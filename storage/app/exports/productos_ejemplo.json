@@ -1,0 +1,642 @@
+[
+  {
+    "cod_centro": "#017",
+    "producto": "MORRAL BELLEZA UNICORNIO #017",
+    "categoria": "JUGUETERIA",
+    "subcategoria": "JUEGUETERIA NIÑA",
+    "proveedor": "LUCKY CITY CENTER C.A (SUPER WIN)",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "DORAL": {
+        "existencia": 4,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "VIRTUDES": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "ZAMORA": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#1016G",
+    "producto": "BOLSA DE REGALO GRANDE #1016G",
+    "categoria": "DECORACION Y ARREGLOS",
+    "subcategoria": "BOLSA",
+    "proveedor": "LUCKY CITY CENTER C.A (SUPER WIN)",
+    "sedes": {
+      "JRZ": {
+        "existencia": 15,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#102055",
+    "producto": "GANCHETA HAWAINA CON PERLA #102055",
+    "categoria": "ARTICULOS DE CABELLO",
+    "subcategoria": "COLITAS/GANCHETAS",
+    "proveedor": "LUCKY CITY CENTER C.A (SUPER WIN)",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 22,
+        "promedio_15d": 0,
+        "ventas_60d": 14.0
+      },
+      "DORAL": {
+        "existencia": 1,
+        "promedio_15d": 2,
+        "ventas_60d": 35.0
+      },
+      "JRZ": {
+        "existencia": 144,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "VIRTUDES": {
+        "existencia": 31,
+        "promedio_15d": 0,
+        "ventas_60d": 5.0
+      },
+      "ZAMORA": {
+        "existencia": 18,
+        "promedio_15d": 2,
+        "ventas_60d": 18.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#1052",
+    "producto": "CARTERA DAMA MINI UNICOLOR  #1052",
+    "categoria": "CARTERAS Y BOLSOS",
+    "subcategoria": "CARTERAS",
+    "proveedor": "INVERSIONES MUNDO FAMOSO VIP,C.A",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 2,
+        "promedio_15d": 2,
+        "ventas_60d": 3.0
+      },
+      "DORAL": {
+        "existencia": 0,
+        "promedio_15d": 0,
+        "ventas_60d": 1.0
+      },
+      "VIRTUDES": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "ZAMORA": {
+        "existencia": 4,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#1127",
+    "producto": "TAZA FELIZ DIA MAMA #1127",
+    "categoria": "HOGAR",
+    "subcategoria": "VASOS",
+    "proveedor": "LUCKY CITY CENTER C.A (SUPER WIN)",
+    "sedes": {
+      "JRZ": {
+        "existencia": 2,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#2501",
+    "producto": "RUBOR LIQUIDO DOUCCC #2501",
+    "categoria": "COSMETICOS",
+    "subcategoria": "RUBOR",
+    "proveedor": "nan",
+    "sedes": {
+      "JRZ": {
+        "existencia": 96,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#3833-14",
+    "producto": "LAZO D/COL P/CAB OSITO X12 #3833-14",
+    "categoria": "ARTICULOS DE CABELLO",
+    "subcategoria": "COLITAS/GANCHETAS",
+    "proveedor": "INVERSIONES MUNDO FAMOSO VIP,C.A",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 1,
+        "promedio_15d": 1,
+        "ventas_60d": 9.0
+      },
+      "DORAL": {
+        "existencia": 0,
+        "promedio_15d": 0,
+        "ventas_60d": 10.0
+      },
+      "ZAMORA": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#3859-2",
+    "producto": "CINTILLO FINO BRILL C/PERLAS X12 #3859-2",
+    "categoria": "ARTICULOS DE CABELLO",
+    "subcategoria": "COLITAS/GANCHETAS",
+    "proveedor": "INVERSIONES MUNDO FAMOSO VIP,C.A",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 8.0
+      },
+      "DORAL": {
+        "existencia": 5,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "VIRTUDES": {
+        "existencia": 12,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "ZAMORA": {
+        "existencia": 2,
+        "promedio_15d": 1,
+        "ventas_60d": 6.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#4251",
+    "producto": "CARTERA DAMA COLORES #4251",
+    "categoria": "CARTERAS Y BOLSOS",
+    "subcategoria": "CARTERAS Y BOLSOS",
+    "proveedor": "INVERSIONES MUNDO FAMOSO VIP,C.A",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 0,
+        "promedio_15d": 0,
+        "ventas_60d": 1.0
+      },
+      "DORAL": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "VIRTUDES": {
+        "existencia": 4,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "ZAMORA": {
+        "existencia": 5,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#618",
+    "producto": "CARTERA DE DAMA  ROSADO #618",
+    "categoria": "CARTERAS Y BOLSOS",
+    "subcategoria": "CARTERAS",
+    "proveedor": "TUBOLSOPOSH",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 0,
+        "promedio_15d": 1,
+        "ventas_60d": 3.0
+      },
+      "DORAL": {
+        "existencia": 1,
+        "promedio_15d": 1,
+        "ventas_60d": 4.0
+      },
+      "VIRTUDES": {
+        "existencia": 2,
+        "promedio_15d": 0,
+        "ventas_60d": 1.0
+      },
+      "ZAMORA": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 2.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#618MARRON",
+    "producto": "CARTERA DE DAMA MARRON #618",
+    "categoria": "CARTERAS Y BOLSOS",
+    "subcategoria": "CARTERAS",
+    "proveedor": "TUBOLSOPOSH",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 0,
+        "promedio_15d": 2,
+        "ventas_60d": 4.0
+      },
+      "DORAL": {
+        "existencia": 0,
+        "promedio_15d": 0,
+        "ventas_60d": 2.0
+      },
+      "VIRTUDES": {
+        "existencia": 0,
+        "promedio_15d": 0,
+        "ventas_60d": 3.0
+      },
+      "ZAMORA": {
+        "existencia": 0,
+        "promedio_15d": 0,
+        "ventas_60d": 1.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#618NEGRO",
+    "producto": "CARTERA DE DAMA NEGRO #618",
+    "categoria": "CARTERAS Y BOLSOS",
+    "subcategoria": "CARTERAS",
+    "proveedor": "TUBOLSOPOSH",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 1,
+        "promedio_15d": 1,
+        "ventas_60d": 3.0
+      },
+      "VIRTUDES": {
+        "existencia": 0,
+        "promedio_15d": 0,
+        "ventas_60d": 4.0
+      },
+      "ZAMORA": {
+        "existencia": 0,
+        "promedio_15d": 0,
+        "ventas_60d": 2.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#80",
+    "producto": "PLIEGO DE PAPEL DE REGALO",
+    "categoria": "ARTICULOS ESCOLARES",
+    "subcategoria": "PAPELERIA",
+    "proveedor": "PAPEL PAPURRI",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 3476,
+        "promedio_15d": 5,
+        "ventas_60d": 87.0
+      },
+      "DORAL": {
+        "existencia": 1994,
+        "promedio_15d": 11,
+        "ventas_60d": 134.0
+      },
+      "JRZ": {
+        "existencia": 1166,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "VIRTUDES": {
+        "existencia": 3130,
+        "promedio_15d": 4,
+        "ventas_60d": 44.0
+      },
+      "ZAMORA": {
+        "existencia": 2365,
+        "promedio_15d": 9,
+        "ventas_60d": 80.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#8022",
+    "producto": "JUEGO DE BINGO #8022",
+    "categoria": "JUGUETERIA",
+    "subcategoria": "JUEGO DIDACTICOS",
+    "proveedor": "LUCKY CITY CENTER C.A (SUPER WIN)",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 3,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "DORAL": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 1.0
+      },
+      "ZAMORA": {
+        "existencia": 2,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#8304-GRISARCILLA",
+    "producto": "MONEDERO PRADA #8304 GRIS ARCILLA",
+    "categoria": "ACCESORIOS DE VESTIR",
+    "subcategoria": "MONEDEROS",
+    "proveedor": "nan",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 4,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "DORAL": {
+        "existencia": 5,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "JRZ": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "VIRTUDES": {
+        "existencia": 4,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "ZAMORA": {
+        "existencia": 4,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#901-1",
+    "producto": "BANDOLERO COLOR CORAZON/FOREVER #8002-6/ #901-1",
+    "categoria": "CARTERAS Y BOLSOS",
+    "subcategoria": "BANDOLEROS",
+    "proveedor": "INVERSIONES MUNDO FAMOSO VIP,C.A",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 11.0
+      },
+      "DORAL": {
+        "existencia": 2,
+        "promedio_15d": 1,
+        "ventas_60d": 12.0
+      },
+      "VIRTUDES": {
+        "existencia": 1,
+        "promedio_15d": 1,
+        "ventas_60d": 9.0
+      },
+      "ZAMORA": {
+        "existencia": 10,
+        "promedio_15d": 2,
+        "ventas_60d": 2.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#A2-1",
+    "producto": "COLA TUBO A2-1",
+    "categoria": "ARTICULOS DE CABELLO",
+    "subcategoria": "COLITAS/GANCHETAS",
+    "proveedor": "INVERSIONES MAKEUPS (SEA CENTER)",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 23,
+        "promedio_15d": 0,
+        "ventas_60d": 1.0
+      },
+      "DORAL": {
+        "existencia": 5,
+        "promedio_15d": 3,
+        "ventas_60d": 19.0
+      },
+      "VIRTUDES": {
+        "existencia": 22,
+        "promedio_15d": 2,
+        "ventas_60d": 2.0
+      },
+      "ZAMORA": {
+        "existencia": 13,
+        "promedio_15d": 3,
+        "ventas_60d": 11.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#A263",
+    "producto": "SET BROCHAS ESCARCHADA X5 #A263",
+    "categoria": "COSMETICOS",
+    "subcategoria": "BROCHAS Y ESPONJAS",
+    "proveedor": "INVERSIONES MAKEUPS (SEA CENTER)",
+    "sedes": {
+      "DORAL": {
+        "existencia": 0,
+        "promedio_15d": 0,
+        "ventas_60d": 2.0
+      },
+      "VIRTUDES": {
+        "existencia": 6,
+        "promedio_15d": 2,
+        "ventas_60d": 4.0
+      },
+      "ZAMORA": {
+        "existencia": 0,
+        "promedio_15d": 0,
+        "ventas_60d": 1.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#AB-1",
+    "producto": "PINZA #AB-1",
+    "categoria": "ARTICULOS DE CABELLO",
+    "subcategoria": "COLITAS/GANCHETAS",
+    "proveedor": "INVERSIONES MAKEUPS (SEA CENTER)",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 5,
+        "promedio_15d": 1,
+        "ventas_60d": 7.0
+      },
+      "DORAL": {
+        "existencia": 1,
+        "promedio_15d": 1,
+        "ventas_60d": 11.0
+      },
+      "VIRTUDES": {
+        "existencia": 12,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "ZAMORA": {
+        "existencia": 8,
+        "promedio_15d": 0,
+        "ventas_60d": 4.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#B3725-25",
+    "producto": "GANCHETAS HAWAIANA #B3725-25",
+    "categoria": "ARTICULOS DE CABELLO",
+    "subcategoria": "COLITAS/GANCHETAS",
+    "proveedor": "LUCKY CITY CENTER C.A (SUPER WIN)",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 6,
+        "promedio_15d": 1,
+        "ventas_60d": 30.0
+      },
+      "DORAL": {
+        "existencia": 0,
+        "promedio_15d": 1,
+        "ventas_60d": 36.0
+      },
+      "VIRTUDES": {
+        "existencia": 6,
+        "promedio_15d": 1,
+        "ventas_60d": 30.0
+      },
+      "ZAMORA": {
+        "existencia": 0,
+        "promedio_15d": 0,
+        "ventas_60d": 36.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#BR02",
+    "producto": "BILLETERA DE NIÑO CON RELIEVE #BR02",
+    "categoria": "ACCESORIOS DE VESTIR",
+    "subcategoria": "BILLETERAS",
+    "proveedor": "INVERSIONES MUNDO FAMOSO VIP,C.A",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 2,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "DORAL": {
+        "existencia": 0,
+        "promedio_15d": 0,
+        "ventas_60d": 1.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#BW",
+    "producto": "BASE COAT WINCOLOR 7.5ML X12 #BW",
+    "categoria": "ACCESORIOS ESTETICOS",
+    "subcategoria": "ESMALTES",
+    "proveedor": "INVERSIONES MUNDO FAMOSO VIP,C.A",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 4,
+        "promedio_15d": 0,
+        "ventas_60d": 4.0
+      },
+      "DORAL": {
+        "existencia": 12,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "VIRTUDES": {
+        "existencia": 8,
+        "promedio_15d": 0,
+        "ventas_60d": 3.0
+      },
+      "ZAMORA": {
+        "existencia": 0,
+        "promedio_15d": 0,
+        "ventas_60d": 3.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#G1260",
+    "producto": "BANDOLERO DAMA DE COLOR #G1260/ #G1260-2",
+    "categoria": "CARTERAS Y BOLSOS",
+    "subcategoria": "BANDOLEROS",
+    "proveedor": "INVERSIONES MUNDO FAMOSO VIP,C.A",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 8,
+        "promedio_15d": 0,
+        "ventas_60d": 10.0
+      },
+      "DORAL": {
+        "existencia": 10,
+        "promedio_15d": 2,
+        "ventas_60d": 8.0
+      },
+      "VIRTUDES": {
+        "existencia": 4,
+        "promedio_15d": 3,
+        "ventas_60d": 14.0
+      },
+      "ZAMORA": {
+        "existencia": 16,
+        "promedio_15d": 0,
+        "ventas_60d": 2.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#J8801",
+    "producto": "JUGUETE FIGURA HULK PEQUEÑO #J8801",
+    "categoria": "nan",
+    "subcategoria": "JUGUETERIA",
+    "proveedor": "INVERSIONES MUNDO FAMOSO VIP,C.A",
+    "sedes": {
+      "DORAL": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      }
+    }
+  },
+  {
+    "cod_centro": "#J8804",
+    "producto": "JUGUETE FIGURA CAPITAN AMERICA PEQUEÑO #J8804",
+    "categoria": "nan",
+    "subcategoria": "JUGUETERIA",
+    "proveedor": "INVERSIONES MUNDO FAMOSO VIP,C.A",
+    "sedes": {
+      "CENTRO": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      },
+      "DORAL": {
+        "existencia": 1,
+        "promedio_15d": 0,
+        "ventas_60d": 0.0
+      }
+    }
+  }
+]
