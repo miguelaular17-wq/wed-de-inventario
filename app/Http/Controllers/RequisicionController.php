@@ -25,59 +25,12 @@ class RequisicionController extends Controller
     public function form(Request $request): View
     {
         $sede = (string) $request->session()->get('sede_local');
-        $tp = (float) $request->session()->get('tiempo_pronostico', config('inventario.tiempo_pronostico_default'));
-        $ventasRows = $this->ventas->calcular($this->products->loadForSede($sede), $sede, $tp);
-
-        $categories = $ventasRows
-            ->where('accion', 'HACER REQUISICION')
-            ->pluck('categoria')
-            ->filter()
-            ->unique()
-            ->sort()
-            ->values()
-            ->all();
-
-        $subcategories = $ventasRows
-            ->where('accion', 'HACER REQUISICION')
-            ->pluck('subcategoria')
-            ->filter()
-            ->unique()
-            ->sort()
-            ->values()
-            ->all();
-
-        // Build mapping of category => subcategories for the view
-        $subByCat = [];
-        $ventasRows->where('accion', 'HACER REQUISICION')->each(function (array $r) use (&$subByCat) {
-            $cat = (string) ($r['categoria'] ?? '');
-            $sub = (string) ($r['subcategoria'] ?? '');
-            if ($cat === '' || $sub === '') {
-                return;
-            }
-            $subByCat[$cat] = $subByCat[$cat] ?? [];
-            if (! in_array($sub, $subByCat[$cat], true)) {
-                $subByCat[$cat][] = $sub;
-            }
-        });
-        foreach ($subByCat as $k => $v) {
-            sort($subByCat[$k]);
-        }
-
         $tipoReporte = $request->query('tipo_reporte', 'ventas') === 'personalizada' ? 'personalizada' : 'ventas';
 
         $sedesOrigen = $this->export->sedesOrigen($sede);
-        $defaultSedeOrigen = $tipoReporte === 'personalizada'
-            ? 'Todas'
-            : ($sedesOrigen[0] ?? '');
+        $defaultSedeOrigen = $sedesOrigen[0] ?? '';
         $selectedSedeOrigen = (string) $request->query('sede_origen', $defaultSedeOrigen);
-        if ($tipoReporte === 'personalizada') {
-            if ($selectedSedeOrigen !== 'Todas') {
-                $resolved = $this->export->resolveSedeKey($selectedSedeOrigen);
-                if (! $resolved) {
-                    $selectedSedeOrigen = 'Todas';
-                }
-            }
-        } elseif (! $this->export->resolveSedeKey($selectedSedeOrigen)) {
+        if (! $this->export->resolveSedeKey($selectedSedeOrigen)) {
             $selectedSedeOrigen = $defaultSedeOrigen;
         }
 
@@ -153,6 +106,43 @@ class RequisicionController extends Controller
                 'previewRows' => $previewRows,
                 'filteredCount' => $previewRows->count(),
             ]);
+        }
+
+        $tp = (float) $request->session()->get('tiempo_pronostico', config('inventario.tiempo_pronostico_default'));
+        $ventasRows = $this->ventas->calcular($this->products->loadForSede($sede), $sede, $tp);
+
+        $categories = $ventasRows
+            ->where('accion', 'HACER REQUISICION')
+            ->pluck('categoria')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        $subcategories = $ventasRows
+            ->where('accion', 'HACER REQUISICION')
+            ->pluck('subcategoria')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        $subByCat = [];
+        $ventasRows->where('accion', 'HACER REQUISICION')->each(function (array $r) use (&$subByCat) {
+            $cat = (string) ($r['categoria'] ?? '');
+            $sub = (string) ($r['subcategoria'] ?? '');
+            if ($cat === '' || $sub === '') {
+                return;
+            }
+            $subByCat[$cat] = $subByCat[$cat] ?? [];
+            if (! in_array($sub, $subByCat[$cat], true)) {
+                $subByCat[$cat][] = $sub;
+            }
+        });
+        foreach ($subByCat as $k => $v) {
+            sort($subByCat[$k]);
         }
 
         $excluirCategorias = $selectedCategoria === 'Todas' && $request->boolean('excluir_categorias');

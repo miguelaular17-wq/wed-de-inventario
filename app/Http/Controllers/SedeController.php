@@ -10,8 +10,16 @@ class SedeController extends Controller
 {
     public function select(): View|RedirectResponse
     {
+        if (auth()->user() && in_array(auth()->user()->role, ['supervisor', 'telefonia'], true)) {
+            if (auth()->user()->sede) {
+                session()->put('sede_local', strtoupper(auth()->user()->sede));
+                return $this->redirectAfterSede();
+            }
+            return redirect()->route('ventas.index')->withErrors(['error' => 'No tienes permiso para seleccionar sede.']);
+        }
+
         if (session()->has('sede_local')) {
-            return redirect()->route('ventas.index');
+            return $this->redirectAfterSede();
         }
 
         return view('sede.select', [
@@ -21,6 +29,10 @@ class SedeController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        if (auth()->user() && in_array(auth()->user()->role, ['supervisor', 'telefonia'], true)) {
+            return redirect()->route('ventas.index')->withErrors(['error' => 'No tienes permiso para cambiar de sede.']);
+        }
+
         $sedes = config('inventario.sedes_locales');
         $sede = strtoupper((string) $request->input('sede_local', ''));
 
@@ -30,13 +42,32 @@ class SedeController extends Controller
 
         $request->session()->put('sede_local', $sede);
 
-        return redirect()->route('ventas.index');
+        return $this->redirectAfterSede();
     }
 
     public function change(): RedirectResponse
     {
+        if (auth()->user() && in_array(auth()->user()->role, ['supervisor', 'telefonia'], true)) {
+            return redirect()->route('ventas.index')->withErrors(['error' => 'No tienes permiso para cambiar de sede.']);
+        }
+
         session()->forget('sede_local');
 
         return redirect()->route('sede.select');
+    }
+
+    /**
+     * Redirect the user to the appropriate dashboard after selecting a sede.
+     * Comprador and marketing go to their own dashboard; everyone else to ventas.
+     */
+    private function redirectAfterSede(): RedirectResponse
+    {
+        $user = auth()->user();
+
+        if ($user && ($user->isComprador() || $user->isMarketing())) {
+            return redirect()->route('comprador.dashboard');
+        }
+
+        return redirect()->route('ventas.index');
     }
 }

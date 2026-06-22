@@ -24,58 +24,151 @@ class InventarioV2Repository
             ->table('productos')
             ->where('activo', true)
             ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre', 'categoria', 'subcategoria', 'proveedor']);
+            ->get(['id', 'codigo', 'nombre', 'categoria', 'subcategoria', 'proveedor', 'precio_unidad', 'precio_mayor']);
 
         if ($productos->isEmpty()) {
             return collect();
         }
 
-        $stockByProduct = DB::connection('pgsql')
+        $stocksByProduct = [];
+        foreach (DB::connection('pgsql')
             ->table('stock_actual')
-            ->get(['producto_id', 'sede', 'existencia'])
-            ->groupBy('producto_id');
+            ->get(['producto_id', 'sede', 'existencia']) as $row) {
+            $stocksByProduct[(int) $row->producto_id][$row->sede] = (int) $row->existencia;
+        }
 
-        $ventasByProduct = DB::connection('pgsql')
+        $ventasByProduct = [];
+        foreach (DB::connection('pgsql')
             ->table('ventas_historicas')
-            ->get(['producto_id', 'sede', 'venta_promedio', 'ventas_60d', 'ultima_venta'])
-            ->groupBy('producto_id');
+            ->get(['producto_id', 'sede', 'venta_promedio', 'ventas_60d', 'ultima_venta', 'ultima_compra']) as $row) {
+            $ventasByProduct[(int) $row->producto_id][$row->sede] = [
+                'venta_promedio' => (int) $row->venta_promedio,
+                'ventas_60d' => (float) $row->ventas_60d,
+                'ultima_venta' => $row->ultima_venta,
+                'ultima_compra' => $row->ultima_compra,
+            ];
+        }
 
-        return $productos->map(function ($p) use ($sedeLocal, $sedes, $stockByProduct, $ventasByProduct) {
-            $stockMap = ($stockByProduct->get($p->id) ?? collect())->keyBy('sede');
-            $ventaMap = ($ventasByProduct->get($p->id) ?? collect())->keyBy('sede');
-            $localStock = $stockMap->get($sedeLocal);
-            $localVenta = $ventaMap->get($sedeLocal);
+        $rows = [];
+        foreach ($productos as $p) {
+            $productoId = (int) $p->id;
+            $stockMap = $stocksByProduct[$productoId] ?? [];
+            $ventaMap = $ventasByProduct[$productoId] ?? [];
+            $localVenta = $ventaMap[$sedeLocal] ?? null;
 
             $stocks = [];
             $ventasInternas = [];
             $ventasInternas15d = [];
+            $ultimasVentas = [];
+            $ultimasCompras = []; // Not available in DB currently
             foreach ($sedes as $sede) {
-                $stocks[$sede] = (int) ($stockMap->get($sede)?->existencia ?? 0);
-                $ventasInternas[$sede] = (int) ($ventaMap->get($sede)?->ventas_60d ?? 0);
-                $ventasInternas15d[$sede] = (int) ($ventaMap->get($sede)?->venta_promedio ?? 0);
+                $ventaSede = $ventaMap[$sede] ?? null;
+                $stocks[$sede] = $stockMap[$sede] ?? 0;
+                $ventasInternas[$sede] = $ventaSede ? (int) $ventaSede['ventas_60d'] : 0;
+                $ventasInternas15d[$sede] = $ventaSede ? (int) $ventaSede['venta_promedio'] : 0;
+                
+                $uv = $ventaSede['ultima_venta'] ?? null;
+                $ultimasVentas[$sede] = $uv ? date('d/m/Y', strtotime((string) $uv)) : null;
+                $uc = $ventaSede['ultima_compra'] ?? null;
+                $ultimasCompras[$sede] = $uc ? date('d/m/Y', strtotime((string) $uc)) : null;
             }
 
-            $ultimaVenta = $localVenta?->ultima_venta ?? null;
+            $ultimaVenta = $localVenta['ultima_venta'] ?? null;
             if ($ultimaVenta && ! is_string($ultimaVenta)) {
                 $ultimaVenta = (string) $ultimaVenta;
             }
 
-            return [
-                'id' => (int) $p->id,
-                'cod_centro' => $p->codigo,
-                'producto' => $p->nombre,
-                'categoria' => $p->categoria,
-                'subcategoria' => $p->subcategoria,
-                'proveedor' => $p->proveedor,
-                'existencia' => (int) ($localStock?->existencia ?? 0),
-                'venta' => (int) ($localVenta?->venta_promedio ?? 0),
-                'ventas_60d' => (float) ($localVenta?->ventas_60d ?? 0),
-                'ultima_venta' => $ultimaVenta ? date('d/m/Y', strtotime($ultimaVenta)) : null,
-                'stocks' => $stocks,
+            $rows[] = [
+                'id'              => $productoId,
+                'cod_centro'      => $p->codigo,
+                'producto'        => $p->nombre,
+                'categoria'       => $p->categoria,
+                'subcategoria'    => $p->subcategoria,
+                'proveedor'       => $p->proveedor,
+                'precio_unidad'   => (float) ($p->precio_unidad ?? 0),
+                'precio_mayor'    => (float) ($p->precio_mayor ?? 0),
+                'existencia'      => $stockMap[$sedeLocal] ?? 0,
+                'venta'           => $localVenta ? (int) $localVenta['venta_promedio'] : 0,
+                'ventas_60d'      => $localVenta ? (float) $localVenta['ventas_60d'] : 0.0,
+                'ultima_venta'    => $ultimaVenta ? date('d/m/Y', strtotime($ultimaVenta)) : null,
+                'stocks'          => $stocks,
                 'ventas_internas' => $ventasInternas,
                 'ventas_internas_15d' => $ventasInternas15d,
+                'ultimas_ventas'  => $ultimasVentas,
+                'ultimas_compras' => $ultimasCompras,
             ];
-        });
+        }
+
+        return collect($rows);
+    }
+
+    public function findForSedeByCodigo(string $sedeLocal, string $codigo): ?array
+    {
+        $producto = DB::connection('pgsql')
+            ->table('productos')
+            ->where('activo', true)
+            ->where('codigo', $codigo)
+            ->first(['id', 'codigo', 'nombre', 'categoria', 'subcategoria', 'proveedor']);
+
+        if (! $producto) {
+            return null;
+        }
+
+        $sedes = config('inventario.sedes_stock');
+
+        $stocks = DB::connection('pgsql')
+            ->table('stock_actual')
+            ->where('producto_id', $producto->id)
+            ->get(['sede', 'existencia'])
+            ->keyBy('sede');
+
+        $ventas = DB::connection('pgsql')
+            ->table('ventas_historicas')
+            ->where('producto_id', $producto->id)
+            ->get(['sede', 'venta_promedio', 'ventas_60d', 'ultima_venta', 'ultima_compra'])
+            ->keyBy('sede');
+
+        $localStock = $stocks->get($sedeLocal);
+        $localVenta = $ventas->get($sedeLocal);
+
+        $stockValues = [];
+        $ventasInternas = [];
+        $ventasInternas15d = [];
+        $ultimasVentas = [];
+        $ultimasCompras = [];
+        foreach ($sedes as $sede) {
+            $stockValues[$sede] = (int) ($stocks->get($sede)?->existencia ?? 0);
+            $ventasInternas[$sede] = (int) ($ventas->get($sede)?->ventas_60d ?? 0);
+            $ventasInternas15d[$sede] = (int) ($ventas->get($sede)?->venta_promedio ?? 0);
+            
+            $uv = $ventas->get($sede)?->ultima_venta;
+            $ultimasVentas[$sede] = $uv ? date('d/m/Y', strtotime((string) $uv)) : null;
+            $uc = $ventas->get($sede)?->ultima_compra;
+            $ultimasCompras[$sede] = $uc ? date('d/m/Y', strtotime((string) $uc)) : null;
+        }
+
+        $ultimaVenta = $localVenta?->ultima_venta ?? null;
+        if ($ultimaVenta && ! is_string($ultimaVenta)) {
+            $ultimaVenta = (string) $ultimaVenta;
+        }
+
+        return [
+            'id' => (int) $producto->id,
+            'cod_centro' => $producto->codigo,
+            'producto' => $producto->nombre,
+            'categoria' => $producto->categoria,
+            'subcategoria' => $producto->subcategoria,
+            'proveedor' => $producto->proveedor,
+            'existencia' => (int) ($localStock?->existencia ?? 0),
+            'venta' => (int) ($localVenta?->venta_promedio ?? 0),
+            'ventas_60d' => (float) ($localVenta?->ventas_60d ?? 0),
+            'ultima_venta' => $ultimaVenta ? date('d/m/Y', strtotime($ultimaVenta)) : null,
+            'stocks' => $stockValues,
+            'ventas_internas' => $ventasInternas,
+            'ventas_internas_15d' => $ventasInternas15d,
+            'ultimas_ventas' => $ultimasVentas,
+            'ultimas_compras' => $ultimasCompras,
+        ];
     }
 
     public function lastStockUpdate(): ?string
@@ -96,26 +189,40 @@ class InventarioV2Repository
             $now = now();
 
             DB::connection('pgsql')->statement(
-                'TRUNCATE TABLE inventario_v2.stock_actual, inventario_v2.ventas_historicas RESTART IDENTITY'
+                'TRUNCATE TABLE inventario_v2.stock_actual, inventario_v2.ventas_historicas, inventario_v2.reposicion, inventario_v2.inventario_derivado RESTART IDENTITY'
             );
-            Producto::query()->delete();
+            
+            // Mark all existing products as inactive (instead of deleting them, to avoid foreign key violations in movements)
+            Producto::query()->update(['activo' => false]);
 
             $productRows = [];
+            $seenCodes = [];
             foreach ($rows as $row) {
+                $codigo = (string) ($row['cod_centro'] ?? '');
+                if ($codigo === '' || isset($seenCodes[$codigo])) {
+                    continue;
+                }
+                $seenCodes[$codigo] = true;
                 $productRows[] = [
-                    'codigo' => (string) ($row['cod_centro'] ?? ''),
-                    'nombre' => (string) ($row['producto'] ?? ''),
-                    'categoria' => (string) ($row['categoria'] ?? ''),
-                    'subcategoria' => (string) ($row['subcategoria'] ?? ''),
-                    'proveedor' => (string) ($row['proveedor'] ?? ''),
-                    'activo' => true,
-                    'created_at' => $now,
-                    'updated_at' => $now,
+                    'codigo'         => $codigo,
+                    'nombre'         => (string) ($row['producto'] ?? ''),
+                    'categoria'      => (string) ($row['categoria'] ?? ''),
+                    'subcategoria'   => (string) ($row['subcategoria'] ?? ''),
+                    'proveedor'      => (string) ($row['proveedor'] ?? ''),
+                    'precio_unidad'  => (float) ($row['precio_unidad'] ?? 0),
+                    'precio_mayor'   => (float) ($row['precio_mayor'] ?? 0),
+                    'activo'         => true,
+                    'created_at'     => $now,
+                    'updated_at'     => $now,
                 ];
             }
 
             foreach (array_chunk($productRows, 400) as $chunk) {
-                DB::connection('pgsql')->table('productos')->insert($chunk);
+                DB::connection('pgsql')->table('productos')->upsert(
+                    $chunk,
+                    ['codigo'],
+                    ['nombre', 'categoria', 'subcategoria', 'proveedor', 'precio_unidad', 'precio_mayor', 'activo', 'updated_at']
+                );
             }
 
             $idByCodigo = DB::connection('pgsql')
@@ -144,6 +251,7 @@ class InventarioV2Repository
                         'venta_promedio' => (int) ($m['promedio_15d'] ?? 0),
                         'ventas_60d' => (float) ($m['ventas_60d'] ?? 0),
                         'ultima_venta' => $m['ultima_venta'] ?? null,
+                        'ultima_compra' => $m['ultima_compra'] ?? null,
                         'updated_at' => $now,
                     ];
                 }
@@ -158,7 +266,48 @@ class InventarioV2Repository
             }
         });
 
+        // Re-apply all app movements on top of the freshly imported baseline.
+        // Movements are only created by the app (requisitions/exports), so they
+        // represent transfers between sedes that the external Excel does not track.
+        // We replay them in chronological order to reconstruct the correct stock.
+        $this->replayMovements();
+
         return $count;
+    }
+
+    /**
+     * Re-apply every movement in the movimientos table to stock_actual.
+     * Called after each Excel import to restore app-level transfers.
+     */
+    private function replayMovements(): void
+    {
+        // Load all active product IDs so we can skip orphaned movements safely
+        $activeProductIds = DB::connection('pgsql')
+            ->table('productos')
+            ->where('activo', true)
+            ->pluck('id')
+            ->flip();
+
+        DB::connection('pgsql')->transaction(function () use ($activeProductIds) {
+            Movimiento::query()
+                ->orderBy('created_at', 'asc')
+                ->each(function (Movimiento $m) use ($activeProductIds) {
+                    // Skip movements for products removed from the catalogue
+                    if (! isset($activeProductIds[$m->producto_id])) {
+                        return;
+                    }
+
+                    // Subtract from the origin sede (if present)
+                    if (! empty($m->origen)) {
+                        $this->adjustStock($m->producto_id, $m->origen, -$m->cantidad);
+                    }
+
+                    // Add to the destination sede (if present)
+                    if (! empty($m->destino)) {
+                        $this->adjustStock($m->producto_id, $m->destino, $m->cantidad);
+                    }
+                });
+        });
     }
 
     public function applyRequisition(Collection $lines, string $sedeOrigen, string $sedeDestino, ?string $usuario = null): int
@@ -166,6 +315,13 @@ class InventarioV2Repository
         $applied = 0;
 
         DB::connection('pgsql')->transaction(function () use ($lines, $sedeOrigen, $sedeDestino, $usuario, &$applied) {
+            $codigos = $lines->pluck('codigo')->filter()->unique()->values()->all();
+
+            $productosByCodigo = Producto::query()
+                ->whereIn('codigo', $codigos)
+                ->get(['id', 'codigo'])
+                ->keyBy('codigo');
+
             foreach ($lines as $line) {
                 $cod = (string) ($line['codigo'] ?? '');
                 $qty = (int) ($line['cantidad'] ?? 0);
@@ -173,7 +329,7 @@ class InventarioV2Repository
                     continue;
                 }
 
-                $producto = Producto::query()->where('codigo', $cod)->first();
+                $producto = $productosByCodigo->get($cod);
                 if (! $producto) {
                     continue;
                 }
@@ -204,6 +360,7 @@ class InventarioV2Repository
         $row = StockActual::query()
             ->where('producto_id', $productoId)
             ->where('sede', $sede)
+            ->lockForUpdate()
             ->first();
 
         if (! $row) {

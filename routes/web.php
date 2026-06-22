@@ -11,12 +11,25 @@ use App\Http\Controllers\SedeController;
 use App\Http\Controllers\VentasController;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureSedeSelected;
+use App\Http\Controllers\GerenteController;
+use App\Http\Controllers\CompradorController;
+use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     if (auth()->check()) {
-        if (auth()->user()->isAdmin()) {
+        $user = auth()->user();
+        if ($user->isAdmin()) {
             return redirect()->route('admin.dashboard');
+        }
+        if ($user->isGerente()) {
+            return redirect()->route('gerente.dashboard');
+        }
+        if ($user->isComprador() || $user->isMarketing()) {
+            return redirect()->route('comprador.dashboard');
+        }
+        if ($user->isVendedor()) {
+            return redirect()->route('vendedor.dashboard');
         }
 
         return redirect()->route('ventas.index');
@@ -47,23 +60,62 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/importar', [ImportController::class, 'create'])->name('import.create');
     Route::post('/importar', [ImportController::class, 'store'])->name('import.store');
-    Route::get('/movimientos', [MovimientoController::class, 'index'])->name('movimientos.index');
-    Route::get('/movimientos/sync', [MovimientoController::class, 'sync'])->name('movimientos.sync');
-    Route::get('/sedes', [\App\Http\Controllers\Admin\SedeController::class, 'index'])->name('sedes.index');
-    Route::post('/sedes/{sede}/usar', [\App\Http\Controllers\Admin\SedeController::class, 'use'])->name('sedes.use');
     Route::get('/usuarios', [UserController::class, 'index'])->name('users.index');
     Route::post('/usuarios/{user}', [UserController::class, 'update'])->name('users.update');
+    Route::delete('/usuarios/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+    Route::post('/config/cashea', [UserController::class, 'updateCashea'])->name('config.cashea.update');
 });
 
-Route::middleware(['auth', EnsureSedeSelected::class])->group(function () {
+// Sede change views accessible by roles with sede access
+Route::middleware(['auth', 'role:admin,supervisor,telefonia,sede,comprador'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/sedes', [\App\Http\Controllers\Admin\SedeController::class, 'index'])->name('sedes.index');
+    Route::post('/sedes/{sede}/usar', [\App\Http\Controllers\Admin\SedeController::class, 'use'])->name('sedes.use');
+});
+
+// Movimientos routes accessible by Admin and Gerente
+Route::middleware(['auth', 'role:admin,gerente'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/movimientos', [MovimientoController::class, 'index'])->name('movimientos.index');
+    Route::get('/movimientos/sync', [MovimientoController::class, 'sync'])->name('movimientos.sync');
+});
+
+// Sede views restricted by role
+Route::middleware(['auth', EnsureSedeSelected::class, 'role:admin,supervisor,telefonia,sede,comprador'])->group(function () {
     Route::get('/ventas', [VentasController::class, 'index'])->name('ventas.index');
     Route::get('/ventas/sync', [VentasController::class, 'sync'])->name('ventas.sync');
     Route::get('/inventario', [InventarioController::class, 'index'])->name('inventario.index');
     Route::post('/inventario/requisicion-manual', [InventarioController::class, 'storeManual'])->name('inventario.manual.store');
+    Route::delete('/inventario/requisicion-manual', [InventarioController::class, 'destroyManual'])->name('inventario.manual.destroy');
     Route::get('/inventario/metricas-manual', [InventarioController::class, 'metricasManual'])->name('inventario.manual.metricas');
     Route::get('/inventario/sync', [InventarioController::class, 'sync'])->name('inventario.sync');
     Route::get('/requisicion', [RequisicionController::class, 'form'])->name('requisicion.form');
     Route::post('/requisicion/exportar', [RequisicionController::class, 'export'])->name('requisicion.export');
+});
+
+// Gerente specific routes
+Route::middleware(['auth', 'role:admin,gerente'])->prefix('gerente')->group(function () {
+    Route::get('/', [GerenteController::class, 'index'])->name('gerente.dashboard');
+    Route::post('/mensaje', [GerenteController::class, 'sendMessage'])->name('gerente.message.send');
+    Route::post('/requisiciones/{requisicion}/apply', [GerenteController::class, 'markRequisitionApplied'])->name('gerente.requisiciones.apply');
+});
+
+// Comprador & Marketing specific routes
+Route::middleware(['auth', 'role:admin,comprador,marketing'])->prefix('compras')->group(function () {
+    Route::get('/', [CompradorController::class, 'index'])->name('comprador.dashboard');
+    Route::get('/exportar', [CompradorController::class, 'export'])->name('comprador.export');
+    Route::post('/notificar', [CompradorController::class, 'notifyRedistribution'])->name('comprador.notify');
+    Route::post('/publicidad/toggle', [CompradorController::class, 'togglePublicidad'])->name('comprador.publicidad.toggle');
+});
+
+// Vendedor specific routes
+Route::middleware(['auth', 'role:vendedor'])->prefix('vendedor')->group(function () {
+    Route::get('/', [\App\Http\Controllers\VendedorController::class, 'index'])->name('vendedor.dashboard');
+});
+
+// Notifications routes for all authenticated users
+Route::middleware('auth')->group(function () {
+    Route::get('/notificaciones', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notificaciones/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+    Route::post('/notificaciones/read-all', [NotificationController::class, 'readAll'])->name('notifications.read_all');
 });
 
 // User profile: change sede

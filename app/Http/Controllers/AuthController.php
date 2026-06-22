@@ -67,7 +67,7 @@ class AuthController extends Controller
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => $data['password'],
-            'role' => User::ROLE_SEDE,
+            'role' => User::ROLE_VENDEDOR,
             'sede' => strtoupper($data['sede']),
         ]);
 
@@ -75,8 +75,7 @@ class AuthController extends Controller
         $request->session()->regenerate();
         $request->session()->put('sede_local', strtoupper($user->sede));
 
-        return redirect()
-            ->route('ventas.index')
+        return $this->redirectAfterLogin($user)
             ->with('status', 'Cuenta creada. Bienvenido, '.$user->name.'.');
     }
 
@@ -93,6 +92,18 @@ class AuthController extends Controller
     {
         if ($user->isAdmin()) {
             return redirect()->route('admin.dashboard');
+        }
+
+        if ($user->isGerente()) {
+            return redirect()->route('gerente.dashboard');
+        }
+
+        if ($user->isComprador() || $user->isMarketing()) {
+            return redirect()->route('comprador.dashboard');
+        }
+
+        if ($user->isVendedor()) {
+            return redirect()->route('vendedor.dashboard');
         }
 
         if (session()->has('sede_local') || $user->sede) {

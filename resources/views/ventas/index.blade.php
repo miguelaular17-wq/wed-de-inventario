@@ -5,15 +5,16 @@
 @section('content')
 <div class="page-header">
     <h1>Ventas — {{ $sede }}</h1>
-    <p class="lead">Mostrando {{ $rows->count() }} de {{ $calculatedCount }} productos calculados.</p>
+    <p class="lead">
+        Mostrando {{ $rows->count() }} de {{ $calculatedCount }} productos calculados
+        @if ($rows->lastPage() > 1)
+            · Página {{ $rows->currentPage() }}/{{ $rows->lastPage() }}
+        @endif
+        .
+    </p>
 </div>
 
-<div class="stats-row" data-tour="ventas-stats">
-    <div class="stat-chip"><strong>{{ $rows->count() }}</strong> filas visibles</div>
-    <div class="stat-chip"><strong>{{ $calculatedCount }}</strong> total calculado</div>
-</div>
-
-<form id="filters-form" method="GET" class="filter-bar" data-auto-filter data-auto-filter-delay="350" data-tour="ventas-filters">
+<form id="filters-form" method="GET" class="filter-bar" data-auto-filter data-auto-filter-delay="350" data-auto-filter-target="#ventas-content" data-tour="ventas-filters">
     <div class="field field-wide">
         <label for="q">Buscar</label>
         <input type="search" id="q" name="q" value="{{ $filters['q'] }}" placeholder="Producto o código…" autocomplete="off">
@@ -67,84 +68,17 @@
     </div>
 </form>
 
-<section class="table-section-full" data-tour="ventas-table">
-    <div class="table-wrap table-wrap-full">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Código</th>
-                    <th>Producto</th>
-                    <th>Exist.</th>
-                    <th>Categoría</th>
-                    <th>Subcat.</th>
-                    <th>Venta 15d</th>
-                    @foreach ($sedesStock as $sedeCol)
-                        <th>{{ config('inventario.display.'.$sedeCol, $sedeCol) }}</th>
-                    @endforeach
-                    <th>Sugerido</th>
-                    <th>OPC</th>
-                    <th>Acción</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($rows as $row)
-                    @php
-                        $tag = $row['req_tag'] ?? '';
-                        $rowClass = match($tag) {
-                            'req_ok' => 'row-req-ok',
-                            'req_parcial' => 'row-req-parcial',
-                            'req_insuf' => 'row-req-insuf',
-                            default => '',
-                        };
-                    @endphp
-                    <tr class="{{ $rowClass }}">
-                        <td>{{ $row['cod_centro'] }}</td>
-                        <td>{{ $row['producto'] }}</td>
-                        <td>{{ $row['existencia'] }}</td>
-                        <td>{{ $row['categoria'] }}</td>
-                        <td>{{ $row['subcategoria'] }}</td>
-                        <td>{{ $row['venta'] }}</td>
-                        @foreach ($sedesStock as $sedeCol)
-                            <td>{{ $row['stocks'][$sedeCol] ?? 0 }}</td>
-                        @endforeach
-                        <td>{{ $row['sugerido'] ?: '—' }}</td>
-                        <td>{{ $row['opc'] ?: '—' }}</td>
-                        <td>
-                            @php $acc = $row['accion']; @endphp
-                            @if ($acc === 'HACER REQUISICION')
-                                <span class="tag req">{{ $acc }}</span>
-                            @elseif ($acc === 'TIENE EXISTENCIA')
-                                <span class="tag ok">{{ $acc }}</span>
-                            @elseif ($acc === 'NO TIENE EXISTENCIA')
-                                <span class="tag warn">{{ $acc }}</span>
-                            @else
-                                <span class="tag no">{{ $acc }}</span>
-                            @endif
-                        </td>
-                    </tr>
-                @empty
-                    <tr><td colspan="{{ 10 + count($sedesStock) }}">Sin datos. Importe el Excel multisede desde el panel admin.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-</section>
+<div id="ventas-content" class="ajax-content">
+    @include('ventas._content')
+</div>
 @endsection
 
 @push('scripts')
 <script>
 (function () {
-    const accion = document.getElementById('accion-select');
-    const reqBlocks = document.querySelectorAll('.req-filter');
+    const syncInterval = @json((int) config('inventario.sync_interval_ms', 60000));
     const cat = document.getElementById('categoria-select');
     const sub = document.getElementById('subcategoria-select');
-
-    if (accion) {
-        accion.addEventListener('change', () => {
-            const show = accion.value === 'HACER REQUISICION';
-            reqBlocks.forEach(el => el.style.display = show ? '' : 'none');
-        });
-    }
 
     if (cat && sub) {
         function updateSubDisabled() {
@@ -155,11 +89,33 @@
     }
 
     let since = @json($stockUpdatedAt);
-    const tableBody = document.querySelector('section.table-section-full tbody');
     const filterForm = document.getElementById('filters-form');
+    const contentRoot = document.getElementById('ventas-content');
+
+    async function reloadContent() {
+        if (!contentRoot) return;
+
+        const url = new URL(window.location.href);
+        contentRoot.classList.add('is-loading');
+        try {
+            const r = await fetch(url.toString(), {
+                headers: {
+                    'X-Partial': 'content',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            if (!r.ok) return;
+            contentRoot.innerHTML = await r.text();
+            if (window.AutoFilter) {
+                window.AutoFilter.rebind('#ventas-content');
+            }
+        } finally {
+            contentRoot.classList.remove('is-loading');
+        }
+    }
 
     async function syncVentas() {
-        if (!since || !tableBody) {
+        if (!since) {
             return;
         }
 
@@ -179,35 +135,15 @@
             }
 
             since = j.updated_at;
-            tableBody.innerHTML = j.rows.map(row => {
-                const stocks = @json($sedesStock).map(sede => `<td>${row.stocks[sede] ?? 0}</td>`).join('');
-                const tag = row.accion === 'HACER REQUISICION'
-                    ? '<span class="tag req">HACER REQUISICION</span>'
-                    : row.accion === 'TIENE EXISTENCIA'
-                        ? '<span class="tag ok">TIENE EXISTENCIA</span>'
-                        : row.accion === 'NO TIENE EXISTENCIA'
-                            ? '<span class="tag warn">NO TIENE EXISTENCIA</span>'
-                            : `<span class="tag no">${row.accion}</span>`;
-
-                return `<tr>
-                    <td>${row.cod_centro}</td>
-                    <td>${row.producto}</td>
-                    <td>${row.existencia}</td>
-                    <td>${row.categoria}</td>
-                    <td>${row.subcategoria}</td>
-                    <td>${row.venta}</td>
-                    ${stocks}
-                    <td>${row.sugerido ?? '—'}</td>
-                    <td>${row.opc ?? '—'}</td>
-                    <td>${tag}</td>
-                </tr>`;
-            }).join('');
+            await reloadContent();
         } catch (e) {
             // ignore transient sync issues
         }
     }
 
-    setInterval(syncVentas, 15000);
+    if (since && window.AppSyncPoll) {
+        window.AppSyncPoll.start(syncVentas, syncInterval);
+    }
 })();
 </script>
 @endpush

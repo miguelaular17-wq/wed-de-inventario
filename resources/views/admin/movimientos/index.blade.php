@@ -262,7 +262,11 @@
         });
     }
 
-    setInterval(fetchUpdates, 15000);
+    if (window.AppSyncPoll) {
+        window.AppSyncPoll.start(fetchUpdates, @json((int) config('inventario.sync_interval_ms', 60000)));
+    } else {
+        setInterval(fetchUpdates, @json((int) config('inventario.sync_interval_ms', 60000)));
+    }
 })();
 </script>
 @endpush

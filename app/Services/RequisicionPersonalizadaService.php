@@ -10,9 +10,15 @@ class RequisicionPersonalizadaService
 {
     private const STOCK_ORDER = ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL'];
 
+    /**
+     * Build inventory rows enriched with any pending/exported manual requisitions.
+     * A product can now have requisitions from multiple sede_origns simultaneously,
+     * so we group by 'codigo' and merge all of them into the row data.
+     */
     public function buildRows(Collection $products, string $sedeLocal, Collection $manuales): Collection
     {
-        $manualByCod = $manuales->keyBy('codigo');
+        // Group by codigo so a product can have N requisitions (one per sede_origen)
+        $manualByCod = $manuales->groupBy('codigo');
 
         return $products
             ->map(function (array $row) use ($sedeLocal, $manualByCod) {
@@ -20,25 +26,39 @@ class RequisicionPersonalizadaService
                     return null;
                 }
 
-                $manual = $manualByCod->get($row['cod_centro']);
-                $reqManual = false;
-                $origenManual = '';
-                $cantidadManual = 0;
-                $accion = '';
+                /** @var Collection $entries */
+                $entries = $manualByCod->get($row['cod_centro'], collect());
 
-                if ($manual) {
-                    $reqManual = true;
-                    $origenManual = $manual->sede_origen;
-                    $cantidadManual = (int) $manual->cantidad;
-                    $accion = $this->textoAccionManual($origenManual, $cantidadManual, $manual->isPendiente());
+                $reqManual      = $entries->isNotEmpty();
+                $origenManual   = '';   // legacy single-value (first pending, for backward compat)
+                $cantidadManual = 0;    // legacy single-value
+                $accion         = '';
+
+                // Build the multi-sede array used by the new UI
+                $manualesList = $entries->map(fn ($m) => [
+                    'id'        => $m->id,
+                    'sede_origen' => $m->sede_origen,
+                    'cantidad'  => (int) $m->cantidad,
+                    'pendiente' => $m->isPendiente(),
+                    'accion'    => $this->textoAccionManual($m->sede_origen, (int) $m->cantidad, $m->isPendiente()),
+                ])->values()->all();
+
+                if ($reqManual) {
+                    // Legacy fields: prefer the first pendiente entry
+                    $first = $entries->first();
+                    $origenManual   = $first->sede_origen;
+                    $cantidadManual = (int) $first->cantidad;
+                    $accion = $this->textoAccionManualMulti($manualesList);
                 }
 
                 return array_merge($row, [
-                    'req_manual' => $reqManual,
-                    'origen_manual' => $origenManual,
+                    'req_manual'      => $reqManual,
+                    'origen_manual'   => $origenManual,
                     'cantidad_manual' => $cantidadManual,
-                    'accion_manual' => $accion,
-                    'manual_pendiente' => $manual?->isPendiente() ?? false,
+                    'accion_manual'   => $accion,
+                    'manual_pendiente' => $entries->contains(fn ($m) => $m->isPendiente()),
+                    // New: full list of requisitions for this product
+                    'manuales_list'   => $manualesList,
                 ]);
             })
             ->filter()
@@ -98,8 +118,8 @@ class RequisicionPersonalizadaService
         $excedente = max(0, (int) floor($stock - $demanda));
 
         return [
-            'stock' => $stock,
-            'demanda' => round($demanda, 2),
+            'stock'    => $stock,
+            'demanda'  => round($demanda, 2),
             'excedente' => $excedente,
         ];
     }
@@ -116,7 +136,10 @@ class RequisicionPersonalizadaService
         ];
     }
 
-    /** Solo guarda la línea; el stock se aplica al exportar el CSV. */
+    /**
+     * Save or update a manual requisition for a specific (sede_local, codigo, sede_origen) tuple.
+     * Multiple sede_origen values are now allowed for the same product.
+     */
     public function confirmar(
         string $sedeLocal,
         string $codigo,
@@ -126,7 +149,7 @@ class RequisicionPersonalizadaService
         ?string $usuario,
     ): void {
         $sedeOrigen = strtoupper($sedeOrigen);
-        $sedeLocal = strtoupper($sedeLocal);
+        $sedeLocal  = strtoupper($sedeLocal);
 
         if ($cantidad <= 0) {
             throw new \InvalidArgumentException('La cantidad debe ser mayor que cero.');
@@ -136,16 +159,39 @@ class RequisicionPersonalizadaService
             throw new \InvalidArgumentException('Sede origen inválida.');
         }
 
+        // Unique key is now (sede_local, codigo, sede_origen)
         RequisicionManual::query()->updateOrCreate(
-            ['sede_local' => $sedeLocal, 'codigo' => $codigo],
             [
-                'producto' => $producto,
+                'sede_local'  => $sedeLocal,
+                'codigo'      => $codigo,
                 'sede_origen' => $sedeOrigen,
-                'cantidad' => $cantidad,
-                'usuario' => $usuario,
+            ],
+            [
+                'producto'    => $producto,
+                'cantidad'    => $cantidad,
+                'usuario'     => $usuario,
                 'aplicada_at' => null,
             ]
         );
+    }
+
+    /**
+     * Delete a specific manual requisition by (sede_local, codigo, sede_origen).
+     * Returns true if a record was deleted.
+     */
+    public function eliminar(
+        string $sedeLocal,
+        string $codigo,
+        string $sedeOrigen,
+    ): bool {
+        $deleted = RequisicionManual::query()
+            ->where('sede_local', strtoupper($sedeLocal))
+            ->where('codigo', $codigo)
+            ->where('sede_origen', strtoupper($sedeOrigen))
+            ->whereNull('aplicada_at')
+            ->delete();
+
+        return $deleted > 0;
     }
 
     public function buildExport(
@@ -188,10 +234,10 @@ class RequisicionPersonalizadaService
         }
 
         return $rows->map(fn (RequisicionManual $m) => [
-            'codigo' => $m->codigo,
-            'unidad' => 'UND',
-            'cantidad' => $m->cantidad,
-            'producto' => $m->producto,
+            'codigo'      => $m->codigo,
+            'unidad'      => 'UND',
+            'cantidad'    => $m->cantidad,
+            'producto'    => $m->producto,
             'sede_origen' => $m->sede_origen,
         ])->values();
     }
@@ -207,25 +253,27 @@ class RequisicionPersonalizadaService
             return 0;
         }
 
-        $codigos = $lines->pluck('codigo')->filter()->values()->all();
         $applied = 0;
 
-        DB::transaction(function () use ($lines, $sedeLocal, $stock, $usuario, $codigos, &$applied) {
+        DB::transaction(function () use ($lines, $sedeLocal, $stock, $usuario, &$applied) {
             foreach ($lines->groupBy('sede_origen') as $origen => $group) {
                 $origenKey = strtoupper((string) $origen);
+                $codigos   = $group->pluck('codigo')->filter()->values()->all();
+
                 $applied += $stock->applyRequisition(
                     $group->values(),
                     $origenKey,
                     strtoupper($sedeLocal),
                     $usuario,
                 );
-            }
 
-            RequisicionManual::query()
-                ->where('sede_local', strtoupper($sedeLocal))
-                ->whereIn('codigo', $codigos)
-                ->whereNull('aplicada_at')
-                ->update(['aplicada_at' => now()]);
+                RequisicionManual::query()
+                    ->where('sede_local', strtoupper($sedeLocal))
+                    ->where('sede_origen', $origenKey)
+                    ->whereIn('codigo', $codigos)
+                    ->whereNull('aplicada_at')
+                    ->update(['aplicada_at' => now()]);
+            }
         });
 
         return $applied;
@@ -273,9 +321,27 @@ class RequisicionPersonalizadaService
         $label = config('inventario.display.'.$sedeOrigen, $sedeOrigen);
 
         if ($pendiente) {
-            return "PENDIENTE EXPORTAR ({$label}: {$cantidad})";
+            return "PENDIENTE ({$label}: {$cantidad})";
         }
 
         return "EXPORTADA ({$label}: {$cantidad})";
+    }
+
+    /**
+     * Build a single summary string when there are multiple sede-origen requisitions.
+     */
+    private function textoAccionManualMulti(array $manualesList): string
+    {
+        if (empty($manualesList)) {
+            return '';
+        }
+
+        $parts = array_map(function (array $m) {
+            $label = config('inventario.display.'.$m['sede_origen'], $m['sede_origen']);
+            $prefix = $m['pendiente'] ? 'PEND' : 'EXP';
+            return "{$prefix} {$label}: {$m['cantidad']}";
+        }, $manualesList);
+
+        return implode(' | ', $parts);
     }
 }

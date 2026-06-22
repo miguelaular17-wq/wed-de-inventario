@@ -72,6 +72,7 @@ class StockMovementService
         $metric = \App\Models\ProductSedeMetric::query()
             ->where('product_id', $productId)
             ->where('sede', $sede)
+            ->lockForUpdate()
             ->first();
 
         if (! $metric) {

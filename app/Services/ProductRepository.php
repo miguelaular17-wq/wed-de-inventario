@@ -3,20 +3,75 @@
 namespace App\Services;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class ProductRepository
 {
+    private array $loadForSedeCache = [];
+    private ?string $lastStockUpdateCache = null;
+
     public function __construct(
         private InventarioV2Repository $v2,
     ) {}
 
     public function loadForSede(string $sedeLocal): Collection
     {
-        if (config('database.default') === 'pgsql') {
-            return $this->v2->loadForSede($sedeLocal);
+        $stockUpdatedAt = $this->lastStockUpdate();
+        $cacheKey = 'product_repository.load_for_sede.'.$sedeLocal.'.'.md5((string) $stockUpdatedAt);
+
+        $cacheSeconds = max(60, (int) config('inventario.load_for_sede_cache_seconds', 1800));
+
+        $products = $this->loadForSedeCache[$sedeLocal] ??= Cache::remember($cacheKey, $cacheSeconds, function () use ($sedeLocal) {
+            return config('database.default') === 'pgsql'
+                ? $this->v2->loadForSede($sedeLocal)
+                : $this->loadFromSqlite($sedeLocal);
+        });
+
+        if (auth()->check() && auth()->user()->isTelefonia()) {
+            $products = $products->filter(function ($row) {
+                return $this->isAllowedCategoryForTelefonia($row['categoria'] ?? '');
+            })->values();
         }
 
-        return $this->loadFromSqlite($sedeLocal);
+        return $products;
+    }
+
+    public function findForSedeByCodigo(string $sedeLocal, string $codigo): ?array
+    {
+        $product = null;
+        if (isset($this->loadForSedeCache[$sedeLocal])) {
+            $product = $this->loadForSedeCache[$sedeLocal]->firstWhere('cod_centro', $codigo);
+        } elseif (config('database.default') === 'pgsql') {
+            $product = $this->v2->findForSedeByCodigo($sedeLocal, $codigo);
+        } else {
+            $product = $this->findFromSqliteByCodigo($sedeLocal, $codigo);
+        }
+
+        if ($product && auth()->check() && auth()->user()->isTelefonia()) {
+            if (!$this->isAllowedCategoryForTelefonia($product['categoria'] ?? '')) {
+                return null;
+            }
+        }
+
+        return $product;
+    }
+
+    private function isAllowedCategoryForTelefonia(string $category): bool
+    {
+        $normalized = str_replace(
+            ['á', 'é', 'í', 'ó', 'ú', 'Á', 'É', 'Í', 'Ó', 'Ú'],
+            ['a', 'e', 'i', 'o', 'u', 'A', 'E', 'I', 'O', 'U'],
+            mb_strtoupper(trim($category))
+        );
+
+        $allowed = [
+            'TELEFONIA',
+            'ACCESORIOS ELECTRONICOS',
+            'ACCESORIOS TECNOLOGICOS',
+            'ELECTRONICA'
+        ];
+
+        return in_array($normalized, $allowed, true);
     }
 
     private function loadFromSqlite(string $sedeLocal): Collection
@@ -60,10 +115,23 @@ class ProductRepository
 
     public function lastStockUpdate(): ?string
     {
-        if (config('database.default') === 'pgsql') {
-            return $this->v2->lastStockUpdate();
+        if ($this->lastStockUpdateCache !== null) {
+            return $this->lastStockUpdateCache;
         }
 
-        return \App\Models\ProductSedeMetric::query()->max('updated_at');
+        $ttl = max(1, (int) config('inventario.last_stock_update_cache_seconds', 30));
+
+        return $this->lastStockUpdateCache = Cache::remember(
+            'product_repository.last_stock_update_ts',
+            $ttl,
+            fn () => config('database.default') === 'pgsql'
+                ? $this->v2->lastStockUpdate()
+                : \App\Models\ProductSedeMetric::query()->max('updated_at')
+        );
+    }
+
+    public function findFromSqliteByCodigo(string $sedeLocal, string $codigo): ?array
+    {
+        return $this->loadForSede($sedeLocal)->firstWhere('cod_centro', $codigo);
     }
 }

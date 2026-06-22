@@ -9,11 +9,25 @@ class InventarioPgConfig
     public static function load(): array
     {
         $path = config('inventario_pg.config_path');
-        if (! $path || ! File::exists($path)) {
+        if (! $path || ! \Illuminate\Support\Facades\File::exists($path)) {
+            $fallbacks = [
+                base_path('../inventario_pg_config.json'),
+                base_path('../CALL CENTER/inventario_pg_config.json'),
+                base_path('../inventario_pg_config copy.json'),
+            ];
+            foreach ($fallbacks as $fb) {
+                if (\Illuminate\Support\Facades\File::exists($fb)) {
+                    $path = $fb;
+                    break;
+                }
+            }
+        }
+
+        if (! $path || ! \Illuminate\Support\Facades\File::exists($path)) {
             return [];
         }
 
-        $data = json_decode(File::get($path), true);
+        $data = json_decode(\Illuminate\Support\Facades\File::get($path), true);
 
         return is_array($data) ? $data : [];
     }

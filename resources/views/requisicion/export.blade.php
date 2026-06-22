@@ -42,9 +42,6 @@
         <div class="field">
             <label for="sede_origen">Sede origen</label>
             <select name="sede_origen" id="sede_origen" @if(($tipoReporte ?? 'ventas') === 'ventas') required @endif>
-                @if(($tipoReporte ?? 'ventas') === 'personalizada')
-                    <option value="Todas" @selected($selectedSedeOrigen === 'Todas')>Todas las sedes</option>
-                @endif
                 @foreach ($sedesOrigen as $origen)
                     <option value="{{ config('inventario.display.'.$origen, $origen) }}" @selected($selectedSedeOrigen === config('inventario.display.'.$origen, $origen))>
                         {{ config('inventario.display.'.$origen, $origen) }}
@@ -306,7 +303,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    let rowDebounce = null;
     previewCards.forEach(function (card) {
         card.addEventListener('click', function () {
             card.classList.toggle('excluded-item');
@@ -322,8 +318,16 @@ document.addEventListener('DOMContentLoaded', function () {
             syncExcludedInputs();
             if (filtersForm) {
                 copyExcludedToFilters();
-                clearTimeout(rowDebounce);
-                rowDebounce = setTimeout(function () { filtersForm.submit(); }, 350);
+                
+                // Update URL search parameters dynamically without reloading the page
+                const url = new URL(window.location.href);
+                url.searchParams.delete('exclude_codes[]');
+                
+                document.querySelectorAll('#preview-list .product-card.excluded-item').forEach(function (c) {
+                    url.searchParams.append('exclude_codes[]', c.dataset.code);
+                });
+                
+                history.replaceState(null, '', url.toString());
             }
         });
     });
@@ -340,6 +344,15 @@ document.addEventListener('DOMContentLoaded', function () {
             syncExcludedInputs();
             if (excludedCount) excludedCount.textContent = '0';
             if (filteredCount) filteredCount.textContent = totalRows;
+            
+            if (filtersForm) {
+                copyExcludedToFilters();
+                
+                // Remove exclude_codes from URL dynamically
+                const url = new URL(window.location.href);
+                url.searchParams.delete('exclude_codes[]');
+                history.replaceState(null, '', url.toString());
+            }
         });
     }
 

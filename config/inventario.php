@@ -49,4 +49,9 @@ return [
 
     /** Tutorial guiado para usuarios nuevos (desactivado) */
     'tutorial_enabled' => false,
+
+    'per_page' => (int) env('PER_PAGE', 75),
+    'sync_interval_ms' => (int) env('SYNC_INTERVAL_MS', 60000),
+    'last_stock_update_cache_seconds' => (int) env('LAST_STOCK_UPDATE_CACHE_SECONDS', 30),
+    'load_for_sede_cache_seconds' => (int) env('LOAD_FOR_SEDE_CACHE_SECONDS', 1800),
 ];

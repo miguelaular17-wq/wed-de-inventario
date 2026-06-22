@@ -45,7 +45,6 @@ class MovimientoController extends Controller
             'updated_at' => $movimientos->lastUpdatedAt(),
             'rows' => $result['rows'],
             'removed' => $result['removed'],
-            'count' => $movimientos->list($filters)->count(),
         ]);
     }
 }

@@ -40,6 +40,6 @@ class ImportController extends Controller
 
         return redirect()
             ->route('admin.dashboard')
-            ->with('status', "Importación completada: {$count} productos cargados en la base de datos.");
+            ->with('status', "Importación completada: {$count} productos cargados. Los movimientos de requisiciones registrados en la app fueron reaplicados automáticamente sobre el nuevo inventario.");
     }
 }

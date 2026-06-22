@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\PaginatesCollections;
 use App\Services\ProductRepository;
 use App\Services\VentasCalculator;
 use App\Services\VentasFilterService;
@@ -11,6 +12,8 @@ use Illuminate\View\View;
 
 class VentasController extends Controller
 {
+    use PaginatesCollections;
+
     public function __construct(
         private ProductRepository $products,
         private VentasCalculator $ventas,
@@ -18,6 +21,17 @@ class VentasController extends Controller
     ) {}
 
     public function index(Request $request): View
+    {
+        $viewData = $this->buildIndexData($request);
+
+        if ($request->header('X-Partial') === 'content') {
+            return view('ventas._content', $viewData);
+        }
+
+        return view('ventas.index', $viewData);
+    }
+
+    private function buildIndexData(Request $request): array
     {
         $sede = (string) $request->session()->get('sede_local');
 
@@ -39,12 +53,32 @@ class VentasController extends Controller
             'req_color' => (string) $request->query('req_color', 'Todos'),
         ];
 
-        $calculated = $this->ventas->calcular($this->products->loadForSede($sede), $sede, $tp);
-        $rows = $this->filters->apply($calculated, $filterInput);
+        $products = $this->products->loadForSede($sede);
+        if ($filterInput['q'] !== '' || $filterInput['categoria'] !== 'Ninguno' || $filterInput['subcategoria'] !== 'Ninguno') {
+            $qLower = mb_strtolower($filterInput['q']);
+            $products = $products->filter(function (array $row) use ($filterInput, $qLower) {
+                if ($filterInput['categoria'] !== 'Ninguno' && ($row['categoria'] ?? '') !== $filterInput['categoria']) {
+                    return false;
+                }
+                if ($filterInput['subcategoria'] !== 'Ninguno' && ($row['subcategoria'] ?? '') !== $filterInput['subcategoria']) {
+                    return false;
+                }
+                if ($qLower === '') {
+                    return true;
+                }
 
-        $reqFiltersVisible = $filterInput['accion'] === 'HACER REQUISICION';
+                return str_contains(mb_strtolower((string) ($row['cod_centro'] ?? '')), $qLower)
+                    || str_contains(mb_strtolower((string) ($row['producto'] ?? '')), $qLower);
+            })->values();
+        }
 
-        return view('ventas.index', [
+        $calculated = $this->ventas->calcular($products, $sede, $tp);
+        $rows = $this->paginateCollection(
+            $this->filters->apply($calculated, $filterInput),
+            $request
+        );
+
+        return [
             'sede' => $sede,
             'rows' => $rows,
             'calculatedCount' => $calculated->count(),
@@ -56,7 +90,7 @@ class VentasController extends Controller
             ),
             'accionesCombo' => $this->filters->accionesCombo(),
             'sedesOpc' => $this->filters->sedesOpc($calculated),
-            'reqFiltersVisible' => $reqFiltersVisible,
+            'reqFiltersVisible' => $filterInput['accion'] === 'HACER REQUISICION',
             'tiempoPronostico' => (int) $tp,
             'minimoInv' => (int) config('inventario.minimo_inv_solicitar', 6),
             'sedesStock' => collect(config('inventario.sedes_stock'))
@@ -64,7 +98,7 @@ class VentasController extends Controller
                 ->values()
                 ->all(),
             'stockUpdatedAt' => $this->products->lastStockUpdate(),
-        ]);
+        ];
     }
 
     public function sync(Request $request): JsonResponse

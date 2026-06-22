@@ -59,6 +59,8 @@ def export_excel(path: Path) -> list[dict]:
         "Subcategoria" if "Subcategoria" in df.columns else None
     )
     prov_col = "Proveedor" if "Proveedor" in df.columns else None
+    precio1_col = "Precio 1" if "Precio 1" in df.columns else ("precio 1" if "precio 1" in df.columns else None)
+    precio2_col = "Precio 2" if "Precio 2" in df.columns else ("precio 2" if "precio 2" in df.columns else None)
 
     df = df.copy()
     df["_cod"] = _norm_cod_series(df["COD CENTRO"])
@@ -71,6 +73,7 @@ def export_excel(path: Path) -> list[dict]:
         prom_col = f"{label} promedio 15 días (60d)"
         vent_col = f"{label} ventas"
         uv_col = f"{label} última venta"
+        uc_col = f"{label} última compra"
         prefix = f"_{sede_key}_"
         if ex_col in df.columns:
             df[prefix + "ex"] = pd.to_numeric(df[ex_col], errors="coerce").fillna(0).astype(int)
@@ -88,6 +91,10 @@ def export_excel(path: Path) -> list[dict]:
             df[prefix + "uv"] = _parse_date_series(df[uv_col])
         else:
             df[prefix + "uv"] = None
+        if uc_col in df.columns:
+            df[prefix + "uc"] = _parse_date_series(df[uc_col])
+        else:
+            df[prefix + "uc"] = None
         sede_fields[sede_key] = {"prefix": prefix}
 
     if cat_col:
@@ -102,6 +109,14 @@ def export_excel(path: Path) -> list[dict]:
         df["_proveedor"] = df[prov_col].fillna("").astype(str).str.strip()
     else:
         df["_proveedor"] = ""
+    if precio1_col:
+        df["_precio_unidad"] = pd.to_numeric(df[precio1_col], errors="coerce").fillna(0.0).round(2)
+    else:
+        df["_precio_unidad"] = 0.0
+    if precio2_col:
+        df["_precio_mayor"] = pd.to_numeric(df[precio2_col], errors="coerce").fillna(0.0).round(2)
+    else:
+        df["_precio_mayor"] = 0.0
 
     rows: list[dict] = []
     codes = df["_cod"].tolist()
@@ -109,6 +124,8 @@ def export_excel(path: Path) -> list[dict]:
     categorias = df["_categoria"].tolist()
     subcategorias = df["_subcategoria"].tolist()
     proveedores = df["_proveedor"].tolist()
+    precios_unidad = df["_precio_unidad"].tolist()
+    precios_mayor = df["_precio_mayor"].tolist()
 
     sede_arrays: dict[str, dict[str, list]] = {}
     for sede_key, meta in sede_fields.items():
@@ -118,6 +135,7 @@ def export_excel(path: Path) -> list[dict]:
             "prom": df[prefix + "prom"].tolist(),
             "vent": df[prefix + "vent"].tolist(),
             "uv": df[prefix + "uv"].tolist(),
+            "uc": df[prefix + "uc"].tolist(),
         }
 
     n = len(df)
@@ -128,13 +146,17 @@ def export_excel(path: Path) -> list[dict]:
             promedio = int(arr["prom"][i])
             ventas = float(arr["vent"][i])
             uv = arr["uv"][i]
+            uc = arr["uc"][i]
             if uv is not None and isinstance(uv, float) and math.isnan(uv):
                 uv = None
-            if existencia or promedio or ventas or uv:
+            if uc is not None and isinstance(uc, float) and math.isnan(uc):
+                uc = None
+            if existencia or promedio or ventas or uv or uc:
                 sedes[sede_key] = {
                     "existencia": existencia,
                     "ventas_60d": ventas,
                     "ultima_venta": uv,
+                    "ultima_compra": uc,
                     "promedio_15d": promedio,
                 }
 
@@ -145,6 +167,8 @@ def export_excel(path: Path) -> list[dict]:
                 "categoria": categorias[i],
                 "subcategoria": subcategorias[i],
                 "proveedor": proveedores[i],
+                "precio_unidad": float(precios_unidad[i]),
+                "precio_mayor": float(precios_mayor[i]),
                 "sedes": sedes,
             }
         )

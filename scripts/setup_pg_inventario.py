@@ -13,11 +13,40 @@ SCRIPTS = LARAVEL / "scripts"
 
 
 def load_pg_config() -> dict:
-    for name in ("inventario_pg_config copy.json", "inventario_pg_config.json"):
-        p = ROOT / name
+    # Find .env file in laravel_app directory or current directories
+    env_paths = [
+        LARAVEL / ".env",
+        ROOT / ".env",
+        Path(__file__).resolve().parents[1] / ".env",
+    ]
+    env_file = None
+    for p in env_paths:
         if p.is_file():
-            return json.loads(p.read_text(encoding="utf-8"))
-    raise FileNotFoundError("No se encontró inventario_pg_config copy.json")
+            env_file = p
+            break
+            
+    if not env_file:
+        raise FileNotFoundError("No se encontró el archivo .env en laravel_app o la raíz.")
+
+    config = {}
+    with env_file.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, val = line.split("=", 1)
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                config[key] = val
+
+    return {
+        "PGHOST": config.get("DB_HOST", "localhost"),
+        "PGPORT": int(config.get("DB_PORT", 5432)),
+        "PGDATABASE": config.get("DB_DATABASE", "postgres"),
+        "PGUSER": config.get("DB_USERNAME", "postgres"),
+        "PGPASSWORD": config.get("DB_PASSWORD", ""),
+    }
 
 
 def connect(cfg: dict):
