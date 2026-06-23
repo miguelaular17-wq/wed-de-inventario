@@ -79,8 +79,8 @@ class AnalisisInventarioService
             ),
             calculated_indicators AS (
                 SELECT *,
-                    EXTRACT(DAY FROM CURRENT_DATE - ultima_venta) as dias_sin_venta_raw,
-                    EXTRACT(DAY FROM CURRENT_DATE - ultima_compra) as dias_sin_compra_raw
+                    (CURRENT_DATE - ultima_venta) as dias_sin_venta_raw,
+                    (CURRENT_DATE - ultima_compra) as dias_sin_compra_raw
                 FROM product_metrics
                 WHERE total_stock > 0
             ),
@@ -304,9 +304,9 @@ class AnalisisInventarioService
                     sa.sede,
                     COUNT(DISTINCT p.id) as total_productos,
                     SUM(sa.existencia) as stock_total,
-                    COUNT(CASE WHEN vh.ultima_venta IS NULL OR EXTRACT(DAY FROM CURRENT_DATE - vh.ultima_venta) > 90 THEN 1 END) as sin_rotacion,
+                    COUNT(CASE WHEN vh.ultima_venta IS NULL OR (CURRENT_DATE - vh.ultima_venta) > 90 THEN 1 END) as sin_rotacion,
                     COUNT(CASE WHEN vh.venta_promedio > 0 AND (sa.existencia::numeric / vh.venta_promedio::numeric) > 4 THEN 1 END) as sobrestock,
-                    COUNT(CASE WHEN sa.existencia > 0 AND EXTRACT(DAY FROM CURRENT_DATE - vh.ultima_venta) > 90 THEN 1 END) as inmovilizados
+                    COUNT(CASE WHEN sa.existencia > 0 AND (CURRENT_DATE - vh.ultima_venta) > 90 THEN 1 END) as inmovilizados
                 FROM inventario_v2.productos p
                 LEFT JOIN inventario_v2.stock_actual sa ON p.id = sa.producto_id
                 LEFT JOIN inventario_v2.ventas_historicas vh ON p.id = vh.producto_id AND sa.sede = vh.sede
