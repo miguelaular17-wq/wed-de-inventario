@@ -47,6 +47,7 @@
                         <th class="col-number" style="width:100px;">{{ config('inventario.display.'.$sedeCol, $sedeCol) }}</th>
                     @endforeach
                     <th class="col-number" style="width:120px; color:#16a34a; font-weight:700;">P. Unidad</th>
+                    <th class="col-number" style="width:140px; color:#0284c7; font-weight:700;">Desc. Especial (30%)</th>
                     <th class="col-number" style="width:120px; color:#7c3aed; font-weight:700;">P. Mayor</th>
                 </tr>
             </thead>
@@ -80,6 +81,22 @@
                                 <span style="color:#94a3b8;">—</span>
                             @endif
                         </td>
+                        <td class="col-number">
+                            @if(($row['precio_unidad'] ?? 0) > 0)
+                                @php
+                                    $descAmount = $row['precio_unidad'] * 0.30;
+                                    $priceWithDesc = $row['precio_unidad'] * 0.70;
+                                @endphp
+                                <div style="font-weight:700; color:#0284c7;">
+                                    ${{ number_format($descAmount, 2) }}
+                                </div>
+                                <div style="font-size:0.75rem; color:var(--muted); margin-top:2px;">
+                                    Neto: ${{ number_format($priceWithDesc, 2) }}
+                                </div>
+                            @else
+                                <span style="color:#94a3b8;">—</span>
+                            @endif
+                        </td>
                         <td class="col-number" style="font-weight:700; color:#7c3aed;">
                             @if(($row['precio_mayor'] ?? 0) > 0)
                                 ${{ number_format($row['precio_mayor'], 2) }}
@@ -90,7 +107,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ 4 + count($sedes) + 2 }}" style="text-align:center; padding:32px; color:var(--muted);">
+                        <td colspan="{{ 4 + count($sedes) + 3 }}" style="text-align:center; padding:32px; color:var(--muted);">
                             No se encontraron productos.
                         </td>
                     </tr>
@@ -124,6 +141,10 @@
                 <div style="background:rgba(255,255,255,.15); border-radius:8px; padding:8px 14px;">
                     <div style="font-size:.75rem; opacity:.8;">Precio al mayor</div>
                     <div id="cashea-pmayor" style="font-size:1.1rem; font-weight:700;"></div>
+                </div>
+                <div style="background:rgba(255,255,255,.15); border-radius:8px; padding:8px 14px;">
+                    <div style="font-size:.75rem; opacity:.8;">Desc. Especial (30%)</div>
+                    <div id="cashea-descuento" style="font-size:1.1rem; font-weight:700; color:#e0f2fe;"></div>
                 </div>
             </div>
         </div>
@@ -202,6 +223,11 @@
         document.getElementById('cashea-nombre').textContent  = `${nombre} — ${codigo}`;
         document.getElementById('cashea-punit').textContent   = precioUnit  > 0 ? fmt(precioUnit)  : '—';
         document.getElementById('cashea-pmayor').textContent  = precioMayor > 0 ? fmt(precioMayor) : '—';
+        
+        const descEspecial = precioUnit * 0.30;
+        const netoEspecial = precioUnit * 0.70;
+        document.getElementById('cashea-descuento').textContent = precioUnit > 0 ? `${fmt(descEspecial)} (Neto: ${fmt(netoEspecial)})` : '—';
+
         document.getElementById('cashea-resultado').style.display = 'none';
 
         const container = document.getElementById('cashea-niveles');
