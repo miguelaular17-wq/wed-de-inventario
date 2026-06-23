@@ -39,6 +39,10 @@ class ImportController extends Controller
 
         try {
             $count = $import->importFromExcel($path);
+            
+            // Automatically clear cache and compiled views after successful import to free memory
+            \Illuminate\Support\Facades\Artisan::call('cache:clear');
+            \Illuminate\Support\Facades\Artisan::call('view:clear');
         } catch (\Throwable $e) {
             if (is_file($path)) {
                 @unlink($path);
