@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (\Illuminate\Support\Facades\DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         // Add the new column without schema prefix for the connection to handle
         Schema::connection('pgsql')->table('ventas_historicas', function (Blueprint $table) {
             if (! Schema::connection('pgsql')->hasColumn('ventas_historicas', 'ultima_compra')) {
@@ -24,6 +28,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (\Illuminate\Support\Facades\DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         Schema::connection('pgsql')->table('ventas_historicas', function (Blueprint $table) {
             $table->dropColumn('ultima_compra');
         });

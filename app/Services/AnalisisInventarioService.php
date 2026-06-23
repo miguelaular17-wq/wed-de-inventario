@@ -22,6 +22,10 @@ class AnalisisInventarioService
      */
     public function getAnalysis(array $filters = []): Collection
     {
+        if (config('database.default') !== 'pgsql') {
+            return collect();
+        }
+
         $sedes = config('inventario.sedes_stock');
 
         // ── Step 1: Fetch raw data from PostgreSQL with aggregations ──

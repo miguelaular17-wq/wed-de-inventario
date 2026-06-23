@@ -12,8 +12,13 @@ class ImportController extends Controller
 {
     public function create(): View
     {
+        $defaultPath = base_path('../ExelMultiSede (2).xlsx');
+        if (! is_file($defaultPath)) {
+            $defaultPath = database_path('seeders/ExelMultiSede.xlsx');
+        }
+
         return view('admin.import', [
-            'defaultPath' => base_path('../ExelMultiSede (2).xlsx'),
+            'defaultPath' => $defaultPath,
         ]);
     }
 

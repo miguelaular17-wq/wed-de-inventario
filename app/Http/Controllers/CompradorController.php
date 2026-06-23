@@ -225,67 +225,71 @@ class CompradorController extends Controller
             sort($subcatMap[$cat]);
         }
 
-        // Fetch advertised products (Publicidad)
-        $publicitados = \Illuminate\Support\Facades\DB::connection('pgsql')
-            ->table('publicidad_productos as pub')
-            ->join('productos as p', 'pub.producto_id', '=', 'p.id')
-            ->leftJoin(
-                \Illuminate\Support\Facades\DB::raw('(SELECT producto_id, SUM(existencia) as total_stock FROM stock_actual GROUP BY producto_id) sa'),
-                'p.id', '=', 'sa.producto_id'
-            )
-            ->leftJoin(
-                \Illuminate\Support\Facades\DB::raw("(SELECT producto_id,
-                    MAX(ultima_venta) as ultima_venta,
-                    SUM(venta_promedio) as promedio_venta_total
-                FROM ventas_historicas GROUP BY producto_id) vh"),
-                'p.id', '=', 'vh.producto_id'
-            )
-            ->select([
-                'p.id',
-                'p.codigo',
-                'p.nombre',
-                'p.categoria',
-                'p.proveedor',
-                'pub.fecha_publicidad',
-                'pub.ultima_venta_original',
-                \Illuminate\Support\Facades\DB::raw('COALESCE(sa.total_stock, 0) as total_stock'),
-                'vh.ultima_venta as ultima_venta_actual',
-            ])
-            ->orderBy('pub.fecha_publicidad', 'desc')
-            ->get();
-
         $publicitadosData = [];
-        foreach ($publicitados as $row) {
-            $tuvoVentas = false;
-            if ($row->ultima_venta_actual) {
-                $dateActual = \Carbon\Carbon::parse($row->ultima_venta_actual);
-                $datePub = \Carbon\Carbon::parse($row->fecha_publicidad);
-                if ($row->ultima_venta_original === null 
-                    || $dateActual->gt(\Carbon\Carbon::parse($row->ultima_venta_original)) 
-                    || $dateActual->greaterThanOrEqualTo($datePub->startOfDay())
-                ) {
-                    $tuvoVentas = true;
-                }
-            }
-            
-            $publicitadosData[] = [
-                'id' => $row->id,
-                'codigo' => $row->codigo,
-                'producto' => $row->nombre,
-                'categoria' => $row->categoria,
-                'proveedor' => $row->proveedor,
-                'total_stock' => (int)$row->total_stock,
-                'fecha_publicidad' => \Carbon\Carbon::parse($row->fecha_publicidad)->format('d/m/Y H:i'),
-                'ultima_venta_original' => $row->ultima_venta_original ? \Carbon\Carbon::parse($row->ultima_venta_original)->format('d/m/Y') : 'Sin datos',
-                'ultima_venta_actual' => $row->ultima_venta_actual ? \Carbon\Carbon::parse($row->ultima_venta_actual)->format('d/m/Y') : 'Sin datos',
-                'tuvo_ventas' => $tuvoVentas,
-            ];
-        }
+        $advertisedProductIds = [];
 
-        $advertisedProductIds = \Illuminate\Support\Facades\DB::connection('pgsql')
-            ->table('publicidad_productos')
-            ->pluck('producto_id')
-            ->toArray();
+        if (config('database.default') === 'pgsql') {
+            // Fetch advertised products (Publicidad)
+            $publicitados = \Illuminate\Support\Facades\DB::connection('pgsql')
+                ->table('publicidad_productos as pub')
+                ->join('productos as p', 'pub.producto_id', '=', 'p.id')
+                ->leftJoin(
+                    \Illuminate\Support\Facades\DB::raw('(SELECT producto_id, SUM(existencia) as total_stock FROM stock_actual GROUP BY producto_id) sa'),
+                    'p.id', '=', 'sa.producto_id'
+                )
+                ->leftJoin(
+                    \Illuminate\Support\Facades\DB::raw("(SELECT producto_id,
+                        MAX(ultima_venta) as ultima_venta,
+                        SUM(venta_promedio) as promedio_venta_total
+                    FROM ventas_historicas GROUP BY producto_id) vh"),
+                    'p.id', '=', 'vh.producto_id'
+                )
+                ->select([
+                    'p.id',
+                    'p.codigo',
+                    'p.nombre',
+                    'p.categoria',
+                    'p.proveedor',
+                    'pub.fecha_publicidad',
+                    'pub.ultima_venta_original',
+                    \Illuminate\Support\Facades\DB::raw('COALESCE(sa.total_stock, 0) as total_stock'),
+                    'vh.ultima_venta as ultima_venta_actual',
+                ])
+                ->orderBy('pub.fecha_publicidad', 'desc')
+                ->get();
+
+            foreach ($publicitados as $row) {
+                $tuvoVentas = false;
+                if ($row->ultima_venta_actual) {
+                    $dateActual = \Carbon\Carbon::parse($row->ultima_venta_actual);
+                    $datePub = \Carbon\Carbon::parse($row->fecha_publicidad);
+                    if ($row->ultima_venta_original === null 
+                        || $dateActual->gt(\Carbon\Carbon::parse($row->ultima_venta_original)) 
+                        || $dateActual->greaterThanOrEqualTo($datePub->startOfDay())
+                    ) {
+                        $tuvoVentas = true;
+                    }
+                }
+                
+                $publicitadosData[] = [
+                    'id' => $row->id,
+                    'codigo' => $row->codigo,
+                    'producto' => $row->nombre,
+                    'categoria' => $row->categoria,
+                    'proveedor' => $row->proveedor,
+                    'total_stock' => (int)$row->total_stock,
+                    'fecha_publicidad' => \Carbon\Carbon::parse($row->fecha_publicidad)->format('d/m/Y H:i'),
+                    'ultima_venta_original' => $row->ultima_venta_original ? \Carbon\Carbon::parse($row->ultima_venta_original)->format('d/m/Y') : 'Sin datos',
+                    'ultima_venta_actual' => $row->ultima_venta_actual ? \Carbon\Carbon::parse($row->ultima_venta_actual)->format('d/m/Y') : 'Sin datos',
+                    'tuvo_ventas' => $tuvoVentas,
+                ];
+            }
+
+            $advertisedProductIds = \Illuminate\Support\Facades\DB::connection('pgsql')
+                ->table('publicidad_productos')
+                ->pluck('producto_id')
+                ->toArray();
+        }
 
         return view('comprador.index', [
             'productos' => $paginatedItems,
@@ -529,6 +533,14 @@ class CompradorController extends Controller
         
         $productoId = $data['producto_id'];
         
+        if (config('database.default') !== 'pgsql') {
+            return response()->json([
+                'success' => true,
+                'status' => 'removed',
+                'message' => 'Campaña de publicidad no disponible en SQLite.'
+            ]);
+        }
+        
         $exists = \Illuminate\Support\Facades\DB::connection('pgsql')
             ->table('publicidad_productos')
             ->where('producto_id', $productoId)
@@ -551,7 +563,7 @@ class CompradorController extends Controller
                 ->where('producto_id', $productoId)
                 ->select(\Illuminate\Support\Facades\DB::raw('MAX(ultima_venta) as ultima_venta'))
                 ->first();
-                
+            
             $lastSaleDate = $lastSaleRow ? $lastSaleRow->ultima_venta : null;
             
             \Illuminate\Support\Facades\DB::connection('pgsql')

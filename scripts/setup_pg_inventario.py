@@ -210,6 +210,8 @@ def main() -> int:
     limit = int(sys.argv[1]) if len(sys.argv) > 1 else 25
     excel = ROOT / "ExelMultiSede (2).xlsx"
     if not excel.is_file():
+        excel = ROOT / "database" / "seeders" / "ExelMultiSede.xlsx"
+    if not excel.is_file():
         print(f"No existe {excel}", file=sys.stderr)
         return 1
 

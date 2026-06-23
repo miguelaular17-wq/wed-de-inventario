@@ -17,8 +17,13 @@ class ImportMultisedeCommand extends Command
 
     public function handle(MultisedeImportService $import): int
     {
-        $path = $this->argument('path')
-            ?? base_path('../ExelMultiSede (2).xlsx');
+        $path = $this->argument('path');
+        if (! $path) {
+            $path = base_path('../ExelMultiSede (2).xlsx');
+            if (! is_file($path)) {
+                $path = database_path('seeders/ExelMultiSede.xlsx');
+            }
+        }
 
         if (! is_file($path)) {
             $this->error("No se encontró: {$path}");

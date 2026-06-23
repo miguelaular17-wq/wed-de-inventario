@@ -21,10 +21,13 @@ class ExportProductosEjemploCommand extends Command
     ): int {
         $limit = max(1, (int) $this->option('limit'));
         $excel = base_path('../ExelMultiSede (2).xlsx');
+        if (! is_file($excel)) {
+            $excel = database_path('seeders/ExelMultiSede.xlsx');
+        }
 
         if ($this->option('import') || ($v2->isActive() && \App\Models\V2\Producto::query()->count() === 0)) {
             if (! is_file($excel)) {
-                $this->error('No hay productos en BD y falta ExelMultiSede (2).xlsx');
+                $this->error('No hay productos en BD y falta ExelMultiSede.xlsx');
 
                 return self::FAILURE;
             }
