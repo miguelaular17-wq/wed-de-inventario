@@ -29,7 +29,11 @@ class MultisedeImportService
         $process->run();
 
         if (! $process->isSuccessful()) {
-            throw new \RuntimeException(trim($process->getErrorOutput() ?: $process->getOutput()));
+            $err = trim($process->getErrorOutput() ?: $process->getOutput());
+            if (empty($err)) {
+                $err = "El comando de importación Python falló sin salida (código de salida: " . $process->getExitCode() . " - " . $process->getExitCodeText() . ")";
+            }
+            throw new \RuntimeException($err);
         }
 
         $rows = json_decode(File::get($jsonPath), true);

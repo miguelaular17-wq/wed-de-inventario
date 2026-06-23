@@ -1,6 +1,6 @@
 FROM php:8.2-apache
 
-# Install system dependencies and PostgreSQL drivers
+# Install system dependencies, PostgreSQL drivers, and Python environment for Excel parsing
 RUN apt-get update && apt-get install -y \
     libpng-dev \
     libjpeg-dev \
@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y \
     unzip \
     git \
     libpq-dev \
+    python3 \
+    python3-pandas \
+    python3-openpyxl \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install gd pdo pdo_pgsql pgsql
 
