@@ -36,17 +36,23 @@ class MultisedeImportService
             throw new \RuntimeException($err);
         }
 
-        $rows = json_decode(File::get($jsonPath), true);
-        if (! is_array($rows)) {
-            throw new \RuntimeException('JSON de importación inválido.');
-        }
+        try {
+            $rows = json_decode(File::get($jsonPath), true);
+            if (! is_array($rows)) {
+                throw new \RuntimeException('JSON de importación inválido.');
+            }
 
-        if ($limit !== null && $limit > 0) {
-            $rows = array_slice($rows, 0, $limit);
-        }
+            if ($limit !== null && $limit > 0) {
+                $rows = array_slice($rows, 0, $limit);
+            }
 
-        $count = $this->importFromArray($rows);
-        unset($rows);
+            $count = $this->importFromArray($rows);
+            unset($rows);
+        } finally {
+            if (File::exists($jsonPath)) {
+                File::delete($jsonPath);
+            }
+        }
 
         return $count;
     }

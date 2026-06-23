@@ -65,6 +65,7 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::post('/usuarios/{user}', [UserController::class, 'update'])->name('users.update');
     Route::delete('/usuarios/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::post('/config/cashea', [UserController::class, 'updateCashea'])->name('config.cashea.update');
+    Route::post('/clear-cache', [DashboardController::class, 'clearCache'])->name('clear-cache');
 });
 
 // Sede change views accessible by roles with sede access

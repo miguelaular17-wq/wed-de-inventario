@@ -40,7 +40,14 @@ class ImportController extends Controller
         try {
             $count = $import->importFromExcel($path);
         } catch (\Throwable $e) {
+            if (is_file($path)) {
+                @unlink($path);
+            }
             return back()->withErrors(['excel' => 'Error al importar: '.$e->getMessage()]);
+        }
+
+        if (is_file($path)) {
+            @unlink($path);
         }
 
         return redirect()

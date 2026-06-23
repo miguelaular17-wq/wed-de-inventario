@@ -21,6 +21,9 @@ RUN echo "upload_max_filesize = 128M" > /usr/local/etc/php/conf.d/uploads.ini \
     && echo "post_max_size = 128M" >> /usr/local/etc/php/conf.d/uploads.ini \
     && echo "memory_limit = 512M" >> /usr/local/etc/php/conf.d/uploads.ini
 
+# Limit Apache MaxRequestWorkers to prevent Out-Of-Memory on low RAM containers, and recycle them to prevent memory leaks
+RUN echo "<IfModule mpm_prefork_module>\n\tStartServers 2\n\tMinSpareServers 2\n\tMaxSpareServers 4\n\tMaxRequestWorkers 8\n\tMaxConnectionsPerChild 100\n</IfModule>" > /etc/apache2/mods-available/mpm_prefork.conf
+
 # Enable Apache mod_rewrite
 RUN a2enmod rewrite
 

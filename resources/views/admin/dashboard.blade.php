@@ -31,6 +31,10 @@
         @else
             <a href="{{ route('sede.select') }}" class="btn secondary">Elegir sede operativa</a>
         @endif
+        <form method="POST" action="{{ route('admin.clear-cache') }}" style="display:inline;margin:0;">
+            @csrf
+            <button type="submit" class="btn secondary" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;" onclick="return confirm('¿Seguro que deseas vaciar la caché y limpiar los archivos temporales?')">Limpiar Caché y Liberar RAM</button>
+        </form>
     </div>
 
     @if($lastImport)
