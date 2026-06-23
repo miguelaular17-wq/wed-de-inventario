@@ -217,7 +217,7 @@ class InventarioV2Repository
                 ];
             }
 
-            foreach (array_chunk($productRows, 400) as $chunk) {
+            foreach (array_chunk($productRows, 1500) as $chunk) {
                 DB::connection('pgsql')->table('productos')->upsert(
                     $chunk,
                     ['codigo'],
@@ -257,11 +257,11 @@ class InventarioV2Repository
                 }
             }
 
-            foreach (array_chunk($stockRows, 800) as $chunk) {
+            foreach (array_chunk($stockRows, 5000) as $chunk) {
                 DB::connection('pgsql')->table('stock_actual')->insert($chunk);
             }
 
-            foreach (array_chunk($ventaRows, 800) as $chunk) {
+            foreach (array_chunk($ventaRows, 4000) as $chunk) {
                 DB::connection('pgsql')->table('ventas_historicas')->insert($chunk);
             }
         });
@@ -286,27 +286,84 @@ class InventarioV2Repository
             ->table('productos')
             ->where('activo', true)
             ->pluck('id')
-            ->flip();
+            ->flip()
+            ->toArray();
 
-        DB::connection('pgsql')->transaction(function () use ($activeProductIds) {
-            Movimiento::query()
-                ->orderBy('created_at', 'asc')
-                ->each(function (Movimiento $m) use ($activeProductIds) {
-                    // Skip movements for products removed from the catalogue
-                    if (! isset($activeProductIds[$m->producto_id])) {
-                        return;
-                    }
+        // Step 1: Accumulate net changes in memory to avoid N+1 database queries
+        $adjustments = []; // [productId => [sede => delta]]
+        
+        Movimiento::query()
+            ->orderBy('created_at', 'asc')
+            ->each(function (Movimiento $m) use ($activeProductIds, &$adjustments) {
+                if (! isset($activeProductIds[$m->producto_id])) {
+                    return;
+                }
 
-                    // Subtract from the origin sede (if present)
-                    if (! empty($m->origen)) {
-                        $this->adjustStock($m->producto_id, $m->origen, -$m->cantidad);
+                if (! empty($m->origen)) {
+                    if (! isset($adjustments[$m->producto_id][$m->origen])) {
+                        $adjustments[$m->producto_id][$m->origen] = 0;
                     }
+                    $adjustments[$m->producto_id][$m->origen] -= $m->cantidad;
+                }
 
-                    // Add to the destination sede (if present)
-                    if (! empty($m->destino)) {
-                        $this->adjustStock($m->producto_id, $m->destino, $m->cantidad);
+                if (! empty($m->destino)) {
+                    if (! isset($adjustments[$m->producto_id][$m->destino])) {
+                        $adjustments[$m->producto_id][$m->destino] = 0;
                     }
-                });
+                    $adjustments[$m->producto_id][$m->destino] += $m->cantidad;
+                }
+            });
+
+        // Step 2: Flat list of non-zero adjustments
+        $flatAdjustments = [];
+        foreach ($adjustments as $productId => $sedes) {
+            foreach ($sedes as $sede => $delta) {
+                if ($delta !== 0) {
+                    $flatAdjustments[] = [
+                        'producto_id' => (int) $productId,
+                        'sede' => (string) $sede,
+                        'delta' => (int) $delta,
+                    ];
+                }
+            }
+        }
+
+        if (empty($flatAdjustments)) {
+            return;
+        }
+
+        // Step 3: Run bulk UPDATE queries using PostgreSQL VALUES expression (max 500 records per chunk)
+        DB::connection('pgsql')->transaction(function () use ($flatAdjustments) {
+            foreach (array_chunk($flatAdjustments, 500) as $chunk) {
+                $valuesList = [];
+                $bindings = [];
+                $idx = 0;
+                
+                foreach ($chunk as $adj) {
+                    $pIdKey = "pId_{$idx}";
+                    $sedeKey = "sede_{$idx}";
+                    $deltaKey = "delta_{$idx}";
+                    
+                    $valuesList[] = "(:{$pIdKey}::bigint, :{$sedeKey}::varchar, :{$deltaKey}::integer)";
+                    
+                    $bindings[$pIdKey] = $adj['producto_id'];
+                    $bindings[$sedeKey] = $adj['sede'];
+                    $bindings[$deltaKey] = $adj['delta'];
+                    
+                    $idx++;
+                }
+
+                $valuesSql = implode(', ', $valuesList);
+                $sql = "
+                    UPDATE inventario_v2.stock_actual as sa
+                    SET existencia = GREATEST(0, sa.existencia + v.delta),
+                        updated_at = NOW()
+                    FROM (VALUES {$valuesSql}) as v(producto_id, sede, delta)
+                    WHERE sa.producto_id = v.producto_id AND sa.sede = v.sede
+                ";
+
+                DB::connection('pgsql')->statement($sql, $bindings);
+            }
         });
     }
 
