@@ -9,9 +9,9 @@ class SampleProductsSeeder extends Seeder
 {
     public function run(MultisedeImportService $import): void
     {
-        $excel = base_path('../ExelMultiSede (2).xlsx');
+        $excel = database_path('seeders/ExelMultiSede.xlsx');
         if (! is_file($excel)) {
-            $this->command?->warn('ExelMultiSede (2).xlsx no encontrado; seeder omitido.');
+            $this->command?->warn('ExelMultiSede.xlsx no encontrado; seeder omitido.');
 
             return;
         }
