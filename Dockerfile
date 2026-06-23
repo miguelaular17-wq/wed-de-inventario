@@ -16,6 +16,11 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install gd pdo pdo_pgsql pgsql
 
+# Configure custom PHP settings (upload limits, memory limit)
+RUN echo "upload_max_filesize = 128M" > /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "post_max_size = 128M" >> /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "memory_limit = 512M" >> /usr/local/etc/php/conf.d/uploads.ini
+
 # Enable Apache mod_rewrite
 RUN a2enmod rewrite
 
