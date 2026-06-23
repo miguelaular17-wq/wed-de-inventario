@@ -9,7 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->integer('tutorial_step')->default(-1)->after('sede');
+            if (! Schema::hasColumn('users', 'tutorial_step')) {
+                $table->integer('tutorial_step')->default(-1)->after('sede');
+            }
         });
     }
 

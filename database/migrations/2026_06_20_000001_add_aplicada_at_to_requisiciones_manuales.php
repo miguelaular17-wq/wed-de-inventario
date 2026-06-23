@@ -9,7 +9,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('requisiciones_manuales', function (Blueprint $table) {
-            $table->timestamp('aplicada_at')->nullable()->after('usuario');
+            if (! Schema::hasColumn('requisiciones_manuales', 'aplicada_at')) {
+                $table->timestamp('aplicada_at')->nullable()->after('usuario');
+            }
         });
     }
 

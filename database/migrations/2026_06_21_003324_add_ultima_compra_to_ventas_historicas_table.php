@@ -13,7 +13,9 @@ return new class extends Migration
     {
         // Add the new column without schema prefix for the connection to handle
         Schema::connection('pgsql')->table('ventas_historicas', function (Blueprint $table) {
-            $table->date('ultima_compra')->nullable();
+            if (! Schema::connection('pgsql')->hasColumn('ventas_historicas', 'ultima_compra')) {
+                $table->date('ultima_compra')->nullable();
+            }
         });
     }
 
