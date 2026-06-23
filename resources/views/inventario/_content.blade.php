@@ -1,6 +1,6 @@
 <div class="stats-row">
     <div class="stat-chip"><strong>{{ $rows->total() }}</strong> visibles</div>
-    <div class="stat-chip"><strong>{{ $totalManual ?? 0 }}</strong> pendientes de exportar</div>
+    <div class="stat-chip"><strong id="total-manual-count">{{ $totalManual ?? 0 }}</strong> pendientes de exportar</div>
     @if ($rows->lastPage() > 1)
         <div class="stat-chip">Pág. <strong>{{ $rows->currentPage() }}</strong>/{{ $rows->lastPage() }}</div>
     @endif

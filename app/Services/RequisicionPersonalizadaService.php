@@ -305,6 +305,18 @@ class RequisicionPersonalizadaService
             ->max('updated_at');
     }
 
+    public function getManualesListForProduct(string $sedeLocal, string $codigo): array
+    {
+        $manuales = $this->loadManuales($sedeLocal)->where('codigo', $codigo);
+        return $manuales->map(fn ($m) => [
+            'id'        => $m->id,
+            'sede_origen' => $m->sede_origen,
+            'cantidad'  => (int) $m->cantidad,
+            'pendiente' => $m->isPendiente(),
+            'accion'    => $this->textoAccionManual($m->sede_origen, (int) $m->cantidad, $m->isPendiente()),
+        ])->values()->all();
+    }
+
     private function tieneStockOtrasSedes(array $row, string $sedeLocal): bool
     {
         foreach ($row['stocks'] ?? [] as $sede => $qty) {

@@ -190,45 +190,54 @@ class InventarioController extends Controller
                 ['path' => $request->url(), 'query' => $request->query()]
             );
 
-            // 5. Query categories and subcategories for filter selectors
-            $categorias = \Illuminate\Support\Facades\DB::connection('pgsql')
-                ->table('productos as p')
-                ->where('p.activo', true)
-                ->whereNotNull('p.categoria')
-                ->where('p.categoria', '!=', '')
-                ->whereExists(function ($query) use ($sede) {
-                    $query->select(\Illuminate\Support\Facades\DB::raw(1))
-                        ->from('stock_actual as sa')
-                        ->whereColumn('sa.producto_id', 'p.id')
-                        ->where('sa.sede', '!=', $sede)
-                        ->where('sa.existencia', '>', 0);
-                })
-                ->distinct()
-                ->orderBy('p.categoria')
-                ->pluck('p.categoria')
-                ->all();
+            // 5. Query categories and subcategories for filter selectors (Cached using lastStockUpdate)
+            $stockUpdatedAt = $this->products->lastStockUpdate();
+            $stockUpdateMd5 = md5((string) $stockUpdatedAt);
 
-            $subQuery = \Illuminate\Support\Facades\DB::connection('pgsql')
-                ->table('productos as p')
-                ->where('p.activo', true)
-                ->whereNotNull('p.subcategoria')
-                ->where('p.subcategoria', '!=', '')
-                ->whereExists(function ($query) use ($sede) {
-                    $query->select(\Illuminate\Support\Facades\DB::raw(1))
-                        ->from('stock_actual as sa')
-                        ->whereColumn('sa.producto_id', 'p.id')
-                        ->where('sa.sede', '!=', $sede)
-                        ->where('sa.existencia', '>', 0);
-                });
+            $cacheKeyCat = "inventario_cats_{$sede}_{$stockUpdateMd5}";
+            $categorias = \Illuminate\Support\Facades\Cache::remember($cacheKeyCat, 1800, function () use ($sede) {
+                return \Illuminate\Support\Facades\DB::connection('pgsql')
+                    ->table('productos as p')
+                    ->where('p.activo', true)
+                    ->whereNotNull('p.categoria')
+                    ->where('p.categoria', '!=', '')
+                    ->whereExists(function ($query) use ($sede) {
+                        $query->select(\Illuminate\Support\Facades\DB::raw(1))
+                            ->from('stock_actual as sa')
+                            ->whereColumn('sa.producto_id', 'p.id')
+                            ->where('sa.sede', '!=', $sede)
+                            ->where('sa.existencia', '>', 0);
+                    })
+                    ->distinct()
+                    ->orderBy('p.categoria')
+                    ->pluck('p.categoria')
+                    ->all();
+            });
+
+            $cacheKeySubcat = "inventario_subcats_{$sede}_{$stockUpdateMd5}_" . md5($filters['categoria']);
+            $subcategorias = \Illuminate\Support\Facades\Cache::remember($cacheKeySubcat, 1800, function () use ($sede, $filters) {
+                $subQuery = \Illuminate\Support\Facades\DB::connection('pgsql')
+                    ->table('productos as p')
+                    ->where('p.activo', true)
+                    ->whereNotNull('p.subcategoria')
+                    ->where('p.subcategoria', '!=', '')
+                    ->whereExists(function ($query) use ($sede) {
+                        $query->select(\Illuminate\Support\Facades\DB::raw(1))
+                            ->from('stock_actual as sa')
+                            ->whereColumn('sa.producto_id', 'p.id')
+                            ->where('sa.sede', '!=', $sede)
+                            ->where('sa.existencia', '>', 0);
+                    });
+                    
+                if ($filters['categoria'] !== 'Ninguno') {
+                    $subQuery->where('p.categoria', $filters['categoria']);
+                }
                 
-            if ($filters['categoria'] !== 'Ninguno') {
-                $subQuery->where('p.categoria', $filters['categoria']);
-            }
-            
-            $subcategorias = $subQuery->distinct()
-                ->orderBy('p.subcategoria')
-                ->pluck('p.subcategoria')
-                ->all();
+                return $subQuery->distinct()
+                    ->orderBy('p.subcategoria')
+                    ->pluck('p.subcategoria')
+                    ->all();
+            });
 
             $sedesStock = collect(config('inventario.sedes_stock'))
                 ->reject(fn ($s) => $s === $sede)
@@ -341,6 +350,7 @@ class InventarioController extends Controller
                 'success' => true,
                 'message' => 'Requisición guardada. El stock se aplicará al exportar el CSV.',
                 'total_manual' => $this->reqPersonalizada->countPendientes($sede),
+                'manuales_list' => $this->reqPersonalizada->getManualesListForProduct($sede, $data['codigo']),
             ]);
         }
 
@@ -381,6 +391,7 @@ class InventarioController extends Controller
                 'success' => true,
                 'message' => 'Requisición eliminada correctamente.',
                 'total_manual' => $this->reqPersonalizada->countPendientes($sede),
+                'manuales_list' => $this->reqPersonalizada->getManualesListForProduct($sede, $data['codigo']),
             ]);
         }
 

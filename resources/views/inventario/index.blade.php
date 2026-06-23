@@ -276,6 +276,84 @@
 
     bindProductCards(contentRoot);
 
+    /* ── Instant local UI update ── */
+    function updateProductCardDOM(card, list, totalManual) {
+        if (!card) return;
+
+        // 1. Update data attributes
+        card.dataset.manualesList = JSON.stringify(list);
+        if (list.length > 0) {
+            card.classList.add('has-manual');
+            card.dataset.origenManual = list[0].sede_origen;
+            card.dataset.cantidadManual = list[0].cantidad;
+        } else {
+            card.classList.remove('has-manual');
+            card.dataset.origenManual = '';
+            card.dataset.cantidadManual = '0';
+        }
+
+        // 2. Remove existing tags row and help text/spans
+        const tagsRow = card.querySelector('.manual-tags-row');
+        if (tagsRow) {
+            tagsRow.remove();
+        }
+        const mutedSpans = card.querySelectorAll('span.muted');
+        mutedSpans.forEach(s => s.remove());
+
+        // 3. Insert updated list / elements
+        if (list.length > 0) {
+            const newTagsRow = document.createElement('div');
+            newTagsRow.className = 'manual-tags-row';
+
+            list.forEach(function (m) {
+                const label = sedesDisplay[m.sede_origen] || m.sede_origen;
+                const tagSpan = document.createElement('span');
+                tagSpan.className = 'tag ' + (m.pendiente ? 'manual' : 'ok') + ' tag-sm';
+                tagSpan.style.display = 'inline-flex';
+                tagSpan.style.alignItems = 'center';
+                tagSpan.style.gap = '5px';
+
+                tagSpan.innerHTML = '<span>' + label + ': ' + m.cantidad + '</span>';
+
+                if (m.pendiente) {
+                    const undoBtn = document.createElement('button');
+                    undoBtn.type = 'button';
+                    undoBtn.className = 'btn-undo-tag';
+                    undoBtn.title = 'Deshacer requisición';
+                    undoBtn.style.cssText = 'background:none; border:none; color:rgba(255,255,255,0.7); cursor:pointer; font-size:0.95rem; font-weight:700; padding:0; display:inline-flex; align-items:center; justify-content:center; line-height:1; transition:color 0.2s;';
+                    undoBtn.innerHTML = '&times;';
+                    undoBtn.addEventListener('click', function (event) {
+                        event.stopPropagation();
+                        deleteManualRequisition(card.dataset.codigo, m.sede_origen, label);
+                    });
+                    tagSpan.appendChild(undoBtn);
+                }
+                newTagsRow.appendChild(tagSpan);
+            });
+
+            card.appendChild(newTagsRow);
+
+            const actionSpan = document.createElement('span');
+            actionSpan.className = 'muted';
+            actionSpan.style.fontSize = '0.78rem';
+            actionSpan.textContent = 'Clic para editar / agregar sede';
+            card.appendChild(actionSpan);
+        } else {
+            const actionSpan = document.createElement('span');
+            actionSpan.className = 'muted';
+            actionSpan.textContent = 'Clic para requisitar';
+            card.appendChild(actionSpan);
+        }
+
+        // 4. Update total count badge
+        if (typeof totalManual !== 'undefined') {
+            const totalEl = document.getElementById('total-manual-count');
+            if (totalEl) {
+                totalEl.textContent = totalManual;
+            }
+        }
+    }
+
     /* ── AJAX Delete manual requisition ── */
     window.deleteManualRequisition = async function(codigo, sedeOrigen, label) {
         if (!confirm('¿Eliminar la requisición de ' + label + ' para este producto?')) return;
@@ -305,13 +383,15 @@
                 
                 // Update the product card's dataset attribute first
                 const card = document.querySelector(`.product-card[data-codigo="${codigo}"]`);
+                let list = [];
                 if (card) {
-                    let list = [];
                     try {
                         list = JSON.parse(card.dataset.manualesList || '[]');
                     } catch(e) {}
                     list = list.filter(m => m.sede_origen !== sedeOrigen);
-                    card.dataset.manualesList = JSON.stringify(list);
+                    
+                    // Update DOM instantly
+                    updateProductCardDOM(card, list, data.total_manual);
                     
                     // If the modal is currently open and has the same product, update currentManuales and render
                     if (currentCod === codigo) {
@@ -324,9 +404,9 @@
                     window.showStatusMessage(data.message || 'Requisición eliminada.');
                 }
                 
-                await reloadContent();
+                reloadContent(true); // Silent reload in background
                 
-                if (currentCod === codigo && currentManuales.length === 0) {
+                if (currentCod === codigo && list.length === 0) {
                     modal.style.display = 'none';
                 }
             } else {
@@ -371,7 +451,13 @@
                     window.showStatusMessage(data.message || 'Requisición guardada.');
                 }
                 
-                await reloadContent();
+                // Update DOM instantly
+                const card = document.querySelector(`.product-card[data-codigo="${currentCod}"]`);
+                if (card && data.manuales_list) {
+                    updateProductCardDOM(card, data.manuales_list, data.total_manual);
+                }
+                
+                reloadContent(true); // Silent reload in background
             } else {
                 let errorMsg = 'Error al guardar la requisición.';
                 try {
@@ -401,10 +487,12 @@
     });
 
     /* ── Sync (auto-reload) ── */
-    async function reloadContent() {
+    async function reloadContent(silent = false) {
         if (!contentRoot) return;
         const url = new URL(window.location.href);
-        contentRoot.classList.add('is-loading');
+        if (!silent) {
+            contentRoot.classList.add('is-loading');
+        }
         try {
             const r = await fetch(url.toString(), {
                 headers: { 'X-Partial': 'content', 'X-Requested-With': 'XMLHttpRequest' },
@@ -414,7 +502,9 @@
             bindProductCards(contentRoot);
             if (window.AutoFilter) window.AutoFilter.rebind('#inventario-content');
         } finally {
-            contentRoot.classList.remove('is-loading');
+            if (!silent) {
+                contentRoot.classList.remove('is-loading');
+            }
         }
     }
 
