@@ -8,21 +8,21 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('requisiciones_manuales', function (Blueprint $table) {
-            try {
-                // Drop the old unique constraint that only allowed one sede_origen per product
+        try {
+            Schema::table('requisiciones_manuales', function (Blueprint $table) {
                 $table->dropUnique(['sede_local', 'codigo']);
-            } catch (\Exception $e) {
-                // Already dropped
-            }
+            });
+        } catch (\Exception $e) {
+            // Already dropped or doesn't exist
+        }
 
-            try {
-                // New unique: a product can be requested from each sede_origen independently
+        try {
+            Schema::table('requisiciones_manuales', function (Blueprint $table) {
                 $table->unique(['sede_local', 'codigo', 'sede_origen'], 'req_manuales_sede_codigo_origen_unique');
-            } catch (\Exception $e) {
-                // Already exists
-            }
-        });
+            });
+        } catch (\Exception $e) {
+            // Already exists
+        }
     }
 
     public function down(): void
