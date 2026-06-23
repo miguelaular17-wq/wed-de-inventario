@@ -25,7 +25,7 @@ WORKDIR /var/www/html
 COPY . .
 
 # Install composer packages
-RUN composer install --no-dev --optimize-autoloader
+RUN composer install --no-dev --optimize-autoloader --ignore-platform-reqs
 
 # Configure Laravel storage and bootstrap cache permissions
 RUN chown -R www-data:www-data storage bootstrap/cache
