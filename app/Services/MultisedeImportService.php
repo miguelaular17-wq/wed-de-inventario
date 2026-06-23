@@ -98,8 +98,8 @@ class MultisedeImportService
         $candidates = [
             base_path('../.venv/Scripts/python.exe'),
             base_path('../.venv/bin/python'),
-            'python',
             'python3',
+            'python',
         ];
 
         foreach ($candidates as $bin) {
@@ -111,6 +111,6 @@ class MultisedeImportService
             }
         }
 
-        return 'python';
+        return 'python3';
     }
 }
