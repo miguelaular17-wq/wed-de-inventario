@@ -125,33 +125,3 @@ Route::middleware('auth')->group(function () {
     Route::get('/perfil/sede', [\App\Http\Controllers\UserSedeController::class, 'edit'])->name('user.sede.edit');
     Route::post('/perfil/sede', [\App\Http\Controllers\UserSedeController::class, 'update'])->name('user.sede.update');
 });
-
-Route::get('/seed-test-users-temp-auth', function () {
-    $roles = [
-        \App\Models\User::ROLE_ADMIN => 'test.admin@test.local',
-        \App\Models\User::ROLE_SUPERVISOR => 'test.supervisor@test.local',
-        \App\Models\User::ROLE_TELEFONIA => 'test.telefonia@test.local',
-        \App\Models\User::ROLE_GERENTE => 'test.gerente@test.local',
-        \App\Models\User::ROLE_COMPRADOR => 'test.comprador@test.local',
-        \App\Models\User::ROLE_SEDE => 'test.sede@test.local',
-        \App\Models\User::ROLE_VENDEDOR => 'test.vendedor@test.local',
-        \App\Models\User::ROLE_MARKETING => 'test.marketing@test.local',
-    ];
-
-    foreach ($roles as $role => $email) {
-        $sede = null;
-        if (in_array($role, [\App\Models\User::ROLE_SUPERVISOR, \App\Models\User::ROLE_TELEFONIA, \App\Models\User::ROLE_SEDE, \App\Models\User::ROLE_VENDEDOR])) {
-            $sede = 'DORAL';
-        }
-        \App\Models\User::updateOrCreate(
-            ['email' => $email],
-            [
-                'name' => 'Test ' . ucfirst($role),
-                'password' => 'password123',
-                'role' => $role,
-                'sede' => $sede,
-            ]
-        );
-    }
-    return response()->json(['success' => true, 'message' => 'Test users seeded on production successfully!']);
-});
