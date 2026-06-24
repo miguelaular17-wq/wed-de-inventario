@@ -420,5 +420,17 @@ document.addEventListener("DOMContentLoaded", function() {
         </script>
     @endif
 @endauth
+
+<script>
+    // Keep-alive ping: sends a lightweight request to the server every 10 minutes
+    // to prevent Render's free tier from going to sleep while a user has a tab open.
+    setInterval(function() {
+        fetch('/login').then(function(r) {
+            console.log('Keep-alive ping sent:', r.status);
+        }).catch(function(err) {
+            console.error('Keep-alive ping failed:', err);
+        });
+    }, 600000); // 10 minutes (600,000 ms)
+</script>
 </body>
 </html>
