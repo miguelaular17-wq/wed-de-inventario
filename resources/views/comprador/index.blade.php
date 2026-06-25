@@ -279,7 +279,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         @forelse ($byProvider as $prov)
             <div class="panel provider-card" 
                  style="cursor: pointer; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; justify-content: space-between; gap: 12px; background: var(--panel);"
-                 onclick="openProviderModal({{ json_encode($prov['proveedor']) }}, {{ json_encode($prov['productos']) }})">
+                 onclick="openProviderModal({{ json_encode($prov['proveedor']) }}, {{ json_encode($prov['productos']) }}, this)">
                 <div style="display: flex; align-items: flex-start; gap: 12px;">
                     <span style="font-size: 1.5rem; background: var(--blue-light); padding: 8px; border-radius: 8px; line-height: 1;">📦</span>
                     <div style="flex: 1; min-width: 0;">
@@ -1124,12 +1124,33 @@ document.getElementById('notification-result-modal').addEventListener('click', f
     }
 });
 
-function openProviderModal(providerName, productos) {
-    document.getElementById('provider-modal-title').innerText = providerName;
+let currentProviderProducts = [];
+let currentProviderName = '';
+let currentCardElement = null;
+const providerProductsCache = {};
+
+function openProviderModal(providerName, productos, cardElement) {
+    currentProviderName = providerName;
+    currentCardElement = cardElement;
     
-    const totalProducts = productos.length;
-    const totalUnits = productos.reduce((sum, p) => sum + parseInt(p.faltante || 0), 0);
+    if (!providerProductsCache[providerName]) {
+        providerProductsCache[providerName] = JSON.parse(JSON.stringify(productos));
+    }
+    currentProviderProducts = providerProductsCache[providerName];
+    
+    renderProviderModalTable();
+    document.getElementById('provider-modal').style.display = 'flex';
+}
+
+function updateProviderModalSummary() {
+    const activeProducts = currentProviderProducts.filter(p => !p.excluded);
+    const totalProducts = activeProducts.length;
+    const totalUnits = activeProducts.reduce((sum, p) => sum + (parseInt(p.faltante) || 0), 0);
     document.getElementById('provider-modal-summary').innerText = `${totalProducts} productos · ${totalUnits} unidades sugeridas a comprar`;
+}
+
+function renderProviderModalTable() {
+    updateProviderModalSummary();
     
     // Attach event listener to export button by cloning to clear previous listeners
     const exportBtn = document.getElementById('provider-modal-export-btn');
@@ -1137,7 +1158,7 @@ function openProviderModal(providerName, productos) {
     exportBtn.parentNode.replaceChild(newExportBtn, exportBtn);
     
     newExportBtn.addEventListener('click', () => {
-        downloadProviderCsv(providerName, productos);
+        downloadProviderCsv(currentProviderName, currentProviderProducts);
     });
     
     let html = `
@@ -1150,24 +1171,54 @@ function openProviderModal(providerName, productos) {
                         <th style="width: 150px; padding: 8px 12px;">Categoría</th>
                         <th class="col-number" style="width: 100px; padding: 8px 12px; text-align: right;">Stock Global</th>
                         <th class="col-number" style="width: 100px; padding: 8px 12px; text-align: right;">Demanda</th>
-                        <th class="col-number" style="width: 100px; padding: 8px 12px; text-align: right; color: #b91c1c;">A Comprar</th>
+                        <th class="col-number" style="width: 110px; padding: 8px 12px; text-align: right; color: #b91c1c;">A Comprar</th>
+                        <th style="width: 100px; padding: 8px 12px; text-align: center;">Acción</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
     
-    productos.forEach(prod => {
+    currentProviderProducts.forEach(prod => {
         const cat = prod.categoria || '—';
         const subcat = prod.subcategoria ? `<div style="font-size: 0.75rem; opacity: 0.8;">${prod.subcategoria}</div>` : '';
+        const isExcluded = !!prod.excluded;
+        
+        const rowStyle = isExcluded ? 'background-color: #f8fafc; opacity: 0.6;' : '';
+        const textStyle = isExcluded ? 'text-decoration: line-through; color: var(--muted);' : '';
+        
+        const stockGlobalCell = isExcluded 
+            ? `<td class="col-number" style="padding: 8px 12px; text-align: right; ${textStyle}">${prod.total_stock}</td>`
+            : `<td class="col-number" style="padding: 8px 12px; text-align: right; color: var(--blue); text-decoration: underline; cursor: pointer; font-weight: 600;" 
+                   onclick="openDistributionModalFromProvider('${prod.cod_centro}')"
+                   title="Ver desglose por sede">
+                   ${prod.total_stock}
+               </td>`;
+               
+        const quantityInput = isExcluded
+            ? `<span style="font-weight: 600; color: var(--muted);">${prod.faltante}</span>`
+            : `<input type="number" 
+                      value="${prod.faltante}" 
+                      min="0" 
+                      style="width: 75px; text-align: right; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-weight: 600; color: #b91c1c; background: #fff;" 
+                      oninput="updateProductQuantity('${prod.cod_centro}', this.value)">`;
+                      
+        const actionBtn = isExcluded
+            ? `<button type="button" class="btn secondary" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 4px;" onclick="toggleExcludeProduct('${prod.cod_centro}')">Incluir</button>`
+            : `<button type="button" class="btn req" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 4px; background-color: #ef4444; color: #fff; border: none; cursor: pointer;" onclick="toggleExcludeProduct('${prod.cod_centro}')">Excluir</button>`;
         
         html += `
-            <tr>
-                <td class="col-code" style="padding: 8px 12px;">${prod.cod_centro}</td>
-                <td style="padding: 8px 12px; font-weight: 600;">${prod.producto}</td>
-                <td style="padding: 8px 12px; color: var(--muted);">${cat}${subcat}</td>
-                <td class="col-number" style="padding: 8px 12px; text-align: right;">${prod.total_stock}</td>
-                <td class="col-number" style="padding: 8px 12px; text-align: right;">${prod.total_demanda}</td>
-                <td class="col-number font-semibold" style="padding: 8px 12px; text-align: right; color: #b91c1c; font-weight: 600;">${prod.faltante}</td>
+            <tr style="${rowStyle}">
+                <td class="col-code" style="padding: 8px 12px; ${textStyle}">${prod.cod_centro}</td>
+                <td style="padding: 8px 12px; font-weight: 600; ${textStyle}">${prod.producto}</td>
+                <td style="padding: 8px 12px; color: var(--muted); ${textStyle}">${cat}${subcat}</td>
+                ${stockGlobalCell}
+                <td class="col-number" style="padding: 8px 12px; text-align: right; ${textStyle}">${prod.total_demanda}</td>
+                <td class="col-number" style="padding: 8px 12px; text-align: right; ${textStyle}">
+                    ${quantityInput}
+                </td>
+                <td style="padding: 8px 12px; text-align: center;">
+                    ${actionBtn}
+                </td>
             </tr>
         `;
     });
@@ -1179,14 +1230,53 @@ function openProviderModal(providerName, productos) {
     `;
     
     document.getElementById('provider-modal-body').innerHTML = html;
-    document.getElementById('provider-modal').style.display = 'flex';
+}
+
+function updateProductQuantity(code, value) {
+    const val = parseInt(value) || 0;
+    const prod = currentProviderProducts.find(p => p.cod_centro === code);
+    if (prod) {
+        prod.faltante = val;
+        updateProviderModalSummary();
+        updateProviderCard();
+    }
+}
+
+function toggleExcludeProduct(code) {
+    const prod = currentProviderProducts.find(p => p.cod_centro === code);
+    if (prod) {
+        prod.excluded = !prod.excluded;
+        renderProviderModalTable();
+        updateProviderCard();
+    }
+}
+
+function updateProviderCard() {
+    if (currentCardElement) {
+        const activeProducts = currentProviderProducts.filter(p => !p.excluded);
+        const totalUnits = activeProducts.reduce((sum, p) => sum + (parseInt(p.faltante) || 0), 0);
+        
+        const tagNo = currentCardElement.querySelector('.tag.no');
+        const tagWarn = currentCardElement.querySelector('.tag.warn');
+        if (tagNo) tagNo.innerText = activeProducts.length;
+        if (tagWarn) tagWarn.innerText = totalUnits + ' u.';
+    }
+}
+
+function openDistributionModalFromProvider(code) {
+    const prod = currentProviderProducts.find(p => p.cod_centro === code);
+    if (prod) {
+        openDistributionModal(prod.cod_centro, prod.producto, prod.stocks || {}, prod.demands || {});
+    }
 }
 
 function downloadProviderCsv(providerName, productos) {
+    const activeProducts = productos.filter(p => !p.excluded);
+    
     let csvContent = "\ufeff"; // BOM for Excel encoding support (UTF-8)
     csvContent += "Código;Producto;Categoría;Stock Global;Demanda;A Comprar\n";
     
-    productos.forEach(p => {
+    activeProducts.forEach(p => {
         const nameEscaped = (p.producto || "").replace(/;/g, ",");
         const catEscaped = (p.categoria || "").replace(/;/g, ",");
         csvContent += `${p.cod_centro};${nameEscaped};${catEscaped};${p.total_stock};${p.total_demanda};${p.faltante}\n`;
@@ -1215,7 +1305,7 @@ document.getElementById('provider-modal').addEventListener('click', function(e) 
 </script>
 
 <!-- Modal de Desglose de Distribución -->
-<div id="distribution-modal" class="modal-overlay" style="display: none;">
+<div id="distribution-modal" class="modal-overlay" style="display: none; z-index: 1100;">
     <div class="panel modal-box" style="max-width: 500px; position: relative; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
         <button type="button" class="modal-close" onclick="closeDistributionModal()" aria-label="Cerrar">×</button>
         <h3 id="modal-product-title" style="margin: 0 0 6px; font-size: 1.25rem; color: var(--blue);"></h3>
@@ -1229,7 +1319,7 @@ document.getElementById('provider-modal').addEventListener('click', function(e) 
 </div>
 
 <!-- Modal de Desglose de Compras -->
-<div id="comprar-modal" class="modal-overlay" style="display: none;">
+<div id="comprar-modal" class="modal-overlay" style="display: none; z-index: 1100;">
     <div class="panel modal-box" style="max-width: 550px; position: relative; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
         <button type="button" class="modal-close" onclick="closeComprarModal()" aria-label="Cerrar">×</button>
         <h3 id="modal-comprar-title" style="margin: 0 0 6px; font-size: 1.25rem; color: var(--blue);"></h3>
@@ -1243,7 +1333,7 @@ document.getElementById('provider-modal').addEventListener('click', function(e) 
 </div>
 
 <!-- Modal de Resultado de Notificación -->
-<div id="notification-result-modal" class="modal-overlay" style="display: none;">
+<div id="notification-result-modal" class="modal-overlay" style="display: none; z-index: 1100;">
     <div class="panel modal-box" style="max-width: 450px; position: relative; padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
         <button type="button" class="modal-close" onclick="closeNotificationResultModal()" aria-label="Cerrar">×</button>
         <div style="font-size: 3rem; margin-bottom: 12px;" id="modal-result-icon">🔔</div>

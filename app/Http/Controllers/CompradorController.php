@@ -209,6 +209,7 @@ class CompradorController extends Controller
             $toBuySql = "
                 WITH product_metrics AS (
                     SELECT 
+                        p.id,
                         p.codigo as cod_centro,
                         p.nombre as producto,
                         p.categoria,
@@ -232,8 +233,47 @@ class CompradorController extends Controller
                 'tp' => $tp,
             ]);
 
+            $productIds = [];
+            foreach ($dbToBuy as $row) {
+                $productIds[] = (int) $row->id;
+            }
+
+            $stocksByProduct = [];
+            $ventasByProduct = [];
+
+            if (count($productIds) > 0) {
+                $dbStocks = \Illuminate\Support\Facades\DB::connection('pgsql')
+                    ->table('stock_actual')
+                    ->whereIn('producto_id', $productIds)
+                    ->get(['producto_id', 'sede', 'existencia']);
+                
+                foreach ($dbStocks as $row) {
+                    $stocksByProduct[(int) $row->producto_id][$row->sede] = (int) $row->existencia;
+                }
+
+                $dbVentas = \Illuminate\Support\Facades\DB::connection('pgsql')
+                    ->table('ventas_historicas')
+                    ->whereIn('producto_id', $productIds)
+                    ->get(['producto_id', 'sede', 'ventas_60d']);
+
+                foreach ($dbVentas as $row) {
+                    $ventasByProduct[(int) $row->producto_id][$row->sede] = (float) $row->ventas_60d;
+                }
+            }
+
             $productsToBuy = collect();
             foreach ($dbToBuy as $row) {
+                $pId = (int) $row->id;
+                $pStocks = [];
+                $pDemands = [];
+                foreach ($sedes as $sede) {
+                    $stockVal = $stocksByProduct[$pId][$sede] ?? 0;
+                    $salesVal = $ventasByProduct[$pId][$sede] ?? 0.0;
+                    $demandVal = ($salesVal / $tv) * $tp;
+                    $pStocks[$sede] = $stockVal;
+                    $pDemands[$sede] = (int) round($demandVal);
+                }
+
                 $productsToBuy->push([
                     'cod_centro' => $row->cod_centro,
                     'producto' => $row->producto,
@@ -243,6 +283,8 @@ class CompradorController extends Controller
                     'total_stock' => (int) $row->total_stock,
                     'total_demanda' => (int) $row->total_demand,
                     'faltante' => (int) ($row->total_demand - $row->total_stock),
+                    'stocks' => $pStocks,
+                    'demands' => $pDemands,
                 ]);
             }
 
@@ -482,10 +524,13 @@ class CompradorController extends Controller
                 $ventasInternas = $product['ventas_internas'] ?? [];
                 $totalStock = array_sum($stocks);
                 $totalDemand = 0;
+                $pDemands = [];
                 foreach ($sedes as $sede) {
                     $salesVal = (float) ($ventasInternas[$sede] ?? 0);
                     $demandVal = ($salesVal / $tv) * $tp;
-                    $totalDemand += (int) round($demandVal);
+                    $demandInt = (int) round($demandVal);
+                    $totalDemand += $demandInt;
+                    $pDemands[$sede] = $demandInt;
                 }
                 if ($totalStock < $totalDemand) {
                     $productsToBuy->push([
@@ -497,6 +542,8 @@ class CompradorController extends Controller
                         'total_stock' => $totalStock,
                         'total_demanda' => $totalDemand,
                         'faltante' => $totalDemand - $totalStock,
+                        'stocks' => $stocks,
+                        'demands' => $pDemands,
                     ]);
                 }
             }
