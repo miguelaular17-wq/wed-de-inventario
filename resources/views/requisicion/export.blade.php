@@ -19,6 +19,7 @@
         <label for="tipo_reporte">Tipo de reporte</label>
         <select name="tipo_reporte" id="tipo_reporte">
             <option value="ventas" @selected(($tipoReporte ?? 'ventas') === 'ventas')>Requisición automática (ventas)</option>
+            <option value="mayor_demanda" @selected(($tipoReporte ?? '') === 'mayor_demanda')>Requisición por mayor demanda</option>
             <option value="personalizada" @selected(($tipoReporte ?? '') === 'personalizada')>Requisición personalizada (manual)</option>
         </select>
     </div>
@@ -27,6 +28,10 @@
 @if(($tipoReporte ?? 'ventas') === 'ventas')
     <p class="muted" style="margin:0 0 16px;">
         Genera CSV y <strong>aplica movimiento de stock</strong> al exportar. Clic en un producto para excluirlo del reporte.
+    </p>
+@elseif(($tipoReporte ?? 'ventas') === 'mayor_demanda')
+    <p class="muted" style="margin:0 0 16px;">
+        Genera CSV para los productos estrella (mayor venta local que en otras sedes) y <strong>aplica movimiento de stock</strong>. Clic en un producto para excluirlo.
     </p>
 @else
     <p class="muted" style="margin:0 0 16px;">
@@ -70,7 +75,7 @@
         </div>
     </div>
 
-    @if(($tipoReporte ?? 'ventas') === 'ventas')
+    @if(($tipoReporte ?? 'ventas') !== 'personalizada')
     <div class="filter-options-row">
         <label class="option-toggle">
             <input type="checkbox" name="incluir_parcial" value="1" @checked(request()->boolean('incluir_parcial'))>
@@ -119,7 +124,7 @@
 
 @if($previewRows->isNotEmpty())
 <div class="panel">
-    @if(($tipoReporte ?? 'ventas') === 'ventas')
+    @if(($tipoReporte ?? 'ventas') !== 'personalizada')
         <p class="muted" style="margin:0 0 12px;">Productos incluidos — clic para excluir</p>
     @else
         <p class="muted" style="margin:0 0 12px;">Requisiciones manuales incluidas en el reporte</p>
@@ -128,7 +133,7 @@
         @foreach ($previewRows as $row)
             @php $isExcluded = in_array($row['codigo'], $excludeCodes ?? [], true); @endphp
             <article class="product-card {{ $isExcluded ? 'excluded-item' : '' }} {{ ($tipoReporte ?? 'ventas') === 'personalizada' ? 'manual-preview' : '' }}"
-                @if(($tipoReporte ?? 'ventas') === 'ventas')
+                @if(($tipoReporte ?? 'ventas') !== 'personalizada')
                 data-code="{{ $row['codigo'] }}"
                 @endif
                 style="{{ $isExcluded ? 'opacity:.5;border-color:#fca5a5;background:#fef2f2;' : '' }}">
@@ -181,7 +186,7 @@
                 Exportar CSV y aplicar movimiento
             @endif
         </button>
-        @if(($tipoReporte ?? 'ventas') === 'ventas')
+        @if(($tipoReporte ?? 'ventas') !== 'personalizada')
             <button type="button" id="clear-exclusions" class="btn secondary">Limpiar exclusiones</button>
         @endif
     </div>

@@ -25,7 +25,10 @@ class RequisicionController extends Controller
     public function form(Request $request): View
     {
         $sede = (string) $request->session()->get('sede_local');
-        $tipoReporte = $request->query('tipo_reporte', 'ventas') === 'personalizada' ? 'personalizada' : 'ventas';
+        $tipoReporte = $request->query('tipo_reporte', 'ventas');
+        if (! in_array($tipoReporte, ['ventas', 'personalizada', 'mayor_demanda'], true)) {
+            $tipoReporte = 'ventas';
+        }
 
         $sedesOrigen = $this->export->sedesOrigen($sede);
         $defaultSedeOrigen = $sedesOrigen[0] ?? '';
@@ -111,6 +114,30 @@ class RequisicionController extends Controller
         $tp = (float) $request->session()->get('tiempo_pronostico', config('inventario.tiempo_pronostico_default'));
         $ventasRows = $this->ventas->calcular($this->products->loadForSede($sede), $sede, $tp);
 
+        if ($tipoReporte === 'mayor_demanda') {
+            $ventasRows = $ventasRows->filter(function (array $row) use ($sede) {
+                if (($row['accion'] ?? '') !== 'HACER REQUISICION') {
+                    return false;
+                }
+
+                $ventas15d = $row['ventas_internas_15d'] ?? [];
+                $localSales = (int) ($row['venta'] ?? 0);
+
+                if ($localSales <= 0) {
+                    return false;
+                }
+
+                $maxOtherSales = 0;
+                foreach ($ventas15d as $s => $qty) {
+                    if ($s !== $sede) {
+                        $maxOtherSales = max($maxOtherSales, (int) $qty);
+                    }
+                }
+
+                return $localSales > $maxOtherSales;
+            })->sortByDesc(fn (array $row) => (int) ($row['venta'] ?? 0))->values();
+        }
+
         $categories = $ventasRows
             ->where('accion', 'HACER REQUISICION')
             ->pluck('categoria')
@@ -175,7 +202,7 @@ class RequisicionController extends Controller
 
         return view('requisicion.export', [
             'sede' => $sede,
-            'tipoReporte' => 'ventas',
+            'tipoReporte' => $tipoReporte,
             'sedesOrigen' => $sedesOrigen,
             'totalRequisicion' => $ventasRows->where('accion', 'HACER REQUISICION')->count(),
             'categories' => $categories,
@@ -196,7 +223,10 @@ class RequisicionController extends Controller
     {
         $sede = (string) $request->session()->get('sede_local');
         $tp = (float) $request->session()->get('tiempo_pronostico', config('inventario.tiempo_pronostico_default'));
-        $tipoReporte = $request->input('tipo_reporte', 'ventas') === 'personalizada' ? 'personalizada' : 'ventas';
+        $tipoReporte = $request->input('tipo_reporte', 'ventas');
+        if (! in_array($tipoReporte, ['ventas', 'personalizada', 'mayor_demanda'], true)) {
+            $tipoReporte = 'ventas';
+        }
         $sedeOrigen = (string) $request->input('sede_origen');
         $categoria = (string) $request->input('categoria', 'Todas');
         $subcategoria = (string) $request->input('subcategoria', 'Todas');
@@ -257,6 +287,30 @@ class RequisicionController extends Controller
             $hasFiles = false;
             $ventasRows = $this->ventas->calcular($this->products->loadForSede($sede), $sede, $tp);
 
+            if ($tipoReporte === 'mayor_demanda') {
+                $ventasRows = $ventasRows->filter(function (array $row) use ($sede) {
+                    if (($row['accion'] ?? '') !== 'HACER REQUISICION') {
+                        return false;
+                    }
+
+                    $ventas15d = $row['ventas_internas_15d'] ?? [];
+                    $localSales = (int) ($row['venta'] ?? 0);
+
+                    if ($localSales <= 0) {
+                        return false;
+                    }
+
+                    $maxOtherSales = 0;
+                    foreach ($ventas15d as $s => $qty) {
+                        if ($s !== $sede) {
+                            $maxOtherSales = max($maxOtherSales, (int) $qty);
+                        }
+                    }
+
+                    return $localSales > $maxOtherSales;
+                })->sortByDesc(fn (array $row) => (int) ($row['venta'] ?? 0))->values();
+            }
+
             foreach ($sedesStock as $origSede) {
                 $displayOrig = config('inventario.display.'.$origSede, $origSede);
                 $lines = $this->export->buildExport(
@@ -299,6 +353,30 @@ class RequisicionController extends Controller
         }
 
         $ventasRows = $this->ventas->calcular($this->products->loadForSede($sede), $sede, $tp);
+
+        if ($tipoReporte === 'mayor_demanda') {
+            $ventasRows = $ventasRows->filter(function (array $row) use ($sede) {
+                if (($row['accion'] ?? '') !== 'HACER REQUISICION') {
+                    return false;
+                }
+
+                $ventas15d = $row['ventas_internas_15d'] ?? [];
+                $localSales = (int) ($row['venta'] ?? 0);
+
+                if ($localSales <= 0) {
+                    return false;
+                }
+
+                $maxOtherSales = 0;
+                foreach ($ventas15d as $s => $qty) {
+                    if ($s !== $sede) {
+                        $maxOtherSales = max($maxOtherSales, (int) $qty);
+                    }
+                }
+
+                return $localSales > $maxOtherSales;
+            })->sortByDesc(fn (array $row) => (int) ($row['venta'] ?? 0))->values();
+        }
         $lines = $this->export->buildExport(
             $ventasRows,
             $sedeOrigen,

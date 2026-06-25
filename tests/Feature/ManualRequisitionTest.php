@@ -253,4 +253,110 @@ class ManualRequisitionTest extends TestCase
         $response->assertHeader('Content-Type', 'application/zip');
         $response->assertHeader('Content-Disposition', 'attachment; filename=Requisiciones_ZAMORA_todas.zip');
     }
+
+    public function test_export_mayor_demanda_requisition()
+    {
+        $user = User::create([
+            'name' => 'Admin User',
+            'email' => 'admin_md@test.local',
+            'password' => 'password123',
+            'role' => 'admin',
+        ]);
+
+        // Product A: Star Product (local sales 30 > other sales 10)
+        $prodA = Product::create([
+            'cod_centro' => 'PROD_STAR',
+            'producto' => 'Star Product A',
+            'categoria' => 'Electrónica',
+            'subcategoria' => 'Accesorios',
+            'proveedor' => 'Proveedor A',
+        ]);
+
+        ProductSedeMetric::create([
+            'product_id' => $prodA->id,
+            'sede' => 'ZAMORA',
+            'existencia' => 0,
+            'ventas_60d' => 120,
+            'promedio_15d' => 30,
+        ]);
+
+        ProductSedeMetric::create([
+            'product_id' => $prodA->id,
+            'sede' => 'JRZ',
+            'existencia' => 100,
+            'ventas_60d' => 10,
+            'promedio_15d' => 10,
+        ]);
+
+        ProductSedeMetric::create([
+            'product_id' => $prodA->id,
+            'sede' => 'DORAL',
+            'existencia' => 50,
+            'ventas_60d' => 10,
+            'promedio_15d' => 10,
+        ]);
+
+        // Product B: Non-Star Product (local sales 10 < JRZ sales 20)
+        $prodB = Product::create([
+            'cod_centro' => 'PROD_NON_STAR',
+            'producto' => 'Non-Star Product B',
+            'categoria' => 'Electrónica',
+            'subcategoria' => 'Accesorios',
+            'proveedor' => 'Proveedor B',
+        ]);
+
+        ProductSedeMetric::create([
+            'product_id' => $prodB->id,
+            'sede' => 'ZAMORA',
+            'existencia' => 0,
+            'ventas_60d' => 120,
+            'promedio_15d' => 10,
+        ]);
+
+        ProductSedeMetric::create([
+            'product_id' => $prodB->id,
+            'sede' => 'JRZ',
+            'existencia' => 100,
+            'ventas_60d' => 10,
+            'promedio_15d' => 20,
+        ]);
+
+        ProductSedeMetric::create([
+            'product_id' => $prodB->id,
+            'sede' => 'DORAL',
+            'existencia' => 50,
+            'ventas_60d' => 10,
+            'promedio_15d' => 5,
+        ]);
+
+        // 1. Get the form view. Only PROD_STAR should be in $previewRows.
+        $responseForm = $this->actingAs($user)
+            ->withSession(['sede_local' => 'ZAMORA'])
+            ->get(route('requisicion.form', [
+                'tipo_reporte' => 'mayor_demanda',
+                'sede_origen' => 'JRZ',
+            ]));
+
+        $responseForm->assertOk();
+        $responseForm->assertViewHas('previewRows', function ($previewRows) {
+            $codes = $previewRows->pluck('codigo')->all();
+            return in_array('PROD_STAR', $codes, true) && !in_array('PROD_NON_STAR', $codes, true);
+        });
+
+        // 2. Export single-sede CSV. CSV content should contain PROD_STAR and NOT PROD_NON_STAR.
+        $responseExport = $this->actingAs($user)
+            ->withSession(['sede_local' => 'ZAMORA'])
+            ->post(route('requisicion.export'), [
+                'tipo_reporte' => 'mayor_demanda',
+                'sede_origen' => 'JRZ',
+                'categoria' => 'Todas',
+                'subcategoria' => 'Todas',
+                'incluir_parcial' => 0,
+            ]);
+
+        $responseExport->assertOk();
+        $csvContent = $responseExport->getContent();
+        $this->assertStringContainsString('PROD_STAR', $csvContent);
+        $this->assertStringNotContainsString('PROD_NON_STAR', $csvContent);
+    }
 }
