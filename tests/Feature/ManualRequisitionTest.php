@@ -109,4 +109,95 @@ class ManualRequisitionTest extends TestCase
         $this->assertEquals(0, $dataDel['total_manual']);
         $this->assertCount(0, $dataDel['manuales_list']);
     }
+
+    public function test_store_batch_manual_requisitions()
+    {
+        $user = User::create([
+            'name' => 'Admin User',
+            'email' => 'admin_batch@test.local',
+            'password' => 'password123',
+            'role' => 'admin',
+        ]);
+
+        $product = Product::create([
+            'cod_centro' => 'PROD999',
+            'producto' => 'Batch Product',
+            'categoria' => 'Electrónica',
+            'subcategoria' => 'Accesorios',
+            'proveedor' => 'Proveedor B',
+        ]);
+
+        ProductSedeMetric::create([
+            'product_id' => $product->id,
+            'sede' => 'JRZ',
+            'existencia' => 10,
+        ]);
+
+        ProductSedeMetric::create([
+            'product_id' => $product->id,
+            'sede' => 'DORAL',
+            'existencia' => 8,
+        ]);
+
+        // 1. Post batch store: JRZ=5, DORAL=3
+        $response = $this->actingAs($user)
+            ->withSession(['sede_local' => 'ZAMORA'])
+            ->postJson(route('inventario.manual.store_batch'), [
+                'codigo' => 'PROD999',
+                'producto' => 'Batch Product',
+                'quantities' => [
+                    'JRZ' => 5,
+                    'DORAL' => 3,
+                ],
+            ]);
+
+        $response->assertOk();
+        $response->assertJsonStructure([
+            'success',
+            'message',
+            'total_manual',
+            'manuales_list'
+        ]);
+
+        $this->assertDatabaseHas('requisiciones_manuales', [
+            'sede_local' => 'ZAMORA',
+            'codigo' => 'PROD999',
+            'sede_origen' => 'JRZ',
+            'cantidad' => 5,
+        ]);
+
+        $this->assertDatabaseHas('requisiciones_manuales', [
+            'sede_local' => 'ZAMORA',
+            'codigo' => 'PROD999',
+            'sede_origen' => 'DORAL',
+            'cantidad' => 3,
+        ]);
+
+        // 2. Post batch update: JRZ=0 (delete), DORAL=7 (update)
+        $responseUpdate = $this->actingAs($user)
+            ->withSession(['sede_local' => 'ZAMORA'])
+            ->postJson(route('inventario.manual.store_batch'), [
+                'codigo' => 'PROD999',
+                'producto' => 'Batch Product',
+                'quantities' => [
+                    'JRZ' => 0,
+                    'DORAL' => 7,
+                ],
+            ]);
+
+        $responseUpdate->assertOk();
+        
+        $this->assertDatabaseMissing('requisiciones_manuales', [
+            'sede_local' => 'ZAMORA',
+            'codigo' => 'PROD999',
+            'sede_origen' => 'JRZ',
+        ]);
+
+        $this->assertDatabaseHas('requisiciones_manuales', [
+            'sede_local' => 'ZAMORA',
+            'codigo' => 'PROD999',
+            'sede_origen' => 'DORAL',
+            'cantidad' => 7,
+        ]);
+    }
 }

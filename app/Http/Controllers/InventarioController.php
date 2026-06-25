@@ -364,6 +364,49 @@ class InventarioController extends Controller
             ->with('status', 'Requisición guardada. El stock se aplicará al exportar el CSV.');
     }
 
+    public function storeManualBatch(Request $request): JsonResponse
+    {
+        $sede = (string) $request->session()->get('sede_local');
+
+        $data = $request->validate([
+            'codigo' => ['required', 'string'],
+            'producto' => ['required', 'string'],
+            'quantities' => ['required', 'array'],
+            'quantities.*' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $userEmail = auth()->user()?->email;
+
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($sede, $data, $userEmail) {
+                foreach ($data['quantities'] as $origen => $qty) {
+                    $qty = ($qty !== null && $qty !== '') ? (int) $qty : 0;
+                    if ($qty > 0) {
+                        $this->reqPersonalizada->confirmar(
+                            $sede,
+                            $data['codigo'],
+                            $data['producto'],
+                            $origen,
+                            $qty,
+                            $userEmail
+                        );
+                    } else {
+                        $this->reqPersonalizada->eliminar($sede, $data['codigo'], $origen);
+                    }
+                }
+            });
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Requisiciones actualizadas.',
+            'total_manual' => $this->reqPersonalizada->countPendientes($sede),
+            'manuales_list' => $this->reqPersonalizada->getManualesListForProduct($sede, $data['codigo']),
+        ]);
+    }
+
     public function destroyManual(Request $request): \Illuminate\Http\RedirectResponse|\Illuminate\Http\JsonResponse
     {
         $sede = (string) $request->session()->get('sede_local');

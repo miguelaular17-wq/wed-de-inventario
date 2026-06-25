@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\PaginatesCollections;
 use App\Services\ProductRepository;
 use App\Services\VentasCalculator;
 use App\Services\VentasFilterService;
+use App\Services\RequisicionPersonalizadaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -18,6 +19,7 @@ class VentasController extends Controller
         private ProductRepository $products,
         private VentasCalculator $ventas,
         private VentasFilterService $filters,
+        private RequisicionPersonalizadaService $reqPersonalizada,
     ) {}
 
     public function index(Request $request): View
@@ -212,6 +214,23 @@ class VentasController extends Controller
 
         // Sort by local sales descending (mayor demanda)
         $sorted = $filtered->sortByDesc(fn(array $row) => (int) ($row['venta'] ?? 0))->values();
+
+        $manuales = $this->reqPersonalizada->loadManuales($sede);
+        $manualByCod = $manuales->groupBy('codigo');
+
+        $sorted = $sorted->map(function (array $row) use ($manualByCod) {
+            $entries = $manualByCod->get($row['cod_centro'], collect());
+            $manualesList = $entries->map(fn ($m) => [
+                'id'        => $m->id,
+                'sede_origen' => $m->sede_origen,
+                'cantidad'  => (int) $m->cantidad,
+                'pendiente' => $m->isPendiente(),
+            ])->values()->all();
+
+            return array_merge($row, [
+                'manuales_list' => $manualesList,
+            ]);
+        });
 
         $rows = $this->paginateCollection($sorted, $request);
 

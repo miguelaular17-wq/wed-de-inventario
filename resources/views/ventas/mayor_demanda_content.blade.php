@@ -38,7 +38,18 @@
                     @endphp
                     <tr class="{{ $rowClass }}">
                         <td class="col-code">{{ $row['cod_centro'] }}</td>
-                        <td>{{ $row['producto'] }}</td>
+                        <td>
+                            <div>{{ $row['producto'] }}</div>
+                            @if (!empty($row['manuales_list']))
+                                <div class="manual-tags-row" style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px;">
+                                    @foreach ($row['manuales_list'] as $m)
+                                        <span class="tag {{ $m['pendiente'] ? 'manual' : 'ok' }} tag-sm" style="font-size: 0.7rem; padding: 1px 6px;">
+                                            {{ config('inventario.display.'.$m['sede_origen'], $m['sede_origen']) }}: {{ $m['cantidad'] }}
+                                        </span>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </td>
                         <td class="col-number">{{ $row['existencia'] }}</td>
                         <td>{{ $row['categoria'] }}</td>
                         <td>{{ $row['subcategoria'] }}</td>
@@ -51,12 +62,17 @@
                         <td>
                             @php $acc = $row['accion']; @endphp
                             @if ($acc === 'HACER REQUISICION')
-                                <a href="{{ route('requisicion.form', [
-                                    'tipo_reporte' => 'ventas',
-                                    'sede_origen' => config('inventario.display.'.$row['op1'], $row['op1']),
-                                    'categoria' => $row['categoria'],
-                                    'subcategoria' => $row['subcategoria']
-                                ]) }}" class="tag req" title="Ir a exportar requisición para este producto y categoría">{{ $acc }}</a>
+                                <button type="button" 
+                                    class="tag req btn-hacer-requisicion" 
+                                    data-codigo="{{ $row['cod_centro'] }}"
+                                    data-producto="{{ e($row['producto']) }}"
+                                    data-stocks="{{ json_encode($row['stocks']) }}"
+                                    data-excedentes="{{ json_encode($row['excedentes'] ?? []) }}"
+                                    data-manuales-list="{{ json_encode($row['manuales_list'] ?? []) }}"
+                                    style="border: none; cursor: pointer; font-family: inherit; font-size: inherit;"
+                                    title="Hacer requisición de múltiples sedes">
+                                    {{ $acc }}
+                                </button>
                             @elseif ($acc === 'TIENE EXISTENCIA')
                                 <span class="tag ok">{{ $acc }}</span>
                             @elseif ($acc === 'NO TIENE EXISTENCIA')

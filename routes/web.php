@@ -87,6 +87,7 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'role:admin,supervisor,tel
     Route::get('/ventas/mayor-demanda', [VentasController::class, 'mayorDemanda'])->name('ventas.mayor_demanda');
     Route::get('/inventario', [InventarioController::class, 'index'])->name('inventario.index');
     Route::post('/inventario/requisicion-manual', [InventarioController::class, 'storeManual'])->name('inventario.manual.store');
+    Route::post('/inventario/requisicion-manual/batch', [InventarioController::class, 'storeManualBatch'])->name('inventario.manual.store_batch');
     Route::delete('/inventario/requisicion-manual', [InventarioController::class, 'destroyManual'])->name('inventario.manual.destroy');
     Route::get('/inventario/metricas-manual', [InventarioController::class, 'metricasManual'])->name('inventario.manual.metricas');
     Route::get('/inventario/sync', [InventarioController::class, 'sync'])->name('inventario.sync');
