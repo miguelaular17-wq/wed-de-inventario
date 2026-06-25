@@ -194,7 +194,12 @@ class VentasController extends Controller
         $calculated = $this->ventas->calcular($products, $sede, $tp);
 
         // Filter: only products where this branch sells more than any other branch
+        // AND the action is strictly 'HACER REQUISICION'
         $filtered = $calculated->filter(function (array $row) use ($sede) {
+            if (($row['accion'] ?? '') !== 'HACER REQUISICION') {
+                return false;
+            }
+
             $ventas15d = $row['ventas_internas_15d'] ?? [];
             $localSales = (int) ($row['venta'] ?? 0);
 
