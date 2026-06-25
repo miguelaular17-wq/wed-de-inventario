@@ -30,7 +30,7 @@ class RequisicionController extends Controller
         $sedesOrigen = $this->export->sedesOrigen($sede);
         $defaultSedeOrigen = $sedesOrigen[0] ?? '';
         $selectedSedeOrigen = (string) $request->query('sede_origen', $defaultSedeOrigen);
-        if (! $this->export->resolveSedeKey($selectedSedeOrigen)) {
+        if ($selectedSedeOrigen !== 'Todas' && ! $this->export->resolveSedeKey($selectedSedeOrigen)) {
             $selectedSedeOrigen = $defaultSedeOrigen;
         }
 
@@ -192,7 +192,7 @@ class RequisicionController extends Controller
         ]);
     }
 
-    public function export(Request $request): Response|RedirectResponse
+    public function export(Request $request): \Symfony\Component\HttpFoundation\Response|RedirectResponse
     {
         $sede = (string) $request->session()->get('sede_local');
         $tp = (float) $request->session()->get('tiempo_pronostico', config('inventario.tiempo_pronostico_default'));
@@ -238,17 +238,65 @@ class RequisicionController extends Controller
             ]);
         }
 
-        $sedeOrigenKey = $this->export->resolveSedeKey($sedeOrigen);
-        if (! $sedeOrigenKey) {
-            return back()->withErrors(['export' => 'Sede origen inválida.']);
-        }
-
         $incluirParcial = $request->boolean('incluir_parcial');
         $excludeCategories = array_filter((array) $request->input('exclude_categories', []));
         if ($categoria !== 'Todas' || ! $request->boolean('excluir_categorias')) {
             $excludeCategories = [];
         }
         $excludeCodes = array_filter((array) $request->input('exclude_codes', []));
+
+        if ($sedeOrigen === 'Todas') {
+            $sedesStock = $this->export->sedesOrigen($sede);
+            
+            $zip = new \ZipArchive();
+            $zipFile = tempnam(sys_get_temp_dir(), 'zip');
+            if ($zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+                return back()->withErrors(['export' => 'No se pudo crear el archivo ZIP.']);
+            }
+
+            $hasFiles = false;
+            $ventasRows = $this->ventas->calcular($this->products->loadForSede($sede), $sede, $tp);
+
+            foreach ($sedesStock as $origSede) {
+                $displayOrig = config('inventario.display.'.$origSede, $origSede);
+                $lines = $this->export->buildExport(
+                    $ventasRows,
+                    $displayOrig,
+                    $sede,
+                    $incluirParcial,
+                    $categoria,
+                    $subcategoria,
+                    $excludeCategories,
+                    $excludeCodes,
+                );
+
+                if ($lines->isNotEmpty()) {
+                    // Apply requisition stock movement
+                    $this->stock->applyRequisition($lines, $origSede, $sede);
+                    
+                    // Generate CSV content
+                    $csvContent = $this->export->toCsv($lines);
+                    
+                    // Add to ZIP
+                    $zip->addFromString('Requisicion_'.$sede.'_desde_'.$origSede.'.csv', $csvContent);
+                    $hasFiles = true;
+                }
+            }
+
+            $zip->close();
+
+            if (! $hasFiles) {
+                @unlink($zipFile);
+                return back()->withErrors(['export' => 'No hay filas exportables para ninguna sede origen.']);
+            }
+
+            return response()->download($zipFile, 'Requisiciones_'.$sede.'_todas.zip')->deleteFileAfterSend(true);
+        }
+
+        $sedeOrigenKey = $this->export->resolveSedeKey($sedeOrigen);
+        if (! $sedeOrigenKey) {
+            return back()->withErrors(['export' => 'Sede origen inválida.']);
+        }
 
         $ventasRows = $this->ventas->calcular($this->products->loadForSede($sede), $sede, $tp);
         $lines = $this->export->buildExport(

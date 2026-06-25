@@ -200,4 +200,57 @@ class ManualRequisitionTest extends TestCase
             'cantidad' => 7,
         ]);
     }
+
+    public function test_export_sales_requisition_for_all_sedes()
+    {
+        $user = User::create([
+            'name' => 'Admin User',
+            'email' => 'admin_export@test.local',
+            'password' => 'password123',
+            'role' => 'admin',
+        ]);
+
+        $product = Product::create([
+            'cod_centro' => 'PROD_EXPORT_TEST',
+            'producto' => 'Export Test Product',
+            'categoria' => 'Electrónica',
+            'subcategoria' => 'Accesorios',
+            'proveedor' => 'Proveedor Export',
+        ]);
+
+        ProductSedeMetric::create([
+            'product_id' => $product->id,
+            'sede' => 'ZAMORA',
+            'existencia' => 0,
+            'ventas_60d' => 120,
+        ]);
+
+        ProductSedeMetric::create([
+            'product_id' => $product->id,
+            'sede' => 'JRZ',
+            'existencia' => 100,
+            'ventas_60d' => 10,
+        ]);
+
+        ProductSedeMetric::create([
+            'product_id' => $product->id,
+            'sede' => 'DORAL',
+            'existencia' => 50,
+            'ventas_60d' => 10,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['sede_local' => 'ZAMORA'])
+            ->post(route('requisicion.export'), [
+                'tipo_reporte' => 'ventas',
+                'sede_origen' => 'Todas',
+                'categoria' => 'Todas',
+                'subcategoria' => 'Todas',
+                'incluir_parcial' => 0,
+            ]);
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'application/zip');
+        $response->assertHeader('Content-Disposition', 'attachment; filename=Requisiciones_ZAMORA_todas.zip');
+    }
 }

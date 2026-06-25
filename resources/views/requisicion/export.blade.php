@@ -41,7 +41,8 @@
     <div class="filter-bar filter-row-main @if(($tipoReporte ?? 'ventas') === 'personalizada') filter-row-standalone @endif">
         <div class="field">
             <label for="sede_origen">Sede origen</label>
-            <select name="sede_origen" id="sede_origen" @if(($tipoReporte ?? 'ventas') === 'ventas') required @endif>
+            <select name="sede_origen" id="sede_origen" required>
+                <option value="Todas" @selected($selectedSedeOrigen === 'Todas')>Todas las sedes</option>
                 @foreach ($sedesOrigen as $origen)
                     <option value="{{ config('inventario.display.'.$origen, $origen) }}" @selected($selectedSedeOrigen === config('inventario.display.'.$origen, $origen))>
                         {{ config('inventario.display.'.$origen, $origen) }}

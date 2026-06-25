@@ -82,6 +82,48 @@ class RequisicionExportService
         array $excludeCategories = [],
         array $excludeCodes = [],
     ): Collection {
+        if ($sedeOrigenDisplay === 'Todas') {
+            $allRows = collect();
+            $sedes = $this->sedesOrigen($sedeLocal);
+            foreach ($sedes as $s) {
+                $display = config('inventario.display.'.$s, $s);
+                $rows = $this->getFilteredRequisitionRowsSingle(
+                    $ventasRows,
+                    $display,
+                    $sedeLocal,
+                    $incluirParcial,
+                    $categoria,
+                    $subcategoria,
+                    $excludeCategories,
+                    $excludeCodes
+                );
+                $allRows = $allRows->concat($rows);
+            }
+            return $allRows;
+        }
+
+        return $this->getFilteredRequisitionRowsSingle(
+            $ventasRows,
+            $sedeOrigenDisplay,
+            $sedeLocal,
+            $incluirParcial,
+            $categoria,
+            $subcategoria,
+            $excludeCategories,
+            $excludeCodes
+        );
+    }
+
+    private function getFilteredRequisitionRowsSingle(
+        Collection $ventasRows,
+        string $sedeOrigenDisplay,
+        string $sedeLocal,
+        bool $incluirParcial = false,
+        string $categoria = 'Todas',
+        string $subcategoria = 'Todas',
+        array $excludeCategories = [],
+        array $excludeCodes = [],
+    ): Collection {
         $sedeOrigen = $this->resolveSedeKeyInternal($sedeOrigenDisplay);
         if (! $sedeOrigen) {
             return collect();
