@@ -44,16 +44,23 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $data = $request->validate([
-            'role' => ['required', 'string', 'in:admin,supervisor,telefonia,gerente,comprador,sede,vendedor,marketing'],
+            'role' => ['required', 'string', 'in:admin,supervisor,telefonia,comprador,sede,vendedor,marketing'],
             'sede' => ['nullable', 'string'],
+            'password_plain' => ['nullable', 'string', 'min:6'],
         ]);
 
         $user->role = $data['role'];
-        if (in_array($data['role'], ['gerente', 'comprador', 'marketing'], true)) {
+        if (in_array($data['role'], ['comprador', 'marketing'], true)) {
             $user->sede = null;
         } else {
             $user->sede = isset($data['sede']) && $data['sede'] ? strtoupper($data['sede']) : null;
         }
+
+        if (isset($data['password_plain']) && $data['password_plain'] !== '') {
+            $user->password = $data['password_plain']; // gets hashed automatically in Laravel model cast
+            $user->password_plain = $data['password_plain'];
+        }
+
         $user->save();
 
         return back()->with('status', 'Usuario actualizado con éxito.');
@@ -86,5 +93,16 @@ class UserController extends Controller
         file_put_contents($casheaLevelsPath, json_encode($data['levels'], JSON_PRETTY_PRINT));
 
         return back()->with('status', 'Configuración de Cashea actualizada con éxito.');
+    }
+
+    public function loginLogs(): View
+    {
+        $logs = \App\Models\LoginLog::with('user')
+            ->orderByDesc('created_at')
+            ->paginate(75);
+
+        return view('admin.users.login_logs', [
+            'logs' => $logs,
+        ]);
     }
 }

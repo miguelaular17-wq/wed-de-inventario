@@ -13,7 +13,6 @@ class User extends Authenticatable
     public const ROLE_ADMIN = 'admin';
     public const ROLE_SUPERVISOR = 'supervisor';
     public const ROLE_TELEFONIA = 'telefonia';
-    public const ROLE_GERENTE = 'gerente';
     public const ROLE_COMPRADOR = 'comprador';
     public const ROLE_SEDE = 'sede';
     public const ROLE_VENDEDOR = 'vendedor';
@@ -23,6 +22,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'password_plain',
         'role',
         'sede',
         'tutorial_step',
@@ -55,10 +55,6 @@ class User extends Authenticatable
         return $this->role === self::ROLE_TELEFONIA;
     }
 
-    public function isGerente(): bool
-    {
-        return $this->role === self::ROLE_GERENTE;
-    }
 
     public function isComprador(): bool
     {
@@ -87,7 +83,7 @@ class User extends Authenticatable
 
     public function hasAccessToMovimientos(): bool
     {
-        return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_GERENTE], true);
+        return $this->role === self::ROLE_ADMIN;
     }
 
     /**

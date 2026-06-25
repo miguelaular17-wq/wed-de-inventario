@@ -36,9 +36,6 @@
                         <a href="{{ route('admin.movimientos.index') }}" data-tour="admin-movimientos" class="{{ request()->routeIs('admin.movimientos.*') ? 'active' : '' }}">Movimientos</a>
                         <a href="{{ route('admin.import.create') }}" data-tour="admin-import" class="{{ request()->routeIs('admin.import.*') ? 'active' : '' }}">Importar</a>
                         <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">Usuarios</a>
-                    @elseif(auth()->user()->isGerente())
-                        <a href="{{ route('admin.movimientos.index') }}" class="{{ request()->routeIs('admin.movimientos.*') ? 'active' : '' }}">Movimientos</a>
-                        <a href="{{ route('gerente.dashboard') }}" class="{{ request()->routeIs('gerente.dashboard') ? 'active' : '' }}">Requisiciones</a>
                     @elseif(auth()->user()->isComprador() || auth()->user()->isMarketing())
                         <a href="{{ route('comprador.dashboard') }}" class="{{ request()->routeIs('comprador.dashboard') ? 'active' : '' }}">
                             {{ auth()->user()->isMarketing() ? 'Marketing' : 'Compras' }}

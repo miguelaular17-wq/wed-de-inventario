@@ -326,7 +326,7 @@ class RequisicionController extends Controller
 
                 if ($lines->isNotEmpty()) {
                     // Apply requisition stock movement
-                    $this->stock->applyRequisition($lines, $origSede, $sede);
+                    $this->stock->applyRequisition($lines, $origSede, $sede, null, $tipoReporte);
                     
                     // Generate CSV content
                     $csvContent = $this->export->toCsv($lines);
@@ -392,7 +392,7 @@ class RequisicionController extends Controller
             return back()->withErrors(['export' => 'No hay filas exportables para esa sede origen.']);
         }
 
-        $this->stock->applyRequisition($lines, $sedeOrigenKey, $sede);
+        $this->stock->applyRequisition($lines, $sedeOrigenKey, $sede, null, $tipoReporte);
 
         $filename = 'Requisicion_'.$sede.'_desde_'.$sedeOrigenKey.'.csv';
 

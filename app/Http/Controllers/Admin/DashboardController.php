@@ -13,10 +13,33 @@ class DashboardController extends Controller
 {
     public function index(Request $request, ProductRepository $products, MovimientoQueryService $movimientos): View
     {
+        $stockBySede = [];
+        if (config('database.default') === 'pgsql') {
+            $stockBySede = \Illuminate\Support\Facades\DB::connection('pgsql')
+                ->table('stock_actual')
+                ->select('sede', \Illuminate\Support\Facades\DB::raw('SUM(existencia) as total_stock'))
+                ->groupBy('sede')
+                ->pluck('total_stock', 'sede')
+                ->toArray();
+        } else {
+            $stockBySede = \Illuminate\Support\Facades\DB::table('product_sede_metrics')
+                ->select('sede', \Illuminate\Support\Facades\DB::raw('SUM(existencia) as total_stock'))
+                ->groupBy('sede')
+                ->pluck('total_stock', 'sede')
+                ->toArray();
+        }
+
+        $sedes = config('inventario.sedes_stock');
+        $chartData = [];
+        foreach ($sedes as $s) {
+            $chartData[$s] = (int) ($stockBySede[strtoupper($s)] ?? 0);
+        }
+
         return view('admin.dashboard', [
             'productCount' => $this->productCount($products),
             'movementStats' => $movimientos->stats(),
             'lastImport' => $products->lastStockUpdate(),
+            'chartData' => $chartData,
         ]);
     }
 

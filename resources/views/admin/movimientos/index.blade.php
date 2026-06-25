@@ -72,7 +72,21 @@
                             <span class="route-pill route-pill-dest">{{ config('inventario.display.'.$row['destino'], $row['destino']) }}</span>
                         </td>
                         <td>
-                            <span class="tag {{ strtolower($row['tipo']) === 'requisicion' ? 'req' : 'no' }}">{{ $row['tipo'] }}</span>
+                            @php
+                                $classLabel = match($row['classification'] ?? 'automatica') {
+                                    'manual' => 'Manual',
+                                    'mayor_demanda' => 'Mayor Demanda',
+                                    'sincronizacion' => 'Sincronización',
+                                    default => 'Automático',
+                                };
+                                $classTag = match($row['classification'] ?? 'automatica') {
+                                    'manual' => 'manual',
+                                    'mayor_demanda' => 'warn',
+                                    'sincronizacion' => 'primary',
+                                    default => 'req',
+                                };
+                            @endphp
+                            <span class="tag {{ $classTag }}" title="Tipo original: {{ $row['tipo'] }}">{{ $classLabel }}</span>
                         </td>
                         <td class="cell-qty"><strong>{{ $row['cantidad'] }}</strong></td>
                         <td class="cell-user">{{ $row['usuario'] }}</td>
@@ -239,7 +253,20 @@
             `<span class="route-pill">${row.origen}</span> <span class="route-arrow">→</span> <span class="route-pill route-pill-dest">${row.destino}</span>`,
             'cell-route'
         ));
-        tr.appendChild(createCell(`<span class="tag ${row.tipo.toLowerCase() === 'requisicion' ? 'req' : 'no'}">${row.tipo}</span>`));
+        const classification = row.classification || 'automatica';
+        let classLabel = 'Automático';
+        let classTag = 'req';
+        if (classification === 'manual') {
+            classLabel = 'Manual';
+            classTag = 'manual';
+        } else if (classification === 'mayor_demanda') {
+            classLabel = 'Mayor Demanda';
+            classTag = 'warn';
+        } else if (classification === 'sincronizacion') {
+            classLabel = 'Sincronización';
+            classTag = 'primary';
+        }
+        tr.appendChild(createCell(`<span class="tag ${classTag}" title="Tipo original: ${row.tipo}">${classLabel}</span>`));
         tr.appendChild(createCell(`<strong>${row.cantidad}</strong>`, 'cell-qty'));
         tr.appendChild(createCell(row.usuario, 'cell-user'));
         tr.appendChild(renderNoteCell(row));

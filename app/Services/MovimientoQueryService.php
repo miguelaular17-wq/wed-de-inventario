@@ -84,6 +84,7 @@ class MovimientoQueryService
             'created_at_ts' => $m->created_at?->getTimestamp() ?? 0,
             'metadata' => $m->metadata,
             'is_manual' => false,
+            'classification' => $this->pgClassification($m),
         ]);
 
         return $movimientos
@@ -146,7 +147,8 @@ class MovimientoQueryService
                 'created_at' => $manual->created_at?->format('d/m/Y H:i'),
                 'created_at_ts' => $manual->created_at?->getTimestamp() ?? 0,
                 'is_manual' => true,
-            'manual_exported' => $manual->aplicada_at !== null,
+                'manual_exported' => $manual->aplicada_at !== null,
+                'classification' => 'manual',
             ];
         });
     }
@@ -275,6 +277,7 @@ class MovimientoQueryService
             'is_manual' => false,
             'manual_note' => null,
             'metadata' => $m->metadata,
+            'classification' => $this->pgClassification($m),
         ]);
     }
 
@@ -313,6 +316,7 @@ class MovimientoQueryService
             'created_at_ts' => $m->created_at?->getTimestamp() ?? 0,
             'is_manual' => false,
             'manual_note' => null,
+            'classification' => $this->sqliteClassification($m),
         ]);
     }
 
@@ -358,6 +362,7 @@ class MovimientoQueryService
                 'is_manual' => true,
                 'manual_exported' => $manual->aplicada_at !== null,
                 'manual_note' => $demandInfo['warning'],
+                'classification' => 'manual',
             ];
         })->values();
 
@@ -443,11 +448,42 @@ class MovimientoQueryService
             'usuario' => '—',
             'created_at' => $m->created_at?->format('d/m/Y H:i'),
             'created_at_ts' => $m->created_at?->getTimestamp() ?? 0,
+            'classification' => $this->sqliteClassification($m),
         ]);
 
         return $movimientos
             ->concat($this->listPendingManualRequisitions($filters))
             ->sortByDesc('created_at_ts')
             ->values();
+    }
+
+    private function pgClassification(Movimiento $m): string
+    {
+        if ($m->usuario === 'sistema_sync' || $m->tipo === 'AJUSTE') {
+            return 'sincronizacion';
+        }
+        $subTipo = $m->metadata['source_type'] ?? null;
+        if ($subTipo === 'manual') {
+            return 'manual';
+        }
+        if ($subTipo === 'mayor_demanda') {
+            return 'mayor_demanda';
+        }
+        return 'automatica';
+    }
+
+    private function sqliteClassification(StockMovement $m): string
+    {
+        $tipoLower = strtolower($m->tipo);
+        if (str_contains($tipoLower, 'manual')) {
+            return 'manual';
+        }
+        if (str_contains($tipoLower, 'mayor_demanda')) {
+            return 'mayor_demanda';
+        }
+        if (str_contains($tipoLower, 'sincronizacion') || str_contains($tipoLower, 'ajuste')) {
+            return 'sincronizacion';
+        }
+        return 'automatica';
     }
 }

@@ -45,6 +45,12 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         $user = Auth::user();
+        \App\Models\LoginLog::create([
+            'user_id' => $user->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'created_at' => now(),
+        ]);
         if ($user->sede && ! $request->session()->has('sede_local')) {
             $request->session()->put('sede_local', strtoupper($user->sede));
         }
@@ -67,11 +73,18 @@ class AuthController extends Controller
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => $data['password'],
+            'password_plain' => $data['password'],
             'role' => User::ROLE_VENDEDOR,
             'sede' => strtoupper($data['sede']),
         ]);
 
         Auth::login($user);
+        \App\Models\LoginLog::create([
+            'user_id' => $user->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'created_at' => now(),
+        ]);
         $request->session()->regenerate();
         $request->session()->put('sede_local', strtoupper($user->sede));
 
@@ -94,9 +107,6 @@ class AuthController extends Controller
             return redirect()->route('admin.dashboard');
         }
 
-        if ($user->isGerente()) {
-            return redirect()->route('gerente.dashboard');
-        }
 
         if ($user->isComprador() || $user->isMarketing()) {
             return redirect()->route('comprador.dashboard');

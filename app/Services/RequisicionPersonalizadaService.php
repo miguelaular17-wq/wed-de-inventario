@@ -265,6 +265,7 @@ class RequisicionPersonalizadaService
                     $origenKey,
                     strtoupper($sedeLocal),
                     $usuario,
+                    'manual',
                 );
 
                 RequisicionManual::query()

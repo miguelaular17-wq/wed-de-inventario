@@ -10,7 +10,7 @@ class StockMovementService
         private InventarioV2Repository $v2,
     ) {}
 
-    public function applyRequisition(Collection $lines, string $sedeOrigen, string $sedeDestino, ?string $usuario = null): int
+    public function applyRequisition(Collection $lines, string $sedeOrigen, string $sedeDestino, ?string $usuario = null, ?string $sourceType = null): int
     {
         if ($sedeOrigen === $sedeDestino) {
             throw new \InvalidArgumentException('Origen y destino deben ser distintos.');
@@ -25,17 +25,18 @@ class StockMovementService
                 $sedeOrigen,
                 $sedeDestino,
                 $userEmail,
+                $sourceType,
             );
         }
 
-        return $this->applySqlite($lines, $sedeOrigen, $sedeDestino, $userEmail);
+        return $this->applySqlite($lines, $sedeOrigen, $sedeDestino, $userEmail, $sourceType);
     }
 
-    private function applySqlite(Collection $lines, string $sedeOrigen, string $sedeDestino, ?string $usuario = null): int
+    private function applySqlite(Collection $lines, string $sedeOrigen, string $sedeDestino, ?string $usuario = null, ?string $sourceType = null): int
     {
         $applied = 0;
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($lines, $sedeOrigen, $sedeDestino, &$applied) {
+        \Illuminate\Support\Facades\DB::transaction(function () use ($lines, $sedeOrigen, $sedeDestino, $usuario, $sourceType, &$applied) {
             foreach ($lines as $line) {
                 $cod = (string) ($line['codigo'] ?? '');
                 $qty = (int) ($line['cantidad'] ?? 0);
@@ -56,7 +57,7 @@ class StockMovementService
                     'sede_origen' => $sedeOrigen,
                     'sede_destino' => $sedeDestino,
                     'cantidad' => $qty,
-                    'tipo' => 'requisicion',
+                    'tipo' => $sourceType ? 'requisicion_' . $sourceType : 'requisicion',
                     'usuario' => $usuario ?? auth()->user()?->email ?? 'system',
                 ]);
 

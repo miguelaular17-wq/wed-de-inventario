@@ -11,7 +11,6 @@ use App\Http\Controllers\SedeController;
 use App\Http\Controllers\VentasController;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureSedeSelected;
-use App\Http\Controllers\GerenteController;
 use App\Http\Controllers\CompradorController;
 use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
@@ -21,9 +20,6 @@ Route::get('/', function () {
         $user = auth()->user();
         if ($user->isAdmin()) {
             return redirect()->route('admin.dashboard');
-        }
-        if ($user->isGerente()) {
-            return redirect()->route('gerente.dashboard');
         }
         if ($user->isComprador() || $user->isMarketing()) {
             return redirect()->route('comprador.dashboard');
@@ -66,18 +62,19 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::delete('/usuarios/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::post('/config/cashea', [UserController::class, 'updateCashea'])->name('config.cashea.update');
     Route::post('/clear-cache', [DashboardController::class, 'clearCache'])->name('clear-cache');
+    
+    // Login logs
+    Route::get('/inicios-sesion', [UserController::class, 'loginLogs'])->name('users.login-logs');
+
+    // Movimientos
+    Route::get('/movimientos', [MovimientoController::class, 'index'])->name('movimientos.index');
+    Route::get('/movimientos/sync', [MovimientoController::class, 'sync'])->name('movimientos.sync');
 });
 
 // Sede change views accessible by roles with sede access
 Route::middleware(['auth', 'role:admin,supervisor,telefonia,sede,comprador'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/sedes', [\App\Http\Controllers\Admin\SedeController::class, 'index'])->name('sedes.index');
     Route::post('/sedes/{sede}/usar', [\App\Http\Controllers\Admin\SedeController::class, 'use'])->name('sedes.use');
-});
-
-// Movimientos routes accessible by Admin and Gerente
-Route::middleware(['auth', 'role:admin,gerente'])->prefix('admin')->name('admin.')->group(function () {
-    Route::get('/movimientos', [MovimientoController::class, 'index'])->name('movimientos.index');
-    Route::get('/movimientos/sync', [MovimientoController::class, 'sync'])->name('movimientos.sync');
 });
 
 // Sede views restricted by role
@@ -95,12 +92,7 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'role:admin,supervisor,tel
     Route::post('/requisicion/exportar', [RequisicionController::class, 'export'])->name('requisicion.export');
 });
 
-// Gerente specific routes
-Route::middleware(['auth', 'role:admin,gerente'])->prefix('gerente')->group(function () {
-    Route::get('/', [GerenteController::class, 'index'])->name('gerente.dashboard');
-    Route::post('/mensaje', [GerenteController::class, 'sendMessage'])->name('gerente.message.send');
-    Route::post('/requisiciones/{requisicion}/apply', [GerenteController::class, 'markRequisitionApplied'])->name('gerente.requisiciones.apply');
-});
+
 
 // Comprador & Marketing specific routes
 Route::middleware(['auth', 'role:admin,comprador,marketing'])->prefix('compras')->group(function () {

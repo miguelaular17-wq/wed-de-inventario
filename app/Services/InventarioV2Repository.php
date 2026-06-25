@@ -367,11 +367,11 @@ class InventarioV2Repository
         });
     }
 
-    public function applyRequisition(Collection $lines, string $sedeOrigen, string $sedeDestino, ?string $usuario = null): int
+    public function applyRequisition(Collection $lines, string $sedeOrigen, string $sedeDestino, ?string $usuario = null, ?string $sourceType = null): int
     {
         $applied = 0;
 
-        DB::connection('pgsql')->transaction(function () use ($lines, $sedeOrigen, $sedeDestino, $usuario, &$applied) {
+        DB::connection('pgsql')->transaction(function () use ($lines, $sedeOrigen, $sedeDestino, $usuario, $sourceType, &$applied) {
             $codigos = $lines->pluck('codigo')->filter()->unique()->values()->all();
 
             $productosByCodigo = Producto::query()
@@ -402,7 +402,10 @@ class InventarioV2Repository
                     'tipo' => 'REQUISICION',
                     'cantidad' => $qty,
                     'usuario' => $usuario ?? $sedeLabel,
-                    'metadata' => ['codigo' => $cod],
+                    'metadata' => [
+                        'codigo' => $cod,
+                        'source_type' => $sourceType,
+                    ],
                 ]);
 
                 $applied++;

@@ -79,48 +79,6 @@ class RoleAccessTest extends TestCase
         $this->assertEquals('111111', $products->first()['cod_centro']);
     }
 
-    public function test_gerente_role_access_and_messaging(): void
-    {
-        $gerente = User::create([
-            'name' => 'Gerente',
-            'email' => 'gerente@test.local',
-            'password' => 'password123',
-            'role' => User::ROLE_GERENTE,
-        ]);
-
-        $supervisor = User::create([
-            'name' => 'Supervisor Doral',
-            'email' => 'supervisor@test.local',
-            'password' => 'password123',
-            'role' => User::ROLE_SUPERVISOR,
-            'sede' => 'DORAL',
-        ]);
-
-        $this->actingAs($gerente);
-
-        // Can access movements page
-        $this->get(route('admin.movimientos.index'))->assertOk();
-
-        // Can access gerente dashboard
-        $this->get(route('gerente.dashboard'))->assertOk();
-
-        // Cannot access admin dashboard
-        $this->get(route('admin.dashboard'))->assertRedirect(route('login'));
-
-        // Can send a message to supervisor
-        $response = $this->post(route('gerente.message.send'), [
-            'receiver_id' => $supervisor->id,
-            'message' => 'Instrucción de inventario importante para Doral.',
-        ]);
-
-        $response->assertRedirect();
-        $this->assertDatabaseHas('notifications', [
-            'sender_id' => $gerente->id,
-            'receiver_id' => $supervisor->id,
-            'message' => 'Instrucción de inventario importante para Doral.',
-        ]);
-    }
-
     public function test_comprador_role_access_and_redistribution_notifications(): void
     {
         $comprador = User::create([

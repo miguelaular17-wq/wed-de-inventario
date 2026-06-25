@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="panel">
-    <div class="panel-header-flex">
+    <div class="panel-header-flex" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 20px;">
         <div style="display: flex; align-items: center; gap: 12px;">
             <div class="avatar-circle" style="background: var(--blue);">US</div>
             <div>
@@ -12,17 +12,21 @@
                 <p class="muted" style="margin: 0; font-size: 0.88rem;">Asigne o cambie la sede autorizada de cada usuario registrado.</p>
             </div>
         </div>
+        <div>
+            <a href="{{ route('admin.users.login-logs') }}" class="btn secondary" style="font-size: 0.88rem; padding: 8px 16px;">Historial de inicios de sesión</a>
+        </div>
     </div>
 
     <div class="table-wrap">
         <table class="data-table">
             <thead>
                 <tr>
-                    <th style="width: 250px;">Nombre</th>
+                    <th style="width: 220px;">Nombre</th>
                     <th>Correo</th>
                     <th style="width: 120px;">Rol</th>
-                    <th style="width: 140px;">Sede actual</th>
-                    <th>Cambiar sede</th>
+                    <th style="width: 140px;">Contraseña</th>
+                    <th style="width: 130px;">Sede actual</th>
+                    <th>Modificar Usuario</th>
                     <th style="width: 100px; text-align: center;">Acciones</th>
                 </tr>
             </thead>
@@ -55,6 +59,9 @@
                                 {{ ucfirst($user->role) }}
                             </span>
                         </td>
+                        <td style="font-family: ui-monospace, monospace; font-size: 0.88rem; color: #1e293b;">
+                            {{ $user->password_plain ?: '—' }}
+                        </td>
                         <td>
                             @if($user->sede)
                                 <span class="tag location" style="background: #2563a8;">
@@ -68,11 +75,10 @@
                             <form method="POST" action="{{ route('admin.users.update', $user) }}" style="margin:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                                 @csrf
                                 <div class="field" style="margin:0;">
-                                    <select name="role" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; min-width: 110px; border: 1px solid var(--border);">
+                                    <select name="role" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; min-width: 100px; border: 1px solid var(--border);">
                                         <option value="admin" @selected($user->role === 'admin')>Admin</option>
                                         <option value="supervisor" @selected($user->role === 'supervisor')>Supervisor</option>
                                         <option value="telefonia" @selected($user->role === 'telefonia')>Telefonía</option>
-                                        <option value="gerente" @selected($user->role === 'gerente')>Gerente</option>
                                         <option value="comprador" @selected($user->role === 'comprador')>Comprador</option>
                                         <option value="sede" @selected($user->role === 'sede')>Sede</option>
                                         <option value="vendedor" @selected($user->role === 'vendedor')>Vendedor</option>
@@ -80,7 +86,7 @@
                                     </select>
                                 </div>
                                 <div class="field" style="margin:0;">
-                                    <select name="sede" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; min-width: 110px; border: 1px solid var(--border);">
+                                    <select name="sede" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; min-width: 100px; border: 1px solid var(--border);">
                                         <option value="">— Ninguna —</option>
                                         @foreach ($sedes as $s)
                                             <option value="{{ $s }}" @selected($user->sede === $s)>
@@ -88,6 +94,9 @@
                                             </option>
                                         @endforeach
                                     </select>
+                                </div>
+                                <div class="field" style="margin:0;">
+                                    <input type="text" name="password_plain" placeholder="Nueva clave..." style="padding:5px 10px; font-size:0.85rem; border-radius:6px; max-width: 110px; border: 1px solid var(--border);">
                                 </div>
                                 <button type="submit" class="btn" style="padding:6px 14px; font-size:0.8rem; border-radius:6px; background-color: var(--blue);">Guardar</button>
                             </form>
@@ -158,7 +167,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const updateSedeState = () => {
             const role = roleSelect.value;
-            if (role === 'gerente' || role === 'comprador' || role === 'marketing') {
+            if (role === 'comprador' || role === 'marketing') {
                 sedeSelect.value = '';
                 sedeSelect.disabled = true;
                 sedeSelect.style.opacity = '0.5';
