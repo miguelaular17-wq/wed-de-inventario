@@ -279,7 +279,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         @forelse ($byProvider as $prov)
             <div class="panel provider-card" 
                  style="cursor: pointer; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; justify-content: space-between; gap: 12px; background: var(--panel);"
-                 onclick="openProviderModal({{ json_encode($prov['proveedor']) }}, {{ json_encode($prov['productos']) }}, this)">
+                 onclick="openProviderModalByIndex({{ $loop->index }}, this)">
                 <div style="display: flex; align-items: flex-start; gap: 12px;">
                     <span style="font-size: 1.5rem; background: var(--blue-light); padding: 8px; border-radius: 8px; line-height: 1;">📦</span>
                     <div style="flex: 1; min-width: 0;">
@@ -810,6 +810,15 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 @endif
 
 <script>
+const allProvidersData = @json($byProvider);
+
+function openProviderModalByIndex(index, cardElement) {
+    const prov = allProvidersData[index];
+    if (prov) {
+        openProviderModal(prov.proveedor, prov.productos, cardElement);
+    }
+}
+
 function updateSsSubcats() {
     // Reset subcategoria and submit to reload options from server
     document.getElementById('ss_subcategoria').value = 'Ninguno';
