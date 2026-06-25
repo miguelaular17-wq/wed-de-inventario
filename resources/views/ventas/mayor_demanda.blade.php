@@ -78,7 +78,10 @@
 
             <div style="display:flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 16px;">
                 <button type="button" class="btn secondary" id="modal-req-cancel" style="margin-bottom:0;">Cerrar</button>
-                <button type="submit" class="btn" id="modal-req-submit-btn" style="margin-bottom:0;">Guardar Todo</button>
+                <div style="display:flex; gap:10px;">
+                    <button type="button" class="btn secondary" id="modal-req-autofill-stock" style="margin-bottom:0; background-color: var(--surface-alt, #f3f4f6); border-color: #d1d5db;">Traer Existencia Total</button>
+                    <button type="submit" class="btn" id="modal-req-submit-btn" style="margin-bottom:0;">Guardar Todo</button>
+                </div>
             </div>
         </form>
     </div>
@@ -114,6 +117,7 @@
     const rowsContainer = document.getElementById('modal-requisicion-rows');
     const cancelBtn = document.getElementById('modal-req-cancel');
     const submitBtn = document.getElementById('modal-req-submit-btn');
+    const autofillStockBtn = document.getElementById('modal-req-autofill-stock');
 
     function openRequisitionModal(btn) {
         const codigo = btn.dataset.codigo;
@@ -152,6 +156,7 @@
                            class="modal-qty-input" 
                            data-sede="${sede}" 
                            data-excedente="${excedente}" 
+                           data-stock="${stock}" 
                            min="0" 
                            value="${currentQty > 0 ? currentQty : ''}" 
                            placeholder="0"
@@ -200,6 +205,19 @@
     if (cancelBtn) {
         cancelBtn.addEventListener('click', function () {
             modal.style.display = 'none';
+        });
+    }
+
+    if (autofillStockBtn) {
+        autofillStockBtn.addEventListener('click', function () {
+            const inputs = rowsContainer.querySelectorAll('.modal-qty-input');
+            inputs.forEach(function (input) {
+                const stock = parseInt(input.dataset.stock || 0);
+                if (stock > 0) {
+                    input.value = stock;
+                    input.dispatchEvent(new Event('input'));
+                }
+            });
         });
     }
 
