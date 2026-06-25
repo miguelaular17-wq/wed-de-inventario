@@ -84,6 +84,14 @@
                                 @if(! empty($row['manual_note']))
                                     <div class="manual-note {{ ($row['manual_exported'] ?? false) ? 'manual-exported' : '' }}">{{ $row['manual_note'] }}</div>
                                 @endif
+                            @elseif(!empty($row['metadata']['motivo']))
+                                <span class="tag primary">Sincronización</span>
+                                <div class="manual-note">
+                                    {{ $row['metadata']['motivo'] }}
+                                    @if(!empty($row['metadata']['fecha_venta_local']))
+                                        <br><small style="color:var(--muted)">Fecha venta: {{ date('d/m/Y H:i', strtotime($row['metadata']['fecha_venta_local'])) }}</small>
+                                    @endif
+                                </div>
                             @else
                                 —
                             @endif
@@ -201,6 +209,21 @@
             const note = `<span class="tag ${tagClass}">${tagLabel}</span>`;
             const detailClass = row.manual_exported ? 'manual-note manual-exported' : 'manual-note';
             const detail = row.manual_note ? `<div class="${detailClass}">${row.manual_note}</div>` : '';
+            return createCell(note + detail, 'cell-note');
+        } else if (row.metadata && row.metadata.motivo) {
+            const note = `<span class="tag primary">Sincronización</span>`;
+            let dateStr = '';
+            if (row.metadata.fecha_venta_local) {
+                const parts = row.metadata.fecha_venta_local.split(' ');
+                if (parts.length >= 2) {
+                    const dp = parts[0].split('-');
+                    const tp = parts[1].split(':');
+                    if (dp.length >= 3 && tp.length >= 2) {
+                        dateStr = `<br><small style="color:var(--muted)">Fecha venta: ${dp[2]}/${dp[1]}/${dp[0]} ${tp[0]}:${tp[1]}</small>`;
+                    }
+                }
+            }
+            const detail = `<div class="manual-note">${row.metadata.motivo}${dateStr}</div>`;
             return createCell(note + detail, 'cell-note');
         }
         return createCell('—', 'cell-note');

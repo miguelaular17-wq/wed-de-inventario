@@ -20,6 +20,12 @@
             <div class="stat-value">{{ $movementStats['requisiciones'] ?? 0 }}</div>
             <div class="stat-label">Requisiciones</div>
         </div>
+        @if(isset($movementStats['sincronizaciones']))
+            <div class="stat-card">
+                <div class="stat-value">{{ $movementStats['sincronizaciones'] }}</div>
+                <div class="stat-label">Ventas sincronizadas</div>
+            </div>
+        @endif
     </div>
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;">

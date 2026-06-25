@@ -27,8 +27,9 @@ class MovimientoQueryService
         if (config('database.default') === 'pgsql') {
             $total = Movimiento::query()->count();
             $requisiciones = Movimiento::query()->where('tipo', 'REQUISICION')->count();
+            $sincronizaciones = Movimiento::query()->where('usuario', 'sistema_sync')->count();
 
-            return compact('total', 'requisiciones');
+            return compact('total', 'requisiciones', 'sincronizaciones');
         }
 
         $total = StockMovement::query()->count();
@@ -81,6 +82,8 @@ class MovimientoQueryService
             'usuario' => $m->usuario ?: '—',
             'created_at' => $m->created_at?->format('d/m/Y H:i'),
             'created_at_ts' => $m->created_at?->getTimestamp() ?? 0,
+            'metadata' => $m->metadata,
+            'is_manual' => false,
         ]);
 
         return $movimientos
@@ -271,6 +274,7 @@ class MovimientoQueryService
             'created_at_ts' => $m->created_at?->getTimestamp() ?? 0,
             'is_manual' => false,
             'manual_note' => null,
+            'metadata' => $m->metadata,
         ]);
     }
 
