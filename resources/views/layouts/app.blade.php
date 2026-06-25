@@ -46,7 +46,8 @@
                     @endif
 
                     @if(auth()->user()->hasAccessToSedeViews() && session('sede_local'))
-                        <a href="{{ route('ventas.index') }}" data-tour="nav-ventas" class="{{ request()->routeIs('ventas.*') ? 'active' : '' }}">Ventas</a>
+                        <a href="{{ route('ventas.index') }}" data-tour="nav-ventas" class="{{ request()->routeIs('ventas.index') ? 'active' : '' }}">Ventas</a>
+                        <a href="{{ route('ventas.mayor_demanda') }}" class="{{ request()->routeIs('ventas.mayor_demanda') ? 'active' : '' }}">Mayor Demanda</a>
                         <a href="{{ route('inventario.index') }}" data-tour="nav-inventario" class="{{ request()->routeIs('inventario.*') ? 'active' : '' }}">Inventario</a>
                         <a href="{{ route('requisicion.form') }}" data-tour="nav-export" class="{{ request()->routeIs('requisicion.*') ? 'active' : '' }}">Exportar</a>
                     @endif

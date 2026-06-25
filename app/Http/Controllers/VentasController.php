@@ -149,4 +149,98 @@ class VentasController extends Controller
             'rows' => $rows,
         ]);
     }
+
+    public function mayorDemanda(Request $request): View
+    {
+        $sede = (string) $request->session()->get('sede_local');
+
+        if ($request->filled('tiempo_pronostico')) {
+            $request->session()->put(
+                'tiempo_pronostico',
+                max(1, (int) $request->input('tiempo_pronostico'))
+            );
+        }
+
+        $tp = (float) $request->session()->get('tiempo_pronostico', config('inventario.tiempo_pronostico_default'));
+
+        $filterInput = [
+            'q' => trim((string) $request->query('q', '')),
+            'categoria' => (string) $request->query('categoria', 'Ninguno'),
+            'subcategoria' => (string) $request->query('subcategoria', 'Ninguno'),
+        ];
+
+        $products = $this->products->loadForSede($sede);
+        
+        if ($filterInput['q'] !== '' || $filterInput['categoria'] !== 'Ninguno' || $filterInput['subcategoria'] !== 'Ninguno') {
+            $qLower = mb_strtolower($filterInput['q']);
+            $products = $products->filter(function (array $row) use ($filterInput, $qLower) {
+                if ($filterInput['categoria'] !== 'Ninguno' && ($row['categoria'] ?? '') !== $filterInput['categoria']) {
+                    return false;
+                }
+                if ($filterInput['subcategoria'] !== 'Ninguno' && ($row['subcategoria'] ?? '') !== $filterInput['subcategoria']) {
+                    return false;
+                }
+                if ($qLower === '') {
+                    return true;
+                }
+
+                return str_contains(mb_strtolower((string) ($row['cod_centro'] ?? '')), $qLower)
+                    || str_contains(mb_strtolower((string) ($row['producto'] ?? '')), $qLower);
+            })->values();
+        }
+
+        $calculated = $this->ventas->calcular($products, $sede, $tp);
+
+        // Filter: only products where this branch sells more than any other branch
+        $filtered = $calculated->filter(function (array $row) use ($sede) {
+            $ventas15d = $row['ventas_internas_15d'] ?? [];
+            $localSales = (int) ($row['venta'] ?? 0);
+
+            if ($localSales <= 0) {
+                return false;
+            }
+
+            $maxOtherSales = 0;
+            foreach ($ventas15d as $s => $qty) {
+                if ($s !== $sede) {
+                    $maxOtherSales = max($maxOtherSales, (int) $qty);
+                }
+            }
+
+            return $localSales > $maxOtherSales;
+        });
+
+        // Sort by local sales descending (mayor demanda)
+        $sorted = $filtered->sortByDesc(fn(array $row) => (int) ($row['venta'] ?? 0))->values();
+
+        $rows = $this->paginateCollection($sorted, $request);
+
+        // Get categories and subcategories
+        $categorias = $calculated->pluck('categoria')->filter()->unique()->sort()->values()->all();
+        $subcategorias = [];
+        if ($filterInput['categoria'] !== 'Ninguno') {
+            $subcategorias = $calculated->where('categoria', $filterInput['categoria'])->pluck('subcategoria')->filter()->unique()->sort()->values()->all();
+        }
+
+        $viewData = [
+            'sede' => $sede,
+            'rows' => $rows,
+            'calculatedCount' => $sorted->count(),
+            'filters' => $filterInput,
+            'categorias' => $categorias,
+            'subcategorias' => $subcategorias,
+            'tiempoPronostico' => (int) $tp,
+            'sedesStock' => collect(config('inventario.sedes_stock'))
+                ->reject(fn ($s) => $s === $sede)
+                ->values()
+                ->all(),
+            'stockUpdatedAt' => $this->products->lastStockUpdate(),
+        ];
+
+        if ($request->header('X-Partial') === 'content') {
+            return view('ventas.mayor_demanda_content', $viewData);
+        }
+
+        return view('ventas.mayor_demanda', $viewData);
+    }
 }

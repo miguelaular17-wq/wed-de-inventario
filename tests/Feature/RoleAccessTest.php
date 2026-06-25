@@ -228,4 +228,21 @@ class RoleAccessTest extends TestCase
         $this->get(route('ventas.index'))->assertOk();
         $this->get(route('vendedor.dashboard'))->assertRedirect('/');
     }
+
+    public function test_mayor_demanda_view_access(): void
+    {
+        $user = User::create([
+            'name' => 'Supervisor Doral',
+            'email' => 'supervisor_md@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_SUPERVISOR,
+            'sede' => 'DORAL',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->get(route('ventas.mayor_demanda'));
+
+        $response->assertOk();
+    }
 }
