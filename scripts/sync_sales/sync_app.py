@@ -599,26 +599,32 @@ class SyncApp:
         
         while not self.stop_event.is_set():
             today = datetime.now().strftime("%Y-%m-%d")
+            success = True
 
             # At the start of each new day (or first run), push full inventory snapshot
             if last_snapshot_date != today:
                 self.log("=" * 60)
                 self.log(f"NUEVO DÍA DETECTADO ({today}). Actualizando stock de productos conocidos...")
                 self.log("=" * 60)
-                self._execute_daily_snapshot()
+                success = self._execute_daily_snapshot()
                 
-                # If first run ever, set baseline to now so we don't pull from 2020
-                state = self.load_state()
-                if not state.get("last_processed_timestamp"):
-                    state["last_processed_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S.000")
-                    self.save_state(state)
-                    
-                last_snapshot_date = today
+                if success:
+                    # If first run ever, set baseline to now so we don't pull from 2020
+                    state = self.load_state()
+                    if not state.get("last_processed_timestamp"):
+                        state["last_processed_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S.000")
+                        self.save_state(state)
+                        
+                    last_snapshot_date = today
 
-            self._execute_sync_cycle()
+            if success:
+                success = self._execute_sync_cycle()
             
             # Sleep in 1-second chunks to react fast to the stop event
-            for _ in range(interval_seconds):
+            # If failed, retry in 60 seconds instead of the full interval
+            current_interval = interval_seconds if success else 60
+            
+            for _ in range(current_interval):
                 if self.stop_event.is_set():
                     break
                 time.sleep(1)
@@ -664,15 +670,7 @@ class SyncApp:
 
             self.log(f"[Snapshot] La web tiene {len(prod_map)} productos registrados. Consultando SQL Server...")
             
-            billing = self.config["billing_db"]
-            billing_conn = pyodbc.connect(
-                f"DRIVER={{SQL Server}};"
-                f"SERVER={billing['server']};"
-                f"DATABASE={billing['database']};"
-                f"Trusted_Connection=yes;"
-                f"TrustServerCertificate=yes;",
-                timeout=10
-            )
+            billing_conn = self.get_sql_connection()
 
             snapshot_query = """
                 SELECT
@@ -712,7 +710,7 @@ class SyncApp:
             self.log(f"[Snapshot] {len(rows)} totales obtenidos de SQL Server.")
 
             if not rows:
-                return
+                return True
 
             from psycopg2.extras import execute_batch
 
@@ -749,7 +747,7 @@ class SyncApp:
 
             if not stock_tuples:
                 self.log(f"[Snapshot] No hay datos conocidos para actualizar (omitidos {skipped} desconocidos).")
-                return
+                return True
 
             self.log(f"[Snapshot] Preparados {len(stock_tuples)} productos conocidos. Enviando...")
                     
@@ -798,6 +796,7 @@ class SyncApp:
             state["last_processed_timestamp"] = new_ts
             self.save_state(state)
             self.log(f"[Snapshot] Punto de inicio de movimientos: {new_ts}")
+            return True
 
         except Exception as e:
             self.log(f"[Snapshot] Error al subir reporte de apertura: {str(e)}")
@@ -810,9 +809,9 @@ class SyncApp:
             if billing_conn:
                 try: billing_conn.close()
                 except Exception: pass
-            if web_conn:
                 try: web_conn.close()
                 except Exception: pass
+            return False
 
     def _execute_sync_cycle(self):
         billing_conn = None
@@ -829,15 +828,7 @@ class SyncApp:
             self.log(f"Consultando ventas locales registradas después de: {last_time}")
             
             # Connect to SQL Server
-            billing = self.config["billing_db"]
-            billing_conn = pyodbc.connect(
-                f"DRIVER={{SQL Server}};"
-                f"SERVER={billing['server']};"
-                f"DATABASE={billing['database']};"
-                f"Trusted_Connection=yes;"
-                f"TrustServerCertificate=yes;",
-                timeout=5
-            )
+            billing_conn = self.get_sql_connection()
             
             # Connect to production web application DB (PostgreSQL / Supabase)
             web = self.config["web_db"]
@@ -861,7 +852,7 @@ class SyncApp:
             
             if not rows:
                 self.log("No se encontraron nuevas ventas.")
-                return
+                return True
                 
             self.log(f"Se encontraron {len(rows)} ventas nuevas para procesar.")
             sede = self.config["sede"]
@@ -1001,6 +992,7 @@ class SyncApp:
             
             # Update UI field value
             self.log(f"Sincronización completada. Último registro procesado: {new_last_time}")
+            return True
             
         except Exception as e:
             self.log(f"Error en ciclo de sincronización: {str(e)}")
@@ -1020,6 +1012,7 @@ class SyncApp:
                     web_conn.close()
                 except Exception:
                     pass
+            return False
 
 if __name__ == "__main__":
     root = tk.Tk()
