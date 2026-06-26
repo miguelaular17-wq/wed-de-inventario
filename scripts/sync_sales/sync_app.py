@@ -15,7 +15,11 @@ else:
     winreg = None
 
 # Database drivers and config paths
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 STATE_PATH = os.path.join(BASE_DIR, "state.json")
 
@@ -348,15 +352,19 @@ class SyncApp:
                 winreg.KEY_WRITE
             )
             if enable:
-                py_exe = sys.executable
-                # Use pythonw.exe if running from python.exe so it runs windowless for console
-                if py_exe.lower().endswith("python.exe"):
-                    pyw_exe = py_exe[:-10] + "pythonw.exe"
-                    if os.path.exists(pyw_exe):
-                        py_exe = pyw_exe
-                
-                script_path = os.path.abspath(__file__)
-                cmd = f'"{py_exe}" "{script_path}" --autostart'
+                if getattr(sys, 'frozen', False):
+                    # If compiled with PyInstaller, the executable is sys.executable itself
+                    cmd = f'"{sys.executable}" --autostart'
+                else:
+                    py_exe = sys.executable
+                    # Use pythonw.exe if running from python.exe so it runs windowless for console
+                    if py_exe.lower().endswith("python.exe"):
+                        pyw_exe = py_exe[:-10] + "pythonw.exe"
+                        if os.path.exists(pyw_exe):
+                            py_exe = pyw_exe
+                    
+                    script_path = os.path.abspath(__file__)
+                    cmd = f'"{py_exe}" "{script_path}" --autostart'
                 
                 winreg.SetValueEx(key, "JRZInventorySync", 0, winreg.REG_SZ, cmd)
                 self.log("Inicio automático habilitado con comando:")
