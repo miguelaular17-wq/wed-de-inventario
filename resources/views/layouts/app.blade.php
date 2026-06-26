@@ -34,6 +34,7 @@
                     @if(auth()->user()->isAdmin())
                         <a href="{{ route('admin.dashboard') }}" data-tour="admin-dashboard" class="{{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">Admin</a>
                         <a href="{{ route('admin.movimientos.index') }}" data-tour="admin-movimientos" class="{{ request()->routeIs('admin.movimientos.*') ? 'active' : '' }}">Movimientos</a>
+                        <a href="{{ route('admin.sync_logs.index') }}" class="{{ request()->routeIs('admin.sync_logs.*') ? 'active' : '' }}">Sync Logs</a>
                         <a href="{{ route('admin.import.create') }}" data-tour="admin-import" class="{{ request()->routeIs('admin.import.*') ? 'active' : '' }}">Importar</a>
                         <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">Usuarios</a>
                     @elseif(auth()->user()->isComprador() || auth()->user()->isMarketing())

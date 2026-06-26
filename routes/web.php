@@ -69,6 +69,9 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     // Movimientos
     Route::get('/movimientos', [MovimientoController::class, 'index'])->name('movimientos.index');
     Route::get('/movimientos/sync', [MovimientoController::class, 'sync'])->name('movimientos.sync');
+
+    // Sync Logs
+    Route::get('/sync-logs', [\App\Http\Controllers\Admin\SyncLogController::class, 'index'])->name('sync_logs.index');
 });
 
 // Sede change views accessible by roles with sede access
