@@ -387,14 +387,16 @@ class SyncApp:
         server = billing.get("server", "localhost\\SQLEXPRESS")
         database = billing.get("database", "suitedb_centro")
         
-        conn_str = f"DRIVER={driver};SERVER={server};DATABASE={database};TrustServerCertificate=yes;"
+        conn_str = f"DRIVER={driver};SERVER={server};DATABASE={database};"
         
         if billing.get("trusted_connection", True):
             conn_str += "Trusted_Connection=yes;"
+            self.log(f"Intentando conectar a SQL Server: DRIVER={driver};SERVER={server};DATABASE={database};Trusted_Connection=yes;")
         else:
             user = billing.get("user", "")
             password = billing.get("password", "")
             conn_str += f"UID={user};PWD={password};"
+            self.log(f"Intentando conectar a SQL Server: DRIVER={driver};SERVER={server};DATABASE={database};UID={user};PWD=******;")
             
         return pyodbc.connect(conn_str, timeout=15)
 
