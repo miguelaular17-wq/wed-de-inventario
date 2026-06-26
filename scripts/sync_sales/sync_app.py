@@ -142,13 +142,19 @@ class SyncApp:
         self.sql_server_var = tk.StringVar()
         self.sql_server_entry = ttk.Entry(config_frame, textvariable=self.sql_server_var, width=30)
         self.sql_server_entry.grid(row=1, column=1, sticky=tk.W, pady=5, padx=10)
-        # Row 2: Interval in minutes
-        ttk.Label(config_frame, text="Intervalo de consulta (minutos):").grid(row=2, column=0, sticky=tk.W, pady=5)
+        
+        # Row 2: SQL Database
+        ttk.Label(config_frame, text="Base de Datos SQL:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.sql_database_var = tk.StringVar()
+        self.sql_database_entry = ttk.Entry(config_frame, textvariable=self.sql_database_var, width=30)
+        self.sql_database_entry.grid(row=2, column=1, sticky=tk.W, pady=5, padx=10)
+        # Row 3: Interval in minutes
+        ttk.Label(config_frame, text="Intervalo de consulta (minutos):").grid(row=3, column=0, sticky=tk.W, pady=5)
         self.interval_var = tk.IntVar()
         self.interval_entry = ttk.Entry(config_frame, textvariable=self.interval_var, width=10)
-        self.interval_entry.grid(row=2, column=1, sticky=tk.W, pady=5, padx=10)
+        self.interval_entry.grid(row=3, column=1, sticky=tk.W, pady=5, padx=10)
         
-        # Row 3: Startup Checkbox
+        # Row 4: Startup Checkbox
         self.startup_var = tk.BooleanVar()
         self.startup_chk = ttk.Checkbutton(
             config_frame, 
@@ -156,7 +162,7 @@ class SyncApp:
             variable=self.startup_var,
             command=self.on_startup_changed
         )
-        self.startup_chk.grid(row=3, column=0, columnspan=4, sticky=tk.W, pady=5)
+        self.startup_chk.grid(row=4, column=0, columnspan=4, sticky=tk.W, pady=5)
         
         # Buttons / Actions
         action_frame = ttk.Frame(main_frame)
@@ -217,6 +223,7 @@ class SyncApp:
         # Load SQL server config
         billing_config = self.config.get("billing_db", {})
         self.sql_server_var.set(billing_config.get("server", "localhost\\SQLEXPRESS"))
+        self.sql_database_var.set(billing_config.get("database", "suitedb_centro"))
         
         interval_min = int(self.config.get("interval_seconds", 1800) / 60)
         self.interval_var.set(interval_min)
@@ -231,6 +238,7 @@ class SyncApp:
         # Retrieve values from UI
         sede = self.sede_var.get()
         sql_server = self.sql_server_var.get().strip()
+        sql_database = self.sql_database_var.get().strip()
         
         try:
             interval_min = self.interval_var.get()
@@ -247,6 +255,7 @@ class SyncApp:
         if "billing_db" not in self.config:
             self.config["billing_db"] = {}
         self.config["billing_db"]["server"] = sql_server
+        self.config["billing_db"]["database"] = sql_database
         
         self.save_config()
         
