@@ -148,13 +148,37 @@ class SyncApp:
         self.sql_database_var = tk.StringVar()
         self.sql_database_entry = ttk.Entry(config_frame, textvariable=self.sql_database_var, width=30)
         self.sql_database_entry.grid(row=2, column=1, sticky=tk.W, pady=5, padx=10)
-        # Row 3: Interval in minutes
-        ttk.Label(config_frame, text="Intervalo de consulta (minutos):").grid(row=3, column=0, sticky=tk.W, pady=5)
+        # Row 3: Auth type
+        self.sql_auth_var = tk.BooleanVar(value=True)
+        self.sql_auth_chk = ttk.Checkbutton(
+            config_frame,
+            text="Usar Autenticación de Windows",
+            variable=self.sql_auth_var,
+            command=self.on_auth_changed
+        )
+        self.sql_auth_chk.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=5)
+        
+        # Row 4: User and Password (only visible if auth is false)
+        self.auth_frame = ttk.Frame(config_frame)
+        self.auth_frame.grid(row=4, column=0, columnspan=4, sticky=tk.W, pady=2)
+        
+        ttk.Label(self.auth_frame, text="Usuario SQL:").pack(side=tk.LEFT, padx=(0,5))
+        self.sql_user_var = tk.StringVar()
+        self.sql_user_entry = ttk.Entry(self.auth_frame, textvariable=self.sql_user_var, width=15)
+        self.sql_user_entry.pack(side=tk.LEFT, padx=(0,15))
+        
+        ttk.Label(self.auth_frame, text="Clave:").pack(side=tk.LEFT, padx=(0,5))
+        self.sql_pass_var = tk.StringVar()
+        self.sql_pass_entry = ttk.Entry(self.auth_frame, textvariable=self.sql_pass_var, width=15, show="*")
+        self.sql_pass_entry.pack(side=tk.LEFT)
+        
+        # Row 5: Interval in minutes
+        ttk.Label(config_frame, text="Intervalo de consulta (minutos):").grid(row=5, column=0, sticky=tk.W, pady=5)
         self.interval_var = tk.IntVar()
         self.interval_entry = ttk.Entry(config_frame, textvariable=self.interval_var, width=10)
-        self.interval_entry.grid(row=3, column=1, sticky=tk.W, pady=5, padx=10)
+        self.interval_entry.grid(row=5, column=1, sticky=tk.W, pady=5, padx=10)
         
-        # Row 4: Startup Checkbox
+        # Row 6: Startup Checkbox
         self.startup_var = tk.BooleanVar()
         self.startup_chk = ttk.Checkbutton(
             config_frame, 
@@ -162,7 +186,7 @@ class SyncApp:
             variable=self.startup_var,
             command=self.on_startup_changed
         )
-        self.startup_chk.grid(row=4, column=0, columnspan=4, sticky=tk.W, pady=5)
+        self.startup_chk.grid(row=6, column=0, columnspan=4, sticky=tk.W, pady=5)
         
         # Buttons / Actions
         action_frame = ttk.Frame(main_frame)
@@ -216,6 +240,14 @@ class SyncApp:
         )
         self.console.pack(fill=tk.BOTH, expand=True)
         
+        
+    def on_auth_changed(self):
+        if self.sql_auth_var.get():
+            # Hide auth frame if windows auth
+            self.auth_frame.grid_remove()
+        else:
+            self.auth_frame.grid()
+            
     def load_values_into_ui(self):
         # Load from config
         self.sede_var.set(self.config.get("sede", "JRZ"))
@@ -224,6 +256,12 @@ class SyncApp:
         billing_config = self.config.get("billing_db", {})
         self.sql_server_var.set(billing_config.get("server", "localhost\\SQLEXPRESS"))
         self.sql_database_var.set(billing_config.get("database", "suitedb_centro"))
+        
+        is_trusted = billing_config.get("trusted_connection", True)
+        self.sql_auth_var.set(is_trusted)
+        self.sql_user_var.set(billing_config.get("user", ""))
+        self.sql_pass_var.set(billing_config.get("password", ""))
+        self.on_auth_changed()
         
         interval_min = int(self.config.get("interval_seconds", 1800) / 60)
         self.interval_var.set(interval_min)
@@ -239,6 +277,9 @@ class SyncApp:
         sede = self.sede_var.get()
         sql_server = self.sql_server_var.get().strip()
         sql_database = self.sql_database_var.get().strip()
+        sql_auth_trusted = self.sql_auth_var.get()
+        sql_user = self.sql_user_var.get().strip()
+        sql_pass = self.sql_pass_var.get().strip()
         
         try:
             interval_min = self.interval_var.get()
@@ -256,6 +297,14 @@ class SyncApp:
             self.config["billing_db"] = {}
         self.config["billing_db"]["server"] = sql_server
         self.config["billing_db"]["database"] = sql_database
+        self.config["billing_db"]["trusted_connection"] = sql_auth_trusted
+        if not sql_auth_trusted:
+            self.config["billing_db"]["user"] = sql_user
+            self.config["billing_db"]["password"] = sql_pass
+        else:
+            # Clear them if trusted
+            self.config["billing_db"].pop("user", None)
+            self.config["billing_db"].pop("password", None)
         
         self.save_config()
         
@@ -322,6 +371,24 @@ class SyncApp:
         except Exception as e:
             self.log(f"Error al configurar inicio automático: {str(e)}")
             self.startup_var.set(not enable)
+            
+    def get_sql_connection(self):
+        """Helper to create the SQL Server connection string from config"""
+        billing = self.config["billing_db"]
+        driver = billing.get("driver", "{SQL Server}")
+        server = billing.get("server", "localhost\\SQLEXPRESS")
+        database = billing.get("database", "suitedb_centro")
+        
+        conn_str = f"DRIVER={driver};SERVER={server};DATABASE={database};TrustServerCertificate=yes;"
+        
+        if billing.get("trusted_connection", True):
+            conn_str += "Trusted_Connection=yes;"
+        else:
+            user = billing.get("user", "")
+            password = billing.get("password", "")
+            conn_str += f"UID={user};PWD={password};"
+            
+        return pyodbc.connect(conn_str, timeout=15)
 
     def run_report_once(self):
         if not self.save_ui_values_to_config():
@@ -335,11 +402,7 @@ class SyncApp:
         
     def _report_thread_worker(self):
         try:
-            billing = self.config["billing_db"]
-            driver = "SQL Server"
-            conn_str = f"DRIVER={driver};SERVER={billing['server']};DATABASE={billing['database']};Trusted_Connection=yes;TrustServerCertificate=yes;"
-            
-            conn = pyodbc.connect(conn_str)
+            conn = self.get_sql_connection()
             
             query = """
                 SELECT 
@@ -408,15 +471,7 @@ class SyncApp:
 
     def _inspect_sqlserver_columns_worker(self):
         try:
-            billing = self.config["billing_db"]
-            conn_str = (
-                f"DRIVER={{SQL Server}};"
-                f"SERVER={billing['server']};"
-                f"DATABASE={billing['database']};"
-                f"Trusted_Connection=yes;"
-                f"TrustServerCertificate=yes;"
-            )
-            conn = pyodbc.connect(conn_str, timeout=10)
+            conn = self.get_sql_connection()
             cursor = conn.cursor()
 
             # Get column names from articulos
