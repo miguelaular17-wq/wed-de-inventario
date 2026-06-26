@@ -8,6 +8,7 @@ use App\Models\V2\StockActual;
 use App\Models\V2\VentaHistorica;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class InventarioV2Repository
 {
@@ -16,38 +17,57 @@ class InventarioV2Repository
         return config('database.default') === 'pgsql';
     }
 
+    private function getGlobalProducts(): Collection
+    {
+        return Cache::remember('inventario_v2.global_products', 86400, function () {
+            return DB::connection('pgsql')
+                ->table('productos')
+                ->where('activo', true)
+                ->orderBy('codigo')
+                ->get(['id', 'codigo', 'nombre', 'categoria', 'subcategoria', 'proveedor', 'precio_unidad', 'precio_mayor']);
+        });
+    }
+
+    private function getGlobalStockAndVentas(): array
+    {
+        $lastUpdate = $this->lastStockUpdate();
+        $cacheKey = 'inventario_v2.global_stock_ventas.' . md5((string) $lastUpdate);
+        
+        return Cache::remember($cacheKey, 1800, function () {
+            $stocksByProduct = [];
+            foreach (DB::connection('pgsql')
+                ->table('stock_actual')
+                ->get(['producto_id', 'sede', 'existencia']) as $row) {
+                $stocksByProduct[(int) $row->producto_id][$row->sede] = (int) $row->existencia;
+            }
+
+            $ventasByProduct = [];
+            foreach (DB::connection('pgsql')
+                ->table('ventas_historicas')
+                ->get(['producto_id', 'sede', 'venta_promedio', 'ventas_60d', 'ultima_venta', 'ultima_compra']) as $row) {
+                $ventasByProduct[(int) $row->producto_id][$row->sede] = [
+                    'venta_promedio' => (int) $row->venta_promedio,
+                    'ventas_60d' => (float) $row->ventas_60d,
+                    'ultima_venta' => $row->ultima_venta,
+                    'ultima_compra' => $row->ultima_compra,
+                ];
+            }
+            
+            return [$stocksByProduct, $ventasByProduct];
+        });
+    }
+
     public function loadForSede(string $sedeLocal): Collection
     {
         $sedes = config('inventario.sedes_stock');
 
-        $productos = DB::connection('pgsql')
-            ->table('productos')
-            ->where('activo', true)
-            ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre', 'categoria', 'subcategoria', 'proveedor', 'precio_unidad', 'precio_mayor']);
+        $productos = $this->getGlobalProducts();
 
         if ($productos->isEmpty()) {
             return collect();
         }
 
-        $stocksByProduct = [];
-        foreach (DB::connection('pgsql')
-            ->table('stock_actual')
-            ->get(['producto_id', 'sede', 'existencia']) as $row) {
-            $stocksByProduct[(int) $row->producto_id][$row->sede] = (int) $row->existencia;
-        }
-
-        $ventasByProduct = [];
-        foreach (DB::connection('pgsql')
-            ->table('ventas_historicas')
-            ->get(['producto_id', 'sede', 'venta_promedio', 'ventas_60d', 'ultima_venta', 'ultima_compra']) as $row) {
-            $ventasByProduct[(int) $row->producto_id][$row->sede] = [
-                'venta_promedio' => (int) $row->venta_promedio,
-                'ventas_60d' => (float) $row->ventas_60d,
-                'ultima_venta' => $row->ultima_venta,
-                'ultima_compra' => $row->ultima_compra,
-            ];
-        }
+        [$stocksByProduct, $ventasByProduct] = $this->getGlobalStockAndVentas();
 
         $rows = [];
         foreach ($productos as $p) {
