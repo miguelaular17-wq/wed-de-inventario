@@ -56,9 +56,9 @@
                         </td>
                         <td>
                             @if($log->tipo === 'APERTURA')
-                                <span class="badge" style="background:var(--accent-teal); color:#fff;">Reporte Inicio Día</span>
+                                <span class="badge" style="background:#0f766e; color:#fff; padding:4px 8px; border-radius:4px;">Reporte Inicio Día</span>
                             @else
-                                <span class="badge" style="background:var(--accent-purple); color:#fff;">Ventas Registradas</span>
+                                <span class="badge" style="background:#6d28d9; color:#fff; padding:4px 8px; border-radius:4px;">Ventas Registradas</span>
                             @endif
                         </td>
                         <td class="num" style="text-align: right; font-weight: 500;">
