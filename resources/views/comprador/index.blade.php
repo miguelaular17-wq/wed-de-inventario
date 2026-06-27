@@ -278,13 +278,30 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 
 <!-- Tab 2: General por Proveedor -->
 <div id="proveedores-tab" class="tab-content" style="display: none;">
-    <!-- Barra de búsqueda de proveedor -->
-    <div style="margin-bottom: 20px;">
-        <div class="field field-wide" style="max-width: 400px;">
+    <!-- Barra de búsqueda de proveedor y filtro de demanda -->
+    <form method="GET" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;">
+        <input type="hidden" name="categoria" value="{{ $selectedCategoria ?? 'Ninguno' }}">
+        <input type="hidden" name="subcategoria" value="{{ $selectedSubcategoria ?? 'Ninguno' }}">
+        <input type="hidden" name="proveedor" value="{{ $selectedProveedor ?? 'Ninguno' }}">
+        <input type="hidden" name="status" value="{{ $statusFilter ?? 'Todos' }}">
+        <input type="hidden" name="q" value="{{ $q ?? '' }}">
+        
+        <div class="field field-wide" style="flex: 1; max-width: 400px; margin-bottom: 0;">
             <label for="q-proveedor">Buscar proveedor</label>
             <input type="search" id="q-proveedor" placeholder="Nombre del proveedor..." autocomplete="off" onkeyup="filterProviders(this.value)">
         </div>
-    </div>
+        
+        <div class="field" style="margin-bottom: 0;">
+            <label for="tp_prov">Proyectar Demanda a:</label>
+            <select id="tp_prov" name="tp" onchange="this.form.submit();" style="border-color: var(--blue); font-weight: 500;">
+                <option value="15" @selected(($tp ?? 60) == 15)>15 días</option>
+                <option value="30" @selected(($tp ?? 60) == 30)>30 días</option>
+                <option value="45" @selected(($tp ?? 60) == 45)>45 días</option>
+                <option value="60" @selected(($tp ?? 60) == 60)>60 días (Por defecto)</option>
+                <option value="90" @selected(($tp ?? 60) == 90)>90 días</option>
+            </select>
+        </div>
+    </form>
 
     <div id="provider-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
         @forelse ($byProvider as $prov)
