@@ -895,7 +895,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             </button>
         </div>
         
-        <div id="provider-modal-body" style="max-height: 60vh; overflow-y: auto;">
+        <div id="provider-modal-body" style="max-height: 60vh; overflow: auto;">
             <!-- La tabla de productos se inserta dinámicamente -->
         </div>
     </div>
@@ -1263,7 +1263,7 @@ function renderProviderModalTable() {
     });
     
     let html = `
-        <div style="border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; background: #fff;">
+        <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff;">
             <table class="data-table" style="margin: 0; font-size: 0.85rem; width: 100%;">
                 <thead>
                     <tr>
