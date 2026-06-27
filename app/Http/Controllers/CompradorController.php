@@ -25,12 +25,12 @@ class CompradorController extends Controller
      */
     public function index(Request $request): View
     {
-        $tp = (float) config('inventario.tiempo_pronostico_default', 15);
+        $tp = (float) $request->query('tp', 60);
         $tv = (float) config('inventario.tiempo_venta_sede', 15);
         $sedes = config('inventario.sedes_stock');
 
         if (config('database.default') === 'pgsql') {
-            $tp = (float) config('inventario.tiempo_pronostico_default', 15);
+            $tp = (float) $request->query('tp', 60);
             $tv = (float) config('inventario.tiempo_venta_sede', 15);
             $sedes = config('inventario.sedes_stock');
 
@@ -79,9 +79,9 @@ class CompradorController extends Controller
                         p.precio_unidad,
                         p.precio_mayor,
                         COALESCE(SUM(sa.existencia), 0) as total_stock,
-                        COALESCE(SUM(ROUND((vh.ventas_60d / :tv) * :tp)), 0) as total_demand,
-                        COUNT(CASE WHEN COALESCE(sa.existencia, 0) < ROUND((COALESCE(vh.ventas_60d, 0) / :tv) * :tp) THEN 1 END) as shortages_count,
-                        COUNT(CASE WHEN COALESCE(sa.existencia, 0) > ROUND((COALESCE(vh.ventas_60d, 0) / :tv) * :tp) THEN 1 END) as surpluses_count
+                        COALESCE(SUM(ROUND((vh.ventas_60d / 60) * :tp)), 0) as total_demand,
+                        COUNT(CASE WHEN COALESCE(sa.existencia, 0) < ROUND((COALESCE(vh.ventas_60d, 0) / 60) * :tp) THEN 1 END) as shortages_count,
+                        COUNT(CASE WHEN COALESCE(sa.existencia, 0) > ROUND((COALESCE(vh.ventas_60d, 0) / 60) * :tp) THEN 1 END) as surpluses_count
                     FROM inventario_v2.productos p
                     LEFT JOIN inventario_v2.stock_actual sa ON p.id = sa.producto_id
                     LEFT JOIN inventario_v2.ventas_historicas vh ON p.id = vh.producto_id AND sa.sede = vh.sede
@@ -161,7 +161,7 @@ class CompradorController extends Controller
                         $stockVal = $stockMap[$sede] ?? 0;
                         $ventaSede = $ventaMap[$sede] ?? null;
                         $salesVal = $ventaSede ? (float) $ventaSede['ventas_60d'] : 0.0;
-                        $demandVal = ($salesVal / $tv) * $tp;
+                        $demandVal = ($salesVal / 60) * $tp;
                         $demandInt = (int) round($demandVal);
 
                         $stocks[$sede] = $stockVal;
@@ -216,7 +216,7 @@ class CompradorController extends Controller
                         p.subcategoria,
                         COALESCE(p.proveedor, '') as proveedor,
                         COALESCE(SUM(sa.existencia), 0) as total_stock,
-                        COALESCE(SUM(ROUND((vh.ventas_60d / :tv) * :tp)), 0) as total_demand
+                        COALESCE(SUM(ROUND((vh.ventas_60d / 60) * :tp)), 0) as total_demand
                     FROM inventario_v2.productos p
                     LEFT JOIN inventario_v2.stock_actual sa ON p.id = sa.producto_id
                     LEFT JOIN inventario_v2.ventas_historicas vh ON p.id = vh.producto_id AND sa.sede = vh.sede
@@ -229,7 +229,6 @@ class CompradorController extends Controller
             ";
 
             $dbToBuy = \Illuminate\Support\Facades\DB::connection('pgsql')->select($toBuySql, [
-                'tv' => $tv,
                 'tp' => $tp,
             ]);
 
@@ -269,7 +268,7 @@ class CompradorController extends Controller
                 foreach ($sedes as $sede) {
                     $stockVal = $stocksByProduct[$pId][$sede] ?? 0;
                     $salesVal = $ventasByProduct[$pId][$sede] ?? 0.0;
-                    $demandVal = ($salesVal / $tv) * $tp;
+                    $demandVal = ($salesVal / 60) * $tp;
                     $pStocks[$sede] = $stockVal;
                     $pDemands[$sede] = (int) round($demandVal);
                 }
@@ -461,7 +460,7 @@ class CompradorController extends Controller
                 foreach ($sedes as $sede) {
                     $stockVal = (int) ($stocks[$sede] ?? 0);
                     $salesVal = (float) ($ventasInternas[$sede] ?? 0);
-                    $demandVal = ($salesVal / $tv) * $tp;
+                    $demandVal = ($salesVal / 60) * $tp;
                     $demandInt = (int) round($demandVal);
 
                     $totalDemand += $demandInt;
@@ -527,7 +526,7 @@ class CompradorController extends Controller
                 $pDemands = [];
                 foreach ($sedes as $sede) {
                     $salesVal = (float) ($ventasInternas[$sede] ?? 0);
-                    $demandVal = ($salesVal / $tv) * $tp;
+                    $demandVal = ($salesVal / 60) * $tp;
                     $demandInt = (int) round($demandVal);
                     $totalDemand += $demandInt;
                     $pDemands[$sede] = $demandInt;
@@ -773,7 +772,7 @@ class CompradorController extends Controller
      */
     public function export(Request $request): \Symfony\Component\HttpFoundation\Response
     {
-        $tp = (float) config('inventario.tiempo_pronostico_default', 15);
+        $tp = (float) $request->query('tp', 60);
         $tv = (float) config('inventario.tiempo_venta_sede', 15);
         $sedes = config('inventario.sedes_stock');
 
@@ -820,7 +819,7 @@ class CompradorController extends Controller
             foreach ($sedes as $sede) {
                 $stockVal = (int) ($stocks[$sede] ?? 0);
                 $salesVal = (float) ($ventasInternas[$sede] ?? 0);
-                $demandVal = ($salesVal / $tv) * $tp;
+                $demandVal = ($salesVal / 60) * $tp;
                 $demandInt = (int) round($demandVal);
 
                 $totalDemand += $demandInt;

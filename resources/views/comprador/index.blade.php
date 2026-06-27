@@ -79,6 +79,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             <input type="hidden" name="subcategoria" value="{{ $selectedSubcategoria ?? 'Ninguno' }}">
             <input type="hidden" name="proveedor" value="{{ $selectedProveedor ?? 'Ninguno' }}">
             <input type="hidden" name="status" value="{{ $statusFilter ?? 'Todos' }}">
+            <input type="hidden" name="tp" value="{{ $tp ?? 60 }}">
             <div style="flex: 1; max-width: 480px; position: relative;">
                 <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:1rem; color:var(--muted); pointer-events:none;">🔍</span>
                 <input
@@ -137,6 +138,16 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                     <option value="Todos" @selected($statusFilter === 'Todos')>Todos los estados</option>
                     <option value="Comprar" @selected($statusFilter === 'Comprar')>Necesita Compra (COMPRAR)</option>
                     <option value="MalaDistribucion" @selected($statusFilter === 'MalaDistribucion')>Mala Distribución</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="tp">Proyectar Demanda a:</label>
+                <select id="tp" name="tp" onchange="this.form.submit();" style="border-color: var(--blue); font-weight: 500;">
+                    <option value="15" @selected(($tp ?? 60) == 15)>15 días</option>
+                    <option value="30" @selected(($tp ?? 60) == 30)>30 días</option>
+                    <option value="45" @selected(($tp ?? 60) == 45)>45 días</option>
+                    <option value="60" @selected(($tp ?? 60) == 60)>60 días (Por defecto)</option>
+                    <option value="90" @selected(($tp ?? 60) == 90)>90 días</option>
                 </select>
             </div>
         </form>
