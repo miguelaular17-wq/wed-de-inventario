@@ -43,7 +43,6 @@ class CompradorController extends Controller
             $perPage = 25;
 
             $bindings = [
-                'tv' => $tv,
                 'tp' => $tp,
             ];
 
