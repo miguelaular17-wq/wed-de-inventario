@@ -1022,7 +1022,7 @@ function openDistributionModal(code, name, stocks, demands) {
     const displayNames = @json(config('inventario.display'));
     
     let html = `
-        <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff;">
+        <div style="border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; background: #fff;">
             <table class="data-table" style="margin: 0; font-size: 0.85rem; width: 100%;">
                 <thead>
                     <tr>
@@ -1093,7 +1093,7 @@ function openComprarModal(code, name, stocks, ultimasVentas, ultimasCompras) {
     const displayNames = @json(config('inventario.display'));
     
     let html = `
-        <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff;">
+        <div style="border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; background: #fff;">
             <table class="data-table" style="margin: 0; font-size: 0.85rem; width: 100%;">
                 <thead>
                     <tr>
@@ -1263,7 +1263,7 @@ function renderProviderModalTable() {
     });
     
     let html = `
-        <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff;">
+        <div style="border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; background: #fff;">
             <table class="data-table" style="margin: 0; font-size: 0.85rem; width: 100%;">
                 <thead>
                     <tr>
