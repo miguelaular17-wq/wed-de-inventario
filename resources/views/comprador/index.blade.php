@@ -839,13 +839,13 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 
 <!-- Modal de Desglose de Distribución -->
 <div id="distribution-modal" class="modal-overlay" style="display: none; z-index: 1100;">
-    <div class="panel modal-box" style="max-width: 500px; position: relative; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
+    <div class="panel modal-box" style="width: 95%; max-width: 800px; position: relative; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
         <button type="button" class="modal-close" onclick="closeDistributionModal()" aria-label="Cerrar">×</button>
         <h3 id="modal-product-title" style="margin: 0 0 6px; font-size: 1.25rem; color: var(--blue);"></h3>
         <p id="modal-product-code" style="margin: 0 0 16px; font-size: 0.85rem; color: var(--muted); font-family: monospace;"></p>
         
         <h4 style="margin: 0 0 10px; font-size: 0.95rem; font-weight: 600; color: var(--text);">Desglose de Inventario por Sede</h4>
-        <div id="modal-distribution-body" style="max-height: 60vh; overflow: auto;">
+        <div id="modal-distribution-body" style="max-height: 75vh; overflow: auto;">
             <!-- La tabla se inserta dinámicamente -->
         </div>
     </div>
@@ -853,13 +853,13 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 
 <!-- Modal de Desglose de Compras -->
 <div id="comprar-modal" class="modal-overlay" style="display: none; z-index: 1100;">
-    <div class="panel modal-box" style="max-width: 550px; position: relative; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
+    <div class="panel modal-box" style="width: 95%; max-width: 800px; position: relative; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
         <button type="button" class="modal-close" onclick="closeComprarModal()" aria-label="Cerrar">×</button>
         <h3 id="modal-comprar-title" style="margin: 0 0 6px; font-size: 1.25rem; color: var(--blue);"></h3>
         <p id="modal-comprar-code" style="margin: 0 0 16px; font-size: 0.85rem; color: var(--muted); font-family: monospace;"></p>
         
         <h4 style="margin: 0 0 10px; font-size: 0.95rem; font-weight: 600; color: var(--text);">Información por Sede</h4>
-        <div id="modal-comprar-body" style="max-height: 60vh; overflow: auto;">
+        <div id="modal-comprar-body" style="max-height: 75vh; overflow: auto;">
             <!-- La tabla se inserta dinámicamente -->
         </div>
     </div>
@@ -880,7 +880,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 
 <!-- Modal de Productos por Proveedor -->
 <div id="provider-modal" class="modal-overlay" style="display: none;">
-    <div class="panel modal-box" style="max-width: 850px; position: relative; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
+    <div class="panel modal-box" style="width: 95%; max-width: 1200px; position: relative; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
         <button type="button" class="modal-close" onclick="closeProviderModal()" aria-label="Cerrar">×</button>
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 8px;">
             <div>
@@ -895,7 +895,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             </button>
         </div>
         
-        <div id="provider-modal-body" style="max-height: 60vh; overflow: auto;">
+        <div id="provider-modal-body" style="max-height: 75vh; overflow: auto;">
             <!-- La tabla de productos se inserta dinámicamente -->
         </div>
     </div>
