@@ -852,8 +852,10 @@ class SyncApp:
             # Legacy ODBC drivers sometimes fail to parse '?' correctly.
             if '?' in query:
                 query = query.replace('?', f"'{last_time}'")
+                self.log(f"[DEBUG SQL] {query}")
                 billing_cursor.execute(query)
             else:
+                self.log(f"[DEBUG SQL] {query} with param {last_time}")
                 billing_cursor.execute(query, (last_time,))
             
             rows = billing_cursor.fetchall()
