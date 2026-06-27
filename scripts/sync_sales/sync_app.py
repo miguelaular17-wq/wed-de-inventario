@@ -661,8 +661,13 @@ class SyncApp:
                     time.sleep(2)
             
             wc = web_conn.cursor()
-            wc.execute("SELECT codigo, id FROM inventario_v2.productos;")
-            prod_map = {str(r[0]).strip(): r[1] for r in wc.fetchall()}
+            wc.execute("SELECT codigo, nombre, id FROM inventario_v2.productos;")
+            supabase_rows = wc.fetchall()
+            prod_map = {str(r[0]).strip(): r[2] for r in supabase_rows}
+            name_map = {}
+            for r in supabase_rows:
+                if r[1]:
+                    name_map[str(r[1]).strip().lower()] = r[2]
             
             if not prod_map:
                 self.log("[Snapshot] No hay ningún producto registrado en la web todavía. Omitiendo actualización masiva.")
@@ -679,7 +684,8 @@ class SyncApp:
                     ISNULL(s15.total_qty, 0)                         AS ventas_15d,
                     ISNULL(s60.total_qty, 0)                         AS ventas_60d,
                     CONVERT(VARCHAR(19), a.fecha_ultima_venta,  120) AS ultima_venta,
-                    CONVERT(VARCHAR(19), a.fecha_ultima_compra, 120) AS ultima_compra
+                    CONVERT(VARCHAR(19), a.fecha_ultima_compra, 120) AS ultima_compra,
+                    a.descripcion                                    AS descripcion
                 FROM [dbo].[articulos] a WITH (NOLOCK)
                 LEFT JOIN (
                     SELECT vi.articulo, SUM(vi.cantidad) AS total_qty
@@ -720,13 +726,30 @@ class SyncApp:
 
             for row in rows:
                 codigo = str(row[0]).strip()
+                nombre_local = str(row[6]).strip() if len(row) > 6 and row[6] else None
                 
                 # ¡LA MAGIA AQUÍ! Solo nos importan los productos que ya existen en Supabase
-                if codigo not in prod_map:
+                if codigo in prod_map:
+                    pid = prod_map[codigo]
+                elif nombre_local and nombre_local.lower() in name_map:
+                    pid = name_map[nombre_local.lower()]
+                    self.log(f"[Snapshot Auto-Heal] Producto '{nombre_local}' encontrado por nombre. Actualizando código en web a '{codigo}'.")
+                    # Auto-heal en Supabase (ignora si hay conflicto)
+                    try:
+                        wc.execute(
+                            "UPDATE inventario_v2.productos SET codigo = %s, updated_at = NOW() WHERE id = %s;",
+                            (codigo, pid)
+                        )
+                    except Exception as e:
+                        self.log(f"[Snapshot Auto-Heal] Error actualizando código: {e}")
+                        web_conn.rollback() # Rollback the failed update but keep the transaction going
+                        pass
+                    
+                    prod_map[codigo] = pid # Update local map
+                else:
                     skipped += 1
                     continue
                     
-                pid           = prod_map[codigo]
                 existencia    = max(0, int(row[1]) if row[1] else 0)
                 ventas_15d    = float(row[2]) if row[2] else 0.0
                 ventas_60d    = float(row[3]) if row[3] else 0.0
@@ -848,7 +871,7 @@ class SyncApp:
             # Execute query on SQL Server
             billing = self.config.get("billing_db", {})
             default_query = (
-                "SELECT h.fecha_emision, COALESCE(a.codigo, i.articulo) AS articulo, i.cantidad "
+                "SELECT h.fecha_emision, COALESCE(a.codigo, i.articulo) AS articulo, i.cantidad, a.descripcion "
                 "FROM [dbo].[documentos_venta] h WITH (NOLOCK) "
                 "INNER JOIN [dbo].[documentos_venta_items] i WITH (NOLOCK) ON h.tipo_documento = i.tipo_documento AND h.numero_documento = i.numero_documento "
                 "LEFT JOIN [dbo].[articulos_codigos] ac WITH (NOLOCK) ON i.articulo = ac.codigo "
@@ -875,8 +898,12 @@ class SyncApp:
             new_last_time = last_time
             
             for row in rows:
-                fecha_venta, codigo, cantidad = row
-                
+                if len(row) >= 4:
+                    fecha_venta, codigo, cantidad, nombre_local = row[0:4]
+                else:
+                    fecha_venta, codigo, cantidad = row[0:3]
+                    nombre_local = None
+                    
                 if isinstance(fecha_venta, datetime):
                     fecha_str = fecha_venta.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                 else:
@@ -913,7 +940,28 @@ class SyncApp:
                         if prod_row:
                             self.log(f"  [Info] Código '{codigo}' encontrado como '{codigo_stripped}' (sin ceros iniciales).")
 
-                # Paso 4: Si aun no existe, crear el producto automáticamente para no perder el movimiento
+                # Paso 4: Auto-Sanación por nombre
+                if not prod_row and nombre_local:
+                    nombre_clean = str(nombre_local).strip()
+                    if nombre_clean:
+                        web_cursor.execute(
+                            "SELECT id, activo FROM inventario_v2.productos WHERE LOWER(TRIM(nombre)) = LOWER(%s) LIMIT 1;",
+                            (nombre_clean,)
+                        )
+                        prod_row = web_cursor.fetchone()
+                        if prod_row:
+                            self.log(f"  [Sync Auto-Heal] Producto '{nombre_clean}' encontrado por nombre. Actualizando código en web a '{codigo_clean}'.")
+                            try:
+                                web_cursor.execute(
+                                    "UPDATE inventario_v2.productos SET codigo = %s, updated_at = NOW() WHERE id = %s;",
+                                    (codigo_clean, prod_row[0])
+                                )
+                            except Exception as e:
+                                self.log(f"  [Sync Auto-Heal] Error actualizando código: {e}")
+                                web_conn.rollback()
+                                pass
+
+                # Paso 5: Si aun no existe, crear el producto automáticamente para no perder el movimiento
                 if not prod_row:
                     self.log(f"  [Auto-Registro] Código '{codigo_clean}' no existe. Creando producto desconocido...")
                     web_cursor.execute(
@@ -926,6 +974,7 @@ class SyncApp:
                         (codigo_clean, f"[Auto] {codigo_clean}")
                     )
                     prod_row = web_cursor.fetchone()
+
                     if prod_row:
                         self.log(f"  [Auto-Registro] Producto creado con ID={prod_row[0]}.")
                     else:
