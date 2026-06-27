@@ -663,11 +663,20 @@ class SyncApp:
             wc = web_conn.cursor()
             wc.execute("SELECT codigo, nombre, id FROM inventario_v2.productos;")
             supabase_rows = wc.fetchall()
-            prod_map = {str(r[0]).strip(): r[2] for r in supabase_rows}
+            prod_map = {}
+            for r in supabase_rows:
+                db_id = r[2]
+                if r[0]:
+                    full_code = str(r[0]).strip()
+                    for part in full_code.replace(' ', '').split('/'):
+                        if part:
+                            prod_map[part] = db_id
+            
             name_map = {}
             for r in supabase_rows:
                 if r[1]:
-                    name_map[str(r[1]).strip().lower()] = r[2]
+                    name_map[str(r[1]).strip().lower()] = (r[2], str(r[0]).strip() if r[0] else "")
+
             
             if not prod_map:
                 self.log("[Snapshot] No hay ningún producto registrado en la web todavía. Omitiendo actualización masiva.")
@@ -732,20 +741,26 @@ class SyncApp:
                 if codigo in prod_map:
                     pid = prod_map[codigo]
                 elif nombre_local and nombre_local.lower() in name_map:
-                    pid = name_map[nombre_local.lower()]
-                    self.log(f"[Snapshot Auto-Heal] Producto '{nombre_local}' encontrado por nombre. Actualizando código en web a '{codigo}'.")
-                    # Auto-heal en Supabase (ignora si hay conflicto)
-                    try:
-                        wc.execute(
-                            "UPDATE inventario_v2.productos SET codigo = %s, updated_at = NOW() WHERE id = %s;",
-                            (codigo, pid)
-                        )
-                    except Exception as e:
-                        self.log(f"[Snapshot Auto-Heal] Error actualizando código: {e}")
-                        web_conn.rollback() # Rollback the failed update but keep the transaction going
-                        pass
+                    pid, current_codigo = name_map[nombre_local.lower()]
+                    
+                    parts = current_codigo.replace(' ', '').split('/')
+                    if codigo not in parts:
+                        new_codigo = f"{current_codigo} / {codigo}" if current_codigo else codigo
+                        self.log(f"[Snapshot Auto-Heal] Producto '{nombre_local}' encontrado por nombre. Agregando código '{codigo}' a la web.")
+                        # Auto-heal en Supabase (ignora si hay conflicto)
+                        try:
+                            wc.execute(
+                                "UPDATE inventario_v2.productos SET codigo = %s, updated_at = NOW() WHERE id = %s;",
+                                (new_codigo, pid)
+                            )
+                            name_map[nombre_local.lower()] = (pid, new_codigo)
+                        except Exception as e:
+                            self.log(f"[Snapshot Auto-Heal] Error actualizando código: {e}")
+                            web_conn.rollback() # Rollback the failed update but keep the transaction going
+                            pass
                     
                     prod_map[codigo] = pid # Update local map
+
                 else:
                     skipped += 1
                     continue
@@ -912,10 +927,10 @@ class SyncApp:
                 self.log(f"Procesando: Código={codigo}, Cant={float(cantidad):.2f}, Fecha={fecha_str}")
                 
                 # --- Búsqueda robusta de producto ---
-                # Paso 1: Buscar exacto (incluyendo inactivos)
+                # Paso 1: Buscar exacto (incluyendo inactivos) dentro de SKUs concatenados
                 codigo_clean = str(codigo).strip()
                 web_cursor.execute(
-                    "SELECT id, activo FROM inventario_v2.productos WHERE codigo = %s LIMIT 1;",
+                    "SELECT id, activo, codigo FROM inventario_v2.productos WHERE %s = ANY(string_to_array(REPLACE(codigo, ' ', ''), '/')) LIMIT 1;",
                     (codigo_clean,)
                 )
                 prod_row = web_cursor.fetchone()
@@ -923,7 +938,7 @@ class SyncApp:
                 # Paso 2: Buscar sin distinguir mayúsculas/minúsculas (ILIKE)
                 if not prod_row:
                     web_cursor.execute(
-                        "SELECT id, activo FROM inventario_v2.productos WHERE LOWER(codigo) = LOWER(%s) LIMIT 1;",
+                        "SELECT id, activo, codigo FROM inventario_v2.productos WHERE LOWER(%s) = ANY(string_to_array(LOWER(REPLACE(codigo, ' ', '')), '/')) LIMIT 1;",
                         (codigo_clean,)
                     )
                     prod_row = web_cursor.fetchone()
@@ -933,9 +948,15 @@ class SyncApp:
                     codigo_stripped = codigo_clean.lstrip('0')
                     if codigo_stripped and codigo_stripped != codigo_clean:
                         web_cursor.execute(
-                            "SELECT id, activo FROM inventario_v2.productos WHERE LOWER(LTRIM(codigo, '0')) = LOWER(%s) LIMIT 1;",
+                            "SELECT id, activo, codigo FROM inventario_v2.productos WHERE LOWER(LTRIM(codigo, '0')) = LOWER(%s) LIMIT 1;",
                             (codigo_stripped,)
                         )
+                        # Fallback for array with no zeros is too complex, just use exact without zeros against the full string
+                        if not web_cursor.fetchone():
+                            web_cursor.execute(
+                                "SELECT id, activo, codigo FROM inventario_v2.productos WHERE %s = ANY(string_to_array(REPLACE(codigo, ' ', ''), '/')) LIMIT 1;",
+                                (codigo_stripped,)
+                            )
                         prod_row = web_cursor.fetchone()
                         if prod_row:
                             self.log(f"  [Info] Código '{codigo}' encontrado como '{codigo_stripped}' (sin ceros iniciales).")
@@ -945,21 +966,26 @@ class SyncApp:
                     nombre_clean = str(nombre_local).strip()
                     if nombre_clean:
                         web_cursor.execute(
-                            "SELECT id, activo FROM inventario_v2.productos WHERE LOWER(TRIM(nombre)) = LOWER(%s) LIMIT 1;",
+                            "SELECT id, activo, codigo FROM inventario_v2.productos WHERE LOWER(TRIM(nombre)) = LOWER(%s) LIMIT 1;",
                             (nombre_clean,)
                         )
                         prod_row = web_cursor.fetchone()
                         if prod_row:
-                            self.log(f"  [Sync Auto-Heal] Producto '{nombre_clean}' encontrado por nombre. Actualizando código en web a '{codigo_clean}'.")
-                            try:
-                                web_cursor.execute(
-                                    "UPDATE inventario_v2.productos SET codigo = %s, updated_at = NOW() WHERE id = %s;",
-                                    (codigo_clean, prod_row[0])
-                                )
-                            except Exception as e:
-                                self.log(f"  [Sync Auto-Heal] Error actualizando código: {e}")
-                                web_conn.rollback()
-                                pass
+                            current_codigo = str(prod_row[2]) if prod_row[2] else ""
+                            parts = current_codigo.replace(' ', '').split('/')
+                            if codigo_clean not in parts:
+                                new_codigo = f"{current_codigo} / {codigo_clean}" if current_codigo else codigo_clean
+                                self.log(f"  [Sync Auto-Heal] Producto '{nombre_clean}' encontrado por nombre. Agregando código '{codigo_clean}' a la web.")
+                                try:
+                                    web_cursor.execute(
+                                        "UPDATE inventario_v2.productos SET codigo = %s, updated_at = NOW() WHERE id = %s;",
+                                        (new_codigo, prod_row[0])
+                                    )
+                                except Exception as e:
+                                    self.log(f"  [Sync Auto-Heal] Error actualizando código: {e}")
+                                    web_conn.rollback()
+                                    pass
+
 
                 # Paso 5: Si aun no existe, crear el producto automáticamente para no perder el movimiento
                 if not prod_row:
