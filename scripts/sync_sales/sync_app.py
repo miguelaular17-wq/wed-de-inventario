@@ -805,14 +805,14 @@ class SyncApp:
                     web_conn.rollback()
                 except Exception:
                     pass
+            return False
         finally:
             if billing_conn:
                 try: billing_conn.close()
                 except Exception: pass
+            if web_conn:
                 try: web_conn.close()
                 except Exception: pass
-            return False
-
     def _execute_sync_cycle(self):
         billing_conn = None
         web_conn = None
@@ -1001,6 +1001,7 @@ class SyncApp:
                     web_conn.rollback()
                 except Exception:
                     pass
+            return False
         finally:
             if billing_conn:
                 try:
@@ -1012,8 +1013,6 @@ class SyncApp:
                     web_conn.close()
                 except Exception:
                     pass
-            return False
-
 if __name__ == "__main__":
     root = tk.Tk()
     app = SyncApp(root)
