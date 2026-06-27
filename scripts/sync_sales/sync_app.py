@@ -848,7 +848,14 @@ class SyncApp:
             # Execute query on SQL Server
             billing = self.config.get("billing_db", {})
             query = billing.get("query", "SELECT h.fecha_emision, i.articulo, i.cantidad FROM [dbo].[documentos_venta] h WITH (NOLOCK) INNER JOIN [dbo].[documentos_venta_items] i WITH (NOLOCK) ON h.tipo_documento = i.tipo_documento AND h.numero_documento = i.numero_documento WHERE h.tipo_documento = 'FAC' AND h.fecha_emision > ? ORDER BY h.fecha_emision ASC")
-            billing_cursor.execute(query, (last_time,))
+            
+            # Legacy ODBC drivers sometimes fail to parse '?' correctly.
+            if '?' in query:
+                query = query.replace('?', f"'{last_time}'")
+                billing_cursor.execute(query)
+            else:
+                billing_cursor.execute(query, (last_time,))
+            
             rows = billing_cursor.fetchall()
             
             if not rows:
