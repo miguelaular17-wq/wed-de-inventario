@@ -845,7 +845,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         <p id="modal-product-code" style="margin: 0 0 16px; font-size: 0.85rem; color: var(--muted); font-family: monospace;"></p>
         
         <h4 style="margin: 0 0 10px; font-size: 0.95rem; font-weight: 600; color: var(--text);">Desglose de Inventario por Sede</h4>
-        <div id="modal-distribution-body">
+        <div id="modal-distribution-body" style="max-height: 60vh; overflow: auto;">
             <!-- La tabla se inserta dinámicamente -->
         </div>
     </div>
@@ -859,7 +859,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         <p id="modal-comprar-code" style="margin: 0 0 16px; font-size: 0.85rem; color: var(--muted); font-family: monospace;"></p>
         
         <h4 style="margin: 0 0 10px; font-size: 0.95rem; font-weight: 600; color: var(--text);">Información por Sede</h4>
-        <div id="modal-comprar-body">
+        <div id="modal-comprar-body" style="max-height: 60vh; overflow: auto;">
             <!-- La tabla se inserta dinámicamente -->
         </div>
     </div>
@@ -1022,7 +1022,7 @@ function openDistributionModal(code, name, stocks, demands) {
     const displayNames = @json(config('inventario.display'));
     
     let html = `
-        <div style="border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; background: #fff;">
+        <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; width: max-content; min-width: 100%;">
             <table class="data-table" style="margin: 0; font-size: 0.85rem; width: 100%;">
                 <thead>
                     <tr>
@@ -1093,7 +1093,7 @@ function openComprarModal(code, name, stocks, ultimasVentas, ultimasCompras) {
     const displayNames = @json(config('inventario.display'));
     
     let html = `
-        <div style="border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; background: #fff;">
+        <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; width: max-content; min-width: 100%;">
             <table class="data-table" style="margin: 0; font-size: 0.85rem; width: 100%;">
                 <thead>
                     <tr>
@@ -1263,7 +1263,7 @@ function renderProviderModalTable() {
     });
     
     let html = `
-        <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff;">
+        <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; width: max-content; min-width: 100%;">
             <table class="data-table" style="margin: 0; font-size: 0.85rem; width: 100%;">
                 <thead>
                     <tr>
