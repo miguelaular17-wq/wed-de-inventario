@@ -73,18 +73,27 @@
                         </td>
                         <td>
                             @php
-                                $classLabel = match($row['classification'] ?? 'automatica') {
-                                    'manual' => 'Manual',
-                                    'mayor_demanda' => 'Mayor Demanda',
-                                    'sincronizacion' => 'Sincronización',
-                                    default => 'Automático',
-                                };
-                                $classTag = match($row['classification'] ?? 'automatica') {
-                                    'manual' => 'manual',
-                                    'mayor_demanda' => 'warn',
-                                    'sincronizacion' => 'primary',
-                                    default => 'req',
-                                };
+                                $c = $row['classification'] ?? 'automatica';
+                                if ($c === 'manual') {
+                                    $classLabel = 'Manual';
+                                    $classTag = 'manual';
+                                } elseif ($c === 'mayor_demanda') {
+                                    $classLabel = 'Mayor Demanda';
+                                    $classTag = 'warn';
+                                } elseif ($c === 'migracion') {
+                                    $classLabel = 'Migración';
+                                    $classTag = 'ok';
+                                } elseif (str_starts_with($c, 'sincronizacion_')) {
+                                    $sedeName = config('inventario.display.'.strtoupper(str_replace('sincronizacion_', '', $c)), ucfirst(str_replace('sincronizacion_', '', $c)));
+                                    $classLabel = 'Sync ' . $sedeName;
+                                    $classTag = 'primary';
+                                } elseif ($c === 'sincronizacion') {
+                                    $classLabel = 'Sincronización';
+                                    $classTag = 'primary';
+                                } else {
+                                    $classLabel = 'Automático';
+                                    $classTag = 'req';
+                                }
                             @endphp
                             <span class="tag {{ $classTag }}" title="Tipo original: {{ $row['tipo'] }}">{{ $classLabel }}</span>
                         </td>
@@ -256,16 +265,26 @@
         const classification = row.classification || 'automatica';
         let classLabel = 'Automático';
         let classTag = 'req';
+        
         if (classification === 'manual') {
             classLabel = 'Manual';
             classTag = 'manual';
         } else if (classification === 'mayor_demanda') {
             classLabel = 'Mayor Demanda';
             classTag = 'warn';
+        } else if (classification === 'migracion') {
+            classLabel = 'Migración';
+            classTag = 'ok';
+        } else if (classification.startsWith('sincronizacion_')) {
+            const sede = classification.replace('sincronizacion_', '');
+            const displaySede = sede.charAt(0).toUpperCase() + sede.slice(1);
+            classLabel = 'Sync ' + displaySede;
+            classTag = 'primary';
         } else if (classification === 'sincronizacion') {
             classLabel = 'Sincronización';
             classTag = 'primary';
         }
+
         tr.appendChild(createCell(`<span class="tag ${classTag}" title="Tipo original: ${row.tipo}">${classLabel}</span>`));
         tr.appendChild(createCell(`<strong>${row.cantidad}</strong>`, 'cell-qty'));
         tr.appendChild(createCell(row.usuario, 'cell-user'));

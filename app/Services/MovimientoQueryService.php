@@ -459,8 +459,14 @@ class MovimientoQueryService
 
     private function pgClassification(Movimiento $m): string
     {
-        if ($m->usuario === 'sistema_sync' || $m->tipo === 'AJUSTE') {
-            return 'sincronizacion';
+        $usr = strtolower($m->usuario ?? '');
+        $tipo = strtolower($m->tipo ?? '');
+
+        if ($usr === 'sistema' || $tipo === 'migracion' || str_contains($usr, 'migr')) {
+            return 'migracion';
+        }
+        if ($usr === 'sistema_sync' || $tipo === 'ajuste') {
+            return 'sincronizacion_' . strtolower($m->origen);
         }
         $subTipo = $m->metadata['source_type'] ?? null;
         if ($subTipo === 'manual') {
@@ -475,6 +481,11 @@ class MovimientoQueryService
     private function sqliteClassification(StockMovement $m): string
     {
         $tipoLower = strtolower($m->tipo);
+        $usr = strtolower($m->usuario ?? '');
+        
+        if ($usr === 'sistema' || str_contains($tipoLower, 'migracion') || str_contains($usr, 'migr')) {
+            return 'migracion';
+        }
         if (str_contains($tipoLower, 'manual')) {
             return 'manual';
         }
@@ -482,7 +493,7 @@ class MovimientoQueryService
             return 'mayor_demanda';
         }
         if (str_contains($tipoLower, 'sincronizacion') || str_contains($tipoLower, 'ajuste')) {
-            return 'sincronizacion';
+            return 'sincronizacion_' . strtolower($m->sede_origen);
         }
         return 'automatica';
     }
