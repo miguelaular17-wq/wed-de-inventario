@@ -668,6 +668,7 @@ class SyncApp:
                 db_id = r[2]
                 if r[0]:
                     full_code = str(r[0]).strip()
+                    prod_map[full_code] = db_id # Agregar el código original sin dividir
                     for part in full_code.replace(' ', '').split('/'):
                         if part:
                             prod_map[part] = db_id
@@ -736,10 +737,30 @@ class SyncApp:
             for row in rows:
                 codigo = str(row[0]).strip()
                 
-                # ¡LA MAGIA AQUÍ! Solo nos importan los productos que ya existen en Supabase por su CÓDIGO.
-                # Ya no unimos productos por nombre para evitar sobreescrituras y errores de llaves duplicadas.
+                # ¡LA MAGIA AQUÍ! Solo nos importan los productos que ya existen en Supabase
                 if codigo in prod_map:
                     pid = prod_map[codigo]
+                elif nombre_local and nombre_local.lower() in name_map:
+                    pid, current_codigo = name_map[nombre_local.lower()]
+                    
+                    # Split for robust checking, but also check if the full code is already there
+                    parts = current_codigo.replace(' ', '').split('/')
+                    if codigo not in parts and codigo not in current_codigo:
+                        new_codigo = f"{current_codigo} / {codigo}" if current_codigo else codigo
+                        self.log(f"[Snapshot Auto-Heal] Producto '{nombre_local}' encontrado por nombre. Agregando código '{codigo}' a la web.")
+                        # Auto-heal en Supabase (ignora si hay conflicto)
+                        try:
+                            wc.execute(
+                                "UPDATE inventario_v2.productos SET codigo = %s, updated_at = NOW() WHERE id = %s;",
+                                (new_codigo, pid)
+                            )
+                            name_map[nombre_local.lower()] = (pid, new_codigo)
+                        except Exception as e:
+                            self.log(f"[Snapshot Auto-Heal] Error actualizando código: {e}")
+                            web_conn.rollback() # Rollback the failed update but keep the transaction going
+                            pass
+                    
+                    prod_map[codigo] = pid # Update local map
                 else:
                     skipped += 1
                     continue
