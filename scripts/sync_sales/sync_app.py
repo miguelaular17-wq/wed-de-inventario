@@ -697,7 +697,7 @@ class SyncApp:
                     CONVERT(VARCHAR(19), a.fecha_ultima_compra, 120) AS ultima_compra,
                     a.descripcion                                    AS descripcion
                 FROM [dbo].[articulos] a WITH (NOLOCK)
-                LEFT JOIN [dbo].[existencias] ex WITH (NOLOCK) 
+                INNER JOIN [dbo].[existencias] ex WITH (NOLOCK) 
                     ON a.codigo = ex.articulo AND ex.almacen = '01'
                 LEFT JOIN (
                     SELECT vi.articulo, SUM(vi.cantidad) AS total_qty
