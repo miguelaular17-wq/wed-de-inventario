@@ -741,6 +741,7 @@ class SyncApp:
 
             for row in rows:
                 codigo = str(row[0]).strip()
+                nombre_local = str(row[6]).strip() if len(row) > 6 and row[6] else None
                 
                 # ¡LA MAGIA AQUÍ! Solo nos importan los productos que ya existen en Supabase
                 if codigo in prod_map:
