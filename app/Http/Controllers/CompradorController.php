@@ -219,7 +219,7 @@ class CompradorController extends Controller
                     FROM inventario_v2.productos p
                     LEFT JOIN inventario_v2.stock_actual sa ON p.id = sa.producto_id
                     LEFT JOIN inventario_v2.ventas_historicas vh ON p.id = vh.producto_id AND sa.sede = vh.sede
-                    WHERE p.activo = true
+                    WHERE p.activo = true {$whereSql}
                     GROUP BY p.id, p.codigo, p.nombre, p.categoria, p.subcategoria, p.proveedor
                 )
                 SELECT * 
@@ -227,9 +227,7 @@ class CompradorController extends Controller
                 WHERE total_stock < total_demand
             ";
 
-            $dbToBuy = \Illuminate\Support\Facades\DB::connection('pgsql')->select($toBuySql, [
-                'tp' => $tp,
-            ]);
+            $dbToBuy = \Illuminate\Support\Facades\DB::connection('pgsql')->select($toBuySql, $bindings);
 
             $productIds = [];
             foreach ($dbToBuy as $row) {
