@@ -194,28 +194,36 @@ class InventarioController extends Controller
             $stockUpdatedAt = $this->products->lastStockUpdate();
             $stockUpdateMd5 = md5((string) $stockUpdatedAt);
 
-            $cacheKeyCat = "inventario_cats_{$sede}_{$stockUpdateMd5}";
-            $categorias = \Illuminate\Support\Facades\Cache::remember($cacheKeyCat, 1800, function () use ($sede) {
-                return \Illuminate\Support\Facades\DB::connection('pgsql')
+            $isTelefonia = auth()->check() && auth()->user()->isTelefonia();
+            $roleKey = $isTelefonia ? '_telefonia' : '';
+
+            $cacheKeyCat = "inventario_cats_{$sede}_{$stockUpdateMd5}{$roleKey}";
+            $categorias = \Illuminate\Support\Facades\Cache::remember($cacheKeyCat, 1800, function () use ($sede, $isTelefonia) {
+                $query = \Illuminate\Support\Facades\DB::connection('pgsql')
                     ->table('productos as p')
                     ->where('p.activo', true)
                     ->whereNotNull('p.categoria')
                     ->where('p.categoria', '!=', '')
-                    ->whereExists(function ($query) use ($sede) {
-                        $query->select(\Illuminate\Support\Facades\DB::raw(1))
+                    ->whereExists(function ($q) use ($sede) {
+                        $q->select(\Illuminate\Support\Facades\DB::raw(1))
                             ->from('stock_actual as sa')
                             ->whereColumn('sa.producto_id', 'p.id')
                             ->where('sa.sede', '!=', $sede)
                             ->where('sa.existencia', '>', 0);
-                    })
-                    ->distinct()
+                    });
+
+                if ($isTelefonia) {
+                    $query->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(p.categoria)'), ['telefonia', 'accesorios electronicos', 'accesorios tecnologicos', 'electronica']);
+                }
+
+                return $query->distinct()
                     ->orderBy('p.categoria')
                     ->pluck('p.categoria')
                     ->all();
             });
 
-            $cacheKeySubcat = "inventario_subcats_{$sede}_{$stockUpdateMd5}_" . md5($filters['categoria']);
-            $subcategorias = \Illuminate\Support\Facades\Cache::remember($cacheKeySubcat, 1800, function () use ($sede, $filters) {
+            $cacheKeySubcat = "inventario_subcats_{$sede}_{$stockUpdateMd5}_" . md5($filters['categoria']) . $roleKey;
+            $subcategorias = \Illuminate\Support\Facades\Cache::remember($cacheKeySubcat, 1800, function () use ($sede, $filters, $isTelefonia) {
                 $subQuery = \Illuminate\Support\Facades\DB::connection('pgsql')
                     ->table('productos as p')
                     ->where('p.activo', true)
@@ -231,6 +239,10 @@ class InventarioController extends Controller
                     
                 if ($filters['categoria'] !== 'Ninguno') {
                     $subQuery->where('p.categoria', $filters['categoria']);
+                }
+
+                if ($isTelefonia) {
+                    $subQuery->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(p.categoria)'), ['telefonia', 'accesorios electronicos', 'accesorios tecnologicos', 'electronica']);
                 }
                 
                 return $subQuery->distinct()
