@@ -12,8 +12,14 @@
                 <p class="muted" style="margin: 0; font-size: 0.88rem;">Asigne o cambie la sede autorizada de cada usuario registrado.</p>
             </div>
         </div>
-        <div>
-            <a href="{{ route('admin.users.login-logs') }}" class="btn secondary" style="font-size: 0.88rem; padding: 8px 16px;">Historial de inicios de sesión</a>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <a href="{{ route('admin.users.export') }}" class="btn secondary" style="font-size: 0.88rem; padding: 8px 16px;">Exportar Respaldo</a>
+            <form action="{{ route('admin.users.import') }}" method="POST" enctype="multipart/form-data" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                @csrf
+                <input type="file" name="backup_file" accept=".json" required style="font-size: 0.88rem; max-width: 200px; padding: 4px;">
+                <button type="submit" class="btn" style="background-color: var(--blue); color: white; font-size: 0.88rem; padding: 8px 16px;">Importar</button>
+            </form>
+            <a href="{{ route('admin.users.login-logs') }}" class="btn secondary" style="font-size: 0.88rem; padding: 8px 16px; margin-left: 12px;">Historial</a>
         </div>
     </div>
 

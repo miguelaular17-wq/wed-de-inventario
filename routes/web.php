@@ -58,6 +58,8 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::get('/importar', [ImportController::class, 'create'])->name('import.create');
     Route::post('/importar', [ImportController::class, 'store'])->name('import.store');
     Route::get('/usuarios', [UserController::class, 'index'])->name('users.index');
+    Route::get('/usuarios/export', [UserController::class, 'export'])->name('users.export');
+    Route::post('/usuarios/import', [UserController::class, 'import'])->name('users.import');
     Route::post('/usuarios/{user}', [UserController::class, 'update'])->name('users.update');
     Route::delete('/usuarios/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::post('/config/cashea', [UserController::class, 'updateCashea'])->name('config.cashea.update');
