@@ -698,7 +698,7 @@ class SyncApp:
                     a.descripcion                                    AS descripcion
                 FROM [dbo].[articulos] a WITH (NOLOCK)
                 LEFT JOIN [dbo].[existencias] ex WITH (NOLOCK) 
-                    ON a.id = ex.articulo AND ex.almacen = '01'
+                    ON a.codigo = ex.articulo AND ex.almacen = '01'
                 LEFT JOIN (
                     SELECT vi.articulo, SUM(vi.cantidad) AS total_qty
                     FROM [dbo].[documentos_venta] v WITH (NOLOCK)
