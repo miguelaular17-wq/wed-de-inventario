@@ -733,6 +733,9 @@ class SyncApp:
             stock_tuples = []
             ventas_tuples = []
             skipped = 0
+            
+            pid_stock_map = {}
+            pid_ventas_map = {}
 
             for row in rows:
                 codigo = str(row[0]).strip()
@@ -771,10 +774,38 @@ class SyncApp:
                 ultima_venta  = str(row[4])   if row[4] else None
                 ultima_compra = str(row[5])   if row[5] else None
 
-                stock_tuples.append((pid, sede, existencia))
+                pid_stock_map[pid] = pid_stock_map.get(pid, 0) + existencia
                 
-                venta_promedio_15d = int(round(ventas_15d / 15)) if ventas_15d else 0
-                ventas_tuples.append((pid, sede, ventas_60d, venta_promedio_15d, ultima_venta, ultima_compra))
+                if pid not in pid_ventas_map:
+                    pid_ventas_map[pid] = {
+                        'ventas_60d': 0.0,
+                        'ventas_15d': 0.0,
+                        'ultima_venta': None,
+                        'ultima_compra': None
+                    }
+                
+                v_data = pid_ventas_map[pid]
+                v_data['ventas_60d'] += ventas_60d
+                v_data['ventas_15d'] += ventas_15d
+                
+                # Para fechas, tomamos la más reciente
+                if ultima_venta:
+                    if not v_data['ultima_venta'] or ultima_venta > v_data['ultima_venta']:
+                        v_data['ultima_venta'] = ultima_venta
+                if ultima_compra:
+                    if not v_data['ultima_compra'] or ultima_compra > v_data['ultima_compra']:
+                        v_data['ultima_compra'] = ultima_compra
+
+            # Construir las tuplas agregadas
+            for pid, stock in pid_stock_map.items():
+                stock_tuples.append((pid, sede, stock))
+            
+            for pid, v_data in pid_ventas_map.items():
+                venta_promedio_15d = int(round(v_data['ventas_15d'] / 15)) if v_data['ventas_15d'] else 0
+                ventas_tuples.append((
+                    pid, sede, v_data['ventas_60d'], venta_promedio_15d, 
+                    v_data['ultima_venta'], v_data['ultima_compra']
+                ))
 
             # Helper to execute in small committed chunks to avoid pooler timeouts
             def batch_execute_and_commit(query, data_list, chunk_size=1000):
