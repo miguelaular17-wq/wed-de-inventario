@@ -686,16 +686,18 @@ class SyncApp:
             
             billing_conn = self.get_sql_connection()
 
-            snapshot_query = """
+            snapshot_query = f"""
                 SELECT
                     a.codigo                                         AS codigo,
-                    CAST(ISNULL(a.existencia, 0) AS INT)             AS existencia,
+                    CAST(ISNULL(ex.actual, 0) AS INT)                AS existencia,
                     ISNULL(s15.total_qty, 0)                         AS ventas_15d,
                     ISNULL(s60.total_qty, 0)                         AS ventas_60d,
                     CONVERT(VARCHAR(19), a.fecha_ultima_venta,  120) AS ultima_venta,
                     CONVERT(VARCHAR(19), a.fecha_ultima_compra, 120) AS ultima_compra,
                     a.descripcion                                    AS descripcion
                 FROM [dbo].[articulos] a WITH (NOLOCK)
+                LEFT JOIN [dbo].[existencias] ex WITH (NOLOCK) 
+                    ON a.id = ex.articulo AND ex.almacen = '01'
                 LEFT JOIN (
                     SELECT vi.articulo, SUM(vi.cantidad) AS total_qty
                     FROM [dbo].[documentos_venta] v WITH (NOLOCK)
@@ -725,8 +727,6 @@ class SyncApp:
             self.log(f"[Snapshot] {len(rows)} totales obtenidos de SQL Server.")
 
             if not rows:
-                return True
-
             from psycopg2.extras import execute_batch
 
             stock_tuples = []
@@ -735,32 +735,11 @@ class SyncApp:
 
             for row in rows:
                 codigo = str(row[0]).strip()
-                nombre_local = str(row[6]).strip() if len(row) > 6 and row[6] else None
                 
-                # ¡LA MAGIA AQUÍ! Solo nos importan los productos que ya existen en Supabase
+                # ¡LA MAGIA AQUÍ! Solo nos importan los productos que ya existen en Supabase por su CÓDIGO.
+                # Ya no unimos productos por nombre para evitar sobreescrituras y errores de llaves duplicadas.
                 if codigo in prod_map:
                     pid = prod_map[codigo]
-                elif nombre_local and nombre_local.lower() in name_map:
-                    pid, current_codigo = name_map[nombre_local.lower()]
-                    
-                    parts = current_codigo.replace(' ', '').split('/')
-                    if codigo not in parts:
-                        new_codigo = f"{current_codigo} / {codigo}" if current_codigo else codigo
-                        self.log(f"[Snapshot Auto-Heal] Producto '{nombre_local}' encontrado por nombre. Agregando código '{codigo}' a la web.")
-                        # Auto-heal en Supabase (ignora si hay conflicto)
-                        try:
-                            wc.execute(
-                                "UPDATE inventario_v2.productos SET codigo = %s, updated_at = NOW() WHERE id = %s;",
-                                (new_codigo, pid)
-                            )
-                            name_map[nombre_local.lower()] = (pid, new_codigo)
-                        except Exception as e:
-                            self.log(f"[Snapshot Auto-Heal] Error actualizando código: {e}")
-                            web_conn.rollback() # Rollback the failed update but keep the transaction going
-                            pass
-                    
-                    prod_map[codigo] = pid # Update local map
-
                 else:
                     skipped += 1
                     continue
