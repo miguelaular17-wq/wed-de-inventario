@@ -728,6 +728,8 @@ class SyncApp:
             self.log(f"[Snapshot] {len(rows)} totales obtenidos de SQL Server.")
 
             if not rows:
+                return True
+
             from psycopg2.extras import execute_batch
 
             stock_tuples = []
