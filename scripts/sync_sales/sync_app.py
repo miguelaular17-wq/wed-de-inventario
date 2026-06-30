@@ -1096,7 +1096,10 @@ class SyncApp:
                     (prod_id, sede, fecha_str)
                 )
                 
-                new_last_time = max(new_last_time, fecha_str)
+                # Evitar que fechas en el futuro (ej. errores de tipeo 2626) congelen el sincronizador
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S.999")
+                valid_fecha_str = fecha_str if fecha_str <= now_str else now_str
+                new_last_time = max(new_last_time, valid_fecha_str)
                 
             # Log successful sync to sync_logs
             meta_json = json.dumps({"timestamp": new_last_time})
