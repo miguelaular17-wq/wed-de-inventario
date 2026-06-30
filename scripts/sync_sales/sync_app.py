@@ -958,7 +958,14 @@ class SyncApp:
                 else:
                     fecha_str = str(fecha_venta)
                     
-                self.log(f"Procesando: Código={codigo}, Cant={float(cantidad):.2f}, Fecha={fecha_str}")
+                # Convertir cantidad a entero >= 1 para la BD web
+                try:
+                    raw_cant = float(cantidad)
+                    int_cantidad = max(1, int(round(raw_cant)))
+                except (ValueError, TypeError):
+                    int_cantidad = 1
+                    
+                self.log(f"Procesando: Código={codigo}, Cant={float(cantidad):.2f} (Web: {int_cantidad}), Fecha={fecha_str}")
                 
                 # --- Búsqueda robusta de producto ---
                 # Paso 1: Buscar exacto (incluyendo inactivos) dentro de SKUs concatenados
@@ -1069,7 +1076,7 @@ class SyncApp:
                     SET existencia = GREATEST(0, existencia - %s), updated_at = NOW()
                     WHERE producto_id = %s AND sede = %s;
                     """,
-                    (cantidad, prod_id, sede)
+                    (int_cantidad, prod_id, sede)
                 )
                 
                 # Log stock movement
@@ -1082,7 +1089,7 @@ class SyncApp:
                     INSERT INTO inventario_v2.movimientos (producto_id, origen, destino, tipo, cantidad, usuario, metadata, created_at)
                     VALUES (%s, %s, NULL, 'AJUSTE', %s, 'sistema_sync', %s, NOW());
                     """,
-                    (prod_id, sede, cantidad, metadata)
+                    (prod_id, sede, int_cantidad, metadata)
                 )
                 
                 # Update real-time ultima_venta
