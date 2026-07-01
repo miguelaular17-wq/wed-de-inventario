@@ -30,6 +30,14 @@ try:
 except ImportError:
     psycopg2 = None
 
+try:
+    import pystray
+    from pystray import MenuItem as item
+    from PIL import Image, ImageDraw
+    TRAY_SUPPORT = True
+except ImportError:
+    TRAY_SUPPORT = False
+
 class SyncApp:
     def __init__(self, root):
         self.root = root
@@ -53,13 +61,47 @@ class SyncApp:
         
         # Check autostart flag
         if "--autostart" in sys.argv:
-            self.root.iconify()  # Minimize window on automatic startup
             self.root.after(1000, self.toggle_sync)
-        
+            
+        # Ocultar en la bandeja del sistema (System Tray)
+        if TRAY_SUPPORT:
+            self.root.protocol('WM_DELETE_WINDOW', self.hide_window)
+            # Arranque oculto y silencioso
+            self.root.after(100, self.hide_window)
+        else:
+            if "--autostart" in sys.argv:
+                self.root.iconify()
+
     def log(self, message):
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.console.insert(tk.END, f"[{timestamp}] {message}\n")
         self.console.see(tk.END)
+
+    def create_image(self):
+        # Generar un icono simple dinámicamente si no hay archivo .ico
+        image = Image.new('RGB', (64, 64), color=(30, 58, 138))
+        dc = ImageDraw.Draw(image)
+        dc.rectangle((16, 16, 48, 48), fill=(255, 255, 255))
+        return image
+
+    def hide_window(self):
+        self.root.withdraw()
+        image = self.create_image()
+        menu = pystray.Menu(
+            item('Mostrar Panel', self.show_window, default=True),
+            item('Salir Completamente', self.quit_window)
+        )
+        self.icon = pystray.Icon("SyncApp", image, "Sincronizador Integra", menu)
+        threading.Thread(target=self.icon.run, daemon=True).start()
+
+    def show_window(self, icon, item):
+        self.icon.stop()
+        self.root.after(0, self.root.deiconify)
+
+    def quit_window(self, icon, item):
+        self.icon.stop()
+        self.root.after(0, self.root.destroy)
+        os._exit(0)
 
     def load_config(self):
         if not os.path.exists(CONFIG_PATH):
