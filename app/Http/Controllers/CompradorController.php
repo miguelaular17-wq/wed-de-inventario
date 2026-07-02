@@ -214,13 +214,14 @@ class CompradorController extends Controller
                         p.categoria,
                         p.subcategoria,
                         COALESCE(p.proveedor, '') as proveedor,
+                        p.excluir_compras,
                         COALESCE(SUM(sa.existencia), 0) as total_stock,
                         COALESCE(SUM(ROUND((vh.ventas_60d / 60) * :tp)), 0) as total_demand
                     FROM inventario_v2.productos p
                     LEFT JOIN inventario_v2.stock_actual sa ON p.id = sa.producto_id
                     LEFT JOIN inventario_v2.ventas_historicas vh ON p.id = vh.producto_id AND sa.sede = vh.sede
                     WHERE p.activo = true {$whereSql}
-                    GROUP BY p.id, p.codigo, p.nombre, p.categoria, p.subcategoria, p.proveedor
+                    GROUP BY p.id, p.codigo, p.nombre, p.categoria, p.subcategoria, p.proveedor, p.excluir_compras
                 )
                 SELECT * 
                 FROM product_metrics
@@ -271,11 +272,13 @@ class CompradorController extends Controller
                 }
 
                 $productsToBuy->push([
+                    'id' => $pId,
                     'cod_centro' => $row->cod_centro,
                     'producto' => $row->producto,
                     'categoria' => $row->categoria ?? '—',
                     'subcategoria' => $row->subcategoria ?? '—',
                     'proveedor' => $row->proveedor ?: 'Sin Proveedor',
+                    'excluir_compras' => (bool) $row->excluir_compras,
                     'total_stock' => (int) $row->total_stock,
                     'total_demanda' => (int) $row->total_demand,
                     'faltante' => (int) ($row->total_demand - $row->total_stock),
@@ -971,5 +974,20 @@ class CompradorController extends Controller
                 'message' => 'Producto marcado para campaña de publicidad con éxito.'
             ]);
         }
+    }
+
+    public function toggleExclusion(Request $request, $id)
+    {
+        $current = \Illuminate\Support\Facades\DB::connection('pgsql')
+            ->table('inventario_v2.productos')
+            ->where('id', $id)
+            ->value('excluir_compras');
+
+        \Illuminate\Support\Facades\DB::connection('pgsql')
+            ->table('inventario_v2.productos')
+            ->where('id', $id)
+            ->update(['excluir_compras' => !$current]);
+
+        return response()->json(['status' => 'success', 'excluido' => !$current]);
     }
 }

@@ -264,6 +264,15 @@ class SyncApp:
             width=20
         )
         self.btn_save.pack(side=tk.LEFT, padx=(10, 0))
+
+        # Button: Sync Histórico Completo
+        self.btn_historico = ttk.Button(
+            action_frame,
+            text="Sincronizar Histórico Completo",
+            command=self.run_sinc_historico,
+            width=30
+        )
+        self.btn_historico.pack(side=tk.LEFT, padx=(10, 0))
         # Button: Inspect SQL Server columns
         self.btn_inspect = ttk.Button(
             action_frame,
@@ -1144,6 +1153,19 @@ class SyncApp:
                     """,
                     (prod_id, sede, fecha_str)
                 )
+
+                # Update real-time historial mensual
+                anio_mes = fecha_str[:7]
+                web_cursor.execute(
+                    """
+                    INSERT INTO inventario_v2.historial_ventas_mensuales (producto_id, sede, anio_mes, cantidad, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, NOW(), NOW())
+                    ON CONFLICT (sede, producto_id, anio_mes) DO UPDATE
+                        SET cantidad = inventario_v2.historial_ventas_mensuales.cantidad + EXCLUDED.cantidad,
+                            updated_at = NOW();
+                    """,
+                    (prod_id, sede, anio_mes, int_cantidad)
+                )
                 
                 # Evitar que fechas en el futuro (ej. errores de tipeo 2626) congelen el sincronizador
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S.999")
@@ -1190,6 +1212,122 @@ class SyncApp:
                     web_conn.close()
                 except Exception:
                     pass
+
+    def run_sinc_historico(self):
+        self.btn_historico.config(state=tk.DISABLED)
+        threading.Thread(target=self._perform_sinc_historico, daemon=True).start()
+
+    def _perform_sinc_historico(self):
+        billing_conn = None
+        web_conn = None
+        try:
+            self.log("Iniciando sincronización histórica COMPLETA...")
+            if not self.save_ui_values_to_config():
+                return
+            
+            sede = self.config["sede"]
+            billing_conn = self.get_sql_connection()
+            if not billing_conn:
+                self.log("Error: No se pudo conectar a SQL Server.")
+                return
+            
+            web = self.config.get("web_db", {})
+            if not web:
+                self.log("Error: No hay credenciales para Supabase en config.json.")
+                return
+                
+            web_conn = psycopg2.connect(
+                host=web.get("host"), port=web.get("port"), database=web.get("database"),
+                user=web.get("user"), password=web.get("password"), sslmode="require",
+                connect_timeout=15
+            )
+
+            self.log("Consultando TODO el historial en SQL Server. Esto puede tardar...")
+            cursor = billing_conn.cursor()
+            query = """
+            SELECT 
+                CONVERT(VARCHAR(7), v.fecha_emision, 120) AS AnioMes,
+                LTRIM(RTRIM(d.articulo)) AS Codigo,
+                d.cantidad AS Cantidad_Vendida
+            FROM 
+                documentos_venta v 
+            INNER JOIN 
+                documentos_venta_items d ON v.numero_documento = d.numero_documento AND v.tipo_documento = d.tipo_documento
+            WHERE 
+                v.tipo_documento = 'FAC' 
+            """
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            
+            self.log(f"Extracción finalizada. Se encontraron {len(rows)} filas.")
+            if not rows:
+                return
+                
+            self.log("Agrupando y consolidando datos POR MES...")
+            from collections import defaultdict
+            aggregated = defaultdict(float)
+            for r in rows:
+                anio_mes = r[0]
+                codigo = r[1]
+                cant = float(r[2]) if r[2] else 0.0
+                aggregated[(anio_mes, codigo)] += cant
+            
+            self.log("Cargando mapeo de IDs de productos web...")
+            web_cursor = web_conn.cursor()
+            web_cursor.execute("SELECT id, codigo FROM inventario_v2.productos")
+            prod_rows = web_cursor.fetchall()
+            
+            codigo_a_id = {}
+            for pid, cods_web in prod_rows:
+                if cods_web:
+                    parts = [p.strip().upper() for p in str(cods_web).split("/")]
+                    for p in parts:
+                        codigo_a_id[p] = pid
+            
+            self.log("Generando inserciones para la web...")
+            tuples_to_insert = []
+            for (anio_mes, codigo), cant in aggregated.items():
+                if cant <= 0:
+                    continue
+                codigo_upper = str(codigo).upper()
+                if codigo_upper in codigo_a_id:
+                    pid = codigo_a_id[codigo_upper]
+                    tuples_to_insert.append((pid, sede, anio_mes, int(round(cant))))
+            
+            if not tuples_to_insert:
+                self.log("No hay datos válidos para insertar.")
+                return
+                
+            self.log(f"Subiendo {len(tuples_to_insert)} registros mensuales a Supabase (BATCH)...")
+            
+            insert_query = """
+                INSERT INTO inventario_v2.historial_ventas_mensuales
+                    (producto_id, sede, anio_mes, cantidad, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, NOW(), NOW())
+                ON CONFLICT (sede, producto_id, anio_mes) DO UPDATE
+                    SET cantidad = EXCLUDED.cantidad,
+                        updated_at = NOW();
+            """
+            if psycopg2:
+                psycopg2.extras.execute_batch(web_cursor, insert_query, tuples_to_insert, page_size=2000)
+            else:
+                for tup in tuples_to_insert:
+                    web_cursor.execute(insert_query, tup)
+                    
+            web_conn.commit()
+            self.log("¡Sincronización histórica finalizada exitosamente!")
+            
+        except Exception as e:
+            self.log(f"Error en sincronización histórica: {str(e)}")
+            if web_conn:
+                web_conn.rollback()
+        finally:
+            self.btn_historico.config(state=tk.NORMAL)
+            if billing_conn:
+                billing_conn.close()
+            if web_conn:
+                web_conn.close()
+
 if __name__ == "__main__":
     root = tk.Tk()
     app = SyncApp(root)

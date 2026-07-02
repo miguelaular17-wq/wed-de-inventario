@@ -105,6 +105,16 @@ Route::middleware(['auth', 'role:admin,comprador,marketing'])->prefix('compras')
     Route::get('/exportar', [CompradorController::class, 'export'])->name('comprador.export');
     Route::post('/notificar', [CompradorController::class, 'notifyRedistribution'])->name('comprador.notify');
     Route::post('/publicidad/toggle', [CompradorController::class, 'togglePublicidad'])->name('comprador.publicidad.toggle');
+    
+    // Histórico de ventas mensuales
+    Route::get('/historico-ventas', [\App\Http\Controllers\CompradorVentasController::class, 'index'])->name('comprador.historico');
+    Route::get('/historico-ventas/export', [\App\Http\Controllers\CompradorVentasController::class, 'export'])->name('comprador.historico.export');
+
+    // Análisis de Sustitutos
+    Route::get('/sustitutos', [\App\Http\Controllers\CompradorSustitutosController::class, 'index'])->name('comprador.sustitutos');
+
+    // Toggle Exclusión de Compras
+    Route::post('/productos/{id}/toggle-exclusion', [\App\Http\Controllers\CompradorController::class, 'toggleExclusion'])->name('comprador.productos.toggle_exclusion');
 });
 
 // Vendedor specific routes

@@ -45,7 +45,13 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         <h1 style="margin: 0;">Compras y Distribución</h1>
         <p class="lead" style="margin: 4px 0 0;">Analice el stock global para compras o redistribución de inventario entre sucursales.</p>
     </div>
-    <div>
+    <div style="display: flex; gap: 8px;">
+        <a href="{{ route('comprador.sustitutos') }}" class="btn" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-weight: 600; font-size: 0.9rem; border: none; border-radius: 6px; background-color: #10b981; color: #ffffff; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <span>🔄</span> Análisis de Sustitutos
+        </a>
+        <a href="{{ route('comprador.historico') }}" class="btn" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-weight: 600; font-size: 0.9rem; border: none; border-radius: 6px; background-color: #2563eb; color: #ffffff; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <span>📊</span> Histórico Mensual
+        </a>
         <a href="{{ route('comprador.export', request()->query()) }}" class="btn secondary" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-weight: 600; font-size: 0.9rem; border: 1px solid var(--border);">
             <span>📥</span> Exportar Excel Global
         </a>
@@ -362,98 +368,6 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             <div style="font-size: 0.75rem; color: var(--muted);">productos</div>
         </div>
     </div>
-
-    {{-- ── Resumen por Sede (collapsible) ── --}}
-    <details style="margin-bottom: 20px;">
-        <summary class="panel" style="padding: 14px 20px; cursor: pointer; font-weight: 600; color: var(--blue); display: flex; align-items: center; gap: 8px; user-select: none;">
-            📊 Resumen por Sede <span style="font-weight: 400; color: var(--muted); font-size: 0.85rem;">(click para expandir)</span>
-        </summary>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; margin-top: 12px;">
-            @foreach($resumenPorSede as $sedeSummary)
-            <div class="panel" style="padding: 14px;">
-                <h4 style="margin: 0 0 10px; color: var(--blue);">{{ $sedeSummary['display'] }}</h4>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 0.85rem;">
-                    <span style="color: var(--muted);">Productos:</span>
-                    <span style="font-weight: 600;">{{ number_format($sedeSummary['total_productos']) }}</span>
-                    <span style="color: var(--muted);">Stock total:</span>
-                    <span style="font-weight: 600;">{{ number_format($sedeSummary['stock_total']) }} u.</span>
-                    <span style="color: var(--muted);">Sin rotación:</span>
-                    <span style="font-weight: 600; color: #ef4444;">{{ $sedeSummary['sin_rotacion'] }}</span>
-                    <span style="color: var(--muted);">Sobrestock:</span>
-                    <span style="font-weight: 600; color: #f97316;">{{ $sedeSummary['sobrestock'] }}</span>
-                    <span style="color: var(--muted);">Inmovilizados:</span>
-                    <span style="font-weight: 600; color: #dc2626;">{{ $sedeSummary['inmovilizados'] }}</span>
-                </div>
-            </div>
-            @endforeach
-        </div>
-    </details>
-
-    {{-- ── Resumen Rotación & Sobrestock (collapsible) ── --}}
-    <details style="margin-bottom: 20px;">
-        <summary class="panel" style="padding: 14px 20px; cursor: pointer; font-weight: 600; color: var(--blue); display: flex; align-items: center; gap: 8px; user-select: none;">
-            📈 Detalle por Categoría de Riesgo <span style="font-weight: 400; color: var(--muted); font-size: 0.85rem;">(click para expandir)</span>
-        </summary>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 12px;">
-            {{-- Rotación --}}
-            <div class="panel" style="padding: 16px;">
-                <h4 style="margin: 0 0 12px; color: var(--text);">Clasificación de Rotación</h4>
-                @foreach($resumenRiesgo['rotacion'] as $label => $count)
-                    @php
-                        $barColor = match($label) { 'Normal' => '#22c55e', 'Lenta' => '#eab308', 'Riesgo' => '#f97316', 'Sin rotación' => '#ef4444', default => '#94a3b8' };
-                        $pct = $resumenRiesgo['total'] > 0 ? round(($count / $resumenRiesgo['total']) * 100, 1) : 0;
-                    @endphp
-                    <div style="margin-bottom: 8px;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 3px;">
-                            <span>{{ $label }}</span>
-                            <span style="font-weight: 600;">{{ $count }} ({{ $pct }}%)</span>
-                        </div>
-                        <div style="background: #f1f5f9; border-radius: 4px; height: 8px; overflow: hidden;">
-                            <div style="background: {{ $barColor }}; height: 100%; width: {{ $pct }}%; border-radius: 4px; transition: width 0.3s ease;"></div>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-            {{-- Sobrestock --}}
-            <div class="panel" style="padding: 16px;">
-                <h4 style="margin: 0 0 12px; color: var(--text);">Clasificación de Sobrestock</h4>
-                @foreach($resumenRiesgo['sobrestock'] as $label => $count)
-                    @php
-                        $barColor = match($label) { 'Normal' => '#22c55e', 'Vigilar' => '#eab308', 'Sobrestock' => '#f97316', 'Sobrestock Crítico' => '#ef4444', default => '#94a3b8' };
-                        $pct = $resumenRiesgo['total'] > 0 ? round(($count / $resumenRiesgo['total']) * 100, 1) : 0;
-                    @endphp
-                    <div style="margin-bottom: 8px;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 3px;">
-                            <span>{{ $label }}</span>
-                            <span style="font-weight: 600;">{{ $count }} ({{ $pct }}%)</span>
-                        </div>
-                        <div style="background: #f1f5f9; border-radius: 4px; height: 8px; overflow: hidden;">
-                            <div style="background: {{ $barColor }}; height: 100%; width: {{ $pct }}%; border-radius: 4px; transition: width 0.3s ease;"></div>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-            {{-- Estados especiales --}}
-            <div class="panel" style="padding: 16px;">
-                <h4 style="margin: 0 0 12px; color: var(--text);">Estados Especiales</h4>
-                @foreach($resumenRiesgo['estados'] as $label => $count)
-                    @php
-                        $barColor = $label === 'Compra Reciente Sin Rotación' ? '#ef4444' : '#f97316';
-                        $pct = $resumenRiesgo['total'] > 0 ? round(($count / $resumenRiesgo['total']) * 100, 1) : 0;
-                    @endphp
-                    <div style="margin-bottom: 8px;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 3px;">
-                            <span>{{ $label }}</span>
-                            <span style="font-weight: 600;">{{ $count }} ({{ $pct }}%)</span>
-                        </div>
-                        <div style="background: #f1f5f9; border-radius: 4px; height: 8px; overflow: hidden;">
-                            <div style="background: {{ $barColor }}; height: 100%; width: {{ $pct }}%; border-radius: 4px; transition: width 0.3s ease;"></div>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    </details>
 
     {{-- ── Barra de búsqueda independiente para Sobrestock ── --}}
     <form method="GET" id="ss-search-form" style="margin-bottom: 14px; display: flex; align-items: center; gap: 10px;">
@@ -1242,7 +1156,7 @@ function openProviderModal(providerName, productos, cardElement) {
 }
 
 function updateProviderModalSummary() {
-    const activeProducts = currentProviderProducts.filter(p => !p.excluded);
+    const activeProducts = currentProviderProducts.filter(p => !p.excluir_compras);
     const totalProducts = activeProducts.length;
     const totalUnits = activeProducts.reduce((sum, p) => sum + (parseInt(p.faltante) || 0), 0);
     document.getElementById('provider-modal-summary').innerText = `${totalProducts} productos · ${totalUnits} unidades sugeridas a comprar`;
@@ -1280,15 +1194,15 @@ function renderProviderModalTable() {
     currentProviderProducts.forEach(prod => {
         const cat = prod.categoria || '—';
         const subcat = prod.subcategoria ? `<div style="font-size: 0.75rem; opacity: 0.8;">${prod.subcategoria}</div>` : '';
-        const isExcluded = !!prod.excluded;
+        const isExcluded = !!prod.excluir_compras;
         
-        const rowStyle = isExcluded ? 'background-color: #f8fafc; opacity: 0.6;' : '';
+        const rowStyle = isExcluded ? 'background-color: #f8fafc; opacity: 0.6; cursor: pointer; user-select: none;' : 'cursor: pointer; user-select: none;';
         const textStyle = isExcluded ? 'text-decoration: line-through; color: var(--muted);' : '';
         
         const stockGlobalCell = isExcluded 
             ? `<td class="col-number" style="padding: 8px 12px; text-align: right; ${textStyle}">${prod.total_stock}</td>`
             : `<td class="col-number" style="padding: 8px 12px; text-align: right; color: var(--blue); text-decoration: underline; cursor: pointer; font-weight: 600;" 
-                   onclick="openDistributionModalFromProvider('${prod.cod_centro}')"
+                   onclick="event.stopPropagation(); openDistributionModalFromProvider('${prod.cod_centro}')"
                    title="Ver desglose por sede">
                    ${prod.total_stock}
                </td>`;
@@ -1299,14 +1213,15 @@ function renderProviderModalTable() {
                       value="${prod.faltante}" 
                       min="0" 
                       style="width: 75px; text-align: right; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-weight: 600; color: #b91c1c; background: #fff;" 
+                      onclick="event.stopPropagation()"
                       oninput="updateProductQuantity('${prod.cod_centro}', this.value)">`;
                       
         const actionBtn = isExcluded
-            ? `<button type="button" class="btn secondary" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 4px;" onclick="toggleExcludeProduct('${prod.cod_centro}')">Incluir</button>`
-            : `<button type="button" class="btn req" style="padding: 4px 8px; font-size: 0.75rem; border-radius: 4px; background-color: #ef4444; color: #fff; border: none; cursor: pointer;" onclick="toggleExcludeProduct('${prod.cod_centro}')">Excluir</button>`;
+            ? `<span class="tag" style="background: #e2e8f0; color: #64748b; font-weight: 600;">Ignorado</span>`
+            : `<span class="tag" style="background: #2563eb; color: #fff; font-weight: 600;">Comprar</span>`;
         
         html += `
-            <tr style="${rowStyle}">
+            <tr style="${rowStyle}" ondblclick="toggleExcludeProduct('${prod.cod_centro}', event)" title="Doble clic para ignorar producto">
                 <td class="col-code" style="padding: 8px 12px; ${textStyle}">${prod.cod_centro}</td>
                 <td style="padding: 8px 12px; font-weight: 600; ${textStyle}">${prod.producto}</td>
                 <td style="padding: 8px 12px; color: var(--muted); ${textStyle}">${cat}${subcat}</td>
@@ -1341,18 +1256,42 @@ function updateProductQuantity(code, value) {
     }
 }
 
-function toggleExcludeProduct(code) {
+async function toggleExcludeProduct(code, event) {
+    if(event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
     const prod = currentProviderProducts.find(p => p.cod_centro === code);
     if (prod) {
-        prod.excluded = !prod.excluded;
+        prod.excluir_compras = !prod.excluir_compras;
         renderProviderModalTable();
         updateProviderCard();
+        
+        try {
+            const resp = await fetch(`/compras/productos/${prod.id}/toggle-exclusion`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            });
+            const data = await resp.json();
+            if(data.status !== 'success') {
+                prod.excluir_compras = !prod.excluir_compras;
+                renderProviderModalTable();
+                updateProviderCard();
+            }
+        } catch(e) {
+            prod.excluir_compras = !prod.excluir_compras;
+            renderProviderModalTable();
+            updateProviderCard();
+        }
     }
 }
 
 function updateProviderCard() {
     if (currentCardElement) {
-        const activeProducts = currentProviderProducts.filter(p => !p.excluded);
+        const activeProducts = currentProviderProducts.filter(p => !p.excluir_compras);
         const totalUnits = activeProducts.reduce((sum, p) => sum + (parseInt(p.faltante) || 0), 0);
         
         const tagNo = currentCardElement.querySelector('.tag.no');
@@ -1370,7 +1309,7 @@ function openDistributionModalFromProvider(code) {
 }
 
 function downloadProviderCsv(providerName, productos) {
-    const activeProducts = productos.filter(p => !p.excluded);
+    const activeProducts = productos.filter(p => !p.excluir_compras);
     
     let csvContent = "\ufeff"; // BOM for Excel encoding support (UTF-8)
     csvContent += "Código;Producto;Categoría;Stock Global;Demanda;A Comprar\n";

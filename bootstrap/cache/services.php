@@ -24,9 +24,10 @@
     20 => 'Illuminate\\Translation\\TranslationServiceProvider',
     21 => 'Illuminate\\Validation\\ValidationServiceProvider',
     22 => 'Illuminate\\View\\ViewServiceProvider',
-    23 => 'Carbon\\Laravel\\ServiceProvider',
-    24 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    25 => 'App\\Providers\\AppServiceProvider',
+    23 => 'Barryvdh\\DomPDF\\ServiceProvider',
+    24 => 'Carbon\\Laravel\\ServiceProvider',
+    25 => 'Termwind\\Laravel\\TermwindServiceProvider',
+    26 => 'App\\Providers\\AppServiceProvider',
   ),
   'eager' => 
   array (
@@ -40,9 +41,10 @@
     7 => 'Illuminate\\Pagination\\PaginationServiceProvider',
     8 => 'Illuminate\\Session\\SessionServiceProvider',
     9 => 'Illuminate\\View\\ViewServiceProvider',
-    10 => 'Carbon\\Laravel\\ServiceProvider',
-    11 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    12 => 'App\\Providers\\AppServiceProvider',
+    10 => 'Barryvdh\\DomPDF\\ServiceProvider',
+    11 => 'Carbon\\Laravel\\ServiceProvider',
+    12 => 'Termwind\\Laravel\\TermwindServiceProvider',
+    13 => 'App\\Providers\\AppServiceProvider',
   ),
   'deferred' => 
   array (
