@@ -79,7 +79,7 @@ class CompradorVentasController extends Controller
 
         // Apply groupBy
         $query->groupBy('p.id', 'p.codigo', 'p.nombre', 'p.categoria', 'p.subcategoria', 'p.proveedor');
-        $query->orderByDesc('total_general');
+        $query->orderByRaw('SUM(hv.cantidad) DESC NULLS LAST');
         $query->orderBy('p.nombre');
 
         $paginatedProducts = $query->paginate(50)->appends($request->all());

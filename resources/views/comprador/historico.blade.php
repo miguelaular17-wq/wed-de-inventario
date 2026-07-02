@@ -207,7 +207,7 @@
                 Mostrando {{ $paginatedProducts->firstItem() ?? 0 }} al {{ $paginatedProducts->lastItem() ?? 0 }} de {{ $paginatedProducts->total() }} productos
             </div>
             <div>
-                {{ $paginatedProducts->links('pagination::bootstrap-4') }}
+                {{ $paginatedProducts->links() }}
             </div>
         </div>
     </div>
