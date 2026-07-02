@@ -69,10 +69,12 @@
                 <thead>
                     <tr>
                         <th width="15%">Código</th>
-                        <th width="35%">Producto</th>
-                        <th width="20%">Proveedor</th>
-                        <th width="15%" class="text-right">Stock Global</th>
-                        <th width="15%" class="text-center">Última Compra</th>
+                        <th width="30%">Producto</th>
+                        <th width="15%">Proveedor</th>
+                        <th width="10%" class="text-right">Stock Global</th>
+                        <th width="10%" class="text-right">Demanda 15d</th>
+                        <th width="10%" class="text-right">Demanda 60d</th>
+                        <th width="10%" class="text-center">Última Compra</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -83,6 +85,12 @@
                         <td>{{ $prod->proveedor ?: 'N/A' }}</td>
                         <td class="text-right {{ $prod->stock_total == 0 ? 'text-danger' : 'text-success' }}">
                             {{ number_format($prod->stock_total, 0) }}
+                        </td>
+                        <td class="text-right">
+                            {{ number_format($prod->demanda_15d, 0) }}
+                        </td>
+                        <td class="text-right">
+                            {{ number_format($prod->demanda_60d, 0) }}
                         </td>
                         <td class="text-center">
                             {{ $prod->ultima_compra ? \Carbon\Carbon::parse($prod->ultima_compra)->format('d/m/Y') : 'Nunca' }}

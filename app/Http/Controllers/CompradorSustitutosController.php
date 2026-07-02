@@ -30,6 +30,8 @@ class CompradorSustitutosController extends Controller
                     'p.proveedor',
                     'p.excluir_compras',
                     DB::raw("COALESCE(SUM(sa.existencia), 0) as stock_total"),
+                    DB::raw("COALESCE(SUM(vh.venta_promedio) * 15, 0) as demanda_15d"),
+                    DB::raw("COALESCE(SUM(vh.ventas_60d), 0) as demanda_60d"),
                     DB::raw("MAX(vh.ultima_compra) as ultima_compra")
                 )
                 ->leftJoin('inventario_v2.stock_actual as sa', 'p.id', '=', 'sa.producto_id')
