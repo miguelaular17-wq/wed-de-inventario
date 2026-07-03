@@ -89,6 +89,8 @@
                                         <option value="sede" @selected($user->role === 'sede')>Sede</option>
                                         <option value="vendedor" @selected($user->role === 'vendedor')>Vendedor</option>
                                         <option value="marketing" @selected($user->role === 'marketing')>Marketing</option>
+                                        <option value="finanzas" @selected($user->role === 'finanzas')>Finanzas</option>
+                                        <option value="cobranza" @selected($user->role === 'cobranza')>Cobranza</option>
                                     </select>
                                 </div>
                                 <div class="field" style="margin:0;">
