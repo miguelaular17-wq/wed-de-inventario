@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('inventario_v2.productos', function (Blueprint $table) {
-            $table->boolean('excluir_compras')->default(false);
-        });
+        if (!Schema::hasColumn('inventario_v2.productos', 'excluir_compras')) {
+            Schema::table('inventario_v2.productos', function (Blueprint $table) {
+                $table->boolean('excluir_compras')->default(false);
+            });
+        }
     }
 
     /**

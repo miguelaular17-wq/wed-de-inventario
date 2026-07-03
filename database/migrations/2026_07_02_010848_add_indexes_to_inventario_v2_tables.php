@@ -11,17 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('inventario_v2.productos', function (Blueprint $table) {
-            $table->index('categoria', 'idx_productos_categoria');
-            $table->index('subcategoria', 'idx_productos_subcategoria');
-            $table->index('proveedor', 'idx_productos_proveedor');
-            $table->index('activo', 'idx_productos_activo');
-        });
+        \Illuminate\Support\Facades\DB::statement("CREATE INDEX IF NOT EXISTS idx_productos_categoria ON inventario_v2.productos (categoria)");
+        \Illuminate\Support\Facades\DB::statement("CREATE INDEX IF NOT EXISTS idx_productos_subcategoria ON inventario_v2.productos (subcategoria)");
+        \Illuminate\Support\Facades\DB::statement("CREATE INDEX IF NOT EXISTS idx_productos_proveedor ON inventario_v2.productos (proveedor)");
+        \Illuminate\Support\Facades\DB::statement("CREATE INDEX IF NOT EXISTS idx_productos_activo ON inventario_v2.productos (activo)");
 
-        Schema::table('inventario_v2.historial_ventas_mensuales', function (Blueprint $table) {
-            $table->index('anio_mes', 'idx_ventas_anio_mes');
-            $table->index('producto_id', 'idx_ventas_producto_id');
-        });
+        \Illuminate\Support\Facades\DB::statement("CREATE INDEX IF NOT EXISTS idx_ventas_anio_mes ON inventario_v2.historial_ventas_mensuales (anio_mes)");
+        \Illuminate\Support\Facades\DB::statement("CREATE INDEX IF NOT EXISTS idx_ventas_producto_id ON inventario_v2.historial_ventas_mensuales (producto_id)");
     }
 
     /**
