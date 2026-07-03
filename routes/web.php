@@ -140,6 +140,7 @@ Route::middleware('auth')->group(function () {
 // Finanzas routes
 Route::middleware(['auth', 'role:admin,finanzas'])->prefix('finanzas')->group(function () {
     Route::get('/flujo-caja', [FinanzasController::class, 'flujoCaja'])->name('finanzas.flujo_caja');
+    Route::post('/flujo-caja/egreso', [FinanzasController::class, 'storeEgreso'])->name('finanzas.store_egreso');
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
 });
 

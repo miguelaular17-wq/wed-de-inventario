@@ -6,5 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class FlujoCaja extends Model
 {
-    //
+    protected $fillable = [
+        'fecha', 'concepto', 'tipo', 'monto', 'cuenta', 'observaciones',
+        'banco', 'titular', 'categoria_cuenta',
+        'monto_usd', 'tasa_cambio', 'diferencial_cambiario', 'monto_bs',
+        'comision', 'motivo', 'categoria_egreso'
+    ];
 }
