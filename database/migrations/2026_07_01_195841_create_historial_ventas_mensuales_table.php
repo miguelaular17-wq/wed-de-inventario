@@ -11,16 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('inventario_v2.historial_ventas_mensuales', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('producto_id')->constrained('inventario_v2.productos')->onDelete('cascade');
-            $table->string('sede', 50);
-            $table->string('anio_mes', 7);
-            $table->integer('cantidad');
-            $table->timestamps();
+        if (!Schema::hasTable('inventario_v2.historial_ventas_mensuales')) {
+            Schema::create('inventario_v2.historial_ventas_mensuales', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('producto_id')->constrained('inventario_v2.productos')->onDelete('cascade');
+                $table->string('sede', 50);
+                $table->string('anio_mes', 7);
+                $table->integer('cantidad');
+                $table->timestamps();
 
-            $table->unique(['sede', 'producto_id', 'anio_mes'], 'historial_ventas_mensuales_unique');
-        });
+                $table->unique(['sede', 'producto_id', 'anio_mes'], 'historial_ventas_mensuales_unique');
+            });
+        }
     }
 
     /**
