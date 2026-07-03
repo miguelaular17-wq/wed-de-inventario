@@ -41,6 +41,11 @@
                         <a href="{{ route('comprador.dashboard') }}" class="{{ request()->routeIs('comprador.dashboard') ? 'active' : '' }}">
                             {{ auth()->user()->isMarketing() ? 'Marketing' : 'Compras' }}
                         </a>
+                    @elseif(auth()->user()->isFinanzas())
+                        <a href="{{ route('finanzas.flujo_caja') }}" class="{{ request()->routeIs('finanzas.flujo_caja') ? 'active' : '' }}">Flujo de Caja</a>
+                        <a href="{{ route('finanzas.conciliaciones') }}" class="{{ request()->routeIs('finanzas.conciliaciones') ? 'active' : '' }}">Conciliaciones</a>
+                    @elseif(auth()->user()->isCobranza())
+                        <a href="{{ route('cobranza.index') }}" class="{{ request()->routeIs('cobranza.*') ? 'active' : '' }}">Cobranza</a>
                     @endif
 
                     @if(auth()->user()->hasAccessToSedeViews() && session('sede_local'))

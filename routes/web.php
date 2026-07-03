@@ -8,6 +8,8 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\RequisicionController;
 use App\Http\Controllers\SedeController;
+use App\Http\Controllers\FinanzasController;
+use App\Http\Controllers\CobranzaController;
 use App\Http\Controllers\VentasController;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureSedeSelected;
@@ -133,4 +135,15 @@ Route::middleware('auth')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/perfil/sede', [\App\Http\Controllers\UserSedeController::class, 'edit'])->name('user.sede.edit');
     Route::post('/perfil/sede', [\App\Http\Controllers\UserSedeController::class, 'update'])->name('user.sede.update');
+});
+
+// Finanzas routes
+Route::middleware(['auth', 'role:admin,finanzas'])->prefix('finanzas')->group(function () {
+    Route::get('/flujo-caja', [FinanzasController::class, 'flujoCaja'])->name('finanzas.flujo_caja');
+    Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
+});
+
+// Cobranza routes
+Route::middleware(['auth', 'role:admin,cobranza'])->prefix('cobranza')->group(function () {
+    Route::get('/', [CobranzaController::class, 'index'])->name('cobranza.index');
 });
