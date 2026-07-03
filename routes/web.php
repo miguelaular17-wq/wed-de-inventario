@@ -26,6 +26,12 @@ Route::get('/', function () {
         if ($user->isComprador() || $user->isMarketing()) {
             return redirect()->route('comprador.dashboard');
         }
+        if ($user->isFinanzas()) {
+            return redirect()->route('finanzas.flujo_caja');
+        }
+        if ($user->isCobranza()) {
+            return redirect()->route('cobranza.index');
+        }
         if ($user->isVendedor()) {
             return redirect()->route('vendedor.dashboard');
         }
