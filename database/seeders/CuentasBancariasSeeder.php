@@ -15,22 +15,22 @@ class CuentasBancariasSeeder extends Seeder
         \Illuminate\Support\Facades\DB::statement('TRUNCATE TABLE cuentas_bancarias RESTART IDENTITY CASCADE');
         
         $cuentas = [
-            ['banco' => 'BANESCO', 'titular' => 'GRUPO JRZ', 'color_tc' => '#f4b183'], 
-            ['banco' => 'BANESCO', 'titular' => 'DORAL', 'color_tc' => '#f4b183'], 
-            ['banco' => 'BANESCO', 'titular' => 'LNACEH', 'color_tc' => '#f4b183'], 
-            ['banco' => 'BANESCO', 'titular' => 'NUNES', 'color_tc' => '#ff0000'], 
-            ['banco' => 'BANESCO', 'titular' => 'GRUPO JENU', 'color_tc' => null],
-            ['banco' => 'BANESCO', 'titular' => 'JOSE JEREZ', 'color_tc' => '#f4b183'], 
-            ['banco' => 'BANESCO', 'titular' => 'EURONISSI', 'color_tc' => '#f4b183'], 
-            ['banco' => 'BNC', 'titular' => 'GRUPO JRZ', 'color_tc' => null],
-            ['banco' => 'BNC', 'titular' => 'DORAL', 'color_tc' => null],
-            ['banco' => 'BNC', 'titular' => 'LNACEH', 'color_tc' => null],
-            ['banco' => 'BNC', 'titular' => 'L.S. CASHEA', 'color_tc' => '#ffff00'], 
-            ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JENU', 'color_tc' => '#0070c0'], 
-            ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'color_tc' => null],
+            ['banco' => 'BANESCO', 'titular' => 'GRUPO JRZ', 'color_tc' => '#f4b183'], // Naranja
+            ['banco' => 'BANESCO', 'titular' => 'DORAL', 'color_tc' => '#f4b183'], // Naranja
+            ['banco' => 'BANESCO', 'titular' => 'LNACEH', 'color_tc' => '#f4b183'], // Naranja
+            ['banco' => 'BANESCO', 'titular' => 'NUNES', 'color_tc' => '#ff0000'], // Rojo
+            ['banco' => 'BANESCO', 'titular' => 'GRUPO JENU', 'color_tc' => '#0070c0'], // Azul
+            ['banco' => 'BANESCO', 'titular' => 'JOSE JEREZ', 'color_tc' => '#f4b183'], // Naranja
+            ['banco' => 'BANESCO', 'titular' => 'EURONISSI', 'color_tc' => '#f4b183'], // Naranja
+            ['banco' => 'BNC', 'titular' => 'GRUPO JRZ', 'color_tc' => '#f4b183'], // Naranja
+            ['banco' => 'BNC', 'titular' => 'DORAL', 'color_tc' => '#f4b183'], // Naranja
+            ['banco' => 'BNC', 'titular' => 'LNACEH', 'color_tc' => '#f4b183'], // Naranja
+            ['banco' => 'BNC', 'titular' => 'L.S. CASHEA', 'color_tc' => '#ffff00'], // Amarillo
+            ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JENU', 'color_tc' => '#0070c0'], // Azul
+            ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'color_tc' => '#f4b183'], // Naranja
             ['banco' => 'BBVA', 'titular' => 'LNACEH', 'color_tc' => null],
             ['banco' => 'BANCARIBE', 'titular' => 'GRUPO JRZ', 'color_tc' => null],
-            ['banco' => 'BANCARIBE', 'titular' => 'JOSE JEREZ', 'color_tc' => '#ff0000'], 
+            ['banco' => 'BANCARIBE', 'titular' => 'JOSE JEREZ', 'color_tc' => '#ff0000'], // Rojo
             ['banco' => 'BANCAMIGA', 'titular' => 'DORAL', 'color_tc' => null],
             ['banco' => 'MERCANTIL', 'titular' => 'LNACEH', 'color_tc' => null],
             ['banco' => 'MERCANTIL', 'titular' => 'DORAL', 'color_tc' => null],
@@ -45,7 +45,7 @@ class CuentasBancariasSeeder extends Seeder
             ['banco' => 'BANCARIBE', 'titular' => 'DORAL', 'color_tc' => null],
             ['banco' => 'BANCAMIGA', 'titular' => 'JOSE JEREZ', 'color_tc' => null],
             ['banco' => 'BBVA', 'titular' => 'JOSE JEREZ', 'color_tc' => null],
-            ['banco' => 'BNC', 'titular' => 'DORAL CASHEA', 'color_tc' => '#ffff00'], 
+            ['banco' => 'BNC', 'titular' => 'DORAL CASHEA', 'color_tc' => '#ffff00'], // Amarillo
             ['banco' => 'BNC', 'titular' => 'JOSE JEREZ', 'color_tc' => null],
             ['banco' => 'BNC', 'titular' => 'EURONISSI', 'color_tc' => null],
             ['banco' => 'BANCARIBE', 'titular' => 'EURONISSI', 'color_tc' => null],

@@ -3,44 +3,78 @@
 @section('content')
 
 <style>
-    .tc-cell {
-        width: 30px;
-        text-align: center;
-        border-right: 1px solid #ccc;
+    /* Estilos copiados exactamente del Excel */
+    .excel-table {
+        border-collapse: collapse;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        background-color: white;
+        border: 2px solid black;
     }
-    .editable-input {
+    .excel-table th, .excel-table td {
+        border: 1px solid black;
+        padding: 4px;
+    }
+    .excel-table thead th {
+        font-weight: bold;
+        text-align: center;
+    }
+    .excel-header-row {
+        background-color: #d9e1f2 !important;
+        text-align: center;
+        font-weight: bold;
+    }
+    .excel-header-col {
+        background-color: #d9e1f2 !important;
+        font-weight: bold;
+    }
+    .tasa-header {
+        background-color: #fce4d6 !important;
+        font-weight: bold;
+        text-align: center;
+    }
+    .tasa-value {
+        background-color: #fce4d6 !important;
+        font-weight: bold;
+    }
+    .excel-input {
         width: 100%;
         border: none;
         background: transparent;
         text-align: right;
         outline: none;
     }
-    .editable-input:focus {
+    .excel-input:focus {
         background-color: #e9ecef;
     }
-    .resumen-input {
+    .tc-cell {
+        width: 25px;
+        text-align: center;
+        border: 1px solid black;
+    }
+    
+    /* Resumen derecho */
+    .resumen-table {
+        border-collapse: collapse;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        background-color: white;
+        border: 2px solid black;
         width: 100%;
-        border: 1px solid #ccc;
-        text-align: right;
-        padding: 4px;
-        border-radius: 4px;
+        margin-bottom: 20px;
     }
-    .disponibilidad-table th {
+    .resumen-table th, .resumen-table td {
+        border: 1px solid black;
+        padding: 4px;
+    }
+    .resumen-header {
         background-color: #d9e1f2 !important;
-        text-align: center;
-        border: 1px solid #000;
         font-weight: bold;
-        font-size: 0.85rem;
-    }
-    .disponibilidad-table td {
-        border: 1px solid #000;
-        padding: 4px;
-        font-size: 0.85rem;
-    }
-    .legend-box {
-        border: 1px solid #000;
         text-align: center;
-        font-size: 0.85rem;
+    }
+    .resumen-value {
+        background-color: #c6e0b4 !important;
+        text-align: right;
         font-weight: bold;
     }
 </style>
@@ -57,57 +91,57 @@
         <!-- TABLA DISPONIBILIDAD (IZQUIERDA) -->
         <div class="col-xl-7 col-lg-8 mb-4">
             <div class="table-responsive">
-                <table class="table table-sm disponibilidad-table" style="background-color: white;">
+                <table class="excel-table w-100">
                     <thead>
                         <tr>
-                            <th colspan="5" style="font-size:1rem;">DISPONIBILIDAD EN TIEMPO REAL</th>
-                            <th style="background-color:#fce4d6 !important;">TASA BCV USD</th>
-                            <th style="background-color:#fce4d6 !important;">
-                                <input type="number" step="0.01" class="editable-input text-center fw-bold" style="background:transparent;width:100%;" 
+                            <th colspan="5" class="excel-header-row" style="border: 2px solid black; border-right: 1px solid black;">DISPONIBILIDAD EN TIEMPO REAL</th>
+                            <th class="tasa-header" style="border-top: 2px solid black;">TASA BCV USD</th>
+                            <th class="tasa-value" style="border-top: 2px solid black; border-right: 2px solid black;">
+                                <input type="number" step="0.01" class="excel-input text-center fw-bold" 
                                     value="{{ $resumen->tasa_bcv_usd }}" data-type="resumen" data-id="{{ $resumen->id }}" data-field="tasa_bcv_usd">
                             </th>
                         </tr>
-                        <tr>
-                            <th style="width:20px;">TC</th>
+                        <tr class="excel-header-row" style="border-bottom: 2px solid black;">
+                            <th style="width: 25px; border-left: 2px solid black;">TC</th>
                             <th>BANCO</th>
                             <th>TITULAR</th>
                             <th>BS TC</th>
                             <th>BS DISPONIBLES</th>
                             <th>USD TC</th>
-                            <th>USD DISP.</th>
+                            <th style="border-right: 2px solid black;">USD DISP.</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($cuentasBancarias as $cb)
                         <tr>
-                            <td style="background-color: {{ $cb->color_tc ?: '#fff' }}; width: 20px;"></td>
+                            <td class="tc-cell" style="background-color: {{ $cb->color_tc ?: '#fff' }}; border-left: 2px solid black;"></td>
                             <td>{{ $cb->banco }}</td>
                             <td>{{ $cb->titular }}</td>
                             <td>
-                                Bs. <input type="number" step="0.01" class="editable-input" style="width:calc(100% - 25px);"
+                                Bs. <input type="number" step="0.01" class="excel-input" style="width:calc(100% - 30px);"
                                     value="{{ $cb->bs_tc }}" data-type="cuenta" data-id="{{ $cb->id }}" data-field="bs_tc">
                             </td>
                             <td>
-                                Bs. <input type="number" step="0.01" class="editable-input" style="width:calc(100% - 25px);"
+                                Bs. <input type="number" step="0.01" class="excel-input" style="width:calc(100% - 30px);"
                                     value="{{ $cb->bs_disponibles }}" data-type="cuenta" data-id="{{ $cb->id }}" data-field="bs_disponibles">
                             </td>
                             <td>
-                                $ <input type="number" step="0.01" class="editable-input" style="width:calc(100% - 20px);"
+                                $ <input type="number" step="0.01" class="excel-input" style="width:calc(100% - 20px);"
                                     value="{{ $cb->usd_tc }}" data-type="cuenta" data-id="{{ $cb->id }}" data-field="usd_tc">
                             </td>
-                            <td style="{{ $loop->last ? 'background-color:#c6e0b4;' : '' }}">
-                                $ <input type="number" step="0.01" class="editable-input" style="width:calc(100% - 20px);"
+                            <td style="border-right: 2px solid black; {{ $loop->last ? 'background-color:#c6e0b4;' : '' }}">
+                                $ <input type="number" step="0.01" class="excel-input" style="width:calc(100% - 20px);"
                                     value="{{ $cb->usd_disp }}" data-type="cuenta" data-id="{{ $cb->id }}" data-field="usd_disp">
                             </td>
                         </tr>
                         @endforeach
                         <!-- LAST ROW SUMMARY -->
-                        <tr>
-                            <td colspan="3" class="text-end fw-bold" style="background-color:#bdd7ee;">Bs.</td>
-                            <td style="background-color:#bdd7ee;" class="fw-bold text-end">Bs. <span id="sum_bs_tc">0.00</span></td>
-                            <td style="background-color:#bdd7ee;" class="fw-bold text-end">Bs. <span id="sum_bs_disp">0.00</span></td>
-                            <td style="background-color:#c6e0b4;" class="fw-bold text-end">$ <span id="sum_usd_tc">0.00</span></td>
-                            <td style="background-color:#c6e0b4;" class="fw-bold text-end">$ <span id="sum_usd_disp">0.00</span></td>
+                        <tr style="border-bottom: 2px solid black;">
+                            <td colspan="3" class="text-end fw-bold" style="background-color:#bdd7ee; border-left: 2px solid black; border-bottom: 2px solid black;">Bs.</td>
+                            <td style="background-color:#bdd7ee; border-bottom: 2px solid black;" class="fw-bold text-end">Bs. <span id="sum_bs_tc">0.00</span></td>
+                            <td style="background-color:#bdd7ee; border-bottom: 2px solid black;" class="fw-bold text-end">Bs. <span id="sum_bs_disp">0.00</span></td>
+                            <td style="background-color:#c6e0b4; border-bottom: 2px solid black;" class="fw-bold text-end">$ <span id="sum_usd_tc">0.00</span></td>
+                            <td style="background-color:#c6e0b4; border-right: 2px solid black; border-bottom: 2px solid black;" class="fw-bold text-end">$ <span id="sum_usd_disp">0.00</span></td>
                         </tr>
                     </tbody>
                 </table>
@@ -115,79 +149,79 @@
         </div>
 
         <!-- PANELES DERECHA (LEYENDA Y RESUMEN) -->
-        <div class="col-xl-5 col-lg-4 mb-4">
+        <div class="col-xl-3 col-lg-4 mb-4">
             
-            <table class="table table-sm table-bordered mb-4" style="background-color: white; width: 100%;">
+            <table class="resumen-table mb-4">
                 <thead>
-                    <tr><th colspan="2" class="text-center" style="background-color:#d9e1f2;">TIPO DE CUENTA</th></tr>
+                    <tr><th colspan="2" class="resumen-header" style="border: 2px solid black;">TIPO DE CUENTA</th></tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="fw-bold text-center">P.V/TRANSF/P.M</td>
-                        <td style="background-color:#f4b183; width:30px;"></td>
+                        <td class="fw-bold text-center" style="border-left: 2px solid black;">P.V/TRANSF/P.M</td>
+                        <td style="background-color:#f4b183; width:40px; border-right: 2px solid black;"></td>
                     </tr>
                     <tr>
-                        <td class="fw-bold text-center">TERCEROS P.V/P.M</td>
-                        <td style="background-color:#ff0000;"></td>
+                        <td class="fw-bold text-center" style="border-left: 2px solid black;">TERCEROS P.V/P.M</td>
+                        <td style="background-color:#ff0000; border-right: 2px solid black;"></td>
                     </tr>
                     <tr>
-                        <td class="fw-bold text-center">CASHEA</td>
-                        <td style="background-color:#ffff00;"></td>
+                        <td class="fw-bold text-center" style="border-left: 2px solid black;">CASHEA</td>
+                        <td style="background-color:#ffff00; border-right: 2px solid black;"></td>
                     </tr>
                     <tr>
-                        <td class="fw-bold text-center">AVANCES</td>
-                        <td style="background-color:#0070c0;"></td>
+                        <td class="fw-bold text-center" style="border-left: 2px solid black;">AVANCES</td>
+                        <td style="background-color:#0070c0; border-right: 2px solid black;"></td>
                     </tr>
                     <tr>
-                        <td class="fw-bold text-center">B/MOVIMIENTO</td>
-                        <td style="background-color:#fff;"></td>
+                        <td class="fw-bold text-center" style="border-left: 2px solid black; border-bottom: 2px solid black;">B/MOVIMIENTO</td>
+                        <td style="background-color:#fff; border-right: 2px solid black; border-bottom: 2px solid black;"></td>
                     </tr>
                 </tbody>
             </table>
 
-            <table class="table table-sm table-bordered" style="background-color: white; width: 100%;">
+            <table class="resumen-table">
                 <tbody>
                     <tr>
-                        <td class="fw-bold text-center" style="background-color:#d9e1f2; padding:10px;">SALDO INICIAL</td>
+                        <td class="resumen-header" style="border: 2px solid black; padding: 12px;">SALDO INICIAL</td>
                     </tr>
                     <tr>
-                        <td style="background-color:#c6e0b4; padding: 0;">
-                            <input type="number" step="0.01" class="resumen-input" style="background:transparent; border:none; font-weight:bold; height:100%;"
+                        <td class="resumen-value" style="border-left: 2px solid black; border-right: 2px solid black; padding: 6px;">
+                            $<input type="number" step="0.01" class="excel-input text-end" style="width:calc(100% - 20px); font-weight:bold;"
                                 value="{{ $resumen->saldo_inicial }}" data-type="resumen" data-id="{{ $resumen->id }}" data-field="saldo_inicial">
                         </td>
                     </tr>
                     <tr>
-                        <td class="fw-bold text-center" style="background-color:#d9e1f2; padding:10px;">TOTAL SALIDAS BS</td>
+                        <td class="resumen-header" style="border-left: 2px solid black; border-right: 2px solid black; padding: 12px;">TOTAL SALIDAS BS</td>
                     </tr>
                     <tr>
-                        <td style="background-color:#c6e0b4; padding:10px;" class="text-end fw-bold">
+                        <td class="resumen-value" style="border-left: 2px solid black; border-right: 2px solid black; padding: 6px;">
                             ${{ number_format($total_salidas_bs, 2) }}
                         </td>
                     </tr>
                     <tr>
-                        <td class="fw-bold text-center" style="background-color:#d9e1f2; padding:10px;">QUEDA DEL DIA ANTERIOR</td>
+                        <td class="resumen-header" style="border-left: 2px solid black; border-right: 2px solid black; padding: 12px;">QUEDA DEL DIA ANTERIOR</td>
                     </tr>
                     <tr>
-                        <td style="background-color:#c6e0b4; padding: 0;">
-                            <input type="number" step="0.01" class="resumen-input" style="background:transparent; border:none; font-weight:bold; height:100%;"
+                        <td class="resumen-value" style="border-left: 2px solid black; border-right: 2px solid black; padding: 6px;">
+                            $<input type="number" step="0.01" class="excel-input text-end" style="width:calc(100% - 20px); font-weight:bold;"
                                 value="{{ $resumen->queda_dia_anterior }}" data-type="resumen" data-id="{{ $resumen->id }}" data-field="queda_dia_anterior">
                         </td>
                     </tr>
                     <tr>
-                        <td class="fw-bold text-center text-danger" style="background-color:#d9e1f2; padding:10px;">TOTAL DIFERENCIAL CAMBIARIO</td>
+                        <td class="resumen-header text-danger" style="border-left: 2px solid black; border-right: 2px solid black; padding: 12px;">TOTAL DIFERENCIAL CAMBIARIO</td>
                     </tr>
                     <tr>
-                        <td style="background-color:#c6e0b4; padding:10px;" class="text-end fw-bold">
+                        <td class="resumen-value" style="border-left: 2px solid black; border-right: 2px solid black; padding: 6px;">
                             ${{ number_format($total_diferencial_cambiario, 2) }}
                         </td>
                     </tr>
                     <tr>
-                        <td class="fw-bold text-center text-danger" style="background-color:#d9e1f2; padding:10px;">% TOTAL DIFERENCIAL CAMBIARIO</td>
+                        <td class="resumen-header text-danger" style="border-left: 2px solid black; border-right: 2px solid black; padding: 12px;">% TOTAL DIFERENCIAL CAMBIARIO</td>
                     </tr>
                     <tr>
-                        <td style="background-color:#c6e0b4; padding: 0;">
-                            <input type="number" step="0.01" class="resumen-input" style="background:transparent; border:none; font-weight:bold; height:100%;"
-                                value="{{ $resumen->porcentaje_total_diferencial }}" data-type="resumen" data-id="{{ $resumen->id }}" data-field="porcentaje_total_diferencial">
+                        <td class="resumen-value" style="border: 2px solid black; border-top: 1px solid black; padding: 6px;">
+                            <input type="number" step="0.01" class="excel-input text-center" style="width:calc(100% - 20px); font-weight:bold;"
+                                value="{{ $resumen->porcentaje_total_diferencial }}" data-type="resumen" data-id="{{ $resumen->id }}" data-field="porcentaje_total_diferencial">%
                         </td>
                     </tr>
                 </tbody>
@@ -372,7 +406,7 @@ document.addEventListener('DOMContentLoaded', function() {
     tasaInput.addEventListener('input', calcularBs);
 
     // AJAX Guardado en Vivo
-    const editables = document.querySelectorAll('.editable-input, .resumen-input');
+    const editables = document.querySelectorAll('.excel-input');
     
     function updateSums() {
         let bsTc = 0, bsDisp = 0, usdTc = 0, usdDisp = 0;
@@ -381,6 +415,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('input[data-field="usd_tc"]').forEach(i => usdTc += parseFloat(i.value)||0);
         document.querySelectorAll('input[data-field="usd_disp"]').forEach(i => usdDisp += parseFloat(i.value)||0);
         
+        // Sumar campos fijos si es necesario, o solo mostrarlos
         document.getElementById('sum_bs_tc').textContent = bsTc.toFixed(2);
         document.getElementById('sum_bs_disp').textContent = bsDisp.toFixed(2);
         document.getElementById('sum_usd_tc').textContent = usdTc.toFixed(2);
