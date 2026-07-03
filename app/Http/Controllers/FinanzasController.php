@@ -100,9 +100,32 @@ class FinanzasController extends Controller
         $movimientos = FlujoCaja::orderBy('fecha', 'desc')->get();
         $egresos_realizados = $movimientos->where('categoria_egreso', 'egreso_realizado');
         $otros_egresos = $movimientos->where('categoria_egreso', 'otros_egresos');
-        $cuentas = $this->getCuentas();
         
-        return view('finanzas.flujo_caja', compact('movimientos', 'egresos_realizados', 'otros_egresos', 'cuentas'));
+        $cuentas = $this->getCuentas(); // Mantenemos para el dropdown si es necesario o usamos las nuevas
+        $cuentasBancarias = \App\Models\CuentaBancaria::orderBy('orden')->get();
+        $resumen = \App\Models\FinanzasResumen::firstOrCreate(
+            ['fecha' => date('Y-m-d')],
+            [
+                'tasa_bcv_usd' => 652.97,
+                'saldo_inicial' => 0,
+                'queda_dia_anterior' => 0,
+                'porcentaje_total_diferencial' => 0
+            ]
+        );
+
+        $total_salidas_bs = $movimientos->sum('monto_bs');
+        $total_diferencial_cambiario = $movimientos->sum('diferencial_cambiario');
+        
+        return view('finanzas.flujo_caja', compact(
+            'movimientos', 
+            'egresos_realizados', 
+            'otros_egresos', 
+            'cuentas',
+            'cuentasBancarias',
+            'resumen',
+            'total_salidas_bs',
+            'total_diferencial_cambiario'
+        ));
     }
 
     public function storeEgreso(Request $request)
@@ -145,5 +168,31 @@ class FinanzasController extends Controller
     public function conciliaciones() {
         $conciliaciones = ConciliacionBancaria::orderBy('fecha_inicio', 'desc')->get();
         return view('finanzas.conciliaciones', compact('conciliaciones'));
+    }
+
+    public function updateCuenta(Request $request, $id) {
+        $cuenta = \App\Models\CuentaBancaria::findOrFail($id);
+        $field = $request->input('field');
+        $value = $request->input('value');
+        
+        if (in_array($field, ['bs_tc', 'bs_disponibles', 'usd_tc', 'usd_disp'])) {
+            $cuenta->$field = $value ?: 0;
+            $cuenta->save();
+            return response()->json(['success' => true]);
+        }
+        return response()->json(['success' => false, 'message' => 'Invalid field'], 400);
+    }
+
+    public function updateResumen(Request $request, $id) {
+        $resumen = \App\Models\FinanzasResumen::findOrFail($id);
+        $field = $request->input('field');
+        $value = $request->input('value');
+        
+        if (in_array($field, ['tasa_bcv_usd', 'saldo_inicial', 'queda_dia_anterior', 'porcentaje_total_diferencial'])) {
+            $resumen->$field = $value ?: 0;
+            $resumen->save();
+            return response()->json(['success' => true]);
+        }
+        return response()->json(['success' => false, 'message' => 'Invalid field'], 400);
     }
 }
