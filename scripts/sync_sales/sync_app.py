@@ -852,7 +852,8 @@ class SyncApp:
                         try:
                             # Aseguramos el commit previo por si acaso, o usamos un savepoint
                             wc.execute("SAVEPOINT auto_reg_sp;")
-                            nombre_insercion = nombre_local if nombre_local else f"[Auto] {codigo}"
+                            nombre_insercion = str(nombre_local).strip() if nombre_local and str(nombre_local).strip() else f"[Auto] {codigo}"
+                            self.log(f"[Snapshot Auto-Registro] Producto '{codigo}' no existe en la web pero tiene stock ({existencia}). Subiéndolo como '{nombre_insercion}'...")
                             wc.execute(
                                 """
                                 INSERT INTO inventario_v2.productos (codigo, nombre, categoria, subcategoria, proveedor, precio_unidad, precio_mayor, activo, created_at, updated_at)
