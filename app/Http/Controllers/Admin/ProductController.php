@@ -111,6 +111,7 @@ class ProductController extends Controller
                 DB::connection('pgsql')->table('inventario_v2.stock_actual')->where('producto_id', $id)->delete();
                 DB::connection('pgsql')->table('inventario_v2.ventas_historicas')->where('producto_id', $id)->delete();
                 DB::connection('pgsql')->table('inventario_v2.historial_ventas_mensuales')->where('producto_id', $id)->delete();
+                DB::connection('pgsql')->table('movimientos')->where('producto_id', $id)->delete();
                 
                 // Now delete the product
                 $producto->delete();
