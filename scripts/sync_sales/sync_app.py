@@ -69,6 +69,7 @@ class SyncApp:
             # Arranque oculto y silencioso
             self.root.after(100, self.hide_window)
         else:
+            self.root.protocol('WM_DELETE_WINDOW', self.ask_quit_password)
             if "--autostart" in sys.argv:
                 self.root.iconify()
 
@@ -99,9 +100,29 @@ class SyncApp:
         self.root.after(0, self.root.deiconify)
 
     def quit_window(self, icon, item):
-        self.icon.stop()
-        self.root.after(0, self.root.destroy)
-        os._exit(0)
+        self.root.after(0, self.ask_quit_password)
+
+    def ask_quit_password(self):
+        from tkinter import simpledialog
+        was_hidden = self.root.state() == 'withdrawn'
+        if was_hidden:
+            self.root.deiconify()
+        
+        pwd = simpledialog.askstring("Seguridad", "Ingrese el código de administrador para salir:", parent=self.root, show='*')
+        
+        if pwd == "Jrz2026":
+            if getattr(self, 'icon', None):
+                try:
+                    self.icon.stop()
+                except Exception:
+                    pass
+            self.root.destroy()
+            os._exit(0)
+        else:
+            if pwd is not None:
+                messagebox.showerror("Error", "Código incorrecto.", parent=self.root)
+            if was_hidden:
+                self.root.withdraw()
 
     def load_config(self):
         if not os.path.exists(CONFIG_PATH):

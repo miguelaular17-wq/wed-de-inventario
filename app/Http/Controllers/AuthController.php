@@ -33,6 +33,10 @@ class AuthController extends Controller
 
     public function login(Request $request): RedirectResponse
     {
+        if ($request->has('email')) {
+            $request->merge(['email' => strtolower($request->input('email'))]);
+        }
+
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required'],
@@ -61,6 +65,10 @@ class AuthController extends Controller
     public function register(Request $request): RedirectResponse
     {
         $sedes = config('inventario.sedes_locales');
+
+        if ($request->has('email')) {
+            $request->merge(['email' => strtolower($request->input('email'))]);
+        }
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],

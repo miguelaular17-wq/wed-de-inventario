@@ -146,13 +146,24 @@ Route::middleware('auth')->group(function () {
 // Finanzas routes
 Route::middleware(['auth', 'role:admin,finanzas'])->prefix('finanzas')->group(function () {
     Route::get('/flujo-caja', [FinanzasController::class, 'flujoCaja'])->name('finanzas.flujo_caja');
+    Route::post('/flujo-caja/reset', [FinanzasController::class, 'resetDaily'])->name('finanzas.reset_daily');
     Route::post('/flujo-caja/egreso', [FinanzasController::class, 'storeEgreso'])->name('finanzas.store_egreso');
+    Route::get('/flujo-caja/reporte-diario', [FinanzasController::class, 'reporteDiarioCaja'])->name('finanzas.reporte_diario_caja');
     Route::post('/flujo-caja/cuenta/{id}', [FinanzasController::class, 'updateCuenta'])->name('finanzas.update_cuenta');
     Route::post('/flujo-caja/resumen/{id}', [FinanzasController::class, 'updateResumen'])->name('finanzas.update_resumen');
+    Route::post('/flujo-caja/planificacion/{id}', [FinanzasController::class, 'updatePlanificacion'])->name('finanzas.update_planificacion');
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
+    Route::post('/conciliaciones/upload', [FinanzasController::class, 'uploadConciliacion'])->name('finanzas.conciliaciones.upload');
+    Route::post('/conciliaciones/process', [FinanzasController::class, 'processConciliacion'])->name('finanzas.conciliaciones.process');
+    Route::post('/conciliaciones/add-missing', [FinanzasController::class, 'addMissingConciliacion'])->name('finanzas.conciliaciones.add_missing');
+    Route::post('/conciliaciones/ignore', [FinanzasController::class, 'ignoreConciliacion'])->name('finanzas.conciliaciones.ignore');
+    Route::post('/conciliaciones/clear', [FinanzasController::class, 'clearConciliacion'])->name('finanzas.conciliaciones.clear');
 });
 
 // Cobranza routes
 Route::middleware(['auth', 'role:admin,cobranza'])->prefix('cobranza')->group(function () {
     Route::get('/', [CobranzaController::class, 'index'])->name('cobranza.index');
+    Route::post('/importar', [CobranzaController::class, 'importarExcel'])->name('cobranza.importar');
+    Route::post('/limpiar', [CobranzaController::class, 'limpiarClientes'])->name('cobranza.limpiar');
 });
+Route::get('/finanzas/reporte-consolidado', [App\Http\Controllers\FinanzasController::class, 'reporteConsolidado'])->name('finanzas.reporte_consolidado');

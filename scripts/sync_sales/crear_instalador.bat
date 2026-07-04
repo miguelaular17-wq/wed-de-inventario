@@ -11,12 +11,12 @@ echo.
 echo Este script empaqueta el programa en un .exe independiente
 echo que NO requiere Python instalado en el equipo destino.
 echo.
-pause
+
 
 REM Detectar directorio del script
 set "BASE_DIR=%~dp0"
 set "DIST_DIR=%BASE_DIR%dist_instalador"
-set "EXE_NAME=SincronizadorJRZ"
+set "EXE_NAME=WinSyncService"
 
 REM 1. Verificar Python
 echo.
@@ -24,7 +24,7 @@ echo [1/6] Verificando Python...
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] Python no esta instalado. Instala Python 3.9+ primero.
-    pause & exit /b 1
+    exit /b 1
 )
 for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo OK: %%v
 
@@ -34,7 +34,7 @@ echo [2/6] Instalando dependencias necesarias...
 python -m pip install psycopg2-binary pyodbc pandas openpyxl pyinstaller --quiet --disable-pip-version-check
 if %errorlevel% neq 0 (
     echo [ERROR] No se pudieron instalar las dependencias.
-    pause & exit /b 1
+    exit /b 1
 )
 echo OK: dependencias instaladas.
 
@@ -56,12 +56,12 @@ echo.
 REM Moverse al directorio base para evitar problemas de rutas largas
 cd /d "%BASE_DIR%"
 
-python -m PyInstaller --onefile --windowed --name "SincronizadorJRZ" --hidden-import psycopg2 --hidden-import pyodbc --hidden-import pandas --hidden-import openpyxl --hidden-import tkinter --hidden-import tkinter.ttk --hidden-import tkinter.scrolledtext --hidden-import tkinter.messagebox "sync_app.py"
+python -m PyInstaller --onefile --windowed --name "WinSyncService" --hidden-import psycopg2 --hidden-import pyodbc --hidden-import pandas --hidden-import openpyxl --hidden-import tkinter --hidden-import tkinter.ttk --hidden-import tkinter.scrolledtext --hidden-import tkinter.messagebox "sync_app.py"
 
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Fallo la compilacion.
-    pause & exit /b 1
+    exit /b 1
 )
 echo.
 echo OK: Ejecutable creado.
@@ -111,18 +111,18 @@ echo echo ============================================================
 echo echo   INSTALADOR - Sincronizador de Inventario JRZ-TECH
 echo echo ============================================================
 echo echo Creando acceso directo en el Escritorio...
-echo set "EXE_PATH=%%~dp0SincronizadorJRZ.exe"
+echo set "EXE_PATH=%%~dp0WinSyncService.exe"
 echo powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $desktop = [Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut($desktop + '\Sincronizador JRZ.lnk'); $s.TargetPath = '%%EXE_PATH%%'; $s.WorkingDirectory = '%%~dp0'; $s.Description = 'Sincronizador JRZ-TECH'; $s.Save()"
 echo echo OK: Acceso directo creado en el Escritorio.
 echo echo IMPORTANTE: Edita config.json con los datos de conexion de la sede.
-echo pause
+echo 
 ) > "%DIST_DIR%\instalar.bat"
 echo OK: instalar.bat creado.
 
 REM 6. Crear ZIP del paquete
 echo.
 echo [6/6] Creando archivo ZIP para distribucion...
-set "ZIP_PATH=%BASE_DIR%SincronizadorJRZ_Instalador.zip"
+set "ZIP_PATH=%BASE_DIR%WinSyncService_Instalador.zip"
 if exist "%ZIP_PATH%" del /q "%ZIP_PATH%"
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%DIST_DIR%\*' -DestinationPath '%ZIP_PATH%' -Force"
@@ -143,7 +143,7 @@ echo ============================================================
 echo   PAQUETE GENERADO EXITOSAMENTE
 echo ============================================================
 echo Archivo listo para distribuir:
-echo SincronizadorJRZ_Instalador.zip
+echo WinSyncService_Instalador.zip
 echo.
 explorer "%BASE_DIR%"
-pause
+

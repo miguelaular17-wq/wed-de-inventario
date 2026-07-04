@@ -96,25 +96,46 @@ class FinanzasController extends Controller
         ];
     }
 
+    private function getTasaBcvDelDia() {
+        try {
+            $client = new \GuzzleHttp\Client(['timeout' => 5]);
+            $response = $client->get('https://ve.dolarapi.com/v1/dolares/oficial');
+            $data = json_decode($response->getBody(), true);
+            if (isset($data['promedio']) && $data['promedio'] > 0) {
+                return round($data['promedio'], 2);
+            }
+        } catch (\Exception $e) {
+            // Silently fallback if api fails
+        }
+        
+        $ultimo = \App\Models\FinanzasResumen::orderBy('fecha', 'desc')->first();
+        return $ultimo ? $ultimo->tasa_bcv_usd : 1;
+    }
+
     public function flujoCaja() {
-        $movimientos = FlujoCaja::orderBy('fecha', 'desc')->get();
+        $movimientos = FlujoCaja::where('fecha', date('Y-m-d'))->orderBy('fecha', 'desc')->get();
         $egresos_realizados = $movimientos->where('categoria_egreso', 'egreso_realizado');
         $otros_egresos = $movimientos->where('categoria_egreso', 'otros_egresos');
         
         $cuentas = $this->getCuentas(); // Mantenemos para el dropdown si es necesario o usamos las nuevas
-        $cuentasBancarias = \App\Models\CuentaBancaria::orderBy('orden')->get();
+        $cuentasBancarias = \App\Models\CuentaBancaria::where('mostrar_en_principal', true)->orderBy('orden')->get();
         $resumen = \App\Models\FinanzasResumen::firstOrCreate(
             ['fecha' => date('Y-m-d')],
             [
-                'tasa_bcv_usd' => 652.97,
+                'tasa_bcv_usd' => $this->getTasaBcvDelDia(),
                 'saldo_inicial' => 0,
                 'queda_dia_anterior' => 0,
                 'porcentaje_total_diferencial' => 0
             ]
         );
 
-        $total_salidas_bs = $movimientos->sum('monto_bs');
-        $total_diferencial_cambiario = $movimientos->sum('diferencial_cambiario');
+        $total_salidas_bs = $egresos_realizados->sum('monto_bs') 
+                          + $egresos_realizados->sum('comision') 
+                          + $otros_egresos->sum('monto_bs') 
+                          + $otros_egresos->sum('comision');
+        
+        $total_diferencial_cambiario = $egresos_realizados->sum('diferencial_cambiario') 
+                                     + $otros_egresos->sum('diferencial_cambiario');
         
         return view('finanzas.flujo_caja', compact(
             'movimientos', 
@@ -133,6 +154,7 @@ class FinanzasController extends Controller
         $data = $request->validate([
             'categoria_egreso' => 'required|in:egreso_realizado,otros_egresos',
             'banco_titular' => 'required|string',
+            'referencia' => 'nullable|string|max:255',
             'monto_usd' => 'nullable|numeric',
             'tasa_cambio' => 'nullable|numeric',
             'diferencial_cambiario' => 'nullable|numeric',
@@ -147,6 +169,17 @@ class FinanzasController extends Controller
         $titular = $cuentaInfo[1] ?? null;
         $categoria_cuenta = $cuentaInfo[2] ?? null;
 
+        $resumen = \App\Models\FinanzasResumen::where('fecha', date('Y-m-d'))->first();
+        $tasa_bcv = $resumen ? ($resumen->tasa_bcv_usd ?: 1) : 1;
+        
+        $monto_usd = $data['monto_usd'] ?: 0;
+        $monto_bs = $data['monto_bs'] ?: 0;
+        
+        $diferencial_cambiario = 0;
+        if ($tasa_bcv > 0) {
+            $diferencial_cambiario = (($monto_usd * $tasa_bcv) - $monto_bs) / $tasa_bcv;
+        }
+
         FlujoCaja::create([
             'fecha' => $data['fecha'],
             'tipo' => 'egreso',
@@ -154,9 +187,10 @@ class FinanzasController extends Controller
             'banco' => $banco,
             'titular' => $titular,
             'categoria_cuenta' => $categoria_cuenta,
+            'referencia' => $data['referencia'],
             'monto_usd' => $data['monto_usd'],
             'tasa_cambio' => $data['tasa_cambio'],
-            'diferencial_cambiario' => $data['diferencial_cambiario'],
+            'diferencial_cambiario' => $diferencial_cambiario,
             'monto_bs' => $data['monto_bs'],
             'comision' => $data['comision'],
             'motivo' => $data['motivo'],
@@ -166,8 +200,133 @@ class FinanzasController extends Controller
     }
 
     public function conciliaciones() {
-        $conciliaciones = ConciliacionBancaria::orderBy('fecha_inicio', 'desc')->get();
-        return view('finanzas.conciliaciones', compact('conciliaciones'));
+        // Obtenemos las lineas cargadas
+        $lineas = \App\Models\ConciliacionLinea::orderBy('fecha', 'asc')->get();
+        
+        // Ejecutamos el motor de emparejamiento automáticamente
+        foreach ($lineas as $linea) {
+            if ($linea->estado == 'pendiente' && !$linea->flujo_caja_id) {
+                // Buscar match en FlujoCaja: Misma fecha, mismo monto, y referencia (si aplica)
+                $query = \App\Models\FlujoCaja::where('fecha', $linea->fecha)
+                                              ->where('monto', $linea->monto)
+                                              ->orWhere('monto_usd', $linea->monto) // a veces puede estar en USD
+                                              ->orWhere('monto_bs', $linea->monto);
+
+                // Si se proporcionó referencia, intentar match exacto
+                if ($linea->referencia) {
+                    $query->where('referencia', 'like', '%' . $linea->referencia . '%');
+                }
+
+                $match = $query->first();
+
+                if ($match) {
+                    $linea->estado = 'conciliado';
+                    $linea->flujo_caja_id = $match->id;
+                    $linea->save();
+                }
+            }
+        }
+
+        // Dividir para la vista
+        $conciliados = $lineas->where('estado', 'conciliado');
+        $faltan_sistema = $lineas->where('estado', 'pendiente');
+        
+        // Obtener movimientos de FlujoCaja de los últimos 30 días que NO están conciliados
+        $conciliados_ids = $conciliados->pluck('flujo_caja_id')->filter()->toArray();
+        $faltan_banco = \App\Models\FlujoCaja::whereNotIn('id', $conciliados_ids)
+            ->where('fecha', '>=', now()->subDays(30)->format('Y-m-d'))
+            ->orderBy('fecha', 'asc')
+            ->get();
+
+        $cuentasBancarias = \App\Models\CuentaBancaria::all();
+
+        return view('finanzas.conciliaciones', compact('lineas', 'conciliados', 'faltan_sistema', 'faltan_banco', 'cuentasBancarias'));
+    }
+
+    public function uploadConciliacion(Request $request) {
+        $request->validate([
+            'file' => 'required|mimes:csv,txt',
+            'col_fecha' => 'required|integer',
+            'col_descripcion' => 'required|integer',
+            'col_referencia' => 'required|integer',
+            'col_monto' => 'required|integer',
+        ]);
+
+        $file = $request->file('file');
+        $handle = fopen($file->getRealPath(), "r");
+        
+        $col_fecha = $request->col_fecha;
+        $col_descripcion = $request->col_descripcion;
+        $col_referencia = $request->col_referencia;
+        $col_monto = $request->col_monto;
+
+        $header_skipped = false;
+
+        while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
+            // Ignorar encabezados si la primera línea no parece una fecha o monto válido
+            if (!$header_skipped) {
+                $header_skipped = true;
+                if (!strtotime($data[$col_fecha]) && !is_numeric($data[$col_monto])) {
+                    continue; // Skip header
+                }
+            }
+
+            try {
+                // Limpiar monto (quitar símbolos de moneda, reemplazar comas por puntos si aplica)
+                $monto_raw = $data[$col_monto];
+                $monto_clean = str_replace(['$', 'Bs', ' ', ','], ['', '', '', '.'], $monto_raw);
+
+                // Normalizar fecha (asume Y-m-d o d/m/Y)
+                $fecha_raw = $data[$col_fecha];
+                $fecha_carbon = \Carbon\Carbon::parse(str_replace('/', '-', $fecha_raw));
+
+                \App\Models\ConciliacionLinea::create([
+                    'fecha' => $fecha_carbon->format('Y-m-d'),
+                    'descripcion' => $data[$col_descripcion] ?? '',
+                    'referencia' => $data[$col_referencia] ?? null,
+                    'monto' => (float)$monto_clean,
+                    'estado' => 'pendiente'
+                ]);
+            } catch (\Exception $e) {
+                continue; // Ignorar líneas inválidas
+            }
+        }
+        fclose($handle);
+
+        return redirect()->route('finanzas.conciliaciones')->with('success', 'Archivo CSV cargado y procesado. El sistema ha buscado coincidencias automáticamente.');
+    }
+
+    public function addMissingConciliacion(Request $request) {
+        $linea = \App\Models\ConciliacionLinea::findOrFail($request->linea_id);
+        
+        $flujo = \App\Models\FlujoCaja::create([
+            'fecha' => $linea->fecha,
+            'concepto' => $linea->descripcion,
+            'referencia' => $linea->referencia,
+            'monto' => abs($linea->monto),
+            'monto_bs' => abs($linea->monto),
+            'tipo' => $linea->monto < 0 ? 'salida' : 'ingreso',
+            'categoria_egreso' => $request->categoria_egreso ?? 'otros_egresos',
+            'cuenta' => $request->cuenta ?? 'N/A'
+        ]);
+
+        $linea->estado = 'conciliado';
+        $linea->flujo_caja_id = $flujo->id;
+        $linea->save();
+
+        return redirect()->route('finanzas.conciliaciones')->with('success', 'Gasto agregado al sistema y conciliado correctamente.');
+    }
+
+    public function ignoreConciliacion(Request $request) {
+        $linea = \App\Models\ConciliacionLinea::findOrFail($request->linea_id);
+        $linea->estado = 'ignorado';
+        $linea->save();
+        return redirect()->route('finanzas.conciliaciones')->with('success', 'Línea ignorada.');
+    }
+
+    public function clearConciliacion() {
+        \App\Models\ConciliacionLinea::truncate();
+        return redirect()->route('finanzas.conciliaciones')->with('success', 'Todas las líneas de conciliación han sido borradas.');
     }
 
     public function updateCuenta(Request $request, $id) {
@@ -175,7 +334,7 @@ class FinanzasController extends Controller
         $field = $request->input('field');
         $value = $request->input('value');
         
-        if (in_array($field, ['bs_tc', 'bs_disponibles', 'usd_tc', 'usd_disp'])) {
+        if (in_array($field, ['bs_tc', 'bs_disponibles', 'usd_tc', 'usd_disp', 'reporte_bs', 'reporte_usd'])) {
             $cuenta->$field = $value ?: 0;
             $cuenta->save();
             return response()->json(['success' => true]);
@@ -188,11 +347,105 @@ class FinanzasController extends Controller
         $field = $request->input('field');
         $value = $request->input('value');
         
-        if (in_array($field, ['tasa_bcv_usd', 'saldo_inicial', 'queda_dia_anterior', 'porcentaje_total_diferencial'])) {
+        $allowed = [
+            'tasa_bcv_usd', 'saldo_inicial', 'queda_dia_anterior', 'porcentaje_total_diferencial',
+            'tasa_paralelo', 'bloqueado_compra_divisas', 'fondos_no_disponibles',
+            'titulos_cobertura_espera', 'titulos_cobertura_aprobados', 'retenido_pagos_planificados',
+            'compromisos_pago_bs', 'compromisos_pago_usd'
+        ];
+
+        if (in_array($field, $allowed)) {
             $resumen->$field = $value ?: 0;
             $resumen->save();
             return response()->json(['success' => true]);
         }
         return response()->json(['success' => false, 'message' => 'Invalid field'], 400);
+    }
+
+    public function reporteConsolidado()
+    {
+        $cuentas = \App\Models\CuentaBancaria::orderBy('orden')->get()->groupBy('categoria_reporte');
+        
+        $resumen = \App\Models\FinanzasResumen::firstOrCreate(
+            ['fecha' => date('Y-m-d')],
+            [
+                'tasa_bcv_usd' => $this->getTasaBcvDelDia(),
+                'tasa_paralelo' => 738.50,
+                'saldo_inicial' => 0,
+                'queda_dia_anterior' => 0,
+                'porcentaje_total_diferencial' => 0
+            ]
+        );
+
+        $planificacion = \App\Models\PlanificacionPago::orderBy('orden')->get();
+
+        return view('finanzas.reporte_consolidado', compact('cuentas', 'resumen', 'planificacion'));
+    }
+
+    public function reporteDiarioCaja()
+    {
+        $movimientos = \App\Models\FlujoCaja::where('fecha', date('Y-m-d'))->orderBy('fecha', 'desc')->get();
+        $egresos_realizados = $movimientos->where('categoria_egreso', 'egreso_realizado');
+        $otros_egresos = $movimientos->where('categoria_egreso', 'otros_egresos');
+        
+        $cuentasBancarias = \App\Models\CuentaBancaria::where('mostrar_en_principal', true)->orderBy('orden')->get();
+        $resumen = \App\Models\FinanzasResumen::firstOrCreate(
+            ['fecha' => date('Y-m-d')],
+            [
+                'tasa_bcv_usd' => $this->getTasaBcvDelDia(),
+                'saldo_inicial' => 0,
+                'queda_dia_anterior' => 0,
+                'porcentaje_total_diferencial' => 0
+            ]
+        );
+
+        $total_salidas_bs = $egresos_realizados->sum('monto_bs') 
+                          + $egresos_realizados->sum('comision') 
+                          + $otros_egresos->sum('monto_bs') 
+                          + $otros_egresos->sum('comision');
+        
+        $total_diferencial_cambiario = $egresos_realizados->sum('diferencial_cambiario') 
+                                     + $otros_egresos->sum('diferencial_cambiario');
+
+        return view('finanzas.reporte_diario_caja', compact(
+            'movimientos', 
+            'egresos_realizados', 
+            'otros_egresos', 
+            'cuentasBancarias',
+            'resumen',
+            'total_salidas_bs',
+            'total_diferencial_cambiario'
+        ));
+    }
+
+
+    public function updatePlanificacion(Request $request, $id)
+    {
+        $plan = \App\Models\PlanificacionPago::findOrFail($id);
+        $field = $request->input('field');
+        $value = $request->input('value');
+        $plan->$field = $value;
+        $plan->save();
+        return response()->json(['success' => true]);
+    }
+
+    public function resetDaily() {
+        // 1. Limpiar todos los movimientos de caja
+        \App\Models\FlujoCaja::truncate();
+
+        // 2. Reiniciar todas las cuentas bancarias a 0
+        \App\Models\CuentaBancaria::query()->update([
+            'bs_tc' => 0,
+            'bs_disponibles' => 0,
+            'usd_tc' => 0,
+            'usd_disp' => 0,
+            'reporte_bs' => 0,
+            'reporte_usd' => 0,
+        ]);
+
+        // 3. Limpiar los resúmenes financieros
+        \App\Models\FinanzasResumen::truncate();
+
+        return redirect()->back()->with('success', 'Todos los datos financieros han sido eliminados para empezar el día en blanco.');
     }
 }
