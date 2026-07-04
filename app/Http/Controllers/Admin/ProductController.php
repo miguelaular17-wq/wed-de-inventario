@@ -43,7 +43,7 @@ class ProductController extends Controller
             $total = $query->count();
             
             $query->select([
-                'p.codigo', 'p.nombre as producto', 'p.categoria', 'p.proveedor',
+                'p.id', 'p.codigo', 'p.nombre as producto', 'p.categoria', 'p.proveedor',
                 'sa.existencia as stock',
                 'vh.ultima_venta', 'vh.ultima_compra'
             ]);
@@ -74,6 +74,7 @@ class ProductController extends Controller
             $items = $query->forPage($page, $perPage)->get()->map(function($product) {
                 $metric = $product->sedeMetrics->first();
                 return [
+                    'id' => $product->id,
                     'codigo' => $product->cod_centro,
                     'producto' => $product->producto,
                     'categoria' => $product->categoria,
@@ -99,5 +100,24 @@ class ProductController extends Controller
             'sedeSeleccionada' => $sede,
             'buscar' => $search
         ]);
+    }
+
+    public function destroy($id)
+    {
+        if (config('database.default') === 'pgsql') {
+            $producto = Producto::find($id);
+            if ($producto) {
+                // To avoid foreign key issues on strict DBs, just set it to inactive
+                // or delete related things if necessary. Since it's internal, let's delete
+                $producto->delete();
+            }
+        } else {
+            $product = Product::find($id);
+            if ($product) {
+                $product->delete();
+            }
+        }
+
+        return redirect()->back()->with('success', 'Producto eliminado exitosamente.');
     }
 }

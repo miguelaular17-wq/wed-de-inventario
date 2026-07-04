@@ -39,6 +39,7 @@
                     <th>Categoría</th>
                     <th>Proveeedor</th>
                     <th style="text-align: center;">Stock en {{ config('inventario.display.'.$sedeSeleccionada, $sedeSeleccionada) }}</th>
+                    <th style="text-align: center; width: 100px;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -58,10 +59,19 @@
                                 <span style="color: var(--muted); font-weight: bold;">0</span>
                             @endif
                         </td>
+                        <td style="text-align: center; vertical-align: middle;">
+                            <form method="POST" action="{{ route('admin.productos.destroy', $row['id']) }}" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este producto de la base de datos de forma permanente?')" style="display:inline; margin:0;">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn" style="padding:4px 10px; font-size:0.8rem; border-radius:6px; background-color: #dc2626; color: white; border: 0; cursor: pointer; transition: background-color 0.15s;" onmouseover="this.style.backgroundColor='#b91c1c'" onmouseout="this.style.backgroundColor='#dc2626'" title="Eliminar Producto">
+                                    Eliminar
+                                </button>
+                            </form>
+                        </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" style="text-align: center; padding: 32px; color: var(--muted);">No se encontraron productos.</td>
+                        <td colspan="6" style="text-align: center; padding: 32px; color: var(--muted);">No se encontraron productos.</td>
                     </tr>
                 @endforelse
             </tbody>
