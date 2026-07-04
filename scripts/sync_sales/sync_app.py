@@ -1135,7 +1135,8 @@ class SyncApp:
 
                 # Paso 5: Si aun no existe, crear el producto automáticamente para no perder el movimiento
                 if not prod_row:
-                    self.log(f"  [Auto-Registro] Código '{codigo_clean}' no existe. Creando producto desconocido...")
+                    nombre_insercion = str(nombre_local).strip() if nombre_local and str(nombre_local).strip() else f"[Auto] {codigo_clean}"
+                    self.log(f"  [Auto-Registro] Código '{codigo_clean}' no existe. Creando producto con nombre '{nombre_insercion}'...")
                     web_cursor.execute(
                         """
                         INSERT INTO inventario_v2.productos (codigo, nombre, categoria, subcategoria, proveedor, precio_unidad, precio_mayor, activo, created_at, updated_at)
@@ -1143,7 +1144,7 @@ class SyncApp:
                         ON CONFLICT (codigo) DO UPDATE SET activo = true, updated_at = NOW()
                         RETURNING id, activo;
                         """,
-                        (codigo_clean, f"[Auto] {codigo_clean}")
+                        (codigo_clean, nombre_insercion)
                     )
                     prod_row = web_cursor.fetchone()
 
