@@ -3,163 +3,147 @@
 @section('title', 'Catálogo de Productos')
 
 @section('content')
-<div class="content-container">
-    <div class="page-header d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2>Catálogo de Productos</h2>
-            <p class="text-muted">Consulta de stock e histórico por sede</p>
-        </div>
-    </div>
+<div class="page-header">
+    <h1>Catálogo de Productos</h1>
+    <p class="lead">Consulta de stock e histórico por sede</p>
+</div>
 
-    <div class="card card-custom mb-4">
-        <div class="card-body">
-            <form method="GET" action="{{ route('admin.productos.index') }}" class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label">Buscar producto</label>
-                    <input type="text" name="buscar" class="form-control" value="{{ $buscar ?? '' }}" placeholder="Código o nombre...">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Sede a consultar</label>
-                    <select name="sede" class="form-select">
-                        @foreach($sedes as $s)
-                            <option value="{{ $s }}" {{ $sedeSeleccionada === $s ? 'selected' : '' }}>{{ $s }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100">Consultar</button>
-                </div>
-                @if($buscar)
-                <div class="col-md-2">
-                    <a href="{{ route('admin.productos.index', ['sede' => $sedeSeleccionada]) }}" class="btn btn-light w-100">Limpiar</a>
-                </div>
-                @endif
-            </form>
-        </div>
+<form method="GET" action="{{ route('admin.productos.index') }}" class="filter-bar">
+    <div class="field field-wide">
+        <label for="buscar">Buscar producto</label>
+        <input type="search" id="buscar" name="buscar" value="{{ $buscar ?? '' }}" placeholder="Código o nombre..." autocomplete="off">
     </div>
+    <div class="field">
+        <label for="sede">Sede a consultar</label>
+        <select id="sede" name="sede">
+            @foreach($sedes as $s)
+                <option value="{{ $s }}" @selected($sedeSeleccionada === $s)>{{ config('inventario.display.'.$s, $s) }}</option>
+            @endforeach
+        </select>
+    </div>
+    <div class="field" style="display: flex; align-items: flex-end; gap: 8px;">
+        <button type="submit" class="btn primary">Consultar</button>
+        @if($buscar)
+            <a href="{{ route('admin.productos.index', ['sede' => $sedeSeleccionada]) }}" class="btn secondary">Limpiar</a>
+        @endif
+    </div>
+</form>
 
-    <div class="card card-custom">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Código</th>
-                            <th>Producto</th>
-                            <th>Categoría</th>
-                            <th>Proveeedor</th>
-                            <th class="text-center">Stock en {{ $sedeSeleccionada }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($rows as $row)
-                            <tr>
-                                <td>{{ $row['codigo'] ?? '—' }}</td>
-                                <td>{{ $row['producto'] ?? '—' }}</td>
-                                <td>{{ $row['categoria'] ?? '—' }}</td>
-                                <td>{{ $row['proveedor'] ?? '—' }}</td>
-                                <td class="text-center">
-                                    @if(($row['stock'] ?? 0) > 0)
-                                        <button type="button" class="btn btn-sm btn-outline-primary stock-btn"
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#historyModal"
-                                            data-producto="{{ $row['producto'] }}"
-                                            data-sede="{{ $sedeSeleccionada }}"
-                                            data-stock="{{ $row['stock'] }}"
-                                            data-compra="{{ !empty($row['ultima_compra']) ? \Carbon\Carbon::parse($row['ultima_compra'])->format('d/m/Y') : 'Sin registro' }}"
-                                            data-venta="{{ !empty($row['ultima_venta']) ? \Carbon\Carbon::parse($row['ultima_venta'])->format('d/m/Y') : 'Sin registro' }}">
-                                            <strong>{{ $row['stock'] }}</strong>
-                                        </button>
-                                    @else
-                                        <span class="text-muted">0</span>
-                                    @endif
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="5" class="text-center py-4 text-muted">No se encontraron productos.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
+<section class="table-section-full">
+    <div class="table-wrap table-wrap-full">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Producto</th>
+                    <th>Categoría</th>
+                    <th>Proveeedor</th>
+                    <th style="text-align: center;">Stock en {{ config('inventario.display.'.$sedeSeleccionada, $sedeSeleccionada) }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($rows as $row)
+                    <tr>
+                        <td style="font-family: ui-monospace, monospace; font-size: .85rem;">{{ $row['codigo'] ?? '—' }}</td>
+                        <td style="font-weight: 500;">{{ $row['producto'] ?? '—' }}</td>
+                        <td style="color: var(--muted); font-size: .9rem;">{{ $row['categoria'] ?? '—' }}</td>
+                        <td style="color: var(--muted); font-size: .9rem;">{{ $row['proveedor'] ?? '—' }}</td>
+                        <td style="text-align: center;">
+                            @if(($row['stock'] ?? 0) > 0)
+                                <button type="button" class="btn stock-btn" style="background: var(--blue); color: white; padding: 4px 12px; font-weight: bold; font-size: 1rem; border-radius: 6px;"
+                                    onclick="openHistoryModal('{{ addslashes($row['producto']) }}', '{{ $sedeSeleccionada }}', '{{ $row['stock'] }}', '{{ !empty($row['ultima_compra']) ? \Carbon\Carbon::parse($row['ultima_compra'])->format('d/m/Y') : 'Sin registro' }}', '{{ !empty($row['ultima_venta']) ? \Carbon\Carbon::parse($row['ultima_venta'])->format('d/m/Y') : 'Sin registro' }}')">
+                                    {{ $row['stock'] }}
+                                </button>
+                            @else
+                                <span style="color: var(--muted); font-weight: bold;">0</span>
+                            @endif
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 32px; color: var(--muted);">No se encontraron productos.</td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
     </div>
     
-    <div class="mt-4">
-        {{ $rows->links() }}
+    <div style="margin-top: 20px;">
+        {{ $rows->links('pagination::default') }}
     </div>
-</div>
+</section>
 
-<!-- History Modal -->
-<div class="modal fade" id="historyModal" tabindex="-1" aria-labelledby="historyModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title" id="historyModalLabel">Histórico del Producto</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <h6 id="modalProductName" class="text-primary mb-3"></h6>
-        <div class="row g-3">
-            <div class="col-6">
-                <div class="p-3 border rounded bg-light text-center">
-                    <span class="d-block text-muted small mb-1">Sede</span>
-                    <strong id="modalSedeName" class="fs-5"></strong>
+<!-- Vanilla JS Modal Overlay -->
+<div id="historyModalOverlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+    <div style="background: white; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); overflow: hidden; font-family: 'Outfit', sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border);">
+            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 600;">Histórico del Producto</h3>
+            <button type="button" onclick="closeHistoryModal()" style="background: transparent; border: none; font-size: 1.5rem; line-height: 1; cursor: pointer; color: var(--muted);">&times;</button>
+        </div>
+        <div style="padding: 20px;">
+            <h4 id="modalProductName" style="color: var(--blue); margin-top: 0; margin-bottom: 20px; font-size: 1.1rem; line-height: 1.4;"></h4>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center;">
+                    <span style="display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Sede</span>
+                    <strong id="modalSedeName" style="font-size: 1.2rem; color: var(--text);"></strong>
                 </div>
-            </div>
-            <div class="col-6">
-                <div class="p-3 border rounded bg-light text-center">
-                    <span class="d-block text-muted small mb-1">Stock Actual</span>
-                    <strong id="modalStock" class="fs-5 text-dark"></strong>
+                <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center;">
+                    <span style="display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Stock Actual</span>
+                    <strong id="modalStock" style="font-size: 1.3rem; color: var(--blue);"></strong>
                 </div>
-            </div>
-            <div class="col-6">
-                <div class="p-3 border rounded bg-white text-center">
-                    <span class="d-block text-muted small mb-1">Última Compra</span>
-                    <strong id="modalUltimaCompra"></strong>
+                <div style="border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center;">
+                    <span style="display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Última Compra</span>
+                    <strong id="modalUltimaCompra" style="font-size: 1rem; color: var(--text);"></strong>
                 </div>
-            </div>
-            <div class="col-6">
-                <div class="p-3 border rounded bg-white text-center">
-                    <span class="d-block text-muted small mb-1">Última Venta</span>
-                    <strong id="modalUltimaVenta"></strong>
+                <div style="border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center;">
+                    <span style="display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Última Venta</span>
+                    <strong id="modalUltimaVenta" style="font-size: 1rem; color: var(--text);"></strong>
                 </div>
             </div>
         </div>
-      </div>
-      <div class="modal-footer border-0">
-        <button type="button" class="btn btn-secondary w-100" data-bs-dismiss="modal">Cerrar</button>
-      </div>
+        <div style="padding: 16px 20px; border-top: 1px solid var(--border); text-align: right; background: #f8fafc;">
+            <button type="button" class="btn primary" onclick="closeHistoryModal()" style="padding: 8px 24px;">Cerrar</button>
+        </div>
     </div>
-  </div>
 </div>
-
 @endsection
 
 @push('scripts')
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const historyModal = document.getElementById('historyModal');
-    if (historyModal) {
-        historyModal.addEventListener('show.bs.modal', function (event) {
-            const button = event.relatedTarget;
-            
-            // Extract info from data-bs-* attributes
-            const producto = button.getAttribute('data-producto');
-            const sede = button.getAttribute('data-sede');
-            const stock = button.getAttribute('data-stock');
-            const compra = button.getAttribute('data-compra');
-            const venta = button.getAttribute('data-venta');
-            
-            // Update the modal's content
-            document.getElementById('modalProductName').textContent = producto;
-            document.getElementById('modalSedeName').textContent = sede;
-            document.getElementById('modalStock').textContent = stock;
-            document.getElementById('modalUltimaCompra').textContent = compra;
-            document.getElementById('modalUltimaVenta').textContent = venta;
-        });
+    const modal = document.getElementById('historyModalOverlay');
+
+    function openHistoryModal(producto, sede, stock, compra, venta) {
+        document.getElementById('modalProductName').textContent = producto;
+        document.getElementById('modalSedeName').textContent = sede;
+        document.getElementById('modalStock').textContent = stock;
+        document.getElementById('modalUltimaCompra').textContent = compra;
+        document.getElementById('modalUltimaVenta').textContent = venta;
+        
+        modal.style.display = 'flex';
+        // Add subtle fade in animation
+        modal.animate([
+            { opacity: 0 },
+            { opacity: 1 }
+        ], { duration: 150, fill: 'forwards' });
     }
-});
+
+    function closeHistoryModal() {
+        const animation = modal.animate([
+            { opacity: 1 },
+            { opacity: 0 }
+        ], { duration: 150, fill: 'forwards' });
+        
+        animation.onfinish = () => {
+            modal.style.display = 'none';
+        };
+    }
+
+    // Close modal when clicking outside
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeHistoryModal();
+        }
+    });
 </script>
 @endpush
