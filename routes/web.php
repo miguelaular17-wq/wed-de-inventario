@@ -82,6 +82,9 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
 
     // Sync Logs
     Route::get('/sync-logs', [\App\Http\Controllers\Admin\SyncLogController::class, 'index'])->name('sync_logs.index');
+
+    // Admin Products
+    Route::get('/productos', [\App\Http\Controllers\Admin\ProductController::class, 'index'])->name('productos.index');
 });
 
 // Sede change views accessible by roles with sede access
