@@ -815,7 +815,14 @@ class SyncApp:
                 codigo = str(row[0]).strip()
                 nombre_local = str(row[6]).strip() if len(row) > 6 and row[6] else None
                 
+                existencia    = max(0, int(row[1]) if row[1] else 0)
+                ventas_15d    = float(row[2]) if row[2] else 0.0
+                ventas_60d    = float(row[3]) if row[3] else 0.0
+                ultima_venta  = str(row[4])   if row[4] else None
+                ultima_compra = str(row[5])   if row[5] else None
+
                 # ¡LA MAGIA AQUÍ! Solo nos importan los productos que ya existen en Supabase
+                # O los que NO existen pero TIENEN STOCK en esta sede
                 if codigo in prod_map:
                     pid = prod_map[codigo]
                 elif nombre_local and nombre_local.lower() in name_map:
@@ -840,14 +847,40 @@ class SyncApp:
                     
                     prod_map[codigo] = pid # Update local map
                 else:
-                    skipped += 1
-                    continue
-                    
-                existencia    = max(0, int(row[1]) if row[1] else 0)
-                ventas_15d    = float(row[2]) if row[2] else 0.0
-                ventas_60d    = float(row[3]) if row[3] else 0.0
-                ultima_venta  = str(row[4])   if row[4] else None
-                ultima_compra = str(row[5])   if row[5] else None
+                    if existencia > 0:
+                        self.log(f"[Snapshot Auto-Registro] Producto '{codigo}' no existe en la web pero tiene stock ({existencia}). Subiéndolo...")
+                        try:
+                            # Aseguramos el commit previo por si acaso, o usamos un savepoint
+                            wc.execute("SAVEPOINT auto_reg_sp;")
+                            nombre_insercion = nombre_local if nombre_local else f"[Auto] {codigo}"
+                            wc.execute(
+                                """
+                                INSERT INTO inventario_v2.productos (codigo, nombre, categoria, subcategoria, proveedor, precio_unidad, precio_mayor, activo, created_at, updated_at)
+                                VALUES (%s, %s, 'Sin categoría', '', '', 0, 0, true, NOW(), NOW())
+                                ON CONFLICT (codigo) DO UPDATE SET activo = true, updated_at = NOW()
+                                RETURNING id;
+                                """,
+                                (codigo, nombre_insercion)
+                            )
+                            new_pid_row = wc.fetchone()
+                            if new_pid_row:
+                                pid = new_pid_row[0]
+                                prod_map[codigo] = pid
+                                if nombre_local:
+                                    name_map[nombre_local.lower()] = (pid, codigo)
+                                wc.execute("RELEASE SAVEPOINT auto_reg_sp;")
+                            else:
+                                wc.execute("ROLLBACK TO SAVEPOINT auto_reg_sp;")
+                                skipped += 1
+                                continue
+                        except Exception as e:
+                            self.log(f"[Snapshot Auto-Registro] Error subiendo producto '{codigo}': {e}")
+                            wc.execute("ROLLBACK TO SAVEPOINT auto_reg_sp;")
+                            skipped += 1
+                            continue
+                    else:
+                        skipped += 1
+                        continue
 
                 pid_stock_map[pid] = pid_stock_map.get(pid, 0) + existencia
                 
