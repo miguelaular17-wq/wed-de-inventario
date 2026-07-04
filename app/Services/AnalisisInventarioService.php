@@ -16,6 +16,10 @@ use Illuminate\Support\Facades\DB;
  */
 class AnalisisInventarioService
 {
+    public function __construct(
+        private ProductRepository $products
+    ) {}
+
     /**
      * Build the full analysis dataset with all indicators computed.
      * Filters, paginates, and sorts server-side.
@@ -25,6 +29,17 @@ class AnalisisInventarioService
         if (config('database.default') !== 'pgsql') {
             return collect();
         }
+
+        $stockUpdatedAt = $this->products->lastStockUpdate();
+        $stockUpdateMd5 = md5((string) $stockUpdatedAt);
+        // Build a unique cache key for these base filters
+        $filtersHash = md5(json_encode([
+            $filters['categoria'] ?? 'Ninguno',
+            $filters['subcategoria'] ?? 'Ninguno',
+            $filters['proveedor'] ?? 'Ninguno',
+            $filters['buscar'] ?? ''
+        ]));
+        $cacheKey = "analisis_inv_base_{$stockUpdateMd5}_{$filtersHash}";
 
         $bindings = [];
         $whereClauses = [];
@@ -158,39 +173,41 @@ class AnalisisInventarioService
             SELECT * FROM indicators_with_semaforo
         ";
 
-        $rows = DB::connection('pgsql')->select($sql, $bindings);
+        $items = \Illuminate\Support\Facades\Cache::remember($cacheKey, 1800, function () use ($sql, $bindings) {
+            $rows = DB::connection('pgsql')->select($sql, $bindings);
+            $items = collect();
+            foreach ($rows as $row) {
+                $ultimaVentaDate = $row->ultima_venta ? \Carbon\Carbon::parse($row->ultima_venta) : null;
+                $ultimaCompraDate = $row->ultima_compra ? \Carbon\Carbon::parse($row->ultima_compra) : null;
 
-        $items = collect();
-        foreach ($rows as $row) {
-            $ultimaVentaDate = $row->ultima_venta ? \Carbon\Carbon::parse($row->ultima_venta) : null;
-            $ultimaCompraDate = $row->ultima_compra ? \Carbon\Carbon::parse($row->ultima_compra) : null;
-
-            $items->push([
-                'id' => (int) $row->id,
-                'codigo' => $row->codigo,
-                'producto' => $row->nombre,
-                'categoria' => $row->categoria ?? '—',
-                'subcategoria' => $row->subcategoria ?? '—',
-                'proveedor' => $row->proveedor ?: 'Sin Proveedor',
-                'total_stock' => (int) $row->total_stock,
-                'promedio_venta' => (float) $row->promedio_venta,
-                'dias_sin_venta' => (int) $row->dias_sin_venta,
-                'dias_sin_compra' => $row->dias_sin_compra ? (int) $row->dias_sin_compra : null,
-                'ultima_venta' => $ultimaVentaDate ? $ultimaVentaDate->format('d/m/Y') : null,
-                'ultima_compra' => $ultimaCompraDate ? $ultimaCompraDate->format('d/m/Y') : null,
-                'rotacion' => $row->rotacion,
-                'rotacion_color' => $row->rotacion_color,
-                'meses_inventario' => (float) $row->meses_inventario,
-                'sobrestock' => $row->sobrestock,
-                'sobrestock_color' => $row->sobrestock_color,
-                'estado' => $row->estado,
-                'estado_color' => $row->estado_color,
-                'prioridad' => (int) $row->prioridad,
-                'semaforo' => $row->semaforo,
-                'stocks_por_sede' => [], // Will be loaded dynamically for the current page items in the controller
-                'ventas_por_sede' => [],
-            ]);
-        }
+                $items->push([
+                    'id' => (int) $row->id,
+                    'codigo' => $row->codigo,
+                    'producto' => $row->nombre,
+                    'categoria' => $row->categoria ?? '—',
+                    'subcategoria' => $row->subcategoria ?? '—',
+                    'proveedor' => $row->proveedor ?: 'Sin Proveedor',
+                    'total_stock' => (int) $row->total_stock,
+                    'promedio_venta' => (float) $row->promedio_venta,
+                    'dias_sin_venta' => (int) $row->dias_sin_venta,
+                    'dias_sin_compra' => $row->dias_sin_compra ? (int) $row->dias_sin_compra : null,
+                    'ultima_venta' => $ultimaVentaDate ? $ultimaVentaDate->format('d/m/Y') : null,
+                    'ultima_compra' => $ultimaCompraDate ? $ultimaCompraDate->format('d/m/Y') : null,
+                    'rotacion' => $row->rotacion,
+                    'rotacion_color' => $row->rotacion_color,
+                    'meses_inventario' => (float) $row->meses_inventario,
+                    'sobrestock' => $row->sobrestock,
+                    'sobrestock_color' => $row->sobrestock_color,
+                    'estado' => $row->estado,
+                    'estado_color' => $row->estado_color,
+                    'prioridad' => (int) $row->prioridad,
+                    'semaforo' => $row->semaforo,
+                    'stocks_por_sede' => [], // Will be loaded dynamically for the current page items in the controller
+                    'ventas_por_sede' => [],
+                ]);
+            }
+            return $items;
+        });
 
         // Apply advanced filters that are calculated or need post-filtering
         if (!empty($filters['rotacion_filter']) && $filters['rotacion_filter'] !== 'Todos') {
@@ -278,8 +295,19 @@ class AnalisisInventarioService
             $sedes = config('inventario.sedes_stock');
             $display = config('inventario.display');
 
-            $bindings = [];
-            $whereClauses = [];
+            $stockUpdatedAt = $this->products->lastStockUpdate();
+            $stockUpdateMd5 = md5((string) $stockUpdatedAt);
+            $filtersHash = md5(json_encode([
+                $filters['categoria'] ?? 'Ninguno',
+                $filters['subcategoria'] ?? 'Ninguno',
+                $filters['proveedor'] ?? 'Ninguno',
+                $filters['buscar'] ?? ''
+            ]));
+            $cacheKey = "analisis_resumen_sedes_{$stockUpdateMd5}_{$filtersHash}";
+
+            return \Illuminate\Support\Facades\Cache::remember($cacheKey, 1800, function () use ($sedes, $display, $filters) {
+                $bindings = [];
+                $whereClauses = [];
             if (!empty($filters['categoria']) && $filters['categoria'] !== 'Ninguno') {
                 $whereClauses[] = "p.categoria = :categoria";
                 $bindings['categoria'] = $filters['categoria'];
@@ -317,21 +345,22 @@ class AnalisisInventarioService
             $dbRows = DB::connection('pgsql')->select($sql, $bindings);
             $dbRowsBySede = collect($dbRows)->keyBy('sede');
 
-            $resumen = [];
-            foreach ($sedes as $sede) {
-                $row = $dbRowsBySede->get($sede);
-                $resumen[] = [
-                    'sede' => $sede,
-                    'display' => $display[$sede] ?? $sede,
-                    'total_productos' => $row ? (int) $row->total_productos : 0,
-                    'stock_total' => $row ? (int) $row->stock_total : 0,
-                    'sin_rotacion' => $row ? (int) $row->sin_rotacion : 0,
-                    'sobrestock' => $row ? (int) $row->sobrestock : 0,
-                    'inmovilizados' => $row ? (int) $row->inmovilizados : 0,
-                ];
-            }
+                $resumen = [];
+                foreach ($sedes as $sede) {
+                    $row = $dbRowsBySede->get($sede);
+                    $resumen[] = [
+                        'sede' => $sede,
+                        'display' => $display[$sede] ?? $sede,
+                        'total_productos' => $row ? (int) $row->total_productos : 0,
+                        'stock_total' => $row ? (int) $row->stock_total : 0,
+                        'sin_rotacion' => $row ? (int) $row->sin_rotacion : 0,
+                        'sobrestock' => $row ? (int) $row->sobrestock : 0,
+                        'inmovilizados' => $row ? (int) $row->inmovilizados : 0,
+                    ];
+                }
 
-            return $resumen;
+                return $resumen;
+            });
         }
 
         $sedes = config('inventario.sedes_stock');

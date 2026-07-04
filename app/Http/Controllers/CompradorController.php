@@ -296,36 +296,45 @@ class CompradorController extends Controller
                 ];
             })->sortByDesc('total_unidades')->values();
 
-            $categorias = \Illuminate\Support\Facades\DB::connection('pgsql')
-                ->table('productos')
-                ->where('activo', true)
-                ->whereNotNull('categoria')
-                ->where('categoria', '!=', '')
-                ->distinct()
-                ->orderBy('categoria')
-                ->pluck('categoria')
-                ->all();
+            $stockUpdatedAt = $this->products->lastStockUpdate();
+            $stockUpdateMd5 = md5((string) $stockUpdatedAt);
 
-            $proveedores = \Illuminate\Support\Facades\DB::connection('pgsql')
-                ->table('productos')
-                ->where('activo', true)
-                ->whereNotNull('proveedor')
-                ->where('proveedor', '!=', '')
-                ->distinct()
-                ->orderBy('proveedor')
-                ->pluck('proveedor')
-                ->all();
+            $categorias = \Illuminate\Support\Facades\Cache::remember("comprador_categorias_{$stockUpdateMd5}", 1800, function () {
+                return \Illuminate\Support\Facades\DB::connection('pgsql')
+                    ->table('productos')
+                    ->where('activo', true)
+                    ->whereNotNull('categoria')
+                    ->where('categoria', '!=', '')
+                    ->distinct()
+                    ->orderBy('categoria')
+                    ->pluck('categoria')
+                    ->all();
+            });
 
-            $subcatDb = \Illuminate\Support\Facades\DB::connection('pgsql')
-                ->table('productos')
-                ->where('activo', true)
-                ->whereNotNull('categoria')
-                ->where('categoria', '!=', '')
-                ->whereNotNull('subcategoria')
-                ->where('subcategoria', '!=', '')
-                ->select(['categoria', 'subcategoria'])
-                ->distinct()
-                ->get();
+            $proveedores = \Illuminate\Support\Facades\Cache::remember("comprador_proveedores_{$stockUpdateMd5}", 1800, function () {
+                return \Illuminate\Support\Facades\DB::connection('pgsql')
+                    ->table('productos')
+                    ->where('activo', true)
+                    ->whereNotNull('proveedor')
+                    ->where('proveedor', '!=', '')
+                    ->distinct()
+                    ->orderBy('proveedor')
+                    ->pluck('proveedor')
+                    ->all();
+            });
+
+            $subcatDb = \Illuminate\Support\Facades\Cache::remember("comprador_subcats_{$stockUpdateMd5}", 1800, function () {
+                return \Illuminate\Support\Facades\DB::connection('pgsql')
+                    ->table('productos')
+                    ->where('activo', true)
+                    ->whereNotNull('categoria')
+                    ->where('categoria', '!=', '')
+                    ->whereNotNull('subcategoria')
+                    ->where('subcategoria', '!=', '')
+                    ->select(['categoria', 'subcategoria'])
+                    ->distinct()
+                    ->get();
+            });
             
             $subcatMap = [];
             foreach ($subcatDb as $row) {
