@@ -107,8 +107,12 @@ class ProductController extends Controller
         if (config('database.default') === 'pgsql') {
             $producto = Producto::find($id);
             if ($producto) {
-                // To avoid foreign key issues on strict DBs, just set it to inactive
-                // or delete related things if necessary. Since it's internal, let's delete
+                // Delete related records to prevent foreign key constraint violations
+                DB::connection('pgsql')->table('inventario_v2.stock_actual')->where('producto_id', $id)->delete();
+                DB::connection('pgsql')->table('inventario_v2.ventas_historicas')->where('producto_id', $id)->delete();
+                DB::connection('pgsql')->table('inventario_v2.historial_ventas_mensuales')->where('producto_id', $id)->delete();
+                
+                // Now delete the product
                 $producto->delete();
             }
         } else {
