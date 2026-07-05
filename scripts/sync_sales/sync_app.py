@@ -840,6 +840,7 @@ class SyncApp:
                                 (new_codigo, pid)
                             )
                             name_map[nombre_local.lower()] = (pid, new_codigo)
+                            web_conn.commit() # Fix for PgBouncer
                         except Exception as e:
                             self.log(f"[Snapshot Auto-Heal] Error actualizando código: {e}")
                             web_conn.rollback() # Rollback the failed update but keep the transaction going
@@ -870,6 +871,7 @@ class SyncApp:
                                 if nombre_local:
                                     name_map[nombre_local.lower()] = (pid, codigo)
                                 wc.execute("RELEASE SAVEPOINT auto_reg_sp;")
+                                web_conn.commit() # Fix for PgBouncer: commit immediately so the ID exists for execute_batch
                             else:
                                 wc.execute("ROLLBACK TO SAVEPOINT auto_reg_sp;")
                                 skipped += 1
