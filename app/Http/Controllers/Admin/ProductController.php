@@ -45,7 +45,7 @@ class ProductController extends Controller
             $query->select([
                 'p.id', 'p.codigo', 'p.nombre as producto', 'p.categoria', 'p.proveedor',
                 'sa.existencia as stock',
-                'vh.ultima_venta', 'vh.ultima_compra'
+                'vh.ultima_venta', 'vh.ultima_compra', 'vh.venta_promedio', 'vh.ventas_60d'
             ]);
             $query->orderBy('p.nombre');
             
@@ -82,6 +82,8 @@ class ProductController extends Controller
                     'stock' => $metric ? $metric->existencia : 0,
                     'ultima_venta' => $metric ? $metric->ultima_venta : null,
                     'ultima_compra' => null, // Not tracked in old sqlite model
+                    'venta_promedio' => 0,
+                    'ventas_60d' => 0,
                 ];
             });
         }

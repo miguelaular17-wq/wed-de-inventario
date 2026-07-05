@@ -37,7 +37,9 @@
                     <th>Código</th>
                     <th>Producto</th>
                     <th>Categoría</th>
-                    <th>Proveeedor</th>
+                    <th>Proveedor</th>
+                    <th style="text-align: center;">Demanda (15d)</th>
+                    <th style="text-align: center;">Demanda (60d)</th>
                     <th style="text-align: center;">Stock en {{ config('inventario.display.'.$sedeSeleccionada, $sedeSeleccionada) }}</th>
                     <th style="text-align: center; width: 100px;">Acciones</th>
                 </tr>
@@ -49,6 +51,8 @@
                         <td style="font-weight: 500;">{{ $row['producto'] ?? '—' }}</td>
                         <td style="color: var(--muted); font-size: .9rem;">{{ $row['categoria'] ?? '—' }}</td>
                         <td style="color: var(--muted); font-size: .9rem;">{{ $row['proveedor'] ?? '—' }}</td>
+                        <td style="text-align: center; font-weight: 500;">{{ isset($row['venta_promedio']) ? (intval($row['venta_promedio']) * 15) : '0' }}</td>
+                        <td style="text-align: center; font-weight: 500;">{{ isset($row['ventas_60d']) ? intval($row['ventas_60d']) : '0' }}</td>
                         <td style="text-align: center;">
                             @if(($row['stock'] ?? 0) > 0)
                                 <button type="button" class="btn stock-btn" style="background: var(--blue); color: white; padding: 4px 12px; font-weight: bold; font-size: 1rem; border-radius: 6px;"
@@ -71,7 +75,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 32px; color: var(--muted);">No se encontraron productos.</td>
+                        <td colspan="8" style="text-align: center; padding: 32px; color: var(--muted);">No se encontraron productos.</td>
                     </tr>
                 @endforelse
             </tbody>
