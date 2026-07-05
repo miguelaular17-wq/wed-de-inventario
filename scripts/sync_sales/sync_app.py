@@ -849,7 +849,6 @@ class SyncApp:
                     prod_map[codigo] = pid # Update local map
                 else:
                     if existencia > 0:
-                        self.log(f"[Snapshot Auto-Registro] Producto '{codigo}' no existe en la web pero tiene stock ({existencia}). Subiéndolo...")
                         try:
                             # Aseguramos el commit previo por si acaso, o usamos un savepoint
                             wc.execute("SAVEPOINT auto_reg_sp;")
