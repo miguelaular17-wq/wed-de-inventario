@@ -4,6 +4,50 @@
 
 @section('content')
 <div class="page-header">
+    <style>
+        .pagination {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: wrap;
+            justify-content: center;
+            list-style: none !important;
+            padding-left: 0;
+            gap: 8px;
+            margin-top: 20px;
+        }
+        .pagination .page-item {
+            display: block !important;
+            list-style: none !important;
+            margin: 0 !important;
+        }
+        .pagination .page-link, .pagination span.page-link {
+            display: block;
+            padding: 8px 14px;
+            color: var(--blue, #2563eb);
+            background-color: #fff;
+            border: 1px solid var(--border, #e2e8f0);
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+            line-height: 1;
+        }
+        .pagination .page-item.active .page-link, .pagination .page-item.active span.page-link {
+            z-index: 3;
+            color: #fff;
+            background-color: var(--blue, #2563eb);
+            border-color: var(--blue, #2563eb);
+        }
+        .pagination .page-item.disabled .page-link, .pagination .page-item.disabled span.page-link {
+            color: var(--muted, #64748b);
+            pointer-events: none;
+            background-color: #f8fafc;
+            border-color: var(--border, #e2e8f0);
+        }
+        .pagination .page-item:not(.active):not(.disabled) .page-link:hover {
+            background-color: #f1f5f9;
+        }
+    </style>
     <h1>Catálogo de Productos</h1>
     <p class="lead">Consulta de stock e histórico por sede</p>
 </div>
