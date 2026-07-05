@@ -82,8 +82,8 @@
         </table>
     </div>
     
-    <div style="margin-top: 20px;">
-        {{ $rows->links('pagination::default') }}
+    <div style="margin-top: 20px; display: flex; justify-content: center;">
+        {{ $rows->links('pagination::bootstrap-4') }}
     </div>
 </section>
 

@@ -892,4 +892,9 @@ table.data-table tbody tr:hover {
          } 
  } 
   
- 
+ /* Pagination Styles */
+.pagination { display: flex; padding-left: 0; list-style: none; justify-content: center; gap: 5px; margin-top: 20px; }
+.page-item .page-link { position: relative; display: block; padding: 8px 14px; color: var(--blue, #2563eb); background-color: #fff; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; text-decoration: none; font-weight: 500; transition: all 0.2s; }
+.page-item.active .page-link { z-index: 3; color: #fff; background-color: var(--blue, #2563eb); border-color: var(--blue, #2563eb); }
+.page-item.disabled .page-link, .page-item.disabled span.page-link { color: var(--muted, #64748b); pointer-events: none; background-color: #f8fafc; border-color: var(--border, #e2e8f0); }
+.page-item:not(.active):not(.disabled) .page-link:hover { background-color: #f1f5f9; }
