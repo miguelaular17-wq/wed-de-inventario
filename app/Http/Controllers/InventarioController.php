@@ -490,12 +490,6 @@ class InventarioController extends Controller
         $sede = (string) $request->session()->get('sede_local');
         $since = (string) $request->query('since', '');
 
-        $filters = [
-            'q' => trim((string) $request->query('q', '')),
-            'categoria' => (string) $request->query('categoria', 'Ninguno'),
-            'subcategoria' => (string) $request->query('subcategoria', 'Ninguno'),
-        ];
-
         $updatedAt = collect([
                 $this->products->lastStockUpdate(),
                 $this->reqPersonalizada->lastUpdatedAt($sede),
@@ -505,40 +499,12 @@ class InventarioController extends Controller
             ->max();
 
         $changed = $since && $updatedAt !== $since;
-        $rows = collect();
         $totalManual = $this->reqPersonalizada->countPendientes($sede);
-
-        if ($changed) {
-            $products = $this->products->loadForSede($sede);
-            $base = $this->reqPersonalizada->buildRows(
-                $products,
-                $sede,
-                $this->reqPersonalizada->loadManuales($sede),
-            );
-            $filtered = $this->reqPersonalizada->applyFilters($base, $filters);
-
-            $rows = $filtered->map(function (array $row) {
-                return [
-                    'cod_centro' => $row['cod_centro'],
-                    'producto' => $row['producto'],
-                    'existencia' => $row['existencia'],
-                    'stocks' => $row['stocks'],
-                    'req_manual' => $row['req_manual'] ?? false,
-                    'origen_manual' => $row['origen_manual'] ?? '',
-                    'cantidad_manual' => $row['cantidad_manual'] ?? 0,
-                    'accion_manual' => $row['accion_manual'] ?? '',
-                    'manual_pendiente' => $row['manual_pendiente'] ?? false,
-                    'manuales_list'   => $row['manuales_list'] ?? [],
-                ];
-            })->values();
-        }
 
         return response()->json([
             'updated_at' => $updatedAt,
             'changed' => $changed,
-            'rows' => $rows,
             'total_manual' => $totalManual,
-            'row_count' => $rows->count(),
         ]);
     }
 }
