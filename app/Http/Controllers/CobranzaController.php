@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 class CobranzaController extends Controller
 {
     public function index() {
+        $inicio = microtime(true);
         $sedes = config('inventario.sedes_locales');
         
         // Leer Resumenes Globales
@@ -73,6 +74,7 @@ class CobranzaController extends Controller
         }
         $clientes_lista = $queryClientes->orderBy('cliente', 'asc')->get();
         
+        \Log::info('Cobranza: ' . round((microtime(true) - $inicio) * 1000, 2) . ' ms');
         return view('cobranza.index', compact('porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'sedes', 'clientes_lista', 'filtro_sede'));
     }
 

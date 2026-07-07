@@ -422,6 +422,7 @@
                     <tr>
                         <th style="width: 100px;">Fecha</th>
                         <th>Banco y Titular</th>
+                        <th>Tipo Gasto</th>
                         <th>Motivo</th>
                         <th class="col-number" style="text-align: right;">USD</th>
                         <th class="col-number" style="text-align: right;">Tasa Cambio</th>
@@ -438,6 +439,7 @@
                                 <strong style="color: var(--blue);">{{ $mov->banco }}</strong><br>
                                 <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular }}</span>
                             </td>
+                            <td>{{ $mov->tipo_gasto ?: '-' }}</td>
                             <td>{{ $mov->motivo ?: '-' }}</td>
                             <td class="col-number" style="text-align: right; font-weight: 500;">{{ $mov->monto_usd ? '$'.number_format($mov->monto_usd, 2) : '-' }}</td>
                             <td class="col-number" style="text-align: right;">{{ $mov->tasa_cambio ? number_format($mov->tasa_cambio, 2) : '-' }}</td>
@@ -496,6 +498,7 @@
                     <tr>
                         <th style="width: 100px;">Fecha</th>
                         <th>Banco y Titular</th>
+                        <th>Tipo Gasto</th>
                         <th>Motivo</th>
                         <th class="col-number" style="text-align: right;">USD</th>
                         <th class="col-number" style="text-align: right;">Tasa Cambio</th>
@@ -512,6 +515,7 @@
                                 <strong style="color: var(--blue);">{{ $mov->banco }}</strong><br>
                                 <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular }}</span>
                             </td>
+                            <td>{{ $mov->tipo_gasto ?: '-' }}</td>
                             <td>{{ $mov->motivo ?: '-' }}</td>
                             <td class="col-number" style="text-align: right; font-weight: 500;">{{ $mov->monto_usd ? '$'.number_format($mov->monto_usd, 2) : '-' }}</td>
                             <td class="col-number" style="text-align: right;">{{ $mov->tasa_cambio ? number_format($mov->tasa_cambio, 2) : '-' }}</td>
@@ -566,7 +570,14 @@
 <div id="nuevoEgresoModal" class="modal-overlay" style="display: none; z-index: 1100;">
     <div class="panel modal-box" style="width: 95%; max-width: 600px; position: relative; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
         <button type="button" class="modal-close" onclick="closeNuevoEgresoModal()" aria-label="Cerrar" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
-        <h3 style="margin: 0 0 20px; font-size: 1.25rem; color: var(--blue);">Nuevo Egreso</h3>
+        <h3 style="margin: 0 0 20px; font-size: 1.25rem; color: var(--blue); display: flex; justify-content: space-between; align-items: center;">
+            <span>Nuevo Egreso</span>
+            <button type="button" id="btn-ocr" onclick="document.getElementById('ocr-upload').click()" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; padding: 6px 12px; border-radius: 6px; font-size: 0.875rem; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                <span id="ocr-btn-text">Escanear Recibo</span>
+            </button>
+            <input type="file" id="ocr-upload" accept="image/*" style="display: none;" onchange="handleOcrUpload(event)">
+        </h3>
         
         <form method="POST" action="{{ route('finanzas.store_egreso') }}">
             @csrf
@@ -612,7 +623,7 @@
                     <input type="number" step="0.01" name="tasa_cambio" id="tasa_cambio" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
                 <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Monto BS <small>(Auto)</small></label>
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Monto BS</label>
                     <input type="number" step="0.01" name="monto_bs" id="monto_bs" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
             </div>
@@ -629,8 +640,8 @@
             </div>
 
             <div style="margin-bottom: 25px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Motivo</label>
-                <select name="motivo" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Tipo de Gasto</label>
+                <select name="tipo_gasto" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                     <option value="">-- Seleccione un tipo de gasto --</option>
                     <option value="083 - GASTOS MEDICOS EMPLEADOS">083 - GASTOS MEDICOS EMPLEADOS</option>
                     <option value="002 - IMPUESTO MUNICIPAL (ALCALDIAS)">002 - IMPUESTO MUNICIPAL (ALCALDIAS)</option>
@@ -733,8 +744,13 @@
                 </select>
             </div>
 
+            <div style="margin-bottom: 25px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Motivo (Breve descripción)</label>
+                <input type="text" name="motivo" placeholder="Ej. Pago de internet mensual..." style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+
             <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                <button type="button" onclick="closeNuevoEgresoModal()" style="padding: 10px 20px; background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-weight: 500;">Cancelar</button>
+                <button type="button" onclick="closeNuevoEgresoModal(); sessionStorage.removeItem('pending_ocr_txs'); document.querySelector('#nuevoEgresoModal button[type=\'submit\']').innerText='Guardar Egreso'; document.querySelector('#nuevoEgresoModal button[type=\'submit\']').style.backgroundColor='#1a4273';" style="padding: 10px 20px; background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-weight: 500;">Cancelar</button>
                 <button type="submit" style="padding: 10px 20px; background-color: #1a4273; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Guardar Egreso</button>
             </div>
         </form>
@@ -757,26 +773,43 @@ document.addEventListener('DOMContentLoaded', function() {
     const bsInput = document.getElementById('monto_bs');
     const difInput = document.querySelector('input[name="diferencial_cambiario"]');
 
-    function calcularBs() {
+    let lastEditedAmount = 'usd';
+
+    function calcular() {
         const usd = parseFloat(usdInput.value) || 0;
+        const bs = parseFloat(bsInput.value) || 0;
         const tasa = parseFloat(tasaInput.value) || 0;
-        if(usd > 0 && tasa > 0) {
-            bsInput.value = (usd * tasa).toFixed(2);
+        
+        if (tasa > 0) {
+            if (lastEditedAmount === 'usd') {
+                bsInput.value = (usd * tasa).toFixed(2);
+            } else if (lastEditedAmount === 'bs') {
+                usdInput.value = (bs / tasa).toFixed(2);
+            }
         }
         
         const bcvTasaInput = document.querySelector('input[data-field="tasa_bcv_usd"]');
         if (difInput && bcvTasaInput) {
             const bcv = parseFloat(bcvTasaInput.value) || 1;
-            const bs = parseFloat(bsInput.value) || 0;
+            const finalUsd = parseFloat(usdInput.value) || 0;
+            const finalBs = parseFloat(bsInput.value) || 0;
             if (bcv > 0) {
-                difInput.value = (((usd * bcv) - bs) / bcv).toFixed(2);
+                difInput.value = (((finalUsd * bcv) - finalBs) / bcv).toFixed(2);
             }
         }
     }
 
-    usdInput.addEventListener('input', calcularBs);
-    tasaInput.addEventListener('input', calcularBs);
-    if(bsInput) bsInput.addEventListener('input', calcularBs);
+    usdInput.addEventListener('input', function() {
+        lastEditedAmount = 'usd';
+        calcular();
+    });
+    
+    bsInput.addEventListener('input', function() {
+        lastEditedAmount = 'bs';
+        calcular();
+    });
+    
+    tasaInput.addEventListener('input', calcular);
 
     // AJAX Guardado en Vivo
     const editables = document.querySelectorAll('.editable-input');
@@ -884,5 +917,161 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+function handleOcrUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const btn = document.getElementById('btn-ocr');
+    const btnText = document.getElementById('ocr-btn-text');
+    const originalText = btnText.innerText;
+    
+    btn.disabled = true;
+    btnText.innerText = "Analizando...";
+    btn.style.opacity = "0.7";
+
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('_token', '{{ csrf_token() }}');
+
+    fetch('{{ route("finanzas.ocr_receipt") }}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        btn.disabled = false;
+        btnText.innerText = originalText;
+        btn.style.opacity = "1";
+        
+        if (data.error) {
+            alert('Error al leer recibo: ' + (data.error || 'Desconocido'));
+            return;
+        }
+
+        // Fill form fields
+        if (data.fecha) {
+            const dateInput = document.querySelector('input[name="fecha"]');
+            if (dateInput) dateInput.value = data.fecha;
+        }
+        
+        if (data.referencia) {
+            const refInput = document.querySelector('input[name="referencia"]');
+            if (refInput) refInput.value = data.referencia;
+        }
+
+        // The user specifically requested amounts in BS
+        const amount = data.monto_bs ? data.monto_bs : (data.monto_usd ? data.monto_usd : null);
+        const montoBsInput = document.querySelector('input[name="monto_bs"]');
+        
+        if (amount && montoBsInput) {
+            montoBsInput.value = Math.abs(amount);
+            montoBsInput.dispatchEvent(new Event('input')); // trigger calculations if any
+        }
+        
+        if (data.motivo) {
+            const motivoInput = document.querySelector('input[name="motivo"]');
+            if (motivoInput) motivoInput.value = data.motivo;
+        }
+
+        // Try to pre-select Banco
+        if (data.banco_titular_hint) {
+            const bancoSelect = document.querySelector('select[name="banco_titular"]');
+            if (bancoSelect) {
+                const hint = data.banco_titular_hint.toLowerCase();
+                Array.from(bancoSelect.options).forEach(opt => {
+                    if (opt.text.toLowerCase().includes(hint)) {
+                        bancoSelect.value = opt.value;
+                    }
+                });
+            }
+        }
+        
+        // Abrir el modal original
+        openNuevoEgresoModal();
+
+        // Reset file input
+        event.target.value = '';
+    })
+    .catch(err => {
+        console.error(err);
+        btn.disabled = false;
+        btnText.innerText = originalText;
+        btn.style.opacity = "1";
+        alert('Error de conexión o timeout al analizar la imagen.');
+    });
+}
+
+function handleOcrSaldosUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const textSpan = document.getElementById('ocr-saldos-text');
+    const originalText = textSpan.innerText;
+    textSpan.innerText = "Analizando Reporte...";
+
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('_token', '{{ csrf_token() }}');
+
+    fetch('{{ route("finanzas.ocr_saldos") }}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        textSpan.innerText = originalText;
+        if (data.error) {
+            alert('Error al leer reporte: ' + data.error);
+            event.target.value = '';
+            return;
+        }
+
+        if (!Array.isArray(data) || data.length === 0) {
+            alert('No se encontraron cuentas o saldos en el reporte.');
+            event.target.value = '';
+            return;
+        }
+
+        let updatedCount = 0;
+        const tableRows = document.querySelectorAll('.modern-table tbody tr');
+        
+        data.forEach(item => {
+            if (!item.banco || !item.titular || item.bs === undefined || item.bs === null) return;
+            
+            const bankStr = item.banco.toUpperCase().trim();
+            const titStr = item.titular.toUpperCase().trim();
+            
+            tableRows.forEach(tr => {
+                const tdBanco = tr.querySelector('td:nth-child(2)');
+                const tdTit = tr.querySelector('td:nth-child(3)');
+                if (!tdBanco || !tdTit) return;
+                
+                // Fuzzy match just in case
+                const rowBank = tdBanco.innerText.toUpperCase().trim();
+                const rowTit = tdTit.innerText.toUpperCase().trim();
+                
+                if (rowBank.includes(bankStr) && rowTit.includes(titStr)) {
+                    const bsDispInput = tr.querySelector('input[data-field="bs_disponibles"]');
+                    if (bsDispInput) {
+                        bsDispInput.value = item.bs;
+                        // Dispatch event to save via AJAX and trigger USD auto-calc
+                        bsDispInput.dispatchEvent(new Event('change')); 
+                        updatedCount++;
+                    }
+                }
+            });
+        });
+
+        alert(`Se actualizaron exitosamente ${updatedCount} cuentas bancarias.`);
+        event.target.value = '';
+    })
+    .catch(err => {
+        console.error(err);
+        textSpan.innerText = originalText;
+        alert('Error de conexión al analizar el reporte.');
+        event.target.value = '';
+    });
+}
 </script>
 @endsection

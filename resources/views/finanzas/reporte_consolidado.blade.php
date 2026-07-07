@@ -136,6 +136,12 @@
 <div class="report-container">
     <div style="margin-bottom: 10px;" class="no-print btn-container">
         <a href="{{ route('finanzas.flujo_caja') }}" class="btn btn-secondary" style="background-color: #f1f5f9; color: #334155; padding: 8px 16px; border: 1px solid #cbd5e1; border-radius: 6px; text-decoration: none; font-weight: bold;">&larr; Volver</a>
+        
+        <div style="display: inline-block; margin-left: 30px;">
+            <button id="btn-inicio" class="btn" style="background-color: #1a4273; color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-right: 5px;">☀️ Inicio de Día</button>
+            <button id="btn-fin" class="btn" style="background-color: #f1f5f9; color: #334155; padding: 8px 16px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-weight: bold;">🌙 Fin de Día</button>
+        </div>
+
         <button onclick="window.print()" class="btn btn-primary" style="background-color: #1a4273; color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; float: right; display: flex; align-items: center; gap: 8px; font-weight: bold;">
             🖨️ Descargar PDF (Imprimir)
         </button>
@@ -147,7 +153,7 @@
         </div>
         <div class="report-title-box">
             <h1>FLUJO DE CAJA AL {{ \Carbon\Carbon::parse($resumen->fecha)->format('d/m/Y') }}</h1>
-            <h2>CONSOLIDADO DISPONIBILIDAD BANCARIA</h2>
+            <h2 id="report-title-text">CONSOLIDADO DISPONIBILIDAD BANCARIA (INICIO DE DÍA)</h2>
             <h3>GRUPO PALACIO DE LOS DETALLES - GRUPO JENU - NUNES STORE, C.A. - EURONISSI, C.A.</h3>
         </div>
         <div>
@@ -516,6 +522,47 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    let currentMode = 'inicio';
+    
+    const cuentasData = @json(collect($cuentas)->flatten());
+    const cuentasMap = {};
+    cuentasData.forEach(c => {
+        cuentasMap[c.id] = c;
+    });
+
+    document.getElementById('btn-inicio').addEventListener('click', () => switchMode('inicio'));
+    document.getElementById('btn-fin').addEventListener('click', () => switchMode('fin'));
+
+    function switchMode(mode) {
+        currentMode = mode;
+        
+        // Update Title and UI
+        document.getElementById('report-title-text').innerText = mode === 'inicio' ? "CONSOLIDADO DISPONIBILIDAD BANCARIA (INICIO DE DÍA)" : "CONSOLIDADO DISPONIBILIDAD BANCARIA (FIN DE DÍA)";
+        document.getElementById('btn-inicio').style.backgroundColor = mode === 'inicio' ? '#1a4273' : '#f1f5f9';
+        document.getElementById('btn-inicio').style.color = mode === 'inicio' ? 'white' : '#334155';
+        document.getElementById('btn-fin').style.backgroundColor = mode === 'fin' ? '#1a4273' : '#f1f5f9';
+        document.getElementById('btn-fin').style.color = mode === 'fin' ? 'white' : '#334155';
+
+        // Update inputs
+        document.querySelectorAll('.save-cuenta').forEach(input => {
+            let baseField = input.getAttribute('data-field').replace('_fin', '');
+            let id = input.getAttribute('data-id');
+            let data = cuentasMap[id];
+            
+            if (data) {
+                if (mode === 'inicio') {
+                    input.setAttribute('data-field', baseField);
+                    input.value = data[baseField];
+                } else {
+                    input.setAttribute('data-field', baseField + '_fin');
+                    input.value = data[baseField + '_fin'] || 0;
+                }
+            }
+        });
+
+        calculateTotals();
+    }
+
     function calculateTotals() {
         let bcv = parseFloat(document.getElementById('tasa_bcv').value) || 1;
         
@@ -565,6 +612,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     document.querySelectorAll('.report-input').forEach(input => {
+        // Instant visual conversion when typing BS
+        if (input.getAttribute('data-field') === 'reporte_bs' || input.getAttribute('data-field') === 'reporte_bs_fin') {
+            input.addEventListener('input', function() {
+                let val = parseFloat(this.value) || 0;
+                let bcv = parseFloat(document.getElementById('tasa_bcv').value) || 1;
+                let usdVal = bcv > 0 ? (val / bcv) : 0;
+                
+                let row = this.closest('tr');
+                if (row) {
+                    let usdField = currentMode === 'inicio' ? 'reporte_usd' : 'reporte_usd_fin';
+                    let usdInput = row.querySelector(`input[data-field="${usdField}"]`);
+                    if (usdInput) {
+                        usdInput.value = usdVal.toFixed(2);
+                    }
+                }
+                calculateTotals();
+            });
+        }
+
         input.addEventListener('change', function() {
             calculateTotals();
             
@@ -577,14 +643,15 @@ document.addEventListener('DOMContentLoaded', function() {
             };
             
             if (this.classList.contains('save-cuenta')) {
-                route = '/flujo-caja/cuenta/' + this.getAttribute('data-id');
+                route = '{{ url("finanzas/flujo-caja/cuenta") }}/' + this.getAttribute('data-id');
             } else if (this.classList.contains('save-resumen')) {
-                route = '/flujo-caja/resumen/{{ $resumen->id }}';
+                route = '{{ url("finanzas/flujo-caja/resumen") }}/{{ $resumen->id }}';
             } else if (this.classList.contains('save-plan')) {
-                route = '/flujo-caja/planificacion/' + this.getAttribute('data-id');
+                route = '{{ url("finanzas/flujo-caja/planificacion") }}/' + this.getAttribute('data-id');
             }
 
             if(route) {
+                let currentInput = this;
                 fetch(route, {
                     method: 'POST',
                     headers: {
@@ -592,6 +659,37 @@ document.addEventListener('DOMContentLoaded', function() {
                         'X-CSRF-TOKEN': '{{ csrf_token() }}'
                     },
                     body: JSON.stringify(payload)
+                }).then(res => res.json()).then(data => {
+                    // Update the local Map cache so switching back and forth keeps the unsaved state if any
+                    if (currentInput.classList.contains('save-cuenta')) {
+                        let id = currentInput.getAttribute('data-id');
+                        if (cuentasMap[id]) {
+                            cuentasMap[id][payload.field] = payload.value;
+                            
+                            // Mimic backend synchronization logic for local JS cache
+                            if (payload.field === 'reporte_bs') {
+                                cuentasMap[id]['reporte_bs_fin'] = payload.value;
+                            }
+                            
+                            if (data.success) {
+                                cuentasMap[id]['reporte_usd'] = data.reporte_usd;
+                                cuentasMap[id]['reporte_usd_fin'] = data.reporte_usd_fin;
+                            }
+                        }
+                    }
+
+                    if (data.success && (payload.field === 'reporte_bs' || payload.field === 'reporte_bs_fin') && currentInput.classList.contains('save-cuenta')) {
+                        // Find the USD input in the same row and update it visually
+                        let row = currentInput.closest('tr');
+                        if (row) {
+                            let usdField = currentMode === 'inicio' ? 'reporte_usd' : 'reporte_usd_fin';
+                            let usdInput = row.querySelector(`input[data-field="${usdField}"]`);
+                            if (usdInput) {
+                                usdInput.value = currentMode === 'inicio' ? data.reporte_usd : data.reporte_usd_fin;
+                                calculateTotals();
+                            }
+                        }
+                    }
                 });
             }
         });

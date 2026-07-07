@@ -152,6 +152,9 @@ Route::middleware(['auth', 'role:admin,finanzas'])->prefix('finanzas')->group(fu
     Route::get('/flujo-caja', [FinanzasController::class, 'flujoCaja'])->name('finanzas.flujo_caja');
     Route::post('/flujo-caja/reset', [FinanzasController::class, 'resetDaily'])->name('finanzas.reset_daily');
     Route::post('/flujo-caja/egreso', [FinanzasController::class, 'storeEgreso'])->name('finanzas.store_egreso');
+    Route::post('/flujo-caja/egresos-bulk', [FinanzasController::class, 'storeEgresosBulk'])->name('finanzas.store_egresos_bulk');
+    Route::post('/flujo-caja/ocr-receipt', [FinanzasController::class, 'ocrReceipt'])->name('finanzas.ocr_receipt');
+    Route::post('/flujo-caja/ocr-saldos', [FinanzasController::class, 'ocrSaldos'])->name('finanzas.ocr_saldos');
     Route::get('/flujo-caja/reporte-diario', [FinanzasController::class, 'reporteDiarioCaja'])->name('finanzas.reporte_diario_caja');
     Route::post('/flujo-caja/cuenta/{id}', [FinanzasController::class, 'updateCuenta'])->name('finanzas.update_cuenta');
     Route::post('/flujo-caja/resumen/{id}', [FinanzasController::class, 'updateResumen'])->name('finanzas.update_resumen');
@@ -159,9 +162,10 @@ Route::middleware(['auth', 'role:admin,finanzas'])->prefix('finanzas')->group(fu
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
     Route::post('/conciliaciones/upload', [FinanzasController::class, 'uploadConciliacion'])->name('finanzas.conciliaciones.upload');
     Route::post('/conciliaciones/process', [FinanzasController::class, 'processConciliacion'])->name('finanzas.conciliaciones.process');
-    Route::post('/conciliaciones/add-missing', [FinanzasController::class, 'addMissingConciliacion'])->name('finanzas.conciliaciones.add_missing');
-    Route::post('/conciliaciones/ignore', [FinanzasController::class, 'ignoreConciliacion'])->name('finanzas.conciliaciones.ignore');
-    Route::post('/conciliaciones/clear', [FinanzasController::class, 'clearConciliacion'])->name('finanzas.conciliaciones.clear');
+    Route::post('/conciliaciones/add-missing', [App\Http\Controllers\FinanzasController::class, 'addMissingConciliacion'])->name('finanzas.conciliaciones.add_missing');
+    Route::post('/conciliaciones/ignore', [App\Http\Controllers\FinanzasController::class, 'ignoreConciliacion'])->name('finanzas.conciliaciones.ignore');
+    Route::post('/conciliaciones/clear', [App\Http\Controllers\FinanzasController::class, 'clearConciliacion'])->name('finanzas.conciliaciones.clear');
+    Route::get('/conciliaciones/reporte', [App\Http\Controllers\FinanzasController::class, 'reporteConciliacion'])->name('finanzas.conciliaciones.reporte');
 });
 
 // Cobranza routes
@@ -171,3 +175,10 @@ Route::middleware(['auth', 'role:admin,cobranza'])->prefix('cobranza')->group(fu
     Route::post('/limpiar', [CobranzaController::class, 'limpiarClientes'])->name('cobranza.limpiar');
 });
 Route::get('/finanzas/reporte-consolidado', [App\Http\Controllers\FinanzasController::class, 'reporteConsolidado'])->name('finanzas.reporte_consolidado');
+
+Route::get('/ping', function () { return 'OK'; });
+
+Route::get('/pure', function () {
+    $inicio = microtime(true);
+    return response('Tiempo: ' . round((microtime(true) - $inicio) * 1000, 2) . ' ms');
+});
