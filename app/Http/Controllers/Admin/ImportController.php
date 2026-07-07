@@ -40,9 +40,14 @@ class ImportController extends Controller
         try {
             $count = $import->importFromExcel($path);
             
-            // Automatically clear cache and compiled views after successful import to free memory
-            \Illuminate\Support\Facades\Artisan::call('cache:clear');
-            \Illuminate\Support\Facades\Artisan::call('view:clear');
+            // Invalidar solo las claves de caché que dependen del inventario.
+            // Se evita cache:clear global para no destruir la tasa BCV ni las sesiones.
+            // Las claves con md5(lastStockUpdate) se invalidan solas al cambiar el timestamp.
+            \Illuminate\Support\Facades\Cache::forget('inventario_v2.global_products');
+            \Illuminate\Support\Facades\Cache::forget('dashboard.productos_activos');
+            \Illuminate\Support\Facades\Cache::forget('dashboard.existencia_por_sede');
+            \Illuminate\Support\Facades\Cache::forget('dashboard.movimientos_stats');
+            \Illuminate\Support\Facades\Cache::forget('cobranza_resumenes');
         } catch (\Throwable $e) {
             if (is_file($path)) {
                 @unlink($path);
