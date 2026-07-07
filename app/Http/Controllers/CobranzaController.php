@@ -15,21 +15,25 @@ class CobranzaController extends Controller
         \Log::info('URL: '.$request->fullUrl());
         \Log::info('Método: '.$request->method());
 
-        $queryCount = 0;
-        \Illuminate\Support\Facades\DB::listen(function ($query) use (&$queryCount) {
-            $queryCount++;
-            \Log::info(sprintf('[SQL #%d] %.2f ms | %s', $queryCount, $query->time, $query->sql));
-        });
+        // Listener de diagnóstico solo activo en modo debug
+        if (config('app.debug')) {
+            \Illuminate\Support\Facades\DB::listen(function ($query) use (&$queryCount) {
+                $queryCount++;
+                \Log::info(sprintf('[SQL #%d] %.2f ms | %s', $queryCount, $query->time, $query->sql));
+            });
+        }
 
         \Log::info('Inicio controlador');
 
         $t = microtime(true);
         $sedes = config('inventario.sedes_locales');
         
-        // Leer Resumenes Globales
-        $resumenes = CobranzaResumen::all();
+        // Leer Resumenes Globales (cacheado 5 minutos: solo cambia cuando se importa un Excel)
+        $resumenes = \Illuminate\Support\Facades\Cache::remember('cobranza_resumenes', 300, fn () => CobranzaResumen::all());
 
-        \Log::info(sprintf('CobranzaResumen::all() => %.2f ms | %d registros', (microtime(true)-$t)*1000, $resumenes->count()));
+        if (config('app.debug')) {
+            \Log::info(sprintf('CobranzaResumen::all() => %d registros', $resumenes->count()));
+        }
         
         $porSede = [];
         $gran_total_saldo = 0;
@@ -88,9 +92,15 @@ class CobranzaController extends Controller
         if ($filtro_sede) {
             $queryClientes->where('sede_nombre', $filtro_sede);
         }
-        $clientes_lista = $queryClientes->orderBy('cliente', 'asc')->get();
-        
-        \Log::info(sprintf('Clientes => %.2f ms | %d registros', (microtime(true)-$t)*1000, $clientes_lista->count()));
+        // Solo se cargan las columnas que usa la vista (evita SELECT *)
+        $clientes_lista = $queryClientes
+            ->select(['codigo', 'cliente', 'saldo_bs', 'saldo_usd', 'fecha_emision', 'estatus'])
+            ->orderBy('cliente', 'asc')
+            ->get();
+
+        if (config('app.debug')) {
+            \Log::info(sprintf('Clientes => %d registros', $clientes_lista->count()));
+        }
 
         $t = microtime(true);
         $view = view('cobranza.index', compact('porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'sedes', 'clientes_lista', 'filtro_sede'));
@@ -236,6 +246,8 @@ class CobranzaController extends Controller
                 foreach(array_chunk($insertData, 500) as $chunk) {
                     Cobranza::insert($chunk);
                 }
+                // Invalidar caché de resumenes para que la pantalla muestre datos frescos inmediatamente
+                \Illuminate\Support\Facades\Cache::forget('cobranza_resumenes');
                 return redirect()->back()->with('success', 'Excel importado correctamente. Se cargaron ' . count($insertData) . ' saldos y se actualizó el resumen global.');
             } else {
                 return redirect()->back()->with('error', 'No se encontraron datos válidos para importar.');

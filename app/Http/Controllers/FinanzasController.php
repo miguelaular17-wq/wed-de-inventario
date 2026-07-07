@@ -5,8 +5,11 @@ use App\Models\FlujoCaja;
 use App\Models\ConciliacionBancaria;
 use Illuminate\Http\Request;
 
+use App\Services\BcvRateService;
+
 class FinanzasController extends Controller
 {
+    public function __construct(private BcvRateService $bcvRate) {}
     private function getCuentas()
     {
         return [
@@ -96,22 +99,9 @@ class FinanzasController extends Controller
         ];
     }
 
-    private function getTasaBcvDelDia() {
-        return \Illuminate\Support\Facades\Cache::remember('tasa_bcv_' . date('Y-m-d'), 60 * 12, function () {
-            try {
-                $client = new \GuzzleHttp\Client(['timeout' => 5]);
-                $response = $client->get('https://ve.dolarapi.com/v1/dolares/oficial');
-                $data = json_decode($response->getBody(), true);
-                if (isset($data['promedio']) && $data['promedio'] > 0) {
-                    return round($data['promedio'], 2);
-                }
-            } catch (\Exception $e) {
-                // Silently fallback if api fails
-            }
-            
-            $ultimo = \App\Models\FinanzasResumen::orderBy('fecha', 'desc')->first();
-            return $ultimo ? $ultimo->tasa_bcv_usd : 1;
-        });
+    private function getTasaBcvDelDia(): float
+    {
+        return $this->bcvRate->getRateForToday();
     }
 
     public function flujoCaja() {

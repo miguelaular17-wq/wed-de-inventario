@@ -12,10 +12,14 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->trustProxies(at: '*');
+        // Middleware de profiling — activo solo cuando APP_PROFILING=true en .env
+        $middleware->web(append: [
+            \App\Http\Middleware\ProfilingMiddleware::class,
+        ]);
         $middleware->alias([
-            'sede' => \App\Http\Middleware\EnsureSedeSelected::class,
+            'sede'  => \App\Http\Middleware\EnsureSedeSelected::class,
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
-            'role' => \App\Http\Middleware\EnsureRole::class,
+            'role'  => \App\Http\Middleware\EnsureRole::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

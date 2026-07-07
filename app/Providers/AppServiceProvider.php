@@ -13,13 +13,17 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        \Illuminate\Support\Facades\DB::listen(function ($query) {
-            \Illuminate\Support\Facades\Log::info(sprintf(
-                '[SQL] %.2f ms | %s',
-                $query->time,
-                $query->sql
-            ));
-        });
+        // Logging de SQL solo en entorno de desarrollo (DEBUG=true)
+        // En producción se omite para eliminar escrituras síncronas a disco por cada query
+        if (config('app.debug')) {
+            \Illuminate\Support\Facades\DB::listen(function ($query) {
+                \Illuminate\Support\Facades\Log::info(sprintf(
+                    '[SQL] %.2f ms | %s',
+                    $query->time,
+                    $query->sql
+                ));
+            });
+        }
 
         \Illuminate\Pagination\Paginator::useBootstrapFive();
 

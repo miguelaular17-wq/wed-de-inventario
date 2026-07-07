@@ -58,5 +58,5 @@ RUN sed -ri -e 's!AllowOverride None!AllowOverride All!g' /etc/apache2/apache2.c
 # Expose default HTTP port
 EXPOSE 80
 
-# Run migrations, seed database, and start Apache server
-CMD php artisan migrate --force && php artisan db:seed --force && apache2-foreground
+# Run migrations and start Apache server
+CMD php artisan optimize:clear && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && apache2-foreground

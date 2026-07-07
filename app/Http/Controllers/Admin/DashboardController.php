@@ -3,31 +3,16 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Services\MovimientoQueryService;
+use App\Services\DashboardStatsService;
 use App\Services\ProductRepository;
-use App\Services\VentasCalculator;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request, ProductRepository $products, MovimientoQueryService $movimientos): View
+    public function index(Request $request, ProductRepository $products, DashboardStatsService $stats): View
     {
-        $stockBySede = [];
-        if (config('database.default') === 'pgsql') {
-            $stockBySede = \Illuminate\Support\Facades\DB::connection('pgsql')
-                ->table('stock_actual')
-                ->select('sede', \Illuminate\Support\Facades\DB::raw('SUM(existencia) as total_stock'))
-                ->groupBy('sede')
-                ->pluck('total_stock', 'sede')
-                ->toArray();
-        } else {
-            $stockBySede = \Illuminate\Support\Facades\DB::table('product_sede_metrics')
-                ->select('sede', \Illuminate\Support\Facades\DB::raw('SUM(existencia) as total_stock'))
-                ->groupBy('sede')
-                ->pluck('total_stock', 'sede')
-                ->toArray();
-        }
+        $stockBySede = $stats->existenciaPorSede();
 
         $sedes = config('inventario.sedes_stock');
         $chartData = [];
@@ -36,21 +21,13 @@ class DashboardController extends Controller
         }
 
         return view('admin.dashboard', [
-            'productCount' => $this->productCount($products),
-            'movementStats' => $movimientos->stats(),
-            'lastImport' => $products->lastStockUpdate(),
-            'chartData' => $chartData,
+            'productCount'  => $stats->productosActivos(),
+            'movementStats' => $stats->movimientosStats(),
+            'lastImport'    => $products->lastStockUpdate(),
+            'chartData'     => $chartData,
         ]);
     }
 
-    private function productCount(ProductRepository $products): int
-    {
-        if (config('database.default') === 'pgsql') {
-            return \App\Models\V2\Producto::query()->where('activo', true)->count();
-        }
-
-        return \App\Models\Product::query()->count();
-    }
 
     public function clearCache(): \Illuminate\Http\RedirectResponse
     {
