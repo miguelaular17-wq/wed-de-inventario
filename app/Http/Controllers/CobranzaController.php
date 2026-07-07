@@ -9,12 +9,27 @@ use Illuminate\Support\Facades\Log;
 
 class CobranzaController extends Controller
 {
-    public function index() {
-        $inicio = microtime(true);
+    public function index(Request $request) {
+        $t0 = microtime(true);
+        \Log::info('========== COBRANZA ==========');
+        \Log::info('URL: '.$request->fullUrl());
+        \Log::info('Método: '.$request->method());
+
+        $queryCount = 0;
+        \Illuminate\Support\Facades\DB::listen(function ($query) use (&$queryCount) {
+            $queryCount++;
+            \Log::info(sprintf('[SQL #%d] %.2f ms | %s', $queryCount, $query->time, $query->sql));
+        });
+
+        \Log::info('Inicio controlador');
+
+        $t = microtime(true);
         $sedes = config('inventario.sedes_locales');
         
         // Leer Resumenes Globales
         $resumenes = CobranzaResumen::all();
+
+        \Log::info(sprintf('CobranzaResumen::all() => %.2f ms | %d registros', (microtime(true)-$t)*1000, $resumenes->count()));
         
         $porSede = [];
         $gran_total_saldo = 0;
@@ -66,6 +81,7 @@ class CobranzaController extends Controller
             return strcmp($a->sede_nombre, $b->sede_nombre);
         });
 
+        $t = microtime(true);
         // Filtrado de la tabla de clientes detallada
         $filtro_sede = request('filtro_sede');
         $queryClientes = Cobranza::query();
@@ -74,8 +90,19 @@ class CobranzaController extends Controller
         }
         $clientes_lista = $queryClientes->orderBy('cliente', 'asc')->get();
         
-        \Log::info('Cobranza: ' . round((microtime(true) - $inicio) * 1000, 2) . ' ms');
-        return view('cobranza.index', compact('porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'sedes', 'clientes_lista', 'filtro_sede'));
+        \Log::info(sprintf('Clientes => %.2f ms | %d registros', (microtime(true)-$t)*1000, $clientes_lista->count()));
+
+        $t = microtime(true);
+        $view = view('cobranza.index', compact('porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'sedes', 'clientes_lista', 'filtro_sede'));
+        $html = $view->render();
+        \Log::info(sprintf('Render Blade => %.2f ms', (microtime(true)-$t)*1000));
+        
+        \Log::info(sprintf('Consultas SQL: %d', $queryCount));
+        \Log::info(sprintf('Memoria: %.2f MB', memory_get_peak_usage(true)/1024/1024));
+        \Log::info(sprintf('TOTAL CONTROLADOR => %.2f ms', (microtime(true)-$t0)*1000));
+        \Log::info('==============================');
+
+        return response($html);
     }
 
     public function limpiarClientes(Request $request) {

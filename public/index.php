@@ -1,4 +1,5 @@
 <?php
+$inicioGlobal = microtime(true);
 
 /**
  * Front controller de Laravel.
@@ -14,6 +15,8 @@ $kernel = $app->make(Illuminate\Contracts\Http\Kernel::class);
 $response = $kernel->handle(
     $request = Illuminate\Http\Request::capture()
 );
+
+\Illuminate\Support\Facades\Log::info('TOTAL REQUEST: ' . round((microtime(true) - $inicioGlobal) * 1000, 2) . ' ms');
 
 $response->send();
 
