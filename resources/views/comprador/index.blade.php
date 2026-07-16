@@ -61,14 +61,255 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 <!-- Selector de Pestañas (Tabs) -->
 <div class="segmented" style="margin-bottom: 24px; display: flex; width: max-content;">
     @if(!auth()->user()->isMarketing())
-        <button type="button" class="tab-btn active" onclick="switchTab('productos-tab', this)">Productos y Distribución</button>
-        <button type="button" class="tab-btn" onclick="switchTab('proveedores-tab', this)">General por Proveedor</button>
-        <button type="button" class="tab-btn" onclick="switchTab('sobrestock-tab', this)">Sobre Stock / Sin Rotación</button>
+        <button type="button" id="tab-btn-dist" class="tab-btn {{ ($statusFilter ?? 'MalaDistribucion') !== 'Comprar' ? 'active' : '' }}" onclick="localStorage.setItem('activeCompradorTab', 'productos-tab'); window.location.href = window.location.pathname + '?status=MalaDistribucion';">Distribución</button>
+        <button type="button" id="tab-btn-compra" class="tab-btn {{ ($statusFilter ?? '') === 'Comprar' ? 'active' : '' }}" onclick="localStorage.setItem('activeCompradorTab', 'productos-tab'); window.location.href = window.location.pathname + '?status=Comprar';">Necesidad de Compra</button>
+        <button type="button" class="tab-btn" onclick="localStorage.setItem('activeCompradorTab', 'proveedores-tab'); window.location.href = window.location.pathname;">General por Proveedor</button>
+        <button type="button" class="tab-btn" onclick="localStorage.setItem('activeCompradorTab', 'sobrestock-tab'); window.location.href = window.location.pathname;">Sobre Stock / Sin Rotación</button>
     @else
-        <button type="button" class="tab-btn active" onclick="switchTab('sobrestock-tab', this)">Sobre Stock / Sin Rotación</button>
+        <button type="button" class="tab-btn active" onclick="localStorage.setItem('activeCompradorTab', 'sobrestock-tab'); window.location.href = window.location.pathname;">Sobre Stock / Sin Rotación</button>
     @endif
+    <button type="button" class="tab-btn" onclick="switchTab('qpedir-tab', this)">Q Pedir @if(isset($pedidosSolicitados) && $pedidosSolicitados->isNotEmpty()) ({{ $pedidosSolicitados->count() }}) @endif</button>
     @if(auth()->user()->isMarketing() || auth()->user()->isAdmin())
         <button type="button" class="tab-btn" onclick="switchTab('publicidad-tab', this)">Efectividad Publicidad</button>
+    @endif
+    <button type="button" class="tab-btn" onclick="switchTab('cobranzas-tab', this)">Cobranzas</button>
+</div>
+
+<!-- Tab Cobranzas -->
+<div id="cobranzas-tab" class="tab-content" style="display: none;">
+    @if(!empty($cobranzasData['fecha_actual']))
+    <div style="display: flex; gap: 24px; margin-bottom: 24px; flex-wrap: wrap;">
+        <!-- Card 1: Por Sede -->
+        <div class="panel" style="flex: 1; min-width: 300px; background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
+            <h3 style="text-align: center; font-size: 0.9rem; font-weight: 700; margin-bottom: 16px;">INDICADORES DE COBRANZA POR SEDE AL<br>{{ $cobranzasData['fecha_actual'] }}</h3>
+            <table class="table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #e0f2fe; color: #0369a1; text-align: left; font-size: 0.8rem;">
+                        <th style="padding: 8px;">SEDE ▼</th>
+                        <th style="padding: 8px; text-align: center;">CLIENTE</th>
+                        <th style="padding: 8px; text-align: right;">SALDO</th>
+                        <th style="padding: 8px; text-align: right;">% GLOBAL</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @php $totCliSede = 0; $totSalSede = 0; $totPorSede = 0; @endphp
+                    @foreach($cobranzasData['sede_list'] as $s)
+                    @php $totCliSede += $s['clientes']; $totSalSede += $s['saldo']; $totPorSede += $s['porcentaje']; @endphp
+                    <tr style="border-bottom: 1px solid #f1f5f9; font-size: 0.85rem;">
+                        <td style="padding: 8px;">{{ $s['sede'] }}</td>
+                        <td style="padding: 8px; text-align: center;">{{ $s['clientes'] }}</td>
+                        <td style="padding: 8px; text-align: right;">{{ number_format($s['saldo'], 2, ',', '.') }}</td>
+                        <td style="padding: 8px; text-align: right;">{{ $s['porcentaje'] }}%</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+                <tfoot>
+                    <tr style="background: #dbeafe; font-weight: bold; font-size: 0.85rem;">
+                        <td style="padding: 8px;">Total general</td>
+                        <td style="padding: 8px; text-align: center;">{{ $totCliSede }}</td>
+                        <td style="padding: 8px; text-align: right;">{{ number_format($totSalSede, 2, ',', '.') }}</td>
+                        <td style="padding: 8px; text-align: right;">100%</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <!-- Card 2: Por Estatus -->
+        <div class="panel" style="flex: 1; min-width: 300px; background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
+            <h3 style="text-align: center; font-size: 0.9rem; font-weight: 700; margin-bottom: 16px;">INDICADORES DE COBRANZA POR ESTATUS AL<br>{{ $cobranzasData['fecha_actual'] }}</h3>
+            <table class="table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #e0f2fe; color: #0369a1; text-align: left; font-size: 0.8rem;">
+                        <th style="padding: 8px;">ESTATUS ▼</th>
+                        <th style="padding: 8px; text-align: center;">CLIENTE</th>
+                        <th style="padding: 8px; text-align: right;">SALDO</th>
+                        <th style="padding: 8px; text-align: right;">% GLOBAL</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @php $totCliEst = 0; $totSalEst = 0; @endphp
+                    @foreach($cobranzasData['estatus_list'] as $e)
+                    @php $totCliEst += $e['clientes']; $totSalEst += $e['saldo']; @endphp
+                    <tr style="background: {{ $e['color'] }}; color: #fff; font-size: 0.85rem; font-weight: 600;">
+                        <td style="padding: 8px;">{{ $e['estatus'] }}</td>
+                        <td style="padding: 8px; text-align: center;">{{ $e['clientes'] }}</td>
+                        <td style="padding: 8px; text-align: right;">{{ number_format($e['saldo'], 2, ',', '.') }}</td>
+                        <td style="padding: 8px; text-align: right;">{{ $e['porcentaje'] }}%</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+                <tfoot>
+                    <tr style="background: #dbeafe; font-weight: bold; font-size: 0.85rem; color: #333;">
+                        <td style="padding: 8px;">Total general</td>
+                        <td style="padding: 8px; text-align: center;">{{ $totCliEst }}</td>
+                        <td style="padding: 8px; text-align: right;">{{ number_format($totSalEst, 2, ',', '.') }}</td>
+                        <td style="padding: 8px; text-align: right;">100%</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- Comparativa Semanal -->
+    @if(!empty($cobranzasData['fechas_semanal']))
+    <div class="panel" style="background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; margin-bottom: 24px; overflow-x: auto;">
+        <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 16px; color: #333;">Comparativa Semanal</h3>
+        <table class="table" style="width: 100%; border-collapse: collapse; text-align: right; min-width: 600px;">
+            <thead>
+                <tr style="background: #3b82f6; color: white; font-size: 0.8rem;">
+                    <th style="padding: 10px; text-align: left;">ESTATUS</th>
+                    @foreach($cobranzasData['fechas_semanal'] as $index => $fecha)
+                        <th style="padding: 10px;">LUNES<br>{{ $fecha }}</th>
+                        @if($index > 0)
+                            <th style="padding: 10px;">% DE EFECTIVIDAD</th>
+                        @endif
+                    @endforeach
+                </tr>
+            </thead>
+            <tbody>
+                @php $totalesLunes = []; @endphp
+                @foreach($cobranzasData['semanal_list'] as $row)
+                <tr style="border-bottom: 1px solid #e2e8f0; font-size: 0.85rem;">
+                    <td style="padding: 10px; background: {{ $row['color'] }}; color: white; font-weight: 600; text-align: left;">{{ $row['estatus'] }}</td>
+                    @foreach($row['lunes'] as $index => $lun)
+                        @php 
+                            if(!isset($totalesLunes[$index])) $totalesLunes[$index] = 0;
+                            $totalesLunes[$index] += $lun['saldo'];
+                        @endphp
+                        <td style="padding: 10px;">{{ number_format($lun['saldo'], 2, ',', '.') }}</td>
+                        @if($index > 0)
+                            <td style="padding: 10px; color: {{ str_starts_with($lun['efectividad'], '-') ? '#ef4444' : '#10b981' }}; font-weight: 600;">{{ $lun['efectividad'] }}</td>
+                        @endif
+                    @endforeach
+                </tr>
+                @endforeach
+                <tr style="background: #f8fafc; font-weight: 700; font-size: 0.85rem;">
+                    <td style="padding: 10px; text-align: left;">TOTALES</td>
+                    @foreach($totalesLunes as $index => $tot)
+                        <td style="padding: 10px;">{{ number_format($tot, 2, ',', '.') }}</td>
+                        @if($index > 0)
+                            @php
+                                $prev = $totalesLunes[$index - 1];
+                                $ef = $prev > 0 ? round((($prev - $tot) / $prev) * 100, 0) . '%' : '-';
+                            @endphp
+                            <td style="padding: 10px;">{{ $ef }}</td>
+                        @endif
+                    @endforeach
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    @endif
+
+    <!-- Detalle de Clientes -->
+    <div class="panel" style="background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="font-size: 1rem; font-weight: 700; color: #1e3a8a; margin: 0;">Detalle de Clientes</h3>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <label style="font-size: 0.85rem; color: #64748b;">Filtrar por Sede:</label>
+                <select id="cobranzas-sede-filter" onchange="filterCobranzas(this.value)" style="padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; outline: none;">
+                    <option value="ALL">Todas las Sedes</option>
+                    @foreach($cobranzasData['sede_list'] as $s)
+                        <option value="{{ $s['sede'] }}">{{ $s['sede'] }}</option>
+                    @endforeach
+                </select>
+            </div>
+        </div>
+        <div style="overflow-x: auto; max-height: 500px;">
+            <table class="table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                <thead style="position: sticky; top: 0; background: #fff; z-index: 10; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                    <tr style="color: #0369a1; text-align: left;">
+                        <th style="padding: 12px 8px;">CÓDIGO</th>
+                        <th style="padding: 12px 8px;">CLIENTE</th>
+                        <th style="padding: 12px 8px; text-align: right;">SALDO USD</th>
+                        <th style="padding: 12px 8px; text-align: right;">SALDO BS (Ref)</th>
+                        <th style="padding: 12px 8px; text-align: center;">FECHA EMISIÓN</th>
+                        <th style="padding: 12px 8px; text-align: center;">ESTATUS</th>
+                    </tr>
+                </thead>
+                <tbody id="cobranzas-tbody">
+                    @foreach($cobranzasData['detalle'] as $det)
+                    <tr class="cobranza-row" data-sede="{{ $det->sede_nombre }}" style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 10px 8px;">{{ $det->codigo_cliente }}</td>
+                        <td style="padding: 10px 8px; font-weight: 600;">{{ $det->nombre_cliente }}</td>
+                        <td style="padding: 10px 8px; text-align: right;">{{ number_format($det->saldo, 2, ',', '.') }}</td>
+                        <td style="padding: 10px 8px; text-align: right; color: #64748b;">{{ number_format($det->saldo * 40, 2, ',', '.') }}</td>
+                        <td style="padding: 10px 8px; text-align: center;">{{ \Carbon\Carbon::parse($det->fecha_emision)->format('d/m/Y') }}</td>
+                        <td style="padding: 10px 8px; text-align: center;">
+                            <span style="padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; color: #fff; font-weight: 600; background: {{ $det->estatus === 'CRITICO' ? '#ef4444' : ($det->estatus === 'MOROSO' ? '#eab308' : '#84cc16') }};">
+                                {{ $det->estatus }}
+                            </span>
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        function filterCobranzas(sede) {
+            const rows = document.querySelectorAll('.cobranza-row');
+            rows.forEach(row => {
+                if (sede === 'ALL' || row.dataset.sede === sede) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+    </script>
+    @else
+    <div class="panel" style="padding: 40px; text-align: center; color: var(--muted);">
+        <p>No hay datos de cobranzas registrados. El sincronizador subirá esta información próximamente.</p>
+    </div>
+    @endif
+</div>
+
+<!-- Tab Q Pedir -->
+<div id="qpedir-tab" class="tab-content" style="display: none;">
+    @if(isset($pedidosSolicitados) && $pedidosSolicitados->isNotEmpty())
+    <div class="panel pedidos-card" style="background: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; padding: 20px; border-left: 4px solid #f59e0b; margin-bottom: 24px;">
+        <h2 style="margin: 0 0 16px; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+            <span style="background:#fef3c7;color:#b45309;padding:4px 10px;border-radius:6px;font-size:0.85rem;">Q Pedir</span>
+            Solicitudes pendientes ({{ $pedidosSolicitados->count() }})
+        </h2>
+        <p style="margin:0 0 12px;color:#64748b;font-size:0.88rem;">
+            Productos solicitados desde el login. Revisa y marca como atendido cuando los proceses.
+        </p>
+        @foreach($pedidosSolicitados as $pedido)
+            <div class="pedido-item" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap;">
+                <div>
+                    <div style="font-weight:600;">{{ $pedido->producto }}</div>
+                    <div style="font-size:0.8rem;color:#64748b;font-family:monospace;">
+                        {{ $pedido->codigo }}
+                        @if($pedido->categoria) &middot; {{ $pedido->categoria }} @endif
+                        @if($pedido->proveedor) &middot; {{ $pedido->proveedor }} @endif
+                    </div>
+                    <div style="font-size:0.78rem;color:#64748b;margin-top:4px;">
+                        Solicitado {{ $pedido->created_at->diffForHumans() }}
+                        @if($pedido->solicitante) por <strong>{{ $pedido->solicitante }}</strong> @endif
+                        @if($pedido->notas) &mdash; {{ $pedido->notas }} @endif
+                    </div>
+                </div>
+                <div class="pedido-actions" style="display: flex; gap: 8px; flex-shrink: 0;">
+                    <form method="POST" action="{{ route('comprador.pedidos.atender', $pedido) }}">
+                        @csrf
+                        <button type="submit" class="btn-atender" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #10b981; background: #10b981; color: white;">Atendido</button>
+                    </form>
+                    <form method="POST" action="{{ route('comprador.pedidos.destroy', $pedido) }}" onsubmit="return confirm('¿Eliminar esta solicitud?')">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn-eliminar" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #fecaca; background: #fff; color: #ef4444;">Eliminar</button>
+                    </form>
+                </div>
+            </div>
+        @endforeach
+    </div>
+    @else
+    <div class="panel" style="padding: 40px; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 12px; background: #f8fafc;">
+        <p style="font-size: 1.1rem; font-weight: 500;">No hay solicitudes pendientes en este momento.</p>
+    </div>
     @endif
 </div>
 
@@ -76,16 +317,16 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 <!-- Tab 1: Productos y Distribución -->
 <div id="productos-tab" class="tab-content">
     <div class="panel">
-        <h2 style="margin: 0 0 16px; font-size: 1.25rem;">Distribución y Compras por Producto</h2>
+        <h2 style="margin: 0 0 16px; font-size: 1.25rem;">{{ ($statusFilter ?? 'MalaDistribucion') === 'Comprar' ? 'Necesidad de Compra por Producto' : 'Mala Distribución por Producto' }}</h2>
         
         {{-- Barra de búsqueda independiente --}}
         <form method="GET" id="tab1-search-form" style="margin-bottom: 14px; display: flex; align-items: center; gap: 10px;">
             {{-- Preserve all current filter values so they don't reset on search --}}
-            <input type="hidden" name="categoria" value="{{ $selectedCategoria ?? 'Ninguno' }}">
-            <input type="hidden" name="subcategoria" value="{{ $selectedSubcategoria ?? 'Ninguno' }}">
-            <input type="hidden" name="proveedor" value="{{ $selectedProveedor ?? 'Ninguno' }}">
-            <input type="hidden" name="status" value="{{ $statusFilter ?? 'Todos' }}">
-            <input type="hidden" name="tp" value="{{ $tp ?? 60 }}">
+            <input type="hidden" name="categoria" value="{{ request('categoria', 'Ninguno') }}">
+            <input type="hidden" name="subcategoria" value="{{ request('subcategoria', 'Ninguno') }}">
+            <input type="hidden" name="proveedor" value="{{ request('proveedor', 'Ninguno') }}">
+            <input type="hidden" name="status" id="status-filter" value="{{ $statusFilter ?? 'MalaDistribucion' }}">
+            <input type="hidden" name="tp" value="{{ request('tp', 60) }}">
             <div style="flex: 1; max-width: 480px; position: relative;">
                 <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:1rem; color:var(--muted); pointer-events:none;">🔍</span>
                 <input
@@ -138,14 +379,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                     @endif
                 </select>
             </div>
-            <div class="field">
-                <label for="status">Estado</label>
-                <select id="status" name="status" onchange="this.form.submit();">
-                    <option value="Todos" @selected($statusFilter === 'Todos')>Todos los estados</option>
-                    <option value="Comprar" @selected($statusFilter === 'Comprar')>Necesita Compra (COMPRAR)</option>
-                    <option value="MalaDistribucion" @selected($statusFilter === 'MalaDistribucion')>Mala Distribución</option>
-                </select>
-            </div>
+            <input type="hidden" name="status" value="{{ $statusFilter ?? 'MalaDistribucion' }}">
             <div class="field">
                 <label for="tp">Proyectar Demanda a (días):</label>
                 <input type="number" id="tp" name="tp" value="{{ $tp ?? 60 }}" min="1" step="1" onchange="this.form.submit();" style="border-color: var(--blue); font-weight: 500; width: 130px; padding: 10px; border-radius: 8px;">
@@ -161,7 +395,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                         <th style="width: 160px;">Categoría</th>
                         <th class="col-number" style="width: 110px;">Stock Global</th>
                         <th class="col-number" style="width: 110px;">Demanda Global</th>
-                        <th style="width: 160px;">Estado</th>
+
                         <th style="min-width: 380px; width: 400px;">Detalles / Distribución sugerida</th>
                     </tr>
                 </thead>
@@ -181,21 +415,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                             </td>
                             <td class="col-number font-semibold">{{ $row['total_stock'] }}</td>
                             <td class="col-number font-semibold">{{ $row['total_demanda'] }}</td>
-                            <td>
-                                @if ($isComprar)
-                                    <span class="tag warn" 
-                                          style="font-size: 0.7rem; padding: 3px 8px; cursor: pointer;"
-                                          onclick="openComprarModal('{{ $row['cod_centro'] }}', {{ json_encode($row['producto']) }}, {{ json_encode($row['stocks']) }}, {{ json_encode($row['ultimas_ventas'] ?? []) }}, {{ json_encode($row['ultimas_compras'] ?? []) }})"
-                                          title="Ver detalles por sede">COMPRAR</span>
-                                @else
-                                    <span class="tag req" 
-                                          style="font-size: 0.7rem; padding: 3px 8px; cursor: pointer;"
-                                          onclick="openDistributionModal('{{ $row['cod_centro'] }}', {{ json_encode($row['producto']) }}, {{ json_encode($row['stocks']) }}, {{ json_encode($row['demands']) }})"
-                                          title="Ver por qué hay mala distribución">
-                                        MALA DISTRIBUCIÓN
-                                    </span>
-                                @endif
-                            </td>
+
                             <td>
                                 @if ($isComprar)
                                     <div style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #991b1b; font-size: 0.8rem; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
@@ -280,11 +500,10 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 <div id="proveedores-tab" class="tab-content" style="display: none;">
     <!-- Barra de búsqueda de proveedor y filtro de demanda -->
     <form method="GET" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;">
-        <!-- <input type="hidden" name="categoria" value="{{ $selectedCategoria ?? 'Ninguno' }}"> -->
-        <input type="hidden" name="subcategoria" value="{{ $selectedSubcategoria ?? 'Ninguno' }}">
-        <input type="hidden" name="proveedor" value="{{ $selectedProveedor ?? 'Ninguno' }}">
-        <input type="hidden" name="status" value="{{ $statusFilter ?? 'Todos' }}">
-        <input type="hidden" name="q" value="{{ $q ?? '' }}">
+        <input type="hidden" name="subcategoria" value="{{ request('subcategoria', 'Ninguno') }}">
+        <input type="hidden" name="proveedor" value="{{ request('proveedor', 'Ninguno') }}">
+        <input type="hidden" name="status" id="status-filter-2" value="{{ $statusFilter ?? 'MalaDistribucion' }}">
+        <input type="hidden" name="q" value="{{ request('q', '') }}">
         
         <div class="field" style="margin-bottom: 0;">
             <label for="cat_prov">Categoría</label>
@@ -621,8 +840,8 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                                 </span>
                             </td>
                             <td style="text-align: center;">
-                                @if($item['estado'])
-                                    <span style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; background: {{ $item['estado_color'] === 'rojo' ? '#fef2f2' : '#fff7ed' }}; color: {{ $item['estado_color'] === 'rojo' ? '#dc2626' : '#ea580c' }}; border: 1px solid {{ $item['estado_color'] === 'rojo' ? '#dc262620' : '#ea580c20' }};">
+                                @if(!empty($item['estado']))
+                                    <span style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; background: {{ ($item['estado_color'] ?? '') === 'rojo' ? '#fef2f2' : '#fff7ed' }}; color: {{ ($item['estado_color'] ?? '') === 'rojo' ? '#dc2626' : '#ea580c' }}; border: 1px solid {{ ($item['estado_color'] ?? '') === 'rojo' ? '#dc262620' : '#ea580c20' }};">
                                         {{ $item['estado'] }}
                                     </span>
                                 @else
@@ -856,7 +1075,19 @@ function switchTab(tabId, btn) {
         btn.classList.add('active');
     } else {
         // Find and activate the correct button
-        document.querySelector(`button[onclick*="${tabId}"]`).classList.add('active');
+        if (tabId === 'productos-tab') {
+            const currentStatus = document.getElementById('status-filter') ? document.getElementById('status-filter').value : 'MalaDistribucion';
+            const btnDist = document.getElementById('tab-btn-dist');
+            const btnCompra = document.getElementById('tab-btn-compra');
+            if (currentStatus === 'Comprar' && btnCompra) {
+                btnCompra.classList.add('active');
+            } else if (btnDist) {
+                btnDist.classList.add('active');
+            }
+        } else {
+            const targetBtn = document.querySelector(`button[onclick*="${tabId}"]`);
+            if (targetBtn) targetBtn.classList.add('active');
+        }
     }
     localStorage.setItem('activeCompradorTab', tabId);
 }
@@ -916,10 +1147,19 @@ async function toggleAdvertising(productId, btn) {
 
 // Restore active tab on page load
 document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlTab = urlParams.get('tab');
+
     const isMarketing = @json(auth()->user()->isMarketing());
     let defaultTab = isMarketing ? 'sobrestock-tab' : 'productos-tab';
-    const activeTab = localStorage.getItem('activeCompradorTab') || defaultTab;
-    if (isMarketing && activeTab !== 'sobrestock-tab' && activeTab !== 'publicidad-tab') {
+    
+    let activeTab = localStorage.getItem('activeCompradorTab') || defaultTab;
+    if (urlTab) {
+        activeTab = urlTab + '-tab';
+        localStorage.setItem('activeCompradorTab', activeTab);
+    }
+    
+    if (isMarketing && activeTab !== 'sobrestock-tab' && activeTab !== 'publicidad-tab' && activeTab !== 'cobranzas-tab') {
         switchTab('sobrestock-tab', null);
     } else {
         switchTab(activeTab, null);

@@ -8,6 +8,12 @@
         <h2 style="color: var(--blue); font-weight: 600; margin: 0;">Dashboard Global de Cobranza</h2>
         
         <div style="display: flex; gap: 10px;">
+            <form action="{{ route('cobranza.guardar_resumen') }}" method="POST">
+                @csrf
+                <button type="submit" class="btn" style="background-color: #198754; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px;">
+                    💾 Guardar Resumen
+                </button>
+            </form>
             <form action="{{ route('cobranza.limpiar') }}" method="POST" onsubmit="return confirm('¿Estás seguro que deseas eliminar los datos detallados de todos los clientes? Los indicadores de las tablas superiores se mantendrán intactos.');">
                 @csrf
                 <button type="submit" class="btn" style="background-color: #dc3545; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px;">
@@ -29,6 +35,12 @@
     @if(session('error'))
         <div style="background: #f8d7da; color: #842029; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px;">
             {{ session('error') }}
+        </div>
+    @endif
+
+    @if(session('info'))
+        <div style="background: #fff3cd; color: #664d03; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px;">
+            ⚠️ {{ session('info') }}
         </div>
     @endif
 
@@ -175,6 +187,83 @@
         </div>
     </div>
 
+    <!-- TABLA COMPARATIVA SEMANAL -->
+    @if(!empty($fechas_semanal) && count($fechas_semanal) > 1)
+        <div style="margin-bottom: 40px; overflow-x: auto;">
+            <h4 style="text-align: center; color: black; font-weight: bold; font-size: 1.1rem; margin-bottom: 10px;">
+                COMPARATIVA SEMANAL DE EFECTIVIDAD
+            </h4>
+            <div class="panel shadow-sm" style="border-radius: 10px; overflow: hidden; border: 1px solid #e5e7eb;">
+                <table class="indicadores-table" style="text-align: center;">
+                    <thead>
+                        <tr style="background-color: #5b9bd5; color: white;">
+                            <th style="background-color: #5b9bd5; color: white; border-right: 1px solid #fff;">ESTATUS</th>
+                            @foreach($fechas_semanal as $index => $fecha)
+                                <th style="background-color: #5b9bd5; color: white; border-right: 1px solid #fff;">LUNES<br>{{ $fecha }}</th>
+                                @if($index > 0)
+                                    <th style="background-color: #5b9bd5; color: white; border-right: 1px solid #fff;">% DE<br>EFECTIVIDAD<br>AL {{ $fecha }}</th>
+                                @endif
+                            @endforeach
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($semanal_list as $row)
+                            @php $class = 'row-' . strtolower($row['estatus']); @endphp
+                            <tr>
+                                <td class="{{ $class }}" style="text-align: left; border-right: 1px solid #ccc;">{{ $row['estatus'] }}</td>
+                                @foreach($row['lunes'] as $index => $data)
+                                    <td style="text-align: right; border-right: 1px solid #ccc; background: white; color: black;">
+                                        {{ $data['saldo'] > 0 ? number_format($data['saldo'], 2, ',', '.') : '-' }}
+                                    </td>
+                                    @if($index > 0)
+                                        @php
+                                            $efectColor = 'black';
+                                            if ($data['efectividad'] !== '-') {
+                                                $efectVal = floatval(str_replace('%', '', $data['efectividad']));
+                                                if ($efectVal > 0) $efectColor = 'red';
+                                                elseif ($efectVal < 0) $efectColor = '#198754';
+                                            }
+                                        @endphp
+                                        <td style="text-align: right; border-right: 1px solid #ccc; background: white; color: {{ $efectColor }};">
+                                            {{ $data['efectividad'] }}
+                                        </td>
+                                    @endif
+                                @endforeach
+                            </tr>
+                        @endforeach
+                        <tr style="font-weight: bold; background: white;">
+                            <td style="text-align: left; border-right: 1px solid #ccc;">TOTALES</td>
+                            @foreach($fechas_semanal as $index => $fecha)
+                                @php
+                                    $colTotal = 0;
+                                    foreach($semanal_list as $row) {
+                                        $colTotal += $row['lunes'][$index]['saldo'];
+                                    }
+                                @endphp
+                                <td style="text-align: right; border-right: 1px solid #ccc; color: black;">
+                                    {{ $colTotal > 0 ? number_format($colTotal, 2, ',', '.') : '-' }}
+                                </td>
+                                @if($index > 0)
+                                    @php
+                                        $prevTotal = 0;
+                                        foreach($semanal_list as $row) {
+                                            $prevTotal += $row['lunes'][$index-1]['saldo'];
+                                        }
+                                        $totalEfect = '-';
+                                        if ($prevTotal > 0) {
+                                            $totalEfect = round((($prevTotal - $colTotal) / $prevTotal) * 100, 0) . '%';
+                                        }
+                                    @endphp
+                                    <td style="text-align: right; border-right: 1px solid #ccc; color: black;">{{ $totalEfect }}</td>
+                                @endif
+                            @endforeach
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @endif
+
     <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 40px 0;">
 
     <!-- TABLA DETALLADA DE CLIENTES -->
@@ -202,7 +291,7 @@
                     <tr>
                         <th style="padding-left: 12px;">CÓDIGO</th>
                         <th>CLIENTE</th>
-                        <th style="text-align: right;">SALDO BS</th>
+                        <th style="text-align: right;">MONTO NETO</th>
                         <th style="text-align: right;">SALDO USD</th>
                         <th style="text-align: center;">FECHA EMISIÓN</th>
                         <th style="text-align: center;">ESTATUS</th>
@@ -213,7 +302,7 @@
                         <tr>
                             <td style="padding-left: 12px;">{{ $c->codigo }}</td>
                             <td>{{ $c->cliente }}</td>
-                            <td style="text-align: right; font-weight: 500; color: #4b5563;">Bs. {{ number_format($c->saldo_bs, 2, ',', '.') }}</td>
+                            <td style="text-align: right; font-weight: 500; color: #4b5563;">$ {{ number_format($c->monto_neto, 2, ',', '.') }}</td>
                             <td style="text-align: right; font-weight: 600; color: #198754;">$ {{ number_format($c->saldo_usd, 2, ',', '.') }}</td>
                             <td style="text-align: center; color: #6b7280;">{{ $c->fecha_emision ? date('d/m/Y', strtotime($c->fecha_emision)) : '-' }}</td>
                             <td style="text-align: center;">

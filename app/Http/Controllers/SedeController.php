@@ -15,7 +15,7 @@ class SedeController extends Controller
                 session()->put('sede_local', strtoupper(auth()->user()->sede));
                 return $this->redirectAfterSede();
             }
-            return redirect()->route('ventas.index')->withErrors(['error' => 'No tienes permiso para seleccionar sede.']);
+            abort(403, 'No tienes una sede asignada. Por favor, contacta al administrador.');
         }
 
         if (session()->has('sede_local')) {

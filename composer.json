@@ -10,6 +10,7 @@
     "shuchkin/simplexlsx": "^1.1"
   },
   "require-dev": {
+    "barryvdh/laravel-debugbar": "^4.4",
     "mockery/mockery": "^1.6",
     "phpunit/phpunit": "^11.0"
   },

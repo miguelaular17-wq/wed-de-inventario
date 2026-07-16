@@ -584,9 +584,10 @@
             <div style="display: flex; gap: 15px; margin-bottom: 15px;">
                 <div style="flex: 1;">
                     <label style="display: block; margin-bottom: 5px; font-weight: 500;">Tipo de Egreso</label>
-                    <select name="categoria_egreso" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <select name="categoria_egreso" id="categoria_egreso" onchange="toggleTraslados()" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                         <option value="egreso_realizado">EGRESOS REALIZADOS</option>
                         <option value="otros_egresos">OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
+                        <option value="traslados">TRASLADOS</option>
                     </select>
                 </div>
                 <div style="flex: 1;">
@@ -597,38 +598,52 @@
 
             <div style="display: flex; gap: 15px; margin-bottom: 15px;">
                 <div style="flex: 2;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Banco y Titular</label>
+                    <label id="lbl_banco_titular" style="display: block; margin-bottom: 5px; font-weight: 500;">Banco y Titular</label>
                     <select name="banco_titular" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                         <option value="">-- Seleccione --</option>
                         @foreach($cuentas as $cuenta)
                             <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
-                                {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }} ({{ $cuenta['categoria'] }})
+                                {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
                             </option>
                         @endforeach
                     </select>
                 </div>
-                <div style="flex: 1;">
+                <div style="flex: 1;" id="col_referencia">
                     <label style="display: block; margin-bottom: 5px; font-weight: 500;">Ref.</label>
                     <input type="text" name="referencia" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="# Referencia">
                 </div>
             </div>
+
+            <div id="row_receptor" style="display: none; gap: 15px; margin-bottom: 15px;">
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Banco Receptor y Titular Receptor</label>
+                    <select name="banco_titular_receptor" id="banco_titular_receptor" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        <option value="">-- Seleccione Receptor --</option>
+                        @foreach($cuentas as $cuenta)
+                            <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
+                                {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
             
             <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-                <div style="flex: 1;">
+                <div style="flex: 1;" id="col_monto_usd">
                     <label style="display: block; margin-bottom: 5px; font-weight: 500;">Monto USD</label>
                     <input type="number" step="0.01" name="monto_usd" id="monto_usd" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
-                <div style="flex: 1;">
+                <div style="flex: 1;" id="col_tasa_cambio">
                     <label style="display: block; margin-bottom: 5px; font-weight: 500;">Tasa de Cambio</label>
                     <input type="number" step="0.01" name="tasa_cambio" id="tasa_cambio" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
                 <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Monto BS</label>
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;" id="lbl_monto_bs">Monto BS</label>
                     <input type="number" step="0.01" name="monto_bs" id="monto_bs" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
             </div>
 
-            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <div id="row_diferencial" style="display: flex; gap: 15px; margin-bottom: 15px;">
                 <div style="flex: 1;">
                     <label style="display: block; margin-bottom: 5px; font-weight: 500;">Diferencial Cambiario</label>
                     <input type="number" step="0.01" name="diferencial_cambiario" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
@@ -639,9 +654,9 @@
                 </div>
             </div>
 
-            <div style="margin-bottom: 25px;">
+            <div id="row_tipo_gasto" style="margin-bottom: 25px;">
                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Tipo de Gasto</label>
-                <select name="tipo_gasto" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white;">
+                <select name="tipo_gasto" id="tipo_gasto" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                     <option value="">-- Seleccione un tipo de gasto --</option>
                     <option value="083 - GASTOS MEDICOS EMPLEADOS">083 - GASTOS MEDICOS EMPLEADOS</option>
                     <option value="002 - IMPUESTO MUNICIPAL (ALCALDIAS)">002 - IMPUESTO MUNICIPAL (ALCALDIAS)</option>
@@ -743,6 +758,22 @@
                     <option value="098 - MEJORAS INSTALACIONES TIENDAS">098 - MEJORAS INSTALACIONES TIENDAS</option>
                 </select>
             </div>
+            
+            <div style="display: flex; gap: 15px; margin-bottom: 25px;">
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Sede (Opcional)</label>
+                    <select name="sede" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white;">
+                        <option value="">-- Seleccione una sede --</option>
+                        @foreach(config('inventario.sedes_locales') as $sedeLocal)
+                            <option value="{{ $sedeLocal }}">{{ $sedeLocal }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Placa del vehículo (Si aplica)</label>
+                    <input type="text" name="placa_vehiculo" placeholder="Ej. ABC-123" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+            </div>
 
             <div style="margin-bottom: 25px;">
                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Motivo (Breve descripción)</label>
@@ -758,6 +789,25 @@
 </div>
 
 <script>
+function toggleTraslados() {
+    const cat = document.getElementById('categoria_egreso').value;
+    const isTraslado = (cat === 'traslados');
+
+    document.getElementById('row_receptor').style.display = isTraslado ? 'flex' : 'none';
+    document.getElementById('banco_titular_receptor').required = isTraslado;
+    
+    document.getElementById('lbl_banco_titular').innerText = isTraslado ? 'Banco Emisor y Titular Emisor' : 'Banco y Titular';
+    document.getElementById('lbl_monto_bs').innerText = isTraslado ? 'Monto' : 'Monto BS';
+    
+    document.getElementById('col_monto_usd').style.display = isTraslado ? 'none' : 'block';
+    document.getElementById('col_tasa_cambio').style.display = isTraslado ? 'none' : 'block';
+    
+    document.getElementById('row_diferencial').style.display = isTraslado ? 'none' : 'flex';
+    document.getElementById('row_tipo_gasto').style.display = isTraslado ? 'none' : 'block';
+    
+    document.getElementById('tipo_gasto').required = !isTraslado;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Modal functions
     window.openNuevoEgresoModal = function() {

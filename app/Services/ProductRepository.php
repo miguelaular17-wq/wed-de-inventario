@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Profiler;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
@@ -16,23 +17,45 @@ class ProductRepository
 
     public function loadForSede(string $sedeLocal): Collection
     {
-        $stockUpdatedAt = $this->lastStockUpdate();
-        $cacheKey = 'product_repository.load_for_sede.'.$sedeLocal.'.'.md5((string) $stockUpdatedAt);
+        Profiler::start('ProductRepository::loadForSede total');
 
-        $cacheSeconds = max(60, (int) config('inventario.load_for_sede_cache_seconds', 1800));
+        // Verificar caché de instancia (misma request: no re-deserializa)
+        if (isset($this->loadForSedeCache[$sedeLocal])) {
+            $cached = $this->loadForSedeCache[$sedeLocal];
+            Profiler::record('ProductRepository::loadForSede [INSTANCE HIT]', 0.0, count($cached));
+            Profiler::stop('ProductRepository::loadForSede total', count($cached));
+            return $cached;
+        }
 
-        $products = $this->loadForSedeCache[$sedeLocal] ??= Cache::remember($cacheKey, $cacheSeconds, function () use ($sedeLocal) {
-            return config('database.default') === 'pgsql'
-                ? $this->v2->loadForSede($sedeLocal)
-                : $this->loadFromSqlite($sedeLocal);
-        });
+        // ── Paso 1: timestamp del último stock ─────────────────
+        Profiler::start('ProductRepository::lastStockUpdate');
+        $this->lastStockUpdate(); // populate cache
+        Profiler::stop('ProductRepository::lastStockUpdate');
 
+        // ── Paso 2: Construir desde las dos capas del repositorio ──
+        // Las capas individuales (global_products_v2 + global_stock_ventas) ya están
+        // cacheadas por InventarioV2Repository con payloads mucho más pequeños.
+        // No se guarda el resultado combinado en caché para evitar serializar
+        // 12,947 arrays de 20 campos (~14 MB de payload).
+        Profiler::start('ProductRepository::loadForSede [BUILD] v2->loadForSede');
+        $products = config('database.default') === 'pgsql'
+            ? $this->v2->loadForSede($sedeLocal)
+            : $this->loadFromSqlite($sedeLocal);
+        Profiler::stop('ProductRepository::loadForSede [BUILD] v2->loadForSede', count($products));
+
+        // Guardar en caché de instancia (reutilización dentro del mismo request)
+        $this->loadForSedeCache[$sedeLocal] = $products;
+
+        // ── Filtro telefonía ────────────────────────────────
         if (auth()->check() && auth()->user()->isTelefonia()) {
+            Profiler::start('ProductRepository::loadForSede filter(telefonia)');
             $products = $products->filter(function ($row) {
                 return $this->isAllowedCategoryForTelefonia($row['categoria'] ?? '');
             })->values();
+            Profiler::stop('ProductRepository::loadForSede filter(telefonia)', count($products));
         }
 
+        Profiler::stop('ProductRepository::loadForSede total', count($products));
         return $products;
     }
 
@@ -121,13 +144,17 @@ class ProductRepository
 
         $ttl = max(1, (int) config('inventario.last_stock_update_cache_seconds', 30));
 
-        return $this->lastStockUpdateCache = Cache::remember(
+        Profiler::start('ProductRepository::lastStockUpdate');
+        $result = $this->lastStockUpdateCache = Cache::remember(
             'product_repository.last_stock_update_ts',
             $ttl,
             fn () => config('database.default') === 'pgsql'
                 ? $this->v2->lastStockUpdate()
                 : \App\Models\ProductSedeMetric::query()->max('updated_at')
         );
+        Profiler::stop('ProductRepository::lastStockUpdate');
+
+        return $result;
     }
 
     public function findFromSqliteByCodigo(string $sedeLocal, string $codigo): ?array

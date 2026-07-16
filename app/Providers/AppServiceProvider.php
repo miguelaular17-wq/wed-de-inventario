@@ -8,7 +8,12 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        // scoped() = singleton por request en PHP-FPM.
+        // El cach\u00e9 de instancia ($loadForSedeCache) se comparte dentro del request
+        // y se libera autom\u00e1ticamente al terminar. Evita reconstruir la colecci\u00f3n de
+        // 12,947 productos cuando m\u00faltiples m\u00e9todos la solicitan en el mismo request.
+        $this->app->scoped(\App\Services\InventarioV2Repository::class);
+        $this->app->scoped(\App\Services\ProductRepository::class);
     }
 
     public function boot(): void
@@ -26,9 +31,6 @@ class AppServiceProvider extends ServiceProvider
         }
 
         \Illuminate\Pagination\Paginator::useBootstrapFive();
-
-        @ini_set('memory_limit', '512M');
-        @ini_set('max_execution_time', '120');
 
         if ($path = env('SESSION_PATH')) {
             if (! is_dir($path)) {

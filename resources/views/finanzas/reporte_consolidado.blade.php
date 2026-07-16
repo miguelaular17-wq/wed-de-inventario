@@ -373,8 +373,8 @@
         <div>
             <table class="report-table" id="table-extranjera">
                 <thead>
-                    <tr><th colspan="4">BANCA NACIONAL / TARJETAS<br>MONEDA EXTRANJERA</th></tr>
-                    <tr><th style="width: 25%">BANCO</th><th style="width: 35%">TITULAR</th><th style="width: 20%">USD</th><th style="width: 20%">USD</th></tr>
+                    <tr><th colspan="3">BANCA NACIONAL / TARJETAS<br>MONEDA EXTRANJERA</th></tr>
+                    <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
                 </thead>
                 <tbody>
                     @php $extranjera = isset($cuentas['BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA']) ? $cuentas['BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA'] : []; @endphp
@@ -382,7 +382,6 @@
                     <tr>
                         <td>{{ $c->banco }}</td>
                         <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta currency-input" data-id="{{ $c->id }}" data-field="reporte_bs" value="{{ $c->reporte_bs }}"></div></td>
                         <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta calc-extranjera-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
                     </tr>
                     @endforeach
@@ -390,7 +389,6 @@
                 <tfoot>
                     <tr>
                         <td colspan="2" class="text-center bg-light-blue" style="font-weight: bold;">TOTALES</td>
-                        <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span>0.00</span></div></td>
                         <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_extranjera_usd_sum">0.00</span></div></td>
                     </tr>
                 </tfoot>
@@ -402,8 +400,8 @@
             <!-- BILLETERAS -->
             <table class="report-table" id="table-billeteras">
                 <thead>
-                    <tr><th colspan="4">BANCA INTERNACIONAL /<br>BILLETERAS</th></tr>
-                    <tr><th style="width: 25%">BANCO</th><th style="width: 35%">TITULAR</th><th style="width: 20%">USD</th><th style="width: 20%">USD</th></tr>
+                    <tr><th colspan="3">BANCA INTERNACIONAL /<br>BILLETERAS</th></tr>
+                    <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
                 </thead>
                 <tbody>
                     @php $billeteras = isset($cuentas['BANCA INTERNACIONAL / BILLETERAS']) ? $cuentas['BANCA INTERNACIONAL / BILLETERAS'] : []; @endphp
@@ -411,7 +409,6 @@
                     <tr>
                         <td>{{ $c->banco }}</td>
                         <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta currency-input" data-id="{{ $c->id }}" data-field="reporte_bs" value="{{ $c->reporte_bs }}"></div></td>
                         <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta calc-billeteras-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
                     </tr>
                     @endforeach
@@ -419,7 +416,6 @@
                 <tfoot>
                     <tr>
                         <td colspan="2" class="bg-light-blue"></td>
-                        <td class="bg-green"></td>
                         <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_billeteras_usd_sum">0.00</span></div></td>
                     </tr>
                 </tfoot>
@@ -428,8 +424,8 @@
             <!-- NO OPERATIVAS -->
             <table class="report-table" id="table-no-operativas">
                 <thead>
-                    <tr><th colspan="4">BANCA INTERNACIONAL<br>CUENTAS NO OPERATIVAS</th></tr>
-                    <tr><th style="width: 25%">BANCO</th><th style="width: 35%">TITULAR</th><th style="width: 20%">USD</th><th style="width: 20%">USD</th></tr>
+                    <tr><th colspan="3">BANCA INTERNACIONAL<br>CUENTAS NO OPERATIVAS</th></tr>
+                    <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
                 </thead>
                 <tbody>
                     @php $no_op = isset($cuentas['BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS']) ? $cuentas['BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS'] : []; @endphp
@@ -437,7 +433,6 @@
                     <tr>
                         <td>{{ $c->banco }}</td>
                         <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta currency-input" data-id="{{ $c->id }}" data-field="reporte_bs" value="{{ $c->reporte_bs }}"></div></td>
                         <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta calc-noop-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
                     </tr>
                     @endforeach
@@ -445,7 +440,6 @@
                 <tfoot>
                     <tr>
                         <td colspan="2" class="bg-light-blue"></td>
-                        <td class="bg-green"></td>
                         <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_noop_usd_sum">0.00</span></div></td>
                     </tr>
                 </tfoot>
@@ -454,8 +448,8 @@
             <!-- TERCEROS -->
             <table class="report-table" id="table-terceros">
                 <thead>
-                    <tr><th colspan="4">TARJETAS INTERNACIONALES<br>DE TERCEROS</th></tr>
-                    <tr><th style="width: 25%">BANCO</th><th style="width: 35%">TITULAR</th><th style="width: 20%">USD</th><th style="width: 20%">USD</th></tr>
+                    <tr><th colspan="3">TARJETAS INTERNACIONALES<br>DE TERCEROS</th></tr>
+                    <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
                 </thead>
                 <tbody>
                     @php $terceros = isset($cuentas['TARJETAS INTERNACIONALES DE TERCEROS']) ? $cuentas['TARJETAS INTERNACIONALES DE TERCEROS'] : []; @endphp
@@ -463,7 +457,6 @@
                     <tr>
                         <td>{{ $c->banco }}</td>
                         <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta currency-input" data-id="{{ $c->id }}" data-field="reporte_bs" value="{{ $c->reporte_bs }}"></div></td>
                         <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta calc-terceros-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
                     </tr>
                     @endforeach
@@ -471,7 +464,6 @@
                 <tfoot>
                     <tr>
                         <td colspan="2" class="bg-light-blue"></td>
-                        <td class="bg-green"></td>
                         <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_terceros_usd_sum">0.00</span></div></td>
                     </tr>
                 </tfoot>
@@ -604,11 +596,60 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('disp_usd_noop').innerText = (sum_noop_usd).toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         document.getElementById('disp_usd_terceros').innerText = (sum_terc_usd).toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         
+        // --- CALCULOS DISPONIBILIDAD USD (Según Excel) ---
+        let disp_usd_tot = sum_ext_usd + sum_bill_usd + sum_noop_usd + sum_terc_usd;
+        let elDispUsdTot = document.getElementById('disp_usd_tot');
+        if (elDispUsdTot) elDispUsdTot.innerText = disp_usd_tot.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        let disp_usd_uso = sum_bill_usd + sum_terc_usd;
+        let elDispUsdUso = document.getElementById('disp_usd_uso');
+        if (elDispUsdUso) elDispUsdUso.innerText = disp_usd_uso.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        
         let sum_plan_bs = 0, sum_plan_usd = 0;
         document.querySelectorAll('.calc-plan-bs').forEach(el => sum_plan_bs += parseFloat(el.value) || 0);
         document.querySelectorAll('.calc-plan-usd').forEach(el => sum_plan_usd += parseFloat(el.value) || 0);
         document.getElementById('tot_plan_bs').innerText = sum_plan_bs.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         document.getElementById('tot_plan_usd').innerText = sum_plan_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        // --- CALCULOS DISPONIBILIDAD BOLIVARES (Según Excel) ---
+        let tasa_paralelo = parseFloat(document.getElementById('tasa_paralelo').value) || 1;
+
+        // TOTAL DISPONIBILIDAD (TASA BCV) -> Suma de Bancas (USD)
+        let disp_bs_tot_bcv = sum_alto_usd + sum_bajo_usd;
+        document.getElementById('disp_bs_tot_bcv').innerText = disp_bs_tot_bcv.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        // TOTAL DISPONIBILIDAD (TASA PARALELO) -> Suma de Bancas (Bs) / Tasa Paralelo
+        let disp_bs_tot_par = tasa_paralelo > 0 ? (sum_alto_bs + sum_bajo_bs) / tasa_paralelo : 0;
+        document.getElementById('disp_bs_tot_par').innerText = disp_bs_tot_par.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        // Descuentos / Retenciones
+        let bloqueado = parseFloat(document.querySelector('input[data-field="bloqueado_compra_divisas"]').value) || 0;
+        let fondos = parseFloat(document.querySelector('input[data-field="fondos_no_disponibles"]').value) || 0;
+        let solicitudes = parseFloat(document.querySelector('input[data-field="solicitudes_cobertura"]').value) || 0;
+        let titulos = parseFloat(document.querySelector('input[data-field="titulos_cobertura_aprobados"]').value) || 0;
+        let retenido = parseFloat(document.querySelector('input[data-field="retenido_pagos"]').value) || 0;
+
+        // DISPONIBLE PARA USO (TASA BCV)
+        let disp_uso_bcv = disp_bs_tot_bcv - bloqueado - fondos - solicitudes - titulos - retenido;
+        document.getElementById('disp_uso_bcv').innerText = disp_uso_bcv.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        // DISPONIBLE PARA USO (TASA PARALELO)
+        let disp_uso_par = tasa_paralelo > 0 ? (disp_uso_bcv * bcv) / tasa_paralelo : 0;
+        document.getElementById('disp_uso_par').innerText = disp_uso_par.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        // Pérdida y Diferencial
+        let perdida_dif = disp_bs_tot_par - disp_bs_tot_bcv;
+        let dif_porc = disp_bs_tot_bcv !== 0 ? (perdida_dif / disp_bs_tot_bcv) * 100 : 0;
+        let brecha_porc = bcv > 0 ? ((tasa_paralelo - bcv) / bcv) * 100 : 0;
+
+        let elPerdida = document.getElementById('perdida_dif');
+        if(elPerdida) elPerdida.innerText = perdida_dif.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        
+        let elDif = document.getElementById('dif_porc');
+        if(elDif) elDif.innerText = dif_porc.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '%';
+        
+        let elBrecha = document.getElementById('brecha_porc');
+        if(elBrecha) elBrecha.innerText = brecha_porc.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '%';
     }
 
     document.querySelectorAll('.report-input').forEach(input => {

@@ -127,4 +127,84 @@ class ProductController extends Controller
 
         return redirect()->back()->with('success', 'Producto eliminado exitosamente.');
     }
+
+    public function exportJson()
+    {
+        if (config('database.default') === 'pgsql') {
+            // PostgreSQL: fetch all active products with global existencia (sum across all sedes)
+            $productos = DB::connection('pgsql')
+                ->table('inventario_v2.productos as p')
+                ->leftJoin(
+                    DB::connection('pgsql')->raw('(
+                        SELECT producto_id, SUM(existencia) as existencia_global
+                        FROM inventario_v2.stock_actual
+                        GROUP BY producto_id
+                    ) as sg'),
+                    'p.id', '=', 'sg.producto_id'
+                )
+                ->where('p.activo', true)
+                ->orderBy('p.nombre')
+                ->select([
+                    'p.id',
+                    'p.codigo',
+                    'p.nombre',
+                    'p.categoria',
+                    'p.subcategoria',
+                    'p.proveedor',
+                    'p.precio_unidad',
+                    'p.precio_mayor',
+                    DB::connection('pgsql')->raw('COALESCE(sg.existencia_global, 0) as existencia_global'),
+                ])
+                ->get();
+        } else {
+            // SQLite fallback
+            $productos = Product::with('sedeMetrics')->get()->map(function($p) {
+                return (object)[
+                    'id'               => $p->id,
+                    'codigo'           => $p->cod_centro,
+                    'nombre'           => $p->producto,
+                    'categoria'        => $p->categoria,
+                    'subcategoria'     => '',
+                    'proveedor'        => $p->proveedor ?? '',
+                    'precio_unidad'    => 0,
+                    'precio_mayor'     => 0,
+                    'existencia_global' => $p->sedeMetrics->sum('existencia'),
+                ];
+            });
+        }
+
+        $output = $productos->map(function($p) {
+            $cat = trim($p->categoria ?? '');
+            $sub = trim($p->subcategoria ?? '');
+            $categories = $cat;
+            if ($sub && $sub !== $cat) {
+                $categories = $cat . ',' . $sub;
+            }
+
+            return [
+                'id'                  => (int) $p->id,
+                'codigo'              => $p->codigo ?? '',
+                'descripcion'         => trim($p->nombre ?? ''),
+                'descripcion_ampliada' => null,
+                'precio1'             => (float) ($p->precio_unidad ?? 0),
+                'precio2'             => (float) ($p->precio_unidad ?? 0),
+                'precio3'             => (float) ($p->precio_mayor ?? 0),
+                'existencia'          => (float) ($p->existencia_global ?? 0),
+                'url_imagen'          => '',
+                'categories'          => strtoupper($categories),
+                'codigo_padre'        => null,
+                'atributo'            => null,
+                'termino'             => null,
+            ];
+        })->values();
+
+        $filename = 'productos_' . date('Y-m-d_His') . '.json';
+        $json = json_encode($output, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+        return response($json, 200, [
+            'Content-Type'        => 'application/json; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Length'      => strlen($json),
+        ]);
+    }
 }

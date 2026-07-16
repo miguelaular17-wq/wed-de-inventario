@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Profiler;
+
 use App\Models\Notification;
+use App\Models\PedidoSolicitado;
 use App\Models\User;
 use App\Services\AnalisisInventarioService;
 use App\Services\ProductRepository;
@@ -10,6 +13,7 @@ use App\Services\VentasCalculator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class CompradorController extends Controller
@@ -25,6 +29,8 @@ class CompradorController extends Controller
      */
     public function index(Request $request): View
     {
+        ini_set('memory_limit', '512M');
+        Profiler::start('CompradorController::index');
         $tp = (float) $request->query('tp', 60);
         $tv = (float) config('inventario.tiempo_venta_sede', 15);
         $sedes = config('inventario.sedes_stock');
@@ -77,6 +83,7 @@ class CompradorController extends Controller
                         p.proveedor,
                         p.precio_unidad,
                         p.precio_mayor,
+                        p.excluir_compras,
                         COALESCE(SUM(sa.existencia), 0) as total_stock,
                         COALESCE(SUM(ROUND((vh.ventas_60d / 60) * :tp)), 0) as total_demand,
                         COUNT(CASE WHEN COALESCE(sa.existencia, 0) < ROUND((COALESCE(vh.ventas_60d, 0) / 60) * :tp) THEN 1 END) as shortages_count,
@@ -85,7 +92,7 @@ class CompradorController extends Controller
                     LEFT JOIN inventario_v2.stock_actual sa ON p.id = sa.producto_id
                     LEFT JOIN inventario_v2.ventas_historicas vh ON p.id = vh.producto_id AND sa.sede = vh.sede
                     WHERE p.activo = true {$whereSql}
-                    GROUP BY p.id, p.codigo, p.nombre, p.categoria, p.subcategoria, p.proveedor, p.precio_unidad, p.precio_mayor
+                    GROUP BY p.id, p.codigo, p.nombre, p.categoria, p.subcategoria, p.proveedor, p.precio_unidad, p.precio_mayor, p.excluir_compras
                 ),
                 classified_products AS (
                     SELECT *,
@@ -107,13 +114,28 @@ class CompradorController extends Controller
                 $cteSql .= " AND status = 'MALA DISTRIBUCIÓN'";
             }
 
-            // Ejecutar la CTE una sola vez (ORDER BY en SQL, paginación en PHP).
-            // Antes se ejecutaba dos veces: una para COUNT(*) y otra para los datos.
-            // El EXPLAIN ANALYZE confirmó que los 5,715 resultados pesan < 5 MB en PHP.
-            $allDbItems = \Illuminate\Support\Facades\DB::connection('pgsql')->select(
-                $cteSql . ' ORDER BY codigo',
-                $bindings
-            );
+            // Cachear el resultado de la CTE (determinista mientras el stock no cambie).
+            // Clave = hash de (MAX(updated_at) del stock + todos los parámetros de filtro).
+            // TTL 1800s. Con cache HIT evita los ~400ms de la CTE en cada request.
+            $stockTs  = $this->products->lastStockUpdate();
+            $cacheKey = 'comprador_cte_' . md5(serialize([
+                'ts'     => $stockTs,
+                'tp'     => $tp,
+                'cat'    => $category,
+                'sub'    => $subcategoria,
+                'prov'   => $proveedor,
+                'q'      => $search,
+                'status' => $statusFilter,
+            ]));
+
+            Profiler::start('CompradorController::index CTE query');
+            $allDbItems = \Illuminate\Support\Facades\Cache::remember($cacheKey, 1800, function () use ($cteSql, $bindings) {
+                return \Illuminate\Support\Facades\DB::connection('pgsql')->select(
+                    $cteSql . ' ORDER BY codigo',
+                    $bindings
+                );
+            });
+            Profiler::stop('CompradorController::index CTE query');
             $totalCount = count($allDbItems);
 
             $offset  = ($page - 1) * $perPage;
@@ -208,59 +230,45 @@ class CompradorController extends Controller
                 ['path' => $request->url(), 'query' => $request->query()]
             );
 
-            // Tab 2: Grouped by provider for products to buy (totalStock < totalDemand)
-            $toBuySql = "
-                WITH product_metrics AS (
-                    SELECT 
-                        p.id,
-                        p.codigo as cod_centro,
-                        p.nombre as producto,
-                        p.categoria,
-                        p.subcategoria,
-                        COALESCE(p.proveedor, '') as proveedor,
-                        p.excluir_compras,
-                        COALESCE(SUM(sa.existencia), 0) as total_stock,
-                        COALESCE(SUM(ROUND((vh.ventas_60d / 60) * :tp)), 0) as total_demand
-                    FROM inventario_v2.productos p
-                    LEFT JOIN inventario_v2.stock_actual sa ON p.id = sa.producto_id
-                    LEFT JOIN inventario_v2.ventas_historicas vh ON p.id = vh.producto_id AND sa.sede = vh.sede
-                    WHERE p.activo = true {$whereSql}
-                    GROUP BY p.id, p.codigo, p.nombre, p.categoria, p.subcategoria, p.proveedor, p.excluir_compras
-                )
-                SELECT * 
-                FROM product_metrics
-                WHERE total_stock < total_demand
-            ";
+            // Tab 2: productos a COMPRAR — derivados de $allDbItems sin segunda CTE.
+            // Antes: segunda CTE idéntica (~182ms) + stocks/ventas redundantes (~130ms).
+            // Ahora: filtro PHP O(n) sobre resultados ya en memoria + 2 queries SQL para stocks/ventas.
+            $dbToBuy = array_values(array_filter(
+                $allDbItems,
+                fn ($item) => $item->status === 'COMPRAR'
+            ));
 
-            $dbToBuy = \Illuminate\Support\Facades\DB::connection('pgsql')->select($toBuySql, $bindings);
+            $toBuyProductIds = array_map(fn ($r) => (int) $r->id, $dbToBuy);
 
-            $productIds = [];
-            foreach ($dbToBuy as $row) {
-                $productIds[] = (int) $row->id;
-            }
+            // Cachear stocks/ventas de COMPRAR junto con la CTE (misma vigencia).
+            // Con cache HIT elimina ~165ms SQL (stock 66ms + ventas 99ms).
+            $tab2CacheKey = $cacheKey . '_tab2';
+            [$stocksByProduct, $ventasByProduct] = \Illuminate\Support\Facades\Cache::remember(
+                $tab2CacheKey,
+                1800,
+                function () use ($toBuyProductIds) {
+                    $stocks = [];
+                    $ventas = [];
+                    if (! empty($toBuyProductIds)) {
+                        $dbStocks2 = \Illuminate\Support\Facades\DB::connection('pgsql')
+                            ->table('stock_actual')
+                            ->whereIn('producto_id', $toBuyProductIds)
+                            ->get(['producto_id', 'sede', 'existencia']);
+                        foreach ($dbStocks2 as $row) {
+                            $stocks[(int) $row->producto_id][$row->sede] = (int) $row->existencia;
+                        }
 
-            $stocksByProduct = [];
-            $ventasByProduct = [];
-
-            if (count($productIds) > 0) {
-                $dbStocks = \Illuminate\Support\Facades\DB::connection('pgsql')
-                    ->table('stock_actual')
-                    ->whereIn('producto_id', $productIds)
-                    ->get(['producto_id', 'sede', 'existencia']);
-                
-                foreach ($dbStocks as $row) {
-                    $stocksByProduct[(int) $row->producto_id][$row->sede] = (int) $row->existencia;
+                        $dbVentas2 = \Illuminate\Support\Facades\DB::connection('pgsql')
+                            ->table('ventas_historicas')
+                            ->whereIn('producto_id', $toBuyProductIds)
+                            ->get(['producto_id', 'sede', 'ventas_60d']);
+                        foreach ($dbVentas2 as $row) {
+                            $ventas[(int) $row->producto_id][$row->sede] = (float) $row->ventas_60d;
+                        }
+                    }
+                    return [$stocks, $ventas];
                 }
-
-                $dbVentas = \Illuminate\Support\Facades\DB::connection('pgsql')
-                    ->table('ventas_historicas')
-                    ->whereIn('producto_id', $productIds)
-                    ->get(['producto_id', 'sede', 'ventas_60d']);
-
-                foreach ($dbVentas as $row) {
-                    $ventasByProduct[(int) $row->producto_id][$row->sede] = (float) $row->ventas_60d;
-                }
-            }
+            );
 
             $productsToBuy = collect();
             foreach ($dbToBuy as $row) {
@@ -277,17 +285,17 @@ class CompradorController extends Controller
 
                 $productsToBuy->push([
                     'id' => $pId,
-                    'cod_centro' => $row->cod_centro,
-                    'producto' => $row->producto,
-                    'categoria' => $row->categoria ?? '—',
+                    'cod_centro' => $row->codigo,
+                    'producto'   => $row->nombre,
+                    'categoria'  => $row->categoria ?? '—',
                     'subcategoria' => $row->subcategoria ?? '—',
-                    'proveedor' => $row->proveedor ?: 'Sin Proveedor',
-                    'excluir_compras' => (bool) $row->excluir_compras,
-                    'total_stock' => (int) $row->total_stock,
+                    'proveedor'  => ($row->proveedor ?: 'Sin Proveedor'),
+                    'excluir_compras' => (bool) ($row->excluir_compras ?? false),
+                    'total_stock'  => (int) $row->total_stock,
                     'total_demanda' => (int) $row->total_demand,
-                    'faltante' => (int) ($row->total_demand - $row->total_stock),
-                    'stocks' => $pStocks,
-                    'demands' => $pDemands,
+                    'faltante'   => (int) ($row->total_demand - $row->total_stock),
+                    'stocks'     => $pStocks,
+                    'demands'    => $pDemands,
                 ]);
             }
 
@@ -360,10 +368,12 @@ class CompradorController extends Controller
                 'semaforo_filter' => (string) $request->query('ss_semaforo', 'Todos'),
                 'min_dias_sin_venta' => $request->query('ss_min_dias'),
                 'min_existencia' => $request->query('ss_min_stock'),
-                'buscar' => (string) $request->query('ss_buscar', ''),
+                'buscar' => $this->resolveBuscarFilter($request),
             ];
 
+            Profiler::start('AnalisisInventarioService::getAnalysis');
             $analysisItems = $this->analisis->getAnalysis($ssFilters);
+            Profiler::stop('AnalisisInventarioService::getAnalysis');
 
             $sortBy = (string) $request->query('ss_sort', 'prioridad');
             $sortDir = (string) $request->query('ss_dir', 'desc');
@@ -379,7 +389,7 @@ class CompradorController extends Controller
             $resumenRiesgo = $this->analisis->getResumenRiesgo($analysisItems);
             $resumenPorSede = $this->analisis->getResumenPorSede($analysisItems, $ssFilters);
 
-            $pageSobreStock = (int) $request->query('page_sobre_stock', 1);
+            $pageSobreStock = (int) $request->query('page', $request->query('page_sobre_stock', 1));
             $perPageSS = 50;
 
             $slicedItems = $analysisItems->slice(($pageSobreStock - 1) * $perPageSS, $perPageSS)->values();
@@ -425,11 +435,29 @@ class CompradorController extends Controller
                 $analysisItems->count(),
                 $perPageSS,
                 $pageSobreStock,
-                ['path' => $request->url(), 'query' => $request->query(), 'pageName' => 'page_sobre_stock']
+                ['path' => $request->url(), 'query' => $request->query(), 'pageName' => 'page']
             );
+
+            // FASE 2: Calcular Dashboard Ejecutivo y Top Reportes
+            $topInmovilizados = $analysisItems->filter(fn($i) => in_array($i['accion_recomendada'], ['Liquidar por falta de rotación', 'Detener compra por exceso']))
+                ->sortByDesc('valor_inmovilizado')->take(100)->values();
+            $topCompraUrgente = $analysisItems->filter(fn($i) => $i['accion_recomendada'] === 'Comprar urgente')
+                ->sortByDesc('oportunidad_compra')->take(100)->values();
+            $topRedistribucion = $analysisItems->filter(fn($i) => $i['accion_recomendada'] === 'Redistribuir')
+                ->sortByDesc('cantidad_sugerida')->take(100)->values();
+
+            $dashboardStats = [
+                'total_analizados' => $analysisItems->count(),
+                'valor_inmovilizado' => $analysisItems->filter(fn($i) => in_array($i['accion_recomendada'], ['Liquidar por falta de rotación', 'Detener compra por exceso']))->sum('valor_inmovilizado'),
+                'count_compra_urgente' => $analysisItems->filter(fn($i) => $i['accion_recomendada'] === 'Comprar urgente')->count(),
+                'count_redistribuir' => $analysisItems->filter(fn($i) => $i['accion_recomendada'] === 'Redistribuir')->count(),
+                'count_saludables' => $analysisItems->filter(fn($i) => in_array($i['accion_recomendada'], ['Mantener', 'Revisar compra']))->count(),
+            ];
         } else {
             // Load all products (we can use the central sede JRZ or any)
+            Profiler::start('ProductRepository::loadForSede (SQLite path)');
             $rawProducts = $this->products->loadForSede('JRZ');
+            Profiler::stop('ProductRepository::loadForSede (SQLite path)');
             $allProducts = $rawProducts;
 
             $search = trim((string) $request->query('q', ''));
@@ -581,10 +609,12 @@ class CompradorController extends Controller
                 'semaforo_filter' => (string) $request->query('ss_semaforo', 'Todos'),
                 'min_dias_sin_venta' => $request->query('ss_min_dias'),
                 'min_existencia' => $request->query('ss_min_stock'),
-                'buscar' => (string) $request->query('ss_buscar', ''),
+                'buscar' => $this->resolveBuscarFilter($request),
             ];
 
+            Profiler::start('AnalisisInventarioService::getAnalysis');
             $analysisItems = $this->analisis->getAnalysis($ssFilters);
+            Profiler::stop('AnalisisInventarioService::getAnalysis');
 
             // Sort
             $sortBy = (string) $request->query('ss_sort', 'prioridad');
@@ -603,15 +633,23 @@ class CompradorController extends Controller
             $resumenPorSede = $this->analisis->getResumenPorSede($analysisItems);
 
             // Paginate
-            $pageSobreStock = (int) $request->query('page_sobre_stock', 1);
+            $pageSobreStock = (int) $request->query('page', $request->query('page_sobre_stock', 1));
             $perPageSS = 50;
             $paginatedAnalysis = new \Illuminate\Pagination\LengthAwarePaginator(
                 $analysisItems->slice(($pageSobreStock - 1) * $perPageSS, $perPageSS)->values(),
                 $analysisItems->count(),
                 $perPageSS,
                 $pageSobreStock,
-                ['path' => $request->url(), 'query' => $request->query(), 'pageName' => 'page_sobre_stock']
+                ['path' => $request->url(), 'query' => $request->query(), 'pageName' => 'page']
             );
+
+            $dashboardStats = [
+                'total_analizados' => $analysisItems->count(),
+                'valor_inmovilizado' => 0,
+                'count_compra_urgente' => 0,
+                'count_redistribuir' => 0,
+                'count_saludables' => 0,
+            ];
 
             $categorias = $allProducts->pluck('categoria')->filter()->unique()->sort()->values()->all();
             $proveedores = $allProducts->pluck('proveedor')->filter()->unique()->sort()->values()->all();
@@ -696,7 +734,94 @@ class CompradorController extends Controller
                 ->toArray();
         }
 
-        return view('comprador.index', [
+        $pedidosSolicitados = Schema::hasTable('pedidos_solicitados')
+            ? PedidoSolicitado::where('estado', 'pendiente')->orderByDesc('created_at')->get()
+            : collect();
+
+        $cobranzasData = [
+            'fecha_actual' => null,
+            'sede_list' => [],
+            'estatus_list' => [],
+            'fechas_semanal' => [],
+            'semanal_list' => [],
+            'detalle' => []
+        ];
+
+        if (Schema::hasTable('historial_cobranzas')) {
+            $latestFecha = \App\Models\HistorialCobranza::max('fecha_registro');
+            if ($latestFecha) {
+                $cobranzasData['fecha_actual'] = \Carbon\Carbon::parse($latestFecha)->format('d/m/Y');
+                $detalles = \App\Models\HistorialCobranza::where('fecha_registro', $latestFecha)->get();
+                $cobranzasData['detalle'] = $detalles;
+                
+                $totalSaldo = $detalles->sum('saldo');
+                
+                $sedeList = $detalles->groupBy('sede_nombre')->map(function ($items, $sede) use ($totalSaldo) {
+                    $s = $items->sum('saldo');
+                    return [
+                        'sede' => $sede ?: 'N/A',
+                        'clientes' => $items->count(),
+                        'saldo' => $s,
+                        'porcentaje' => $totalSaldo > 0 ? round(($s / $totalSaldo) * 100, 2) : 0
+                    ];
+                })->values()->sortByDesc('saldo');
+                $cobranzasData['sede_list'] = $sedeList;
+                
+                $estatusColors = ['CRITICO' => '#ef4444', 'MOROSO' => '#eab308', 'RECIENTE' => '#84cc16'];
+                $estatusList = $detalles->groupBy('estatus')->map(function ($items, $estatus) use ($totalSaldo, $estatusColors) {
+                    $s = $items->sum('saldo');
+                    return [
+                        'estatus' => $estatus ?: 'OTROS',
+                        'clientes' => $items->count(),
+                        'saldo' => $s,
+                        'color' => $estatusColors[$estatus] ?? '#94a3b8',
+                        'porcentaje' => $totalSaldo > 0 ? round(($s / $totalSaldo) * 100, 2) : 0
+                    ];
+                })->values()->sortByDesc('saldo');
+                $cobranzasData['estatus_list'] = $estatusList;
+                
+                try {
+                    $fechasLunes = \Illuminate\Support\Facades\DB::connection('pgsql')->table('historial_cobranzas')
+                        ->select('fecha_registro')
+                        ->whereRaw("EXTRACT(DOW FROM fecha_registro::date) = 1")
+                        ->distinct()
+                        ->orderBy('fecha_registro', 'desc')
+                        ->limit(4)
+                        ->pluck('fecha_registro')
+                        ->toArray();
+                        
+                    if (!empty($fechasLunes)) {
+                        $fechasLunes = array_reverse($fechasLunes); // Chronological order
+                        $cobranzasData['fechas_semanal'] = array_map(fn($f) => \Carbon\Carbon::parse($f)->format('d/m'), $fechasLunes);
+                        $historialLunes = \App\Models\HistorialCobranza::whereIn('fecha_registro', $fechasLunes)->get();
+                        
+                        $estatusKeys = ['CRITICO', 'MOROSO', 'RECIENTE'];
+                        $semanalList = [];
+                        foreach ($estatusKeys as $est) {
+                            $row = ['estatus' => $est, 'color' => $estatusColors[$est], 'lunes' => []];
+                            $prevSaldo = null;
+                            foreach ($fechasLunes as $fecha) {
+                                $saldo = $historialLunes->where('fecha_registro', $fecha)->where('estatus', $est)->sum('saldo');
+                                $efectividad = '-';
+                                if ($prevSaldo !== null && $prevSaldo > 0) {
+                                    // Efectividad: reduccion de deuda (saldo anterior - saldo actual) / saldo anterior
+                                    $efectividad = round((($prevSaldo - $saldo) / $prevSaldo) * 100, 0) . '%';
+                                }
+                                $row['lunes'][] = ['saldo' => $saldo, 'efectividad' => $efectividad];
+                                $prevSaldo = $saldo;
+                            }
+                            $semanalList[] = $row;
+                        }
+                        $cobranzasData['semanal_list'] = $semanalList;
+                    }
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error("Error en cobranzas semanal: " . $e->getMessage());
+                }
+            }
+        }
+
+        Profiler::start('CompradorController::index Blade render');
+        $viewResult = view('comprador.index', [
             'productos' => $paginatedItems,
             'sobreStock' => $paginatedAnalysis,
             'categorias' => $categorias,
@@ -717,7 +842,29 @@ class CompradorController extends Controller
             'sedeDisplay' => config('inventario.display'),
             'publicitadosData' => $publicitadosData,
             'advertisedProductIds' => $advertisedProductIds,
+            // FASE 2
+            'topInmovilizados' => $topInmovilizados ?? collect(),
+            'topCompraUrgente' => $topCompraUrgente ?? collect(),
+            'topRedistribucion' => $topRedistribucion ?? collect(),
+            'dashboardStats' => $dashboardStats ?? [],
+            'analysisItems' => $analysisItems ?? collect(),
+            'pedidosSolicitados' => $pedidosSolicitados,
+            'buscarQuery' => $this->resolveBuscarFilter($request),
+            'cobranzasData' => $cobranzasData,
         ]);
+        Profiler::stop('CompradorController::index Blade render');
+        Profiler::stop('CompradorController::index');
+        return $viewResult;
+    }
+
+    private function resolveBuscarFilter(Request $request): string
+    {
+        $ssBuscar = trim((string) $request->query('ss_buscar', ''));
+        if ($ssBuscar !== '') {
+            return $ssBuscar;
+        }
+
+        return trim((string) $request->query('q', ''));
     }
 
     /**

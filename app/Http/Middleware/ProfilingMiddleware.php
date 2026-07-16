@@ -36,7 +36,8 @@ class ProfilingMiddleware
     public function handle(Request $request, Closure $next): Response
     {
         // ── Guard: solo cuando APP_PROFILING=true ─────────────────────
-        if (env('APP_PROFILING') !== 'true') {
+        $isProfiling = env('APP_PROFILING', false) === true || env('APP_PROFILING') === 'true';
+        if (!$isProfiling) {
             return $next($request);
         }
 
@@ -239,6 +240,8 @@ class ProfilingMiddleware
         $lines[] = $sep;
 
         Log::channel('daily')->info(implode("\n", $lines));
+
+        \App\Services\Profiler::flush();
 
         return $response;
     }

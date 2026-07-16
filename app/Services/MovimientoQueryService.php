@@ -15,11 +15,16 @@ class MovimientoQueryService
 
     public function list(array $filters): Collection
     {
+        \App\Services\Profiler::start('MovimientoQueryService::list');
         if (config('database.default') === 'pgsql') {
-            return $this->withDisplayNames($this->listPg($filters));
+            $res = $this->withDisplayNames($this->listPg($filters));
+            \App\Services\Profiler::stop('MovimientoQueryService::list');
+            return $res;
         }
 
-        return $this->withDisplayNames($this->listSqlite($filters));
+        $res = $this->withDisplayNames($this->listSqlite($filters));
+        \App\Services\Profiler::stop('MovimientoQueryService::list');
+        return $res;
     }
 
     public function stats(): array
@@ -71,6 +76,7 @@ class MovimientoQueryService
             $query->whereDate('created_at', '<=', $filters['hasta']);
         }
 
+        \App\Services\Profiler::start('MovimientoQueryService::listPg fetch&map');
         $movimientos = $query->limit(500)->get()->map(fn (Movimiento $m) => [
             'id' => $m->id,
             'codigo' => $m->producto?->codigo ?? ($m->metadata['codigo'] ?? '—'),
@@ -86,11 +92,15 @@ class MovimientoQueryService
             'is_manual' => false,
             'classification' => $this->pgClassification($m),
         ]);
+        \App\Services\Profiler::stop('MovimientoQueryService::listPg fetch&map');
 
-        return $movimientos
+        \App\Services\Profiler::start('MovimientoQueryService::listPg merge');
+        $res = $movimientos
             ->concat($this->listPendingManualRequisitions($filters))
             ->sortByDesc('created_at_ts')
             ->values();
+        \App\Services\Profiler::stop('MovimientoQueryService::listPg merge');
+        return $res;
     }
 
     private function listPendingManualRequisitions(array $filters): Collection
@@ -132,54 +142,67 @@ class MovimientoQueryService
             }
         }
 
-        return $query->orderByDesc('created_at')->limit(500)->get()->map(function (RequisicionManual $manual) {
-            $demandInfo = $this->manualDemandInfo($manual);
+        $manuales = $query->orderByDesc('created_at')->limit(500)->get();
+
+        if ($manuales->isEmpty()) {
+            return collect();
+        }
+
+        // ── Pre-cargar productos por código×sede usando 3 queries totales ──
+        // Antes: loadForSede() cargaba 12,947 productos × N sedes = 290MB, ~2,400ms
+        // Ahora: findManyByCodigos() carga solo los códigos reales de las manuales
+        //        (típicamente 10-50 únicos) = 3 queries SQL, <1MB, <50ms
+        $v2 = app(\App\Services\InventarioV2Repository::class);
+        $tv = (float) config('inventario.tiempo_venta_sede', 15);
+        $tp = max((float) config('inventario.tiempo_pronostico_default', 15), 1.0);
+
+        // Pre-cargar todos los codigos × sede_local únicos
+        $productsBySedeAndCodigo = [];
+        $bySedeLocal = $manuales->groupBy(fn ($m) => strtoupper($m->sede_local));
+        foreach ($bySedeLocal as $sedeLocal => $items) {
+            $codigos = $items->pluck('codigo')->unique()->values()->all();
+            $productsBySedeAndCodigo[$sedeLocal] = $v2->findManyByCodigos($sedeLocal, $codigos);
+        }
+
+        return $manuales->map(function (RequisicionManual $manual) use ($productsBySedeAndCodigo, $tv, $tp) {
+            $sede   = strtoupper($manual->sede_local);
+            $product = $productsBySedeAndCodigo[$sede][$manual->codigo] ?? null;
+            $productoNombre = $product['producto'] ?? $manual->producto;
+
+            $warning = null;
+            if ($product) {
+                $stock     = (int) ($product['stocks'][$manual->sede_origen] ?? 0);
+                $venta     = (float) ($product['ventas_internas'][$manual->sede_origen] ?? 0);
+                $demanda   = ($venta / max($tv, 1.0)) * $tp;
+                $excedente = max(0, (int) floor($stock - $demanda));
+                $cantidad  = (int) $manual->cantidad;
+                $warning   = $cantidad <= $excedente
+                    ? 'Cantidad segura. No afecta la demanda proyectada de la sede origen.'
+                    : 'Advertencia: esta requisión consume stock necesario para cubrir la demanda de la sede origen.';
+            }
 
             return [
-                'id' => 'manual-'.$manual->id,
-                'codigo' => $manual->codigo,
-                'producto' => $this->resolveManualProductName($manual) ?? $manual->producto,
-                'origen' => $manual->sede_origen,
-                'destino' => $manual->sede_local,
-                'tipo' => 'REQUISICION',
-                'cantidad' => $manual->cantidad,
-                'usuario' => $manual->usuario ?: '—',
-                'created_at' => $manual->created_at?->format('d/m/Y H:i'),
-                'created_at_ts' => $manual->created_at?->getTimestamp() ?? 0,
-                'is_manual' => true,
+                'id'              => 'manual-'.$manual->id,
+                'codigo'          => $manual->codigo,
+                'producto'        => $productoNombre,
+                'origen'          => $manual->sede_origen,
+                'destino'         => $manual->sede_local,
+                'tipo'            => 'REQUISICION',
+                'cantidad'        => $manual->cantidad,
+                'usuario'         => $manual->usuario ?: '—',
+                'created_at'      => $manual->created_at?->format('d/m/Y H:i'),
+                'created_at_ts'   => $manual->created_at?->getTimestamp() ?? 0,
+                'is_manual'       => true,
                 'manual_exported' => $manual->aplicada_at !== null,
-                'classification' => 'manual',
+                'classification'  => 'manual',
             ];
         });
     }
 
-    private function manualDemandInfo(RequisicionManual $manual): array
-    {
-        $product = $this->resolveManualProductRow($manual);
-        if (! $product) {
-            return [
-                'excedente' => null,
-                'faltante' => null,
-                'warning' => null,
-            ];
-        }
-
-        $service = app(RequisicionPersonalizadaService::class);
-        $metrics = $service->metricasOrigen(
-            $product,
-            $manual->sede_origen,
-            (float) config('inventario.tiempo_pronostico_default')
-        );
-
-        [$warning, $faltante] = $service->mensajeValidacion((int) $manual->cantidad, $metrics['excedente']);
-
-        return [
-            'excedente' => $metrics['excedente'],
-            'faltante' => $faltante,
-            'warning' => $warning,
-        ];
-    }
-
+    /**
+     * @deprecated Mantenido solo por compatibilidad con listManualChangesSince.
+     * listPendingManualRequisitions ya usa findManyByCodigos directamente.
+     */
     private function resolveManualProductRow(RequisicionManual $manual): ?array
     {
         $sede = strtoupper($manual->sede_local);
@@ -345,24 +368,54 @@ class MovimientoQueryService
 
         $rows = $query->orderByDesc('updated_at')->limit(500)->get();
 
-        $changedRows = $rows->map(function (RequisicionManual $manual) {
-            $demandInfo = $this->manualDemandInfo($manual);
+        if ($rows->isEmpty()) {
+            return ['rows' => collect(), 'removed' => []];
+        }
+
+        // Mismo patrón que listPendingManualRequisitions: lookup puntual por código
+        $v2 = app(\App\Services\InventarioV2Repository::class);
+        $tv = (float) config('inventario.tiempo_venta_sede', 15);
+        $tp = max((float) config('inventario.tiempo_pronostico_default', 15), 1.0);
+
+        $productsBySedeAndCodigo = [];
+        $bySedeLocal = $rows->groupBy(fn ($m) => strtoupper($m->sede_local));
+        foreach ($bySedeLocal as $sedeLocal => $items) {
+            $codigos = $items->pluck('codigo')->unique()->values()->all();
+            $productsBySedeAndCodigo[$sedeLocal] = $v2->findManyByCodigos($sedeLocal, $codigos);
+        }
+
+        $changedRows = $rows->map(function (RequisicionManual $manual) use ($productsBySedeAndCodigo, $tv, $tp) {
+            $sede    = strtoupper($manual->sede_local);
+            $product = $productsBySedeAndCodigo[$sede][$manual->codigo] ?? null;
+            $productoNombre = $product['producto'] ?? $manual->producto;
+
+            $warning = null;
+            if ($product) {
+                $stock     = (int) ($product['stocks'][$manual->sede_origen] ?? 0);
+                $venta     = (float) ($product['ventas_internas'][$manual->sede_origen] ?? 0);
+                $demanda   = ($venta / max($tv, 1.0)) * $tp;
+                $excedente = max(0, (int) floor($stock - $demanda));
+                $cantidad  = (int) $manual->cantidad;
+                $warning   = $cantidad <= $excedente
+                    ? 'Cantidad segura. No afecta la demanda proyectada de la sede origen.'
+                    : 'Advertencia: esta requisión consume stock necesario para cubrir la demanda de la sede origen.';
+            }
 
             return [
-                'id' => 'manual-'.$manual->id,
-                'codigo' => $manual->codigo,
-                'producto' => $this->resolveManualProductName($manual) ?? $manual->producto,
-                'origen' => $manual->sede_origen,
-                'destino' => $manual->sede_local,
-                'tipo' => 'REQUISICION',
-                'cantidad' => $manual->cantidad,
-                'usuario' => $manual->usuario ?: '—',
-                'created_at' => $manual->created_at?->format('d/m/Y H:i'),
-                'created_at_ts' => $manual->created_at?->getTimestamp() ?? 0,
-                'is_manual' => true,
+                'id'              => 'manual-'.$manual->id,
+                'codigo'          => $manual->codigo,
+                'producto'        => $productoNombre,
+                'origen'          => $manual->sede_origen,
+                'destino'         => $manual->sede_local,
+                'tipo'            => 'REQUISICION',
+                'cantidad'        => $manual->cantidad,
+                'usuario'         => $manual->usuario ?: '—',
+                'created_at'      => $manual->created_at?->format('d/m/Y H:i'),
+                'created_at_ts'   => $manual->created_at?->getTimestamp() ?? 0,
+                'is_manual'       => true,
                 'manual_exported' => $manual->aplicada_at !== null,
-                'manual_note' => $demandInfo['warning'],
-                'classification' => 'manual',
+                'manual_note'     => $warning,
+                'classification'  => 'manual',
             ];
         })->values();
 
@@ -371,21 +424,28 @@ class MovimientoQueryService
 
     private function withDisplayNames(Collection $rows): Collection
     {
+        \App\Services\Profiler::start('MovimientoQueryService::withDisplayNames unique emails');
         $emails = $rows
             ->pluck('usuario')
             ->filter(fn ($u) => is_string($u) && str_contains($u, '@'))
             ->unique()
             ->values();
+        \App\Services\Profiler::stop('MovimientoQueryService::withDisplayNames unique emails');
 
+        \App\Services\Profiler::start('MovimientoQueryService::withDisplayNames query DB');
         $namesByEmail = $emails->isEmpty()
             ? collect()
             : User::query()->whereIn('email', $emails)->pluck('name', 'email');
+        \App\Services\Profiler::stop('MovimientoQueryService::withDisplayNames query DB');
 
-        return $rows->map(function (array $row) use ($namesByEmail) {
+        \App\Services\Profiler::start('MovimientoQueryService::withDisplayNames map rows');
+        $res = $rows->map(function (array $row) use ($namesByEmail) {
             $row['usuario'] = $this->displayNameForUsuario($row['usuario'] ?? '—', $namesByEmail);
 
             return $row;
         });
+        \App\Services\Profiler::stop('MovimientoQueryService::withDisplayNames map rows');
+        return $res;
     }
 
     private function displayNameForUsuario(string $raw, Collection $namesByEmail): string

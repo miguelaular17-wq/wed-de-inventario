@@ -16,6 +16,12 @@ use Illuminate\Support\Facades\DB;
  */
 class AnalisisInventarioService
 {
+    private const DIAS_VENTANA_ANALISIS = 60;
+    private const MESES_NORMAL = 2;
+    private const MESES_VIGILAR = 4;
+    private const MESES_SOBRESTOCK = 6;
+    private const DIAS_SIN_ROTACION = 90;
+
     public function __construct(
         private ProductRepository $products
     ) {}
@@ -26,6 +32,7 @@ class AnalisisInventarioService
      */
     public function getAnalysis(array $filters = []): Collection
     {
+        ini_set('memory_limit', '512M');
         if (config('database.default') !== 'pgsql') {
             return collect();
         }
@@ -64,7 +71,27 @@ class AnalisisInventarioService
         $whereSql = $whereClauses ? 'AND ' . implode(' AND ', $whereClauses) : '';
 
         $sql = "
-            WITH product_metrics AS (
+            /*
+             * REFACTORIZACIÓN HISTÓRICA:
+             * Históricamente, el sistema utilizaba la columna 'venta_promedio' asumiendo que 
+             * representaba un promedio mensual, cuando en realidad el script de Python enviaba 
+             * un promedio diario. Al dividir (Stock / Promedio Diario), el resultado se leía 
+             * como 'Meses de inventario' pero en realidad eran 'Días de inventario', causando 
+             * que el 90% del inventario se clasificara falsamente como 'Sobrestock Crítico'.
+             * 
+             * SOLUCIÓN ARQUITECTÓNICA:
+             * 1. Ignoramos por completo 'venta_promedio' para proteger la compatibilidad de otros módulos.
+             * 2. Utilizamos 'ventas_60d' (Unidades totales vendidas en los últimos 60 días).
+             * 3. Calculamos promedios y reglas en cascada (CTEs) de forma centralizada sin repetir matemáticas.
+             * 
+             * VARIABLES Y UNIDADES DE MEDIDA:
+             * - total_vendido:     Unidades totales vendidas en la ventana de análisis.
+             * - promedio_diario:   Unidades por día (total_vendido / DIAS_VENTANA_ANALISIS).
+             * - promedio_mensual:  Unidades por mes (total_vendido / (DIAS_VENTANA_ANALISIS / 30)).
+             * - dias_sin_venta:    Días transcurridos desde la última venta registrada globalmente.
+             * - meses_inventario:  Meses estimados que durará el stock actual (total_stock / promedio_mensual).
+             */
+WITH product_metrics AS (
                 SELECT 
                     p.id,
                     p.codigo,
@@ -72,10 +99,11 @@ class AnalisisInventarioService
                     p.categoria,
                     p.subcategoria,
                     p.proveedor,
+                    p.precio_mayor,
                     COALESCE(sa.total_stock, 0) as total_stock,
                     vh.ultima_venta,
                     vh.ultima_compra,
-                    COALESCE(vh.promedio_venta_total, 0) as promedio_venta
+                    COALESCE(vh.total_ventas_60d, 0) as total_ventas_60d
                 FROM inventario_v2.productos p
                 LEFT JOIN (
                     SELECT producto_id, SUM(existencia) as total_stock 
@@ -86,91 +114,161 @@ class AnalisisInventarioService
                     SELECT producto_id,
                         MAX(ultima_venta) as ultima_venta,
                         MAX(ultima_compra) as ultima_compra,
-                        SUM(venta_promedio) as promedio_venta_total
+                        SUM(ventas_60d) as total_ventas_60d
                     FROM inventario_v2.ventas_historicas 
                     GROUP BY producto_id
                 ) vh ON p.id = vh.producto_id
                 WHERE p.activo = true {$whereSql}
             ),
-            calculated_indicators AS (
-                SELECT *,
-                    (CURRENT_DATE - ultima_venta) as dias_sin_venta_raw,
-                    (CURRENT_DATE - ultima_compra) as dias_sin_compra_raw
-                FROM product_metrics
-                WHERE total_stock > 0
+            multisede_raw AS (
+                SELECT 
+                    p.id as producto_id,
+                    sedes.sede,
+                    COALESCE(s.existencia, 0) as stock,
+                    COALESCE(v.ventas_60d, 0) as ventas
+                FROM inventario_v2.productos p
+                CROSS JOIN (SELECT DISTINCT sede FROM inventario_v2.stock_actual) sedes
+                LEFT JOIN inventario_v2.stock_actual s ON p.id = s.producto_id AND sedes.sede = s.sede
+                LEFT JOIN inventario_v2.ventas_historicas v ON p.id = v.producto_id AND sedes.sede = v.sede
+                WHERE p.activo = true {$whereSql}
             ),
-            indicators AS (
+            origen_calc AS (
+                SELECT DISTINCT ON (producto_id) 
+                    producto_id, 
+                    sede as sede_origen, 
+                    stock as stock_origen, 
+                    ventas as ventas_origen,
+                    (stock - ventas) as exceso
+                FROM multisede_raw
+                ORDER BY producto_id, (stock - ventas) DESC
+            ),
+            destino_calc AS (
+                SELECT DISTINCT ON (producto_id) 
+                    producto_id, 
+                    sede as sede_destino, 
+                    stock as stock_destino, 
+                    ventas as ventas_destino,
+                    (ventas - stock) as demanda
+                FROM multisede_raw
+                ORDER BY producto_id, (ventas - stock) DESC
+            ),
+            multisede_agg AS (
+                SELECT 
+                    o.producto_id,
+                    o.sede_origen,
+                    o.stock_origen,
+                    o.ventas_origen,
+                    d.sede_destino,
+                    d.stock_destino,
+                    d.ventas_destino,
+                    CASE 
+                        WHEN o.exceso > 0 AND d.demanda > 0 AND o.sede_origen != d.sede_destino THEN LEAST(o.exceso, d.demanda)
+                        ELSE 0
+                    END as cantidad_sugerida
+                FROM origen_calc o
+                JOIN destino_calc d ON o.producto_id = d.producto_id
+            ),
+            time_metrics AS (
+                SELECT pm.*,
+                    msa.sede_origen,
+                    msa.stock_origen,
+                    msa.ventas_origen,
+                    msa.sede_destino,
+                    msa.stock_destino,
+                    msa.ventas_destino,
+                    msa.cantidad_sugerida,
+                    pm.total_ventas_60d as total_vendido,
+                    ROUND((pm.total_ventas_60d::numeric / " . self::DIAS_VENTANA_ANALISIS . "), 2) as promedio_diario,
+                    ROUND((pm.total_ventas_60d::numeric / (" . self::DIAS_VENTANA_ANALISIS . " / 30.0)), 2) as promedio_mensual,
+                    (CURRENT_DATE - pm.ultima_venta) as dias_sin_venta_raw,
+                    (CURRENT_DATE - pm.ultima_compra) as dias_sin_compra_raw
+                FROM product_metrics pm
+                LEFT JOIN multisede_agg msa ON pm.id = msa.producto_id
+                WHERE pm.total_stock > 0
+            ),
+            inventory_months AS (
                 SELECT *,
                     COALESCE(dias_sin_venta_raw, 999) as dias_sin_venta,
                     dias_sin_compra_raw as dias_sin_compra,
                     CASE 
+                        WHEN promedio_mensual > 0 THEN ROUND((total_stock::numeric / promedio_mensual), 2)
+                        ELSE NULL 
+                    END as meses_inventario
+                FROM time_metrics
+            ),
+            classification_rules AS (
+                SELECT *,
+                    -- 1. Regla de Rotación
+                    CASE 
                         WHEN dias_sin_venta_raw IS NULL THEN 'Sin rotación'
-                        WHEN dias_sin_venta_raw <= 30 THEN 'Normal'
-                        WHEN dias_sin_venta_raw <= 60 THEN 'Lenta'
-                        WHEN dias_sin_venta_raw <= 90 THEN 'Riesgo'
+                        WHEN dias_sin_venta <= 30 THEN 'Normal'
+                        WHEN dias_sin_venta <= 60 THEN 'Lenta'
+                        WHEN dias_sin_venta <= " . self::DIAS_SIN_ROTACION . " THEN 'Riesgo'
                         ELSE 'Sin rotación'
                     END as rotacion,
                     CASE 
                         WHEN dias_sin_venta_raw IS NULL THEN 'rojo'
-                        WHEN dias_sin_venta_raw <= 30 THEN 'verde'
-                        WHEN dias_sin_venta_raw <= 60 THEN 'amarillo'
-                        WHEN dias_sin_venta_raw <= 90 THEN 'naranja'
+                        WHEN dias_sin_venta <= 30 THEN 'verde'
+                        WHEN dias_sin_venta <= 60 THEN 'amarillo'
+                        WHEN dias_sin_venta <= " . self::DIAS_SIN_ROTACION . " THEN 'naranja'
                         ELSE 'rojo'
                     END as rotacion_color,
+                    
+                    -- 2. Regla de Sobrestock
                     CASE 
-                        WHEN promedio_venta > 0 THEN ROUND((total_stock::numeric / promedio_venta::numeric), 1)
-                        ELSE 999
-                    END as meses_inventario,
-                    CASE 
-                        WHEN promedio_venta > 0 THEN 
-                            CASE 
-                                WHEN (total_stock::numeric / promedio_venta::numeric) <= 2 THEN 'Normal'
-                                WHEN (total_stock::numeric / promedio_venta::numeric) <= 4 THEN 'Vigilar'
-                                WHEN (total_stock::numeric / promedio_venta::numeric) <= 6 THEN 'Sobrestock'
-                                ELSE 'Sobrestock Crítico'
-                            END
-                        WHEN total_stock > 0 THEN 'Sobrestock Crítico'
-                        ELSE 'N/A'
+                        WHEN meses_inventario IS NULL AND dias_sin_venta > " . self::DIAS_SIN_ROTACION . " THEN 'Crítico / Sin Rotación'
+                        WHEN meses_inventario IS NULL THEN 'Crítico / Sin Rotación'
+                        WHEN meses_inventario <= " . self::MESES_NORMAL . " THEN 'Normal'
+                        WHEN meses_inventario <= " . self::MESES_VIGILAR . " THEN 'Vigilar'
+                        WHEN meses_inventario <= " . self::MESES_SOBRESTOCK . " THEN 'Sobrestock'
+                        ELSE 'Crítico / Sin Rotación'
                     END as sobrestock,
                     CASE 
-                        WHEN promedio_venta > 0 THEN 
-                            CASE 
-                                WHEN (total_stock::numeric / promedio_venta::numeric) <= 2 THEN 'verde'
-                                WHEN (total_stock::numeric / promedio_venta::numeric) <= 4 THEN 'amarillo'
-                                WHEN (total_stock::numeric / promedio_venta::numeric) <= 6 THEN 'naranja'
-                                ELSE 'rojo'
-                            END
-                        WHEN total_stock > 0 THEN 'rojo'
-                        ELSE 'gris'
+                        WHEN meses_inventario IS NULL THEN 'rojo'
+                        WHEN meses_inventario <= " . self::MESES_NORMAL . " THEN 'verde'
+                        WHEN meses_inventario <= " . self::MESES_VIGILAR . " THEN 'amarillo'
+                        WHEN meses_inventario <= " . self::MESES_SOBRESTOCK . " THEN 'naranja'
+                        ELSE 'rojo'
                     END as sobrestock_color
-                FROM calculated_indicators
+                FROM inventory_months
             ),
             indicators_with_states AS (
                 SELECT *,
+                    (total_stock * dias_sin_venta) as riesgo_economico,
+                    (total_stock * COALESCE(precio_mayor, 0)) as valor_inmovilizado,
                     CASE 
-                        WHEN total_stock > 0 AND dias_sin_venta > 90 AND dias_sin_compra IS NOT NULL AND dias_sin_compra <= 30 THEN 'Compra Reciente Sin Rotación'
-                        WHEN total_stock > 0 AND dias_sin_venta > 90 THEN 'Inventario Inmovilizado'
-                        ELSE NULL
-                    END as estado,
+                        WHEN total_stock > 0 THEN ROUND(((promedio_mensual / total_stock::numeric) * total_vendido), 4)
+                        ELSE 0
+                    END as oportunidad_compra,
+
+                    -- ACCIÓN RECOMENDADA
                     CASE 
-                        WHEN total_stock > 0 AND dias_sin_venta > 90 AND dias_sin_compra IS NOT NULL AND dias_sin_compra <= 30 THEN 'rojo'
-                        WHEN total_stock > 0 AND dias_sin_venta > 90 THEN 'naranja'
-                        ELSE NULL
-                    END as estado_color,
-                    (total_stock * dias_sin_venta) as prioridad
-                FROM indicators
-            ),
-            indicators_with_semaforo AS (
-                SELECT *,
+                        WHEN promedio_mensual > 0 AND (meses_inventario IS NOT NULL AND meses_inventario <= 1) AND dias_sin_venta <= 90 THEN 'Comprar urgente'
+                        WHEN cantidad_sugerida > 0 THEN 'Redistribuir'
+                        WHEN dias_sin_venta > 90 THEN 'Liquidar por falta de rotación'
+                        WHEN meses_inventario > 6 THEN 'Detener compra por exceso'
+                        WHEN meses_inventario > 4 OR dias_sin_venta > 60 THEN 'Revisar compra'
+                        ELSE 'Mantener'
+                    END as accion_recomendada,
+                    
                     CASE 
-                        WHEN rotacion_color = 'rojo' OR sobrestock_color = 'rojo' THEN 'rojo'
-                        WHEN rotacion_color = 'naranja' OR sobrestock_color = 'naranja' THEN 'naranja'
-                        WHEN rotacion_color = 'amarillo' OR sobrestock_color = 'amarillo' THEN 'amarillo'
+                        WHEN promedio_mensual > 0 AND (meses_inventario IS NOT NULL AND meses_inventario <= 1) AND dias_sin_venta <= 90 THEN 'azul'
+                        WHEN cantidad_sugerida > 0 THEN 'naranja'
+                        WHEN dias_sin_venta > 90 THEN 'rojo'
+                        WHEN meses_inventario > 6 THEN 'rojo'
+                        WHEN meses_inventario > 4 OR dias_sin_venta > 60 THEN 'amarillo'
                         ELSE 'verde'
-                    END as semaforo
-                FROM indicators_with_states
+                    END as accion_color,
+
+                    CASE 
+                        WHEN dias_sin_venta > 90 THEN 'Sin movimiento'
+                        WHEN meses_inventario > 6 THEN 'Sobrestock'
+                        ELSE 'No crítico'
+                    END as motivo_critico
+
+                FROM classification_rules
             )
-            SELECT * FROM indicators_with_semaforo
+            SELECT * FROM indicators_with_states
         ";
 
         $items = \Illuminate\Support\Facades\Cache::remember($cacheKey, 1800, function () use ($sql, $bindings) {
@@ -188,20 +286,36 @@ class AnalisisInventarioService
                     'subcategoria' => $row->subcategoria ?? '—',
                     'proveedor' => $row->proveedor ?: 'Sin Proveedor',
                     'total_stock' => (int) $row->total_stock,
-                    'promedio_venta' => (float) $row->promedio_venta,
+                    'promedio_venta' => (float) $row->promedio_diario, // Mantenemos esta llave por compatibilidad pero con el dato correcto
+                    'total_vendido' => (int) $row->total_vendido,
+                    'promedio_diario' => (float) $row->promedio_diario,
+                    'promedio_mensual' => (float) $row->promedio_mensual,
                     'dias_sin_venta' => (int) $row->dias_sin_venta,
                     'dias_sin_compra' => $row->dias_sin_compra ? (int) $row->dias_sin_compra : null,
                     'ultima_venta' => $ultimaVentaDate ? $ultimaVentaDate->format('d/m/Y') : null,
                     'ultima_compra' => $ultimaCompraDate ? $ultimaCompraDate->format('d/m/Y') : null,
                     'rotacion' => $row->rotacion,
                     'rotacion_color' => $row->rotacion_color,
-                    'meses_inventario' => (float) $row->meses_inventario,
+                    'meses_inventario' => $row->meses_inventario !== null ? (float) $row->meses_inventario : 999, // Mantenemos 999 para el frontend/sort pero la logica SQL usa NULL
                     'sobrestock' => $row->sobrestock,
                     'sobrestock_color' => $row->sobrestock_color,
-                    'estado' => $row->estado,
-                    'estado_color' => $row->estado_color,
-                    'prioridad' => (int) $row->prioridad,
-                    'semaforo' => $row->semaforo,
+                    'riesgo_economico' => (float) $row->riesgo_economico,
+                    'valor_inmovilizado' => (float) $row->valor_inmovilizado,
+                    'oportunidad_compra' => (float) $row->oportunidad_compra,
+                    'accion_recomendada' => $row->accion_recomendada,
+                    'accion_color' => $row->accion_color,
+                    'motivo_critico' => $row->motivo_critico,
+                    'sede_origen' => $row->sede_origen,
+                    'stock_origen' => (int) $row->stock_origen,
+                    'ventas_origen' => (float) $row->ventas_origen,
+                    'sede_destino' => $row->sede_destino,
+                    'stock_destino' => (int) $row->stock_destino,
+                    'ventas_destino' => (float) $row->ventas_destino,
+                    'cantidad_sugerida' => (int) $row->cantidad_sugerida,
+                    'precio_mayor' => (float) ($row->precio_mayor ?? 0),
+                    'prioridad' => (int) $row->riesgo_economico, // Compatibilidad legacy
+                    'semaforo' => $row->accion_color, // Actualizado semáforo
+                    'regla_aplicada' => 'Acción: ' . $row->accion_recomendada . '. Motivo: ' . $row->motivo_critico,
                     'stocks_por_sede' => [], // Will be loaded dynamically for the current page items in the controller
                     'ventas_por_sede' => [],
                 ]);

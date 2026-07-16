@@ -24,6 +24,7 @@ class RequisicionController extends Controller
 
     public function form(Request $request): View
     {
+        ini_set('memory_limit', '512M');
         $sede = (string) $request->session()->get('sede_local');
         $tipoReporte = $request->query('tipo_reporte', 'ventas');
         if (! in_array($tipoReporte, ['ventas', 'personalizada', 'mayor_demanda'], true)) {
@@ -45,7 +46,9 @@ class RequisicionController extends Controller
                 ? null
                 : $this->export->resolveSedeKey($selectedSedeOrigen);
 
+            \App\Services\Profiler::start('RequisicionController::form loadForSede');
             $products = $this->products->loadForSede($sede)->keyBy('cod_centro');
+            \App\Services\Profiler::stop('RequisicionController::form loadForSede');
             $manualCats = $this->reqPersonalizada->loadManuales($sede);
 
             $subByCat = [];
@@ -74,13 +77,14 @@ class RequisicionController extends Controller
             $subcategories = $manualCats->map(fn ($m) => $products->get($m->codigo)['subcategoria'] ?? '')
                 ->filter()->unique()->sort()->values()->all();
 
+            \App\Services\Profiler::start('RequisicionController::form buildExport & map');
             $previewRows = $this->reqPersonalizada->buildExport(
                 $sede,
                 $sedeOrigenKey,
                 $selectedCategoria !== 'Todas' ? $selectedCategoria : null,
                 $selectedSubcategoria,
             )->map(function (array $r) use ($products) {
-                $p = $products->get($r['codigo']);
+                $p = $products->get($r['codigo_completo'] ?? $r['codigo']);
 
                 return [
                     'codigo' => $r['codigo'],
@@ -91,6 +95,7 @@ class RequisicionController extends Controller
                     'cantidad' => $r['cantidad'],
                 ];
             });
+            \App\Services\Profiler::stop('RequisicionController::form buildExport & map');
 
             return view('requisicion.export', [
                 'sede' => $sede,
@@ -112,7 +117,10 @@ class RequisicionController extends Controller
         }
 
         $tp = (float) $request->session()->get('tiempo_pronostico', config('inventario.tiempo_pronostico_default'));
+        
+        \App\Services\Profiler::start('RequisicionController::form loadForSede & calcular');
         $ventasRows = $this->ventas->calcular($this->products->loadForSede($sede), $sede, $tp);
+        \App\Services\Profiler::stop('RequisicionController::form loadForSede & calcular');
 
         if ($tipoReporte === 'mayor_demanda') {
             $ventasRows = $ventasRows->filter(function (array $row) use ($sede) {
@@ -138,6 +146,7 @@ class RequisicionController extends Controller
             })->sortByDesc(fn (array $row) => (int) ($row['venta'] ?? 0))->values();
         }
 
+        \App\Services\Profiler::start('RequisicionController::form extract categories');
         $categories = $ventasRows
             ->where('accion', 'HACER REQUISICION')
             ->pluck('categoria')
@@ -147,14 +156,30 @@ class RequisicionController extends Controller
             ->values()
             ->all();
 
-        $subcategories = $ventasRows
-            ->where('accion', 'HACER REQUISICION')
-            ->pluck('subcategoria')
-            ->filter()
-            ->unique()
-            ->sort()
-            ->values()
-            ->all();
+        $subcategories = [];
+        if ($selectedCategoria !== 'Todas') {
+            $subcategories = $ventasRows
+                ->where('accion', 'HACER REQUISICION')
+                ->where('categoria', $selectedCategoria)
+                ->pluck('subcategoria')
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+        }
+        \App\Services\Profiler::stop('RequisicionController::form extract categories');
+
+        \App\Services\Profiler::start('RequisicionController::form build preview');
+        $previewRows = $this->export->previewExportRows(
+            $ventasRows,
+            $selectedSedeOrigen,
+            $sede,
+            false,
+            $selectedCategoria === 'Todas' ? 'Todas' : $selectedCategoria,
+            $selectedSubcategoria === 'Todas' ? 'Todas' : $selectedSubcategoria
+        );
+        \App\Services\Profiler::stop('RequisicionController::form build preview');
 
         $subByCat = [];
         $ventasRows->where('accion', 'HACER REQUISICION')->each(function (array $r) use (&$subByCat) {

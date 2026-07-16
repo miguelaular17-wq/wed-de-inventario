@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('cobranza_resumenes', function (Blueprint $table) {
             $table->id();
-            $table->string('sede_nombre')->unique();
+            $table->string('sede_nombre');
             $table->integer('total_clientes')->default(0);
             $table->decimal('total_saldo', 15, 2)->default(0);
             $table->integer('critico_clientes')->default(0);

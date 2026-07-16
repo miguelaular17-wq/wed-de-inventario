@@ -74,9 +74,13 @@ class SyncApp:
                 self.root.iconify()
 
     def log(self, message):
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.console.insert(tk.END, f"[{timestamp}] {message}\n")
-        self.console.see(tk.END)
+        def _update_gui():
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self.console.insert(tk.END, f"[{timestamp}] {message}\n")
+            self.console.see(tk.END)
+            self.console.update_idletasks()
+        # Enviar al hilo principal de la interfaz para refresco en tiempo real
+        self.root.after(0, _update_gui)
 
     def create_image(self):
         # Generar un icono simple dinámicamente si no hay archivo .ico
@@ -255,6 +259,15 @@ class SyncApp:
         )
         self.startup_chk.grid(row=6, column=0, columnspan=4, sticky=tk.W, pady=5)
         
+        # Row 7: Sync Cobranzas Checkbox
+        self.sync_cobranzas_var = tk.BooleanVar()
+        self.sync_cobranzas_chk = ttk.Checkbutton(
+            config_frame, 
+            text="Subir Cobranzas al inicio del día", 
+            variable=self.sync_cobranzas_var
+        )
+        self.sync_cobranzas_chk.grid(row=7, column=0, columnspan=4, sticky=tk.W, pady=5)
+        
         # Buttons / Actions
         action_frame = ttk.Frame(main_frame)
         action_frame.pack(fill=tk.X, pady=(0, 15))
@@ -303,6 +316,24 @@ class SyncApp:
         )
         self.btn_inspect.pack(side=tk.LEFT, padx=(10, 0))
         
+        # Button: Reparar Productos [Auto]
+        self.btn_auto_heal = ttk.Button(
+            action_frame,
+            text="Reparar Códigos [Auto]",
+            command=self.run_auto_heal,
+            width=25
+        )
+        self.btn_auto_heal.pack(side=tk.LEFT, padx=(10, 0))
+        
+        # Button: Actualizar Precios
+        self.btn_update_prices = ttk.Button(
+            action_frame,
+            text="Actualizar Precios",
+            command=self.run_update_prices,
+            width=20
+        )
+        self.btn_update_prices.pack(side=tk.LEFT, padx=(10, 0))
+        
         # Log Console
         console_frame = ttk.LabelFrame(main_frame, text=" Consola de Logs / Actividad ", padding="5")
         console_frame.pack(fill=tk.BOTH, expand=True)
@@ -345,6 +376,9 @@ class SyncApp:
         # Load startup state
         self.startup_var.set(self.is_startup_enabled())
         
+        # Load sync cobranzas
+        self.sync_cobranzas_var.set(self.config.get("sync_cobranzas", True))
+        
         # State timestamp is loaded into state dictionary on startup,
         # we don't display it in the UI anymore to avoid confusion.
         
@@ -368,6 +402,7 @@ class SyncApp:
         # Update config dictionary
         self.config["sede"] = sede
         self.config["interval_seconds"] = interval_min * 60
+        self.config["sync_cobranzas"] = self.sync_cobranzas_var.get()
         
         if "billing_db" not in self.config:
             self.config["billing_db"] = {}
@@ -680,6 +715,9 @@ class SyncApp:
                 self.log("=" * 60)
                 success = self._execute_daily_snapshot()
                 
+                if success and self.config.get("sync_cobranzas", True):
+                    self._execute_daily_cobranzas()
+
                 if success:
                     # If first run ever, set baseline to now so we don't pull from 2020
                     state = self.load_state()
@@ -741,9 +779,10 @@ class SyncApp:
                 if r[0]:
                     full_code = str(r[0]).strip()
                     prod_map[full_code] = db_id # Agregar el código original sin dividir
-                    for part in full_code.replace(' ', '').split('/'):
-                        if part:
-                            prod_map[part] = db_id
+                    for part in full_code.split(' / '):
+                        clean_part = part.strip()
+                        if clean_part:
+                            prod_map[clean_part] = db_id
             
             name_map = {}
             for r in supabase_rows:
@@ -767,29 +806,39 @@ class SyncApp:
                     ISNULL(s60.total_qty, 0)                         AS ventas_60d,
                     CONVERT(VARCHAR(19), a.fecha_ultima_venta,  120) AS ultima_venta,
                     CONVERT(VARCHAR(19), a.fecha_ultima_compra, 120) AS ultima_compra,
-                    a.descripcion                                    AS descripcion
+                    a.descripcion                                    AS descripcion,
+                    ISNULL(a.precio1_moneda2_uni1, 0)                AS precio_unidad,
+                    ISNULL(a.precio2_moneda2_uni1, ISNULL(a.precio1_moneda2_uni1, 0)) AS precio_mayor,
+                    c_padre.descripcion                              AS categoria,
+                    c_sub.descripcion                                AS subcategoria
                 FROM [dbo].[articulos] a WITH (NOLOCK)
                 LEFT JOIN [dbo].[existencias] ex WITH (NOLOCK) 
                     ON a.id = ex.id_articulo AND ex.almacen = '01'
+                LEFT JOIN [dbo].[categorias] c_sub WITH (NOLOCK) ON a.categoria = c_sub.codigo
+                LEFT JOIN [dbo].[categorias] c_padre WITH (NOLOCK) ON c_sub.id_padre = c_padre.id
                 LEFT JOIN (
-                    SELECT vi.articulo, SUM(vi.cantidad) AS total_qty
+                    SELECT ISNULL(a2.codigo, vi.articulo) AS articulo, SUM(vi.cantidad) AS total_qty
                     FROM [dbo].[documentos_venta] v WITH (NOLOCK)
                     JOIN [dbo].[documentos_venta_items] vi WITH (NOLOCK)
                         ON v.tipo_documento = vi.tipo_documento
                        AND v.numero_documento = vi.numero_documento
+                    LEFT JOIN [dbo].[articulos_codigos] ac WITH (NOLOCK) ON vi.articulo = ac.codigo
+                    LEFT JOIN [dbo].[articulos] a2 WITH (NOLOCK) ON ac.articulo = a2.id
                     WHERE v.tipo_documento = 'FAC'
                       AND v.fecha_emision >= DATEADD(day, -15, GETDATE())
-                    GROUP BY vi.articulo
+                    GROUP BY ISNULL(a2.codigo, vi.articulo)
                 ) s15 ON s15.articulo = a.codigo
                 LEFT JOIN (
-                    SELECT vi.articulo, SUM(vi.cantidad) AS total_qty
+                    SELECT ISNULL(a2.codigo, vi.articulo) AS articulo, SUM(vi.cantidad) AS total_qty
                     FROM [dbo].[documentos_venta] v WITH (NOLOCK)
                     JOIN [dbo].[documentos_venta_items] vi WITH (NOLOCK)
                         ON v.tipo_documento = vi.tipo_documento
                        AND v.numero_documento = vi.numero_documento
+                    LEFT JOIN [dbo].[articulos_codigos] ac WITH (NOLOCK) ON vi.articulo = ac.codigo
+                    LEFT JOIN [dbo].[articulos] a2 WITH (NOLOCK) ON ac.articulo = a2.id
                     WHERE v.tipo_documento = 'FAC'
                       AND v.fecha_emision >= DATEADD(day, -60, GETDATE())
-                    GROUP BY vi.articulo
+                    GROUP BY ISNULL(a2.codigo, vi.articulo)
                 ) s60 ON s60.articulo = a.codigo
                 WHERE a.codigo IS NOT NULL AND LTRIM(RTRIM(a.codigo)) <> ''
             """
@@ -810,10 +859,22 @@ class SyncApp:
             
             pid_stock_map = {}
             pid_ventas_map = {}
+            pid_updates_map = {}
 
             for row in rows:
                 codigo = str(row[0]).strip()
-                nombre_local = str(row[6]).strip() if len(row) > 6 and row[6] else None
+                nombre_local  = str(row[6]).strip() if len(row) > 6 and row[6] else None
+                precio_unidad = float(row[7]) if len(row) > 7 and row[7] else 0.0
+                precio_mayor  = float(row[8]) if len(row) > 8 and row[8] else 0.0
+                categoria_str = str(row[9]).strip() if len(row) > 9 and row[9] else None
+                subcategoria_str = str(row[10]).strip() if len(row) > 10 and row[10] else ''
+                
+                if not categoria_str:
+                    categoria_str = subcategoria_str
+                    subcategoria_str = ''
+                
+                if not categoria_str:
+                    categoria_str = 'Sin categoría'
                 
                 existencia    = max(0, int(row[1]) if row[1] else 0)
                 ventas_15d    = float(row[2]) if row[2] else 0.0
@@ -829,7 +890,7 @@ class SyncApp:
                     pid, current_codigo = name_map[nombre_local.lower()]
                     
                     # Split for robust checking, but also check if the full code is already there
-                    parts = current_codigo.replace(' ', '').split('/')
+                    parts = [p.strip() for p in current_codigo.split(' / ')]
                     if codigo not in parts and codigo not in current_codigo:
                         new_codigo = f"{current_codigo} / {codigo}" if current_codigo else codigo
                         self.log(f"[Snapshot Auto-Heal] Producto '{nombre_local}' encontrado por nombre. Agregando código '{codigo}' a la web.")
@@ -848,20 +909,30 @@ class SyncApp:
                     
                     prod_map[codigo] = pid # Update local map
                 else:
-                    if existencia > 0:
+                    # FIX: Registrar el producto si tiene stock O si tiene ventas recientes.
+                    # Antes solo se registraba con existencia > 0, dejando fuera productos con stock 0
+                    # que igualmente se venden (devoluciones, descuadres, etc.)
+                    tiene_actividad = existencia > 0 or ventas_15d > 0 or ventas_60d > 0
+                    if tiene_actividad:
                         try:
-                            # Aseguramos el commit previo por si acaso, o usamos un savepoint
                             wc.execute("SAVEPOINT auto_reg_sp;")
-                            nombre_insercion = str(nombre_local).strip() if nombre_local and str(nombre_local).strip() else f"[Auto] {codigo}"
-                            self.log(f"[Snapshot Auto-Registro] Producto '{codigo}' no existe en la web pero tiene stock ({existencia}). Subiéndolo como '{nombre_insercion}'...")
+                            # FIX: Usar el nombre real del artículo. Solo usar código como fallback si no hay nombre.
+                            nombre_insercion = str(nombre_local).strip() if nombre_local and str(nombre_local).strip() else codigo
+                            self.log(f"[Snapshot Auto-Registro] Producto '{codigo}' no existe en la web (stock={existencia}, ventas60d={ventas_60d}). Subiéndolo como '{nombre_insercion}'...")
                             wc.execute(
                                 """
                                 INSERT INTO inventario_v2.productos (codigo, nombre, categoria, subcategoria, proveedor, precio_unidad, precio_mayor, activo, created_at, updated_at)
-                                VALUES (%s, %s, 'Sin categoría', '', '', 0, 0, true, NOW(), NOW())
-                                ON CONFLICT (codigo) DO UPDATE SET activo = true, updated_at = NOW()
+                                VALUES (%s, %s, %s, %s, '', %s, %s, true, NOW(), NOW())
+                                ON CONFLICT (codigo) DO UPDATE
+                                    SET activo = true,
+                                        precio_unidad = GREATEST(inventario_v2.productos.precio_unidad, EXCLUDED.precio_unidad),
+                                        precio_mayor  = GREATEST(inventario_v2.productos.precio_mayor,  EXCLUDED.precio_mayor),
+                                        categoria     = CASE WHEN inventario_v2.productos.categoria = 'Sin categoría' OR inventario_v2.productos.categoria IS NULL OR inventario_v2.productos.categoria = '' THEN EXCLUDED.categoria ELSE inventario_v2.productos.categoria END,
+                                        subcategoria  = CASE WHEN inventario_v2.productos.subcategoria IS NULL OR inventario_v2.productos.subcategoria = '' THEN EXCLUDED.subcategoria ELSE inventario_v2.productos.subcategoria END,
+                                        updated_at = NOW()
                                 RETURNING id;
                                 """,
-                                (codigo, nombre_insercion)
+                                (codigo, nombre_insercion, categoria_str, subcategoria_str, precio_unidad, precio_mayor)
                             )
                             new_pid_row = wc.fetchone()
                             if new_pid_row:
@@ -870,7 +941,7 @@ class SyncApp:
                                 if nombre_local:
                                     name_map[nombre_local.lower()] = (pid, codigo)
                                 wc.execute("RELEASE SAVEPOINT auto_reg_sp;")
-                                web_conn.commit() # Fix for PgBouncer: commit immediately so the ID exists for execute_batch
+                                web_conn.commit()
                             else:
                                 wc.execute("ROLLBACK TO SAVEPOINT auto_reg_sp;")
                                 skipped += 1
@@ -884,19 +955,24 @@ class SyncApp:
                         skipped += 1
                         continue
 
+                # Guardar info para la actualización masiva de precios y categorías
+                if pid not in pid_updates_map or precio_unidad > pid_updates_map[pid][0]:
+                    pid_updates_map[pid] = (precio_unidad, precio_mayor, categoria_str, subcategoria_str)
+
                 pid_stock_map[pid] = pid_stock_map.get(pid, 0) + existencia
                 
                 if pid not in pid_ventas_map:
                     pid_ventas_map[pid] = {
-                        'ventas_60d': 0.0,
-                        'ventas_15d': 0.0,
+                        'ventas_60d': ventas_60d,
+                        'ventas_15d': ventas_15d,
                         'ultima_venta': None,
                         'ultima_compra': None
                     }
+                else:
+                    pid_ventas_map[pid]['ventas_60d'] = max(pid_ventas_map[pid]['ventas_60d'], ventas_60d)
+                    pid_ventas_map[pid]['ventas_15d'] = max(pid_ventas_map[pid]['ventas_15d'], ventas_15d)
                 
                 v_data = pid_ventas_map[pid]
-                v_data['ventas_60d'] += ventas_60d
-                v_data['ventas_15d'] += ventas_15d
                 
                 # Para fechas, tomamos la más reciente
                 if ultima_venta:
@@ -929,7 +1005,30 @@ class SyncApp:
                 return True
 
             self.log(f"[Snapshot] Preparados {len(stock_tuples)} productos conocidos. Enviando...")
-                    
+            # Ejecutar actualización de precios y categorias en lotes para evitar que se cuelgue
+            updates_tuples = []
+            for pid_r, (pu, pm, cat, subcat) in pid_updates_map.items():
+                updates_tuples.append((pu, pm, cat, subcat, pid_r, pu, pm, cat, subcat))
+                
+            if updates_tuples:
+                batch_update_query = """
+                    UPDATE inventario_v2.productos
+                    SET precio_unidad = CASE WHEN precio_unidad IS NULL OR precio_unidad <= 0 THEN %s ELSE precio_unidad END,
+                        precio_mayor  = CASE WHEN precio_mayor  IS NULL OR precio_mayor  <= 0 THEN %s ELSE precio_mayor  END,
+                        categoria     = CASE WHEN categoria = 'Sin categoría' OR categoria IS NULL OR categoria = '' THEN %s ELSE categoria END,
+                        subcategoria  = CASE WHEN subcategoria IS NULL OR subcategoria = '' THEN %s ELSE subcategoria END,
+                        updated_at = NOW()
+                    WHERE id = %s AND (
+                        (%s > 0 AND (precio_unidad IS NULL OR precio_unidad <= 0)) OR
+                        (%s > 0 AND (precio_mayor  IS NULL OR precio_mayor  <= 0)) OR
+                        (%s != 'Sin categoría' AND (categoria = 'Sin categoría' OR categoria IS NULL OR categoria = '')) OR
+                        (%s != '' AND (subcategoria IS NULL OR subcategoria = ''))
+                    );
+                """
+                batch_execute_and_commit(batch_update_query, updates_tuples)
+                
+            self.log(f"[Snapshot] Atributos (precios, categorias) evaluados y actualizados para {len(updates_tuples)} productos en la web.")
+
             # 1. Batch Upsert stock
             upsert_stock_query = """
                 INSERT INTO inventario_v2.stock_actual (producto_id, sede, existencia, updated_at)
@@ -992,6 +1091,161 @@ class SyncApp:
             if web_conn:
                 try: web_conn.close()
                 except Exception: pass
+
+    def _execute_daily_cobranzas(self):
+        """Pulls the collection details from SQL Server and pushes to Supabase historial_cobranzas."""
+        billing_conn = None
+        web_conn = None
+        try:
+            sede = self.config.get("sede", "JRZ")
+            web = self.config["web_db"]
+            
+            self.log("[Cobranzas] 1. Ejecutando consulta de cuentas por cobrar en SQL Server...")
+            billing_conn = self.get_sql_connection()
+            
+            query = """
+            SELECT 
+                cx.codigo_cliente AS [CODIGO CLIENTE],
+                c.descripcion AS [NOMBRE CLIENTE],
+                cx.id AS [ID],
+                CAST(cx.fecha_emision AS DATE) AS [FECHA EMISION],
+                cx.tipo_documento AS [TIPO CXC],
+                cx.numero_documento AS [NUMERO DOCUMENTO], 
+                cx.monto_neto_moneda2 AS [MONTO NETO $],
+                cx.saldo_actual_moneda2 AS [SALDO $],
+                DATEDIFF(day, cx.fecha_emision, GETDATE()) AS [DIAS DE DEUDA],
+                CASE 
+                    WHEN DATEDIFF(day, cx.fecha_emision, GETDATE()) >= 300 THEN 'CRITICO'
+                    WHEN DATEDIFF(day, cx.fecha_emision, GETDATE()) > 60 THEN 'MOROSO'
+                    ELSE 'RECIENTE'
+                END AS [ESTADO CALCULADO],
+                cx.usuario AS [USUARIO],
+                cx.estacion AS [ESTACION],
+                cx.codigo_caja AS [CODIGO CAJA]
+            FROM cuentas_cobrar cx WITH (NOLOCK)
+            JOIN clientes c WITH (NOLOCK) ON cx.codigo_cliente = c.codigo
+            WHERE cx.saldo_actual_moneda2 > 0.5
+              AND cx.tipo_documento IN ('FAC', 'ND')
+            """
+            
+            cursor = billing_conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            self.log(f"[Cobranzas] {len(rows)} documentos por cobrar obtenidos.")
+            
+            if not rows:
+                return True
+
+            self.log("[Cobranzas] 2. Conectando a Supabase para subir historial de cobranzas...")
+            web_conn = psycopg2.connect(
+                host=web["host"], port=web["port"], database=web["database"],
+                user=web["user"], password=web["password"], sslmode="require",
+                connect_timeout=30
+            )
+            wc = web_conn.cursor()
+            
+            today = datetime.now().strftime("%Y-%m-%d")
+            
+            # Borrar los datos de la sede para reemplazarlos con el snapshot fresco
+            wc.execute("DELETE FROM cobranzas WHERE sede_nombre = %s;", (sede,))
+            wc.execute("DELETE FROM cobranza_resumenes WHERE sede_nombre = %s;", (sede,))
+            
+            from psycopg2.extras import execute_batch
+            
+            insert_query = """
+                INSERT INTO cobranzas (
+                    sede_nombre, codigo, cliente, saldo_bs, saldo_usd,
+                    meses_antiguedad, estatus, fecha_emision,
+                    created_at, updated_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW()
+                )
+            """
+            
+            total_clientes = 0
+            total_saldo = 0.0
+            crit_c = 0; crit_s = 0.0
+            moro_c = 0; moro_s = 0.0
+            reci_c = 0; reci_s = 0.0
+            
+            cobranzas_data = []
+            for row in rows:
+                codigo = str(row[0]).strip() if row[0] else ''
+                cliente = str(row[1]).strip() if row[1] else ''
+                fecha_emision = row[3]
+                saldo_usd = float(row[7]) if row[7] else 0.0
+                dias = int(row[8]) if row[8] else 0
+                meses = dias / 30.0
+                
+                estatus = 'RECIENTE'
+                if dias >= 300:
+                    estatus = 'CRITICO'
+                    crit_c += 1
+                    crit_s += saldo_usd
+                elif dias > 60:
+                    estatus = 'MOROSO'
+                    moro_c += 1
+                    moro_s += saldo_usd
+                else:
+                    reci_c += 1
+                    reci_s += saldo_usd
+                
+                total_clientes += 1
+                total_saldo += saldo_usd
+                
+                # asume tasa de 36 si no hay saldo en bs
+                saldo_bs = float(row[6]) if row[6] else (saldo_usd * 36)
+
+                cobranzas_data.append((
+                    sede,
+                    codigo,
+                    cliente,
+                    saldo_bs,
+                    saldo_usd,
+                    meses,
+                    estatus,
+                    fecha_emision
+                ))
+            
+            if cobranzas_data:
+                execute_batch(wc, insert_query, cobranzas_data, page_size=1000)
+                
+                # Insert summary
+                wc.execute("""
+                    INSERT INTO cobranza_resumenes (
+                        sede_nombre, total_clientes, total_saldo,
+                        critico_clientes, critico_saldo,
+                        moroso_clientes, moroso_saldo,
+                        reciente_clientes, reciente_saldo,
+                        apartado_clientes, apartado_saldo,
+                        created_at, updated_at
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, 0.0, NOW(), NOW()
+                    )
+                """, (
+                    sede, total_clientes, total_saldo,
+                    crit_c, crit_s, moro_c, moro_s, reci_c, reci_s
+                ))
+                
+            web_conn.commit()
+            
+            self.log(f"[Cobranzas] ✓ Historial de cobranzas subido con éxito: {len(cobranzas_data)} registros.")
+            return True
+            
+        except Exception as e:
+            self.log(f"[Cobranzas] Error al subir cobranzas: {str(e)}")
+            if web_conn:
+                try: web_conn.rollback()
+                except Exception: pass
+            return False
+        finally:
+            if billing_conn:
+                try: billing_conn.close()
+                except Exception: pass
+            if web_conn:
+                try: web_conn.close()
+                except Exception: pass
+
     def _execute_sync_cycle(self):
         billing_conn = None
         web_conn = None
@@ -1120,7 +1374,7 @@ class SyncApp:
                         prod_row = web_cursor.fetchone()
                         if prod_row:
                             current_codigo = str(prod_row[2]) if prod_row[2] else ""
-                            parts = current_codigo.replace(' ', '').split('/')
+                            parts = [p.strip() for p in current_codigo.split(' / ')]
                             if codigo_clean not in parts:
                                 new_codigo = f"{current_codigo} / {codigo_clean}" if current_codigo else codigo_clean
                                 self.log(f"  [Sync Auto-Heal] Producto '{nombre_clean}' encontrado por nombre. Agregando código '{codigo_clean}' a la web.")
@@ -1135,15 +1389,24 @@ class SyncApp:
                                     pass
 
 
-                # Paso 5: Si aun no existe, crear el producto automáticamente para no perder el movimiento
+                # Paso 5: Si aún no existe, crear el producto automáticamente para no perder el movimiento.
+                # FIX: Usar nombre real del artículo. Solo usar el código si no hay nombre disponible.
                 if not prod_row:
-                    nombre_insercion = str(nombre_local).strip() if nombre_local and str(nombre_local).strip() else f"[Auto] {codigo_clean}"
-                    self.log(f"  [Auto-Registro] Código '{codigo_clean}' no existe. Creando producto con nombre '{nombre_insercion}'...")
+                    if nombre_local and str(nombre_local).strip():
+                        nombre_insercion = str(nombre_local).strip()
+                    else:
+                        nombre_insercion = codigo_clean  # sin prefijo [Auto]
+                    self.log(f"  [Auto-Registro] Código '{codigo_clean}' no existe. Creando producto '{nombre_insercion}'...")
                     web_cursor.execute(
                         """
                         INSERT INTO inventario_v2.productos (codigo, nombre, categoria, subcategoria, proveedor, precio_unidad, precio_mayor, activo, created_at, updated_at)
                         VALUES (%s, %s, 'Sin categoría', '', '', 0, 0, true, NOW(), NOW())
-                        ON CONFLICT (codigo) DO UPDATE SET activo = true, updated_at = NOW()
+                        ON CONFLICT (codigo) DO UPDATE
+                            SET activo = true,
+                                nombre = CASE WHEN inventario_v2.productos.nombre LIKE '[Auto]%%' OR inventario_v2.productos.nombre = inventario_v2.productos.codigo
+                                              THEN EXCLUDED.nombre
+                                              ELSE inventario_v2.productos.nombre END,
+                            updated_at = NOW()
                         RETURNING id, activo;
                         """,
                         (codigo_clean, nombre_insercion)
@@ -1337,7 +1600,7 @@ class SyncApp:
             codigo_a_id = {}
             for pid, cods_web in prod_rows:
                 if cods_web:
-                    parts = [p.strip().upper() for p in str(cods_web).split("/")]
+                    parts = [p.strip().upper() for p in str(cods_web).split(" / ")]
                     for p in parts:
                         codigo_a_id[p] = pid
             
@@ -1385,6 +1648,200 @@ class SyncApp:
             if web_conn:
                 web_conn.close()
 
+    def run_auto_heal(self):
+        self.btn_auto_heal.config(state=tk.DISABLED)
+        threading.Thread(target=self._perform_auto_heal, daemon=True).start()
+
+    def _perform_auto_heal(self):
+        billing_conn = None
+        web_conn = None
+        try:
+            self.log("Iniciando reparación automática de productos [Auto]...")
+            if not self.save_ui_values_to_config():
+                return
+            
+            billing_conn = self.get_sql_connection()
+            if not billing_conn:
+                self.log("Error: No se pudo conectar a SQL Server.")
+                return
+            
+            web = self.config.get("web_db", {})
+            web_conn = psycopg2.connect(
+                host=web.get("host"), port=web.get("port"), database=web.get("database"),
+                user=web.get("user"), password=web.get("password"), sslmode="require",
+                connect_timeout=15
+            )
+            
+            web_cursor = web_conn.cursor()
+            billing_cursor = billing_conn.cursor()
+            
+            # Paso 1: Buscar productos [Auto] en la web
+            self.log("Buscando productos [Auto] huérfanos en la web...")
+            web_cursor.execute("SELECT id, codigo, nombre FROM inventario_v2.productos WHERE nombre LIKE '%[Auto]%' OR TRIM(nombre) = TRIM(codigo) OR TRIM(nombre) = TRIM(codigo)")
+            auto_prods = web_cursor.fetchall()
+            
+            if not auto_prods:
+                self.log("¡Todo excelente! No hay productos fantasma [Auto] para reparar.")
+                return
+                
+            self.log(f"Se encontraron {len(auto_prods)} productos [Auto]. Buscando nombres reales en SQL Server...")
+            
+            reparados = 0
+            for auto_id, auto_codigo, auto_nombre in auto_prods:
+                codigo_corto = str(auto_codigo).strip()
+                self.log(f"Analizando: '{auto_nombre}' (Código: {codigo_corto})")
+                
+                # Paso 2: Buscar nombre real en SQL Server
+                query_sql = """
+                    SELECT a.descripcion, a.codigo 
+                    FROM articulos a WITH (NOLOCK) 
+                    WHERE a.codigo = ? 
+                       OR a.id IN (SELECT articulo FROM articulos_codigos WHERE codigo = ?)
+                """
+                billing_cursor.execute(query_sql, (codigo_corto, codigo_corto))
+                sql_row = billing_cursor.fetchone()
+                
+                if not sql_row:
+                    self.log(f"  -> No se encontró '{codigo_corto}' en SQL Server. Se omitirá.")
+                    continue
+                    
+                nombre_real = str(sql_row[0]).strip()
+                codigo_largo_real = str(sql_row[1]).strip()
+                self.log(f"  -> Nombre real en SQL Server: '{nombre_real}'")
+                
+                # Paso 3: Buscar nombre real en la web
+                web_cursor.execute(
+                    "SELECT id, codigo FROM inventario_v2.productos WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(%s)) LIMIT 1",
+                    (nombre_real,)
+                )
+                parent_row = web_cursor.fetchone()
+                
+                if not parent_row:
+                    self.log(f"  -> El producto '{nombre_real}' aún no existe en la web. Sincronízalo primero.")
+                    continue
+                    
+                parent_id = parent_row[0]
+                parent_codigo = str(parent_row[1]).strip() if parent_row[1] else ""
+                
+                # Paso 4: Combinar códigos y reparar
+                parts = [p.strip() for p in parent_codigo.split(' / ')]
+                if codigo_corto not in parts:
+                    new_codigo = f"{parent_codigo} / {codigo_corto}" if parent_codigo else codigo_corto
+                    self.log(f"  -> Combinando códigos en producto principal: {new_codigo}")
+                    web_cursor.execute(
+                        "UPDATE inventario_v2.productos SET codigo = %s, updated_at = NOW() WHERE id = %s",
+                        (new_codigo, parent_id)
+                    )
+                else:
+                    self.log("  -> El producto principal ya tenía el código enlazado.")
+                    
+                # Eliminar historiales y stock del producto fantasma para evitar errores de clave foránea
+                self.log("  -> Limpiando y eliminando producto falso [Auto]...")
+                web_cursor.execute("DELETE FROM inventario_v2.movimientos WHERE producto_id = %s", (auto_id,))
+                web_cursor.execute("DELETE FROM inventario_v2.stock_actual WHERE producto_id = %s", (auto_id,))
+                web_cursor.execute("DELETE FROM inventario_v2.ventas_historicas WHERE producto_id = %s", (auto_id,))
+                web_cursor.execute("DELETE FROM inventario_v2.historial_ventas_mensuales WHERE producto_id = %s", (auto_id,))
+                
+                # Finalmente borrar el producto
+                web_cursor.execute("DELETE FROM inventario_v2.productos WHERE id = %s", (auto_id,))
+                web_conn.commit()
+                
+                self.log(f"  ¡Reparado! Ventas futuras de {codigo_corto} irán a '{nombre_real}'.")
+                reparados += 1
+                
+            self.log(f"Resumen: {reparados} de {len(auto_prods)} productos [Auto] reparados exitosamente.")
+            
+        except Exception as e:
+            import traceback
+            self.log(f"Error en auto-reparación: {traceback.format_exc()}")
+            if web_conn:
+                web_conn.rollback()
+        finally:
+            self.btn_auto_heal.config(state=tk.NORMAL)
+            if billing_conn:
+                billing_conn.close()
+            if web_conn:
+                web_conn.close()
+
+    def run_update_prices(self):
+        self.btn_update_prices.config(state=tk.DISABLED)
+        threading.Thread(target=self._perform_update_prices, daemon=True).start()
+
+    def _perform_update_prices(self):
+        billing_conn = None
+        web_conn = None
+        try:
+            self.log("Iniciando actualizacion de precios...")
+            if not self.save_ui_values_to_config():
+                return
+            
+            billing_conn = self.get_sql_connection()
+            if not billing_conn:
+                self.log("Error: No se pudo conectar a SQL Server.")
+                return
+            
+            web = self.config.get("web_db", {})
+            web_conn = psycopg2.connect(
+                host=web.get("host"), port=web.get("port"), database=web.get("database"),
+                user=web.get("user"), password=web.get("password"), sslmode="require",
+                connect_timeout=15
+            )
+            
+            web_cursor = web_conn.cursor()
+            billing_cursor = billing_conn.cursor()
+
+            self.log("Consultando productos en Supabase...")
+            web_cursor.execute("SELECT id, nombre, COALESCE(precio_unidad, 0), COALESCE(precio_mayor, 0) FROM inventario_v2.productos WHERE nombre IS NOT NULL")
+            web_prods = web_cursor.fetchall()
+
+            self.log("Consultando precios en SQL Server...")
+            billing_cursor.execute("SELECT descripcion, ISNULL(precio1_moneda2_uni1, 0), ISNULL(precio2_moneda2_uni1, ISNULL(precio1_moneda2_uni1, 0)) FROM articulos WITH (NOLOCK) WHERE descripcion IS NOT NULL")
+            sql_prods = billing_cursor.fetchall()
+
+            self.log("Procesando comparaciones...")
+            sql_dict = {}
+            for desc, p1, p2 in sql_prods:
+                sql_dict[str(desc).strip().lower()] = (float(p1), float(p2))
+
+            updates = []
+            for wid, wname, wp1, wp2 in web_prods:
+                clean_name = str(wname).strip().lower()
+                if clean_name in sql_dict:
+                    sp1, sp2 = sql_dict[clean_name]
+                    new_p1 = max(float(wp1), sp1)
+                    new_p2 = max(float(wp2), sp2)
+
+                    if new_p1 > float(wp1) or new_p2 > float(wp2):
+                        updates.append((new_p1, new_p2, wid))
+
+            if not updates:
+                self.log("Todos los precios estan actualizados en la web.")
+                return
+
+            self.log(f"Se actualizaran los precios de {len(updates)} productos. Subiendo a Supabase...")
+            psycopg2.extras.execute_batch(
+                web_cursor,
+                "UPDATE inventario_v2.productos SET precio_unidad = %s, precio_mayor = %s, updated_at = NOW() WHERE id = %s",
+                updates
+            )
+            web_conn.commit()
+            self.log(f"Actualizacion completada! {len(updates)} precios actualizados.")
+
+        except Exception as e:
+            import traceback
+            self.log(f"Error en actualizacion de precios: {traceback.format_exc()}")
+            if web_conn:
+                try: web_conn.rollback()
+                except Exception: pass
+        finally:
+            self.root.after(0, lambda: self.btn_update_prices.config(state=tk.NORMAL))
+            if billing_conn:
+                try: billing_conn.close()
+                except Exception: pass
+            if web_conn:
+                try: web_conn.close()
+                except Exception: pass
+
 if __name__ == "__main__":
     root = tk.Tk()
     app = SyncApp(root)
@@ -1395,3 +1852,7 @@ if __name__ == "__main__":
         root.after(1000, app.toggle_sync)
         
     root.mainloop()
+
+
+
+

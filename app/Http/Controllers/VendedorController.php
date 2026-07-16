@@ -17,6 +17,7 @@ class VendedorController extends Controller
 
     public function index(Request $request): View
     {
+        ini_set('memory_limit', '512M');
         $q = trim((string) $request->query('q', ''));
         $sedeLocal = (string) $request->session()->get('sede_local');
 

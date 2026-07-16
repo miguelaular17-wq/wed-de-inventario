@@ -47,10 +47,101 @@
         .pagination .page-item:not(.active):not(.disabled) .page-link:hover {
             background-color: #f1f5f9;
         }
+
+        /* Export JSON button */
+        .btn-export-json {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #0f766e, #0d9488);
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.92rem;
+            border: none;
+            border-radius: 8px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(13,148,136,0.3);
+            letter-spacing: 0.2px;
+        }
+        .btn-export-json:hover {
+            background: linear-gradient(135deg, #0d9488, #14b8a6);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(13,148,136,0.4);
+            color: #fff;
+            text-decoration: none;
+        }
+        .btn-export-json:active { transform: translateY(0); }
+        .btn-export-json svg { flex-shrink: 0; }
+        .btn-export-json.loading { opacity: 0.7; pointer-events: none; }
+
+        /* Toast */
+        #export-toast {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            background: #0f172a;
+            color: #fff;
+            padding: 14px 22px;
+            border-radius: 10px;
+            font-size: 0.92rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 9999;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+        }
+        #export-toast.show { opacity: 1; transform: translateY(0); }
     </style>
-    <h1>Catálogo de Productos</h1>
-    <p class="lead">Consulta de stock e histórico por sede</p>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div>
+            <h1>Catálogo de Productos</h1>
+            <p class="lead">Consulta de stock e histórico por sede</p>
+        </div>
+        <a href="{{ route('admin.productos.export_json') }}"
+           id="btn-export-json"
+           class="btn-export-json"
+           onclick="onExportClick(event)">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Descargar JSON de Productos
+        </a>
+    </div>
 </div>
+
+<div id="export-toast">
+    <svg width="18" height="18" fill="none" stroke="#4ade80" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+    Descargando productos...
+</div>
+
+<script>
+function onExportClick(e) {
+    const btn = document.getElementById('btn-export-json');
+    const toast = document.getElementById('export-toast');
+    btn.classList.add('loading');
+    btn.innerHTML = `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="animation:spin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Generando...`;
+    toast.classList.add('show');
+    setTimeout(() => {
+        toast.classList.remove('show');
+        btn.classList.remove('loading');
+        btn.innerHTML = `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Descargar JSON de Productos`;
+    }, 2500);
+}
+</script>
+<style>
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
 
 <form method="GET" action="{{ route('admin.productos.index') }}" class="filter-bar">
     <div class="field field-wide">

@@ -1,261 +1,370 @@
 @extends('layouts.app')
-@section('title', 'Conciliación Bancaria Inteligente')
+@section('title', 'Conciliación Bancaria')
 @section('content')
-<div style="padding: 24px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 15px;">
-        <h2 style="margin: 0; font-size: 1.5rem; color: #1a4273; font-weight: 600;">Conciliación Bancaria Inteligente</h2>
-        
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <button type="button" onclick="document.getElementById('uploadModal').style.display = 'flex'" style="background-color: #10b981; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+
+<style>
+    .conc-page { padding: 28px; font-family: 'Inter', sans-serif; background: #f1f5f9; min-height: 100vh; }
+    .conc-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; flex-wrap: wrap; gap: 14px; }
+    .conc-title { margin: 0; font-size: 1.6rem; color: #0f172a; font-weight: 800; letter-spacing: -0.5px; }
+    .conc-title span { color: #2563eb; }
+
+    /* Toolbar */
+    .conc-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .btn-upload { background: linear-gradient(135deg,#2563eb,#1d4ed8); color: white; padding: 10px 18px; border: none; border-radius: 9px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(37,99,235,.3); transition: transform .15s; }
+    .btn-upload:hover { transform: translateY(-1px); }
+    .btn-clear { background: white; color: #ef4444; border: 1.5px solid #fca5a5; padding: 10px 18px; border-radius: 9px; font-weight: 600; cursor: pointer; font-size: 0.95rem; }
+    .btn-clear:hover { background: #fef2f2; }
+    .select-banco { padding: 10px 14px; border: 1.5px solid #cbd5e1; border-radius: 9px; font-size: 0.95rem; color: #334155; background: white; min-width: 160px; }
+    .btn-filtrar { background: #f8fafc; color: #475569; border: 1.5px solid #cbd5e1; padding: 10px 16px; border-radius: 9px; font-weight: 600; cursor: pointer; }
+
+    /* Alert */
+    .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; padding: 14px 18px; border-radius: 10px; margin-bottom: 22px; font-weight: 500; }
+    .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; padding: 14px 18px; border-radius: 10px; margin-bottom: 22px; font-weight: 500; text-align: center; }
+
+    /* Bank card */
+    .bank-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,.06); margin-bottom: 40px; overflow: hidden; }
+    .bank-card-header { background: linear-gradient(135deg, #1e3a5f 0%, #1a4273 100%); padding: 18px 24px; display: flex; align-items: center; gap: 14px; justify-content: space-between; flex-wrap: wrap; }
+    .bank-name { color: white; font-size: 1.25rem; font-weight: 800; letter-spacing: .5px; display: flex; align-items: center; gap: 10px; }
+    .bank-totals-row { display: flex; gap: 18px; flex-wrap: wrap; }
+    .bank-stat { background: rgba(255,255,255,.12); border-radius: 8px; padding: 8px 14px; text-align: center; min-width: 120px; }
+    .bank-stat-label { font-size: 0.7rem; color: rgba(255,255,255,.7); text-transform: uppercase; letter-spacing: .5px; display: block; }
+    .bank-stat-value { font-size: 1rem; font-weight: 700; color: white; }
+    .bank-stat-value.green { color: #6ee7b7; }
+    .bank-stat-value.yellow { color: #fcd34d; }
+    .bank-stat-value.red { color: #fca5a5; }
+    .bank-stat-value.orange { color: #fdba74; }
+
+    /* Sections inside bank */
+    .sections-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+    @media(max-width: 900px) { .sections-grid { grid-template-columns: 1fr; } }
+
+    .section-block { border-right: 1px solid #f1f5f9; }
+    .section-block:nth-child(even) { border-right: none; }
+    .section-block:nth-child(1), .section-block:nth-child(2) { border-bottom: 1px solid #f1f5f9; }
+
+    .section-header { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid #f1f5f9; }
+    .section-badge { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    .badge-green { background: #10b981; }
+    .badge-yellow { background: #f59e0b; }
+    .badge-red { background: #ef4444; }
+    .badge-purple { background: #8b5cf6; }
+
+    .section-title { font-size: 0.88rem; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: .5px; }
+    .section-count { margin-left: auto; font-size: 0.75rem; background: #f1f5f9; color: #64748b; border-radius: 20px; padding: 2px 9px; font-weight: 600; }
+
+    /* Tables */
+    .mini-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .mini-table thead tr { background: #f8fafc; }
+    .mini-table th { padding: 9px 14px; font-weight: 600; color: #64748b; text-align: left; font-size: 0.78rem; text-transform: uppercase; letter-spacing: .3px; border-bottom: 1px solid #f1f5f9; }
+    .mini-table td { padding: 10px 14px; border-bottom: 1px solid #f8fafc; color: #334155; vertical-align: top; }
+    .mini-table tr:last-child td { border-bottom: none; }
+    .mini-table tr:hover td { background: #f8fafc; }
+    .monto-cell { font-weight: 700; text-align: right; font-family: 'Courier New', monospace; }
+    .monto-green { color: #059669; }
+    .monto-red { color: #dc2626; }
+    .monto-yellow { color: #d97706; }
+    .monto-purple { color: #7c3aed; }
+    .ref-chip { font-size: 0.75rem; color: #64748b; background: #f1f5f9; border-radius: 4px; padding: 1px 6px; display: inline-block; margin-top: 2px; font-family: monospace; }
+    .tipo-chip { font-size: 0.72rem; border-radius: 4px; padding: 2px 7px; font-weight: 600; display: inline-block; }
+    .chip-cargo { background: #fef2f2; color: #dc2626; }
+    .chip-abono { background: #f0fdf4; color: #16a34a; }
+
+    .empty-row td { text-align: center; color: #94a3b8; padding: 24px; font-size: 0.85rem; }
+
+    /* Section footer */
+    .section-footer { padding: 10px 14px; background: #f8fafc; border-top: 1px solid #f1f5f9; text-align: right; font-weight: 700; font-size: 0.9rem; color: #1e293b; }
+
+    /* Upload modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1050; align-items: center; justify-content: center; padding: 20px; }
+    .modal-box { background: white; border-radius: 14px; width: 100%; max-width: 500px; box-shadow: 0 20px 40px rgba(0,0,0,.2); overflow: hidden; }
+    .modal-head { padding: 20px 24px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+    .modal-title { margin: 0; font-weight: 800; color: #1a4273; font-size: 1.2rem; }
+    .modal-close { background: none; border: none; font-size: 1.6rem; cursor: pointer; color: #64748b; line-height: 1; }
+    .modal-body { padding: 24px; }
+    .modal-foot { padding: 16px 24px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 12px; background: #f8fafc; }
+    .form-label { display: block; font-weight: 600; color: #334155; margin-bottom: 8px; font-size: 0.9rem; }
+    .form-control { width: 100%; padding: 10px 14px; border: 1.5px solid #cbd5e1; border-radius: 9px; background: white; font-family: inherit; font-size: 0.95rem; margin-bottom: 18px; box-sizing: border-box; }
+    .file-wrap { display: flex; }
+    .file-label { background: #f1f5f9; color: #334155; padding: 10px 16px; border: 1.5px solid #cbd5e1; border-radius: 9px 0 0 9px; cursor: pointer; margin: 0; font-weight: 500; white-space: nowrap; font-size: 0.9rem; }
+    .file-name { flex: 1; min-width: 0; padding: 10px; border: 1.5px solid #cbd5e1; border-left: none; border-radius: 0 9px 9px 0; background: white; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; font-family: inherit; }
+    .file-hint { font-size: 0.82rem; color: #94a3b8; margin-top: 10px; }
+    .btn-cancel { background: white; border: 1.5px solid #cbd5e1; padding: 10px 20px; border-radius: 9px; font-weight: 600; cursor: pointer; color: #475569; font-family: inherit; }
+    .btn-submit { background: linear-gradient(135deg,#2563eb,#1d4ed8); color: white; padding: 10px 22px; border: none; border-radius: 9px; font-weight: 700; cursor: pointer; font-family: inherit; }
+</style>
+
+<div class="conc-page">
+
+    {{-- Top bar --}}
+    <div class="conc-topbar">
+        <h2 class="conc-title">Conciliación <span>Bancaria</span></h2>
+        <div class="conc-toolbar">
+            <button type="button" class="btn-upload" onclick="document.getElementById('uploadModal').style.display='flex'">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 Añadir Movimientos
             </button>
-            
-            <form action="{{ route('finanzas.conciliaciones') }}" method="GET" style="display: flex; align-items: center; gap: 8px; margin: 0;">
-                <select name="banco_filtro" style="padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; color: #334155; min-width: 150px;">
+
+            <form action="{{ route('finanzas.conciliaciones') }}" method="GET" style="display:flex;align-items:center;gap:8px;margin:0;">
+                <select name="banco_filtro" class="select-banco">
                     <option value="">Todos los Bancos</option>
                     @foreach($bancos as $b)
                         <option value="{{ $b }}" {{ request('banco_filtro') == $b ? 'selected' : '' }}>{{ $b }}</option>
                     @endforeach
                 </select>
-                <button type="submit" style="background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 10px 15px; border-radius: 8px; font-weight: 600; cursor: pointer;">
-                    Filtrar
-                </button>
+                <button type="submit" class="btn-filtrar">Filtrar</button>
             </form>
 
             @if($lineas->count() > 0)
-            <form action="{{ route('finanzas.conciliaciones.clear') }}" method="POST" onsubmit="return confirm('¿Seguro que deseas borrar todas las líneas y empezar de cero?');">
+            <form action="{{ route('finanzas.conciliaciones.clear') }}" method="POST" onsubmit="return confirm('¿Borrar todos los movimientos cargados?');">
                 @csrf
-                <button style="background-color: #ef4444; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: 500; cursor: pointer;">Limpiar Todo</button>
+                <button type="submit" class="btn-clear">Limpiar Todo</button>
             </form>
             @endif
         </div>
     </div>
 
+    {{-- Alerts --}}
     @if(session('success'))
-        <div style="background-color: #dcfce7; color: #166534; padding: 16px; border-radius: 8px; margin-bottom: 24px;">{{ session('success') }}</div>
+        <div class="alert-success">✅ {{ session('success') }}</div>
+    @endif
+    @if(session('error'))
+        <div class="alert-success" style="background:#fef2f2;color:#991b1b;border-color:#fca5a5;">⚠️ {{ session('error') }}</div>
     @endif
 
+    @if($bancosActivos->isEmpty())
+        <div class="alert-info">
+            📂 No hay movimientos cargados aún.<br>
+            <small>Usa "Añadir Movimientos" para subir el estado de cuenta de un banco.</small>
+        </div>
+    @endif
 
-    
-    <!-- RESULTS ZONE -->
-    @php
-        $bancos_activos = collect([])
-            ->concat($faltan_sistema->pluck('banco'))
-            ->concat($conciliados->pluck('banco'))
-            ->concat($faltan_banco->pluck('banco'))
-            ->concat($egresos_ayer->pluck('banco'))
-            ->map(function($b) { return strtoupper(trim($b)); })
-            ->filter()
-            ->unique()
-            ->sort();
-    @endphp
+    {{-- Per-bank sections --}}
+    @foreach($bancosActivos as $bk)
+    @php $d = $data_por_banco[$bk]; @endphp
 
-    @foreach($bancos_activos as $banco_actual)
-    <div style="margin-bottom: 50px; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-        <h3 style="font-size: 1.3rem; color: #1e293b; font-weight: 800; margin-bottom: 20px; border-bottom: 2px solid #cbd5e1; padding-bottom: 10px;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 5px;"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
-            BANCO: {{ $banco_actual }}
-        </h3>
-        
-        <div style="display: flex; flex-wrap: wrap; gap: 24px;">
-            <!-- FALTAN EN SISTEMA -->
-            <div style="flex: 1 1 100%;">
-                <div style="background: white; border-radius: 12px; border-top: 4px solid #ef4444; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); overflow: hidden;">
-                    <div style="padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: white;">
-                        <h5 style="margin: 0; color: #ef4444; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-                            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.15.15 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.2.2 0 0 1-.054.06.1.1 0 0 1-.066.017H1.146a.1.1 0 0 1-.066-.017.2.2 0 0 1-.054-.06.18.18 0 0 1 .002-.183L7.884 2.073a.15.15 0 0 1 .054-.057zm1.044-.45a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566z"/><path d="M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0z"/></svg>
-                            Falta en Sistema (Gastos del Banco no registrados)
-                        </h5>
-                    </div>
-                    <div>
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead style="background-color:#fef2f2; color: #7f1d1d;">
-                                <tr>
-                                    <th style="padding: 12px 20px; font-weight: 600;">Fecha</th>
-                                    <th style="padding: 12px 20px; font-weight: 600;">Descripción</th>
-                                    <th style="padding: 12px 20px; font-weight: 600;">Referencia</th>
-                                    <th style="padding: 12px 20px; font-weight: 600; text-align: right;">Monto</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @php $faltan_sistema_banco = $faltan_sistema->filter(function($i) use ($banco_actual) { return strtoupper(trim($i->banco)) == $banco_actual; }); @endphp
-                                @foreach($faltan_sistema_banco as $linea)
-                                    <tr style="border-top: 1px solid #fee2e2;">
-                                        <td style="padding: 12px 20px;">{{ \Carbon\Carbon::parse($linea->fecha)->format('d/m/Y') }}</td>
-                                        <td style="padding: 12px 20px;">{{ $linea->descripcion }}</td>
-                                        <td style="padding: 12px 20px;">{{ $linea->referencia }}</td>
-                                        <td style="padding: 12px 20px; font-weight: 700; color: #ef4444; text-align: right;">{{ number_format($linea->monto, 2) }}</td>
-                                    </tr>
-                                @endforeach
-                                @if($faltan_sistema_banco->count() == 0)
-                                    <tr><td colspan="4" style="padding: 24px; text-align: center; color: #64748b;">No hay faltantes en el sistema.</td></tr>
-                                @endif
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+    <div class="bank-card">
+        {{-- Bank header --}}
+        <div class="bank-card-header">
+            <div class="bank-name">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                {{ $bk }}
             </div>
-
-            <div style="flex: 1 1 calc(50% - 12px); min-width: 350px;">
-                <!-- CONCILIADOS -->
-                <div style="background: white; border-radius: 12px; border-top: 4px solid #10b981; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); height: 100%; overflow: hidden;">
-                    <div style="padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: white; display: flex; justify-content: space-between; align-items: center;">
-                        <h5 style="margin: 0; color: #10b981; font-weight: 700;">Emparejados Correctamente</h5>
-                        <a href="{{ route('finanzas.conciliaciones.reporte', ['banco_filtro' => $banco_actual]) }}" style="background-color: #10b981; color: white; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 0.9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            Descargar Excel
-                        </a>
-                    </div>
-                    <div>
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead style="background-color:#ecfdf5; color: #065f46;">
-                                <tr>
-                                    <th style="padding: 12px 20px; font-weight: 600;">Fecha</th>
-                                    <th style="padding: 12px 20px; font-weight: 600;">Descripción del Banco</th>
-                                    <th style="padding: 12px 20px; font-weight: 600;">Tipo Gasto</th>
-                                    <th style="padding: 12px 20px; font-weight: 600;">Motivo</th>
-                                    <th style="padding: 12px 20px; font-weight: 600; text-align: right;">Monto</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @php $conciliados_banco = $conciliados->filter(function($i) use ($banco_actual) { return strtoupper(trim($i->banco)) == $banco_actual; }); @endphp
-                                @foreach($conciliados_banco as $linea)
-                                    <tr style="border-top: 1px solid #d1fae5;">
-                                        <td style="padding: 12px 20px;">{{ \Carbon\Carbon::parse($linea->fecha)->format('d/m/Y') }}</td>
-                                        <td style="padding: 12px 20px;">{{ $linea->descripcion }}</td>
-                                        <td style="padding: 12px 20px; color: #065f46; font-size: 0.9em;">
-                                            {{ $linea->flujoCaja ? ($linea->flujoCaja->tipo_gasto ?: $linea->flujoCaja->categoria_egreso) : '-' }}
-                                        </td>
-                                        <td style="padding: 12px 20px; color: #065f46; font-size: 0.9em;">
-                                            {{ $linea->flujoCaja ? $linea->flujoCaja->motivo : '-' }}
-                                        </td>
-                                        <td style="padding: 12px 20px; text-align: right;">{{ number_format($linea->monto, 2) }}</td>
-                                    </tr>
-                                @endforeach
-                                @if($conciliados_banco->count() == 0)
-                                    <tr><td colspan="5" style="padding: 24px; text-align: center; color: #64748b;">No hay emparejamientos.</td></tr>
-                                @endif
-                            </tbody>
-                        </table>
-                    </div>
+            <div class="bank-totals-row">
+                <div class="bank-stat">
+                    <span class="bank-stat-label">✅ Consolidados</span>
+                    <span class="bank-stat-value green">Bs. {{ number_format($d['total_conciliados'], 2) }}</span>
                 </div>
-            </div>
-
-            <div style="flex: 1 1 calc(50% - 12px); min-width: 350px;">
-                <!-- FALTAN EN BANCO (TRANSITO) -->
-                <div style="background: white; border-radius: 12px; border-top: 4px solid #f59e0b; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); height: 100%; overflow: hidden;">
-                    <div style="padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: white;">
-                        <h5 style="margin: 0; color: #d97706; font-weight: 700;">Tránsito (En Sistema, no en Banco)</h5>
-                    </div>
-                    <div>
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead style="background-color:#fffbeb; color: #92400e;">
-                                <tr>
-                                    <th style="padding: 12px 20px; font-weight: 600;">Fecha</th>
-                                    <th style="padding: 12px 20px; font-weight: 600;">Concepto</th>
-                                    <th style="padding: 12px 20px; font-weight: 600; text-align: right;">Monto</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @php $faltan_banco_banco = $faltan_banco->filter(function($i) use ($banco_actual) { return strtoupper(trim($i->banco)) == $banco_actual; }); @endphp
-                                @foreach($faltan_banco_banco as $flujo)
-                                    <tr style="border-top: 1px solid #fef3c7;">
-                                        <td style="padding: 12px 20px;">{{ \Carbon\Carbon::parse($flujo->fecha)->format('d/m/Y') }}</td>
-                                        <td style="padding: 12px 20px;">{{ $flujo->concepto }} <span style="display:block; font-size:0.8rem; color:#64748b;">{{ $flujo->referencia }}</span></td>
-                                        <td style="padding: 12px 20px; text-align: right; font-weight: 700; color: #d97706;">{{ number_format($flujo->monto, 2) }}</td>
-                                    </tr>
-                                @endforeach
-                                @if($faltan_banco_banco->count() == 0)
-                                    <tr><td colspan="3" style="padding: 24px; text-align: center; color: #64748b;">No hay transacciones en tránsito.</td></tr>
-                                @endif
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="bank-stat">
+                    <span class="bank-stat-label">🕐 En Tránsito</span>
+                    <span class="bank-stat-value yellow">Bs. {{ number_format($d['total_transito'], 2) }}</span>
+                </div>
+                <div class="bank-stat">
+                    <span class="bank-stat-label">⚠️ Sin Registrar</span>
+                    <span class="bank-stat-value red">Bs. {{ number_format($d['total_sin_registrar'], 2) }}</span>
+                </div>
+                <div class="bank-stat">
+                    <span class="bank-stat-label">🏦 Comisiones</span>
+                    <span class="bank-stat-value orange">Bs. {{ number_format($d['total_comisiones'], 2) }}</span>
                 </div>
             </div>
         </div>
-        <!-- EGRESOS DEL DIA ANTERIOR -->
-        <div style="margin-top: 30px;">
-            <h3 style="font-size: 1.1rem; color: #1a4273; font-weight: 700; text-transform: uppercase; margin-bottom: 15px;">EGRESOS DEL DÍA ANTERIOR PENDIENTES - {{ $banco_actual }}</h3>
-            <table style="width: 100%; border-collapse: collapse; background: white; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                <thead style="background-color: #f1f5f9; color: #1e293b; text-align: left; border-bottom: 1px solid #cbd5e1;">
-                    <tr>
-                        <th style="padding: 12px 16px; font-weight: 600; font-size: 0.85rem;">Fecha</th>
-                        <th style="padding: 12px 16px; font-weight: 600; font-size: 0.85rem;">Titular</th>
-                        <th style="padding: 12px 16px; font-weight: 600; font-size: 0.85rem;">Ref.</th>
-                        <th style="padding: 12px 16px; font-weight: 600; font-size: 0.85rem;">Tipo Gasto</th>
-                        <th style="padding: 12px 16px; font-weight: 600; font-size: 0.85rem;">Motivo</th>
-                        <th style="padding: 12px 16px; font-weight: 600; font-size: 0.85rem; text-align: right;">USD</th>
-                        <th style="padding: 12px 16px; font-weight: 600; font-size: 0.85rem; text-align: right;">Tasa</th>
-                        <th style="padding: 12px 16px; font-weight: 600; font-size: 0.85rem; text-align: right;">Dif. Camb.</th>
-                        <th style="padding: 12px 16px; font-weight: 600; font-size: 0.85rem; text-align: right;">BS</th>
-                        <th style="padding: 12px 16px; font-weight: 600; font-size: 0.85rem; text-align: right;">Comisión</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @php $egresos_ayer_banco = $egresos_ayer->filter(function($i) use ($banco_actual) { return strtoupper(trim($i->banco)) == $banco_actual; }); @endphp
-                    @foreach($egresos_ayer_banco as $egreso)
-                    <tr style="border-bottom: 1px solid #e2e8f0;">
-                        <td style="padding: 12px 16px; color: #334155; font-size: 0.9rem;">{{ \Carbon\Carbon::parse($egreso->fecha)->format('d/m/Y') }}</td>
-                        <td style="padding: 12px 16px; color: #64748b; font-size: 0.9rem;">{{ $egreso->titular ?: '-' }}</td>
-                        <td style="padding: 12px 16px; color: #334155; font-size: 0.9rem; font-weight: 600;">{{ $egreso->referencia ?: '-' }}</td>
-                        <td style="padding: 12px 16px; color: #334155; font-size: 0.9rem;">{{ $egreso->tipo_gasto ?: '-' }}</td>
-                        <td style="padding: 12px 16px; color: #64748b; font-size: 0.9rem;">{{ $egreso->motivo ?: '-' }}</td>
-                        <td style="padding: 12px 16px; color: #0f172a; font-size: 0.9rem; font-weight: 700; text-align: right;">{{ $egreso->monto_usd ? '$'.number_format($egreso->monto_usd, 2) : '-' }}</td>
-                        <td style="padding: 12px 16px; color: #334155; font-size: 0.9rem; text-align: right;">{{ $egreso->tasa_cambio ? number_format($egreso->tasa_cambio, 2) : '-' }}</td>
-                        <td style="padding: 12px 16px; color: #334155; font-size: 0.9rem; text-align: right;">{{ $egreso->diferencial_cambiario ? number_format($egreso->diferencial_cambiario, 2) : '-' }}</td>
-                        <td style="padding: 12px 16px; color: #1a4273; font-size: 0.9rem; font-weight: 700; text-align: right;">Bs.{{ number_format($egreso->monto_bs, 2) }}</td>
-                        <td style="padding: 12px 16px; color: #334155; font-size: 0.9rem; text-align: right;">{{ $egreso->comision ? number_format($egreso->comision, 2) : '-' }}</td>
-                    </tr>
-                    @endforeach
-                    @if($egresos_ayer_banco->count() == 0)
-                    <tr>
-                        <td colspan="10" style="padding: 24px; text-align: center; color: #64748b; font-size: 0.9rem;">No hay egresos pendientes para este banco.</td>
-                    </tr>
-                    @endif
-                </tbody>
-            </table>
-        </div>
-    </div>
+
+        {{-- 4 sections grid --}}
+        <div class="sections-grid">
+
+            {{-- 1. CONSOLIDADOS --}}
+            <div class="section-block">
+                <div class="section-header">
+                    <span class="section-badge badge-green"></span>
+                    <span class="section-title">Consolidados</span>
+                    <span class="section-count">{{ $d['conciliados']->count() }}</span>
+                </div>
+                <table class="mini-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Referencia</th>
+                            <th>Motivo</th>
+                            <th style="text-align:right">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($d['conciliados'] as $row)
+                        <tr>
+                            <td>{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
+                            <td>
+                                <span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span>
+                            </td>
+                            <td style="max-width:200px;font-size:0.82rem;">
+                                {{ Str::limit($row['motivo'], 50) }}
+                                @if($row['tipo_gasto'])
+                                    <br><span class="tipo-chip chip-cargo">{{ $row['tipo_gasto'] }}</span>
+                                @endif
+                            </td>
+                            <td class="monto-cell monto-green">Bs. {{ number_format($row['monto'], 2) }}</td>
+                        </tr>
+                        @empty
+                        <tr class="empty-row"><td colspan="4">Sin movimientos consolidados</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+                @if($d['conciliados']->count() > 0)
+                <div class="section-footer">Total: Bs. {{ number_format($d['total_conciliados'], 2) }}</div>
+                @endif
+            </div>
+
+            {{-- 2. EN TRÁNSITO --}}
+            <div class="section-block">
+                <div class="section-header">
+                    <span class="section-badge badge-yellow"></span>
+                    <span class="section-title">En Tránsito</span>
+                    <span class="section-count">{{ $d['en_transito']->count() }}</span>
+                </div>
+                <table class="mini-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Referencia</th>
+                            <th>Concepto / Motivo</th>
+                            <th style="text-align:right">Monto Bs.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($d['en_transito'] as $row)
+                        <tr>
+                            <td>{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
+                            <td><span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span></td>
+                            <td style="max-width:200px;font-size:0.82rem;">
+                                {{ Str::limit($row['concepto'] ?: $row['motivo'], 50) }}
+                                @if($row['tipo_gasto'])
+                                    <br><span class="tipo-chip chip-cargo">{{ $row['tipo_gasto'] }}</span>
+                                @endif
+                            </td>
+                            <td class="monto-cell monto-yellow">{{ number_format($row['monto_bs'], 2) }}</td>
+                        </tr>
+                        @empty
+                        <tr class="empty-row"><td colspan="4">Sin movimientos en tránsito</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+                @if($d['en_transito']->count() > 0)
+                <div class="section-footer">Total: Bs. {{ number_format($d['total_transito'], 2) }}</div>
+                @endif
+            </div>
+
+            {{-- 3. SIN REGISTRAR --}}
+            <div class="section-block">
+                <div class="section-header">
+                    <span class="section-badge badge-red"></span>
+                    <span class="section-title">Sin Registrar en Sistema</span>
+                    <span class="section-count">{{ $d['sin_registrar']->count() }}</span>
+                </div>
+                <table class="mini-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Referencia</th>
+                            <th>Descripción del Banco</th>
+                            <th style="text-align:right">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($d['sin_registrar'] as $row)
+                        <tr>
+                            <td>{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
+                            <td><span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span></td>
+                            <td style="max-width:200px;font-size:0.82rem;">
+                                {{ Str::limit($row['descripcion'], 55) }}
+                                <br>
+                                <span class="tipo-chip {{ $row['tipo'] == 'cargo' ? 'chip-cargo' : 'chip-abono' }}">
+                                    {{ $row['tipo'] == 'cargo' ? 'Cargo' : 'Abono' }}
+                                </span>
+                            </td>
+                            <td class="monto-cell monto-red">Bs. {{ number_format($row['monto'], 2) }}</td>
+                        </tr>
+                        @empty
+                        <tr class="empty-row"><td colspan="4">Sin movimientos sin registrar</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+                @if($d['sin_registrar']->count() > 0)
+                <div class="section-footer">Total: Bs. {{ number_format($d['total_sin_registrar'], 2) }}</div>
+                @endif
+            </div>
+
+            {{-- 4. COMISIONES BANCARIAS --}}
+            <div class="section-block">
+                <div class="section-header">
+                    <span class="section-badge badge-purple"></span>
+                    <span class="section-title">Comisiones Bancarias</span>
+                    <span class="section-count">{{ $d['comisiones']->count() }}</span>
+                </div>
+                <table class="mini-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Descripción</th>
+                            <th>Referencia</th>
+                            <th style="text-align:right">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($d['comisiones'] as $row)
+                        <tr>
+                            <td>{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
+                            <td style="max-width:200px;font-size:0.82rem;">{{ Str::limit($row['descripcion'], 55) }}</td>
+                            <td><span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span></td>
+                            <td class="monto-cell monto-purple">Bs. {{ number_format($row['monto'], 2) }}</td>
+                        </tr>
+                        @empty
+                        <tr class="empty-row"><td colspan="4">Sin comisiones detectadas</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+                @if($d['comisiones']->count() > 0)
+                <div class="section-footer">Total: Bs. {{ number_format($d['total_comisiones'], 2) }}</div>
+                @endif
+            </div>
+
+        </div>{{-- end sections-grid --}}
+    </div>{{-- end bank-card --}}
     @endforeach
+
 </div>
 
-<!-- UPLOAD MODAL -->
-<div id="uploadModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1050; align-items: center; justify-content: center; padding: 20px;">
-    <div style="background: white; border-radius: 12px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+{{-- UPLOAD MODAL --}}
+<div id="uploadModal" class="modal-overlay">
+    <div class="modal-box">
         <form action="{{ route('finanzas.conciliaciones.upload') }}" method="POST" enctype="multipart/form-data">
             @csrf
-            <div style="padding: 20px 24px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
-                <h5 style="margin: 0; font-weight: 700; color: #1a4273; font-size: 1.25rem;">Subir Archivo del Banco</h5>
-                <button type="button" onclick="document.getElementById('uploadModal').style.display = 'none'" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">&times;</button>
+            <div class="modal-head">
+                <h5 class="modal-title">Subir Archivo del Banco</h5>
+                <button type="button" class="modal-close" onclick="document.getElementById('uploadModal').style.display='none'">&times;</button>
             </div>
-            <div style="padding: 24px;">
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; font-weight: 600; color: #334155; margin-bottom: 8px;">Selecciona el Banco:</label>
-                    <select name="banco_seleccionado" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: white; font-family: inherit;">
-                        <option value="">-- Seleccione el Banco --</option>
-                        @foreach($bancos as $banco)
-                            <option value="{{ $banco }}">{{ $banco }}</option>
-                        @endforeach
-                    </select>
+            <div class="modal-body">
+                <label class="form-label">Selecciona el Banco:</label>
+                <select name="banco_seleccionado" required class="form-control">
+                    <option value="">-- Seleccione el Banco --</option>
+                    @foreach($bancos as $b)
+                        <option value="{{ $b }}">{{ $b }}</option>
+                    @endforeach
+                </select>
+
+                <label class="form-label">Archivo (Excel o CSV):</label>
+                <div class="file-wrap">
+                    <label class="file-label">
+                        Elegir Archivo
+                        <input type="file" name="file[]" multiple accept=".csv,.xls,.xlsx,image/jpeg,image/png" required
+                               id="csvUploadInput"
+                               onchange="document.getElementById('csvFileName').value = this.files.length > 1 ? this.files.length + ' archivos' : (this.files[0] ? this.files[0].name : '');"
+                               style="display:none;">
+                    </label>
+                    <input type="text" id="csvFileName" placeholder="Ningún archivo seleccionado" readonly class="file-name">
                 </div>
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; font-weight: 600; color: #334155; margin-bottom: 8px;">Archivo (Excel, CSV o Foto):</label>
-                    <div style="display: flex;">
-                        <label style="background: #f1f5f9; color: #334155; padding: 10px 16px; border: 1px solid #cbd5e1; border-radius: 8px 0 0 8px; cursor: pointer; margin: 0; font-weight: 500; white-space: nowrap;">
-                            Elegir Archivos
-                            <input type="file" name="file[]" multiple accept=".csv,.xls,.xlsx,image/jpeg,image/png,image/jpg" required id="csvUploadInput" onchange="document.getElementById('csvFileName').value = this.files.length > 1 ? this.files.length + ' archivos seleccionados' : (this.files[0] ? this.files[0].name : '');" style="display: none;">
-                        </label>
-                        <input type="text" id="csvFileName" placeholder="Ningún archivo" readonly style="flex: 1; min-width: 0; padding: 10px; border: 1px solid #cbd5e1; border-left: none; border-radius: 0 8px 8px 0; background: white; color: #64748b; overflow: hidden; text-overflow: ellipsis; font-family: inherit;">
-                    </div>
-                    <p style="font-size: 0.85rem; color: #94a3b8; margin-top: 15px; margin-bottom: 0;">
-                    El sistema detectará automáticamente las columnas de Excel/CSV, o usará IA para leer tu foto.
-                </p></div>
+                <p class="file-hint">El sistema detectará automáticamente el formato según el banco seleccionado.</p>
             </div>
-            <div style="padding: 16px 24px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 12px; background: #f8fafc; border-radius: 0 0 12px 12px;">
-                <button type="button" onclick="document.getElementById('uploadModal').style.display = 'none'" style="background: white; border: 1px solid #cbd5e1; padding: 10px 20px; border-radius: 8px; font-weight: 500; cursor: pointer; color: #475569; font-family: inherit;">Cancelar</button>
-                <button type="submit" style="background-color: #1a4273; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-family: inherit;">Subir y Analizar</button>
+            <div class="modal-foot">
+                <button type="button" class="btn-cancel" onclick="document.getElementById('uploadModal').style.display='none'">Cancelar</button>
+                <button type="submit" class="btn-submit">Subir y Analizar</button>
             </div>
         </form>
     </div>

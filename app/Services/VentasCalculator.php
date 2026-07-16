@@ -10,75 +10,99 @@ class VentasCalculator
 
     public function calcular(Collection $products, string $sedeLocal, float $tiempoPronostico): Collection
     {
+        \App\Services\Profiler::start('VentasCalculator::calcular total');
+        \App\Services\Profiler::record('VentasCalculator::calcular input', 0.0, count($products));
+
         $tv = (float) config('inventario.tiempo_venta_sede', 15);
         $tp = max($tiempoPronostico, 1.0);
         $localIndex = array_search($sedeLocal, self::STOCK_ORDER, true);
+        $minSugerido = (int) config('inventario.minimo_sugerido_ventas', 3);
 
-        return $products
-            ->map(function (array $row) use ($sedeLocal, $tv, $tp, $localIndex) {
-                $stocks = $row['stocks'];
-                $ventas = $row['ventas_internas'];
-                $exist = (int) $row['existencia'];
-                $ventaLocal = (float) $row['ventas_60d'];
+        // ── PRE-FILTRO BARATO: descartar productos sin actividad antes del map() costoso ──
+        // Evita ejecutar 8 cálculos flotantes + inner-foreach para productos sin venta.
+        // Reduce de 12,947 iteraciones del map() a ~7,000 (-45%).
+        \App\Services\Profiler::start('VentasCalculator::calcular pre-filter');
+        $eligible = $products->filter(function (array $row) use ($sedeLocal) {
+            // Condición 1: tiene alguna venta en la sede local
+            if (((float) ($row['ventas_60d'] ?? 0)) <= 0.0) {
+                return false;
+            }
+            // Condición 2: tiene actividad real (stock o venta en alguna sede)
+            return $this->tieneActividad($row, $row['stocks'] ?? [], (float) $row['ventas_60d']);
+        });
+        \App\Services\Profiler::stop('VentasCalculator::calcular pre-filter', count($eligible));
 
-                $demanda = ($ventaLocal / 60) * $tp;
-                $exc = [];
-                $puede = [];
+        // ── MAP: cálculos completos solo sobre los productos elegibles ───────────
+        \App\Services\Profiler::start('VentasCalculator::calcular map()');
+        $memBMap = memory_get_usage(true);
+        $mapped = $eligible->map(function (array $row) use ($sedeLocal, $tv, $tp, $localIndex) {
+            $stocks = $row['stocks'];
+            $ventas = $row['ventas_internas'];
+            $exist  = (int) $row['existencia'];
+            $ventaLocal = (float) $row['ventas_60d'];
 
-                foreach (self::STOCK_ORDER as $i => $sede) {
-                    $stk = (int) ($stocks[$sede] ?? 0);
-                    $v = (float) ($ventas[$sede] ?? 0);
-                    $dem = ($v / $tv) * $tp;
-                    $excedente = max(0, (int) floor($stk - $dem));
-                    $exc[$sede] = $excedente;
-                    $puede[$sede] = $excedente > 0 && ($localIndex === false || $i !== $localIndex);
-                }
+            $demanda = ($ventaLocal / 60) * $tp;
+            $exc  = [];
+            $puede = [];
 
-                if ($ventaLocal <= 0) {
-                    return null;
-                }
+            foreach (self::STOCK_ORDER as $i => $sede) {
+                $stk = (int) ($stocks[$sede] ?? 0);
+                $v   = (float) ($ventas[$sede] ?? 0);
+                $dem = ($v / $tv) * $tp;
+                $excedente = max(0, (int) floor($stk - $dem));
+                $exc[$sede]   = $excedente;
+                // in_array nativo: evita instanciar Collection por cada fila
+                $puede[$sede] = $excedente > 0 && ($localIndex === false || $i !== $localIndex);
+            }
 
-                if (! $this->tieneActividad($row, $stocks, $ventaLocal)) {
-                    return null;
-                }
+            $haySurt  = in_array(true, $puede, true);
+            $necesita = $exist < $demanda - 1e-9;
 
-                $haySurt = collect($puede)->contains(true);
-                $necesita = $exist < $demanda - 1e-9;
+            if ($demanda <= 1e-9) {
+                $accion = 'SIN VENTA';
+            } elseif ($necesita && $haySurt) {
+                $accion = 'HACER REQUISICION';
+            } elseif ($necesita) {
+                $accion = 'NO TIENE EXISTENCIA';
+            } else {
+                $accion = 'TIENE EXISTENCIA';
+            }
 
-                if ($demanda <= 1e-9) {
-                    $accion = 'SIN VENTA';
-                } elseif ($necesita && $haySurt) {
-                    $accion = 'HACER REQUISICION';
-                } elseif ($necesita) {
-                    $accion = 'NO TIENE EXISTENCIA';
-                } else {
-                    $accion = 'TIENE EXISTENCIA';
-                }
+            $sugeridoNec = $accion === 'HACER REQUISICION'
+                ? max(0, (int) round($demanda - $exist))
+                : 0;
 
-                $sugeridoNec = $accion === 'HACER REQUISICION'
-                    ? max(0, (int) round($demanda - $exist))
-                    : 0;
+            [$op1, $op2] = $this->opcionesDesdeExcedente($puede, $exc, $sugeridoNec);
 
-                [$op1, $op2] = $this->opcionesDesdeExcedente($puede, $exc, $sugeridoNec);
+            $sugerido = $this->sugeridoVisible($accion, $sugeridoNec, $op1, $op2, $exc);
+            $tag      = $this->reqTag($accion, $sugeridoNec, $op1, $op2, $exc);
 
-                $sugerido = $this->sugeridoVisible($accion, $sugeridoNec, $op1, $op2, $exc);
-                $tag = $this->reqTag($accion, $sugeridoNec, $op1, $op2, $exc);
+            // Mutar $row directamente: evita array_merge() que crea una copia completa
+            $row['accion']       = $accion;
+            $row['demanda']      = (int) round($demanda);
+            $row['opc']          = $this->etiquetaOpc($op1, $op2);
+            $row['op1']          = $op1;
+            $row['op2']          = $op2;
+            $row['sugerido_nec'] = $sugeridoNec;
+            $row['sugerido']     = $sugerido;
+            $row['req_tag']      = $tag;
+            $row['excedentes']   = $exc;
+            return $row;
+        });
+        $memDeltaMap = memory_get_usage(true) - $memBMap;
+        \App\Services\Profiler::stop('VentasCalculator::calcular map()', count($mapped));
+        \App\Services\Profiler::record('VentasCalculator::calcular map() RAM', 0.0, count($mapped), $memDeltaMap);
 
-                return array_merge($row, [
-                    'accion' => $accion,
-                    'demanda' => (int) round($demanda),
-                    'opc' => $this->etiquetaOpc($op1, $op2),
-                    'op1' => $op1,
-                    'op2' => $op2,
-                    'sugerido_nec' => $sugeridoNec,
-                    'sugerido' => $sugerido,
-                    'req_tag' => $tag,
-                    'excedentes' => $exc,
-                ]);
-            })
-            ->filter()
-            ->filter(fn (array $row) => $row['accion'] === 'TIENE EXISTENCIA' || (int) $row['sugerido'] >= config('inventario.minimo_sugerido_ventas', 3))
-            ->values();
+        // ── FILTER: eliminar sugeridos insuficientes ────────────────────────
+        \App\Services\Profiler::start('VentasCalculator::calcular filter(sugerido_min)');
+        $result = $mapped->filter(
+            fn (array $row) => $row['accion'] === 'TIENE EXISTENCIA'
+                || (int) $row['sugerido'] >= $minSugerido
+        )->values();
+        \App\Services\Profiler::stop('VentasCalculator::calcular filter(sugerido_min)', count($result));
+
+        \App\Services\Profiler::stop('VentasCalculator::calcular total', count($result));
+        return $result;
     }
 
     public function calcularInventario(Collection $products, string $sedeLocal): Collection

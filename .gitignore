@@ -13,7 +13,16 @@
 .env.backup
 .env.production
 .env.testing
+.env.bak
 .phpunit.result.cache
 /bootstrap/cache/*
 /phpunit.xml
 /scripts/sync_sales/
+/database/database.sqlite
+*.py
+*.sql
+test*.php
+temp_*.txt
+debug_*.php
+latency_*.php
+single_*.php

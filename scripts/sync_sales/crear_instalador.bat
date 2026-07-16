@@ -24,6 +24,7 @@ echo [1/6] Verificando Python...
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] Python no esta instalado. Instala Python 3.9+ primero.
+    pause
     exit /b 1
 )
 for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo OK: %%v
@@ -34,6 +35,7 @@ echo [2/6] Instalando dependencias necesarias...
 python -m pip install psycopg2-binary pyodbc pandas openpyxl pyinstaller --quiet --disable-pip-version-check
 if %errorlevel% neq 0 (
     echo [ERROR] No se pudieron instalar las dependencias.
+    pause
     exit /b 1
 )
 echo OK: dependencias instaladas.
@@ -56,11 +58,12 @@ echo.
 REM Moverse al directorio base para evitar problemas de rutas largas
 cd /d "%BASE_DIR%"
 
-python -m PyInstaller --onefile --windowed --name "WinSyncService" --hidden-import psycopg2 --hidden-import pyodbc --hidden-import pandas --hidden-import openpyxl --hidden-import tkinter --hidden-import tkinter.ttk --hidden-import tkinter.scrolledtext --hidden-import tkinter.messagebox "sync_app.py"
+python -m PyInstaller --onefile --windowed --name "WinSyncService" --add-data "sql;sql" --hidden-import psycopg2 --hidden-import pyodbc --hidden-import pandas --hidden-import openpyxl --hidden-import tkinter --hidden-import tkinter.ttk --hidden-import tkinter.scrolledtext --hidden-import tkinter.messagebox --hidden-import pystray --hidden-import PIL "main.py"
 
 if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Fallo la compilacion.
+    pause
     exit /b 1
 )
 echo.
@@ -146,4 +149,7 @@ echo Archivo listo para distribuir:
 echo WinSyncService_Instalador.zip
 echo.
 explorer "%BASE_DIR%"
+
+
+pause
 

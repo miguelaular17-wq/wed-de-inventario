@@ -21,6 +21,7 @@ class InventarioController extends Controller
 
     public function index(Request $request): View
     {
+        ini_set('memory_limit', '512M');
         $viewData = $this->buildIndexData($request);
 
         if ($request->header('X-Partial') === 'content') {

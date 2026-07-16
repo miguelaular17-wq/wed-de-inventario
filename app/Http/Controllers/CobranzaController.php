@@ -28,14 +28,14 @@ class CobranzaController extends Controller
         $t = microtime(true);
         $sedes = config('inventario.sedes_locales');
         
-        // Leer Resumenes Globales (cacheado 5 minutos: solo cambia cuando se importa un Excel)
-        $resumenes = \Illuminate\Support\Facades\Cache::remember('cobranza_resumenes', 300, fn () => CobranzaResumen::all());
-
-        if (config('app.debug')) {
-            \Log::info(sprintf('CobranzaResumen::all() => %d registros', $resumenes->count()));
-        }
+        // 1. Obtener la última fecha registrada en historial_cobranzas
+        $ultimaFecha = \App\Models\HistorialCobranza::max('fecha_registro');
         
-        $porSede = [];
+        $historialActual = collect();
+        if ($ultimaFecha) {
+            $historialActual = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha)->get();
+        }
+
         $gran_total_saldo = 0;
         $gran_total_clientes = 0;
         
@@ -47,27 +47,31 @@ class CobranzaController extends Controller
             'APARTADO' => ['clientes' => 0, 'saldo' => 0],
         ];
 
-        foreach($resumenes as $r) {
+        // Agrupar por sede
+        $porSede = [];
+        $agrupadoPorSede = $historialActual->groupBy('sede_nombre');
+
+        foreach ($agrupadoPorSede as $sede => $registrosSede) {
+            $saldoSede = $registrosSede->sum('saldo');
+            $clientesSede = $registrosSede->count();
+
             $porSede[] = (object) [
-                'sede_nombre' => $r->sede_nombre,
-                'total_clientes' => $r->total_clientes,
-                'total_saldo' => $r->total_saldo
+                'sede_nombre' => $sede,
+                'total_clientes' => $clientesSede,
+                'total_saldo' => $saldoSede
             ];
             
-            $gran_total_saldo += $r->total_saldo;
-            $gran_total_clientes += $r->total_clientes;
-            
-            $estatus_totales['CRITICO']['clientes'] += $r->critico_clientes;
-            $estatus_totales['CRITICO']['saldo'] += $r->critico_saldo;
-            
-            $estatus_totales['MOROSO']['clientes'] += $r->moroso_clientes;
-            $estatus_totales['MOROSO']['saldo'] += $r->moroso_saldo;
-            
-            $estatus_totales['RECIENTE']['clientes'] += $r->reciente_clientes;
-            $estatus_totales['RECIENTE']['saldo'] += $r->reciente_saldo;
-            
-            $estatus_totales['APARTADO']['clientes'] += $r->apartado_clientes;
-            $estatus_totales['APARTADO']['saldo'] += $r->apartado_saldo;
+            $gran_total_saldo += $saldoSede;
+            $gran_total_clientes += $clientesSede;
+
+            foreach ($registrosSede as $r) {
+                $est = strtoupper($r->estatus) ?: 'RECIENTE';
+                if (!isset($estatus_totales[$est])) {
+                    $est = 'RECIENTE';
+                }
+                $estatus_totales[$est]['clientes'] += 1;
+                $estatus_totales[$est]['saldo'] += $r->saldo;
+            }
         }
 
         // Convertir array estatus a formato que espera la vista
@@ -85,17 +89,91 @@ class CobranzaController extends Controller
             return strcmp($a->sede_nombre, $b->sede_nombre);
         });
 
+        // -------------------------------------------------------------
+        // LOGICA COMPARATIVA SEMANAL — lee de cobranza_resumenes
+        // Cada "Guardar Resumen" inserta una fila con fecha_registro,
+        // lo que permite comparar semana a semana sin reescanear historial.
+        // -------------------------------------------------------------
+        $fechas_semanal = [];
+        $semanal_list = [];
+        $estatusColors = ['CRITICO' => '#ef4444', 'MOROSO' => '#eab308', 'RECIENTE' => '#84cc16'];
+
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('cobranza_resumenes') &&
+                \Illuminate\Support\Facades\Schema::hasColumn('cobranza_resumenes', 'fecha_registro')) {
+
+                // Obtener las últimas 4 fechas distintas guardadas en los resúmenes
+                $fechasResumen = \Illuminate\Support\Facades\DB::connection('pgsql')
+                    ->table('cobranza_resumenes')
+                    ->select('fecha_registro')
+                    ->whereNotNull('fecha_registro')
+                    ->distinct()
+                    ->orderBy('fecha_registro', 'desc')
+                    ->limit(4)
+                    ->pluck('fecha_registro')
+                    ->toArray();
+
+                if (!empty($fechasResumen)) {
+                    $fechasResumen = array_reverse($fechasResumen); // orden cronológico
+                    $fechas_semanal = array_map(
+                        fn($f) => \Carbon\Carbon::parse($f)->format('d/m'),
+                        $fechasResumen
+                    );
+
+                    // Cargar todos los resúmenes de esas fechas de una sola consulta
+                    $resumenesPorFecha = \App\Models\CobranzaResumen::whereIn('fecha_registro', $fechasResumen)->get();
+
+                    $estatusKeys = ['CRITICO', 'MOROSO', 'RECIENTE'];
+                    foreach ($estatusKeys as $est) {
+                        $campoSaldo  = strtolower($est) . '_saldo';
+                        $row = ['estatus' => $est, 'color' => $estatusColors[$est], 'lunes' => []];
+                        $prevSaldo = null;
+                        foreach ($fechasResumen as $fecha) {
+                            // Sumar saldo de todas las sedes para esa fecha y estatus
+                            $saldo = $resumenesPorFecha
+                                ->where('fecha_registro', $fecha)
+                                ->sum($campoSaldo);
+                            $efectividad = '-';
+                            if ($prevSaldo !== null && $prevSaldo > 0) {
+                                $efectividad = round((($prevSaldo - $saldo) / $prevSaldo) * 100, 0) . '%';
+                            }
+                            $row['lunes'][] = ['saldo' => $saldo, 'efectividad' => $efectividad];
+                            $prevSaldo = $saldo;
+                        }
+                        $semanal_list[] = $row;
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Error en cobranzas semanal: " . $e->getMessage());
+        }
+
         $t = microtime(true);
         // Filtrado de la tabla de clientes detallada
         $filtro_sede = request('filtro_sede');
-        $queryClientes = Cobranza::query();
+        $queryClientes = \App\Models\HistorialCobranza::query();
+        
+        if ($ultimaFecha) {
+            $queryClientes->where('fecha_registro', $ultimaFecha);
+        } else {
+            $queryClientes->where('id', '<', 0);
+        }
+
         if ($filtro_sede) {
             $queryClientes->where('sede_nombre', $filtro_sede);
         }
-        // Solo se cargan las columnas que usa la vista (evita SELECT *)
+        
+        // Solo se cargan las columnas que usa la vista y usamos alias para compatibilidad
         $clientes_lista = $queryClientes
-            ->select(['codigo', 'cliente', 'saldo_bs', 'saldo_usd', 'fecha_emision', 'estatus'])
-            ->orderBy('cliente', 'asc')
+            ->select([
+                'codigo_cliente as codigo', 
+                'nombre_cliente as cliente', 
+                'monto_neto',
+                'saldo as saldo_usd', 
+                'fecha_emision', 
+                'estatus'
+            ])
+            ->orderBy('nombre_cliente', 'asc')
             ->get();
 
         if (config('app.debug')) {
@@ -103,11 +181,10 @@ class CobranzaController extends Controller
         }
 
         $t = microtime(true);
-        $view = view('cobranza.index', compact('porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'sedes', 'clientes_lista', 'filtro_sede'));
+        $view = view('cobranza.index', compact('porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'sedes', 'clientes_lista', 'filtro_sede', 'fechas_semanal', 'semanal_list'));
         $html = $view->render();
         \Log::info(sprintf('Render Blade => %.2f ms', (microtime(true)-$t)*1000));
         
-        \Log::info(sprintf('Consultas SQL: %d', $queryCount));
         \Log::info(sprintf('Memoria: %.2f MB', memory_get_peak_usage(true)/1024/1024));
         \Log::info(sprintf('TOTAL CONTROLADOR => %.2f ms', (microtime(true)-$t0)*1000));
         \Log::info('==============================');
@@ -255,6 +332,85 @@ class CobranzaController extends Controller
 
         } else {
             return redirect()->back()->with('error', 'Error al leer el archivo Excel: ' . SimpleXLSX::parseError());
+        }
+    }
+
+    public function guardarResumen(Request $request) {
+        try {
+            $ultimaFecha = \App\Models\HistorialCobranza::max('fecha_registro');
+            if (!$ultimaFecha) {
+                return redirect()->back()->with('error', 'No hay datos en el historial para guardar el resumen.');
+            }
+
+            // Normalizar la fecha como string YYYY-MM-DD (evita problemas de cast Carbon vs string)
+            $fechaStr = \Carbon\Carbon::parse($ultimaFecha)->toDateString();
+
+            // Verificar si ya existe un resumen guardado para esta fecha
+            // (evitar duplicados si el usuario presiona el botón dos veces el mismo día)
+            $yaExiste = \Illuminate\Support\Facades\DB::table('cobranza_resumenes')
+                ->whereNotNull('fecha_registro')
+                ->whereRaw("fecha_registro::date = ?", [$fechaStr])
+                ->exists();
+
+            if ($yaExiste) {
+                return redirect()->back()->with('info',
+                    'Ya existe un resumen guardado para el ' . \Carbon\Carbon::parse($fechaStr)->format('d/m/Y') .
+                    '. No se insertaron duplicados.'
+                );
+            }
+
+            $historialActual = \App\Models\HistorialCobranza::where('fecha_registro', $fechaStr)->get();
+
+            if ($historialActual->isEmpty()) {
+                return redirect()->back()->with('error', 'No se encontraron registros en el historial para la fecha ' . $fechaStr . '.');
+            }
+
+            $agrupadoPorSede = $historialActual->groupBy('sede_nombre');
+
+            foreach ($agrupadoPorSede as $sede => $registrosSede) {
+                $saldoSede    = $registrosSede->sum('saldo');
+                $clientesSede = $registrosSede->count();
+
+                $crit_c = 0; $crit_s = 0.0;
+                $moro_c = 0; $moro_s = 0.0;
+                $reci_c = 0; $reci_s = 0.0;
+                $apar_c = 0; $apar_s = 0.0;
+
+                foreach ($registrosSede as $r) {
+                    $est = strtoupper($r->estatus ?? '') ?: 'RECIENTE';
+                    if ($est === 'CRITICO')      { $crit_c++; $crit_s += (float)$r->saldo; }
+                    elseif ($est === 'MOROSO')   { $moro_c++; $moro_s += (float)$r->saldo; }
+                    elseif ($est === 'RECIENTE') { $reci_c++; $reci_s += (float)$r->saldo; }
+                    else                         { $apar_c++; $apar_s += (float)$r->saldo; }
+                }
+
+                // INSERT nuevo registro — nunca actualiza, para alimentar la comparativa semanal
+                \Illuminate\Support\Facades\DB::table('cobranza_resumenes')->insert([
+                    'fecha_registro'    => $fechaStr,
+                    'sede_nombre'       => $sede,
+                    'total_clientes'    => $clientesSede,
+                    'total_saldo'       => $saldoSede,
+                    'critico_clientes'  => $crit_c,
+                    'critico_saldo'     => $crit_s,
+                    'moroso_clientes'   => $moro_c,
+                    'moroso_saldo'      => $moro_s,
+                    'reciente_clientes' => $reci_c,
+                    'reciente_saldo'    => $reci_s,
+                    'apartado_clientes' => $apar_c,
+                    'apartado_saldo'    => $apar_s,
+                    'created_at'        => now(),
+                    'updated_at'        => now(),
+                ]);
+            }
+
+            return redirect()->back()->with('success',
+                'Resumen del ' . \Carbon\Carbon::parse($fechaStr)->format('d/m/Y') .
+                ' guardado exitosamente (' . $agrupadoPorSede->count() . ' sedes). Los datos alimentarán la Comparativa Semanal de Efectividad.'
+            );
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error en guardarResumen: ' . $e->getMessage() . ' | ' . $e->getFile() . ':' . $e->getLine());
+            return redirect()->back()->with('error', 'Error al guardar el resumen: ' . $e->getMessage());
         }
     }
 }

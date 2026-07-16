@@ -363,6 +363,64 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     syncExcludedInputs();
+
+    // Para tipo "personalizada": interceptar el submit con fetch,
+    // descargar el CSV y luego recargar la página para reflejar el estado actualizado.
+    const tipoReporte = '{{ $tipoReporte ?? "ventas" }}';
+    if (tipoReporte === 'personalizada' && exportForm) {
+        exportForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const btn = exportForm.querySelector('button[type="submit"]');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Exportando…';
+            }
+
+            const formData = new FormData(exportForm);
+
+            fetch(exportForm.action, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            })
+            .then(function (response) {
+                if (!response.ok) {
+                    return response.text().then(function (text) {
+                        throw new Error(text || 'Error al exportar.');
+                    });
+                }
+                // Extraer nombre del archivo desde Content-Disposition
+                const disposition = response.headers.get('Content-Disposition') || '';
+                let filename = 'requisicion_manual.csv';
+                const match = disposition.match(/filename="?([^";\r\n]+)"?/i);
+                if (match) filename = match[1];
+
+                return response.blob().then(function (blob) {
+                    // Disparar descarga del archivo
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(function () {
+                        URL.revokeObjectURL(url);
+                        a.remove();
+                        // Recargar la página para mostrar la lista actualizada
+                        window.location.reload();
+                    }, 500);
+                });
+            })
+            .catch(function (err) {
+                alert('Error al exportar: ' + err.message);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Exportar CSV y aplicar movimiento';
+                }
+            });
+        });
+    }
 });
 </script>
 @endpush

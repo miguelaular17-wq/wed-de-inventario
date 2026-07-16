@@ -234,7 +234,8 @@ class RequisicionPersonalizadaService
         }
 
         return $rows->map(fn (RequisicionManual $m) => [
-            'codigo'      => $m->codigo,
+            'codigo_completo' => $m->codigo,
+            'codigo'      => trim(explode('/', $m->codigo)[0]),
             'unidad'      => 'UND',
             'cantidad'    => $m->cantidad,
             'producto'    => $m->producto,
@@ -242,7 +243,6 @@ class RequisicionPersonalizadaService
         ])->values();
     }
 
-    /** Aplica movimiento de stock y marca las líneas como exportadas. */
     public function applyExport(
         Collection $lines,
         string $sedeLocal,
@@ -258,7 +258,8 @@ class RequisicionPersonalizadaService
         DB::transaction(function () use ($lines, $sedeLocal, $stock, $usuario, &$applied) {
             foreach ($lines->groupBy('sede_origen') as $origen => $group) {
                 $origenKey = strtoupper((string) $origen);
-                $codigos   = $group->pluck('codigo')->filter()->values()->all();
+                // Usa codigo_completo para hacer match exacto en la BD
+                $codigos   = $group->map(fn($item) => $item['codigo_completo'] ?? $item['codigo'])->filter()->values()->all();
 
                 $applied += $stock->applyRequisition(
                     $group->values(),

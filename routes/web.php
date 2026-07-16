@@ -15,6 +15,7 @@ use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureSedeSelected;
 use App\Http\Controllers\CompradorController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PedidoSolicitadoController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -32,6 +33,9 @@ Route::get('/', function () {
         if ($user->isCobranza()) {
             return redirect()->route('cobranza.index');
         }
+        if ($user->isContabilidad()) {
+            return redirect()->route('finanzas.conciliaciones');
+        }
         if ($user->isVendedor()) {
             return redirect()->route('vendedor.dashboard');
         }
@@ -47,6 +51,9 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->name('login.store');
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
     Route::post('/register', [AuthController::class, 'register'])->name('register.store');
+
+    Route::get('/pedidos/buscar', [PedidoSolicitadoController::class, 'search'])->name('pedidos.search');
+    Route::post('/pedidos', [PedidoSolicitadoController::class, 'store'])->name('pedidos.store');
 });
 
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
@@ -85,6 +92,7 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
 
     // Admin Products
     Route::get('/productos', [\App\Http\Controllers\Admin\ProductController::class, 'index'])->name('productos.index');
+    Route::get('/productos/export-json', [\App\Http\Controllers\Admin\ProductController::class, 'exportJson'])->name('productos.export_json');
     Route::delete('/productos/{id}', [\App\Http\Controllers\Admin\ProductController::class, 'destroy'])->name('productos.destroy');
 });
 
@@ -127,6 +135,10 @@ Route::middleware(['auth', 'role:admin,comprador,marketing'])->prefix('compras')
 
     // Toggle Exclusión de Compras
     Route::post('/productos/{id}/toggle-exclusion', [\App\Http\Controllers\CompradorController::class, 'toggleExclusion'])->name('comprador.productos.toggle_exclusion');
+
+    // Pedidos solicitados (Q pedir)
+    Route::post('/pedidos/{pedido}/atender', [PedidoSolicitadoController::class, 'marcarAtendido'])->name('comprador.pedidos.atender');
+    Route::delete('/pedidos/{pedido}', [PedidoSolicitadoController::class, 'destroy'])->name('comprador.pedidos.destroy');
 });
 
 // Vendedor specific routes
@@ -159,6 +171,17 @@ Route::middleware(['auth', 'role:admin,finanzas'])->prefix('finanzas')->group(fu
     Route::post('/flujo-caja/cuenta/{id}', [FinanzasController::class, 'updateCuenta'])->name('finanzas.update_cuenta');
     Route::post('/flujo-caja/resumen/{id}', [FinanzasController::class, 'updateResumen'])->name('finanzas.update_resumen');
     Route::post('/flujo-caja/planificacion/{id}', [FinanzasController::class, 'updatePlanificacion'])->name('finanzas.update_planificacion');
+    Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
+    Route::post('/gastos-fijos/monto', [FinanzasController::class, 'updateGastoFijoMonto'])->name('finanzas.gastos_fijos.monto');
+    Route::post('/gastos-fijos/pagado', [FinanzasController::class, 'marcarGastoFijoPagado'])->name('finanzas.gastos_fijos.pagado');
+    Route::post('/gastos-fijos/fecha', [FinanzasController::class, 'updateGastoFijoFecha'])->name('finanzas.gastos_fijos.fecha');
+    Route::post('/gastos-fijos/costo', [FinanzasController::class, 'updateGastoFijoCosto'])->name('finanzas.gastos_fijos.costo');
+    Route::post('/gastos-fijos/agregar', [FinanzasController::class, 'agregarGastoFijo'])->name('finanzas.gastos_fijos.agregar');
+    Route::post('/gastos-fijos/eliminar', [FinanzasController::class, 'eliminarGastoFijoFila'])->name('finanzas.gastos_fijos.eliminar');
+});
+
+// Conciliaciones routes - solo admin y contabilidad
+Route::middleware(['auth', 'role:admin,contabilidad'])->prefix('finanzas')->group(function () {
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
     Route::post('/conciliaciones/upload', [FinanzasController::class, 'uploadConciliacion'])->name('finanzas.conciliaciones.upload');
     Route::post('/conciliaciones/process', [FinanzasController::class, 'processConciliacion'])->name('finanzas.conciliaciones.process');
@@ -173,6 +196,7 @@ Route::middleware(['auth', 'role:admin,cobranza'])->prefix('cobranza')->group(fu
     Route::get('/', [CobranzaController::class, 'index'])->name('cobranza.index');
     Route::post('/importar', [CobranzaController::class, 'importarExcel'])->name('cobranza.importar');
     Route::post('/limpiar', [CobranzaController::class, 'limpiarClientes'])->name('cobranza.limpiar');
+    Route::post('/guardar-resumen', [CobranzaController::class, 'guardarResumen'])->name('cobranza.guardar_resumen');
 });
 Route::get('/finanzas/reporte-consolidado', [App\Http\Controllers\FinanzasController::class, 'reporteConsolidado'])->name('finanzas.reporte_consolidado');
 

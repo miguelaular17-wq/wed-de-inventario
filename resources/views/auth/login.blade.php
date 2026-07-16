@@ -46,9 +46,50 @@
             <button type="submit" class="btn auth-btn">Entrar al Sistema</button>
         </form>
 
+        <div style="margin-top: 16px; text-align: center;">
+            <button type="button" id="btn-q-pedir" class="btn q-pedir-btn">Q Pedir</button>
+            <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">Solicita un producto al equipo de compras sin iniciar sesión.</p>
+        </div>
+
         <div class="auth-footer">
             ¿No tienes cuenta? <a href="{{ route('register') }}">Regístrate aquí</a>
         </div>
+    </div>
+</div>
+
+{{-- Modal Q Pedir --}}
+<div id="q-pedir-modal" class="q-pedir-overlay" hidden>
+    <div class="q-pedir-modal" role="dialog" aria-labelledby="q-pedir-title" aria-modal="true">
+        <div class="q-pedir-header">
+            <h2 id="q-pedir-title">Q Pedir — Solicitar producto</h2>
+            <button type="button" id="q-pedir-close" class="q-pedir-close" aria-label="Cerrar">&times;</button>
+        </div>
+        <p style="margin:0 0 16px;color:var(--muted);font-size:0.88rem;">
+            Busca el producto que necesitas y envíalo al equipo de compras.
+        </p>
+
+        <div class="auth-field">
+            <label for="q-pedir-search">Buscar producto</label>
+            <input type="search" id="q-pedir-search" placeholder="Código o nombre del producto..." autocomplete="off">
+        </div>
+
+        <div id="q-pedir-results" class="q-pedir-results"></div>
+
+        <div id="q-pedir-selected" class="q-pedir-selected" hidden>
+            <div style="font-size:0.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">Producto seleccionado</div>
+            <div id="q-pedir-selected-info" style="font-weight:600;margin-bottom:12px;"></div>
+            <div class="auth-field">
+                <label for="q-pedir-solicitante">Tu nombre (opcional)</label>
+                <input type="text" id="q-pedir-solicitante" placeholder="Ej: Juan Pérez" maxlength="120">
+            </div>
+            <div class="auth-field">
+                <label for="q-pedir-notas">Notas (opcional)</label>
+                <input type="text" id="q-pedir-notas" placeholder="Cantidad, urgencia, sede..." maxlength="500">
+            </div>
+            <button type="button" id="q-pedir-guardar" class="btn auth-btn" style="margin-top:8px;">Guardar solicitud</button>
+        </div>
+
+        <div id="q-pedir-message" class="q-pedir-message" hidden></div>
     </div>
 </div>
 @endsection
@@ -191,6 +232,136 @@
     .password-toggle-btn:hover {
         color: var(--blue);
     }
+    .q-pedir-btn {
+        background: #fff;
+        color: var(--blue);
+        border: 2px solid var(--blue);
+        padding: 10px 24px;
+        font-size: 0.92rem;
+        font-weight: 600;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        width: 100%;
+        max-width: 280px;
+    }
+    .q-pedir-btn:hover {
+        background: var(--blue-light);
+    }
+    .q-pedir-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        padding: 20px;
+    }
+    .q-pedir-overlay[hidden] {
+        display: none;
+    }
+    .q-pedir-modal {
+        background: #fff;
+        border-radius: 16px;
+        padding: 28px;
+        max-width: 520px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2);
+        border: 1px solid var(--border);
+    }
+    .q-pedir-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    .q-pedir-header h2 {
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #1e293b;
+    }
+    .q-pedir-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: var(--muted);
+        line-height: 1;
+        padding: 4px 8px;
+    }
+    .q-pedir-results {
+        margin: 12px 0;
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+    }
+    .q-pedir-results:empty {
+        display: none;
+    }
+    .q-pedir-result-item {
+        padding: 10px 14px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border);
+        transition: background 0.15s;
+    }
+    .q-pedir-result-item:last-child {
+        border-bottom: none;
+    }
+    .q-pedir-result-item:hover {
+        background: var(--blue-light);
+    }
+    .q-pedir-result-item strong {
+        display: block;
+        font-size: 0.9rem;
+    }
+    .q-pedir-result-item span {
+        font-size: 0.78rem;
+        color: var(--muted);
+        font-family: monospace;
+    }
+    .q-pedir-stock {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        font-family: inherit;
+    }
+    .q-pedir-stock.zero {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+    .q-pedir-stock.ok {
+        background: #f0fdf4;
+        color: #16a34a;
+    }
+    .q-pedir-selected {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+    }
+    .q-pedir-message {
+        margin-top: 16px;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 0.88rem;
+    }
+    .q-pedir-message.success {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #86efac;
+    }
+    .q-pedir-message.error {
+        background: #fef2f2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+    }
 </style>
 @endpush
 
@@ -221,6 +392,140 @@
     }
 
     setupPasswordToggle('password', 'toggle-password');
+
+    // Q Pedir modal
+    const modal = document.getElementById('q-pedir-modal');
+    const btnOpen = document.getElementById('btn-q-pedir');
+    const btnClose = document.getElementById('q-pedir-close');
+    const searchInput = document.getElementById('q-pedir-search');
+    const resultsEl = document.getElementById('q-pedir-results');
+    const selectedPanel = document.getElementById('q-pedir-selected');
+    const selectedInfo = document.getElementById('q-pedir-selected-info');
+    const btnGuardar = document.getElementById('q-pedir-guardar');
+    const messageEl = document.getElementById('q-pedir-message');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+
+    let selectedProduct = null;
+    let searchTimeout = null;
+
+    function openModal() {
+        modal.hidden = false;
+        searchInput.focus();
+        resetModal();
+    }
+
+    function closeModal() {
+        modal.hidden = true;
+        resetModal();
+    }
+
+    function resetModal() {
+        searchInput.value = '';
+        resultsEl.innerHTML = '';
+        selectedPanel.hidden = true;
+        messageEl.hidden = true;
+        selectedProduct = null;
+        document.getElementById('q-pedir-solicitante').value = '';
+        document.getElementById('q-pedir-notas').value = '';
+    }
+
+    function showMessage(text, type) {
+        messageEl.textContent = text;
+        messageEl.className = 'q-pedir-message ' + type;
+        messageEl.hidden = false;
+    }
+
+    btnOpen?.addEventListener('click', openModal);
+    btnClose?.addEventListener('click', closeModal);
+    modal?.addEventListener('click', function(e) {
+        if (e.target === modal) closeModal();
+    });
+
+    searchInput?.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const q = this.value.trim();
+        if (q.length < 2) {
+            resultsEl.innerHTML = '';
+            return;
+        }
+        searchTimeout = setTimeout(async function() {
+            try {
+                const res = await fetch('{{ route("pedidos.search") }}?q=' + encodeURIComponent(q));
+                const data = await res.json();
+                resultsEl.innerHTML = '';
+                if (!data.productos || data.productos.length === 0) {
+                    resultsEl.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:0.85rem;">No se encontraron productos.</div>';
+                    return;
+                }
+                data.productos.forEach(function(p) {
+                    const div = document.createElement('div');
+                    div.className = 'q-pedir-result-item';
+                    const stock = p.stock !== undefined ? parseInt(p.stock, 10) : null;
+                    const stockBadge = stock !== null
+                        ? '<span class="q-pedir-stock ' + (stock === 0 ? 'zero' : 'ok') + '">Stock: ' + stock + '</span>'
+                        : '';
+                    div.innerHTML = '<strong>' + escapeHtml(p.producto) + stockBadge + '</strong><span>' + escapeHtml(p.codigo) + (p.categoria ? ' · ' + escapeHtml(p.categoria) : '') + '</span>';
+                    div.addEventListener('click', function() {
+                        selectedProduct = p;
+                        const stockTxt = stock !== null ? ' — Stock: ' + stock : '';
+                        selectedInfo.textContent = p.producto + ' (' + p.codigo + ')' + stockTxt;
+                        selectedPanel.hidden = false;
+                        resultsEl.innerHTML = '';
+                        searchInput.value = p.producto;
+                        messageEl.hidden = true;
+                    });
+                    resultsEl.appendChild(div);
+                });
+            } catch (err) {
+                showMessage('Error al buscar productos. Intenta de nuevo.', 'error');
+            }
+        }, 300);
+    });
+
+    btnGuardar?.addEventListener('click', async function() {
+        if (!selectedProduct) return;
+        btnGuardar.disabled = true;
+        btnGuardar.textContent = 'Guardando...';
+        try {
+            const res = await fetch('{{ route("pedidos.store") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({
+                    producto_id: selectedProduct.id,
+                    codigo: selectedProduct.codigo,
+                    producto: selectedProduct.producto,
+                    categoria: selectedProduct.categoria || null,
+                    proveedor: selectedProduct.proveedor || null,
+                    solicitante: document.getElementById('q-pedir-solicitante').value.trim() || null,
+                    notas: document.getElementById('q-pedir-notas').value.trim() || null
+                })
+            });
+            const data = await res.json();
+            if (res.ok && data.ok) {
+                showMessage(data.message, 'success');
+                selectedPanel.hidden = true;
+                searchInput.value = '';
+            } else {
+                const errMsg = data.message || (data.errors ? Object.values(data.errors).flat().join(' ') : 'Error al guardar.');
+                showMessage(errMsg, 'error');
+            }
+        } catch (err) {
+            showMessage('Error de conexión. Intenta de nuevo.', 'error');
+        } finally {
+            btnGuardar.disabled = false;
+            btnGuardar.textContent = 'Guardar solicitud';
+        }
+    });
+
+    function escapeHtml(str) {
+        const d = document.createElement('div');
+        d.textContent = str || '';
+        return d.innerHTML;
+    }
 })();
 </script>
 @endpush

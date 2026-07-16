@@ -128,6 +128,10 @@ class AuthController extends Controller
             return redirect()->route('cobranza.index');
         }
 
+        if ($user->isContabilidad()) {
+            return redirect()->route('finanzas.conciliaciones');
+        }
+
         if ($user->isVendedor()) {
             return redirect()->route('vendedor.dashboard');
         }

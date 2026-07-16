@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\DashboardStatsService;
+use App\Services\Profiler;
 use App\Services\ProductRepository;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -12,7 +13,9 @@ class DashboardController extends Controller
 {
     public function index(Request $request, ProductRepository $products, DashboardStatsService $stats): View
     {
-        $stockBySede = $stats->existenciaPorSede();
+        Profiler::start('DashboardController::index');
+
+        $stockBySede = Profiler::measure('DashboardController::index existenciaPorSede', fn() => $stats->existenciaPorSede());
 
         $sedes = config('inventario.sedes_stock');
         $chartData = [];
@@ -20,12 +23,18 @@ class DashboardController extends Controller
             $chartData[$s] = (int) ($stockBySede[strtoupper($s)] ?? 0);
         }
 
-        return view('admin.dashboard', [
-            'productCount'  => $stats->productosActivos(),
-            'movementStats' => $stats->movimientosStats(),
-            'lastImport'    => $products->lastStockUpdate(),
+        Profiler::start('DashboardController::index Blade render');
+        $view = view('admin.dashboard', [
+            'productCount'  => Profiler::measure('DashboardController::index productosActivos', fn() => $stats->productosActivos()),
+            'movementStats' => Profiler::measure('DashboardController::index movimientosStats', fn() => $stats->movimientosStats()),
+            'lastImport'    => Profiler::measure('DashboardController::index lastStockUpdate', fn() => $products->lastStockUpdate()),
             'chartData'     => $chartData,
         ]);
+        Profiler::stop('DashboardController::index Blade render');
+
+        Profiler::stop('DashboardController::index');
+
+        return $view;
     }
 
 

@@ -91,6 +91,7 @@
                                         <option value="marketing" @selected($user->role === 'marketing')>Marketing</option>
                                         <option value="finanzas" @selected($user->role === 'finanzas')>Finanzas</option>
                                         <option value="cobranza" @selected($user->role === 'cobranza')>Cobranza</option>
+                                        <option value="contabilidad" @selected($user->role === 'contabilidad')>Contabilidad</option>
                                     </select>
                                 </div>
                                 <div class="field" style="margin:0;">

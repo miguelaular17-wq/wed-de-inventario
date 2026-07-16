@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FinanzasResumen;
+use App\Services\Profiler;
 use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -34,11 +35,14 @@ class BcvRateService
      */
     public function getRateForToday(): float
     {
+        Profiler::start('BcvRateService::getRateForToday');
         $cacheKey = 'tasa_bcv_' . date('Y-m-d');
 
-        return Cache::remember($cacheKey, self::TTL_SECONDS, function () {
+        $result = Cache::remember($cacheKey, self::TTL_SECONDS, function () {
             return $this->fetchFromApi() ?? $this->fetchFromDatabase() ?? 1.0;
         });
+        Profiler::stop('BcvRateService::getRateForToday');
+        return $result;
     }
 
     /**
@@ -49,7 +53,9 @@ class BcvRateService
     {
         try {
             $client = new Client(['timeout' => self::API_TIMEOUT]);
+            Profiler::start('BcvRateService::fetchFromApi HTTP');
             $response = $client->get(self::API_URL);
+            Profiler::stop('BcvRateService::fetchFromApi HTTP');
             $data = json_decode($response->getBody(), true);
 
             if (isset($data['promedio']) && $data['promedio'] > 0) {
@@ -68,8 +74,10 @@ class BcvRateService
      */
     private function fetchFromDatabase(): ?float
     {
+        Profiler::start('BcvRateService::fetchFromDatabase');
         $ultimo = FinanzasResumen::orderBy('fecha', 'desc')->first();
-
-        return $ultimo ? (float) $ultimo->tasa_bcv_usd : null;
+        $result = $ultimo ? (float) $ultimo->tasa_bcv_usd : null;
+        Profiler::stop('BcvRateService::fetchFromDatabase');
+        return $result;
     }
 }

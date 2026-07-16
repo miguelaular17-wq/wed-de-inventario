@@ -22,15 +22,27 @@ class VentasController extends Controller
         private RequisicionPersonalizadaService $reqPersonalizada,
     ) {}
 
-    public function index(Request $request): View
+    public function index(Request $request): mixed
     {
+        ini_set('memory_limit', '512M');
+        \App\Services\Profiler::start('VentasController::index');
+        \App\Services\Profiler::start('VentasController::index buildIndexData');
         $viewData = $this->buildIndexData($request);
+        \App\Services\Profiler::stop('VentasController::index buildIndexData');
 
         if ($request->header('X-Partial') === 'content') {
-            return view('ventas._content', $viewData);
+            \App\Services\Profiler::start('VentasController::index Blade _content');
+            $view = view('ventas._content', $viewData)->render();
+            \App\Services\Profiler::stop('VentasController::index Blade _content');
+            \App\Services\Profiler::stop('VentasController::index');
+            return response($view);
         }
 
-        return view('ventas.index', $viewData);
+        \App\Services\Profiler::start('VentasController::index Blade index');
+        $view = view('ventas.index', $viewData)->render();
+        \App\Services\Profiler::stop('VentasController::index Blade index');
+        \App\Services\Profiler::stop('VentasController::index');
+        return response($view);
     }
 
     private function buildIndexData(Request $request): array
@@ -55,7 +67,11 @@ class VentasController extends Controller
             'req_color' => (string) $request->query('req_color', 'Todos'),
         ];
 
+        \App\Services\Profiler::start('VentasController::buildIndexData loadForSede');
         $products = $this->products->loadForSede($sede);
+        \App\Services\Profiler::stop('VentasController::buildIndexData loadForSede');
+        
+        \App\Services\Profiler::start('VentasController::buildIndexData filter');
         if ($filterInput['q'] !== '' || $filterInput['categoria'] !== 'Ninguno' || $filterInput['subcategoria'] !== 'Ninguno') {
             $qLower = mb_strtolower($filterInput['q']);
             $products = $products->filter(function (array $row) use ($filterInput, $qLower) {
@@ -73,14 +89,21 @@ class VentasController extends Controller
                     || str_contains(mb_strtolower((string) ($row['producto'] ?? '')), $qLower);
             })->values();
         }
+        \App\Services\Profiler::stop('VentasController::buildIndexData filter');
 
+        \App\Services\Profiler::start('VentasController::buildIndexData ventas->calcular');
         $calculated = $this->ventas->calcular($products, $sede, $tp);
+        \App\Services\Profiler::stop('VentasController::buildIndexData ventas->calcular');
+        
+        \App\Services\Profiler::start('VentasController::buildIndexData filters->apply & paginate');
         $rows = $this->paginateCollection(
             $this->filters->apply($calculated, $filterInput),
             $request
         );
-
-        return [
+        \App\Services\Profiler::stop('VentasController::buildIndexData filters->apply & paginate');
+        
+        \App\Services\Profiler::start('VentasController::buildIndexData prepare return');
+        $res = [
             'sede' => $sede,
             'rows' => $rows,
             'calculatedCount' => $calculated->count(),
@@ -101,6 +124,8 @@ class VentasController extends Controller
                 ->all(),
             'stockUpdatedAt' => $this->products->lastStockUpdate(),
         ];
+        \App\Services\Profiler::stop('VentasController::buildIndexData prepare return');
+        return $res;
     }
 
     public function sync(Request $request): JsonResponse
@@ -121,6 +146,7 @@ class VentasController extends Controller
 
     public function mayorDemanda(Request $request): View
     {
+        ini_set('memory_limit', '512M');
         $sede = (string) $request->session()->get('sede_local');
 
         if ($request->filled('tiempo_pronostico')) {
