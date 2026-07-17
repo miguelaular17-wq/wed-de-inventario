@@ -72,6 +72,7 @@ class CatalogoController extends Controller
     public function exportPdf(Request $request)
     {
         ini_set('max_execution_time', 300); // Dar 5 minutos por si son muchos
+        ini_set('memory_limit', '512M'); // Dar más memoria para dompdf (evita error 500)
 
         $query = clone $this->buildQuery($request);
         
