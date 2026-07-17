@@ -60,8 +60,10 @@
             padding-top: 5px;
         }
         .product-img {
-            max-width: 90%;
             max-height: 110px;
+            max-width: 100%;
+            height: auto;
+            width: auto;
         }
         .product-category {
             font-size: 8px;
@@ -156,12 +158,12 @@
                 $primary_code = trim($codigos[0]);
                 
                 // Usar Image Transformations de Supabase (requiere Plan Pro)
-                // Usamos format=origin y redimensionamos a 200px para ahorrar memoria
+                // Usamos format=origin y forzamos un cuadrado de 200x200 (resize=contain) para evitar que dompdf estire la imagen
                 $base_url = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/render/image/public/imagenes_producto/imagenes/";
-                $jpg_url = $base_url . rawurlencode($primary_code) . ".jpg?width=200&format=origin&quality=80";
+                $jpg_url = $base_url . rawurlencode($primary_code) . ".jpg?width=200&height=200&resize=contain&format=origin&quality=80";
 
                 // Guardar la imagen en Caché por 24 horas para acelerar las descargas posteriores
-                $base64 = \Illuminate\Support\Facades\Cache::remember('img_base64_v4_' . $primary_code, 86400, function() use ($jpg_url, $base_url, $primary_code) {
+                $base64 = \Illuminate\Support\Facades\Cache::remember('img_base64_v5_' . $primary_code, 86400, function() use ($jpg_url, $base_url, $primary_code) {
                     $ch = curl_init();
                     curl_setopt($ch, CURLOPT_URL, $jpg_url);
                     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -180,7 +182,7 @@
                     }
                     
                     // Si falla el JPG, intentamos con PNG pero forzando salida
-                    $png_url = $base_url . rawurlencode($primary_code) . ".png?width=200&format=origin&quality=80";
+                    $png_url = $base_url . rawurlencode($primary_code) . ".png?width=200&height=200&resize=contain&format=origin&quality=80";
                     $ch2 = curl_init();
                     curl_setopt($ch2, CURLOPT_URL, $png_url);
                     curl_setopt($ch2, CURLOPT_RETURNTRANSFER, 1);
