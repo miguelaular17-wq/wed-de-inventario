@@ -109,6 +109,23 @@ class FinanzasController extends Controller
         return $this->bcvRate->getRateForToday();
     }
 
+    private function syncSaldoInicialDisponibilidad($resumen)
+    {
+        // El saldo inicial es TOTAL DISPONIBILIDAD (TASA BCV)
+        // que equivale a la suma de reporte_usd de ALTO y BAJO movimiento
+        $saldoCalculado = \App\Models\CuentaBancaria::whereIn('categoria_reporte', [
+            'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO',
+            'BANCA NACIONAL - BAJO MOVIMIENTO'
+        ])->sum('reporte_usd');
+
+        if ($resumen->saldo_inicial != $saldoCalculado) {
+            $resumen->saldo_inicial = $saldoCalculado;
+            $resumen->save();
+        }
+        return $resumen;
+    }
+
+
     public function flujoCaja() {
         Profiler::start('FinanzasController::flujoCaja');
 
@@ -132,6 +149,7 @@ class FinanzasController extends Controller
                 'porcentaje_total_diferencial' => 0
             ]
         );
+        $resumen = $this->syncSaldoInicialDisponibilidad($resumen);
         Profiler::stop('FinanzasController::flujoCaja resumen');
 
         $total_salidas_bs = $egresos_realizados->sum('monto_bs') 
@@ -306,6 +324,22 @@ class FinanzasController extends Controller
             ->filter(fn($b) => in_array($b, $bancosPermitidos))
             ->unique()->sort()->values();
 
+        // Mapa banco → titulares para el modal JS
+        $titularesPorBanco = [];
+        foreach ($cuentasBancarias as $cuenta) {
+            $b = strtoupper(trim($cuenta->banco));
+            $t = strtoupper(trim($cuenta->titular));
+            if (in_array($b, $bancosPermitidos) && $t) {
+                $titularesPorBanco[$b][] = $t;
+            }
+        }
+        // Ordenar titulares dentro de cada banco
+        foreach ($titularesPorBanco as $b => &$tits) {
+            $tits = array_values(array_unique($tits));
+            sort($tits);
+        }
+        unset($tits);
+
         // 2. Líneas bancarias cargadas (mostramos las de hoy y ayer — sin depender de session_id)
         $fecha_desde = now()->subDays(1)->startOfDay();
         $lineas_query = \App\Models\ConciliacionLinea::where('created_at', '>=', $fecha_desde)
@@ -379,21 +413,36 @@ class FinanzasController extends Controller
         }
         $egresos_ayer = $egresos_query->orderBy('id')->get();
 
-        // 6. Construir estructura por banco
+        // 6. Construir estructura por banco+titular
+        // Clave compuesta: "BANESCO|GRUPO JRZ"
         $bancosActivos = collect([]);
-        $lineas->each(fn($l) => $bancosActivos->push(strtoupper(trim($l->banco ?? ''))));
-        $egresos_ayer->each(fn($e) => $bancosActivos->push(strtoupper(trim($e->banco ?? ''))));
+        $lineas->each(function($l) use (&$bancosActivos) {
+            $bk  = strtoupper(trim($l->banco ?? ''));
+            $tit = strtoupper(trim($l->titular ?? ''));
+            if ($bk) $bancosActivos->push($bk . '|' . $tit);
+        });
+        // Egresos en tránsito solo tienen banco (sin titular), los agrupamos con titular vacío
+        $egresos_ayer->each(function($e) use (&$bancosActivos) {
+            $bk = strtoupper(trim($e->banco ?? ''));
+            if ($bk) $bancosActivos->push($bk . '|');
+        });
         if ($banco_filtro) {
-            $bancosActivos->push(strtoupper(trim($banco_filtro)));
+            $bancosActivos->push(strtoupper(trim($banco_filtro)) . '|');
         }
         $bancosActivos = $bancosActivos->filter()->unique()->sort()->values();
 
         $data_por_banco = [];
-        foreach ($bancosActivos as $bk) {
-            $bk_lower = strtolower($bk);
+        foreach ($bancosActivos as $bk_key) {
+            [$bk, $tit] = array_pad(explode('|', $bk_key, 2), 2, '');
+            $bk_lower  = strtolower($bk);
+            $tit_lower = strtolower($tit);
 
-            // Líneas del banco cargadas esta sesión
-            $lineas_banco = $lineas->filter(fn($l) => strtolower(trim($l->banco ?? '')) == $bk_lower);
+            // Líneas del banco+titular cargadas
+            $lineas_banco = $lineas->filter(function($l) use ($bk_lower, $tit_lower) {
+                $lbanco = strtolower(trim($l->banco ?? ''));
+                $ltit   = strtolower(trim($l->titular ?? ''));
+                return $lbanco === $bk_lower && ($tit_lower === '' || $ltit === $tit_lower);
+            });
 
             // Separar comisiones vs. transacciones normales
             $lineas_comisiones = $lineas_banco->filter(function($l) use ($comision_keywords) {
@@ -405,7 +454,7 @@ class FinanzasController extends Controller
             });
             $lineas_normales = $lineas_banco->diff($lineas_comisiones);
 
-            // Conciliados = emparejados (estado conciliado)
+            // Conciliados
             $conciliados = $lineas_normales->where('estado', 'conciliado')
                 ->map(function($l) {
                     $flujo = $l->flujo_caja_id ? \App\Models\FlujoCaja::find($l->flujo_caja_id) : null;
@@ -420,7 +469,7 @@ class FinanzasController extends Controller
                     ];
                 })->values();
 
-            // Sin registrar = líneas del banco que NO están en el sistema (estado pendiente, no comisiones)
+            // Sin registrar
             $sin_registrar = $lineas_normales->where('estado', 'pendiente')
                 ->map(fn($l) => [
                     'fecha'       => $l->fecha,
@@ -445,7 +494,7 @@ class FinanzasController extends Controller
                     'flujo_id'   => $e->id,
                 ])->values();
 
-            // Comisiones bancarias detectadas
+            // Comisiones
             $comisiones = $lineas_comisiones->map(fn($l) => [
                 'fecha'       => $l->fecha,
                 'descripcion' => $l->descripcion,
@@ -453,21 +502,21 @@ class FinanzasController extends Controller
                 'monto'       => $l->monto,
             ])->values();
 
-            // Totales
-            $total_conciliados  = $conciliados->sum('monto');
-            $total_transito     = $en_transito->sum('monto_bs');
-            $total_sin_registrar= $sin_registrar->sum('monto');
-            $total_comisiones   = $comisiones->sum('monto');
+            $total_conciliados   = $conciliados->sum('monto');
+            $total_transito      = $en_transito->sum('monto_bs');
+            $total_sin_registrar = $sin_registrar->sum('monto');
+            $total_comisiones    = $comisiones->sum('monto');
 
-            $data_por_banco[$bk] = compact(
-                'conciliados', 'en_transito', 'sin_registrar', 'comisiones',
-                'total_conciliados', 'total_transito', 'total_sin_registrar', 'total_comisiones'
+            $data_por_banco[$bk_key] = array_merge(
+                compact('conciliados', 'en_transito', 'sin_registrar', 'comisiones',
+                        'total_conciliados', 'total_transito', 'total_sin_registrar', 'total_comisiones'),
+                ['banco' => $bk, 'titular' => $tit]
             );
         }
 
         return view('finanzas.conciliaciones', compact(
             'lineas', 'bancos', 'cuentasBancarias', 'egresos_ayer',
-            'bancosActivos', 'data_por_banco'
+            'bancosActivos', 'data_por_banco', 'titularesPorBanco'
         ));
     }
 
@@ -477,12 +526,14 @@ class FinanzasController extends Controller
             'file.*' => 'required|mimes:csv,txt,xlsx,xls,png,jpg,jpeg',
             'file' => 'required|array',
             'banco_seleccionado' => 'required|string',
+            'titular_seleccionado' => 'required|string',
         ]);
 
         $files = $request->file('file');
         $success_count = 0;
         $session_id = session()->getId();
-        $banco_nombre = strtoupper(trim($request->banco_seleccionado));
+        $banco_nombre  = strtoupper(trim($request->banco_seleccionado));
+        $titular_nombre = strtoupper(trim($request->titular_seleccionado));
 
         // ── Mapeo fijo de columnas por banco ──────────────────────────────────
         // col_monto: columna única (puede ser negativo para cargos)
@@ -632,7 +683,8 @@ class FinanzasController extends Controller
                                 if ($monto_val == 0) continue;
                                 \App\Models\ConciliacionLinea::create([
                                     'session_id'  => $session_id,
-                                    'banco'       => $request->banco_seleccionado,
+                                    'banco'       => $banco_nombre,
+                                    'titular'     => $titular_nombre,
                                     'fecha'       => $data['fecha'],
                                     'descripcion' => substr((string)($data['descripcion'] ?? 'Extracción por IA'), 0, 255),
                                     'referencia'  => substr((string)($data['referencia'] ?? ''), 0, 255),
@@ -727,7 +779,8 @@ class FinanzasController extends Controller
                     try {
                         \App\Models\ConciliacionLinea::create([
                             'session_id'  => $session_id,
-                            'banco'       => $request->banco_seleccionado,
+                            'banco'       => $banco_nombre,
+                            'titular'     => $titular_nombre,
                             'fecha'       => $fecha_str,
                             'descripcion' => $descripcion,
                             'referencia'  => $referencia,
@@ -737,7 +790,7 @@ class FinanzasController extends Controller
                         ]);
                         $success_count++;
                     } catch (\Exception $e) {
-                        \Log::error("Error guardando fila $idx banco $banco_nombre: " . $e->getMessage());
+                        \Log::error("Error guardando fila $idx banco $banco_nombre titular $titular_nombre: " . $e->getMessage());
                     }
                 }
 
@@ -816,7 +869,8 @@ class FinanzasController extends Controller
                         try {
                             \App\Models\ConciliacionLinea::create([
                                 'session_id'  => $session_id,
-                                'banco'       => $request->banco_seleccionado,
+                                'banco'       => $banco_nombre,
+                                'titular'     => $titular_nombre,
                                 'fecha'       => $fecha_str,
                                 'descripcion' => substr((string)($col_descripcion != -1 ? ($data[$col_descripcion] ?? '') : ''), 0, 255),
                                 'referencia'  => substr((string)($col_referencia != -1 ? ($data[$col_referencia] ?? '') : ''), 0, 255),

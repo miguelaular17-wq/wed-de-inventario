@@ -369,11 +369,11 @@
                 <div class="widget-header">RESUMEN FINANCIERO</div>
                 
                 <div class="widget-block">
-                    <div class="widget-block-label">Saldo Inicial</div>
+                    <div class="widget-block-label" title="Sincronizado automáticamente con la Disponibilidad Bancaria (Tasa BCV)">Saldo Inicial (Auto)</div>
                     <div style="display: flex; justify-content: center; align-items: center; gap: 4px;">
                         <span style="color: #94a3b8; font-size: 14px; font-weight: 500;">$</span>
-                        <input type="number" step="0.01" class="editable-input widget-block-value" style="text-align: center; background: #f8fafc; border-color: #e2e8f0; padding: 8px; max-width: 150px;"
-                            value="{{ $resumen->saldo_inicial }}" data-type="resumen" data-id="{{ $resumen->id }}" data-field="saldo_inicial">
+                        <input type="number" step="0.01" class="widget-block-value" style="text-align: center; background: #e2e8f0; border-color: #cbd5e1; padding: 8px; max-width: 150px; color: #64748b; cursor: not-allowed;"
+                            value="{{ $resumen->saldo_inicial }}" readonly>
                     </div>
                 </div>
 

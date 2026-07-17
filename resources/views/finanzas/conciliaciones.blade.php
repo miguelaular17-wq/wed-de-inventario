@@ -138,15 +138,24 @@
     @endif
 
     {{-- Per-bank sections --}}
-    @foreach($bancosActivos as $bk)
-    @php $d = $data_por_banco[$bk]; @endphp
+    @foreach($bancosActivos as $bk_key)
+    @php
+        $d   = $data_por_banco[$bk_key];
+        $bk  = $d['banco'];
+        $tit = $d['titular'];
+    @endphp
 
     <div class="bank-card">
         {{-- Bank header --}}
         <div class="bank-card-header">
-            <div class="bank-name">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-                {{ $bk }}
+            <div>
+                <div class="bank-name">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                    {{ $bk }}
+                </div>
+                @if($tit)
+                    <div style="color:rgba(255,255,255,.65); font-size:0.82rem; font-weight:600; margin-top:4px; letter-spacing:.3px;">Titular: {{ $tit }}</div>
+                @endif
             </div>
             <div class="bank-totals-row">
                 <div class="bank-stat">
@@ -341,15 +350,26 @@
                 <button type="button" class="modal-close" onclick="document.getElementById('uploadModal').style.display='none'">&times;</button>
             </div>
             <div class="modal-body">
-                <label class="form-label">Selecciona el Banco:</label>
-                <select name="banco_seleccionado" required class="form-control">
+
+                {{-- PASO 1: Banco --}}
+                <label class="form-label">1. Selecciona el Banco:</label>
+                <select name="banco_seleccionado" id="selectBanco" required class="form-control"
+                        onchange="filtrarTitulares(this.value)">
                     <option value="">-- Seleccione el Banco --</option>
                     @foreach($bancos as $b)
                         <option value="{{ $b }}">{{ $b }}</option>
                     @endforeach
                 </select>
 
-                <label class="form-label">Archivo (Excel o CSV):</label>
+                {{-- PASO 2: Titular (se filtra según el banco) --}}
+                <label class="form-label">2. Selecciona el Titular:</label>
+                <select name="titular_seleccionado" id="selectTitular" required class="form-control"
+                        disabled style="background:#f8fafc; color:#94a3b8;">
+                    <option value="">-- Primero seleccione un Banco --</option>
+                </select>
+
+                {{-- Archivo --}}
+                <label class="form-label">3. Archivo (Excel o CSV):</label>
                 <div class="file-wrap">
                     <label class="file-label">
                         Elegir Archivo
@@ -369,5 +389,38 @@
         </form>
     </div>
 </div>
+
+{{-- Mapa banco → titulares (generado desde PHP/BD) --}}
+<script>
+const titularesPorBanco = @json($titularesPorBanco);
+
+function filtrarTitulares(banco) {
+    const selTit = document.getElementById('selectTitular');
+    selTit.innerHTML = '<option value="">-- Seleccione el Titular --</option>';
+
+    if (!banco || !titularesPorBanco[banco]) {
+        selTit.disabled = true;
+        selTit.style.background = '#f8fafc';
+        selTit.style.color = '#94a3b8';
+        return;
+    }
+
+    titularesPorBanco[banco].forEach(function(tit) {
+        const opt = document.createElement('option');
+        opt.value = tit;
+        opt.textContent = tit;
+        selTit.appendChild(opt);
+    });
+
+    selTit.disabled = false;
+    selTit.style.background = 'white';
+    selTit.style.color = '#334155';
+
+    // Si solo hay un titular, seleccionarlo automáticamente
+    if (titularesPorBanco[banco].length === 1) {
+        selTit.value = titularesPorBanco[banco][0];
+    }
+}
+</script>
 
 @endsection

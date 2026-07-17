@@ -148,6 +148,10 @@ Route::middleware(['auth', 'role:vendedor'])->prefix('vendedor')->group(function
 
 // Notifications routes for all authenticated users
 Route::middleware('auth')->group(function () {
+    // Catálogo Gráfico
+    Route::get('/catalogo', [\App\Http\Controllers\CatalogoController::class, 'index'])->name('catalogo.index');
+    Route::get('/catalogo/pdf', [\App\Http\Controllers\CatalogoController::class, 'exportPdf'])->name('catalogo.pdf');
+
     Route::get('/notificaciones', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notificaciones/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
     Route::post('/notificaciones/read-all', [NotificationController::class, 'readAll'])->name('notifications.read_all');

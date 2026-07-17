@@ -10,6 +10,11 @@
             {{ $rows->total() }} productos · Doble clic en una fila para ver niveles de pago
         </p>
     </div>
+    <div>
+        <a href="{{ route('catalogo.index') }}" class="btn btn-primary" style="background-color: var(--blue); color: white; padding: 10px 16px; border-radius: 8px; text-decoration: none; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+            <i class="fas fa-images"></i> Ver Catálogo Gráfico / PDF
+        </a>
+    </div>
 </div>
 
 {{-- Barra de búsqueda --}}

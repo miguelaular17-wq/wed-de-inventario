@@ -56,6 +56,7 @@
                         <a href="{{ route('ventas.mayor_demanda') }}" class="{{ request()->routeIs('ventas.mayor_demanda') ? 'active' : '' }}">Mayor Demanda</a>
                         <a href="{{ route('inventario.index') }}" data-tour="nav-inventario" class="{{ request()->routeIs('inventario.*') ? 'active' : '' }}">Inventario</a>
                         <a href="{{ route('requisicion.form') }}" data-tour="nav-export" class="{{ request()->routeIs('requisicion.*') ? 'active' : '' }}">Exportar</a>
+                        <a href="{{ route('catalogo.index') }}" data-tour="nav-catalogo" class="{{ request()->routeIs('catalogo.*') ? 'active' : '' }}" style="background-color: var(--blue); color: white; border-radius: 4px; padding: 4px 10px;">Catálogo Visual</a>
                     @endif
                 </nav>
 

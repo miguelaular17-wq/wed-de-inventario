@@ -7,9 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 class ConciliacionLinea extends Model
 {
     protected $fillable = [
-        'banco',
-        'fecha',
-        'descripcion', 'referencia', 'monto', 'estado', 'flujo_caja_id'];
+        'banco', 'titular',
+        'fecha', 'descripcion', 'referencia', 'monto', 'estado', 'flujo_caja_id',
+        'session_id', 'tipo',
+    ];
 
     public function flujoCaja()
     {
