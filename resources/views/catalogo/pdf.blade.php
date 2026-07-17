@@ -132,16 +132,18 @@
 </head>
 <body>
 
-    <div class="header">
+    <div class="header" style="text-align: center;">
+        @php
+            $logoPath = public_path('logo.png');
+            $logoBase64 = '';
+            if (file_exists($logoPath)) {
+                $logoBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath));
+            }
+        @endphp
+        @if($logoBase64)
+            <img src="{{ $logoBase64 }}" alt="Logo" style="max-height: 50px; margin-bottom: 5px;">
+        @endif
         <h1>CATÁLOGO DE PRODUCTOS</h1>
-    </div>
-
-    <div class="filters-info">
-        Generado el: {{ date('d/m/Y H:i') }} | 
-        Sede: {{ request('sede', 'Todas') }} | 
-        Categoría: {{ request('categoria', 'Todas') }} | 
-        Subcategoría: {{ request('subcategoria', 'Todas') }} |
-        Total mostrados: {{ count($productos) }}
     </div>
 
     <div class="catalog-container clearfix">
@@ -193,7 +195,7 @@
                 // Si es NO_IMAGE, cargamos la de por defecto
                 if ($base64 === 'NO_IMAGE') {
                     $base64 = \Illuminate\Support\Facades\Cache::remember('img_base64_no_image', 86400, function() {
-                        $no_image_url = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/object/public/imagenes_producto/no-image.jpg";
+                        $no_image_url = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/object/public/imagenes_producto/imagenes/no-image.jpg";
                         $ch = curl_init();
                         curl_setopt($ch, CURLOPT_URL, $no_image_url);
                         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -230,6 +232,10 @@
                         <tr>
                             <td>P. Mayor:</td>
                             <td class="price-val">${{ number_format($prod->precio_mayor, 2) }}</td>
+                        </tr>
+                        <tr>
+                            <td>P. Divisa (-30%):</td>
+                            <td class="price-val">${{ number_format($prod->precio_unidad * 0.70, 2) }}</td>
                         </tr>
                     </table>
                 </div>

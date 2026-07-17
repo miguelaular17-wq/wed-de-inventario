@@ -270,8 +270,13 @@
 </style>
 
 <div>
-    <div class="catalogo-header">
-        <h1>Catálogo de Productos</h1>
+    <div class="catalogo-header" style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px;">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <a href="{{ route('inventario.index') }}" style="background: rgba(255,255,255,0.2); color: white; padding: 5px 12px; border-radius: 4px; text-decoration: none; font-size: 0.9rem; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                ← Volver
+            </a>
+            <h1 style="margin: 0; font-size: 1.5rem;">Catálogo de Productos</h1>
+        </div>
         <div class="catalogo-badge">
             {{ $productos->total() }} productos encontrados
         </div>
@@ -426,7 +431,7 @@
                         $base_url = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/object/public/imagenes_producto/imagenes/";
                         $jpg_url = $base_url . rawurlencode($primary_code) . ".jpg";
                         $png_url = $base_url . rawurlencode($primary_code) . ".png";
-                        $no_image_url = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/object/public/imagenes_producto/no-image.jpg";
+                        $no_image_url = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/object/public/imagenes_producto/imagenes/no-image.jpg";
                     @endphp
                     <img src="{{ $jpg_url }}" 
                          alt="{{ $prod->descripcion }}" 
@@ -447,14 +452,18 @@
                         <div class="product-title" title="{{ $prod->descripcion }}">{{ $prod->descripcion }}</div>
                         <div class="product-code">Cód: <strong>{{ $prod->codigo }}</strong></div>
                         
-                        <div class="price-box">
-                            <div>
-                                <span class="price-label">P. Unidad</span>
+                        <div class="price-box" style="display: flex; justify-content: space-between; gap: 5px;">
+                            <div style="flex: 1; text-align: left;">
+                                <span class="price-label" style="font-size: 0.7rem;">P. Unidad</span>
                                 <span class="price-value">${{ number_format($prod->precio_unidad, 2) }}</span>
                             </div>
-                            <div style="text-align: right;">
-                                <span class="price-label">P. Mayor</span>
+                            <div style="flex: 1; text-align: center;">
+                                <span class="price-label" style="font-size: 0.7rem;">P. Mayor</span>
                                 <span class="price-value">${{ number_format($prod->precio_mayor, 2) }}</span>
+                            </div>
+                            <div style="flex: 1; text-align: right;">
+                                <span class="price-label" style="font-size: 0.7rem;">Divisa (-30%)</span>
+                                <span class="price-value" style="color: #16a34a;">${{ number_format($prod->precio_unidad * 0.70, 2) }}</span>
                             </div>
                         </div>
                         

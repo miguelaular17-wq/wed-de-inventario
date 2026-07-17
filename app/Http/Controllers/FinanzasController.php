@@ -405,10 +405,26 @@ class FinanzasController extends Controller
             }
         }
 
-        // 4. Palabras clave para detectar comisiones bancarias en los movimientos del banco
+        // 4. Palabras clave para detectar comisiones bancarias
+        // Basadas en el análisis real de los archivos de cada banco
         $comision_keywords = [
+            // Genéricas
             'comision', 'comisión', 'commission', 'mantenimiento', 'maintenance',
             'cargo mensual', 'servicio', 'below minimum', 'administracion', 'administración',
+            // BBVA: "COM.REF.BANC.", "COM MTTO POS", "COMIS. CR.I OB"
+            'com.ref.banc', 'com mtto pos', 'comis. cr.i',
+            // BNC: "COMISION TRANS", "Comisión del", "SERVICIO USO PUNTO DE VENTA", "Comisión Credito Inmediato"
+            'servicio uso punto', 'comision intervencion', 'comision credito inmediato',
+            // MERCANTIL: "COMISION POR TRANSFERENCIA", "TARIFA MANTENIMIENTO", "DESCUENTO TARJETA", "EMISION EDO"
+            'comision por transferencia', 'tarifa mantenimiento', 'descuento tarjeta', 'emision edo',
+            // VENEZUELA: "COM MANTENIMIENTO", "COBRO COMISION", "COM PAGO OTR BCOS", "COMISION COBRO CENTRALIZADO"
+            'com mantenimiento', 'cobro comision', 'com pago otr', 'comision cobro centralizado',
+            // TESORO: "COMIS USO CANAL", "BELOW MINIMUM BALANCE", "STAMENT SERVICE"
+            'comis uso canal', 'stament service',
+            // BANESCO: "SERV MTTO. POS"
+            'serv mtto',
+            // BANCARIBE/BANCAMIGA
+            'cobro de comision', 'tarifa por',
         ];
 
         // 5. Egresos del día anterior sin conciliar (para en_transito)
@@ -555,83 +571,108 @@ class FinanzasController extends Controller
         $banco_nombre  = strtoupper(trim($request->banco_seleccionado));
         $titular_nombre = strtoupper(trim($request->titular_seleccionado));
 
-        // ── Mapeo fijo de columnas por banco ──────────────────────────────────
-        // col_monto: columna única (puede ser negativo para cargos)
-        // col_cargo / col_abono: columnas separadas
-        // start_row: índice 0 de la primera fila de datos (saltando cabeceras)
-        // Los índices son 0-based.
+        // ── Mapeo fijo de columnas por banco ─────────────────────────────────
+        // Basado en análisis real de los archivos de cada banco.
+        // col_monto: columna única (negativo=cargo, positivo=abono)
+        // col_cargo / col_abono: columnas separadas Debe/Haber
+        // start_row: índice 0-based de la primera fila con datos reales
+        // skip_desc_contains: palabras en descripción que indican filas a omitir (SALDO)
         $bankMappings = [
+            // F[0]: vacío | F[5]: cabeceras | F[6]: datos
+            // Cols: [0]=vacío [1]=Fecha [2]=Descripción [3]=vacío [4]=Referencia [5]=Débito [6]=Crédito
             'BANCAMIGA' => [
-                'start_row'      => 6,    // fila 7 en Excel (fila 6 es cabecera)
-                'col_fecha'      => 1,
-                'col_referencia' => 2,
-                'col_descripcion'=> 3,
-                'col_monto'      => null,
-                'col_cargo'      => 4,    // Débito
-                'col_abono'      => 5,    // Crédito
+                'start_row'       => 6,
+                'col_fecha'       => 1,
+                'col_referencia'  => 4,
+                'col_descripcion' => 2,
+                'col_monto'       => null,
+                'col_cargo'       => 5,   // Débito
+                'col_abono'       => 6,   // Crédito
+                'skip_desc'       => ['saldo inicial', 'saldo final', 'totales'],
             ],
+            // CSV con separador ';': Fecha;Referencia;Descripción;Monto;...
+            // F[0]: cabecera | F[1..]: datos
             'BANCARIBE' => [
-                'start_row'      => 1,    // fila 1 son cabeceras (fila 0 = número de cuenta)
-                'col_fecha'      => 0,
-                'col_referencia' => 1,
-                'col_descripcion'=> 2,
-                'col_monto'      => 3,
-                'col_cargo'      => null,
-                'col_abono'      => null,
+                'start_row'       => 1,
+                'col_fecha'       => 0,
+                'col_referencia'  => 1,
+                'col_descripcion' => 2,
+                'col_monto'       => 3,
+                'col_cargo'       => null,
+                'col_abono'       => null,
+                'skip_desc'       => ['saldo inicial', 'saldo final'],
             ],
+            // F[0]: Fecha|Referencia|Descripción|Monto|Balance — datos directos
             'BANESCO' => [
-                'start_row'      => 1,    // fila 0 = cabeceras
-                'col_fecha'      => 0,
-                'col_referencia' => 1,
-                'col_descripcion'=> 2,
-                'col_monto'      => 3,    // Monto (puede ser negativo)
-                'col_cargo'      => null,
-                'col_abono'      => null,
+                'start_row'       => 1,
+                'col_fecha'       => 0,
+                'col_referencia'  => 1,
+                'col_descripcion' => 2,
+                'col_monto'       => 3,
+                'col_cargo'       => null,
+                'col_abono'       => null,
+                'skip_desc'       => ['saldo inicial', 'saldo final'],
             ],
+            // CSV con separador ';' y comillas: Fecha;Ref;Desc;Importe;Saldo
+            // F[0]: cabecera | F[1..]: datos en col[0] como "fecha;ref;desc;importe;saldo"
             'BBVA' => [
-                'start_row'      => 1,    // fila 0 = cabeceras
-                'col_fecha'      => 0,
-                'col_referencia' => 1,
-                'col_descripcion'=> 2,
-                'col_monto'      => 3,    // Importe
-                'col_cargo'      => null,
-                'col_abono'      => null,
+                'start_row'       => 1,
+                'col_fecha'       => 0,
+                'col_referencia'  => 1,
+                'col_descripcion' => 2,
+                'col_monto'       => 3,   // Importe
+                'col_cargo'       => null,
+                'col_abono'       => null,
+                'skip_desc'       => ['saldo inicial', 'saldo final'],
+                'csv_semicolon'   => true,
             ],
+            // F[15]: cabecera | F[16..]: datos
+            // Cols: [1]=Fecha [12]=Referencia [7]=Descripción [13]=Debe [15]=Haber [16]=Saldo
             'BNC' => [
-                'start_row'      => 15,   // Encabezado con logo ocupa ~15 filas
-                'col_fecha'      => 0,
-                'col_referencia' => 5,
-                'col_descripcion'=> 4,
-                'col_monto'      => null,
-                'col_cargo'      => 6,    // Debe
-                'col_abono'      => 7,    // Haber
+                'start_row'       => 16,
+                'col_fecha'       => 1,
+                'col_referencia'  => 12,
+                'col_descripcion' => 7,
+                'col_monto'       => null,
+                'col_cargo'       => 13,  // Debe
+                'col_abono'       => 15,  // Haber
+                'skip_desc'       => ['saldo inicial', 'saldo final'],
             ],
+            // F[3]: cabecera | F[4..]: datos
+            // Cols: [0]=Nro [1]=Fecha [2]=Referencia [3]=Código [4]=Concepto [5]=Débito [6]=Crédito
             'TESORO' => [
-                'start_row'      => 4,    // filas 0-3 son cabeceras del documento
-                'col_fecha'      => 1,
-                'col_referencia' => 2,
-                'col_descripcion'=> 4,    // Concepto
-                'col_monto'      => null,
-                'col_cargo'      => 5,    // Débito
-                'col_abono'      => 6,    // Crédito
+                'start_row'       => 4,
+                'col_fecha'       => 1,
+                'col_referencia'  => 2,
+                'col_descripcion' => 4,
+                'col_monto'       => null,
+                'col_cargo'       => 5,   // Débito
+                'col_abono'       => 6,   // Crédito
+                'skip_desc'       => ['saldo inicial', 'saldo final'],
             ],
+            // F[0]: cabecera | F[1..]: datos
+            // Cols: [0]=fecha [1]=referencia [2]=concepto [3]=saldo [4]=monto [5]=tipoMovimiento
             'VENEZUELA' => [
-                'start_row'      => 1,    // fila 0 = cabeceras
-                'col_fecha'      => 0,
-                'col_referencia' => 1,
-                'col_descripcion'=> 2,
-                'col_monto'      => 4,    // columna "monto"
-                'col_cargo'      => null,
-                'col_abono'      => null,
+                'start_row'       => 1,
+                'col_fecha'       => 0,
+                'col_referencia'  => 1,
+                'col_descripcion' => 2,
+                'col_monto'       => 4,   // monto (negativo=débito, positivo=crédito)
+                'col_cargo'       => null,
+                'col_abono'       => null,
+                'skip_desc'       => ['saldo inicial', 'saldo final'],
             ],
+            // F[5]: cabecera | F[6]: SALDO INICIAL (skip) | F[7..]: datos
+            // Cols: [0]=Fecha [1]=Referencia [2]=Descripción [3]=Monto (negativo=cargo)
             'MERCANTIL' => [
-                'start_row'      => 7,    // filas 0-5: cabeceras doc, fila 6: SALDO INICIAL (se omite)
-                'col_fecha'      => 0,
-                'col_referencia' => 1,
-                'col_descripcion'=> 2,
-                'col_monto'      => 3,    // Monto (negativo = cargo, positivo = abono)
-                'col_cargo'      => null,
-                'col_abono'      => null,
+                'start_row'       => 6,
+                'col_fecha'       => 0,
+                'col_referencia'  => 1,
+                'col_descripcion' => 2,
+                'col_monto'       => 3,
+                'col_cargo'       => null,
+                'col_abono'       => null,
+                'skip_desc'       => ['saldo inicial', 'saldo final'],
             ],
         ];
 
@@ -735,12 +776,24 @@ class FinanzasController extends Controller
                     $all_rows = $xlsx->rows();
                 }
             } else {
-                // CSV
+                // CSV — detectar separador real
                 $handle = fopen($file->getRealPath(), 'r');
-                while (($row = fgetcsv($handle, 1000, ',')) !== false) {
-                    if (count($row) === 1 && strpos($row[0], ';') !== false) {
-                        $row = str_getcsv($row[0], ';');
+                $csv_semicolon = $bankMappings[$banco_nombre]['csv_semicolon'] ?? false;
+                while (($line = fgets($handle)) !== false) {
+                    $line = rtrim($line, "\r\n");
+                    if ($line === '') {
+                        $all_rows[] = [];
+                        continue;
                     }
+                    // Intentar detectar automáticamente si usa ';'
+                    $sep = ',';
+                    if ($csv_semicolon || (strpos($line, ';') !== false && substr_count($line, ';') > substr_count($line, ','))) {
+                        $sep = ';';
+                    }
+                    // Parsear respetando comillas
+                    $row = str_getcsv($line, $sep);
+                    // Limpiar comillas residuales
+                    $row = array_map(fn($v) => trim($v, " \t\"'"), $row);
                     $all_rows[] = $row;
                 }
                 fclose($handle);
@@ -767,7 +820,17 @@ class FinanzasController extends Controller
                     $fecha_str = $parseFecha($data[$c_fecha]);
                     if (!$fecha_str) continue;
 
-                    // Calcular monto y tipo
+                    // Omitir filas de saldo inicial/final/totales
+                    $skip_desc = $map['skip_desc'] ?? [];
+                    if (!empty($skip_desc) && isset($data[$c_desc])) {
+                        $desc_lower = strtolower(trim((string)$data[$c_desc]));
+                        $skip = false;
+                        foreach ($skip_desc as $sw) {
+                            if (strpos($desc_lower, $sw) !== false) { $skip = true; break; }
+                        }
+                        if ($skip) continue;
+                    }
+
                     $monto_val = 0;
                     $es_egreso = false;
 
