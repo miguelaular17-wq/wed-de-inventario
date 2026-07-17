@@ -52,9 +52,6 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         <a href="{{ route('comprador.historico') }}" class="btn" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-weight: 600; font-size: 0.9rem; border: none; border-radius: 6px; background-color: #2563eb; color: #ffffff; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <span>📊</span> Histórico Mensual
         </a>
-        <a href="{{ route('comprador.export', request()->query()) }}" class="btn secondary" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-weight: 600; font-size: 0.9rem; border: 1px solid var(--border);">
-            <span>📥</span> Exportar Excel Global
-        </a>
     </div>
 </div>
 

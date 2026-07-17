@@ -523,6 +523,9 @@
         selectedSubcat = 'todas'; 
         updateSubcategorias();
     });
+
+    // Initialize subcategories on page load
+    updateSubcategorias();
     
     // --- NUEVA LÓGICA DE PDF ASÍNCRONA ---
     async function descargarPDF(scope) {
