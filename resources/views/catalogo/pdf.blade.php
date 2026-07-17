@@ -156,12 +156,12 @@
                 $primary_code = trim($codigos[0]);
                 
                 // Usar Image Transformations de Supabase (requiere Plan Pro)
-                // Convierte a JPEG y redimensiona a 200px para ahorrar memoria y evitar crasheos con WebP
+                // Usamos format=origin y redimensionamos a 200px para ahorrar memoria
                 $base_url = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/render/image/public/imagenes_producto/imagenes/";
-                $jpg_url = $base_url . rawurlencode($primary_code) . ".jpg?width=200&format=jpeg&quality=80";
+                $jpg_url = $base_url . rawurlencode($primary_code) . ".jpg?width=200&format=origin&quality=80";
 
                 // Guardar la imagen en Caché por 24 horas para acelerar las descargas posteriores
-                $base64 = \Illuminate\Support\Facades\Cache::remember('img_base64_v3_' . $primary_code, 86400, function() use ($jpg_url, $base_url, $primary_code) {
+                $base64 = \Illuminate\Support\Facades\Cache::remember('img_base64_v4_' . $primary_code, 86400, function() use ($jpg_url, $base_url, $primary_code) {
                     $ch = curl_init();
                     curl_setopt($ch, CURLOPT_URL, $jpg_url);
                     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -172,11 +172,15 @@
                     curl_close($ch);
                     
                     if ($http_code == 200 && $img_data) {
+                        $isWebp = (substr($img_data, 0, 4) === 'RIFF' && substr($img_data, 8, 4) === 'WEBP');
+                        if ($isWebp) {
+                            return 'NO_IMAGE';
+                        }
                         return 'data:image/jpeg;base64,' . base64_encode($img_data);
                     }
                     
-                    // Si falla el JPG, intentamos con PNG pero forzando salida en JPEG
-                    $png_url = $base_url . rawurlencode($primary_code) . ".png?width=200&format=jpeg&quality=80";
+                    // Si falla el JPG, intentamos con PNG pero forzando salida
+                    $png_url = $base_url . rawurlencode($primary_code) . ".png?width=200&format=origin&quality=80";
                     $ch2 = curl_init();
                     curl_setopt($ch2, CURLOPT_URL, $png_url);
                     curl_setopt($ch2, CURLOPT_RETURNTRANSFER, 1);
@@ -187,6 +191,10 @@
                     curl_close($ch2);
                     
                     if ($http_code_png == 200 && $img_data_png) {
+                        $isWebp = (substr($img_data_png, 0, 4) === 'RIFF' && substr($img_data_png, 8, 4) === 'WEBP');
+                        if ($isWebp) {
+                            return 'NO_IMAGE';
+                        }
                         return 'data:image/jpeg;base64,' . base64_encode($img_data_png);
                     }
                     
