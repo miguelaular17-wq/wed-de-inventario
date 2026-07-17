@@ -161,35 +161,46 @@ class CatalogoController extends Controller
         $codigo = $request->input('codigo');
         $imageUrl = $request->input('imagen_url');
 
-        // 1. Descargar la imagen de la URL remota
-        $imageResponse = \Illuminate\Support\Facades\Http::withoutVerifying()->get($imageUrl);
-        
-        if (!$imageResponse->successful()) {
-            return response()->json(['success' => false, 'error' => 'No se pudo descargar la imagen de la URL proporcionada. Asegúrate de que el enlace sea público.'], 400);
+        // 1. Intentar usar wsrv.nl como conversor en la nube (soporta WebP, AVIF, HEIC, etc.)
+        $wsrvUrl = 'https://wsrv.nl/?url=' . urlencode($imageUrl) . '&output=jpg&bg=white&q=85';
+        $imageResponse = \Illuminate\Support\Facades\Http::withoutVerifying()->get($wsrvUrl);
+        $imageContent = null;
+        $isConverted = false;
+
+        if ($imageResponse->successful()) {
+            $imageContent = $imageResponse->body();
+            $isConverted = true;
+        } else {
+            // Fallback: descarga directa si el proxy es bloqueado por el servidor origen
+            $imageResponse = \Illuminate\Support\Facades\Http::withoutVerifying()->get($imageUrl);
+            if (!$imageResponse->successful()) {
+                return response()->json(['success' => false, 'error' => 'No se pudo descargar la imagen de la URL proporcionada. Asegúrate de que el enlace sea público.'], 400);
+            }
+            $imageContent = $imageResponse->body();
         }
 
-        $imageContent = $imageResponse->body();
-        
-        // 2. Convertir cualquier formato de imagen (incluyendo WebP/PNG) a JPEG usando GD
-        $gdImage = @imagecreatefromstring($imageContent);
-        if (!$gdImage) {
-            return response()->json(['success' => false, 'error' => 'El enlace proporcionado no contiene una imagen válida o el formato no es compatible.'], 400);
+        // 2. Si no pasó por el proxy (descarga directa), intentar convertir usando PHP GD
+        if (!$isConverted) {
+            $gdImage = @imagecreatefromstring($imageContent);
+            if (!$gdImage) {
+                return response()->json(['success' => false, 'error' => 'El enlace proporcionado no contiene una imagen válida o es un formato WebP no soportado por este servidor.'], 400);
+            }
+
+            // Crear una imagen blanca de fondo en caso de que sea un PNG transparente
+            $width = imagesx($gdImage);
+            $height = imagesy($gdImage);
+            $bg = imagecreatetruecolor($width, $height);
+            imagefill($bg, 0, 0, imagecolorallocate($bg, 255, 255, 255));
+            imagecopy($bg, $gdImage, 0, 0, 0, 0, $width, $height);
+
+            // Capturar el JPEG en memoria (calidad 85 para reducir peso)
+            ob_start();
+            imagejpeg($bg, null, 85);
+            $imageContent = ob_get_clean();
+            
+            imagedestroy($gdImage);
+            imagedestroy($bg);
         }
-
-        // Crear una imagen blanca de fondo en caso de que sea un PNG transparente
-        $width = imagesx($gdImage);
-        $height = imagesy($gdImage);
-        $bg = imagecreatetruecolor($width, $height);
-        imagefill($bg, 0, 0, imagecolorallocate($bg, 255, 255, 255));
-        imagecopy($bg, $gdImage, 0, 0, 0, 0, $width, $height);
-
-        // Capturar el JPEG en memoria (calidad 85 para reducir peso)
-        ob_start();
-        imagejpeg($bg, null, 85);
-        $imageContent = ob_get_clean();
-        
-        imagedestroy($gdImage);
-        imagedestroy($bg);
 
         $contentType = 'image/jpeg';
         $extension = '.jpg';
