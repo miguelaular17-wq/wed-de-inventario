@@ -235,7 +235,7 @@ class RequisicionPersonalizadaService
 
         return $rows->map(fn (RequisicionManual $m) => [
             'codigo_completo' => $m->codigo,
-            'codigo'      => trim(explode('/', $m->codigo)[0]),
+            'codigo'      => trim(explode('/', (string) $m->codigo)[0]),
             'unidad'      => 'UND',
             'cantidad'    => $m->cantidad,
             'producto'    => $m->producto,

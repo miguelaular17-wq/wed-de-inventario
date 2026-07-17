@@ -35,7 +35,7 @@ class RequisicionExportService
             $excludeCodes,
         )
         ->map(fn (array $r) => [
-            'codigo' => $r['cod_centro'],
+            'codigo' => trim(explode('/', (string) $r['cod_centro'])[0]),
             'producto' => $r['producto'],
             'categoria' => $r['categoria'] ?? '—',
             'subcategoria' => $r['subcategoria'] ?? '—',
@@ -65,7 +65,7 @@ class RequisicionExportService
             $excludeCodes,
         )
         ->map(fn (array $r) => [
-            'codigo' => $r['cod_centro'],
+            'codigo' => trim(explode('/', (string) $r['cod_centro'])[0]),
             'unidad' => 'UND',
             'cantidad' => $r['cantidad'],
             'producto' => $r['producto'],
