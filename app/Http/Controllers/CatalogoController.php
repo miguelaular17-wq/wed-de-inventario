@@ -71,70 +71,79 @@ class CatalogoController extends Controller
 
     public function exportPdf(Request $request)
     {
-        ini_set('max_execution_time', 300); // Dar 5 minutos por si son muchos
-        ini_set('memory_limit', '512M'); // Dar más memoria para dompdf (evita error 500)
+        try {
+            ini_set('max_execution_time', 300); // Dar 5 minutos por si son muchos
+            ini_set('memory_limit', '512M'); // Dar más memoria para dompdf (evita error 500)
 
-        $query = clone $this->buildQuery($request);
-        
-        $scope = $request->input('pdf_scope', 'page');
-        if ($scope === 'page') {
-            $perPage = $request->input('per_page', 24);
-            $productos = $query->paginate($perPage);
-        } else {
-            $productos = $query->get();
-        }
-
-        $sedeFiltro = $request->sede && $request->sede !== 'todas' ? $request->sede : 'Global (Todas)';
-        $catFiltro = $request->categoria && $request->categoria !== 'todas' ? $request->categoria : 'Todas';
-        $subcatFiltro = $request->subcategoria && $request->subcategoria !== 'todas' ? $request->subcategoria : 'Todas';
-
-        $filtrosActivos = [
-            'Sede' => $sedeFiltro,
-            'Categoría' => $catFiltro,
-            'Subcategoría' => $subcatFiltro,
-        ];
-
-        $pdf = Pdf::setOptions(['isRemoteEnabled' => true])
-            ->loadView('catalogo.pdf', compact('productos', 'filtrosActivos'));
-        
-        $pdf->setPaper('A4', 'portrait');
-
-        if ($request->wantsJson() || $request->ajax()) {
-            $pdfContent = $pdf->output();
-            $fileName = 'catalogo_' . date('Ymd_His') . '.pdf';
+            $query = clone $this->buildQuery($request);
             
-            $supabaseUrl = env('SUPABASE_URL');
-            $supabaseKey = env('SUPABASE_KEY');
-            
-            if (!$supabaseUrl || !$supabaseKey) {
-                return response()->json(['success' => false, 'error' => 'Faltan credenciales SUPABASE_URL o SUPABASE_KEY en el archivo .env.'], 500);
+            $scope = $request->input('pdf_scope', 'page');
+            if ($scope === 'page') {
+                $perPage = $request->input('per_page', 24);
+                $productos = $query->paginate($perPage);
+            } else {
+                $productos = $query->get();
             }
+
+            $sedeFiltro = $request->sede && $request->sede !== 'todas' ? $request->sede : 'Global (Todas)';
+            $catFiltro = $request->categoria && $request->categoria !== 'todas' ? $request->categoria : 'Todas';
+            $subcatFiltro = $request->subcategoria && $request->subcategoria !== 'todas' ? $request->subcategoria : 'Todas';
+
+            $filtrosActivos = [
+                'Sede' => $sedeFiltro,
+                'Categoría' => $catFiltro,
+                'Subcategoría' => $subcatFiltro,
+            ];
+
+            $pdf = Pdf::setOptions(['isRemoteEnabled' => true])
+                ->loadView('catalogo.pdf', compact('productos', 'filtrosActivos'));
             
-            // Eliminar posibles slashes al final
-            $supabaseUrl = rtrim($supabaseUrl, '/');
-            $uploadUrl = "{$supabaseUrl}/storage/v1/object/catalogos/{$fileName}";
-            
-            $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
-                'Authorization' => "Bearer {$supabaseKey}",
-                'Content-Type' => 'application/pdf',
-            ])->withBody($pdfContent, 'application/pdf')->post($uploadUrl);
-            
-            if ($response->successful()) {
-                $publicUrl = "{$supabaseUrl}/storage/v1/object/public/catalogos/{$fileName}";
+            $pdf->setPaper('A4', 'portrait');
+
+            if ($request->wantsJson() || $request->ajax()) {
+                $pdfContent = $pdf->output();
+                $fileName = 'catalogo_' . date('Ymd_His') . '.pdf';
+                
+                $supabaseUrl = env('SUPABASE_URL');
+                $supabaseKey = env('SUPABASE_KEY');
+                
+                if (!$supabaseUrl || !$supabaseKey) {
+                    return response()->json(['success' => false, 'error' => 'Faltan credenciales SUPABASE_URL o SUPABASE_KEY en el archivo .env.'], 500);
+                }
+                
+                // Eliminar posibles slashes al final
+                $supabaseUrl = rtrim($supabaseUrl, '/');
+                $uploadUrl = "{$supabaseUrl}/storage/v1/object/catalogos/{$fileName}";
+                
+                $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
+                    'Authorization' => "Bearer {$supabaseKey}",
+                    'Content-Type' => 'application/pdf',
+                ])->withBody($pdfContent, 'application/pdf')->post($uploadUrl);
+                
+                if ($response->successful()) {
+                    $publicUrl = "{$supabaseUrl}/storage/v1/object/public/catalogos/{$fileName}";
+                    return response()->json([
+                        'success' => true,
+                        'url' => $publicUrl,
+                        'file_name' => $fileName
+                    ]);
+                }
+                
                 return response()->json([
-                    'success' => true,
-                    'url' => $publicUrl,
-                    'file_name' => $fileName
-                ]);
+                    'success' => false,
+                    'error' => 'Error al subir a Supabase: ' . $response->body()
+                ], 500);
             }
-            
+
+            return $pdf->download('catalogo.pdf');
+        } catch (\Throwable $e) {
             return response()->json([
-                'success' => false, 
-                'error' => 'Error al subir a Supabase: ' . $response->body()
+                'success' => false,
+                'error' => 'Excepción atrapada: ' . $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
             ], 500);
         }
-
-        return $pdf->download('catalogo.pdf');
     }
 
     public function uploadImageByUrl(Request $request)
