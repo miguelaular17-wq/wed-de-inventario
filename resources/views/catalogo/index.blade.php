@@ -452,18 +452,18 @@
                         <div class="product-title" title="{{ $prod->descripcion }}">{{ $prod->descripcion }}</div>
                         <div class="product-code">Cód: <strong>{{ $prod->codigo }}</strong></div>
                         
-                        <div class="price-box" style="display: flex; justify-content: space-between; gap: 5px;">
-                            <div style="flex: 1; text-align: left;">
-                                <span class="price-label" style="font-size: 0.7rem;">P. Unidad</span>
-                                <span class="price-value">${{ number_format($prod->precio_unidad, 2) }}</span>
+                        <div class="price-box" style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span class="price-label" style="font-size: 0.75rem;">P. Unidad</span>
+                                <span class="price-value" style="font-size: 0.9rem;">${{ number_format($prod->precio_unidad, 2) }}</span>
                             </div>
-                            <div style="flex: 1; text-align: center;">
-                                <span class="price-label" style="font-size: 0.7rem;">P. Mayor</span>
-                                <span class="price-value">${{ number_format($prod->precio_mayor, 2) }}</span>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span class="price-label" style="font-size: 0.75rem;">P. Mayor</span>
+                                <span class="price-value" style="font-size: 0.9rem;">${{ number_format($prod->precio_mayor, 2) }}</span>
                             </div>
-                            <div style="flex: 1; text-align: right;">
-                                <span class="price-label" style="font-size: 0.7rem;">Divisa (-30%)</span>
-                                <span class="price-value" style="color: #16a34a;">${{ number_format($prod->precio_unidad * 0.70, 2) }}</span>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span class="price-label" style="font-size: 0.75rem;">Divisa (-30%)</span>
+                                <span class="price-value" style="color: #16a34a; font-size: 0.9rem;">${{ number_format($prod->precio_unidad * 0.70, 2) }}</span>
                             </div>
                         </div>
                         
