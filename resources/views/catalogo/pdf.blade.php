@@ -159,7 +159,7 @@
                 $jpg_url = $base_url . rawurlencode($primary_code) . ".jpg";
 
                 // Guardar la imagen en Caché por 24 horas para acelerar las descargas posteriores
-                $base64 = \Illuminate\Support\Facades\Cache::remember('img_base64_' . $primary_code, 86400, function() use ($jpg_url) {
+                $base64 = \Illuminate\Support\Facades\Cache::remember('img_base64_v2_' . $primary_code, 86400, function() use ($jpg_url) {
                     $ch = curl_init();
                     curl_setopt($ch, CURLOPT_URL, $jpg_url);
                     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -170,6 +170,10 @@
                     curl_close($ch);
                     
                     if ($http_code == 200 && $img_data) {
+                        $isWebp = (substr($img_data, 0, 4) === 'RIFF' && substr($img_data, 8, 4) === 'WEBP');
+                        if ($isWebp) {
+                            return 'NO_IMAGE';
+                        }
                         return 'data:image/jpeg;base64,' . base64_encode($img_data);
                     }
                     
@@ -185,6 +189,10 @@
                     curl_close($ch2);
                     
                     if ($http_code_png == 200 && $img_data_png) {
+                        $isWebp = (substr($img_data_png, 0, 4) === 'RIFF' && substr($img_data_png, 8, 4) === 'WEBP');
+                        if ($isWebp) {
+                            return 'NO_IMAGE';
+                        }
                         return 'data:image/png;base64,' . base64_encode($img_data_png);
                     }
                     
