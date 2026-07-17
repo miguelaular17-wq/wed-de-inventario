@@ -136,6 +136,73 @@ class CatalogoController extends Controller
         return $pdf->download('catalogo.pdf');
     }
 
+    public function uploadImageByUrl(Request $request)
+    {
+        // Solo permitir vendedores o administradores según la vista (asumiendo vendedor, admin, supervisor)
+        if (!auth()->check() || auth()->user()->role !== 'vendedor' && !in_array(auth()->user()->role, ['admin', 'supervisor'])) {
+            return response()->json(['success' => false, 'error' => 'No tienes permiso para actualizar imágenes.'], 403);
+        }
+
+        $request->validate([
+            'codigo' => 'required|string',
+            'imagen_url' => 'required|url'
+        ]);
+
+        $codigo = $request->input('codigo');
+        $imageUrl = $request->input('imagen_url');
+
+        // 1. Descargar la imagen de la URL remota
+        $imageResponse = \Illuminate\Support\Facades\Http::withoutVerifying()->get($imageUrl);
+        
+        if (!$imageResponse->successful()) {
+            return response()->json(['success' => false, 'error' => 'No se pudo descargar la imagen de la URL proporcionada. Asegúrate de que el enlace sea público.'], 400);
+        }
+
+        $imageContent = $imageResponse->body();
+        
+        // Validar que sea una imagen (verificar tipo mime si es posible, o confiar en la extensión)
+        $contentType = $imageResponse->header('Content-Type') ?? 'image/jpeg';
+        $extension = '.jpg';
+        if (strpos($contentType, 'png') !== false || strpos(strtolower($imageUrl), '.png') !== false) {
+            $extension = '.png';
+            $contentType = 'image/png';
+        } else {
+            $contentType = 'image/jpeg';
+        }
+
+        // 2. Subir a Supabase
+        $fileName = rawurlencode($codigo) . $extension;
+        $supabaseUrl = env('SUPABASE_URL');
+        $supabaseKey = env('SUPABASE_KEY');
+
+        if (!$supabaseUrl || !$supabaseKey) {
+            return response()->json(['success' => false, 'error' => 'Credenciales de Supabase no configuradas en el servidor.'], 500);
+        }
+
+        $supabaseUrl = rtrim($supabaseUrl, '/');
+        // Usamos el endpoint para subir a 'imagenes_producto' dentro de 'imagenes'
+        $uploadUrl = "{$supabaseUrl}/storage/v1/object/imagenes_producto/imagenes/{$fileName}";
+
+        // En Supabase, para sobreescribir un archivo existente usamos un header especial o PUT
+        // Pero el método de subir por defecto es POST, si existe fallará a menos que usemos upsert=true en el header
+        $supabaseResponse = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
+            'Authorization' => "Bearer {$supabaseKey}",
+            'Content-Type' => $contentType,
+            'x-upsert' => 'true'
+        ])->withBody($imageContent, $contentType)->post($uploadUrl);
+
+        if ($supabaseResponse->successful()) {
+            // Limpiar caché de la imagen para que el PDF se actualice de inmediato
+            \Illuminate\Support\Facades\Cache::forget('img_base64_' . $codigo);
+            return response()->json(['success' => true]);
+        }
+
+        return response()->json([
+            'success' => false, 
+            'error' => 'Error al guardar la imagen en Supabase: ' . $supabaseResponse->body()
+        ], 500);
+    }
+
     private function buildQuery(Request $request)
     {
         // Seleccionamos solo las columnas necesarias

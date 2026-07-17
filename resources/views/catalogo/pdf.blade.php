@@ -170,8 +170,43 @@
                     if ($http_code == 200 && $img_data) {
                         return 'data:image/jpeg;base64,' . base64_encode($img_data);
                     }
-                    return ''; // Sin imagen
+                    
+                    // Si falla, intentamos PNG
+                    $png_url = str_replace('.jpg', '.png', $jpg_url);
+                    $ch2 = curl_init();
+                    curl_setopt($ch2, CURLOPT_URL, $png_url);
+                    curl_setopt($ch2, CURLOPT_RETURNTRANSFER, 1);
+                    curl_setopt($ch2, CURLOPT_TIMEOUT, 2);
+                    curl_setopt($ch2, CURLOPT_SSL_VERIFYPEER, false);
+                    $img_data_png = curl_exec($ch2);
+                    $http_code_png = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+                    curl_close($ch2);
+                    
+                    if ($http_code_png == 200 && $img_data_png) {
+                        return 'data:image/png;base64,' . base64_encode($img_data_png);
+                    }
+                    
+                    // Si fallan ambas, devolvemos 'NO_IMAGE'
+                    return 'NO_IMAGE';
                 });
+                
+                // Si es NO_IMAGE, cargamos la de por defecto
+                if ($base64 === 'NO_IMAGE') {
+                    $base64 = \Illuminate\Support\Facades\Cache::remember('img_base64_no_image', 86400, function() {
+                        $no_image_url = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/object/public/imagenes_producto/no-image.jpg";
+                        $ch = curl_init();
+                        curl_setopt($ch, CURLOPT_URL, $no_image_url);
+                        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+                        curl_setopt($ch, CURLOPT_TIMEOUT, 2);
+                        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                        $img_data = curl_exec($ch);
+                        curl_close($ch);
+                        if ($img_data) {
+                            return 'data:image/jpeg;base64,' . base64_encode($img_data);
+                        }
+                        return '';
+                    });
+                }
             @endphp
             <div class="product-card">
                 <div class="product-img-wrapper">

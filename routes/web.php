@@ -151,6 +151,7 @@ Route::middleware('auth')->group(function () {
     // Catálogo Gráfico
     Route::get('/catalogo', [\App\Http\Controllers\CatalogoController::class, 'index'])->name('catalogo.index');
     Route::get('/catalogo/pdf', [\App\Http\Controllers\CatalogoController::class, 'exportPdf'])->name('catalogo.pdf');
+    Route::post('/catalogo/upload-image', [\App\Http\Controllers\CatalogoController::class, 'uploadImageByUrl'])->name('catalogo.upload_image');
 
     Route::get('/notificaciones', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notificaciones/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');

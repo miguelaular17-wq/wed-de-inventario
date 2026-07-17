@@ -357,27 +357,35 @@ class FinanzasController extends Controller
                 ->where('tipo', 'egreso')
                 ->where('fecha', '>=', $fecha_minima)
                 ->get();
-
             $cambios = false;
             foreach ($lineas_pendientes as $linea) {
-                $banco_linea = strtolower(trim($linea->banco ?? ''));
+                $banco_linea  = strtolower(trim($linea->banco ?? ''));
+                $titular_linea = strtolower(trim($linea->titular ?? ''));
                 $match = null;
 
-                // Primer intento: mismo banco + mismo monto + referencia coincide
+                // Primer intento: mismo banco + mismo titular + mismo monto + referencia coincide
                 if ($linea->referencia && $banco_linea) {
-                    $match = $flujos_posibles->first(function($f) use ($linea, $banco_linea) {
-                        return strtolower(trim($f->banco ?? '')) == $banco_linea
+                    $match = $flujos_posibles->first(function($f) use ($linea, $banco_linea, $titular_linea) {
+                        $fbanco  = strtolower(trim($f->banco ?? ''));
+                        $ftit    = strtolower(trim($f->titular ?? ''));
+                        $titOk   = ($titular_linea === '' || $ftit === '' || $ftit === $titular_linea);
+                        return $fbanco == $banco_linea
+                            && $titOk
                             && ($f->monto_usd == $linea->monto || $f->monto_bs == $linea->monto)
                             && stripos($f->referencia ?? '', $linea->referencia) !== false;
                     });
                 }
-                // Segundo intento: misma fecha + mismo monto + mismo banco
+                // Segundo intento: misma fecha + mismo monto + mismo banco + mismo titular
                 if (!$match) {
-                    $match = $flujos_posibles->first(function($f) use ($linea, $banco_linea) {
+                    $match = $flujos_posibles->first(function($f) use ($linea, $banco_linea, $titular_linea) {
+                        $fbanco  = strtolower(trim($f->banco ?? ''));
+                        $ftit    = strtolower(trim($f->titular ?? ''));
+                        $titOk   = ($titular_linea === '' || $ftit === '' || $ftit === $titular_linea);
                         return \Carbon\Carbon::parse($f->fecha)->format('Y-m-d')
                                 == \Carbon\Carbon::parse($linea->fecha)->format('Y-m-d')
                             && ($f->monto_usd == $linea->monto || $f->monto_bs == $linea->monto)
-                            && (!$banco_linea || strtolower(trim($f->banco ?? '')) == $banco_linea);
+                            && (!$banco_linea || $fbanco == $banco_linea)
+                            && $titOk;
                     });
                 }
 
@@ -416,16 +424,21 @@ class FinanzasController extends Controller
         // 6. Construir estructura por banco+titular
         // Clave compuesta: "BANESCO|GRUPO JRZ"
         $bancosActivos = collect([]);
+
+        // Líneas del banco cargadas (tienen banco + titular del archivo subido)
         $lineas->each(function($l) use (&$bancosActivos) {
             $bk  = strtoupper(trim($l->banco ?? ''));
             $tit = strtoupper(trim($l->titular ?? ''));
             if ($bk) $bancosActivos->push($bk . '|' . $tit);
         });
-        // Egresos en tránsito solo tienen banco (sin titular), los agrupamos con titular vacío
+
+        // Egresos en tránsito: también tienen banco Y titular guardados en flujo_cajas
         $egresos_ayer->each(function($e) use (&$bancosActivos) {
-            $bk = strtoupper(trim($e->banco ?? ''));
-            if ($bk) $bancosActivos->push($bk . '|');
+            $bk  = strtoupper(trim($e->banco ?? ''));
+            $tit = strtoupper(trim($e->titular ?? ''));
+            if ($bk) $bancosActivos->push($bk . '|' . $tit);
         });
+
         if ($banco_filtro) {
             $bancosActivos->push(strtoupper(trim($banco_filtro)) . '|');
         }
@@ -480,14 +493,21 @@ class FinanzasController extends Controller
                     'linea_id'    => $l->id,
                 ])->values();
 
-            // En tránsito = egresos del sistema del día anterior sin conciliar
+            // En tránsito = egresos del sistema del día anterior sin conciliar (mismo banco+titular)
             $en_transito = $egresos_ayer
-                ->filter(fn($e) => strtolower(trim($e->banco ?? '')) == $bk_lower)
+                ->filter(function($e) use ($bk_lower, $tit_lower) {
+                    $ebanco = strtolower(trim($e->banco ?? ''));
+                    $etit   = strtolower(trim($e->titular ?? ''));
+                    // Si el titular de la clave está vacío (ej: filtro solo por banco), mostrar todos los del banco
+                    // Si está definido, debe coincidir exactamente
+                    return $ebanco === $bk_lower && ($tit_lower === '' || $etit === $tit_lower);
+                })
                 ->map(fn($e) => [
                     'fecha'      => $e->fecha,
                     'referencia' => $e->referencia,
                     'concepto'   => $e->concepto,
                     'motivo'     => $e->motivo,
+                    'titular'    => strtoupper(trim($e->titular ?? '')),
                     'tipo_gasto' => $e->tipo_gasto ?: $e->categoria_egreso,
                     'monto_bs'   => $e->monto_bs,
                     'monto_usd'  => $e->monto_usd,

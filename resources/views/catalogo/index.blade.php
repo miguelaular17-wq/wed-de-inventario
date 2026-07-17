@@ -414,25 +414,34 @@
     @else
         <div class="catalogo-grid">
             @foreach($productos as $prod)
-                @php
-                    $codigos = explode('/', $prod->codigo);
-                    if(count($codigos) === 1) {
-                        $codigos = explode(' ', $prod->codigo);
-                    }
-                    $primary_code = trim($codigos[0]);
-                    
-                    $base_url = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/object/public/imagenes_producto/imagenes/";
-                    $jpg_url = $base_url . rawurlencode($primary_code) . ".jpg";
-                    $png_url = $base_url . rawurlencode($primary_code) . ".png";
-                @endphp
                 <div class="product-card">
-                    <div class="product-img-wrapper">
-                        <img src="{{ $jpg_url }}" 
-                             alt="{{ $prod->descripcion }}" 
-                             class="product-img"
-                             loading="lazy"
-                             onerror="if(this.dataset.fallback === 'png') { this.dataset.fallback = 'none'; this.src='{{ asset('images/no-image.png') }}'; } else { this.dataset.fallback = 'png'; this.src='{{ $png_url }}'; }">
-                    </div>
+                    <div class="product-img-wrapper" style="position: relative;">
+                    @php
+                        $codigos = explode('/', $prod->codigo);
+                        if(count($codigos) === 1) {
+                            $codigos = explode(' ', $prod->codigo);
+                        }
+                        $primary_code = trim($codigos[0]);
+                        
+                        $base_url = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/object/public/imagenes_producto/imagenes/";
+                        $jpg_url = $base_url . rawurlencode($primary_code) . ".jpg";
+                        $png_url = $base_url . rawurlencode($primary_code) . ".png";
+                        $no_image_url = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/object/public/imagenes_producto/no-image.jpg";
+                    @endphp
+                    <img src="{{ $jpg_url }}" 
+                         alt="{{ $prod->descripcion }}" 
+                         class="product-img"
+                         loading="lazy"
+                         onerror="if(this.dataset.triedPng !== 'true') { this.dataset.triedPng = 'true'; this.src='{{ $png_url }}'; } else { this.src='{{ $no_image_url }}'; this.onerror=null; }">
+                    
+                    @if(auth()->check() && auth()->user()->role === 'vendedor')
+                        <button type="button" 
+                                onclick="pedirUrlImagen('{{ $primary_code }}')"
+                                style="position: absolute; top: 5px; right: 5px; background: rgba(255,255,255,0.9); border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; cursor: pointer; color: #1e3a8a; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                            🔗 Actualizar
+                        </button>
+                    @endif
+                </div>
                     <div class="product-info">
                         <div class="product-category">{{ $prod->categoria ?? 'Sin Categoría' }}</div>
                         <div class="product-title" title="{{ $prod->descripcion }}">{{ $prod->descripcion }}</div>
@@ -573,6 +582,42 @@
             loaderPanel.style.display = 'none';
             btnPanel.style.display = 'block';
             alert('Ocurrió un error de conexión al generar el catálogo.');
+        }
+    }
+
+    // --- LÓGICA PARA ACTUALIZAR IMAGEN VÍA URL ---
+    async function pedirUrlImagen(codigo) {
+        const nuevaUrl = prompt('Pega aquí el enlace de la nueva imagen (debe terminar en .jpg o .png):');
+        if (!nuevaUrl || nuevaUrl.trim() === '') return;
+        
+        try {
+            // Mostrar estado de carga usando un toast o alert temporal
+            window.showStatusMessage ? window.showStatusMessage('Descargando y subiendo imagen...', false) : console.log('Subiendo...');
+            
+            const response = await fetch("{{ route('catalogo.upload_image') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    codigo: codigo,
+                    imagen_url: nuevaUrl
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.success) {
+                alert('¡Imagen actualizada exitosamente!');
+                window.location.reload(); // Recargar para ver la nueva imagen
+            } else {
+                alert('Error al actualizar: ' + (data.error || 'Error desconocido'));
+            }
+        } catch (error) {
+            console.error('Fetch error:', error);
+            alert('Ocurrió un error al intentar conectarse con el servidor.');
         }
     }
 
