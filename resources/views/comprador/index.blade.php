@@ -72,7 +72,9 @@ table.data-table tbody tr.row-mala-distribucion:hover {
     @if(auth()->user()->isMarketing() || auth()->user()->isAdmin())
         <button type="button" class="tab-btn" onclick="switchTab('publicidad-tab', this)">Efectividad Publicidad</button>
     @endif
-    <button type="button" class="tab-btn" onclick="switchTab('cobranzas-tab', this)">Cobranzas</button>
+    @if(!auth()->user()->isComprador())
+        <button type="button" class="tab-btn" onclick="switchTab('cobranzas-tab', this)">Cobranzas</button>
+    @endif
 </div>
 
 <!-- Tab Cobranzas -->
@@ -325,6 +327,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             <input type="hidden" name="categoria" value="{{ request('categoria', 'Ninguno') }}">
             <input type="hidden" name="subcategoria" value="{{ request('subcategoria', 'Ninguno') }}">
             <input type="hidden" name="proveedor" value="{{ request('proveedor', 'Ninguno') }}">
+            <input type="hidden" name="sede_destino" value="{{ request('sede_destino', 'Todas') }}">
             <input type="hidden" name="status" id="status-filter" value="{{ $statusFilter ?? 'MalaDistribucion' }}">
             <input type="hidden" name="tp" value="{{ request('tp', 60) }}">
             <div style="flex: 1; max-width: 480px; position: relative;">
@@ -342,7 +345,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                 >
             </div>
             @if(!empty($q))
-                <a href="{{ route('comprador.dashboard', array_merge(request()->except('q'), ['categoria' => $selectedCategoria ?? 'Ninguno', 'subcategoria' => $selectedSubcategoria ?? 'Ninguno', 'proveedor' => $selectedProveedor ?? 'Ninguno', 'status' => $statusFilter ?? 'Todos'])) }}" style="font-size:0.82rem; color:var(--muted); text-decoration:none; white-space:nowrap;">✕ Limpiar búsqueda</a>
+                <a href="{{ route('comprador.dashboard', array_merge(request()->except('q'), ['categoria' => $selectedCategoria ?? 'Ninguno', 'subcategoria' => $selectedSubcategoria ?? 'Ninguno', 'proveedor' => $selectedProveedor ?? 'Ninguno', 'sede_destino' => $sedeDestinoFilter ?? 'Todas', 'status' => $statusFilter ?? 'Todos'])) }}" style="font-size:0.82rem; color:var(--muted); text-decoration:none; white-space:nowrap;">✕ Limpiar búsqueda</a>
             @endif
         </form>
 
@@ -377,6 +380,15 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                             <option value="{{ $subcat }}" @selected($selectedSubcategoria === $subcat)>{{ $subcat }}</option>
                         @endforeach
                     @endif
+                </select>
+            </div>
+            <div class="field">
+                <label for="sede_destino">Sede Destino</label>
+                <select id="sede_destino" name="sede_destino" onchange="this.form.submit();">
+                    <option value="Todas">Todas</option>
+                    @foreach (config('inventario.sedes_stock', ['DORAL','CENTRO','SAMBIL','VIRTUDES','JRZ','ZAMORA']) as $sede)
+                        <option value="{{ $sede }}" @selected(($sedeDestinoFilter ?? 'Todas') === $sede)>{{ config('inventario.display.'.$sede, $sede) }}</option>
+                    @endforeach
                 </select>
             </div>
             <input type="hidden" name="status" value="{{ $statusFilter ?? 'MalaDistribucion' }}">

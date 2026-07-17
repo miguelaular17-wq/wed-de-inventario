@@ -94,5 +94,88 @@ class DashboardStatsService
         Cache::forget('dashboard.productos_activos');
         Cache::forget('dashboard.movimientos_stats');
         Cache::forget('dashboard.existencia_por_sede');
+        Cache::forget('dashboard.requisiciones_hoy');
+    }
+
+    /**
+     * Estado diario de requisiciones por sede, indicando si el supervisor y telefonía
+     * ya realizaron sus requisiciones del día.
+     */
+    public function estadoRequisicionesHoy(): array
+    {
+        return Profiler::measure('DashboardStats::estadoRequisicionesHoy', fn() =>
+            Cache::remember('dashboard.requisiciones_hoy', self::TTL, function () {
+                // Ajustar al timezone local (Venezuela) para obtener qué día es "hoy" para el usuario
+                $fechaLocal = \Illuminate\Support\Carbon::now('America/Caracas')->toDateString();
+
+                // Obtener requisiciones manuales de hoy
+                $requisiciones = \App\Models\RequisicionManual::query()
+                    ->whereDate('created_at', $fechaLocal)
+                    ->get();
+
+                // Obtener nombres de usuario para buscar sus roles
+                $nombres = $requisiciones->pluck('usuario')->filter()->unique();
+
+                // Buscar usuarios (puede coincidir por name o email)
+                $usuarios = \App\Models\User::query()
+                    ->whereIn('name', $nombres)
+                    ->orWhereIn('email', $nombres)
+                    ->get()
+                    ->keyBy(function ($u) {
+                        return strtolower($u->name);
+                    });
+                
+                $usuariosPorEmail = \App\Models\User::query()
+                    ->whereIn('name', $nombres)
+                    ->orWhereIn('email', $nombres)
+                    ->get()
+                    ->keyBy(function ($u) {
+                        return strtolower($u->email);
+                    });
+
+                $sedes = config('inventario.sedes_stock', ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL']);
+                $estado = [];
+
+                foreach ($sedes as $sede) {
+                    $estado[$sede] = [
+                        'supervisor' => null,
+                        'telefonia' => null,
+                    ];
+                }
+
+                foreach ($requisiciones as $req) {
+                    $sede = strtoupper($req->sede_local);
+                    if (!isset($estado[$sede])) {
+                        continue;
+                    }
+
+                    $nombreUser = $req->usuario;
+                    if (!$nombreUser) continue;
+                    
+                    $nombreKey = strtolower($nombreUser);
+                    $user = $usuarios->get($nombreKey) ?? $usuariosPorEmail->get($nombreKey);
+                    
+                    if ($user) {
+                        if ($user->role === 'supervisor') {
+                            $estado[$sede]['supervisor'] = $user->name;
+                        } elseif ($user->role === 'telefonia') {
+                            $estado[$sede]['telefonia'] = $user->name;
+                        } else {
+                            // Si el rol es otro pero hizo la requisición, lo asignamos a supervisor por defecto si está vacío para no dejarlo en pendiente
+                            if (!$estado[$sede]['supervisor']) {
+                                $estado[$sede]['supervisor'] = $user->name . ' ('.$user->role.')';
+                            }
+                        }
+                    } else {
+                        // Si no se encuentra el rol, se anota como supervisor genérico (suele ser admin o fallback)
+                        if (!$estado[$sede]['supervisor']) {
+                            $estado[$sede]['supervisor'] = $nombreUser;
+                        }
+                    }
+                }
+
+                return $estado;
+            })
+        );
     }
 }

@@ -29,6 +29,7 @@ class DashboardController extends Controller
             'movementStats' => Profiler::measure('DashboardController::index movimientosStats', fn() => $stats->movimientosStats()),
             'lastImport'    => Profiler::measure('DashboardController::index lastStockUpdate', fn() => $products->lastStockUpdate()),
             'chartData'     => $chartData,
+            'estadoRequisiciones' => Profiler::measure('DashboardController::index estadoRequisicionesHoy', fn() => $stats->estadoRequisicionesHoy()),
         ]);
         Profiler::stop('DashboardController::index Blade render');
 
@@ -76,6 +77,24 @@ class DashboardController extends Controller
             return back()->with('status', '¡Caché de la aplicación, vistas compiladas y archivos temporales liberados con éxito!');
         } catch (\Throwable $e) {
             return back()->withErrors(['error' => 'Error al liberar memoria: ' . $e->getMessage()]);
+        }
+    }
+
+    public function clearData(): \Illuminate\Http\RedirectResponse
+    {
+        try {
+            if (config('database.default') === 'pgsql') {
+                \Illuminate\Support\Facades\DB::table('inventario_v2.sync_logs')->truncate();
+                \App\Models\V2\Movimiento::truncate();
+            } else {
+                \App\Models\StockMovement::truncate();
+                try { \Illuminate\Support\Facades\DB::table('inventario_v2.sync_logs')->truncate(); } catch(\Throwable $e) {}
+            }
+            \App\Models\RequisicionManual::truncate();
+            
+            return back()->with('status', '¡Todos los registros de movimientos, requisiciones y logs han sido borrados permanentemente!');
+        } catch (\Throwable $e) {
+            return back()->withErrors(['error' => 'Error al borrar datos: ' . $e->getMessage()]);
         }
     }
 }

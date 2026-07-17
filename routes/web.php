@@ -79,6 +79,7 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::delete('/usuarios/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::post('/config/cashea', [UserController::class, 'updateCashea'])->name('config.cashea.update');
     Route::post('/clear-cache', [DashboardController::class, 'clearCache'])->name('clear-cache');
+    Route::post('/clear-data', [DashboardController::class, 'clearData'])->name('clear-data');
     
     // Login logs
     Route::get('/inicios-sesion', [UserController::class, 'loginLogs'])->name('users.login-logs');

@@ -45,6 +45,7 @@ class CompradorController extends Controller
             $proveedor = (string) $request->query('proveedor', 'Ninguno');
             $subcategoria = (string) $request->query('subcategoria', 'Ninguno');
             $statusFilter = (string) $request->query('status', 'Todos'); // Todos, Comprar, MalaDistribucion
+            $sedeDestinoFilter = (string) $request->query('sede_destino', 'Todas');
             $page = (int) $request->query('page', 1);
             $perPage = 25;
 
@@ -88,6 +89,7 @@ class CompradorController extends Controller
                         COALESCE(SUM(ROUND((vh.ventas_60d / 60) * :tp)), 0) as total_demand,
                         COUNT(CASE WHEN COALESCE(sa.existencia, 0) < ROUND((COALESCE(vh.ventas_60d, 0) / 60) * :tp) THEN 1 END) as shortages_count,
                         COUNT(CASE WHEN COALESCE(sa.existencia, 0) > ROUND((COALESCE(vh.ventas_60d, 0) / 60) * :tp) THEN 1 END) as surpluses_count
+                        " . ($sedeDestinoFilter !== 'Todas' ? ", MAX(CASE WHEN sa.sede = :sede_destino AND COALESCE(sa.existencia, 0) < ROUND((COALESCE(vh.ventas_60d, 0) / 60) * :tp) THEN 1 ELSE 0 END) as has_target_shortage" : "") . "
                     FROM inventario_v2.productos p
                     LEFT JOIN inventario_v2.stock_actual sa ON p.id = sa.producto_id
                     LEFT JOIN inventario_v2.ventas_historicas vh ON p.id = vh.producto_id AND sa.sede = vh.sede
@@ -113,6 +115,10 @@ class CompradorController extends Controller
             } elseif ($statusFilter === 'MalaDistribucion') {
                 $cteSql .= " AND status = 'MALA DISTRIBUCIÓN'";
             }
+            if ($sedeDestinoFilter !== 'Todas') {
+                $cteSql .= " AND has_target_shortage = 1";
+                $bindings['sede_destino'] = $sedeDestinoFilter;
+            }
 
             // Cachear el resultado de la CTE (determinista mientras el stock no cambie).
             // Clave = hash de (MAX(updated_at) del stock + todos los parámetros de filtro).
@@ -126,6 +132,7 @@ class CompradorController extends Controller
                 'prov'   => $proveedor,
                 'q'      => $search,
                 'status' => $statusFilter,
+                'sede_dest' => $sedeDestinoFilter,
             ]));
 
             Profiler::start('CompradorController::index CTE query');
@@ -521,6 +528,12 @@ class CompradorController extends Controller
                     continue;
                 }
 
+                if ($sedeDestinoFilter !== 'Todas') {
+                    if (!isset($shortages[$sedeDestinoFilter]) || $shortages[$sedeDestinoFilter] <= 0) {
+                        continue;
+                    }
+                }
+
                 $status = $necesitaCompra ? 'COMPRAR' : 'MALA DISTRIBUCIÓN';
 
                 if ($statusFilter === 'Comprar' && $status !== 'COMPRAR') {
@@ -833,6 +846,7 @@ class CompradorController extends Controller
             'selectedProveedor' => $proveedor,
             'selectedSubcategoria' => $subcategoria,
             'statusFilter' => $statusFilter,
+            'sedeDestinoFilter' => $sedeDestinoFilter ?? 'Todas',
             'ssFilters' => $ssFilters,
             'ssSortBy' => $sortBy,
             'ssSortDir' => $sortDir,

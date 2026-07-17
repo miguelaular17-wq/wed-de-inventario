@@ -35,6 +35,37 @@
         <div style="position:relative;height:280px;width:100%;">
             <canvas id="stockSedesChart"></canvas>
         </div>
+        </div>
+    </div>
+
+    <!-- Estado de Requisiciones Diarias -->
+    <div style="margin:25px 0;">
+        <h3 style="margin-top:0;margin-bottom:15px;color:#1e293b;font-size:1.1rem;font-weight:600;display:flex;align-items:center;gap:8px;">
+            <span>📋</span> Estado de Requisiciones de Hoy
+        </h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;">
+            @foreach($estadoRequisiciones as $sede => $roles)
+                <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                    <h4 style="margin:0 0 10px;font-size:1rem;color:var(--blue);font-weight:700;">{{ $sede }}</h4>
+                    <div style="font-size:0.9rem;margin-bottom:6px;">
+                        <span style="font-weight:600;color:#475569;">Supervisor:</span> 
+                        @if($roles['supervisor'])
+                            <span style="color:#16a34a;">✅ {{ $roles['supervisor'] }}</span>
+                        @else
+                            <span style="color:#dc2626;">❌ Pendiente</span>
+                        @endif
+                    </div>
+                    <div style="font-size:0.9rem;">
+                        <span style="font-weight:600;color:#475569;">Telefonía:</span> 
+                        @if($roles['telefonia'])
+                            <span style="color:#16a34a;">✅ {{ $roles['telefonia'] }}</span>
+                        @else
+                            <span style="color:#dc2626;">❌ Pendiente</span>
+                        @endif
+                    </div>
+                </div>
+            @endforeach
+        </div>
     </div>
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
@@ -49,6 +80,10 @@
         <form method="POST" action="{{ route('admin.clear-cache') }}" style="display:inline;margin:0;">
             @csrf
             <button type="submit" class="btn secondary" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;" onclick="return confirm('¿Seguro que deseas vaciar la caché y limpiar los archivos temporales?')">Limpiar Caché y Liberar RAM</button>
+        </form>
+        <form method="POST" action="{{ route('admin.clear-data') }}" style="display:inline;margin:0;">
+            @csrf
+            <button type="submit" class="btn secondary" style="background:#fef2f2;color:#dc2626;border-color:#fca5a5; font-weight: bold;" onclick="return confirm('¡PELIGRO! ¿Estás absolutamente seguro de querer BORRAR TODOS los registros de movimientos, requisiciones y logs de sincronización? Esta acción NO se puede deshacer.')">Borrar Datos BDD</button>
         </form>
     </div>
 
