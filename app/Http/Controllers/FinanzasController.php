@@ -799,7 +799,10 @@ class FinanzasController extends Controller
                 fclose($handle);
             }
 
-            if (empty($all_rows)) continue;
+            if (empty($all_rows)) {
+                \Log::warning("uploadConciliacion: archivo vacio o no pudo leerse. Banco=$banco_nombre ext=$ext");
+                continue;
+            }
 
             // 3. SELECCIONAR PARSER: fijo si el banco es conocido, IA si no
             if (isset($bankMappings[$banco_nombre])) {
