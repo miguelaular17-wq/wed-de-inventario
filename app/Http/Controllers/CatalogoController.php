@@ -170,17 +170,31 @@ class CatalogoController extends Controller
 
         $imageContent = $imageResponse->body();
         
-        // Validar que sea una imagen (verificar tipo mime si es posible, o confiar en la extensión)
-        $contentType = $imageResponse->header('Content-Type') ?? 'image/jpeg';
-        $extension = '.jpg';
-        if (strpos($contentType, 'png') !== false || strpos(strtolower($imageUrl), '.png') !== false) {
-            $extension = '.png';
-            $contentType = 'image/png';
-        } else {
-            $contentType = 'image/jpeg';
+        // 2. Convertir cualquier formato de imagen (incluyendo WebP/PNG) a JPEG usando GD
+        $gdImage = @imagecreatefromstring($imageContent);
+        if (!$gdImage) {
+            return response()->json(['success' => false, 'error' => 'El enlace proporcionado no contiene una imagen válida o el formato no es compatible.'], 400);
         }
 
-        // 2. Subir a Supabase
+        // Crear una imagen blanca de fondo en caso de que sea un PNG transparente
+        $width = imagesx($gdImage);
+        $height = imagesy($gdImage);
+        $bg = imagecreatetruecolor($width, $height);
+        imagefill($bg, 0, 0, imagecolorallocate($bg, 255, 255, 255));
+        imagecopy($bg, $gdImage, 0, 0, 0, 0, $width, $height);
+
+        // Capturar el JPEG en memoria (calidad 85 para reducir peso)
+        ob_start();
+        imagejpeg($bg, null, 85);
+        $imageContent = ob_get_clean();
+        
+        imagedestroy($gdImage);
+        imagedestroy($bg);
+
+        $contentType = 'image/jpeg';
+        $extension = '.jpg';
+
+        // 3. Subir a Supabase
         $fileName = rawurlencode($codigo) . $extension;
         $supabaseUrl = env('SUPABASE_URL');
         $supabaseKey = env('SUPABASE_KEY');
