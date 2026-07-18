@@ -170,7 +170,7 @@ class CompradorController extends Controller
                 $ventasByProduct = [];
                 foreach ($dbVentas as $row) {
                     $ventasByProduct[(int) $row->producto_id][$row->sede] = [
-                        'venta_promedio' => (int) $row->venta_promedio,
+                        'venta_promedio' => (float) $row->venta_promedio,
                         'ventas_60d' => (float) $row->ventas_60d,
                         'ultima_venta' => $row->ultima_venta,
                         'ultima_compra' => $row->ultima_compra,
@@ -422,7 +422,7 @@ class CompradorController extends Controller
                 $ventasByProduct = [];
                 foreach ($dbVentas as $row) {
                     $ventasByProduct[(int) $row->producto_id][$row->sede] = [
-                        'venta_promedio' => (int) $row->venta_promedio,
+                        'venta_promedio' => (float) $row->venta_promedio,
                         'ventas_60d' => (float) $row->ventas_60d,
                         'ultima_venta' => $row->ultima_venta,
                         'ultima_compra' => $row->ultima_compra,

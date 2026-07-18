@@ -186,7 +186,7 @@ function onExportClick(e) {
                         <td style="font-weight: 500;">{{ $row['producto'] ?? '—' }}</td>
                         <td style="color: var(--muted); font-size: .9rem;">{{ $row['categoria'] ?? '—' }}</td>
                         <td style="color: var(--muted); font-size: .9rem;">{{ $row['proveedor'] ?? '—' }}</td>
-                        <td style="text-align: center; font-weight: 500;">{{ isset($row['venta_promedio']) ? (intval($row['venta_promedio']) * 15) : '0' }}</td>
+                        <td style="text-align: center; font-weight: 500;">{{ isset($row['venta_promedio']) ? round(floatval($row['venta_promedio']) * 15) : '0' }}</td>
                         <td style="text-align: center; font-weight: 500;">{{ isset($row['ventas_60d']) ? intval($row['ventas_60d']) : '0' }}</td>
                         <td style="text-align: center;">
                             @if(($row['stock'] ?? 0) > 0)

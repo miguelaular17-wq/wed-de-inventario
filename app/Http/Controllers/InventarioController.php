@@ -118,7 +118,7 @@ class InventarioController extends Controller
                 $ventasByProduct = [];
                 foreach ($dbVentas as $row) {
                     $ventasByProduct[(int) $row->producto_id][$row->sede] = [
-                        'venta_promedio' => (int) $row->venta_promedio,
+                        'venta_promedio' => (float) $row->venta_promedio,
                         'ventas_60d' => (float) $row->ventas_60d,
                         'ultima_venta' => $row->ultima_venta,
                         'ultima_compra' => $row->ultima_compra,
@@ -140,7 +140,7 @@ class InventarioController extends Controller
                         $ventaSede = $ventaMap[$s] ?? null;
                         $stocks[$s] = $stockMap[$s] ?? 0;
                         $ventasInternas[$s] = $ventaSede ? (int) $ventaSede['ventas_60d'] : 0;
-                        $ventasInternas15d[$s] = $ventaSede ? (int) $ventaSede['venta_promedio'] : 0;
+                        $ventasInternas15d[$s] = $ventaSede ? (float) $ventaSede['venta_promedio'] : 0;
                         
                         $uv = $ventaSede['ultima_venta'] ?? null;
                         $ultimasVentas[$s] = $uv ? date('d/m/Y', strtotime((string) $uv)) : null;
@@ -163,7 +163,7 @@ class InventarioController extends Controller
                         'precio_unidad'   => (float) ($item->precio_unidad ?? 0),
                         'precio_mayor'    => (float) ($item->precio_mayor ?? 0),
                         'existencia'      => $stockMap[$sede] ?? 0,
-                        'venta'           => $localVenta ? (int) $localVenta['venta_promedio'] : 0,
+                        'venta'           => $localVenta ? (float) $localVenta['venta_promedio'] : 0,
                         'ventas_60d'      => $localVenta ? (float) $localVenta['ventas_60d'] : 0.0,
                         'ultima_venta'    => $ultimaVenta ? date('d/m/Y', strtotime($ultimaVenta)) : null,
                         'stocks'          => $stocks,

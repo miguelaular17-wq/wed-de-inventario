@@ -102,7 +102,7 @@ class InventarioV2Repository
             $uv = $row->ultima_venta;
             $uc = $row->ultima_compra;
             $ventasByProduct[(int) $row->producto_id][$row->sede] = [
-                'venta_promedio' => (int) $row->venta_promedio,
+                'venta_promedio' => (float) $row->venta_promedio,
                 'ventas_60d'     => (float) $row->ventas_60d,
                 // Guardamos ya formateadas (d/m/Y). El foreach no vuelve a llamar date().
                 'ultima_venta'   => $uv ? self::formatDateDMY((string) $uv) : null,
@@ -193,7 +193,7 @@ class InventarioV2Repository
                 $ventaSede = $ventaMap[$sede] ?? null;
                 $stocks[$sede]            = $stockMap[$sede] ?? 0;
                 $ventasInternas[$sede]    = $ventaSede ? (int) $ventaSede['ventas_60d'] : 0;
-                $ventasInternas15d[$sede] = $ventaSede ? (int) $ventaSede['venta_promedio'] : 0;
+                $ventasInternas15d[$sede] = $ventaSede ? (float) $ventaSede['venta_promedio'] : 0;
                 // Fechas ya formateadas (d/m/Y) desde el caché — asignación directa
                 $ultimasVentas[$sede]  = $ventaSede['ultima_venta']  ?? null;
                 $ultimasCompras[$sede] = $ventaSede['ultima_compra'] ?? null;
@@ -209,7 +209,7 @@ class InventarioV2Repository
                 'precio_unidad'       => (float) ($p->precio_unidad ?? 0),
                 'precio_mayor'        => (float) ($p->precio_mayor ?? 0),
                 'existencia'          => $stockMap[$sedeLocal] ?? 0,
-                'venta'               => $localVenta ? (int) $localVenta['venta_promedio'] : 0,
+                'venta'               => $localVenta ? (float) $localVenta['venta_promedio'] : 0,
                 'ventas_60d'          => $localVenta ? (float) $localVenta['ventas_60d'] : 0.0,
                 'ultima_venta'        => $localVenta['ultima_venta'] ?? null,
                 'stocks'              => $stocks,
@@ -292,7 +292,7 @@ class InventarioV2Repository
         $ventasByProduct = [];
         foreach ($ventaRows as $row) {
             $ventasByProduct[(int) $row->producto_id][$row->sede] = [
-                'venta_promedio' => (int) $row->venta_promedio,
+                'venta_promedio' => (float) $row->venta_promedio,
                 'ventas_60d'     => (float) $row->ventas_60d,
                 'ultima_venta'   => $row->ultima_venta,
                 'ultima_compra'  => $row->ultima_compra,
@@ -315,7 +315,7 @@ class InventarioV2Repository
                 $ventaSede = $ventaMap[$sede] ?? null;
                 $stockValues[$sede]       = $stockMap[$sede] ?? 0;
                 $ventasInternas[$sede]    = $ventaSede ? (int) $ventaSede['ventas_60d'] : 0;
-                $ventasInternas15d[$sede] = $ventaSede ? (int) $ventaSede['venta_promedio'] : 0;
+                $ventasInternas15d[$sede] = $ventaSede ? (float) $ventaSede['venta_promedio'] : 0;
                 $uv = $ventaSede['ultima_venta'] ?? null;
                 $ultimasVentas[$sede] = $uv ? date('d/m/Y', strtotime((string) $uv)) : null;
                 $uc = $ventaSede['ultima_compra'] ?? null;
@@ -335,7 +335,7 @@ class InventarioV2Repository
                 'subcategoria'        => $p->subcategoria,
                 'proveedor'           => $p->proveedor,
                 'existencia'          => $stockMap[$sedeLocal] ?? 0,
-                'venta'               => $localVenta ? (int) $localVenta['venta_promedio'] : 0,
+                'venta'               => $localVenta ? (float) $localVenta['venta_promedio'] : 0,
                 'ventas_60d'          => $localVenta ? (float) $localVenta['ventas_60d'] : 0.0,
                 'ultima_venta'        => $ultimaVenta ? date('d/m/Y', strtotime($ultimaVenta)) : null,
                 'stocks'              => $stockValues,
@@ -431,7 +431,7 @@ class InventarioV2Repository
                     $ventaRows[] = [
                         'producto_id' => $productoId,
                         'sede' => $sede,
-                        'venta_promedio' => (int) ($m['promedio_15d'] ?? 0),
+                        'venta_promedio' => (float) ($m['promedio_15d'] ?? 0),
                         'ventas_60d' => (float) ($m['ventas_60d'] ?? 0),
                         'ultima_venta' => $m['ultima_venta'] ?? null,
                         'ultima_compra' => $m['ultima_compra'] ?? null,
@@ -633,7 +633,7 @@ class InventarioV2Repository
                 foreach (config('inventario.sedes_stock') as $sede) {
                     $sedes[$sede] = [
                         'existencia' => (int) ($p->stock->firstWhere('sede', $sede)?->existencia ?? 0),
-                        'promedio_15d' => (int) ($p->ventas->firstWhere('sede', $sede)?->venta_promedio ?? 0),
+                        'promedio_15d' => (float) ($p->ventas->firstWhere('sede', $sede)?->venta_promedio ?? 0),
                         'ventas_60d' => (float) ($p->ventas->firstWhere('sede', $sede)?->ventas_60d ?? 0),
                     ];
                 }
