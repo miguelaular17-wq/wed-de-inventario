@@ -38,6 +38,36 @@ class GastosFijosSeeder extends Seeder
                 'grupo_id' => 0,
                 'sede' => '',
                 'servicio' => 'CONDOMINIO',
+                'empresa' => 'CONDOMINIO LOCAL SAMBIL L-94',
+                'fecha' => '8 - 15 de cada mes',
+                'costo' => 300,
+                'orden' => 6,
+                'visible' => true,
+            ],
+            [
+                'grupo_id' => 0,
+                'sede' => '',
+                'servicio' => 'CONDOMINIO',
+                'empresa' => 'CONDOMINIO MIRASOL',
+                'fecha' => '1',
+                'costo' => 70,
+                'orden' => 8,
+                'visible' => true,
+            ],
+            [
+                'grupo_id' => 0,
+                'sede' => '',
+                'servicio' => 'CONDOMINIO',
+                'empresa' => 'CONDOMINIO TERRANOVA',
+                'fecha' => '8 - 15 de cada mes',
+                'costo' => 55,
+                'orden' => 0,
+                'visible' => true,
+            ],
+            [
+                'grupo_id' => 0,
+                'sede' => '',
+                'servicio' => 'CONDOMINIO',
                 'empresa' => 'CONDOMINIO BALCONES',
                 'fecha' => '8 - 15 de cada mes',
                 'costo' => 10,
@@ -77,31 +107,11 @@ class GastosFijosSeeder extends Seeder
             [
                 'grupo_id' => 0,
                 'sede' => '',
-                'servicio' => 'CONDOMINIO',
-                'empresa' => 'CONDOMINIO LOCAL SAMBIL L-94',
-                'fecha' => '8 - 15 de cada mes',
-                'costo' => 300,
-                'orden' => 6,
-                'visible' => true,
-            ],
-            [
-                'grupo_id' => 0,
-                'sede' => '',
-                'servicio' => 'CONDOMINIO',
-                'empresa' => 'CONDOMINIO MIRASOL',
-                'fecha' => '1',
-                'costo' => 70,
-                'orden' => 8,
-                'visible' => true,
-            ],
-            [
-                'grupo_id' => 0,
-                'sede' => '',
-                'servicio' => 'CONDOMINIO',
-                'empresa' => 'CONDOMINIO TERRANOVA',
-                'fecha' => '8 - 15 de cada mes',
-                'costo' => 55,
-                'orden' => 0,
+                'servicio' => 'ELECTRICIDAD',
+                'empresa' => '',
+                'fecha' => '',
+                'costo' => 0,
+                'orden' => 10,
                 'visible' => true,
             ],
             [
@@ -117,16 +127,6 @@ class GastosFijosSeeder extends Seeder
             [
                 'grupo_id' => 0,
                 'sede' => '',
-                'servicio' => 'ELECTRICIDAD',
-                'empresa' => '',
-                'fecha' => '',
-                'costo' => 0,
-                'orden' => 10,
-                'visible' => true,
-            ],
-            [
-                'grupo_id' => 0,
-                'sede' => '',
                 'servicio' => 'INTERNET',
                 'empresa' => 'BESSER SOLUTIONS MIRASOL',
                 'fecha' => '17',
@@ -135,7 +135,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'ALQUILER LOCALES PB-09 PB-10',
                 'empresa' => 'DESCARGADORES MARITIMOS',
@@ -145,7 +145,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'ASEO URBANO LOCALES PB-09 Y PB-10',
                 'empresa' => 'SUMITCA',
@@ -155,7 +155,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'CONDOMINIO LOCALES PB-09 Y PB-10',
                 'empresa' => 'CONDOMINIO CENTRO COMERCIAL DORAL',
@@ -165,7 +165,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => false,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'ELECTRICIDAD Y RELLENO LOCALES PB-09 Y PB-10',
                 'empresa' => 'CORPOELEC / PROTECNIA FALCON',
@@ -175,7 +175,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'INTERNET LOCALES PB-09 Y PB-10',
                 'empresa' => 'AIRTEK',
@@ -185,7 +185,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'MERCADO LIBRE',
                 'empresa' => 'IMPUESTO MENSUAL POR VENTAS',
@@ -195,7 +195,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'MONITOREO Y SOPORTE SERVIDOR',
                 'empresa' => 'INFORMATICA UNIX',
@@ -205,7 +205,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'PUBLICIDAD RADIAL',
                 'empresa' => 'HIT FM (LENIS)',
@@ -215,17 +215,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
-                'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
-                'servicio' => 'PUBLICIDAD RADIAL',
-                'empresa' => 'EDUARDO VASQUEZ',
-                'fecha' => '24',
-                'costo' => 60,
-                'orden' => 7,
-                'visible' => true,
-            ],
-            [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'PUBLICIDAD RADIAL',
                 'empresa' => 'EMIRO BRAVO',
@@ -235,17 +225,17 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
-                'servicio' => 'PUBLICIDAD REDES',
-                'empresa' => 'GEEK ELECTRONICO (ADONIS)',
-                'fecha' => '30',
-                'costo' => 30,
-                'orden' => 6,
+                'servicio' => 'PUBLICIDAD RADIAL',
+                'empresa' => 'EDUARDO VASQUEZ',
+                'fecha' => '24',
+                'costo' => 60,
+                'orden' => 7,
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'PUBLICIDAD REDES',
                 'empresa' => 'ZINLI',
@@ -255,17 +245,17 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
-                'servicio' => 'RECARGA TELEFONO CHOFER',
-                'empresa' => 'GREGORIO COLINA',
-                'fecha' => '17',
-                'costo' => 13,
-                'orden' => 12,
+                'servicio' => 'PUBLICIDAD REDES',
+                'empresa' => 'GEEK ELECTRONICO (ADONIS)',
+                'fecha' => '30',
+                'costo' => 30,
+                'orden' => 6,
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'RECARGA TELEFONO CHOFER',
                 'empresa' => 'LUIS GARCIA',
@@ -275,7 +265,17 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
+                'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
+                'servicio' => 'RECARGA TELEFONO CHOFER',
+                'empresa' => 'GREGORIO COLINA',
+                'fecha' => '17',
+                'costo' => 13,
+                'orden' => 12,
+                'visible' => true,
+            ],
+            [
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'RECARGA TELEFONO REDES',
                 'empresa' => 'REDES DORAL',
@@ -285,7 +285,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'RECARGA TELEFONOS CORPORATIVOS',
                 'empresa' => 'CORPORACION DIGITEL',
@@ -295,7 +295,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296',
                 'servicio' => 'TU MARCA CLOUD MAI SERVICES, C.A.',
                 'empresa' => 'RICARDO MAITA',
@@ -305,7 +305,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. SUCURSAL SAMBIL J401722296',
                 'servicio' => 'ASEO URBANO LOCAL L-114',
                 'empresa' => 'SUMITCA',
@@ -315,7 +315,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. SUCURSAL SAMBIL J401722296',
                 'servicio' => 'CONDOMINIO LOCAL L-114',
                 'empresa' => 'A.S. 20 PARAGUANÁ, C.A.',
@@ -325,7 +325,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. SUCURSAL SAMBIL J401722296',
                 'servicio' => 'INTERNET LOCAL L-114',
                 'empresa' => 'BESSER SOLUTIONS',
@@ -335,7 +335,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. SUCURSAL SAMBIL J401722296',
                 'servicio' => 'MONITOREO Y SOPORTE SERVIDOR',
                 'empresa' => 'INFORMATICA UNIX',
@@ -345,7 +345,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'INVERSIONES DORAL PARAGUANÁ, C.A. SUCURSAL SAMBIL J401722296',
                 'servicio' => 'RECARGA TELEFONO ENCARGADO SAMBIL',
                 'empresa' => 'AURELES LUGO',
@@ -355,7 +355,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'OFICINAS ADMINISTRACION',
                 'servicio' => 'CONDOMINIO LOCAL PA-22',
                 'empresa' => 'CONDOMINIO CENTRO COMERCIAL DORAL',
@@ -365,7 +365,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'OFICINAS ADMINISTRACION',
                 'servicio' => 'ELECTRICIDAD Y RELLENO LOCAL PA-22',
                 'empresa' => 'CORPOELEC / PROTECNIA FALCON',
@@ -375,7 +375,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 1,
+                'grupo_id' => 0,
                 'sede' => 'OFICINAS ADMINISTRACION',
                 'servicio' => 'INTERNET LOCAL PA-22',
                 'empresa' => 'AIRTEK',
@@ -385,17 +385,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
-                'sede' => '',
-                'servicio' => 'AYUDA',
-                'empresa' => 'MARBETH JEREZ (HERMANA)',
-                'fecha' => 'Todos los Lunes',
-                'costo' => 400,
-                'orden' => 7,
-                'visible' => true,
-            ],
-            [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => '',
                 'servicio' => 'AYUDA',
                 'empresa' => 'AGUSTIN JEREZ (PAPA)',
@@ -405,7 +395,17 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
+                'sede' => '',
+                'servicio' => 'AYUDA',
+                'empresa' => 'MARBETH JEREZ (HERMANA)',
+                'fecha' => 'Todos los Lunes',
+                'costo' => 400,
+                'orden' => 7,
+                'visible' => true,
+            ],
+            [
+                'grupo_id' => 1,
                 'sede' => '',
                 'servicio' => 'AYUDA',
                 'empresa' => 'MARTA (TIA)',
@@ -415,7 +415,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => '',
                 'servicio' => 'COLEGIO CESAR',
                 'empresa' => 'CENTRO CIVICO CARDON (U.E. COLEGIO)',
@@ -425,7 +425,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => '',
                 'servicio' => 'COLEGIO NAHOMI',
                 'empresa' => 'U.E. NUESTRA SEÑORA DEL CARMEN',
@@ -435,7 +435,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => '',
                 'servicio' => 'CONDOMINIO',
                 'empresa' => 'CONDOMINIO SAN ROMAN',
@@ -445,7 +445,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => '',
                 'servicio' => 'INGLES CESAR',
                 'empresa' => 'LANGUAGE CENTER',
@@ -455,7 +455,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => '',
                 'servicio' => 'INTERNET',
                 'empresa' => 'BESSER SOLUTIONS MARIA FATIMA',
@@ -465,7 +465,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => '',
                 'servicio' => 'INTERNET',
                 'empresa' => 'BESSER SOLUTIONS DIRECTIVO',
@@ -475,7 +475,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => '',
                 'servicio' => 'NATACION CESAR',
                 'empresa' => 'AQUA CLUB',
@@ -485,7 +485,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => '',
                 'servicio' => 'POLIZA DE SEGUROS',
                 'empresa' => 'MERCANTIL SEGUROS',
@@ -495,7 +495,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => '',
                 'servicio' => 'RECARGA TELEFONICA DIGITEL',
                 'empresa' => 'ABONO A NRO TLF PERSONAL BS.2000',
@@ -505,7 +505,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => '',
                 'servicio' => 'TAREAS DIRIGIDAS CESAR',
                 'empresa' => '',
@@ -515,7 +515,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'EURONISSI, C.A. J412919512 (TIENDA MOVISTAR)',
                 'servicio' => 'ASEO URBANO LOCAL M1-2',
                 'empresa' => 'SUMITCA',
@@ -525,7 +525,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'EURONISSI, C.A. J412919512 (TIENDA MOVISTAR)',
                 'servicio' => 'CONDOMINIO LOCAL M1-2',
                 'empresa' => 'CONDOMINIO CENTRO COMERCIAL VIRTUDES',
@@ -535,7 +535,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'EURONISSI, C.A. J412919512 (TIENDA MOVISTAR)',
                 'servicio' => 'INTERNET LOCAL M1-2',
                 'empresa' => 'BESSER SOLUTIONS',
@@ -545,7 +545,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'EURONISSI, C.A. J412919512 (TIENDA MOVISTAR)',
                 'servicio' => 'MONITOREO Y SOPORTE SERVIDOR',
                 'empresa' => 'INFORMATICA UNIX',
@@ -555,7 +555,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'GRUPO JRZ TECH ELECTRONICS, C.A. J501653895',
                 'servicio' => 'ELECTRICIDAD Y RELLENO DEPÓSITO',
                 'empresa' => 'CORPOELEC',
@@ -565,7 +565,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'GRUPO JRZ TECH ELECTRONICS, C.A. J501653895',
                 'servicio' => 'INTERNET DEPÓSITO DOÑA EMILIA',
                 'empresa' => 'AIRTEK',
@@ -575,7 +575,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'GRUPO JRZ TECH ELECTRONICS, C.A. J501653895',
                 'servicio' => 'MONITOREO Y SOPORTE SERVIDOR',
                 'empresa' => 'INFORMATICA UNIX',
@@ -585,7 +585,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. PRINCIPAL J409254852',
                 'servicio' => 'ALQUILER LOCAL H-6',
                 'empresa' => 'INVERSIONES MILLENIUM',
@@ -595,7 +595,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. PRINCIPAL J409254852',
                 'servicio' => 'ASEO URBANO LOCAL H-6',
                 'empresa' => 'SUMITCA',
@@ -605,7 +605,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. PRINCIPAL J409254852',
                 'servicio' => 'CONDOMINIO LOCAL H-12',
                 'empresa' => 'CONDOMINIO CENTRO COMERCIAL VIRTUDES',
@@ -615,7 +615,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. PRINCIPAL J409254852',
                 'servicio' => 'CONDOMINIO LOCAL H-6',
                 'empresa' => 'CONDOMINIO CENTRO COMERCIAL VIRTUDES',
@@ -625,7 +625,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. PRINCIPAL J409254852',
                 'servicio' => 'INTERNET LOCAL H-6',
                 'empresa' => 'BESSER SOLUTIONS',
@@ -635,7 +635,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. PRINCIPAL J409254852',
                 'servicio' => 'MONITOREO Y SOPORTE SERVIDOR',
                 'empresa' => 'INFORMATICA UNIX',
@@ -645,7 +645,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL BOLIVAR J409254852',
                 'servicio' => 'ALQUILER LOCAL HADI 3000',
                 'empresa' => 'MOHAMED NAIMM',
@@ -655,7 +655,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL BOLIVAR J409254852',
                 'servicio' => 'ASEO URBANO LOCAL HADI 3000',
                 'empresa' => 'SUMITCA',
@@ -665,7 +665,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL BOLIVAR J409254852',
                 'servicio' => 'CUSTODIA LOCAL HADI 3000',
                 'empresa' => 'POLICARUBANA',
@@ -675,7 +675,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL BOLIVAR J409254852',
                 'servicio' => 'ELECTRICIDAD Y RELLENO LOCAL HADI 3000',
                 'empresa' => 'CORPOELEC / PROTECNIA FALCON',
@@ -685,7 +685,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL BOLIVAR J409254852',
                 'servicio' => 'INTERNET LOCAL HADI 3000',
                 'empresa' => 'AIRTEK',
@@ -695,7 +695,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL BOLIVAR J409254852',
                 'servicio' => 'MONITOREO Y SOPORTE SERVIDOR',
                 'empresa' => 'INFORMATICA UNIX',
@@ -705,7 +705,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL ZAMORA J409254852',
                 'servicio' => 'AGUA LOCAL SHANGHAI',
                 'empresa' => 'HIDROFALCÓN',
@@ -715,7 +715,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL ZAMORA J409254852',
                 'servicio' => 'ALQUILER LOCAL SHANGHAI',
                 'empresa' => 'JESUS SANCHEZ',
@@ -725,7 +725,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL ZAMORA J409254852',
                 'servicio' => 'ASEO URBANO LOCAL SHANGHAI',
                 'empresa' => 'SUMITCA',
@@ -735,7 +735,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL ZAMORA J409254852',
                 'servicio' => 'CUSTODIA LOCAL SHANGHAI',
                 'empresa' => 'POLICARIRUBANA',
@@ -745,7 +745,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL ZAMORA J409254852',
                 'servicio' => 'ELECTRICIDAD Y RELLENO SHANGHAI',
                 'empresa' => 'CORPOELEC / PROTECNIA FALCON',
@@ -755,7 +755,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL ZAMORA J409254852',
                 'servicio' => 'INTERNET LOCAL SHANGHAI',
                 'empresa' => 'AIRTEK',
@@ -765,7 +765,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL ZAMORA J409254852',
                 'servicio' => 'MONITOREO Y SOPORTE SERVIDOR',
                 'empresa' => 'INFORMATICA UNIX',
@@ -775,7 +775,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL ZAMORA J409254852',
                 'servicio' => 'RECARGA TELEFONO CAJA ZAMORA',
                 'empresa' => 'CARLOS GOMEZ',
@@ -785,7 +785,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL ZAMORA J409254852',
                 'servicio' => 'RECARGA TELEFONO SUPERVISOR 2 ZAMORA',
                 'empresa' => 'AURELES LUGO',
@@ -795,7 +795,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL ZAMORA J409254852',
                 'servicio' => 'RECARGA TELEFONO SUPERVISOR ZAMORA',
                 'empresa' => 'CARLOS GOMEZ',
@@ -805,7 +805,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'LNACEH SPORT, C.A. SUCURSAL ZAMORA J409254852',
                 'servicio' => 'RECARGA TELEFONO TELEFONIA ZAMORA',
                 'empresa' => 'AURELES LUGO',
@@ -815,7 +815,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'NUNES STORE, C.A. J501653879',
                 'servicio' => 'ASEO URBANO LOCAL L-11 / H-12',
                 'empresa' => 'SUMITCA',
@@ -825,7 +825,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'NUNES STORE, C.A. J501653879',
                 'servicio' => 'CONDOMINIO LOCAL H-12',
                 'empresa' => 'CONDOMINIO CENTRO COMERCIAL VIRTUDES',
@@ -835,7 +835,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'NUNES STORE, C.A. J501653879',
                 'servicio' => 'CONDOMINIO LOCAL L-11',
                 'empresa' => 'A.S. 20 PARAGUANÁ, C.A.',
@@ -845,7 +845,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'NUNES STORE, C.A. J501653879',
                 'servicio' => 'INTERNET LOCAL L-11',
                 'empresa' => 'BESSER SOLUTIONS',
@@ -855,7 +855,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'NUNES STORE, C.A. J501653879',
                 'servicio' => 'MONITOREO Y SOPORTE SERVIDOR',
                 'empresa' => 'INFORMATICA UNIX',
@@ -865,7 +865,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 2,
+                'grupo_id' => 1,
                 'sede' => 'NUNES STORE, C.A. J501653879',
                 'servicio' => 'RECARGA TELEFONO ENCARGADO NUNES',
                 'empresa' => 'NUNES STORE',
@@ -875,7 +875,7 @@ class GastosFijosSeeder extends Seeder
                 'visible' => true,
             ],
             [
-                'grupo_id' => 3,
+                'grupo_id' => 2,
                 'sede' => 'GALPON BELLA VISTA V32089692',
                 'servicio' => 'INTERNET GALPON',
                 'empresa' => 'AIRTEK',
