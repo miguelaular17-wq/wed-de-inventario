@@ -423,9 +423,9 @@
                                 <td class="col-sede">{{ $fila['sede'] ?? '' }}</td>
                             @endif
                             <td class="col-servicio">{{ $fila['servicio'] }}</td>
-                            <td class="col-fecha editable" contenteditable="true" data-type="fecha" data-tidx="{{ $tIndex }}" data-fidx="{{ $fila['fidx'] }}">{{ $fila['fecha'] }}</td>
+                            <td class="col-fecha editable" ondblclick="openFechaModal({{ $fila['id'] }}, this)" data-type="fecha" data-fidx="{{ $fila['id'] }}">{{ $fila['fecha'] }}</td>
                             <td class="col-empresa">{{ $fila['empresa'] }}</td>
-                            <td class="col-costo editable {{ $fila['costo'] > 0 ? 'has-value' : 'no-value' }}" contenteditable="true" data-type="costo" data-tidx="{{ $tIndex }}" data-fidx="{{ $fila['fidx'] }}" data-original="{{ $fila['costo'] > 0 ? number_format($fila['costo'], 2, '.', '') : '' }}">
+                            <td class="col-costo editable {{ $fila['costo'] > 0 ? 'has-value' : 'no-value' }}" contenteditable="true" data-type="costo" data-tidx="{{ $tIndex }}" data-fidx="{{ $fila['id'] }}" data-original="{{ $fila['costo'] > 0 ? number_format($fila['costo'], 2, '.', '') : '' }}">
                                 @if($fila['costo'] > 0)
                                     {{ number_format($fila['costo'], 2, '.', '') }}
                                 @else
@@ -434,12 +434,12 @@
                             </td>
                             @for($m = 0; $m < $mesActual; $m++)
                                 @php $val = $fila['meses'][$m] ?? null; @endphp
-                                <td class="col-mes editable {{ $val !== null ? 'has-value' : 'no-value' }}" contenteditable="true" data-type="monto" data-tidx="{{ $tIndex }}" data-fidx="{{ $fila['fidx'] }}" data-midx="{{ $m }}" data-original="{{ $val !== null ? number_format($val, 2, '.', '') : '' }}">
+                                <td class="col-mes editable {{ $val !== null ? 'has-value' : 'no-value' }}" contenteditable="true" data-type="monto" data-tidx="{{ $tIndex }}" data-fidx="{{ $fila['id'] }}" data-midx="{{ $m }}" data-original="{{ $val !== null ? number_format($val, 2, '.', '') : '' }}">
                                     {{ $val !== null ? number_format($val, 2, '.', '') : '' }}
                                 </td>
                             @endfor
                             <td class="col-accion">
-                                <button class="btn-del-row" onclick="deleteRow({{ $tIndex }}, {{ $fila['fidx'] }}, {{ isset($fila['custom_id']) ? $fila['custom_id'] : 'null' }}, this)" title="Eliminar fila">✖</button>
+                                <button class="btn-del-row" onclick="deleteRow({{ $fila['id'] }}, this)" title="Eliminar fila">✖</button>
                             </td>
                         </tr>
                     @endforeach
@@ -502,7 +502,37 @@
         <input type="text" id="modal-empresa" placeholder="Ej: AIRTEK, CORPOELEC...">
 
         <label>Fecha de Pago (Opcional)</label>
-        <input type="text" id="modal-fecha" placeholder="Ej: 15 de cada mes">
+        <select id="add-fecha-tipo" style="margin-bottom: 12px;" onchange="toggleAddFechaInputs()">
+            <option value="dia">Un día específico del mes</option>
+            <option value="rango">Un rango de días en el mes</option>
+            <option value="semana">Un día de la semana</option>
+            <option value="libre">Texto Libre</option>
+        </select>
+
+        <div id="add-fecha-input-dia">
+            <input type="number" id="add-fecha-val-dia" min="1" max="31" placeholder="Día del mes (Ej: 15)">
+        </div>
+
+        <div id="add-fecha-input-rango" style="display:none; gap: 8px; flex-direction: column;">
+            <input type="number" id="add-fecha-val-rango-1" min="1" max="31" placeholder="Desde el día (Ej: 1)" style="margin-bottom: 8px;">
+            <input type="number" id="add-fecha-val-rango-2" min="1" max="31" placeholder="Hasta el día (Ej: 5)">
+        </div>
+
+        <div id="add-fecha-input-semana" style="display:none;">
+            <select id="add-fecha-val-semana">
+                <option value="Lunes">Todos los Lunes</option>
+                <option value="Martes">Todos los Martes</option>
+                <option value="Miercoles">Todos los Miércoles</option>
+                <option value="Jueves">Todos los Jueves</option>
+                <option value="Viernes">Todos los Viernes</option>
+                <option value="Sabado">Todos los Sábados</option>
+                <option value="Domingo">Todos los Domingos</option>
+            </select>
+        </div>
+
+        <div id="add-fecha-input-libre" style="display:none;">
+            <input type="text" id="add-fecha-val-libre" placeholder="Ej: Aviso de SUMITCA">
+        </div>
 
         <label>Costo Estimado ($)</label>
         <input type="number" id="modal-costo" step="0.01" min="0" placeholder="0.00">
@@ -514,6 +544,57 @@
     </div>
 </div>
 
+<!-- Modal para Configurar Fecha -->
+<div class="gf-modal-bg" id="modalFechaGasto">
+    <div class="gf-modal">
+        <h3>Configurar Fecha de Pago</h3>
+        <input type="hidden" id="modal-fecha-fidx" value="">
+        <input type="hidden" id="modal-fecha-cell" value="">
+        
+        <label>Tipo de Fecha</label>
+        <select id="modal-fecha-tipo" style="margin-bottom: 12px;" onchange="toggleFechaInputs()">
+            <option value="dia">Un día específico del mes</option>
+            <option value="rango">Un rango de días en el mes</option>
+            <option value="semana">Un día de la semana</option>
+            <option value="libre">Texto Libre</option>
+        </select>
+
+        <div id="fecha-input-dia">
+            <label>Día del mes (Ej: 15)</label>
+            <input type="number" id="fecha-val-dia" min="1" max="31" placeholder="Ej: 15">
+        </div>
+
+        <div id="fecha-input-rango" style="display:none;">
+            <label>Desde el día</label>
+            <input type="number" id="fecha-val-rango-1" min="1" max="31" placeholder="Ej: 1">
+            <label>Hasta el día</label>
+            <input type="number" id="fecha-val-rango-2" min="1" max="31" placeholder="Ej: 5">
+        </div>
+
+        <div id="fecha-input-semana" style="display:none;">
+            <label>Día de la semana</label>
+            <select id="fecha-val-semana">
+                <option value="Lunes">Todos los Lunes</option>
+                <option value="Martes">Todos los Martes</option>
+                <option value="Miercoles">Todos los Miércoles</option>
+                <option value="Jueves">Todos los Jueves</option>
+                <option value="Viernes">Todos los Viernes</option>
+                <option value="Sabado">Todos los Sábados</option>
+                <option value="Domingo">Todos los Domingos</option>
+            </select>
+        </div>
+
+        <div id="fecha-input-libre" style="display:none;">
+            <label>Texto Libre</label>
+            <input type="text" id="fecha-val-libre" placeholder="Ej: Aviso de SUMITCA">
+        </div>
+
+        <div class="gf-modal-actions">
+            <button class="btn-modal-cancel" onclick="closeFechaModal()">Cancelar</button>
+            <button class="btn-modal-save" onclick="saveFechaModal(this)">Guardar Fecha</button>
+        </div>
+    </div>
+</div>
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
@@ -659,25 +740,7 @@ document.querySelectorAll('.gf-table td.editable').forEach(cell => {
                 this.classList.add('error');
                 this.innerText = original;
             });
-        } else if (type === 'fecha') {
-            fetch("{{ route('finanzas.gastos_fijos.fecha') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-                body: JSON.stringify({ tabla_idx: tIdx, fila_idx: fIdx, fecha: val })
-            }).then(async res => {
-                if (!res.ok) throw new Error(await res.text());
-                return res.json();
-            }).then(data => {
-                this.classList.remove('saving');
-                if (data.ok) {
-                    this.setAttribute('data-original', val);
-                    this.classList.add('success');
-                    setTimeout(() => this.classList.remove('success'), 1000);
-                } else {
-                    this.classList.add('error');
-                    this.innerText = original;
-                }
-            });
+
         } else if (type === 'costo') {
             const numVal = val === '' ? null : parseFloat(val.replace(',', ''));
             fetch("{{ route('finanzas.gastos_fijos.costo') }}", {
@@ -784,6 +847,14 @@ document.getElementById('modal-sede-select').addEventListener('change', function
     }
 });
 
+function toggleAddFechaInputs() {
+    const tipo = document.getElementById('add-fecha-tipo').value;
+    document.getElementById('add-fecha-input-dia').style.display = tipo === 'dia' ? 'block' : 'none';
+    document.getElementById('add-fecha-input-rango').style.display = tipo === 'rango' ? 'flex' : 'none';
+    document.getElementById('add-fecha-input-semana').style.display = tipo === 'semana' ? 'block' : 'none';
+    document.getElementById('add-fecha-input-libre').style.display = tipo === 'libre' ? 'block' : 'none';
+}
+
 function openAddModal(tIdx, tieneSede) {
     document.getElementById('modal-tidx').value = tIdx;
     document.getElementById('modal-sede-container').style.display = tieneSede ? 'block' : 'none';
@@ -812,7 +883,16 @@ function openAddModal(tIdx, tieneSede) {
     selectSede.value = '';
     document.getElementById('modal-servicio').value = '';
     document.getElementById('modal-empresa').value = '';
-    document.getElementById('modal-fecha').value = '';
+    
+    // Reset date fields
+    document.getElementById('add-fecha-tipo').value = 'dia';
+    document.getElementById('add-fecha-val-dia').value = '';
+    document.getElementById('add-fecha-val-rango-1').value = '';
+    document.getElementById('add-fecha-val-rango-2').value = '';
+    document.getElementById('add-fecha-val-semana').value = 'Lunes';
+    document.getElementById('add-fecha-val-libre').value = '';
+    toggleAddFechaInputs();
+    
     document.getElementById('modal-costo').value = '';
 
     document.getElementById('modalAddGasto').classList.add('open');
@@ -828,7 +908,26 @@ function saveNewRow(btn) {
     const sede = selectValue === 'OTRA' ? document.getElementById('modal-sede').value.trim() : selectValue;
     const servicio = document.getElementById('modal-servicio').value.trim();
     const empresa = document.getElementById('modal-empresa').value.trim();
-    const fecha = document.getElementById('modal-fecha').value.trim();
+    
+    // Parse Date string
+    const tipo = document.getElementById('add-fecha-tipo').value;
+    let fechaStr = '';
+    if (tipo === 'dia') {
+        const d = document.getElementById('add-fecha-val-dia').value;
+        if (!d) return alert("Ingresa el día.");
+        fechaStr = d;
+    } else if (tipo === 'rango') {
+        const d1 = document.getElementById('add-fecha-val-rango-1').value;
+        const d2 = document.getElementById('add-fecha-val-rango-2').value;
+        if (!d1 || !d2) return alert("Ingresa ambos días del rango.");
+        fechaStr = `${d1} - ${d2} de cada mes`;
+    } else if (tipo === 'semana') {
+        const s = document.getElementById('add-fecha-val-semana').value;
+        fechaStr = `Todos los ${s}`;
+    } else {
+        fechaStr = document.getElementById('add-fecha-val-libre').value.trim();
+    }
+    
     const costo = parseFloat(document.getElementById('modal-costo').value) || 0;
 
     if (!servicio) {
@@ -847,7 +946,7 @@ function saveNewRow(btn) {
             sede: sede,
             servicio: servicio,
             empresa: empresa,
-            fecha: fecha,
+            fecha: fechaStr,
             costo: costo
         })
     }).then(async res => {
@@ -906,6 +1005,109 @@ function deleteRow(tIdx, fIdx, customId, btn) {
         btn.style.opacity = '1';
     });
 }
+
+// ── Lógica Modal Fecha ──
+let currentFechaCell = null;
+
+function toggleFechaInputs() {
+    const tipo = document.getElementById('modal-fecha-tipo').value;
+    document.getElementById('fecha-input-dia').style.display = tipo === 'dia' ? 'block' : 'none';
+    document.getElementById('fecha-input-rango').style.display = tipo === 'rango' ? 'block' : 'none';
+    document.getElementById('fecha-input-semana').style.display = tipo === 'semana' ? 'block' : 'none';
+    document.getElementById('fecha-input-libre').style.display = tipo === 'libre' ? 'block' : 'none';
+}
+
+window.openFechaModal = function(fIdx, cell) {
+    document.getElementById('modal-fecha-fidx').value = fIdx;
+    currentFechaCell = cell;
+    
+    // Parse current value to set defaults if possible
+    const currentVal = cell.innerText.trim().toLowerCase();
+    
+    if (currentVal.match(/^\d+$/)) {
+        document.getElementById('modal-fecha-tipo').value = 'dia';
+        document.getElementById('fecha-val-dia').value = currentVal;
+    } else if (currentVal.includes('-') && currentVal.includes('cada mes')) {
+        document.getElementById('modal-fecha-tipo').value = 'rango';
+        const parts = currentVal.match(/(\d+)\s*-\s*(\d+)/);
+        if (parts) {
+            document.getElementById('fecha-val-rango-1').value = parts[1];
+            document.getElementById('fecha-val-rango-2').value = parts[2];
+        }
+    } else if (currentVal.includes('lunes') || currentVal.includes('martes') || currentVal.includes('miercoles') || currentVal.includes('jueves') || currentVal.includes('viernes') || currentVal.includes('sabado') || currentVal.includes('domingo')) {
+        document.getElementById('modal-fecha-tipo').value = 'semana';
+        const dias = ['Lunes','Martes','Miercoles','Jueves','Viernes','Sabado','Domingo'];
+        const found = dias.find(d => currentVal.includes(d.toLowerCase()));
+        if (found) document.getElementById('fecha-val-semana').value = found;
+    } else {
+        document.getElementById('modal-fecha-tipo').value = 'libre';
+        document.getElementById('fecha-val-libre').value = cell.innerText.trim();
+    }
+    
+    toggleFechaInputs();
+    document.getElementById('modalFechaGasto').classList.add('open');
+};
+
+function closeFechaModal() {
+    document.getElementById('modalFechaGasto').classList.remove('open');
+    currentFechaCell = null;
+}
+
+window.saveFechaModal = function(btn) {
+    const fIdx = document.getElementById('modal-fecha-fidx').value;
+    const tipo = document.getElementById('modal-fecha-tipo').value;
+    let fechaStr = '';
+
+    if (tipo === 'dia') {
+        const d = document.getElementById('fecha-val-dia').value;
+        if (!d) return alert("Ingresa el día.");
+        fechaStr = d; // "8"
+    } else if (tipo === 'rango') {
+        const d1 = document.getElementById('fecha-val-rango-1').value;
+        const d2 = document.getElementById('fecha-val-rango-2').value;
+        if (!d1 || !d2) return alert("Ingresa ambos días del rango.");
+        fechaStr = `${d1} - ${d2} de cada mes`;
+    } else if (tipo === 'semana') {
+        const s = document.getElementById('fecha-val-semana').value;
+        fechaStr = `Todos los ${s}`;
+    } else {
+        fechaStr = document.getElementById('fecha-val-libre').value.trim();
+    }
+
+    if (!fechaStr) {
+        alert("La fecha no puede estar vacía.");
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = 'Guardando...';
+
+    fetch("{{ route('finanzas.gastos_fijos.fecha') }}", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+        body: JSON.stringify({ gasto_fijo_id: fIdx, fecha: fechaStr })
+    }).then(async res => {
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+    }).then(data => {
+        if (data.ok) {
+            closeFechaModal();
+            if (currentFechaCell) {
+                currentFechaCell.innerText = fechaStr;
+                currentFechaCell.classList.add('success');
+                setTimeout(() => currentFechaCell.classList.remove('success'), 1000);
+            }
+        } else {
+            alert("Error al guardar.");
+        }
+    }).catch(err => {
+        console.error(err);
+        alert("Error de conexión.");
+    }).finally(() => {
+        btn.disabled = false;
+        btn.innerText = 'Guardar Fecha';
+    });
+};
 </script>
 
 @endsection

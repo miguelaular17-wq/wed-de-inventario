@@ -1427,249 +1427,58 @@ class FinanzasController extends Controller
         $diaActual = (int) date('j');
         $nombresMeses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
 
-        // ── TABLA 1: GASTOS FIJOS GRUPO INMOBILIARIO ──
-        $tabla1 = [
-            'titulo' => 'GASTOS FIJOS GRUPO INMOBILIARIO Y DE TRANSPORTE JE NU & ASOCIADOS, C.A. 2026',
-            'titulo_corto' => 'GRUPO INMOBILIARIO Y DE TRANSPORTE JE NU & ASOCIADOS, C.A.',
-            'tiene_sede' => false,
-            'filas' => [
-                ['servicio'=>'CONDOMINIO','fecha'=>'8-15 de cada mes','empresa'=>'CONDOMINIO TERRANOVA','costo'=>55.00,'meses'=>[45.00,55.00,55.00,55.00,null,null,null,null,null,null,null,null]],
-                ['servicio'=>'CONDOMINIO','fecha'=>'8-15 de cada mes','empresa'=>'CONDOMINIO BALCONES','costo'=>10.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['servicio'=>'CONDOMINIO','fecha'=>'8-15 de cada mes','empresa'=>'CONDOMINIO BALCONES APPTO T4','costo'=>15.00,'meses'=>[15.30,15.30,15.30,null,15.15,null,null,null,null,null,null,null]],
-                ['servicio'=>'CONDOMINIO','fecha'=>'8-15 de cada mes','empresa'=>'CONDOMINIO TERRAZAS CLUB GOLF','costo'=>25.00,'meses'=>[81.87,25.00,25.00,25.00,25.00,20.00,null,null,null,null,null,null]],
-                ['servicio'=>'CONDOMINIO','fecha'=>'AVISO DE COBRANZAS','empresa'=>'CONDOMINIO APPTO SALAMAR','costo'=>200.00,'meses'=>[200.00,200.00,200.00,200.00,200.00,200.00,null,null,null,null,null,null]],
-                ['servicio'=>'CONDOMINIO','fecha'=>'8-15 de cada mes','empresa'=>'CONDOMINIO LOCAL SAMBIL L-26','costo'=>450.00,'meses'=>[null,null,null,null,null,433.30,null,null,null,null,null,null]],
-                ['servicio'=>'CONDOMINIO','fecha'=>'8-15 de cada mes','empresa'=>'CONDOMINIO LOCAL SAMBIL L-94','costo'=>300.00,'meses'=>[311.67,318.42,278.50,null,297.56,null,null,null,null,null,null,null]],
-                ['servicio'=>'CONDOMINIO','fecha'=>'8','empresa'=>'CONDOMINIO LOCAL PA 14','costo'=>150.00,'meses'=>[133.42,114.45,146.84,null,138.97,null,null,null,null,null,null,null]],
-                ['servicio'=>'CONDOMINIO','fecha'=>'1 DE CADA MES','empresa'=>'CONDOMINIO MIRASOL','costo'=>70.00,'meses'=>[70.00,70.00,70.00,70.00,70.00,70.00,70.00,null,null,null,null,null]],
-                ['servicio'=>'INTERNET','fecha'=>'17 DE CADA MES','empresa'=>'BESSER SOLUTIONS MIRASOL','costo'=>28.00,'meses'=>[null,null,28.00,28.00,28.00,null,null,null,null,null,null,null]],
-                ['servicio'=>'ELECTRICIDAD','fecha'=>'','empresa'=>'','costo'=>0,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['servicio'=>'ELECTRICIDAD','fecha'=>'1ERO D/C MES','empresa'=>'CORPOELEC CASA PUERTA MARAVEN','costo'=>21.00,'meses'=>[20.59,18.49,null,null,17.37,null,null,null,null,null,null,null]],
+        $tablas = [
+            0 => [
+                'titulo' => 'GASTOS FIJOS GRUPO INMOBILIARIO Y DE TRANSPORTE JE NU & ASOCIADOS, C.A. 2026',
+                'titulo_corto' => 'GRUPO INMOBILIARIO Y DE TRANSPORTE JE NU & ASOCIADOS, C.A.',
+                'tiene_sede' => false,
+                'filas' => []
+            ],
+            1 => [
+                'titulo' => 'GASTO FIJOS GRUPO PALACIO DE LOS DETALLES / NUNES STORE / EURONISSI 2026',
+                'titulo_corto' => 'GRUPO PALACIO DE LOS DETALLES / NUNES STORE / EURONISSI',
+                'tiene_sede' => true,
+                'filas' => []
+            ],
+            2 => [
+                'titulo' => 'GASTOS FIJOS DIRECTIVO 2026',
+                'titulo_corto' => 'GASTOS FIJOS DIRECTIVO',
+                'tiene_sede' => false,
+                'filas' => []
             ],
         ];
 
-        // ── TABLA 2: GASTOS FIJOS GRUPO PALACIO / NUNES / EURONISSI ──
-        $tabla2 = [
-            'titulo' => 'GASTO FIJOS GRUPO PALACIO DE LOS DETALLES / NUNES STORE / EURONISSI 2026',
-            'titulo_corto' => 'GRUPO PALACIO DE LOS DETALLES / NUNES STORE / EURONISSI',
-            'tiene_sede' => true,
-            'filas' => [
-                // ── SEDE: INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296 ──
-                ['sede'=>'INVERSIONES DORAL PARAGUANÁ, C.A. PRINCIPAL J401722296','servicio'=>'INTERNET LOCALES PB-09 Y PB-10','fecha'=>'1-5 de Cada mes','empresa'=>'AIRTEK','costo'=>30.00,'meses'=>[100.00,25.06,null,30.00,30.00,30.00,30.00,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'CONDOMINIO LOCALES PB-09 Y PB-10','fecha'=>'8','empresa'=>'CONDOMINIO CENTRO COMERCIAL DORAL','costo'=>380.00,'meses'=>[321.34,325.14,308.74,361.44,null,342.42,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'ELECTRICIDAD Y RELLENO LOCALES PB-09 Y PB-10','fecha'=>'5 D/C MES','empresa'=>'CORPOELEC / PROTECNIA FALCON','costo'=>100.00,'meses'=>[100.06,225.78,205.50,null,256.40,null,223.56,null,238.41,null,null,null]],
-                ['sede'=>'','servicio'=>'ASEO URBANO LOCALES PB-09 Y PB-10','fecha'=>'AVISO DE SUMITCA','empresa'=>'SUMITCA','costo'=>40.00,'meses'=>[null,12.50,25.03,null,30.00,49.65,null,41.00,null,null,null,null]],
-                ['sede'=>'','servicio'=>'ALQUILER LOCALES PB-09 PB-10','fecha'=>'1 - 15 de cada mes','empresa'=>'DESCARGADORES MARITIMOS','costo'=>1100.00,'meses'=>[1100.06,1100.06,1200.06,1200.06,null,1100.00,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'PUBLICIDAD REDES','fecha'=>'1-5 de Cadmes','empresa'=>'ZINLI','costo'=>100.00,'meses'=>[100.00,298.00,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'PUBLICIDAD REDES','fecha'=>'30','empresa'=>'GEEK ELECTRONICO (ADONIS)','costo'=>160.00,'meses'=>[100.00,100.00,null,140.00,160.00,160.00,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'PUBLICIDAD RADIAL','fecha'=>'24','empresa'=>'EDUARDO VASQUEZ','costo'=>60.00,'meses'=>[60.00,60.07,59.31,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'PUBLICIDAD RADIAL','fecha'=>'15','empresa'=>'EMIRO BRAVO','costo'=>60.00,'meses'=>[60.00,null,null,30.00,null,30.00,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'PUBLICIDAD RADIAL','fecha'=>'1','empresa'=>'HIT FM (LENIS)','costo'=>80.00,'meses'=>[200.00,218.37,219.46,219.48,null,222.25,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'RECARGA TELEFONOS CORPORATIVOS','fecha'=>'1','empresa'=>'CORPORACION DIGITEL','costo'=>200.00,'meses'=>[30.00,null,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'RECARGA TELEFONO CHOFER','fecha'=>'15 DE CADA MES','empresa'=>'LUIS GARCIA','costo'=>10.00,'meses'=>[11.00,11.00,null,11.07,12.04,null,12.54,null,11.68,null,null,null]],
-                ['sede'=>'','servicio'=>'RECARGA TELEFONO CHOFER','fecha'=>'17','empresa'=>'GREGORIO COLINA','costo'=>13.00,'meses'=>[13.06,13.09,null,12.11,12.04,null,12.69,null,11.58,null,null,null]],
-                ['sede'=>'','servicio'=>'RECARGA TELEFONO REDES','fecha'=>'10 de cada mes','empresa'=>'REDES DORAL','costo'=>5.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'MERCADO LIBRE','fecha'=>'5 de cada mes','empresa'=>'IMPUESTO MENSUAL POR VENTAS','costo'=>40.00,'meses'=>[null,25.49,14.79,null,null,12.43,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'MONITOREO Y SOPORTE SERVIDOR','fecha'=>'1 AL 5 DE CADA MES','empresa'=>'INFORMATICA UNIX','costo'=>50.00,'meses'=>[50.00,76.00,58.01,50.00,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'TU MARCA CLOUD MAI SERVICES, C.A.','fecha'=>'','empresa'=>'RICARDO MAITA','costo'=>55.00,'meses'=>[25.06,25.06,null,55.00,null,null,194.31,null,null,null,null,null]],
+        $gastos = \App\Models\GastoFijo::where('visible', true)
+            ->orderBy('grupo_id')
+            ->orderBy('orden')
+            ->orderBy('id')
+            ->with(['pagos' => function($q) {
+                $q->where('anio', (int) date('Y'));
+            }])
+            ->get();
 
-                // ── SEDE: INVERSIONES DORAL PARAGUANÁ, C.A. SUCURSAL SAMBIL J401722296 ──
-                ['sede'=>'INVERSIONES DORAL PARAGUANÁ, C.A. SUCURSAL SAMBIL J401722296','servicio'=>'CONDOMINIO LOCAL L-114','fecha'=>'31-15 de cada mes','empresa'=>'A.S. 20 PARAGUANÁ, C.A.','costo'=>200.00,'meses'=>[null,115.28,25.70,null,24.12,24.60,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'ASEO URBANO LOCAL L-114','fecha'=>'AVISO DE SUMITCA','empresa'=>'SUMITCA','costo'=>20.00,'meses'=>[null,null,null,null,null,29.10,null,4.58,null,null,null,null]],
-                ['sede'=>'','servicio'=>'RECARGA TELEFONO ENCARGADO SAMBIL','fecha'=>'15 DE CADA MES','empresa'=>'AURELES LUGO','costo'=>5.00,'meses'=>[null,null,null,10.00,10.02,null,5.80,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'MONITOREO Y SOPORTE SERVIDOR','fecha'=>'1 AL 5 DE CADA MES','empresa'=>'INFORMATICA UNIX','costo'=>50.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'INTERNET LOCAL L-114','fecha'=>'1-5 de Cada mes','empresa'=>'BESSER SOLUTIONS','costo'=>49.88,'meses'=>[49.38,41.08,44.72,44.72,null,44.72,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'INTERNET LOCAL H-6','fecha'=>'15','empresa'=>'BESSER SOLUTIONS','costo'=>78.88,'meses'=>[70.86,57.08,null,76.27,30.17,null,20.27,null,null,81.61,null,null]],
-                ['sede'=>'','servicio'=>'ASEO URBANO LOCAL H-6','fecha'=>'AVISO DE SUMITCA','empresa'=>'SUMITCA','costo'=>20.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
+        foreach ($gastos as $gasto) {
+            if (!isset($tablas[$gasto->grupo_id])) continue;
 
-                // ── SEDE: LNACEH SPORT, C.A. PRINCIPAL J409254852 ──
-                ['sede'=>'LNACEH SPORT, C.A. PRINCIPAL J409254852','servicio'=>'CONDOMINIO LOCAL H-6','fecha'=>'8-15 de cada mes','empresa'=>'CONDOMINIO CENTRO COMERCIAL VIRTUDES','costo'=>800.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'CONDOMINIO LOCAL H-12','fecha'=>'8-15 de cada mes','empresa'=>'CONDOMINIO CENTRO COMERCIAL VIRTUDES','costo'=>300.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'MONITOREO Y SOPORTE SERVIDOR','fecha'=>'1 AL 5 DE CADA MES','empresa'=>'INFORMATICA UNIX','costo'=>50.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'ALQUILER LOCAL H-6','fecha'=>'','empresa'=>'INVERSIONES MILLENIUM','costo'=>1566.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
+            $meses = array_fill(0, 12, null);
+            $pagosMap = $gasto->pagos->keyBy('mes_idx');
 
-                // ── SEDE: LNACEH SPORT, C.A. SUCURSAL BOLIVAR J409254852 ──
-                ['sede'=>'LNACEH SPORT, C.A. SUCURSAL BOLIVAR J409254852','servicio'=>'INTERNET LOCAL HADI 3000','fecha'=>'1 - 5 de Cada mes','empresa'=>'AIRTEK','costo'=>60.00,'meses'=>[50.00,36.00,null,null,null,null,60.00,null,60.00,null,null,null]],
-                ['sede'=>'','servicio'=>'ELECTRICIDAD Y RELLENO LOCAL HADI 3000','fecha'=>'5 D/C MES','empresa'=>'CORPOELEC / PROTECNIA FALCON','costo'=>100.00,'meses'=>[100.26,122.86,null,232.21,240.14,null,121.61,null,238.13,null,null,null]],
-                ['sede'=>'','servicio'=>'ASEO URBANO LOCAL HADI 3000','fecha'=>'AVISO DE SUMITCA','empresa'=>'SUMITCA','costo'=>20.00,'meses'=>[null,null,17.02,null,48.05,null,51.14,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'CUSTODIA LOCAL HADI 3000','fecha'=>'TODOS LOS LUNES','empresa'=>'POLICARUBANA','costo'=>30.00,'meses'=>[null,130.00,130.00,130.00,120.00,null,120.00,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'MONITOREO Y SOPORTE SERVIDOR','fecha'=>'1 AL 5 DE CADA MES','empresa'=>'INFORMATICA UNIX','costo'=>50.00,'meses'=>[20.06,75.00,26.00,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'ALQUILER LOCAL HADI 3000','fecha'=>'1 - 11 de cada mes','empresa'=>'MOHAMED NAIMM','costo'=>1600.00,'meses'=>[1200.00,1200.00,1200.00,1200.06,1200.00,null,1000.00,null,1000.00,null,null,null]],
-
-                // ── SEDE: LNACEH SPORT, C.A. SUCURSAL ZAMORA J409254852 ──
-                ['sede'=>'LNACEH SPORT, C.A. SUCURSAL ZAMORA J409254852','servicio'=>'RECARGA TELEFONO TELEFONIA ZAMORA','fecha'=>'12 de cada mes','empresa'=>'AURELES LUGO','costo'=>5.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'RECARGA TELEFONO SUPERVISOR 2 ZAMORA','fecha'=>'13 de cada mes','empresa'=>'AURELES LUGO','costo'=>5.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'RECARGA TELEFONO SUPERVISOR ZAMORA','fecha'=>'14 de cada mes','empresa'=>'CARLOS GOMEZ','costo'=>5.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'RECARGA TELEFONO CAJA ZAMORA','fecha'=>'14 de cada mes','empresa'=>'CARLOS GOMEZ','costo'=>5.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'ALQUILER LOCAL SHANGHAI','fecha'=>'30 de cada mes','empresa'=>'JESUS SANCHEZ','costo'=>450.00,'meses'=>[450.00,null,500.00,null,700.00,560.01,null,585.05,null,null,null,null]],
-                ['sede'=>'','servicio'=>'ELECTRICIDAD Y RELLENO SHANGHAI','fecha'=>'5 D/C MES','empresa'=>'CORPOELEC / PROTECNIA FALCON','costo'=>180.00,'meses'=>[140.06,null,100.00,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'ASEO URBANO LOCAL SHANGHAI','fecha'=>'AVISO DE SUMITCA','empresa'=>'SUMITCA','costo'=>20.00,'meses'=>[null,null,15.67,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'AGUA LOCAL SHANGHAI','fecha'=>'AVISO DEL GESTOR','empresa'=>'HIDROFALCÓN','costo'=>15.00,'meses'=>[null,70.86,22.73,null,41.41,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'MONITOREO Y SOPORTE SERVIDOR','fecha'=>'1 AL 5 DE CADA MES','empresa'=>'INFORMATICA UNIX','costo'=>50.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'INTERNET LOCAL SHANGHAI','fecha'=>'1-5 de Cada mes','empresa'=>'AIRTEK','costo'=>60.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-
-                // ── SEDE: OFICINAS ADMINISTRACION ──
-                ['sede'=>'OFICINAS ADMINISTRACION','servicio'=>'ELECTRICIDAD Y RELLENO LOCAL PA-22','fecha'=>'5 D/C MES','empresa'=>'CORPOELEC / PROTECNIA FALCON','costo'=>100.00,'meses'=>[100.06,21.54,null,53.53,54.77,null,22.78,null,30.56,null,null,null]],
-                ['sede'=>'','servicio'=>'INTERNET LOCAL PA-22','fecha'=>'1-5 de Cada mes','empresa'=>'AIRTEK','costo'=>30.00,'meses'=>[30.06,25.06,null,28.06,28.06,null,26.02,null,30.00,null,30.00,null]],
-                ['sede'=>'','servicio'=>'CONDOMINIO LOCAL PA-22','fecha'=>'8','empresa'=>'CONDOMINIO CENTRO COMERCIAL DORAL','costo'=>150.00,'meses'=>[null,125.12,null,140.57,null,131.41,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'INTERNET LOCAL L-11','fecha'=>'15','empresa'=>'BESSER SOLUTIONS','costo'=>35.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'RECARGA TELEFONO ENCARGADO NUNES','fecha'=>'17 DE CADA MES','empresa'=>'NUNES STORE','costo'=>0.50,'meses'=>[null,5.00,69.97,null,27.27,null,24.50,null,75.00,null,null,null]],
-
-                // ── SEDE: NUNES STORE, C.A. J501653879 ──
-                ['sede'=>'NUNES STORE, C.A. J501653879','servicio'=>'ASEO URBANO LOCAL L-11 / H-12','fecha'=>'AVISO DE SUMITCA','empresa'=>'SUMITCA','costo'=>20.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'CONDOMINIO LOCAL L-11','fecha'=>'31-15 de cada mes','empresa'=>'A.S. 20 PARAGUANÁ, C.A.','costo'=>800.00,'meses'=>[null,100.00,89.88,null,null,null,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'MONITOREO Y SOPORTE SERVIDOR','fecha'=>'1 AL 5 DE CADA MES','empresa'=>'INFORMATICA UNIX','costo'=>25.00,'meses'=>[25.06,null,null,62.01,50.71,null,45.15,null,null,null,481.97,null]],
-                ['sede'=>'','servicio'=>'CONDOMINIO LOCAL H-12','fecha'=>'8-15 de cada mes','empresa'=>'CONDOMINIO CENTRO COMERCIAL VIRTUDES','costo'=>500.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-
-                // ── SEDE: GRUPO JRZ TECH ELECTRONICS, C.A. J501653895 ──
-                ['sede'=>'GRUPO JRZ TECH ELECTRONICS, C.A. J501653895','servicio'=>'ELECTRICIDAD Y RELLENO DEPÓSITO','fecha'=>'1ERO D/C MES','empresa'=>'CORPOELEC','costo'=>2.50,'meses'=>[2.56,3.08,null,2.77,2.76,null,15.50,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'MONITOREO Y SOPORTE SERVIDOR','fecha'=>'1 AL 5 DE CADA MES','empresa'=>'INFORMATICA UNIX','costo'=>50.00,'meses'=>[null,null,50.00,null,50.00,null,50.00,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'INTERNET DEPÓSITO DOÑA EMILIA','fecha'=>'1 - 5 de cada mes','empresa'=>'AIRTEK','costo'=>60.00,'meses'=>[60.00,36.00,null,36.00,36.00,null,60.00,null,60.00,null,60.00,null]],
-                ['sede'=>'','servicio'=>'CONDOMINIO LOCAL M1-2','fecha'=>'8-15 de cada mes','empresa'=>'CONDOMINIO CENTRO COMERCIAL VIRTUDES','costo'=>230.00,'meses'=>[250.00,218.86,null,170.55,null,215.55,null,null,null,null,null,null]],
-
-                // ── SEDE: EURONISSI, C.A. J412919512 (TIENDA MOVISTAR) ──
-                ['sede'=>'EURONISSI, C.A. J412919512 (TIENDA MOVISTAR)','servicio'=>'ASEO URBANO LOCAL M1-2','fecha'=>'AVISO DE SUMITCA','empresa'=>'SUMITCA','costo'=>12.00,'meses'=>[12.00,16.09,null,16.57,16.15,null,15.31,null,15.40,null,null,null]],
-                ['sede'=>'','servicio'=>'MONITOREO Y SOPORTE SERVIDOR','fecha'=>'1 AL 5 DE CADA MES','empresa'=>'INFORMATICA UNIX','costo'=>25.00,'meses'=>[25.00,null,null,25.00,null,25.00,null,null,null,null,null,null]],
-                ['sede'=>'','servicio'=>'INTERNET LOCAL M1-2','fecha'=>'1-5 de Cadmes','empresa'=>'BESSER SOLUTIONS','costo'=>67.60,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-
-                // ── SEDE: GALPON BELLA VISTA V32089692 ──
-                ['sede'=>'GALPON BELLA VISTA V32089692','servicio'=>'INTERNET GALPON','fecha'=>'1 - 5 de Cada mes','empresa'=>'AIRTEK','costo'=>30.00,'meses'=>[10.06,28.71,null,36.00,null,30.00,30.00,null,29.81,null,36.00,null]],
-            ],
-        ];
-
-        // ── TABLA 3: GASTOS FIJOS DIRECTIVO ──
-        $tabla3 = [
-            'titulo' => 'GASTOS FIJOS DIRECTIVO 2026',
-            'titulo_corto' => 'GASTOS FIJOS DIRECTIVO',
-            'tiene_sede' => false,
-            'filas' => [
-                ['servicio'=>'RECARGA TELEFONICA DIGITEL','fecha'=>'1 de cada Mes','empresa'=>'ABONO A NRO TLF PERSONAL BS.2000','costo'=>20.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['servicio'=>'INTERNET','fecha'=>'3 de cada Mes','empresa'=>'BESSER SOLUTIONS DIRECTIVO','costo'=>28.00,'meses'=>[25.00,28.00,28.00,28.00,28.00,28.00,null,null,null,null,null,null]],
-                ['servicio'=>'INTERNET','fecha'=>'3 de cada Mes','empresa'=>'BESSER SOLUTIONS MARIA FATIMA','costo'=>25.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['servicio'=>'CONDOMINIO','fecha'=>'1-5 de cada mes','empresa'=>'CONDOMINIO SAN ROMAN','costo'=>100.00,'meses'=>[90.00,90.00,95.56,null,100.00,90.00,null,null,null,null,null,null]],
-                ['servicio'=>'POLIZA DE SEGUROS','fecha'=>'20 de cada mes','empresa'=>'MERCANTIL SEGUROS','costo'=>225.92,'meses'=>[295.74,295.05,295.74,295.74,295.74,null,null,null,null,null,null,null]],
-                ['servicio'=>'AYUDA','fecha'=>'SABADO','empresa'=>'MARTA (TIA)','costo'=>160.00,'meses'=>[200.00,160.00,160.00,160.00,160.00,160.00,null,null,null,null,null,null]],
-                ['servicio'=>'AYUDA','fecha'=>'VIERNES','empresa'=>'AGUSTIN JEREZ (PAPA)','costo'=>400.00,'meses'=>[300.00,400.00,400.00,400.00,400.00,400.00,null,null,null,null,null,null]],
-                ['servicio'=>'AYUDA','fecha'=>'LUNES','empresa'=>'MARBETH JEREZ (HERMANA)','costo'=>400.00,'meses'=>[400.00,400.00,500.00,400.00,300.00,null,null,null,null,null,null,null]],
-                ['servicio'=>'COLEGIO NAHOMI','fecha'=>'5 de cada mes','empresa'=>'U.E. NUESTRA SEÑORA DEL CARMEN','costo'=>120.00,'meses'=>[120.00,120.00,120.00,120.00,120.00,120.00,null,null,null,null,null,null]],
-                ['servicio'=>'COLEGIO CESAR','fecha'=>'','empresa'=>'CENTRO CIVICO CARDON (U.E. COLEGIO)','costo'=>140.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-                ['servicio'=>'TAREAS DIRIGIDAS CESAR','fecha'=>'','empresa'=>'','costo'=>50.00,'meses'=>[80.00,80.00,null,null,null,null,null,null,null,null,null,null]],
-                ['servicio'=>'INGLES CESAR','fecha'=>'','empresa'=>'LANGUAGE CENTER','costo'=>60.00,'meses'=>[61.00,60.00,null,null,null,null,null,null,null,null,null,null]],
-                ['servicio'=>'NATACION CESAR','fecha'=>'','empresa'=>'AQUA CLUB','costo'=>45.00,'meses'=>[null,null,null,null,null,null,null,null,null,null,null,null]],
-            ],
-        ];
-
-        $tablas = [$tabla1, $tabla2, $tabla3];
-
-        // ── CARGAR DATOS DE BD Y MERGEAR ──
-        $anioActual = (int) date('Y');
-        $pagosDb = GastoFijoPago::where('anio', $anioActual)->get();
-        $pagosMap = [];
-        foreach ($pagosDb as $pago) {
-            $pagosMap["{$pago->tabla_idx}_{$pago->fila_idx}_{$pago->mes_idx}"] = $pago;
-        }
-
-        $configOverrides = GastoFijoConfig::all();
-        $configMap = [];
-        foreach ($configOverrides as $cfg) {
-            $configMap["{$cfg->tabla_idx}_{$cfg->fila_idx}"] = $cfg;
-        }
-
-        // Merge overrides into tables
-        foreach ($tablas as $tIdx => &$tabla) {
-            foreach ($tabla['filas'] as $fIdx => &$fila) {
-                // Override config (fecha & costo)
-                $configKey = "{$tIdx}_{$fIdx}";
-                if (isset($configMap[$configKey])) {
-                    if ($configMap[$configKey]->fecha !== null && $configMap[$configKey]->fecha !== '') {
-                        $fila['fecha'] = $configMap[$configKey]->fecha;
-                    }
-                    if ($configMap[$configKey]->costo !== null) {
-                        $fila['costo'] = (float) $configMap[$configKey]->costo;
-                    }
-                }
-                // Override monthly values
-                for ($m = 0; $m < 12; $m++) {
-                    $key = "{$tIdx}_{$fIdx}_{$m}";
-                    if (isset($pagosMap[$key]) && $pagosMap[$key]->monto !== null) {
-                        $fila['meses'][$m] = (float) $pagosMap[$key]->monto;
-                    }
-                }
-            }
-        }
-        unset($tabla, $fila);
-
-        // ── FILTRAR OCULTOS Y ASIGNAR fidx ORIGINAL ──
-        $ocultosDb = GastoFijoOculto::all();
-        $ocultosMap = [];
-        foreach ($ocultosDb as $o) {
-            $ocultosMap["{$o->tabla_idx}_{$o->fila_idx}"] = true;
-        }
-        foreach ($tablas as $tIdx => &$tabla) {
-            // Asignar fidx original a cada fila antes de filtrar
-            foreach ($tabla['filas'] as $idx => &$f) {
-                $f['fidx'] = $idx;
-            }
-            unset($f);
-
-            $tabla['filas'] = array_values(array_filter(
-                $tabla['filas'],
-                fn($fila) => !isset($ocultosMap["{$tIdx}_{$fila['fidx']}"])
-            ));
-        }
-        unset($tabla);
-
-        // ── INYECTAR FILAS CUSTOM (fila_idx = 50000 + id) ──
-        $customRows = GastoFijoCustom::orderBy('id')->get();
-        foreach ($customRows as $custom) {
-            $tIdx = (int) $custom->tabla_idx;
-            if (!isset($tablas[$tIdx])) continue;
-
-            $customFiila = [
-                'sede'    => $custom->sede,
-                'servicio'=> $custom->servicio,
-                'fecha'   => $custom->fecha,
-                'empresa' => $custom->empresa,
-                'costo'   => (float) $custom->costo,
-                'meses'   => array_fill(0, 12, null),
-                'custom_id'=> $custom->id,
-                'fidx'    => 50000 + $custom->id,
-            ];
-
-            // Merge monthly data for custom rows using fila_idx = 50000 + id
-            $customFilaIdx = 50000 + $custom->id;
             for ($m = 0; $m < 12; $m++) {
-                $key = "{$tIdx}_{$customFilaIdx}_{$m}";
-                if (isset($pagosMap[$key]) && $pagosMap[$key]->monto !== null) {
-                    $customFiila['meses'][$m] = (float) $pagosMap[$key]->monto;
+                if (isset($pagosMap[$m]) && $pagosMap[$m]->monto !== null) {
+                    $meses[$m] = (float) $pagosMap[$m]->monto;
                 }
             }
 
-            // Find where to insert: after the last row with same sede name or append
-            $insertAfter = -1;
-            $cSede = preg_replace('/\s+/', ' ', trim($custom->sede ?? ''));
-            foreach ($tablas[$tIdx]['filas'] as $fIdx => $f) {
-                $fSede = preg_replace('/\s+/', ' ', trim($f['sede'] ?? ''));
-                if (!empty($cSede) && $fSede === $cSede) {
-                    $insertAfter = $fIdx;
-                } elseif (!empty($cSede) && empty($fSede) && $insertAfter >= 0) {
-                    $insertAfter = $fIdx;
-                } elseif (!empty($fSede) && $fSede !== $cSede && $insertAfter >= 0) {
-                    // We reached the next block, so stop updating insertAfter
-                    break;
-                }
-            }
-
-            if ($insertAfter >= 0) {
-                $customFiila['sede'] = ''; // Ocultar nombre porque ya existe en el primer elemento del bloque
-                if ($insertAfter < count($tablas[$tIdx]['filas']) - 1) {
-                    array_splice($tablas[$tIdx]['filas'], $insertAfter + 1, 0, [$customFiila]);
-                } else {
-                    $tablas[$tIdx]['filas'][] = $customFiila;
-                }
-            } else {
-                $tablas[$tIdx]['filas'][] = $customFiila;
-            }
+            $tablas[$gasto->grupo_id]['filas'][] = [
+                'id' => $gasto->id,
+                'sede' => $gasto->sede,
+                'servicio' => $gasto->servicio,
+                'fecha' => $gasto->fecha,
+                'empresa' => $gasto->empresa,
+                'costo' => (float) $gasto->costo,
+                'meses' => $meses,
+                'pagos_models' => $gasto->pagos // Pass the actual models for notifications
+            ];
         }
 
         // ── GENERAR NOTIFICACIONES ──
@@ -1681,8 +1490,9 @@ class FinanzasController extends Controller
                 if (empty($fila['fecha']) || $fila['costo'] <= 0) continue;
 
                 // Check if already paid for current period
-                $pagoKey = "{$tIdx}_{$fIdx}_{" . ($mesActual - 1) . "}";
-                $pagoRecord = $pagosMap[$pagoKey] ?? null;
+                $mesBusqueda = $mesActual - 1;
+                $pagoRecord = $fila['pagos_models']->firstWhere('mes_idx', $mesBusqueda);
+
                 if ($pagoRecord && $pagoRecord->pagado) {
                     // For weekly payments, check if paid within last 7 days
                     $diasPagoCheck = $this->parseDiasPago($fila['fecha']);
@@ -1707,7 +1517,8 @@ class FinanzasController extends Controller
                             'fecha' => $fila['fecha'],
                             'tabla' => $tablaLabels[$tIdx],
                             'tabla_idx' => $tIdx,
-                            'fila_idx' => $fIdx,
+                            'fila_idx' => $fila['id'], // Now using gasto_fijo_id
+                            'gasto_fijo_id' => $fila['id'],
                             'urgente' => false,
                         ];
                         break;
@@ -1723,7 +1534,8 @@ class FinanzasController extends Controller
                             'dia' => $dia,
                             'tabla' => $tablaLabels[$tIdx],
                             'tabla_idx' => $tIdx,
-                            'fila_idx' => $fIdx,
+                            'fila_idx' => $fila['id'], // Now using gasto_fijo_id
+                            'gasto_fijo_id' => $fila['id'],
                             'urgente' => $diff <= 2,
                         ];
                         break;
@@ -1780,39 +1592,30 @@ class FinanzasController extends Controller
             'costo'     => 'nullable|numeric|min:0',
         ]);
 
-        $custom = GastoFijoCustom::create([
-            'tabla_idx' => $request->tabla_idx,
+        $gasto = \App\Models\GastoFijo::create([
+            'grupo_id'  => $request->tabla_idx,
             'sede'      => $request->sede ?? '',
             'servicio'  => $request->servicio,
             'fecha'     => $request->fecha ?? '',
             'empresa'   => $request->empresa ?? '',
             'costo'     => $request->costo ?? 0,
+            'orden'     => 9999,
+            'visible'   => true,
         ]);
 
-        return response()->json(['ok' => true, 'id' => $custom->id]);
+        return response()->json(['ok' => true, 'id' => $gasto->id]);
     }
 
     public function eliminarGastoFijoFila(Request $request)
     {
         $request->validate([
-            'tabla_idx'  => 'required|integer|min:0|max:2',
-            'fila_idx'   => 'required|integer',
-            'custom_id'  => 'nullable|integer',
+            'gasto_fijo_id' => 'required|integer',
         ]);
 
-        if ($request->custom_id) {
-            // Delete custom row permanently
-            GastoFijoCustom::where('id', $request->custom_id)->delete();
-            // Also delete any payment records for this custom row
-            $customFilaIdx = 50000 + (int) $request->custom_id;
-            GastoFijoPago::where('tabla_idx', $request->tabla_idx)
-                         ->where('fila_idx', $customFilaIdx)
-                         ->delete();
-        } else {
-            // Soft-hide hardcoded row
-            GastoFijoOculto::updateOrCreate(
-                ['tabla_idx' => $request->tabla_idx, 'fila_idx' => $request->fila_idx]
-            );
+        $gasto = \App\Models\GastoFijo::find($request->gasto_fijo_id);
+        if ($gasto) {
+            $gasto->visible = false;
+            $gasto->save();
         }
 
         return response()->json(['ok' => true]);
@@ -1821,16 +1624,14 @@ class FinanzasController extends Controller
     public function updateGastoFijoMonto(Request $request)
     {
         $request->validate([
-            'tabla_idx' => 'required|integer|min:0|max:2',
-            'fila_idx' => 'required|integer|min:0',
+            'gasto_fijo_id' => 'required|integer',
             'mes_idx' => 'required|integer|min:0|max:11',
             'monto' => 'nullable|numeric|min:0',
         ]);
 
-        $pago = GastoFijoPago::updateOrCreate(
+        $pago = \App\Models\GastoFijoPago::updateOrCreate(
             [
-                'tabla_idx' => $request->tabla_idx,
-                'fila_idx' => $request->fila_idx,
+                'gasto_fijo_id' => $request->gasto_fijo_id,
                 'mes_idx' => $request->mes_idx,
                 'anio' => (int) date('Y'),
             ],
@@ -1845,17 +1646,15 @@ class FinanzasController extends Controller
     public function marcarGastoFijoPagado(Request $request)
     {
         $request->validate([
-            'tabla_idx' => 'required|integer|min:0|max:2',
-            'fila_idx' => 'required|integer|min:0',
+            'gasto_fijo_id' => 'required|integer',
             'costo' => 'nullable|numeric|min:0',
         ]);
 
         $mesActual = (int) date('n');
 
-        $pago = GastoFijoPago::updateOrCreate(
+        $pago = \App\Models\GastoFijoPago::updateOrCreate(
             [
-                'tabla_idx' => $request->tabla_idx,
-                'fila_idx' => $request->fila_idx,
+                'gasto_fijo_id' => $request->gasto_fijo_id,
                 'mes_idx' => $mesActual - 1,
                 'anio' => (int) date('Y'),
             ],
@@ -1876,20 +1675,15 @@ class FinanzasController extends Controller
     public function updateGastoFijoFecha(Request $request)
     {
         $request->validate([
-            'tabla_idx' => 'required|integer|min:0|max:2',
-            'fila_idx' => 'required|integer|min:0',
+            'gasto_fijo_id' => 'required|integer',
             'fecha' => 'required|string|max:100',
         ]);
 
-        GastoFijoConfig::updateOrCreate(
-            [
-                'tabla_idx' => $request->tabla_idx,
-                'fila_idx' => $request->fila_idx,
-            ],
-            [
-                'fecha' => $request->fecha,
-            ]
-        );
+        $gasto = \App\Models\GastoFijo::find($request->gasto_fijo_id);
+        if ($gasto) {
+            $gasto->fecha = $request->fecha;
+            $gasto->save();
+        }
 
         return response()->json(['ok' => true]);
     }
@@ -1897,20 +1691,15 @@ class FinanzasController extends Controller
     public function updateGastoFijoCosto(Request $request)
     {
         $request->validate([
-            'tabla_idx' => 'required|integer|min:0|max:2',
-            'fila_idx' => 'required|integer|min:0',
+            'gasto_fijo_id' => 'required|integer',
             'costo' => 'nullable|numeric|min:0',
         ]);
 
-        GastoFijoConfig::updateOrCreate(
-            [
-                'tabla_idx' => $request->tabla_idx,
-                'fila_idx' => $request->fila_idx,
-            ],
-            [
-                'costo' => $request->costo,
-            ]
-        );
+        $gasto = \App\Models\GastoFijo::find($request->gasto_fijo_id);
+        if ($gasto) {
+            $gasto->costo = $request->costo;
+            $gasto->save();
+        }
 
         return response()->json(['ok' => true]);
     }
