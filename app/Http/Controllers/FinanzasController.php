@@ -481,9 +481,10 @@ class FinanzasController extends Controller
             if ($bk) $bancosActivos->push($bk . '|' . $tit);
         });
 
-        if ($banco_filtro) {
-            $bancosActivos->push(strtoupper(trim($banco_filtro)) . '|');
-        }
+        // Removed forced global bank view:
+        // if ($banco_filtro) {
+        //     $bancosActivos->push(strtoupper(trim($banco_filtro)) . '|');
+        // }
         $bancosActivos = $bancosActivos->filter()->unique()->sort()->values();
 
         $data_por_banco = [];
