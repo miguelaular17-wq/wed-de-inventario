@@ -304,6 +304,7 @@
                     <tr>
                         <th style="padding-left: 12px;">CÓDIGO</th>
                         <th>CLIENTE</th>
+                        <th>SEDE</th>
                         <th style="text-align: right;">MONTO NETO</th>
                         <th style="text-align: right;">SALDO USD</th>
                         <th style="text-align: center;">FECHA EMISIÓN</th>
@@ -319,9 +320,15 @@
                                 $dias = (int) round(\Carbon\Carbon::parse($c->fecha_emision)->diffInDays(now()));
                             }
                         @endphp
-                        <tr>
+                        <tr class="client-row" data-codigo="{{ $c->codigo }}" data-cliente="{{ $c->cliente }}" data-personal="{{ $c->es_personal ? '1' : '0' }}" style="cursor: pointer;" title="Doble clic para marcar/desmarcar como personal">
                             <td style="padding-left: 12px;">{{ $c->codigo }}</td>
-                            <td>{{ $c->cliente }}</td>
+                            <td>
+                                {{ $c->cliente }}
+                                @if($c->es_personal)
+                                    <span style="background: var(--blue); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; margin-left: 5px;">PERSONAL</span>
+                                @endif
+                            </td>
+                            <td>{{ $c->sede ?? '-' }}</td>
                             <td style="text-align: right; font-weight: 500; color: #4b5563;">$ {{ number_format($c->monto_neto, 2, ',', '.') }}</td>
                             <td style="text-align: right; font-weight: 600; color: #198754;">$ {{ number_format($c->saldo_usd, 2, ',', '.') }}</td>
                             <td style="text-align: center; color: #6b7280;">{{ $c->fecha_emision ? date('d/m/Y', strtotime($c->fecha_emision)) : '-' }}</td>
@@ -340,7 +347,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" style="padding: 30px; text-align: center; color: #6c757d;">
+                            <td colspan="8" style="padding: 30px; text-align: center; color: #6c757d;">
                                 No hay clientes registrados para esta selección.
                             </td>
                         </tr>
@@ -423,6 +430,40 @@
         if (e.target === this) {
             closeImportModal();
         }
+    });
+
+    document.querySelectorAll('.client-row').forEach(row => {
+        row.addEventListener('dblclick', function() {
+            const codigo = this.dataset.codigo;
+            const cliente = this.dataset.cliente;
+            const isPersonal = this.dataset.personal === '1';
+            
+            const accion = isPersonal ? 'DESMARCAR' : 'MARCAR';
+            
+            if (confirm(`¿Deseas ${accion} al cliente ${cliente} (${codigo}) como PERSONAL para identificarlo en el reporte?`)) {
+                fetch('{{ route('cobranza.marcar_personal') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({ codigo: codigo, cliente: cliente })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        window.location.reload();
+                    } else {
+                        alert('Error al procesar la solicitud.');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Error en la petición.');
+                });
+            }
+        });
     });
 </script>
 @endpush

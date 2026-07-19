@@ -187,8 +187,10 @@ class CobranzaController extends Controller
                 'monto_neto',
                 'saldo as saldo_usd', 
                 'fecha_emision', 
-                'estatus'
+                'estatus',
+                'sede_nombre as sede'
             ])
+            ->selectRaw('EXISTS(SELECT 1 FROM cliente_personals WHERE cliente_personals.codigo_cliente = historial_cobranzas.codigo_cliente) as es_personal')
             ->orderBy('nombre_cliente', 'asc')
             ->get();
 
@@ -506,5 +508,25 @@ class CobranzaController extends Controller
         $pdf->setPaper('A4', 'portrait');
 
         return $pdf->download('Reporte_Cobranza_' . date('Y_m_d') . '.pdf');
+    }
+
+    public function marcarPersonal(Request $request) {
+        $request->validate([
+            'codigo' => 'required|string',
+            'cliente' => 'nullable|string'
+        ]);
+
+        $clientePersonal = \App\Models\ClientePersonal::where('codigo_cliente', $request->codigo)->first();
+
+        if ($clientePersonal) {
+            $clientePersonal->delete();
+            return response()->json(['success' => true, 'message' => 'El cliente ya no está marcado como personal.']);
+        } else {
+            \App\Models\ClientePersonal::create([
+                'codigo_cliente' => $request->codigo,
+                'nombre_cliente' => $request->cliente
+            ]);
+            return response()->json(['success' => true, 'message' => 'Cliente marcado como personal.']);
+        }
     }
 }

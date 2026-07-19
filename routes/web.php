@@ -204,6 +204,7 @@ Route::middleware(['auth', 'role:admin,cobranza'])->prefix('cobranza')->group(fu
     Route::post('/importar', [CobranzaController::class, 'importarExcel'])->name('cobranza.importar');
     Route::post('/limpiar', [CobranzaController::class, 'limpiarClientes'])->name('cobranza.limpiar');
     Route::post('/guardar-resumen', [CobranzaController::class, 'guardarResumen'])->name('cobranza.guardar_resumen');
+    Route::post('/marcar-personal', [CobranzaController::class, 'marcarPersonal'])->name('cobranza.marcar_personal');
 });
 Route::get('/finanzas/reporte-consolidado', [App\Http\Controllers\FinanzasController::class, 'reporteConsolidado'])->name('finanzas.reporte_consolidado');
 

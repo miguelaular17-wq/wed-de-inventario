@@ -201,9 +201,7 @@ class SyncService:
                     (prod_id, sede, anio_mes, int_cantidad)
                 )
                 
-                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S.999")
-                valid_fecha_str = fecha_str if fecha_str <= now_str else now_str
-                new_last_time = max(new_last_time, valid_fecha_str)
+                new_last_time = max(new_last_time, fecha_str)
                 
             meta_json = json.dumps({"timestamp": new_last_time})
             web_cursor.execute(
