@@ -42,7 +42,7 @@
                         <td class="col-number">{{ $row['existencia'] }}</td>
                         <td>{{ $row['categoria'] }}</td>
                         <td>{{ $row['subcategoria'] }}</td>
-                        <td class="col-number">{{ $row['venta'] }}</td>
+                        <td class="col-number">{{ round($row['venta'] * 15) }}</td>
                         @foreach ($sedesStock as $sedeCol)
                             <td class="col-number">{{ $row['stocks'][$sedeCol] ?? 0 }}</td>
                         @endforeach

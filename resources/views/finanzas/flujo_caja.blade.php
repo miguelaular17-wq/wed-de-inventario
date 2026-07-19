@@ -757,6 +757,7 @@
                     <option value="095 - TASAS Y CONTRIBUCIONES">095 - TASAS Y CONTRIBUCIONES</option>
                     <option value="097 - INSTALACIONES Y MEJORAS GALPON Y DEPOSITO">097 - INSTALACIONES Y MEJORAS GALPON Y DEPOSITO</option>
                     <option value="098 - MEJORAS INSTALACIONES TIENDAS">098 - MEJORAS INSTALACIONES TIENDAS</option>
+                    <option value="099 - DEVOLUCIONES CLIENTES">099 - DEVOLUCIONES CLIENTES</option>
                 </select>
             </div>
             

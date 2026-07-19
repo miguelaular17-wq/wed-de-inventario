@@ -364,10 +364,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     syncExcludedInputs();
 
-    // Para tipo "personalizada": interceptar el submit con fetch,
+    // Interceptar el submit con fetch para todos los tipos de reporte,
     // descargar el CSV y luego recargar la página para reflejar el estado actualizado.
     const tipoReporte = '{{ $tipoReporte ?? "ventas" }}';
-    if (tipoReporte === 'personalizada' && exportForm) {
+    if (exportForm) {
         exportForm.addEventListener('submit', function (e) {
             e.preventDefault();
 
