@@ -672,6 +672,34 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
+        // Instant visual conversion for all rows when typing Tasa BCV
+        if (input.id === 'tasa_bcv') {
+            input.addEventListener('input', function() {
+                let bcv = parseFloat(this.value) || 1;
+                if (bcv <= 0) return;
+
+                document.querySelectorAll('.calc-alto-bs, .calc-bajo-bs').forEach(bsInput => {
+                    let bsVal = parseFloat(bsInput.value) || 0;
+                    let usdVal = bsVal / bcv;
+                    
+                    let row = bsInput.closest('tr');
+                    let id = bsInput.getAttribute('data-id');
+                    if (row) {
+                        let usdField = currentMode === 'inicio' ? 'reporte_usd' : 'reporte_usd_fin';
+                        let usdInput = row.querySelector(`input[data-field="${usdField}"]`);
+                        if (usdInput) {
+                            usdInput.value = usdVal.toFixed(2);
+                        }
+                        if (cuentasMap[id]) {
+                            cuentasMap[id]['reporte_usd'] = parseFloat((cuentasMap[id]['reporte_bs'] / bcv).toFixed(2)) || 0;
+                            cuentasMap[id]['reporte_usd_fin'] = parseFloat((cuentasMap[id]['reporte_bs_fin'] / bcv).toFixed(2)) || 0;
+                        }
+                    }
+                });
+                calculateTotals();
+            });
+        }
+
         input.addEventListener('change', function() {
             calculateTotals();
             

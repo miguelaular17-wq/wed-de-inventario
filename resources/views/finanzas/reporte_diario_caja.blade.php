@@ -227,21 +227,21 @@
                     </tbody>
                     <tfoot class="thick-border-top bg-light-gray">
                         <tr>
-                            <th class="text-danger thick-border-left thick-border-right">% D.C</th>
-                            <td class="text-right" style="font-weight: bold;">$ {{ number_format($e_usd, 2, ',', '.') }}</td>
-                            <td class="text-danger text-center" style="font-weight: bold; font-size: 7px;">DIFERENCIAL<br>CAMBIARIO</td>
-                            <td class="text-danger text-right" style="font-weight: bold;">$ {{ number_format($e_dif, 2, ',', '.') }}</td>
+                            <td class="text-right thick-border-left thick-border-right" style="font-weight: bold;">$ {{ number_format($e_usd, 2, ',', '.') }}</td>
+                            <td class="text-center text-danger" style="font-weight: bold;">TOTAL</td>
+                            <td class="text-danger text-right thick-border-left thick-border-right" style="font-weight: bold;">$ {{ number_format($e_dif, 2, ',', '.') }}</td>
                             <td class="text-right" style="font-weight: bold;">Bs. {{ number_format($e_bs, 2, ',', '.') }}</td>
                             <td class="text-right thick-border-left thick-border-right" style="font-weight: bold;">Bs. {{ number_format($e_comision, 2, ',', '.') }}</td>
+                            <td class="bg-white"></td>
                         </tr>
                         @php $pct_e = $e_usd > 0 ? ($e_dif / $e_usd) * 100 : 0; @endphp
                         <tr>
-                            <td class="text-danger text-center thick-border-left thick-border-right" style="font-weight: bold;">{{ number_format($pct_e, 2, ',', '.') }}%</td>
-                            <td class="text-center text-danger" style="font-weight: bold;">TOTAL</td>
+                            <td class="text-danger text-center thick-border-left thick-border-right" style="font-weight: bold;">% D.C: {{ number_format($pct_e, 2, ',', '.') }}%</td>
+                            <td class="text-center text-danger" style="font-weight: bold; font-size: 8px;">EN USD</td>
+                            <td class="bg-white thick-border-left thick-border-right"></td>
+                            <td class="text-right text-success" style="font-weight: bold;">$ {{ number_format($e_bs / ($resumen->tasa_bcv_usd ?: 1), 2, ',', '.') }}</td>
+                            <td class="text-right text-success thick-border-left thick-border-right" style="font-weight: bold;">$ {{ number_format($e_comision / ($resumen->tasa_bcv_usd ?: 1), 2, ',', '.') }}</td>
                             <td class="bg-white"></td>
-                            <td class="bg-white"></td>
-                            <td class="text-right" style="font-weight: bold;">$ {{ number_format($e_bs / ($resumen->tasa_bcv_usd ?: 1), 2, ',', '.') }}</td>
-                            <td class="text-right thick-border-left thick-border-right" style="font-weight: bold;">$ {{ number_format($e_comision / ($resumen->tasa_bcv_usd ?: 1), 2, ',', '.') }}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -295,21 +295,21 @@
                     </tbody>
                     <tfoot class="thick-border-top bg-light-gray">
                         <tr>
-                            <th class="text-danger thick-border-left thick-border-right">% D.C</th>
-                            <td class="text-right" style="font-weight: bold;">$ {{ number_format($o_usd, 2, ',', '.') }}</td>
-                            <td class="text-danger text-center" style="font-weight: bold; font-size: 7px;">DIFERENCIAL<br>CAMBIARIO</td>
-                            <td class="text-danger text-right" style="font-weight: bold;">$ {{ number_format($o_dif, 2, ',', '.') }}</td>
+                            <td class="text-right thick-border-left thick-border-right" style="font-weight: bold;">$ {{ number_format($o_usd, 2, ',', '.') }}</td>
+                            <td class="text-center text-danger" style="font-weight: bold;">TOTAL</td>
+                            <td class="text-danger text-right thick-border-left thick-border-right" style="font-weight: bold;">$ {{ number_format($o_dif, 2, ',', '.') }}</td>
                             <td class="text-right" style="font-weight: bold;">Bs. {{ number_format($o_bs, 2, ',', '.') }}</td>
                             <td class="text-right thick-border-left thick-border-right" style="font-weight: bold;">Bs. {{ number_format($o_comision, 2, ',', '.') }}</td>
+                            <td class="bg-white"></td>
                         </tr>
                         @php $pct_o = $o_usd > 0 ? ($o_dif / $o_usd) * 100 : 0; @endphp
                         <tr>
-                            <td class="text-danger text-center thick-border-left thick-border-right" style="font-weight: bold;">{{ number_format($pct_o, 2, ',', '.') }}%</td>
-                            <td class="text-center text-danger" style="font-weight: bold;">TOTAL</td>
+                            <td class="text-danger text-center thick-border-left thick-border-right" style="font-weight: bold;">% D.C: {{ number_format($pct_o, 2, ',', '.') }}%</td>
+                            <td class="text-center text-danger" style="font-weight: bold; font-size: 8px;">EN USD</td>
+                            <td class="bg-white thick-border-left thick-border-right"></td>
+                            <td class="text-right text-success" style="font-weight: bold;">$ {{ number_format($o_bs / ($resumen->tasa_bcv_usd ?: 1), 2, ',', '.') }}</td>
+                            <td class="text-right text-success thick-border-left thick-border-right" style="font-weight: bold;">$ {{ number_format($o_comision / ($resumen->tasa_bcv_usd ?: 1), 2, ',', '.') }}</td>
                             <td class="bg-white"></td>
-                            <td class="bg-white"></td>
-                            <td class="text-right" style="font-weight: bold;">$ {{ number_format($o_bs / ($resumen->tasa_bcv_usd ?: 1), 2, ',', '.') }}</td>
-                            <td class="text-right thick-border-left thick-border-right" style="font-weight: bold;">$ {{ number_format($o_comision / ($resumen->tasa_bcv_usd ?: 1), 2, ',', '.') }}</td>
                         </tr>
                     </tfoot>
                 </table>

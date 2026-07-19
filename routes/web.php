@@ -200,6 +200,7 @@ Route::middleware(['auth', 'role:admin,contabilidad'])->prefix('finanzas')->grou
 // Cobranza routes
 Route::middleware(['auth', 'role:admin,cobranza'])->prefix('cobranza')->group(function () {
     Route::get('/', [CobranzaController::class, 'index'])->name('cobranza.index');
+    Route::get('/pdf', [CobranzaController::class, 'descargarReportePdf'])->name('cobranza.pdf');
     Route::post('/importar', [CobranzaController::class, 'importarExcel'])->name('cobranza.importar');
     Route::post('/limpiar', [CobranzaController::class, 'limpiarClientes'])->name('cobranza.limpiar');
     Route::post('/guardar-resumen', [CobranzaController::class, 'guardarResumen'])->name('cobranza.guardar_resumen');

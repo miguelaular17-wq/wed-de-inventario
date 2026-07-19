@@ -151,6 +151,10 @@ class CobranzaController extends Controller
         $t = microtime(true);
         // Filtrado de la tabla de clientes detallada
         $filtro_sede = request('filtro_sede');
+        $buscar_cliente = request('buscar_cliente');
+        $fecha_desde = request('fecha_desde');
+        $fecha_hasta = request('fecha_hasta');
+        
         $queryClientes = \App\Models\HistorialCobranza::query();
         
         if ($ultimaFecha) {
@@ -161,6 +165,18 @@ class CobranzaController extends Controller
 
         if ($filtro_sede) {
             $queryClientes->where('sede_nombre', $filtro_sede);
+        }
+        
+        if ($buscar_cliente) {
+            $queryClientes->whereRaw('LOWER(nombre_cliente) LIKE ?', ['%' . strtolower($buscar_cliente) . '%']);
+        }
+        
+        if ($fecha_desde) {
+            $queryClientes->whereDate('fecha_emision', '>=', $fecha_desde);
+        }
+        
+        if ($fecha_hasta) {
+            $queryClientes->whereDate('fecha_emision', '<=', $fecha_hasta);
         }
         
         // Solo se cargan las columnas que usa la vista y usamos alias para compatibilidad
@@ -181,7 +197,7 @@ class CobranzaController extends Controller
         }
 
         $t = microtime(true);
-        $view = view('cobranza.index', compact('porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'sedes', 'clientes_lista', 'filtro_sede', 'fechas_semanal', 'semanal_list'));
+        $view = view('cobranza.index', compact('porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'sedes', 'clientes_lista', 'filtro_sede', 'buscar_cliente', 'fecha_desde', 'fecha_hasta', 'fechas_semanal', 'semanal_list'));
         $html = $view->render();
         \Log::info(sprintf('Render Blade => %.2f ms', (microtime(true)-$t)*1000));
         
@@ -412,5 +428,83 @@ class CobranzaController extends Controller
             \Illuminate\Support\Facades\Log::error('Error en guardarResumen: ' . $e->getMessage() . ' | ' . $e->getFile() . ':' . $e->getLine());
             return redirect()->back()->with('error', 'Error al guardar el resumen: ' . $e->getMessage());
         }
+    }
+
+    public function descargarReportePdf() {
+        $ultimaFecha = \App\Models\HistorialCobranza::max('fecha_registro');
+        $historialActual = collect();
+        if ($ultimaFecha) {
+            $historialActual = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha)->get();
+        }
+
+        $gran_total_saldo = 0;
+        $gran_total_clientes = 0;
+        
+        $estatus_totales = [
+            'CRITICO' => ['clientes' => 0, 'saldo' => 0],
+            'MOROSO' => ['clientes' => 0, 'saldo' => 0],
+            'RECIENTE' => ['clientes' => 0, 'saldo' => 0],
+            'APARTADO' => ['clientes' => 0, 'saldo' => 0],
+        ];
+
+        $agrupadoPorSede = $historialActual->groupBy('sede_nombre');
+        $porSede = [];
+
+        foreach ($agrupadoPorSede as $sede => $registrosSede) {
+            $saldoSede = $registrosSede->sum('saldo');
+            $clientesSede = $registrosSede->count();
+
+            $porSede[] = (object) [
+                'sede_nombre' => $sede,
+                'total_clientes' => $clientesSede,
+                'total_saldo' => $saldoSede
+            ];
+            
+            $gran_total_saldo += $saldoSede;
+            $gran_total_clientes += $clientesSede;
+
+            foreach ($registrosSede as $r) {
+                $est = strtoupper($r->estatus) ?: 'RECIENTE';
+                if (!isset($estatus_totales[$est])) {
+                    $est = 'RECIENTE';
+                }
+                $estatus_totales[$est]['clientes'] += 1;
+                $estatus_totales[$est]['saldo'] += $r->saldo;
+            }
+        }
+
+        $porEstatus = [];
+        foreach($estatus_totales as $k => $v) {
+            $porEstatus[] = (object) [
+                'estatus' => $k,
+                'total_clientes' => $v['clientes'],
+                'total_saldo' => $v['saldo']
+            ];
+        }
+
+        usort($porSede, function($a, $b) {
+            return strcmp($a->sede_nombre, $b->sede_nombre);
+        });
+
+        // 2. Clientes por sede
+        $clientesPorSede = [];
+        foreach ($agrupadoPorSede as $sede => $clientesSede) {
+            $clientesPorSede[$sede] = $clientesSede->sortBy('nombre_cliente')->values();
+        }
+        
+        // sort array keys logically
+        ksort($clientesPorSede);
+
+        // 3. Clientes Global Ordenados de Mayor a Menor Saldo
+        $clientesGlobalDesc = $historialActual->sortByDesc('saldo')->values();
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('cobranza.pdf', compact(
+            'porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'ultimaFecha', 'clientesPorSede', 'clientesGlobalDesc'
+        ));
+
+        // Use landscape or portrait depending on layout, we will use portrait for the lists
+        $pdf->setPaper('A4', 'portrait');
+
+        return $pdf->download('Reporte_Cobranza_' . date('Y_m_d') . '.pdf');
     }
 }

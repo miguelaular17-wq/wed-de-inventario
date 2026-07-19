@@ -378,16 +378,17 @@
                 </div>
 
                 <div class="widget-block" style="background-color: #f8fafc;">
-                    <div class="widget-block-label">Total Salidas Bs</div>
+                    <div class="widget-block-label">Total Salidas (USD)</div>
                     <div class="widget-block-value text-danger" style="font-size: 18px;">
-                        <span style="color: #fca5a5; font-size: 14px; font-weight: 500;">$</span>{{ number_format($total_salidas_bs, 2) }}
+                        @php $total_salidas_usd = $resumen->tasa_bcv_usd > 0 ? ($total_salidas_bs / $resumen->tasa_bcv_usd) : 0; @endphp
+                        <span style="color: #fca5a5; font-size: 14px; font-weight: 500;">$</span>{{ number_format($total_salidas_usd, 2) }}
                     </div>
                 </div>
 
                 <div class="widget-block">
                     <div class="widget-block-label">Queda del día anterior</div>
                     <div class="widget-block-value" style="font-size: 18px; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 10px; border-radius: 6px;">
-                        @php $queda_calculada = $resumen->saldo_inicial - $total_salidas_bs; @endphp
+                        @php $queda_calculada = $resumen->saldo_inicial - $total_salidas_usd; @endphp
                         <span style="color: #6ee7b7; font-size: 14px; font-weight: 500;">$</span>{{ number_format($queda_calculada, 2) }}
                     </div>
                 </div>
@@ -568,38 +569,38 @@
 
 <!-- Modal Nuevo Egreso -->
 <div id="nuevoEgresoModal" class="modal-overlay" style="display: none; z-index: 1100;">
-    <div class="panel modal-box" style="width: 95%; max-width: 600px; position: relative; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
+    <div class="panel modal-box" style="width: 95%; max-width: 600px; position: relative; padding: 15px 20px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); max-height: 95vh; overflow-y: auto;">
         <button type="button" class="modal-close" onclick="closeNuevoEgresoModal()" aria-label="Cerrar" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
-        <h3 style="margin: 0 0 20px; font-size: 1.25rem; color: var(--blue); display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0 0 15px; font-size: 1.1rem; color: var(--blue); display: flex; justify-content: space-between; align-items: center;">
             <span>Nuevo Egreso</span>
-            <button type="button" id="btn-ocr" onclick="document.getElementById('ocr-upload').click()" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; padding: 6px 12px; border-radius: 6px; font-size: 0.875rem; cursor: pointer; display: flex; align-items: center; gap: 5px;">
-                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            <button type="button" id="btn-ocr" onclick="document.getElementById('ocr-upload').click()" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                 <span id="ocr-btn-text">Escanear Recibo</span>
             </button>
             <input type="file" id="ocr-upload" accept="image/*" style="display: none;" onchange="handleOcrUpload(event)">
         </h3>
         
-        <form method="POST" action="{{ route('finanzas.store_egreso') }}">
+        <form method="POST" action="{{ route('finanzas.store_egreso') }}" enctype="multipart/form-data">
             @csrf
-            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Tipo de Egreso</label>
-                    <select name="categoria_egreso" id="categoria_egreso" onchange="toggleTraslados()" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tipo de Egreso</label>
+                    <select name="categoria_egreso" id="categoria_egreso" onchange="toggleTraslados()" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                         <option value="egreso_realizado">EGRESOS REALIZADOS</option>
                         <option value="otros_egresos">OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
                         <option value="traslados">TRASLADOS</option>
                     </select>
                 </div>
                 <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Fecha</label>
-                    <input type="date" name="fecha" value="{{ date('Y-m-d') }}" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Fecha</label>
+                    <input type="date" name="fecha" value="{{ date('Y-m-d') }}" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
             </div>
 
-            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 2;">
-                    <label id="lbl_banco_titular" style="display: block; margin-bottom: 5px; font-weight: 500;">Banco y Titular</label>
-                    <select name="banco_titular" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <label id="lbl_banco_titular" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Banco y Titular</label>
+                    <select name="banco_titular" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                         <option value="">-- Seleccione --</option>
                         @foreach($cuentas as $cuenta)
                             <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
@@ -609,15 +610,15 @@
                     </select>
                 </div>
                 <div style="flex: 1;" id="col_referencia">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Ref.</label>
-                    <input type="text" name="referencia" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="# Referencia">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Ref.</label>
+                    <input type="text" name="referencia" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;" placeholder="# Referencia">
                 </div>
             </div>
 
-            <div id="row_receptor" style="display: none; gap: 15px; margin-bottom: 15px;">
+            <div id="row_receptor" style="display: none; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Banco Receptor y Titular Receptor</label>
-                    <select name="banco_titular_receptor" id="banco_titular_receptor" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Banco Receptor y Titular Receptor</label>
+                    <select name="banco_titular_receptor" id="banco_titular_receptor" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                         <option value="">-- Seleccione Receptor --</option>
                         @foreach($cuentas as $cuenta)
                             <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
@@ -628,35 +629,35 @@
                 </div>
             </div>
             
-            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 1;" id="col_monto_usd">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Monto USD</label>
-                    <input type="number" step="0.01" name="monto_usd" id="monto_usd" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto USD</label>
+                    <input type="number" step="0.01" name="monto_usd" id="monto_usd" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
                 <div style="flex: 1;" id="col_tasa_cambio">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Tasa de Cambio</label>
-                    <input type="number" step="0.01" name="tasa_cambio" id="tasa_cambio" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tasa de Cambio</label>
+                    <input type="number" step="0.01" name="tasa_cambio" id="tasa_cambio" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
                 <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;" id="lbl_monto_bs">Monto BS</label>
-                    <input type="number" step="0.01" name="monto_bs" id="monto_bs" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;" id="lbl_monto_bs">Monto BS</label>
+                    <input type="number" step="0.01" name="monto_bs" id="monto_bs" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
             </div>
 
-            <div id="row_diferencial" style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <div id="row_diferencial" style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Diferencial Cambiario</label>
-                    <input type="number" step="0.01" name="diferencial_cambiario" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Dif. Cambiario</label>
+                    <input type="number" step="0.01" name="diferencial_cambiario" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
                 <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Comisión</label>
-                    <input type="number" step="0.01" name="comision" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Comisión</label>
+                    <input type="number" step="0.01" name="comision" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
             </div>
 
-            <div id="row_tipo_gasto" style="margin-bottom: 25px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Tipo de Gasto</label>
-                <select name="tipo_gasto" id="tipo_gasto" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white;">
+            <div id="row_tipo_gasto" style="margin-bottom: 10px;">
+                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tipo de Gasto</label>
+                <select name="tipo_gasto" id="tipo_gasto" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                     <option value="">-- Seleccione un tipo de gasto --</option>
                     <option value="083 - GASTOS MEDICOS EMPLEADOS">083 - GASTOS MEDICOS EMPLEADOS</option>
                     <option value="002 - IMPUESTO MUNICIPAL (ALCALDIAS)">002 - IMPUESTO MUNICIPAL (ALCALDIAS)</option>
@@ -759,10 +760,10 @@
                 </select>
             </div>
             
-            <div style="display: flex; gap: 15px; margin-bottom: 25px;">
+            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Sede (Opcional)</label>
-                    <select name="sede" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Sede (Opcional)</label>
+                    <select name="sede" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                         <option value="">-- Seleccione una sede --</option>
                         @foreach(config('inventario.sedes_locales') as $sedeLocal)
                             <option value="{{ $sedeLocal }}">{{ $sedeLocal }}</option>
@@ -770,14 +771,24 @@
                     </select>
                 </div>
                 <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Placa del vehículo (Si aplica)</label>
-                    <input type="text" name="placa_vehiculo" placeholder="Ej. ABC-123" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Placa del vehículo</label>
+                    <input type="text" name="placa_vehiculo" placeholder="Ej. ABC-123" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
             </div>
 
-            <div style="margin-bottom: 25px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Motivo (Breve descripción)</label>
-                <input type="text" name="motivo" placeholder="Ej. Pago de internet mensual..." style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+            <div style="margin-bottom: 10px;">
+                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Motivo (Breve descripción)</label>
+                <input type="text" name="motivo" placeholder="Ej. Pago de internet mensual..." style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Comprobante de Pago</label>
+                <div id="paste-area" style="border: 2px dashed #cbd5e1; border-radius: 8px; padding: 10px; text-align: center; cursor: pointer; background: #f8fafc; transition: all 0.2s;" onmouseover="this.style.borderColor='#3b82f6'; this.style.backgroundColor='#eff6ff';" onmouseout="this.style.borderColor='#cbd5e1'; this.style.backgroundColor='#f8fafc';">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    <span id="paste-text" style="display: block; color: #64748b; font-size: 13px;">Haz clic aquí y presiona <b>Ctrl+V</b> para pegar una imagen.</span>
+                    <img id="preview-image" src="" style="max-width: 100%; max-height: 100px; display: none; margin: 10px auto 0; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" />
+                </div>
+                <input type="file" name="comprobante" id="comprobante-input" accept="image/*" style="display: none;">
             </div>
 
             <div style="display: flex; justify-content: flex-end; gap: 10px;">
@@ -815,7 +826,62 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     window.closeNuevoEgresoModal = function() {
         document.getElementById('nuevoEgresoModal').style.display = 'none';
+        // Limpiar el comprobante
+        document.getElementById('comprobante-input').value = '';
+        document.getElementById('preview-image').src = '';
+        document.getElementById('preview-image').style.display = 'none';
+        document.getElementById('paste-text').style.display = 'block';
     };
+
+    // Pegar imagen (Comprobante)
+    const pasteArea = document.getElementById('paste-area');
+    const fileInput = document.getElementById('comprobante-input');
+    const preview = document.getElementById('preview-image');
+    const pasteText = document.getElementById('paste-text');
+
+    pasteArea.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    document.getElementById('nuevoEgresoModal').addEventListener('paste', (e) => {
+        handlePaste(e);
+    });
+
+    fileInput.addEventListener('change', function(e) {
+        if (this.files && this.files[0]) {
+            showPreview(this.files[0]);
+        }
+    });
+
+    function handlePaste(e) {
+        let items = e.clipboardData || e.originalEvent.clipboardData;
+        if (!items) return;
+
+        let file = null;
+        for (let i = 0; i < items.items.length; i++) {
+            if (items.items[i].type.indexOf("image") !== -1) {
+                file = items.items[i].getAsFile();
+                break;
+            }
+        }
+
+        if (file) {
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            fileInput.files = dataTransfer.files;
+            showPreview(file);
+        }
+    }
+
+    function showPreview(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+            pasteText.style.display = 'none';
+        }
+        reader.readAsDataURL(file);
+    }
 
     // Calculadora Egreso
     const usdInput = document.getElementById('monto_usd');

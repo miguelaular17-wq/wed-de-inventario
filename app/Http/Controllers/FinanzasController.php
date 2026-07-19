@@ -235,6 +235,31 @@ class FinanzasController extends Controller
             $diferencial_cambiario = (($monto_usd * $tasa_bcv) - $monto_bs) / $tasa_bcv;
         }
 
+        $comprobante_url = null;
+        if ($request->hasFile('comprobante')) {
+            $file = $request->file('comprobante');
+            $ref = !empty($data['referencia']) ? preg_replace('/[^a-zA-Z0-9_-]/', '_', $data['referencia']) : uniqid();
+            $fileName = 'comprobante_' . $ref . '_' . date('Ymd_His') . '.' . $file->getClientOriginalExtension();
+            $fileContent = file_get_contents($file->getRealPath());
+            
+            $supabaseUrl = env('SUPABASE_URL');
+            $supabaseKey = env('SUPABASE_KEY');
+            
+            if ($supabaseUrl && $supabaseKey) {
+                $supabaseUrl = rtrim($supabaseUrl, '/');
+                $uploadUrl = "{$supabaseUrl}/storage/v1/object/comprobantes/{$fileName}";
+                
+                $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
+                    'Authorization' => "Bearer {$supabaseKey}",
+                    'Content-Type' => $file->getClientMimeType(),
+                ])->withBody($fileContent, $file->getClientMimeType())->post($uploadUrl);
+                
+                if ($response->successful()) {
+                    $comprobante_url = "{$supabaseUrl}/storage/v1/object/public/comprobantes/{$fileName}";
+                }
+            }
+        }
+
         FlujoCaja::create([
             'fecha' => $data['fecha'],
             'tipo' => 'egreso',
@@ -254,6 +279,7 @@ class FinanzasController extends Controller
             'motivo' => $data['motivo'],
             'sede' => $data['sede'] ?? null,
             'placa_vehiculo' => $data['placa_vehiculo'] ?? null,
+            'comprobante_url' => $comprobante_url,
         ]);
 
         return redirect()->back()->with('success', 'Egreso registrado correctamente.');
@@ -1135,12 +1161,27 @@ class FinanzasController extends Controller
             'tasa_bcv_usd', 'saldo_inicial', 'queda_dia_anterior', 'porcentaje_total_diferencial',
             'tasa_paralelo', 'bloqueado_compra_divisas', 'fondos_no_disponibles',
             'titulos_cobertura_espera', 'titulos_cobertura_aprobados', 'retenido_pagos_planificados',
-            'compromisos_pago_bs', 'compromisos_pago_usd'
+            'compromisos_pago_bs', 'compromisos_pago_usd', 'solicitudes_cobertura', 'retenido_pagos'
         ];
 
         if (in_array($field, $allowed)) {
             $resumen->$field = $value ?: 0;
             $resumen->save();
+            
+            if ($field === 'tasa_bcv_usd' && $resumen->tasa_bcv_usd > 0) {
+                $cuentas = \App\Models\CuentaBancaria::whereIn('categoria_reporte', [
+                    'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO',
+                    'BANCA NACIONAL - BAJO MOVIMIENTO'
+                ])->get();
+                
+                foreach ($cuentas as $cuenta) {
+                    $cuenta->reporte_usd = round($cuenta->reporte_bs / $resumen->tasa_bcv_usd, 2);
+                    $cuenta->reporte_usd_fin = round($cuenta->reporte_bs_fin / $resumen->tasa_bcv_usd, 2);
+                    $cuenta->usd_disp = $cuenta->reporte_usd; 
+                    $cuenta->save();
+                }
+            }
+
             return response()->json(['success' => true]);
         }
         return response()->json(['success' => false, 'message' => 'Invalid field'], 400);

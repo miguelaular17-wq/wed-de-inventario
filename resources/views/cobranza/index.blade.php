@@ -8,21 +8,15 @@
         <h2 style="color: var(--blue); font-weight: 600; margin: 0;">Dashboard Global de Cobranza</h2>
         
         <div style="display: flex; gap: 10px;">
+            <a href="{{ route('cobranza.pdf') }}" target="_blank" class="btn" style="background-color: #dc3545; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px; text-decoration: none;">
+                📄 Descargar PDF
+            </a>
             <form action="{{ route('cobranza.guardar_resumen') }}" method="POST">
                 @csrf
                 <button type="submit" class="btn" style="background-color: #198754; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px;">
                     💾 Guardar Resumen
                 </button>
             </form>
-            <form action="{{ route('cobranza.limpiar') }}" method="POST" onsubmit="return confirm('¿Estás seguro que deseas eliminar los datos detallados de todos los clientes? Los indicadores de las tablas superiores se mantendrán intactos.');">
-                @csrf
-                <button type="submit" class="btn" style="background-color: #dc3545; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px;">
-                    🗑️ Limpiar Clientes
-                </button>
-            </form>
-            <button type="button" class="btn primary" onclick="openImportModal()" style="background-color: var(--blue); border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px;">
-                📄 Importar Excel
-            </button>
         </div>
     </div>
 
@@ -270,16 +264,35 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h3 style="color: var(--blue); font-weight: 600; margin: 0;">Detalle de Clientes</h3>
         
-        <form method="GET" action="{{ route('cobranza.index') }}" style="display: flex; gap: 10px; align-items: center; margin: 0;">
-            <label style="font-weight: 600; color: #4b5563;">Filtrar por Sede:</label>
-            <select name="filtro_sede" onchange="this.form.submit()" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff; min-width: 250px;">
-                <option value="">Todas las Sedes</option>
-                @foreach($sedes as $s)
-                    <option value="{{ $s }}" {{ $filtro_sede === $s ? 'selected' : '' }}>{{ $s }}</option>
-                @endforeach
-            </select>
-            @if($filtro_sede)
-                <a href="{{ route('cobranza.index') }}" class="btn secondary" style="padding: 8px 12px; font-size: 0.85rem; border-radius: 6px; text-decoration: none;">Ver Todas</a>
+        <form method="GET" action="{{ route('cobranza.index') }}" style="display: flex; gap: 10px; align-items: center; margin: 0; flex-wrap: wrap; justify-content: flex-end;">
+            <input type="text" name="buscar_cliente" value="{{ $buscar_cliente ?? '' }}" placeholder="Buscar cliente..." style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff; min-width: 200px;">
+            
+            <div style="display: flex; align-items: center; gap: 5px;">
+                <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Desde:</label>
+                <input type="date" name="fecha_desde" value="{{ $fecha_desde ?? '' }}" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff;">
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 5px;">
+                <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Hasta:</label>
+                <input type="date" name="fecha_hasta" value="{{ $fecha_hasta ?? '' }}" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff;">
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 5px;">
+                <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Sede:</label>
+                <select name="filtro_sede" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff; min-width: 150px;">
+                    <option value="">Todas</option>
+                    @foreach($sedes as $s)
+                        <option value="{{ $s }}" {{ ($filtro_sede ?? '') === $s ? 'selected' : '' }}>{{ $s }}</option>
+                    @endforeach
+                </select>
+            </div>
+            
+            <button type="submit" class="btn primary" style="background-color: var(--blue); border: none; padding: 8px 16px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px;">
+                Buscar
+            </button>
+
+            @if(($filtro_sede ?? '') || ($buscar_cliente ?? '') || ($fecha_desde ?? '') || ($fecha_hasta ?? ''))
+                <a href="{{ route('cobranza.index') }}" class="btn secondary" style="padding: 8px 12px; font-size: 0.85rem; border-radius: 6px; text-decoration: none; background-color: #6c757d; color: white;">Limpiar Filtros</a>
             @endif
         </form>
     </div>
@@ -294,17 +307,25 @@
                         <th style="text-align: right;">MONTO NETO</th>
                         <th style="text-align: right;">SALDO USD</th>
                         <th style="text-align: center;">FECHA EMISIÓN</th>
+                        <th style="text-align: center;">DÍAS PREST.</th>
                         <th style="text-align: center;">ESTATUS</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($clientes_lista as $c)
+                        @php
+                            $dias = '-';
+                            if ($c->fecha_emision) {
+                                $dias = (int) round(\Carbon\Carbon::parse($c->fecha_emision)->diffInDays(now()));
+                            }
+                        @endphp
                         <tr>
                             <td style="padding-left: 12px;">{{ $c->codigo }}</td>
                             <td>{{ $c->cliente }}</td>
                             <td style="text-align: right; font-weight: 500; color: #4b5563;">$ {{ number_format($c->monto_neto, 2, ',', '.') }}</td>
                             <td style="text-align: right; font-weight: 600; color: #198754;">$ {{ number_format($c->saldo_usd, 2, ',', '.') }}</td>
                             <td style="text-align: center; color: #6b7280;">{{ $c->fecha_emision ? date('d/m/Y', strtotime($c->fecha_emision)) : '-' }}</td>
+                            <td style="text-align: center; color: #4b5563; font-weight: 500;">{{ $dias }}</td>
                             <td style="text-align: center;">
                                 @if($c->estatus === 'CRITICO')
                                     <span style="background: #ff0000; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;">CRÍTICO</span>
@@ -319,8 +340,8 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" style="padding: 30px; text-align: center; color: #6c757d;">
-                                No hay clientes registrados para esta selección. Sube un archivo Excel para llenarlo.
+                            <td colspan="7" style="padding: 30px; text-align: center; color: #6c757d;">
+                                No hay clientes registrados para esta selección.
                             </td>
                         </tr>
                     @endforelse
