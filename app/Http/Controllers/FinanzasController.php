@@ -130,7 +130,8 @@ class FinanzasController extends Controller
         Profiler::start('FinanzasController::flujoCaja');
 
         Profiler::start('FinanzasController::flujoCaja query');
-        $movimientos = FlujoCaja::where('fecha', date('Y-m-d'))->where('oculto', false)->orderBy('fecha', 'desc')->get();
+        $fecha_filtro = request('fecha_filtro', date('Y-m-d'));
+        $movimientos = FlujoCaja::where('fecha', $fecha_filtro)->where('oculto', false)->orderBy('fecha', 'desc')->get();
         Profiler::stop('FinanzasController::flujoCaja query');
         $egresos_realizados = $movimientos->where('categoria_egreso', 'egreso_realizado');
         $otros_egresos = $movimientos->where('categoria_egreso', 'otros_egresos');
@@ -141,7 +142,7 @@ class FinanzasController extends Controller
         Profiler::stop('FinanzasController::flujoCaja cuentas');
         Profiler::start('FinanzasController::flujoCaja resumen');
         $resumen = \App\Models\FinanzasResumen::firstOrCreate(
-            ['fecha' => date('Y-m-d')],
+            ['fecha' => $fecha_filtro],
             [
                 'tasa_bcv_usd' => $this->getTasaBcvDelDia(),
                 'saldo_inicial' => 0,
@@ -169,7 +170,8 @@ class FinanzasController extends Controller
             'cuentasBancarias',
             'resumen',
             'total_salidas_bs',
-            'total_diferencial_cambiario'
+            'total_diferencial_cambiario',
+            'fecha_filtro'
         ));
         Profiler::stop('FinanzasController::flujoCaja Blade render');
 

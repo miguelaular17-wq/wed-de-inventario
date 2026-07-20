@@ -415,7 +415,13 @@
     </div>
 
 <!-- EGRESOS REALIZADOS -->
-    <h3 style="margin-top: 30px; margin-bottom: 15px; color: var(--blue);">EGRESOS REALIZADOS</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; margin-bottom: 15px;">
+        <h3 style="color: var(--blue); margin: 0;">EGRESOS REALIZADOS</h3>
+        <form method="GET" action="{{ route('finanzas.flujo_caja') }}" style="display: flex; gap: 10px; align-items: center; margin: 0;">
+            <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Día a consultar:</label>
+            <input type="date" name="fecha_filtro" value="{{ $fecha_filtro }}" style="padding: 6px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff;" onchange="this.form.submit()">
+        </form>
+    </div>
     <div class="panel" style="padding: 0; overflow: hidden; margin-bottom: 30px;">
         <div class="table-wrap">
             <table class="data-table" style="width: 100%;">
@@ -593,7 +599,7 @@
                 </div>
                 <div style="flex: 1;">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Fecha</label>
-                    <input type="date" name="fecha" value="{{ date('Y-m-d') }}" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <input type="date" name="fecha" value="{{ $fecha_filtro }}" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
             </div>
 
