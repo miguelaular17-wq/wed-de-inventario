@@ -8,7 +8,7 @@
         <h2 style="color: var(--blue); font-weight: 600; margin: 0;">Dashboard Global de Cobranza</h2>
         
         <div style="display: flex; gap: 10px;">
-            <a href="{{ route('cobranza.pdf') }}" target="_blank" class="btn" style="background-color: #dc3545; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px; text-decoration: none;">
+            <a href="{{ route('cobranza.pdf', ['mostrar_clientes' => request('mostrar_clientes', 'todos')]) }}" target="_blank" class="btn" style="background-color: #dc3545; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px; text-decoration: none;">
                 📄 Descargar PDF
             </a>
             <form action="{{ route('cobranza.guardar_resumen') }}" method="POST">
@@ -41,45 +41,71 @@
     <style>
         .indicadores-table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             background: white;
-            font-family: Arial, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             font-size: 0.95rem;
         }
         .indicadores-table th {
-            background-color: #dbeafe;
-            color: #1e3a8a;
-            padding: 8px 12px;
-            font-weight: bold;
+            background-color: #f8fafc;
+            color: #475569;
+            padding: 12px 16px;
+            font-weight: 600;
             text-align: center;
-            border-bottom: 2px solid #93c5fd;
+            border-bottom: 2px solid #e2e8f0;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
         }
         .indicadores-table td {
-            padding: 8px 12px;
-            border-bottom: 1px solid #e5e7eb;
+            padding: 12px 16px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+            transition: background-color 0.2s ease;
         }
-        .row-critico { background-color: #ff0000; color: white !important; font-weight: bold; }
-        .row-moroso { background-color: #ffff00; color: black !important; font-weight: bold; }
-        .row-reciente { background-color: #92d050; color: black !important; font-weight: bold; }
-        .row-apartado { background-color: white; color: black !important; }
-        .row-total { background-color: #dbeafe; font-weight: bold; }
+        .indicadores-table tbody tr:hover td {
+            background-color: #f8fafc;
+        }
+
+        /* Modern Row Status Colors */
+        .row-critico td { background-color: #fef2f2 !important; color: #b91c1c !important; font-weight: 600; }
+        .row-moroso td { background-color: #fefce8 !important; color: #a16207 !important; font-weight: 600; }
+        .row-reciente td { background-color: #f0fdf4 !important; color: #15803d !important; font-weight: 600; }
+        .row-apartado td { background-color: #ffffff !important; color: #64748b !important; font-weight: 500; }
+        .row-total td { background-color: #f1f5f9 !important; font-weight: 700; color: #0f172a !important; }
+
+        /* Left border accent */
+        .row-critico td:first-child { box-shadow: inset 4px 0 0 0 #ef4444; }
+        .row-moroso td:first-child { box-shadow: inset 4px 0 0 0 #eab308; }
+        .row-reciente td:first-child { box-shadow: inset 4px 0 0 0 #22c55e; }
         
         .client-table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             background: white;
             font-size: 0.95rem;
         }
         .client-table th {
-            color: var(--blue);
-            font-weight: bold;
+            background-color: #f8fafc;
+            color: #475569;
+            font-weight: 600;
             text-align: left;
-            padding: 12px;
-            border-bottom: 2px solid #e5e7eb;
+            padding: 14px 16px;
+            border-bottom: 2px solid #e2e8f0;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
         }
         .client-table td {
-            padding: 12px;
-            border-bottom: 1px solid #e5e7eb;
+            padding: 14px 16px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+            transition: all 0.2s ease;
+        }
+        .client-table tbody tr:hover td {
+            background-color: #f8fafc;
         }
     </style>
 
@@ -161,11 +187,11 @@
                                 $porcentaje = $gran_total_saldo > 0 ? round(($datos['saldo'] / $gran_total_saldo) * 100) : 0;
                                 $class = 'row-' . strtolower($estatus);
                             @endphp
-                            <tr>
-                                <td class="{{ $class }}" style="text-align: left; border-right: 1px solid #ccc;">{{ $estatus }}</td>
-                                <td class="{{ $class }}" style="text-align: center; border-right: 1px solid #ccc;">{{ $datos['clientes'] }}</td>
-                                <td class="{{ $class }}" style="text-align: right; border-right: 1px solid #ccc;">{{ number_format($datos['saldo'], 2, ',', '.') }}</td>
-                                <td class="{{ $class }}" style="text-align: right;">{{ $porcentaje }}%</td>
+                            <tr class="{{ $class }}">
+                                <td style="text-align: left; font-weight: bold;">{{ $estatus }}</td>
+                                <td style="text-align: center;">{{ $datos['clientes'] }}</td>
+                                <td style="text-align: right;">{{ number_format($datos['saldo'], 2, ',', '.') }}</td>
+                                <td style="text-align: right;">{{ $porcentaje }}%</td>
                             </tr>
                         @endforeach
 
@@ -203,30 +229,30 @@
                     <tbody>
                         @foreach($semanal_list as $row)
                             @php $class = 'row-' . strtolower($row['estatus']); @endphp
-                            <tr>
-                                <td class="{{ $class }}" style="text-align: left; border-right: 1px solid #ccc;">{{ $row['estatus'] }}</td>
+                            <tr class="{{ $class }}">
+                                <td style="text-align: left; font-weight: bold;">{{ $row['estatus'] }}</td>
                                 @foreach($row['lunes'] as $index => $data)
-                                    <td style="text-align: right; border-right: 1px solid #ccc; background: white; color: black;">
+                                    <td style="text-align: right;">
                                         {{ $data['saldo'] > 0 ? number_format($data['saldo'], 2, ',', '.') : '-' }}
                                     </td>
                                     @if($index > 0)
                                         @php
-                                            $efectColor = 'black';
+                                            $efectColor = '#334155';
                                             if ($data['efectividad'] !== '-') {
                                                 $efectVal = floatval(str_replace('%', '', $data['efectividad']));
-                                                if ($efectVal > 0) $efectColor = 'red';
-                                                elseif ($efectVal < 0) $efectColor = '#198754';
+                                                if ($efectVal > 0) $efectColor = '#dc2626';
+                                                elseif ($efectVal < 0) $efectColor = '#16a34a';
                                             }
                                         @endphp
-                                        <td style="text-align: right; border-right: 1px solid #ccc; background: white; color: {{ $efectColor }};">
+                                        <td style="text-align: right; font-weight: 600; color: {{ $efectColor }} !important;">
                                             {{ $data['efectividad'] }}
                                         </td>
                                     @endif
                                 @endforeach
                             </tr>
                         @endforeach
-                        <tr style="font-weight: bold; background: white;">
-                            <td style="text-align: left; border-right: 1px solid #ccc;">TOTALES</td>
+                        <tr class="row-total">
+                            <td style="text-align: left;">TOTALES</td>
                             @foreach($fechas_semanal as $index => $fecha)
                                 @php
                                     $colTotal = 0;
@@ -234,7 +260,7 @@
                                         $colTotal += $row['lunes'][$index]['saldo'];
                                     }
                                 @endphp
-                                <td style="text-align: right; border-right: 1px solid #ccc; color: black;">
+                                <td style="text-align: right;">
                                     {{ $colTotal > 0 ? number_format($colTotal, 2, ',', '.') : '-' }}
                                 </td>
                                 @if($index > 0)
@@ -248,7 +274,7 @@
                                             $totalEfect = round((($prevTotal - $colTotal) / $prevTotal) * 100, 0) . '%';
                                         }
                                     @endphp
-                                    <td style="text-align: right; border-right: 1px solid #ccc; color: black;">{{ $totalEfect }}</td>
+                                    <td style="text-align: right;">{{ $totalEfect }}</td>
                                 @endif
                             @endforeach
                         </tr>
@@ -286,12 +312,21 @@
                     @endforeach
                 </select>
             </div>
+
+            <div style="display: flex; align-items: center; gap: 5px;">
+                <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Tipo Cliente:</label>
+                <select name="mostrar_clientes" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff; min-width: 150px;">
+                    <option value="todos" {{ ($mostrar_clientes ?? 'todos') === 'todos' ? 'selected' : '' }}>Todos</option>
+                    <option value="regulares" {{ ($mostrar_clientes ?? 'todos') === 'regulares' ? 'selected' : '' }}>Solo Regulares</option>
+                    <option value="personales" {{ ($mostrar_clientes ?? 'todos') === 'personales' ? 'selected' : '' }}>Solo Personales</option>
+                </select>
+            </div>
             
             <button type="submit" class="btn primary" style="background-color: var(--blue); border: none; padding: 8px 16px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px;">
                 Buscar
             </button>
 
-            @if(($filtro_sede ?? '') || ($buscar_cliente ?? '') || ($fecha_desde ?? '') || ($fecha_hasta ?? ''))
+            @if(($filtro_sede ?? '') || ($buscar_cliente ?? '') || ($fecha_desde ?? '') || ($fecha_hasta ?? '') || (($mostrar_clientes ?? 'todos') !== 'todos'))
                 <a href="{{ route('cobranza.index') }}" class="btn secondary" style="padding: 8px 12px; font-size: 0.85rem; border-radius: 6px; text-decoration: none; background-color: #6c757d; color: white;">Limpiar Filtros</a>
             @endif
         </form>

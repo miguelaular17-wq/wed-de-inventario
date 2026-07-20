@@ -26,14 +26,24 @@ class CobranzaController extends Controller
         \Log::info('Inicio controlador');
 
         $t = microtime(true);
-        $sedes = config('inventario.sedes_locales');
+        $sedes = config('inventario.sedes_stock');
         
         // 1. Obtener la última fecha registrada en historial_cobranzas
         $ultimaFecha = \App\Models\HistorialCobranza::max('fecha_registro');
         
+        // Filtro de tipo de cliente
+        $mostrar_clientes = request('mostrar_clientes', 'todos');
+        $personalCodes = \App\Models\ClientePersonal::pluck('codigo_cliente')->toArray();
+        
         $historialActual = collect();
         if ($ultimaFecha) {
-            $historialActual = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha)->get();
+            $query = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha);
+            if ($mostrar_clientes === 'regulares') {
+                $query->whereNotIn('codigo_cliente', $personalCodes);
+            } elseif ($mostrar_clientes === 'personales') {
+                $query->whereIn('codigo_cliente', $personalCodes);
+            }
+            $historialActual = $query->get();
         }
 
         $gran_total_saldo = 0;
@@ -163,6 +173,12 @@ class CobranzaController extends Controller
             $queryClientes->where('id', '<', 0);
         }
 
+        if ($mostrar_clientes === 'regulares') {
+            $queryClientes->whereNotIn('codigo_cliente', $personalCodes);
+        } elseif ($mostrar_clientes === 'personales') {
+            $queryClientes->whereIn('codigo_cliente', $personalCodes);
+        }
+
         if ($filtro_sede) {
             $queryClientes->where('sede_nombre', $filtro_sede);
         }
@@ -199,7 +215,7 @@ class CobranzaController extends Controller
         }
 
         $t = microtime(true);
-        $view = view('cobranza.index', compact('porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'sedes', 'clientes_lista', 'filtro_sede', 'buscar_cliente', 'fecha_desde', 'fecha_hasta', 'fechas_semanal', 'semanal_list'));
+        $view = view('cobranza.index', compact('porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'sedes', 'clientes_lista', 'filtro_sede', 'buscar_cliente', 'fecha_desde', 'fecha_hasta', 'fechas_semanal', 'semanal_list', 'mostrar_clientes'));
         $html = $view->render();
         \Log::info(sprintf('Render Blade => %.2f ms', (microtime(true)-$t)*1000));
         
@@ -432,11 +448,21 @@ class CobranzaController extends Controller
         }
     }
 
-    public function descargarReportePdf() {
+    public function descargarReportePdf(Request $request) {
         $ultimaFecha = \App\Models\HistorialCobranza::max('fecha_registro');
+        
+        $mostrar_clientes = request('mostrar_clientes', 'todos');
+        $personalCodes = \App\Models\ClientePersonal::pluck('codigo_cliente')->toArray();
+        
         $historialActual = collect();
         if ($ultimaFecha) {
-            $historialActual = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha)->get();
+            $query = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha);
+            if ($mostrar_clientes === 'regulares') {
+                $query->whereNotIn('codigo_cliente', $personalCodes);
+            } elseif ($mostrar_clientes === 'personales') {
+                $query->whereIn('codigo_cliente', $personalCodes);
+            }
+            $historialActual = $query->get();
         }
 
         $gran_total_saldo = 0;
