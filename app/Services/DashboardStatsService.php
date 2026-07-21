@@ -113,8 +113,24 @@ class DashboardStatsService
                     ->whereDate('created_at', $fechaLocal)
                     ->get();
 
+                // Obtener movimientos de requisiciones automáticas de hoy
+                $movimientosAut = collect();
+                if (config('database.default') === 'pgsql') {
+                    $movimientosAut = \App\Models\V2\Movimiento::query()
+                        ->whereDate('created_at', $fechaLocal)
+                        ->where('tipo', 'REQUISICION')
+                        ->get(['usuario', 'destino as sede_local']);
+                } else {
+                    $movimientosAut = \App\Models\StockMovement::query()
+                        ->whereDate('created_at', $fechaLocal)
+                        ->where('tipo', 'requisicion')
+                        ->get(['usuario', 'sede_destino as sede_local']);
+                }
+
+                $todasRequisiciones = $requisiciones->concat($movimientosAut);
+
                 // Obtener nombres de usuario para buscar sus roles
-                $nombres = $requisiciones->pluck('usuario')->filter()->unique();
+                $nombres = $todasRequisiciones->pluck('usuario')->filter()->unique();
 
                 // Buscar usuarios (puede coincidir por name o email)
                 $usuarios = \App\Models\User::query()
@@ -143,7 +159,7 @@ class DashboardStatsService
                     ];
                 }
 
-                foreach ($requisiciones as $req) {
+                foreach ($todasRequisiciones as $req) {
                     $sede = strtoupper($req->sede_local);
                     if (!isset($estado[$sede])) {
                         continue;

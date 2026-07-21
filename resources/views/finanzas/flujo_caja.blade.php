@@ -447,7 +447,16 @@
                                 <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular }}</span>
                             </td>
                             <td>{{ $mov->tipo_gasto ?: '-' }}</td>
-                            <td>{{ $mov->motivo ?: '-' }}</td>
+                            <td>
+                                {{ $mov->motivo ?: '-' }}
+                                @if($mov->desglose)
+                                    <div style="margin-top: 5px;">
+                                        <button type="button" onclick='verDesglose(@json($mov->desglose))' style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; cursor: pointer;">
+                                            Ver Desglose ({{ count($mov->desglose) }})
+                                        </button>
+                                    </div>
+                                @endif
+                            </td>
                             <td class="col-number" style="text-align: right; font-weight: 500;">{{ $mov->monto_usd ? '$'.number_format($mov->monto_usd, 2) : '-' }}</td>
                             <td class="col-number" style="text-align: right;">{{ $mov->tasa_cambio ? number_format($mov->tasa_cambio, 2) : '-' }}</td>
                             <td class="col-number" style="text-align: right; color: var(--danger);">{{ $mov->diferencial_cambiario ? number_format($mov->diferencial_cambiario, 2) : '-' }}</td>
@@ -586,7 +595,7 @@
             <input type="file" id="ocr-upload" accept="image/*" style="display: none;" onchange="handleOcrUpload(event)">
         </h3>
         
-        <form method="POST" action="{{ route('finanzas.store_egreso') }}" enctype="multipart/form-data">
+        <form id="formNuevoEgreso" method="POST" action="{{ route('finanzas.store_egreso') }}" enctype="multipart/form-data" onsubmit="return validarDesglose(event)">
             @csrf
             <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 1;">
@@ -786,6 +795,26 @@
             <div style="margin-bottom: 10px;">
                 <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Motivo (Breve descripción)</label>
                 <input type="text" name="motivo" placeholder="Ej. Pago de internet mensual..." style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+
+            <div style="margin-bottom: 15px; margin-top: 15px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 0.95rem;">
+                    <input type="checkbox" id="chk_desglose" onchange="toggleDesglose()" style="width: 16px; height: 16px;">
+                    Este pago es general y requiere desglose por beneficiarios
+                </label>
+            </div>
+
+            <div id="container_desglose" style="display: none; background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px;">
+                <h4 style="margin-top: 0; font-size: 0.95rem; color: var(--blue);">Desglose del Pago</h4>
+                <div id="lista_desglose">
+                    <div class="row-desglose" style="display: flex; gap: 10px; margin-bottom: 8px;">
+                        <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" style="flex: 2; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                        <input type="text" name="desglose_cedula[]" placeholder="Cédula" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                        <input type="number" step="0.01" name="desglose_monto[]" placeholder="Monto Bs" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                        <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">&times;</button>
+                    </div>
+                </div>
+                <button type="button" onclick="agregarDesglose()" style="margin-top: 5px; padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">+ Añadir persona</button>
             </div>
 
             <div style="margin-bottom: 15px;">
@@ -1196,5 +1225,98 @@ function handleOcrSaldosUpload(event) {
         event.target.value = '';
     });
 }
+
+function validarDesglose(event) {
+    const chk = document.getElementById('chk_desglose');
+    if (chk && chk.checked) {
+        const montoBsInput = document.getElementById('monto_bs');
+        const montoTotal = parseFloat(montoBsInput.value) || 0;
+        
+        const montosDesglose = document.querySelectorAll('input[name="desglose_monto[]"]');
+        let sumaDesglose = 0;
+        montosDesglose.forEach(input => {
+            sumaDesglose += parseFloat(input.value) || 0;
+        });
+
+        if (Math.abs(montoTotal - sumaDesglose) > 0.05) {
+            alert(`Error: La suma del desglose (Bs. ${sumaDesglose.toLocaleString('es-VE', {minimumFractionDigits:2})}) no coincide con el Monto Bs total (Bs. ${montoTotal.toLocaleString('es-VE', {minimumFractionDigits:2})}).`);
+            event.preventDefault();
+            return false;
+        }
+    }
+    return true;
+}
+
+function toggleDesglose() {
+    const chk = document.getElementById('chk_desglose');
+    const container = document.getElementById('container_desglose');
+    container.style.display = chk.checked ? 'block' : 'none';
+}
+
+function agregarDesglose() {
+    const lista = document.getElementById('lista_desglose');
+    const html = `
+        <div class="row-desglose" style="display: flex; gap: 10px; margin-bottom: 8px;">
+            <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" style="flex: 2; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="text" name="desglose_cedula[]" placeholder="Cédula" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="number" step="0.01" name="desglose_monto[]" placeholder="Monto Bs" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">&times;</button>
+        </div>
+    `;
+    lista.insertAdjacentHTML('beforeend', html);
+}
+
+function verDesglose(desglose) {
+    let tbodyHtml = '';
+    let total = 0;
+    desglose.forEach(item => {
+        const monto = parseFloat(item.monto) || 0;
+        total += monto;
+        tbodyHtml += `
+            <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${item.cedula || '-'}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${item.beneficiario || '-'}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 500;">Bs. ${monto.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+            </tr>
+        `;
+    });
+    
+    document.getElementById('modalDesgloseBody').innerHTML = tbodyHtml;
+    document.getElementById('modalDesgloseTotal').innerText = `Bs. ${total.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+    document.getElementById('modalDesglose').style.display = 'flex';
+}
+
+function closeDesgloseModal() {
+    document.getElementById('modalDesglose').style.display = 'none';
+}
 </script>
+
+<!-- Modal Ver Desglose -->
+<div id="modalDesglose" class="modal-overlay" style="display: none; z-index: 1200; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div class="modal-box" style="background: white; width: 95%; max-width: 500px; padding: 20px; border-radius: 12px; position: relative;">
+        <button type="button" onclick="closeDesgloseModal()" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
+        <h3 style="margin-top: 0; color: var(--blue);">Desglose de Beneficiarios</h3>
+        
+        <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+            <thead>
+                <tr style="background: #f8fafc; text-align: left;">
+                    <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Cédula</th>
+                    <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Beneficiario</th>
+                    <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align: right;">Monto</th>
+                </tr>
+            </thead>
+            <tbody id="modalDesgloseBody">
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="2" style="padding: 10px 8px; text-align: right; font-weight: bold; color: var(--blue);">Total:</td>
+                    <td id="modalDesgloseTotal" style="padding: 10px 8px; text-align: right; font-weight: bold; color: var(--blue);">Bs. 0,00</td>
+                </tr>
+            </tfoot>
+        </table>
+        <div style="text-align: right; margin-top: 20px;">
+            <button type="button" onclick="closeDesgloseModal()" style="padding: 8px 16px; background: #94a3b8; color: white; border: none; border-radius: 6px; cursor: pointer;">Cerrar</button>
+        </div>
+    </div>
+</div>
 @endsection

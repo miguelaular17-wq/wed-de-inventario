@@ -195,7 +195,10 @@ class FinanzasController extends Controller
             'motivo' => 'nullable|string',
             'sede' => 'nullable|string',
             'placa_vehiculo' => 'nullable|string',
-            'fecha' => 'required|date'
+            'fecha' => 'required|date',
+            'desglose_beneficiario' => 'nullable|array',
+            'desglose_cedula' => 'nullable|array',
+            'desglose_monto' => 'nullable|array'
         ]);
 
         if ($data['categoria_egreso'] === 'traslados') {
@@ -262,6 +265,25 @@ class FinanzasController extends Controller
             }
         }
 
+        $desglose = null;
+        if (!empty($data['desglose_beneficiario'])) {
+            $desglose = [];
+            foreach ($data['desglose_beneficiario'] as $index => $beneficiario) {
+                $cedula = $data['desglose_cedula'][$index] ?? '';
+                $monto_desglose = $data['desglose_monto'][$index] ?? 0;
+                if ($beneficiario || $cedula || $monto_desglose) {
+                    $desglose[] = [
+                        'beneficiario' => $beneficiario,
+                        'cedula' => $cedula,
+                        'monto' => (float)$monto_desglose
+                    ];
+                }
+            }
+            if (empty($desglose)) {
+                $desglose = null;
+            }
+        }
+
         FlujoCaja::create([
             'fecha' => $data['fecha'],
             'tipo' => 'egreso',
@@ -282,6 +304,7 @@ class FinanzasController extends Controller
             'sede' => $data['sede'] ?? null,
             'placa_vehiculo' => $data['placa_vehiculo'] ?? null,
             'comprobante_url' => $comprobante_url,
+            'desglose' => $desglose,
         ]);
 
         return redirect()->back()->with('success', 'Egreso registrado correctamente.');
