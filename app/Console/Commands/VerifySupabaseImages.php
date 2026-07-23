@@ -88,20 +88,48 @@ class VerifySupabaseImages extends Command
             $updated = 0;
 
             foreach ($productos as $p) {
-                $codigos = explode('/', $p->codigo);
-                if (count($codigos) === 1) {
-                    $codigos = explode(' ', $p->codigo);
-                }
-                $primary_code = trim($codigos[0]);
-                
-                $fileName = rawurlencode($primary_code) . ".jpg";
-                $pngName = rawurlencode($primary_code) . ".png";
-                
                 $url = null;
-                if (isset($fileMap[$fileName])) {
-                    $url = $baseUrl . $fileName;
-                } elseif (isset($fileMap[$pngName])) {
-                    $url = $baseUrl . $pngName;
+                
+                // Extraer todos los códigos posibles (separados por '/' o ' ')
+                $codigos_finales = [];
+                $partesSlash = explode('/', $p->codigo);
+                foreach ($partesSlash as $parte) {
+                    $partesEspacio = explode(' ', trim($parte));
+                    foreach ($partesEspacio as $pe) {
+                        if (trim($pe) !== '') {
+                            $codigos_finales[] = trim($pe);
+                        }
+                    }
+                }
+
+                // Buscar imagen para cualquiera de los códigos
+                foreach ($codigos_finales as $c_final) {
+                    $fileName = rawurlencode($c_final) . ".jpg";
+                    $pngName = rawurlencode($c_final) . ".png";
+                    
+                    if (isset($fileMap[$fileName])) {
+                        $url = $baseUrl . $fileName;
+                        break;
+                    } elseif (isset($fileMap[$pngName])) {
+                        $url = $baseUrl . $pngName;
+                        break;
+                    }
+                    
+                    // Si no encuentra exacto, busca la base antes del guión
+                    $partesGuion = explode('-', $c_final);
+                    if (count($partesGuion) > 1) {
+                        $base_code = trim($partesGuion[0]);
+                        $baseFileName = rawurlencode($base_code) . ".jpg";
+                        $basePngName = rawurlencode($base_code) . ".png";
+                        
+                        if (isset($fileMap[$baseFileName])) {
+                            $url = $baseUrl . $baseFileName;
+                            break;
+                        } elseif (isset($fileMap[$basePngName])) {
+                            $url = $baseUrl . $basePngName;
+                            break;
+                        }
+                    }
                 }
 
                 DB::connection('pgsql')->table('inventario_v2.productos')
@@ -125,20 +153,48 @@ class VerifySupabaseImages extends Command
             $updated = 0;
 
             foreach ($productos as $p) {
-                $codigos = explode('/', $p->cod_centro);
-                if (count($codigos) === 1) {
-                    $codigos = explode(' ', $p->cod_centro);
-                }
-                $primary_code = trim($codigos[0]);
-                
-                $fileName = rawurlencode($primary_code) . ".jpg";
-                $pngName = rawurlencode($primary_code) . ".png";
-                
                 $url = null;
-                if (isset($fileMap[$fileName])) {
-                    $url = $baseUrl . $fileName;
-                } elseif (isset($fileMap[$pngName])) {
-                    $url = $baseUrl . $pngName;
+                
+                // Extraer todos los códigos posibles (separados por '/' o ' ')
+                $codigos_finales = [];
+                $partesSlash = explode('/', $p->cod_centro);
+                foreach ($partesSlash as $parte) {
+                    $partesEspacio = explode(' ', trim($parte));
+                    foreach ($partesEspacio as $pe) {
+                        if (trim($pe) !== '') {
+                            $codigos_finales[] = trim($pe);
+                        }
+                    }
+                }
+
+                // Buscar imagen para cualquiera de los códigos
+                foreach ($codigos_finales as $c_final) {
+                    $fileName = rawurlencode($c_final) . ".jpg";
+                    $pngName = rawurlencode($c_final) . ".png";
+                    
+                    if (isset($fileMap[$fileName])) {
+                        $url = $baseUrl . $fileName;
+                        break;
+                    } elseif (isset($fileMap[$pngName])) {
+                        $url = $baseUrl . $pngName;
+                        break;
+                    }
+                    
+                    // Si no encuentra exacto, busca la base antes del guión
+                    $partesGuion = explode('-', $c_final);
+                    if (count($partesGuion) > 1) {
+                        $base_code = trim($partesGuion[0]);
+                        $baseFileName = rawurlencode($base_code) . ".jpg";
+                        $basePngName = rawurlencode($base_code) . ".png";
+                        
+                        if (isset($fileMap[$baseFileName])) {
+                            $url = $baseUrl . $baseFileName;
+                            break;
+                        } elseif (isset($fileMap[$basePngName])) {
+                            $url = $baseUrl . $basePngName;
+                            break;
+                        }
+                    }
                 }
 
                 Product::where('id', $p->id)->update(['url_imagen' => $url]);

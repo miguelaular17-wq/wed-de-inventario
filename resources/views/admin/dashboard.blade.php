@@ -69,9 +69,8 @@
     </div>
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
-        <a href="{{ route('admin.import.create') }}" class="btn" data-tour="admin-import-btn">Subir ExelMultiSede (.xlsx)</a>
-        <a href="{{ route('admin.movimientos.index') }}" class="btn secondary">Ver movimientos (todas las sedes)</a>
-        <a href="{{ route('admin.users.index') }}" class="btn secondary">Gestionar usuarios</a>
+
+        <a href="{{ route('admin.catalogo-auto.index') }}" class="btn secondary" style="background:#eff6ff;color:#2563eb;border-color:#bfdbfe;">🤖 Automatizador de Catálogos</a>
         @if(session('sede_local'))
             <a href="{{ route('ventas.index') }}" class="btn secondary">Ir a Ventas</a>
         @else

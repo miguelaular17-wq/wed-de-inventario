@@ -95,6 +95,12 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::get('/productos', [\App\Http\Controllers\Admin\ProductController::class, 'index'])->name('productos.index');
     Route::get('/productos/export-json', [\App\Http\Controllers\Admin\ProductController::class, 'exportJson'])->name('productos.export_json');
     Route::delete('/productos/{id}', [\App\Http\Controllers\Admin\ProductController::class, 'destroy'])->name('productos.destroy');
+
+    // Catalog Automator
+    Route::get('/catalogo-auto', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'index'])->name('catalogo-auto.index');
+    Route::post('/catalogo-auto/config', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'store'])->name('catalogo-auto.config');
+    Route::post('/catalogo-auto/{id}/generar', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'generate'])->name('catalogo-auto.generate');
+    Route::delete('/catalogo-auto/{id}', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'destroy'])->name('catalogo-auto.destroy');
 });
 
 // Sede change views accessible by roles with sede access

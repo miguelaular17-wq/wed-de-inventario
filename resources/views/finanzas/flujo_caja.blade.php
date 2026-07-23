@@ -828,11 +828,11 @@
             <div id="container_desglose" style="display: none; background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px;">
                 <h4 style="margin-top: 0; font-size: 0.95rem; color: var(--blue);">Desglose del Pago</h4>
                 <div id="lista_desglose">
-                    <div class="row-desglose" style="display: flex; gap: 10px; margin-bottom: 8px;">
-                        <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" style="flex: 2; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                        <input type="text" name="desglose_cedula[]" placeholder="Cédula" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                        <input type="number" step="0.01" name="desglose_monto[]" placeholder="Monto Bs" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                        <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">&times;</button>
+                    <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+                        <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                        <input type="text" name="desglose_cedula[]" placeholder="Cédula" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                        <input type="number" step="0.01" name="desglose_monto[]" placeholder="Monto Bs" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                        <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0;">&times;</button>
                     </div>
                 </div>
                 <button type="button" onclick="agregarDesglose()" style="margin-top: 5px; padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">+ Añadir persona</button>
@@ -856,6 +856,9 @@
     </div>
 </div>
 
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+
 <script>
 function toggleTraslados() {
     const cat = document.getElementById('categoria_egreso').value;
@@ -877,6 +880,21 @@ function toggleTraslados() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize TomSelect for tipo_gasto
+    const srcTG = document.getElementById('tipo_gasto');
+    const dstTG = document.getElementById('edit_tipo_gasto');
+    if (srcTG && dstTG) {
+        dstTG.innerHTML = srcTG.innerHTML;
+    }
+    const tsSettings = {
+        create: false,
+        sortField: { field: "text", direction: "asc" },
+        placeholder: '-- Seleccione un tipo de gasto --',
+        maxOptions: null
+    };
+    if (srcTG) window.tsTipoGasto = new TomSelect("#tipo_gasto", tsSettings);
+    if (dstTG) window.tsEditTipoGasto = new TomSelect("#edit_tipo_gasto", tsSettings);
+
     // Modal functions
     window.openNuevoEgresoModal = function() {
         document.getElementById('nuevoEgresoModal').style.display = 'flex';
@@ -1277,11 +1295,11 @@ function toggleDesglose() {
 function agregarDesglose() {
     const lista = document.getElementById('lista_desglose');
     const html = `
-        <div class="row-desglose" style="display: flex; gap: 10px; margin-bottom: 8px;">
-            <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" style="flex: 2; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="text" name="desglose_cedula[]" placeholder="Cédula" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="number" step="0.01" name="desglose_monto[]" placeholder="Monto Bs" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">&times;</button>
+        <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+            <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="text" name="desglose_cedula[]" placeholder="Cédula" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="number" step="0.01" name="desglose_monto[]" placeholder="Monto Bs" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0;">&times;</button>
         </div>
     `;
     lista.insertAdjacentHTML('beforeend', html);
@@ -1361,16 +1379,14 @@ function abrirEditarEgreso(mov) {
     f.querySelector('[name="motivo"]').value         = mov.motivo || '';
     f.querySelector('[name="sede"]').value           = mov.sede || '';
     f.querySelector('[name="placa_vehiculo"]').value = mov.placa_vehiculo || '';
-    // Populate tipo_gasto select from the Nuevo Egreso select (same list)
-    const srcTG = document.getElementById('tipo_gasto');
-    const dstTG = document.getElementById('edit_tipo_gasto');
-    if (srcTG && dstTG && dstTG.options.length <= 1) {
-        Array.from(srcTG.options).forEach(opt => {
-            const newOpt = opt.cloneNode(true);
-            dstTG.appendChild(newOpt);
-        });
+    
+    // Set value for TomSelect
+    if (window.tsEditTipoGasto) {
+        window.tsEditTipoGasto.setValue(mov.tipo_gasto || '');
+    } else {
+        const dstTG = document.getElementById('edit_tipo_gasto');
+        if (dstTG) dstTG.value = mov.tipo_gasto || '';
     }
-    if (dstTG) dstTG.value = mov.tipo_gasto || '';
 
     // Banco titular
     const bancoVal = (mov.banco || '') + '|' + (mov.titular || '') + '|' + (mov.categoria_cuenta || '');
@@ -1448,11 +1464,11 @@ function toggleDesgloseEdit() {
 function agregarDesgloseEdit(benef, ced, monto) {
     const lista = document.getElementById('lista_desglose_edit');
     const html = `
-        <div class="row-desglose" style="display: flex; gap: 10px; margin-bottom: 8px;">
-            <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" value="${benef || ''}" style="flex: 2; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="text" name="desglose_cedula[]" placeholder="Cédula" value="${ced || ''}" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="number" step="0.01" name="desglose_monto[]" placeholder="Monto Bs" value="${monto || ''}" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">&times;</button>
+        <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+            <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" value="${benef || ''}" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="text" name="desglose_cedula[]" placeholder="Cédula" value="${ced || ''}" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="number" step="0.01" name="desglose_monto[]" placeholder="Monto Bs" value="${monto || ''}" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0;">&times;</button>
         </div>`;
     lista.insertAdjacentHTML('beforeend', html);
 }
