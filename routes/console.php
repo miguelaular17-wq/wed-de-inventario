@@ -16,6 +16,7 @@ Schedule::call(function () {
 })->dailyAt('02:00');
 
 Schedule::command('finanzas:reset')->dailyAt('02:00');
+Schedule::command('contratos:notificar')->dailyAt('08:00');
 
 Schedule::call(function () {
     $limite = \Illuminate\Support\Carbon::now()->subDays(2);

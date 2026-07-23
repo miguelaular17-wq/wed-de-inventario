@@ -332,9 +332,9 @@ WITH product_metrics AS (
         }
         if (!empty($filters['estado_filter']) && $filters['estado_filter'] !== 'Todos') {
             if ($filters['estado_filter'] === 'Sin estado') {
-                $items = $items->filter(fn($item) => $item['estado'] === null);
+                $items = $items->filter(fn($item) => ($item['estado'] ?? null) === null);
             } else {
-                $items = $items->filter(fn($item) => $item['estado'] === $filters['estado_filter']);
+                $items = $items->filter(fn($item) => ($item['estado'] ?? null) === $filters['estado_filter']);
             }
         }
         if (!empty($filters['semaforo_filter']) && $filters['semaforo_filter'] !== 'Todos') {

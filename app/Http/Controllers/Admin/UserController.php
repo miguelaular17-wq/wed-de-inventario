@@ -9,9 +9,21 @@ use Illuminate\View\View;
 
 class UserController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $users = User::orderBy('name')->get();
+        $search = $request->query('search');
+        
+        $query = User::query();
+        
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('role', 'like', "%{$search}%");
+            });
+        }
+        
+        $users = $query->orderBy('name')->get();
 
         $casheaLevelsPath = storage_path('app/cashea_levels.json');
         $defaultLevels = [
@@ -36,6 +48,7 @@ class UserController extends Controller
 
         return view('admin.users.index', [
             'users' => $users,
+            'search' => $search,
             'sedes' => config('inventario.sedes_locales'),
             'casheaLevels' => $casheaLevels,
         ]);

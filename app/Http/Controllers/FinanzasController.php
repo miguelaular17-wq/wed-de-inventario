@@ -242,27 +242,7 @@ class FinanzasController extends Controller
 
         $comprobante_url = null;
         if ($request->hasFile('comprobante')) {
-            $file = $request->file('comprobante');
-            $ref = !empty($data['referencia']) ? preg_replace('/[^a-zA-Z0-9_-]/', '_', $data['referencia']) : uniqid();
-            $fileName = 'comprobante_' . $ref . '_' . date('Ymd_His') . '.' . $file->getClientOriginalExtension();
-            $fileContent = file_get_contents($file->getRealPath());
-            
-            $supabaseUrl = env('SUPABASE_URL');
-            $supabaseKey = env('SUPABASE_KEY');
-            
-            if ($supabaseUrl && $supabaseKey) {
-                $supabaseUrl = rtrim($supabaseUrl, '/');
-                $uploadUrl = "{$supabaseUrl}/storage/v1/object/comprobantes/{$fileName}";
-                
-                $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
-                    'Authorization' => "Bearer {$supabaseKey}",
-                    'Content-Type' => $file->getClientMimeType(),
-                ])->withBody($fileContent, $file->getClientMimeType())->post($uploadUrl);
-                
-                if ($response->successful()) {
-                    $comprobante_url = "{$supabaseUrl}/storage/v1/object/public/comprobantes/{$fileName}";
-                }
-            }
+            $comprobante_url = $this->uploadComprobante($request->file('comprobante'), $data['referencia'] ?? null);
         }
 
         $desglose = null;
@@ -285,29 +265,166 @@ class FinanzasController extends Controller
         }
 
         FlujoCaja::create([
-            'fecha' => $data['fecha'],
-            'tipo' => 'egreso',
-            'categoria_egreso' => $data['categoria_egreso'],
-            'banco' => $banco,
-            'titular' => $titular,
-            'categoria_cuenta' => $categoria_cuenta,
-            'banco_receptor' => $banco_receptor,
-            'titular_receptor' => $titular_receptor,
-            'referencia' => $data['referencia'],
-            'monto_usd' => $data['monto_usd'],
-            'tasa_cambio' => $data['tasa_cambio'],
+            'fecha'                 => $data['fecha'],
+            'tipo'                  => 'egreso',
+            'categoria_egreso'      => $data['categoria_egreso'],
+            'banco'                 => $banco,
+            'titular'               => $titular,
+            'categoria_cuenta'      => $categoria_cuenta,
+            'banco_receptor'        => $banco_receptor,
+            'titular_receptor'      => $titular_receptor,
+            'referencia'            => $data['referencia'],
+            'monto_usd'             => $data['monto_usd'],
+            'tasa_cambio'           => $data['tasa_cambio'],
             'diferencial_cambiario' => $diferencial_cambiario,
-            'monto_bs' => $data['monto_bs'],
-            'comision' => $data['comision'],
-            'tipo_gasto' => $data['tipo_gasto'] ?? null,
-            'motivo' => $data['motivo'],
-            'sede' => $data['sede'] ?? null,
-            'placa_vehiculo' => $data['placa_vehiculo'] ?? null,
-            'comprobante_url' => $comprobante_url,
-            'desglose' => $desglose,
+            'monto_bs'              => $data['monto_bs'],
+            'comision'              => $data['comision'],
+            'tipo_gasto'            => $data['tipo_gasto'] ?? null,
+            'motivo'                => $data['motivo'],
+            'sede'                  => $data['sede'] ?? null,
+            'placa_vehiculo'        => $data['placa_vehiculo'] ?? null,
+            'comprobante_url'       => $comprobante_url,
+            'comprobantes'          => $comprobante_url ? [$comprobante_url] : null,
+            'desglose'              => $desglose,
         ]);
 
         return redirect()->back()->with('success', 'Egreso registrado correctamente.');
+    }
+
+    private function uploadComprobante($file, ?string $referencia): ?string
+    {
+        $ref = !empty($referencia) ? preg_replace('/[^a-zA-Z0-9_-]/', '_', $referencia) : uniqid();
+        $fileName = 'comprobante_' . $ref . '_' . date('Ymd_His') . '.' . $file->getClientOriginalExtension();
+        $fileContent = file_get_contents($file->getRealPath());
+
+        $supabaseUrl = env('SUPABASE_URL');
+        $supabaseKey = env('SUPABASE_KEY');
+
+        if ($supabaseUrl && $supabaseKey) {
+            $supabaseUrl = rtrim($supabaseUrl, '/');
+            $uploadUrl = "{$supabaseUrl}/storage/v1/object/comprobantes/{$fileName}";
+
+            $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
+                'Authorization' => "Bearer {$supabaseKey}",
+                'Content-Type' => $file->getClientMimeType(),
+            ])->withBody($fileContent, $file->getClientMimeType())->post($uploadUrl);
+
+            if ($response->successful()) {
+                return "{$supabaseUrl}/storage/v1/object/public/comprobantes/{$fileName}";
+            }
+        }
+        return null;
+    }
+
+    public function updateEgreso(Request $request, $id)
+    {
+        $egreso = FlujoCaja::findOrFail($id);
+
+        $data = $request->validate([
+            'banco_titular'          => 'required|string',
+            'banco_titular_receptor' => 'nullable|string',
+            'referencia'             => 'nullable|string|max:255',
+            'monto_usd'              => 'nullable|numeric',
+            'tasa_cambio'            => 'nullable|numeric',
+            'monto_bs'               => 'nullable|numeric',
+            'comision'               => 'nullable|numeric',
+            'tipo_gasto'             => 'nullable|string',
+            'motivo'                 => 'nullable|string',
+            'sede'                   => 'nullable|string',
+            'placa_vehiculo'         => 'nullable|string',
+            'fecha'                  => 'required|date',
+            'desglose_beneficiario'  => 'nullable|array',
+            'desglose_cedula'        => 'nullable|array',
+            'desglose_monto'         => 'nullable|array',
+            'comprobantes_eliminar'  => 'nullable|array',
+        ]);
+
+        $cuentaInfo = explode('|', $data['banco_titular']);
+        $banco = $cuentaInfo[0] ?? null;
+        $titular = $cuentaInfo[1] ?? null;
+        $categoria_cuenta = $cuentaInfo[2] ?? null;
+
+        $banco_receptor = null;
+        $titular_receptor = null;
+        if (!empty($data['banco_titular_receptor'])) {
+            $cuentaReceptorInfo = explode('|', $data['banco_titular_receptor']);
+            $banco_receptor = $cuentaReceptorInfo[0] ?? null;
+            $titular_receptor = $cuentaReceptorInfo[1] ?? null;
+        }
+
+        $resumen = \App\Models\FinanzasResumen::where('fecha', $data['fecha'])->first();
+        $tasa_bcv = $resumen ? ($resumen->tasa_bcv_usd ?: 1) : 1;
+        $monto_usd = $data['monto_usd'] ?: 0;
+        $monto_bs  = $data['monto_bs'] ?: 0;
+        $diferencial_cambiario = 0;
+        if ($egreso->categoria_egreso !== 'traslados' && $tasa_bcv > 0) {
+            $diferencial_cambiario = (($monto_usd * $tasa_bcv) - $monto_bs) / $tasa_bcv;
+        }
+
+        // Manage comprobantes array: start from existing
+        $comprobantes = $egreso->comprobantes ?? [];
+
+        // Migrate old single comprobante_url if not yet in array
+        if ($egreso->comprobante_url && !in_array($egreso->comprobante_url, $comprobantes)) {
+            array_unshift($comprobantes, $egreso->comprobante_url);
+        }
+
+        // Remove comprobantes the user flagged for deletion
+        if (!empty($data['comprobantes_eliminar'])) {
+            $comprobantes = array_values(array_filter($comprobantes, fn($url) => !in_array($url, $data['comprobantes_eliminar'])));
+        }
+
+        // Upload new comprobantes
+        if ($request->hasFile('comprobantes_nuevos')) {
+            foreach ($request->file('comprobantes_nuevos') as $file) {
+                $url = $this->uploadComprobante($file, $data['referencia'] ?? $egreso->referencia);
+                if ($url) {
+                    $comprobantes[] = $url;
+                }
+            }
+        }
+
+        // Desglose
+        $desglose = null;
+        if (!empty($data['desglose_beneficiario'])) {
+            $desglose = [];
+            foreach ($data['desglose_beneficiario'] as $index => $beneficiario) {
+                $cedula = $data['desglose_cedula'][$index] ?? '';
+                $monto_desglose = $data['desglose_monto'][$index] ?? 0;
+                if ($beneficiario || $cedula || $monto_desglose) {
+                    $desglose[] = [
+                        'beneficiario' => $beneficiario,
+                        'cedula'       => $cedula,
+                        'monto'        => (float) $monto_desglose,
+                    ];
+                }
+            }
+            if (empty($desglose)) $desglose = null;
+        }
+
+        $egreso->update([
+            'fecha'                 => $data['fecha'],
+            'banco'                 => $banco,
+            'titular'               => $titular,
+            'categoria_cuenta'      => $categoria_cuenta,
+            'banco_receptor'        => $banco_receptor,
+            'titular_receptor'      => $titular_receptor,
+            'referencia'            => $data['referencia'] ?? null,
+            'monto_usd'             => $data['monto_usd'],
+            'tasa_cambio'           => $data['tasa_cambio'],
+            'diferencial_cambiario' => $diferencial_cambiario,
+            'monto_bs'              => $data['monto_bs'],
+            'comision'              => $data['comision'],
+            'tipo_gasto'            => $data['tipo_gasto'] ?? null,
+            'motivo'                => $data['motivo'],
+            'sede'                  => $data['sede'] ?? null,
+            'placa_vehiculo'        => $data['placa_vehiculo'] ?? null,
+            'comprobante_url'       => $comprobantes[0] ?? $egreso->comprobante_url,
+            'comprobantes'          => empty($comprobantes) ? null : array_values($comprobantes),
+            'desglose'              => $desglose,
+        ]);
+
+        return redirect()->back()->with('success', 'Egreso actualizado correctamente.');
     }
 
     public function storeEgresosBulk(Request $request)

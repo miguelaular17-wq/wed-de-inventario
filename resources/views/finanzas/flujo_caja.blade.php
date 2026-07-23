@@ -436,6 +436,7 @@
                         <th class="col-number" style="text-align: right;">Dif. Cambiario</th>
                         <th class="col-number" style="text-align: right;">BS</th>
                         <th class="col-number" style="text-align: right;">Comisión</th>
+                        <th style="text-align: center; width: 80px;">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -461,11 +462,31 @@
                             <td class="col-number" style="text-align: right;">{{ $mov->tasa_cambio ? number_format($mov->tasa_cambio, 2) : '-' }}</td>
                             <td class="col-number" style="text-align: right; color: var(--danger);">{{ $mov->diferencial_cambiario ? number_format($mov->diferencial_cambiario, 2) : '-' }}</td>
                             <td class="col-number" style="text-align: right; font-weight: 500;">{{ $mov->monto_bs ? 'Bs.'.number_format($mov->monto_bs, 2) : '-' }}</td>
-                            <td class="col-number" style="text-align: right;">{{ $mov->comision ? number_format($mov->comision, 2) : '-' }}</td>
+                            <td class="col-number" style="text-align: right;">
+                                {{ $mov->comision ? number_format($mov->comision, 2) : '-' }}
+                            </td>
+                            <td style="text-align: center; white-space: nowrap;">
+                                @php
+                                    $allComprobantes = array_filter(array_merge(
+                                        $mov->comprobantes ?? [],
+                                        ($mov->comprobante_url && !in_array($mov->comprobante_url, $mov->comprobantes ?? [])) ? [$mov->comprobante_url] : []
+                                    ));
+                                @endphp
+                                {{-- Galería --}}
+                                @if(count($allComprobantes) > 0)
+                                    <button type="button" onclick='abrirGaleria(@json(array_values($allComprobantes)))'
+                                        title="Ver comprobantes ({{ count($allComprobantes) }})"
+                                        style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer; margin-right: 2px;">📎 {{ count($allComprobantes) }}</button>
+                                @endif
+                                {{-- Editar --}}
+                                <button type="button" onclick='abrirEditarEgreso(@json($mov))'
+                                    title="Editar egreso"
+                                    style="background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">✏️</button>
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" style="text-align: center; padding: 30px; color: var(--muted);">No hay egresos realizados.</td>
+                            <td colspan="10" style="text-align: center; padding: 30px; color: var(--muted);">No hay egresos realizados.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -1289,6 +1310,171 @@ function verDesglose(desglose) {
 function closeDesgloseModal() {
     document.getElementById('modalDesglose').style.display = 'none';
 }
+
+// ===== GALERÍA DE COMPROBANTES =====
+function abrirGaleria(urls) {
+    const grid = document.getElementById('galeriaGrid');
+    grid.innerHTML = '';
+    urls.forEach((url, i) => {
+        const isImage = /\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i.test(url);
+        const item = document.createElement('div');
+        item.style.cssText = 'position:relative;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#f8fafc;display:flex;flex-direction:column;align-items:center;';
+        if (isImage) {
+            item.innerHTML = `
+                <img src="${url}" style="max-width:100%;max-height:200px;object-fit:contain;cursor:zoom-in;" onclick="window.open('${url}','_blank')">
+                <div style="padding:6px;display:flex;gap:6px;">
+                    <a href="${url}" download target="_blank" style="font-size:0.8rem;background:#3b82f6;color:white;padding:4px 10px;border-radius:4px;text-decoration:none;">⬇ Descargar</a>
+                    <a href="${url}" target="_blank" style="font-size:0.8rem;background:#e0f2fe;color:#0284c7;padding:4px 10px;border-radius:4px;text-decoration:none;">🔍 Ver</a>
+                </div>`;
+        } else {
+            item.innerHTML = `
+                <div style="padding:20px;text-align:center;font-size:0.85rem;color:#64748b;">📄 Documento ${i+1}</div>
+                <div style="padding:6px;display:flex;gap:6px;">
+                    <a href="${url}" download target="_blank" style="font-size:0.8rem;background:#3b82f6;color:white;padding:4px 10px;border-radius:4px;text-decoration:none;">⬇ Descargar</a>
+                    <a href="${url}" target="_blank" style="font-size:0.8rem;background:#e0f2fe;color:#0284c7;padding:4px 10px;border-radius:4px;text-decoration:none;">🔍 Ver</a>
+                </div>`;
+        }
+        grid.appendChild(item);
+    });
+    document.getElementById('modalGaleria').style.display = 'flex';
+}
+
+function cerrarGaleria() {
+    document.getElementById('modalGaleria').style.display = 'none';
+}
+
+// ===== EDITAR EGRESO =====
+function abrirEditarEgreso(mov) {
+    const m = document.getElementById('modalEditarEgreso');
+    const f = document.getElementById('formEditarEgreso');
+
+    // Set action URL
+    f.action = '/finanzas/flujo-caja/egreso/' + mov.id;
+
+    // Fill fields
+    f.querySelector('[name="fecha"]').value          = mov.fecha || '';
+    f.querySelector('[name="referencia"]').value     = mov.referencia || '';
+    f.querySelector('[name="monto_usd"]').value      = mov.monto_usd || '';
+    f.querySelector('[name="tasa_cambio"]').value    = mov.tasa_cambio || '';
+    f.querySelector('[name="monto_bs"]').value       = mov.monto_bs || '';
+    f.querySelector('[name="comision"]').value       = mov.comision || '';
+    f.querySelector('[name="motivo"]').value         = mov.motivo || '';
+    f.querySelector('[name="sede"]').value           = mov.sede || '';
+    f.querySelector('[name="placa_vehiculo"]').value = mov.placa_vehiculo || '';
+    // Populate tipo_gasto select from the Nuevo Egreso select (same list)
+    const srcTG = document.getElementById('tipo_gasto');
+    const dstTG = document.getElementById('edit_tipo_gasto');
+    if (srcTG && dstTG && dstTG.options.length <= 1) {
+        Array.from(srcTG.options).forEach(opt => {
+            const newOpt = opt.cloneNode(true);
+            dstTG.appendChild(newOpt);
+        });
+    }
+    if (dstTG) dstTG.value = mov.tipo_gasto || '';
+
+    // Banco titular
+    const bancoVal = (mov.banco || '') + '|' + (mov.titular || '') + '|' + (mov.categoria_cuenta || '');
+    const bancoSelect = f.querySelector('[name="banco_titular"]');
+    if (bancoSelect) {
+        // Try exact match first
+        let found = false;
+        for (let opt of bancoSelect.options) {
+            if (opt.value === bancoVal) { opt.selected = true; found = true; break; }
+        }
+        if (!found) {
+            // fallback: search by banco+titular partial
+            for (let opt of bancoSelect.options) {
+                const parts = opt.value.split('|');
+                if (parts[0] === mov.banco && parts[1] === mov.titular) { opt.selected = true; break; }
+            }
+        }
+    }
+
+    // Existing comprobantes gallery
+    const compSection = document.getElementById('editComprobantesActuales');
+    compSection.innerHTML = '';
+    const allComps = [];
+    if (mov.comprobantes && mov.comprobantes.length) {
+        mov.comprobantes.forEach(u => allComps.push(u));
+    } else if (mov.comprobante_url) {
+        allComps.push(mov.comprobante_url);
+    }
+
+    allComps.forEach((url, i) => {
+        const isImg = /\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i.test(url);
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;';
+        div.innerHTML = `
+            ${isImg ? `<img src="${url}" style="width:60px;height:50px;object-fit:cover;border-radius:4px;cursor:pointer;" onclick="window.open('${url}','_blank')">` : `<span style="font-size:1.5rem;">📄</span>`}
+            <div style="flex:1;font-size:0.8rem;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${url.split('/').pop()}</div>
+            <a href="${url}" target="_blank" style="font-size:0.75rem;color:#0284c7;text-decoration:none;">Ver</a>
+            <label style="font-size:0.75rem;color:#dc2626;cursor:pointer;">
+                <input type="checkbox" name="comprobantes_eliminar[]" value="${url}"> Eliminar
+            </label>`;
+        compSection.appendChild(div);
+    });
+    if (allComps.length === 0) {
+        compSection.innerHTML = '<p style="color:#94a3b8;font-size:0.85rem;">Sin comprobantes adjuntos</p>';
+    }
+
+    // Desglose
+    const chk = document.getElementById('chk_desglose_edit');
+    const listaDes = document.getElementById('lista_desglose_edit');
+    const containerDes = document.getElementById('container_desglose_edit');
+    listaDes.innerHTML = '';
+    if (mov.desglose && mov.desglose.length) {
+        chk.checked = true;
+        containerDes.style.display = 'block';
+        mov.desglose.forEach(item => {
+            agregarDesgloseEdit(item.beneficiario, item.cedula, item.monto);
+        });
+    } else {
+        chk.checked = false;
+        containerDes.style.display = 'none';
+    }
+
+    m.style.display = 'flex';
+}
+
+function cerrarEditarEgreso() {
+    document.getElementById('modalEditarEgreso').style.display = 'none';
+}
+
+function toggleDesgloseEdit() {
+    const chk = document.getElementById('chk_desglose_edit');
+    document.getElementById('container_desglose_edit').style.display = chk.checked ? 'block' : 'none';
+}
+
+function agregarDesgloseEdit(benef, ced, monto) {
+    const lista = document.getElementById('lista_desglose_edit');
+    const html = `
+        <div class="row-desglose" style="display: flex; gap: 10px; margin-bottom: 8px;">
+            <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" value="${benef || ''}" style="flex: 2; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="text" name="desglose_cedula[]" placeholder="Cédula" value="${ced || ''}" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="number" step="0.01" name="desglose_monto[]" placeholder="Monto Bs" value="${monto || ''}" style="flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">&times;</button>
+        </div>`;
+    lista.insertAdjacentHTML('beforeend', html);
+}
+
+function validarDesgloseEdit(event) {
+    const chk = document.getElementById('chk_desglose_edit');
+    if (chk && chk.checked) {
+        const montoBsInput = document.querySelector('#formEditarEgreso [name="monto_bs"]');
+        const montoTotal = parseFloat(montoBsInput ? montoBsInput.value : 0) || 0;
+        let sumaDesglose = 0;
+        document.querySelectorAll('#lista_desglose_edit input[name="desglose_monto[]"]').forEach(inp => {
+            sumaDesglose += parseFloat(inp.value) || 0;
+        });
+        if (Math.abs(montoTotal - sumaDesglose) > 0.05) {
+            alert(`Error: La suma del desglose (Bs. ${sumaDesglose.toFixed(2)}) no coincide con el Monto Bs (Bs. ${montoTotal.toFixed(2)}).`);
+            event.preventDefault();
+            return false;
+        }
+    }
+    return true;
+}
+
 </script>
 
 <!-- Modal Ver Desglose -->
@@ -1317,6 +1503,133 @@ function closeDesgloseModal() {
         <div style="text-align: right; margin-top: 20px;">
             <button type="button" onclick="closeDesgloseModal()" style="padding: 8px 16px; background: #94a3b8; color: white; border: none; border-radius: 6px; cursor: pointer;">Cerrar</button>
         </div>
+    </div>
+</div>
+
+<!-- Modal Galería de Comprobantes -->
+<div id="modalGaleria" class="modal-overlay" style="display: none; z-index: 1300; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); align-items: center; justify-content: center;">
+    <div style="background: white; width: 95%; max-width: 700px; max-height: 90vh; overflow-y: auto; padding: 24px; border-radius: 14px; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+        <button type="button" onclick="cerrarGaleria()" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 22px; cursor: pointer;">&times;</button>
+        <h3 style="margin-top: 0; color: var(--blue); display:flex; align-items:center; gap:8px;">📎 Comprobantes de Pago</h3>
+        <div id="galeriaGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 15px;"></div>
+        <div style="text-align: right; margin-top: 20px;">
+            <button type="button" onclick="cerrarGaleria()" style="padding: 8px 20px; background: #94a3b8; color: white; border: none; border-radius: 6px; cursor: pointer;">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Egreso -->
+<div id="modalEditarEgreso" class="modal-overlay" style="display: none; z-index: 1300; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div class="panel modal-box" style="width: 95%; max-width: 650px; position: relative; padding: 20px; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); max-height: 92vh; overflow-y: auto; background: white;">
+        <button type="button" onclick="cerrarEditarEgreso()" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 22px; cursor: pointer;">&times;</button>
+        <h3 style="margin-top: 0; color: var(--blue);">✏️ Editar Egreso</h3>
+
+        <form id="formEditarEgreso" method="POST" action="" enctype="multipart/form-data" onsubmit="return validarDesgloseEdit(event)">
+            @csrf
+
+            <!-- Banco + Referencia -->
+            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
+                <div style="flex: 2;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Banco y Titular</label>
+                    <select name="banco_titular" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                        <option value="">-- Seleccione --</option>
+                        @foreach($cuentas as $cuenta)
+                            <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
+                                {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Ref.</label>
+                    <input type="text" name="referencia" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+            </div>
+
+            <!-- Fecha -->
+            <div style="margin-bottom: 10px;">
+                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Fecha</label>
+                <input type="date" name="fecha" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+
+            <!-- Montos -->
+            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto USD</label>
+                    <input type="number" step="0.01" name="monto_usd" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tasa Cambio</label>
+                    <input type="number" step="0.01" name="tasa_cambio" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto BS</label>
+                    <input type="number" step="0.01" name="monto_bs" id="monto_bs_edit" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+            </div>
+
+            <!-- Comisión -->
+            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Comisión</label>
+                    <input type="number" step="0.01" name="comision" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Sede</label>
+                    <input type="text" name="sede" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Placa Veh.</label>
+                    <input type="text" name="placa_vehiculo" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+            </div>
+
+            <!-- Tipo gasto -->
+            <div style="margin-bottom: 10px;">
+                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tipo de Gasto</label>
+                <select id="edit_tipo_gasto" name="tipo_gasto" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
+                    <option value="">-- Seleccione --</option>
+                </select>
+            </div>
+
+            <!-- Motivo -->
+            <div style="margin-bottom: 10px;">
+                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Motivo</label>
+                <input type="text" name="motivo" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+
+            <!-- Comprobantes actuales -->
+            <div style="margin-bottom: 15px; border-top: 1px dashed #cbd5e1; padding-top: 12px;">
+                <h4 style="margin: 0 0 8px; font-size: 0.95rem; color: #475569;">Comprobantes actuales</h4>
+                <div id="editComprobantesActuales"></div>
+            </div>
+
+            <!-- Agregar nuevos comprobantes -->
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Agregar nuevos comprobantes</label>
+                <input type="file" name="comprobantes_nuevos[]" multiple accept="image/*,.pdf" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: #f8fafc;">
+                <p style="margin: 4px 0 0; font-size: 0.8rem; color: #94a3b8;">Puedes seleccionar varias imágenes a la vez</p>
+            </div>
+
+            <!-- Desglose -->
+            <div style="margin-bottom: 15px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 0.95rem;">
+                    <input type="checkbox" id="chk_desglose_edit" onchange="toggleDesgloseEdit()" style="width: 16px; height: 16px;">
+                    Este pago requiere desglose por beneficiarios
+                </label>
+            </div>
+            <div id="container_desglose_edit" style="display: none; background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px;">
+                <h4 style="margin-top: 0; font-size: 0.95rem; color: var(--blue);">Desglose del Pago</h4>
+                <div id="lista_desglose_edit"></div>
+                <button type="button" onclick="agregarDesgloseEdit('','','')" style="margin-top: 5px; padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">+ Añadir persona</button>
+            </div>
+
+            <!-- Buttons -->
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                <button type="button" onclick="cerrarEditarEgreso()" style="padding: 8px 20px; background: #94a3b8; color: white; border: none; border-radius: 6px; cursor: pointer;">Cancelar</button>
+                <button type="submit" style="padding: 8px 20px; background: var(--blue); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Guardar Cambios</button>
+            </div>
+        </form>
     </div>
 </div>
 @endsection

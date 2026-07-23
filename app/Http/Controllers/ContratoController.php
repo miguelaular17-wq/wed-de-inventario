@@ -1,0 +1,833 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Contrato;
+use App\Models\ContratoCuota;
+use App\Models\ContratoSeguimiento;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
+class ContratoController extends Controller
+{
+    // ─────────────────────────────────────────────────────────────────────────
+    // DASHBOARD — KPIs generales
+    // ─────────────────────────────────────────────────────────────────────────
+    public function index()
+    {
+        $hoy = Carbon::today();
+
+        // KPIs de cuotas
+        $totalContratos    = Contrato::where('activo', true)->count();
+        $vencidas          = ContratoCuota::where('estatus', 'vencido')->count();
+        $porVencer3        = ContratoCuota::whereIn('estatus', ['pendiente', 'parcial'])
+                                ->whereBetween('fecha_vencimiento', [$hoy, $hoy->copy()->addDays(3)])->count();
+        $porVencer7        = ContratoCuota::whereIn('estatus', ['pendiente', 'parcial'])
+                                ->whereBetween('fecha_vencimiento', [$hoy, $hoy->copy()->addDays(7)])->count();
+        $porVencer15       = ContratoCuota::whereIn('estatus', ['pendiente', 'parcial'])
+                                ->whereBetween('fecha_vencimiento', [$hoy, $hoy->copy()->addDays(15)])->count();
+        $montoPendiente    = ContratoCuota::whereIn('estatus', ['pendiente', 'vencido', 'parcial'])->sum('saldo');
+        $cobradoMes        = ContratoCuota::where('estatus', 'pagado')
+                                ->whereMonth('fecha_pago', $hoy->month)
+                                ->whereYear('fecha_pago', $hoy->year)
+                                ->sum('monto_pagado');
+
+        // Alertas urgentes del día: cuotas que vencen hoy o ya están vencidas
+        $alertasHoy = ContratoCuota::with('contrato')
+            ->where(function ($q) use ($hoy) {
+                $q->where('fecha_vencimiento', $hoy)
+                  ->orWhere(function ($q2) use ($hoy) {
+                      $q2->where('estatus', 'vencido')
+                         ->where('fecha_vencimiento', '>=', $hoy->copy()->subDays(3));
+                  });
+            })
+            ->whereIn('estatus', ['pendiente', 'vencido', 'parcial'])
+            ->orderBy('fecha_vencimiento')
+            ->limit(20)
+            ->get();
+
+        // Promesas de pago para hoy
+        $promesasHoy = ContratoSeguimiento::with(['contrato', 'cuota'])
+            ->where('resultado', 'PROMESA_PAGO')
+            ->where('fecha_prometida_pago', $hoy)
+            ->get();
+
+        // Indicadores del mes (últimos 6 meses)
+        $indicadoresMes = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $mes = $hoy->copy()->subMonths($i);
+            $indicadoresMes[] = [
+                'mes'      => $mes->translatedFormat('M Y'),
+                'cobrado'  => ContratoCuota::where('estatus', 'pagado')
+                    ->whereMonth('fecha_pago', $mes->month)
+                    ->whereYear('fecha_pago', $mes->year)
+                    ->sum('monto_pagado'),
+                'vencido'  => ContratoCuota::where('estatus', 'vencido')
+                    ->whereMonth('fecha_vencimiento', $mes->month)
+                    ->whereYear('fecha_vencimiento', $mes->year)
+                    ->sum('saldo'),
+            ];
+        }
+
+        return view('contratos.dashboard', compact(
+            'totalContratos', 'vencidas', 'porVencer3', 'porVencer7', 'porVencer15',
+            'montoPendiente', 'cobradoMes', 'alertasHoy', 'promesasHoy', 'indicadoresMes'
+        ));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LISTA — con filtros
+    // ─────────────────────────────────────────────────────────────────────────
+    public function listar(Request $request)
+    {
+        $query = Contrato::with(['responsable', 'cuotas'])
+            ->where('activo', true);
+
+        if ($request->filled('q')) {
+            $q = $request->q;
+            $query->where(function ($sub) use ($q) {
+                $sub->where('cliente', 'ilike', "%{$q}%")
+                    ->orWhere('numero_contrato', 'ilike', "%{$q}%")
+                    ->orWhere('contacto', 'ilike', "%{$q}%");
+            });
+        }
+
+        if ($request->filled('sede')) {
+            $query->where('sede', $request->sede);
+        }
+
+        if ($request->filled('responsable_id')) {
+            $query->where('responsable_id', $request->responsable_id);
+        }
+
+        $contratos = $query->orderBy('cliente')->paginate(50)->withQueryString();
+
+        // Enriquecer con KPIs calculados
+        $contratos->getCollection()->transform(function (Contrato $c) {
+            $c->_saldo_pendiente   = $c->saldoPendiente();
+            $c->_dias_atraso       = $c->diasAtraso();
+            $c->_estatus_general   = $c->estatusGeneral();
+            $c->_proxima_cuota     = $c->proximaCuota();
+            return $c;
+        });
+
+        $asesores = User::orderBy('name')->get(['id', 'name']);
+        $sedes    = Contrato::distinct()->pluck('sede')->filter()->sort()->values();
+
+        return view('contratos.lista', compact('contratos', 'asesores', 'sedes'));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SHOW — Detalle de un contrato
+    // ─────────────────────────────────────────────────────────────────────────
+    public function show(int $id)
+    {
+        $contrato = Contrato::with([
+            'cuotas',
+            'seguimientos.usuario',
+            'seguimientos.cuota',
+            'responsable',
+        ])->findOrFail($id);
+
+        $asesores   = User::orderBy('name')->get(['id', 'name']);
+        $resultados = ContratoSeguimiento::RESULTADOS;
+
+        return view('contratos.show', compact('contrato', 'asesores', 'resultados'));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CREATE / STORE — Nuevo contrato
+    // ─────────────────────────────────────────────────────────────────────────
+    public function create()
+    {
+        $asesores = User::orderBy('name')->get(['id', 'name']);
+        $lastContrato = Contrato::latest('id')->first();
+        $nextId = $lastContrato ? $lastContrato->id + 1 : 1;
+        $numeroGenerado = 'CT-' . str_pad($nextId, 6, '0', STR_PAD_LEFT);
+        
+        return view('contratos.create', compact('asesores', 'numeroGenerado'));
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'numero_contrato'    => 'required|string|max:100|unique:contratos',
+            'cliente'            => 'required|string|max:255',
+            'garantia'           => 'nullable|string|max:255',
+            'contacto'           => 'nullable|string|max:255',
+            'telefono'           => 'nullable|string|max:50',
+            'sede'               => 'nullable|string|max:100',
+            'capital'            => 'required|numeric|min:0',
+            'interes_porcentaje' => 'required|numeric|min:0',
+            'cuota_fija'         => 'required|numeric|min:0',
+            'fecha_inicio'       => 'required|date',
+            'frecuencia'         => 'required|in:MENSUAL,QUINCENAL',
+            'numero_cuotas'      => 'required|integer|min:1|max:360',
+            'responsable_id'     => 'nullable|exists:users,id',
+            'observaciones'      => 'nullable|string',
+        ]);
+
+        $data['total_a_pagar'] = $data['capital']; // As user requested: capital + unpaid dues (which is 0 on creation)
+
+        $numeroCuotas = (int) $data['numero_cuotas'];
+        unset($data['numero_cuotas']);
+
+        DB::transaction(function () use ($data, $numeroCuotas) {
+            $contrato = Contrato::create($data);
+
+            // Generar cuotas automáticamente
+            $fecha = Carbon::parse($data['fecha_inicio']);
+            for ($i = 1; $i <= $numeroCuotas; $i++) {
+                if ($data['frecuencia'] === 'QUINCENAL') {
+                    $fechaVenc = $fecha->copy()->addDays(15 * $i);
+                } else {
+                    $fechaVenc = $fecha->copy()->addMonths($i);
+                }
+
+                ContratoCuota::create([
+                    'contrato_id'      => $contrato->id,
+                    'numero_cuota'     => $i,
+                    'fecha_vencimiento' => $fechaVenc,
+                    'monto'            => $data['cuota_fija'],
+                    'saldo'            => $data['cuota_fija'],
+                    'estatus'          => 'pendiente',
+                ]);
+            }
+        });
+
+        return redirect()->route('contratos.lista')->with('success', 'Contrato creado correctamente.');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // EDIT / UPDATE
+    // ─────────────────────────────────────────────────────────────────────────
+    public function edit(int $id)
+    {
+        $contrato = Contrato::findOrFail($id);
+        $asesores = User::orderBy('name')->get(['id', 'name']);
+        return view('contratos.edit', compact('contrato', 'asesores'));
+    }
+
+    public function update(Request $request, int $id)
+    {
+        $contrato = Contrato::findOrFail($id);
+        $data = $request->validate([
+            'cliente'            => 'required|string|max:255',
+            'garantia'           => 'nullable|string|max:255',
+            'contacto'           => 'nullable|string|max:255',
+            'telefono'           => 'nullable|string|max:50',
+            'sede'               => 'nullable|string|max:100',
+            'capital'            => 'required|numeric|min:0',
+            'interes_porcentaje' => 'required|numeric|min:0',
+            'cuota_fija'         => 'required|numeric|min:0',
+            'responsable_id'     => 'nullable|exists:users,id',
+            'observaciones'      => 'nullable|string',
+            'activo'             => 'boolean',
+        ]);
+
+        $contrato->update($data);
+        return redirect()->route('contratos.show', $id)->with('success', 'Contrato actualizado correctamente.');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GENERAR REPORTE (PDF)
+    // ─────────────────────────────────────────────────────────────────────────
+    public function reporte(int $id)
+    {
+        $contrato = Contrato::with(['cuotas' => function($q) {
+            $q->orderBy('numero_cuota');
+        }, 'responsable'])->findOrFail($id);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('contratos.reporte', compact('contrato'));
+        return $pdf->stream('contrato_' . $contrato->numero_contrato . '.pdf');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // REGISTRAR PAGO de una cuota
+    // ─────────────────────────────────────────────────────────────────────────
+    public function registrarPago(Request $request, int $cuotaId)
+    {
+        $cuota = ContratoCuota::findOrFail($cuotaId);
+
+        $data = $request->validate([
+            'forma_pago'    => 'required|string',
+            'monto_pagado'  => 'required|numeric|min:0',
+            'abono_capital' => 'nullable|numeric|min:0',
+            'fecha_pago'    => 'required|date',
+            'comentario'    => 'nullable|string',
+        ]);
+
+        $montoPagado  = (float) $data['monto_pagado'];
+        $abonoCapital = (float) ($data['abono_capital'] ?? 0);
+        
+        if ($montoPagado <= 0 && $abonoCapital <= 0) {
+            return redirect()->back()->withErrors(['monto_pagado' => 'Debe ingresar un monto o un abono a capital mayor a 0.']);
+        }
+        
+        // Si el interés es 0, todo lo ingresado en monto_pagado se suma directamente al abono a capital
+        if ((float) $cuota->contrato->interes_porcentaje == 0) {
+            $abonoCapital += $montoPagado;
+        }
+
+        $montoTotal   = (float) $cuota->monto;
+        $saldoPrevio  = (float) $cuota->saldo > 0 ? (float) $cuota->saldo : $montoTotal;
+
+        $nuevoSaldo = max(0, $saldoPrevio - $montoPagado);
+
+        if ($nuevoSaldo <= 0) {
+            $estatus = 'pagado';
+        } elseif ($montoPagado > 0) {
+            $estatus = 'parcial';
+        } else {
+            $estatus = $cuota->estatus;
+        }
+
+        $cuota->update([
+            'monto_pagado'  => $cuota->monto_pagado + $montoPagado,
+            'abono_capital' => $cuota->abono_capital + $abonoCapital,
+            'saldo'         => $nuevoSaldo,
+            'estatus'       => $estatus,
+            'fecha_pago'    => $data['fecha_pago'],
+            'forma_pago'    => $data['forma_pago'],
+        ]);
+
+        // Si hay abono a capital, actualizar el capital del contrato
+        if ($abonoCapital > 0) {
+            $contrato = $cuota->contrato;
+            $nuevoCapital = max(0, $contrato->capital - $abonoCapital);
+            $contrato->update(['capital' => $nuevoCapital]);
+        }
+
+        // Registrar seguimiento automático
+        ContratoSeguimiento::create([
+            'contrato_id'       => $cuota->contrato_id,
+            'cuota_id'          => $cuota->id,
+            'usuario_id'        => Auth::id(),
+            'fecha_hora'        => now(),
+            'resultado'         => $estatus === 'pagado' ? 'PAGO_COMPLETO' : 'PAGO_PARCIAL',
+            'comentarios'       => $data['comentario'] ?? "Pago registrado: \${$montoPagado} via {$data['forma_pago']}",
+            'contactado'        => true,
+        ]);
+
+        return redirect()->back()->with('success', 'Pago registrado correctamente.');
+    }
+
+    public function generarSiguienteCuota(int $id)
+    {
+        $contrato = Contrato::findOrFail($id);
+
+        if ($contrato->capital <= 0) {
+            return redirect()->back()->with('error', 'El contrato ya no tiene deuda de capital.');
+        }
+
+        $ultimaCuota = $contrato->cuotas()
+            ->where('estatus', '!=', 'prestamo')
+            ->reorder()
+            ->orderByDesc('fecha_vencimiento')
+            ->orderByDesc('numero_cuota')
+            ->first();
+        
+        $numeroCuota = 1;
+        $fechaVenc = Carbon::parse($contrato->fecha_inicio);
+        
+        if ($ultimaCuota) {
+            // Buscamos el mayor numero_cuota real que existe
+            $maxNumeroCuota = $contrato->cuotas()->max('numero_cuota') ?? 0;
+            $numeroCuota = $maxNumeroCuota + 1;
+            
+            // Usar la fecha de vencimiento o de pago de la última cuota cronológica como base
+            if ($ultimaCuota->fecha_vencimiento) {
+                $fechaBase = Carbon::parse($ultimaCuota->fecha_vencimiento);
+            } elseif ($ultimaCuota->fecha_pago) {
+                $fechaBase = Carbon::parse($ultimaCuota->fecha_pago);
+            } else {
+                $fechaBase = now();
+            }
+            
+            if ($contrato->frecuencia === 'QUINCENAL') {
+                $fechaVenc = $fechaBase->copy()->addDays(15);
+            } else {
+                $fechaVenc = $fechaBase->copy()->addMonths(1);
+            }
+        } else {
+            // Si es la primera cuota, calcula a partir de fecha_inicio
+            if ($contrato->frecuencia === 'QUINCENAL') {
+                $fechaVenc = $fechaVenc->addDays(15);
+            } else {
+                $fechaVenc = $fechaVenc->addMonths(1);
+            }
+        }
+        
+        // El monto de la cuota no puede superar el saldo del capital si la cuota fija es mayor (opcional, pero útil)
+        $montoCuota = $contrato->cuota_fija;
+
+        ContratoCuota::create([
+            'contrato_id'      => $contrato->id,
+            'numero_cuota'     => $numeroCuota,
+            'fecha_vencimiento' => $fechaVenc,
+            'monto'            => $montoCuota,
+            'saldo'            => $montoCuota,
+            'estatus'          => 'pendiente',
+        ]);
+
+        return redirect()->back()->with('success', 'Siguiente cuota generada exitosamente.');
+    }
+
+    public function aumentarCapital(Request $request, int $id)
+    {
+        $contrato = Contrato::findOrFail($id);
+        
+        $data = $request->validate([
+            'monto' => 'required|numeric|min:0.01',
+            'comentario' => 'nullable|string'
+        ]);
+
+        $monto = (float) $data['monto'];
+        $contrato->increment('capital', $monto);
+
+        // Opcional: Registrar un seguimiento automático para que quede en el historial
+        ContratoSeguimiento::create([
+            'contrato_id'       => $contrato->id,
+            'usuario_id'        => Auth::id(),
+            'fecha_hora'        => now(),
+            'resultado'         => 'NUEVO_PRESTAMO',
+            'comentarios'       => 'Se sumaron $' . number_format($monto, 2) . ' al capital. ' . ($data['comentario'] ?? ''),
+            'contactado'        => true,
+        ]);
+
+        // Registrar como una "cuota" especial en el plan de pagos para que se refleje
+        ContratoCuota::create([
+            'contrato_id'      => $contrato->id,
+            'numero_cuota'     => 0, // 0 para que no interfiera con las cuotas regulares o lo manejamos en la vista
+            'fecha_vencimiento' => now(),
+            'monto'            => $monto,
+            'saldo'            => 0,
+            'estatus'          => 'prestamo',
+            'forma_pago'       => 'NUEVO PRÉSTAMO',
+            'fecha_pago'       => now(),
+        ]);
+
+        return redirect()->back()->with('success', 'Préstamo agregado al capital exitosamente y reflejado en el plan de pagos.');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // AGREGAR SEGUIMIENTO / LOG DE LLAMADA
+    // ─────────────────────────────────────────────────────────────────────────
+    public function agregarSeguimiento(Request $request)
+    {
+        $data = $request->validate([
+            'contrato_id'          => 'required|exists:contratos,id',
+            'cuota_id'             => 'nullable|exists:contrato_cuotas,id',
+            'resultado'            => 'required|string',
+            'fecha_prometida_pago' => 'nullable|date',
+            'comentarios'          => 'nullable|string',
+            'contactado'           => 'boolean',
+        ]);
+
+        ContratoSeguimiento::create([
+            'contrato_id'          => $data['contrato_id'],
+            'cuota_id'             => $data['cuota_id'] ?? null,
+            'usuario_id'           => Auth::id(),
+            'fecha_hora'           => now(),
+            'resultado'            => $data['resultado'],
+            'fecha_prometida_pago' => $data['fecha_prometida_pago'] ?? null,
+            'comentarios'          => $data['comentarios'] ?? null,
+            'contactado'           => $data['contactado'] ?? false,
+        ]);
+
+        return redirect()->back()->with('success', 'Seguimiento registrado correctamente.');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CALENDARIO DE VENCIMIENTOS
+    // ─────────────────────────────────────────────────────────────────────────
+    public function calendario(Request $request)
+    {
+        $mes  = (int) $request->get('mes', now()->month);
+        $anio = (int) $request->get('anio', now()->year);
+
+        $inicio = Carbon::createFromDate($anio, $mes, 1)->startOfMonth();
+        $fin    = $inicio->copy()->endOfMonth();
+
+        $cuotas = ContratoCuota::with('contrato')
+            ->whereBetween('fecha_vencimiento', [$inicio, $fin])
+            ->whereIn('estatus', ['pendiente', 'vencido', 'parcial'])
+            ->get()
+            ->groupBy(fn($c) => $c->fecha_vencimiento->format('Y-m-d'));
+
+        $mesAnterior = $inicio->copy()->subMonth();
+        $mesSiguiente = $inicio->copy()->addMonth();
+
+        return view('contratos.calendario', compact(
+            'cuotas', 'inicio', 'fin', 'mes', 'anio', 'mesAnterior', 'mesSiguiente'
+        ));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // IMPORTAR DESDE EXCEL
+    // ─────────────────────────────────────────────────────────────────────────
+    public function importarExcel(Request $request)
+    {
+        $request->validate([
+            'archivo' => 'nullable|file|mimes:xlsx,xls',
+        ]);
+
+        // Usar el archivo subido o el de la ruta por defecto
+        if ($request->hasFile('archivo')) {
+            $path = $request->file('archivo')->getRealPath();
+        } else {
+            $path = base_path('RELACION DE CONTRATOS - COBRANZAS.xlsx');
+        }
+
+        if (!file_exists($path)) {
+            return redirect()->back()->with('error', 'No se encontró el archivo Excel.');
+        }
+
+        try {
+            $resultado = $this->procesarExcel($path);
+            return redirect()->route('contratos.lista')
+                ->with('success', "Importación completada: {$resultado['creados']} contratos creados, {$resultado['actualizados']} actualizados.");
+        } catch (\Throwable $e) {
+            Log::error('Error importando Excel contratos: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error al procesar el Excel: ' . $e->getMessage());
+        }
+    }
+
+    public function procesarExcel(string $path): array
+    {
+        $z = new \ZipArchive();
+        if ($z->open($path) !== true) {
+            throw new \RuntimeException('No se pudo abrir el archivo Excel.');
+        }
+
+        // Leer strings compartidos
+        $shared = $this->leerSharedStrings($z);
+
+        // Leer hojas del workbook
+        $wbXml  = $z->getFromName('xl/workbook.xml');
+        $wbRoot = simplexml_load_string($wbXml);
+        $ns     = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+
+        // Obtener la relación hoja → archivo
+        $relsXml  = $z->getFromName('xl/_rels/workbook.xml.rels');
+        $relsRoot = simplexml_load_string($relsXml);
+        $sheetFiles = [];
+        foreach ($relsRoot->Relationship as $rel) {
+            $sheetFiles[(string)$rel['Id']] = 'xl/' . ltrim((string)$rel['Target'], '/');
+        }
+
+        $creados     = 0;
+        $actualizados = 0;
+
+        foreach ($wbRoot->children($ns)->sheets->children($ns) as $sheet) {
+            $sheetName = (string)$sheet->attributes()['name'];
+            $rId = (string)$sheet->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships')['id'];
+            $sheetFile  = $sheetFiles[$rId] ?? null;
+
+            if (!$sheetFile) continue;
+            $sheetContent = $z->getFromName($sheetFile);
+            if (!$sheetContent) continue;
+
+            try {
+                $rows = $this->parseSheet($sheetContent, $shared);
+                if (count($rows) < 3) {
+                    continue; // Skip hojas vacías
+                }
+
+                $contratoData = $this->extractContratoData($rows, $sheetName);
+                if (!$contratoData) {
+                    echo "Skipped $sheetName because contratoData is null\n";
+                    continue;
+                }
+
+                $cuotasData = $this->extractCuotasData($rows);
+                echo "Sheet $sheetName parsed cuotas: " . count($cuotasData) . "\n";
+
+                // Crear o actualizar contrato
+                $contrato = Contrato::firstOrNew(['numero_contrato' => $contratoData['numero_contrato']]);
+                $esNuevo  = !$contrato->exists;
+
+                unset($contratoData['_layout']); // internal key, not a DB column
+                $contrato->fill($contratoData);
+                $contrato->save();
+                if ($esNuevo) {
+                    // Crear cuotas
+                    foreach ($cuotasData as $cuotaRow) {
+                        ContratoCuota::create(array_merge($cuotaRow, ['contrato_id' => $contrato->id]));
+                    }
+                    $creados++;
+                } else {
+                    // Actualizar cuotas existentes o agregar nuevas
+                    foreach ($cuotasData as $cuotaRow) {
+                        ContratoCuota::updateOrCreate(
+                            ['contrato_id' => $contrato->id, 'numero_cuota' => $cuotaRow['numero_cuota']],
+                            $cuotaRow
+                        );
+                    }
+                    $actualizados++;
+                }
+            } catch (\Throwable $e) {
+                echo "Error procesando hoja '{$sheetName}': " . $e->getMessage() . " at " . $e->getFile() . ":" . $e->getLine() . "\n";
+                continue;
+            }
+        }
+
+        $z->close();
+        return compact('creados', 'actualizados');
+    }
+
+    private function leerSharedStrings(\ZipArchive $z): array
+    {
+        $ssXml = $z->getFromName('xl/sharedStrings.xml');
+        if (!$ssXml) return [];
+
+        $ssRoot = simplexml_load_string($ssXml);
+        $ns     = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+        $shared = [];
+
+        foreach ($ssRoot->children($ns) as $si) {
+            $texts = $si->xpath('.//*[local-name()="t"]');
+            $shared[] = implode('', array_map(fn($t) => (string)$t, $texts));
+        }
+        return $shared;
+    }
+
+    private function parseSheet(string $xml, array $shared): array
+    {
+        $root = simplexml_load_string($xml);
+        $ns   = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+        $rows = [];
+
+        foreach ($root->children($ns)->sheetData->children($ns) as $row) {
+            $rowAttrs = $row->attributes();
+            $rowNum = (int)$rowAttrs['r'] - 1;
+            $rowData = [];
+            foreach ($row->children($ns) as $cell) {
+                $cellAttrs = $cell->attributes();
+                $ref   = (string)$cellAttrs['r'];
+                $colLetter = preg_replace('/[0-9]/', '', $ref);
+                $colIdx = $this->colToIndex($colLetter);
+                $type  = (string)$cellAttrs['t'];
+                $vNode = $cell->children($ns)->v;
+                $val   = $vNode ? (string)$vNode : '';
+
+                if ($type === 's') {
+                    $val = $shared[(int)$val] ?? '';
+                }
+                $rowData[$colIdx] = $val;
+            }
+            $rows[$rowNum] = $rowData;
+        }
+        return $rows;
+    }
+
+    private function colToIndex(string $col): int
+    {
+        $col   = strtoupper($col);
+        $index = 0;
+        for ($i = 0; $i < strlen($col); $i++) {
+            $index = $index * 26 + (ord($col[$i]) - ord('A') + 1);
+        }
+        return $index - 1;
+    }
+
+    private function excelDateToCarbon(string $val): ?Carbon
+    {
+        if (!is_numeric($val) || (int)$val <= 0) return null;
+        try {
+            return Carbon::createFromTimestamp(((int)$val - 25569) * 86400);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function extractContratoData(array $rows, string $sheetName): ?array
+    {
+        $cliente = '';
+        $garantia = '';
+        $contacto = '';
+        $telefono = '';
+        $capital = 0;
+        $interes = 0.10;
+        $cuotaFija = 0;
+        $fechaInicio = null;
+        $frecuencia = 'MENSUAL';
+
+        for ($r = 0; $r < 15; $r++) {
+            if (!isset($rows[$r])) continue;
+            for ($c = 0; $c < 20; $c++) {
+                $cell = strtoupper(trim((string)($rows[$r][$c] ?? '')));
+                if (!$cell) continue;
+                
+                $nextCell = trim((string)($rows[$r][$c+1] ?? ''));
+                if (!$nextCell) $nextCell = trim((string)($rows[$r][$c+2] ?? ''));
+                
+                if (str_contains($cell, 'CLIENTE')) $cliente = $nextCell;
+                if (str_contains($cell, 'GARANTIA')) $garantia = $nextCell;
+                if (str_contains($cell, 'CONTACTO')) $contacto = $nextCell;
+                if (str_contains($cell, 'TELEFONO')) $telefono = $nextCell;
+                if (str_contains($cell, 'CAPITAL ACTUAL') || $cell === 'CAPITAL') {
+                    if (is_numeric($nextCell)) $capital = (float)$nextCell;
+                }
+                if (str_contains($cell, 'PORCENTAJE') || str_contains($cell, 'INTERES')) {
+                    if (is_numeric($nextCell)) $interes = (float)$nextCell;
+                }
+                if (str_contains($cell, 'CUOTA FIJA')) {
+                    if (is_numeric($nextCell)) $cuotaFija = (float)$nextCell;
+                }
+                if (str_contains($cell, 'FRECUENCIA')) {
+                    if (str_contains(strtoupper($nextCell), 'QUINCENAL')) $frecuencia = 'QUINCENAL';
+                }
+                if (str_contains($cell, 'FECHA PRESTAMO') || str_contains($cell, 'FECHA INICIO')) {
+                    if (is_numeric($nextCell) && (int)$nextCell > 40000) $fechaInicio = $this->excelDateToCarbon($nextCell);
+                    else if (strtotime($nextCell)) $fechaInicio = Carbon::parse($nextCell);
+                }
+            }
+        }
+
+        if (empty($cliente)) return null;
+
+        // Si el capital no se encontró en las cabeceras, buscar en la fila del PERIODO 0
+        if ($capital == 0 || $cuotaFija == 0) {
+            $headerRow = -1;
+            $colMap = [];
+            for ($r = 0; $r < 20; $r++) {
+                if (!isset($rows[$r])) continue;
+                $rowStr = strtoupper(implode(' ', array_map('trim', $rows[$r])));
+                if (str_contains($rowStr, 'PERIODO') || str_contains($rowStr, 'SALDO')) {
+                    $headerRow = $r;
+                    foreach ($rows[$r] as $idx => $val) {
+                        $val = strtoupper(trim((string)$val));
+                        if ($val) $colMap[$val] = $idx;
+                    }
+                    break;
+                }
+            }
+            if ($headerRow !== -1) {
+                // Fila de periodo 0 suele ser $headerRow + 1
+                $r0 = $headerRow + 1;
+                if (isset($rows[$r0])) {
+                    if ($capital == 0 && isset($colMap['CAPITAL'])) {
+                        $cap = trim((string)($rows[$r0][$colMap['CAPITAL']] ?? ''));
+                        if (is_numeric($cap)) $capital = (float)$cap;
+                    }
+                    if ($cuotaFija == 0 && isset($colMap['CUOTA FIJA'])) {
+                        $cf = trim((string)($rows[$r0][$colMap['CUOTA FIJA']] ?? ''));
+                        if (is_numeric($cf)) $cuotaFija = (float)$cf;
+                    }
+                }
+            }
+        }
+
+        $codigo = 'SH-' . preg_replace('/[^A-Z0-9]/i', '', $sheetName);
+
+        return [
+            'numero_contrato'    => $codigo,
+            'cliente'            => $cliente,
+            'garantia'           => $garantia,
+            'contacto'           => $contacto,
+            'telefono'           => $telefono,
+            'capital'            => $capital,
+            'interes_porcentaje' => $interes,
+            'cuota_fija'         => $cuotaFija,
+            'total_a_pagar'      => $capital,
+            'fecha_inicio'       => $fechaInicio?->toDateString() ?: now()->toDateString(),
+            'frecuencia'         => $frecuencia,
+            'activo'             => true,
+            '_layout'            => 'auto',
+        ];
+    }
+
+    private function extractCuotasData(array $rows): array
+    {
+        $headerRow = -1;
+        $colMap = [];
+        for ($r = 0; $r < 20; $r++) {
+            if (!isset($rows[$r])) continue;
+            $rowStr = strtoupper(implode(' ', array_map('trim', $rows[$r])));
+            if (str_contains($rowStr, 'PERIODO') || str_contains($rowStr, 'SALDO') || str_contains($rowStr, 'VENCIMIENTO')) {
+                $headerRow = $r;
+                foreach ($rows[$r] as $idx => $val) {
+                    $val = strtoupper(trim((string)$val));
+                    if ($val) {
+                        if (!isset($colMap[$val])) {
+                            $colMap[$val] = $idx;
+                        } else {
+                            $colMap[$val . '_2'] = $idx;
+                        }
+                    }
+                }
+                break;
+            }
+        }
+
+        if ($headerRow === -1) return [];
+
+        $cuotas = [];
+        for ($r = $headerRow + 1; $r <= $headerRow + 200; $r++) {
+            if (!isset($rows[$r])) continue;
+
+            $periodoIdx = $colMap['PERIODO'] ?? -1;
+            if ($periodoIdx !== -1) {
+                $periodo = trim((string)($rows[$r][$periodoIdx] ?? ''));
+                if ($periodo === '' || !is_numeric($periodo) || (int)$periodo === 0) continue;
+            } else {
+                if (empty($colMap['VENCIMIENTO'])) continue;
+                $venc = trim((string)($rows[$r][$colMap['VENCIMIENTO']] ?? ''));
+                if ($venc === '') continue;
+                $periodo = count($cuotas) + 1;
+            }
+
+            $num = (int)$periodo;
+
+            $getVal = function($keys) use ($rows, $r, $colMap) {
+                foreach ((array)$keys as $k) {
+                    if (isset($colMap[$k])) return trim((string)($rows[$r][$colMap[$k]] ?? ''));
+                }
+                return '';
+            };
+
+            $vencimiento = $getVal('VENCIMIENTO');
+            if (empty($vencimiento)) $vencimiento = $getVal('FECHA DE PAGO');
+            $fechaVen = null;
+            if (is_numeric($vencimiento)) $fechaVen = $this->excelDateToCarbon($vencimiento);
+            elseif (strtotime($vencimiento)) $fechaVen = \Carbon\Carbon::parse($vencimiento);
+
+            $monto = (float)$getVal(['CUOTA FIJA', 'MONTO']);
+            
+            $pagado1 = (float)$getVal(['PAGADO', 'CANCELA']);
+            $pagado2 = (float)$getVal('PAGADO_2');
+            $pagado = max($pagado1, $pagado2);
+
+            $abonoCap = (float)$getVal(['ABONO A CAPITAL', 'ABONO CAPITAL']);
+            $saldo = (float)$getVal('SALDO');
+            $formaPago = $getVal('FORMA DE PAGO');
+
+            $estatus = 'pendiente';
+            if ($pagado >= $monto && $monto > 0) $estatus = 'pagado';
+            elseif ($pagado > 0) $estatus = 'parcial';
+            elseif ($fechaVen && $fechaVen->isPast()) $estatus = 'vencido';
+
+            $fechaPago = $pagado > 0 ? ($fechaVen ?: now()) : null;
+
+            $cuotas[] = [
+                'numero_cuota' => $num,
+                'fecha_vencimiento' => $fechaVen?->toDateString(),
+                'monto' => $monto,
+                'estatus' => $estatus,
+                'fecha_pago' => $fechaPago?->toDateString(),
+                'forma_pago' => $formaPago,
+                'monto_pagado' => $pagado,
+                'abono_capital' => $abonoCap,
+                'saldo' => max(0, $monto - $pagado),
+            ];
+        }
+
+        return $cuotas;
+    }
+
+}

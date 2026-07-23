@@ -142,8 +142,8 @@ Route::middleware(['auth', 'role:admin,comprador,marketing'])->prefix('compras')
     Route::delete('/pedidos/{pedido}', [PedidoSolicitadoController::class, 'destroy'])->name('comprador.pedidos.destroy');
 });
 
-// Vendedor specific routes
-Route::middleware(['auth', 'role:vendedor'])->prefix('vendedor')->group(function () {
+// Vendedor specific routes (Now public for inventory checking)
+Route::prefix('vendedor')->group(function () {
     Route::get('/', [\App\Http\Controllers\VendedorController::class, 'index'])->name('vendedor.dashboard');
 });
 
@@ -170,6 +170,7 @@ Route::middleware(['auth', 'role:admin,finanzas'])->prefix('finanzas')->group(fu
     Route::get('/flujo-caja', [FinanzasController::class, 'flujoCaja'])->name('finanzas.flujo_caja');
     Route::post('/flujo-caja/reset', [FinanzasController::class, 'resetDaily'])->name('finanzas.reset_daily');
     Route::post('/flujo-caja/egreso', [FinanzasController::class, 'storeEgreso'])->name('finanzas.store_egreso');
+    Route::post('/flujo-caja/egreso/{id}', [FinanzasController::class, 'updateEgreso'])->name('finanzas.update_egreso');
     Route::post('/flujo-caja/egresos-bulk', [FinanzasController::class, 'storeEgresosBulk'])->name('finanzas.store_egresos_bulk');
     Route::post('/flujo-caja/ocr-receipt', [FinanzasController::class, 'ocrReceipt'])->name('finanzas.ocr_receipt');
     Route::post('/flujo-caja/ocr-saldos', [FinanzasController::class, 'ocrSaldos'])->name('finanzas.ocr_saldos');
@@ -207,6 +208,24 @@ Route::middleware(['auth', 'role:admin,cobranza'])->prefix('cobranza')->group(fu
     Route::post('/marcar-personal', [CobranzaController::class, 'marcarPersonal'])->name('cobranza.marcar_personal');
 });
 Route::get('/finanzas/reporte-consolidado', [App\Http\Controllers\FinanzasController::class, 'reporteConsolidado'])->name('finanzas.reporte_consolidado');
+
+// Contratos / Seguimiento de cobranza routes
+Route::middleware(['auth', 'role:admin,finanzas,cobranza'])->prefix('contratos')->group(function () {
+    Route::get('/', [App\Http\Controllers\ContratoController::class, 'index'])->name('contratos.index');
+    Route::get('/lista', [App\Http\Controllers\ContratoController::class, 'listar'])->name('contratos.lista');
+    Route::get('/calendario', [App\Http\Controllers\ContratoController::class, 'calendario'])->name('contratos.calendario');
+    Route::get('/crear', [App\Http\Controllers\ContratoController::class, 'create'])->name('contratos.create');
+    Route::post('/', [App\Http\Controllers\ContratoController::class, 'store'])->name('contratos.store');
+    Route::post('/importar', [App\Http\Controllers\ContratoController::class, 'importarExcel'])->name('contratos.importar');
+    Route::get('/{id}', [App\Http\Controllers\ContratoController::class, 'show'])->name('contratos.show');
+    Route::get('/{id}/editar', [App\Http\Controllers\ContratoController::class, 'edit'])->name('contratos.edit');
+    Route::post('/{id}', [App\Http\Controllers\ContratoController::class, 'update'])->name('contratos.update');
+    Route::post('/cuota/{id}/pagar', [App\Http\Controllers\ContratoController::class, 'registrarPago'])->name('contratos.pagar');
+    Route::post('/{id}/generar-cuota', [App\Http\Controllers\ContratoController::class, 'generarSiguienteCuota'])->name('contratos.generarCuota');
+    Route::post('/{id}/aumentar-capital', [App\Http\Controllers\ContratoController::class, 'aumentarCapital'])->name('contratos.aumentarCapital');
+    Route::post('/seguimiento', [App\Http\Controllers\ContratoController::class, 'agregarSeguimiento'])->name('contratos.seguimiento');
+    Route::get('/{id}/reporte', [App\Http\Controllers\ContratoController::class, 'reporte'])->name('contratos.reporte');
+});
 
 Route::get('/ping', function () { return 'OK'; });
 

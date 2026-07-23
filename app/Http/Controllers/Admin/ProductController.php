@@ -96,11 +96,33 @@ class ProductController extends Controller
             ['path' => $request->url(), 'query' => $request->query()]
         );
 
+        if (config('database.default') === 'pgsql') {
+            $categoriasTree = DB::connection('pgsql')->table('inventario_v2.productos')
+                ->select('categoria', 'subcategoria')
+                ->where('activo', true)
+                ->whereNotNull('categoria')
+                ->where('categoria', '!=', '')
+                ->distinct()
+                ->get()
+                ->groupBy('categoria')
+                ->map(function ($items) {
+                    return $items->pluck('subcategoria')->filter(function ($val) { return $val !== null && $val !== ''; })->values()->toArray();
+                })->toArray();
+        } else {
+            $categoriasTree = Product::whereNotNull('categoria')->where('categoria', '!=', '')->distinct()->pluck('categoria')
+                ->mapWithKeys(function ($cat) {
+                    return [$cat => []];
+                })->toArray();
+        }
+
         return view('admin.productos.index', [
             'rows' => $paginator,
+            'search' => $search,
+            'sede' => $sede,
             'sedes' => $sedes,
             'sedeSeleccionada' => $sede,
-            'buscar' => $search
+            'buscar' => $search,
+            'categoriasTree' => $categoriasTree,
         ]);
     }
 
@@ -128,11 +150,15 @@ class ProductController extends Controller
         return redirect()->back()->with('success', 'Producto eliminado exitosamente.');
     }
 
-    public function exportJson()
+    public function exportJson(Request $request)
     {
+        $categorias = $request->input('categorias', []);
+        $subcategorias = $request->input('subcategorias', []);
+        $conExistencia = $request->input('con_existencia', 0);
+
         if (config('database.default') === 'pgsql') {
             // PostgreSQL: fetch all active products with global existencia (sum across all sedes)
-            $productos = DB::connection('pgsql')
+            $query = DB::connection('pgsql')
                 ->table('inventario_v2.productos as p')
                 ->leftJoin(
                     DB::connection('pgsql')->raw('(
@@ -142,8 +168,19 @@ class ProductController extends Controller
                     ) as sg'),
                     'p.id', '=', 'sg.producto_id'
                 )
-                ->where('p.activo', true)
-                ->orderBy('p.nombre')
+                ->where('p.activo', true);
+
+            if (!empty($categorias)) {
+                $query->whereIn('p.categoria', $categorias);
+            }
+            if (!empty($subcategorias)) {
+                $query->whereIn('p.subcategoria', $subcategorias);
+            }
+            if ($conExistencia) {
+                $query->whereRaw('COALESCE(sg.existencia_global, 0) > 0');
+            }
+
+            $productos = $query->orderBy('p.nombre')
                 ->select([
                     'p.id',
                     'p.codigo',
@@ -153,12 +190,22 @@ class ProductController extends Controller
                     'p.proveedor',
                     'p.precio_unidad',
                     'p.precio_mayor',
+                    'p.url_imagen',
                     DB::connection('pgsql')->raw('COALESCE(sg.existencia_global, 0) as existencia_global'),
                 ])
-                ->get();
+                ->get()
+                ->map(function ($p) {
+                    return $p;
+                });
         } else {
             // SQLite fallback
-            $productos = Product::with('sedeMetrics')->get()->map(function($p) {
+            $query = Product::with('sedeMetrics');
+
+            if (!empty($categorias)) {
+                $query->whereIn('categoria', $categorias);
+            }
+            
+            $productos = $query->get()->map(function($p) {
                 return (object)[
                     'id'               => $p->id,
                     'codigo'           => $p->cod_centro,
@@ -169,8 +216,15 @@ class ProductController extends Controller
                     'precio_unidad'    => 0,
                     'precio_mayor'     => 0,
                     'existencia_global' => $p->sedeMetrics->sum('existencia'),
+                    'url_imagen'       => $p->url_imagen ?? '',
                 ];
             });
+
+            if ($conExistencia) {
+                $productos = $productos->filter(function($p) {
+                    return $p->existencia_global > 0;
+                })->values();
+            }
         }
 
         $output = $productos->map(function($p) {
@@ -190,7 +244,7 @@ class ProductController extends Controller
                 'precio2'             => (float) ($p->precio_unidad ?? 0),
                 'precio3'             => (float) ($p->precio_mayor ?? 0),
                 'existencia'          => (float) ($p->existencia_global ?? 0),
-                'url_imagen'          => '',
+                'url_imagen'          => $p->url_imagen ?? '',
                 'categories'          => strtoupper($categories),
                 'codigo_padre'        => null,
                 'atributo'            => null,

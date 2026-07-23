@@ -229,6 +229,18 @@ class CatalogoController extends Controller
         if ($supabaseResponse->successful()) {
             // Limpiar caché de la imagen para que el PDF se actualice de inmediato
             \Illuminate\Support\Facades\Cache::forget('img_base64_' . $codigo);
+            
+            // Actualizar la base de datos con la nueva URL
+            $publicUrl = "{$supabaseUrl}/storage/v1/object/public/imagenes_producto/imagenes/{$fileName}";
+            if (config('database.default') === 'pgsql') {
+                \Illuminate\Support\Facades\DB::connection('pgsql')->table('inventario_v2.productos')
+                    ->where('codigo', 'like', $codigo . '%')
+                    ->update(['url_imagen' => $publicUrl]);
+            } else {
+                \App\Models\Product::where('cod_centro', 'like', $codigo . '%')
+                    ->update(['url_imagen' => $publicUrl]);
+            }
+
             return response()->json(['success' => true]);
         }
 

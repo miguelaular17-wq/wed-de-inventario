@@ -3,56 +3,94 @@
 @section('title', 'Iniciar sesión')
 
 @section('content')
-<div class="auth-card-container">
-    <div class="panel auth-panel">
-        <div class="auth-card-header">
-            <div style="margin-bottom: 16px;">
-                <img src="{{ asset('logo.png') }}" alt="Logo" style="max-height: 70px;">
-            </div>
-            <h1 style="margin: 0; font-size: 1.6rem; font-weight: 700; color: #1e293b;">Iniciar sesión</h1>
-            <p class="muted" style="margin: 6px 0 0; font-size: 0.88rem;">Accede a Ventas, Inventario y Requisiciones de tu sede.</p>
-        </div>
+<style>
+    body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+    main { max-width: 100% !important; padding: 0 !important; margin: 0 !important; height: 100vh; display: flex; flex-direction: column; }
+    .split-layout { display: flex; flex: 1; height: 100vh; width: 100%; }
+    .split-image { flex: 1.2; display: none; background: url('{{ asset('login_bg.png') }}') center/cover no-repeat; position: relative; }
+    .split-form-container { flex: 1; display: flex; align-items: center; justify-content: center; background: #f8fafc; padding: 40px; position: relative; }
+    
+    @media (min-width: 900px) {
+        .split-image { display: block; }
+    }
+</style>
 
-        <form method="POST" action="{{ route('login.store') }}" style="display: flex; flex-direction: column; gap: 16px;">
-            @csrf
-            <div class="auth-field">
-                <label for="email">Correo Electrónico</label>
-                <input type="email" id="email" name="email" value="{{ old('email') }}" placeholder="ejemplo@correo.com" required autofocus>
+<div class="split-layout">
+    <div class="split-image">
+        <!-- Overlay sutil -->
+        <div style="position: absolute; inset: 0; background: linear-gradient(135deg, rgba(37,99,235,0.4) 0%, rgba(139,92,246,0.3) 100%);"></div>
+        <div style="position: absolute; bottom: 60px; left: 60px; color: white; z-index: 2; background: rgba(15, 23, 42, 0.65); padding: 40px; border-radius: 24px; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+            <h2 style="font-size: 3.5rem; font-weight: 700; margin: 0 0 15px; letter-spacing: -1px; line-height: 1.1; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">Inventario<br>Multisede</h2>
+            <p style="font-size: 1.15rem; max-width: 450px; margin: 0; opacity: 0.95; line-height: 1.6; color: #e2e8f0;">Gestión integral de ventas, inventario y requisiciones en tiempo real para todas tus sucursales.</p>
+        </div>
+    </div>
+    
+    <div class="split-form-container">
+        <div class="panel auth-panel" style="width: 100%; max-width: 440px; box-shadow: 0 20px 40px rgba(0,0,0,0.08); border-radius: 20px; padding: 48px; border: 1px solid rgba(255,255,255,0.8); background: #ffffff;">
+            <div class="auth-card-header" style="text-align: center; margin-bottom: 32px;">
+                <div style="margin-bottom: 20px;">
+                    <img src="{{ asset('logo.png') }}" alt="Logo" style="max-height: 70px;">
+                </div>
+                <h1 style="margin: 0; font-size: 1.8rem; font-weight: 700; color: #1e293b;">Iniciar sesión</h1>
+                <p class="muted" style="margin: 8px 0 0; font-size: 0.95rem;">Accede a Ventas, Inventario y Requisiciones de tu sede.</p>
             </div>
-            <div class="auth-field" style="position: relative;">
-                <label for="password">Contraseña</label>
-                <div style="position: relative; display: flex; align-items: center; width: 100%;">
-                    <input type="password" id="password" name="password" placeholder="••••••••" required style="padding-right: 40px;">
-                    <button type="button" id="toggle-password" class="password-toggle-btn" aria-label="Mostrar contraseña">
-                        <svg class="eye-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                        <svg class="eye-off-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
-                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-                            <line x1="1" y1="1" x2="23" y2="23"></line>
-                        </svg>
+
+            <form method="POST" action="{{ route('login.store') }}" style="display: flex; flex-direction: column; gap: 20px;">
+                @csrf
+                <div class="auth-field">
+                    <label for="email" style="font-weight: 600; font-size: 0.85rem; color: #475569; margin-bottom: 6px; display: block;">CORREO ELECTRÓNICO</label>
+                    <input type="email" id="email" name="email" value="{{ old('email') }}" placeholder="ejemplo@correo.com" required autofocus style="width: 100%; padding: 12px 16px; border-radius: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 1rem; transition: border-color 0.2s;">
+                </div>
+                
+                <div class="auth-field" style="position: relative;">
+                    <label for="password" style="font-weight: 600; font-size: 0.85rem; color: #475569; margin-bottom: 6px; display: block;">CONTRASEÑA</label>
+                    <div style="position: relative; display: flex; align-items: center; width: 100%;">
+                        <input type="password" id="password" name="password" placeholder="••••••••" required style="width: 100%; padding: 12px 16px; border-radius: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 1rem; transition: border-color 0.2s;">
+                        <button type="button" id="toggle-password" class="password-toggle-btn" aria-label="Mostrar contraseña" style="position: absolute; right: 12px; background: none; border: none; color: #64748b; cursor: pointer; padding: 4px;">
+                            <svg class="eye-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            <svg class="eye-off-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                <line x1="1" y1="1" x2="23" y2="23"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <label class="auth-remember" style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: #475569; cursor: pointer;">
+                        <input type="checkbox" name="remember" value="1" style="width: 16px; height: 16px; accent-color: var(--blue);">
+                        <span>Recordarme</span>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn auth-btn" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #2563eb, #4f46e5); color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 8px; box-shadow: 0 4px 12px rgba(37,99,235,0.3);">Entrar al Sistema</button>
+            </form>
+
+            <div style="margin-top: 24px; text-align: center; position: relative;">
+                <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;"><div style="height: 1px; width: 100%; background: #e2e8f0;"></div></div>
+                <span style="background: #ffffff; padding: 0 12px; color: #64748b; font-size: 0.85rem; position: relative; font-weight: 500;">O</span>
+            </div>
+
+            <div style="margin-top: 24px; text-align: center;">
+                <p class="muted" style="margin: 0 0 12px; font-size: 0.85rem; color: #64748b; font-weight: 500;">Acceso rápido sin iniciar sesión:</p>
+                <div style="display: flex; gap: 12px;">
+                    <a href="{{ route('vendedor.dashboard') }}" style="flex: 1; padding: 14px 10px; background: #f8fafc; border: 1.5px solid #cbd5e1; color: #334155; border-radius: 12px; font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; text-decoration: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);" onmouseover="this.style.borderColor='#3b82f6'; this.style.color='#1e293b'; this.style.background='#f1f5f9';" onmouseout="this.style.borderColor='#cbd5e1'; this.style.color='#334155'; this.style.background='#f8fafc';">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
+                        Ver Existencias
+                    </a>
+                    <button type="button" id="btn-q-pedir" class="btn q-pedir-btn" style="flex: 1; padding: 14px 10px; background: #f8fafc; border: 1.5px solid #cbd5e1; color: #334155; border-radius: 12px; font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);" onmouseover="this.style.borderColor='#10b981'; this.style.color='#1e293b'; this.style.background='#f1f5f9';" onmouseout="this.style.borderColor='#cbd5e1'; this.style.color='#334155'; this.style.background='#f8fafc';">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                        Solicitar (Q Pedir)
                     </button>
                 </div>
             </div>
-            
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
-                <label class="auth-remember">
-                    <input type="checkbox" name="remember" value="1">
-                    <span>Recordarme</span>
-                </label>
+
+            <div class="auth-footer" style="margin-top: 32px; text-align: center; font-size: 0.95rem; color: #475569;">
+                ¿No tienes cuenta? <a href="{{ route('register') }}" style="color: #2563eb; font-weight: 600; text-decoration: none;">Regístrate aquí</a>
             </div>
-
-            <button type="submit" class="btn auth-btn">Entrar al Sistema</button>
-        </form>
-
-        <div style="margin-top: 16px; text-align: center;">
-            <button type="button" id="btn-q-pedir" class="btn q-pedir-btn">Q Pedir</button>
-            <p class="muted" style="margin: 8px 0 0; font-size: 0.82rem;">Solicita un producto al equipo de compras sin iniciar sesión.</p>
-        </div>
-
-        <div class="auth-footer">
-            ¿No tienes cuenta? <a href="{{ route('register') }}">Regístrate aquí</a>
         </div>
     </div>
 </div>

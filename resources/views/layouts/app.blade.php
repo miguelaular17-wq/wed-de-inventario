@@ -14,8 +14,18 @@
     <link rel="stylesheet" href="/css/onboarding-tour.css">
     @endif
     @stack('head')
+    <style>
+        /* Pagination Styles */
+        .pagination { display: flex; flex-direction: row; flex-wrap: wrap; padding-left: 0; list-style: none; justify-content: center; gap: 5px; margin-top: 20px; }
+        .page-item { display: inline-block; }
+        .page-item .page-link { position: relative; display: flex; align-items: center; justify-content: center; padding: 8px 14px; color: #2563eb; background-color: #fff; border: 1px solid #e2e8f0; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; min-width: 38px; }
+        .page-item.active .page-link { z-index: 3; color: #fff; background-color: #2563eb; border-color: #2563eb; }
+        .page-item.disabled .page-link, .page-item.disabled span.page-link { color: #64748b; pointer-events: none; background-color: #f8fafc; border-color: #e2e8f0; }
+        .page-item:not(.active):not(.disabled) .page-link:hover { background-color: #f1f5f9; }
+    </style>
 </head>
 <body>
+@auth
 <header>
     <div class="wrap">
         <div>
@@ -37,7 +47,6 @@
                         <a href="{{ route('admin.movimientos.index') }}" data-tour="admin-movimientos" class="{{ request()->routeIs('admin.movimientos.*') ? 'active' : '' }}">Movimientos</a>
                         <a href="{{ route('admin.productos.index') }}" class="{{ request()->routeIs('admin.productos.*') ? 'active' : '' }}">Productos</a>
                         <a href="{{ route('admin.sync_logs.index') }}" class="{{ request()->routeIs('admin.sync_logs.*') ? 'active' : '' }}">Sync Logs</a>
-                        <a href="{{ route('admin.import.create') }}" data-tour="admin-import" class="{{ request()->routeIs('admin.import.*') ? 'active' : '' }}">Importar</a>
                         <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">Usuarios</a>
                     @elseif(auth()->user()->isComprador() || auth()->user()->isMarketing())
                         <a href="{{ route('comprador.dashboard') }}" class="{{ request()->routeIs('comprador.dashboard') ? 'active' : '' }}">
@@ -50,6 +59,7 @@
                         <a href="{{ route('finanzas.conciliaciones') }}" class="{{ request()->routeIs('finanzas.conciliaciones') ? 'active' : '' }}">Conciliaciones</a>
                     @elseif(auth()->user()->isCobranza())
                         <a href="{{ route('cobranza.index') }}" class="{{ request()->routeIs('cobranza.*') ? 'active' : '' }}">Cobranza</a>
+                        <a href="{{ route('contratos.index') }}" class="{{ request()->routeIs('contratos.*') ? 'active' : '' }}">Contratos</a>
                     @endif
 
                     @if(auth()->user()->hasAccessToSedeViews() && session('sede_local'))
@@ -127,10 +137,6 @@
                 </div>
             @endauth
 
-            @guest
-                <a href="{{ route('login') }}" class="btn secondary" style="padding:6px 12px;font-size:.85rem;">Iniciar sesión</a>
-                <a href="{{ route('register') }}" class="btn" style="padding:6px 12px;font-size:.85rem;">Registrarse</a>
-            @else
                 @if(config('inventario.tutorial_enabled'))
                 <form method="POST" action="{{ route('tutorial.restart') }}" style="margin:0;">
                     @csrf
@@ -145,10 +151,10 @@
                     @csrf
                     <button type="submit" class="btn secondary" style="padding:6px 12px;font-size:.85rem;">Salir</button>
                 </form>
-            @endguest
         </div>
     </div>
 </header>
+@endauth
 
 <main>
     @if (session('status'))

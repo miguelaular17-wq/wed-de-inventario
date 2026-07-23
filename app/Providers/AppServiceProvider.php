@@ -18,6 +18,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        \Illuminate\Pagination\Paginator::useBootstrapFive();
+
         // Logging de SQL solo en entorno de desarrollo (DEBUG=true)
         // En producción se omite para eliminar escrituras síncronas a disco por cada query
         if (config('app.debug')) {

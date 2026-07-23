@@ -1,0 +1,343 @@
+@extends('layouts.app')
+@section('title', 'Contrato ' . $contrato->numero_contrato)
+@section('content')
+<div style="padding: 20px; max-width: 1400px; margin: 0 auto;">
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+        <div>
+            <a href="{{ route('contratos.lista') }}" style="color: #64748b; text-decoration: none; font-size: 0.85rem;">← Volver a lista</a>
+            <h2 style="color: var(--blue); font-weight: 700; margin: 6px 0 0;">{{ $contrato->cliente }}</h2>
+            <span style="color: #64748b; font-size: 0.9rem;">Contrato: <strong>{{ $contrato->numero_contrato }}</strong></span>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <a href="{{ route('contratos.reporte', $contrato->id) }}" target="_blank" style="padding: 8px 16px; background: #3b82f6; color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">⬇️ Descargar Reporte</a>
+            <a href="{{ route('contratos.edit', $contrato->id) }}" style="padding: 8px 16px; background: #f59e0b; color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">✏️ Editar</a>
+            <button type="button" onclick="document.getElementById('modalSeguimiento').style.display='flex'" style="padding: 8px 16px; background: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">📞 Registrar Llamada</button>
+        </div>
+    </div>
+
+    @if(session('success'))
+        <div style="background: #d1e7dd; color: #0f5132; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;">{{ session('success') }}</div>
+    @endif
+    @if($errors->any())
+        <div style="background: #f8d7da; color: #842029; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;">
+            <ul style="margin: 0; padding-left: 20px;">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    {{-- Info del contrato --}}
+    <div class="panel" style="padding: 20px; margin-bottom: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+            <div>
+                <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Garantía</div>
+                <div style="font-weight: 500;">{{ $contrato->garantia ?: '—' }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Contacto / Responsable de Pago</div>
+                <div style="font-weight: 500;">{{ $contrato->contacto ?: '—' }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Teléfono</div>
+                <div style="font-weight: 500;">{{ $contrato->telefono ?: '—' }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Fecha Inicio</div>
+                <div style="font-weight: 500;">{{ $contrato->fecha_inicio?->format('d/m/Y') ?? '—' }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Capital</div>
+                <div style="font-weight: 700; font-size: 1.1rem; color: var(--blue);">${{ number_format($contrato->capital, 2) }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Cuota Fija</div>
+                <div style="font-weight: 700; font-size: 1.1rem;">${{ number_format($contrato->cuota_fija, 2) }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Total a Pagar</div>
+                <div style="font-weight: 700; font-size: 1.1rem; color: #7c3aed;">${{ number_format($contrato->total_a_pagar, 2) }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Interés</div>
+                <div style="font-weight: 500;">{{ number_format($contrato->interes_porcentaje * 100, 2) }}%</div>
+            </div>
+            <div>
+                <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Frecuencia</div>
+                <div style="font-weight: 500;">{{ $contrato->frecuencia }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Asesor</div>
+                <div style="font-weight: 500;">{{ $contrato->responsable?->name ?? '—' }}</div>
+            </div>
+        </div>
+        @if($contrato->observaciones)
+            <div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed #e2e8f0;">
+                <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Observaciones</div>
+                <div>{{ $contrato->observaciones }}</div>
+            </div>
+        @endif
+    </div>
+
+    {{-- Cuotas --}}
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+        <h3 style="color: var(--blue); margin: 0;">📄 Plan de Pagos</h3>
+        <div style="display: flex; gap: 10px;">
+            <button type="button" onclick="document.getElementById('modalAumentarCapital').style.display='flex'" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                ➕ Aumentar Capital
+            </button>
+            @if($contrato->capital > 0)
+                <form method="POST" action="{{ route('contratos.generarCuota', $contrato->id) }}">
+                    @csrf
+                    <button type="submit" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                        ➕ Generar Próxima Cuota
+                    </button>
+                </form>
+            @endif
+        </div>
+    </div>
+    <div class="panel" style="padding: 0; overflow: hidden; margin-bottom: 24px;">
+        <div class="table-wrap">
+            <table class="data-table" style="width: 100%;">
+                <thead>
+                    <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 600; font-size: 0.9rem;">
+                        <th style="padding: 12px; text-align: left;">#</th>
+                        <th style="padding: 12px; text-align: left;">Vencimiento</th>
+                        <th style="padding: 12px; text-align: right;">Monto</th>
+                        <th style="padding: 12px; text-align: right;">Int. Pagado</th>
+                        <th style="padding: 12px; text-align: right;">Abono Cap.</th>
+                        <th style="padding: 12px; text-align: right;">Saldo</th>
+                        <th style="padding: 12px; text-align: left;">Forma Pago</th>
+                        <th style="padding: 12px; text-align: left;">Fecha Pago</th>
+                        <th style="padding: 12px; text-align: center;">Estatus</th>
+                        <th style="padding: 12px; text-align: center;">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($contrato->cuotas as $cuota)
+                        @php
+                            $rowStyle = match($cuota->estatus) {
+                                'prestamo' => 'background: #f0fdf4;',
+                                'pagado' => 'background: #f0fdf4;',
+                                'vencido' => 'background: #fef2f2;',
+                                'parcial' => 'background: #fffbeb;',
+                                default => '',
+                            };
+                            $badgeStyle = match($cuota->estatus) {
+                                'prestamo' => 'background:#10b981; color:white;',
+                                'pagado' => 'background:#059669; color:white;',
+                                'vencido' => 'background:#dc2626; color:white;',
+                                'parcial' => 'background:#f59e0b; color:white;',
+                                default => 'background:#e2e8f0; color:#475569;',
+                            };
+                        @endphp
+                        <tr style="{{ $rowStyle }}">
+                            <td style="font-weight: 600; color: #64748b; padding: 12px;">{{ $cuota->estatus === 'prestamo' ? '➕' : $cuota->numero_cuota }}</td>
+                            <td style="padding: 12px;">{{ $cuota->fecha_vencimiento?->format('d/m/Y') ?? '—' }}</td>
+                            <td style="text-align: right; font-weight: 500; padding: 12px;">
+                                @if($cuota->estatus === 'prestamo')
+                                    <span style="color: #10b981; font-weight: 600;">+${{ number_format($cuota->monto, 2) }}</span>
+                                @else
+                                    ${{ number_format($cuota->monto, 2) }}
+                                @endif
+                            </td>
+                            <td style="text-align: right; color: #059669; font-weight: 500; padding: 12px;">{{ $cuota->estatus === 'prestamo' ? '—' : '$'.number_format($cuota->monto_pagado, 2) }}</td>
+                            <td style="text-align: right; color: #7c3aed; font-weight: 500; padding: 12px;">{{ $cuota->estatus === 'prestamo' ? '—' : '$'.number_format($cuota->abono_capital ?? 0, 2) }}</td>
+                            <td style="text-align: right; font-weight: 600; color: {{ $cuota->saldo > 0 ? '#dc2626' : '#059669' }}; padding: 12px;">
+                                {{ $cuota->estatus === 'prestamo' ? '—' : '$'.number_format($cuota->saldo, 2) }}
+                            </td>
+                            <td style="color: #475569; font-size: 0.9rem; padding: 12px;">{{ $cuota->forma_pago ?: '—' }}</td>
+                            <td style="font-size: 0.9rem; padding: 12px;">{{ $cuota->fecha_pago?->format('d/m/Y') ?? '—' }}</td>
+                            <td style="text-align: center; padding: 12px;">
+                                <span style="padding: 3px 10px; border-radius: 10px; font-size: 0.75rem; font-weight: 700; {{ $badgeStyle }}">
+                                    {{ $cuota->estatus === 'prestamo' ? 'NUEVO PRÉSTAMO' : strtoupper($cuota->estatus) }}
+                                </span>
+                            </td>
+                            <td style="text-align: center;">
+                                @if($cuota->estatus !== 'pagado' && $cuota->estatus !== 'prestamo')
+                                    <button type="button" onclick="abrirPago({{ $cuota->id }}, {{ $cuota->saldo }}, {{ $cuota->numero_cuota }})"
+                                        style="padding: 4px 10px; background: #059669; color: white; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">💰 Pagar</button>
+                                @elseif($cuota->estatus === 'prestamo')
+                                    <span style="color: #94a3b8; font-size: 0.85rem;">—</span>
+                                @else
+                                    <span style="color: #94a3b8; font-size: 0.85rem;">✓</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {{-- Seguimientos --}}
+    <h3 style="color: var(--blue); margin-bottom: 12px;">📞 Historial de Seguimiento</h3>
+    <div class="panel" style="padding: 0; overflow: hidden;">
+        <div class="table-wrap">
+            <table class="data-table" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Fecha/Hora</th>
+                        <th>Usuario</th>
+                        <th>Resultado</th>
+                        <th>Promesa de Pago</th>
+                        <th>Cuota</th>
+                        <th>Comentarios</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($contrato->seguimientos as $seg)
+                        @php
+                            $resColor = match($seg->resultado) {
+                                'PAGO_COMPLETO' => 'background:#059669; color:white;',
+                                'PROMESA_PAGO' => 'background:#3b82f6; color:white;',
+                                'NO_CONTESTA', 'SIN_SEÑAL', 'BUZON_MENSAJES' => 'background:#f59e0b; color:white;',
+                                default => 'background:#e2e8f0; color:#475569;',
+                            };
+                        @endphp
+                        <tr>
+                            <td style="font-size: 0.85rem; white-space: nowrap;">{{ $seg->fecha_hora?->format('d/m/Y H:i') }}</td>
+                            <td style="font-weight: 500;">{{ $seg->usuario?->name ?? '—' }}</td>
+                            <td>
+                                <span style="padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; {{ $resColor }}">
+                                    {{ $seg->resultadoLabel() }}
+                                </span>
+                            </td>
+                            <td style="font-size: 0.85rem;">{{ $seg->fecha_prometida_pago?->format('d/m/Y') ?? '—' }}</td>
+                            <td style="font-size: 0.85rem;">{{ $seg->cuota ? '#'.$seg->cuota->numero_cuota : '—' }}</td>
+                            <td style="font-size: 0.85rem; color: #475569; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">{{ $seg->comentarios ?: '—' }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6" style="text-align: center; padding: 30px; color: #94a3b8;">No hay seguimientos registrados.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{{-- Modal Pago --}}
+<div id="modalPago" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;">
+    <div style="background: white; width: 95%; max-width: 450px; padding: 24px; border-radius: 14px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.15);">
+        <button type="button" onclick="document.getElementById('modalPago').style.display='none'" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
+        <h3 style="margin-top: 0; color: var(--blue);">💰 Registrar Pago — Cuota #<span id="pagoNumCuota"></span></h3>
+        <form id="formPago" method="POST" action="">
+            @csrf
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Monto Interés/Cuota</label>
+                <input type="number" step="0.01" name="monto_pagado" id="pagoMonto" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Abono a Capital (Opcional)</label>
+                <input type="number" step="0.01" name="abono_capital" value="0" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Forma de Pago</label>
+                <select name="forma_pago" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; background: white;">
+                    <option value="">-- Seleccione --</option>
+                    <option value="ZELLE">ZELLE</option>
+                    <option value="EFECTIVO">EFECTIVO</option>
+                    <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                    <option value="PAGO_MOVIL">PAGO MÓVIL</option>
+                    <option value="DEPOSITO">DEPÓSITO</option>
+                    <option value="BINANCE">BINANCE</option>
+                </select>
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Fecha de Pago</label>
+                <input type="date" name="fecha_pago" required value="{{ now()->toDateString() }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Comentario (opcional)</label>
+                <textarea name="comentario" rows="2" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;">
+                <button type="button" onclick="document.getElementById('modalPago').style.display='none'" style="padding: 8px 20px; background: #94a3b8; color: white; border: none; border-radius: 6px; cursor: pointer;">Cancelar</button>
+                <button type="submit" style="padding: 8px 20px; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Registrar Pago</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Modal Seguimiento --}}
+<div id="modalSeguimiento" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;">
+    <div style="background: white; width: 95%; max-width: 500px; padding: 24px; border-radius: 14px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.15);">
+        <button type="button" onclick="document.getElementById('modalSeguimiento').style.display='none'" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
+        <h3 style="margin-top: 0; color: #7c3aed;">📞 Registrar Llamada / Contacto</h3>
+        <form method="POST" action="{{ route('contratos.seguimiento') }}">
+            @csrf
+            <input type="hidden" name="contrato_id" value="{{ $contrato->id }}">
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Resultado</label>
+                <select name="resultado" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; background: white;">
+                    @foreach($resultados as $key => $label)
+                        <option value="{{ $key }}">{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Cuota relacionada (opcional)</label>
+                <select name="cuota_id" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; background: white;">
+                    <option value="">— Ninguna —</option>
+                    @foreach($contrato->cuotas->whereIn('estatus', ['pendiente', 'vencido', 'parcial']) as $cuo)
+                        <option value="{{ $cuo->id }}">Cuota #{{ $cuo->numero_cuota }} — Vence {{ $cuo->fecha_vencimiento?->format('d/m/Y') }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Fecha prometida de pago</label>
+                <input type="date" name="fecha_prometida_pago" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Comentarios</label>
+                <textarea name="comentarios" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;"></textarea>
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" name="contactado" value="1" checked style="width: 16px; height: 16px;">
+                    <span style="font-weight: 500;">Se logró contactar al cliente</span>
+                </label>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;">
+                <button type="button" onclick="document.getElementById('modalSeguimiento').style.display='none'" style="padding: 8px 20px; background: #94a3b8; color: white; border: none; border-radius: 6px; cursor: pointer;">Cancelar</button>
+                <button type="submit" style="padding: 8px 20px; background: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Guardar Seguimiento</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Modal Aumentar Capital --}}
+<div id="modalAumentarCapital" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;">
+    <div style="background: white; width: 95%; max-width: 450px; padding: 24px; border-radius: 14px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.15);">
+        <button type="button" onclick="document.getElementById('modalAumentarCapital').style.display='none'" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
+        <h3 style="margin-top: 0; color: #10b981;">➕ Agregar Nuevo Préstamo al Capital</h3>
+        <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 16px;">Este monto se sumará al capital actual del contrato.</p>
+        <form method="POST" action="{{ route('contratos.aumentarCapital', $contrato->id) }}">
+            @csrf
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Monto a agregar ($)</label>
+                <input type="number" step="0.01" name="monto" required min="0.01" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Comentario (opcional)</label>
+                <textarea name="comentario" rows="2" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;"></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;">
+                <button type="button" onclick="document.getElementById('modalAumentarCapital').style.display='none'" style="padding: 8px 20px; background: #94a3b8; color: white; border: none; border-radius: 6px; cursor: pointer;">Cancelar</button>
+                <button type="submit" style="padding: 8px 20px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Agregar Préstamo</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function abrirPago(cuotaId, saldo, numCuota) {
+    document.getElementById('formPago').action = '/contratos/cuota/' + cuotaId + '/pagar';
+    document.getElementById('pagoMonto').value = saldo;
+    document.getElementById('pagoNumCuota').textContent = numCuota;
+    document.getElementById('modalPago').style.display = 'flex';
+}
+</script>
+@endsection

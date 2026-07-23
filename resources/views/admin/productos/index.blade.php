@@ -120,6 +120,59 @@
     </div>
 </div>
 
+<div id="export-modal" class="modal-backdrop" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div class="modal-content" style="background: #ffffff; padding: 24px; border-radius: 16px; border: 1px solid #e2e8f0; width: 100%; max-width: 500px; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+        <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 1.2rem; color: #1e293b;">Opciones de Exportación JSON</h3>
+        <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 20px;">Selecciona las categorías y subcategorías que deseas incluir. Si no seleccionas ninguna, se exportarán todos los productos activos.</p>
+        
+        <form id="export-form" method="GET" action="{{ route('admin.productos.export_json') }}" onsubmit="onExportSubmit(event)">
+            <div style="margin-bottom: 20px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.2); padding: 12px; border-radius: 8px; font-weight: 500; font-size: 0.95rem; color: #4ade80;">
+                    <input type="checkbox" name="con_existencia" value="1" style="accent-color: #4ade80; transform: scale(1.1);"> 
+                    Exportar SÓLO productos con existencia (Stock > 0)
+                </label>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500; font-size: 0.9rem; color: #334155;">Categorías y Subcategorías</label>
+                <div style="max-height: 250px; overflow-y: auto; padding-right: 8px;" class="custom-scroll">
+                    @foreach($categoriasTree ?? [] as $cat => $subs)
+                        <div style="margin-bottom: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+                            <label style="display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; border-bottom: {{ count($subs) > 0 ? '1px solid #e2e8f0' : 'none' }}; font-weight: 500; color: #334155;">
+                                <input type="checkbox" name="categorias[]" value="{{ $cat }}" class="cat-checkbox" style="accent-color: var(--primary-color);" onchange="toggleSubs(this)"> 
+                                {{ $cat }}
+                            </label>
+                            
+                            @if(count($subs) > 0)
+                            <div style="padding: 8px 12px 8px 32px; display: flex; flex-wrap: wrap; gap: 6px; background: #f1f5f9; color: #475569;">
+                                @foreach($subs as $sub)
+                                    <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" name="subcategorias[]" value="{{ $sub }}" class="sub-checkbox" style="accent-color: var(--primary-color);"> 
+                                        <span>{{ $sub }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+                <button type="button" class="btn secondary" onclick="closeExportModal()" style="padding: 8px 16px;">Cancelar</button>
+                <button type="submit" id="btn-export-submit" class="btn primary" style="padding: 8px 16px; display: inline-flex; align-items: center; gap: 8px;">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Descargar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div id="export-toast">
     <svg width="18" height="18" fill="none" stroke="#4ade80" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
     Descargando productos...
@@ -127,20 +180,75 @@
 
 <script>
 function onExportClick(e) {
-    const btn = document.getElementById('btn-export-json');
-    const toast = document.getElementById('export-toast');
-    btn.classList.add('loading');
-    btn.innerHTML = `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="animation:spin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Generando...`;
-    toast.classList.add('show');
-    setTimeout(() => {
-        toast.classList.remove('show');
-        btn.classList.remove('loading');
-        btn.innerHTML = `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Descargar JSON de Productos`;
-    }, 2500);
+    e.preventDefault();
+    document.getElementById('export-modal').style.display = 'flex';
 }
+
+function closeExportModal() {
+    document.getElementById('export-modal').style.display = 'none';
+}
+
+function toggleSubs(checkbox) {
+    // Encuentra todos los sub-checkboxes dentro del mismo contenedor principal
+    const container = checkbox.closest('div');
+    const subCheckboxes = container.querySelectorAll('.sub-checkbox');
+    subCheckboxes.forEach(sub => {
+        sub.checked = checkbox.checked;
+    });
+}
+
+// Opcional: si desmarcas un sub, y todos los subs se desmarcan, desmarca el padre
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.sub-checkbox').forEach(sub => {
+        sub.addEventListener('change', function() {
+            const container = this.closest('div').parentElement;
+            const parentCat = container.querySelector('.cat-checkbox');
+            if (parentCat) {
+                // Si se marca un sub, marcamos el padre automáticamente
+                if (this.checked) {
+                    parentCat.checked = true;
+                }
+            }
+        });
+    });
+});
+
+function onExportSubmit(e) {
+    const btn = document.getElementById('btn-export-submit');
+    const toast = document.getElementById('export-toast');
+    
+    // Cambiar estado del botón del modal
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="animation:spin 1s linear infinite"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Generando...`;
+    
+    // Ocultar modal y mostrar toast
+    setTimeout(() => {
+        closeExportModal();
+        toast.classList.add('show');
+        
+        // Restaurar estado después de un tiempo
+        setTimeout(() => {
+            toast.classList.remove('show');
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }, 2500);
+    }, 100);
+    
+    // Dejar que el form se envíe de forma nativa para descargar el archivo
+}
+
+// Cerrar modal al hacer clic afuera
+document.getElementById('export-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeExportModal();
+});
 </script>
 <style>
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.custom-scroll::-webkit-scrollbar { width: 6px; }
+.custom-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); border-radius: 4px; }
+.custom-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+.custom-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 </style>
 
 <form method="GET" action="{{ route('admin.productos.index') }}" class="filter-bar">

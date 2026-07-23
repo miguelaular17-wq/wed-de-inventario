@@ -12,15 +12,20 @@
                 <p class="muted" style="margin: 0; font-size: 0.88rem;">Asigne o cambie la sede autorizada de cada usuario registrado.</p>
             </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <a href="{{ route('admin.users.export') }}" class="btn secondary" style="font-size: 0.88rem; padding: 8px 16px;">Exportar Respaldo</a>
-            <form action="{{ route('admin.users.import') }}" method="POST" enctype="multipart/form-data" style="margin: 0; display: flex; align-items: center; gap: 8px;">
-                @csrf
-                <input type="file" name="backup_file" accept=".json" required style="font-size: 0.88rem; max-width: 200px; padding: 4px;">
-                <button type="submit" class="btn" style="background-color: var(--blue); color: white; font-size: 0.88rem; padding: 8px 16px;">Importar</button>
-            </form>
-            <a href="{{ route('admin.users.login-logs') }}" class="btn secondary" style="font-size: 0.88rem; padding: 8px 16px; margin-left: 12px;">Historial</a>
-        </div>
+        
+        <form method="GET" action="{{ route('admin.users.index') }}" style="display: flex; gap: 8px;">
+            <div style="position: relative;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted);">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" name="search" value="{{ $search ?? '' }}" placeholder="Buscar por nombre, correo..." style="padding: 8px 12px 8px 36px; border: 1px solid var(--border-color); border-radius: 6px; width: 250px; outline: none; transition: border-color 0.2s;">
+            </div>
+            <button type="submit" class="btn primary" style="padding: 8px 16px;">Buscar</button>
+            @if($search)
+                <a href="{{ route('admin.users.index') }}" class="btn secondary" style="padding: 8px 16px; text-decoration: none;">Limpiar</a>
+            @endif
+        </form>
     </div>
 
     <div class="table-wrap">
@@ -176,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const updateSedeState = () => {
             const role = roleSelect.value;
-            if (role === 'comprador' || role === 'marketing') {
+            if (role === 'comprador' || role === 'marketing' || role === 'finanzas' || role === 'cobranza' || role === 'contabilidad') {
                 sedeSelect.value = '';
                 sedeSelect.disabled = true;
                 sedeSelect.style.opacity = '0.5';
