@@ -35,6 +35,16 @@
                 <p class="muted" style="margin: 8px 0 0; font-size: 0.95rem;">Accede a Ventas, Inventario y Requisiciones de tu sede.</p>
             </div>
 
+            @if ($errors->any())
+                <div style="background: #fef2f2; border-left: 4px solid #ef4444; color: #991b1b; padding: 12px 16px; margin-bottom: 24px; border-radius: 4px; font-size: 0.9rem;">
+                    @foreach ($errors->all() as $error)
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.1rem;">⚠️</span> {{ $error }}
+                        </div>
+                    @endforeach
+                </div>
+            @endif
+
             <form method="POST" action="{{ route('login.store') }}" style="display: flex; flex-direction: column; gap: 20px;">
                 @csrf
                 <div class="auth-field">

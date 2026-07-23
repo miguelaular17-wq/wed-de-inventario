@@ -157,15 +157,17 @@
 @endauth
 
 <main>
-    @if (session('status'))
-        <div class="success">{{ session('status') }}</div>
-    @endif
-    @if ($errors->any())
-        <div class="errors">
-            @foreach ($errors->all() as $error)
-                <div>{{ $error }}</div>
-            @endforeach
-        </div>
+    @if (!request()->routeIs('login', 'register'))
+        @if (session('status'))
+            <div class="success">{{ session('status') }}</div>
+        @endif
+        @if ($errors->any())
+            <div class="errors">
+                @foreach ($errors->all() as $error)
+                    <div>{{ $error }}</div>
+                @endforeach
+            </div>
+        @endif
     @endif
     @yield('content')
 </main>
