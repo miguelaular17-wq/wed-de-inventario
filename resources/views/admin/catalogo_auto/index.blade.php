@@ -439,9 +439,16 @@ function syncSubcats(chkCat) {
     const toggle = block.querySelector('.cat-toggle');
 
     if (subList) {
+        // Marcar/desmarcar todas las subcategorías
+        const subChecks = subList.querySelectorAll('.chk-sub');
+        subChecks.forEach(sub => sub.checked = chkCat.checked);
+
         if (chkCat.checked) {
             subList.classList.add('visible');
             if (toggle) toggle.classList.add('open');
+        } else {
+            subList.classList.remove('visible');
+            if (toggle) toggle.classList.remove('open');
         }
     }
 }

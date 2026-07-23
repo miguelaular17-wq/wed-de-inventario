@@ -135,6 +135,7 @@ class FinanzasController extends Controller
         Profiler::stop('FinanzasController::flujoCaja query');
         $egresos_realizados = $movimientos->where('categoria_egreso', 'egreso_realizado');
         $otros_egresos = $movimientos->where('categoria_egreso', 'otros_egresos');
+        $traslados = $movimientos->where('categoria_egreso', 'traslados');
         
         $cuentas = $this->getCuentas(); // Mantenemos para el dropdown si es necesario o usamos las nuevas
         Profiler::start('FinanzasController::flujoCaja cuentas');
@@ -165,7 +166,8 @@ class FinanzasController extends Controller
         $result = view('finanzas.flujo_caja', compact(
             'movimientos', 
             'egresos_realizados', 
-            'otros_egresos', 
+            'otros_egresos',
+            'traslados',
             'cuentas',
             'cuentasBancarias',
             'resumen',

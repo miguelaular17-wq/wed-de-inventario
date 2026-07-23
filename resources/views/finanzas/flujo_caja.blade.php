@@ -603,6 +603,87 @@
     </div>
 </div>
 
+<!-- TRASLADOS (no aparece en reportes) -->
+<div class="dashboard-container" style="margin-top: 10px;">
+    <h3 style="margin-bottom: 15px; color: #7c3aed; display: flex; align-items: center; gap: 8px;">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 16V4m0 0L3 8m4-4l4 4"/><path d="M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+        TRASLADOS BANCARIOS
+        <span style="font-size: 0.75rem; font-weight: 400; background: #ede9fe; color: #6d28d9; padding: 2px 10px; border-radius: 20px; margin-left: 6px;">No incluidos en el reporte</span>
+    </h3>
+    <div class="panel" style="padding: 0; overflow: hidden; margin-bottom: 30px; border: 1.5px solid #ede9fe;">
+        <div class="table-wrap">
+            <table class="data-table" style="width: 100%;">
+                <thead>
+                    <tr style="background: #faf5ff;">
+                        <th style="width: 100px;">Fecha</th>
+                        <th>Banco Emisor y Titular</th>
+                        <th>Banco Receptor y Titular</th>
+                        <th>Motivo</th>
+                        <th class="col-number" style="text-align: right;">Monto BS</th>
+                        <th style="text-align: center; width: 80px;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($traslados as $mov)
+                        <tr>
+                            <td>{{ $mov->fecha }}</td>
+                            <td>
+                                <strong style="color: #7c3aed;">{{ $mov->banco }}</strong><br>
+                                <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular }}</span>
+                            </td>
+                            <td>
+                                @if($mov->banco_receptor)
+                                    <strong style="color: #059669;">{{ $mov->banco_receptor }}</strong><br>
+                                    <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular_receptor }}</span>
+                                @else
+                                    <span class="muted">-</span>
+                                @endif
+                            </td>
+                            <td>{{ $mov->motivo ?: '-' }}</td>
+                            <td class="col-number" style="text-align: right; font-weight: 500;">
+                                {{ $mov->monto_bs ? 'Bs.'.number_format($mov->monto_bs, 2) : '-' }}
+                            </td>
+                            <td style="text-align: center; white-space: nowrap;">
+                                @php
+                                    $allComprobantesT = array_filter(array_merge(
+                                        $mov->comprobantes ?? [],
+                                        ($mov->comprobante_url && !in_array($mov->comprobante_url, $mov->comprobantes ?? [])) ? [$mov->comprobante_url] : []
+                                    ));
+                                @endphp
+                                @if(count($allComprobantesT) > 0)
+                                    <button type="button" onclick='abrirGaleria(@json(array_values($allComprobantesT)))'
+                                        title="Ver comprobantes ({{ count($allComprobantesT) }})"
+                                        style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer; margin-right: 2px;">📎 {{ count($allComprobantesT) }}</button>
+                                @endif
+                                <button type="button" onclick='abrirEditarEgreso(@json($mov))'
+                                    title="Editar traslado"
+                                    style="background: #ede9fe; color: #7c3aed; border: 1px solid #ddd6fe; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">✏️</button>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 30px; color: var(--muted);">No hay traslados registrados para este día.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+                <tfoot>
+                    @php
+                        $tot_traslados_bs = $traslados->sum('monto_bs');
+                    @endphp
+                    <tr style="background-color: #faf5ff; border-top: 2px solid #ede9fe; font-weight: bold;">
+                        <td colspan="4" style="text-align: right; color: #7c3aed;">TOTAL TRASLADADO</td>
+                        <td class="col-number" style="text-align: right; color: #7c3aed;">
+                            Bs. {{ number_format($tot_traslados_bs, 2) }}
+                        </td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+
 <!-- Modal Nuevo Egreso -->
 <div id="nuevoEgresoModal" class="modal-overlay" style="display: none; z-index: 1100;">
     <div class="panel modal-box" style="width: 95%; max-width: 600px; position: relative; padding: 15px 20px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); max-height: 95vh; overflow-y: auto;">

@@ -154,9 +154,11 @@ Route::prefix('vendedor')->group(function () {
 });
 
 // Notifications routes for all authenticated users
+// Catálogo público - accesible sin login
+Route::get('/catalogo', [\App\Http\Controllers\CatalogoController::class, 'index'])->name('catalogo.index');
+
 Route::middleware('auth')->group(function () {
-    // Catálogo Gráfico
-    Route::get('/catalogo', [\App\Http\Controllers\CatalogoController::class, 'index'])->name('catalogo.index');
+    // Catálogo Gráfico (solo acciones protegidas)
     Route::get('/catalogo/pdf', [\App\Http\Controllers\CatalogoController::class, 'exportPdf'])->name('catalogo.pdf');
     Route::post('/catalogo/upload-image', [\App\Http\Controllers\CatalogoController::class, 'uploadImageByUrl'])->name('catalogo.upload_image');
 
