@@ -260,6 +260,7 @@
                     <option value="PAGO_MOVIL">PAGO MÓVIL</option>
                     <option value="DEPOSITO">DEPÓSITO</option>
                     <option value="BINANCE">BINANCE</option>
+                    <option value="CRUCE">CRUCE</option>
                 </select>
             </div>
             <div style="margin-bottom: 12px;">
