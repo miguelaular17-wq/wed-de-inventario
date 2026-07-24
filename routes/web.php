@@ -186,6 +186,7 @@ Route::middleware(['auth', 'role:admin,finanzas'])->prefix('finanzas')->group(fu
     Route::post('/flujo-caja/cuenta/{id}', [FinanzasController::class, 'updateCuenta'])->name('finanzas.update_cuenta');
     Route::post('/flujo-caja/resumen/{id}', [FinanzasController::class, 'updateResumen'])->name('finanzas.update_resumen');
     Route::post('/flujo-caja/planificacion/{id}', [FinanzasController::class, 'updatePlanificacion'])->name('finanzas.update_planificacion');
+    Route::get('/flujo-caja/api/bcv', [FinanzasController::class, 'fetchBcvApi'])->name('finanzas.api_bcv');
     Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
     Route::post('/gastos-fijos/monto', [FinanzasController::class, 'updateGastoFijoMonto'])->name('finanzas.gastos_fijos.monto');
     Route::post('/gastos-fijos/pagado', [FinanzasController::class, 'marcarGastoFijoPagado'])->name('finanzas.gastos_fijos.pagado');

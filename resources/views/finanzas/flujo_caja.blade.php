@@ -238,12 +238,23 @@
                         <thead>
                             <tr>
                                 <th colspan="4" class="header-main" style="text-align: left; font-size: 13px;">DISPONIBILIDAD EN TIEMPO REAL</th>
-                                <th class="header-tasa" style="text-align: right;">TASA BCV USD</th>
+                                <th class="header-tasa" style="text-align: right;">
+                                    <div style="display: flex; flex-direction: column; align-items: flex-end;">
+                                        TASA BCV USD
+                                        <div id="bcv-api-status" style="font-size: 10px; color: #64748b; font-weight: normal; margin-top: 2px;"></div>
+                                    </div>
+                                </th>
                                 <th colspan="2" class="header-tasa-val">
-                                    <div style="display: flex; align-items: center; justify-content: flex-end;">
-                                        <span style="color: #b45309; font-weight: 600; margin-right: 4px;">Bs.</span>
-                                        <input type="number" step="0.01" class="editable-input" style="text-align: left; width: 100px; font-weight: 700; color: #b45309; background: #fef3c7; border-color: #fde68a;" 
-                                            value="{{ $resumen->tasa_bcv_usd }}" data-type="resumen" data-id="{{ $resumen->id }}" data-field="tasa_bcv_usd">
+                                    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                                        <button type="button" id="btn-fetch-bcv" onclick="fetchBcvRate()" title="Consultar BCV API" style="background: none; border: none; cursor: pointer; color: #b45309; padding: 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.background='#fef3c7'" onmouseout="this.style.background='none'">
+                                            <svg id="bcv-icon-refresh" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.26l5.08 2.69"/></svg>
+                                            <svg id="bcv-icon-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none; animation: spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
+                                        </button>
+                                        <div style="display: flex; align-items: center;">
+                                            <span style="color: #b45309; font-weight: 600; margin-right: 4px;">Bs.</span>
+                                            <input type="number" step="0.01" id="tasa-bcv-input" class="editable-input" style="text-align: left; width: 100px; font-weight: 700; color: #b45309; background: #fef3c7; border-color: #fde68a;" 
+                                                value="{{ $resumen->tasa_bcv_usd }}" data-type="resumen" data-id="{{ $resumen->id }}" data-field="tasa_bcv_usd">
+                                        </div>
                                     </div>
                                 </th>
                             </tr>
@@ -960,7 +971,47 @@ function toggleTraslados() {
     document.getElementById('tipo_gasto').required = !isTraslado;
 }
 
+function fetchBcvRate() {
+    const btn = document.getElementById('btn-fetch-bcv');
+    const iconRefresh = document.getElementById('bcv-icon-refresh');
+    const iconSpinner = document.getElementById('bcv-icon-spinner');
+    const statusDiv = document.getElementById('bcv-api-status');
+    const input = document.getElementById('tasa-bcv-input');
+
+    if (btn) btn.disabled = true;
+    if (iconRefresh) iconRefresh.style.display = 'none';
+    if (iconSpinner) iconSpinner.style.display = 'block';
+    if (statusDiv) statusDiv.innerHTML = 'Consultando...';
+
+    fetch('{{ route("finanzas.api_bcv") }}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (statusDiv) statusDiv.innerHTML = 'Actualizado: ' + data.fecha_actualizacion;
+                if (input) {
+                    input.value = data.tasa;
+                    // Disparar evento change para que el backend lo guarde automáticamente
+                    input.dispatchEvent(new Event('change'));
+                }
+            } else {
+                if (statusDiv) statusDiv.innerHTML = '<span style="color: #ef4444;">Error: ' + data.message + '</span>';
+            }
+        })
+        .catch(err => {
+            console.error('Error fetching BCV rate:', err);
+            if (statusDiv) statusDiv.innerHTML = '<span style="color: #ef4444;">Sin conexión a API</span>';
+        })
+        .finally(() => {
+            if (btn) btn.disabled = false;
+            if (iconSpinner) iconSpinner.style.display = 'none';
+            if (iconRefresh) iconRefresh.style.display = 'block';
+        });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    // Auto fetch BCV API on load
+    fetchBcvRate();
+
     // Initialize TomSelect for tipo_gasto
     const srcTG = document.getElementById('tipo_gasto');
     const dstTG = document.getElementById('edit_tipo_gasto');
@@ -1487,6 +1538,40 @@ function abrirEditarEgreso(mov) {
         }
     }
 
+    // Lógica para Traslados
+    const isTraslado = (mov.categoria_egreso === 'traslados');
+    
+    document.getElementById('row_receptor_edit').style.display = isTraslado ? 'flex' : 'none';
+    document.getElementById('banco_titular_receptor_edit').required = isTraslado;
+    
+    document.getElementById('lbl_banco_titular_edit').innerText = isTraslado ? 'Banco Emisor y Titular Emisor' : 'Banco y Titular';
+    document.getElementById('lbl_monto_bs_edit').innerText = isTraslado ? 'Monto' : 'Monto BS';
+    
+    document.getElementById('col_monto_usd_edit').style.display = isTraslado ? 'none' : 'block';
+    document.getElementById('col_tasa_cambio_edit').style.display = isTraslado ? 'none' : 'block';
+    
+    document.getElementById('row_tipo_gasto_edit').style.display = isTraslado ? 'none' : 'block';
+    // Para no dar error con TomSelect requerimos el elemento base
+    const dstTG = document.getElementById('edit_tipo_gasto');
+    if (dstTG) dstTG.required = !isTraslado;
+
+    // Banco receptor
+    if (isTraslado && mov.banco_receptor) {
+        const bancoReceptorSelect = document.getElementById('banco_titular_receptor_edit');
+        if (bancoReceptorSelect) {
+            // Se busca match parcial con banco y titular receptor
+            for (let opt of bancoReceptorSelect.options) {
+                const parts = opt.value.split('|');
+                if (parts[0] === mov.banco_receptor && parts[1] === mov.titular_receptor) { 
+                    opt.selected = true; 
+                    break; 
+                }
+            }
+        }
+    } else {
+        document.getElementById('banco_titular_receptor_edit').value = '';
+    }
+
     // Existing comprobantes gallery
     const compSection = document.getElementById('editComprobantesActuales');
     compSection.innerHTML = '';
@@ -1627,8 +1712,8 @@ function validarDesgloseEdit(event) {
             <!-- Banco + Referencia -->
             <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 2;">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Banco y Titular</label>
-                    <select name="banco_titular" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <label id="lbl_banco_titular_edit" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Banco y Titular</label>
+                    <select name="banco_titular" id="banco_titular_edit" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                         <option value="">-- Seleccione --</option>
                         @foreach($cuentas as $cuenta)
                             <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
@@ -1643,6 +1728,21 @@ function validarDesgloseEdit(event) {
                 </div>
             </div>
 
+            <!-- Receptor Traslado -->
+            <div id="row_receptor_edit" style="display: none; gap: 15px; margin-bottom: 10px;">
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Banco Receptor y Titular Receptor</label>
+                    <select name="banco_titular_receptor" id="banco_titular_receptor_edit" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                        <option value="">-- Seleccione Receptor --</option>
+                        @foreach($cuentas as $cuenta)
+                            <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
+                                {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
             <!-- Fecha -->
             <div style="margin-bottom: 10px;">
                 <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Fecha</label>
@@ -1651,16 +1751,16 @@ function validarDesgloseEdit(event) {
 
             <!-- Montos -->
             <div style="display: flex; gap: 15px; margin-bottom: 10px;">
-                <div style="flex: 1;">
+                <div style="flex: 1;" id="col_monto_usd_edit">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto USD</label>
                     <input type="number" step="0.01" name="monto_usd" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
-                <div style="flex: 1;">
+                <div style="flex: 1;" id="col_tasa_cambio_edit">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tasa Cambio</label>
                     <input type="number" step="0.01" name="tasa_cambio" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
                 <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto BS</label>
+                    <label id="lbl_monto_bs_edit" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto BS</label>
                     <input type="number" step="0.01" name="monto_bs" id="monto_bs_edit" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
             </div>
@@ -1682,7 +1782,7 @@ function validarDesgloseEdit(event) {
             </div>
 
             <!-- Tipo gasto -->
-            <div style="margin-bottom: 10px;">
+            <div id="row_tipo_gasto_edit" style="margin-bottom: 10px;">
                 <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tipo de Gasto</label>
                 <select id="edit_tipo_gasto" name="tipo_gasto" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                     <option value="">-- Seleccione --</option>

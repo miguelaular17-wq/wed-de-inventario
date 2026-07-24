@@ -7,7 +7,7 @@
     <h2 style="color: var(--blue); font-weight: 700; margin: 10px 0 24px;">📝 Nuevo Contrato</h2>
 
     <div class="panel" style="padding: 24px;">
-        <form method="POST" action="{{ route('contratos.store') }}">
+        <form method="POST" action="{{ route('contratos.store') }}" enctype="multipart/form-data">
             @csrf
 
             @if($errors->any())
@@ -37,8 +37,8 @@
                     <input type="text" name="garantia" value="{{ old('garantia') }}" placeholder="Ej: CAMION" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
                 </div>
                 <div>
-                    <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Contacto</label>
-                    <input type="text" name="contacto" value="{{ old('contacto') }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+                    <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Adjunto Garantía (Foto/PDF)</label>
+                    <input type="file" name="garantia_documento" accept="image/*,.pdf" style="width: 100%; padding: 5px; border: 1px solid #ccc; border-radius: 6px; background: white;">
                 </div>
                 <div>
                     <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Teléfono</label>

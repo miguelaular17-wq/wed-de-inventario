@@ -158,6 +158,7 @@ class ContratoController extends Controller
             'numero_contrato'    => 'required|string|max:100|unique:contratos',
             'cliente'            => 'required|string|max:255',
             'garantia'           => 'nullable|string|max:255',
+            'garantia_documento' => 'nullable|file|mimes:jpeg,png,jpg,webp,pdf|max:5120',
             'contacto'           => 'nullable|string|max:255',
             'telefono'           => 'nullable|string|max:50',
             'sede'               => 'nullable|string|max:100',
@@ -175,6 +176,36 @@ class ContratoController extends Controller
 
         $numeroCuotas = (int) $data['numero_cuotas'];
         unset($data['numero_cuotas']);
+
+        $documentoUrl = null;
+        if ($request->hasFile('garantia_documento')) {
+            $file = $request->file('garantia_documento');
+            $extension = $file->getClientOriginalExtension();
+            $fileName = preg_replace('/[^A-Za-z0-9\-]/', '', $data['numero_contrato']) . '_' . time() . '.' . $extension;
+            
+            $supabaseUrl = env('SUPABASE_URL');
+            $supabaseKey = env('SUPABASE_KEY');
+            
+            if ($supabaseUrl && $supabaseKey) {
+                $supabaseUrl = rtrim($supabaseUrl, '/');
+                $uploadUrl = "{$supabaseUrl}/storage/v1/object/Contratos/{$fileName}";
+                
+                $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
+                    'Authorization' => "Bearer {$supabaseKey}",
+                    'Content-Type' => $file->getMimeType(),
+                ])->withBody(file_get_contents($file->getRealPath()), $file->getMimeType())->post($uploadUrl);
+                
+                if ($response->successful()) {
+                    $documentoUrl = "{$supabaseUrl}/storage/v1/object/public/Contratos/{$fileName}";
+                } else {
+                    \Illuminate\Support\Facades\Log::error('Error uploading to Supabase: ' . $response->body());
+                }
+            }
+        }
+        unset($data['garantia_documento']);
+        if ($documentoUrl) {
+            $data['garantia_documento'] = $documentoUrl;
+        }
 
         DB::transaction(function () use ($data, $numeroCuotas) {
             $contrato = Contrato::create($data);
@@ -218,6 +249,7 @@ class ContratoController extends Controller
         $data = $request->validate([
             'cliente'            => 'required|string|max:255',
             'garantia'           => 'nullable|string|max:255',
+            'garantia_documento' => 'nullable|file|mimes:jpeg,png,jpg,webp,pdf|max:5120',
             'contacto'           => 'nullable|string|max:255',
             'telefono'           => 'nullable|string|max:50',
             'sede'               => 'nullable|string|max:100',
@@ -228,6 +260,36 @@ class ContratoController extends Controller
             'observaciones'      => 'nullable|string',
             'activo'             => 'boolean',
         ]);
+
+        $documentoUrl = null;
+        if ($request->hasFile('garantia_documento')) {
+            $file = $request->file('garantia_documento');
+            $extension = $file->getClientOriginalExtension();
+            $fileName = preg_replace('/[^A-Za-z0-9\-]/', '', $contrato->numero_contrato) . '_' . time() . '.' . $extension;
+            
+            $supabaseUrl = env('SUPABASE_URL');
+            $supabaseKey = env('SUPABASE_KEY');
+            
+            if ($supabaseUrl && $supabaseKey) {
+                $supabaseUrl = rtrim($supabaseUrl, '/');
+                $uploadUrl = "{$supabaseUrl}/storage/v1/object/Contratos/{$fileName}";
+                
+                $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
+                    'Authorization' => "Bearer {$supabaseKey}",
+                    'Content-Type' => $file->getMimeType(),
+                ])->withBody(file_get_contents($file->getRealPath()), $file->getMimeType())->post($uploadUrl);
+                
+                if ($response->successful()) {
+                    $documentoUrl = "{$supabaseUrl}/storage/v1/object/public/Contratos/{$fileName}";
+                } else {
+                    \Illuminate\Support\Facades\Log::error('Error uploading to Supabase: ' . $response->body());
+                }
+            }
+        }
+        unset($data['garantia_documento']);
+        if ($documentoUrl) {
+            $data['garantia_documento'] = $documentoUrl;
+        }
 
         $contrato->update($data);
         return redirect()->route('contratos.show', $id)->with('success', 'Contrato actualizado correctamente.');

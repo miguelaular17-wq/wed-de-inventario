@@ -181,6 +181,68 @@ class FinanzasController extends Controller
         return $result;
     }
 
+    public function fetchBcvApi(Request $request)
+    {
+        try {
+            $apiUrl = env('BCV_API_URL', 'https://bcvapi.tech/api/v1/dolar');
+            $apiKey = env('BCV_API_KEY');
+
+            $headers = [];
+            if ($apiKey) {
+                $headers['Authorization'] = $apiKey;
+            }
+
+            $client = new \GuzzleHttp\Client(['timeout' => 5]);
+            $response = $client->get($apiUrl, [
+                'headers' => $headers
+            ]);
+
+            $data = json_decode($response->getBody(), true);
+            
+            // Suponiendo formato de BCVAPI.tech, ajustamos los campos. 
+            // Buscamos algo parecido a "rate", "tasa", "value", etc.
+            $rate = null;
+            $updatedAt = date('Y-m-d H:i');
+
+            if (isset($data['dolar'])) $rate = $data['dolar'];
+            elseif (isset($data['rate'])) $rate = $data['rate'];
+            elseif (isset($data['tasa'])) $rate = $data['tasa'];
+            elseif (isset($data['promedio'])) $rate = $data['promedio'];
+            elseif (isset($data['price'])) $rate = $data['price'];
+            elseif (isset($data['dolar_oficial'])) $rate = $data['dolar_oficial'];
+            else {
+                // If the response is a direct number
+                if (is_numeric($data)) $rate = $data;
+                // Otherwise maybe it's in a nested object or "data" key
+                elseif (isset($data['data']['rate'])) $rate = $data['data']['rate'];
+            }
+
+            if (isset($data['updated_at'])) $updatedAt = $data['updated_at'];
+            elseif (isset($data['fecha'])) $updatedAt = $data['fecha'];
+
+            if ($rate) {
+                return response()->json([
+                    'success' => true,
+                    'tasa' => round((float)$rate, 2),
+                    'fecha_actualizacion' => $updatedAt
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se encontró la tasa en la respuesta de la API.',
+                'debug' => $data
+            ], 400);
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('Error consultando BCV API: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'API no disponible o error de conexión.'
+            ]);
+        }
+    }
+
     public function storeEgreso(Request $request)
     {
         $data = $request->validate([

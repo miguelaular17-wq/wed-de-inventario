@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
 class Contrato extends Model
 {
     protected $fillable = [
-        'numero_contrato', 'cliente', 'garantia', 'contacto', 'telefono',
+        'numero_contrato', 'cliente', 'garantia', 'garantia_documento', 'contacto', 'telefono',
         'sede', 'capital', 'interes_porcentaje', 'cuota_fija', 'total_a_pagar',
         'fecha_inicio', 'frecuencia', 'responsable_id', 'observaciones', 'activo',
     ];

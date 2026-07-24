@@ -7,7 +7,7 @@
     <h2 style="color: var(--blue); font-weight: 700; margin: 10px 0 24px;">✏️ Editar Contrato — {{ $contrato->numero_contrato }}</h2>
 
     <div class="panel" style="padding: 24px;">
-        <form method="POST" action="{{ route('contratos.update', $contrato->id) }}">
+        <form method="POST" action="{{ route('contratos.update', $contrato->id) }}" enctype="multipart/form-data">
             @csrf
 
             @if($errors->any())
@@ -37,8 +37,13 @@
                     <input type="text" name="garantia" value="{{ old('garantia', $contrato->garantia) }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
                 </div>
                 <div>
-                    <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Contacto</label>
-                    <input type="text" name="contacto" value="{{ old('contacto', $contrato->contacto) }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+                    <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Adjunto Garantía</label>
+                    <input type="file" name="garantia_documento" accept="image/*,.pdf" style="width: 100%; padding: 5px; border: 1px solid #ccc; border-radius: 6px; background: white;">
+                    @if($contrato->garantia_documento)
+                        <div style="margin-top: 4px; font-size: 0.85rem;">
+                            <a href="{{ $contrato->garantia_documento }}" target="_blank" style="color: var(--blue); text-decoration: none;">Ver actual</a>
+                        </div>
+                    @endif
                 </div>
                 <div>
                     <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Teléfono</label>

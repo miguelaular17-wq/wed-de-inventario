@@ -31,14 +31,16 @@
 
     {{-- Info del contrato --}}
     <div class="panel" style="padding: 20px; margin-bottom: 20px;">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <div style="flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
             <div>
                 <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Garantía</div>
-                <div style="font-weight: 500;">{{ $contrato->garantia ?: '—' }}</div>
-            </div>
-            <div>
-                <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Contacto / Responsable de Pago</div>
-                <div style="font-weight: 500;">{{ $contrato->contacto ?: '—' }}</div>
+                <div style="font-weight: 500;">
+                    {{ $contrato->garantia ?: '—' }}
+                    @if($contrato->garantia_documento)
+                        <br><a href="{{ $contrato->garantia_documento }}" target="_blank" style="color: var(--blue); text-decoration: none; font-size: 0.85rem; display: inline-block; margin-top: 4px;">📄 Ver Documento</a>
+                    @endif
+                </div>
             </div>
             <div>
                 <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Teléfono</div>
@@ -72,6 +74,21 @@
                 <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Asesor</div>
                 <div style="font-weight: 500;">{{ $contrato->responsable?->name ?? '—' }}</div>
             </div>
+            </div>
+            
+            @if($contrato->garantia_documento)
+                @php
+                    $ext = strtolower(pathinfo(parse_url($contrato->garantia_documento, PHP_URL_PATH), PATHINFO_EXTENSION));
+                @endphp
+                @if(in_array($ext, ['jpg', 'jpeg', 'png', 'webp']))
+                    <div style="width: 120px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; border-left: 1px solid #e2e8f0; padding-left: 20px;">
+                        <div style="font-size: 0.75rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 8px;">Vista Previa</div>
+                        <a href="{{ $contrato->garantia_documento }}" target="_blank">
+                            <img src="{{ $contrato->garantia_documento }}" alt="Vista previa garantía" style="width: 100px; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        </a>
+                    </div>
+                @endif
+            @endif
         </div>
         @if($contrato->observaciones)
             <div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed #e2e8f0;">
