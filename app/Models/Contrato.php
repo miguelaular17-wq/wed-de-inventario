@@ -78,6 +78,7 @@ class Contrato extends Model
         $pendientes = $this->cuotas()->whereIn('estatus', ['pendiente', 'parcial'])->count();
         if ($vencidas > 0) return 'VENCIDO';
         if ($pendientes > 0) return 'ACTIVO';
+        if ($this->total_a_pagar > 0) return 'ACTIVO';
         return 'PAGADO';
     }
 
