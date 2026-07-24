@@ -241,15 +241,10 @@
                                 <th class="header-tasa" style="text-align: right;">
                                     <div style="display: flex; flex-direction: column; align-items: flex-end;">
                                         TASA BCV USD
-                                        <div id="bcv-api-status" style="font-size: 10px; color: #64748b; font-weight: normal; margin-top: 2px;"></div>
                                     </div>
                                 </th>
                                 <th colspan="2" class="header-tasa-val">
                                     <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-                                        <button type="button" id="btn-fetch-bcv" onclick="fetchBcvRate()" title="Consultar BCV API" style="background: none; border: none; cursor: pointer; color: #b45309; padding: 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center;" onmouseover="this.style.background='#fef3c7'" onmouseout="this.style.background='none'">
-                                            <svg id="bcv-icon-refresh" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.26l5.08 2.69"/></svg>
-                                            <svg id="bcv-icon-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none; animation: spin 1s linear infinite;"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>
-                                        </button>
                                         <div style="display: flex; align-items: center;">
                                             <span style="color: #b45309; font-weight: 600; margin-right: 4px;">Bs.</span>
                                             <input type="number" step="0.01" id="tasa-bcv-input" class="editable-input" style="text-align: left; width: 100px; font-weight: 700; color: #b45309; background: #fef3c7; border-color: #fde68a;" 
@@ -971,46 +966,9 @@ function toggleTraslados() {
     document.getElementById('tipo_gasto').required = !isTraslado;
 }
 
-function fetchBcvRate() {
-    const btn = document.getElementById('btn-fetch-bcv');
-    const iconRefresh = document.getElementById('bcv-icon-refresh');
-    const iconSpinner = document.getElementById('bcv-icon-spinner');
-    const statusDiv = document.getElementById('bcv-api-status');
-    const input = document.getElementById('tasa-bcv-input');
 
-    if (btn) btn.disabled = true;
-    if (iconRefresh) iconRefresh.style.display = 'none';
-    if (iconSpinner) iconSpinner.style.display = 'block';
-    if (statusDiv) statusDiv.innerHTML = 'Consultando...';
-
-    fetch('{{ route("finanzas.api_bcv") }}')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                if (statusDiv) statusDiv.innerHTML = 'Actualizado: ' + data.fecha_actualizacion;
-                if (input) {
-                    input.value = data.tasa;
-                    // Disparar evento change para que el backend lo guarde automáticamente
-                    input.dispatchEvent(new Event('change'));
-                }
-            } else {
-                if (statusDiv) statusDiv.innerHTML = '<span style="color: #ef4444;">Error: ' + data.message + '</span>';
-            }
-        })
-        .catch(err => {
-            console.error('Error fetching BCV rate:', err);
-            if (statusDiv) statusDiv.innerHTML = '<span style="color: #ef4444;">Sin conexión a API</span>';
-        })
-        .finally(() => {
-            if (btn) btn.disabled = false;
-            if (iconSpinner) iconSpinner.style.display = 'none';
-            if (iconRefresh) iconRefresh.style.display = 'block';
-        });
-}
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Auto fetch BCV API on load
-    fetchBcvRate();
 
     // Initialize TomSelect for tipo_gasto
     const srcTG = document.getElementById('tipo_gasto');
