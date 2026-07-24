@@ -81,13 +81,13 @@ class Contrato extends Model
         return 'PAGADO';
     }
 
-    public function getTotalAPagarAttribute(): float
+    public function getTotalAPagarAttribute($value): float
     {
         if ((float) $this->interes_porcentaje == 0) {
-            return (float) $this->capital;
+            return (float) $value;
         }
 
         $cuotasAtrasadas = $this->cuotas()->where('estatus', 'vencido')->sum('saldo');
-        return (float) $this->capital + (float) $cuotasAtrasadas;
+        return (float) $value + (float) $cuotasAtrasadas;
     }
 }

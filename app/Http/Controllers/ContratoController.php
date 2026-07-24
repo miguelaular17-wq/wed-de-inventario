@@ -357,11 +357,11 @@ class ContratoController extends Controller
             'forma_pago'    => $data['forma_pago'],
         ]);
 
-        // Si hay abono a capital, actualizar el capital del contrato
+        // Si hay abono a capital, actualizar el total a pagar del contrato
         if ($abonoCapital > 0) {
             $contrato = $cuota->contrato;
-            $nuevoCapital = max(0, $contrato->capital - $abonoCapital);
-            $contrato->update(['capital' => $nuevoCapital]);
+            $nuevoTotal = max(0, $contrato->total_a_pagar - $abonoCapital);
+            $contrato->update(['total_a_pagar' => $nuevoTotal]);
         }
 
         // Registrar seguimiento automático
@@ -450,6 +450,7 @@ class ContratoController extends Controller
 
         $monto = (float) $data['monto'];
         $contrato->increment('capital', $monto);
+        $contrato->increment('total_a_pagar', $monto);
 
         // Opcional: Registrar un seguimiento automático para que quede en el historial
         ContratoSeguimiento::create([
