@@ -215,7 +215,7 @@
                     Limpiar Día
                 </button>
             </form>
-            <a href="{{ route('finanzas.reporte_diario_caja') }}" class="btn btn-secondary" style="background-color: #f1f5f9; color: #334155; padding: 10px 20px; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 500; display: flex; align-items: center; gap: 8px; text-decoration: none; transition: all 0.2s;" onmouseover="this.style.background='#e2e8f0';" onmouseout="this.style.background='#f1f5f9';">
+            <a href="{{ route('finanzas.reporte_diario_caja', ['fecha' => $fecha_filtro]) }}" class="btn btn-secondary" style="background-color: #f1f5f9; color: #334155; padding: 10px 20px; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 500; display: flex; align-items: center; gap: 8px; text-decoration: none; transition: all 0.2s;" onmouseover="this.style.background='#e2e8f0';" onmouseout="this.style.background='#f1f5f9';">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                 Reporte Diario
             </a>
@@ -311,7 +311,41 @@
                             </tr>
                             @endforelse
                             
-
+                            @if(count($cuentasBancarias) > 0)
+                            @php
+                                $tot_bs_tc = $cuentasBancarias->sum('bs_tc');
+                                $tot_bs_disp = $cuentasBancarias->sum('bs_disponibles');
+                                $tot_usd_tc = $cuentasBancarias->sum('usd_tc');
+                                $tot_usd_disp = $cuentasBancarias->sum('usd_disp');
+                            @endphp
+                            <tr class="summary-row" style="background-color: #f8fafc; font-weight: bold; border-top: 2px solid #e2e8f0;">
+                                <td colspan="3" style="text-align: right; color: var(--blue);">TOTALES</td>
+                                <td>
+                                    <div style="display: flex; align-items: center;">
+                                        <span style="color: #94a3b8; font-size: 11px; margin-right: 4px;">Bs.</span>
+                                        <span id="sum_bs_tc">{{ number_format($tot_bs_tc, 2, '.', '') }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div style="display: flex; align-items: center;">
+                                        <span style="color: #94a3b8; font-size: 11px; margin-right: 4px;">Bs.</span>
+                                        <span id="sum_bs_disp">{{ number_format($tot_bs_disp, 2, '.', '') }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div style="display: flex; align-items: center;">
+                                        <span style="color: #94a3b8; font-size: 11px; margin-right: 4px;">$</span>
+                                        <span id="sum_usd_tc">{{ number_format($tot_usd_tc, 2, '.', '') }}</span>
+                                    </div>
+                                </td>
+                                <td style="color: #166534;">
+                                    <div style="display: flex; align-items: center;">
+                                        <span style="color: #94a3b8; font-size: 11px; margin-right: 4px;">$</span>
+                                        <span id="sum_usd_disp">{{ number_format($tot_usd_disp, 2, '.', '') }}</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            @endif
                         </tbody>
                     </table>
                 </div>

@@ -469,18 +469,6 @@
                 </tfoot>
             </table>
             
-            <!-- TOTALES GENERALES ROW -->
-            <table class="report-table" style="border-width: 3px;">
-                <tr class="bg-light-blue">
-                    <td class="text-center" style="font-weight: bold; width: 50%; font-size: 12px; padding: 5px;">TOTALES</td>
-                    <td class="text-center" style="font-weight: bold; width: 50%; font-size: 11px;">Bs. <span id="totales_gran_bs">-</span></td>
-                </tr>
-                <tr class="bg-light-blue">
-                    <td class="text-center" style="font-weight: bold;"></td>
-                    <td class="text-center bg-green" style="font-weight: bold; font-size: 11px;">$ <span id="totales_gran_usd">0.00</span></td>
-                </tr>
-            </table>
-
             <!-- PROYECCION -->
             <table class="report-table">
                 <thead>

@@ -1449,17 +1449,19 @@ class FinanzasController extends Controller
         return view('finanzas.reporte_consolidado', compact('cuentas', 'resumen', 'planificacion'));
     }
 
-    public function reporteDiarioCaja()
+    public function reporteDiarioCaja(\Illuminate\Http\Request $request)
     {
         Profiler::start('FinanzasController::reporteDiarioCaja');
 
-        $movimientos = \App\Models\FlujoCaja::where('fecha', date('Y-m-d'))->orderBy('fecha', 'desc')->get();
+        $fecha = $request->query('fecha', date('Y-m-d'));
+
+        $movimientos = \App\Models\FlujoCaja::where('fecha', $fecha)->orderBy('fecha', 'desc')->get();
         $egresos_realizados = $movimientos->where('categoria_egreso', 'egreso_realizado');
         $otros_egresos = $movimientos->where('categoria_egreso', 'otros_egresos');
         
         $cuentasBancarias = \App\Models\CuentaBancaria::where('mostrar_en_principal', true)->orderBy('orden')->get();
         $resumen = \App\Models\FinanzasResumen::firstOrCreate(
-            ['fecha' => date('Y-m-d')],
+            ['fecha' => $fecha],
             [
                 'tasa_bcv_usd' => $this->getTasaBcvDelDia(),
                 'saldo_inicial' => 0,
