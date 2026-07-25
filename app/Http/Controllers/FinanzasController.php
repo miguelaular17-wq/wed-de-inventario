@@ -154,8 +154,17 @@ class FinanzasController extends Controller
         // Mantener las existentes por si acaso
         $total_usd = $egresos->sum('monto_usd');
         $total_bs = $egresos->sum('monto_bs');
+        $total_salidas_usd = $total_bs / $tasa_bcv;
+        
         $resumen->total_salidas_usd = $total_usd;
-        $resumen->total_salidas_bs_en_usd = $total_bs / $tasa_bcv;
+        $resumen->total_salidas_bs_en_usd = $total_salidas_usd;
+        
+        // Queda del dia anterior
+        $resumen->queda_dia_anterior = $resumen->saldo_inicial - $total_salidas_usd;
+        
+        // Diferencial cambiario
+        $total_diferencial = $egresos->sum('diferencial_cambiario');
+        $resumen->porcentaje_total_diferencial = $resumen->saldo_inicial > 0 ? ($total_diferencial / $resumen->saldo_inicial) * 100 : 0;
         
         $resumen->save();
     }
@@ -185,7 +194,9 @@ class FinanzasController extends Controller
                 'porcentaje_total_diferencial' => 0
             ]
         );
-        $resumen = $this->syncSaldoInicialDisponibilidad($resumen);
+        if ($fecha_filtro === date('Y-m-d')) {
+            $resumen = $this->syncSaldoInicialDisponibilidad($resumen);
+        }
         Profiler::stop('FinanzasController::flujoCaja resumen');
 
         $total_salidas_bs = $egresos_realizados->sum('monto_bs') 
@@ -1728,11 +1739,6 @@ class FinanzasController extends Controller
 
         // 3. No borrar el historial (sin truncate). Solo resetear saldos de hoy y resincronizar
         $resumen = \App\Models\FinanzasResumen::where('fecha', date('Y-m-d'))->first();
-        if ($resumen) {
-            $resumen->saldo_inicial = 0;
-            $resumen->queda_dia_anterior = 0;
-            $resumen->save();
-        }
         $this->syncTotalesSalidas(date('Y-m-d'));
 
         return redirect()->back()->with('success', 'Disponibilidad y datos iniciales del día de hoy reseteados correctamente.');

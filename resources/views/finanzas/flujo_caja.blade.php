@@ -281,25 +281,25 @@
                                 <td>
                                     <div style="display: flex; align-items: center;">
                                         <span style="color: #94a3b8; font-size: 11px; margin-right: 4px;">Bs.</span>
-                                        <input type="number" step="0.01" class="editable-input" value="{{ $cb->bs_tc }}" data-type="cuenta" data-id="{{ $cb->id }}" data-field="bs_tc">
+                                        <input type="number" step="0.01" class="editable-input" value="{{ $fecha_filtro == date('Y-m-d') ? $cb->bs_tc : '0.00' }}" {{ $fecha_filtro == date('Y-m-d') ? '' : 'readonly' }} data-type="cuenta" data-id="{{ $cb->id }}" data-field="bs_tc">
                                     </div>
                                 </td>
                                 <td>
                                     <div style="display: flex; align-items: center;">
                                         <span style="color: #94a3b8; font-size: 11px; margin-right: 4px;">Bs.</span>
-                                        <input type="number" step="0.01" class="editable-input" value="{{ $cb->bs_disponibles }}" data-type="cuenta" data-id="{{ $cb->id }}" data-field="bs_disponibles">
+                                        <input type="number" step="0.01" class="editable-input" value="{{ $fecha_filtro == date('Y-m-d') ? $cb->bs_disponibles : '0.00' }}" {{ $fecha_filtro == date('Y-m-d') ? '' : 'readonly' }} data-type="cuenta" data-id="{{ $cb->id }}" data-field="bs_disponibles">
                                     </div>
                                 </td>
                                 <td>
                                     <div style="display: flex; align-items: center;">
                                         <span style="color: #94a3b8; font-size: 11px; margin-right: 4px;">$</span>
-                                        <input type="number" step="0.01" class="editable-input" value="{{ $cb->usd_tc }}" data-type="cuenta" data-id="{{ $cb->id }}" data-field="usd_tc">
+                                        <input type="number" step="0.01" class="editable-input" value="{{ $fecha_filtro == date('Y-m-d') ? $cb->usd_tc : '0.00' }}" {{ $fecha_filtro == date('Y-m-d') ? '' : 'readonly' }} data-type="cuenta" data-id="{{ $cb->id }}" data-field="usd_tc">
                                     </div>
                                 </td>
                                 <td style="{{ $loop->last ? 'background-color: #f0fdf4;' : '' }}">
                                     <div style="display: flex; align-items: center;">
                                         <span style="color: #94a3b8; font-size: 11px; margin-right: 4px;">$</span>
-                                        <input type="number" step="0.01" class="editable-input" style="{{ $loop->last ? 'color: #166534; font-weight: 600;' : '' }}" value="{{ $cb->usd_disp }}" data-type="cuenta" data-id="{{ $cb->id }}" data-field="usd_disp">
+                                        <input type="number" step="0.01" class="editable-input" style="{{ $loop->last ? 'color: #166534; font-weight: 600;' : '' }}" value="{{ $fecha_filtro == date('Y-m-d') ? $cb->usd_disp : '0.00' }}" {{ $fecha_filtro == date('Y-m-d') ? '' : 'readonly' }} data-type="cuenta" data-id="{{ $cb->id }}" data-field="usd_disp">
                                     </div>
                                 </td>
                             </tr>
@@ -313,10 +313,10 @@
                             
                             @if(count($cuentasBancarias) > 0)
                             @php
-                                $tot_bs_tc = $cuentasBancarias->sum('bs_tc');
-                                $tot_bs_disp = $cuentasBancarias->sum('bs_disponibles');
-                                $tot_usd_tc = $cuentasBancarias->sum('usd_tc');
-                                $tot_usd_disp = $cuentasBancarias->sum('usd_disp');
+                                $tot_bs_tc = $fecha_filtro == date('Y-m-d') ? $cuentasBancarias->sum('bs_tc') : 0;
+                                $tot_bs_disp = $fecha_filtro == date('Y-m-d') ? $cuentasBancarias->sum('bs_disponibles') : 0;
+                                $tot_usd_tc = $fecha_filtro == date('Y-m-d') ? $cuentasBancarias->sum('usd_tc') : 0;
+                                $tot_usd_disp = $fecha_filtro == date('Y-m-d') ? $cuentasBancarias->sum('usd_disp') : 0;
                             @endphp
                             <tr class="summary-row" style="background-color: #f8fafc; font-weight: bold; border-top: 2px solid #e2e8f0;">
                                 <td colspan="3" style="text-align: right; color: var(--blue);">TOTALES</td>
