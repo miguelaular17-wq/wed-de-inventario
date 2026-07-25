@@ -13,7 +13,7 @@ class ContratoCuota extends Model
     protected $fillable = [
         'contrato_id', 'numero_cuota', 'fecha_vencimiento', 'monto',
         'estatus', 'fecha_pago', 'forma_pago', 'monto_pagado', 'abono_capital', 'saldo',
-        'notificaciones_enviadas',
+        'notificaciones_enviadas', 'acumulada',
     ];
 
     protected $casts = [

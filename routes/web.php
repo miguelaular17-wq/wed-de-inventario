@@ -27,7 +27,7 @@ Route::get('/', function () {
         if ($user->isComprador() || $user->isMarketing()) {
             return redirect()->route('comprador.dashboard');
         }
-        if ($user->isFinanzas()) {
+        if ($user->isFinanzas() || $user->isAuditor()) {
             return redirect()->route('finanzas.flujo_caja');
         }
         if ($user->isCobranza()) {
@@ -174,26 +174,29 @@ Route::middleware('auth')->group(function () {
 });
 
 // Finanzas routes
-Route::middleware(['auth', 'role:admin,finanzas'])->prefix('finanzas')->group(function () {
+Route::middleware(['auth', 'role:admin,finanzas,auditor'])->prefix('finanzas')->group(function () {
     Route::get('/flujo-caja', [FinanzasController::class, 'flujoCaja'])->name('finanzas.flujo_caja');
-    Route::post('/flujo-caja/reset', [FinanzasController::class, 'resetDaily'])->name('finanzas.reset_daily');
-    Route::post('/flujo-caja/egreso', [FinanzasController::class, 'storeEgreso'])->name('finanzas.store_egreso');
-    Route::post('/flujo-caja/egreso/{id}', [FinanzasController::class, 'updateEgreso'])->name('finanzas.update_egreso');
-    Route::post('/flujo-caja/egresos-bulk', [FinanzasController::class, 'storeEgresosBulk'])->name('finanzas.store_egresos_bulk');
-    Route::post('/flujo-caja/ocr-receipt', [FinanzasController::class, 'ocrReceipt'])->name('finanzas.ocr_receipt');
-    Route::post('/flujo-caja/ocr-saldos', [FinanzasController::class, 'ocrSaldos'])->name('finanzas.ocr_saldos');
     Route::get('/flujo-caja/reporte-diario', [FinanzasController::class, 'reporteDiarioCaja'])->name('finanzas.reporte_diario_caja');
-    Route::post('/flujo-caja/cuenta/{id}', [FinanzasController::class, 'updateCuenta'])->name('finanzas.update_cuenta');
-    Route::post('/flujo-caja/resumen/{id}', [FinanzasController::class, 'updateResumen'])->name('finanzas.update_resumen');
-    Route::post('/flujo-caja/planificacion/{id}', [FinanzasController::class, 'updatePlanificacion'])->name('finanzas.update_planificacion');
     Route::get('/flujo-caja/api/bcv', [FinanzasController::class, 'fetchBcvApi'])->name('finanzas.api_bcv');
     Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
-    Route::post('/gastos-fijos/monto', [FinanzasController::class, 'updateGastoFijoMonto'])->name('finanzas.gastos_fijos.monto');
-    Route::post('/gastos-fijos/pagado', [FinanzasController::class, 'marcarGastoFijoPagado'])->name('finanzas.gastos_fijos.pagado');
-    Route::post('/gastos-fijos/fecha', [FinanzasController::class, 'updateGastoFijoFecha'])->name('finanzas.gastos_fijos.fecha');
-    Route::post('/gastos-fijos/costo', [FinanzasController::class, 'updateGastoFijoCosto'])->name('finanzas.gastos_fijos.costo');
-    Route::post('/gastos-fijos/agregar', [FinanzasController::class, 'agregarGastoFijo'])->name('finanzas.gastos_fijos.agregar');
-    Route::post('/gastos-fijos/eliminar', [FinanzasController::class, 'eliminarGastoFijoFila'])->name('finanzas.gastos_fijos.eliminar');
+
+    Route::middleware(['role:admin,finanzas'])->group(function () {
+        Route::post('/flujo-caja/reset', [FinanzasController::class, 'resetDaily'])->name('finanzas.reset_daily');
+        Route::post('/flujo-caja/egreso', [FinanzasController::class, 'storeEgreso'])->name('finanzas.store_egreso');
+        Route::post('/flujo-caja/egreso/{id}', [FinanzasController::class, 'updateEgreso'])->name('finanzas.update_egreso');
+        Route::post('/flujo-caja/egresos-bulk', [FinanzasController::class, 'storeEgresosBulk'])->name('finanzas.store_egresos_bulk');
+        Route::post('/flujo-caja/ocr-receipt', [FinanzasController::class, 'ocrReceipt'])->name('finanzas.ocr_receipt');
+        Route::post('/flujo-caja/ocr-saldos', [FinanzasController::class, 'ocrSaldos'])->name('finanzas.ocr_saldos');
+        Route::post('/flujo-caja/cuenta/{id}', [FinanzasController::class, 'updateCuenta'])->name('finanzas.update_cuenta');
+        Route::post('/flujo-caja/resumen/{id}', [FinanzasController::class, 'updateResumen'])->name('finanzas.update_resumen');
+        Route::post('/flujo-caja/planificacion/{id}', [FinanzasController::class, 'updatePlanificacion'])->name('finanzas.update_planificacion');
+        Route::post('/gastos-fijos/monto', [FinanzasController::class, 'updateGastoFijoMonto'])->name('finanzas.gastos_fijos.monto');
+        Route::post('/gastos-fijos/pagado', [FinanzasController::class, 'marcarGastoFijoPagado'])->name('finanzas.gastos_fijos.pagado');
+        Route::post('/gastos-fijos/fecha', [FinanzasController::class, 'updateGastoFijoFecha'])->name('finanzas.gastos_fijos.fecha');
+        Route::post('/gastos-fijos/costo', [FinanzasController::class, 'updateGastoFijoCosto'])->name('finanzas.gastos_fijos.costo');
+        Route::post('/gastos-fijos/agregar', [FinanzasController::class, 'agregarGastoFijo'])->name('finanzas.gastos_fijos.agregar');
+        Route::post('/gastos-fijos/eliminar', [FinanzasController::class, 'eliminarGastoFijoFila'])->name('finanzas.gastos_fijos.eliminar');
+    });
 });
 
 // Conciliaciones routes - solo admin y contabilidad
@@ -230,6 +233,7 @@ Route::middleware(['auth', 'role:admin,finanzas,cobranza'])->prefix('contratos')
     Route::get('/{id}/editar', [App\Http\Controllers\ContratoController::class, 'edit'])->name('contratos.edit');
     Route::post('/{id}', [App\Http\Controllers\ContratoController::class, 'update'])->name('contratos.update');
     Route::post('/cuota/{id}/pagar', [App\Http\Controllers\ContratoController::class, 'registrarPago'])->name('contratos.pagar');
+    Route::post('/cuota/{id}/acumular', [App\Http\Controllers\ContratoController::class, 'acumularCuota'])->name('contratos.acumular');
     Route::post('/{id}/generar-cuota', [App\Http\Controllers\ContratoController::class, 'generarSiguienteCuota'])->name('contratos.generarCuota');
     Route::post('/{id}/aumentar-capital', [App\Http\Controllers\ContratoController::class, 'aumentarCapital'])->name('contratos.aumentarCapital');
     Route::post('/seguimiento', [App\Http\Controllers\ContratoController::class, 'agregarSeguimiento'])->name('contratos.seguimiento');

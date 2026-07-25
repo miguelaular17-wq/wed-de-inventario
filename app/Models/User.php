@@ -20,6 +20,7 @@ class User extends Authenticatable
     public const ROLE_FINANZAS = 'finanzas';
     public const ROLE_COBRANZA = 'cobranza';
     public const ROLE_CONTABILIDAD = 'contabilidad';
+    public const ROLE_AUDITOR = 'auditor';
 
     protected $fillable = [
         'name',
@@ -77,6 +78,11 @@ class User extends Authenticatable
     public function isMarketing(): bool
     {
         return $this->role === self::ROLE_MARKETING;
+    }
+
+    public function isAuditor(): bool
+    {
+        return $this->role === self::ROLE_AUDITOR;
     }
 
     public function isFinanzas(): bool

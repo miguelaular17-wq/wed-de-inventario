@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
 class Contrato extends Model
 {
     protected $fillable = [
-        'numero_contrato', 'cliente', 'garantia', 'garantia_documento', 'contacto', 'telefono',
+        'numero_contrato', 'cliente', 'garantia', 'garantia_documento', 'garantia_aumento', 'contacto', 'telefono',
         'sede', 'capital', 'interes_porcentaje', 'cuota_fija', 'total_a_pagar',
         'fecha_inicio', 'frecuencia', 'responsable_id', 'observaciones', 'activo',
     ];
@@ -74,11 +74,12 @@ class Contrato extends Model
 
     public function estatusGeneral(): string
     {
-        $vencidas = $this->cuotas()->where('estatus', 'vencido')->count();
+        $vencidas = $this->cuotas()->where('estatus', 'vencido')->where('acumulada', false)->count();
         $pendientes = $this->cuotas()->whereIn('estatus', ['pendiente', 'parcial'])->count();
         if ($vencidas > 0) return 'VENCIDO';
         if ($pendientes > 0) return 'ACTIVO';
-        if ($this->total_a_pagar > 0) return 'ACTIVO';
+        // Si tiene saldo de capital pendiente aunque cuotas estén pagadas, sigue siendo deudor
+        if ((float) $this->attributes['total_a_pagar'] > 0) return 'ACTIVO';
         return 'PAGADO';
     }
 

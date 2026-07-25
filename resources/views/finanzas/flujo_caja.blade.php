@@ -206,6 +206,7 @@
 <div class="dashboard-container py-4">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
         <h2 style="margin: 0; font-size: 1.5rem; color: var(--blue); font-weight: 600;">Flujo de Caja y Disponibilidad</h2>
+        @if(!auth()->user()->isAuditor())
         <div style="display: flex; gap: 10px;">
             <form action="{{ route('finanzas.reset_daily') }}" method="POST" onsubmit="return confirm('¿Estás seguro de que deseas eliminar TODOS los datos financieros y empezar el día completamente en blanco?');">
                 @csrf
@@ -227,8 +228,10 @@
                 Nuevo Egreso
             </button>
         </div>
+        @endif
     </div>
 
+    @if(!auth()->user()->isAuditor())
     <div class="custom-row">
         <!-- TABLA DISPONIBILIDAD (IZQUIERDA) -->
         <div class="custom-left mb-4">
@@ -308,34 +311,7 @@
                             </tr>
                             @endforelse
                             
-                            <!-- LAST ROW SUMMARY -->
-                            <tr class="summary-row">
-                                <td colspan="3" style="text-align: right; padding-right: 20px;">TOTALES</td>
-                                <td>
-                                    <div style="display: flex; align-items: center; justify-content: flex-end;">
-                                        <span style="color: #64748b; font-size: 11px; margin-right: 4px;">Bs.</span>
-                                        <span id="sum_bs_tc">0.00</span>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div style="display: flex; align-items: center; justify-content: flex-end;">
-                                        <span style="color: #64748b; font-size: 11px; margin-right: 4px;">Bs.</span>
-                                        <span id="sum_bs_disp">0.00</span>
-                                    </div>
-                                </td>
-                                <td style="background-color: #f0fdf4; color: #166534;">
-                                    <div style="display: flex; align-items: center; justify-content: flex-end;">
-                                        <span style="color: #86efac; font-size: 11px; margin-right: 4px;">$</span>
-                                        <span id="sum_usd_tc">0.00</span>
-                                    </div>
-                                </td>
-                                <td style="background-color: #f0fdf4; color: #166534;">
-                                    <div style="display: flex; align-items: center; justify-content: flex-end;">
-                                        <span style="color: #86efac; font-size: 11px; margin-right: 4px;">$</span>
-                                        <span id="sum_usd_disp">0.00</span>
-                                    </div>
-                                </td>
-                            </tr>
+
                         </tbody>
                     </table>
                 </div>
@@ -419,6 +395,7 @@
             </div>
         </div>
     </div>
+    @endif
 
 <!-- EGRESOS REALIZADOS -->
     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; margin-bottom: 15px;">
@@ -484,10 +461,16 @@
                                         title="Ver comprobantes ({{ count($allComprobantes) }})"
                                         style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer; margin-right: 2px;">📎 {{ count($allComprobantes) }}</button>
                                 @endif
-                                {{-- Editar --}}
+                                {{-- Editar / Ver --}}
+                                @if(auth()->user()->isAuditor())
+                                <button type="button" onclick='abrirVerEgreso(@json($mov))'
+                                    title="Ver detalle"
+                                    style="background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">👁️</button>
+                                @else
                                 <button type="button" onclick='abrirEditarEgreso(@json($mov))'
                                     title="Editar egreso"
                                     style="background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">✏️</button>
+                                @endif
                             </td>
                         </tr>
                     @empty
@@ -507,7 +490,7 @@
                         $porcentaje_dc = $tot_egresos_bs_usd > 0 ? ($tot_egresos_dif / $tot_egresos_bs_usd) * 100 : 0;
                     @endphp
                     <tr style="background-color: #f8fafc; border-top: 2px solid #e2e8f0; font-weight: bold;">
-                        <td colspan="3" style="text-align: right; color: var(--blue);">
+                        <td colspan="4" style="text-align: right; color: var(--blue);">
                             <span style="color: #be123c; margin-right: 15px; font-weight: 700;">% D.C: {{ number_format($porcentaje_dc, 2) }}%</span>
                             TOTALES
                         </td>
@@ -526,6 +509,7 @@
                             Bs. {{ number_format($tot_egresos_com, 2) }}<br>
                             <span style="font-size: 0.85rem; color: #166534;">$ {{ number_format($tot_egresos_com_usd, 2) }}</span>
                         </td>
+                        <td></td>
                     </tr>
                 </tfoot>
             </table>
@@ -548,6 +532,7 @@
                         <th class="col-number" style="text-align: right;">Dif. Cambiario</th>
                         <th class="col-number" style="text-align: right;">BS</th>
                         <th class="col-number" style="text-align: right;">Comisión</th>
+                        <th style="text-align: center; width: 80px;">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -565,10 +550,32 @@
                             <td class="col-number" style="text-align: right; color: var(--danger);">{{ $mov->diferencial_cambiario ? number_format($mov->diferencial_cambiario, 2) : '-' }}</td>
                             <td class="col-number" style="text-align: right; font-weight: 500;">{{ $mov->monto_bs ? 'Bs.'.number_format($mov->monto_bs, 2) : '-' }}</td>
                             <td class="col-number" style="text-align: right;">{{ $mov->comision ? number_format($mov->comision, 2) : '-' }}</td>
+                            <td style="text-align: center; white-space: nowrap;">
+                                @php
+                                    $allComprobantes = array_filter(array_merge(
+                                        $mov->comprobantes ?? [],
+                                        ($mov->comprobante_url && !in_array($mov->comprobante_url, $mov->comprobantes ?? [])) ? [$mov->comprobante_url] : []
+                                    ));
+                                @endphp
+                                @if(count($allComprobantes) > 0)
+                                    <button type="button" onclick='abrirGaleria(@json(array_values($allComprobantes)))'
+                                        title="Ver comprobantes ({{ count($allComprobantes) }})"
+                                        style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer; margin-right: 2px;">📎 {{ count($allComprobantes) }}</button>
+                                @endif
+                                @if(auth()->user()->isAuditor())
+                                <button type="button" onclick='abrirVerEgreso(@json($mov))'
+                                    title="Ver detalle"
+                                    style="background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">👁️</button>
+                                @else
+                                <button type="button" onclick='abrirEditarEgreso(@json($mov))'
+                                    title="Editar egreso"
+                                    style="background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">✏️</button>
+                                @endif
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" style="text-align: center; padding: 30px; color: var(--muted);">No hay otros egresos registrados.</td>
+                            <td colspan="9" style="text-align: center; padding: 30px; color: var(--muted);">No hay otros egresos registrados.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -583,7 +590,7 @@
                         $porcentaje_otros_dc = $tot_otros_bs_usd > 0 ? ($tot_otros_dif / $tot_otros_bs_usd) * 100 : 0;
                     @endphp
                     <tr style="background-color: #f8fafc; border-top: 2px solid #e2e8f0; font-weight: bold;">
-                        <td colspan="3" style="text-align: right; color: var(--blue);">
+                        <td colspan="4" style="text-align: right; color: var(--blue);">
                             <span style="color: #be123c; margin-right: 15px; font-weight: 700;">% D.C: {{ number_format($porcentaje_otros_dc, 2) }}%</span>
                             TOTALES
                         </td>
@@ -602,6 +609,7 @@
                             Bs. {{ number_format($tot_otros_com, 2) }}<br>
                             <span style="font-size: 0.85rem; color: #166534;">$ {{ number_format($tot_otros_com_usd, 2) }}</span>
                         </td>
+                        <td></td>
                     </tr>
                 </tfoot>
             </table>
@@ -661,9 +669,15 @@
                                         title="Ver comprobantes ({{ count($allComprobantesT) }})"
                                         style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer; margin-right: 2px;">📎 {{ count($allComprobantesT) }}</button>
                                 @endif
+                                @if(auth()->user()->isAuditor())
+                                <button type="button" onclick='abrirVerEgreso(@json($mov))'
+                                    title="Ver detalle"
+                                    style="background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">👁️</button>
+                                @else
                                 <button type="button" onclick='abrirEditarEgreso(@json($mov))'
                                     title="Editar traslado"
                                     style="background: #ede9fe; color: #7c3aed; border: 1px solid #ddd6fe; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">✏️</button>
+                                @endif
                             </td>
                         </tr>
                     @empty
@@ -1102,11 +1116,17 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('input[data-field="usd_tc"]').forEach(i => usdTc += parseFloat(i.value)||0);
         document.querySelectorAll('input[data-field="usd_disp"]').forEach(i => usdDisp += parseFloat(i.value)||0);
         
-        // Sumar campos fijos si es necesario, o solo mostrarlos
-        document.getElementById('sum_bs_tc').textContent = bsTc.toFixed(2);
-        document.getElementById('sum_bs_disp').textContent = bsDisp.toFixed(2);
-        document.getElementById('sum_usd_tc').textContent = usdTc.toFixed(2);
-        document.getElementById('sum_usd_disp').textContent = usdDisp.toFixed(2);
+        const sumBsTc = document.getElementById('sum_bs_tc');
+        if(sumBsTc) sumBsTc.textContent = bsTc.toFixed(2);
+        
+        const sumBsDisp = document.getElementById('sum_bs_disp');
+        if(sumBsDisp) sumBsDisp.textContent = bsDisp.toFixed(2);
+        
+        const sumUsdTc = document.getElementById('sum_usd_tc');
+        if(sumUsdTc) sumUsdTc.textContent = usdTc.toFixed(2);
+        
+        const sumUsdDisp = document.getElementById('sum_usd_disp');
+        if(sumUsdDisp) sumUsdDisp.textContent = usdDisp.toFixed(2);
     }
     
     updateSums(); // Init sums
@@ -1465,6 +1485,7 @@ function abrirEditarEgreso(mov) {
     f.querySelector('[name="monto_usd"]').value      = mov.monto_usd || '';
     f.querySelector('[name="tasa_cambio"]').value    = mov.tasa_cambio || '';
     f.querySelector('[name="monto_bs"]').value       = mov.monto_bs || '';
+    f.querySelector('[name="diferencial_cambiario"]').value = mov.diferencial_cambiario || '';
     f.querySelector('[name="comision"]').value       = mov.comision || '';
     f.querySelector('[name="motivo"]').value         = mov.motivo || '';
     f.querySelector('[name="sede"]').value           = mov.sede || '';
@@ -1507,6 +1528,8 @@ function abrirEditarEgreso(mov) {
     
     document.getElementById('col_monto_usd_edit').style.display = isTraslado ? 'none' : 'block';
     document.getElementById('col_tasa_cambio_edit').style.display = isTraslado ? 'none' : 'block';
+    const rowDifEdit = document.getElementById('row_diferencial_edit');
+    if (rowDifEdit) rowDifEdit.style.display = isTraslado ? 'none' : 'block';
     
     document.getElementById('row_tipo_gasto_edit').style.display = isTraslado ? 'none' : 'block';
     // Para no dar error con TomSelect requerimos el elemento base
@@ -1615,6 +1638,78 @@ function validarDesgloseEdit(event) {
     return true;
 }
 
+function abrirVerEgreso(mov) {
+    document.getElementById('modalVerEgreso').style.display = 'flex';
+    
+    document.getElementById('ver_fecha').innerText = mov.fecha || '-';
+    document.getElementById('ver_referencia').innerText = mov.referencia || '-';
+    
+    const bancoStr = (mov.banco || '') + ' - ' + (mov.titular || '');
+    document.getElementById('ver_banco').innerText = bancoStr;
+
+    if (mov.banco_receptor) {
+        document.getElementById('ver_receptor_container').style.display = 'block';
+        document.getElementById('ver_banco_receptor').innerText = (mov.banco_receptor || '') + ' - ' + (mov.titular_receptor || '');
+    } else {
+        document.getElementById('ver_receptor_container').style.display = 'none';
+    }
+
+    document.getElementById('ver_monto_usd').innerText = mov.monto_usd ? '$ ' + parseFloat(mov.monto_usd).toFixed(2) : '-';
+    document.getElementById('ver_monto_bs').innerText = mov.monto_bs ? 'Bs. ' + parseFloat(mov.monto_bs).toFixed(2) : '-';
+    document.getElementById('ver_tasa').innerText = mov.tasa_cambio ? parseFloat(mov.tasa_cambio).toFixed(2) : '-';
+    document.getElementById('ver_dif').innerText = mov.diferencial_cambiario ? '$ ' + parseFloat(mov.diferencial_cambiario).toFixed(2) : '-';
+    document.getElementById('ver_comision').innerText = mov.comision ? 'Bs. ' + parseFloat(mov.comision).toFixed(2) : '-';
+    document.getElementById('ver_tipo_gasto').innerText = mov.tipo_gasto || '-';
+    document.getElementById('ver_motivo').innerText = mov.motivo || '-';
+    document.getElementById('ver_sede').innerText = mov.sede || '-';
+    document.getElementById('ver_placa').innerText = mov.placa_vehiculo || '-';
+
+    // Desglose
+    const dgCont = document.getElementById('ver_desglose_container');
+    const dgLista = document.getElementById('ver_desglose_lista');
+    dgLista.innerHTML = '';
+    if (mov.desglose && Array.isArray(mov.desglose) && mov.desglose.length > 0) {
+        dgCont.style.display = 'block';
+        mov.desglose.forEach(item => {
+            dgLista.innerHTML += `
+                <div style="display: flex; gap: 10px; margin-bottom: 5px; padding-bottom: 5px; border-bottom: 1px solid #bae6fd;">
+                    <div style="flex: 2;"><strong>Beneficiario:</strong> ${item.beneficiario || ''}</div>
+                    <div style="flex: 1;"><strong>Cédula:</strong> ${item.cedula || ''}</div>
+                    <div style="flex: 1; text-align: right;"><strong>Monto:</strong> Bs. ${item.monto || ''}</div>
+                </div>
+            `;
+        });
+    } else {
+        dgCont.style.display = 'none';
+    }
+
+    // Comprobantes
+    const compCont = document.getElementById('ver_comprobantes');
+    compCont.innerHTML = '';
+    let allComps = [];
+    if (mov.comprobantes) allComps = allComps.concat(mov.comprobantes);
+    if (mov.comprobante_url && !allComps.includes(mov.comprobante_url)) allComps.push(mov.comprobante_url);
+    
+    if (allComps.length > 0) {
+        allComps.forEach(url => {
+            const ext = url.split('.').pop().toLowerCase();
+            let el;
+            if (ext === 'pdf') {
+                el = `<a href="/storage/${url}" target="_blank" style="display:inline-block; padding:10px; background:#f1f5f9; border-radius:6px; border:1px solid #cbd5e1; text-decoration:none; color:#334155; font-weight:500;">📄 Ver PDF</a>`;
+            } else {
+                el = `<a href="/storage/${url}" target="_blank"><img src="/storage/${url}" style="width:100px; height:100px; object-fit:cover; border-radius:6px; border:1px solid #ccc;"></a>`;
+            }
+            compCont.innerHTML += el;
+        });
+    } else {
+        compCont.innerHTML = '<span style="color:#94a3b8; font-size:0.85rem;">No hay comprobantes adjuntos</span>';
+    }
+}
+
+function cerrarVerEgreso() {
+    document.getElementById('modalVerEgreso').style.display = 'none';
+}
+
 </script>
 
 <!-- Modal Ver Desglose -->
@@ -1659,6 +1754,53 @@ function validarDesgloseEdit(event) {
 </div>
 
 <!-- Modal Editar Egreso -->
+<!-- MODAL VER EGRESO (Solo Lectura) -->
+<div id="modalVerEgreso" class="modal-overlay" style="display: none; z-index: 1300; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div class="panel modal-box" style="width: 95%; max-width: 700px; position: relative; padding: 20px; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); max-height: 92vh; overflow-y: auto; background: white;">
+        <button type="button" onclick="cerrarVerEgreso()" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 22px; cursor: pointer;">&times;</button>
+        <h3 style="margin-top: 0; color: var(--blue); display: flex; align-items: center; gap: 8px;">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            Detalles del Movimiento
+        </h3>
+
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <div><span style="color:#64748b; font-size: 0.85rem; font-weight: 600;">Fecha:</span> <div id="ver_fecha" style="font-weight: 500; color: #0f172a;"></div></div>
+            <div><span style="color:#64748b; font-size: 0.85rem; font-weight: 600;">Ref:</span> <div id="ver_referencia" style="font-weight: 500; color: #0f172a;"></div></div>
+            
+            <div style="grid-column: span 2;"><span style="color:#64748b; font-size: 0.85rem; font-weight: 600;">Banco Emisor y Titular:</span> <div id="ver_banco" style="font-weight: 500; color: var(--blue);"></div></div>
+            <div id="ver_receptor_container" style="grid-column: span 2; display: none;"><span style="color:#64748b; font-size: 0.85rem; font-weight: 600;">Banco Receptor y Titular:</span> <div id="ver_banco_receptor" style="font-weight: 500; color: #059669;"></div></div>
+
+            <div><span style="color:#64748b; font-size: 0.85rem; font-weight: 600;">Monto USD:</span> <div id="ver_monto_usd" style="font-weight: 600; color: #0f172a;"></div></div>
+            <div><span style="color:#64748b; font-size: 0.85rem; font-weight: 600;">Monto BS:</span> <div id="ver_monto_bs" style="font-weight: 600; color: #0f172a;"></div></div>
+            
+            <div><span style="color:#64748b; font-size: 0.85rem; font-weight: 600;">Tasa Cambio:</span> <div id="ver_tasa" style="font-weight: 500; color: #0f172a;"></div></div>
+            <div><span style="color:#64748b; font-size: 0.85rem; font-weight: 600;">Dif. Cambiario:</span> <div id="ver_dif" style="font-weight: 500; color: var(--danger);"></div></div>
+
+            <div><span style="color:#64748b; font-size: 0.85rem; font-weight: 600;">Comisión:</span> <div id="ver_comision" style="font-weight: 500; color: #0f172a;"></div></div>
+            <div><span style="color:#64748b; font-size: 0.85rem; font-weight: 600;">Tipo de Gasto:</span> <div id="ver_tipo_gasto" style="font-weight: 500; color: #0f172a;"></div></div>
+
+            <div style="grid-column: span 2;"><span style="color:#64748b; font-size: 0.85rem; font-weight: 600;">Motivo:</span> <div id="ver_motivo" style="font-weight: 500; color: #0f172a;"></div></div>
+            
+            <div><span style="color:#64748b; font-size: 0.85rem; font-weight: 600;">Sede:</span> <div id="ver_sede" style="font-weight: 500; color: #0f172a;"></div></div>
+            <div><span style="color:#64748b; font-size: 0.85rem; font-weight: 600;">Placa Veh.:</span> <div id="ver_placa" style="font-weight: 500; color: #0f172a;"></div></div>
+        </div>
+
+        <div id="ver_desglose_container" style="display: none; background: #f0f9ff; padding: 15px; border-radius: 8px; border: 1px solid #bae6fd; margin-bottom: 20px;">
+            <h4 style="margin: 0 0 10px 0; color: #0284c7; font-size: 0.95rem;">Desglose por Beneficiarios</h4>
+            <div id="ver_desglose_lista"></div>
+        </div>
+
+        <div style="margin-bottom: 15px; border-top: 1px dashed #cbd5e1; padding-top: 15px;">
+            <h4 style="margin: 0 0 10px 0; font-size: 0.95rem; color: #475569;">Comprobantes Adjuntos</h4>
+            <div id="ver_comprobantes" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+            <button type="button" onclick="cerrarVerEgreso()" style="padding: 8px 20px; background: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Cerrar</button>
+        </div>
+    </div>
+</div>
+
 <div id="modalEditarEgreso" class="modal-overlay" style="display: none; z-index: 1300; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
     <div class="panel modal-box" style="width: 95%; max-width: 650px; position: relative; padding: 20px; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); max-height: 92vh; overflow-y: auto; background: white;">
         <button type="button" onclick="cerrarEditarEgreso()" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 22px; cursor: pointer;">&times;</button>
@@ -1720,6 +1862,10 @@ function validarDesgloseEdit(event) {
                 <div style="flex: 1;">
                     <label id="lbl_monto_bs_edit" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto BS</label>
                     <input type="number" step="0.01" name="monto_bs" id="monto_bs_edit" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <div style="flex: 1;" id="row_diferencial_edit">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Dif. Cambiario</label>
+                    <input type="number" step="0.01" name="diferencial_cambiario" style="width: 100%; padding: 6px; border: 1px solid #fde68a; background-color: #fef9c3; border-radius: 4px;">
                 </div>
             </div>
 

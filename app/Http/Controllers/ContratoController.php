@@ -164,7 +164,7 @@ class ContratoController extends Controller
             'sede'               => 'nullable|string|max:100',
             'capital'            => 'required|numeric|min:0',
             'interes_porcentaje' => 'required|numeric|min:0',
-            'cuota_fija'         => 'required|numeric|min:0',
+            'cuota_fija'         => 'nullable|numeric|min:0',
             'fecha_inicio'       => 'required|date',
             'frecuencia'         => 'required|in:MENSUAL,QUINCENAL',
             'numero_cuotas'      => 'required|integer|min:1|max:360',
@@ -172,7 +172,16 @@ class ContratoController extends Controller
             'observaciones'      => 'nullable|string',
         ]);
 
-        $data['total_a_pagar'] = $data['capital']; // As user requested: capital + unpaid dues (which is 0 on creation)
+        // Auto-calcular cuota fija = capital × tasa_interés si el interés es > 0
+        $capital = (float) $data['capital'];
+        $interes = (float) $data['interes_porcentaje'];
+        if ($interes > 0) {
+            $data['cuota_fija'] = round($capital * $interes, 2);
+        } elseif (empty($data['cuota_fija'])) {
+            $data['cuota_fija'] = 0;
+        }
+
+        $data['total_a_pagar'] = $capital;
 
         $numeroCuotas = (int) $data['numero_cuotas'];
         unset($data['numero_cuotas']);
@@ -220,12 +229,12 @@ class ContratoController extends Controller
                 }
 
                 ContratoCuota::create([
-                    'contrato_id'      => $contrato->id,
-                    'numero_cuota'     => $i,
+                    'contrato_id'       => $contrato->id,
+                    'numero_cuota'      => $i,
                     'fecha_vencimiento' => $fechaVenc,
-                    'monto'            => $data['cuota_fija'],
-                    'saldo'            => $data['cuota_fija'],
-                    'estatus'          => 'pendiente',
+                    'monto'             => $data['cuota_fija'],
+                    'saldo'             => $data['cuota_fija'],
+                    'estatus'           => 'pendiente',
                 ]);
             }
         });
@@ -335,10 +344,9 @@ class ContratoController extends Controller
             $abonoCapital += $montoPagado;
         }
 
-        $montoTotal   = (float) $cuota->monto;
-        $saldoPrevio  = (float) $cuota->saldo > 0 ? (float) $cuota->saldo : $montoTotal;
-
-        $nuevoSaldo = max(0, $saldoPrevio - $montoPagado);
+        $montoTotal  = (float) $cuota->monto;
+        $saldoPrevio = (float) $cuota->saldo > 0 ? (float) $cuota->saldo : $montoTotal;
+        $nuevoSaldo  = max(0, $saldoPrevio - $montoPagado);
 
         if ($nuevoSaldo <= 0) {
             $estatus = 'pagado';
@@ -357,22 +365,38 @@ class ContratoController extends Controller
             'forma_pago'    => $data['forma_pago'],
         ]);
 
-        // Si hay abono a capital, actualizar el total a pagar del contrato
+        $contrato = $cuota->contrato;
+
+        // Si hay abono a capital, actualizar el total a pagar y recalcular cuotas futuras
         if ($abonoCapital > 0) {
-            $contrato = $cuota->contrato;
-            $nuevoTotal = max(0, $contrato->total_a_pagar - $abonoCapital);
-            $contrato->update(['total_a_pagar' => $nuevoTotal]);
+            $nuevoTotal = max(0, (float) $contrato->attributes['total_a_pagar'] - $abonoCapital);
+            $nuevaCuotaFija = (float) $contrato->interes_porcentaje > 0
+                ? round($nuevoTotal * (float) $contrato->interes_porcentaje, 2)
+                : (float) $contrato->cuota_fija;
+
+            $contrato->update([
+                'total_a_pagar' => $nuevoTotal,
+                'cuota_fija'    => $nuevaCuotaFija,
+            ]);
+
+            // Recalcular monto de cuotas futuras pendientes
+            if ($nuevaCuotaFija > 0) {
+                $contrato->cuotas()
+                    ->whereIn('estatus', ['pendiente', 'parcial'])
+                    ->where('id', '!=', $cuota->id)
+                    ->update(['monto' => $nuevaCuotaFija, 'saldo' => $nuevaCuotaFija]);
+            }
         }
 
         // Registrar seguimiento automático
         ContratoSeguimiento::create([
-            'contrato_id'       => $cuota->contrato_id,
-            'cuota_id'          => $cuota->id,
-            'usuario_id'        => Auth::id(),
-            'fecha_hora'        => now(),
-            'resultado'         => $estatus === 'pagado' ? 'PAGO_COMPLETO' : 'PAGO_PARCIAL',
-            'comentarios'       => $data['comentario'] ?? "Pago registrado: \${$montoPagado} via {$data['forma_pago']}",
-            'contactado'        => true,
+            'contrato_id' => $cuota->contrato_id,
+            'cuota_id'    => $cuota->id,
+            'usuario_id'  => Auth::id(),
+            'fecha_hora'  => now(),
+            'resultado'   => $estatus === 'pagado' ? 'PAGO_COMPLETO' : 'PAGO_PARCIAL',
+            'comentarios' => $data['comentario'] ?? "Pago registrado: \${$montoPagado} via {$data['forma_pago']}",
+            'contactado'  => true,
         ]);
 
         return redirect()->back()->with('success', 'Pago registrado correctamente.');
@@ -444,37 +468,135 @@ class ContratoController extends Controller
         $contrato = Contrato::findOrFail($id);
         
         $data = $request->validate([
-            'monto' => 'required|numeric|min:0.01',
-            'comentario' => 'nullable|string'
+            'monto'          => 'required|numeric|min:0.01',
+            'fecha_aumento'  => 'required|date',
+            'garantia_tipo'  => 'required|in:misma,nueva',
+            'garantia_nueva' => 'nullable|string|max:255',
+            'comentario'     => 'nullable|string',
         ]);
 
-        $monto = (float) $data['monto'];
-        $contrato->increment('capital', $monto);
-        $contrato->increment('total_a_pagar', $monto);
+        $monto         = (float) $data['monto'];
+        $fechaAumento  = $data['fecha_aumento'];
+        $garantiaTipo  = $data['garantia_tipo'];
+        $garantiaNueva = $data['garantia_nueva'] ?? null;
 
-        // Opcional: Registrar un seguimiento automático para que quede en el historial
+        // Actualizar capital y total a pagar
+        $nuevoCapital = (float) $contrato->capital + $monto;
+        $nuevoTotal   = (float) $contrato->attributes['total_a_pagar'] + $monto;
+
+        // Recalcular cuota fija con el nuevo total si hay tasa de interés
+        $nuevaCuotaFija = (float) $contrato->interes_porcentaje > 0
+            ? round($nuevoTotal * (float) $contrato->interes_porcentaje, 2)
+            : (float) $contrato->cuota_fija;
+
+        $updateData = [
+            'capital'       => $nuevoCapital,
+            'total_a_pagar' => $nuevoTotal,
+            'cuota_fija'    => $nuevaCuotaFija,
+        ];
+
+        // Si la garantía es nueva, registrarla
+        if ($garantiaTipo === 'nueva' && $garantiaNueva) {
+            $updateData['garantia_aumento'] = $garantiaNueva;
+        }
+
+        $contrato->update($updateData);
+
+        // Recalcular monto de cuotas futuras pendientes
+        if ($nuevaCuotaFija > 0) {
+            $contrato->cuotas()
+                ->whereIn('estatus', ['pendiente', 'parcial'])
+                ->update(['monto' => $nuevaCuotaFija, 'saldo' => $nuevaCuotaFija]);
+        }
+
+        // Describir la garantía en el seguimiento
+        $descGarantia = $garantiaTipo === 'nueva'
+            ? 'Nueva garantía: ' . ($garantiaNueva ?: 'No especificada')
+            : 'Misma garantía del contrato';
+
+        $comentarioFinal = "Aumento de capital $" . number_format($monto, 2)
+            . " en fecha {$fechaAumento}. {$descGarantia}."
+            . ($data['comentario'] ? ' Nota: ' . $data['comentario'] : '');
+
+        // Registrar seguimiento histórico
         ContratoSeguimiento::create([
-            'contrato_id'       => $contrato->id,
-            'usuario_id'        => Auth::id(),
-            'fecha_hora'        => now(),
-            'resultado'         => 'NUEVO_PRESTAMO',
-            'comentarios'       => 'Se sumaron $' . number_format($monto, 2) . ' al capital. ' . ($data['comentario'] ?? ''),
-            'contactado'        => true,
+            'contrato_id' => $contrato->id,
+            'usuario_id'  => Auth::id(),
+            'fecha_hora'  => now(),
+            'resultado'   => 'NUEVO_PRESTAMO',
+            'comentarios' => $comentarioFinal,
+            'contactado'  => true,
         ]);
 
-        // Registrar como una "cuota" especial en el plan de pagos para que se refleje
+        // Registrar como fila especial en el plan de pagos
         ContratoCuota::create([
-            'contrato_id'      => $contrato->id,
-            'numero_cuota'     => 0, // 0 para que no interfiera con las cuotas regulares o lo manejamos en la vista
-            'fecha_vencimiento' => now(),
-            'monto'            => $monto,
-            'saldo'            => 0,
-            'estatus'          => 'prestamo',
-            'forma_pago'       => 'NUEVO PRÉSTAMO',
-            'fecha_pago'       => now(),
+            'contrato_id'       => $contrato->id,
+            'numero_cuota'      => 0,
+            'fecha_vencimiento' => $fechaAumento,
+            'monto'             => $monto,
+            'saldo'             => 0,
+            'estatus'           => 'prestamo',
+            'forma_pago'        => 'NUEVO PRÉSTAMO' . ($garantiaTipo === 'nueva' ? ' - ' . ($garantiaNueva ?: 'Nueva Garantía') : ''),
+            'fecha_pago'        => $fechaAumento,
         ]);
 
-        return redirect()->back()->with('success', 'Préstamo agregado al capital exitosamente y reflejado en el plan de pagos.');
+        return redirect()->back()->with('success', 'Préstamo agregado al capital exitosamente. Nueva cuota fija: $' . number_format($nuevaCuotaFija, 2));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ACUMULAR CUOTA VENCIDA AL TOTAL
+    // ─────────────────────────────────────────────────────────────────────────
+    public function acumularCuota(Request $request, int $cuotaId)
+    {
+        $cuota = ContratoCuota::with('contrato')->findOrFail($cuotaId);
+
+        if (!in_array($cuota->estatus, ['vencido', 'pendiente', 'parcial'])) {
+            return redirect()->back()->with('error', 'Solo se pueden acumular cuotas vencidas o pendientes.');
+        }
+
+        $contrato     = $cuota->contrato;
+        $saldoCuota   = (float) $cuota->saldo > 0 ? (float) $cuota->saldo : (float) $cuota->monto;
+        $nuevoTotal   = (float) $contrato->attributes['total_a_pagar'] + $saldoCuota;
+
+        // Recalcular cuota fija con el nuevo total
+        $nuevaCuotaFija = (float) $contrato->interes_porcentaje > 0
+            ? round($nuevoTotal * (float) $contrato->interes_porcentaje, 2)
+            : (float) $contrato->cuota_fija;
+
+        // Marcar la cuota como acumulada
+        $cuota->update([
+            'acumulada'  => true,
+            'estatus'    => 'acumulado',
+            'fecha_pago' => now()->toDateString(),
+            'forma_pago' => 'ACUMULADO AL TOTAL',
+            'saldo'      => 0,
+        ]);
+
+        // Actualizar total y cuota fija del contrato
+        $contrato->update([
+            'total_a_pagar' => $nuevoTotal,
+            'cuota_fija'    => $nuevaCuotaFija,
+        ]);
+
+        // Recalcular cuotas futuras pendientes
+        if ($nuevaCuotaFija > 0) {
+            $contrato->cuotas()
+                ->whereIn('estatus', ['pendiente', 'parcial'])
+                ->update(['monto' => $nuevaCuotaFija, 'saldo' => $nuevaCuotaFija]);
+        }
+
+        // Registrar en el historial
+        ContratoSeguimiento::create([
+            'contrato_id' => $contrato->id,
+            'cuota_id'    => $cuota->id,
+            'usuario_id'  => Auth::id(),
+            'fecha_hora'  => now(),
+            'resultado'   => 'ACUMULADO',
+            'comentarios' => "Cuota #{$cuota->numero_cuota} (\${$saldoCuota}) acumulada al total. Nuevo total: \${$nuevoTotal}. Nueva cuota fija: \${$nuevaCuotaFija}.",
+            'contactado'  => false,
+        ]);
+
+        return redirect()->back()->with('success', "Cuota #{$cuota->numero_cuota} acumulada al total. Nueva cuota fija: \$" . number_format($nuevaCuotaFija, 2));
     }
 
     // ─────────────────────────────────────────────────────────────────────────

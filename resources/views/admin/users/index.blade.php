@@ -97,6 +97,7 @@
                                         <option value="finanzas" @selected($user->role === 'finanzas')>Finanzas</option>
                                         <option value="cobranza" @selected($user->role === 'cobranza')>Cobranza</option>
                                         <option value="contabilidad" @selected($user->role === 'contabilidad')>Contabilidad</option>
+                                        <option value="auditor" @selected($user->role === 'auditor')>Auditor</option>
                                     </select>
                                 </div>
                                 <div class="field" style="margin:0;">
@@ -181,7 +182,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const updateSedeState = () => {
             const role = roleSelect.value;
-            if (role === 'comprador' || role === 'marketing' || role === 'finanzas' || role === 'cobranza' || role === 'contabilidad') {
+            if (role === 'comprador' || role === 'marketing' || role === 'finanzas' || role === 'cobranza' || role === 'contabilidad' || role === 'auditor') {
                 sedeSelect.value = '';
                 sedeSelect.disabled = true;
                 sedeSelect.style.opacity = '0.5';

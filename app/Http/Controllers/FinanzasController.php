@@ -125,6 +125,30 @@ class FinanzasController extends Controller
         return $resumen;
     }
 
+    private function syncTotalesSalidas($fecha)
+    {
+        $resumen = \App\Models\FinanzasResumen::where('fecha', $fecha)->first();
+        if (!$resumen) return;
+
+        $egresos = \App\Models\FlujoCaja::where('fecha', $fecha)
+            ->where('tipo', 'egreso')
+            ->where('oculto', false)
+            ->where(function($q) {
+                $q->whereNull('categoria_egreso')
+                  ->orWhere('categoria_egreso', '!=', 'traslados');
+            })
+            ->get();
+
+        $total_usd = $egresos->sum('monto_usd');
+        $total_bs = $egresos->sum('monto_bs');
+        
+        $tasa_bcv = $resumen->tasa_bcv_usd > 0 ? $resumen->tasa_bcv_usd : 1;
+        $total_bs_en_usd = $total_bs / $tasa_bcv;
+
+        $resumen->total_salidas_usd = $total_usd;
+        $resumen->total_salidas_bs_en_usd = $total_bs_en_usd;
+        $resumen->save();
+    }
 
     public function flujoCaja() {
         Profiler::start('FinanzasController::flujoCaja');
@@ -352,6 +376,8 @@ class FinanzasController extends Controller
             'desglose'              => $desglose,
         ]);
 
+        $this->syncTotalesSalidas($data['fecha']);
+
         return redirect()->back()->with('success', 'Egreso registrado correctamente.');
     }
 
@@ -401,6 +427,7 @@ class FinanzasController extends Controller
             'desglose_cedula'        => 'nullable|array',
             'desglose_monto'         => 'nullable|array',
             'comprobantes_eliminar'  => 'nullable|array',
+            'diferencial_cambiario'  => 'nullable|numeric',
         ]);
 
         $cuentaInfo = explode('|', $data['banco_titular']);
@@ -420,10 +447,10 @@ class FinanzasController extends Controller
         $tasa_bcv = $resumen ? ($resumen->tasa_bcv_usd ?: 1) : 1;
         $monto_usd = $data['monto_usd'] ?: 0;
         $monto_bs  = $data['monto_bs'] ?: 0;
-        $diferencial_cambiario = 0;
-        if ($egreso->categoria_egreso !== 'traslados' && $tasa_bcv > 0) {
-            $diferencial_cambiario = (($monto_usd * $tasa_bcv) - $monto_bs) / $tasa_bcv;
-        }
+        
+        $diferencial_cambiario = array_key_exists('diferencial_cambiario', $data) && $data['diferencial_cambiario'] !== null 
+                                 ? $data['diferencial_cambiario'] 
+                                 : $egreso->diferencial_cambiario;
 
         // Manage comprobantes array: start from existing
         $comprobantes = $egreso->comprobantes ?? [];
@@ -487,6 +514,12 @@ class FinanzasController extends Controller
             'comprobantes'          => empty($comprobantes) ? null : array_values($comprobantes),
             'desglose'              => $desglose,
         ]);
+
+        $this->syncTotalesSalidas($data['fecha']);
+        
+        if ($egreso->fecha != $data['fecha']) {
+            $this->syncTotalesSalidas($egreso->fecha);
+        }
 
         return redirect()->back()->with('success', 'Egreso actualizado correctamente.');
     }
@@ -1247,6 +1280,8 @@ class FinanzasController extends Controller
         $linea->estado = 'conciliado';
         $linea->flujo_caja_id = $flujo->id;
         $linea->save();
+
+        $this->syncTotalesSalidas($linea->fecha);
 
         return redirect()->route('finanzas.conciliaciones')->with('success', 'Gasto agregado al sistema y conciliado correctamente.');
     }

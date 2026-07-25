@@ -68,15 +68,16 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px;">
                 <div>
                     <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Capital (USD) *</label>
-                    <input type="number" step="0.01" name="capital" required value="{{ old('capital') }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+                    <input type="number" step="0.01" name="capital" id="inputCapital" required value="{{ old('capital') }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
                 </div>
                 <div>
                     <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Interés % (mensual) *</label>
-                    <input type="number" step="0.01" name="interes_porcentaje" required value="{{ old('interes_porcentaje', '0.08') }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+                    <input type="number" step="0.0001" name="interes_porcentaje" id="inputInteres" required value="{{ old('interes_porcentaje', '0.08') }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
                 </div>
                 <div>
-                    <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Cuota Fija (USD) *</label>
-                    <input type="number" step="0.01" name="cuota_fija" required value="{{ old('cuota_fija') }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+                    <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Cuota Fija (USD)</label>
+                    <input type="number" step="0.01" name="cuota_fija" id="inputCuotaFija" value="{{ old('cuota_fija') }}" style="width: 100%; padding: 8px; border: 1px solid #10b981; border-radius: 6px; background: #f0fdf4;" placeholder="Auto-calculada">
+                    <div id="formulaCuota" style="font-size: 0.75rem; color: #059669; margin-top: 3px;"></div>
                 </div>
             </div>
 
@@ -115,20 +116,29 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const capitalInput = document.querySelector('input[name="capital"]');
-    const interesInput = document.querySelector('input[name="interes_porcentaje"]');
-    const cuotaInput = document.querySelector('input[name="cuota_fija"]');
+    const capitalInput = document.getElementById('inputCapital');
+    const interesInput = document.getElementById('inputInteres');
+    const cuotaInput  = document.getElementById('inputCuotaFija');
+    const formulaDiv  = document.getElementById('formulaCuota');
 
     function calculateCuota() {
         const capital = parseFloat(capitalInput.value) || 0;
         const interes = parseFloat(interesInput.value) || 0;
         if (capital > 0 && interes > 0) {
-            cuotaInput.value = (capital * interes).toFixed(2);
+            const cuota = (capital * interes).toFixed(2);
+            cuotaInput.value = cuota;
+            formulaDiv.textContent = '$' + capital.toLocaleString('es-VE', {minimumFractionDigits:2}) + ' × ' + (interes * 100).toFixed(2) + '% = $' + parseFloat(cuota).toLocaleString('es-VE', {minimumFractionDigits:2});
+        } else {
+            formulaDiv.textContent = '';
         }
     }
 
     capitalInput.addEventListener('input', calculateCuota);
     interesInput.addEventListener('input', calculateCuota);
+
+    // Calcular al cargar si hay valores
+    calculateCuota();
 });
 </script>
 @endsection
+

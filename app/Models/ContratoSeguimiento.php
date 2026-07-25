@@ -32,6 +32,7 @@ class ContratoSeguimiento extends Model
         'NUEVO_PRESTAMO'  => 'Nuevo préstamo agregado',
         'SIN_FONDOS'      => 'Sin fondos',
         'RENEGOCIACION'   => 'Solicita renegociación',
+        'ACUMULADO'       => 'Cuota acumulada al total',
     ];
 
     public function contrato(): BelongsTo

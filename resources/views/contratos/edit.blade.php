@@ -61,15 +61,16 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px;">
                 <div>
                     <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Capital ($)</label>
-                    <input type="number" step="0.01" name="capital" value="{{ old('capital', $contrato->capital) }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;" required>
+                    <input type="number" step="0.01" name="capital" id="inputCapital" value="{{ old('capital', $contrato->capital) }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;" required>
                 </div>
                 <div>
                     <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Interés % (Mensual)</label>
-                    <input type="number" step="0.01" name="interes_porcentaje" value="{{ old('interes_porcentaje', $contrato->interes_porcentaje) }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;" required>
+                    <input type="number" step="0.0001" name="interes_porcentaje" id="inputInteres" value="{{ old('interes_porcentaje', $contrato->interes_porcentaje) }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;" required>
                 </div>
                 <div>
                     <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Cuota Fija ($)</label>
-                    <input type="number" step="0.01" name="cuota_fija" value="{{ old('cuota_fija', $contrato->cuota_fija) }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;" required>
+                    <input type="number" step="0.01" name="cuota_fija" id="inputCuotaFija" value="{{ old('cuota_fija', $contrato->cuota_fija) }}" style="width: 100%; padding: 8px; border: 1px solid #10b981; border-radius: 6px; background: #f0fdf4;" required>
+                    <div id="formulaCuota" style="font-size: 0.75rem; color: #059669; margin-top: 3px;"></div>
                 </div>
             </div>
 
@@ -105,4 +106,30 @@
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const capitalInput = document.getElementById('inputCapital');
+    const interesInput = document.getElementById('inputInteres');
+    const cuotaInput   = document.getElementById('inputCuotaFija');
+    const formulaDiv   = document.getElementById('formulaCuota');
+
+    function updateFormula() {
+        const capital = parseFloat(capitalInput.value) || 0;
+        const interes = parseFloat(interesInput.value) || 0;
+        if (capital > 0 && interes > 0) {
+            const cuota = (capital * interes).toFixed(2);
+            formulaDiv.textContent = '$' + capital.toLocaleString('es-VE', {minimumFractionDigits:2}) + ' × ' + (interes * 100).toFixed(2) + '% = $' + parseFloat(cuota).toLocaleString('es-VE', {minimumFractionDigits:2});
+            cuotaInput.value = cuota;
+        } else {
+            formulaDiv.textContent = '';
+        }
+    }
+
+    capitalInput.addEventListener('input', updateFormula);
+    interesInput.addEventListener('input', updateFormula);
+    updateFormula();
+});
+</script>
 @endsection
+
