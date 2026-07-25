@@ -160,10 +160,12 @@
                     <tr><td class="bg-green text-center" style="font-weight: bold; font-size: 10px;">$ {{ number_format($resumen->saldo_inicial, 2, ',', '.') }}</td></tr>
                     
                     <tr class="bg-light-gray"><th class="thick-border-top thick-border-bottom">TOTAL SALIDAS BS</th></tr>
-                    <tr><td class="bg-green text-center" style="font-weight: bold; font-size: 10px;">$ {{ number_format($total_salidas_bs / ($resumen->tasa_bcv_usd ?: 1), 2, ',', '.') }}</td></tr>
+                    @php $total_salidas_usd = $resumen->tasa_bcv_usd > 0 ? ($total_salidas_bs / $resumen->tasa_bcv_usd) : 0; @endphp
+                    <tr><td class="bg-green text-center" style="font-weight: bold; font-size: 10px;">$ {{ number_format($total_salidas_usd, 2, ',', '.') }}</td></tr>
 
                     <tr class="bg-light-gray"><th class="thick-border-top thick-border-bottom">QUEDA DEL DIA ANTERIOR</th></tr>
-                    <tr><td class="bg-green text-center" style="font-weight: bold; font-size: 10px;">$ {{ number_format($resumen->queda_dia_anterior, 2, ',', '.') }}</td></tr>
+                    @php $queda_calculada = $resumen->saldo_inicial - $total_salidas_usd; @endphp
+                    <tr><td class="bg-green text-center" style="font-weight: bold; font-size: 10px;">$ {{ number_format($queda_calculada, 2, ',', '.') }}</td></tr>
 
                     <tr class="bg-light-gray"><th class="text-danger thick-border-top thick-border-bottom">TOTAL DIFERENCIAL<br>CAMBIARIO</th></tr>
                     <tr><td class="bg-green text-center" style="font-weight: bold; font-size: 10px;">$ {{ number_format($total_diferencial_cambiario, 2, ',', '.') }}</td></tr>
