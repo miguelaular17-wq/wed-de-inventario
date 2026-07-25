@@ -13,6 +13,7 @@ class Contrato extends Model
         'numero_contrato', 'cliente', 'garantia', 'garantia_documento', 'garantia_aumento', 'contacto', 'telefono',
         'sede', 'capital', 'interes_porcentaje', 'cuota_fija', 'total_a_pagar',
         'fecha_inicio', 'frecuencia', 'responsable_id', 'observaciones', 'activo',
+        'estado', 'liquidado_en_contrato_id',
     ];
 
     protected $casts = [
@@ -32,6 +33,11 @@ class Contrato extends Model
     public function seguimientos(): HasMany
     {
         return $this->hasMany(ContratoSeguimiento::class)->orderByDesc('fecha_hora');
+    }
+
+    public function contratoRenovado(): BelongsTo
+    {
+        return $this->belongsTo(Contrato::class, 'liquidado_en_contrato_id');
     }
 
     public function responsable(): BelongsTo
@@ -74,6 +80,8 @@ class Contrato extends Model
 
     public function estatusGeneral(): string
     {
+        if ($this->estado === 'liquidado') return 'LIQUIDADO';
+
         $vencidas = $this->cuotas()->where('estatus', 'vencido')->where('acumulada', false)->count();
         $pendientes = $this->cuotas()->whereIn('estatus', ['pendiente', 'parcial'])->count();
         if ($vencidas > 0) return 'VENCIDO';

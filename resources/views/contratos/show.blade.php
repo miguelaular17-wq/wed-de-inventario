@@ -11,10 +11,25 @@
         </div>
         <div style="display: flex; gap: 10px;">
             <a href="{{ route('contratos.reporte', $contrato->id) }}" target="_blank" style="padding: 8px 16px; background: #3b82f6; color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">⬇️ Descargar Reporte</a>
-            <a href="{{ route('contratos.edit', $contrato->id) }}" style="padding: 8px 16px; background: #f59e0b; color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">✏️ Editar</a>
-            <button type="button" onclick="document.getElementById('modalSeguimiento').style.display='flex'" style="padding: 8px 16px; background: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">📞 Registrar Llamada</button>
+            @if($contrato->estado !== 'liquidado')
+                <a href="{{ route('contratos.edit', $contrato->id) }}" style="padding: 8px 16px; background: #f59e0b; color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">✏️ Editar</a>
+                <button type="button" onclick="document.getElementById('modalSeguimiento').style.display='flex'" style="padding: 8px 16px; background: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">📞 Registrar Llamada</button>
+                <a href="{{ route('contratos.liquidar', $contrato->id) }}" style="padding: 8px 16px; background: #dc2626; color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">⚠️ Liquidar Contrato</a>
+            @endif
         </div>
     </div>
+
+    @if($contrato->estado === 'liquidado')
+        <div style="background: #fee2e2; border-left: 4px solid #ef4444; color: #b91c1c; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between;">
+            <div>
+                <strong style="display: block; font-size: 1.1rem; margin-bottom: 4px;">⚠️ ESTE CONTRATO FUE LIQUIDADO Y REESTRUCTURADO</strong>
+                <span>Esta deuda ha sido refinanciada y el contrato quedó cerrado. No se admiten más pagos.</span>
+            </div>
+            @if($contrato->liquidado_en_contrato_id)
+                <a href="{{ route('contratos.show', $contrato->liquidado_en_contrato_id) }}" style="background: #ef4444; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.9rem;">Ver Nuevo Contrato ➔</a>
+            @endif
+        </div>
+    @endif
 
     @if(session('success'))
         <div style="background: #d1e7dd; color: #0f5132; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;">{{ session('success') }}</div>
@@ -202,21 +217,9 @@
                                 </span>
                             </td>
                             <td style="text-align: center; padding: 12px;">
-                                @if($cuota->estatus === 'vencido' && !$cuota->acumulada)
-                                    {{-- Cuota vencida: dos opciones --}}
-                                    <div style="display: flex; gap: 4px; justify-content: center; flex-wrap: wrap;">
-                                        <button type="button"
-                                            onclick="abrirPago({{ $cuota->id }}, {{ $cuota->saldo }}, {{ $cuota->numero_cuota }})"
-                                            style="padding: 4px 8px; background: #059669; color: white; border: none; border-radius: 4px; font-size: 0.78rem; cursor: pointer; white-space: nowrap;">
-                                            💰 Pagar
-                                        </button>
-                                        <button type="button"
-                                            onclick="confirmarAcumular({{ $cuota->id }}, {{ $cuota->numero_cuota }}, {{ $cuota->saldo }})"
-                                            style="padding: 4px 8px; background: #7c3aed; color: white; border: none; border-radius: 4px; font-size: 0.78rem; cursor: pointer; white-space: nowrap;">
-                                            📥 Acumular
-                                        </button>
-                                    </div>
-                                @elseif(in_array($cuota->estatus, ['pendiente', 'parcial']))
+                                @if($contrato->estado === 'liquidado')
+                                    <span style="color: #94a3b8; font-size: 0.85rem;">🔒 Bloqueado</span>
+                                @elseif(in_array($cuota->estatus, ['pendiente', 'vencido', 'parcial']))
                                     <button type="button" onclick="abrirPago({{ $cuota->id }}, {{ $cuota->saldo }}, {{ $cuota->numero_cuota }})"
                                         style="padding: 4px 10px; background: #059669; color: white; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">💰 Pagar</button>
                                 @elseif(in_array($cuota->estatus, ['prestamo', 'acumulado']))
@@ -324,27 +327,6 @@
     </div>
 </div>
 
-{{-- Modal Confirmar Acumular --}}
-<div id="modalAcumular" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;">
-    <div style="background: white; width: 95%; max-width: 420px; padding: 24px; border-radius: 14px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.15);">
-        <button type="button" onclick="document.getElementById('modalAcumular').style.display='none'" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
-        <h3 style="margin-top: 0; color: #7c3aed;">📥 Acumular Cuota al Total</h3>
-        <p style="color: #475569; margin-bottom: 8px;">Vas a acumular la <strong>Cuota #<span id="acumularNumCuota"></span></strong> al total pendiente.</p>
-        <div style="background: #f5f3ff; border: 1px solid #c4b5fd; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-            <div style="font-size: 0.85rem; color: #5b21b6; margin-bottom: 4px;">Saldo de la cuota a acumular:</div>
-            <div style="font-size: 1.2rem; font-weight: 700; color: #7c3aed;">$<span id="acumularSaldo"></span></div>
-            <div style="font-size: 0.8rem; color: #64748b; margin-top: 6px;">Este monto se sumará al total a pagar y la cuota fija se recalculará automáticamente.</div>
-        </div>
-        <form id="formAcumular" method="POST" action="">
-            @csrf
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button type="button" onclick="document.getElementById('modalAcumular').style.display='none'" style="padding: 8px 20px; background: #94a3b8; color: white; border: none; border-radius: 6px; cursor: pointer;">Cancelar</button>
-                <button type="submit" style="padding: 8px 20px; background: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Confirmar y Acumular</button>
-            </div>
-        </form>
-    </div>
-</div>
-
 {{-- Modal Seguimiento --}}
 <div id="modalSeguimiento" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;">
     <div style="background: white; width: 95%; max-width: 500px; padding: 24px; border-radius: 14px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.15);">
@@ -398,7 +380,7 @@
         <button type="button" onclick="document.getElementById('modalAumentarCapital').style.display='none'" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
         <h3 style="margin-top: 0; color: #10b981;">➕ Agregar Nuevo Préstamo al Capital</h3>
         <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 16px;">Este monto se sumará al capital actual del contrato y la cuota fija se recalculará.</p>
-        <form method="POST" action="{{ route('contratos.aumentarCapital', $contrato->id) }}">
+        <form method="POST" action="{{ route('contratos.aumentarCapital', $contrato->id) }}" enctype="multipart/form-data">
             @csrf
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
                 <div>
@@ -428,9 +410,12 @@
                 </div>
             </div>
 
-            <div id="campoGarantiaNueva" style="display: none; margin-bottom: 12px;">
+            <div id="campoGarantiaNueva" style="display: none; margin-bottom: 12px; border-left: 3px solid #10b981; padding-left: 10px;">
                 <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Descripción de la nueva garantía *</label>
-                <input type="text" name="garantia_nueva" id="inputGarantiaNueva" placeholder="Ej: MOTO HONDA CRF 2023" style="width: 100%; padding: 8px; border: 1px solid #10b981; border-radius: 6px;">
+                <input type="text" name="garantia_nueva" id="inputGarantiaNueva" placeholder="Ej: MOTO HONDA CRF 2023" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; margin-bottom: 8px;">
+                
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Documento o Imagen (Opcional)</label>
+                <input type="file" name="garantia_documento" accept=".pdf,.jpg,.jpeg,.png" style="width: 100%; padding: 5px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.85rem;">
             </div>
 
             <div style="margin-bottom: 12px;">
@@ -440,7 +425,14 @@
 
             @if((float)$contrato->interes_porcentaje > 0)
                 <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.85rem; color: #14532d;">
-                    💡 La nueva cuota fija se calculará automáticamente como: <strong>(Capital actual + Monto) × {{ number_format($contrato->interes_porcentaje * 100, 2) }}%</strong>
+                    <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" name="recalcular_cuota" value="1" checked style="margin-top: 2px;">
+                        <div>
+                            <strong>Recalcular Cuota Fija Automáticamente</strong><br>
+                            Si marcas esta opción, la cuota fija subirá a: <strong>(Capital actual + Monto) × {{ number_format($contrato->interes_porcentaje * 100, 2) }}%</strong>.<br>
+                            Si la desmarcas, la deuda subirá pero el cliente seguirá pagando la misma cuota de siempre.
+                        </div>
+                    </label>
                 </div>
             @endif
 
@@ -460,12 +452,7 @@ function abrirPago(cuotaId, saldo, numCuota) {
     document.getElementById('modalPago').style.display = 'flex';
 }
 
-function confirmarAcumular(cuotaId, numCuota, saldo) {
-    document.getElementById('formAcumular').action = '/contratos/cuota/' + cuotaId + '/acumular';
-    document.getElementById('acumularNumCuota').textContent = numCuota;
-    document.getElementById('acumularSaldo').textContent = parseFloat(saldo).toFixed(2);
-    document.getElementById('modalAcumular').style.display = 'flex';
-}
+
 
 function toggleGarantiaNueva(valor) {
     const campo = document.getElementById('campoGarantiaNueva');

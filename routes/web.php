@@ -232,8 +232,9 @@ Route::middleware(['auth', 'role:admin,finanzas,cobranza'])->prefix('contratos')
     Route::get('/{id}', [App\Http\Controllers\ContratoController::class, 'show'])->name('contratos.show');
     Route::get('/{id}/editar', [App\Http\Controllers\ContratoController::class, 'edit'])->name('contratos.edit');
     Route::post('/{id}', [App\Http\Controllers\ContratoController::class, 'update'])->name('contratos.update');
+    Route::get('/{id}/liquidar', [App\Http\Controllers\ContratoController::class, 'liquidar'])->name('contratos.liquidar');
+    Route::post('/{id}/liquidar', [App\Http\Controllers\ContratoController::class, 'liquidarStore'])->name('contratos.liquidar.store');
     Route::post('/cuota/{id}/pagar', [App\Http\Controllers\ContratoController::class, 'registrarPago'])->name('contratos.pagar');
-    Route::post('/cuota/{id}/acumular', [App\Http\Controllers\ContratoController::class, 'acumularCuota'])->name('contratos.acumular');
     Route::post('/{id}/generar-cuota', [App\Http\Controllers\ContratoController::class, 'generarSiguienteCuota'])->name('contratos.generarCuota');
     Route::post('/{id}/aumentar-capital', [App\Http\Controllers\ContratoController::class, 'aumentarCapital'])->name('contratos.aumentarCapital');
     Route::post('/seguimiento', [App\Http\Controllers\ContratoController::class, 'agregarSeguimiento'])->name('contratos.seguimiento');

@@ -97,6 +97,7 @@
                                     $badge = match($estatus) {
                                         'VENCIDO' => ['bg' => '#dc2626', 'text' => 'VENCIDO'],
                                         'PAGADO' => ['bg' => '#059669', 'text' => 'PAGADO'],
+                                        'LIQUIDADO' => ['bg' => '#475569', 'text' => 'LIQUIDADO'],
                                         default => ['bg' => '#3b82f6', 'text' => 'ACTIVO'],
                                     };
                                 @endphp

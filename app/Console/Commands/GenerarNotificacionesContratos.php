@@ -88,10 +88,27 @@ class GenerarNotificacionesContratos extends Command
             }
         }
 
-        // Actualizar cuotas vencidas que aún figuran como pendientes
-        ContratoCuota::where('estatus', 'pendiente')
+        // Actualizar cuotas vencidas que aún figuran como pendientes, acumulando la mora
+        $cuotasVencidas = ContratoCuota::with('contrato')
+            ->where('estatus', 'pendiente')
             ->where('fecha_vencimiento', '<', $hoy)
-            ->update(['estatus' => 'vencido']);
+            ->get();
+
+        foreach ($cuotasVencidas as $cuota) {
+            $contrato = $cuota->contrato;
+            if ($contrato && $contrato->estado !== 'liquidado') {
+                $saldoCuota = (float) $cuota->saldo;
+                $nuevoTotal = (float) $contrato->total_a_pagar + $saldoCuota;
+                
+                $contrato->update(['total_a_pagar' => $nuevoTotal]);
+                $cuota->update([
+                    'estatus' => 'vencido',
+                    'saldo' => $nuevoTotal // El usuario solicitó que la cuota muestre el total a pagar
+                ]);
+            } else {
+                $cuota->update(['estatus' => 'vencido']);
+            }
+        }
 
         $this->info("Notificaciones creadas: {$creadas}. Cuotas vencidas actualizadas.");
         Log::info("[contratos:notificar] {$creadas} notificaciones creadas.");
