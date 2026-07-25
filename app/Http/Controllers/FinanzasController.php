@@ -139,14 +139,24 @@ class FinanzasController extends Controller
             })
             ->get();
 
+        $tasa_bcv = $resumen->tasa_bcv_usd > 0 ? $resumen->tasa_bcv_usd : 1;
+
+        // Egresos Realizados (ignorar los que son nulos o vacíos en categoria)
+        $egresos_realizados = $egresos->where('categoria_egreso', 'egreso_realizado');
+        $resumen->total_egresos_usd = $egresos_realizados->sum('monto_usd');
+        $resumen->total_egresos_bs_usd = $egresos_realizados->sum('monto_bs') / $tasa_bcv;
+
+        // Otros Egresos
+        $otros_egresos = $egresos->where('categoria_egreso', 'otros_egresos');
+        $resumen->total_otros_usd = $otros_egresos->sum('monto_usd');
+        $resumen->total_otros_bs_usd = $otros_egresos->sum('monto_bs') / $tasa_bcv;
+
+        // Mantener las existentes por si acaso
         $total_usd = $egresos->sum('monto_usd');
         $total_bs = $egresos->sum('monto_bs');
-        
-        $tasa_bcv = $resumen->tasa_bcv_usd > 0 ? $resumen->tasa_bcv_usd : 1;
-        $total_bs_en_usd = $total_bs / $tasa_bcv;
-
         $resumen->total_salidas_usd = $total_usd;
-        $resumen->total_salidas_bs_en_usd = $total_bs_en_usd;
+        $resumen->total_salidas_bs_en_usd = $total_bs / $tasa_bcv;
+        
         $resumen->save();
     }
 
@@ -493,6 +503,8 @@ class FinanzasController extends Controller
             if (empty($desglose)) $desglose = null;
         }
 
+        $old_fecha = $egreso->fecha;
+
         $egreso->update([
             'fecha'                 => $data['fecha'],
             'banco'                 => $banco,
@@ -517,8 +529,8 @@ class FinanzasController extends Controller
 
         $this->syncTotalesSalidas($data['fecha']);
         
-        if ($egreso->fecha != $data['fecha']) {
-            $this->syncTotalesSalidas($egreso->fecha);
+        if ($old_fecha != $data['fecha']) {
+            $this->syncTotalesSalidas($old_fecha);
         }
 
         return redirect()->back()->with('success', 'Egreso actualizado correctamente.');
@@ -573,6 +585,11 @@ class FinanzasController extends Controller
                 'tipo_gasto' => $egresoData['tipo_gasto'] ?? null,
                 'motivo' => $egresoData['motivo'],
             ]);
+        }
+
+        $fechas_afectadas = collect($data['egresos'])->pluck('fecha')->unique();
+        foreach ($fechas_afectadas as $f) {
+            $this->syncTotalesSalidas($f);
         }
 
         return redirect()->back()->with('success', count($data['egresos']) . ' egresos masivos registrados correctamente.');
@@ -1688,22 +1705,37 @@ class FinanzasController extends Controller
         // 1. Ocultar todos los movimientos de caja de hoy en lugar de borrarlos
         \App\Models\FlujoCaja::where('fecha', date('Y-m-d'))->update(['oculto' => true]);
 
-        // 2. Reiniciar todas las cuentas bancarias a 0
-        \App\Models\CuentaBancaria::query()->update([
-            'bs_tc' => 0,
-            'bs_disponibles' => 0,
-            'usd_tc' => 0,
-            'usd_disp' => 0,
-            'reporte_bs' => 0,
-            'reporte_usd' => 0,
-            'reporte_bs_fin' => 0,
-            'reporte_usd_fin' => 0,
-        ]);
+        // 2. Reiniciar todas las cuentas bancarias a 0, EXCEPTUANDO algunas categorias
+        $excluidas = [
+            'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA',
+            'BANCA INTERNACIONAL / BILLETERAS',
+            'BANCA INTERNACIONAL CUENTAS NO OPERATIVAS',
+            'TARJETAS INTERNACIONALES DE TERCEROS'
+        ];
 
-        // 3. Limpiar los resúmenes financieros
-        \App\Models\FinanzasResumen::truncate();
+        \App\Models\CuentaBancaria::whereNotIn('categoria_reporte', $excluidas)
+            ->orWhereNull('categoria_reporte')
+            ->update([
+                'bs_tc' => 0,
+                'bs_disponibles' => 0,
+                'usd_tc' => 0,
+                'usd_disp' => 0,
+                'reporte_bs' => 0,
+                'reporte_usd' => 0,
+                'reporte_bs_fin' => 0,
+                'reporte_usd_fin' => 0,
+            ]);
 
-        return redirect()->back()->with('success', 'Todos los datos financieros han sido eliminados para empezar el día en blanco.');
+        // 3. No borrar el historial (sin truncate). Solo resetear saldos de hoy y resincronizar
+        $resumen = \App\Models\FinanzasResumen::where('fecha', date('Y-m-d'))->first();
+        if ($resumen) {
+            $resumen->saldo_inicial = 0;
+            $resumen->queda_dia_anterior = 0;
+            $resumen->save();
+        }
+        $this->syncTotalesSalidas(date('Y-m-d'));
+
+        return redirect()->back()->with('success', 'Disponibilidad y datos iniciales del día de hoy reseteados correctamente.');
     }
 
     public function gastosFijos()
