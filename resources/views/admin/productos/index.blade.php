@@ -125,7 +125,8 @@
         <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 1.2rem; color: #1e293b;">Opciones de Exportación JSON</h3>
         <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 20px;">Selecciona las categorías y subcategorías que deseas incluir. Si no seleccionas ninguna, se exportarán todos los productos activos.</p>
         
-        <form id="export-form" method="GET" action="{{ route('admin.productos.export_json') }}" onsubmit="onExportSubmit(event)">
+        <form id="export-form" method="POST" action="{{ route('admin.productos.export_json') }}" onsubmit="onExportSubmit(event)">
+            @csrf
             <div style="margin-bottom: 20px;">
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.2); padding: 12px; border-radius: 8px; font-weight: 500; font-size: 0.95rem; color: #4ade80;">
                     <input type="checkbox" name="con_existencia" value="1" style="accent-color: #4ade80; transform: scale(1.1);"> 
