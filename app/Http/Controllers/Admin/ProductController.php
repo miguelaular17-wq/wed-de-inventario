@@ -239,7 +239,7 @@ class ProductController extends Controller
 
             return [
                 'id'                  => (int) $p->id,
-                'codigo'              => $p->codigo ?? '',
+                'codigo'              => trim(explode('/', $p->codigo ?? '')[0]),
                 'descripcion'         => trim($p->nombre ?? ''),
                 'descripcion_ampliada' => null,
                 'precio1'             => (float) ($p->precio_unidad ?? 0),
