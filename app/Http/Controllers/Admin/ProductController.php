@@ -236,16 +236,6 @@ class ProductController extends Controller
             }
 
             $urlImagen = $p->url_imagen ?? '';
-            if (empty($urlImagen) && !empty($p->codigo)) {
-                $codigos = explode('/', $p->codigo);
-                if (count($codigos) === 1) {
-                    $codigos = explode(' ', $p->codigo);
-                }
-                $primary_code = trim($codigos[0]);
-                if ($primary_code) {
-                    $urlImagen = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/object/public/imagenes_producto/imagenes/" . rawurlencode($primary_code) . ".jpg";
-                }
-            }
 
             return [
                 'id'                  => (int) $p->id,
