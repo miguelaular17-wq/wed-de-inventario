@@ -235,6 +235,18 @@ class ProductController extends Controller
                 $categories = $cat . ',' . $sub;
             }
 
+            $urlImagen = $p->url_imagen ?? '';
+            if (empty($urlImagen) && !empty($p->codigo)) {
+                $codigos = explode('/', $p->codigo);
+                if (count($codigos) === 1) {
+                    $codigos = explode(' ', $p->codigo);
+                }
+                $primary_code = trim($codigos[0]);
+                if ($primary_code) {
+                    $urlImagen = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/object/public/imagenes_producto/imagenes/" . rawurlencode($primary_code) . ".jpg";
+                }
+            }
+
             return [
                 'id'                  => (int) $p->id,
                 'codigo'              => $p->codigo ?? '',
@@ -244,7 +256,7 @@ class ProductController extends Controller
                 'precio2'             => (float) ($p->precio_unidad ?? 0),
                 'precio3'             => (float) ($p->precio_mayor ?? 0),
                 'existencia'          => (float) ($p->existencia_global ?? 0),
-                'url_imagen'          => $p->url_imagen ?? '',
+                'url_imagen'          => $urlImagen,
                 'categories'          => strtoupper($categories),
                 'codigo_padre'        => null,
                 'atributo'            => null,
