@@ -57,13 +57,13 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $data = $request->validate([
-            'role' => ['required', 'string', 'in:admin,supervisor,telefonia,comprador,sede,vendedor,marketing,finanzas,cobranza,contabilidad,auditor'],
+            'role' => ['required', 'string', 'in:admin,supervisor,telefonia,comprador,sede,vendedor,marketing,finanzas,cobranza,contabilidad,auditor,edurar'],
             'sede' => ['nullable', 'string'],
             'password_plain' => ['nullable', 'string', 'min:6'],
         ]);
 
         $user->role = $data['role'];
-        if (in_array($data['role'], ['comprador', 'marketing', 'finanzas', 'cobranza', 'contabilidad', 'auditor'], true)) {
+        if (in_array($data['role'], ['comprador', 'marketing', 'finanzas', 'cobranza', 'contabilidad', 'auditor', 'edurar'], true)) {
             $user->sede = null;
         } else {
             $user->sede = isset($data['sede']) && $data['sede'] ? strtoupper($data['sede']) : null;

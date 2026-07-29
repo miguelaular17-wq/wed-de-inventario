@@ -771,7 +771,7 @@
             <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 2;">
                     <label id="lbl_banco_titular" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Banco y Titular</label>
-                    <select name="banco_titular" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <select id="banco_titular" name="banco_titular" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                         <option value="">-- Seleccione --</option>
                         @foreach($cuentas as $cuenta)
                             <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
@@ -789,7 +789,7 @@
             <div id="row_receptor" style="display: none; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 1;">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Banco Receptor y Titular Receptor</label>
-                    <select name="banco_titular_receptor" id="banco_titular_receptor" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <select name="banco_titular_receptor" id="banco_titular_receptor" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                         <option value="">-- Seleccione Receptor --</option>
                         @foreach($cuentas as $cuenta)
                             <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
@@ -966,7 +966,8 @@
                     <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
                         <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                         <input type="text" name="desglose_cedula[]" placeholder="Cédula" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                        <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                        <input type="text" inputmode="decimal" name="desglose_monto_usd[]" placeholder="Monto USD" oninput="calcDesgloseRow(this, 'usd')" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                        <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" oninput="calcDesgloseRow(this, 'bs')" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                         <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0;">&times;</button>
                     </div>
                 </div>
@@ -1032,6 +1033,15 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     if (srcTG) window.tsTipoGasto = new TomSelect("#tipo_gasto", tsSettings);
     if (dstTG) window.tsEditTipoGasto = new TomSelect("#edit_tipo_gasto", tsSettings);
+
+    const tsBankSettings = {
+        create: false,
+        sortField: { field: "text", direction: "asc" },
+        placeholder: '-- Seleccione --',
+        maxOptions: null
+    };
+    if (document.getElementById('banco_titular')) window.tsBancoTitular = new TomSelect("#banco_titular", tsBankSettings);
+    if (document.getElementById('banco_titular_receptor')) window.tsBancoTitularReceptor = new TomSelect("#banco_titular_receptor", tsBankSettings);
 
     // Modal functions
     window.openNuevoEgresoModal = function() {
@@ -1442,13 +1452,31 @@ function agregarDesglose() {
         <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
             <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
             <input type="text" name="desglose_cedula[]" placeholder="Cédula" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="text" inputmode="decimal" name="desglose_monto_usd[]" placeholder="Monto USD" oninput="calcDesgloseRow(this, 'usd')" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" oninput="calcDesgloseRow(this, 'bs')" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
             <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0;">&times;</button>
         </div>
     `;
     lista.insertAdjacentHTML('beforeend', html);
 }
 
+function calcDesgloseRow(input, source) {
+    const row = input.closest('.row-desglose');
+    const inputBs = row.querySelector('input[name="desglose_monto[]"]');
+    const inputUsd = row.querySelector('input[name="desglose_monto_usd[]"]');
+    const inputTasa = document.getElementById('tasa_cambio') || document.querySelector('input[name="tasa_cambio"]');
+    
+    let tasa = window.parseLocalNumber(inputTasa.value) || 0;
+    if (tasa <= 0) return;
+    
+    if (source === 'usd') {
+        const usd = window.parseLocalNumber(inputUsd.value) || 0;
+        inputBs.value = (usd * tasa).toFixed(2).replace('.', ',');
+    } else {
+        const bs = window.parseLocalNumber(inputBs.value) || 0;
+        inputUsd.value = (bs / tasa).toFixed(2).replace('.', ',');
+    }
+}
 function verDesglose(desglose) {
     let tbodyHtml = '';
     let total = 0;

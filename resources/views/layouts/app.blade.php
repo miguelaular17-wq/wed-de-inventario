@@ -60,6 +60,8 @@
                     @elseif(auth()->user()->isCobranza())
                         <a href="{{ route('cobranza.index') }}" class="{{ request()->routeIs('cobranza.*') ? 'active' : '' }}">Cobranza</a>
                         <a href="{{ route('contratos.index') }}" class="{{ request()->routeIs('contratos.*') ? 'active' : '' }}">Contratos</a>
+                    @elseif(auth()->user()->isEdurar())
+                        <a href="{{ route('edurar.existencias') }}" class="{{ request()->routeIs('edurar.*') ? 'active' : '' }}">Existencias</a>
                     @endif
 
                     @if(auth()->user()->hasAccessToSedeViews() && session('sede_local'))

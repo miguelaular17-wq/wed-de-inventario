@@ -136,6 +136,10 @@ class AuthController extends Controller
             return redirect()->route('vendedor.dashboard');
         }
 
+        if ($user->isEdurar()) {
+            return redirect()->route('edurar.existencias');
+        }
+
         if (session()->has('sede_local') || $user->sede) {
             if ($user->sede && ! session()->has('sede_local')) {
                 session(['sede_local' => strtoupper($user->sede)]);

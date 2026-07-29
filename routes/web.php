@@ -39,6 +39,9 @@ Route::get('/', function () {
         if ($user->isVendedor()) {
             return redirect()->route('vendedor.dashboard');
         }
+        if ($user->isEdurar()) {
+            return redirect()->route('edurar.existencias');
+        }
 
         return redirect()->route('ventas.index');
     }
@@ -242,6 +245,12 @@ Route::middleware(['auth', 'role:admin,finanzas,cobranza'])->prefix('contratos')
 });
 
 Route::get('/ping', function () { return 'OK'; });
+
+// Edurar role routes
+Route::middleware(['auth', 'role:admin,edurar'])->prefix('edurar')->name('edurar.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\EdurarController::class, 'index'])->name('existencias');
+    Route::get('/subcategorias', [\App\Http\Controllers\EdurarController::class, 'getSubcategorias'])->name('subcategorias');
+});
 
 Route::get('/pure', function () {
     $inicio = microtime(true);
