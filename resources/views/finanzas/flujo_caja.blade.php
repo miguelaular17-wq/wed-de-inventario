@@ -1230,7 +1230,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const id = this.getAttribute('data-id');
             const type = this.getAttribute('data-type');
             const field = this.getAttribute('data-field');
-            const value = this.value;
+            // Enviar siempre el valor numérico limpio (sin puntos de miles ni coma decimal)
+            const value = window.parseLocalNumber(this.value);
             
             updateSums();
 

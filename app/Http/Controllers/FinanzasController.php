@@ -290,6 +290,25 @@ class FinanzasController extends Controller
 
     public function storeEgreso(Request $request)
     {
+        // Normalizar campos numéricos: convertir "35.750,00" o "35750,00" → "35750.00"
+        $numericFields = ['monto_usd', 'tasa_cambio', 'diferencial_cambiario', 'monto_bs', 'comision'];
+        $normalized = [];
+        foreach ($numericFields as $field) {
+            $val = $request->input($field);
+            if (is_string($val) && $val !== '') {
+                if (strpos($val, '.') !== false && strpos($val, ',') !== false) {
+                    $val = str_replace('.', '', $val);
+                    $val = str_replace(',', '.', $val);
+                } else {
+                    $val = str_replace(',', '.', $val);
+                }
+                $normalized[$field] = is_numeric($val) ? $val : null;
+            }
+        }
+        if (!empty($normalized)) {
+            $request->merge($normalized);
+        }
+
         $data = $request->validate([
             'categoria_egreso' => 'required|in:egreso_realizado,otros_egresos,traslados',
             'banco_titular' => 'required|string',
@@ -430,6 +449,25 @@ class FinanzasController extends Controller
     public function updateEgreso(Request $request, $id)
     {
         $egreso = FlujoCaja::findOrFail($id);
+
+        // Normalizar campos numéricos: convertir "35.750,00" o "35750,00" → "35750.00"
+        $numericFields = ['monto_usd', 'tasa_cambio', 'diferencial_cambiario', 'monto_bs', 'comision'];
+        $normalized = [];
+        foreach ($numericFields as $field) {
+            $val = $request->input($field);
+            if (is_string($val) && $val !== '') {
+                if (strpos($val, '.') !== false && strpos($val, ',') !== false) {
+                    $val = str_replace('.', '', $val);
+                    $val = str_replace(',', '.', $val);
+                } else {
+                    $val = str_replace(',', '.', $val);
+                }
+                $normalized[$field] = is_numeric($val) ? $val : null;
+            }
+        }
+        if (!empty($normalized)) {
+            $request->merge($normalized);
+        }
 
         $data = $request->validate([
             'banco_titular'          => 'required|string',
@@ -1376,7 +1414,18 @@ class FinanzasController extends Controller
         $value = $request->input('value');
         
         if (in_array($field, ['bs_tc', 'bs_disponibles', 'usd_tc', 'usd_disp', 'reporte_bs', 'reporte_usd', 'reporte_bs_fin', 'reporte_usd_fin'])) {
-            $cuenta->$field = $value ?: 0;
+            // Normalizar: quitar puntos de miles y convertir coma decimal a punto
+            if (is_string($value) && $value !== '') {
+                if (strpos($value, '.') !== false && strpos($value, ',') !== false) {
+                    $value = str_replace('.', '', $value);
+                    $value = str_replace(',', '.', $value);
+                } else {
+                    $value = str_replace(',', '.', $value);
+                }
+            }
+            $value = is_numeric($value) ? (float)$value : 0;
+            $cuenta->$field = $value;
+
             
             // Auto calc USD variables
             $resumen = \App\Models\FinanzasResumen::where('fecha', date('Y-m-d'))->first();
@@ -1435,7 +1484,19 @@ class FinanzasController extends Controller
         ];
 
         if (in_array($field, $allowed)) {
-            $resumen->$field = $value ?: 0;
+            // Normalizar el valor: quitar puntos de miles y convertir coma decimal a punto
+            // Ej: "744,6" → "744.6", "68.500,00" → "68500.00"
+            if (is_string($value) && $value !== '') {
+                // Si tiene punto Y coma, el punto es separador de miles y la coma es decimal
+                if (strpos($value, '.') !== false && strpos($value, ',') !== false) {
+                    $value = str_replace('.', '', $value);  // quitar puntos de miles
+                    $value = str_replace(',', '.', $value); // coma → punto decimal
+                } else {
+                    // Solo tiene coma: es decimal
+                    $value = str_replace(',', '.', $value);
+                }
+            }
+            $resumen->$field = is_numeric($value) ? (float)$value : 0;
             $resumen->save();
             
             if ($field === 'tasa_bcv_usd' && $resumen->tasa_bcv_usd > 0) {

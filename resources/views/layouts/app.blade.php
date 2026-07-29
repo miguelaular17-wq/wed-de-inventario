@@ -460,8 +460,30 @@ document.addEventListener("DOMContentLoaded", function() {
         if (!val) return 0;
         val = val.toString().trim();
         if (val === '') return 0;
-        // Remove dot (thousands), replace comma with dot
-        return parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
+
+        // Caso 1: tiene punto Y coma → punto=miles, coma=decimal  (ej: "74.440,00" → 74440)
+        if (val.includes('.') && val.includes(',')) {
+            return parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
+        }
+
+        // Caso 2: solo coma, sin punto → coma=decimal (ej: "744,4" → 744.4)
+        if (val.includes(',') && !val.includes('.')) {
+            return parseFloat(val.replace(',', '.')) || 0;
+        }
+
+        // Caso 3: solo punto, sin coma → distinguir si es decimal o miles
+        if (val.includes('.') && !val.includes(',')) {
+            // Si el punto está seguido de exactamente 3 dígitos al final → es separador de miles
+            // Ej: "74.440" → 74440 | "1.000" → 1000
+            // Si no → es decimal. Ej: "744.4" → 744.4 | "744.40" → 744.40
+            if (/\.\d{3}$/.test(val)) {
+                return parseFloat(val.replace(/\./g, '')) || 0;
+            } else {
+                return parseFloat(val) || 0;
+            }
+        }
+
+        return parseFloat(val) || 0;
     };
     
     window.formatLocalNumber = function(val) {
