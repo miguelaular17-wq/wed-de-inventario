@@ -647,9 +647,9 @@ function showSubTab(tIdx, sedeName, btn) {
             if (colSede) colSede.style.display = isAll ? '' : 'none';
             
             // Add to totals
-            sumCosto += parseFloat(row.getAttribute('data-costo')) || 0;
+            sumCosto += window.parseLocalNumber(row.getAttribute('data-costo')) || 0;
             for (let m = 0; m < mesActual; m++) {
-                sumMeses[m] += parseFloat(row.getAttribute('data-mes-' + m)) || 0;
+                sumMeses[m] += window.parseLocalNumber(row.getAttribute('data-mes-' + m)) || 0;
             }
         } else {
             row.style.display = 'none';
@@ -695,7 +695,7 @@ document.querySelectorAll('.gf-table td.editable').forEach(cell => {
 
         if (type === 'monto') {
             const mIdx = this.getAttribute('data-midx');
-            const numVal = val === '' ? null : parseFloat(val.replace(',', ''));
+            const numVal = val === '' ? null : window.parseLocalNumber(val.replace(',', ''));
             
             fetch("{{ route('finanzas.gastos_fijos.monto') }}", {
                 method: 'POST',
@@ -742,7 +742,7 @@ document.querySelectorAll('.gf-table td.editable').forEach(cell => {
             });
 
         } else if (type === 'costo') {
-            const numVal = val === '' ? null : parseFloat(val.replace(',', ''));
+            const numVal = val === '' ? null : window.parseLocalNumber(val.replace(',', ''));
             fetch("{{ route('finanzas.gastos_fijos.costo') }}", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
@@ -928,7 +928,7 @@ function saveNewRow(btn) {
         fechaStr = document.getElementById('add-fecha-val-libre').value.trim();
     }
     
-    const costo = parseFloat(document.getElementById('modal-costo').value) || 0;
+    const costo = window.parseLocalNumber(document.getElementById('modal-costo').value) || 0;
 
     if (!servicio) {
         alert("El Servicio es obligatorio.");

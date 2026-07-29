@@ -250,7 +250,7 @@
                                     <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
                                         <div style="display: flex; align-items: center;">
                                             <span style="color: #b45309; font-weight: 600; margin-right: 4px;">Bs.</span>
-                                            <input type="number" step="0.01" id="tasa-bcv-input" class="editable-input" style="text-align: left; width: 100px; font-weight: 700; color: #b45309; background: #fef3c7; border-color: #fde68a;" 
+                                            <input type="text" inputmode="decimal" id="tasa-bcv-input" class="editable-input" style="text-align: left; width: 100px; font-weight: 700; color: #b45309; background: #fef3c7; border-color: #fde68a;" 
                                                 value="{{ $resumen->tasa_bcv_usd }}" data-type="resumen" data-id="{{ $resumen->id }}" data-field="tasa_bcv_usd">
                                         </div>
                                     </div>
@@ -281,25 +281,25 @@
                                 <td>
                                     <div style="display: flex; align-items: center;">
                                         <span style="color: #94a3b8; font-size: 11px; margin-right: 4px;">Bs.</span>
-                                        <input type="number" step="0.01" class="editable-input" value="{{ $fecha_filtro == date('Y-m-d') ? $cb->bs_tc : '0.00' }}" {{ $fecha_filtro == date('Y-m-d') ? '' : 'readonly' }} data-type="cuenta" data-id="{{ $cb->id }}" data-field="bs_tc">
+                                        <input type="text" inputmode="decimal" class="editable-input" value="{{ $fecha_filtro == date('Y-m-d') ? $cb->bs_tc : '0.00' }}" {{ $fecha_filtro == date('Y-m-d') ? '' : 'readonly' }} data-type="cuenta" data-id="{{ $cb->id }}" data-field="bs_tc">
                                     </div>
                                 </td>
                                 <td>
                                     <div style="display: flex; align-items: center;">
                                         <span style="color: #94a3b8; font-size: 11px; margin-right: 4px;">Bs.</span>
-                                        <input type="number" step="0.01" class="editable-input" value="{{ $fecha_filtro == date('Y-m-d') ? $cb->bs_disponibles : '0.00' }}" {{ $fecha_filtro == date('Y-m-d') ? '' : 'readonly' }} data-type="cuenta" data-id="{{ $cb->id }}" data-field="bs_disponibles">
+                                        <input type="text" inputmode="decimal" class="editable-input" value="{{ $fecha_filtro == date('Y-m-d') ? $cb->bs_disponibles : '0.00' }}" {{ $fecha_filtro == date('Y-m-d') ? '' : 'readonly' }} data-type="cuenta" data-id="{{ $cb->id }}" data-field="bs_disponibles">
                                     </div>
                                 </td>
                                 <td>
                                     <div style="display: flex; align-items: center;">
                                         <span style="color: #94a3b8; font-size: 11px; margin-right: 4px;">$</span>
-                                        <input type="number" step="0.01" class="editable-input" value="{{ $fecha_filtro == date('Y-m-d') ? $cb->usd_tc : '0.00' }}" {{ $fecha_filtro == date('Y-m-d') ? '' : 'readonly' }} data-type="cuenta" data-id="{{ $cb->id }}" data-field="usd_tc">
+                                        <input type="text" inputmode="decimal" class="editable-input" value="{{ $fecha_filtro == date('Y-m-d') ? $cb->usd_tc : '0.00' }}" {{ $fecha_filtro == date('Y-m-d') ? '' : 'readonly' }} data-type="cuenta" data-id="{{ $cb->id }}" data-field="usd_tc">
                                     </div>
                                 </td>
                                 <td style="{{ $loop->last ? 'background-color: #f0fdf4;' : '' }}">
                                     <div style="display: flex; align-items: center;">
                                         <span style="color: #94a3b8; font-size: 11px; margin-right: 4px;">$</span>
-                                        <input type="number" step="0.01" class="editable-input" style="{{ $loop->last ? 'color: #166534; font-weight: 600;' : '' }}" value="{{ $fecha_filtro == date('Y-m-d') ? $cb->usd_disp : '0.00' }}" {{ $fecha_filtro == date('Y-m-d') ? '' : 'readonly' }} data-type="cuenta" data-id="{{ $cb->id }}" data-field="usd_disp">
+                                        <input type="text" inputmode="decimal" class="editable-input" style="{{ $loop->last ? 'color: #166534; font-weight: 600;' : '' }}" value="{{ $fecha_filtro == date('Y-m-d') ? $cb->usd_disp : '0.00' }}" {{ $fecha_filtro == date('Y-m-d') ? '' : 'readonly' }} data-type="cuenta" data-id="{{ $cb->id }}" data-field="usd_disp">
                                     </div>
                                 </td>
                             </tr>
@@ -388,7 +388,7 @@
                     <div class="widget-block-label" title="Sincronizado automáticamente con la Disponibilidad Bancaria (Tasa BCV)">Saldo Inicial (Auto)</div>
                     <div style="display: flex; justify-content: center; align-items: center; gap: 4px;">
                         <span style="color: #94a3b8; font-size: 14px; font-weight: 500;">$</span>
-                        <input type="number" step="0.01" class="widget-block-value" style="text-align: center; background: #e2e8f0; border-color: #cbd5e1; padding: 8px; max-width: 150px; color: #64748b; cursor: not-allowed;"
+                        <input type="text" inputmode="decimal" class="widget-block-value" style="text-align: center; background: #e2e8f0; border-color: #cbd5e1; padding: 8px; max-width: 150px; color: #64748b; cursor: not-allowed;"
                             value="{{ $resumen->saldo_inicial }}" readonly>
                     </div>
                 </div>
@@ -803,26 +803,26 @@
             <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 1;" id="col_monto_usd">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto USD</label>
-                    <input type="number" step="0.01" name="monto_usd" id="monto_usd" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <input type="text" inputmode="decimal" name="monto_usd" id="monto_usd" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
                 <div style="flex: 1;" id="col_tasa_cambio">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tasa de Cambio</label>
-                    <input type="number" step="0.01" name="tasa_cambio" id="tasa_cambio" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <input type="text" inputmode="decimal" name="tasa_cambio" id="tasa_cambio" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
                 <div style="flex: 1;">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;" id="lbl_monto_bs">Monto BS</label>
-                    <input type="number" step="0.01" name="monto_bs" id="monto_bs" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <input type="text" inputmode="decimal" name="monto_bs" id="monto_bs" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
             </div>
 
             <div id="row_diferencial" style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 1;">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Dif. Cambiario</label>
-                    <input type="number" step="0.01" name="diferencial_cambiario" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <input type="text" inputmode="decimal" name="diferencial_cambiario" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
                 <div style="flex: 1;">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Comisión</label>
-                    <input type="number" step="0.01" name="comision" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <input type="text" inputmode="decimal" name="comision" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
             </div>
 
@@ -966,7 +966,7 @@
                     <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
                         <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                         <input type="text" name="desglose_cedula[]" placeholder="Cédula" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                        <input type="number" step="0.01" name="desglose_monto[]" placeholder="Monto Bs" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                        <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                         <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0;">&times;</button>
                     </div>
                 </div>
@@ -1105,25 +1105,25 @@ document.addEventListener('DOMContentLoaded', function() {
     let lastEditedAmount = 'usd';
 
     function calcular() {
-        const usd = parseFloat(usdInput.value) || 0;
-        const bs = parseFloat(bsInput.value) || 0;
-        const tasa = parseFloat(tasaInput.value) || 0;
+        const usd = window.parseLocalNumber(usdInput.value) || 0;
+        const bs = window.parseLocalNumber(bsInput.value) || 0;
+        const tasa = window.parseLocalNumber(tasaInput.value) || 0;
         
         if (tasa > 0) {
             if (lastEditedAmount === 'usd') {
-                bsInput.value = (usd * tasa).toFixed(2);
+                bsInput.value = (usd * tasa).toFixed(2).replace(".", ",");
             } else if (lastEditedAmount === 'bs') {
-                usdInput.value = (bs / tasa).toFixed(2);
+                usdInput.value = (bs / tasa).toFixed(2).replace(".", ",");
             }
         }
         
         const bcvTasaInput = document.querySelector('input[data-field="tasa_bcv_usd"]');
         if (difInput && bcvTasaInput) {
-            const bcv = parseFloat(bcvTasaInput.value) || 1;
-            const finalUsd = parseFloat(usdInput.value) || 0;
-            const finalBs = parseFloat(bsInput.value) || 0;
+            const bcv = window.parseLocalNumber(bcvTasaInput.value) || 1;
+            const finalUsd = window.parseLocalNumber(usdInput.value) || 0;
+            const finalBs = window.parseLocalNumber(bsInput.value) || 0;
             if (bcv > 0) {
-                difInput.value = (((finalUsd * bcv) - finalBs) / bcv).toFixed(2);
+                difInput.value = (((finalUsd * bcv) - finalBs) / bcv).toFixed(2).replace(".", ",");
             }
         }
     }
@@ -1145,22 +1145,22 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function updateSums() {
         let bsTc = 0, bsDisp = 0, usdTc = 0, usdDisp = 0;
-        document.querySelectorAll('input[data-field="bs_tc"]').forEach(i => bsTc += parseFloat(i.value)||0);
-        document.querySelectorAll('input[data-field="bs_disponibles"]').forEach(i => bsDisp += parseFloat(i.value)||0);
-        document.querySelectorAll('input[data-field="usd_tc"]').forEach(i => usdTc += parseFloat(i.value)||0);
-        document.querySelectorAll('input[data-field="usd_disp"]').forEach(i => usdDisp += parseFloat(i.value)||0);
+        document.querySelectorAll('input[data-field="bs_tc"]').forEach(i => bsTc += window.parseLocalNumber(i.value)||0);
+        document.querySelectorAll('input[data-field="bs_disponibles"]').forEach(i => bsDisp += window.parseLocalNumber(i.value)||0);
+        document.querySelectorAll('input[data-field="usd_tc"]').forEach(i => usdTc += window.parseLocalNumber(i.value)||0);
+        document.querySelectorAll('input[data-field="usd_disp"]').forEach(i => usdDisp += window.parseLocalNumber(i.value)||0);
         
         const sumBsTc = document.getElementById('sum_bs_tc');
-        if(sumBsTc) sumBsTc.textContent = bsTc.toFixed(2);
+        if(sumBsTc) sumBsTc.textContent = bsTc.toFixed(2).replace(".", ",");
         
         const sumBsDisp = document.getElementById('sum_bs_disp');
-        if(sumBsDisp) sumBsDisp.textContent = bsDisp.toFixed(2);
+        if(sumBsDisp) sumBsDisp.textContent = bsDisp.toFixed(2).replace(".", ",");
         
         const sumUsdTc = document.getElementById('sum_usd_tc');
-        if(sumUsdTc) sumUsdTc.textContent = usdTc.toFixed(2);
+        if(sumUsdTc) sumUsdTc.textContent = usdTc.toFixed(2).replace(".", ",");
         
         const sumUsdDisp = document.getElementById('sum_usd_disp');
-        if(sumUsdDisp) sumUsdDisp.textContent = usdDisp.toFixed(2);
+        if(sumUsdDisp) sumUsdDisp.textContent = usdDisp.toFixed(2).replace(".", ",");
     }
     
     updateSums(); // Init sums
@@ -1173,10 +1173,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const usdDispInput = tr.querySelector('input[data-field="usd_disp"]');
                 const tasaBcvInput = document.querySelector('input[data-field="tasa_bcv_usd"]');
                 if (usdDispInput && tasaBcvInput) {
-                    const bsDisp = parseFloat(this.value) || 0;
-                    const tasa = parseFloat(tasaBcvInput.value) || 1;
+                    const bsDisp = window.parseLocalNumber(this.value) || 0;
+                    const tasa = window.parseLocalNumber(tasaBcvInput.value) || 1;
                     const usdDisp = bsDisp / tasa;
-                    usdDispInput.value = usdDisp.toFixed(2);
+                    usdDispInput.value = usdDisp.toFixed(2).replace(".", ",");
                     // Trigger change manually to save usd_disp
                     usdDispInput.dispatchEvent(new Event('change'));
                 }
@@ -1188,22 +1188,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 const usdTcInput = tr.querySelector('input[data-field="usd_tc"]');
                 const tasaBcvInput = document.querySelector('input[data-field="tasa_bcv_usd"]');
                 if (usdTcInput && tasaBcvInput) {
-                    const bsTc = parseFloat(this.value) || 0;
-                    const tasa = parseFloat(tasaBcvInput.value) || 1;
+                    const bsTc = window.parseLocalNumber(this.value) || 0;
+                    const tasa = window.parseLocalNumber(tasaBcvInput.value) || 1;
                     const usdTc = bsTc / tasa;
-                    usdTcInput.value = usdTc.toFixed(2);
+                    usdTcInput.value = usdTc.toFixed(2).replace(".", ",");
                     usdTcInput.dispatchEvent(new Event('change'));
                 }
             }
 
             // Auto calc all USD if TASA BCV changed
             if (this.getAttribute('data-field') === 'tasa_bcv_usd') {
-                const tasa = parseFloat(this.value) || 1;
+                const tasa = window.parseLocalNumber(this.value) || 1;
                 document.querySelectorAll('input[data-field="bs_disponibles"]').forEach(bsInput => {
                     const tr = bsInput.closest('tr');
                     const usdDispInput = tr.querySelector('input[data-field="usd_disp"]');
                     if (usdDispInput) {
-                        usdDispInput.value = (parseFloat(bsInput.value || 0) / tasa).toFixed(2);
+                        usdDispInput.value = (window.parseLocalNumber(bsInput.value || 0) / tasa).toFixed(2).replace(".", ",");
                         usdDispInput.dispatchEvent(new Event('change'));
                     }
                 });
@@ -1211,7 +1211,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const tr = bsInput.closest('tr');
                     const usdTcInput = tr.querySelector('input[data-field="usd_tc"]');
                     if (usdTcInput) {
-                        usdTcInput.value = (parseFloat(bsInput.value || 0) / tasa).toFixed(2);
+                        usdTcInput.value = (window.parseLocalNumber(bsInput.value || 0) / tasa).toFixed(2).replace(".", ",");
                         usdTcInput.dispatchEvent(new Event('change'));
                     }
                 });
@@ -1413,12 +1413,12 @@ function validarDesglose(event) {
     const chk = document.getElementById('chk_desglose');
     if (chk && chk.checked) {
         const montoBsInput = document.getElementById('monto_bs');
-        const montoTotal = parseFloat(montoBsInput.value) || 0;
+        const montoTotal = window.parseLocalNumber(montoBsInput.value) || 0;
         
         const montosDesglose = document.querySelectorAll('input[name="desglose_monto[]"]');
         let sumaDesglose = 0;
         montosDesglose.forEach(input => {
-            sumaDesglose += parseFloat(input.value) || 0;
+            sumaDesglose += window.parseLocalNumber(input.value) || 0;
         });
 
         if (Math.abs(montoTotal - sumaDesglose) > 0.05) {
@@ -1442,7 +1442,7 @@ function agregarDesglose() {
         <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
             <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
             <input type="text" name="desglose_cedula[]" placeholder="Cédula" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="number" step="0.01" name="desglose_monto[]" placeholder="Monto Bs" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
             <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0;">&times;</button>
         </div>
     `;
@@ -1453,7 +1453,7 @@ function verDesglose(desglose) {
     let tbodyHtml = '';
     let total = 0;
     desglose.forEach(item => {
-        const monto = parseFloat(item.monto) || 0;
+        const monto = window.parseLocalNumber(item.monto) || 0;
         total += monto;
         tbodyHtml += `
             <tr>
@@ -1648,7 +1648,7 @@ function agregarDesgloseEdit(benef, ced, monto) {
         <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
             <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" value="${benef || ''}" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
             <input type="text" name="desglose_cedula[]" placeholder="Cédula" value="${ced || ''}" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="number" step="0.01" name="desglose_monto[]" placeholder="Monto Bs" value="${monto || ''}" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" value="${monto || ''}" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
             <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0;">&times;</button>
         </div>`;
     lista.insertAdjacentHTML('beforeend', html);
@@ -1658,13 +1658,13 @@ function validarDesgloseEdit(event) {
     const chk = document.getElementById('chk_desglose_edit');
     if (chk && chk.checked) {
         const montoBsInput = document.querySelector('#formEditarEgreso [name="monto_bs"]');
-        const montoTotal = parseFloat(montoBsInput ? montoBsInput.value : 0) || 0;
+        const montoTotal = window.parseLocalNumber(montoBsInput ? montoBsInput.value : 0) || 0;
         let sumaDesglose = 0;
         document.querySelectorAll('#lista_desglose_edit input[name="desglose_monto[]"]').forEach(inp => {
-            sumaDesglose += parseFloat(inp.value) || 0;
+            sumaDesglose += window.parseLocalNumber(inp.value) || 0;
         });
         if (Math.abs(montoTotal - sumaDesglose) > 0.05) {
-            alert(`Error: La suma del desglose (Bs. ${sumaDesglose.toFixed(2)}) no coincide con el Monto Bs (Bs. ${montoTotal.toFixed(2)}).`);
+            alert(`Error: La suma del desglose (Bs. ${sumaDesglose.toFixed(2).replace(".", ",")}) no coincide con el Monto Bs (Bs. ${montoTotal.toFixed(2).replace(".", ",")}).`);
             event.preventDefault();
             return false;
         }
@@ -1688,11 +1688,11 @@ function abrirVerEgreso(mov) {
         document.getElementById('ver_receptor_container').style.display = 'none';
     }
 
-    document.getElementById('ver_monto_usd').innerText = mov.monto_usd ? '$ ' + parseFloat(mov.monto_usd).toFixed(2) : '-';
-    document.getElementById('ver_monto_bs').innerText = mov.monto_bs ? 'Bs. ' + parseFloat(mov.monto_bs).toFixed(2) : '-';
-    document.getElementById('ver_tasa').innerText = mov.tasa_cambio ? parseFloat(mov.tasa_cambio).toFixed(2) : '-';
-    document.getElementById('ver_dif').innerText = mov.diferencial_cambiario ? '$ ' + parseFloat(mov.diferencial_cambiario).toFixed(2) : '-';
-    document.getElementById('ver_comision').innerText = mov.comision ? 'Bs. ' + parseFloat(mov.comision).toFixed(2) : '-';
+    document.getElementById('ver_monto_usd').innerText = mov.monto_usd ? '$ ' + window.parseLocalNumber(mov.monto_usd).toFixed(2).replace(".", ",") : '-';
+    document.getElementById('ver_monto_bs').innerText = mov.monto_bs ? 'Bs. ' + window.parseLocalNumber(mov.monto_bs).toFixed(2).replace(".", ",") : '-';
+    document.getElementById('ver_tasa').innerText = mov.tasa_cambio ? window.parseLocalNumber(mov.tasa_cambio).toFixed(2).replace(".", ",") : '-';
+    document.getElementById('ver_dif').innerText = mov.diferencial_cambiario ? '$ ' + window.parseLocalNumber(mov.diferencial_cambiario).toFixed(2).replace(".", ",") : '-';
+    document.getElementById('ver_comision').innerText = mov.comision ? 'Bs. ' + window.parseLocalNumber(mov.comision).toFixed(2).replace(".", ",") : '-';
     document.getElementById('ver_tipo_gasto').innerText = mov.tipo_gasto || '-';
     document.getElementById('ver_motivo').innerText = mov.motivo || '-';
     document.getElementById('ver_sede').innerText = mov.sede || '-';
@@ -1887,19 +1887,19 @@ function cerrarVerEgreso() {
             <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 1;" id="col_monto_usd_edit">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto USD</label>
-                    <input type="number" step="0.01" name="monto_usd" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <input type="text" inputmode="decimal" name="monto_usd" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
                 <div style="flex: 1;" id="col_tasa_cambio_edit">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tasa Cambio</label>
-                    <input type="number" step="0.01" name="tasa_cambio" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <input type="text" inputmode="decimal" name="tasa_cambio" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
                 <div style="flex: 1;">
                     <label id="lbl_monto_bs_edit" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto BS</label>
-                    <input type="number" step="0.01" name="monto_bs" id="monto_bs_edit" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <input type="text" inputmode="decimal" name="monto_bs" id="monto_bs_edit" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
                 <div style="flex: 1;" id="row_diferencial_edit">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Dif. Cambiario</label>
-                    <input type="number" step="0.01" name="diferencial_cambiario" style="width: 100%; padding: 6px; border: 1px solid #fde68a; background-color: #fef9c3; border-radius: 4px;">
+                    <input type="text" inputmode="decimal" name="diferencial_cambiario" style="width: 100%; padding: 6px; border: 1px solid #fde68a; background-color: #fef9c3; border-radius: 4px;">
                 </div>
             </div>
 
@@ -1907,7 +1907,7 @@ function cerrarVerEgreso() {
             <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 1;">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Comisión</label>
-                    <input type="number" step="0.01" name="comision" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <input type="text" inputmode="decimal" name="comision" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
                 <div style="flex: 1;">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Sede</label>

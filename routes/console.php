@@ -15,7 +15,7 @@ Schedule::call(function () {
     \Illuminate\Support\Facades\Log::info('Tabla de clientes detallados truncada exitosamente a las 2 AM.');
 })->dailyAt('02:00');
 
-Schedule::command('finanzas:reset')->dailyAt('02:00');
+// Schedule::command('finanzas:reset')->dailyAt('02:00'); // Desactivado por solicitud del usuario
 Schedule::command('contratos:notificar')->dailyAt('08:00');
 Schedule::command('catalogo:generar')->dailyAt('04:00')->withoutOverlapping()->runInBackground();
 

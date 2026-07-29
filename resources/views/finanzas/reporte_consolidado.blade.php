@@ -164,11 +164,11 @@
     <div class="tasa-box">
         <div class="tasa-cell">
             <div class="tasa-label">TASA<br>BCV</div>
-            <div class="tasa-value"><input type="number" step="0.01" class="report-input save-resumen" data-field="tasa_bcv_usd" value="{{ $resumen->tasa_bcv_usd }}" style="font-size: 14px; width: 80px !important; text-align: center;" id="tasa_bcv"></div>
+            <div class="tasa-value"><input type="text" inputmode="decimal" class="report-input save-resumen" data-field="tasa_bcv_usd" value="{{ $resumen->tasa_bcv_usd }}" style="font-size: 14px; width: 80px !important; text-align: center;" id="tasa_bcv"></div>
         </div>
         <div class="tasa-cell">
             <div class="tasa-label">TASA<br>PARALELO</div>
-            <div class="tasa-value"><input type="number" step="0.01" class="report-input save-resumen" data-field="tasa_paralelo" value="{{ $resumen->tasa_paralelo }}" style="font-size: 14px; width: 80px !important; text-align: center;" id="tasa_paralelo"></div>
+            <div class="tasa-value"><input type="text" inputmode="decimal" class="report-input save-resumen" data-field="tasa_paralelo" value="{{ $resumen->tasa_paralelo }}" style="font-size: 14px; width: 80px !important; text-align: center;" id="tasa_paralelo"></div>
         </div>
     </div>
     
@@ -191,8 +191,8 @@
                             <tr>
                                 <td>{{ $c->banco }}</td>
                                 <td>{{ $c->titular }}</td>
-                                <td><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="number" step="0.01" class="report-input save-cuenta calc-alto-bs currency-input" data-id="{{ $c->id }}" data-field="reporte_bs" value="{{ $c->reporte_bs }}"></div></td>
-                                <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta calc-alto-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
+                                <td><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-alto-bs currency-input" data-id="{{ $c->id }}" data-field="reporte_bs" value="{{ $c->reporte_bs }}"></div></td>
+                                <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-alto-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
                             </tr>
                             @endforeach
                         </tbody>
@@ -219,8 +219,8 @@
                             <tr>
                                 <td>{{ $c->banco }}</td>
                                 <td>{{ $c->titular }}</td>
-                                <td><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="number" step="0.01" class="report-input save-cuenta calc-bajo-bs currency-input" data-id="{{ $c->id }}" data-field="reporte_bs" value="{{ $c->reporte_bs }}"></div></td>
-                                <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta calc-bajo-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
+                                <td><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-bajo-bs currency-input" data-id="{{ $c->id }}" data-field="reporte_bs" value="{{ $c->reporte_bs }}"></div></td>
+                                <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-bajo-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
                             </tr>
                             @endforeach
                         </tbody>
@@ -248,9 +248,9 @@
                         @foreach($planificacion as $p)
                         <tr>
                             <td><input type="text" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="razon_social" value="{{ $p->razon_social }}" style="text-align: left !important;"></td>
-                            <td class="bg-light-blue"><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="number" step="0.01" class="report-input save-plan calc-plan-bs currency-input" data-id="{{ $p->id }}" data-field="total_bs" value="{{ $p->total_bs }}"></div></td>
-                            <td class="text-center"><input type="number" step="0.01" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="tasa" value="{{ $p->tasa }}"></td>
-                            <td class="bg-light-blue"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-plan calc-plan-usd currency-input" data-id="{{ $p->id }}" data-field="total_usd" value="{{ $p->total_usd }}"></div></td>
+                            <td class="bg-light-blue"><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="text" inputmode="decimal" class="report-input save-plan calc-plan-bs currency-input" data-id="{{ $p->id }}" data-field="total_bs" value="{{ $p->total_bs }}"></div></td>
+                            <td class="text-center"><input type="text" inputmode="decimal" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="tasa" value="{{ $p->tasa }}"></td>
+                            <td class="bg-light-blue"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-plan calc-plan-usd currency-input" data-id="{{ $p->id }}" data-field="total_usd" value="{{ $p->total_usd }}"></div></td>
                             <td><input type="text" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="factura" value="{{ $p->factura }}"></td>
                             <td><input type="text" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="concepto" value="{{ $p->concepto }}" style="text-align: left !important;"></td>
                         </tr>
@@ -293,23 +293,23 @@
                         </tr>
                         <tr>
                             <td>BLOQUEADO PARA COMPRA DE DIVISAS</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-resumen currency-input" data-field="bloqueado_compra_divisas" value="{{ $resumen->bloqueado_compra_divisas }}"></div></td>
+                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="bloqueado_compra_divisas" value="{{ $resumen->bloqueado_compra_divisas }}"></div></td>
                         </tr>
                         <tr>
                             <td>FONDOS NO DISPONIBLES<br>(PROBLEMAS CON LA CUENTA BANCARIA)</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-resumen currency-input" data-field="fondos_no_disponibles" value="{{ $resumen->fondos_no_disponibles }}"></div></td>
+                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="fondos_no_disponibles" value="{{ $resumen->fondos_no_disponibles }}"></div></td>
                         </tr>
                         <tr>
                             <td>SOLICITUDES DE TITULOS DE COBERTURA<br>(EN ESPERA DE APROBACION)</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-resumen currency-input" data-field="solicitudes_cobertura" value="{{ $resumen->solicitudes_cobertura }}"></div></td>
+                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="solicitudes_cobertura" value="{{ $resumen->solicitudes_cobertura }}"></div></td>
                         </tr>
                         <tr>
                             <td>TITULOS DE COBERTURA / PLAZO FIJO<br>(APROBADOS)</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-resumen currency-input" data-field="titulos_cobertura_aprobados" value="{{ $resumen->titulos_cobertura_aprobados }}"></div></td>
+                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="titulos_cobertura_aprobados" value="{{ $resumen->titulos_cobertura_aprobados }}"></div></td>
                         </tr>
                         <tr>
                             <td>RETENIDO PARA PAGOS PLANIFICADOS</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-resumen currency-input" data-field="retenido_pagos" value="{{ $resumen->retenido_pagos }}"></div></td>
+                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="retenido_pagos" value="{{ $resumen->retenido_pagos }}"></div></td>
                         </tr>
                         <tr class="bg-light-blue">
                             <td style="font-weight: bold;">DISPONIBLE PARA USO (TASA BCV)</td>
@@ -382,7 +382,7 @@
                     <tr>
                         <td>{{ $c->banco }}</td>
                         <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta calc-extranjera-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
+                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-extranjera-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
                     </tr>
                     @endforeach
                 </tbody>
@@ -409,7 +409,7 @@
                     <tr>
                         <td>{{ $c->banco }}</td>
                         <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta calc-billeteras-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
+                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-billeteras-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
                     </tr>
                     @endforeach
                 </tbody>
@@ -433,7 +433,7 @@
                     <tr>
                         <td>{{ $c->banco }}</td>
                         <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta calc-noop-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
+                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-noop-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
                     </tr>
                     @endforeach
                 </tbody>
@@ -457,7 +457,7 @@
                     <tr>
                         <td>{{ $c->banco }}</td>
                         <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="number" step="0.01" class="report-input save-cuenta calc-terceros-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
+                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-terceros-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
                     </tr>
                     @endforeach
                 </tbody>
@@ -544,35 +544,35 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function calculateTotals() {
-        let bcv = parseFloat(document.getElementById('tasa_bcv').value) || 1;
+        let bcv = window.parseLocalNumber(document.getElementById('tasa_bcv').value) || 1;
         
         // Sums
         let sum_alto_bs = 0, sum_alto_usd = 0;
-        document.querySelectorAll('.calc-alto-bs').forEach(el => sum_alto_bs += parseFloat(el.value) || 0);
-        document.querySelectorAll('.calc-alto-usd').forEach(el => sum_alto_usd += parseFloat(el.value) || 0);
+        document.querySelectorAll('.calc-alto-bs').forEach(el => sum_alto_bs += window.parseLocalNumber(el.value) || 0);
+        document.querySelectorAll('.calc-alto-usd').forEach(el => sum_alto_usd += window.parseLocalNumber(el.value) || 0);
         document.getElementById('tot_alto_bs_sum').innerText = sum_alto_bs.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         document.getElementById('tot_alto_usd_sum').innerText = sum_alto_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         let sum_bajo_bs = 0, sum_bajo_usd = 0;
-        document.querySelectorAll('.calc-bajo-bs').forEach(el => sum_bajo_bs += parseFloat(el.value) || 0);
-        document.querySelectorAll('.calc-bajo-usd').forEach(el => sum_bajo_usd += parseFloat(el.value) || 0);
+        document.querySelectorAll('.calc-bajo-bs').forEach(el => sum_bajo_bs += window.parseLocalNumber(el.value) || 0);
+        document.querySelectorAll('.calc-bajo-usd').forEach(el => sum_bajo_usd += window.parseLocalNumber(el.value) || 0);
         document.getElementById('tot_bajo_bs_sum').innerText = sum_bajo_bs.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         document.getElementById('tot_bajo_usd_sum').innerText = sum_bajo_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         let sum_ext_usd = 0;
-        document.querySelectorAll('.calc-extranjera-usd').forEach(el => sum_ext_usd += parseFloat(el.value) || 0);
+        document.querySelectorAll('.calc-extranjera-usd').forEach(el => sum_ext_usd += window.parseLocalNumber(el.value) || 0);
         document.getElementById('tot_extranjera_usd_sum').innerText = sum_ext_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         let sum_bill_usd = 0;
-        document.querySelectorAll('.calc-billeteras-usd').forEach(el => sum_bill_usd += parseFloat(el.value) || 0);
+        document.querySelectorAll('.calc-billeteras-usd').forEach(el => sum_bill_usd += window.parseLocalNumber(el.value) || 0);
         document.getElementById('tot_billeteras_usd_sum').innerText = sum_bill_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         let sum_noop_usd = 0;
-        document.querySelectorAll('.calc-noop-usd').forEach(el => sum_noop_usd += parseFloat(el.value) || 0);
+        document.querySelectorAll('.calc-noop-usd').forEach(el => sum_noop_usd += window.parseLocalNumber(el.value) || 0);
         document.getElementById('tot_noop_usd_sum').innerText = sum_noop_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         let sum_terc_usd = 0;
-        document.querySelectorAll('.calc-terceros-usd').forEach(el => sum_terc_usd += parseFloat(el.value) || 0);
+        document.querySelectorAll('.calc-terceros-usd').forEach(el => sum_terc_usd += window.parseLocalNumber(el.value) || 0);
         document.getElementById('tot_terceros_usd_sum').innerText = sum_terc_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         
         // Update variables to display in blocks
@@ -594,13 +594,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (elDispUsdUso) elDispUsdUso.innerText = disp_usd_uso.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         
         let sum_plan_bs = 0, sum_plan_usd = 0;
-        document.querySelectorAll('.calc-plan-bs').forEach(el => sum_plan_bs += parseFloat(el.value) || 0);
-        document.querySelectorAll('.calc-plan-usd').forEach(el => sum_plan_usd += parseFloat(el.value) || 0);
+        document.querySelectorAll('.calc-plan-bs').forEach(el => sum_plan_bs += window.parseLocalNumber(el.value) || 0);
+        document.querySelectorAll('.calc-plan-usd').forEach(el => sum_plan_usd += window.parseLocalNumber(el.value) || 0);
         document.getElementById('tot_plan_bs').innerText = sum_plan_bs.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         document.getElementById('tot_plan_usd').innerText = sum_plan_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         // --- CALCULOS DISPONIBILIDAD BOLIVARES (Según Excel) ---
-        let tasa_paralelo = parseFloat(document.getElementById('tasa_paralelo').value) || 1;
+        let tasa_paralelo = window.parseLocalNumber(document.getElementById('tasa_paralelo').value) || 1;
 
         // TOTAL DISPONIBILIDAD (TASA BCV) -> Suma de Bancas (USD)
         let disp_bs_tot_bcv = sum_alto_usd + sum_bajo_usd;
@@ -611,11 +611,11 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('disp_bs_tot_par').innerText = disp_bs_tot_par.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
         // Descuentos / Retenciones
-        let bloqueado = parseFloat(document.querySelector('input[data-field="bloqueado_compra_divisas"]').value) || 0;
-        let fondos = parseFloat(document.querySelector('input[data-field="fondos_no_disponibles"]').value) || 0;
-        let solicitudes = parseFloat(document.querySelector('input[data-field="solicitudes_cobertura"]').value) || 0;
-        let titulos = parseFloat(document.querySelector('input[data-field="titulos_cobertura_aprobados"]').value) || 0;
-        let retenido = parseFloat(document.querySelector('input[data-field="retenido_pagos"]').value) || 0;
+        let bloqueado = window.parseLocalNumber(document.querySelector('input[data-field="bloqueado_compra_divisas"]').value) || 0;
+        let fondos = window.parseLocalNumber(document.querySelector('input[data-field="fondos_no_disponibles"]').value) || 0;
+        let solicitudes = window.parseLocalNumber(document.querySelector('input[data-field="solicitudes_cobertura"]').value) || 0;
+        let titulos = window.parseLocalNumber(document.querySelector('input[data-field="titulos_cobertura_aprobados"]').value) || 0;
+        let retenido = window.parseLocalNumber(document.querySelector('input[data-field="retenido_pagos"]').value) || 0;
 
         // DISPONIBLE PARA USO (TASA BCV)
         let disp_uso_bcv = disp_bs_tot_bcv - bloqueado - fondos - solicitudes - titulos - retenido;
@@ -644,8 +644,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Instant visual conversion when typing BS
         if (input.getAttribute('data-field') === 'reporte_bs' || input.getAttribute('data-field') === 'reporte_bs_fin') {
             input.addEventListener('input', function() {
-                let val = parseFloat(this.value) || 0;
-                let bcv = parseFloat(document.getElementById('tasa_bcv').value) || 1;
+                let val = window.parseLocalNumber(this.value) || 0;
+                let bcv = window.parseLocalNumber(document.getElementById('tasa_bcv').value) || 1;
                 let usdVal = bcv > 0 ? (val / bcv) : 0;
                 
                 let row = this.closest('tr');
@@ -653,7 +653,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     let usdField = currentMode === 'inicio' ? 'reporte_usd' : 'reporte_usd_fin';
                     let usdInput = row.querySelector(`input[data-field="${usdField}"]`);
                     if (usdInput) {
-                        usdInput.value = usdVal.toFixed(2);
+                        usdInput.value = usdVal.toFixed(2).replace(".", ",");
                     }
                 }
                 calculateTotals();
@@ -663,11 +663,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Instant visual conversion for all rows when typing Tasa BCV
         if (input.id === 'tasa_bcv') {
             input.addEventListener('input', function() {
-                let bcv = parseFloat(this.value) || 1;
+                let bcv = window.parseLocalNumber(this.value) || 1;
                 if (bcv <= 0) return;
 
                 document.querySelectorAll('.calc-alto-bs, .calc-bajo-bs').forEach(bsInput => {
-                    let bsVal = parseFloat(bsInput.value) || 0;
+                    let bsVal = window.parseLocalNumber(bsInput.value) || 0;
                     let usdVal = bsVal / bcv;
                     
                     let row = bsInput.closest('tr');
@@ -676,11 +676,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         let usdField = currentMode === 'inicio' ? 'reporte_usd' : 'reporte_usd_fin';
                         let usdInput = row.querySelector(`input[data-field="${usdField}"]`);
                         if (usdInput) {
-                            usdInput.value = usdVal.toFixed(2);
+                            usdInput.value = usdVal.toFixed(2).replace(".", ",");
                         }
                         if (cuentasMap[id]) {
-                            cuentasMap[id]['reporte_usd'] = parseFloat((cuentasMap[id]['reporte_bs'] / bcv).toFixed(2)) || 0;
-                            cuentasMap[id]['reporte_usd_fin'] = parseFloat((cuentasMap[id]['reporte_bs_fin'] / bcv).toFixed(2)) || 0;
+                            cuentasMap[id]['reporte_usd'] = window.parseLocalNumber((cuentasMap[id]['reporte_bs'] / bcv).toFixed(2).replace(".", ",")) || 0;
+                            cuentasMap[id]['reporte_usd_fin'] = window.parseLocalNumber((cuentasMap[id]['reporte_bs_fin'] / bcv).toFixed(2).replace(".", ",")) || 0;
                         }
                     }
                 });

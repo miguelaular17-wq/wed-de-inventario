@@ -451,5 +451,50 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }, 600000); // 10 minutes (600,000 ms)
 </script>
+<script>
+    // Global formatting and parsing for numbers with thousand separators
+    window.parseLocalNumber = function(val) {
+        if (typeof val === 'number') return val;
+        if (!val) return 0;
+        val = val.toString().trim();
+        if (val === '') return 0;
+        // Remove dot (thousands), replace comma with dot
+        return parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
+    };
+    
+    window.formatLocalNumber = function(val) {
+        let num = parseFloat(val) || 0;
+        return num.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    };
+
+    // Attach global focus/blur listeners for all formatted inputs
+    document.addEventListener('focus', function(e) {
+        if (e.target.matches('input.editable-input, input.report-input, input.currency-input, input[data-field="bs_tc"], input[data-field="bs_disponibles"], input[data-field="usd_tc"], input[data-field="usd_disp"]')) {
+            if (e.target.type === 'text') {
+                let val = window.parseLocalNumber(e.target.value);
+                // On focus, show decimal as comma without thousands separator to ease editing
+                e.target.value = val === 0 ? '' : val.toFixed(2).replace('.', ',');
+            }
+        }
+    }, true);
+
+    document.addEventListener('blur', function(e) {
+        if (e.target.matches('input.editable-input, input.report-input, input.currency-input, input[data-field="bs_tc"], input[data-field="bs_disponibles"], input[data-field="usd_tc"], input[data-field="usd_disp"]')) {
+            if (e.target.type === 'text') {
+                let val = window.parseLocalNumber(e.target.value);
+                e.target.value = window.formatLocalNumber(val);
+            }
+        }
+    }, true);
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('input.editable-input, input.report-input, input.currency-input, input[data-field="bs_tc"], input[data-field="bs_disponibles"], input[data-field="usd_tc"], input[data-field="usd_disp"]').forEach(input => {
+            if(input.type === 'text') {
+                let val = window.parseLocalNumber(input.value);
+                input.value = window.formatLocalNumber(val);
+            }
+        });
+    });
+</script>
 </body>
 </html>
