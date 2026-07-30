@@ -326,7 +326,8 @@ class FinanzasController extends Controller
             'fecha' => 'required|date',
             'desglose_beneficiario' => 'nullable|array',
             'desglose_cedula' => 'nullable|array',
-            'desglose_monto' => 'nullable|array'
+            'desglose_monto' => 'nullable|array',
+            'desglose_monto_usd' => 'nullable|array',
         ]);
 
         if ($data['categoria_egreso'] === 'traslados') {
@@ -369,8 +370,19 @@ class FinanzasController extends Controller
         }
 
         $comprobante_url = null;
-        if ($request->hasFile('comprobante')) {
+        $comprobantes_arr = [];
+        if ($request->hasFile('comprobantes')) {
+            foreach ($request->file('comprobantes') as $file) {
+                $url = $this->uploadComprobante($file, $data['referencia'] ?? null);
+                if ($url) {
+                    $comprobantes_arr[] = $url;
+                    if (!$comprobante_url) $comprobante_url = $url; // first one as legacy field
+                }
+            }
+        } elseif ($request->hasFile('comprobante')) {
+            // Backwards compat: single file
             $comprobante_url = $this->uploadComprobante($request->file('comprobante'), $data['referencia'] ?? null);
+            if ($comprobante_url) $comprobantes_arr[] = $comprobante_url;
         }
 
         $desglose = null;
@@ -383,7 +395,8 @@ class FinanzasController extends Controller
                     $desglose[] = [
                         'beneficiario' => $beneficiario,
                         'cedula' => $cedula,
-                        'monto' => (float)$monto_desglose
+                        'monto' => (float)$monto_desglose,
+                        'monto_usd' => (float)($data['desglose_monto_usd'][$index] ?? 0),
                     ];
                 }
             }
@@ -412,7 +425,7 @@ class FinanzasController extends Controller
             'sede'                  => $data['sede'] ?? null,
             'placa_vehiculo'        => $data['placa_vehiculo'] ?? null,
             'comprobante_url'       => $comprobante_url,
-            'comprobantes'          => $comprobante_url ? [$comprobante_url] : null,
+            'comprobantes'          => !empty($comprobantes_arr) ? $comprobantes_arr : null,
             'desglose'              => $desglose,
         ]);
 
@@ -485,6 +498,7 @@ class FinanzasController extends Controller
             'desglose_beneficiario'  => 'nullable|array',
             'desglose_cedula'        => 'nullable|array',
             'desglose_monto'         => 'nullable|array',
+            'desglose_monto_usd'     => 'nullable|array',
             'comprobantes_eliminar'  => 'nullable|array',
             'diferencial_cambiario'  => 'nullable|numeric',
         ]);
@@ -546,6 +560,7 @@ class FinanzasController extends Controller
                         'beneficiario' => $beneficiario,
                         'cedula'       => $cedula,
                         'monto'        => (float) $monto_desglose,
+                        'monto_usd'    => (float) ($data['desglose_monto_usd'][$index] ?? 0),
                     ];
                 }
             }
@@ -1781,7 +1796,7 @@ class FinanzasController extends Controller
         $excluidas = [
             'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA',
             'BANCA INTERNACIONAL / BILLETERAS',
-            'BANCA INTERNACIONAL CUENTAS NO OPERATIVAS',
+            'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS',
             'TARJETAS INTERNACIONALES DE TERCEROS'
         ];
 

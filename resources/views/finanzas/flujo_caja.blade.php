@@ -432,12 +432,25 @@
     @endif
 
 <!-- EGRESOS REALIZADOS -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; margin-bottom: 15px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; margin-bottom: 10px;">
         <h3 style="color: var(--blue); margin: 0;">EGRESOS REALIZADOS</h3>
         <form method="GET" action="{{ route('finanzas.flujo_caja') }}" style="display: flex; gap: 10px; align-items: center; margin: 0;">
             <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Día a consultar:</label>
             <input type="date" name="fecha_filtro" value="{{ $fecha_filtro }}" style="padding: 6px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff;" onchange="this.form.submit()">
         </form>
+    </div>
+
+    {{-- BARRA DE BÚSQUEDA / FILTROS --}}
+    <div id="barra-filtros-egresos" style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px; margin-bottom:14px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; box-shadow:0 1px 4px rgba(0,0,0,.05);">
+        <input id="filtro-texto" type="text" placeholder="🔍 Buscar motivo o tipo de gasto..." oninput="aplicarFiltros()" style="flex:2; min-width:200px; padding:7px 12px; border:1px solid #cbd5e1; border-radius:7px; font-size:0.875rem; outline:none;">
+        <select id="filtro-cat" onchange="aplicarFiltros()" style="flex:1; min-width:160px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:7px; font-size:0.875rem; background:#f8fafc;">
+            <option value="">🏷 Todos los tipos</option>
+            <option value="egresos">Egresos Realizados</option>
+            <option value="otros">Otros Egresos</option>
+            <option value="traslados">Traslados</option>
+        </select>
+        <button type="button" onclick="limpiarFiltros()" style="padding:7px 14px; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; border-radius:7px; font-size:0.85rem; cursor:pointer; font-weight:600;">Limpiar</button>
+        <span id="filtro-contador" style="font-size:0.8rem; color:#64748b; margin-left:4px;"></span>
     </div>
     <div class="panel" style="padding: 0; overflow: hidden; margin-bottom: 30px;">
         <div class="table-wrap">
@@ -458,7 +471,7 @@
                 </thead>
                 <tbody>
                     @forelse($egresos_realizados as $mov)
-                        <tr>
+                        <tr data-egreso-cat="egreso_realizado">
                             <td>{{ $mov->fecha }}</td>
                             <td>
                                 <strong style="color: var(--blue);">{{ $mov->banco }}</strong><br>
@@ -571,7 +584,7 @@
                 </thead>
                 <tbody>
                     @forelse($otros_egresos as $mov)
-                        <tr>
+                        <tr data-egreso-cat="otros_egresos">
                             <td>{{ $mov->fecha }}</td>
                             <td>
                                 <strong style="color: var(--blue);">{{ $mov->banco }}</strong><br>
@@ -667,13 +680,15 @@
                         <th>Banco Emisor y Titular</th>
                         <th>Banco Receptor y Titular</th>
                         <th>Motivo</th>
+                        <th class="col-number" style="text-align: right;">Comisión</th>
+                        <th class="col-number" style="text-align: right;">Monto USD</th>
                         <th class="col-number" style="text-align: right;">Monto BS</th>
                         <th style="text-align: center; width: 80px;">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($traslados as $mov)
-                        <tr>
+                        <tr data-egreso-cat="traslados">
                             <td>{{ $mov->fecha }}</td>
                             <td>
                                 <strong style="color: #7c3aed;">{{ $mov->banco }}</strong><br>
@@ -688,6 +703,17 @@
                                 @endif
                             </td>
                             <td>{{ $mov->motivo ?: '-' }}</td>
+                            @php
+                                $trasUsd = $mov->monto_usd > 0
+                                    ? $mov->monto_usd
+                                    : ($mov->monto_bs > 0 && $resumen->tasa_bcv_usd > 0 ? round($mov->monto_bs / $resumen->tasa_bcv_usd, 2) : null);
+                            @endphp
+                            <td class="col-number" style="text-align: right;">
+                                {{ $mov->comision ? number_format($mov->comision, 2) : '-' }}
+                            </td>
+                            <td class="col-number" style="text-align: right; font-weight: 500;">
+                                {{ $trasUsd ? '$'.number_format($trasUsd, 2) : '-' }}
+                            </td>
                             <td class="col-number" style="text-align: right; font-weight: 500;">
                                 {{ $mov->monto_bs ? 'Bs.'.number_format($mov->monto_bs, 2) : '-' }}
                             </td>
@@ -716,16 +742,25 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" style="text-align: center; padding: 30px; color: var(--muted);">No hay traslados registrados para este día.</td>
+                            <td colspan="8" style="text-align: center; padding: 30px; color: var(--muted);">No hay traslados registrados para este día.</td>
                         </tr>
                     @endforelse
                 </tbody>
                 <tfoot>
                     @php
-                        $tot_traslados_bs = $traslados->sum('monto_bs');
+                        $tot_traslados_bs  = $traslados->sum('monto_bs');
+                        $tot_traslados_com = $traslados->sum('comision');
+                        $tasa_t = $resumen->tasa_bcv_usd > 0 ? $resumen->tasa_bcv_usd : 1;
+                        $tot_traslados_usd = $traslados->sum(fn($t) => $t->monto_usd > 0 ? $t->monto_usd : ($t->monto_bs / $tasa_t));
                     @endphp
                     <tr style="background-color: #faf5ff; border-top: 2px solid #ede9fe; font-weight: bold;">
                         <td colspan="4" style="text-align: right; color: #7c3aed;">TOTAL TRASLADADO</td>
+                        <td class="col-number" style="text-align: right; color: #7c3aed;">
+                            {{ $tot_traslados_com > 0 ? number_format($tot_traslados_com, 2) : '-' }}
+                        </td>
+                        <td class="col-number" style="text-align: right; color: #7c3aed;">
+                            $ {{ number_format($tot_traslados_usd, 2) }}
+                        </td>
                         <td class="col-number" style="text-align: right; color: #7c3aed;">
                             Bs. {{ number_format($tot_traslados_bs, 2) }}
                         </td>
@@ -822,7 +857,26 @@
                 </div>
                 <div style="flex: 1;">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Comisión</label>
-                    <input type="text" inputmode="decimal" name="comision" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <input type="text" inputmode="decimal" name="comision" id="comision" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+            </div>
+
+            {{-- Fila exclusiva para TRASLADOS: Comisión + Monto USD calculado --}}
+            <div id="row_traslado_extra" style="display: none; gap: 15px; margin-bottom: 10px;">
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Comisión (Bs)</label>
+                    <input type="text" inputmode="decimal" name="comision" id="comision_traslado"
+                        oninput="calcTraslado()"
+                        placeholder="0,00"
+                        disabled
+                        style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto USD <small style="color:#64748b;">(calculado)</small></label>
+                    <input type="text" inputmode="decimal" name="monto_usd" id="monto_usd_traslado"
+                        readonly
+                        placeholder="Se calcula con la tasa del día"
+                        style="width: 100%; padding: 6px; border: 1px solid #e2e8f0; border-radius: 4px; background:#f8fafc; color:#475569; cursor:default;">
                 </div>
             </div>
 
@@ -975,13 +1029,20 @@
             </div>
 
             <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Comprobante de Pago</label>
-                <div id="paste-area" style="border: 2px dashed #cbd5e1; border-radius: 8px; padding: 10px; text-align: center; cursor: pointer; background: #f8fafc; transition: all 0.2s;" onmouseover="this.style.borderColor='#3b82f6'; this.style.backgroundColor='#eff6ff';" onmouseout="this.style.borderColor='#cbd5e1'; this.style.backgroundColor='#f8fafc';">
+                <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem;">
+                    Comprobantes de Pago
+                    <span id="comp-counter" style="font-size:0.78rem; color:#64748b; margin-left:6px;">0 / 6</span>
+                </label>
+                {{-- Multi-image preview grid --}}
+                <div id="comp-grid" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;"></div>
+                {{-- Paste/click area --}}
+                <div id="paste-area" style="border: 2px dashed #cbd5e1; border-radius: 8px; padding: 14px; text-align: center; cursor: pointer; background: #f8fafc; transition: all 0.2s;"
+                    onmouseover="if(!pasteAreaDisabled())this.style.borderColor='#3b82f6';"
+                    onmouseout="if(!pasteAreaDisabled())this.style.borderColor='#cbd5e1';">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                    <span id="paste-text" style="display: block; color: #64748b; font-size: 13px;">Haz clic aquí y presiona <b>Ctrl+V</b> para pegar una imagen.</span>
-                    <img id="preview-image" src="" style="max-width: 100%; max-height: 100px; display: none; margin: 10px auto 0; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" />
+                    <span id="paste-text" style="display: block; color: #64748b; font-size: 13px;">Haz clic o pega (<b>Ctrl+V</b>) para añadir imagen &bull; máx. 6</span>
                 </div>
-                <input type="file" name="comprobante" id="comprobante-input" accept="image/*" style="display: none;">
+                <input type="file" name="comprobantes[]" id="comprobante-input" accept="image/*,application/pdf" multiple style="display: none;">
             </div>
 
             <div style="display: flex; justify-content: flex-end; gap: 10px;">
@@ -996,6 +1057,19 @@
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 
 <script>
+function calcTraslado() {
+    const bs = window.parseLocalNumber(document.getElementById('monto_bs')?.value) || 0;
+    const bcvInput = document.querySelector('input[data-field="tasa_bcv_usd"]');
+    const tasa = window.parseLocalNumber(bcvInput?.value) || 0;
+    const usdEl = document.getElementById('monto_usd_traslado');
+    if (!usdEl) return;
+    if (tasa > 0 && bs > 0) {
+        usdEl.value = (bs / tasa).toFixed(2).replace('.', ',');
+    } else {
+        usdEl.value = '';
+    }
+}
+
 function toggleTraslados() {
     const cat = document.getElementById('categoria_egreso').value;
     const isTraslado = (cat === 'traslados');
@@ -1004,13 +1078,27 @@ function toggleTraslados() {
     document.getElementById('banco_titular_receptor').required = isTraslado;
     
     document.getElementById('lbl_banco_titular').innerText = isTraslado ? 'Banco Emisor y Titular Emisor' : 'Banco y Titular';
-    document.getElementById('lbl_monto_bs').innerText = isTraslado ? 'Monto' : 'Monto BS';
+    document.getElementById('lbl_monto_bs').innerText = isTraslado ? 'Monto BS' : 'Monto BS';
     
     document.getElementById('col_monto_usd').style.display = isTraslado ? 'none' : 'block';
     document.getElementById('col_tasa_cambio').style.display = isTraslado ? 'none' : 'block';
     
     document.getElementById('row_diferencial').style.display = isTraslado ? 'none' : 'flex';
     document.getElementById('row_tipo_gasto').style.display = isTraslado ? 'none' : 'block';
+    document.getElementById('row_traslado_extra').style.display = isTraslado ? 'flex' : 'none';
+    
+    // Disable fields that would create duplicate POST keys
+    const comisionNormal = document.getElementById('comision');
+    const comisionTraslado = document.getElementById('comision_traslado');
+    const usdNormal = document.getElementById('monto_usd');
+    const usdTraslado = document.getElementById('monto_usd_traslado');
+    if (comisionNormal) comisionNormal.disabled = isTraslado;
+    if (comisionTraslado) comisionTraslado.disabled = !isTraslado;
+    if (usdNormal) usdNormal.disabled = isTraslado;
+    if (usdTraslado) usdTraslado.disabled = !isTraslado;
+    
+    // When switching to traslado mode, auto-calc USD if monto_bs already has value
+    if (isTraslado) calcTraslado();
     
     document.getElementById('tipo_gasto').required = !isTraslado;
 }
@@ -1049,62 +1137,92 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     window.closeNuevoEgresoModal = function() {
         document.getElementById('nuevoEgresoModal').style.display = 'none';
-        // Limpiar el comprobante
-        document.getElementById('comprobante-input').value = '';
-        document.getElementById('preview-image').src = '';
-        document.getElementById('preview-image').style.display = 'none';
-        document.getElementById('paste-text').style.display = 'block';
+        // Reset multi-comprobante
+        multiFiles = [];
+        renderCompGrid();
     };
 
-    // Pegar imagen (Comprobante)
+    // ===== MULTI-COMPROBANTE (máx 6) =====
+    const MAX_COMP = 6;
+    let multiFiles = []; // array of File objects
+
+    window.pasteAreaDisabled = function() {
+        return multiFiles.length >= MAX_COMP;
+    };
+
+    function renderCompGrid() {
+        const grid = document.getElementById('comp-grid');
+        const counter = document.getElementById('comp-counter');
+        const pasteArea = document.getElementById('paste-area');
+        grid.innerHTML = '';
+        multiFiles.forEach((f, i) => {
+            const wrap = document.createElement('div');
+            wrap.style = 'position:relative; width:80px; height:80px;';
+            const img = document.createElement('img');
+            img.style = 'width:80px; height:80px; object-fit:cover; border-radius:6px; border:1px solid #cbd5e1;';
+            if (f.type.startsWith('image/')) {
+                const url = URL.createObjectURL(f);
+                img.src = url;
+            } else {
+                img.src = '';
+                img.alt = '📄';
+                img.style.background = '#f1f5f9';
+                wrap.title = f.name;
+            }
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.innerHTML = '&times;';
+            btn.style = 'position:absolute; top:-6px; right:-6px; width:20px; height:20px; background:#ef4444; color:#fff; border:none; border-radius:50%; cursor:pointer; font-size:13px; line-height:1; display:flex; align-items:center; justify-content:center;';
+            btn.onclick = () => { multiFiles.splice(i, 1); syncFileInput(); renderCompGrid(); };
+            wrap.appendChild(img);
+            wrap.appendChild(btn);
+            grid.appendChild(wrap);
+        });
+        counter.textContent = `${multiFiles.length} / ${MAX_COMP}`;
+        const full = multiFiles.length >= MAX_COMP;
+        pasteArea.style.opacity = full ? '0.45' : '1';
+        pasteArea.style.pointerEvents = full ? 'none' : 'auto';
+        document.getElementById('paste-text').textContent = full ? `Límite de ${MAX_COMP} soportes alcanzado` : 'Haz clic o pega (Ctrl+V) para añadir imagen • máx. 6';
+    }
+
+    function addFilesToMulti(files) {
+        const remaining = MAX_COMP - multiFiles.length;
+        const toAdd = Array.from(files).slice(0, remaining);
+        toAdd.forEach(f => multiFiles.push(f));
+        syncFileInput();
+        renderCompGrid();
+    }
+
+    function syncFileInput() {
+        const dt = new DataTransfer();
+        multiFiles.forEach(f => dt.items.add(f));
+        document.getElementById('comprobante-input').files = dt.files;
+    }
+
     const pasteArea = document.getElementById('paste-area');
     const fileInput = document.getElementById('comprobante-input');
-    const preview = document.getElementById('preview-image');
-    const pasteText = document.getElementById('paste-text');
 
     pasteArea.addEventListener('click', () => {
-        fileInput.click();
+        if (!pasteAreaDisabled()) fileInput.click();
+    });
+
+    fileInput.addEventListener('change', function() {
+        if (this.files && this.files.length > 0) addFilesToMulti(this.files);
+        this.value = ''; // reset so same file can be re-selected
     });
 
     document.getElementById('nuevoEgresoModal').addEventListener('paste', (e) => {
-        handlePaste(e);
-    });
-
-    fileInput.addEventListener('change', function(e) {
-        if (this.files && this.files[0]) {
-            showPreview(this.files[0]);
-        }
-    });
-
-    function handlePaste(e) {
-        let items = e.clipboardData || e.originalEvent.clipboardData;
+        const items = (e.clipboardData || e.originalEvent.clipboardData)?.items;
         if (!items) return;
-
-        let file = null;
-        for (let i = 0; i < items.items.length; i++) {
-            if (items.items[i].type.indexOf("image") !== -1) {
-                file = items.items[i].getAsFile();
-                break;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const file = items[i].getAsFile();
+                if (file) { addFilesToMulti([file]); break; }
             }
         }
+    });
 
-        if (file) {
-            const dataTransfer = new DataTransfer();
-            dataTransfer.items.add(file);
-            fileInput.files = dataTransfer.files;
-            showPreview(file);
-        }
-    }
-
-    function showPreview(file) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            preview.src = e.target.result;
-            preview.style.display = 'block';
-            pasteText.style.display = 'none';
-        }
-        reader.readAsDataURL(file);
-    }
+    renderCompGrid(); // init counter
 
     // Calculadora Egreso
     const usdInput = document.getElementById('monto_usd');
@@ -1149,6 +1267,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     tasaInput.addEventListener('input', calcular);
+
+    // Auto-calcular USD del traslado cuando cambia monto_bs
+    bsInput.addEventListener('input', function() {
+        const cat = document.getElementById('categoria_egreso')?.value;
+        if (cat === 'traslados') calcTraslado();
+    });
 
     // AJAX Guardado en Vivo
     const editables = document.querySelectorAll('.editable-input');
@@ -1480,21 +1604,48 @@ function calcDesgloseRow(input, source) {
 }
 function verDesglose(desglose) {
     let tbodyHtml = '';
-    let total = 0;
+    let totalBs = 0;
+    let totalUsd = 0;
+    let hasUsd = desglose.some(item => item.monto_usd > 0);
     desglose.forEach(item => {
         const monto = window.parseLocalNumber(item.monto) || 0;
-        total += monto;
+        const montoUsd = parseFloat(item.monto_usd) || 0;
+        totalBs += monto;
+        totalUsd += montoUsd;
         tbodyHtml += `
             <tr>
                 <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${item.cedula || '-'}</td>
                 <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${item.beneficiario || '-'}</td>
                 <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 500;">Bs. ${monto.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                ${hasUsd ? `<td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #0284c7;">$ ${montoUsd.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>` : ''}
             </tr>
         `;
     });
+
+    // Add USD header if needed
+    const thead = document.querySelector('#modalDesglose thead tr');
+    const existingUsdTh = document.getElementById('th-desglose-usd');
+    if (hasUsd && !existingUsdTh) {
+        const th = document.createElement('th');
+        th.id = 'th-desglose-usd';
+        th.style = 'padding: 8px; border-bottom: 2px solid #e2e8f0; text-align: right;';
+        th.textContent = 'USD';
+        thead.appendChild(th);
+    } else if (!hasUsd && existingUsdTh) {
+        existingUsdTh.remove();
+    }
     
     document.getElementById('modalDesgloseBody').innerHTML = tbodyHtml;
-    document.getElementById('modalDesgloseTotal').innerText = `Bs. ${total.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+    document.getElementById('modalDesgloseTotal').innerText = `Bs. ${totalBs.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+    const usdTotalEl = document.getElementById('modalDesgloseTotalUsd');
+    if (hasUsd && usdTotalEl) {
+        usdTotalEl.style.display = '';
+        usdTotalEl.innerText = `$ ${totalUsd.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+        document.getElementById('row-desglose-usd-total').style.display = '';
+    } else if (usdTotalEl) {
+        usdTotalEl.style.display = 'none';
+        document.getElementById('row-desglose-usd-total').style.display = 'none';
+    }
     document.getElementById('modalDesglose').style.display = 'flex';
 }
 
@@ -1773,6 +1924,48 @@ function cerrarVerEgreso() {
     document.getElementById('modalVerEgreso').style.display = 'none';
 }
 
+// ===== FILTROS DE EGRESOS =====
+function aplicarFiltros() {
+    const texto = (document.getElementById('filtro-texto')?.value || '').toLowerCase().trim();
+    const cat = document.getElementById('filtro-cat')?.value || '';
+
+    // Map section identifiers
+    const sectionMap = {
+        'egresos': 'egreso_realizado',
+        'otros': 'otros_egresos',
+        'traslados': 'traslados',
+    };
+
+    // All egreso rows across all 3 tables are marked with data-egreso-cat
+    const rows = document.querySelectorAll('tr[data-egreso-cat]');
+    let visible = 0, total = rows.length;
+
+    rows.forEach(tr => {
+        const rowCat = tr.getAttribute('data-egreso-cat') || '';
+        const rowText = tr.textContent.toLowerCase();
+        const catMatch = !cat || sectionMap[cat] === rowCat;
+        const textMatch = !texto || rowText.includes(texto);
+        const show = catMatch && textMatch;
+        tr.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+
+    const contador = document.getElementById('filtro-contador');
+    if (contador) {
+        contador.textContent = texto || cat
+            ? `Mostrando ${visible} de ${total} registros`
+            : '';
+    }
+}
+
+function limpiarFiltros() {
+    const txt = document.getElementById('filtro-texto');
+    const cat = document.getElementById('filtro-cat');
+    if (txt) txt.value = '';
+    if (cat) cat.value = '';
+    aplicarFiltros();
+}
+
 </script>
 
 <!-- Modal Ver Desglose -->
@@ -1793,8 +1986,12 @@ function cerrarVerEgreso() {
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="2" style="padding: 10px 8px; text-align: right; font-weight: bold; color: var(--blue);">Total:</td>
+                    <td colspan="2" style="padding: 10px 8px; text-align: right; font-weight: bold; color: var(--blue);">Total Bs:</td>
                     <td id="modalDesgloseTotal" style="padding: 10px 8px; text-align: right; font-weight: bold; color: var(--blue);">Bs. 0,00</td>
+                </tr>
+                <tr id="row-desglose-usd-total" style="display:none;">
+                    <td colspan="2" style="padding: 4px 8px; text-align: right; font-weight: bold; color: #0284c7;">Total USD:</td>
+                    <td id="modalDesgloseTotalUsd" style="padding: 4px 8px; text-align: right; font-weight: bold; color: #0284c7;">$ 0,00</td>
                 </tr>
             </tfoot>
         </table>

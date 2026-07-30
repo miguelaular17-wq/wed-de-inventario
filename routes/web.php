@@ -246,6 +246,22 @@ Route::middleware(['auth', 'role:admin,finanzas,cobranza'])->prefix('contratos')
 
 Route::get('/ping', function () { return 'OK'; });
 
+// Endpoint para disparar el scheduler desde Render/GitHub Actions
+Route::get('/scheduler-run', function (\Illuminate\Http\Request $request) {
+    $expectedToken = config('app.scheduler_token', env('SCHEDULER_TOKEN', 'token-seguro-123456'));
+    if ($request->query('token') !== $expectedToken) {
+        abort(403, 'Unauthorized');
+    }
+    
+    // Run the scheduler
+    \Illuminate\Support\Facades\Artisan::call('schedule:run');
+    
+    return response()->json([
+        'status' => 'success',
+        'time' => now()->toDateTimeString(),
+        'output' => \Illuminate\Support\Facades\Artisan::output()
+    ]);
+});
 // Edurar role routes
 Route::middleware(['auth', 'role:admin,edurar'])->prefix('edurar')->name('edurar.')->group(function () {
     Route::get('/', [\App\Http\Controllers\EdurarController::class, 'index'])->name('existencias');

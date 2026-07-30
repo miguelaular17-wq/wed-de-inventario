@@ -1,0 +1,15 @@
+name: Laravel Scheduler
+
+on:
+  schedule:
+    - cron: '* * * * *'   # cada minuto
+  workflow_dispatch:        # también se puede lanzar manualmente
+
+jobs:
+  scheduler:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Laravel Scheduler via HTTP
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" \
+            "https://TU-APP.onrender.com/scheduler-run?token=${{ secrets.SCHEDULER_TOKEN }}"
