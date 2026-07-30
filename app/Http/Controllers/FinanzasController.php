@@ -364,10 +364,16 @@ class FinanzasController extends Controller
         $monto_usd = $data['monto_usd'] ?: 0;
         $monto_bs = $data['monto_bs'] ?: 0;
         
-        $diferencial_cambiario = 0;
-        if ($data['categoria_egreso'] !== 'traslados' && $tasa_bcv > 0) {
-            $diferencial_cambiario = (($monto_usd * $tasa_bcv) - $monto_bs) / $tasa_bcv;
+        $diferencial_cambiario = array_key_exists('diferencial_cambiario', $data) && $data['diferencial_cambiario'] !== null 
+                                 ? $data['diferencial_cambiario'] 
+                                 : null;
+                                 
+        $calc_usd = $monto_usd > 0 ? $monto_usd : (isset($data['tasa_cambio']) && $data['tasa_cambio'] > 0 ? round($monto_bs / $data['tasa_cambio'], 2) : null);
+
+        if ($diferencial_cambiario === null && $data['categoria_egreso'] !== 'traslados' && $tasa_bcv > 0) {
+            $diferencial_cambiario = (($calc_usd * $tasa_bcv) - $monto_bs) / $tasa_bcv;
         }
+        $diferencial_cambiario = $diferencial_cambiario ?: 0;
 
         $comprobante_url = null;
         $comprobantes_arr = [];
@@ -415,7 +421,7 @@ class FinanzasController extends Controller
             'banco_receptor'        => $banco_receptor,
             'titular_receptor'      => $titular_receptor,
             'referencia'            => $data['referencia'],
-            'monto_usd'             => $data['monto_usd'],
+            'monto_usd'             => $calc_usd,
             'tasa_cambio'           => $data['tasa_cambio'],
             'diferencial_cambiario' => $diferencial_cambiario,
             'monto_bs'              => $data['monto_bs'],
@@ -437,7 +443,7 @@ class FinanzasController extends Controller
     private function uploadComprobante($file, ?string $referencia): ?string
     {
         $ref = !empty($referencia) ? preg_replace('/[^a-zA-Z0-9_-]/', '_', $referencia) : uniqid();
-        $fileName = 'comprobante_' . $ref . '_' . date('Ymd_His') . '.' . $file->getClientOriginalExtension();
+        $fileName = 'comprobante_' . $ref . '_' . date('Ymd_His') . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
         $fileContent = file_get_contents($file->getRealPath());
 
         $supabaseUrl = env('SUPABASE_URL');
@@ -525,6 +531,8 @@ class FinanzasController extends Controller
                                  ? $data['diferencial_cambiario'] 
                                  : $egreso->diferencial_cambiario;
 
+        $calc_usd = $monto_usd > 0 ? $monto_usd : (isset($data['tasa_cambio']) && $data['tasa_cambio'] > 0 ? round($monto_bs / $data['tasa_cambio'], 2) : null);
+
         // Manage comprobantes array: start from existing
         $comprobantes = $egreso->comprobantes ?? [];
 
@@ -577,7 +585,7 @@ class FinanzasController extends Controller
             'banco_receptor'        => $banco_receptor,
             'titular_receptor'      => $titular_receptor,
             'referencia'            => $data['referencia'] ?? null,
-            'monto_usd'             => $data['monto_usd'],
+            'monto_usd'             => $calc_usd,
             'tasa_cambio'           => $data['tasa_cambio'],
             'diferencial_cambiario' => $diferencial_cambiario,
             'monto_bs'              => $data['monto_bs'],
@@ -602,11 +610,32 @@ class FinanzasController extends Controller
 
     public function storeEgresosBulk(Request $request)
     {
+        if ($request->has('egresos') && is_array($request->input('egresos'))) {
+            $egresos = $request->input('egresos');
+            $numericFields = ['monto_usd', 'tasa_cambio', 'diferencial_cambiario', 'monto_bs', 'comision'];
+            foreach ($egresos as &$egreso) {
+                foreach ($numericFields as $field) {
+                    if (isset($egreso[$field]) && is_string($egreso[$field]) && $egreso[$field] !== '') {
+                        $val = $egreso[$field];
+                        if (strpos($val, '.') !== false && strpos($val, ',') !== false) {
+                            $val = str_replace('.', '', $val);
+                            $val = str_replace(',', '.', $val);
+                        } else {
+                            $val = str_replace(',', '.', $val);
+                        }
+                        $egreso[$field] = is_numeric($val) ? $val : null;
+                    }
+                }
+            }
+            $request->merge(['egresos' => $egresos]);
+        }
+
         $data = $request->validate([
             'egresos' => 'required|array',
             'egresos.*.categoria_egreso' => 'required|in:egreso_realizado,otros_egresos',
             'egresos.*.banco_titular' => 'required|string',
             'egresos.*.referencia' => 'nullable|string|max:255',
+            'egresos.*.monto_usd' => 'nullable|numeric',
             'egresos.*.tasa_cambio' => 'nullable|numeric',
             'egresos.*.diferencial_cambiario' => 'nullable|numeric',
             'egresos.*.comision' => 'nullable|numeric',
@@ -625,13 +654,19 @@ class FinanzasController extends Controller
             $titular = $cuentaInfo[1] ?? null;
             $categoria_cuenta = $cuentaInfo[2] ?? null;
             
-            $monto_usd = $egresoData['monto_usd'] ?: 0;
-            $monto_bs = $egresoData['monto_bs'] ?: 0;
+            $monto_usd = isset($egresoData['monto_usd']) && $egresoData['monto_usd'] !== null ? $egresoData['monto_usd'] : 0;
+            $monto_bs = isset($egresoData['monto_bs']) && $egresoData['monto_bs'] !== null ? $egresoData['monto_bs'] : 0;
             
-            $diferencial_cambiario = isset($egresoData['diferencial_cambiario']) ? $egresoData['diferencial_cambiario'] : 0;
-            if (empty($egresoData['diferencial_cambiario']) && $tasa_bcv > 0) {
-                $diferencial_cambiario = (($monto_usd * $tasa_bcv) - $monto_bs) / $tasa_bcv;
+            $diferencial_cambiario = isset($egresoData['diferencial_cambiario']) && $egresoData['diferencial_cambiario'] !== null 
+                                     ? $egresoData['diferencial_cambiario'] 
+                                     : null;
+            
+            $calc_usd = $monto_usd > 0 ? $monto_usd : (isset($egresoData['tasa_cambio']) && $egresoData['tasa_cambio'] > 0 ? round($monto_bs / $egresoData['tasa_cambio'], 2) : null);
+
+            if ($diferencial_cambiario === null && $tasa_bcv > 0) {
+                $diferencial_cambiario = (($calc_usd * $tasa_bcv) - $monto_bs) / $tasa_bcv;
             }
+            $diferencial_cambiario = $diferencial_cambiario ?: 0;
 
             \App\Models\FlujoCaja::create([
                 'fecha' => $egresoData['fecha'],
@@ -640,8 +675,8 @@ class FinanzasController extends Controller
                 'banco' => $banco,
                 'titular' => $titular,
                 'categoria_cuenta' => $categoria_cuenta,
-                'referencia' => $egresoData['referencia'],
-                'monto_usd' => $egresoData['monto_usd'],
+                'referencia' => $egresoData['referencia'] ?? null,
+                'monto_usd' => $calc_usd,
                 'tasa_cambio' => $egresoData['tasa_cambio'] ?? null,
                 'diferencial_cambiario' => $diferencial_cambiario,
                 'monto_bs' => $egresoData['monto_bs'],
