@@ -133,7 +133,7 @@ class GenerarCatalogoAuto extends Command
             throw new \Exception('Error Supabase: ' . $response->body());
         }
 
-        $publicUrl = "{$supabaseUrl}/storage/v1/object/public/catalogos/{$fixedFileName}";
+        $publicUrl = "{$supabaseUrl}/storage/v1/object/public/catalogos/{$fixedFileName}?t=" . time();
 
         // Update config record with url and timestamp
         DB::connection('pgsql')->table('catalogo_config')
