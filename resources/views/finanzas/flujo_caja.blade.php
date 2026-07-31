@@ -1803,7 +1803,7 @@ function abrirEditarEgreso(mov) {
         chk.checked = true;
         containerDes.style.display = 'block';
         mov.desglose.forEach(item => {
-            agregarDesgloseEdit(item.beneficiario, item.cedula, item.monto);
+            agregarDesgloseEdit(item.beneficiario, item.cedula, item.monto_usd, item.monto);
         });
     } else {
         chk.checked = false;
@@ -1822,13 +1822,14 @@ function toggleDesgloseEdit() {
     document.getElementById('container_desglose_edit').style.display = chk.checked ? 'block' : 'none';
 }
 
-function agregarDesgloseEdit(benef, ced, monto) {
+function agregarDesgloseEdit(benef, ced, monto_usd, monto) {
     const lista = document.getElementById('lista_desglose_edit');
     const html = `
         <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
             <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" value="${benef || ''}" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
             <input type="text" name="desglose_cedula[]" placeholder="Cédula" value="${ced || ''}" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" value="${monto || ''}" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="text" inputmode="decimal" name="desglose_monto_usd[]" placeholder="Monto USD" value="${monto_usd || ''}" oninput="calcDesgloseRow(this, 'usd')" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+            <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" value="${monto || ''}" oninput="calcDesgloseRow(this, 'bs')" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
             <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0;">&times;</button>
         </div>`;
     lista.insertAdjacentHTML('beforeend', html);
@@ -2182,7 +2183,7 @@ function limpiarFiltros() {
             <div id="container_desglose_edit" style="display: none; background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px;">
                 <h4 style="margin-top: 0; font-size: 0.95rem; color: var(--blue);">Desglose del Pago</h4>
                 <div id="lista_desglose_edit"></div>
-                <button type="button" onclick="agregarDesgloseEdit('','','')" style="margin-top: 5px; padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">+ Añadir persona</button>
+                <button type="button" onclick="agregarDesgloseEdit('','','','')" style="margin-top: 5px; padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">+ Añadir persona</button>
             </div>
 
             <!-- Buttons -->
