@@ -965,11 +965,11 @@ class FinanzasController extends Controller
             'BANCAMIGA' => [
                 'start_row'       => 6,
                 'col_fecha'       => 1,
-                'col_referencia'  => 4,
-                'col_descripcion' => 2,
+                'col_referencia'  => 2,
+                'col_descripcion' => 3,
                 'col_monto'       => null,
-                'col_cargo'       => 5,   // Débito
-                'col_abono'       => 6,   // Crédito
+                'col_cargo'       => 4,   // Débito
+                'col_abono'       => 5,   // Crédito
                 'skip_desc'       => ['saldo inicial', 'saldo final', 'totales'],
             ],
             // CSV con separador ';': Fecha;Referencia;Descripción;Monto;...
@@ -979,9 +979,9 @@ class FinanzasController extends Controller
                 'col_fecha'       => 0,
                 'col_referencia'  => 1,
                 'col_descripcion' => 2,
-                'col_monto'       => 3,
-                'col_cargo'       => null,
-                'col_abono'       => null,
+                'col_monto'       => null,
+                'col_cargo'       => 3,
+                'col_abono'       => 4,
                 'skip_desc'       => ['saldo inicial', 'saldo final'],
             ],
             // F[0]: Fecha|Referencia|Descripción|Monto|Balance — datos directos

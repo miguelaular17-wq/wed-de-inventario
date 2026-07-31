@@ -296,7 +296,7 @@
                             <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="bloqueado_compra_divisas" value="{{ $resumen->bloqueado_compra_divisas }}"></div></td>
                         </tr>
                         <tr>
-                            <td>FONDOS NO DISPONIBLES<br>(PROBLEMAS CON LA CUENTA BANCARIA)</td>
+                            <td>FONDOS NO DISPONIBLES<br>(PROBLEMAS CON LA CUENTA BANCARIA Y/O PAGO CUOTA PRESTAMO)</td>
                             <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="fondos_no_disponibles" value="{{ $resumen->fondos_no_disponibles }}"></div></td>
                         </tr>
                         <tr>
@@ -532,10 +532,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data) {
                 if (mode === 'inicio') {
                     input.setAttribute('data-field', baseField);
-                    input.value = data[baseField];
+                    input.value = window.formatLocalNumber(data[baseField] || 0);
                 } else {
                     input.setAttribute('data-field', baseField + '_fin');
-                    input.value = data[baseField + '_fin'] || 0;
+                    input.value = window.formatLocalNumber(data[baseField + '_fin'] || 0);
                 }
             }
         });
@@ -742,7 +742,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             let usdField = currentMode === 'inicio' ? 'reporte_usd' : 'reporte_usd_fin';
                             let usdInput = row.querySelector(`input[data-field="${usdField}"]`);
                             if (usdInput) {
-                                usdInput.value = currentMode === 'inicio' ? data.reporte_usd : data.reporte_usd_fin;
+                                usdInput.value = window.formatLocalNumber(currentMode === 'inicio' ? data.reporte_usd : data.reporte_usd_fin);
                                 calculateTotals();
                             }
                         }
