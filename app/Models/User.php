@@ -21,8 +21,7 @@ class User extends Authenticatable
     public const ROLE_COBRANZA = 'cobranza';
     public const ROLE_CONTABILIDAD = 'contabilidad';
     public const ROLE_AUDITOR = 'auditor';
-    public const ROLE_EDURAR = 'edurar';
-
+    public const ROLE_TESORERIA = 'tesoreria';
     protected $fillable = [
         'name',
         'email',
@@ -86,9 +85,9 @@ class User extends Authenticatable
         return $this->role === self::ROLE_AUDITOR;
     }
 
-    public function isEdurar(): bool
+    public function isTesoreria(): bool
     {
-        return $this->role === self::ROLE_EDURAR;
+        return $this->role === self::ROLE_TESORERIA;
     }
 
     public function isFinanzas(): bool

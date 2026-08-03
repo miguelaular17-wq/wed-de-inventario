@@ -747,9 +747,31 @@ class CompradorController extends Controller
                 ->toArray();
         }
 
-        $pedidosSolicitados = Schema::hasTable('pedidos_solicitados')
-            ? PedidoSolicitado::where('estado', 'pendiente')->orderByDesc('created_at')->get()
-            : collect();
+        $qPedirDate = $request->query('q_pedir_date');
+        $pedidosSolicitados = collect();
+        if (Schema::hasTable('pedidos_solicitados')) {
+            $query = PedidoSolicitado::query();
+            if ($qPedirDate) {
+                $query->whereDate('created_at', $qPedirDate);
+            }
+            $pedidosSolicitados = $query
+                ->selectRaw('producto, MAX(estado) as estado, MAX(codigo) as codigo, MAX(categoria) as categoria, COUNT(*) as frecuencia, MAX(created_at) as created_at')
+                ->groupBy('producto')
+                ->orderByDesc('frecuencia')
+                ->get();
+        }
+
+        $qPedirStats = [];
+        if (Schema::hasTable('pedidos_solicitados')) {
+            $qPedirStats['global'] = PedidoSolicitado::selectRaw('estado, COUNT(*) as count')->groupBy('estado')->pluck('count', 'estado')->toArray();
+            $qPedirStats['categorias'] = PedidoSolicitado::selectRaw('categoria, estado, COUNT(*) as count')
+                ->whereNotNull('categoria')
+                ->groupBy('categoria', 'estado')
+                ->get()
+                ->groupBy('categoria')
+                ->map(fn($items) => $items->pluck('count', 'estado')->toArray())
+                ->toArray();
+        }
 
         $cobranzasData = [
             'fecha_actual' => null,
@@ -863,6 +885,7 @@ class CompradorController extends Controller
             'dashboardStats' => $dashboardStats ?? [],
             'analysisItems' => $analysisItems ?? collect(),
             'pedidosSolicitados' => $pedidosSolicitados,
+            'qPedirStats' => $qPedirStats,
             'buscarQuery' => $this->resolveBuscarFilter($request),
             'cobranzasData' => $cobranzasData,
         ]);

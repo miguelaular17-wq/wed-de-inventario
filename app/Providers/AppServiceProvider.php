@@ -18,6 +18,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Forzar zona horaria a Caracas sin depender del servidor o variables de entorno
+        date_default_timezone_set('America/Caracas');
+        config(['app.timezone' => 'America/Caracas']);
+        \Carbon\Carbon::setFallbackLocale('es');
+
         \Illuminate\Pagination\Paginator::useBootstrapFive();
 
         // Logging de SQL solo en entorno de desarrollo (DEBUG=true)

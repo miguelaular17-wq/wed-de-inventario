@@ -29,10 +29,18 @@ class PedidoSolicitado extends Model
         return $this->estado === 'pendiente';
     }
 
-    public function marcarAtendido(): void
+    public function marcarComprado(): void
     {
         $this->update([
-            'estado' => 'atendido',
+            'estado' => 'comprado',
+            'atendido_at' => now(),
+        ]);
+    }
+
+    public function marcarFueraMercado(): void
+    {
+        $this->update([
+            'estado' => 'fuera_de_mercado',
             'atendido_at' => now(),
         ]);
     }

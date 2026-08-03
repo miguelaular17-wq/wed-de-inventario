@@ -41,8 +41,8 @@ class CobranzasService:
                 cx.codigo_caja AS [CODIGO CAJA]
             FROM cuentas_cobrar cx WITH (NOLOCK)
             JOIN clientes c WITH (NOLOCK) ON cx.codigo_cliente = c.codigo
-            WHERE cx.saldo_actual_moneda2 > 0.5
-              AND cx.tipo_documento IN ('FAC', 'ND')
+            WHERE ABS(cx.saldo_actual_moneda2) > 0.5
+              AND cx.tipo_documento IN ('FAC', 'NDC')
               AND cx.codigo_cliente NOT LIKE 'EXP%'
             """
             

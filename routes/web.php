@@ -39,8 +39,9 @@ Route::get('/', function () {
         if ($user->isVendedor()) {
             return redirect()->route('vendedor.dashboard');
         }
-        if ($user->isEdurar()) {
-            return redirect()->route('edurar.existencias');
+
+        if ($user->isTesoreria()) {
+            return redirect()->route('tesoreria.dashboard');
         }
 
         return redirect()->route('ventas.index');
@@ -56,6 +57,7 @@ Route::middleware('guest')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])->name('register.store');
 
     Route::get('/pedidos/buscar', [PedidoSolicitadoController::class, 'search'])->name('pedidos.search');
+    Route::get('/pedidos/categorias', [PedidoSolicitadoController::class, 'categorias'])->name('pedidos.categorias');
     Route::post('/pedidos', [PedidoSolicitadoController::class, 'store'])->name('pedidos.store');
 });
 
@@ -147,13 +149,27 @@ Route::middleware(['auth', 'role:admin,comprador,marketing'])->prefix('compras')
     Route::post('/productos/{id}/toggle-exclusion', [\App\Http\Controllers\CompradorController::class, 'toggleExclusion'])->name('comprador.productos.toggle_exclusion');
 
     // Pedidos solicitados (Q pedir)
-    Route::post('/pedidos/{pedido}/atender', [PedidoSolicitadoController::class, 'marcarAtendido'])->name('comprador.pedidos.atender');
-    Route::delete('/pedidos/{pedido}', [PedidoSolicitadoController::class, 'destroy'])->name('comprador.pedidos.destroy');
+    Route::post('/pedidos/comprado', [PedidoSolicitadoController::class, 'marcarComprado'])->name('comprador.pedidos.comprado');
+    Route::post('/pedidos/fuera-mercado', [PedidoSolicitadoController::class, 'marcarFueraMercado'])->name('comprador.pedidos.fuera_mercado');
+    Route::get('/pedidos/reporte-excel', [PedidoSolicitadoController::class, 'reporteExcel'])->name('comprador.pedidos.excel');
+    Route::post('/pedidos/reporte-pdf', [PedidoSolicitadoController::class, 'reportePdf'])->name('comprador.pedidos.pdf');
+    Route::get('/pedidos/reporte-diario', [PedidoSolicitadoController::class, 'reporteDiarioPdf'])->name('comprador.pedidos.diario');
+
+    // Existencias (antes edurar)
+    Route::get('/existencias', [\App\Http\Controllers\ExistenciasController::class, 'index'])->name('comprador.existencias');
+    Route::get('/existencias/subcategorias', [\App\Http\Controllers\ExistenciasController::class, 'getSubcategorias'])->name('comprador.existencias.subcategorias');
 });
 
 // Vendedor specific routes (Now public for inventory checking)
 Route::prefix('vendedor')->group(function () {
     Route::get('/', [\App\Http\Controllers\VendedorController::class, 'index'])->name('vendedor.dashboard');
+});
+
+// Tesoreria routes
+Route::middleware(['auth', 'role:admin,tesoreria'])->prefix('tesoreria')->name('tesoreria.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\TesoreriaController::class, 'dashboard'])->name('dashboard');
+    Route::post('/ingreso-banco', [\App\Http\Controllers\TesoreriaController::class, 'storeIngresoBanco'])->name('ingreso_banco.store');
+    Route::post('/lote-punto-venta', [\App\Http\Controllers\TesoreriaController::class, 'storeLotePuntoVenta'])->name('lote_pos.store');
 });
 
 // Notifications routes for all authenticated users
@@ -179,6 +195,8 @@ Route::middleware('auth')->group(function () {
 // Finanzas routes
 Route::middleware(['auth', 'role:admin,finanzas,auditor'])->prefix('finanzas')->group(function () {
     Route::get('/flujo-caja', [FinanzasController::class, 'flujoCaja'])->name('finanzas.flujo_caja');
+    Route::post('/flujo-caja/parse-desglose', [FinanzasController::class, 'parseArchivoDesglose'])->name('finanzas.parse_desglose');
+    Route::get('/flujo-caja/reporte', [FinanzasController::class, 'reporteFlujoCajaBusqueda'])->name('finanzas.flujo_caja.reporte');
     Route::get('/flujo-caja/reporte-diario', [FinanzasController::class, 'reporteDiarioCaja'])->name('finanzas.reporte_diario_caja');
     Route::get('/flujo-caja/api/bcv', [FinanzasController::class, 'fetchBcvApi'])->name('finanzas.api_bcv');
     Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
@@ -211,6 +229,7 @@ Route::middleware(['auth', 'role:admin,contabilidad'])->prefix('finanzas')->grou
     Route::post('/conciliaciones/ignore', [App\Http\Controllers\FinanzasController::class, 'ignoreConciliacion'])->name('finanzas.conciliaciones.ignore');
     Route::post('/conciliaciones/clear', [App\Http\Controllers\FinanzasController::class, 'clearConciliacion'])->name('finanzas.conciliaciones.clear');
     Route::get('/conciliaciones/reporte', [App\Http\Controllers\FinanzasController::class, 'reporteConciliacion'])->name('finanzas.conciliaciones.reporte');
+    Route::get('/conciliaciones/reporte-banco', [App\Http\Controllers\FinanzasController::class, 'reporteBancoPdf'])->name('finanzas.conciliaciones.reporte-banco');
 });
 
 // Cobranza routes
@@ -262,12 +281,6 @@ Route::get('/scheduler-run', function (\Illuminate\Http\Request $request) {
         'output' => \Illuminate\Support\Facades\Artisan::output()
     ]);
 });
-// Edurar role routes
-Route::middleware(['auth', 'role:admin,edurar'])->prefix('edurar')->name('edurar.')->group(function () {
-    Route::get('/', [\App\Http\Controllers\EdurarController::class, 'index'])->name('existencias');
-    Route::get('/subcategorias', [\App\Http\Controllers\EdurarController::class, 'getSubcategorias'])->name('subcategorias');
-});
-
 Route::get('/pure', function () {
     $inicio = microtime(true);
     return response('Tiempo: ' . round((microtime(true) - $inicio) * 1000, 2) . ' ms');

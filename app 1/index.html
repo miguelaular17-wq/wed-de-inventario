@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'">
+  <link rel="stylesheet" href="styles.css">
+  <title>Palacio De Los Detalles — Sincronización WooCommerce</title>
+</head>
+
+<body>
+  <div class="app">
+
+    <!-- Header -->
+    <div class="header">
+      <h1>Palacio De Los Detalles</h1>
+      <p>Sincronización con WooCommerce</p>
+      <div id="stateBadge" class="state-badge disconnected">
+        <span class="dot"></span>
+        <span id="stateText">Sin estado cargado</span>
+      </div>
+    </div>
+
+    <!-- Upload Card -->
+    <div class="card" id="uploadCard">
+      <div class="card-title">📂 Archivo de productos</div>
+
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept=".json">
+        <span class="icon">📄</span>
+        <span class="label" id="uploadLabel">Arrastra tu JSON aquí o haz clic para seleccionar</span>
+        <span class="filename hidden" id="fileName"></span>
+      </div>
+
+      <!-- Config -->
+      <div class="config-row" style="margin-top: 20px;">
+        <div class="config-group">
+          <label for="discountInput">% Descuento</label>
+          <input type="number" id="discountInput" value="30" min="0" max="100" step="1">
+        </div>
+      </div>
+
+      <!-- Sync Options Panel -->
+      <div class="sync-options-panel">
+        <div class="sync-options-title">⚙️ ¿Qué comparar y actualizar?</div>
+        <div class="sync-options-grid">
+
+          <label class="sync-toggle" title="Compara precio1 y actualiza regular_price / sale_price">
+            <input type="checkbox" id="switchPrecio" checked>
+            <span class="sync-slider"></span>
+            <span class="sync-label">💰 Precio</span>
+          </label>
+
+          <label class="sync-toggle" title="Compara existencia y actualiza stock_quantity">
+            <input type="checkbox" id="switchStock" checked>
+            <span class="sync-slider"></span>
+            <span class="sync-label">📦 Stock</span>
+          </label>
+
+          <label class="sync-toggle" title="Compara categories y actualiza categorías en WooCommerce">
+            <input type="checkbox" id="switchCategorias" checked>
+            <span class="sync-slider"></span>
+            <span class="sync-label">🏷️ Categorías</span>
+          </label>
+
+          <label class="sync-toggle" title="Compara marca y actualiza brand en WooCommerce">
+            <input type="checkbox" id="switchMarca">
+            <span class="sync-slider"></span>
+            <span class="sync-label">🏪 Marca</span>
+          </label>
+
+          <label class="sync-toggle" title="Compara descripción ampliada (hash) y actualiza short_description">
+            <input type="checkbox" id="switchDescripcion">
+            <span class="sync-slider"></span>
+            <span class="sync-label">📝 Descripción</span>
+          </label>
+
+          <label class="sync-toggle" title="Sube imágenes faltantes desde red local o imagen_map.json"
+            id="imagesSwitch">
+            <input type="checkbox" id="switchImagenes">
+            <span class="sync-slider"></span>
+            <span class="sync-label">🖼️ Imágenes</span>
+          </label>
+
+        </div>
+
+        <!-- Switch de eliminación — separado con zona de peligro -->
+        <div class="sync-options-danger-zone">
+          <label class="sync-toggle sync-toggle--danger"
+            title="Elimina de WooCommerce los productos que no aparezcan en el JSON cargado. PELIGROSO con JSONs incompletos.">
+            <input type="checkbox" id="switchEliminar">
+            <span class="sync-slider"></span>
+            <span class="sync-label">🗑️ Eliminar ausentes</span>
+            <span class="danger-badge">PELIGRO</span>
+          </label>
+
+          <!-- Switch de forzar: solo visible cuando Eliminar está activo -->
+          <div class="force-delete-row hidden" id="forceDeleteRow">
+            <label class="sync-toggle sync-toggle--force"
+              title="Desactiva el límite de seguridad del 40%. Úsalo SOLO si el JSON contiene TODOS los productos y sabes lo que haces.">
+              <input type="checkbox" id="switchForzar">
+              <span class="sync-slider"></span>
+              <span class="sync-label">⚡ Forzar (sin límite del 40%)</span>
+              <span class="danger-badge force-badge">EXTREMO</span>
+            </label>
+            <p class="force-delete-hint">⚠️ Eliminará TODOS los ausentes sin importar la cantidad. Asegúrate de que el
+              JSON esté completo.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Pre-análisis: advertencia de JSON incompleto -->
+      <div class="preflight-alert hidden" id="preflightAlert">
+        <div class="preflight-icon" id="preflightIcon">⚠️</div>
+        <div class="preflight-body">
+          <div class="preflight-title" id="preflightTitle">JSON cargado</div>
+          <div class="preflight-detail" id="preflightDetail"></div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="actions">
+        <button class="btn btn-primary btn-block" id="btnSync" disabled>
+          🔄 Sincronizar
+        </button>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-secondary" id="btnImportState">
+          📥 Importar estado
+        </button>
+        <button class="btn btn-warning" id="btnRebuildState">
+          🔄 Reconstruir State
+        </button>
+      </div>
+
+      <!-- Banner: sync interrumpida -->
+      <div class="interrupted-alert hidden" id="interruptedAlert">
+        <div class="interrupted-icon">⚠️</div>
+        <div class="interrupted-body">
+          <div class="interrupted-title">Sincronización anterior interrumpida</div>
+          <div class="interrupted-detail" id="interruptedDetail">El proceso fue cerrado antes de completarse. El state
+            puede estar desincronizado con WooCommerce.</div>
+        </div>
+        <button class="btn btn-warning btn-sm" id="btnRebuildFromAlert">🔄 Reconstruir ahora</button>
+      </div>
+
+    </div>
+    <!-- Progress Card -->
+    <div class="card progress-container" id="progressCard">
+      <div class="card-title">⏳ Progreso</div>
+
+      <div class="progress-bar-wrapper">
+        <div class="progress-bar indeterminate" id="progressBar"></div>
+      </div>
+
+      <div class="log-container" id="logContainer"></div>
+    </div>
+
+    <!-- Results Card -->
+    <div class="card result-section" id="resultCard">
+      <div class="card-title">📊 Resultados</div>
+
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-item new">
+          <div class="stat-value" id="statCreated">0</div>
+          <div class="stat-label">Creados</div>
+        </div>
+        <div class="stat-item modified">
+          <div class="stat-value" id="statUpdated">0</div>
+          <div class="stat-label">Actualizados</div>
+        </div>
+        <div class="stat-item deleted">
+          <div class="stat-value" id="statDeleted">0</div>
+          <div class="stat-label">Eliminados</div>
+        </div>
+        <div class="stat-item images">
+          <div class="stat-value" id="statImages">0</div>
+          <div class="stat-label">Imágenes</div>
+        </div>
+        <div class="stat-item skipped">
+          <div class="stat-value" id="statSkipped">0</div>
+          <div class="stat-label">Omitidos</div>
+        </div>
+        <div class="stat-item errors">
+          <div class="stat-value" id="statErrors">0</div>
+          <div class="stat-label">Errores</div>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top: 24px;">
+        <button class="btn btn-success" id="btnRestart">🔄 Nueva sincronización</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Modal: Primera vez / State vacío -->
+  <div class="modal-overlay hidden" id="firstRunModal">
+    <div class="modal-box">
+      <div class="modal-icon">🆕</div>
+      <div class="modal-title">Primera vez en este equipo</div>
+      <div class="modal-detail">
+        No se detectó un state previo con productos registrados.<br><br>
+        Si sincronizas directamente, la app intentará <strong>crear todos los productos</strong>
+        como si fueran nuevos, aunque ya existan en WooCommerce.<br><br>
+        <strong>Se recomienda reconstruir el state primero</strong> para que la app aprenda
+        qué productos ya están en tu tienda y solo sincronice los cambios.
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btnModalRebuildAndSync">
+          ✅ Reconstruir y luego Sincronizar
+        </button>
+        <button class="btn btn-danger-outline" id="btnModalSyncAnyway">
+          ⚠️ Sincronizar de todas formas
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+
+</html>

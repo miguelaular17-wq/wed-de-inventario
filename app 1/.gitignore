@@ -1,0 +1,7 @@
+dist/
+node_modules/
+out/
+.env
+uploads/*
+!uploads/.gitkeep
+backupProducts/

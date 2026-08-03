@@ -103,7 +103,9 @@
                 Añadir Movimientos
             </button>
 
-            <form action="{{ route('finanzas.conciliaciones') }}" method="GET" style="display:flex;align-items:center;gap:8px;margin:0;">
+            <form action="{{ route('finanzas.conciliaciones') }}" method="GET" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap;">
+                <input type="date" name="fecha_desde" class="select-banco" value="{{ request('fecha_desde') }}" title="Fecha Desde" style="min-width: 130px;">
+                <input type="date" name="fecha_hasta" class="select-banco" value="{{ request('fecha_hasta') }}" title="Fecha Hasta" style="min-width: 130px;">
                 <select name="banco_filtro" class="select-banco">
                     <option value="">Todos los Bancos</option>
                     @foreach($bancos as $b)
@@ -152,6 +154,7 @@
                 <div class="bank-name">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
                     {{ $bk }}
+                    <a href="{{ route('finanzas.conciliaciones.reporte-banco', ['banco' => $bk, 'titular' => $tit]) }}" style="margin-left: 15px; font-size: 0.75rem; background-color: rgba(255,255,255,0.15); color: #fff; padding: 4px 10px; border-radius: 4px; text-decoration: none; font-weight: normal; vertical-align: middle;">📥 PDF</a>
                 </div>
                 @if($tit)
                     <div style="color:rgba(255,255,255,.65); font-size:0.82rem; font-weight:600; margin-top:4px; letter-spacing:.3px;">Titular: {{ $tit }}</div>
@@ -167,7 +170,7 @@
                     <span class="bank-stat-value yellow">Bs. {{ number_format($d['total_transito'], 2) }}</span>
                 </div>
                 <div class="bank-stat">
-                    <span class="bank-stat-label">⚠️ Sin Registrar</span>
+                    <span class="bank-stat-label">⚠️ Movimientos en el Banco</span>
                     <span class="bank-stat-value red">Bs. {{ number_format($d['total_sin_registrar'], 2) }}</span>
                 </div>
                 <div class="bank-stat">
@@ -264,7 +267,7 @@
             <div class="section-block">
                 <div class="section-header">
                     <span class="section-badge badge-red"></span>
-                    <span class="section-title">Sin Registrar en Sistema</span>
+                    <span class="section-title">Movimientos en el Banco</span>
                     <span class="section-count">{{ $d['sin_registrar']->count() }}</span>
                 </div>
                 <table class="mini-table">
@@ -291,7 +294,7 @@
                             <td class="monto-cell monto-red">Bs. {{ number_format($row['monto'], 2) }}</td>
                         </tr>
                         @empty
-                        <tr class="empty-row"><td colspan="4">Sin movimientos sin registrar</td></tr>
+                        <tr class="empty-row"><td colspan="4">Sin movimientos detectados</td></tr>
                         @endforelse
                     </tbody>
                 </table>

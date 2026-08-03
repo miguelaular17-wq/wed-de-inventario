@@ -434,9 +434,14 @@
 <!-- EGRESOS REALIZADOS -->
     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; margin-bottom: 10px;">
         <h3 style="color: var(--blue); margin: 0;">EGRESOS REALIZADOS</h3>
-        <form method="GET" action="{{ route('finanzas.flujo_caja') }}" style="display: flex; gap: 10px; align-items: center; margin: 0;">
-            <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Día a consultar:</label>
-            <input type="date" name="fecha_filtro" value="{{ $fecha_filtro }}" style="padding: 6px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff;" onchange="this.form.submit()">
+        <form id="form-fechas-flujo" method="GET" action="{{ route('finanzas.flujo_caja') }}" style="display: flex; gap: 10px; align-items: center; margin: 0;">
+            <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Desde:</label>
+            <input type="date" id="fecha_desde_input" name="fecha_desde" value="{{ $fecha_desde }}" style="padding: 6px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff;" onchange="this.form.submit()">
+            
+            <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Hasta:</label>
+            <input type="date" id="fecha_hasta_input" name="fecha_hasta" value="{{ $fecha_hasta }}" style="padding: 6px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff;" onchange="this.form.submit()">
+            
+            <button type="button" onclick="descargarReporteBusqueda()" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 6px; padding: 6px 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">📥 Reporte</button>
         </form>
     </div>
 
@@ -458,7 +463,7 @@
                 <thead>
                     <tr>
                         <th style="width: 100px;">Fecha</th>
-                        <th>Banco y Titular</th>
+                        <th>Origen ➔ Destino (Beneficiario)</th>
                         <th>Tipo Gasto</th>
                         <th>Motivo</th>
                         <th class="col-number" style="text-align: right;">USD</th>
@@ -474,8 +479,19 @@
                         <tr data-egreso-cat="egreso_realizado">
                             <td>{{ $mov->fecha }}</td>
                             <td>
-                                <strong style="color: var(--blue);">{{ $mov->banco }}</strong><br>
-                                <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular }}</span>
+                                <div style="display: flex; gap: 15px; align-items: center;">
+                                    <div>
+                                        <strong style="color: var(--blue);">{{ $mov->banco }}</strong><br>
+                                        <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular }}</span>
+                                    </div>
+                                    @if($mov->banco_receptor || $mov->titular_receptor)
+                                    <div style="color: #94a3b8; font-size: 1.2rem;">➔</div>
+                                    <div>
+                                        <strong style="color: #10b981;">{{ $mov->banco_receptor }}</strong><br>
+                                        <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular_receptor }}</span>
+                                    </div>
+                                    @endif
+                                </div>
                             </td>
                             <td>{{ $mov->tipo_gasto ?: '-' }}</td>
                             <td>
@@ -485,6 +501,11 @@
                                         <button type="button" onclick='verDesglose(@json($mov->desglose))' style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; cursor: pointer;">
                                             Ver Desglose ({{ count($mov->desglose) }})
                                         </button>
+                                        <span style="display: none;">
+                                            @foreach($mov->desglose as $item)
+                                                {{ $item['cedula'] ?? '' }}
+                                            @endforeach
+                                        </span>
                                     </div>
                                 @endif
                             </td>
@@ -571,7 +592,7 @@
                 <thead>
                     <tr>
                         <th style="width: 100px;">Fecha</th>
-                        <th>Banco y Titular</th>
+                        <th>Origen ➔ Destino (Beneficiario)</th>
                         <th>Tipo Gasto</th>
                         <th>Motivo</th>
                         <th class="col-number" style="text-align: right;">USD</th>
@@ -587,8 +608,19 @@
                         <tr data-egreso-cat="otros_egresos">
                             <td>{{ $mov->fecha }}</td>
                             <td>
-                                <strong style="color: var(--blue);">{{ $mov->banco }}</strong><br>
-                                <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular }}</span>
+                                <div style="display: flex; gap: 15px; align-items: center;">
+                                    <div>
+                                        <strong style="color: var(--blue);">{{ $mov->banco }}</strong><br>
+                                        <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular }}</span>
+                                    </div>
+                                    @if($mov->banco_receptor || $mov->titular_receptor)
+                                    <div style="color: #94a3b8; font-size: 1.2rem;">➔</div>
+                                    <div>
+                                        <strong style="color: #10b981;">{{ $mov->banco_receptor }}</strong><br>
+                                        <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular_receptor }}</span>
+                                    </div>
+                                    @endif
+                                </div>
                             </td>
                             <td>{{ $mov->tipo_gasto ?: '-' }}</td>
                             <td>{{ $mov->motivo ?: '-' }}</td>
@@ -663,6 +695,85 @@
         </div>
     </div>
 </div>
+
+    <!-- EGRESOS EN DIVISAS (no aparece en reportes) -->
+    <div class="dashboard-container" style="margin-top: 10px;">
+        <h3 style="margin-bottom: 15px; color: #166534; display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v20m-7-7h14m-14-6h14"/></svg>
+            EGRESOS EN DIVISAS
+            <span style="font-size: 0.75rem; font-weight: 400; background: #dcfce7; color: #166534; padding: 2px 10px; border-radius: 20px; margin-left: 6px;">No incluidos en el reporte</span>
+        </h3>
+        <div class="panel" style="padding: 0; overflow: hidden; margin-bottom: 30px; border: 1.5px solid #dcfce7;">
+            <div class="table-wrap">
+                <table class="data-table" style="width: 100%;">
+                    <thead>
+                        <tr style="background: #f0fdf4;">
+                            <th style="width: 100px;">Fecha</th>
+                            <th>Banco y Titular</th>
+                            <th>Tipo Gasto</th>
+                            <th>Motivo</th>
+                            <th class="col-number" style="text-align: right;">Monto USD</th>
+                            <th style="text-align: center; width: 80px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($egresos_divisas as $mov)
+                            <tr data-egreso-cat="egreso_divisas">
+                                <td>{{ $mov->fecha }}</td>
+                                <td>
+                                    <strong style="color: #166534;">{{ $mov->banco }}</strong><br>
+                                    <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular }}</span>
+                                </td>
+                                <td>{{ $mov->tipo_gasto ?: '-' }}</td>
+                                <td>{{ $mov->motivo ?: '-' }}</td>
+                                <td class="col-number" style="text-align: right; font-weight: 500;">
+                                    {{ $mov->monto_usd ? '$'.number_format($mov->monto_usd, 2) : '-' }}
+                                </td>
+                                <td style="text-align: center; white-space: nowrap;">
+                                    @php
+                                        $allComprobantesDiv = array_filter(array_merge(
+                                            $mov->comprobantes ?? [],
+                                            ($mov->comprobante_url && !in_array($mov->comprobante_url, $mov->comprobantes ?? [])) ? [$mov->comprobante_url] : []
+                                        ));
+                                    @endphp
+                                    @if(count($allComprobantesDiv) > 0)
+                                        <button type="button" onclick='abrirGaleria(@json(array_values($allComprobantesDiv)))'
+                                            title="Ver comprobantes ({{ count($allComprobantesDiv) }})"
+                                            style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer; margin-right: 2px;">📎 {{ count($allComprobantesDiv) }}</button>
+                                    @endif
+                                    @if(auth()->user()->isAuditor())
+                                    <button type="button" onclick='abrirVerEgreso(@json($mov))'
+                                        title="Ver detalle"
+                                        style="background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">👁️</button>
+                                    @else
+                                    <button type="button" onclick='abrirEditarEgreso(@json($mov))'
+                                        title="Editar egreso"
+                                        style="background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">✏️</button>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 30px; color: var(--muted);">No hay egresos en divisas registrados.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                    <tfoot>
+                        @php
+                            $tot_divisas_usd = $egresos_divisas->sum('monto_usd');
+                        @endphp
+                        <tr style="background-color: #f0fdf4; border-top: 2px solid #dcfce7; font-weight: bold;">
+                            <td colspan="4" style="text-align: right; color: #166534;">TOTAL EGRESOS EN DIVISAS</td>
+                            <td class="col-number" style="text-align: right; color: #166534;">
+                                $ {{ number_format($tot_divisas_usd, 2) }}
+                            </td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
 
 <!-- TRASLADOS (no aparece en reportes) -->
 <div class="dashboard-container" style="margin-top: 10px;">
@@ -793,6 +904,7 @@
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tipo de Egreso</label>
                     <select name="categoria_egreso" id="categoria_egreso" onchange="toggleTraslados()" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                         <option value="egreso_realizado">EGRESOS REALIZADOS</option>
+                        <option value="egreso_divisas">EGRESOS EN DIVISAS</option>
                         <option value="otros_egresos">OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
                         <option value="traslados">TRASLADOS</option>
                     </select>
@@ -808,10 +920,15 @@
                     <label id="lbl_banco_titular" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Banco y Titular</label>
                     <select id="banco_titular" name="banco_titular" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                         <option value="">-- Seleccione --</option>
-                        @foreach($cuentas as $cuenta)
-                            <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
-                                {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
-                            </option>
+                        @php $cuentasAgrupadas = collect($cuentas)->groupBy('categoria'); @endphp
+                        @foreach($cuentasAgrupadas as $categoria => $listaCuentas)
+                            <optgroup label="{{ $categoria }}">
+                                @foreach($listaCuentas as $cuenta)
+                                    <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
+                                        {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
+                                    </option>
+                                @endforeach
+                            </optgroup>
                         @endforeach
                     </select>
                 </div>
@@ -826,10 +943,14 @@
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Banco Receptor y Titular Receptor</label>
                     <select name="banco_titular_receptor" id="banco_titular_receptor" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                         <option value="">-- Seleccione Receptor --</option>
-                        @foreach($cuentas as $cuenta)
-                            <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
-                                {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
-                            </option>
+                        @foreach($cuentasAgrupadas as $categoria => $listaCuentas)
+                            <optgroup label="{{ $categoria }}">
+                                @foreach($listaCuentas as $cuenta)
+                                    <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
+                                        {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
+                                    </option>
+                                @endforeach
+                            </optgroup>
                         @endforeach
                     </select>
                 </div>
@@ -844,7 +965,7 @@
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tasa de Cambio</label>
                     <input type="text" inputmode="decimal" name="tasa_cambio" id="tasa_cambio" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
-                <div style="flex: 1;">
+                <div style="flex: 1;" id="col_monto_bs">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;" id="lbl_monto_bs">Monto BS</label>
                     <input type="text" inputmode="decimal" name="monto_bs" id="monto_bs" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
@@ -991,7 +1112,10 @@
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Sede (Opcional)</label>
                     <select name="sede" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                         <option value="">-- Seleccione una sede --</option>
-                        @foreach(config('inventario.sedes_locales') as $sedeLocal)
+                        @php
+                            $sedesFinanzas = array_merge(config('inventario.sedes_locales', []), ['Nunes', 'Movistar', 'Depósito', 'Admon', 'Bella vista', 'Jenus']);
+                        @endphp
+                        @foreach($sedesFinanzas as $sedeLocal)
                             <option value="{{ $sedeLocal }}">{{ $sedeLocal }}</option>
                         @endforeach
                     </select>
@@ -1000,6 +1124,16 @@
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Placa del vehículo</label>
                     <input type="text" name="placa_vehiculo" placeholder="Ej. ABC-123" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Beneficiario</label>
+                <select id="beneficiario" name="beneficiario" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
+                    <option value="">-- Seleccione un beneficiario --</option>
+                    @foreach($proveedores as $prov)
+                        <option value="{{ $prov }}">{{ $prov }}</option>
+                    @endforeach
+                </select>
             </div>
 
             <div style="margin-bottom: 10px;">
@@ -1015,15 +1149,18 @@
             </div>
 
             <div id="container_desglose" style="display: none; background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px;">
-                <h4 style="margin-top: 0; font-size: 0.95rem; color: var(--blue);">Desglose del Pago</h4>
-                <div id="lista_desglose">
-                    <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
-                        <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                        <input type="text" name="desglose_cedula[]" placeholder="Cédula" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                        <input type="text" inputmode="decimal" name="desglose_monto_usd[]" placeholder="Monto USD" oninput="calcDesgloseRow(this, 'usd')" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                        <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" oninput="calcDesgloseRow(this, 'bs')" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                        <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0;">&times;</button>
+                <h4 style="margin-top: 0; font-size: 0.95rem; color: var(--blue); display: flex; justify-content: space-between; align-items: center;">
+                    Desglose del Pago
+                    <div style="font-size: 0.85rem; font-weight: normal;">
+                        <input type="file" id="archivo_desglose" accept=".xlsx, .xls, .csv, .xlsm" style="display: none;" onchange="cargarArchivoDesglose(this)">
+                        <button type="button" onclick="document.getElementById('archivo_desglose').click()" style="padding: 4px 10px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            Cargar desde archivo (Excel/CSV)
+                        </button>
                     </div>
+                </h4>
+                <div id="lista_desglose">
+                    <!-- Filas de desglose se generarán en JS -->
                 </div>
                 <button type="button" onclick="agregarDesglose()" style="margin-top: 5px; padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">+ Añadir persona</button>
             </div>
@@ -1055,8 +1192,56 @@
 
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+    .swal2-container {
+        z-index: 9999 !important;
+    }
+</style>
 
 <script>
+function descargarReporteBusqueda() {
+    Swal.fire({
+        title: 'Selecciona las tablas',
+        html: `
+            <div style="text-align: left; margin: 15px auto; width: fit-content; display: flex; flex-direction: column; gap: 10px;">
+                <label style="cursor: pointer;"><input type="checkbox" id="rep_egresos" value="egreso_realizado" checked style="margin-right: 8px;"> Egresos Realizados</label>
+                <label style="cursor: pointer;"><input type="checkbox" id="rep_otros" value="otros_egresos" checked style="margin-right: 8px;"> Otros Egresos (Avances y Cambios)</label>
+                <label style="cursor: pointer;"><input type="checkbox" id="rep_traslados" value="traslados" checked style="margin-right: 8px;"> Traslados</label>
+                <label style="cursor: pointer;"><input type="checkbox" id="rep_divisas" value="egreso_divisas" checked style="margin-right: 8px;"> Egresos Divisas</label>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Generar',
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            let selected = [];
+            if(document.getElementById('rep_egresos').checked) selected.push('egreso_realizado');
+            if(document.getElementById('rep_otros').checked) selected.push('otros_egresos');
+            if(document.getElementById('rep_traslados').checked) selected.push('traslados');
+            if(document.getElementById('rep_divisas').checked) selected.push('egreso_divisas');
+            return selected;
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const fDesde = document.getElementById('fecha_desde_input')?.value || '';
+            const fHasta = document.getElementById('fecha_hasta_input')?.value || '';
+            const txt = document.getElementById('filtro-texto')?.value || '';
+            
+            let selectedCats = result.value;
+            if (selectedCats.length === 0) {
+                Swal.fire('Atención', 'Debes seleccionar al menos una tabla', 'warning');
+                return;
+            }
+
+            let url = '{{ route("finanzas.flujo_caja.reporte") }}?desde=' + encodeURIComponent(fDesde) + '&hasta=' + encodeURIComponent(fHasta);
+            if(txt) url += '&q=' + encodeURIComponent(txt);
+            url += '&cats=' + encodeURIComponent(selectedCats.join(','));
+            
+            window.open(url, '_blank');
+        }
+    });
+}
 function calcTraslado() {
     const bs = window.parseLocalNumber(document.getElementById('monto_bs')?.value) || 0;
     const bcvInput = document.querySelector('input[data-field="tasa_bcv_usd"]');
@@ -1071,9 +1256,10 @@ function calcTraslado() {
 }
 
 function toggleTraslados() {
-    const cat = document.getElementById('categoria_egreso').value;
-    const isTraslado = (cat === 'traslados');
-
+    const val = document.getElementById('categoria_egreso').value;
+    const isTraslado = val === 'traslados';
+    const isDivisas = val === 'egreso_divisas';
+    
     document.getElementById('row_receptor').style.display = isTraslado ? 'flex' : 'none';
     document.getElementById('banco_titular_receptor').required = isTraslado;
     
@@ -1081,9 +1267,10 @@ function toggleTraslados() {
     document.getElementById('lbl_monto_bs').innerText = isTraslado ? 'Monto BS' : 'Monto BS';
     
     document.getElementById('col_monto_usd').style.display = isTraslado ? 'none' : 'block';
-    document.getElementById('col_tasa_cambio').style.display = isTraslado ? 'none' : 'block';
+    document.getElementById('col_tasa_cambio').style.display = (isTraslado || isDivisas) ? 'none' : 'block';
+    document.getElementById('col_monto_bs').style.display = isDivisas ? 'none' : 'block';
     
-    document.getElementById('row_diferencial').style.display = isTraslado ? 'none' : 'flex';
+    document.getElementById('row_diferencial').style.display = (isTraslado || isDivisas) ? 'none' : 'flex';
     document.getElementById('row_tipo_gasto').style.display = isTraslado ? 'none' : 'block';
     document.getElementById('row_traslado_extra').style.display = isTraslado ? 'flex' : 'none';
     
@@ -1092,10 +1279,13 @@ function toggleTraslados() {
     const comisionTraslado = document.getElementById('comision_traslado');
     const usdNormal = document.getElementById('monto_usd');
     const usdTraslado = document.getElementById('monto_usd_traslado');
-    if (comisionNormal) comisionNormal.disabled = isTraslado;
+    if (comisionNormal) comisionNormal.disabled = (isTraslado || isDivisas);
     if (comisionTraslado) comisionTraslado.disabled = !isTraslado;
     if (usdNormal) usdNormal.disabled = isTraslado;
     if (usdTraslado) usdTraslado.disabled = !isTraslado;
+    
+    const bsNormal = document.getElementById('monto_bs');
+    if (bsNormal) bsNormal.disabled = isDivisas;
     
     // When switching to traslado mode, auto-calc USD if monto_bs already has value
     if (isTraslado) calcTraslado();
@@ -1130,6 +1320,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     if (document.getElementById('banco_titular')) window.tsBancoTitular = new TomSelect("#banco_titular", tsBankSettings);
     if (document.getElementById('banco_titular_receptor')) window.tsBancoTitularReceptor = new TomSelect("#banco_titular_receptor", tsBankSettings);
+    if (document.getElementById('beneficiario')) window.tsBeneficiario = new TomSelect("#beneficiario", tsBankSettings);
 
     // Modal functions
     window.openNuevoEgresoModal = function() {
@@ -1569,20 +1760,171 @@ function toggleDesglose() {
     const chk = document.getElementById('chk_desglose');
     const container = document.getElementById('container_desglose');
     container.style.display = chk.checked ? 'block' : 'none';
+    
+    if (chk.checked && document.getElementById('lista_desglose').children.length === 0) {
+        agregarDesglose();
+    }
 }
 
-function agregarDesglose() {
+const proveedoresList = @json($proveedores);
+// Variables para Desglose
+const sedesList = @json($sedesFinanzas);
+
+function buildOptions(list, selectedValue) {
+    let options = '<option value="">-- Seleccione --</option>';
+    list.forEach(item => {
+        options += `<option value="${item}" ${item === selectedValue ? 'selected' : ''}>${item}</option>`;
+    });
+    return options;
+}
+
+const tiposGastoList = [
+    "001 - COMPRA DE MERCANCIA", "002 - ALQUILER", "003 - NOMINA ADMINISTRATIVA", "004 - NOMINA TIENDA",
+    "005 - PUBLICIDAD", "006 - PAPELERIA Y MATERIAL DE OFICINA", "007 - MANTENIMIENTO TIENDA",
+    "008 - MANTENIMIENTO OFICINA", "009 - SERVICIOS BASICOS Y CONDOMINIO", "010 - TRANSPORTE",
+    "011 - VIATICOS", "012 - ALIMENTACION", "013 - HONORARIOS PROFESIONALES", "014 - IMPUESTOS Y PATENTES",
+    "015 - GASTOS DE REPRESENTACION", "016 - SEGUROS", "017 - GASTOS BANCARIOS", "018 - DONACIONES",
+    "019 - MATERIAL DE EMPAQUE", "020 - DOTACION DE PERSONAL", "021 - LICENCIAS Y SOFTWARE",
+    "025 - UTILIDADES PERSONAL", "026 - VACACIONES PERSONAL", "027 - NOMINA LEGAL", 
+    "028 - NOMINA ESPECIAL", "029 - PRESTACIONES SOCIALES",
+    "083 - GASTOS MEDICOS EMPLEADOS", "084 - ABONO TIENDA EMPLEADOS",
+    "090 - PRESTAMO A EMPLEADO", "091 - OTROS EGRESOS", "092 - PAGO DE SERVICIOS ADICIONALES",
+    "093 - GASTOS DIRECTIVO", "094 - SALDO MOVISTAR", "095 - TASAS Y CONTRIBUCIONES",
+    "097 - INSTALACIONES Y MEJORAS GALPON Y DEPOSITO", "098 - MEJORAS INSTALACIONES TIENDAS",
+    "099 - DEVOLUCIONES CLIENTES", "002 - IMPUESTO MUNICIPAL (ALCALDIAS)"
+];
+
+function buildTipoGastoOptions(selectedValue) {
+    let options = '<option value="">-- Tipo Gasto --</option>';
+    tiposGastoList.forEach(item => {
+        options += `<option value="${item}" ${item === selectedValue ? 'selected' : ''}>${item}</option>`;
+    });
+    return options;
+}
+
+window.cargarArchivoDesglose = async function(input) {
+    if (!input.files || input.files.length === 0) return;
+    
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('archivo', file);
+    formData.append('_token', document.querySelector('input[name="_token"]').value);
+
+    // native alert as fallback to ensure it fires
+    // console.log("Procesando archivo...");
+    Swal.fire({
+        title: 'Procesando archivo',
+        text: 'Leyendo datos y buscando clientes...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        const response = await fetch('{{ route("finanzas.parse_desglose") }}', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json'
+            },
+            body: formData
+        });
+        
+        const res = await response.json();
+        
+        if (!res.ok) {
+            Swal.fire('Error', res.error || 'Ocurrió un error al procesar el archivo', 'error');
+            input.value = '';
+            return;
+        }
+
+        const data = res.data;
+        if (data.length === 0) {
+            Swal.fire('Atención', 'No se encontraron registros válidos en el archivo', 'warning');
+            input.value = '';
+            return;
+        }
+
+        // Preguntar por sede y tipo de gasto para aplicar a todos
+        const { value: formValues } = await Swal.fire({
+            title: 'Datos extraídos correctamente',
+            html: `
+                <p style="font-size: 14px; color: #475569; margin-bottom: 15px;">Se encontraron <b>${data.length}</b> registros. Selecciona a dónde pertenecen (opcional):</p>
+                <div style="text-align: left; display: flex; flex-direction: column; gap: 10px;">
+                    <label>Sede (opcional)</label>
+                    <select id="swal_sede" class="swal2-select" style="margin: 0; width: 100%; font-size: 14px; padding: 6px;">
+                        <option value="">-- Ninguna --</option>
+                        ${sedesList.map(s => `<option value="${s}">${s}</option>`).join('')}
+                    </select>
+                    
+                    <label style="margin-top: 10px;">Tipo de Gasto (opcional)</label>
+                    <select id="swal_tg" class="swal2-select" style="margin: 0; width: 100%; font-size: 14px; padding: 6px;">
+                        <option value="">-- Ninguno --</option>
+                        ${tiposGastoList.map(t => `<option value="${t}">${t}</option>`).join('')}
+                    </select>
+                </div>
+            `,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: 'Aplicar y añadir',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                return {
+                    sede: document.getElementById('swal_sede').value,
+                    tg: document.getElementById('swal_tg').value
+                }
+            }
+        });
+
+        if (formValues) {
+            let tgSelected = formValues.tg === 'OTROS' ? '' : formValues.tg;
+            
+            data.forEach(row => {
+                // Formatear monto bs
+                let montoBsFormateado = row.monto.toString().replace('.', ',');
+                agregarDesglose(row.cedula, '', montoBsFormateado, formValues.sede, tgSelected);
+            });
+            
+            Swal.fire('Éxito', `Se agregaron ${data.length} personas al desglose.`, 'success');
+        }
+
+    } catch (err) {
+        console.error(err);
+        Swal.fire('Error', 'No se pudo conectar con el servidor', 'error');
+    }
+    
+    // Limpiar input
+    input.value = '';
+}
+
+function agregarDesglose(ced = '', usd = '', bs = '', sede = '', tipoGasto = '') {
     const lista = document.getElementById('lista_desglose');
+    const sedeOptions = buildOptions(sedesList, sede);
+    const tgOptions = buildTipoGastoOptions(tipoGasto);
+    
+    // Generar un ID único para los selects
+    const uid = Date.now() + Math.floor(Math.random() * 1000);
+
     const html = `
-        <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
-            <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="text" name="desglose_cedula[]" placeholder="Cédula" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="text" inputmode="decimal" name="desglose_monto_usd[]" placeholder="Monto USD" oninput="calcDesgloseRow(this, 'usd')" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" oninput="calcDesgloseRow(this, 'bs')" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0;">&times;</button>
+        <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; background: white; padding: 10px; border-radius: 6px; border: 1px solid #ccc;">
+            <div style="flex: 1 1 100%; display: flex; gap: 8px;">
+                <select id="sel_sede_${uid}" name="desglose_sede[]" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    ${sedeOptions}
+                </select>
+                <select id="sel_tg_${uid}" name="desglose_tipo_gasto[]" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    ${tgOptions}
+                </select>
+            </div>
+            <div style="flex: 1 1 100%; display: flex; gap: 8px; margin-top: 4px; box-sizing: border-box;">
+                <input type="text" name="desglose_cedula[]" placeholder="Cédula/RIF" value="${ced}" style="flex: 2 1 0%; min-width: 0; width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" inputmode="decimal" name="desglose_monto_usd[]" placeholder="Monto USD" value="${usd}" oninput="calcDesgloseRow(this, 'usd')" style="flex: 1 1 0%; min-width: 0; width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" value="${bs}" oninput="calcDesgloseRow(this, 'bs')" style="flex: 1 1 0%; min-width: 0; width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                <button type="button" onclick="this.closest('.row-desglose').remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0; box-sizing: border-box;">&times;</button>
+            </div>
         </div>
     `;
     lista.insertAdjacentHTML('beforeend', html);
+    
+    // Inicializar TomSelect en los nuevos selects
+    new TomSelect(`#sel_tg_${uid}`, { create: false, sortField: { field: "text", direction: "asc" }, placeholder: '-- Tipo Gasto --' });
 }
 
 function calcDesgloseRow(input, source) {
@@ -1615,7 +1957,10 @@ function verDesglose(desglose) {
         tbodyHtml += `
             <tr>
                 <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${item.cedula || '-'}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${item.beneficiario || '-'}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">
+                    <div style="font-weight: 500;">Sede: ${item.sede || '-'}</div>
+                    <div style="font-size: 0.8rem; color: #64748b;">Gasto: ${item.tipo_gasto || '-'}</div>
+                </td>
                 <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 500;">Bs. ${monto.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
                 ${hasUsd ? `<td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #0284c7;">$ ${montoUsd.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>` : ''}
             </tr>
@@ -1803,7 +2148,7 @@ function abrirEditarEgreso(mov) {
         chk.checked = true;
         containerDes.style.display = 'block';
         mov.desglose.forEach(item => {
-            agregarDesgloseEdit(item.beneficiario, item.cedula, item.monto_usd, item.monto);
+            agregarDesgloseEdit(item.cedula, item.monto_usd, item.monto, item.sede, item.tipo_gasto);
         });
     } else {
         chk.checked = false;
@@ -1822,17 +2167,34 @@ function toggleDesgloseEdit() {
     document.getElementById('container_desglose_edit').style.display = chk.checked ? 'block' : 'none';
 }
 
-function agregarDesgloseEdit(benef, ced, monto_usd, monto) {
+function agregarDesgloseEdit(ced, monto_usd, monto, sede = '', tipoGasto = '') {
     const lista = document.getElementById('lista_desglose_edit');
+    const sedeOptions = buildOptions(sedesList, sede);
+    const tgOptions = buildTipoGastoOptions(tipoGasto);
+
+    const uid = Date.now() + Math.floor(Math.random() * 1000);
+
     const html = `
-        <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
-            <input type="text" name="desglose_beneficiario[]" placeholder="Beneficiario" value="${benef || ''}" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="text" name="desglose_cedula[]" placeholder="Cédula" value="${ced || ''}" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="text" inputmode="decimal" name="desglose_monto_usd[]" placeholder="Monto USD" value="${monto_usd || ''}" oninput="calcDesgloseRow(this, 'usd')" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" value="${monto || ''}" oninput="calcDesgloseRow(this, 'bs')" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            <button type="button" onclick="this.parentElement.remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0;">&times;</button>
+        <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; background: white; padding: 10px; border-radius: 6px; border: 1px solid #ccc;">
+            <div style="flex: 1 1 100%; display: flex; gap: 8px;">
+                <select id="sel_sede_edit_${uid}" name="desglose_sede[]" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    ${sedeOptions}
+                </select>
+                <select id="sel_tg_edit_${uid}" name="desglose_tipo_gasto[]" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    ${tgOptions}
+                </select>
+            </div>
+            <div style="flex: 1 1 100%; display: flex; gap: 8px; margin-top: 4px; box-sizing: border-box;">
+                <input type="text" name="desglose_cedula[]" placeholder="Cédula" value="${ced || ''}" style="flex: 2 1 0%; min-width: 0; width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" inputmode="decimal" name="desglose_monto_usd[]" placeholder="Monto USD" value="${monto_usd || ''}" oninput="calcDesgloseRow(this, 'usd')" style="flex: 1 1 0%; min-width: 0; width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" value="${monto || ''}" oninput="calcDesgloseRow(this, 'bs')" style="flex: 1 1 0%; min-width: 0; width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                <button type="button" onclick="this.closest('.row-desglose').remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0; box-sizing: border-box;">&times;</button>
+            </div>
         </div>`;
     lista.insertAdjacentHTML('beforeend', html);
+    
+    // Inicializar TomSelect en los nuevos selects
+    new TomSelect(`#sel_tg_edit_${uid}`, { create: false, sortField: { field: "text", direction: "asc" }, placeholder: '-- Tipo Gasto --' });
 }
 
 function validarDesgloseEdit(event) {
@@ -2183,7 +2545,7 @@ function limpiarFiltros() {
             <div id="container_desglose_edit" style="display: none; background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px;">
                 <h4 style="margin-top: 0; font-size: 0.95rem; color: var(--blue);">Desglose del Pago</h4>
                 <div id="lista_desglose_edit"></div>
-                <button type="button" onclick="agregarDesgloseEdit('','','','')" style="margin-top: 5px; padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">+ Añadir persona</button>
+                <button type="button" onclick="agregarDesgloseEdit('','','','','')" style="margin-top: 5px; padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">+ Añadir persona</button>
             </div>
 
             <!-- Buttons -->

@@ -46,12 +46,14 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         <p class="lead" style="margin: 4px 0 0;">Analice el stock global para compras o redistribución de inventario entre sucursales.</p>
     </div>
     <div style="display: flex; gap: 8px;">
+        @if(!auth()->user()->isMarketing())
         <a href="{{ route('comprador.sustitutos') }}" class="btn" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-weight: 600; font-size: 0.9rem; border: none; border-radius: 6px; background-color: #10b981; color: #ffffff; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <span>🔄</span> Análisis de Sustitutos
         </a>
         <a href="{{ route('comprador.historico') }}" class="btn" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-weight: 600; font-size: 0.9rem; border: none; border-radius: 6px; background-color: #2563eb; color: #ffffff; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <span>📊</span> Histórico Mensual
         </a>
+        @endif
     </div>
 </div>
 
@@ -65,11 +67,19 @@ table.data-table tbody tr.row-mala-distribucion:hover {
     @else
         <button type="button" class="tab-btn active" onclick="localStorage.setItem('activeCompradorTab', 'sobrestock-tab'); window.location.href = window.location.pathname;">Sobre Stock / Sin Rotación</button>
     @endif
-    <button type="button" class="tab-btn" onclick="switchTab('qpedir-tab', this)">Q Pedir @if(isset($pedidosSolicitados) && $pedidosSolicitados->isNotEmpty()) ({{ $pedidosSolicitados->count() }}) @endif</button>
+    @if(!auth()->user()->isMarketing())
+        <button type="button" class="tab-btn" onclick="switchTab('qpedir-tab', this)">Q Pedir @if(isset($pedidosSolicitados) && $pedidosSolicitados->isNotEmpty()) ({{ $pedidosSolicitados->count() }}) @endif</button>
+    @endif
+    @if(!auth()->user()->isMarketing())
+        <a href="{{ route('comprador.existencias') }}" class="tab-btn" style="text-decoration: none; color: inherit; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;">
+            <svg style="width: 16px; height: 16px; margin-right: 6px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+            Existencias Globales
+        </a>
+    @endif
     @if(auth()->user()->isMarketing() || auth()->user()->isAdmin())
         <button type="button" class="tab-btn" onclick="switchTab('publicidad-tab', this)">Efectividad Publicidad</button>
     @endif
-    @if(!auth()->user()->isComprador())
+    @if(!auth()->user()->isComprador() && !auth()->user()->isMarketing())
         <button type="button" class="tab-btn" onclick="switchTab('cobranzas-tab', this)">Cobranzas</button>
     @endif
 </div>
@@ -269,38 +279,74 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 <div id="qpedir-tab" class="tab-content" style="display: none;">
     @if(isset($pedidosSolicitados) && $pedidosSolicitados->isNotEmpty())
     <div class="panel pedidos-card" style="background: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; padding: 20px; border-left: 4px solid #f59e0b; margin-bottom: 24px;">
-        <h2 style="margin: 0 0 16px; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-            <span style="background:#fef3c7;color:#b45309;padding:4px 10px;border-radius:6px;font-size:0.85rem;">Q Pedir</span>
-            Solicitudes pendientes ({{ $pedidosSolicitados->count() }})
+        <h2 style="margin: 0 0 16px; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="background:#fef3c7;color:#b45309;padding:4px 10px;border-radius:6px;font-size:0.85rem;">Q Pedir</span>
+                Solicitudes pendientes ({{ collect($pedidosSolicitados)->count() }})
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <form method="GET" action="{{ route('comprador.dashboard') }}" style="display:flex; gap: 4px; align-items: center;">
+                    <input type="date" name="q_pedir_date" value="{{ request('q_pedir_date') }}" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; font-size: 0.8rem;" onchange="this.form.submit()">
+                    @if(request('q_pedir_date'))
+                        <a href="{{ route('comprador.dashboard') }}" style="text-decoration: none; color: #ef4444; font-size: 0.8rem; margin-right: 8px;">&times; Quitar</a>
+                    @endif
+                </form>
+                <a href="{{ route('comprador.pedidos.excel') }}" class="btn-reporte" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #047857; background: #059669; color: white; text-decoration: none;">Excel Detallado</a>
+                <a href="{{ route('comprador.pedidos.diario') }}" class="btn-reporte" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #1e3a8a; background: #2563eb; color: white; text-decoration: none;">PDF Listado Diario</a>
+                <button type="button" onclick="generatePdfCharts()" class="btn-reporte" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #9333ea; background: #a855f7; color: white;">PDF Gráficos</button>
+            </div>
         </h2>
         <p style="margin:0 0 12px;color:#64748b;font-size:0.88rem;">
             Productos solicitados desde el login. Revisa y marca como atendido cuando los proceses.
         </p>
+
+        <!-- Hidden form for PDF Charts -->
+        <form id="pdfChartsForm" method="POST" action="{{ route('comprador.pedidos.pdf') }}" style="display:none;">
+            @csrf
+            <input type="hidden" name="chart_pie" id="pdf_chart_pie">
+            <input type="hidden" name="chart_bar" id="pdf_chart_bar">
+        </form>
+
+        <div style="position: absolute; left: -9999px; visibility: hidden; width: 600px; height: 400px;">
+            <canvas id="hiddenPieChart" width="400" height="400"></canvas>
+            <canvas id="hiddenBarChart" width="600" height="400"></canvas>
+        </div>
         @foreach($pedidosSolicitados as $pedido)
             <div class="pedido-item" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap;">
                 <div>
-                    <div style="font-weight:600;">{{ $pedido->producto }}</div>
+                    <div style="font-weight:600; display:flex; align-items:center; gap:8px;">
+                        {{ $pedido->producto }}
+                        @if($pedido->frecuencia > 5)
+                            <span style="background:#10b981;color:white;padding:2px 8px;border-radius:12px;font-size:0.75rem;">Pedidas: {{ $pedido->frecuencia }} veces</span>
+                        @else
+                            <span style="background:#e2e8f0;color:#475569;padding:2px 8px;border-radius:12px;font-size:0.75rem;">Pedidas: {{ $pedido->frecuencia }} veces</span>
+                        @endif
+                    </div>
                     <div style="font-size:0.8rem;color:#64748b;font-family:monospace;">
                         {{ $pedido->codigo }}
                         @if($pedido->categoria) &middot; {{ $pedido->categoria }} @endif
-                        @if($pedido->proveedor) &middot; {{ $pedido->proveedor }} @endif
                     </div>
                     <div style="font-size:0.78rem;color:#64748b;margin-top:4px;">
-                        Solicitado {{ $pedido->created_at->diffForHumans() }}
-                        @if($pedido->solicitante) por <strong>{{ $pedido->solicitante }}</strong> @endif
-                        @if($pedido->notas) &mdash; {{ $pedido->notas }} @endif
+                        Última solicitud: {{ \Carbon\Carbon::parse($pedido->created_at)->diffForHumans() }}
                     </div>
                 </div>
-                <div class="pedido-actions" style="display: flex; gap: 8px; flex-shrink: 0;">
-                    <form method="POST" action="{{ route('comprador.pedidos.atender', $pedido) }}">
-                        @csrf
-                        <button type="submit" class="btn-atender" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #10b981; background: #10b981; color: white;">Atendido</button>
-                    </form>
-                    <form method="POST" action="{{ route('comprador.pedidos.destroy', $pedido) }}" onsubmit="return confirm('¿Eliminar esta solicitud?')">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit" class="btn-eliminar" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #fecaca; background: #fff; color: #ef4444;">Eliminar</button>
-                    </form>
+                <div class="pedido-actions" style="display: flex; gap: 8px; flex-shrink: 0; align-items: center;">
+                    @if($pedido->estado === 'pendiente' || !$pedido->estado)
+                        <form method="POST" action="{{ route('comprador.pedidos.comprado') }}">
+                            @csrf
+                            <input type="hidden" name="producto" value="{{ $pedido->producto }}">
+                            <button type="submit" class="btn-atender" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #10b981; background: #10b981; color: white;">Comprado</button>
+                        </form>
+                        <form method="POST" action="{{ route('comprador.pedidos.fuera_mercado') }}" onsubmit="return confirm('¿Marcar como fuera de mercado (no se puede comprar)?')">
+                            @csrf
+                            <input type="hidden" name="producto" value="{{ $pedido->producto }}">
+                            <button type="submit" class="btn-eliminar" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #fecaca; background: #fff; color: #ef4444;">Fuera de mercado</button>
+                        </form>
+                    @elseif($pedido->estado === 'comprado')
+                        <span style="color: #10b981; font-weight: 600; font-size: 0.9rem; padding: 6px;">✓ Comprado</span>
+                    @elseif($pedido->estado === 'fuera_de_mercado')
+                        <span style="color: #ef4444; font-weight: 600; font-size: 0.9rem; padding: 6px;">✗ Fuera de mercado</span>
+                    @endif
                 </div>
             </div>
         @endforeach
@@ -1589,6 +1635,89 @@ document.getElementById('provider-modal').addEventListener('click', function(e) 
         closeProviderModal();
     }
 });
+
+// Include Chart.js dynamically if not present
+if (typeof Chart === 'undefined') {
+    const script = document.createElement('script');
+    script.src = "https://cdn.jsdelivr.net/npm/chart.js";
+    document.head.appendChild(script);
+}
+
+function generatePdfCharts() {
+    const stats = @json($qPedirStats ?? []);
+    if (!stats.global || Object.keys(stats.global).length === 0) {
+        alert("No hay datos suficientes para generar gráficos.");
+        return;
+    }
+
+    // Colors mapping
+    const colors = {
+        'comprado': '#10b981',
+        'fuera_de_mercado': '#ef4444',
+        'pendiente': '#f59e0b'
+    };
+    const labels = {
+        'comprado': 'Comprado',
+        'fuera_de_mercado': 'Fuera de mercado',
+        'pendiente': 'Pendiente / Sin Acción'
+    };
+
+    // 1. Pie Chart
+    const pieCtx = document.getElementById('hiddenPieChart').getContext('2d');
+    const pieLabels = Object.keys(stats.global).map(k => labels[k] || k);
+    const pieData = Object.values(stats.global);
+    const pieBg = Object.keys(stats.global).map(k => colors[k] || '#ccc');
+    
+    new Chart(pieCtx, {
+        type: 'pie',
+        data: {
+            labels: pieLabels,
+            datasets: [{ data: pieData, backgroundColor: pieBg }]
+        },
+        options: {
+            animation: false,
+            responsive: false
+        }
+    });
+
+    // 2. Bar Chart
+    const barCtx = document.getElementById('hiddenBarChart').getContext('2d');
+    const categories = Object.keys(stats.categorias || {});
+    
+    const datasets = Object.keys(colors).map(estado => {
+        return {
+            label: labels[estado],
+            backgroundColor: colors[estado],
+            data: categories.map(c => stats.categorias[c][estado] || 0)
+        };
+    });
+
+    new Chart(barCtx, {
+        type: 'bar',
+        data: {
+            labels: categories,
+            datasets: datasets
+        },
+        options: {
+            animation: false,
+            responsive: false,
+            scales: {
+                x: { stacked: true },
+                y: { stacked: true, beginAtZero: true }
+            }
+        }
+    });
+
+    // Timeout para asegurar render
+    setTimeout(() => {
+        const pieBase64 = document.getElementById('hiddenPieChart').toDataURL('image/png');
+        const barBase64 = document.getElementById('hiddenBarChart').toDataURL('image/png');
+
+        document.getElementById('pdf_chart_pie').value = pieBase64;
+        document.getElementById('pdf_chart_bar').value = barBase64;
+        document.getElementById('pdfChartsForm').submit();
+    }, 500);
+}
 </script>
     </div>
 </div>

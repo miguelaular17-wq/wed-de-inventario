@@ -135,7 +135,7 @@ class FinanzasController extends Controller
             ->where('oculto', false)
             ->where(function($q) {
                 $q->whereNull('categoria_egreso')
-                  ->orWhere('categoria_egreso', '!=', 'traslados');
+                  ->orWhereNotIn('categoria_egreso', ['traslados', 'egreso_divisas']);
             })
             ->get();
 
@@ -173,12 +173,16 @@ class FinanzasController extends Controller
         Profiler::start('FinanzasController::flujoCaja');
 
         Profiler::start('FinanzasController::flujoCaja query');
-        $fecha_filtro = request('fecha_filtro', date('Y-m-d'));
-        $movimientos = FlujoCaja::where('fecha', $fecha_filtro)->where('oculto', false)->orderBy('fecha', 'desc')->get();
+        $fecha_desde = request('fecha_desde', request('fecha_filtro', date('Y-m-d')));
+        $fecha_hasta = request('fecha_hasta', request('fecha_filtro', date('Y-m-d')));
+        $fecha_filtro = $fecha_hasta;
+
+        $movimientos = FlujoCaja::whereBetween('fecha', [$fecha_desde, $fecha_hasta])->where('oculto', false)->orderBy('fecha', 'desc')->get();
         Profiler::stop('FinanzasController::flujoCaja query');
         $egresos_realizados = $movimientos->where('categoria_egreso', 'egreso_realizado');
         $otros_egresos = $movimientos->where('categoria_egreso', 'otros_egresos');
         $traslados = $movimientos->where('categoria_egreso', 'traslados');
+        $egresos_divisas = $movimientos->where('categoria_egreso', 'egreso_divisas');
         
         $cuentas = $this->getCuentas(); // Mantenemos para el dropdown si es necesario o usamos las nuevas
         Profiler::start('FinanzasController::flujoCaja cuentas');
@@ -207,18 +211,29 @@ class FinanzasController extends Controller
         $total_diferencial_cambiario = $egresos_realizados->sum('diferencial_cambiario') 
                                      + $otros_egresos->sum('diferencial_cambiario');
         
+        $proveedores = \Illuminate\Support\Facades\DB::table('inventario_v2.productos')
+                        ->whereNotNull('proveedor')
+                        ->where('proveedor', '!=', '')
+                        ->distinct()
+                        ->orderBy('proveedor')
+                        ->pluck('proveedor');
+        
         Profiler::start('FinanzasController::flujoCaja Blade render');
         $result = view('finanzas.flujo_caja', compact(
             'movimientos', 
             'egresos_realizados', 
             'otros_egresos',
             'traslados',
+            'egresos_divisas',
             'cuentas',
             'cuentasBancarias',
             'resumen',
             'total_salidas_bs',
             'total_diferencial_cambiario',
-            'fecha_filtro'
+            'fecha_filtro',
+            'fecha_desde',
+            'fecha_hasta',
+            'proveedores'
         ));
         Profiler::stop('FinanzasController::flujoCaja Blade render');
 
@@ -310,7 +325,7 @@ class FinanzasController extends Controller
         }
 
         $data = $request->validate([
-            'categoria_egreso' => 'required|in:egreso_realizado,otros_egresos,traslados',
+            'categoria_egreso' => 'required|in:egreso_realizado,otros_egresos,traslados,egreso_divisas',
             'banco_titular' => 'required|string',
             'banco_titular_receptor' => 'nullable|string',
             'referencia' => 'nullable|string|max:255',
@@ -322,12 +337,14 @@ class FinanzasController extends Controller
             'tipo_gasto' => 'nullable|string',
             'motivo' => 'nullable|string',
             'sede' => 'nullable|string',
+            'beneficiario' => 'nullable|string',
             'placa_vehiculo' => 'nullable|string',
             'fecha' => 'required|date',
-            'desglose_beneficiario' => 'nullable|array',
             'desglose_cedula' => 'nullable|array',
             'desglose_monto' => 'nullable|array',
             'desglose_monto_usd' => 'nullable|array',
+            'desglose_sede' => 'nullable|array',
+            'desglose_tipo_gasto' => 'nullable|array',
         ]);
 
         if ($data['categoria_egreso'] === 'traslados') {
@@ -352,25 +369,34 @@ class FinanzasController extends Controller
 
         $banco_receptor = null;
         $titular_receptor = null;
-        if (!empty($data['banco_titular_receptor'])) {
-            $cuentaReceptorInfo = explode('|', $data['banco_titular_receptor']);
-            $banco_receptor = $cuentaReceptorInfo[0] ?? null;
-            $titular_receptor = $cuentaReceptorInfo[1] ?? null;
+        
+        if ($data['categoria_egreso'] === 'traslados') {
+            if (!empty($data['banco_titular_receptor'])) {
+                $cuentaReceptorInfo = explode('|', $data['banco_titular_receptor']);
+                $banco_receptor = $cuentaReceptorInfo[0] ?? null;
+                $titular_receptor = $cuentaReceptorInfo[1] ?? null;
+            }
+        } else {
+            if (!empty($data['beneficiario'])) {
+                $titular_receptor = $data['beneficiario'];
+            }
         }
 
         $resumen = \App\Models\FinanzasResumen::where('fecha', date('Y-m-d'))->first();
         $tasa_bcv = $resumen ? ($resumen->tasa_bcv_usd ?: 1) : 1;
         
-        $monto_usd = $data['monto_usd'] ?: 0;
-        $monto_bs = $data['monto_bs'] ?: 0;
+        $monto_usd = $data['monto_usd'] ?? 0;
+        $monto_bs = $data['monto_bs'] ?? 0;
+        $comision = $data['comision'] ?? 0;
         
         $diferencial_cambiario = array_key_exists('diferencial_cambiario', $data) && $data['diferencial_cambiario'] !== null 
                                  ? $data['diferencial_cambiario'] 
                                  : null;
                                  
-        $calc_usd = $monto_usd > 0 ? $monto_usd : (isset($data['tasa_cambio']) && $data['tasa_cambio'] > 0 ? round($monto_bs / $data['tasa_cambio'], 2) : null);
+        $tasa_cambio = $data['tasa_cambio'] ?? null;
+        $calc_usd = $monto_usd > 0 ? $monto_usd : ($tasa_cambio > 0 ? round($monto_bs / $tasa_cambio, 2) : null);
 
-        if ($diferencial_cambiario === null && $data['categoria_egreso'] !== 'traslados' && $tasa_bcv > 0) {
+        if ($diferencial_cambiario === null && $data['categoria_egreso'] !== 'traslados' && $data['categoria_egreso'] !== 'egreso_divisas' && $tasa_bcv > 0) {
             $diferencial_cambiario = (($calc_usd * $tasa_bcv) - $monto_bs) / $tasa_bcv;
         }
         $diferencial_cambiario = $diferencial_cambiario ?: 0;
@@ -392,15 +418,16 @@ class FinanzasController extends Controller
         }
 
         $desglose = null;
-        if (!empty($data['desglose_beneficiario'])) {
+        if (!empty($data['desglose_monto'])) {
             $desglose = [];
-            foreach ($data['desglose_beneficiario'] as $index => $beneficiario) {
+            foreach ($data['desglose_monto'] as $index => $monto_val) {
                 $cedula = $data['desglose_cedula'][$index] ?? '';
-                $monto_desglose = $data['desglose_monto'][$index] ?? 0;
-                if ($beneficiario || $cedula || $monto_desglose) {
+                $monto_desglose = $monto_val ?? 0;
+                if ($cedula || $monto_desglose) {
                     $desglose[] = [
-                        'beneficiario' => $beneficiario,
                         'cedula' => $cedula,
+                        'sede' => $data['desglose_sede'][$index] ?? '',
+                        'tipo_gasto' => $data['desglose_tipo_gasto'][$index] ?? '',
                         'monto' => (float)$monto_desglose,
                         'monto_usd' => (float)($data['desglose_monto_usd'][$index] ?? 0),
                     ];
@@ -422,10 +449,10 @@ class FinanzasController extends Controller
             'titular_receptor'      => $titular_receptor,
             'referencia'            => $data['referencia'],
             'monto_usd'             => $calc_usd,
-            'tasa_cambio'           => $data['tasa_cambio'],
+            'tasa_cambio'           => $tasa_cambio,
             'diferencial_cambiario' => $diferencial_cambiario,
-            'monto_bs'              => $data['monto_bs'],
-            'comision'              => $data['comision'],
+            'monto_bs'              => $monto_bs,
+            'comision'              => $comision,
             'tipo_gasto'            => $data['tipo_gasto'] ?? null,
             'motivo'                => $data['motivo'],
             'sede'                  => $data['sede'] ?? null,
@@ -679,10 +706,11 @@ class FinanzasController extends Controller
                 'monto_usd' => $calc_usd,
                 'tasa_cambio' => $egresoData['tasa_cambio'] ?? null,
                 'diferencial_cambiario' => $diferencial_cambiario,
-                'monto_bs' => $egresoData['monto_bs'],
+                'monto_bs' => $egresoData['monto_bs'] ?? 0,
                 'comision' => $egresoData['comision'] ?? 0,
                 'tipo_gasto' => $egresoData['tipo_gasto'] ?? null,
-                'motivo' => $egresoData['motivo'],
+                'motivo' => $egresoData['motivo'] ?? null,
+                'egreso_divisas' => $egresoData['egreso_divisas'] ?? false,
             ]);
         }
 
@@ -721,10 +749,23 @@ class FinanzasController extends Controller
         }
         unset($tits);
 
-        // 2. Líneas bancarias cargadas (mostramos las de hoy y ayer — sin depender de session_id)
-        $fecha_desde = now()->subDays(1)->startOfDay();
-        $lineas_query = \App\Models\ConciliacionLinea::where('created_at', '>=', $fecha_desde)
-            ->orderBy('fecha');
+        // 2. Líneas bancarias cargadas
+        $fecha_desde = $request->input('fecha_desde') ? \Carbon\Carbon::parse($request->input('fecha_desde'))->format('Y-m-d') : null;
+        $fecha_hasta = $request->input('fecha_hasta') ? \Carbon\Carbon::parse($request->input('fecha_hasta'))->format('Y-m-d') : null;
+
+        $lineas_query = \App\Models\ConciliacionLinea::query()->orderBy('fecha');
+        
+        if ($fecha_desde) {
+            $lineas_query->where('fecha', '>=', $fecha_desde);
+        } else {
+            // Default behavior if no filter: last 2 days of uploads (created_at)
+            $lineas_query->where('created_at', '>=', now()->subDays(1)->startOfDay());
+        }
+        
+        if ($fecha_hasta) {
+            $lineas_query->where('fecha', '<=', $fecha_hasta);
+        }
+
         if ($banco_filtro) {
             $lineas_query->whereRaw('LOWER(banco) = ?', [strtolower(trim($banco_filtro))]);
         }
@@ -808,11 +849,21 @@ class FinanzasController extends Controller
             'cobro de comision', 'tarifa por',
         ];
 
-        // 5. Egresos del día anterior sin conciliar (para en_transito)
-        $ayer = now()->subDay()->format('Y-m-d');
+        // 5. Egresos del sistema (en tránsito)
         $egresos_query = \App\Models\FlujoCaja::where('tipo', 'egreso')
-            ->where('es_conciliado', false)
-            ->where('fecha', $ayer);
+            ->where('es_conciliado', false);
+            
+        if ($fecha_desde) {
+            $egresos_query->where('fecha', '>=', $fecha_desde);
+        } else {
+            $ayer = now()->subDay()->format('Y-m-d');
+            $egresos_query->where('fecha', '>=', $ayer);
+        }
+        
+        if ($fecha_hasta) {
+            $egresos_query->where('fecha', '<=', $fecha_hasta);
+        }
+
         if ($banco_filtro) {
             $egresos_query->whereRaw('LOWER(banco) = ?', [strtolower(trim($banco_filtro))]);
         }
@@ -912,13 +963,16 @@ class FinanzasController extends Controller
                     'flujo_id'   => $e->id,
                 ])->values();
 
-            // Comisiones
-            $comisiones = $lineas_comisiones->map(fn($l) => [
-                'fecha'       => $l->fecha,
-                'descripcion' => $l->descripcion,
-                'referencia'  => $l->referencia,
-                'monto'       => $l->monto,
-            ])->values();
+            // Comisiones agrupadas por descripción
+            $comisiones = $lineas_comisiones->groupBy('descripcion')->map(function($group) {
+                $first = $group->first();
+                return [
+                    'fecha'       => $first->fecha,
+                    'descripcion' => $first->descripcion,
+                    'referencia'  => $group->count() > 1 ? 'VARIAS (' . $group->count() . ')' : $first->referencia,
+                    'monto'       => $group->sum('monto'),
+                ];
+            })->values();
 
             $total_conciliados   = $conciliados->sum('monto');
             $total_transito      = $en_transito->sum('monto_bs');
@@ -1452,6 +1506,123 @@ class FinanzasController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
+    public function reporteBancoPdf(Request $request) {
+        $bk_req = strtolower(trim($request->query('banco', '')));
+        $tit_req = strtolower(trim($request->query('titular', '')));
+        
+        if (!$bk_req) {
+            return redirect()->back()->with('error', 'Banco no especificado.');
+        }
+
+        $fecha_desde = now()->subDays(1)->startOfDay();
+        $lineas_query = \App\Models\ConciliacionLinea::where('created_at', '>=', $fecha_desde)
+            ->whereRaw('LOWER(banco) = ?', [$bk_req]);
+        $lineas = $lineas_query->get();
+
+        $ayer = now()->subDay()->format('Y-m-d');
+        $egresos_query = \App\Models\FlujoCaja::where('tipo', 'egreso')
+            ->where('es_conciliado', false)
+            ->where('fecha', $ayer)
+            ->whereRaw('LOWER(banco) = ?', [$bk_req]);
+        $egresos_ayer = $egresos_query->orderBy('id')->get();
+
+        $comision_keywords = [
+            'comision', 'comisión', 'commission', 'mantenimiento', 'maintenance',
+            'cargo mensual', 'servicio', 'below minimum', 'administracion', 'administración',
+            'com.ref.banc', 'com mtto pos', 'comis. cr.i',
+            'servicio uso punto', 'comision intervencion', 'comision credito inmediato',
+            'comision por transferencia', 'tarifa mantenimiento', 'descuento tarjeta', 'emision edo',
+            'com mantenimiento', 'cobro comision', 'com pago otr', 'comision cobro centralizado',
+            'comis uso canal', 'stament service',
+            'serv mtto',
+            'cobro de comision', 'tarifa por',
+        ];
+
+        $lineas_banco = $lineas->filter(function($l) use ($tit_req) {
+            $ltit = strtolower(trim($l->titular ?? ''));
+            return $tit_req === '' || $ltit === $tit_req;
+        });
+
+        $lineas_comisiones = $lineas_banco->filter(function($l) use ($comision_keywords) {
+            $desc = strtolower($l->descripcion ?? '');
+            foreach ($comision_keywords as $kw) {
+                if (strpos($desc, $kw) !== false) return true;
+            }
+            return false;
+        });
+        $lineas_normales = $lineas_banco->diff($lineas_comisiones);
+
+        $conciliados = $lineas_normales->where('estado', 'conciliado')
+            ->map(function($l) {
+                $flujo = $l->flujo_caja_id ? \App\Models\FlujoCaja::find($l->flujo_caja_id) : null;
+                return [
+                    'fecha'       => $l->fecha,
+                    'referencia'  => $l->referencia,
+                    'descripcion' => $l->descripcion,
+                    'motivo'      => $flujo ? ($flujo->motivo ?: $flujo->concepto) : '-',
+                    'tipo_gasto'  => $flujo ? ($flujo->tipo_gasto ?: $flujo->categoria_egreso) : '-',
+                    'monto'       => $l->monto,
+                    'tipo'        => $l->tipo,
+                ];
+            })->values();
+
+        $sin_registrar = $lineas_normales->where('estado', 'pendiente')
+            ->map(fn($l) => [
+                'fecha'       => $l->fecha,
+                'referencia'  => $l->referencia,
+                'descripcion' => $l->descripcion,
+                'monto'       => $l->monto,
+                'tipo'        => $l->tipo,
+                'linea_id'    => $l->id,
+            ])->values();
+
+        $en_transito = $egresos_ayer
+            ->filter(function($e) use ($tit_req) {
+                $etit = strtolower(trim($e->titular ?? ''));
+                return $tit_req === '' || $etit === $tit_req;
+            })
+            ->map(fn($e) => [
+                'fecha'      => $e->fecha,
+                'referencia' => $e->referencia,
+                'concepto'   => $e->concepto,
+                'motivo'     => $e->motivo,
+                'titular'    => strtoupper(trim($e->titular ?? '')),
+                'tipo_gasto' => $e->tipo_gasto ?: $e->categoria_egreso,
+                'monto_bs'   => $e->monto_bs,
+                'monto_usd'  => $e->monto_usd,
+                'flujo_id'   => $e->id,
+            ])->values();
+
+        $comisiones = $lineas_comisiones->groupBy('descripcion')->map(function($group) {
+            $first = $group->first();
+            return [
+                'fecha'       => $first->fecha,
+                'descripcion' => $first->descripcion,
+                'referencia'  => $group->count() > 1 ? 'VARIAS (' . $group->count() . ')' : $first->referencia,
+                'monto'       => $group->sum('monto'),
+            ];
+        })->values();
+
+        $data = [
+            'banco' => strtoupper($bk_req),
+            'titular' => strtoupper($tit_req),
+            'conciliados' => $conciliados,
+            'en_transito' => $en_transito,
+            'sin_registrar' => $sin_registrar,
+            'comisiones' => $comisiones,
+            'total_conciliados' => $conciliados->sum('monto'),
+            'total_transito' => $en_transito->sum('monto_bs'),
+            'total_sin_registrar' => $sin_registrar->sum('monto'),
+            'total_comisiones' => $comisiones->sum('monto'),
+        ];
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('finanzas.pdf.reporte_banco', ['data' => $data]);
+        $pdf->setPaper('a4', 'landscape');
+        
+        $filename = 'Reporte_' . strtoupper($bk_req) . ($tit_req ? '_' . str_replace(' ', '_', strtoupper($tit_req)) : '') . '_' . date('Ymd') . '.pdf';
+        
+        return $pdf->download($filename);
+    }
     public function clearConciliacion() {
         $fecha_desde = now()->subDays(1)->startOfDay();
         \App\Models\ConciliacionLinea::where('created_at', '>=', $fecha_desde)->delete();
@@ -2136,5 +2307,239 @@ class FinanzasController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    public function reporteFlujoCajaBusqueda(Request $request) {
+        $fecha_desde = $request->query('desde', date('Y-m-d'));
+        $fecha_hasta = $request->query('hasta', date('Y-m-d'));
+        $q = strtolower(trim($request->query('q', '')));
+        $cats_str = $request->query('cats', '');
+        $selected_cats = $cats_str ? explode(',', $cats_str) : ['egreso_realizado', 'otros_egresos', 'traslados', 'egreso_divisas'];
+
+        $movimientos_query = \App\Models\FlujoCaja::whereBetween('fecha', [$fecha_desde, $fecha_hasta])
+                                ->where('oculto', false)
+                                ->whereIn('categoria_egreso', $selected_cats)
+                                ->orderBy('fecha', 'desc');
+
+        $movimientos = $movimientos_query->get();
+
+        if ($q) {
+            $movimientos = $movimientos->filter(function($m) use ($q) {
+                $banco = strtolower($m->banco ?? '');
+                $titular = strtolower($m->titular ?? '');
+                $receptor_banco = strtolower($m->banco_receptor ?? '');
+                $receptor_titular = strtolower($m->titular_receptor ?? '');
+                $motivo = strtolower($m->motivo ?? '');
+                $tipo = strtolower($m->tipo_gasto ?? '');
+
+                return strpos($banco, $q) !== false ||
+                       strpos($titular, $q) !== false ||
+                       strpos($receptor_banco, $q) !== false ||
+                       strpos($receptor_titular, $q) !== false ||
+                       strpos($motivo, $q) !== false ||
+                       strpos($tipo, $q) !== false;
+            });
+        }
+
+        $egresos = $movimientos->where('categoria_egreso', 'egreso_realizado');
+        $otros = $movimientos->where('categoria_egreso', 'otros_egresos');
+        $traslados = $movimientos->where('categoria_egreso', 'traslados');
+        $divisas = $movimientos->where('categoria_egreso', 'egreso_divisas');
+
+        $data = [
+            'fecha_desde' => $fecha_desde,
+            'fecha_hasta' => $fecha_hasta,
+            'q' => $q,
+            'selected_cats' => $selected_cats,
+            'egresos' => $egresos,
+            'otros' => $otros,
+            'traslados' => $traslados,
+            'divisas' => $divisas,
+            'tot_egresos_usd' => $egresos->sum('monto_usd'),
+            'tot_egresos_bs' => $egresos->sum('monto_bs'),
+            'tot_egresos_dif' => $egresos->sum('diferencial_cambiario'),
+            'tot_egresos_com' => $egresos->sum('comision'),
+            'tot_otros_usd' => $otros->sum('monto_usd'),
+            'tot_otros_bs' => $otros->sum('monto_bs'),
+            'tot_otros_dif' => $otros->sum('diferencial_cambiario'),
+            'tot_otros_com' => $otros->sum('comision'),
+            'tot_traslados_usd' => $traslados->sum('monto_usd'),
+            'tot_traslados_bs' => $traslados->sum('monto_bs'),
+            'tot_traslados_com' => $traslados->sum('comision'),
+            'tot_divisas_usd' => $divisas->sum('monto_usd'),
+        ];
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('finanzas.pdf.reporte_flujo_busqueda', ['data' => $data]);
+        $pdf->setPaper('a4', 'landscape');
+        return $pdf->download('Reporte_Flujo_Caja_' . $fecha_desde . '_al_' . $fecha_hasta . '.pdf');
+    }
+
+    public function parseArchivoDesglose(Request $request)
+    {
+        try {
+            $request->validate([
+                'archivo' => 'required|file|mimes:xlsx,xls,csv,xlsm|max:5120',
+            ]);
+
+            $file = $request->file('archivo');
+            $ext = strtolower($file->getClientOriginalExtension());
+            $path = $file->getRealPath();
+
+            $allSheetsRows = [];
+            if ($ext === 'csv') {
+                $rows = [];
+                $handle = fopen($path, 'r');
+                while (($data = fgetcsv($handle, 1000, ';')) !== false) {
+                    if (count($data) === 1) { // Fallback if comma separated
+                        $data = str_getcsv($data[0], ',');
+                    }
+                    $rows[] = $data;
+                }
+                fclose($handle);
+                $allSheetsRows[] = $rows;
+            } elseif ($ext === 'xls') {
+                if ($xls = \Shuchkin\SimpleXLS::parse($path)) {
+                    foreach ($xls->sheetNames() as $index => $name) {
+                        $allSheetsRows[] = $xls->rows($index);
+                    }
+                } else {
+                    return response()->json(['ok' => false, 'error' => \Shuchkin\SimpleXLS::parseError()]);
+                }
+            } else {
+                if ($xlsx = \Shuchkin\SimpleXLSX::parse($path)) {
+                    foreach ($xlsx->sheetNames() as $index => $name) {
+                        $allSheetsRows[] = $xlsx->rows($index);
+                    }
+                } else {
+                    return response()->json(['ok' => false, 'error' => \Shuchkin\SimpleXLSX::parseError()]);
+                }
+            }
+
+            if (empty($allSheetsRows)) {
+                return response()->json(['ok' => false, 'error' => 'El archivo está vacío o no se pudo leer.']);
+            }
+
+            $colCedula = -1;
+            $colMonto = -1;
+            $startRow = -1;
+            $targetRows = [];
+
+            // Buscar en todas las hojas
+            foreach ($allSheetsRows as $rows) {
+                if (empty($rows)) continue;
+
+                foreach ($rows as $rowIndex => $row) {
+                    if ($rowIndex > 50) break; // Check first 50 rows
+                    
+                    $colCedula = -1;
+                    $colMonto = -1;
+
+                    $header = array_map(function($val) { 
+                        // Clean whitespace and weird characters
+                        $val = strtolower(trim((string)$val));
+                        return preg_replace('/\s+/', ' ', $val); 
+                    }, $row);
+
+                    foreach ($header as $i => $colName) {
+                        if ($colCedula === -1) {
+                            if (strpos($colName, 'cédula del beneficiario') !== false || strpos($colName, 'cedula del beneficiario') !== false || $colName === 'cédula' || $colName === 'cedula' || strpos($colName, 'cedula') !== false || strpos($colName, 'beneficiario') !== false) {
+                                $colCedula = $i;
+                            }
+                        }
+                        if ($colMonto === -1) {
+                            if (strpos($colName, 'monto a abonar') !== false || strpos($colName, 'monto') !== false || strpos($colName, 'abonar') !== false) {
+                                $colMonto = $i;
+                            }
+                        }
+                    }
+                    if ($colCedula !== -1 && $colMonto !== -1 && $colCedula !== $colMonto) {
+                        $startRow = $rowIndex + 1;
+                        $targetRows = $rows;
+                        break 2; // Break both loops
+                    }
+                }
+                
+                // reset if not found in this sheet
+                $colCedula = -1;
+                $colMonto = -1;
+            }
+
+            if ($colCedula === -1 || $colMonto === -1) {
+                return response()->json(['ok' => false, 'error' => 'No se encontraron las columnas "Cédula del beneficiario" y "Monto a abonar" en ninguna de las hojas del archivo.']);
+            }
+
+            $result = [];
+            $cedulas = [];
+            for ($i = $startRow; $i < count($targetRows); $i++) {
+                $row = $targetRows[$i];
+                if (!isset($row[$colCedula])) continue;
+
+                $cedRawStr = (string)$row[$colCedula];
+                $cedRaw = preg_replace('/[^0-9]/', '', $cedRawStr);
+                if (empty($cedRaw)) continue;
+
+                $cedulas[] = $cedRaw;
+            }
+
+            $clientesDb = \App\Models\Cliente::whereIn('cedula', $cedulas)->get()->keyBy('cedula');
+
+            for ($i = $startRow; $i < count($targetRows); $i++) {
+                $row = $targetRows[$i];
+                if (!isset($row[$colCedula])) continue;
+                
+                $cedRawStr = (string)$row[$colCedula];
+                // Ignorar filas que parezcan encabezados repetidos
+                if (strpos(strtolower($cedRawStr), 'cédula') !== false || strpos(strtolower($cedRawStr), 'cedula') !== false) continue;
+
+                $cedRaw = preg_replace('/[^0-9]/', '', $cedRawStr);
+                if (empty($cedRaw)) continue;
+
+                $montoStr = (string)($row[$colMonto] ?? '0');
+                
+                // --- DEBUG LOGGING ---
+                \Log::info("Row $i - CedulaRaw: '$cedRawStr' ($cedRaw), MontoRaw: '$montoStr'");
+
+                // Clean monto string: remove symbols, but keep dots and commas
+                $montoClean = preg_replace('/[^0-9,-.]/', '', $montoStr);
+                // If comma is the decimal separator (e.g. 500,00)
+                if (strpos($montoClean, ',') !== false && strpos($montoClean, '.') === false) {
+                    $montoClean = str_replace(',', '.', $montoClean);
+                } elseif (strpos($montoClean, ',') !== false && strpos($montoClean, '.') !== false) {
+                    // If both are present, remove dot (thousands) and change comma to dot
+                    $montoClean = str_replace('.', '', $montoClean);
+                    $montoClean = str_replace(',', '.', $montoClean);
+                }
+                $monto = (float)$montoClean;
+
+                \Log::info("Row $i - MontoClean: '$montoClean', MontoFloat: $monto");
+                // ---------------------
+
+                if ($monto <= 0) {
+                    \Log::info("Row $i - Monto is <= 0. Skipped.");
+                    continue;
+                }
+
+                $cliente = $clientesDb->get($cedRaw);
+                if ($cliente && $cliente->nombre) {
+                    $nombre_mostrar = $cliente->nombre;
+                } else {
+                    $nombre_mostrar = $cedRaw;
+                }
+
+                $result[] = [
+                    'cedula' => $nombre_mostrar,
+                    'monto' => $monto,
+                ];
+            }
+
+            if (empty($result)) {
+                return response()->json(['ok' => false, 'error' => 'Se encontraron las columnas, pero no hay datos válidos (cédulas y montos) para procesar.']);
+            }
+
+            return response()->json(['ok' => true, 'data' => $result]);
+        } catch (\Exception $e) {
+            \Log::error('Error parseando excel desglose: ' . $e->getMessage());
+            return response()->json(['ok' => false, 'error' => 'Error interno: ' . $e->getMessage()]);
+        }
     }
 }

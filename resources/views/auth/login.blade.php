@@ -126,6 +126,16 @@
         <div id="q-pedir-selected" class="q-pedir-selected" hidden>
             <div style="font-size:0.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">Producto seleccionado</div>
             <div id="q-pedir-selected-info" style="font-weight:600;margin-bottom:12px;"></div>
+            
+            <div id="q-pedir-manual-fields" hidden>
+                <div class="auth-field" style="margin-bottom:12px;">
+                    <label for="q-pedir-categoria">Categoría (Obligatorio)</label>
+                    <select id="q-pedir-categoria" style="width: 100%; padding: 11px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.92rem;" required>
+                        <option value="">-- Seleccione una categoría --</option>
+                    </select>
+                </div>
+            </div>
+
             <div class="auth-field">
                 <label for="q-pedir-solicitante">Tu nombre (opcional)</label>
                 <input type="text" id="q-pedir-solicitante" placeholder="Ej: Juan Pérez" maxlength="120">
@@ -460,6 +470,26 @@
         modal.hidden = false;
         searchInput.focus();
         resetModal();
+        cargarCategorias();
+    }
+    
+    let categoriasCargadas = false;
+    async function cargarCategorias() {
+        if (categoriasCargadas) return;
+        try {
+            const res = await fetch('{{ route("pedidos.categorias") }}');
+            const data = await res.json();
+            const select = document.getElementById('q-pedir-categoria');
+            data.categorias.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                select.appendChild(opt);
+            });
+            categoriasCargadas = true;
+        } catch (e) {
+            console.error('Error cargando categorias', e);
+        }
     }
 
     function closeModal() {
@@ -475,6 +505,8 @@
         selectedProduct = null;
         document.getElementById('q-pedir-solicitante').value = '';
         document.getElementById('q-pedir-notas').value = '';
+        document.getElementById('q-pedir-categoria').value = '';
+        document.getElementById('q-pedir-manual-fields').hidden = true;
     }
 
     function showMessage(text, type) {
@@ -502,7 +534,20 @@
                 const data = await res.json();
                 resultsEl.innerHTML = '';
                 if (!data.productos || data.productos.length === 0) {
-                    resultsEl.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:0.85rem;">No se encontraron productos.</div>';
+                    resultsEl.innerHTML = `
+                        <div style="padding:12px;color:var(--muted);font-size:0.85rem;margin-bottom:10px;">No se encontraron productos.</div>
+                        <button type="button" id="btn-manual-prod" class="btn auth-btn" style="width:100%;font-size:0.85rem;padding:8px;">Agregar manualmente: "${escapeHtml(q.toUpperCase())}"</button>
+                    `;
+                    document.getElementById('btn-manual-prod').addEventListener('click', function() {
+                        selectedProduct = {
+                            producto: q.toUpperCase(),
+                            codigo: 'MANUAL',
+                            isManual: true
+                        };
+                        selectedInfo.textContent = selectedProduct.producto + ' (MANUAL)';
+                        selectedPanel.hidden = false;
+                        document.getElementById('q-pedir-manual-fields').hidden = false;
+                    });
                     return;
                 }
                 data.productos.forEach(function(p) {
@@ -518,6 +563,7 @@
                         const stockTxt = stock !== null ? ' — Stock: ' + stock : '';
                         selectedInfo.textContent = p.producto + ' (' + p.codigo + ')' + stockTxt;
                         selectedPanel.hidden = false;
+                        document.getElementById('q-pedir-manual-fields').hidden = true;
                         resultsEl.innerHTML = '';
                         searchInput.value = p.producto;
                         messageEl.hidden = true;
@@ -532,9 +578,29 @@
 
     btnGuardar?.addEventListener('click', async function() {
         if (!selectedProduct) return;
+        const solicitante = document.getElementById('q-pedir-solicitante').value.trim();
+        const notas = document.getElementById('q-pedir-notas').value.trim();
+        const categoria = document.getElementById('q-pedir-categoria').value;
+
+        if (selectedProduct.isManual && !categoria) {
+            showMessage('Por favor, selecciona una categoría para el producto nuevo.', 'error');
+            return;
+        }
+
         btnGuardar.disabled = true;
         btnGuardar.textContent = 'Guardando...';
+
         try {
+            const bodyData = {
+                producto_id: selectedProduct.id || null,
+                codigo: selectedProduct.codigo || 'N/A',
+                producto: selectedProduct.producto,
+                categoria: selectedProduct.isManual ? categoria : (selectedProduct.categoria || null),
+                proveedor: selectedProduct.proveedor || null,
+                solicitante: solicitante,
+                notas: notas
+            };
+
             const res = await fetch('{{ route("pedidos.store") }}', {
                 method: 'POST',
                 headers: {
@@ -542,15 +608,7 @@
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': csrfToken
                 },
-                body: JSON.stringify({
-                    producto_id: selectedProduct.id,
-                    codigo: selectedProduct.codigo,
-                    producto: selectedProduct.producto,
-                    categoria: selectedProduct.categoria || null,
-                    proveedor: selectedProduct.proveedor || null,
-                    solicitante: document.getElementById('q-pedir-solicitante').value.trim() || null,
-                    notas: document.getElementById('q-pedir-notas').value.trim() || null
-                })
+                body: JSON.stringify(bodyData)
             });
             const data = await res.json();
             if (res.ok && data.ok) {

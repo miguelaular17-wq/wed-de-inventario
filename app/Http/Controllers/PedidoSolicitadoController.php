@@ -12,6 +12,27 @@ use Illuminate\Support\Facades\Schema;
 
 class PedidoSolicitadoController extends Controller
 {
+    public function categorias(): JsonResponse
+    {
+        if (config('database.default') === 'pgsql') {
+            $categorias = DB::connection('pgsql')
+                ->table('inventario_v2.productos')
+                ->whereNotNull('categoria')
+                ->where('categoria', '!=', '')
+                ->distinct()
+                ->orderBy('categoria')
+                ->pluck('categoria');
+        } else {
+            $categorias = Product::whereNotNull('categoria')
+                ->where('categoria', '!=', '')
+                ->distinct()
+                ->orderBy('categoria')
+                ->pluck('categoria');
+        }
+
+        return response()->json(['categorias' => $categorias]);
+    }
+
     public function search(Request $request): JsonResponse
     {
         $q = trim((string) $request->query('q', ''));
@@ -110,17 +131,80 @@ class PedidoSolicitadoController extends Controller
         ]);
     }
 
-    public function marcarAtendido(PedidoSolicitado $pedido): RedirectResponse
+    public function marcarComprado(Request $request): RedirectResponse
     {
-        $pedido->marcarAtendido();
+        $producto = $request->input('producto');
+        PedidoSolicitado::where('producto', $producto)
+            ->where('estado', 'pendiente')
+            ->update([
+                'estado' => 'comprado',
+                'atendido_at' => now(),
+            ]);
 
-        return back()->with('success', 'Pedido marcado como atendido.');
+        return back()->with('success', 'Pedidos marcados como comprados.');
     }
 
-    public function destroy(PedidoSolicitado $pedido): RedirectResponse
+    public function marcarFueraMercado(Request $request): RedirectResponse
     {
-        $pedido->delete();
+        $producto = $request->input('producto');
+        PedidoSolicitado::where('producto', $producto)
+            ->where('estado', 'pendiente')
+            ->update([
+                'estado' => 'fuera_de_mercado',
+                'atendido_at' => now(),
+            ]);
 
-        return back()->with('success', 'Pedido eliminado.');
+        return back()->with('success', 'Pedidos marcados como fuera de mercado.');
+    }
+
+    public function reporteExcel()
+    {
+        $pedidos = PedidoSolicitado::where('estado', 'pendiente')
+            ->selectRaw('producto, MAX(codigo) as codigo, MAX(categoria) as categoria, MAX(proveedor) as proveedor, COUNT(*) as frecuencia, MAX(created_at) as created_at')
+            ->groupBy('producto')
+            ->orderByDesc('frecuencia')
+            ->get();
+
+        $csvData = mb_convert_encoding("Producto;Código;Categoría;Proveedor;Frecuencia;Última Solicitud\n", 'UTF-8', 'auto');
+        foreach($pedidos as $p) {
+            $csvData .= sprintf(
+                "\"%s\";\"%s\";\"%s\";\"%s\";%d;\"%s\"\n",
+                str_replace('"', '""', $p->producto),
+                str_replace('"', '""', $p->codigo),
+                str_replace('"', '""', $p->categoria),
+                str_replace('"', '""', $p->proveedor),
+                $p->frecuencia,
+                $p->created_at
+            );
+        }
+
+        return response($csvData)
+            ->header('Content-Type', 'text/csv; charset=UTF-8')
+            ->header('Content-Disposition', 'attachment; filename="reporte_qpedir_'.date('Ymd').'.csv"');
+    }
+
+    public function reporteDiarioPdf()
+    {
+        $pedidos = PedidoSolicitado::where('estado', 'pendiente')
+            ->whereDate('created_at', now()->toDateString())
+            ->selectRaw('producto, MAX(codigo) as codigo, MAX(categoria) as categoria, COUNT(*) as frecuencia, MAX(created_at) as created_at')
+            ->groupBy('producto')
+            ->orderByDesc('frecuencia')
+            ->get();
+            
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('comprador.reporte_diario', ['pedidos' => $pedidos]);
+        return $pdf->download('reporte_diario_qpedir_'.date('Ymd').'.pdf');
+    }
+
+    public function reportePdf(Request $request)
+    {
+        $chartPie = $request->input('chart_pie');
+        $chartBar = $request->input('chart_bar');
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('comprador.reporte_graficos', [
+            'chartPie' => $chartPie,
+            'chartBar' => $chartBar,
+        ]);
+        return $pdf->download('reporte_graficos_qpedir_'.date('Ymd').'.pdf');
     }
 }

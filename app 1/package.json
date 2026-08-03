@@ -1,0 +1,77 @@
+{
+  "name": "palacio-sync",
+  "version": "2.0.0",
+  "authors": "Geekelecronico",
+  "description": "Sincronización de productos con WooCommerce — Palacio de los Detalles",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint": "echo \"No se ha configurado linting\" && exit 0"
+  },
+  "build": {
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "renderer.js",
+      "styles.css",
+      "scripts/",
+      "uploads/"
+    ],
+    "extraResources": [
+      {
+        "from": "./uploads/",
+        "to": "uploads/"
+      }
+    ]
+  },
+  "config": {
+    "forge": {
+      "packagerConfig": {
+        "asar": true,
+        "icon": "app-icon"
+      },
+      "makers": [
+        {
+          "name": "@electron-forge/maker-squirrel",
+          "config": {
+            "name": "palacio_sync",
+            "authors": "Geekelecronico"
+          }
+        },
+        {
+          "name": "@electron-forge/maker-zip",
+          "platforms": [
+            "darwin"
+          ]
+        },
+        {
+          "name": "@electron-forge/maker-deb",
+          "config": {}
+        },
+        {
+          "name": "@electron-forge/maker-rpm",
+          "config": {}
+        }
+      ]
+    }
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/maker-deb": "^7.11.1",
+    "@electron-forge/maker-rpm": "^7.11.1",
+    "@electron-forge/maker-squirrel": "^7.11.1",
+    "@electron-forge/maker-zip": "^7.11.1",
+    "electron": "^40.4.1"
+  },
+  "dependencies": {
+    "@woocommerce/woocommerce-rest-api": "^1.0.2",
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.7",
+    "electron-squirrel-startup": "^1.0.1",
+    "sharp": "^0.34.5"
+  }
+}

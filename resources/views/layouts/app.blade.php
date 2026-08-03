@@ -36,6 +36,28 @@
             @auth
                 @if(auth()->user()->isAdmin())
                     <span class="badge">Admin</span>
+                    <span class="badge" id="server-clock" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); font-family: monospace; letter-spacing: 0.5px; margin-left: 5px;" title="Hora del Servidor (Caracas)">
+                        {{ \Carbon\Carbon::now()->format('d/m/Y h:i:s A') }}
+                    </span>
+                    <script>
+                        document.addEventListener("DOMContentLoaded", function() {
+                            let serverTime = new Date("{{ \Carbon\Carbon::now()->format('Y/m/d H:i:s') }}");
+                            setInterval(() => {
+                                serverTime.setSeconds(serverTime.getSeconds() + 1);
+                                const d = String(serverTime.getDate()).padStart(2, '0');
+                                const m = String(serverTime.getMonth() + 1).padStart(2, '0');
+                                const y = serverTime.getFullYear();
+                                let hr = serverTime.getHours();
+                                const min = String(serverTime.getMinutes()).padStart(2, '0');
+                                const sec = String(serverTime.getSeconds()).padStart(2, '0');
+                                const ampm = hr >= 12 ? 'PM' : 'AM';
+                                hr = hr % 12;
+                                hr = hr ? hr : 12;
+                                const hrStr = String(hr).padStart(2, '0');
+                                document.getElementById('server-clock').innerText = `${d}/${m}/${y} ${hrStr}:${min}:${sec} ${ampm}`;
+                            }, 1000);
+                        });
+                    </script>
                 @endif
             @endauth
         </div>
@@ -60,8 +82,8 @@
                     @elseif(auth()->user()->isCobranza())
                         <a href="{{ route('cobranza.index') }}" class="{{ request()->routeIs('cobranza.*') ? 'active' : '' }}">Cobranza</a>
                         <a href="{{ route('contratos.index') }}" class="{{ request()->routeIs('contratos.*') ? 'active' : '' }}">Contratos</a>
-                    @elseif(auth()->user()->isEdurar())
-                        <a href="{{ route('edurar.existencias') }}" class="{{ request()->routeIs('edurar.*') ? 'active' : '' }}">Existencias</a>
+                    @elseif(auth()->user()->isTesoreria())
+                        <a href="{{ route('tesoreria.dashboard') }}" class="{{ request()->routeIs('tesoreria.*') ? 'active' : '' }}">Tesorería</a>
                     @endif
 
                     @if(auth()->user()->hasAccessToSedeViews() && session('sede_local'))
