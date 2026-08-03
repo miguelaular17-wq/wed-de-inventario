@@ -41,9 +41,10 @@ class CobranzasService:
                 cx.codigo_caja AS [CODIGO CAJA]
             FROM cuentas_cobrar cx WITH (NOLOCK)
             JOIN clientes c WITH (NOLOCK) ON cx.codigo_cliente = c.codigo
-            WHERE ABS(cx.saldo_actual_moneda2) > 0.5
-              AND cx.tipo_documento IN ('FAC', 'NDC')
+            WHERE cx.saldo_actual_moneda2 > 0.5
+              AND cx.tipo_documento IN ('FAC', 'NDD')
               AND cx.codigo_cliente NOT LIKE 'EXP%'
+              AND (cx.estado <> 'Anulado' OR cx.estado IS NULL)
             """
             
             cursor = billing_conn.cursor()
