@@ -277,6 +277,7 @@
                             <th>Referencia</th>
                             <th>Descripción del Banco</th>
                             <th style="text-align:right">Monto</th>
+                            <th style="width: 40px;"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -292,9 +293,18 @@
                                 </span>
                             </td>
                             <td class="monto-cell monto-red">Bs. {{ number_format($row['monto'], 2) }}</td>
+                            <td style="text-align:center;">
+                                <form action="{{ route('finanzas.conciliaciones.manual') }}" method="POST" style="display:inline-block;" title="Marcar como Conciliado">
+                                    @csrf
+                                    <input type="hidden" name="linea_id" value="{{ $row['id'] }}">
+                                    <button type="submit" class="btn btn-sm btn-success" style="padding: 2px 6px; font-size: 0.75rem;" onclick="return confirm('¿Marcar este movimiento como conciliado manualmente?')">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                </form>
+                            </td>
                         </tr>
                         @empty
-                        <tr class="empty-row"><td colspan="4">Sin movimientos detectados</td></tr>
+                        <tr class="empty-row"><td colspan="5">Sin movimientos detectados</td></tr>
                         @endforelse
                     </tbody>
                 </table>

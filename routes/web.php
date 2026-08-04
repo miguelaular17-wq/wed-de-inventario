@@ -109,13 +109,13 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
 });
 
 // Sede change views accessible by roles with sede access
-Route::middleware(['auth', 'role:admin,supervisor,telefonia,sede,comprador'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'role:admin,gerente,supervisor,telefonia,sede,comprador'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/sedes', [\App\Http\Controllers\Admin\SedeController::class, 'index'])->name('sedes.index');
     Route::post('/sedes/{sede}/usar', [\App\Http\Controllers\Admin\SedeController::class, 'use'])->name('sedes.use');
 });
 
 // Sede views restricted by role
-Route::middleware(['auth', EnsureSedeSelected::class, 'role:admin,supervisor,telefonia,sede,comprador'])->group(function () {
+Route::middleware(['auth', EnsureSedeSelected::class, 'role:admin,gerente,supervisor,telefonia,sede,comprador'])->group(function () {
     Route::get('/ventas', [VentasController::class, 'index'])->name('ventas.index');
     Route::get('/ventas/sync', [VentasController::class, 'sync'])->name('ventas.sync');
     Route::get('/ventas/mayor-demanda', [VentasController::class, 'mayorDemanda'])->name('ventas.mayor_demanda');
@@ -132,7 +132,7 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'role:admin,supervisor,tel
 
 
 // Comprador & Marketing specific routes
-Route::middleware(['auth', 'role:admin,comprador,marketing'])->prefix('compras')->group(function () {
+Route::middleware(['auth', 'role:admin,gerente,comprador,marketing'])->prefix('compras')->group(function () {
     Route::get('/', [CompradorController::class, 'index'])->name('comprador.dashboard');
     Route::get('/exportar', [CompradorController::class, 'export'])->name('comprador.export');
     Route::post('/notificar', [CompradorController::class, 'notifyRedistribution'])->name('comprador.notify');
@@ -166,7 +166,7 @@ Route::prefix('vendedor')->group(function () {
 });
 
 // Tesoreria routes
-Route::middleware(['auth', 'role:admin,tesoreria'])->prefix('tesoreria')->name('tesoreria.')->group(function () {
+Route::middleware(['auth', 'role:admin,gerente,tesoreria'])->prefix('tesoreria')->name('tesoreria.')->group(function () {
     Route::get('/', [\App\Http\Controllers\TesoreriaController::class, 'dashboard'])->name('dashboard');
     Route::post('/ingreso-banco', [\App\Http\Controllers\TesoreriaController::class, 'storeIngresoBanco'])->name('ingreso_banco.store');
     Route::post('/lote-punto-venta', [\App\Http\Controllers\TesoreriaController::class, 'storeLotePuntoVenta'])->name('lote_pos.store');
@@ -193,7 +193,7 @@ Route::middleware('auth')->group(function () {
 });
 
 // Finanzas routes
-Route::middleware(['auth', 'role:admin,finanzas,auditor'])->prefix('finanzas')->group(function () {
+Route::middleware(['auth', 'role:admin,gerente,finanzas,auditor'])->prefix('finanzas')->group(function () {
     Route::get('/flujo-caja', [FinanzasController::class, 'flujoCaja'])->name('finanzas.flujo_caja');
     Route::post('/flujo-caja/parse-desglose', [FinanzasController::class, 'parseArchivoDesglose'])->name('finanzas.parse_desglose');
     Route::get('/flujo-caja/reporte', [FinanzasController::class, 'reporteFlujoCajaBusqueda'])->name('finanzas.flujo_caja.reporte');
@@ -201,7 +201,7 @@ Route::middleware(['auth', 'role:admin,finanzas,auditor'])->prefix('finanzas')->
     Route::get('/flujo-caja/api/bcv', [FinanzasController::class, 'fetchBcvApi'])->name('finanzas.api_bcv');
     Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
 
-    Route::middleware(['role:admin,finanzas'])->group(function () {
+    Route::middleware(['role:admin,gerente,finanzas'])->group(function () {
         Route::post('/flujo-caja/reset', [FinanzasController::class, 'resetDaily'])->name('finanzas.reset_daily');
         Route::post('/flujo-caja/egreso', [FinanzasController::class, 'storeEgreso'])->name('finanzas.store_egreso');
         Route::post('/flujo-caja/egreso/{id}', [FinanzasController::class, 'updateEgreso'])->name('finanzas.update_egreso');
@@ -221,19 +221,20 @@ Route::middleware(['auth', 'role:admin,finanzas,auditor'])->prefix('finanzas')->
 });
 
 // Conciliaciones routes - solo admin y contabilidad
-Route::middleware(['auth', 'role:admin,contabilidad'])->prefix('finanzas')->group(function () {
+Route::middleware(['auth', 'role:admin,gerente,contabilidad'])->prefix('finanzas')->group(function () {
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
     Route::post('/conciliaciones/upload', [FinanzasController::class, 'uploadConciliacion'])->name('finanzas.conciliaciones.upload');
     Route::post('/conciliaciones/process', [FinanzasController::class, 'processConciliacion'])->name('finanzas.conciliaciones.process');
     Route::post('/conciliaciones/add-missing', [App\Http\Controllers\FinanzasController::class, 'addMissingConciliacion'])->name('finanzas.conciliaciones.add_missing');
     Route::post('/conciliaciones/ignore', [App\Http\Controllers\FinanzasController::class, 'ignoreConciliacion'])->name('finanzas.conciliaciones.ignore');
+    Route::post('/conciliaciones/manual', [App\Http\Controllers\FinanzasController::class, 'manualConciliacion'])->name('finanzas.conciliaciones.manual');
     Route::post('/conciliaciones/clear', [App\Http\Controllers\FinanzasController::class, 'clearConciliacion'])->name('finanzas.conciliaciones.clear');
     Route::get('/conciliaciones/reporte', [App\Http\Controllers\FinanzasController::class, 'reporteConciliacion'])->name('finanzas.conciliaciones.reporte');
     Route::get('/conciliaciones/reporte-banco', [App\Http\Controllers\FinanzasController::class, 'reporteBancoPdf'])->name('finanzas.conciliaciones.reporte-banco');
 });
 
 // Cobranza routes
-Route::middleware(['auth', 'role:admin,cobranza'])->prefix('cobranza')->group(function () {
+Route::middleware(['auth', 'role:admin,gerente,cobranza'])->prefix('cobranza')->group(function () {
     Route::get('/', [CobranzaController::class, 'index'])->name('cobranza.index');
     Route::get('/pdf', [CobranzaController::class, 'descargarReportePdf'])->name('cobranza.pdf');
     Route::post('/importar', [CobranzaController::class, 'importarExcel'])->name('cobranza.importar');
@@ -244,7 +245,7 @@ Route::middleware(['auth', 'role:admin,cobranza'])->prefix('cobranza')->group(fu
 Route::get('/finanzas/reporte-consolidado', [App\Http\Controllers\FinanzasController::class, 'reporteConsolidado'])->name('finanzas.reporte_consolidado');
 
 // Contratos / Seguimiento de cobranza routes
-Route::middleware(['auth', 'role:admin,finanzas,cobranza'])->prefix('contratos')->group(function () {
+Route::middleware(['auth', 'role:admin,gerente,finanzas,cobranza'])->prefix('contratos')->group(function () {
     Route::get('/', [App\Http\Controllers\ContratoController::class, 'index'])->name('contratos.index');
     Route::get('/lista', [App\Http\Controllers\ContratoController::class, 'listar'])->name('contratos.lista');
     Route::get('/calendario', [App\Http\Controllers\ContratoController::class, 'calendario'])->name('contratos.calendario');

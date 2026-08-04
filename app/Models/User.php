@@ -22,6 +22,7 @@ class User extends Authenticatable
     public const ROLE_CONTABILIDAD = 'contabilidad';
     public const ROLE_AUDITOR = 'auditor';
     public const ROLE_TESORERIA = 'tesoreria';
+    public const ROLE_GERENTE = 'gerente';
     protected $fillable = [
         'name',
         'email',
@@ -46,7 +47,7 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return $this->role === self::ROLE_ADMIN;
+        return $this->role === self::ROLE_ADMIN || $this->role === self::ROLE_GERENTE;
     }
 
     public function isSupervisor(): bool
@@ -58,7 +59,6 @@ class User extends Authenticatable
     {
         return $this->role === self::ROLE_TELEFONIA;
     }
-
 
     public function isComprador(): bool
     {
@@ -105,14 +105,19 @@ class User extends Authenticatable
         return $this->role === self::ROLE_CONTABILIDAD;
     }
 
+    public function isGerente(): bool
+    {
+        return $this->role === self::ROLE_GERENTE;
+    }
+
     public function hasAccessToSedeViews(): bool
     {
-        return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_SUPERVISOR, self::ROLE_TELEFONIA, self::ROLE_SEDE, self::ROLE_COMPRADOR], true);
+        return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_SUPERVISOR, self::ROLE_TELEFONIA, self::ROLE_SEDE, self::ROLE_COMPRADOR, self::ROLE_GERENTE], true);
     }
 
     public function hasAccessToMovimientos(): bool
     {
-        return $this->role === self::ROLE_ADMIN;
+        return $this->role === self::ROLE_ADMIN || $this->role === self::ROLE_GERENTE;
     }
 
     /**

@@ -34,9 +34,12 @@
                 <span class="badge" data-tour="sede-badge">Sede: {{ session('sede_local') }}</span>
             @endif
             @auth
-                @if(auth()->user()->isAdmin())
+                @if(auth()->user()->isGerente())
+                    <span class="badge" style="background: var(--purple); border: 1px solid var(--purple);">Gerente</span>
+                @elseif(auth()->user()->isAdmin())
                     <span class="badge">Admin</span>
                     <span class="badge" id="server-clock" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); font-family: monospace; letter-spacing: 0.5px; margin-left: 5px;" title="Hora del Servidor (Caracas)">
+
                         {{ \Carbon\Carbon::now()->format('d/m/Y h:i:s A') }}
                     </span>
                     <script>
@@ -70,19 +73,24 @@
                         <a href="{{ route('admin.productos.index') }}" class="{{ request()->routeIs('admin.productos.*') ? 'active' : '' }}">Productos</a>
                         <a href="{{ route('admin.sync_logs.index') }}" class="{{ request()->routeIs('admin.sync_logs.*') ? 'active' : '' }}">Sync Logs</a>
                         <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">Usuarios</a>
-                    @elseif(auth()->user()->isComprador() || auth()->user()->isMarketing())
+                    @endif
+                    @if(auth()->user()->isComprador() || auth()->user()->isMarketing() || auth()->user()->isGerente())
                         <a href="{{ route('comprador.dashboard') }}" class="{{ request()->routeIs('comprador.dashboard') ? 'active' : '' }}">
-                            {{ auth()->user()->isMarketing() ? 'Marketing' : 'Compras' }}
+                            {{ auth()->user()->isMarketing() && !auth()->user()->isGerente() ? 'Marketing' : 'Compras' }}
                         </a>
-                    @elseif(auth()->user()->isFinanzas())
+                    @endif
+                    @if(auth()->user()->isFinanzas() || auth()->user()->isGerente())
                         <a href="{{ route('finanzas.flujo_caja') }}" class="{{ request()->routeIs('finanzas.flujo_caja') ? 'active' : '' }}">Flujo de Caja</a>
                         <a href="{{ route('finanzas.gastos_fijos') }}" class="{{ request()->routeIs('finanzas.gastos_fijos') ? 'active' : '' }}">Gastos Fijos</a>
-                    @elseif(auth()->user()->isContabilidad())
+                    @endif
+                    @if(auth()->user()->isContabilidad() || auth()->user()->isGerente())
                         <a href="{{ route('finanzas.conciliaciones') }}" class="{{ request()->routeIs('finanzas.conciliaciones') ? 'active' : '' }}">Conciliaciones</a>
-                    @elseif(auth()->user()->isCobranza())
+                    @endif
+                    @if(auth()->user()->isCobranza() || auth()->user()->isGerente())
                         <a href="{{ route('cobranza.index') }}" class="{{ request()->routeIs('cobranza.*') ? 'active' : '' }}">Cobranza</a>
                         <a href="{{ route('contratos.index') }}" class="{{ request()->routeIs('contratos.*') ? 'active' : '' }}">Contratos</a>
-                    @elseif(auth()->user()->isTesoreria())
+                    @endif
+                    @if(auth()->user()->isTesoreria() || auth()->user()->isGerente())
                         <a href="{{ route('tesoreria.dashboard') }}" class="{{ request()->routeIs('tesoreria.*') ? 'active' : '' }}">Tesorería</a>
                     @endif
 

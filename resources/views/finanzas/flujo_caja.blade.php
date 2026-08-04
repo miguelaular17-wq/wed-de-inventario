@@ -911,7 +911,7 @@
                 </div>
                 <div style="flex: 1;">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Fecha</label>
-                    <input type="date" name="fecha" value="{{ $fecha_filtro }}" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <input type="date" name="fecha" value="{{ $fecha_filtro }}" max="{{ date('Y-m-d') }}" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
             </div>
 
@@ -2489,7 +2489,7 @@ function limpiarFiltros() {
             <!-- Fecha -->
             <div style="margin-bottom: 10px;">
                 <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Fecha</label>
-                <input type="date" name="fecha" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="date" name="fecha" max="{{ date('Y-m-d') }}" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
 
             <!-- Montos -->

@@ -305,166 +305,171 @@ class FinanzasController extends Controller
 
     public function storeEgreso(Request $request)
     {
-        // Normalizar campos numéricos: convertir "35.750,00" o "35750,00" → "35750.00"
-        $numericFields = ['monto_usd', 'tasa_cambio', 'diferencial_cambiario', 'monto_bs', 'comision'];
-        $normalized = [];
-        foreach ($numericFields as $field) {
-            $val = $request->input($field);
-            if (is_string($val) && $val !== '') {
-                if (strpos($val, '.') !== false && strpos($val, ',') !== false) {
-                    $val = str_replace('.', '', $val);
-                    $val = str_replace(',', '.', $val);
-                } else {
-                    $val = str_replace(',', '.', $val);
-                }
-                $normalized[$field] = is_numeric($val) ? $val : null;
-            }
-        }
-        if (!empty($normalized)) {
-            $request->merge($normalized);
-        }
-
-        $data = $request->validate([
-            'categoria_egreso' => 'required|in:egreso_realizado,otros_egresos,traslados,egreso_divisas',
-            'banco_titular' => 'required|string',
-            'banco_titular_receptor' => 'nullable|string',
-            'referencia' => 'nullable|string|max:255',
-            'monto_usd' => 'nullable|numeric',
-            'tasa_cambio' => 'nullable|numeric',
-            'diferencial_cambiario' => 'nullable|numeric',
-            'monto_bs' => 'nullable|numeric',
-            'comision' => 'nullable|numeric',
-            'tipo_gasto' => 'nullable|string',
-            'motivo' => 'nullable|string',
-            'sede' => 'nullable|string',
-            'beneficiario' => 'nullable|string',
-            'placa_vehiculo' => 'nullable|string',
-            'fecha' => 'required|date',
-            'desglose_cedula' => 'nullable|array',
-            'desglose_monto' => 'nullable|array',
-            'desglose_monto_usd' => 'nullable|array',
-            'desglose_sede' => 'nullable|array',
-            'desglose_tipo_gasto' => 'nullable|array',
-        ]);
-
-        if ($data['categoria_egreso'] === 'traslados') {
-            if (empty($data['banco_titular_receptor'])) {
-                return back()->with('error', 'El Banco Receptor es obligatorio para los traslados.');
-            }
-            if ($data['banco_titular'] === $data['banco_titular_receptor']) {
-                return back()->with('error', 'El Banco Emisor y el Banco Receptor no pueden ser exactamente iguales.');
-            }
-            if (empty($data['motivo'])) {
-                return back()->with('error', 'El Motivo es obligatorio para los traslados.');
-            }
-            if (empty($data['monto_bs']) || $data['monto_bs'] <= 0) {
-                return back()->with('error', 'El Monto debe ser mayor a cero.');
-            }
-        }
-
-        $cuentaInfo = explode('|', $data['banco_titular']);
-        $banco = $cuentaInfo[0] ?? null;
-        $titular = $cuentaInfo[1] ?? null;
-        $categoria_cuenta = $cuentaInfo[2] ?? null;
-
-        $banco_receptor = null;
-        $titular_receptor = null;
-        
-        if ($data['categoria_egreso'] === 'traslados') {
-            if (!empty($data['banco_titular_receptor'])) {
-                $cuentaReceptorInfo = explode('|', $data['banco_titular_receptor']);
-                $banco_receptor = $cuentaReceptorInfo[0] ?? null;
-                $titular_receptor = $cuentaReceptorInfo[1] ?? null;
-            }
-        } else {
-            if (!empty($data['beneficiario'])) {
-                $titular_receptor = $data['beneficiario'];
-            }
-        }
-
-        $resumen = \App\Models\FinanzasResumen::where('fecha', date('Y-m-d'))->first();
-        $tasa_bcv = $resumen ? ($resumen->tasa_bcv_usd ?: 1) : 1;
-        
-        $monto_usd = $data['monto_usd'] ?? 0;
-        $monto_bs = $data['monto_bs'] ?? 0;
-        $comision = $data['comision'] ?? 0;
-        
-        $diferencial_cambiario = array_key_exists('diferencial_cambiario', $data) && $data['diferencial_cambiario'] !== null 
-                                 ? $data['diferencial_cambiario'] 
-                                 : null;
-                                 
-        $tasa_cambio = $data['tasa_cambio'] ?? null;
-        $calc_usd = $monto_usd > 0 ? $monto_usd : ($tasa_cambio > 0 ? round($monto_bs / $tasa_cambio, 2) : null);
-
-        if ($diferencial_cambiario === null && $data['categoria_egreso'] !== 'traslados' && $data['categoria_egreso'] !== 'egreso_divisas' && $tasa_bcv > 0) {
-            $diferencial_cambiario = (($calc_usd * $tasa_bcv) - $monto_bs) / $tasa_bcv;
-        }
-        $diferencial_cambiario = $diferencial_cambiario ?: 0;
-
-        $comprobante_url = null;
-        $comprobantes_arr = [];
-        if ($request->hasFile('comprobantes')) {
-            foreach ($request->file('comprobantes') as $file) {
-                $url = $this->uploadComprobante($file, $data['referencia'] ?? null);
-                if ($url) {
-                    $comprobantes_arr[] = $url;
-                    if (!$comprobante_url) $comprobante_url = $url; // first one as legacy field
+        try {
+            // Normalizar campos numéricos: convertir "35.750,00" o "35750,00" → "35750.00"
+            $numericFields = ['monto_usd', 'tasa_cambio', 'diferencial_cambiario', 'monto_bs', 'comision'];
+            $normalized = [];
+            foreach ($numericFields as $field) {
+                $val = $request->input($field);
+                if (is_string($val) && $val !== '') {
+                    if (strpos($val, '.') !== false && strpos($val, ',') !== false) {
+                        $val = str_replace('.', '', $val);
+                        $val = str_replace(',', '.', $val);
+                    } else {
+                        $val = str_replace(',', '.', $val);
+                    }
+                    $normalized[$field] = is_numeric($val) ? $val : null;
                 }
             }
-        } elseif ($request->hasFile('comprobante')) {
-            // Backwards compat: single file
-            $comprobante_url = $this->uploadComprobante($request->file('comprobante'), $data['referencia'] ?? null);
-            if ($comprobante_url) $comprobantes_arr[] = $comprobante_url;
-        }
+            if (!empty($normalized)) {
+                $request->merge($normalized);
+            }
 
-        $desglose = null;
-        if (!empty($data['desglose_monto'])) {
-            $desglose = [];
-            foreach ($data['desglose_monto'] as $index => $monto_val) {
-                $cedula = $data['desglose_cedula'][$index] ?? '';
-                $monto_desglose = $monto_val ?? 0;
-                if ($cedula || $monto_desglose) {
-                    $desglose[] = [
-                        'cedula' => $cedula,
-                        'sede' => $data['desglose_sede'][$index] ?? '',
-                        'tipo_gasto' => $data['desglose_tipo_gasto'][$index] ?? '',
-                        'monto' => (float)$monto_desglose,
-                        'monto_usd' => (float)($data['desglose_monto_usd'][$index] ?? 0),
-                    ];
+            $data = $request->validate([
+                'categoria_egreso' => 'required|in:egreso_realizado,otros_egresos,traslados,egreso_divisas',
+                'banco_titular' => 'required|string',
+                'banco_titular_receptor' => 'nullable|string',
+                'referencia' => 'nullable|string|max:255',
+                'monto_usd' => 'nullable|numeric',
+                'tasa_cambio' => 'nullable|numeric',
+                'diferencial_cambiario' => 'nullable|numeric',
+                'monto_bs' => 'nullable|numeric',
+                'comision' => 'nullable|numeric',
+                'tipo_gasto' => 'nullable|string',
+                'motivo' => 'nullable|string',
+                'sede' => 'nullable|string',
+                'beneficiario' => 'nullable|string',
+                'placa_vehiculo' => 'nullable|string',
+                'fecha' => 'required|date|before_or_equal:today',
+                'desglose_cedula' => 'nullable|array',
+                'desglose_monto' => 'nullable|array',
+                'desglose_monto_usd' => 'nullable|array',
+                'desglose_sede' => 'nullable|array',
+                'desglose_tipo_gasto' => 'nullable|array',
+            ]);
+
+            if ($data['categoria_egreso'] === 'traslados') {
+                if (empty($data['banco_titular_receptor'])) {
+                    return back()->with('error', 'El Banco Receptor es obligatorio para los traslados.');
+                }
+                if ($data['banco_titular'] === $data['banco_titular_receptor']) {
+                    return back()->with('error', 'El Banco Emisor y el Banco Receptor no pueden ser exactamente iguales.');
+                }
+                if (empty($data['motivo'])) {
+                    return back()->with('error', 'El Motivo es obligatorio para los traslados.');
+                }
+                if (empty($data['monto_bs']) || $data['monto_bs'] <= 0) {
+                    return back()->with('error', 'El Monto debe ser mayor a cero.');
                 }
             }
-            if (empty($desglose)) {
-                $desglose = null;
+
+            $cuentaInfo = explode('|', $data['banco_titular']);
+            $banco = $cuentaInfo[0] ?? null;
+            $titular = $cuentaInfo[1] ?? null;
+            $categoria_cuenta = $cuentaInfo[2] ?? null;
+
+            $banco_receptor = null;
+            $titular_receptor = null;
+            
+            if ($data['categoria_egreso'] === 'traslados') {
+                if (!empty($data['banco_titular_receptor'])) {
+                    $cuentaReceptorInfo = explode('|', $data['banco_titular_receptor']);
+                    $banco_receptor = $cuentaReceptorInfo[0] ?? null;
+                    $titular_receptor = $cuentaReceptorInfo[1] ?? null;
+                }
+            } else {
+                if (!empty($data['beneficiario'])) {
+                    $titular_receptor = $data['beneficiario'];
+                }
             }
+
+            $resumen = \App\Models\FinanzasResumen::where('fecha', date('Y-m-d'))->first();
+            $tasa_bcv = $resumen ? ($resumen->tasa_bcv_usd ?: 1) : 1;
+            
+            $monto_usd = $data['monto_usd'] ?? 0;
+            $monto_bs = $data['monto_bs'] ?? 0;
+            $comision = $data['comision'] ?? 0;
+            
+            $diferencial_cambiario = array_key_exists('diferencial_cambiario', $data) && $data['diferencial_cambiario'] !== null 
+                                     ? $data['diferencial_cambiario'] 
+                                     : null;
+                                     
+            $tasa_cambio = $data['tasa_cambio'] ?? null;
+            $calc_usd = $monto_usd > 0 ? $monto_usd : ($tasa_cambio > 0 ? round($monto_bs / $tasa_cambio, 2) : null);
+
+            if ($diferencial_cambiario === null && $data['categoria_egreso'] !== 'traslados' && $data['categoria_egreso'] !== 'egreso_divisas' && $tasa_bcv > 0) {
+                $diferencial_cambiario = (($calc_usd * $tasa_bcv) - $monto_bs) / $tasa_bcv;
+            }
+            $diferencial_cambiario = $diferencial_cambiario ?: 0;
+
+            $comprobante_url = null;
+            $comprobantes_arr = [];
+            if ($request->hasFile('comprobantes')) {
+                foreach ($request->file('comprobantes') as $file) {
+                    $url = $this->uploadComprobante($file, $data['referencia'] ?? null);
+                    if ($url) {
+                        $comprobantes_arr[] = $url;
+                        if (!$comprobante_url) $comprobante_url = $url; // first one as legacy field
+                    }
+                }
+            } elseif ($request->hasFile('comprobante')) {
+                // Backwards compat: single file
+                $comprobante_url = $this->uploadComprobante($request->file('comprobante'), $data['referencia'] ?? null);
+                if ($comprobante_url) $comprobantes_arr[] = $comprobante_url;
+            }
+
+            $desglose = null;
+            if (!empty($data['desglose_monto'])) {
+                $desglose = [];
+                foreach ($data['desglose_monto'] as $index => $monto_val) {
+                    $cedula = $data['desglose_cedula'][$index] ?? '';
+                    $monto_desglose = $monto_val ?? 0;
+                    if ($cedula || $monto_desglose) {
+                        $desglose[] = [
+                            'cedula' => $cedula,
+                            'sede' => $data['desglose_sede'][$index] ?? '',
+                            'tipo_gasto' => $data['desglose_tipo_gasto'][$index] ?? '',
+                            'monto' => (float)$monto_desglose,
+                            'monto_usd' => (float)($data['desglose_monto_usd'][$index] ?? 0),
+                        ];
+                    }
+                }
+                if (empty($desglose)) {
+                    $desglose = null;
+                }
+            }
+
+            FlujoCaja::create([
+                'fecha'                 => $data['fecha'],
+                'tipo'                  => 'egreso',
+                'categoria_egreso'      => $data['categoria_egreso'],
+                'banco'                 => $banco,
+                'titular'               => $titular,
+                'categoria_cuenta'      => $categoria_cuenta,
+                'banco_receptor'        => $banco_receptor,
+                'titular_receptor'      => $titular_receptor,
+                'referencia'            => $data['referencia'] ?? null,
+                'monto_usd'             => $calc_usd ?? 0,
+                'tasa_cambio'           => $tasa_cambio ?? 0,
+                'diferencial_cambiario' => $diferencial_cambiario ?? 0,
+                'monto_bs'              => $monto_bs ?? 0,
+                'comision'              => $comision,
+                'tipo_gasto'            => $data['tipo_gasto'] ?? null,
+                'motivo'                => $data['motivo'] ?? null,
+                'sede'                  => $data['sede'] ?? null,
+                'placa_vehiculo'        => $data['placa_vehiculo'] ?? null,
+                'comprobante_url'       => $comprobante_url,
+                'comprobantes'          => !empty($comprobantes_arr) ? $comprobantes_arr : null,
+                'desglose'              => $desglose,
+            ]);
+
+            $this->syncTotalesSalidas($data['fecha']);
+
+            return redirect()->back()->with('success', 'Egreso registrado correctamente.');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Error registrando egreso: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error del sistema: ' . $e->getMessage());
         }
-
-        FlujoCaja::create([
-            'fecha'                 => $data['fecha'],
-            'tipo'                  => 'egreso',
-            'categoria_egreso'      => $data['categoria_egreso'],
-            'banco'                 => $banco,
-            'titular'               => $titular,
-            'categoria_cuenta'      => $categoria_cuenta,
-            'banco_receptor'        => $banco_receptor,
-            'titular_receptor'      => $titular_receptor,
-            'referencia'            => $data['referencia'] ?? null,
-            'monto_usd'             => $calc_usd ?? 0,
-            'tasa_cambio'           => $tasa_cambio ?? 0,
-            'diferencial_cambiario' => $diferencial_cambiario ?? 0,
-            'monto_bs'              => $monto_bs ?? 0,
-            'comision'              => $comision,
-            'tipo_gasto'            => $data['tipo_gasto'] ?? null,
-            'motivo'                => $data['motivo'] ?? null,
-            'sede'                  => $data['sede'] ?? null,
-            'placa_vehiculo'        => $data['placa_vehiculo'] ?? null,
-            'comprobante_url'       => $comprobante_url,
-            'comprobantes'          => !empty($comprobantes_arr) ? $comprobantes_arr : null,
-            'desglose'              => $desglose,
-        ]);
-
-        $this->syncTotalesSalidas($data['fecha']);
-
-        return redirect()->back()->with('success', 'Egreso registrado correctamente.');
     }
 
     private function uploadComprobante($file, ?string $referencia): ?string
@@ -527,7 +532,7 @@ class FinanzasController extends Controller
             'motivo'                 => 'nullable|string',
             'sede'                   => 'nullable|string',
             'placa_vehiculo'         => 'nullable|string',
-            'fecha'                  => 'required|date',
+            'fecha'                  => 'required|date|before_or_equal:today',
             'desglose_beneficiario'  => 'nullable|array',
             'desglose_cedula'        => 'nullable|array',
             'desglose_monto'         => 'nullable|array',
@@ -669,7 +674,7 @@ class FinanzasController extends Controller
             'egresos.*.monto_bs' => 'nullable|numeric',
             'egresos.*.tipo_gasto' => 'nullable|string',
             'egresos.*.motivo' => 'nullable|string',
-            'egresos.*.fecha' => 'required|date'
+            'egresos.*.fecha' => 'required|date|before_or_equal:today'
         ]);
 
         $resumen = \App\Models\FinanzasResumen::where('fecha', date('Y-m-d'))->first();
@@ -934,6 +939,7 @@ class FinanzasController extends Controller
             // Sin registrar
             $sin_registrar = $lineas_normales->where('estado', 'pendiente')
                 ->map(fn($l) => [
+                    'id'          => $l->id,
                     'fecha'       => $l->fecha,
                     'referencia'  => $l->referencia,
                     'descripcion' => $l->descripcion,
@@ -1463,6 +1469,13 @@ class FinanzasController extends Controller
         return redirect()->route('finanzas.conciliaciones')->with('success', 'Línea ignorada.');
     }
 
+    public function manualConciliacion(Request $request) {
+        $linea = \App\Models\ConciliacionLinea::findOrFail($request->linea_id);
+        $linea->estado = 'conciliado';
+        $linea->save();
+        return redirect()->route('finanzas.conciliaciones')->with('success', 'Línea marcada como conciliada manualmente.');
+    }
+
     public function reporteConciliacion(Request $request) {
         $banco_filtro = $request->query('banco_filtro');
         
@@ -1568,6 +1581,7 @@ class FinanzasController extends Controller
 
         $sin_registrar = $lineas_normales->where('estado', 'pendiente')
             ->map(fn($l) => [
+                'id'          => $l->id,
                 'fecha'       => $l->fecha,
                 'referencia'  => $l->referencia,
                 'descripcion' => $l->descripcion,

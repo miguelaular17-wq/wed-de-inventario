@@ -99,6 +99,7 @@
                                         <option value="contabilidad" @selected($user->role === 'contabilidad')>Contabilidad</option>
                                         <option value="auditor" @selected($user->role === 'auditor')>Auditor</option>
                                         <option value="tesoreria" @selected($user->role === 'tesoreria')>Tesorería</option>
+                                        <option value="gerente" @selected($user->role === 'gerente')>Gerente</option>
                                     </select>
                                 </div>
                                 <div class="field" style="margin:0;">
