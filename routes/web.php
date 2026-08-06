@@ -155,6 +155,12 @@ Route::middleware(['auth', 'role:admin,gerente,comprador,marketing'])->prefix('c
     Route::post('/pedidos/reporte-pdf', [PedidoSolicitadoController::class, 'reportePdf'])->name('comprador.pedidos.pdf');
     Route::get('/pedidos/reporte-diario', [PedidoSolicitadoController::class, 'reporteDiarioPdf'])->name('comprador.pedidos.diario');
 
+    // Route for supervisors to download daily report by sede
+    Route::get('/pedidos/reporte-diario-sede', [PedidoSolicitadoController::class, 'reporteDiarioSedePdf'])
+        ->withoutMiddleware('role:admin,gerente,comprador,marketing')
+        ->middleware('role:supervisor,admin,gerente')
+        ->name('comprador.pedidos.diario_sede');
+
     // Existencias (antes edurar)
     Route::get('/existencias', [\App\Http\Controllers\ExistenciasController::class, 'index'])->name('comprador.existencias');
     Route::get('/existencias/subcategorias', [\App\Http\Controllers\ExistenciasController::class, 'getSubcategorias'])->name('comprador.existencias.subcategorias');
@@ -170,6 +176,7 @@ Route::middleware(['auth', 'role:admin,gerente,tesoreria'])->prefix('tesoreria')
     Route::get('/', [\App\Http\Controllers\TesoreriaController::class, 'dashboard'])->name('dashboard');
     Route::post('/ingreso-banco', [\App\Http\Controllers\TesoreriaController::class, 'storeIngresoBanco'])->name('ingreso_banco.store');
     Route::post('/lote-punto-venta', [\App\Http\Controllers\TesoreriaController::class, 'storeLotePuntoVenta'])->name('lote_pos.store');
+    Route::delete('/lote-punto-venta/{id}', [\App\Http\Controllers\TesoreriaController::class, 'destroyLotePuntoVenta'])->name('lote_pos.destroy');
 });
 
 // Notifications routes for all authenticated users
@@ -252,6 +259,7 @@ Route::middleware(['auth', 'role:admin,gerente,finanzas,cobranza'])->prefix('con
     Route::get('/crear', [App\Http\Controllers\ContratoController::class, 'create'])->name('contratos.create');
     Route::post('/', [App\Http\Controllers\ContratoController::class, 'store'])->name('contratos.store');
     Route::post('/importar', [App\Http\Controllers\ContratoController::class, 'importarExcel'])->name('contratos.importar');
+    Route::post('/seguimiento', [App\Http\Controllers\ContratoController::class, 'agregarSeguimiento'])->name('contratos.seguimiento');
     Route::get('/{id}', [App\Http\Controllers\ContratoController::class, 'show'])->name('contratos.show');
     Route::get('/{id}/editar', [App\Http\Controllers\ContratoController::class, 'edit'])->name('contratos.edit');
     Route::post('/{id}', [App\Http\Controllers\ContratoController::class, 'update'])->name('contratos.update');
@@ -260,7 +268,6 @@ Route::middleware(['auth', 'role:admin,gerente,finanzas,cobranza'])->prefix('con
     Route::post('/cuota/{id}/pagar', [App\Http\Controllers\ContratoController::class, 'registrarPago'])->name('contratos.pagar');
     Route::post('/{id}/generar-cuota', [App\Http\Controllers\ContratoController::class, 'generarSiguienteCuota'])->name('contratos.generarCuota');
     Route::post('/{id}/aumentar-capital', [App\Http\Controllers\ContratoController::class, 'aumentarCapital'])->name('contratos.aumentarCapital');
-    Route::post('/seguimiento', [App\Http\Controllers\ContratoController::class, 'agregarSeguimiento'])->name('contratos.seguimiento');
     Route::get('/{id}/reporte', [App\Http\Controllers\ContratoController::class, 'reporte'])->name('contratos.reporte');
 });
 

@@ -64,6 +64,7 @@
                             <th style="padding: 12px 8px; color: #64748b; font-weight: 600;">Lote / Ref</th>
                             <th style="padding: 12px 8px; color: #64748b; font-weight: 600;">Monto</th>
                             <th style="padding: 12px 8px; color: #64748b; font-weight: 600;">Descripción</th>
+                            <th style="padding: 12px 8px; color: #64748b; font-weight: 600; text-align: right;">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -74,6 +75,15 @@
                             <td style="padding: 12px 8px; font-weight: 500; color: #1e293b;">{{ $lote->lote_referencia }}</td>
                             <td style="padding: 12px 8px; color: #059669; font-weight: 600;">${{ number_format($lote->monto, 2) }}</td>
                             <td style="padding: 12px 8px; color: #64748b; font-size: 0.9rem;">{{ $lote->descripcion ?: '-' }}</td>
+                            <td style="padding: 12px 8px; text-align: right;">
+                                <form action="{{ route('tesoreria.lote_pos.destroy', $lote->id) }}" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar este lote POS?');" style="display: inline-block;">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px;" title="Eliminar">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                                    </button>
+                                </form>
+                            </td>
                         </tr>
                         @empty
                         <tr>
@@ -145,6 +155,7 @@
                     <option value="BNC LNACEH">BNC LNACEH</option>
                     <option value="BNC JRZ">BNC JRZ</option>
                     <option value="BBVA LNACEH">BBVA LNACEH</option>
+                    <option value="PROVINCIAL JRZ">PROVINCIAL JRZ</option>
                 </select>
             </div>
             <div style="margin-bottom: 16px;">

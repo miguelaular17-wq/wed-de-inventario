@@ -157,4 +157,12 @@ class TesoreriaController extends Controller
 
         return back()->with('success', 'Lote de punto de venta registrado exitosamente.');
     }
+
+    public function destroyLotePuntoVenta($id)
+    {
+        $lote = TesoreriaIngreso::where('tipo', 'punto_venta')->findOrFail($id);
+        $lote->delete();
+        
+        return back()->with('success', 'Lote de punto de venta eliminado exitosamente.');
+    }
 }

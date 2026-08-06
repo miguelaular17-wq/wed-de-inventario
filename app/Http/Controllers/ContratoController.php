@@ -124,7 +124,7 @@ class ContratoController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     // SHOW — Detalle de un contrato
     // ─────────────────────────────────────────────────────────────────────────
-    public function show(int $id)
+    public function show($id)
     {
         $contrato = Contrato::with([
             'cuotas',
@@ -245,14 +245,14 @@ class ContratoController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     // EDIT / UPDATE
     // ─────────────────────────────────────────────────────────────────────────
-    public function edit(int $id)
+    public function edit($id)
     {
         $contrato = Contrato::findOrFail($id);
         $asesores = User::orderBy('name')->get(['id', 'name']);
         return view('contratos.edit', compact('contrato', 'asesores'));
     }
 
-    public function update(Request $request, int $id)
+    public function update(Request $request, $id)
     {
         $contrato = Contrato::findOrFail($id);
         $data = $request->validate([
@@ -307,7 +307,7 @@ class ContratoController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     // LIQUIDAR (REFINANCIAR) CONTRATO
     // ─────────────────────────────────────────────────────────────────────────
-    public function liquidar(int $id)
+    public function liquidar($id)
     {
         $contrato = Contrato::findOrFail($id);
         if ($contrato->estado === 'liquidado') {
@@ -316,7 +316,7 @@ class ContratoController extends Controller
         return view('contratos.liquidar', compact('contrato'));
     }
 
-    public function liquidarStore(Request $request, int $id)
+    public function liquidarStore(Request $request, $id)
     {
         $contratoViejo = Contrato::findOrFail($id);
         if ($contratoViejo->estado === 'liquidado') {
@@ -401,7 +401,7 @@ class ContratoController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     // GENERAR REPORTE (PDF)
     // ─────────────────────────────────────────────────────────────────────────
-    public function reporte(int $id)
+    public function reporte($id)
     {
         $contrato = Contrato::with(['cuotas' => function($q) {
             $q->orderBy('numero_cuota');
@@ -414,7 +414,7 @@ class ContratoController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     // REGISTRAR PAGO de una cuota
     // ─────────────────────────────────────────────────────────────────────────
-    public function registrarPago(Request $request, int $cuotaId)
+    public function registrarPago(Request $request, $cuotaId)
     {
         $cuota = ContratoCuota::findOrFail($cuotaId);
 
@@ -507,7 +507,7 @@ class ContratoController extends Controller
         return redirect()->back()->with('success', 'Pago registrado correctamente.');
     }
 
-    public function generarSiguienteCuota(int $id)
+    public function generarSiguienteCuota($id)
     {
         $contrato = Contrato::findOrFail($id);
 
@@ -568,7 +568,7 @@ class ContratoController extends Controller
         return redirect()->back()->with('success', 'Siguiente cuota generada exitosamente.');
     }
 
-    public function aumentarCapital(Request $request, int $id)
+    public function aumentarCapital(Request $request, $id)
     {
         $contrato = Contrato::findOrFail($id);
         

@@ -3,15 +3,27 @@
 @section('title', 'Ventas')
 
 @section('content')
-<div class="page-header">
-    <h1>Ventas — {{ $sede }}</h1>
-    <p class="lead">
-        Mostrando {{ $rows->count() }} de {{ $calculatedCount }} productos calculados
-        @if ($rows->lastPage() > 1)
-            · Página {{ $rows->currentPage() }}/{{ $rows->lastPage() }}
-        @endif
-        .
-    </p>
+<div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 15px;">
+    <div>
+        <h1 style="margin-top: 0;">Ventas — {{ $sede }}</h1>
+        <p class="lead">
+            Mostrando {{ $rows->count() }} de {{ $calculatedCount }} productos calculados
+            @if ($rows->lastPage() > 1)
+                · Página {{ $rows->currentPage() }}/{{ $rows->lastPage() }}
+            @endif
+            .
+        </p>
+    </div>
+    @if(auth()->user() && auth()->user()->isSupervisor())
+    <div>
+        <a href="{{ route('comprador.pedidos.diario_sede') }}" class="btn" style="background: #ef4444; color: white; display: inline-flex; align-items: center; gap: 8px;">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Descargar Reporte Diario
+        </a>
+    </div>
+    @endif
 </div>
 
 <form id="filters-form" method="GET" class="filter-bar" data-auto-filter data-auto-filter-delay="350" data-auto-filter-target="#ventas-content" data-tour="ventas-filters">

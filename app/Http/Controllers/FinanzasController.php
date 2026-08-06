@@ -849,7 +849,7 @@ class FinanzasController extends Controller
             // TESORO: "COMIS USO CANAL", "BELOW MINIMUM BALANCE", "STAMENT SERVICE"
             'comis uso canal', 'stament service',
             // BANESCO: "SERV MTTO. POS"
-            'serv mtto',
+            'serv mtto','com. banesco pago movil','contraprestacion pago proveedores',
             // BANCARIBE/BANCAMIGA
             'cobro de comision', 'tarifa por',
         ];

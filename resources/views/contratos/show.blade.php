@@ -235,8 +235,52 @@
         </div>
     </div>
 
+    {{-- Historial de Pagos --}}
+    <h3 style="color: var(--blue); margin-bottom: 12px; margin-top: 30px;">💰 Historial de Pagos</h3>
+    <div class="panel" style="padding: 0; overflow: hidden; margin-bottom: 20px;">
+        <div class="table-wrap">
+            <table class="data-table" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Fecha/Hora</th>
+                        <th>Usuario</th>
+                        <th>Resultado</th>
+                        <th>Promesa de Pago</th>
+                        <th>Cuota</th>
+                        <th>Comentarios</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($contrato->seguimientos->whereIn('resultado', ['PAGO_COMPLETO', 'PAGO_PARCIAL']) as $seg)
+                        @php
+                            $resColor = match($seg->resultado) {
+                                'PAGO_COMPLETO'  => 'background:#059669; color:white;',
+                                'PAGO_PARCIAL'   => 'background:#10b981; color:white;',
+                                default          => 'background:#e2e8f0; color:#475569;',
+                            };
+                        @endphp
+                        <tr>
+                            <td style="font-size: 0.85rem; white-space: nowrap;">{{ $seg->fecha_hora?->format('d/m/Y H:i') }}</td>
+                            <td style="font-weight: 500;">{{ $seg->usuario?->name ?? '—' }}</td>
+                            <td>
+                                <span style="padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; {{ $resColor }}">
+                                    {{ $seg->resultadoLabel() }}
+                                </span>
+                            </td>
+                            <td style="font-size: 0.85rem;">{{ $seg->fecha_prometida_pago?->format('d/m/Y') ?? '—' }}</td>
+                            <td style="font-size: 0.85rem;">{{ $seg->cuota ? '#'.$seg->cuota->numero_cuota : '—' }}</td>
+                            <td style="font-size: 0.85rem; color: #475569; max-width: 300px; overflow: hidden; text-overflow: ellipsis;">{{ $seg->comentarios ?: '—' }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="6" style="text-align: center; padding: 30px; color: #94a3b8;">No hay pagos registrados.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     {{-- Seguimientos --}}
-    <h3 style="color: var(--blue); margin-bottom: 12px;">📞 Historial de Seguimiento</h3>
+    <h3 style="color: var(--blue); margin-bottom: 12px;">📞 Historial de Seguimiento / Llamadas</h3>
     <div class="panel" style="padding: 0; overflow: hidden;">
         <div class="table-wrap">
             <table class="data-table" style="width: 100%;">
@@ -251,10 +295,9 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse($contrato->seguimientos as $seg)
+                    @forelse($contrato->seguimientos->whereNotIn('resultado', ['PAGO_COMPLETO', 'PAGO_PARCIAL']) as $seg)
                         @php
                             $resColor = match($seg->resultado) {
-                                'PAGO_COMPLETO'  => 'background:#059669; color:white;',
                                 'PROMESA_PAGO'   => 'background:#3b82f6; color:white;',
                                 'NUEVO_PRESTAMO' => 'background:#10b981; color:white;',
                                 'ACUMULADO'      => 'background:#7c3aed; color:white;',

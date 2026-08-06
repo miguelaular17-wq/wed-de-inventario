@@ -174,11 +174,42 @@
                     <span class="bank-stat-value red">Bs. {{ number_format($d['total_sin_registrar'], 2) }}</span>
                 </div>
                 <div class="bank-stat">
-                    <span class="bank-stat-label">🏦 Comisiones</span>
+                    <span class="bank-stat-label">🏛️ Comisiones</span>
                     <span class="bank-stat-value orange">Bs. {{ number_format($d['total_comisiones'], 2) }}</span>
                 </div>
             </div>
+
+            {{-- New row for manual reconciliation calculation --}}
+            <div style="margin-top: 10px; padding: 6px 12px; background: rgba(255,255,255,0.05); border-radius: 6px; display: inline-flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                <div style="display:flex; flex-direction:column; gap: 2px;">
+                    <label style="font-size: 0.65rem; color: rgba(255,255,255,0.6); text-transform: uppercase; margin: 0;">Saldo Banco (Manual)</label>
+                    <input type="number" step="0.01" class="saldo-banco-input" data-idx="{{ $loop->index }}" 
+                           data-consolidados="{{ $d['total_conciliados'] }}"
+                           data-transito="{{ $d['total_transito'] }}"
+                           data-movbanco="{{ $d['total_sin_registrar'] }}"
+                           data-comisiones="{{ $d['total_comisiones'] }}"
+                           placeholder="0.00"
+                           style="background: white; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; font-weight: bold; width: 120px; font-size: 0.85rem; color: #334155; margin: 0; height: auto;">
+                </div>
+                
+                <div style="font-size: 1.1rem; color: rgba(255,255,255,0.3);"> = </div>
+                
+                <div style="display:flex; flex-direction:column; gap: 2px;">
+                    <label style="font-size: 0.65rem; color: rgba(255,255,255,0.6); text-transform: uppercase; margin: 0;">Saldo Sistema (Calc)</label>
+                    <span id="saldo_sis_{{ $loop->index }}" style="font-size: 0.9rem; font-weight: bold; color: white;">Bs. 0.00</span>
+                </div>
+
+                <div style="font-size: 1.1rem; color: rgba(255,255,255,0.3);"> | </div>
+
+                <div style="display:flex; flex-direction:column; gap: 2px;">
+                    <label style="font-size: 0.65rem; color: rgba(255,255,255,0.6); text-transform: uppercase; margin: 0;">Diferencia</label>
+                    <span id="dif_{{ $loop->index }}" style="font-size: 0.9rem; font-weight: bold; color: white;">Bs. 0.00</span>
+                </div>
+                
+                <div id="status_{{ $loop->index }}" style="margin-left: 5px; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; font-weight: bold; display: none;"></div>
+            </div>
         </div>
+
 
         {{-- 4 sections grid --}}
         <div class="sections-grid">

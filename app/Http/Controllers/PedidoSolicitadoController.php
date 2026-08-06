@@ -110,6 +110,7 @@ class PedidoSolicitadoController extends Controller
             'categoria' => ['nullable', 'string', 'max:255'],
             'proveedor' => ['nullable', 'string', 'max:255'],
             'solicitante' => ['nullable', 'string', 'max:120'],
+            'sede' => ['nullable', 'string', 'max:50'],
             'notas' => ['nullable', 'string', 'max:500'],
         ]);
 
@@ -120,6 +121,7 @@ class PedidoSolicitadoController extends Controller
             'categoria' => $data['categoria'] ?? null,
             'proveedor' => $data['proveedor'] ?? null,
             'solicitante' => $data['solicitante'] ?? null,
+            'sede' => $data['sede'] ?? null,
             'notas' => $data['notas'] ?? null,
             'estado' => 'pendiente',
         ]);
@@ -194,6 +196,28 @@ class PedidoSolicitadoController extends Controller
             
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('comprador.reporte_diario', ['pedidos' => $pedidos]);
         return $pdf->download('reporte_diario_qpedir_'.date('Ymd').'.pdf');
+    }
+
+    public function reporteDiarioSedePdf(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || !$user->sede) {
+            return redirect()->back()->with('error', 'No tienes una sede asignada para generar el reporte.');
+        }
+
+        $pedidos = PedidoSolicitado::where('estado', 'pendiente')
+            ->whereDate('created_at', now()->toDateString())
+            ->where('sede', $user->sede)
+            ->selectRaw('producto, MAX(codigo) as codigo, MAX(categoria) as categoria, COUNT(*) as frecuencia, MAX(created_at) as created_at')
+            ->groupBy('producto')
+            ->orderByDesc('frecuencia')
+            ->get();
+            
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reporte_diario_sede', [
+            'pedidos' => $pedidos,
+            'sede' => $user->sede
+        ]);
+        return $pdf->download('reporte_diario_sede_'.$user->sede.'_'.date('Ymd').'.pdf');
     }
 
     public function reportePdf(Request $request)

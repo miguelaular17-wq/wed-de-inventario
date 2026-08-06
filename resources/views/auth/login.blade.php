@@ -141,8 +141,19 @@
                 <input type="text" id="q-pedir-solicitante" placeholder="Ej: Juan Pérez" maxlength="120">
             </div>
             <div class="auth-field">
+                <label for="q-pedir-sede">Sede</label>
+                <select id="q-pedir-sede" style="width: 100%; padding: 11px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.92rem;">
+                    <option value="">-- Seleccione una sede --</option>
+                    <option value="DORAL">DORAL</option>
+                    <option value="CENTRO">CENTRO</option>
+                    <option value="ZAMORA">ZAMORA</option>
+                    <option value="SAMBIL">SAMBIL</option>
+                    <option value="VIRTUDES">VIRTUDES</option>
+                </select>
+            </div>
+            <div class="auth-field">
                 <label for="q-pedir-notas">Notas (opcional)</label>
-                <input type="text" id="q-pedir-notas" placeholder="Cantidad, urgencia, sede..." maxlength="500">
+                <input type="text" id="q-pedir-notas" placeholder="Cantidad, urgencia..." maxlength="500">
             </div>
             <button type="button" id="q-pedir-guardar" class="btn auth-btn" style="margin-top:8px;">Guardar solicitud</button>
         </div>
@@ -504,6 +515,7 @@
         messageEl.hidden = true;
         selectedProduct = null;
         document.getElementById('q-pedir-solicitante').value = '';
+        document.getElementById('q-pedir-sede').value = '';
         document.getElementById('q-pedir-notas').value = '';
         document.getElementById('q-pedir-categoria').value = '';
         document.getElementById('q-pedir-manual-fields').hidden = true;
@@ -579,6 +591,7 @@
     btnGuardar?.addEventListener('click', async function() {
         if (!selectedProduct) return;
         const solicitante = document.getElementById('q-pedir-solicitante').value.trim();
+        const sede = document.getElementById('q-pedir-sede').value;
         const notas = document.getElementById('q-pedir-notas').value.trim();
         const categoria = document.getElementById('q-pedir-categoria').value;
 
@@ -598,6 +611,7 @@
                 categoria: selectedProduct.isManual ? categoria : (selectedProduct.categoria || null),
                 proveedor: selectedProduct.proveedor || null,
                 solicitante: solicitante,
+                sede: sede,
                 notas: notas
             };
 

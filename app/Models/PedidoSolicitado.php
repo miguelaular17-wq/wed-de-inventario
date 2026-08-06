@@ -15,6 +15,7 @@ class PedidoSolicitado extends Model
         'categoria',
         'proveedor',
         'solicitante',
+        'sede',
         'notas',
         'estado',
         'atendido_at',
