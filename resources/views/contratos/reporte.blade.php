@@ -45,20 +45,14 @@
         <tr>
             <td class="info-label">Garantía</td>
             <td class="info-value">{{ $contrato->garantia ?: 'N/A' }}</td>
-            <td class="info-label">Contacto</td>
-            <td class="info-value">{{ $contrato->contacto ?: 'N/A' }}</td>
+            <td class="info-label">Fecha de Inicio</td>
+            <td class="info-value">{{ $contrato->fecha_inicio?->format('d/m/Y') }}</td>
         </tr>
         <tr>
             <td class="info-label">Teléfono</td>
             <td class="info-value">{{ $contrato->telefono ?: 'N/A' }}</td>
             <td class="info-label">Sede</td>
             <td class="info-value">{{ $contrato->sede ?: 'N/A' }}</td>
-        </tr>
-        <tr>
-            <td class="info-label">Asesor de Cobranza</td>
-            <td class="info-value">{{ $contrato->responsable?->name ?: 'N/A' }}</td>
-            <td class="info-label">Fecha de Inicio</td>
-            <td class="info-value">{{ $contrato->fecha_inicio?->format('d/m/Y') }}</td>
         </tr>
         <tr>
             <td class="info-label">Capital</td>
@@ -143,6 +137,14 @@
         <tr>
             <td class="info-label text-right" style="font-size: 14px; background: #e2e8f0;">CAPITAL ACTUAL</td>
             <td class="text-right" style="font-size: 14px; font-weight: bold; background: #e2e8f0;">${{ number_format($contrato->capital, 2) }}</td>
+        </tr>
+        <tr>
+            <td class="info-label text-right">Cuotas Pendientes</td>
+            <td class="text-right">${{ number_format($totalSaldo, 2) }}</td>
+        </tr>
+        <tr>
+            <td class="info-label text-right" style="font-size: 15px; background: #dbeafe; color: #1e3a8a;">TOTAL DEUDA (Capital + Cuotas)</td>
+            <td class="text-right" style="font-size: 15px; font-weight: bold; background: #dbeafe; color: #1e3a8a;">${{ number_format($contrato->capital + $totalSaldo, 2) }}</td>
         </tr>
     </table>
 
