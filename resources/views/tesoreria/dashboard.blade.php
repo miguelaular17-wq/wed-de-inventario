@@ -139,6 +139,22 @@
         <form action="{{ route('tesoreria.lote_pos.store') }}" method="POST">
             @csrf
             <div style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #475569; margin-bottom: 6px;">Banco</label>
+                <select name="banco" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none;">
+                    <option value="">Seleccione un banco...</option>
+                    <option value="BANESCO JRZ">BANESCO JRZ</option>
+                    <option value="BANESCO DORAL">BANESCO DORAL</option>
+                    <option value="BANESCO LNACEH">BANESCO LNACEH</option>
+                    <option value="BANESCO NUNES">BANESCO NUNES</option>
+                    <option value="BANESCO EURONISSI">BANESCO EURONISSI</option>
+                    <option value="MERCANTIL JRZ">MERCANTIL JRZ</option>
+                    <option value="VENEZUELA DORAL">VENEZUELA DORAL</option>
+                    <option value="VENEZUELA LNACEH">VENEZUELA LNACEH</option>
+                    <option value="VENEZUELA JRZ">VENEZUELA JRZ</option>
+                    <option value="TESORO DORAL">TESORO DORAL</option>
+                    <option value="TESORO LNACEH">TESORO LNACEH</option>
+                    <option value="TESORO JRZ">TESORO JRZ</option>
+                    <option value="BNC DORAL">BNC DORAL</option>
                     <option value="BNC LNACEH">BNC LNACEH</option>
                     <option value="BNC JRZ">BNC JRZ</option>
                     <option value="BBVA LNACEH">BBVA LNACEH</option>
