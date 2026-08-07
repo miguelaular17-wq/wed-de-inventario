@@ -992,6 +992,9 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                                 @if($p['tuvo_ventas'])
                                     <span style="display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; background: #f0fdf4; color: #22c55e; border: 1px solid #22c55e30;">
                                         🟢 ¡Sí, vendido!
+                                        @if(isset($p['cantidad_vendida_desde_pub']) && $p['cantidad_vendida_desde_pub'] > 0)
+                                            ({{ $p['cantidad_vendida_desde_pub'] }} u.)
+                                        @endif
                                     </span>
                                 @else
                                     <span style="display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; background: #fef2f2; color: #ef4444; border: 1px solid #ef444430;">
@@ -1150,9 +1153,25 @@ function switchTab(tabId, btn) {
 async function toggleAdvertising(productId, btn) {
     const originalText = btn.innerText;
     const isCampaignRow = btn.hasAttribute('data-campaign-row');
+    
+    let fechaPublicidad = null;
+    if (!isCampaignRow && originalText.includes('Publicitar')) {
+        const today = new Date().toISOString().split('T')[0];
+        const dateInput = prompt('Ingrese la fecha de inicio de la publicidad (si desea retroactivo):', today);
+        if (dateInput === null) {
+            return; // Cancelled
+        }
+        fechaPublicidad = dateInput;
+    }
+    
     btn.disabled = true;
     btn.innerText = '...';
     try {
+        const payload = { producto_id: productId };
+        if (fechaPublicidad) {
+            payload.fecha_publicidad = fechaPublicidad;
+        }
+        
         const response = await fetch("{{ route('comprador.publicidad.toggle') }}", {
             method: 'POST',
             headers: {
@@ -1160,7 +1179,7 @@ async function toggleAdvertising(productId, btn) {
                 'X-CSRF-TOKEN': '{{ csrf_token() }}',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            body: JSON.stringify({ producto_id: productId })
+            body: JSON.stringify(payload)
         });
         const res = await response.json();
         if (res.success) {

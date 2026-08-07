@@ -139,6 +139,7 @@ class TesoreriaController extends Controller
     {
         $request->validate([
             'banco' => 'required|string',
+            'titular' => 'nullable|string',
             'fecha' => 'required|date',
             'monto' => 'required|numeric',
             'lote_referencia' => 'required|string',
@@ -148,6 +149,7 @@ class TesoreriaController extends Controller
         TesoreriaIngreso::create([
             'tipo' => 'punto_venta',
             'banco' => $request->banco,
+            'titular' => $request->titular,
             'fecha' => $request->fecha,
             'monto' => $request->monto,
             'lote_referencia' => $request->lote_referencia,
@@ -156,6 +158,31 @@ class TesoreriaController extends Controller
         ]);
 
         return back()->with('success', 'Lote de punto de venta registrado exitosamente.');
+    }
+
+    public function updateLotePuntoVenta(Request $request, $id)
+    {
+        $lote = TesoreriaIngreso::where('tipo', 'punto_venta')->findOrFail($id);
+
+        $request->validate([
+            'banco' => 'required|string',
+            'titular' => 'nullable|string',
+            'fecha' => 'required|date',
+            'monto' => 'required|numeric',
+            'lote_referencia' => 'required|string',
+            'descripcion' => 'nullable|string'
+        ]);
+
+        $lote->update([
+            'banco' => $request->banco,
+            'titular' => $request->titular,
+            'fecha' => $request->fecha,
+            'monto' => $request->monto,
+            'lote_referencia' => $request->lote_referencia,
+            'descripcion' => $request->descripcion
+        ]);
+
+        return back()->with('success', 'Lote de punto de venta actualizado exitosamente.');
     }
 
     public function destroyLotePuntoVenta($id)

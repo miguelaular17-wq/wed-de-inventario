@@ -65,7 +65,7 @@
                 </div>
                 <div>
                     <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Interés % (Mensual)</label>
-                    <input type="number" step="0.0001" name="interes_porcentaje" id="inputInteres" value="{{ old('interes_porcentaje', $contrato->interes_porcentaje) }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;" required>
+                    <input type="number" step="any" name="interes_porcentaje" id="inputInteres" value="{{ old('interes_porcentaje', $contrato->interes_porcentaje) }}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;" required>
                 </div>
                 <div>
                     <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Cuota Fija ($)</label>

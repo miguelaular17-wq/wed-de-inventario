@@ -37,6 +37,12 @@ class SyncService:
                 if success and config.get("sync_cobranzas", True):
                     from services.cobranzas_service import CobranzasService
                     CobranzasService.execute()
+                    
+                    try:
+                        from services.compras_service import ComprasService
+                        ComprasService.execute()
+                    except Exception as e:
+                        logger.error(f"Error executing ComprasService: {e}")
                 
                 if success:
                     last_snapshot_date = today

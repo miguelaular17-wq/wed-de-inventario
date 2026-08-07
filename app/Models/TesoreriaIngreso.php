@@ -12,12 +12,14 @@ class TesoreriaIngreso extends Model
     protected $fillable = [
         'tipo',
         'banco',
+        'titular',
         'fecha',
         'monto',
         'lote_referencia',
         'descripcion',
         'comprobante_path',
-        'user_id'
+        'user_id',
+        'es_conciliado'
     ];
 
     public function user()

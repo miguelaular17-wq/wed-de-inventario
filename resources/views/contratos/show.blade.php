@@ -216,16 +216,23 @@
                                     {{ $badgeLabel }}
                                 </span>
                             </td>
-                            <td style="text-align: center; padding: 12px;">
+                            <td style="text-align: center; padding: 12px; display: flex; gap: 5px; justify-content: center; align-items: center;">
                                 @if($contrato->estado === 'liquidado')
                                     <span style="color: #94a3b8; font-size: 0.85rem;">🔒 Bloqueado</span>
-                                @elseif(in_array($cuota->estatus, ['pendiente', 'vencido', 'parcial']))
-                                    <button type="button" onclick="abrirPago({{ $cuota->id }}, {{ $cuota->saldo }}, {{ $cuota->numero_cuota }})"
-                                        style="padding: 4px 10px; background: #059669; color: white; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">💰 Pagar</button>
-                                @elseif(in_array($cuota->estatus, ['prestamo', 'acumulado']))
-                                    <span style="color: #94a3b8; font-size: 0.85rem;">—</span>
                                 @else
-                                    <span style="color: #94a3b8; font-size: 0.85rem;">✓</span>
+                                    @if(in_array($cuota->estatus, ['pendiente', 'vencido', 'parcial']))
+                                        <button type="button" onclick="abrirPago({{ $cuota->id }}, {{ $cuota->saldo }}, {{ $cuota->numero_cuota }})"
+                                            style="padding: 4px 10px; background: #059669; color: white; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">💰 Pagar</button>
+                                    @elseif(in_array($cuota->estatus, ['prestamo', 'acumulado']))
+                                        <span style="color: #94a3b8; font-size: 0.85rem;">—</span>
+                                    @else
+                                        <span style="color: #94a3b8; font-size: 0.85rem;">✓</span>
+                                    @endif
+
+                                    @if(in_array($cuota->estatus, ['pagado', 'parcial']) && !in_array($cuota->estatus, ['prestamo', 'acumulado']))
+                                        <button type="button" onclick="abrirEditarPago({{ $cuota->id }}, {{ $cuota->numero_cuota }}, {{ (float)$cuota->monto_pagado }}, {{ (float)$cuota->abono_capital ?? 0 }})"
+                                            style="padding: 4px 10px; background: #f59e0b; color: white; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer;" title="Editar Montos Pagados">✏️</button>
+                                    @endif
                                 @endif
                             </td>
                         </tr>
@@ -251,11 +258,12 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse($contrato->seguimientos->whereIn('resultado', ['PAGO_COMPLETO', 'PAGO_PARCIAL']) as $seg)
+                    @forelse($contrato->seguimientos->whereIn('resultado', ['PAGO_COMPLETO', 'PAGO_PARCIAL', 'EDICION_PAGO']) as $seg)
                         @php
                             $resColor = match($seg->resultado) {
                                 'PAGO_COMPLETO'  => 'background:#059669; color:white;',
                                 'PAGO_PARCIAL'   => 'background:#10b981; color:white;',
+                                'EDICION_PAGO'   => 'background:#f59e0b; color:white;',
                                 default          => 'background:#e2e8f0; color:#475569;',
                             };
                         @endphp
@@ -365,6 +373,37 @@
             <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;">
                 <button type="button" onclick="document.getElementById('modalPago').style.display='none'" style="padding: 8px 20px; background: #94a3b8; color: white; border: none; border-radius: 6px; cursor: pointer;">Cancelar</button>
                 <button type="submit" style="padding: 8px 20px; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Registrar Pago</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Modal Editar Pago --}}
+<div id="modalEditarPago" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;">
+    <div style="background: white; width: 95%; max-width: 450px; padding: 24px; border-radius: 14px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.15);">
+        <button type="button" onclick="document.getElementById('modalEditarPago').style.display='none'" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
+        <h3 style="margin-top: 0; color: #f59e0b;">✏️ Editar Totales - Cuota #<span id="editPagoNumCuota"></span></h3>
+        
+        <div style="margin-bottom: 12px; font-size: 0.9rem; color: #475569; background: #fffbeb; padding: 10px; border-radius: 8px;">
+            Ajusta los totales pagados en esta cuota. El sistema calculará la diferencia y recalculará automáticamente el capital total y las cuotas futuras pendientes si el abono a capital cambia.
+        </div>
+
+        <form id="formEditarPago" method="POST" action="">
+            @csrf
+            @method('PUT')
+            
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Monto Interés/Cuota Total Pagado</label>
+                <input type="number" step="0.01" name="monto_pagado" id="editPagoMonto" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Abono a Capital Total (Opcional)</label>
+                <input type="number" step="0.01" name="abono_capital" id="editPagoAbono" value="0" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;">
+                <button type="button" onclick="document.getElementById('modalEditarPago').style.display='none'" style="padding: 8px 20px; background: #94a3b8; color: white; border: none; border-radius: 6px; cursor: pointer;">Cancelar</button>
+                <button type="submit" style="padding: 8px 20px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Actualizar Pago y Recalcular</button>
             </div>
         </form>
     </div>
@@ -493,6 +532,14 @@ function abrirPago(cuotaId, saldo, numCuota) {
     document.getElementById('pagoMonto').value = saldo;
     document.getElementById('pagoNumCuota').textContent = numCuota;
     document.getElementById('modalPago').style.display = 'flex';
+}
+
+function abrirEditarPago(cuotaId, numeroCuota, montoPagadoActual, abonoCapitalActual) {
+    document.getElementById('editPagoNumCuota').textContent = numeroCuota;
+    document.getElementById('editPagoMonto').value = montoPagadoActual;
+    document.getElementById('editPagoAbono').value = abonoCapitalActual;
+    document.getElementById('formEditarPago').action = '/contratos/cuota/' + cuotaId + '/pagar';
+    document.getElementById('modalEditarPago').style.display = 'flex';
 }
 
 

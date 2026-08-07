@@ -688,6 +688,7 @@ class CompradorController extends Controller
             // Fetch advertised products (Publicidad)
             $publicitados = \Illuminate\Support\Facades\DB::connection('pgsql')
                 ->table('publicidad_productos as pub')
+                ->where('pub.user_id', auth()->id())
                 ->join('productos as p', 'pub.producto_id', '=', 'p.id')
                 ->leftJoin(
                     \Illuminate\Support\Facades\DB::raw('(SELECT producto_id, SUM(existencia) as total_stock FROM stock_actual GROUP BY producto_id) sa'),
@@ -710,6 +711,14 @@ class CompradorController extends Controller
                     'pub.ultima_venta_original',
                     \Illuminate\Support\Facades\DB::raw('COALESCE(sa.total_stock, 0) as total_stock'),
                     'vh.ultima_venta as ultima_venta_actual',
+                    \Illuminate\Support\Facades\DB::raw("(
+                        SELECT SUM(CAST(m.cantidad AS INTEGER)) 
+                        FROM movimientos m 
+                        WHERE m.producto_id = p.id 
+                          AND m.tipo = 'AJUSTE' 
+                          AND m.usuario = 'sistema_sync' 
+                          AND m.created_at >= pub.fecha_publicidad
+                    ) as cantidad_vendida_desde_pub"),
                 ])
                 ->orderBy('pub.fecha_publicidad', 'desc')
                 ->get();
@@ -738,11 +747,13 @@ class CompradorController extends Controller
                     'ultima_venta_original' => $row->ultima_venta_original ? \Carbon\Carbon::parse($row->ultima_venta_original)->format('d/m/Y') : 'Sin datos',
                     'ultima_venta_actual' => $row->ultima_venta_actual ? \Carbon\Carbon::parse($row->ultima_venta_actual)->format('d/m/Y') : 'Sin datos',
                     'tuvo_ventas' => $tuvoVentas,
+                    'cantidad_vendida_desde_pub' => $row->cantidad_vendida_desde_pub ? (int) $row->cantidad_vendida_desde_pub : 0,
                 ];
             }
 
             $advertisedProductIds = \Illuminate\Support\Facades\DB::connection('pgsql')
                 ->table('publicidad_productos')
+                ->where('user_id', auth()->id())
                 ->pluck('producto_id')
                 ->toArray();
         }
@@ -1118,6 +1129,7 @@ class CompradorController extends Controller
     {
         $data = $request->validate([
             'producto_id' => ['required', 'integer'],
+            'fecha_publicidad' => ['nullable', 'date'],
         ]);
         
         $productoId = $data['producto_id'];
@@ -1130,15 +1142,19 @@ class CompradorController extends Controller
             ]);
         }
         
+        $userId = auth()->id();
+        
         $exists = \Illuminate\Support\Facades\DB::connection('pgsql')
             ->table('publicidad_productos')
             ->where('producto_id', $productoId)
+            ->where('user_id', $userId)
             ->first();
             
         if ($exists) {
             \Illuminate\Support\Facades\DB::connection('pgsql')
                 ->table('publicidad_productos')
                 ->where('producto_id', $productoId)
+                ->where('user_id', $userId)
                 ->delete();
                 
             return response()->json([
@@ -1154,12 +1170,14 @@ class CompradorController extends Controller
                 ->first();
             
             $lastSaleDate = $lastSaleRow ? $lastSaleRow->ultima_venta : null;
+            $fechaPublicidad = isset($data['fecha_publicidad']) ? \Carbon\Carbon::parse($data['fecha_publicidad']) : now();
             
             \Illuminate\Support\Facades\DB::connection('pgsql')
                 ->table('publicidad_productos')
                 ->insert([
                     'producto_id' => $productoId,
-                    'fecha_publicidad' => now(),
+                    'user_id' => $userId,
+                    'fecha_publicidad' => $fechaPublicidad,
                     'ultima_venta_original' => $lastSaleDate,
                     'created_at' => now(),
                     'updated_at' => now(),

@@ -345,6 +345,7 @@
                         <th style="text-align: center;">FECHA EMISIÓN</th>
                         <th style="text-align: center;">DÍAS PREST.</th>
                         <th style="text-align: center;">ESTATUS</th>
+                        <th style="text-align: center;">ACCIONES</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -378,6 +379,11 @@
                                 @else
                                     <span style="background: #f3f4f6; color: black; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold;">APARTADO</span>
                                 @endif
+                            </td>
+                            <td style="text-align: center;" onclick="event.stopPropagation();">
+                                <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #ccc; background-color: #f8f9fa; cursor: pointer; color: #333;" onclick="marcarPagado('{{ $c->id_documento }}', this)">
+                                    Pagado
+                                </button>
                             </td>
                         </tr>
                     @empty
@@ -500,5 +506,43 @@
             }
         });
     });
+
+    async function marcarPagado(idDocumento, btn) {
+        if (!confirm('¿Estás seguro de querer marcar este documento como pagado manualmente? Esto lo ocultará de las estadísticas y listados de cobranza.')) {
+            return;
+        }
+
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = '...';
+
+        try {
+            const response = await fetch("{{ route('cobranza.marcar_pagado') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ id_documento: idDocumento })
+            });
+
+            const res = await response.json();
+            if (res.success) {
+                // Remove row and reload to update totals
+                btn.closest('tr').remove();
+                window.location.reload();
+            } else {
+                alert(res.message || 'Error al marcar como pagado');
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Error de conexión');
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    }
 </script>
 @endpush

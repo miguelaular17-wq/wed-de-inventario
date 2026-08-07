@@ -300,7 +300,32 @@ class ContratoController extends Controller
             $data['garantia_documento'] = $documentoUrl;
         }
 
+        $viejaCuotaFija = $contrato->cuota_fija;
+
         $contrato->update($data);
+
+        // Sincronizar todas las cuotas pendientes con la nueva cuota fija
+        $cuotas = $contrato->cuotas()->whereIn('estatus', ['pendiente', 'vencido', 'parcial'])->get();
+        foreach ($cuotas as $cuota) {
+            // Solo actualizamos si el monto es distinto para no hacer saves innecesarios
+            if (abs($cuota->monto - $data['cuota_fija']) > 0.001) {
+                $cuota->monto = $data['cuota_fija'];
+                $cuota->saldo = max(0, $cuota->monto - $cuota->monto_pagado);
+                
+                // Si por alguna razón el pago ya cubre la nueva cuota
+                if ($cuota->saldo <= 0 && $cuota->monto_pagado > 0) {
+                    $cuota->estatus = 'pagado';
+                    if (!$cuota->fecha_pago) {
+                        $cuota->fecha_pago = now();
+                    }
+                } elseif ($cuota->monto_pagado > 0) {
+                    $cuota->estatus = 'parcial';
+                }
+                
+                $cuota->save();
+            }
+        }
+
         return redirect()->route('contratos.show', $id)->with('success', 'Contrato actualizado correctamente.');
     }
 
@@ -505,6 +530,87 @@ class ContratoController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Pago registrado correctamente.');
+    }
+
+    public function actualizarPagoCuota(Request $request, $cuotaId)
+    {
+        $cuota = ContratoCuota::findOrFail($cuotaId);
+        
+        $data = $request->validate([
+            'monto_pagado'  => 'required|numeric|min:0',
+            'abono_capital' => 'nullable|numeric|min:0',
+        ]);
+
+        $nuevoMontoPagado  = (float) $data['monto_pagado'];
+        $nuevoAbonoCapital = (float) ($data['abono_capital'] ?? 0);
+        
+        $viejoMontoPagado = (float) $cuota->monto_pagado;
+        $viejoAbonoCapital = (float) $cuota->abono_capital;
+
+        // Calcular la diferencia (lo nuevo menos lo viejo)
+        $diffMontoPagado = $nuevoMontoPagado - $viejoMontoPagado;
+        $diffAbonoCapital = $nuevoAbonoCapital - $viejoAbonoCapital;
+
+        $contrato = $cuota->contrato;
+
+        // 1. Actualizar el capital total del contrato si hubo cambios en abono a capital
+        if ($diffAbonoCapital != 0) {
+            // Si diff es negativo (quitó capital), se suma al total a pagar. Si es positivo (añadió), se resta.
+            $nuevoTotalPagar = max(0, (float) $contrato->getRawOriginal('total_a_pagar') - $diffAbonoCapital);
+            
+            $nuevaCuotaFija = (float) $contrato->interes_porcentaje > 0
+                ? round($nuevoTotalPagar * (float) $contrato->interes_porcentaje, 2)
+                : (float) $contrato->cuota_fija;
+
+            $contrato->update([
+                'total_a_pagar' => $nuevoTotalPagar,
+                'cuota_fija'    => $nuevaCuotaFija,
+            ]);
+
+            // Recalcular monto de cuotas futuras pendientes
+            if ($nuevaCuotaFija >= 0) {
+                $contrato->cuotas()
+                    ->whereIn('estatus', ['pendiente', 'parcial'])
+                    ->where('id', '>', $cuota->id)
+                    ->update(['monto' => $nuevaCuotaFija, 'saldo' => \DB::raw("GREATEST(0, $nuevaCuotaFija - monto_pagado)")]);
+            }
+        }
+
+        // 2. Actualizar la cuota actual
+        $montoTotal = (float) $cuota->monto;
+        $nuevoSaldo = max(0, $montoTotal - $nuevoMontoPagado);
+
+        if ($nuevoMontoPagado == 0 && $nuevoAbonoCapital == 0) {
+            if (\Carbon\Carbon::parse($cuota->fecha_vencimiento)->isPast()) {
+                $estatus = 'vencido';
+            } else {
+                $estatus = 'pendiente';
+            }
+            $nuevoSaldo = $montoTotal;
+        } elseif ($nuevoSaldo <= 0) {
+            $estatus = 'pagado';
+            $nuevoSaldo = 0;
+        } else {
+            $estatus = 'parcial';
+        }
+
+        $cuota->update([
+            'monto_pagado'  => $nuevoMontoPagado,
+            'abono_capital' => $nuevoAbonoCapital,
+            'saldo'         => $nuevoSaldo,
+            'estatus'       => $estatus,
+        ]);
+
+        // 3. Registrar en historial
+        ContratoSeguimiento::create([
+            'contrato_id'  => $contrato->id,
+            'user_id'      => auth()->id(),
+            'resultado'    => 'EDICION_PAGO',
+            'comentarios'  => "Edición de totales en Cuota #{$cuota->numero_cuota}. Anterior: Pagado \$$viejoMontoPagado, Capital \$$viejoAbonoCapital. Nuevo: Pagado \$$nuevoMontoPagado, Capital \$$nuevoAbonoCapital.",
+            'fecha_hora'   => now(),
+        ]);
+
+        return redirect()->back()->with('success', 'Pago actualizado y saldos recalculados correctamente.');
     }
 
     public function generarSiguienteCuota($id)

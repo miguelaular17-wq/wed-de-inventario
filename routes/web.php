@@ -176,6 +176,7 @@ Route::middleware(['auth', 'role:admin,gerente,tesoreria'])->prefix('tesoreria')
     Route::get('/', [\App\Http\Controllers\TesoreriaController::class, 'dashboard'])->name('dashboard');
     Route::post('/ingreso-banco', [\App\Http\Controllers\TesoreriaController::class, 'storeIngresoBanco'])->name('ingreso_banco.store');
     Route::post('/lote-punto-venta', [\App\Http\Controllers\TesoreriaController::class, 'storeLotePuntoVenta'])->name('lote_pos.store');
+    Route::put('/lote-punto-venta/{id}', [\App\Http\Controllers\TesoreriaController::class, 'updateLotePuntoVenta'])->name('lote_pos.update');
     Route::delete('/lote-punto-venta/{id}', [\App\Http\Controllers\TesoreriaController::class, 'destroyLotePuntoVenta'])->name('lote_pos.destroy');
 });
 
@@ -248,6 +249,7 @@ Route::middleware(['auth', 'role:admin,gerente,cobranza'])->prefix('cobranza')->
     Route::post('/limpiar', [CobranzaController::class, 'limpiarClientes'])->name('cobranza.limpiar');
     Route::post('/guardar-resumen', [CobranzaController::class, 'guardarResumen'])->name('cobranza.guardar_resumen');
     Route::post('/marcar-personal', [CobranzaController::class, 'marcarPersonal'])->name('cobranza.marcar_personal');
+    Route::post('/marcar-pagado-manualmente', [CobranzaController::class, 'marcarPagadoManualmente'])->name('cobranza.marcar_pagado');
 });
 Route::get('/finanzas/reporte-consolidado', [App\Http\Controllers\FinanzasController::class, 'reporteConsolidado'])->name('finanzas.reporte_consolidado');
 
@@ -266,6 +268,7 @@ Route::middleware(['auth', 'role:admin,gerente,finanzas,cobranza'])->prefix('con
     Route::get('/{id}/liquidar', [App\Http\Controllers\ContratoController::class, 'liquidar'])->name('contratos.liquidar');
     Route::post('/{id}/liquidar', [App\Http\Controllers\ContratoController::class, 'liquidarStore'])->name('contratos.liquidar.store');
     Route::post('/cuota/{id}/pagar', [App\Http\Controllers\ContratoController::class, 'registrarPago'])->name('contratos.pagar');
+    Route::put('/cuota/{id}/pagar', [App\Http\Controllers\ContratoController::class, 'actualizarPagoCuota'])->name('contratos.actualizar_pago');
     Route::post('/{id}/generar-cuota', [App\Http\Controllers\ContratoController::class, 'generarSiguienteCuota'])->name('contratos.generarCuota');
     Route::post('/{id}/aumentar-capital', [App\Http\Controllers\ContratoController::class, 'aumentarCapital'])->name('contratos.aumentarCapital');
     Route::get('/{id}/reporte', [App\Http\Controllers\ContratoController::class, 'reporte'])->name('contratos.reporte');

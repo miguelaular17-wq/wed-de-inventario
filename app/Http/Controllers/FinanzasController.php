@@ -777,53 +777,106 @@ class FinanzasController extends Controller
         $lineas = $lineas_query->get();
 
         // 3. Motor de emparejamiento automático
-        $lineas_pendientes = $lineas->where('estado', 'pendiente')->whereNull('flujo_caja_id');
+        $lineas_pendientes = $lineas->where('estado', 'pendiente')->whereNull('flujo_caja_id')->whereNull('tesoreria_ingreso_id');
         if ($lineas_pendientes->count() > 0) {
             $fecha_minima    = now()->subDays(90)->format('Y-m-d');
+            
+            // Flujos de caja pendientes (egresos)
             $flujos_posibles = \App\Models\FlujoCaja::where('es_conciliado', false)
                 ->where('tipo', 'egreso')
                 ->where('fecha', '>=', $fecha_minima)
                 ->get();
+
+            // Ingresos de tesorería pendientes
+            $tesoreria_posibles = \App\Models\TesoreriaIngreso::where('es_conciliado', false)
+                ->where('fecha', '>=', $fecha_minima)
+                ->get();
+
             $cambios = false;
             foreach ($lineas_pendientes as $linea) {
-                $banco_linea  = strtolower(trim($linea->banco ?? ''));
+                $banco_linea   = strtolower(trim($linea->banco ?? ''));
                 $titular_linea = strtolower(trim($linea->titular ?? ''));
-                $match = null;
+                $match         = null;
+                $isTesoreriaMatch = false;
 
-                // Primer intento: mismo banco + mismo titular + mismo monto + referencia coincide
-                if ($linea->referencia && $banco_linea) {
-                    $match = $flujos_posibles->first(function($f) use ($linea, $banco_linea, $titular_linea) {
-                        $fbanco  = strtolower(trim($f->banco ?? ''));
-                        $ftit    = strtolower(trim($f->titular ?? ''));
-                        $titOk   = ($titular_linea === '' || $ftit === '' || $ftit === $titular_linea);
-                        return $fbanco == $banco_linea
-                            && $titOk
-                            && ($f->monto_usd == $linea->monto || $f->monto_bs == $linea->monto)
-                            && stripos($f->referencia ?? '', $linea->referencia) !== false;
+                // Helper: fecha dentro de ventana de ±3 días
+                $fechaOk = function($fechaA, $fechaB) {
+                    return abs(\Carbon\Carbon::parse($fechaA)->diffInDays(\Carbon\Carbon::parse($fechaB))) <= 3;
+                };
+
+                if ($linea->monto > 0) {
+                    // ── INGRESOS: Match con Tesorería ─────────────────────
+                    $match = $tesoreria_posibles->first(function($t) use ($linea, $banco_linea, $titular_linea, $fechaOk) {
+                        $tbanco = strtolower(trim($t->banco ?? ''));
+                        $ttit   = strtolower(trim($t->titular ?? ''));
+                        $titOk  = ($titular_linea === '' || $ttit === '' || $ttit === $titular_linea);
+
+                        // Banco y monto deben coincidir siempre
+                        if ($tbanco !== $banco_linea || (float)$t->monto !== (float)$linea->monto) return false;
+
+                        if ($t->tipo === 'punto_venta') {
+                            // Lote POS: referencia exacta O (titular + fecha ±3 días)
+                            if ($t->lote_referencia && stripos((string)$linea->referencia, (string)$t->lote_referencia) !== false) {
+                                return true; // referencia coincide → match directo
+                            }
+                            return $titOk && $fechaOk($t->fecha, $linea->fecha);
+                        } else {
+                            // Pago Móvil/Transferencia
+                            // 1) Referencia parcial (final): si pasa referencia+monto ya es match
+                            if ($t->lote_referencia && str_ends_with((string)$linea->referencia, (string)$t->lote_referencia)) {
+                                return true;
+                            }
+                            // 2) Monto + fecha ±3 días + titular
+                            return $titOk && $fechaOk($t->fecha, $linea->fecha);
+                        }
                     });
-                }
-                // Segundo intento: misma fecha + mismo monto + mismo banco + mismo titular
-                if (!$match) {
-                    $match = $flujos_posibles->first(function($f) use ($linea, $banco_linea, $titular_linea) {
-                        $fbanco  = strtolower(trim($f->banco ?? ''));
-                        $ftit    = strtolower(trim($f->titular ?? ''));
-                        $titOk   = ($titular_linea === '' || $ftit === '' || $ftit === $titular_linea);
-                        return \Carbon\Carbon::parse($f->fecha)->format('Y-m-d')
-                                == \Carbon\Carbon::parse($linea->fecha)->format('Y-m-d')
-                            && ($f->monto_usd == $linea->monto || $f->monto_bs == $linea->monto)
-                            && (!$banco_linea || $fbanco == $banco_linea)
-                            && $titOk;
-                    });
+
+                    if ($match) $isTesoreriaMatch = true;
+
+                } else {
+                    // ── EGRESOS: Match con Flujo de Caja ─────────────────
+                    $monto_abs = abs($linea->monto);
+
+                    // Prioridad 1: referencia + monto coinciden → match directo (sin importar fecha)
+                    if ($linea->referencia && $banco_linea) {
+                        $match = $flujos_posibles->first(function($f) use ($linea, $banco_linea, $titular_linea, $monto_abs) {
+                            $fbanco = strtolower(trim($f->banco ?? ''));
+                            $ftit   = strtolower(trim($f->titular ?? ''));
+                            $titOk  = ($titular_linea === '' || $ftit === '' || $ftit === $titular_linea);
+                            return $fbanco == $banco_linea
+                                && $titOk
+                                && ($f->monto_usd == $monto_abs || $f->monto_bs == $monto_abs)
+                                && stripos($f->referencia ?? '', $linea->referencia) !== false;
+                        });
+                    }
+
+                    // Prioridad 2: monto + banco + fecha ±3 días (sin referencia exacta)
+                    if (!$match) {
+                        $match = $flujos_posibles->first(function($f) use ($linea, $banco_linea, $titular_linea, $monto_abs, $fechaOk) {
+                            $fbanco = strtolower(trim($f->banco ?? ''));
+                            $ftit   = strtolower(trim($f->titular ?? ''));
+                            $titOk  = ($titular_linea === '' || $ftit === '' || $ftit === $titular_linea);
+                            return (!$banco_linea || $fbanco == $banco_linea)
+                                && $titOk
+                                && ($f->monto_usd == $monto_abs || $f->monto_bs == $monto_abs)
+                                && $fechaOk($f->fecha, $linea->fecha);
+                        });
+                    }
                 }
 
                 if ($match) {
-                    $linea->estado       = 'conciliado';
-                    $linea->flujo_caja_id = $match->id;
+                    $linea->estado = 'conciliado';
+                    if ($isTesoreriaMatch) {
+                        $linea->tesoreria_ingreso_id = $match->id;
+                        $tesoreria_posibles = $tesoreria_posibles->reject(fn($t) => $t->id == $match->id);
+                    } else {
+                        $linea->flujo_caja_id = $match->id;
+                        $flujos_posibles = $flujos_posibles->reject(fn($f) => $f->id == $match->id);
+                    }
                     $linea->save();
                     $match->es_conciliado = true;
                     $match->save();
                     $cambios = true;
-                    $flujos_posibles = $flujos_posibles->reject(fn($f) => $f->id == $match->id);
                 }
             }
 
@@ -924,13 +977,28 @@ class FinanzasController extends Controller
             // Conciliados
             $conciliados = $lineas_normales->where('estado', 'conciliado')
                 ->map(function($l) {
-                    $flujo = $l->flujo_caja_id ? \App\Models\FlujoCaja::find($l->flujo_caja_id) : null;
+                    $motivo = '-';
+                    $tipo_gasto = '-';
+                    if ($l->flujo_caja_id) {
+                        $flujo = \App\Models\FlujoCaja::find($l->flujo_caja_id);
+                        if ($flujo) {
+                            $motivo = $flujo->motivo ?: $flujo->concepto;
+                            $tipo_gasto = $flujo->tipo_gasto ?: $flujo->categoria_egreso;
+                        }
+                    } elseif ($l->tesoreria_ingreso_id) {
+                        $tesoreria = \App\Models\TesoreriaIngreso::find($l->tesoreria_ingreso_id);
+                        if ($tesoreria) {
+                            $motivo = ($tesoreria->tipo === 'punto_venta' ? 'Lote Punto de Venta' : 'Ingreso Bancario Tesorería');
+                            $tipo_gasto = 'Ingreso de Tesorería';
+                        }
+                    }
+
                     return [
                         'fecha'       => $l->fecha,
                         'referencia'  => $l->referencia,
                         'descripcion' => $l->descripcion,
-                        'motivo'      => $flujo ? ($flujo->motivo ?: $flujo->concepto) : '-',
-                        'tipo_gasto'  => $flujo ? ($flujo->tipo_gasto ?: $flujo->categoria_egreso) : '-',
+                        'motivo'      => $motivo,
+                        'tipo_gasto'  => $tipo_gasto,
                         'monto'       => $l->monto,
                         'tipo'        => $l->tipo,
                     ];
@@ -1567,13 +1635,28 @@ class FinanzasController extends Controller
 
         $conciliados = $lineas_normales->where('estado', 'conciliado')
             ->map(function($l) {
-                $flujo = $l->flujo_caja_id ? \App\Models\FlujoCaja::find($l->flujo_caja_id) : null;
+                $motivo = '-';
+                $tipo_gasto = '-';
+                if ($l->flujo_caja_id) {
+                    $flujo = \App\Models\FlujoCaja::find($l->flujo_caja_id);
+                    if ($flujo) {
+                        $motivo = $flujo->motivo ?: $flujo->concepto;
+                        $tipo_gasto = $flujo->tipo_gasto ?: $flujo->categoria_egreso;
+                    }
+                } elseif ($l->tesoreria_ingreso_id) {
+                    $tesoreria = \App\Models\TesoreriaIngreso::find($l->tesoreria_ingreso_id);
+                    if ($tesoreria) {
+                        $motivo = ($tesoreria->tipo === 'punto_venta' ? 'Lote Punto de Venta' : 'Ingreso Bancario Tesorería');
+                        $tipo_gasto = 'Ingreso de Tesorería';
+                    }
+                }
+
                 return [
                     'fecha'       => $l->fecha,
                     'referencia'  => $l->referencia,
                     'descripcion' => $l->descripcion,
-                    'motivo'      => $flujo ? ($flujo->motivo ?: $flujo->concepto) : '-',
-                    'tipo_gasto'  => $flujo ? ($flujo->tipo_gasto ?: $flujo->categoria_egreso) : '-',
+                    'motivo'      => $motivo,
+                    'tipo_gasto'  => $tipo_gasto,
                     'monto'       => $l->monto,
                     'tipo'        => $l->tipo,
                 ];

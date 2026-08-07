@@ -33,6 +33,7 @@ class ContratoSeguimiento extends Model
         'SIN_FONDOS'      => 'Sin fondos',
         'RENEGOCIACION'   => 'Solicita renegociación',
         'ACUMULADO'       => 'Cuota acumulada al total',
+        'EDICION_PAGO'    => 'Edición de Pago',
     ];
 
     public function contrato(): BelongsTo

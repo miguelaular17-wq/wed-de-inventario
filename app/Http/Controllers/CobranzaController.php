@@ -37,7 +37,12 @@ class CobranzaController extends Controller
         
         $historialActual = collect();
         if ($ultimaFecha) {
-            $query = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha);
+            $query = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha)
+                ->whereNotExists(function ($query) {
+                    $query->select(\Illuminate\Support\Facades\DB::raw(1))
+                          ->from('cobranzas_pagadas_manualmente')
+                          ->whereColumn('cobranzas_pagadas_manualmente.id_documento', 'historial_cobranzas.id_documento');
+                });
             if ($mostrar_clientes === 'regulares') {
                 $query->whereNotIn('codigo_cliente', $personalCodes);
             } elseif ($mostrar_clientes === 'personales') {
@@ -197,6 +202,11 @@ class CobranzaController extends Controller
         
         // Solo se cargan las columnas que usa la vista y usamos alias para compatibilidad
         $clientes_lista = $queryClientes
+            ->whereNotExists(function ($query) {
+                $query->select(\Illuminate\Support\Facades\DB::raw(1))
+                      ->from('cobranzas_pagadas_manualmente')
+                      ->whereColumn('cobranzas_pagadas_manualmente.id_documento', 'historial_cobranzas.id_documento');
+            })
             ->select([
                 'codigo_cliente as codigo', 
                 'nombre_cliente as cliente', 
@@ -204,7 +214,8 @@ class CobranzaController extends Controller
                 'saldo as saldo_usd', 
                 'fecha_emision', 
                 'estatus',
-                'sede_nombre as sede'
+                'sede_nombre as sede',
+                'id_documento'
             ])
             ->selectRaw('EXISTS(SELECT 1 FROM cliente_personals WHERE cliente_personals.codigo_cliente = historial_cobranzas.codigo_cliente) as es_personal')
             ->orderBy('nombre_cliente', 'asc')
@@ -533,7 +544,7 @@ class CobranzaController extends Controller
         // Use landscape or portrait depending on layout, we will use portrait for the lists
         $pdf->setPaper('A4', 'portrait');
 
-        return $pdf->download('Reporte_Cobranza_' . date('Y_m_d') . '.pdf');
+        return $pdf->download('Reporte_Cobranza_' . date('Y_m_d') .te('Y_m_d') . '.pdf');
     }
 
     public function marcarPersonal(Request $request) {
@@ -554,5 +565,26 @@ class CobranzaController extends Controller
             ]);
             return response()->json(['success' => true, 'message' => 'Cliente marcado como personal.']);
         }
+    }
+    
+    public function marcarPagadoManualmente(Request $request)
+    {
+        $request->validate([
+            'id_documento' => 'required|string',
+        ]);
+        
+        \Illuminate\Support\Facades\DB::connection('pgsql')
+            ->table('cobranzas_pagadas_manualmente')
+            ->insertOrIgnore([
+                'id_documento' => $request->id_documento,
+                'user_id' => auth()->id(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            
+        return response()->json([
+            'success' => true,
+            'message' => 'Documento marcado como pagado manualmente.',
+        ]);
     }
 }
