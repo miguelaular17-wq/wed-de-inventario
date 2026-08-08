@@ -863,11 +863,24 @@
                         $tot_traslados_com = $traslados->sum('comision');
                         $tasa_t = $resumen->tasa_bcv_usd > 0 ? $resumen->tasa_bcv_usd : 1;
                         $tot_traslados_usd = $traslados->sum(fn($t) => $t->monto_usd > 0 ? $t->monto_usd : ($t->monto_bs / $tasa_t));
+                        
+                        $tot_traslados_com_usd = $traslados->sum(function($t) use ($tasa_t) {
+                            if ($t->comision > 0) {
+                                if ($t->monto_usd > 0 && empty($t->monto_bs)) {
+                                    return $t->comision;
+                                }
+                                return $t->comision / $tasa_t;
+                            }
+                            return 0;
+                        });
                     @endphp
                     <tr style="background-color: #faf5ff; border-top: 2px solid #ede9fe; font-weight: bold;">
                         <td colspan="4" style="text-align: right; color: #7c3aed;">TOTAL TRASLADADO</td>
                         <td class="col-number" style="text-align: right; color: #7c3aed;">
                             {{ $tot_traslados_com > 0 ? number_format($tot_traslados_com, 2) : '-' }}
+                            @if($tot_traslados_com_usd > 0)
+                                <br><span style="font-size: 0.8rem; color: #10b981;">$ {{ number_format($tot_traslados_com_usd, 2) }}</span>
+                            @endif
                         </td>
                         <td class="col-number" style="text-align: right; color: #7c3aed;">
                             $ {{ number_format($tot_traslados_usd, 2) }}

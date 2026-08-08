@@ -46,6 +46,8 @@ class CompradorController extends Controller
             $subcategoria = (string) $request->query('subcategoria', 'Ninguno');
             $statusFilter = (string) $request->query('status', 'Todos'); // Todos, Comprar, MalaDistribucion
             $sedeDestinoFilter = (string) $request->query('sede_destino', 'Todas');
+            $sortFirst = (string) $request->query('sort_first', 'codigo');
+            $dirFirst = (string) $request->query('dir_first', 'asc');
             $page = (int) $request->query('page', 1);
             $perPage = 25;
 
@@ -133,12 +135,21 @@ class CompradorController extends Controller
                 'q'      => $search,
                 'status' => $statusFilter,
                 'sede_dest' => $sedeDestinoFilter,
+                'sort'   => $sortFirst,
+                'dir'    => $dirFirst,
             ]));
 
+            $orderByClause = 'ORDER BY codigo ASC';
+            if ($sortFirst === 'stock') {
+                $orderByClause = 'ORDER BY total_stock ' . ($dirFirst === 'desc' ? 'DESC' : 'ASC');
+            } elseif ($sortFirst === 'demanda') {
+                $orderByClause = 'ORDER BY total_demand ' . ($dirFirst === 'desc' ? 'DESC' : 'ASC');
+            }
+
             Profiler::start('CompradorController::index CTE query');
-            $allDbItems = \Illuminate\Support\Facades\Cache::remember($cacheKey, 1800, function () use ($cteSql, $bindings) {
+            $allDbItems = \Illuminate\Support\Facades\Cache::remember($cacheKey, 1800, function () use ($cteSql, $bindings, $orderByClause) {
                 return \Illuminate\Support\Facades\DB::connection('pgsql')->select(
-                    $cteSql . ' ORDER BY codigo',
+                    $cteSql . ' ' . $orderByClause,
                     $bindings
                 );
             });
@@ -875,11 +886,14 @@ class CompradorController extends Controller
             'subcategoriasByCategoria' => $subcatMap,
             'byProvider' => $byProvider,
             'q' => $search,
+            'tp' => $tp,
             'selectedCategoria' => $category,
             'selectedProveedor' => $proveedor,
             'selectedSubcategoria' => $subcategoria,
             'statusFilter' => $statusFilter,
             'sedeDestinoFilter' => $sedeDestinoFilter ?? 'Todas',
+            'sortFirst' => $sortFirst,
+            'dirFirst' => $dirFirst,
             'ssFilters' => $ssFilters,
             'ssSortBy' => $sortBy,
             'ssSortDir' => $sortDir,

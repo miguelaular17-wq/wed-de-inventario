@@ -14,6 +14,7 @@ class ContratoCuota extends Model
         'contrato_id', 'numero_cuota', 'fecha_vencimiento', 'monto',
         'estatus', 'fecha_pago', 'forma_pago', 'monto_pagado', 'abono_capital', 'saldo',
         'notificaciones_enviadas', 'acumulada',
+        'tasa_cambio', 'banco_destino', 'banco_origen', 'referencia',
     ];
 
     protected $casts = [
@@ -61,6 +62,31 @@ class ContratoCuota extends Model
             $enviadas[] = $tipo;
             $this->notificaciones_enviadas = $enviadas;
             $this->save();
+        }
+    }
+
+    public static function actualizarVencidasGlobal(): void
+    {
+        $hoy = now()->toDateString();
+        $cuotasVencidas = self::with('contrato')
+            ->where('estatus', 'pendiente')
+            ->where('fecha_vencimiento', '<', $hoy)
+            ->get();
+
+        foreach ($cuotasVencidas as $cuota) {
+            $contrato = $cuota->contrato;
+            if ($contrato && $contrato->estado !== 'liquidado') {
+                $saldoCuota = (float) $cuota->saldo;
+                $nuevoTotal = (float) $contrato->getRawOriginal('total_a_pagar') + $saldoCuota;
+                
+                $contrato->update(['total_a_pagar' => $nuevoTotal]);
+                $cuota->update([
+                    'estatus' => 'vencido',
+                    'saldo'   => $nuevoTotal
+                ]);
+            } else {
+                $cuota->update(['estatus' => 'vencido']);
+            }
         }
     }
 }

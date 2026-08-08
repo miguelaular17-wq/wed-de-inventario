@@ -19,6 +19,9 @@ class ContratoController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function index()
     {
+        // Asegurarnos de que las cuotas vencidas estén actualizadas en DB
+        \App\Models\ContratoCuota::actualizarVencidasGlobal();
+
         $hoy = Carbon::today();
 
         // KPIs de cuotas
@@ -84,6 +87,9 @@ class ContratoController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function listar(Request $request)
     {
+        // Asegurarnos de que las cuotas vencidas estén actualizadas en DB
+        \App\Models\ContratoCuota::actualizarVencidasGlobal();
+
         $query = Contrato::with(['responsable', 'cuotas'])
             ->where('activo', true);
 
@@ -126,6 +132,9 @@ class ContratoController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     public function show($id)
     {
+        // Actualizar estados de cuotas vencidas antes de mostrar el contrato
+        \App\Models\ContratoCuota::actualizarVencidasGlobal();
+
         $contrato = Contrato::with([
             'cuotas',
             'seguimientos.usuario',
@@ -136,7 +145,9 @@ class ContratoController extends Controller
         $asesores   = User::orderBy('name')->get(['id', 'name']);
         $resultados = ContratoSeguimiento::RESULTADOS;
 
-        return view('contratos.show', compact('contrato', 'asesores', 'resultados'));
+        $cuentasBancarias = \App\Models\CuentaBancaria::where('mostrar_en_principal', true)->orderBy('orden')->get();
+
+        return view('contratos.show', compact('contrato', 'asesores', 'resultados', 'cuentasBancarias'));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -449,6 +460,10 @@ class ContratoController extends Controller
             'abono_capital' => 'nullable|numeric|min:0',
             'fecha_pago'    => 'required|date',
             'comentario'    => 'nullable|string',
+            'tasa_cambio'   => 'nullable|numeric',
+            'banco_destino' => 'nullable|string',
+            'banco_origen'  => 'nullable|string',
+            'referencia'    => 'nullable|string',
         ]);
 
         $montoPagado  = (float) $data['monto_pagado'];
@@ -488,6 +503,10 @@ class ContratoController extends Controller
             'estatus'       => $estatus,
             'fecha_pago'    => $data['fecha_pago'],
             'forma_pago'    => $data['forma_pago'],
+            'tasa_cambio'   => $data['tasa_cambio'] ?? null,
+            'banco_destino' => $data['banco_destino'] ?? null,
+            'banco_origen'  => $data['banco_origen'] ?? null,
+            'referencia'    => $data['referencia'] ?? null,
         ]);
 
         $contrato = $cuota->contrato;
@@ -518,6 +537,24 @@ class ContratoController extends Controller
             }
         }
 
+        $formaPagoStr = str_replace('_', ' ', $data['forma_pago']);
+        $detallePago = "Pago registrado: \${$montoPagado} via {$formaPagoStr}.";
+        
+        if (in_array($data['forma_pago'], ['TRANSFERENCIA_BCV', 'PAGO_MOVIL', 'DEPOSITO'])) {
+            $tasa = $data['tasa_cambio'] ?? '';
+            $bancoDest = $data['banco_destino'] ?? '';
+            $bancoOrig = $data['banco_origen'] ?? '';
+            $ref = $data['referencia'] ?? '';
+            $detallePago .= " Tasa: {$tasa} | De: {$bancoOrig} | Para: {$bancoDest} | Ref: {$ref}";
+        } elseif (in_array($data['forma_pago'], ['ZELLE', 'BINANCE', 'TRANSFERENCIA_DIVISAS'])) {
+            $ref = $data['referencia'] ?? '';
+            $detallePago .= " Ref: {$ref}";
+        }
+
+        if (!empty($data['comentario'])) {
+            $detallePago .= " | Nota: " . $data['comentario'];
+        }
+
         // Registrar seguimiento automático
         ContratoSeguimiento::create([
             'contrato_id' => $cuota->contrato_id,
@@ -525,8 +562,14 @@ class ContratoController extends Controller
             'usuario_id'  => Auth::id(),
             'fecha_hora'  => now(),
             'resultado'   => $estatus === 'pagado' ? 'PAGO_COMPLETO' : 'PAGO_PARCIAL',
-            'comentarios' => $data['comentario'] ?? "Pago registrado: \${$montoPagado} via {$data['forma_pago']}",
+            'comentarios' => $detallePago,
             'contactado'  => true,
+            'detalles_pago' => [
+                'tasa_cambio'   => $data['tasa_cambio'] ?? null,
+                'banco_destino' => $data['banco_destino'] ?? null,
+                'banco_origen'  => $data['banco_origen'] ?? null,
+                'referencia'    => $data['referencia'] ?? null,
+            ],
         ]);
 
         return redirect()->back()->with('success', 'Pago registrado correctamente.');

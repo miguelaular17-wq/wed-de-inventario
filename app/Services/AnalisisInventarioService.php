@@ -100,6 +100,8 @@ WITH product_metrics AS (
                     p.subcategoria,
                     p.proveedor,
                     p.precio_mayor,
+                    p.ultimo_costo_compra,
+                    p.ultima_cantidad_compra,
                     COALESCE(sa.total_stock, 0) as total_stock,
                     vh.ultima_venta,
                     vh.ultima_compra,
@@ -313,6 +315,8 @@ WITH product_metrics AS (
                     'ventas_destino' => (float) $row->ventas_destino,
                     'cantidad_sugerida' => (int) $row->cantidad_sugerida,
                     'precio_mayor' => (float) ($row->precio_mayor ?? 0),
+                    'ultimo_costo_compra' => (float) ($row->ultimo_costo_compra ?? 0),
+                    'ultima_cantidad_compra' => (float) ($row->ultima_cantidad_compra ?? 0),
                     'prioridad' => (int) $row->riesgo_economico, // Compatibilidad legacy
                     'semaforo' => $row->accion_color, // Actualizado semáforo
                     'regla_aplicada' => 'Acción: ' . $row->accion_recomendada . '. Motivo: ' . $row->motivo_critico,

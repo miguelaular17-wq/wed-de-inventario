@@ -12,13 +12,14 @@ class ContratoSeguimiento extends Model
     protected $fillable = [
         'contrato_id', 'cuota_id', 'usuario_id',
         'fecha_hora', 'resultado', 'fecha_prometida_pago',
-        'comentarios', 'contactado',
+        'comentarios', 'contactado', 'detalles_pago',
     ];
 
     protected $casts = [
         'fecha_hora'           => 'datetime',
         'fecha_prometida_pago' => 'date',
         'contactado'           => 'boolean',
+        'detalles_pago'        => 'array',
     ];
 
     public const RESULTADOS = [

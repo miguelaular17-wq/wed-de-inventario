@@ -444,12 +444,26 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         <div class="table-wrap">
             <table class="data-table">
                 <thead>
+                    @php
+                        $sortFirstUrl = function($column) use ($sortFirst, $dirFirst) {
+                            $newDir = ($sortFirst === $column && $dirFirst === 'asc') ? 'desc' : 'asc';
+                            return request()->fullUrlWithQuery(['sort_first' => $column, 'dir_first' => $newDir]);
+                        };
+                        $sortFirstIcon = function($column) use ($sortFirst, $dirFirst) {
+                            if ($sortFirst !== $column) return '⇅';
+                            return $dirFirst === 'asc' ? '↑' : '↓';
+                        };
+                    @endphp
                     <tr>
                         <th style="width: 100px;">Código</th>
                         <th>Producto</th>
                         <th style="width: 160px;">Categoría</th>
-                        <th class="col-number" style="width: 110px;">Stock Global</th>
-                        <th class="col-number" style="width: 110px;">Demanda Global</th>
+                        <th class="col-number" style="width: 110px;">
+                            <a href="{{ $sortFirstUrl('stock') }}" style="color: inherit; text-decoration: none;">Stock Global {{ $sortFirstIcon('stock') }}</a>
+                        </th>
+                        <th class="col-number" style="width: 110px;">
+                            <a href="{{ $sortFirstUrl('demanda') }}" style="color: inherit; text-decoration: none;">Demanda Global {{ $sortFirstIcon('demanda') }}</a>
+                        </th>
 
                         <th style="min-width: 380px; width: 400px;">Detalles / Distribución sugerida</th>
                     </tr>
@@ -748,15 +762,6 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                 <option value="Sobrestock Crítico" @selected($ssFilters['sobrestock_filter'] === 'Sobrestock Crítico')>Sobrestock Crítico</option>
             </select>
         </div>
-        <div class="field" style="width: 160px;">
-            <label for="ss_estado">Estado</label>
-            <select id="ss_estado" name="ss_estado" onchange="document.getElementById('ss-form').submit();">
-                <option value="Todos">Todos</option>
-                <option value="Inventario Inmovilizado" @selected($ssFilters['estado_filter'] === 'Inventario Inmovilizado')>Inmovilizado</option>
-                <option value="Compra Reciente Sin Rotación" @selected($ssFilters['estado_filter'] === 'Compra Reciente Sin Rotación')>Compra s/ Rotación</option>
-                <option value="Sin estado" @selected($ssFilters['estado_filter'] === 'Sin estado')>Sin estado especial</option>
-            </select>
-        </div>
         <div class="field" style="width: 130px;">
             <label for="ss_semaforo">Semáforo</label>
             <select id="ss_semaforo" name="ss_semaforo" onchange="document.getElementById('ss-form').submit();">
@@ -819,6 +824,9 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                         <th style="width: 100px; text-align: right;">
                             <a href="{{ $sortUrl('total_stock') }}" style="color: inherit; text-decoration: none;">Stock {{ $sortIcon('total_stock') }}</a>
                         </th>
+                        <th style="width: 90px; text-align: right;">Costo Unit.</th>
+                        <th style="width: 100px; text-align: right;">Costo Stock</th>
+                        <th style="width: 90px; text-align: right;">Cant. Compra</th>
                         <th style="width: 100px; text-align: right;">
                             <a href="{{ $sortUrl('dias_sin_venta') }}" style="color: inherit; text-decoration: none;">Días s/v {{ $sortIcon('dias_sin_venta') }}</a>
                         </th>
@@ -827,13 +835,9 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                             <a href="{{ $sortUrl('meses_inventario') }}" style="color: inherit; text-decoration: none;">Meses inv {{ $sortIcon('meses_inventario') }}</a>
                         </th>
                         <th style="width: 120px; text-align: center;">Sobrestock</th>
-                        <th style="width: 140px; text-align: center;">Estado</th>
                         @if(auth()->user()->isMarketing() || auth()->user()->isAdmin())
                             <th style="width: 120px; text-align: center;">Publicidad</th>
                         @endif
-                        <th style="width: 100px; text-align: right;">
-                            <a href="{{ $sortUrl('prioridad') }}" style="color: inherit; text-decoration: none;">Prioridad {{ $sortIcon('prioridad') }}</a>
-                        </th>
                         <th style="width: 110px; text-align: center;">Últ. Venta</th>
                         <th style="width: 110px; text-align: center;">Últ. Compra</th>
                     </tr>
@@ -874,6 +878,15 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                                 <span class="tag" style="background: #f1f5f9; color: var(--muted); border-color: #e2e8f0; font-size: 0.7rem;">{{ $item['categoria'] }}</span>
                             </td>
                             <td style="text-align: right; font-weight: 600; color: var(--blue);">{{ number_format($item['total_stock']) }} u.</td>
+                            <td style="text-align: right; font-weight: 500; font-size: 0.85rem; color: #475569;">
+                                ${{ number_format($item['ultimo_costo_compra'] ?? 0, 2) }}
+                            </td>
+                            <td style="text-align: right; font-weight: 600; font-size: 0.85rem; color: #334155;">
+                                ${{ number_format($item['total_stock'] * ($item['ultimo_costo_compra'] ?? 0), 2) }}
+                            </td>
+                            <td style="text-align: right; font-weight: 500; font-size: 0.85rem; color: #475569;">
+                                {{ number_format($item['ultima_cantidad_compra'] ?? 0) }} u.
+                            </td>
                             <td style="text-align: right; font-weight: 600; color: {{ $item['dias_sin_venta'] > 90 ? '#dc2626' : ($item['dias_sin_venta'] > 60 ? '#ea580c' : ($item['dias_sin_venta'] > 30 ? '#a16207' : '#22c55e')) }};">
                                 {{ $item['dias_sin_venta'] >= 999 ? '—' : $item['dias_sin_venta'] . 'd' }}
                             </td>
@@ -894,15 +907,6 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                                     {{ $item['sobrestock'] }}
                                 </span>
                             </td>
-                            <td style="text-align: center;">
-                                @if(!empty($item['estado']))
-                                    <span style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; background: {{ ($item['estado_color'] ?? '') === 'rojo' ? '#fef2f2' : '#fff7ed' }}; color: {{ ($item['estado_color'] ?? '') === 'rojo' ? '#dc2626' : '#ea580c' }}; border: 1px solid {{ ($item['estado_color'] ?? '') === 'rojo' ? '#dc262620' : '#ea580c20' }};">
-                                        {{ $item['estado'] }}
-                                    </span>
-                                @else
-                                    <span style="color: var(--muted); font-size: 0.8rem;">—</span>
-                                @endif
-                            </td>
                             @if(auth()->user()->isMarketing() || auth()->user()->isAdmin())
                                 <td style="text-align: center;">
                                     @php
@@ -916,9 +920,6 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                                     </button>
                                 </td>
                             @endif
-                            <td style="text-align: right; font-weight: 600; color: {{ $item['prioridad'] > 50000 ? '#dc2626' : ($item['prioridad'] > 10000 ? '#ea580c' : '#64748b') }};">
-                                {{ number_format($item['prioridad']) }}
-                            </td>
                             <td style="text-align: center; font-size: 0.8rem;">
                                 @if($item['ultima_venta'])
                                     <span style="{{ $item['dias_sin_venta'] > 90 ? 'color: #dc2626; font-weight: 600;' : '' }}">{{ $item['ultima_venta'] }}</span>
@@ -936,7 +937,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ (auth()->user()->isMarketing() || auth()->user()->isAdmin()) ? 14 : 13 }}" style="text-align: center; color: var(--muted); padding: 24px;">
+                            <td colspan="{{ (auth()->user()->isMarketing() || auth()->user()->isAdmin()) ? 15 : 14 }}" style="text-align: center; color: var(--muted); padding: 24px;">
                                 No se encontraron productos con los filtros seleccionados.
                             </td>
                         </tr>

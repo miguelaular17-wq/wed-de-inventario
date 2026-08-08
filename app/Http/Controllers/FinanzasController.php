@@ -492,6 +492,8 @@ class FinanzasController extends Controller
 
             if ($response->successful()) {
                 return "{$supabaseUrl}/storage/v1/object/public/comprobantes/{$fileName}";
+            } else {
+                throw new \Exception("Error en Supabase: " . $response->body());
             }
         }
         return null;
@@ -499,7 +501,8 @@ class FinanzasController extends Controller
 
     public function updateEgreso(Request $request, $id)
     {
-        $egreso = FlujoCaja::findOrFail($id);
+        try {
+            $egreso = FlujoCaja::findOrFail($id);
 
         // Normalizar campos numéricos: convertir "35.750,00" o "35750,00" → "35750.00"
         $numericFields = ['monto_usd', 'tasa_cambio', 'diferencial_cambiario', 'monto_bs', 'comision'];
@@ -638,6 +641,10 @@ class FinanzasController extends Controller
         }
 
         return redirect()->back()->with('success', 'Egreso actualizado correctamente.');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Error actualizando egreso: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Error al guardar (Es posible que la imagen sea muy pesada o el servidor haya fallado): ' . $e->getMessage());
+        }
     }
 
     public function storeEgresosBulk(Request $request)

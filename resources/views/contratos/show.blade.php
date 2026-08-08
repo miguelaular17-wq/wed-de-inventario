@@ -351,16 +351,48 @@
             </div>
             <div style="margin-bottom: 12px;">
                 <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Forma de Pago</label>
-                <select name="forma_pago" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; background: white;">
+                <select name="forma_pago" id="pagoFormaPago" onchange="togglePagoFields()" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; background: white;">
                     <option value="">-- Seleccione --</option>
                     <option value="ZELLE">ZELLE</option>
                     <option value="EFECTIVO">EFECTIVO</option>
-                    <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                    <option value="TRANSFERENCIA_DIVISAS">TRANSFERENCIA DIVISAS</option>
+                    <option value="TRANSFERENCIA_BCV">TRANSFERENCIA BCV</option>
                     <option value="PAGO_MOVIL">PAGO MÓVIL</option>
                     <option value="DEPOSITO">DEPÓSITO</option>
                     <option value="BINANCE">BINANCE</option>
                     <option value="CRUCE">CRUCE</option>
                 </select>
+            </div>
+            
+            <div id="pagoExtraFields" style="display: none; padding: 12px; border: 1px dashed #ccc; border-radius: 6px; margin-bottom: 12px; background: #fafafa;">
+                <!-- Tasa de Cambio -->
+                <div id="pagoFieldTasa" style="display: none; margin-bottom: 10px;">
+                    <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Tasa de Cambio (Bs)</label>
+                    <input type="number" step="0.01" name="tasa_cambio" id="pagoTasaCambio" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+                </div>
+
+                <!-- Banco Destino -->
+                <div id="pagoFieldBancoDestino" style="display: none; margin-bottom: 10px;">
+                    <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Banco Destino (Empresa)</label>
+                    <select name="banco_destino" id="pagoBancoDestino" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; background: white;">
+                        <option value="">-- Seleccione Banco --</option>
+                        @foreach($cuentasBancarias ?? [] as $cuenta)
+                            <option value="{{ $cuenta->banco }} - {{ $cuenta->titular }}">{{ $cuenta->banco }} - {{ $cuenta->titular }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <!-- Banco Origen -->
+                <div id="pagoFieldBancoOrigen" style="display: none; margin-bottom: 10px;">
+                    <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Banco Origen (Cliente)</label>
+                    <input type="text" name="banco_origen" id="pagoBancoOrigen" placeholder="Ej. Banesco" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+                </div>
+
+                <!-- Referencia -->
+                <div id="pagoFieldReferencia" style="display: none; margin-bottom: 10px;">
+                    <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Referencia</label>
+                    <input type="text" name="referencia" id="pagoReferencia" pattern="[a-zA-Z0-9]+" title="Solo letras y números" placeholder="Ej. 12345678" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;">
+                </div>
             </div>
             <div style="margin-bottom: 12px;">
                 <label style="display: block; font-weight: 500; margin-bottom: 4px; font-size: 0.9rem;">Fecha de Pago</label>
@@ -542,7 +574,57 @@ function abrirEditarPago(cuotaId, numeroCuota, montoPagadoActual, abonoCapitalAc
     document.getElementById('modalEditarPago').style.display = 'flex';
 }
 
+function togglePagoFields() {
+    const forma = document.getElementById('pagoFormaPago').value;
+    const extraFields = document.getElementById('pagoExtraFields');
+    const fTasa = document.getElementById('pagoFieldTasa');
+    const fBancoDest = document.getElementById('pagoFieldBancoDestino');
+    const fBancoOrig = document.getElementById('pagoFieldBancoOrigen');
+    const fRef = document.getElementById('pagoFieldReferencia');
 
+    const iptTasa = document.getElementById('pagoTasaCambio');
+    const iptBancoDest = document.getElementById('pagoBancoDestino');
+    const iptBancoOrig = document.getElementById('pagoBancoOrigen');
+    const iptRef = document.getElementById('pagoReferencia');
+
+    // Reset validations and values
+    iptTasa.required = false; iptTasa.value = '';
+    iptBancoDest.required = false; iptBancoDest.value = '';
+    iptBancoOrig.required = false; iptBancoOrig.value = '';
+    iptRef.required = false; iptRef.value = '';
+
+    if (!forma || forma === 'EFECTIVO' || forma === 'CRUCE') {
+        extraFields.style.display = 'none';
+        fTasa.style.display = 'none';
+        fBancoDest.style.display = 'none';
+        fBancoOrig.style.display = 'none';
+        fRef.style.display = 'none';
+        return;
+    }
+
+    extraFields.style.display = 'block';
+    
+    if (forma === 'ZELLE' || forma === 'BINANCE' || forma === 'TRANSFERENCIA_DIVISAS') {
+        fTasa.style.display = 'none';
+        fBancoDest.style.display = 'none';
+        fBancoOrig.style.display = 'none';
+        
+        fRef.style.display = 'block';
+        iptRef.required = true;
+    } else if (forma === 'TRANSFERENCIA_BCV' || forma === 'PAGO_MOVIL' || forma === 'DEPOSITO') {
+        fTasa.style.display = 'block';
+        iptTasa.required = true;
+
+        fBancoDest.style.display = 'block';
+        iptBancoDest.required = true;
+
+        fBancoOrig.style.display = 'block';
+        iptBancoOrig.required = true;
+
+        fRef.style.display = 'block';
+        iptRef.required = true;
+    }
+}
 
 function toggleGarantiaNueva(valor) {
     const campo = document.getElementById('campoGarantiaNueva');

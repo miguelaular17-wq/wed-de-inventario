@@ -143,7 +143,7 @@
             <td class="text-right">${{ number_format($totalSaldo, 2) }}</td>
         </tr>
         <tr>
-            <td class="info-label text-right" style="font-size: 15px; background: #dbeafe; color: #1e3a8a;">TOTAL DEUDA (Capital + Cuotas)</td>
+            <td class="info-label text-right" style="font-size: 15px; background: #dbeafe; color: #1e3a8a;">TOTAL DEUDA </td>
             <td class="text-right" style="font-size: 15px; font-weight: bold; background: #dbeafe; color: #1e3a8a;">${{ number_format($contrato->capital + $totalSaldo, 2) }}</td>
         </tr>
     </table>
