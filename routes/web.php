@@ -296,3 +296,40 @@ Route::get('/pure', function () {
     $inicio = microtime(true);
     return response('Tiempo: ' . round((microtime(true) - $inicio) * 1000, 2) . ' ms');
 });
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GESTIÓN PATRIMONIAL Y ALQUILERES
+// ─────────────────────────────────────────────────────────────────────────────
+Route::middleware(['auth', 'role:admin,gerente,cobranza'])->prefix('patrimonial')->name('patrimonial.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\Patrimonial\DashboardPatrimonialController::class, 'index'])->name('dashboard');
+
+    Route::resource('propiedades', \App\Http\Controllers\Patrimonial\PropiedadController::class)->parameters(['propiedades' => 'propiedad']);
+    Route::delete('propiedades/{propiedad}/foto', [\App\Http\Controllers\Patrimonial\PropiedadController::class, 'deleteFoto'])->name('propiedades.delete_foto');
+    Route::resource('reservas',    \App\Http\Controllers\Patrimonial\ReservaController::class)->parameters(['reservas' => 'reserva'])->except(['create', 'edit', 'show']);
+    Route::resource('inventario',  \App\Http\Controllers\Patrimonial\InventarioItemController::class)->parameters(['inventario' => 'inventario'])->except(['create', 'edit', 'show']);
+    Route::resource('llaves',      \App\Http\Controllers\Patrimonial\LlaveController::class)->parameters(['llaves' => 'llave'])->except(['create', 'edit', 'show']);
+    Route::resource('documentos',  \App\Http\Controllers\Patrimonial\DocumentoController::class)->parameters(['documentos' => 'documento'])->except(['create', 'edit', 'show']);
+
+    // Alquileres
+    Route::get('/alquileres',           [\App\Http\Controllers\Patrimonial\AlquilerController::class, 'index'])->name('alquileres.index');
+    Route::get('/alquileres/crear',     [\App\Http\Controllers\Patrimonial\AlquilerController::class, 'create'])->name('alquileres.create');
+    Route::post('/alquileres',          [\App\Http\Controllers\Patrimonial\AlquilerController::class, 'store'])->name('alquileres.store');
+    Route::get('/alquileres/{alquiler}/editar', [\App\Http\Controllers\Patrimonial\AlquilerController::class, 'edit'])->name('alquileres.edit');
+    Route::put('/alquileres/{alquiler}', [\App\Http\Controllers\Patrimonial\AlquilerController::class, 'update'])->name('alquileres.update');
+    Route::delete('/alquileres/{alquiler}', [\App\Http\Controllers\Patrimonial\AlquilerController::class, 'destroy'])->name('alquileres.destroy');
+    Route::post('/alquileres/{alquiler}/pago', [\App\Http\Controllers\Patrimonial\AlquilerController::class, 'registrarPago'])->name('alquileres.pago');
+    Route::put('/alquileres/pago/{pago}', [\App\Http\Controllers\Patrimonial\AlquilerController::class, 'actualizarPago'])->name('alquileres.actualizar_pago');
+    Route::get('/alquileres/{alquiler}', [\App\Http\Controllers\Patrimonial\AlquilerController::class, 'show'])->name('alquileres.show');
+
+    // Transacciones
+    Route::get('/transacciones',  [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'index'])->name('transacciones.index');
+    Route::post('/transacciones', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'store'])->name('transacciones.store');
+    Route::delete('/transacciones/{transaccion}', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'destroy'])->name('transacciones.destroy');
+    Route::get('/reportes/mensual', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'reporteMensual'])->name('reportes.mensual');
+
+    // Reservas extra
+    Route::post('/reservas/bloquear', [\App\Http\Controllers\Patrimonial\ReservaController::class, 'bloquear'])->name('reservas.bloquear');
+});
+
+

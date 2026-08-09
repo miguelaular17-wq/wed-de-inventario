@@ -202,7 +202,7 @@ class SyncApp:
         self.sede_combo = ttk.Combobox(
             config_frame, 
             textvariable=self.sede_var, 
-            values=["JRZ", "DORAL", "VIRTUDES", "ZAMORA", "CENTRO", "SAMBIL"], 
+            values=["JRZ", "DORAL", "VIRTUDES", "ZAMORA", "CENTRO", "SAMBIL", "NUNES", "MOVISTAR"], 
             state="readonly",
             width=15
         )

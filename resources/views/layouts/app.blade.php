@@ -73,7 +73,9 @@
                         <a href="{{ route('admin.productos.index') }}" class="{{ request()->routeIs('admin.productos.*') ? 'active' : '' }}">Productos</a>
                         <a href="{{ route('admin.sync_logs.index') }}" class="{{ request()->routeIs('admin.sync_logs.*') ? 'active' : '' }}">Sync Logs</a>
                         <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">Usuarios</a>
+                        <a href="{{ route('patrimonial.dashboard') }}" class="{{ request()->routeIs('patrimonial.*') ? 'active' : '' }}">🏢 Patrimonial</a>
                     @endif
+
                     @if(auth()->user()->isComprador() || auth()->user()->isMarketing() || auth()->user()->isGerente())
                         <a href="{{ route('comprador.dashboard') }}" class="{{ request()->routeIs('comprador.dashboard') ? 'active' : '' }}">
                             {{ auth()->user()->isMarketing() && !auth()->user()->isGerente() ? 'Marketing' : 'Compras' }}
@@ -89,7 +91,9 @@
                     @if(auth()->user()->isCobranza() || auth()->user()->isGerente())
                         <a href="{{ route('cobranza.index') }}" class="{{ request()->routeIs('cobranza.*') ? 'active' : '' }}">Cobranza</a>
                         <a href="{{ route('contratos.index') }}" class="{{ request()->routeIs('contratos.*') ? 'active' : '' }}">Contratos</a>
+                        <a href="{{ route('patrimonial.dashboard') }}" class="{{ request()->routeIs('patrimonial.*') ? 'active' : '' }}">🏢 Patrimonial</a>
                     @endif
+
                     @if(auth()->user()->isTesoreria() || auth()->user()->isGerente())
                         <a href="{{ route('tesoreria.dashboard') }}" class="{{ request()->routeIs('tesoreria.*') ? 'active' : '' }}">Tesorería</a>
                     @endif
