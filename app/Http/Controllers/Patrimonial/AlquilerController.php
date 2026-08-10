@@ -12,7 +12,13 @@ class AlquilerController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Alquiler::with('propiedad')->orderByDesc('created_at');
+        // Update all rentals before displaying to show accurate badges
+        foreach (Alquiler::where('estado', 'activo')->get() as $alq) {
+            $alq->generarPagosPendientes();
+            $alq->actualizarVencimientos();
+        }
+
+        $query = Alquiler::with(['propiedad', 'pagos'])->orderByDesc('created_at');
 
         if ($estado = $request->get('estado')) {
             $query->where('estado', $estado);
@@ -73,6 +79,9 @@ class AlquilerController extends Controller
 
     public function show(Alquiler $alquiler)
     {
+        $alquiler->generarPagosPendientes();
+        $alquiler->actualizarVencimientos();
+        
         $alquiler->load('propiedad', 'pagos');
         return view('patrimonial.alquileres.show', compact('alquiler'));
     }
@@ -124,19 +133,114 @@ class AlquilerController extends Controller
             'observaciones'     => 'nullable|string',
         ]);
         $data['alquiler_id'] = $alquiler->id;
-        AlquilerPago::create($data);
+        $pago = AlquilerPago::create($data);
 
-        return back()->with('status', '✅ Pago registrado.');
+        if ($data['estado'] === 'pagado' && !empty($data['fecha_pago'])) {
+            \App\Models\Patrimonial\PatTransaccion::create([
+                'propiedad_id'  => $alquiler->propiedad_id,
+                'tipo'          => 'ingreso',
+                'categoria'     => 'Alquiler',
+                'descripcion'   => "Pago de alquiler {$data['periodo']} - {$alquiler->inquilino_nombre}",
+                'monto'         => $data['monto'],
+                'moneda'        => 'usd', // Asumiendo USD como principal para alquileres
+                'fecha'         => $data['fecha_pago'],
+                'mes'           => \Carbon\Carbon::parse($data['fecha_pago'])->month,
+                'anio'          => \Carbon\Carbon::parse($data['fecha_pago'])->year,
+                'observaciones' => $data['observaciones'] ?? null,
+            ]);
+        }
+
+        return back()->with('status', '✅ Pago registrado y actualizado en el balance.');
     }
 
     public function actualizarPago(Request $request, AlquilerPago $pago)
     {
-        $pago->update($request->validate([
-            'estado'      => 'required|in:pagado,pendiente,vencido',
+        $data = $request->validate([
             'fecha_pago'  => 'nullable|date',
             'monto'       => 'nullable|numeric|min:0',
             'observaciones' => 'nullable|string',
-        ]));
-        return back()->with('status', '✅ Pago actualizado.');
+            'forma_pago'    => 'nullable|string',
+            'tasa_cambio'   => 'nullable|numeric',
+            'banco_origen'  => 'nullable|string',
+            'banco_destino' => 'nullable|string',
+            'referencia'    => 'nullable|string',
+            'comentario'    => 'nullable|string',
+        ]);
+        
+        $montoAbonado = $data['monto'] ?? 0;
+        unset($data['monto']);
+        
+        if ($montoAbonado > 0) {
+            $pago->monto_pagado += $montoAbonado;
+        }
+        
+        if ($pago->monto_pagado >= $pago->monto) {
+            $data['estado'] = 'pagado';
+        } elseif ($pago->fecha_vencimiento < now()->startOfDay()) {
+            $data['estado'] = 'vencido';
+        } else {
+            $data['estado'] = 'pendiente';
+        }
+
+        $data['user_id'] = auth()->id();
+        $pago->update($data);
+
+        if ($montoAbonado > 0 && !empty($data['fecha_pago'])) {
+            $alquiler = $pago->alquiler;
+            \App\Models\Patrimonial\PatTransaccion::create([
+                'propiedad_id'  => $alquiler->propiedad_id,
+                'tipo'          => 'ingreso',
+                'categoria'     => 'Alquiler',
+                'descripcion'   => "Pago de alquiler {$pago->periodo} - {$alquiler->inquilino_nombre}",
+                'monto'         => $montoAbonado,
+                'moneda'        => 'usd',
+                'fecha'         => $data['fecha_pago'],
+                'mes'           => \Carbon\Carbon::parse($data['fecha_pago'])->month,
+                'anio'          => \Carbon\Carbon::parse($data['fecha_pago'])->year,
+                'observaciones' => $data['comentario'] ?? null,
+            ]);
+        }
+
+        return back()->with('status', '✅ Pago registrado y actualizado en el balance.');
+    }
+
+    public function calendario(Request $request)
+    {
+        $alquileresActivos = Alquiler::with('propiedad')
+            ->where('estado', 'activo')
+            ->whereNotNull('dia_pago')
+            ->get();
+            
+        $eventos = [];
+        $mesFiltro = (int) $request->get('mes', now()->month);
+        $anioFiltro = (int) $request->get('anio', now()->year);
+        
+        // Generar eventos para el mes actual, anterior y siguiente para buena cobertura visual
+        $mesesEvaluar = [
+            Carbon::create($anioFiltro, $mesFiltro, 1)->subMonth(),
+            Carbon::create($anioFiltro, $mesFiltro, 1),
+            Carbon::create($anioFiltro, $mesFiltro, 1)->addMonth(),
+        ];
+        
+        foreach ($alquileresActivos as $alquiler) {
+            foreach ($mesesEvaluar as $fechaRef) {
+                // Si el día de pago es 31 y el mes tiene 30 días, ajustamos al final del mes
+                $dia = min($alquiler->dia_pago, $fechaRef->daysInMonth);
+                $fechaCobro = Carbon::create($fechaRef->year, $fechaRef->month, $dia);
+                
+                // Si la fecha de cobro es mayor o igual a la fecha de inicio
+                if ($fechaCobro->gte(Carbon::parse($alquiler->fecha_inicio))) {
+                    $eventos[] = [
+                        'title' => 'Cobro: ' . ($alquiler->propiedad->nombre ?? 'Propiedad') . ' (' . $alquiler->inquilino_nombre . ')',
+                        'start' => $fechaCobro->format('Y-m-d'),
+                        'url' => route('patrimonial.alquileres.show', $alquiler->id),
+                        'color' => '#10b981', // Verde esmeralda para cobros
+                        'allDay' => true
+                    ];
+                }
+            }
+        }
+        
+        return view('patrimonial.alquileres.calendario', compact('eventos'));
     }
 }

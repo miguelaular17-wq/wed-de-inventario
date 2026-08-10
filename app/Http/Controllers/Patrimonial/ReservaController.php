@@ -11,11 +11,32 @@ class ReservaController extends Controller
 {
     public function index(Request $request)
     {
+        // 1. Actualización automática de estados
+        $hoy = now()->startOfDay();
+        $reservasActivas = Reserva::whereIn('estado', ['confirmada', 'en_curso'])->get();
+        foreach ($reservasActivas as $r) {
+            $inicio = Carbon::parse($r->fecha_entrada)->startOfDay();
+            $fin = Carbon::parse($r->fecha_salida)->startOfDay();
+            
+            $nuevoEstado = $r->estado;
+            if ($hoy->gte($fin)) {
+                $nuevoEstado = 'completada';
+            } elseif ($hoy->gte($inicio) && $hoy->lt($fin)) {
+                $nuevoEstado = 'en_curso';
+            }
+            
+            if ($nuevoEstado !== $r->estado) {
+                $r->update(['estado' => $nuevoEstado]);
+                $this->sincronizarEstadoPropiedad($r->propiedad_id);
+            }
+        }
+
+        // 2. Consulta y visualización normal
         $propiedadId = $request->get('propiedad_id');
         $mes  = (int)$request->get('mes', now()->month);
         $anio = (int)$request->get('anio', now()->year);
 
-        $query = Reserva::with('propiedad');
+        $query = Reserva::with(['propiedad', 'pagos']);
         if ($propiedadId) $query->where('propiedad_id', $propiedadId);
 
         // Para el calendario: reservas en ese mes/año
@@ -50,11 +71,13 @@ class ReservaController extends Controller
             'fecha_salida'     => 'required|date|after:fecha_entrada',
             'precio_noche'     => 'required|numeric|min:0',
             'moneda'           => 'required|in:usd,bs',
-            'estado'           => 'required|in:confirmada,cancelada,completada',
+            'estado'           => 'required|in:confirmada,cancelada,completada,en_curso',
             'observaciones'    => 'nullable|string',
         ]);
 
         Reserva::create($data);
+
+        $this->sincronizarEstadoPropiedad($data['propiedad_id']);
 
         return back()->with('status', '✅ Reserva registrada.');
     }
@@ -68,16 +91,19 @@ class ReservaController extends Controller
             'fecha_salida'     => 'required|date|after:fecha_entrada',
             'precio_noche'     => 'required|numeric|min:0',
             'moneda'           => 'required|in:usd,bs',
-            'estado'           => 'required|in:confirmada,cancelada,completada',
+            'estado'           => 'required|in:confirmada,cancelada,completada,en_curso',
             'observaciones'    => 'nullable|string',
         ]);
         $reserva->update($data);
+        $this->sincronizarEstadoPropiedad($reserva->propiedad_id);
         return back()->with('status', '✅ Reserva actualizada.');
     }
 
     public function destroy(Reserva $reserva)
     {
+        $propiedadId = $reserva->propiedad_id;
         $reserva->delete();
+        $this->sincronizarEstadoPropiedad($propiedadId);
         return back()->with('status', '🗑️ Reserva eliminada.');
     }
 
@@ -95,6 +121,61 @@ class ReservaController extends Controller
         $data['moneda']         = 'usd';
         $data['estado']         = 'confirmada';
         Reserva::create($data);
+        $this->sincronizarEstadoPropiedad($data['propiedad_id']);
         return back()->with('status', '🔒 Fechas bloqueadas.');
+    }
+
+    public function registrarPago(Request $request, Reserva $reserva)
+    {
+        $data = $request->validate([
+            'monto_pagado'  => 'required|numeric|min:0.01',
+            'forma_pago'    => 'required|string',
+            'fecha_pago'    => 'required|date',
+            'tasa_cambio'   => 'nullable|numeric',
+            'banco_destino' => 'nullable|string',
+            'banco_origen'  => 'nullable|string',
+            'referencia'    => 'nullable|string',
+            'comentario'    => 'nullable|string',
+        ]);
+
+        $data['user_id'] = auth()->id();
+        
+        $reserva->pagos()->create($data);
+
+        // Registrar ingreso en el balance (PatTransaccion)
+        \App\Models\Patrimonial\PatTransaccion::create([
+            'propiedad_id'  => $reserva->propiedad_id,
+            'tipo'          => 'ingreso',
+            'categoria'     => 'Reserva temporal',
+            'descripcion'   => "Pago de reserva - {$reserva->cliente_nombre} (" . $data['forma_pago'] . ")",
+            'monto'         => $data['monto_pagado'],
+            'moneda'        => $reserva->moneda,
+            'fecha'         => $data['fecha_pago'],
+            'mes'           => \Carbon\Carbon::parse($data['fecha_pago'])->month,
+            'anio'          => \Carbon\Carbon::parse($data['fecha_pago'])->year,
+            'observaciones' => $data['comentario'] ?? null,
+        ]);
+
+        return back()->with('status', '💰 Pago registrado exitosamente y añadido al balance.');
+    }
+
+    private function sincronizarEstadoPropiedad($propiedadId)
+    {
+        $tieneAlquiler = \App\Models\Patrimonial\Alquiler::where('propiedad_id', $propiedadId)
+            ->where('estado', 'activo')->exists();
+
+        if ($tieneAlquiler) {
+            \App\Models\Patrimonial\Propiedad::where('id', $propiedadId)->update(['estado' => 'alquilado']);
+            return;
+        }
+
+        $tieneReservas = \App\Models\Patrimonial\Reserva::where('propiedad_id', $propiedadId)
+            ->whereIn('estado', ['confirmada', 'en_curso'])->exists();
+
+        if ($tieneReservas) {
+            \App\Models\Patrimonial\Propiedad::where('id', $propiedadId)->update(['estado' => 'reservado']);
+        } else {
+            \App\Models\Patrimonial\Propiedad::where('id', $propiedadId)->update(['estado' => 'disponible']);
+        }
     }
 }

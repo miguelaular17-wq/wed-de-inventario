@@ -363,6 +363,11 @@
                                 @if($c->es_personal)
                                     <span style="background: var(--blue); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; margin-left: 5px;">PERSONAL</span>
                                 @endif
+                                <div style="margin-top: 4px; font-size: 0.75rem;">
+                                    <span style="cursor: pointer; {{ $c->nota_anclada ? 'color: #ea580c; font-weight: 600;' : 'color: #9ca3af;' }}" onclick="event.stopPropagation(); abrirModalNota('{{ $c->id_documento }}', '{{ htmlspecialchars(addslashes($c->nota_anclada ?? '')) }}')">
+                                        📌 {{ $c->nota_anclada ? $c->nota_anclada : 'Añadir nota...' }}
+                                    </span>
+                                </div>
                             </td>
                             <td>{{ $c->sede ?? '-' }}</td>
                             <td style="text-align: right; font-weight: 500; color: #4b5563;">$ {{ number_format($c->monto_neto, 2, ',', '.') }}</td>
@@ -384,17 +389,70 @@
                                 <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #ccc; background-color: #f8f9fa; cursor: pointer; color: #333;" onclick="marcarPagado('{{ $c->id_documento }}', this)">
                                     Pagado
                                 </button>
+                                <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #93c5fd; background-color: #eff6ff; cursor: pointer; color: #1e40af; margin-left: 4px;" onclick="abrirModalLlamadas('{{ $c->codigo }}', '{{ htmlspecialchars($c->cliente) }}')">
+                                    📞 Llamadas
+                                </button>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" style="padding: 30px; text-align: center; color: #6c757d;">
+                            <td colspan="9" style="padding: 30px; text-align: center; color: #6c757d;">
                                 No hay clientes registrados para esta selección.
                             </td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nota Anclada -->
+<div id="modal-nota" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;">
+    <div class="panel modal-box" style="width: 95%; max-width: 400px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); position: relative;">
+        <div style="background-color: #ea580c; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">📌 Nota Anclada</h3>
+            <button type="button" onclick="cerrarModalNota()" style="background: transparent; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+        </div>
+        <div style="padding: 20px; background: #f8fafc;">
+            <form id="formNota" onsubmit="guardarNotaAnclada(event)">
+                <input type="hidden" id="nota_id_documento">
+                <textarea id="nota_texto" rows="3" placeholder="Escribe aquí una nota para este caso..." style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; resize: vertical; margin-bottom: 15px; font-size: 0.9rem;"></textarea>
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" onclick="cerrarModalNota()" style="padding: 8px 16px; background: #e2e8f0; color: #475569; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Cancelar</button>
+                    <button type="submit" style="padding: 8px 16px; background: #ea580c; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Llamadas -->
+<div id="modal-llamadas" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;">
+    <div class="panel modal-box" style="width: 95%; max-width: 600px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); position: relative; max-height: 90vh; display: flex; flex-direction: column;">
+        <div style="background-color: #1e40af; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;">
+            <h3 id="modalLlamadasTitle" style="margin: 0; font-size: 1.1rem; font-weight: 600;">Historial de Llamadas</h3>
+            <button type="button" onclick="cerrarModalLlamadas()" style="background: transparent; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+        </div>
+        
+        <div style="padding: 20px; flex: 1; overflow-y: auto; background: #f8fafc;">
+            <div style="margin-bottom: 20px; background: white; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0 0 10px 0; font-size: 0.95rem; color: #1e293b;">Registrar Nueva Llamada</h4>
+                <form id="formNuevaLlamada" onsubmit="guardarLlamada(event)">
+                    <input type="hidden" id="llamada_codigo_cliente">
+                    <div style="margin-bottom: 10px;">
+                        <textarea id="llamada_descripcion" required rows="2" placeholder="Resumen de lo conversado..." style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; resize: vertical;"></textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="datetime-local" id="llamada_fecha" required style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                        <button type="submit" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Guardar</button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="historialLlamadasList" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- Cargando... -->
+            </div>
         </div>
     </div>
 </div>
@@ -452,6 +510,133 @@
 
 @push('scripts')
 <script>
+    function formatDateLocal(date) {
+        const d = new Date(date);
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        return d.toISOString().slice(0,16);
+    }
+
+    function abrirModalLlamadas(codigo, cliente) {
+        document.getElementById('modal-llamadas').style.display = 'flex';
+        document.getElementById('modalLlamadasTitle').innerText = 'Llamadas: ' + cliente;
+        document.getElementById('llamada_codigo_cliente').value = codigo;
+        document.getElementById('formNuevaLlamada').reset();
+        document.getElementById('llamada_fecha').value = formatDateLocal(new Date());
+        cargarLlamadas(codigo);
+    }
+
+    function cerrarModalLlamadas() {
+        document.getElementById('modal-llamadas').style.display = 'none';
+    }
+
+    function abrirModalNota(id_documento, nota) {
+        document.getElementById('nota_id_documento').value = id_documento;
+        document.getElementById('nota_texto').value = nota;
+        document.getElementById('modal-nota').style.display = 'flex';
+        setTimeout(() => document.getElementById('nota_texto').focus(), 100);
+    }
+
+    function cerrarModalNota() {
+        document.getElementById('modal-nota').style.display = 'none';
+    }
+
+    async function guardarNotaAnclada(e) {
+        e.preventDefault();
+        const id_documento = document.getElementById('nota_id_documento').value;
+        const nota = document.getElementById('nota_texto').value;
+
+        try {
+            const btn = e.target.querySelector('button[type="submit"]');
+            const originalText = btn.innerText;
+            btn.innerText = 'Guardando...';
+            btn.disabled = true;
+
+            const res = await fetch(`{{ route('cobranza.guardar_nota') }}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({ id_documento, nota })
+            });
+
+            if (res.ok) {
+                window.location.reload();
+            } else {
+                alert('Error al guardar la nota');
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Ocurrió un error al guardar');
+        }
+    }
+
+    async function cargarLlamadas(codigo) {
+        const list = document.getElementById('historialLlamadasList');
+        list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">Cargando...</div>';
+        
+        try {
+            const res = await fetch(`/cobranza/${encodeURIComponent(codigo)}/llamadas`);
+            const data = await res.json();
+            
+            if (data.length === 0) {
+                list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No hay llamadas registradas.</div>';
+                return;
+            }
+            
+            let html = '';
+            data.forEach(ll => {
+                const fecha = new Date(ll.fecha_llamada).toLocaleString('es-VE');
+                html += `
+                <div style="background:white; padding:12px; border-radius:8px; border:1px solid #e2e8f0;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.8rem; color:#64748b;">
+                        <strong>${fecha}</strong>
+                        <span>👤 ${ll.user ? ll.user.name : 'Desconocido'}</span>
+                    </div>
+                    <div style="font-size:0.9rem; color:#1e293b; white-space:pre-wrap;">${ll.descripcion}</div>
+                </div>`;
+            });
+            list.innerHTML = html;
+        } catch (e) {
+            list.innerHTML = '<div style="color:red; padding:10px;">Error al cargar historial.</div>';
+        }
+    }
+
+    async function guardarLlamada(e) {
+        e.preventDefault();
+        const codigo = document.getElementById('llamada_codigo_cliente').value;
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.innerText = 'Guardando...';
+
+        try {
+            const res = await fetch(`/cobranza/${encodeURIComponent(codigo)}/llamadas`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    descripcion: document.getElementById('llamada_descripcion').value,
+                    fecha_llamada: document.getElementById('llamada_fecha').value
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('llamada_descripcion').value = '';
+                cargarLlamadas(codigo);
+            } else {
+                alert('Error al guardar');
+            }
+        } catch (err) {
+            alert('Error de conexión');
+        }
+        btn.disabled = false;
+        btn.innerText = 'Guardar';
+    }
+
     function openImportModal() {
         const modal = document.getElementById('import-modal');
         modal.style.display = 'flex';

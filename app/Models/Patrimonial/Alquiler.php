@@ -37,4 +37,61 @@ class Alquiler extends Model
             ? (float)($this->canon_quincenal ?? 0)
             : (float)($this->canon_mensual ?? 0);
     }
+
+    public function actualizarVencimientos()
+    {
+        $hoy = \Carbon\Carbon::now()->startOfDay();
+        $this->pagos()->where('estado', 'pendiente')
+             ->where('fecha_vencimiento', '<', $hoy)
+             ->update(['estado' => 'vencido']);
+    }
+
+    public function generarPagosPendientes()
+    {
+        if ($this->estado !== 'activo') return;
+
+        $fechaInicio = \Carbon\Carbon::parse($this->fecha_inicio)->startOfDay();
+        $hoy = \Carbon\Carbon::now()->startOfDay();
+        
+        if ($this->tipo_canon === 'quincenal') {
+            $fechaCalculo = $fechaInicio->copy();
+            $quincena = 1;
+            while ($fechaCalculo->lte($hoy)) {
+                $periodo = $fechaCalculo->format('Y-m') . '-Q' . $quincena;
+                $existe = $this->pagos()->where('periodo', $periodo)->exists();
+                
+                if (!$existe) {
+                    $this->pagos()->create([
+                        'periodo' => $periodo,
+                        'fecha_vencimiento' => $fechaCalculo->format('Y-m-d'),
+                        'monto' => $this->canonActual(),
+                        'estado' => 'pendiente',
+                    ]);
+                }
+                $fechaCalculo->addDays(15);
+                $quincena++;
+            }
+        } else {
+            $fechaCalculo = $fechaInicio->copy()->startOfMonth();
+            while ($fechaCalculo->lte($hoy->copy()->startOfMonth())) {
+                $periodo = $fechaCalculo->format('Y-m');
+                $diaPago = $this->dia_pago ?: $fechaInicio->day;
+                $diaCalculado = min($diaPago, $fechaCalculo->daysInMonth);
+                
+                $vencimiento = \Carbon\Carbon::createFromDate($fechaCalculo->year, $fechaCalculo->month, $diaCalculado)->startOfDay();
+                
+                $existe = $this->pagos()->where('periodo', $periodo)->exists();
+                
+                if (!$existe) {
+                    $this->pagos()->create([
+                        'periodo' => $periodo,
+                        'fecha_vencimiento' => $vencimiento->format('Y-m-d'),
+                        'monto' => $this->canonActual(),
+                        'estado' => 'pendiente',
+                    ]);
+                }
+                $fechaCalculo->addMonth();
+            }
+        }
+    }
 }

@@ -34,4 +34,19 @@ class Reserva extends Model
     {
         return $this->getNoches() * (float)($this->precio_noche ?? 0);
     }
+
+    public function pagos()
+    {
+        return $this->hasMany(ReservaPago::class, 'reserva_id');
+    }
+
+    public function getTotalPagado(): float
+    {
+        return $this->pagos()->sum('monto_pagado');
+    }
+
+    public function getSaldo(): float
+    {
+        return max(0, $this->getTotal() - $this->getTotalPagado());
+    }
 }

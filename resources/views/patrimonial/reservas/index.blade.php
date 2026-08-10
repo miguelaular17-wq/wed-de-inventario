@@ -163,14 +163,7 @@
                             </div>
                         </div>
                         <div id="res_preview" style="display:none; background:#f0fdf4; border:1px solid #a7f3d0; border-radius:8px; padding:10px; text-align:center; font-weight:700; color:#065f46;"></div>
-                        <div>
-                            <label style="font-size:0.8rem; font-weight:600; color:#64748b; display:block; margin-bottom:4px;">Estado</label>
-                            <select name="estado" style="width:100%; padding:8px 12px; border:1px solid #e2e8f0; border-radius:7px; font-size:0.88rem; font-family:inherit;">
-                                <option value="confirmada">Confirmada</option>
-                                <option value="completada">Completada</option>
-                                <option value="cancelada">Cancelada</option>
-                            </select>
-                        </div>
+                        <input type="hidden" name="estado" value="confirmada">
                         <div>
                             <label style="font-size:0.8rem; font-weight:600; color:#64748b; display:block; margin-bottom:4px;">Observaciones</label>
                             <textarea name="observaciones" rows="2"
@@ -210,8 +203,46 @@
                             @csrf @method('DELETE')
                             <button type="submit" style="padding:4px 8px; background:#fff; color:#dc2626; border:1px solid #fca5a5; border-radius:6px; cursor:pointer; font-size:0.75rem;">🗑️</button>
                         </form>
+                        
+                        @if($res->getSaldo() > 0)
+                        <button onclick="abrirModalPagos({{ $res->id }}, '{{ htmlspecialchars($res->cliente_nombre) }}', {{ $res->getSaldo() }}, '{{ strtoupper($res->moneda) }}')"
+                                style="padding:4px 8px; background:#fff; color:#059669; border:1px solid #6ee7b7; border-radius:6px; cursor:pointer; font-size:0.75rem;"
+                                title="Registrar Pago">
+                            💰 Pagos
+                        </button>
+                        @endif
                     </div>
                 </div>
+                
+                @if($res->pagos->count() > 0)
+                <div style="margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.8rem;">
+                    <div style="font-weight: 600; color: #475569; margin-bottom: 6px;">Historial de Pagos:</div>
+                    <ul style="margin: 0; padding-left: 20px; color: #64748b;">
+                        @foreach($res->pagos as $pago)
+                            <li>
+                                {{ $pago->fecha_pago->format('d/m/Y') }}: 
+                                <strong>{{ number_format($pago->monto_pagado, 2) }}</strong> 
+                                ({{ $pago->forma_pago }}
+                                @if($pago->tasa_cambio) | Tasa: {{ number_format($pago->tasa_cambio, 2) }} @endif)
+                            </li>
+                        @endforeach
+                    </ul>
+                    @if($res->getSaldo() <= 0)
+                    <div style="margin-top: 6px; font-weight: 700; color: #059669;">
+                        ✅ Pagado en su totalidad
+                    </div>
+                    @else
+                    <div style="margin-top: 6px; font-weight: 700; color: #b91c1c;">
+                        Saldo Pendiente: {{ number_format($res->getSaldo(), 2) }} {{ strtoupper($res->moneda) }}
+                    </div>
+                    @endif
+                </div>
+                @elseif($res->getSaldo() > 0)
+                <div style="margin-top: 6px; font-weight: 700; color: #b91c1c; font-size: 0.8rem;">
+                    Saldo Pendiente: {{ number_format($res->getSaldo(), 2) }} {{ strtoupper($res->moneda) }}
+                </div>
+                @endif
+                
             </div>
             @empty
             <div style="padding:30px; text-align:center; color:#94a3b8; font-size:0.88rem;">Sin reservas registradas.</div>
@@ -220,6 +251,77 @@
             <div style="padding:12px 16px;">{{ $reservas->links() }}</div>
             @endif
         </div>
+    </div>
+</div>
+
+{{-- MODAL REGISTRAR PAGO --}}
+<div id="modalPagos" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+    <div style="background:#fff; width:100%; max-width:500px; border-radius:12px; padding:20px; box-shadow:0 10px 25px rgba(0,0,0,0.1);">
+        <h3 id="modalPagoTitle" style="margin:0 0 16px 0; font-size:1.1rem; color:#1e293b;">Registrar Pago</h3>
+        
+        <form id="formPago" method="POST" action="">
+            @csrf
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+                <div>
+                    <label style="font-size:0.8rem; font-weight:600; color:#475569;">Monto Pagado *</label>
+                    <input type="number" name="monto_pagado" id="monto_pagado" step="0.01" min="0" required
+                           style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="font-size:0.8rem; font-weight:600; color:#475569;">Fecha Pago *</label>
+                    <input type="date" name="fecha_pago" required value="{{ date('Y-m-d') }}"
+                           style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                </div>
+            </div>
+            
+            <div style="margin-bottom:12px;">
+                <label style="font-size:0.8rem; font-weight:600; color:#475569;">Forma de Pago *</label>
+                <select name="forma_pago" id="forma_pago" required style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px;" onchange="toggleCamposPago()">
+                    <option value="Transferencia BCV">Transferencia BCV</option>
+                    <option value="Pago Móvil">Pago Móvil</option>
+                    <option value="Zelle">Zelle</option>
+                    <option value="Efectivo USD">Efectivo USD</option>
+                    <option value="Binance">Binance</option>
+                </select>
+            </div>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;" id="div_tasa_ref">
+                <div id="div_tasa">
+                    <label style="font-size:0.8rem; font-weight:600; color:#475569;">Tasa de Cambio</label>
+                    <input type="number" name="tasa_cambio" step="0.0001" placeholder="Ej: 36.50"
+                           style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                </div>
+                <div id="div_referencia">
+                    <label style="font-size:0.8rem; font-weight:600; color:#475569;">Nro Referencia</label>
+                    <input type="text" name="referencia"
+                           style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                </div>
+            </div>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;" id="div_bancos">
+                <div>
+                    <label style="font-size:0.8rem; font-weight:600; color:#475569;">Banco Origen</label>
+                    <input type="text" name="banco_origen"
+                           style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="font-size:0.8rem; font-weight:600; color:#475569;">Banco Destino</label>
+                    <input type="text" name="banco_destino"
+                           style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                </div>
+            </div>
+            
+            <div style="margin-bottom:16px;">
+                <label style="font-size:0.8rem; font-weight:600; color:#475569;">Comentario</label>
+                <textarea name="comentario" rows="2" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;"></textarea>
+            </div>
+            
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button type="button" onclick="cerrarModalPagos()" style="padding:8px 16px; background:#f1f5f9; color:#475569; border:none; border-radius:6px; cursor:pointer;">Cancelar</button>
+                <button type="submit" style="padding:8px 16px; background:#059669; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600;">Guardar Pago</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -241,6 +343,47 @@ function calcularNoches() {
         } else {
             preview.style.display = 'none';
         }
+    }
+}
+
+function abrirModalPagos(idReserva, cliente, saldoP, moneda) {
+    document.getElementById('modalPagoTitle').innerText = 'Registrar Pago - ' + cliente;
+    document.getElementById('monto_pagado').value = saldoP.toFixed(2);
+    document.getElementById('formPago').action = '/patrimonial/reservas/' + idReserva + '/pago';
+    document.getElementById('modalPagos').style.display = 'flex';
+    toggleCamposPago(); // Update fields based on initial selection
+}
+
+function cerrarModalPagos() {
+    document.getElementById('modalPagos').style.display = 'none';
+    document.getElementById('formPago').reset();
+}
+
+function toggleCamposPago() {
+    const forma = document.getElementById('forma_pago').value;
+    const divTasa = document.getElementById('div_tasa');
+    const divRef = document.getElementById('div_referencia');
+    const divBancos = document.getElementById('div_bancos');
+    const divTasaRef = document.getElementById('div_tasa_ref');
+
+    if (forma === 'Zelle' || forma === 'Binance') {
+        // Solo Referencia
+        divTasa.style.display = 'none';
+        divRef.style.display = 'block';
+        divBancos.style.display = 'none';
+        divTasaRef.style.display = 'block';
+        divTasaRef.style.gridTemplateColumns = '1fr';
+    } else if (forma === 'Efectivo USD') {
+        // Nada
+        divTasaRef.style.display = 'none';
+        divBancos.style.display = 'none';
+    } else {
+        // Transferencia BCV, Pago Móvil
+        divTasaRef.style.display = 'grid';
+        divTasaRef.style.gridTemplateColumns = '1fr 1fr';
+        divTasa.style.display = 'block';
+        divRef.style.display = 'block';
+        divBancos.style.display = 'grid';
     }
 }
 </script>

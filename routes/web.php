@@ -250,6 +250,9 @@ Route::middleware(['auth', 'role:admin,gerente,cobranza'])->prefix('cobranza')->
     Route::post('/guardar-resumen', [CobranzaController::class, 'guardarResumen'])->name('cobranza.guardar_resumen');
     Route::post('/marcar-personal', [CobranzaController::class, 'marcarPersonal'])->name('cobranza.marcar_personal');
     Route::post('/marcar-pagado-manualmente', [CobranzaController::class, 'marcarPagadoManualmente'])->name('cobranza.marcar_pagado');
+    Route::post('/guardar-nota', [CobranzaController::class, 'guardarNota'])->name('cobranza.guardar_nota');
+    Route::get('/{codigo_cliente}/llamadas', [CobranzaController::class, 'obtenerLlamadas'])->name('cobranza.llamadas.get');
+    Route::post('/{codigo_cliente}/llamadas', [CobranzaController::class, 'guardarLlamada'])->name('cobranza.llamadas.store');
 });
 Route::get('/finanzas/reporte-consolidado', [App\Http\Controllers\FinanzasController::class, 'reporteConsolidado'])->name('finanzas.reporte_consolidado');
 
@@ -312,6 +315,7 @@ Route::middleware(['auth', 'role:admin,gerente,cobranza'])->prefix('patrimonial'
     Route::resource('documentos',  \App\Http\Controllers\Patrimonial\DocumentoController::class)->parameters(['documentos' => 'documento'])->except(['create', 'edit', 'show']);
 
     // Alquileres
+    Route::get('/alquileres/calendario', [\App\Http\Controllers\Patrimonial\AlquilerController::class, 'calendario'])->name('alquileres.calendario');
     Route::get('/alquileres',           [\App\Http\Controllers\Patrimonial\AlquilerController::class, 'index'])->name('alquileres.index');
     Route::get('/alquileres/crear',     [\App\Http\Controllers\Patrimonial\AlquilerController::class, 'create'])->name('alquileres.create');
     Route::post('/alquileres',          [\App\Http\Controllers\Patrimonial\AlquilerController::class, 'store'])->name('alquileres.store');
@@ -330,6 +334,7 @@ Route::middleware(['auth', 'role:admin,gerente,cobranza'])->prefix('patrimonial'
 
     // Reservas extra
     Route::post('/reservas/bloquear', [\App\Http\Controllers\Patrimonial\ReservaController::class, 'bloquear'])->name('reservas.bloquear');
+    Route::post('/reservas/{reserva}/pago', [\App\Http\Controllers\Patrimonial\ReservaController::class, 'registrarPago'])->name('reservas.pago');
 });
 
 

@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS inventario_v2.stock_actual (
     existencia      INTEGER NOT NULL DEFAULT 0 CHECK (existencia >= 0),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_stock_actual_producto_sede UNIQUE (producto_id, sede),
-    CONSTRAINT ck_stock_actual_sede CHECK (sede IN ('JRZ','DORAL','VIRTUDES','ZAMORA','CENTRO','SAMBIL'))
+    CONSTRAINT ck_stock_actual_sede CHECK (sede IN ('JRZ','DORAL','VIRTUDES','ZAMORA','CENTRO','SAMBIL','NUNES','MOVISTAR'))
 );
 
 CREATE TABLE IF NOT EXISTS inventario_v2.ventas_historicas (
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS inventario_v2.ventas_historicas (
     ultima_venta    DATE,
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_ventas_historicas UNIQUE (producto_id, sede),
-    CONSTRAINT ck_ventas_historicas_sede CHECK (sede IN ('JRZ','DORAL','VIRTUDES','ZAMORA','CENTRO','SAMBIL'))
+    CONSTRAINT ck_ventas_historicas_sede CHECK (sede IN ('JRZ','DORAL','VIRTUDES','ZAMORA','CENTRO','SAMBIL','NUNES','MOVISTAR'))
 );
 
 CREATE TABLE IF NOT EXISTS inventario_v2.reposicion (
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS inventario_v2.reposicion (
     req_tag         VARCHAR(32) NOT NULL DEFAULT '',
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_reposicion UNIQUE (producto_id, sede),
-    CONSTRAINT ck_reposicion_sede CHECK (sede IN ('JRZ','DORAL','VIRTUDES','ZAMORA','CENTRO','SAMBIL'))
+    CONSTRAINT ck_reposicion_sede CHECK (sede IN ('JRZ','DORAL','VIRTUDES','ZAMORA','CENTRO','SAMBIL','NUNES','MOVISTAR'))
 );
 
 CREATE TABLE IF NOT EXISTS inventario_v2.inventario_derivado (
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS inventario_v2.inventario_derivado (
     accion          VARCHAR(128) NOT NULL DEFAULT '',
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_inventario_derivado UNIQUE (producto_id, sede),
-    CONSTRAINT ck_inventario_derivado_sede CHECK (sede IN ('JRZ','DORAL','VIRTUDES','ZAMORA','CENTRO','SAMBIL'))
+    CONSTRAINT ck_inventario_derivado_sede CHECK (sede IN ('JRZ','DORAL','VIRTUDES','ZAMORA','CENTRO','SAMBIL','NUNES','MOVISTAR'))
 );
 
 DO $$ BEGIN
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS inventario_v2.config_sede (
     tiempo_pronostico   INTEGER NOT NULL DEFAULT 15,
     minimo_compra       INTEGER NOT NULL DEFAULT 6,
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT ck_config_sede CHECK (sede IN ('JRZ','DORAL','VIRTUDES','ZAMORA','CENTRO','SAMBIL'))
+    CONSTRAINT ck_config_sede CHECK (sede IN ('JRZ','DORAL','VIRTUDES','ZAMORA','CENTRO','SAMBIL','NUNES','MOVISTAR'))
 );
 
 CREATE INDEX IF NOT EXISTS ix_stock_actual_sede_updated ON inventario_v2.stock_actual (sede, updated_at);

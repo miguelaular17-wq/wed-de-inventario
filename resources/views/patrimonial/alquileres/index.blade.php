@@ -11,9 +11,14 @@
             </div>
             <h1 style="font-size:1.4rem; font-weight:700; color:#1e293b; margin:0;">📋 Alquileres Fijos</h1>
         </div>
-        <a href="{{ route('patrimonial.alquileres.create') }}" style="display:inline-flex; align-items:center; gap:6px; padding:9px 18px; border-radius:8px; font-weight:600; font-size:0.88rem; text-decoration:none; background:#2563eb; color:#fff;">
-            + Nuevo Alquiler
-        </a>
+        <div style="display:flex; gap:10px;">
+            <a href="{{ route('patrimonial.alquileres.calendario') }}" style="display:inline-flex; align-items:center; gap:6px; padding:9px 18px; border-radius:8px; font-weight:600; font-size:0.88rem; text-decoration:none; background:#10b981; color:#fff;">
+                🗓️ Calendario de Cobros
+            </a>
+            <a href="{{ route('patrimonial.alquileres.create') }}" style="display:inline-flex; align-items:center; gap:6px; padding:9px 18px; border-radius:8px; font-weight:600; font-size:0.88rem; text-decoration:none; background:#2563eb; color:#fff;">
+                + Nuevo Alquiler
+            </a>
+        </div>
     </div>
 
     {{-- ALERTAS --}}

@@ -207,15 +207,17 @@ class CobranzaController extends Controller
                       ->from('cobranzas_pagadas_manualmente')
                       ->whereColumn('cobranzas_pagadas_manualmente.id_documento', 'historial_cobranzas.id_documento');
             })
+            ->leftJoin('cobranza_notas', 'cobranza_notas.id_documento', '=', 'historial_cobranzas.id_documento')
             ->select([
-                'codigo_cliente as codigo', 
-                'nombre_cliente as cliente', 
-                'monto_neto',
-                'saldo as saldo_usd', 
-                'fecha_emision', 
-                'estatus',
-                'sede_nombre as sede',
-                'id_documento'
+                'historial_cobranzas.codigo_cliente as codigo', 
+                'historial_cobranzas.nombre_cliente as cliente', 
+                'historial_cobranzas.monto_neto',
+                'historial_cobranzas.saldo as saldo_usd', 
+                'historial_cobranzas.fecha_emision', 
+                'historial_cobranzas.estatus',
+                'historial_cobranzas.sede_nombre as sede',
+                'historial_cobranzas.id_documento',
+                'cobranza_notas.nota as nota_anclada'
             ])
             ->selectRaw('EXISTS(SELECT 1 FROM cliente_personals WHERE cliente_personals.codigo_cliente = historial_cobranzas.codigo_cliente) as es_personal')
             ->orderBy('nombre_cliente', 'asc')
@@ -240,6 +242,25 @@ class CobranzaController extends Controller
     public function limpiarClientes(Request $request) {
         Cobranza::truncate();
         return redirect()->back()->with('success', 'La tabla detallada de clientes ha sido vaciada. Los indicadores globales se mantienen intactos.');
+    }
+
+    public function guardarNota(Request $request)
+    {
+        $request->validate([
+            'id_documento' => 'required|string',
+            'nota' => 'nullable|string'
+        ]);
+
+        if (empty($request->nota)) {
+            \App\Models\CobranzaNota::where('id_documento', $request->id_documento)->delete();
+        } else {
+            \App\Models\CobranzaNota::updateOrCreate(
+                ['id_documento' => $request->id_documento],
+                ['nota' => $request->nota, 'user_id' => auth()->id()]
+            );
+        }
+
+        return response()->json(['success' => true]);
     }
 
     public function importarExcel(Request $request) {
@@ -544,7 +565,7 @@ class CobranzaController extends Controller
         // Use landscape or portrait depending on layout, we will use portrait for the lists
         $pdf->setPaper('A4', 'portrait');
 
-        return $pdf->download('Reporte_Cobranza_' . date('Y_m_d') .te('Y_m_d') . '.pdf');
+        return $pdf->download('Reporte_Cobranza_' . date('Y_m_d') . '.pdf');
     }
 
     public function marcarPersonal(Request $request) {
@@ -585,6 +606,37 @@ class CobranzaController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Documento marcado como pagado manualmente.',
+        ]);
+    }
+
+    public function obtenerLlamadas($codigo_cliente)
+    {
+        $llamadas = \App\Models\CobranzaLlamada::with('user:id,name')
+            ->where('codigo_cliente', $codigo_cliente)
+            ->orderBy('fecha_llamada', 'desc')
+            ->get();
+            
+        return response()->json($llamadas);
+    }
+
+    public function guardarLlamada(Request $request, $codigo_cliente)
+    {
+        $request->validate([
+            'descripcion' => 'required|string',
+            'fecha_llamada' => 'required|date'
+        ]);
+
+        $llamada = \App\Models\CobranzaLlamada::create([
+            'codigo_cliente' => $codigo_cliente,
+            'descripcion' => $request->descripcion,
+            'fecha_llamada' => \Carbon\Carbon::parse($request->fecha_llamada)->format('Y-m-d H:i:s'),
+            'user_id' => auth()->id()
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Llamada registrada correctamente.',
+            'llamada' => $llamada->load('user:id,name')
         ]);
     }
 }

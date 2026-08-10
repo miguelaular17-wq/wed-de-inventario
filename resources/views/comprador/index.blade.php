@@ -825,8 +825,8 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                             <a href="{{ $sortUrl('total_stock') }}" style="color: inherit; text-decoration: none;">Stock {{ $sortIcon('total_stock') }}</a>
                         </th>
                         <th style="width: 90px; text-align: right;">Costo Unit.</th>
-                        <th style="width: 100px; text-align: right;">Costo Stock</th>
                         <th style="width: 90px; text-align: right;">Cant. Compra</th>
+                        <th style="width: 100px; text-align: right;">Costo en Tienda</th>
                         <th style="width: 100px; text-align: right;">
                             <a href="{{ $sortUrl('dias_sin_venta') }}" style="color: inherit; text-decoration: none;">Días s/v {{ $sortIcon('dias_sin_venta') }}</a>
                         </th>
@@ -881,11 +881,11 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                             <td style="text-align: right; font-weight: 500; font-size: 0.85rem; color: #475569;">
                                 ${{ number_format($item['ultimo_costo_compra'] ?? 0, 2) }}
                             </td>
-                            <td style="text-align: right; font-weight: 600; font-size: 0.85rem; color: #334155;">
-                                ${{ number_format($item['total_stock'] * ($item['ultimo_costo_compra'] ?? 0), 2) }}
-                            </td>
                             <td style="text-align: right; font-weight: 500; font-size: 0.85rem; color: #475569;">
                                 {{ number_format($item['ultima_cantidad_compra'] ?? 0) }} u.
+                            </td>
+                            <td style="text-align: right; font-weight: 600; font-size: 0.85rem; color: #334155;">
+                                ${{ number_format($item['precio_unidad'] ?? 0, 2) }}
                             </td>
                             <td style="text-align: right; font-weight: 600; color: {{ $item['dias_sin_venta'] > 90 ? '#dc2626' : ($item['dias_sin_venta'] > 60 ? '#ea580c' : ($item['dias_sin_venta'] > 30 ? '#a16207' : '#22c55e')) }};">
                                 {{ $item['dias_sin_venta'] >= 999 ? '—' : $item['dias_sin_venta'] . 'd' }}

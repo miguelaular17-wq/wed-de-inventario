@@ -78,6 +78,7 @@ class Propiedad extends Model
         return match($estado) {
             'disponible'    => 'Disponible',
             'alquilado'     => 'Alquilado',
+            'reservado'     => 'Reservado',
             'uso_propio'    => 'Uso Propio',
             'remodelacion'  => 'Remodelación',
             'no_disponible' => 'No Disponible',
@@ -91,6 +92,7 @@ class Propiedad extends Model
         return match($estado) {
             'disponible'    => '#10b981',
             'alquilado'     => '#2563eb',
+            'reservado'     => '#0ea5e9', // Azul claro
             'uso_propio'    => '#8b5cf6',
             'remodelacion'  => '#f59e0b',
             'no_disponible' => '#ef4444',

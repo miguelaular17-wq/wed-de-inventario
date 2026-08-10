@@ -46,6 +46,7 @@
 .pat-estado-pill { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
 .estado-disponible { background: #d1fae5; color: #065f46; }
 .estado-alquilado  { background: #dbeafe; color: #1d4ed8; }
+.estado-reservado  { background: #e0f2fe; color: #0369a1; }
 .estado-uso_propio { background: #ede9fe; color: #5b21b6; }
 .estado-remodelacion { background: #fef3c7; color: #92400e; }
 .estado-no_disponible { background: #fee2e2; color: #991b1b; }
