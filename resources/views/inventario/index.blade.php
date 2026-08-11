@@ -11,7 +11,18 @@
 <form method="GET" class="filter-bar" data-auto-filter data-auto-filter-delay="350" data-auto-filter-target="#inventario-content" data-tour="inventario-filters">
     <div class="field field-wide">
         <label for="q">Buscar</label>
-        <input type="search" id="q" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Código o nombre de producto…" autocomplete="off">
+        <div style="display: flex; gap: 8px;">
+            <input type="search" id="q" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Código o nombre de producto…" autocomplete="off" style="flex: 1;">
+            <button type="button" onclick="openScanner()" style="padding: 0 12px; background: var(--blue, #3b82f6); color: white; border: none; border-radius: 6px; cursor: pointer;" title="Escanear Código">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+                    <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+                    <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+                    <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+                    <rect x="7" y="7" width="10" height="10"></rect>
+                </svg>
+            </button>
+        </div>
     </div>
     <div class="field">
         <label for="categoria">Categoría</label>
@@ -35,6 +46,20 @@
 
 <div id="inventario-content" class="ajax-content">
     @include('inventario._content')
+</div>
+
+{{-- ======================================================
+     MODAL: Scanner de Código de Barras
+     ====================================================== --}}
+<div id="modal-scanner" class="modal-overlay" style="display:none; z-index: 2000; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); align-items: center; justify-content: center;">
+    <div class="panel modal-box" style="width: 95%; max-width: 500px; background: white; padding: 20px; border-radius: 12px; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+        <button type="button" onclick="closeScanner()" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b;">&times;</button>
+        <h3 style="margin-top: 0; color: var(--blue, #3b82f6);">📸 Escanear Código de Barras</h3>
+        <div id="reader" style="width: 100%; margin-top: 15px; border-radius: 8px; overflow: hidden;"></div>
+        <div style="text-align: right; margin-top: 20px;">
+            <button type="button" onclick="closeScanner()" style="padding: 8px 20px; background: #94a3b8; color: white; border: none; border-radius: 6px; cursor: pointer;">Cerrar</button>
+        </div>
+    </div>
 </div>
 
 {{-- ======================================================
@@ -532,5 +557,32 @@
         window.AppSyncPoll.start(syncInventario, syncInterval);
     }
 })();
+
+let html5QrcodeScanner = null;
+window.openScanner = function() {
+    document.getElementById('modal-scanner').style.display = 'flex';
+    if (!html5QrcodeScanner) {
+        html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader", { fps: 10, qrbox: {width: 250, height: 250}, aspectRatio: 1.0 }, false);
+        html5QrcodeScanner.render(function(decodedText) {
+            document.getElementById('q').value = decodedText;
+            closeScanner();
+            const evt = new Event('input', { bubbles: true });
+            document.getElementById('q').dispatchEvent(evt);
+        }, function(error) {
+            // ignore scan failures (it scans constantly until it finds one)
+        });
+    }
+};
+window.closeScanner = function() {
+    document.getElementById('modal-scanner').style.display = 'none';
+    if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear().catch(error => {
+            console.error("Failed to clear html5QrcodeScanner. ", error);
+        });
+        html5QrcodeScanner = null;
+    }
+};
 </script>
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 @endpush

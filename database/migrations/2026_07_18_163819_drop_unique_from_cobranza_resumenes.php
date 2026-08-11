@@ -11,9 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('cobranza_resumenes', function (Blueprint $table) {
-            $table->dropUnique('cobranza_resumenes_sede_nombre_unique');
-        });
+        \Illuminate\Support\Facades\DB::statement('ALTER TABLE cobranza_resumenes DROP CONSTRAINT IF EXISTS cobranza_resumenes_sede_nombre_unique');
     }
 
     /**

@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ImportController;
 use App\Http\Controllers\Admin\MovimientoController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\SyncRemoteController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\RequisicionController;
@@ -106,7 +107,13 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::post('/catalogo-auto/config', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'store'])->name('catalogo-auto.config');
     Route::post('/catalogo-auto/{id}/generar', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'generate'])->name('catalogo-auto.generate');
     Route::delete('/catalogo-auto/{id}', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'destroy'])->name('catalogo-auto.destroy');
+
+    // ── Control Remoto de Sincronizadores ─────────────────────────────
+    Route::get('/sincronizadores', [SyncRemoteController::class, 'index'])->name('sync.index');
+    Route::post('/sincronizadores/comando', [SyncRemoteController::class, 'sendCommand'])->name('sync.command');
+    Route::get('/sincronizadores/status', [SyncRemoteController::class, 'status'])->name('sync.status');
 });
+
 
 // Sede change views accessible by roles with sede access
 Route::middleware(['auth', 'role:admin,gerente,supervisor,telefonia,sede,comprador'])->prefix('admin')->name('admin.')->group(function () {
@@ -253,6 +260,8 @@ Route::middleware(['auth', 'role:admin,gerente,cobranza'])->prefix('cobranza')->
     Route::post('/guardar-nota', [CobranzaController::class, 'guardarNota'])->name('cobranza.guardar_nota');
     Route::get('/{codigo_cliente}/llamadas', [CobranzaController::class, 'obtenerLlamadas'])->name('cobranza.llamadas.get');
     Route::post('/{codigo_cliente}/llamadas', [CobranzaController::class, 'guardarLlamada'])->name('cobranza.llamadas.store');
+    Route::delete('/llamadas/{id}', [CobranzaController::class, 'eliminarLlamada'])->name('cobranza.llamadas.destroy');
+    Route::get('/{numero_documento}/estado-cuenta', [CobranzaController::class, 'estadoCuenta'])->name('cobranza.estado_cuenta.get');
 });
 Route::get('/finanzas/reporte-consolidado', [App\Http\Controllers\FinanzasController::class, 'reporteConsolidado'])->name('finanzas.reporte_consolidado');
 

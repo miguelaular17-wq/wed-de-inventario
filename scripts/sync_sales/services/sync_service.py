@@ -9,6 +9,8 @@ from utils.logger import AppLogger
 from utils.helpers import get_sql_query
 from utils.product_matcher import buscar_producto_web
 from services.snapshot_service import SnapshotService
+from services.heartbeat_service import HeartbeatService
+from services.command_poller import CommandPoller
 
 class SyncService:
     def __init__(self):
@@ -30,20 +32,49 @@ class SyncService:
 
             if last_snapshot_date != today:
                 logger.info("=" * 60)
-                logger.info(f"NUEVO DÍA DETECTADO ({today}). Actualizando stock de productos conocidos...")
+                logger.info(f"NUEVO DÍA DETECTADO ({today}). Iniciando carga de apertura...")
                 logger.info("=" * 60)
-                success = SnapshotService.execute()
-                
-                if success and config.get("sync_cobranzas", True):
-                    from services.cobranzas_service import CobranzasService
-                    CobranzasService.execute()
-                    
+
+                # ── Módulo 1: Stock / Inventario ─────────────────────────
+                if config.get("sync_stock", True):
+                    logger.info("[Apertura] ▶ Módulo: Stock / Inventario")
+                    success = SnapshotService.execute()
+                else:
+                    logger.info("[Apertura] ⏭ Módulo Stock/Inventario desactivado. Saltando.")
+
+                # ── Módulo 2: Precios ─────────────────────────────────────
+                if config.get("sync_precios", True):
+                    logger.info("[Apertura] ▶ Módulo: Actualización de Precios")
+                    try:
+                        from services.price_service import PriceService
+                        PriceService.execute()
+                    except Exception as e:
+                        logger.error(f"[Apertura] Error en PriceService: {e}")
+                else:
+                    logger.info("[Apertura] ⏭ Módulo Precios desactivado. Saltando.")
+
+                # ── Módulo 3: Cobranzas ───────────────────────────────────
+                if config.get("sync_cobranzas", True):
+                    logger.info("[Apertura] ▶ Módulo: Cobranzas")
+                    try:
+                        from services.cobranzas_service import CobranzasService
+                        CobranzasService.execute()
+                    except Exception as e:
+                        logger.error(f"[Apertura] Error en CobranzasService: {e}")
+                else:
+                    logger.info("[Apertura] ⏭ Módulo Cobranzas desactivado. Saltando.")
+
+                # ── Módulo 4: Compras ─────────────────────────────────────
+                if config.get("sync_compras", True):
+                    logger.info("[Apertura] ▶ Módulo: Compras")
                     try:
                         from services.compras_service import ComprasService
                         ComprasService.execute()
                     except Exception as e:
-                        logger.error(f"Error executing ComprasService: {e}")
-                
+                        logger.error(f"[Apertura] Error en ComprasService: {e}")
+                else:
+                    logger.info("[Apertura] ⏭ Módulo Compras desactivado. Saltando.")
+
                 if success:
                     last_snapshot_date = today
 
@@ -223,6 +254,12 @@ class SyncService:
             state.set_last_processed_timestamp(new_last_time)
             
             logger.info(f"Sincronización completada. Último registro procesado: {new_last_time}")
+
+            # ── Heartbeat + polling de comandos remotos ────────────────
+            HeartbeatService.ping(web_cursor, web_conn)
+            CommandPoller.poll(web_cursor, web_conn)
+            # ──────────────────────────────────────────────────────────
+
             return True
             
         except Exception as e:

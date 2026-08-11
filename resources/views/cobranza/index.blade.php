@@ -69,11 +69,18 @@
         }
 
         /* Modern Row Status Colors */
-        .row-critico td { background-color: #fef2f2 !important; color: #b91c1c !important; font-weight: 600; }
-        .row-moroso td { background-color: #fefce8 !important; color: #a16207 !important; font-weight: 600; }
-        .row-reciente td { background-color: #f0fdf4 !important; color: #15803d !important; font-weight: 600; }
+        .row-critico td { background-color: #fef2f2 !important; color: #b91c1c !important; font-weight: 600; cursor: pointer; }
+        .row-moroso td { background-color: #fefce8 !important; color: #a16207 !important; font-weight: 600; cursor: pointer; }
+        .row-reciente td { background-color: #f0fdf4 !important; color: #15803d !important; font-weight: 600; cursor: pointer; }
         .row-apartado td { background-color: #ffffff !important; color: #64748b !important; font-weight: 500; }
         .row-total td { background-color: #f1f5f9 !important; font-weight: 700; color: #0f172a !important; }
+
+        /* Sub-rows for breakdown */
+        .row-breakdown td { font-size: 0.82rem !important; font-weight: 500 !important; padding: 6px 16px !important; }
+        .row-breakdown-critico td { background-color: #fff5f5 !important; color: #dc2626 !important; }
+        .row-breakdown-moroso td { background-color: #fffbeb !important; color: #b45309 !important; }
+        .row-breakdown-reciente td { background-color: #f0fdf4 !important; color: #166534 !important; }
+        .row-breakdown-apartado td { background-color: #fafafa !important; color: #6b7280 !important; }
 
         /* Left border accent */
         .row-critico td:first-child { box-shadow: inset 4px 0 0 0 #ef4444; }
@@ -169,15 +176,17 @@
                         @php
                             // Inicializar estatus para que aparezcan siempre, aunque esten en 0
                             $mapEstatus = [
-                                'CRITICO' => ['clientes' => 0, 'saldo' => 0],
-                                'MOROSO' => ['clientes' => 0, 'saldo' => 0],
-                                'RECIENTE' => ['clientes' => 0, 'saldo' => 0],
-                                'APARTADO' => ['clientes' => 0, 'saldo' => 0],
+                                'CRITICO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
+                                'MOROSO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
+                                'RECIENTE' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
+                                'APARTADO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
                             ];
                             foreach($porEstatus as $e) {
                                 if (isset($mapEstatus[$e->estatus])) {
                                     $mapEstatus[$e->estatus]['clientes'] = $e->total_clientes;
                                     $mapEstatus[$e->estatus]['saldo'] = $e->total_saldo;
+                                    $mapEstatus[$e->estatus]['regulares'] = $e->regulares ?? 0;
+                                    $mapEstatus[$e->estatus]['personales'] = $e->personales ?? 0;
                                 }
                             }
                         @endphp
@@ -186,13 +195,36 @@
                             @php
                                 $porcentaje = $gran_total_saldo > 0 ? round(($datos['saldo'] / $gran_total_saldo) * 100) : 0;
                                 $class = 'row-' . strtolower($estatus);
+                                $hasBreakdown = in_array($estatus, ['CRITICO','MOROSO','RECIENTE','APARTADO']);
                             @endphp
-                            <tr class="{{ $class }}">
-                                <td style="text-align: left; font-weight: bold;">{{ $estatus }}</td>
+                            <tr class="{{ $class }} estatus-toggle-row" data-estatus="{{ $estatus }}"
+                                onclick="toggleBreakdown('{{ $estatus }}')"
+                                title="Clic para ver desglose por tipo de cliente">
+                                <td style="text-align: left; font-weight: bold;">
+                                    {{ $estatus }}
+                                    @if($hasBreakdown)
+                                        <span id="arrow-{{ $estatus }}" style="margin-left:6px; font-size:0.75rem; opacity:0.7;">▶</span>
+                                    @endif
+                                </td>
                                 <td style="text-align: center;">{{ $datos['clientes'] }}</td>
                                 <td style="text-align: right;">{{ number_format($datos['saldo'], 2, ',', '.') }}</td>
                                 <td style="text-align: right;">{{ $porcentaje }}%</td>
                             </tr>
+                            @if($hasBreakdown)
+                            {{-- Breakdown sub-rows (hidden by default) --}}
+                            <tr id="breakdown-{{ $estatus }}-regulares" class="row-breakdown row-breakdown-{{ strtolower($estatus) }}" style="display:none;">
+                                <td style="text-align: left; padding-left: 32px;">↳ 👔 Regulares</td>
+                                <td style="text-align: center;">{{ $datos['regulares'] }}</td>
+                                <td style="text-align: right;">—</td>
+                                <td style="text-align: right;">—</td>
+                            </tr>
+                            <tr id="breakdown-{{ $estatus }}-personales" class="row-breakdown row-breakdown-{{ strtolower($estatus) }}" style="display:none;">
+                                <td style="text-align: left; padding-left: 32px;">↳ 🏷️ Personal</td>
+                                <td style="text-align: center;">{{ $datos['personales'] }}</td>
+                                <td style="text-align: right;">—</td>
+                                <td style="text-align: right;">—</td>
+                            </tr>
+                            @endif
                         @endforeach
 
                         <tr class="row-total">
@@ -314,6 +346,17 @@
             </div>
 
             <div style="display: flex; align-items: center; gap: 5px;">
+                <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Estatus:</label>
+                <select name="filtro_estatus" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff; min-width: 140px;">
+                    <option value="">Todos</option>
+                    <option value="CRITICO" {{ ($filtro_estatus ?? '') === 'CRITICO' ? 'selected' : '' }}>🔴 Crítico</option>
+                    <option value="MOROSO" {{ ($filtro_estatus ?? '') === 'MOROSO' ? 'selected' : '' }}>🟡 Moroso</option>
+                    <option value="RECIENTE" {{ ($filtro_estatus ?? '') === 'RECIENTE' ? 'selected' : '' }}>🟢 Reciente</option>
+                    <option value="APARTADO" {{ ($filtro_estatus ?? '') === 'APARTADO' ? 'selected' : '' }}>⚪ Apartado</option>
+                </select>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 5px;">
                 <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Tipo Cliente:</label>
                 <select name="mostrar_clientes" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff; min-width: 150px;">
                     <option value="todos" {{ ($mostrar_clientes ?? 'todos') === 'todos' ? 'selected' : '' }}>Todos</option>
@@ -326,7 +369,7 @@
                 Buscar
             </button>
 
-            @if(($filtro_sede ?? '') || ($buscar_cliente ?? '') || ($fecha_desde ?? '') || ($fecha_hasta ?? '') || (($mostrar_clientes ?? 'todos') !== 'todos'))
+            @if(($filtro_sede ?? '') || ($buscar_cliente ?? '') || ($fecha_desde ?? '') || ($fecha_hasta ?? '') || ($filtro_estatus ?? '') || (($mostrar_clientes ?? 'todos') !== 'todos'))
                 <a href="{{ route('cobranza.index') }}" class="btn secondary" style="padding: 8px 12px; font-size: 0.85rem; border-radius: 6px; text-decoration: none; background-color: #6c757d; color: white;">Limpiar Filtros</a>
             @endif
         </form>
@@ -392,6 +435,9 @@
                                 <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #93c5fd; background-color: #eff6ff; cursor: pointer; color: #1e40af; margin-left: 4px;" onclick="abrirModalLlamadas('{{ $c->codigo }}', '{{ htmlspecialchars($c->cliente) }}')">
                                     📞 Llamadas
                                 </button>
+                                <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #fbbf24; background-color: #fef3c7; cursor: pointer; color: #d97706; margin-left: 4px;" onclick="abrirModalEstadoCuenta('{{ $c->numero_documento }}', '{{ htmlspecialchars($c->cliente) }}')">
+                                    📝 Edo. Cuenta
+                                </button>
                             </td>
                         </tr>
                     @empty
@@ -429,28 +475,51 @@
 
 <!-- Modal Llamadas -->
 <div id="modal-llamadas" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;">
-    <div class="panel modal-box" style="width: 95%; max-width: 600px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); position: relative; max-height: 90vh; display: flex; flex-direction: column;">
-        <div style="background-color: #1e40af; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;">
-            <h3 id="modalLlamadasTitle" style="margin: 0; font-size: 1.1rem; font-weight: 600;">Historial de Llamadas</h3>
-            <button type="button" onclick="cerrarModalLlamadas()" style="background: transparent; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+    <div class="panel modal-box" style="width: 95%; max-width: 640px; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px -10px rgba(0,0,0,0.3); position: relative; max-height: 90vh; display: flex; flex-direction: column;">
+        <div style="background: linear-gradient(135deg, #1e40af, #3b82f6); color: white; padding: 18px 22px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <div style="font-size:0.78rem; opacity:0.8; margin-bottom:2px;">📞 Historial de</div>
+                <h3 id="modalLlamadasTitle" style="margin: 0; font-size: 1.1rem; font-weight: 700;">Llamadas</h3>
+            </div>
+            <button type="button" onclick="cerrarModalLlamadas()" style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 1.2rem; cursor: pointer; line-height: 1; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center;">&times;</button>
+        </div>
+        
+        <div style="padding: 18px 20px; background: #f0f4ff; border-bottom: 1px solid #dbeafe;">
+            <h4 style="margin: 0 0 12px 0; font-size: 0.9rem; color: #1e3a8a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">➕ Registrar Nueva Llamada</h4>
+            <form id="formNuevaLlamada" onsubmit="guardarLlamada(event)">
+                <input type="hidden" id="llamada_codigo_cliente">
+                <div style="margin-bottom: 10px;">
+                    <textarea id="llamada_descripcion" required rows="3" placeholder="Resumen de lo conversado en la llamada..." style="width: 100%; padding: 10px 12px; border: 1px solid #93c5fd; border-radius: 8px; box-sizing: border-box; resize: vertical; font-size: 0.9rem; outline: none; transition: border 0.2s;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#93c5fd'"></textarea>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <input type="datetime-local" id="llamada_fecha" required style="padding: 8px 12px; border: 1px solid #93c5fd; border-radius: 8px; flex: 1; min-width: 160px; outline: none;">
+                    <button type="submit" style="padding: 9px 20px; background: linear-gradient(135deg, #2563eb, #3b82f6); color: white; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.9rem; white-space: nowrap; box-shadow: 0 2px 8px rgba(37,99,235,0.3);">Guardar</button>
+                </div>
+            </form>
+        </div>
+
+        <div style="padding: 16px 20px; flex: 1; overflow-y: auto; background: #f8fafc;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h4 style="margin: 0; font-size: 0.85rem; color: #475569; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">📋 Historial</h4>
+                <span id="llamadas-count" style="font-size: 0.78rem; color: #94a3b8;"></span>
+            </div>
+            <div id="historialLlamadasList" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- Cargando... -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Estado Cuenta -->
+<div id="modal-estado-cuenta" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;">
+    <div class="panel modal-box" style="width: 95%; max-width: 800px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); position: relative; max-height: 90vh; display: flex; flex-direction: column;">
+        <div style="background-color: #d97706; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;">
+            <h3 id="modalEstadoCuentaTitle" style="margin: 0; font-size: 1.1rem; font-weight: 600;">Estado de Cuenta</h3>
+            <button type="button" onclick="cerrarModalEstadoCuenta()" style="background: transparent; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
         </div>
         
         <div style="padding: 20px; flex: 1; overflow-y: auto; background: #f8fafc;">
-            <div style="margin-bottom: 20px; background: white; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                <h4 style="margin: 0 0 10px 0; font-size: 0.95rem; color: #1e293b;">Registrar Nueva Llamada</h4>
-                <form id="formNuevaLlamada" onsubmit="guardarLlamada(event)">
-                    <input type="hidden" id="llamada_codigo_cliente">
-                    <div style="margin-bottom: 10px;">
-                        <textarea id="llamada_descripcion" required rows="2" placeholder="Resumen de lo conversado..." style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; resize: vertical;"></textarea>
-                    </div>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="datetime-local" id="llamada_fecha" required style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
-                        <button type="submit" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Guardar</button>
-                    </div>
-                </form>
-            </div>
-
-            <div id="historialLlamadasList" style="display: flex; flex-direction: column; gap: 10px;">
+            <div id="estadoCuentaList" style="display: flex; flex-direction: column; gap: 10px;">
                 <!-- Cargando... -->
             </div>
         </div>
@@ -575,32 +644,44 @@
 
     async function cargarLlamadas(codigo) {
         const list = document.getElementById('historialLlamadasList');
-        list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">Cargando...</div>';
+        const countEl = document.getElementById('llamadas-count');
+        list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;"><div style="font-size:1.5rem;margin-bottom:6px;">⏳</div>Cargando...</div>';
         
         try {
             const res = await fetch(`/cobranza/${encodeURIComponent(codigo)}/llamadas`);
             const data = await res.json();
             
             if (data.length === 0) {
-                list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No hay llamadas registradas.</div>';
+                if (countEl) countEl.textContent = '0 registros';
+                list.innerHTML = '<div style="text-align:center; padding:30px; color:#94a3b8; border: 2px dashed #e2e8f0; border-radius:12px;"><div style="font-size:2rem;margin-bottom:8px;">📵</div><div style="font-weight:600;">Sin llamadas registradas</div><div style="font-size:0.82rem;margin-top:4px;">Registra la primera llamada arriba</div></div>';
                 return;
             }
+
+            if (countEl) countEl.textContent = data.length + ' registro' + (data.length !== 1 ? 's' : '');
             
             let html = '';
             data.forEach(ll => {
-                const fecha = new Date(ll.fecha_llamada).toLocaleString('es-VE');
+                const fecha = new Date(ll.fecha_llamada + 'Z').toLocaleString('es-VE', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+                const userName = ll.user ? ll.user.name : 'Desconocido';
+                const initials = userName.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
                 html += `
-                <div style="background:white; padding:12px; border-radius:8px; border:1px solid #e2e8f0;">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.8rem; color:#64748b;">
-                        <strong>${fecha}</strong>
-                        <span>👤 ${ll.user ? ll.user.name : 'Desconocido'}</span>
+                <div style="background:white; padding:14px 16px; border-radius:10px; border:1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <div style="width:34px; height:34px; border-radius:50%; background: linear-gradient(135deg,#3b82f6,#2563eb); color:white; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.78rem; flex-shrink:0;">${initials}</div>
+                            <div>
+                                <div style="font-weight:700; font-size:0.88rem; color:#1e293b;">${userName}</div>
+                                <div style="font-size:0.75rem; color:#94a3b8;">📅 ${fecha}</div>
+                            </div>
+                        </div>
+                        <button onclick="eliminarLlamada(${ll.id}, this)" title="Eliminar llamada" style="background: #fef2f2; border: 1px solid #fca5a5; color: #dc2626; border-radius:6px; cursor:pointer; font-size:0.75rem; padding:3px 8px; white-space:nowrap;">🗑 Borrar</button>
                     </div>
-                    <div style="font-size:0.9rem; color:#1e293b; white-space:pre-wrap;">${ll.descripcion}</div>
+                    <div style="font-size:0.9rem; color:#334155; white-space:pre-wrap; line-height:1.5; background:#f8fafc; padding:10px 12px; border-radius:8px; border-left: 3px solid #3b82f6;">${ll.descripcion}</div>
                 </div>`;
             });
             list.innerHTML = html;
         } catch (e) {
-            list.innerHTML = '<div style="color:red; padding:10px;">Error al cargar historial.</div>';
+            list.innerHTML = '<div style="color:red; padding:10px; text-align:center;">⚠️ Error al cargar historial.</div>';
         }
     }
 
@@ -609,7 +690,7 @@
         const codigo = document.getElementById('llamada_codigo_cliente').value;
         const btn = e.target.querySelector('button[type="submit"]');
         btn.disabled = true;
-        btn.innerText = 'Guardando...';
+        btn.innerText = '⏳ Guardando...';
 
         try {
             const res = await fetch(`/cobranza/${encodeURIComponent(codigo)}/llamadas`, {
@@ -635,6 +716,120 @@
         }
         btn.disabled = false;
         btn.innerText = 'Guardar';
+    }
+
+    async function eliminarLlamada(id, btn) {
+        if (!confirm('¿Eliminar esta llamada del historial?')) return;
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '⏳';
+        try {
+            const res = await fetch(`/cobranza/llamadas/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                }
+            });
+            const data = await res.json();
+            if (data.success) {
+                const codigo = document.getElementById('llamada_codigo_cliente').value;
+                cargarLlamadas(codigo);
+            } else {
+                alert('Error al eliminar');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        } catch (err) {
+            alert('Error de conexión');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    async function abrirModalEstadoCuenta(numeroDocumento, cliente) {
+        document.getElementById('modal-estado-cuenta').style.display = 'flex';
+        document.getElementById('modalEstadoCuentaTitle').innerText = 'Estado de Cuenta: ' + cliente;
+        const list = document.getElementById('estadoCuentaList');
+        list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">Cargando detalles...</div>';
+        
+        if (!numeroDocumento) {
+             list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No hay número de documento disponible para esta factura.</div>';
+             return;
+        }
+
+        try {
+            const res = await fetch(`/cobranza/${encodeURIComponent(numeroDocumento)}/estado-cuenta`);
+            const data = await res.json();
+            
+            if (data.length === 0) {
+                list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No hay registros detallados sincronizados para esta factura aún. <br><small>Recuerde activar el módulo de cobranzas en el sincronizador de la tienda.</small></div>';
+                return;
+            }
+            
+            let html = `
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="background-color: #f1f5f9; color: #475569; text-align: left;">
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Fecha</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Detalle</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align: right;">Artículos ($)</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align: right;">Abonos ($)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            let saldoAcumulado = 0;
+            
+            data.forEach(mov => {
+                const isAbono = mov.tipo_fila === 2 || mov.tipo_documento === 'ABONO';
+                const fecha = mov.fecha_emision ? new Date(mov.fecha_emision).toLocaleDateString('es-VE') : '';
+                const descripcion = mov.detalle || (isAbono ? 'Pago/Abono' : 'Artículo/Cargo');
+                
+                let montoCargo = '';
+                let montoAbono = '';
+                
+                if (!isAbono) {
+                    const r = parseFloat(mov.total_renglon || 0);
+                    montoCargo = r.toFixed(2);
+                    saldoAcumulado += r;
+                } else {
+                    const a = parseFloat(mov.total_abono || mov.total_renglon || 0);
+                    montoAbono = a.toFixed(2);
+                    saldoAcumulado -= a;
+                }
+                
+                html += `
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${fecha}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${descripcion}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #dc2626;">${montoCargo ? '$ ' + montoCargo : ''}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #16a34a;">${montoAbono ? '$ ' + montoAbono : ''}</td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3" style="padding: 12px 8px; text-align: right; font-weight: bold; border-top: 2px solid #cbd5e1;">Saldo Restante:</td>
+                            <td style="padding: 12px 8px; text-align: right; font-weight: bold; color: ${saldoAcumulado > 0 ? '#dc2626' : '#16a34a'}; border-top: 2px solid #cbd5e1;">$ ${saldoAcumulado.toFixed(2)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            `;
+            
+            list.innerHTML = html;
+        } catch (e) {
+            console.error(e);
+            list.innerHTML = '<div style="color:red; padding:10px;">Error al cargar el estado de cuenta.</div>';
+        }
+    }
+
+    function cerrarModalEstadoCuenta() {
+        document.getElementById('modal-estado-cuenta').style.display = 'none';
     }
 
     function openImportModal() {
@@ -728,6 +923,16 @@
             btn.disabled = false;
             btn.innerText = originalText;
         }
+    }
+    function toggleBreakdown(estatus) {
+        const rowReg = document.getElementById('breakdown-' + estatus + '-regulares');
+        const rowPer = document.getElementById('breakdown-' + estatus + '-personales');
+        const arrow  = document.getElementById('arrow-' + estatus);
+        if (!rowReg) return;
+        const isOpen = rowReg.style.display !== 'none';
+        rowReg.style.display = isOpen ? 'none' : '';
+        rowPer.style.display = isOpen ? 'none' : '';
+        if (arrow) arrow.textContent = isOpen ? '▶' : '▼';
     }
 </script>
 @endpush

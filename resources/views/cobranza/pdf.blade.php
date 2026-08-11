@@ -135,6 +135,7 @@
                     <th>MONTO NETO</th>
                     <th>SALDO (FALTA PAGAR)</th>
                     <th>ESTATUS</th>
+                    <th>NOTA</th>
                 </tr>
             </thead>
             <tbody>
@@ -144,10 +145,16 @@
                     @endphp
                     <tr>
                         <td>{{ $c->codigo_cliente ?? $c->codigo }}</td>
-                        <td>{{ $c->nombre_cliente ?? $c->cliente }}</td>
+                        <td>
+                            {{ $c->nombre_cliente ?? $c->cliente }}
+                            @if(!empty($c->es_personal))
+                                <span style="background:#2563eb; color:white; padding:1px 5px; border-radius:3px; font-size:9px; font-weight:bold; margin-left:4px;">PERSONAL</span>
+                            @endif
+                        </td>
                         <td class="text-right">${{ number_format($c->monto_neto, 2, ',', '.') }}</td>
                         <td class="text-right">${{ number_format($c->saldo, 2, ',', '.') }}</td>
                         <td class="{{ $class }}">{{ $c->estatus }}</td>
+                        <td style="font-size:10px; color:#555;">{{ $c->nota_anclada ?? '' }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -168,6 +175,7 @@
                 <th>CLIENTE</th>
                 <th>SALDO ADEUDADO</th>
                 <th>ESTATUS</th>
+                <th>NOTA</th>
             </tr>
         </thead>
         <tbody>
@@ -179,9 +187,15 @@
                 <tr>
                     <td class="text-center">{{ $rank++ }}</td>
                     <td>{{ $c->sede_nombre }}</td>
-                    <td>{{ $c->nombre_cliente ?? $c->cliente }}</td>
+                    <td>
+                        {{ $c->nombre_cliente ?? $c->cliente }}
+                        @if(!empty($c->es_personal))
+                            <span style="background:#2563eb; color:white; padding:1px 5px; border-radius:3px; font-size:9px; font-weight:bold; margin-left:4px;">PERSONAL</span>
+                        @endif
+                    </td>
                     <td class="text-right" style="font-weight: bold;">${{ number_format($c->saldo, 2, ',', '.') }}</td>
                     <td class="{{ $class }}">{{ $c->estatus }}</td>
+                    <td style="font-size:10px; color:#555;">{{ $c->nota_anclada ?? '' }}</td>
                 </tr>
             @endforeach
         </tbody>

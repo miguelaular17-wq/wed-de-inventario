@@ -1412,7 +1412,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     fileInput.addEventListener('change', function() {
         if (this.files && this.files.length > 0) addFilesToMulti(this.files);
-        this.value = ''; // reset so same file can be re-selected
     });
 
     document.getElementById('nuevoEgresoModal').addEventListener('paste', (e) => {

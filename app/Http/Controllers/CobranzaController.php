@@ -54,12 +54,12 @@ class CobranzaController extends Controller
         $gran_total_saldo = 0;
         $gran_total_clientes = 0;
         
-        // Acumuladores por estatus
+        // Acumuladores por estatus con desglose regular/personal
         $estatus_totales = [
-            'CRITICO' => ['clientes' => 0, 'saldo' => 0],
-            'MOROSO' => ['clientes' => 0, 'saldo' => 0],
-            'RECIENTE' => ['clientes' => 0, 'saldo' => 0],
-            'APARTADO' => ['clientes' => 0, 'saldo' => 0],
+            'CRITICO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
+            'MOROSO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
+            'RECIENTE' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
+            'APARTADO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
         ];
 
         // Agrupar por sede
@@ -86,6 +86,11 @@ class CobranzaController extends Controller
                 }
                 $estatus_totales[$est]['clientes'] += 1;
                 $estatus_totales[$est]['saldo'] += $r->saldo;
+                if (in_array($r->codigo_cliente, $personalCodes)) {
+                    $estatus_totales[$est]['personales'] += 1;
+                } else {
+                    $estatus_totales[$est]['regulares'] += 1;
+                }
             }
         }
 
@@ -95,7 +100,9 @@ class CobranzaController extends Controller
             $porEstatus[] = (object) [
                 'estatus' => $k,
                 'total_clientes' => $v['clientes'],
-                'total_saldo' => $v['saldo']
+                'total_saldo' => $v['saldo'],
+                'regulares' => $v['regulares'],
+                'personales' => $v['personales'],
             ];
         }
 
@@ -169,6 +176,7 @@ class CobranzaController extends Controller
         $buscar_cliente = request('buscar_cliente');
         $fecha_desde = request('fecha_desde');
         $fecha_hasta = request('fecha_hasta');
+        $filtro_estatus = request('filtro_estatus');
         
         $queryClientes = \App\Models\HistorialCobranza::query();
         
@@ -199,6 +207,10 @@ class CobranzaController extends Controller
         if ($fecha_hasta) {
             $queryClientes->whereDate('fecha_emision', '<=', $fecha_hasta);
         }
+
+        if ($filtro_estatus) {
+            $queryClientes->where('estatus', strtoupper($filtro_estatus));
+        }
         
         // Solo se cargan las columnas que usa la vista y usamos alias para compatibilidad
         $clientes_lista = $queryClientes
@@ -217,6 +229,7 @@ class CobranzaController extends Controller
                 'historial_cobranzas.estatus',
                 'historial_cobranzas.sede_nombre as sede',
                 'historial_cobranzas.id_documento',
+                'historial_cobranzas.numero_documento',
                 'cobranza_notas.nota as nota_anclada'
             ])
             ->selectRaw('EXISTS(SELECT 1 FROM cliente_personals WHERE cliente_personals.codigo_cliente = historial_cobranzas.codigo_cliente) as es_personal')
@@ -228,7 +241,7 @@ class CobranzaController extends Controller
         }
 
         $t = microtime(true);
-        $view = view('cobranza.index', compact('porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'sedes', 'clientes_lista', 'filtro_sede', 'buscar_cliente', 'fecha_desde', 'fecha_hasta', 'fechas_semanal', 'semanal_list', 'mostrar_clientes'));
+        $view = view('cobranza.index', compact('porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'sedes', 'clientes_lista', 'filtro_sede', 'buscar_cliente', 'fecha_desde', 'fecha_hasta', 'fechas_semanal', 'semanal_list', 'mostrar_clientes', 'filtro_estatus'));
         $html = $view->render();
         \Log::info(sprintf('Render Blade => %.2f ms', (microtime(true)-$t)*1000));
         
@@ -488,7 +501,12 @@ class CobranzaController extends Controller
         
         $historialActual = collect();
         if ($ultimaFecha) {
-            $query = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha);
+            $query = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha)
+                ->whereNotExists(function ($q) {
+                    $q->select(\Illuminate\Support\Facades\DB::raw(1))
+                      ->from('cobranzas_pagadas_manualmente')
+                      ->whereColumn('cobranzas_pagadas_manualmente.id_documento', 'historial_cobranzas.id_documento');
+                });
             if ($mostrar_clientes === 'regulares') {
                 $query->whereNotIn('codigo_cliente', $personalCodes);
             } elseif ($mostrar_clientes === 'personales') {
@@ -546,9 +564,32 @@ class CobranzaController extends Controller
             return strcmp($a->sede_nombre, $b->sede_nombre);
         });
 
-        // 2. Clientes por sede
+        // 2. Clientes por sede (con notas)
         $clientesPorSede = [];
-        foreach ($agrupadoPorSede as $sede => $clientesSede) {
+
+        // Re-fetch historial with notes joined, so we have nota_anclada and es_personal
+        $historialConNotas = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha)
+            ->whereNotExists(function ($q) {
+                $q->select(\Illuminate\Support\Facades\DB::raw(1))
+                  ->from('cobranzas_pagadas_manualmente')
+                  ->whereColumn('cobranzas_pagadas_manualmente.id_documento', 'historial_cobranzas.id_documento');
+            })
+            ->leftJoin('cobranza_notas', 'cobranza_notas.id_documento', '=', 'historial_cobranzas.id_documento')
+            ->select([
+                'historial_cobranzas.*',
+                'cobranza_notas.nota as nota_anclada',
+            ])
+            ->selectRaw('EXISTS(SELECT 1 FROM cliente_personals WHERE cliente_personals.codigo_cliente = historial_cobranzas.codigo_cliente) as es_personal')
+            ->get();
+
+        if ($mostrar_clientes === 'regulares') {
+            $historialConNotas = $historialConNotas->filter(fn($r) => !in_array($r->codigo_cliente, $personalCodes));
+        } elseif ($mostrar_clientes === 'personales') {
+            $historialConNotas = $historialConNotas->filter(fn($r) => in_array($r->codigo_cliente, $personalCodes));
+        }
+
+        $agrupadoConNotas = $historialConNotas->groupBy('sede_nombre');
+        foreach ($agrupadoConNotas as $sede => $clientesSede) {
             $clientesPorSede[$sede] = $clientesSede->sortBy('nombre_cliente')->values();
         }
         
@@ -556,7 +597,7 @@ class CobranzaController extends Controller
         ksort($clientesPorSede);
 
         // 3. Clientes Global Ordenados de Mayor a Menor Saldo
-        $clientesGlobalDesc = $historialActual->sortByDesc('saldo')->values();
+        $clientesGlobalDesc = $historialConNotas->sortByDesc('saldo')->values();
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('cobranza.pdf', compact(
             'porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'ultimaFecha', 'clientesPorSede', 'clientesGlobalDesc'
@@ -638,5 +679,23 @@ class CobranzaController extends Controller
             'message' => 'Llamada registrada correctamente.',
             'llamada' => $llamada->load('user:id,name')
         ]);
+    }
+
+    public function eliminarLlamada($id)
+    {
+        $llamada = \App\Models\CobranzaLlamada::findOrFail($id);
+        $llamada->delete();
+        return response()->json(['success' => true, 'message' => 'Llamada eliminada.']);
+    }
+
+    public function estadoCuenta($numero_documento)
+    {
+        $detalles = \App\Models\HistorialCobranza::where('factura_padre', $numero_documento)
+            ->orWhere('numero_documento', $numero_documento)
+            ->orderBy('fecha_emision', 'asc')
+            ->orderBy('tipo_fila', 'asc')
+            ->get();
+            
+        return response()->json($detalles);
     }
 }

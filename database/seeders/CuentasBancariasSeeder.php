@@ -127,7 +127,7 @@ class CuentasBancariasSeeder extends Seeder
                     [
                         'color_tc' => $cuenta['color_tc'],
                         'categoria_reporte' => $cuenta['cat'],
-                        'mostrar_en_principal' => $cuenta['principal'],
+                        'mostrar_en_principal' => $cuenta['principal'] ? 'true' : 'false',
                         'orden' => $index,
                     ]
                 );

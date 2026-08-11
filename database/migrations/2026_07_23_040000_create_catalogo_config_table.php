@@ -22,7 +22,7 @@ return new class extends Migration
         DB::connection('pgsql')->table('catalogo_config')->insert([
             'categorias'       => json_encode([]),
             'subcategorias'    => json_encode([]),
-            'solo_existencia'  => true,
+            'solo_existencia'  => 'true',
             'url_supabase'     => null,
             'ultima_generacion'=> null,
             'created_at'       => now(),
