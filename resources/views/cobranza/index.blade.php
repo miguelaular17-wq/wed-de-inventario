@@ -781,8 +781,26 @@
             `;
             
             let saldoAcumulado = 0;
+            let filasMostradas = 0;
             
-            data.forEach(mov => {
+            // Filtrar filas sin información útil (sin detalle y sin monto)
+            const filesUtiles = data.filter(mov => {
+                const monto = parseFloat(mov.total_renglon || mov.total_abono || 0);
+                const tieneDetalle = mov.detalle && mov.detalle.trim() !== '';
+                return monto > 0 || tieneDetalle || mov.tipo_fila === 2;
+            });
+
+            if (filesUtiles.length === 0) {
+                // Todos los registros son filas vacías → datos incompletos del sincronizador
+                list.innerHTML = `<div style="text-align:center; padding:24px; color:#64748b;">
+                    <div style="font-size:2rem; margin-bottom:8px;">⚠️</div>
+                    <strong>El estado de cuenta existe pero sin desglose de artículos.</strong><br>
+                    <small style="color:#94a3b8;">El sincronizador debe estar actualizado para enviar el detalle por renglón.</small>
+                </div>`;
+                return;
+            }
+
+            filesUtiles.forEach(mov => {
                 const isAbono = mov.tipo_fila === 2 || mov.tipo_documento === 'ABONO';
                 const fecha = mov.fecha_emision ? new Date(mov.fecha_emision).toLocaleDateString('es-VE') : '';
                 const descripcion = mov.detalle || (isAbono ? 'Pago/Abono' : 'Artículo/Cargo');

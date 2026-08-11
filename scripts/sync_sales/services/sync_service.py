@@ -81,12 +81,34 @@ class SyncService:
             if success:
                 success = self._execute_sync_cycle()
             
+            # ── Espera inteligente: heartbeat + comandos cada 60 s ────────────
             current_interval = interval_seconds if success else 60
-            for _ in range(current_interval):
+            elapsed = 0
+            POLL_INTERVAL = 60  # cada cuántos segundos verificar comandos
+
+            while elapsed < current_interval and not self.stop_event.is_set():
+                # Dormir en bloques de 1 segundo para reaccionar rápido al stop
+                sleep_chunk = min(POLL_INTERVAL, current_interval - elapsed)
+                for _ in range(sleep_chunk):
+                    if self.stop_event.is_set():
+                        break
+                    time.sleep(1)
+                elapsed += sleep_chunk
+
                 if self.stop_event.is_set():
                     break
-                time.sleep(1)
-                
+
+                # Heartbeat + poll de comandos remotos cada minuto
+                try:
+                    web_conn = PostgresConnection.get_connection()
+                    web_cursor = web_conn.cursor()
+                    HeartbeatService.ping(web_cursor, web_conn)
+                    CommandPoller.poll(web_cursor, web_conn)
+                    web_cursor.close()
+                    web_conn.close()
+                except Exception as poll_err:
+                    logger.warning(f"[Loop] Error en heartbeat/poll: {poll_err}")
+
         self.is_syncing = False
 
     def _execute_sync_cycle(self):
@@ -107,6 +129,9 @@ class SyncService:
             
             billing_cursor = billing_conn.cursor()
             web_cursor = web_conn.cursor()
+
+            # ── Heartbeat: avisar al servidor que este sincronizador está vivo ──
+            HeartbeatService.ping(web_cursor, web_conn)
             
             query = get_sql_query("ventas.sql")
             

@@ -120,7 +120,7 @@ INSERT_QUERY = """
     ) VALUES (
         %s, %s, %s, %s,
         NULL, %s, %s, %s,
-        0, 0, %s, %s,
+        %s, %s, %s, %s,
         NULL, %s, NULL,
         %s, %s, %s, %s,
         %s, %s, %s,
@@ -194,6 +194,9 @@ class CobranzasService:
             # 17 dias_deuda       (INT)
 
             batch = []
+            # Para no duplicar saldo/monto_neto, rastreamos qué facturas ya tuvieron su fila principal
+            facturas_con_saldo = set()
+
             for row in rows:
                 codigo_cliente   = str(row[0]).strip()  if row[0]  else ''
                 nombre_cliente   = str(row[1]).strip()  if row[1]  else ''
@@ -215,6 +218,19 @@ class CobranzasService:
                 dias_deuda       = int(row[17])          if row[17] is not None else 0
                 estatus          = _calcular_estatus(dias_deuda)
 
+                # Clave única por factura para asignar saldo/monto solo una vez
+                clave_factura = (codigo_cliente, numero_documento if tipo_fila == 1 else factura_padre)
+
+                if tipo_fila == 1 and clave_factura not in facturas_con_saldo:
+                    # Primera fila de artículo para esta factura → lleva el saldo y monto
+                    monto_neto_row = total_factura   or 0.0
+                    saldo_row      = saldo_pendiente or 0.0
+                    facturas_con_saldo.add(clave_factura)
+                else:
+                    # Renglones adicionales o abonos → sin saldo duplicado
+                    monto_neto_row = 0.0
+                    saldo_row      = 0.0
+
                 batch.append((
                     today,            # fecha_registro
                     sede,             # sede_nombre
@@ -223,6 +239,8 @@ class CobranzasService:
                     fecha_doc,        # fecha_emision (del renglón)
                     tipo_documento,   # tipo_cxc
                     numero_documento, # numero_documento
+                    monto_neto_row,   # monto_neto  ← ahora correcto
+                    saldo_row,        # saldo       ← ahora correcto
                     dias_deuda,       # dias_deuda
                     estatus,          # estatus
                     estacion,         # estacion
