@@ -699,8 +699,16 @@ class CobranzaController extends Controller
 
     public function estadoCuenta($numero_documento)
     {
-        $detalles = \App\Models\HistorialCobranza::where('factura_padre', $numero_documento)
+        // Obtener la fecha de sincronización más reciente para esta factura
+        $ultimaFechaSync = \App\Models\HistorialCobranza::where('factura_padre', $numero_documento)
             ->orWhere('numero_documento', $numero_documento)
+            ->max('fecha_registro');
+
+        $detalles = \App\Models\HistorialCobranza::where(function($q) use ($numero_documento) {
+                $q->where('factura_padre', $numero_documento)
+                  ->orWhere('numero_documento', $numero_documento);
+            })
+            ->where('fecha_registro', $ultimaFechaSync)
             ->orderBy('fecha_emision', 'asc')
             ->orderBy('tipo_fila', 'asc')
             ->get();
