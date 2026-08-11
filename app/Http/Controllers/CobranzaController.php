@@ -54,12 +54,12 @@ class CobranzaController extends Controller
         $gran_total_saldo = 0;
         $gran_total_clientes = 0;
         
-        // Acumuladores por estatus con desglose regular/personal
+        // Acumuladores por estatus con desglose regular/personal y saldo
         $estatus_totales = [
-            'CRITICO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
-            'MOROSO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
-            'RECIENTE' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
-            'APARTADO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
+            'CRITICO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0, 'saldo_regulares' => 0, 'saldo_personales' => 0],
+            'MOROSO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0, 'saldo_regulares' => 0, 'saldo_personales' => 0],
+            'RECIENTE' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0, 'saldo_regulares' => 0, 'saldo_personales' => 0],
+            'APARTADO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0, 'saldo_regulares' => 0, 'saldo_personales' => 0],
         ];
 
         // Agrupar por sede
@@ -88,8 +88,10 @@ class CobranzaController extends Controller
                 $estatus_totales[$est]['saldo'] += $r->saldo;
                 if (in_array($r->codigo_cliente, $personalCodes)) {
                     $estatus_totales[$est]['personales'] += 1;
+                    $estatus_totales[$est]['saldo_personales'] += $r->saldo;
                 } else {
                     $estatus_totales[$est]['regulares'] += 1;
+                    $estatus_totales[$est]['saldo_regulares'] += $r->saldo;
                 }
             }
         }
@@ -103,6 +105,8 @@ class CobranzaController extends Controller
                 'total_saldo' => $v['saldo'],
                 'regulares' => $v['regulares'],
                 'personales' => $v['personales'],
+                'saldo_regulares' => $v['saldo_regulares'],
+                'saldo_personales' => $v['saldo_personales'],
             ];
         }
 
@@ -180,11 +184,16 @@ class CobranzaController extends Controller
         
         $queryClientes = \App\Models\HistorialCobranza::query();
         
+        // Solo mostrar la fila principal de la factura (donde monto_neto > 0)
+        // Las filas secundarias (detalles de items con monto 0) se omiten en la vista general
+        $queryClientes->where('monto_neto', '>', 0);
+        
         if ($ultimaFecha) {
             $queryClientes->where('fecha_registro', $ultimaFecha);
         } else {
             $queryClientes->where('id', '<', 0);
         }
+
 
         if ($mostrar_clientes === 'regulares') {
             $queryClientes->whereNotIn('codigo_cliente', $personalCodes);

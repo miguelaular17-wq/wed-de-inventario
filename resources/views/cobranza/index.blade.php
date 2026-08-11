@@ -176,10 +176,10 @@
                         @php
                             // Inicializar estatus para que aparezcan siempre, aunque esten en 0
                             $mapEstatus = [
-                                'CRITICO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
-                                'MOROSO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
-                                'RECIENTE' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
-                                'APARTADO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0],
+                                'CRITICO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0, 'saldo_regulares' => 0, 'saldo_personales' => 0],
+                                'MOROSO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0, 'saldo_regulares' => 0, 'saldo_personales' => 0],
+                                'RECIENTE' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0, 'saldo_regulares' => 0, 'saldo_personales' => 0],
+                                'APARTADO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0, 'saldo_regulares' => 0, 'saldo_personales' => 0],
                             ];
                             foreach($porEstatus as $e) {
                                 if (isset($mapEstatus[$e->estatus])) {
@@ -187,6 +187,8 @@
                                     $mapEstatus[$e->estatus]['saldo'] = $e->total_saldo;
                                     $mapEstatus[$e->estatus]['regulares'] = $e->regulares ?? 0;
                                     $mapEstatus[$e->estatus]['personales'] = $e->personales ?? 0;
+                                    $mapEstatus[$e->estatus]['saldo_regulares'] = $e->saldo_regulares ?? 0;
+                                    $mapEstatus[$e->estatus]['saldo_personales'] = $e->saldo_personales ?? 0;
                                 }
                             }
                         @endphp
@@ -211,18 +213,22 @@
                                 <td style="text-align: right;">{{ $porcentaje }}%</td>
                             </tr>
                             @if($hasBreakdown)
+                            @php
+                                $porcentajeRegulares = $gran_total_saldo > 0 ? round(($datos['saldo_regulares'] / $gran_total_saldo) * 100) : 0;
+                                $porcentajePersonales = $gran_total_saldo > 0 ? round(($datos['saldo_personales'] / $gran_total_saldo) * 100) : 0;
+                            @endphp
                             {{-- Breakdown sub-rows (hidden by default) --}}
                             <tr id="breakdown-{{ $estatus }}-regulares" class="row-breakdown row-breakdown-{{ strtolower($estatus) }}" style="display:none;">
                                 <td style="text-align: left; padding-left: 32px;">↳ 👔 Regulares</td>
                                 <td style="text-align: center;">{{ $datos['regulares'] }}</td>
-                                <td style="text-align: right;">—</td>
-                                <td style="text-align: right;">—</td>
+                                <td style="text-align: right;">{{ number_format($datos['saldo_regulares'], 2, ',', '.') }}</td>
+                                <td style="text-align: right;">{{ $porcentajeRegulares }}%</td>
                             </tr>
-                            <tr id="breakdown-{{ $estatus }}-personales" class="row-breakdown row-breakdown-{{ strtolower($estatus) }}" style="display:none;">
+                            <tr id="breakdown-{{ $estatus }}-personales" class="row-breakdown row-breakdown-{{ strtolower($estatus) }}" style="display:none; border-bottom: 2px solid #e2e8f0;">
                                 <td style="text-align: left; padding-left: 32px;">↳ 🏷️ Personal</td>
                                 <td style="text-align: center;">{{ $datos['personales'] }}</td>
-                                <td style="text-align: right;">—</td>
-                                <td style="text-align: right;">—</td>
+                                <td style="text-align: right;">{{ number_format($datos['saldo_personales'], 2, ',', '.') }}</td>
+                                <td style="text-align: right;">{{ $porcentajePersonales }}%</td>
                             </tr>
                             @endif
                         @endforeach
@@ -800,6 +806,15 @@
                 return;
             }
 
+            // Buscar el saldo real y total de la factura
+            const filaPrincipal = data.find(m => parseFloat(m.saldo_pendiente) > 0 || parseFloat(m.total_factura) > 0);
+            const saldoReal = filaPrincipal ? parseFloat(filaPrincipal.saldo_pendiente || 0) : 0;
+            const totalFacturaReal = filaPrincipal ? parseFloat(filaPrincipal.total_factura || 0) : 0;
+            
+            // Calcular si hubo un abono inicial (suma de articulos - total factura a crédito)
+            const sumaArticulos = filesUtiles.filter(m => m.tipo_fila === 1).reduce((acc, m) => acc + parseFloat(m.total_renglon || 0), 0);
+            const abonoInicial = (totalFacturaReal > 0 && sumaArticulos > totalFacturaReal) ? (sumaArticulos - totalFacturaReal) : 0;
+
             filesUtiles.forEach(mov => {
                 const isAbono = mov.tipo_fila === 2 || mov.tipo_documento === 'ABONO';
                 const fecha = mov.fecha_emision ? new Date(mov.fecha_emision).toLocaleDateString('es-VE') : '';
@@ -811,11 +826,9 @@
                 if (!isAbono) {
                     const r = parseFloat(mov.total_renglon || 0);
                     montoCargo = r.toFixed(2);
-                    saldoAcumulado += r;
                 } else {
                     const a = parseFloat(mov.total_abono || mov.total_renglon || 0);
                     montoAbono = a.toFixed(2);
-                    saldoAcumulado -= a;
                 }
                 
                 html += `
@@ -828,16 +841,28 @@
                 `;
             });
             
+            if (abonoInicial > 0) {
+                html += `
+                    <tr style="background-color: #f8fafc;">
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">-</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-style: italic;">Abono Inicial (Pago en Caja al facturar)</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right;"></td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #16a34a;">$ ${abonoInicial.toFixed(2)}</td>
+                    </tr>
+                `;
+            }
+
             html += `
                     </tbody>
                     <tfoot>
                         <tr>
-                            <td colspan="3" style="padding: 12px 8px; text-align: right; font-weight: bold; border-top: 2px solid #cbd5e1;">Saldo Restante:</td>
-                            <td style="padding: 12px 8px; text-align: right; font-weight: bold; color: ${saldoAcumulado > 0 ? '#dc2626' : '#16a34a'}; border-top: 2px solid #cbd5e1;">$ ${saldoAcumulado.toFixed(2)}</td>
+                            <td colspan="3" style="padding: 12px 8px; text-align: right; font-weight: bold; border-top: 2px solid #cbd5e1;">Saldo Restante (Real):</td>
+                            <td style="padding: 12px 8px; text-align: right; font-weight: bold; color: ${saldoReal > 0 ? '#dc2626' : '#16a34a'}; border-top: 2px solid #cbd5e1;">$ ${saldoReal.toFixed(2)}</td>
                         </tr>
                     </tfoot>
                 </table>
             `;
+
             
             list.innerHTML = html;
         } catch (e) {
