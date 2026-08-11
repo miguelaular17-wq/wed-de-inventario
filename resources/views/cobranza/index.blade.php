@@ -811,9 +811,25 @@
             const saldoReal = filaPrincipal ? parseFloat(filaPrincipal.saldo_pendiente || 0) : 0;
             const totalFacturaReal = filaPrincipal ? parseFloat(filaPrincipal.total_factura || 0) : 0;
             
-            // Calcular si hubo un abono inicial (suma de articulos - total factura a crédito)
             const sumaArticulos = filesUtiles.filter(m => m.tipo_fila === 1).reduce((acc, m) => acc + parseFloat(m.total_renglon || 0), 0);
-            const abonoInicial = (totalFacturaReal > 0 && sumaArticulos > totalFacturaReal) ? (sumaArticulos - totalFacturaReal) : 0;
+            const abonosEnTabla = filesUtiles.filter(m => m.tipo_fila === 2 || m.tipo_documento === 'ABONO').reduce((acc, m) => acc + parseFloat(m.total_abono || m.total_renglon || 0), 0);
+
+            let abonoInicial = 0;
+            let cargosAdicionales = 0;
+            let abonosNoDetallados = 0;
+
+            if (totalFacturaReal > 0) {
+                if (sumaArticulos > totalFacturaReal) {
+                    abonoInicial = sumaArticulos - totalFacturaReal;
+                } else if (totalFacturaReal > sumaArticulos) {
+                    cargosAdicionales = totalFacturaReal - sumaArticulos;
+                }
+                
+                const pagosTotales = totalFacturaReal - saldoReal;
+                if (pagosTotales > abonosEnTabla) {
+                    abonosNoDetallados = pagosTotales - abonosEnTabla;
+                }
+            }
 
             filesUtiles.forEach(mov => {
                 const isAbono = mov.tipo_fila === 2 || mov.tipo_documento === 'ABONO';
@@ -841,13 +857,35 @@
                 `;
             });
             
+            if (cargosAdicionales > 0) {
+                html += `
+                    <tr style="background-color: #fef2f2;">
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">-</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-style: italic;">Cargos adicionales (Intereses / Impuestos)</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #dc2626;">$ ${cargosAdicionales.toFixed(2)}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right;"></td>
+                    </tr>
+                `;
+            }
+
             if (abonoInicial > 0) {
                 html += `
-                    <tr style="background-color: #f8fafc;">
+                    <tr style="background-color: #f0fdf4;">
                         <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">-</td>
                         <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-style: italic;">Abono Inicial (Pago en Caja al facturar)</td>
                         <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right;"></td>
                         <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #16a34a;">$ ${abonoInicial.toFixed(2)}</td>
+                    </tr>
+                `;
+            }
+
+            if (abonosNoDetallados > 0) {
+                html += `
+                    <tr style="background-color: #f0fdf4;">
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">-</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-style: italic;">Pagos / Abonos no detallados</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right;"></td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #16a34a;">$ ${abonosNoDetallados.toFixed(2)}</td>
                     </tr>
                 `;
             }
