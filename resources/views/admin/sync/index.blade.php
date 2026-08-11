@@ -151,11 +151,18 @@
                     <label>Sede destino</label>
                     <select name="sede" class="cmd-select" required id="cmd-sede">
                         <option value="">— Seleccionar —</option>
-                        @foreach($heartbeats as $hb)
-                            <option value="{{ $hb->sede }}">
-                                {{ $hb->sede }} {{ $hb->es_activo ? '🟢' : '🔴' }}
-                            </option>
-                        @endforeach
+                        @if($heartbeats->isNotEmpty())
+                            @foreach($heartbeats as $hb)
+                                <option value="{{ $hb->sede }}">
+                                    {{ $hb->sede }} {{ $hb->es_activo ? '🟢' : '🔴' }}
+                                </option>
+                            @endforeach
+                        @else
+                            {{-- Fallback: sedes del historial de cobranzas --}}
+                            @foreach($sedesFallback as $sede)
+                                <option value="{{ $sede }}">{{ $sede }}</option>
+                            @endforeach
+                        @endif
                     </select>
                 </div>
                 <div class="cmd-field">

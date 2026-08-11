@@ -15,13 +15,24 @@ class SyncRemoteController extends Controller
         // Todos los heartbeats conocidos, los activos primero
         $heartbeats = SyncHeartbeat::orderByRaw("last_seen_at DESC NULLS LAST")->get();
 
+        // Si no hay heartbeats, obtener sedes conocidas del historial de cobranzas
+        // para que el dropdown siempre tenga opciones disponibles
+        $sedesFallback = collect();
+        if ($heartbeats->isEmpty()) {
+            $sedesFallback = \App\Models\HistorialCobranza::select('sede_nombre')
+                ->distinct()
+                ->whereNotNull('sede_nombre')
+                ->orderBy('sede_nombre')
+                ->pluck('sede_nombre');
+        }
+
         // Comandos recientes (últimos 30)
         $comandos = SyncCommand::recientes()->get();
 
         // Opciones de comando disponibles
         $opciones = SyncCommand::LABELS;
 
-        return view('admin.sync.index', compact('heartbeats', 'comandos', 'opciones'));
+        return view('admin.sync.index', compact('heartbeats', 'comandos', 'opciones', 'sedesFallback'));
     }
 
     // ── Enviar comando remoto ───────────────────────────────────────────
