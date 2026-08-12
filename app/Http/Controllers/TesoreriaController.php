@@ -11,7 +11,7 @@ class TesoreriaController extends Controller
     public function dashboard()
     {
         $ingresosBancos = TesoreriaIngreso::where('tipo', 'banco')->latest()->take(20)->get();
-        $lotesPuntos = TesoreriaIngreso::where('tipo', 'punto_venta')->latest()->take(20)->get();
+        $lotesPuntos = TesoreriaIngreso::where('tipo', 'punto_venta')->latest()->get();
 
         return view('tesoreria.dashboard', compact('ingresosBancos', 'lotesPuntos'));
     }
