@@ -24,7 +24,7 @@
         <!-- Lista de Bancos -->
         <div style="background: white; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
             <h2 style="font-size: 1.25rem; font-weight: 600; color: #334155; margin: 0 0 16px;">Últimos Ingresos (Bancos)</h2>
-            <div style="overflow-x: auto;">
+            <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
                 <table style="width: 100%; border-collapse: collapse; text-align: left;">
                     <thead>
                         <tr style="border-bottom: 2px solid #e2e8f0;">
@@ -55,7 +55,7 @@
         <!-- Lista Lotes POS -->
         <div style="background: white; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
             <h2 style="font-size: 1.25rem; font-weight: 600; color: #334155; margin: 0 0 16px;">Últimos Lotes POS</h2>
-            <div style="overflow-x: auto;">
+            <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
                 <table style="width: 100%; border-collapse: collapse; text-align: left;">
                     <thead>
                         <tr style="border-bottom: 2px solid #e2e8f0;">
