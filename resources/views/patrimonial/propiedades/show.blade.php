@@ -80,6 +80,7 @@
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <a href="{{ route('patrimonial.propiedades.edit', $propiedad) }}" class="pat-btn" style="background:rgba(255,255,255,0.15); color:#fff; border:1px solid rgba(255,255,255,0.3);">✏️ Editar</a>
             <a href="{{ route('patrimonial.alquileres.create') }}?propiedad_id={{ $propiedad->id }}" class="pat-btn" style="background:#fff; color:#2563eb;">+ Alquiler</a>
+            <a href="{{ route('patrimonial.reportes.propiedad.pdf', $propiedad) }}" target="_blank" class="pat-btn" style="background:#dc2626; color:#fff; border:none;">📄 Reporte PDF</a>
         </div>
     </div>
 

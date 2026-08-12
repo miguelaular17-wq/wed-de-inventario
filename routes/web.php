@@ -340,6 +340,9 @@ Route::middleware(['auth', 'role:admin,gerente,cobranza'])->prefix('patrimonial'
     Route::post('/transacciones', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'store'])->name('transacciones.store');
     Route::delete('/transacciones/{transaccion}', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'destroy'])->name('transacciones.destroy');
     Route::get('/reportes/mensual', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'reporteMensual'])->name('reportes.mensual');
+    Route::get('/reportes/mensual/pdf', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'reporteMensualPdf'])->name('reportes.mensual.pdf');
+    Route::get('/reportes/propiedad/{propiedad}/pdf', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'reportePropiedadPdf'])->name('reportes.propiedad.pdf');
+
 
     // Reservas extra
     Route::post('/reservas/bloquear', [\App\Http\Controllers\Patrimonial\ReservaController::class, 'bloquear'])->name('reservas.bloquear');

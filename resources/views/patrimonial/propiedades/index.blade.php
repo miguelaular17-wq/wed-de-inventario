@@ -132,6 +132,7 @@
                 <div class="pat-prop-footer">
                     <a href="{{ route('patrimonial.propiedades.show', $prop) }}" class="pat-btn pat-btn-outline pat-btn-sm" style="flex:1; justify-content:center;">Ver</a>
                     <a href="{{ route('patrimonial.propiedades.edit', $prop) }}" class="pat-btn pat-btn-outline pat-btn-sm" style="flex:1; justify-content:center;">Editar</a>
+                    <a href="{{ route('patrimonial.reportes.propiedad.pdf', $prop) }}" target="_blank" class="pat-btn pat-btn-sm" style="flex:1; justify-content:center; background:#dc2626; color:#fff; border:none;" title="Descargar Reporte PDF">📄 PDF</a>
                 </div>
             </div>
             @endforeach
