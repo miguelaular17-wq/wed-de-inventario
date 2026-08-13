@@ -93,11 +93,9 @@ class Contrato extends Model
 
     public function getTotalAPagarAttribute($value): float
     {
-        if ((float) $this->interes_porcentaje == 0) {
-            return (float) $value;
-        }
-
-        $cuotasAtrasadas = $this->cuotas()->where('estatus', 'vencido')->sum('saldo');
-        return (float) $value + (float) $cuotasAtrasadas;
+        // total_a_pagar representa el capital restante del contrato.
+        // Ya no se acumula con saldos de cuotas vencidas — cada cuota
+        // refleja su propio saldo individualmente.
+        return (float) $value;
     }
 }

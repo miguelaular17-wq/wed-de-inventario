@@ -225,7 +225,7 @@
         </div>
         <div class="highlight-cell green">
             <div class="hc-label">Total a Pagar</div>
-            <div class="hc-value">${{ number_format($contrato->capital + $contrato->cuotas->whereIn('estatus', ['vencido','pendiente','parcial'])->sum('monto'), 2) }}</div>
+            <div class="hc-value">${{ number_format($contrato->getRawOriginal('total_a_pagar'), 2) }}</div>
         </div>
         <div class="highlight-cell orange">
             <div class="hc-label">Cuota Fija</div>
@@ -278,23 +278,13 @@
                     <td class="text-right">${{ number_format($cuota->monto, 2) }}</td>
                     <td class="text-right">${{ number_format($cuota->monto_pagado, 2) }}</td>
                     <td class="text-right">${{ number_format($cuota->abono_capital, 2) }}</td>
-                    <td class="text-right">${{ number_format($cuota->saldo, 2) }}</td>
+                    <td class="text-right">${{ number_format($cuota->monto - $cuota->monto_pagado, 2) }}</td>
                     <td>{{ $cuota->forma_pago ?: '—' }}</td>
                     <td>{{ $cuota->fecha_pago?->format('d/m/Y') ?: '—' }}</td>
                     <td><span class="status-badge {{ $statusClass }}">{{ strtoupper($cuota->estatus) }}</span></td>
                 </tr>
             @endforeach
         </tbody>
-        <tfoot>
-            <tr>
-                <td colspan="2" style="text-align:right; font-weight:bold;">TOTALES</td>
-                <td class="text-right">${{ number_format($totalMonto, 2) }}</td>
-                <td class="text-right">${{ number_format($totalPagado, 2) }}</td>
-                <td class="text-right">${{ number_format($totalAbono, 2) }}</td>
-                <td class="text-right">—</td>{{-- El saldo acumulativo no tiene sentido en totales --}}
-                <td colspan="3"></td>
-            </tr>
-        </tfoot>
     </table>
 
     {{-- RESUMEN FINAL --}}
@@ -306,8 +296,8 @@
         <div class="summary-right">
             <table class="summary-table">
                 <tr>
-                    <td class="s-label">Capital Original Estimado</td>
-                    <td class="s-value">${{ number_format($contrato->capital + $totalAbono, 2) }}</td>
+                    <td class="s-label">Capital Original</td>
+                    <td class="s-value">${{ number_format($contrato->capital, 2) }}</td>
                 </tr>
                 <tr>
                     <td class="s-label">Abonos a Capital Totales</td>
@@ -315,16 +305,15 @@
                 </tr>
                 <tr>
                     <td class="s-label">Capital Actual</td>
-                    <td class="s-value">${{ number_format($contrato->capital, 2) }}</td>
+                    <td class="s-value">${{ number_format($contrato->capital - $totalAbono, 2) }}</td>
                 </tr>
                 <tr>
-                    <td class="s-label">Cuotas Pendientes ({{ $contrato->cuotas->whereIn('estatus', ['vencido','pendiente','parcial'])->count() }} cuota(s) × ${{ number_format($contrato->cuota_fija, 2) }})</td>
-                    <td class="s-value">${{ number_format($totalMontoPendiente, 2) }}</td>
+                    <td class="s-label">Intereses / Cuotas Pendientes</td>
+                    <td class="s-value">${{ number_format($contrato->getRawOriginal('total_a_pagar') - ($contrato->capital - $totalAbono), 2) }}</td>
                 </tr>
-                @php $totalDeuda = $contrato->capital + $totalMontoPendiente; @endphp
                 <tr class="total-row">
                     <td class="s-label" style="font-size:13px;">TOTAL DEUDA</td>
-                    <td class="s-value" style="font-size:15px;">${{ number_format($totalDeuda, 2) }}</td>
+                    <td class="s-value" style="font-size:15px;">${{ number_format($contrato->getRawOriginal('total_a_pagar'), 2) }}</td>
                 </tr>
             </table>
         </div>

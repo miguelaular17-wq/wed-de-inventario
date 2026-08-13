@@ -511,27 +511,38 @@ class ContratoController extends Controller
 
         $contrato = $cuota->contrato;
 
+        // Calcular el nuevo total_a_pagar descontando:
+        //   1) El monto pagado si la cuota estaba vencida (ya acumulado en total_a_pagar)
+        //   2) El abono a capital si lo hay
+        // Se usa el valor raw (sin el accessor que suma cuotas atrasadas) como base,
+        // y se aplica UNA SOLA actualización para evitar leer un valor stale.
+        $totalRaw = (float) $contrato->getRawOriginal('total_a_pagar');
+
         if ($estadoAnterior === 'vencido' && $montoPagado > 0) {
-            $nuevoTotalPagar = max(0, (float) $contrato->getRawOriginal('total_a_pagar') - $montoPagado);
-            $contrato->update(['total_a_pagar' => $nuevoTotalPagar]);
+            $totalRaw = max(0, $totalRaw - $montoPagado);
         }
 
-        // Si hay abono a capital, actualizar el total a pagar y recalcular cuotas futuras
         if ($abonoCapital > 0) {
-            $nuevoTotal = max(0, (float) $contrato->getRawOriginal('total_a_pagar') - $abonoCapital);
-            $nuevaCuotaFija = (float) $contrato->interes_porcentaje > 0
-                ? round($nuevoTotal * (float) $contrato->interes_porcentaje, 2)
-                : (float) $contrato->cuota_fija;
+            $totalRaw = max(0, $totalRaw - $abonoCapital);
+        }
+
+        // Si hubo algún cambio en total_a_pagar, persitir y recalcular cuota fija
+        if (($estadoAnterior === 'vencido' && $montoPagado > 0) || $abonoCapital > 0) {
+            $nuevaCuotaFija = (float) $contrato->getRawOriginal('interes_porcentaje') > 0
+                ? round($totalRaw * (float) $contrato->getRawOriginal('interes_porcentaje'), 2)
+                : (float) $contrato->getRawOriginal('cuota_fija');
 
             $contrato->update([
-                'total_a_pagar' => $nuevoTotal,
+                'total_a_pagar' => $totalRaw,
                 'cuota_fija'    => $nuevaCuotaFija,
             ]);
 
-            // Recalcular monto de cuotas futuras pendientes
-            if ($nuevaCuotaFija > 0) {
+            // Recalcular monto/saldo de cuotas no pagadas si hubo abono a capital.
+            // IMPORTANTE: incluir 'vencido' porque si el pago llega con meses de retraso,
+            // las cuotas futuras ya están vencidas y quedarían sin recalcular de otra forma.
+            if ($abonoCapital > 0 && $nuevaCuotaFija > 0) {
                 $contrato->cuotas()
-                    ->whereIn('estatus', ['pendiente', 'parcial'])
+                    ->whereIn('estatus', ['pendiente', 'parcial', 'vencido'])
                     ->where('id', '!=', $cuota->id)
                     ->update(['monto' => $nuevaCuotaFija, 'saldo' => $nuevaCuotaFija]);
             }

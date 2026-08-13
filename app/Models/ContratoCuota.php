@@ -76,14 +76,7 @@ class ContratoCuota extends Model
         foreach ($cuotasVencidas as $cuota) {
             $contrato = $cuota->contrato;
             if ($contrato && $contrato->estado !== 'liquidado') {
-                $saldoCuota = (float) $cuota->saldo;
-                $nuevoTotal = (float) $contrato->getRawOriginal('total_a_pagar') + $saldoCuota;
-                
-                $contrato->update(['total_a_pagar' => $nuevoTotal]);
-                $cuota->update([
-                    'estatus' => 'vencido',
-                    'saldo'   => $nuevoTotal
-                ]);
+                $cuota->update(['estatus' => 'vencido']);
             } else {
                 $cuota->update(['estatus' => 'vencido']);
             }

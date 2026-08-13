@@ -206,8 +206,8 @@
                             </td>
                             <td style="text-align: right; color: #059669; font-weight: 500; padding: 12px;">{{ in_array($cuota->estatus, ['prestamo','acumulado']) ? '—' : '$'.number_format($cuota->monto_pagado, 2) }}</td>
                             <td style="text-align: right; color: #7c3aed; font-weight: 500; padding: 12px;">{{ in_array($cuota->estatus, ['prestamo','acumulado']) ? '—' : '$'.number_format($cuota->abono_capital ?? 0, 2) }}</td>
-                            <td style="text-align: right; font-weight: 600; color: {{ $cuota->saldo > 0 ? '#dc2626' : '#059669' }}; padding: 12px;">
-                                {{ in_array($cuota->estatus, ['prestamo','acumulado']) ? '—' : '$'.number_format($cuota->saldo, 2) }}
+                            <td style="text-align: right; font-weight: 600; color: {{ ($cuota->monto - $cuota->monto_pagado) > 0 ? '#dc2626' : '#059669' }}; padding: 12px;">
+                                {{ in_array($cuota->estatus, ['prestamo','acumulado']) ? '—' : '$'.number_format($cuota->monto - $cuota->monto_pagado, 2) }}
                             </td>
                             <td style="color: #475569; font-size: 0.9rem; padding: 12px;">{{ $cuota->forma_pago ?: '—' }}</td>
                             <td style="font-size: 0.9rem; padding: 12px;">{{ $cuota->fecha_pago?->format('d/m/Y') ?? '—' }}</td>
@@ -221,7 +221,7 @@
                                     <span style="color: #94a3b8; font-size: 0.85rem;">🔒 Bloqueado</span>
                                 @else
                                     @if(in_array($cuota->estatus, ['pendiente', 'vencido', 'parcial']))
-                                        <button type="button" onclick="abrirPago({{ $cuota->id }}, {{ $cuota->saldo }}, {{ $cuota->numero_cuota }})"
+                                        <button type="button" onclick="abrirPago({{ $cuota->id }}, {{ $cuota->monto - $cuota->monto_pagado }}, {{ $cuota->numero_cuota }})"
                                             style="padding: 4px 10px; background: #059669; color: white; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">💰 Pagar</button>
                                     @elseif(in_array($cuota->estatus, ['prestamo', 'acumulado']))
                                         <span style="color: #94a3b8; font-size: 0.85rem;">—</span>
