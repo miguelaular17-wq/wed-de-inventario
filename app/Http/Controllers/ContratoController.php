@@ -782,10 +782,10 @@ class ContratoController extends Controller
 
         $contrato->update($updateData);
 
-        // Recalcular monto de cuotas futuras pendientes SOLO si se seleccionó recalcular
+        // Recalcular monto de cuotas futuras pendientes y vencidas SOLO si se seleccionó recalcular
         if ($recalcular && $nuevaCuotaFija > 0) {
             $contrato->cuotas()
-                ->whereIn('estatus', ['pendiente', 'parcial'])
+                ->whereIn('estatus', ['pendiente', 'parcial', 'vencido'])
                 ->update(['monto' => $nuevaCuotaFija, 'saldo' => $nuevaCuotaFija]);
         }
 
