@@ -114,7 +114,7 @@ class ContratoController extends Controller
 
         // Enriquecer con KPIs calculados
         $contratos->getCollection()->transform(function (Contrato $c) {
-            $c->_saldo_pendiente   = $c->saldoPendiente();
+            $c->_saldo_pendiente   = $c->totalDeuda();
             $c->_dias_atraso       = $c->diasAtraso();
             $c->_estatus_general   = $c->estatusGeneral();
             $c->_proxima_cuota     = $c->proximaCuota();
@@ -511,23 +511,17 @@ class ContratoController extends Controller
 
         $contrato = $cuota->contrato;
 
-        // Calcular el nuevo total_a_pagar descontando:
-        //   1) El monto pagado si la cuota estaba vencida (ya acumulado en total_a_pagar)
-        //   2) El abono a capital si lo hay
-        // Se usa el valor raw (sin el accessor que suma cuotas atrasadas) como base,
-        // y se aplica UNA SOLA actualización para evitar leer un valor stale.
+        // total_a_pagar representa SOLO el capital restante del contrato.
+        // El pago de interés de una cuota (monto_pagado) NO debe reducir el capital.
+        // SOLO el abono_capital debe reducir total_a_pagar.
         $totalRaw = (float) $contrato->getRawOriginal('total_a_pagar');
-
-        if ($estadoAnterior === 'vencido' && $montoPagado > 0) {
-            $totalRaw = max(0, $totalRaw - $montoPagado);
-        }
 
         if ($abonoCapital > 0) {
             $totalRaw = max(0, $totalRaw - $abonoCapital);
         }
 
-        // Si hubo algún cambio en total_a_pagar, persitir y recalcular cuota fija
-        if (($estadoAnterior === 'vencido' && $montoPagado > 0) || $abonoCapital > 0) {
+        // Persistir y recalcular cuota fija solo si hubo abono a capital
+        if ($abonoCapital > 0) {
             $nuevaCuotaFija = (float) $contrato->getRawOriginal('interes_porcentaje') > 0
                 ? round($totalRaw * (float) $contrato->getRawOriginal('interes_porcentaje'), 2)
                 : (float) $contrato->getRawOriginal('cuota_fija');
@@ -537,10 +531,10 @@ class ContratoController extends Controller
                 'cuota_fija'    => $nuevaCuotaFija,
             ]);
 
-            // Recalcular monto/saldo de cuotas no pagadas si hubo abono a capital.
+            // Recalcular monto/saldo de cuotas pendientes, parciales y vencidas.
             // IMPORTANTE: incluir 'vencido' porque si el pago llega con meses de retraso,
-            // las cuotas futuras ya están vencidas y quedarían sin recalcular de otra forma.
-            if ($abonoCapital > 0 && $nuevaCuotaFija > 0) {
+            // las cuotas futuras ya están vencidas y quedarían sin recalcular.
+            if ($nuevaCuotaFija > 0) {
                 $contrato->cuotas()
                     ->whereIn('estatus', ['pendiente', 'parcial', 'vencido'])
                     ->where('id', '!=', $cuota->id)
@@ -621,11 +615,11 @@ class ContratoController extends Controller
                 'cuota_fija'    => $nuevaCuotaFija,
             ]);
 
-            // Recalcular monto de cuotas futuras pendientes
+            // Recalcular monto de TODAS las cuotas no pagadas (vencidas, parciales y pendientes)
             if ($nuevaCuotaFija >= 0) {
                 $contrato->cuotas()
-                    ->whereIn('estatus', ['pendiente', 'parcial'])
-                    ->where('id', '>', $cuota->id)
+                    ->whereIn('estatus', ['pendiente', 'parcial', 'vencido'])
+                    ->where('id', '!=', $cuota->id)
                     ->update(['monto' => $nuevaCuotaFija, 'saldo' => \DB::raw("GREATEST(0, $nuevaCuotaFija - monto_pagado)")]);
             }
         }
@@ -825,6 +819,45 @@ class ContratoController extends Controller
 
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // AJUSTAR CUOTA FIJA MANUALMENTE
+    // ─────────────────────────────────────────────────────────────────────────
+    public function ajustarCuotaFija(Request $request, $id)
+    {
+        $data = $request->validate([
+            'nueva_cuota_fija' => 'required|numeric|min:0.01',
+        ]);
+
+        $contrato = Contrato::findOrFail($id);
+        $nuevaCuotaFija = round((float) $data['nueva_cuota_fija'], 2);
+
+        // Actualizar cuota_fija en el contrato
+        $contrato->update(['cuota_fija' => $nuevaCuotaFija]);
+
+        // Recalcular monto y saldo de todas las cuotas que no estén pagadas
+        $contrato->cuotas()
+            ->whereIn('estatus', ['pendiente', 'parcial', 'vencido'])
+            ->get()
+            ->each(function ($cuota) use ($nuevaCuotaFija) {
+                $nuevoSaldo = max(0, $nuevaCuotaFija - (float) $cuota->monto_pagado);
+                $cuota->update([
+                    'monto' => $nuevaCuotaFija,
+                    'saldo' => $nuevoSaldo,
+                ]);
+            });
+
+        // Registrar en historial
+        ContratoSeguimiento::create([
+            'contrato_id' => $contrato->id,
+            'usuario_id'  => Auth::id(),
+            'fecha_hora'  => now(),
+            'resultado'   => 'EDICION_PAGO',
+            'comentarios' => "Ajuste manual de cuota fija a \${$nuevaCuotaFija}. Se recalcularon todas las cuotas vencidas, parciales y pendientes.",
+            'contactado'  => false,
+        ]);
+
+        return redirect()->back()->with('success', "Cuota fija ajustada a \$$nuevaCuotaFija y cuotas recalculadas correctamente.");
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // AGREGAR SEGUIMIENTO / LOG DE LLAMADA

@@ -81,7 +81,7 @@
             </div>
             <div>
                 <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Total a Pagar</div>
-                <div style="font-weight: 700; font-size: 1.1rem; color: #7c3aed;">${{ number_format($contrato->getRawOriginal('total_a_pagar'), 2) }}</div>
+                <div style="font-weight: 700; font-size: 1.1rem; color: #7c3aed;">${{ number_format($contrato->totalDeuda(), 2) }}</div>
             </div>
             <div>
                 <div style="font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Interés</div>
@@ -141,6 +141,9 @@
         <div style="display: flex; gap: 10px;">
             <button type="button" onclick="document.getElementById('modalAumentarCapital').style.display='flex'" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
                 ➕ Aumentar Capital
+            </button>
+            <button type="button" onclick="document.getElementById('modalAjustarCuota').style.display='flex'" style="padding: 8px 16px; background: #7c3aed; color: white; border: none; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                ✏️ Ajustar Cuota Fija
             </button>
             @if($contrato->getRawOriginal('total_a_pagar') > 0)
                 <form method="POST" action="{{ route('contratos.generarCuota', $contrato->id) }}">
@@ -303,7 +306,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse($contrato->seguimientos->whereNotIn('resultado', ['PAGO_COMPLETO', 'PAGO_PARCIAL']) as $seg)
+                    @forelse($contrato->seguimientos->whereNotIn('resultado', ['PAGO_COMPLETO', 'PAGO_PARCIAL', 'EDICION_PAGO']) as $seg)
                         @php
                             $resColor = match($seg->resultado) {
                                 'PROMESA_PAGO'   => 'background:#3b82f6; color:white;',
@@ -483,6 +486,39 @@
             <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;">
                 <button type="button" onclick="document.getElementById('modalSeguimiento').style.display='none'" style="padding: 8px 20px; background: #94a3b8; color: white; border: none; border-radius: 6px; cursor: pointer;">Cancelar</button>
                 <button type="submit" style="padding: 8px 20px; background: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Guardar Seguimiento</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Modal Ajustar Cuota Fija --}}
+<div id="modalAjustarCuota" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 12px; padding: 30px; max-width: 450px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="color: #7c3aed; font-size: 1.1rem; margin: 0;">✏️ Ajustar Cuota Fija</h3>
+            <button type="button" onclick="document.getElementById('modalAjustarCuota').style.display='none'" style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: #94a3b8;">×</button>
+        </div>
+        <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 16px;">
+            Al guardar, se actualizará la cuota fija del contrato y se recalcularán el monto y saldo de todas las cuotas <strong>vencidas, parciales y pendientes</strong>.
+        </p>
+        <form method="POST" action="{{ route('contratos.ajustarCuotaFija', $contrato->id) }}">
+            @csrf
+            <div style="margin-bottom: 18px;">
+                <label style="display: block; font-size: 0.85rem; color: #475569; font-weight: 600; margin-bottom: 6px;">Cuota Fija Actual</label>
+                <div style="padding: 10px 14px; background: #f1f5f9; border-radius: 8px; font-weight: 700; color: #7c3aed;">${{ number_format($contrato->cuota_fija, 2) }}</div>
+            </div>
+            <div style="margin-bottom: 22px;">
+                <label for="nueva_cuota_fija" style="display: block; font-size: 0.85rem; color: #475569; font-weight: 600; margin-bottom: 6px;">Nueva Cuota Fija ($)</label>
+                <input type="number" id="nueva_cuota_fija" name="nueva_cuota_fija" step="0.01" min="0.01" required
+                    placeholder="Ej: 498.40"
+                    style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 1rem; font-weight: 600; color: #1e293b; outline: none;"
+                    onfocus="this.style.borderColor='#7c3aed'" onblur="this.style.borderColor='#e2e8f0'">
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" onclick="document.getElementById('modalAjustarCuota').style.display='none'"
+                    style="padding: 10px 20px; background: #e2e8f0; color: #475569; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">Cancelar</button>
+                <button type="submit"
+                    style="padding: 10px 20px; background: #7c3aed; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">💾 Guardar y Recalcular</button>
             </div>
         </form>
     </div>

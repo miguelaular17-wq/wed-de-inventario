@@ -68,6 +68,11 @@ class Contrato extends Model
             ->sum('saldo');
     }
 
+    public function totalDeuda(): float
+    {
+        return (float) $this->getRawOriginal('total_a_pagar') + $this->saldoPendiente();
+    }
+
     public function diasAtraso(): int
     {
         $primera = $this->cuotas()

@@ -283,6 +283,7 @@ Route::middleware(['auth', 'role:admin,gerente,finanzas,cobranza'])->prefix('con
     Route::put('/cuota/{id}/pagar', [App\Http\Controllers\ContratoController::class, 'actualizarPagoCuota'])->name('contratos.actualizar_pago');
     Route::post('/{id}/generar-cuota', [App\Http\Controllers\ContratoController::class, 'generarSiguienteCuota'])->name('contratos.generarCuota');
     Route::post('/{id}/aumentar-capital', [App\Http\Controllers\ContratoController::class, 'aumentarCapital'])->name('contratos.aumentarCapital');
+    Route::post('/{id}/ajustar-cuota-fija', [App\Http\Controllers\ContratoController::class, 'ajustarCuotaFija'])->name('contratos.ajustarCuotaFija');
     Route::get('/{id}/reporte', [App\Http\Controllers\ContratoController::class, 'reporte'])->name('contratos.reporte');
 });
 

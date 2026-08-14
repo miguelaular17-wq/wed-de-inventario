@@ -225,7 +225,7 @@
         </div>
         <div class="highlight-cell green">
             <div class="hc-label">Total a Pagar</div>
-            <div class="hc-value">${{ number_format($contrato->getRawOriginal('total_a_pagar'), 2) }}</div>
+            <div class="hc-value">${{ number_format($contrato->totalDeuda(), 2) }}</div>
         </div>
         <div class="highlight-cell orange">
             <div class="hc-label">Cuota Fija</div>
@@ -309,11 +309,11 @@
                 </tr>
                 <tr>
                     <td class="s-label">Intereses / Cuotas Pendientes</td>
-                    <td class="s-value">${{ number_format($contrato->getRawOriginal('total_a_pagar') - ($contrato->capital - $totalAbono), 2) }}</td>
+                    <td class="s-value">${{ number_format($contrato->saldoPendiente(), 2) }}</td>
                 </tr>
                 <tr class="total-row">
                     <td class="s-label" style="font-size:13px;">TOTAL DEUDA</td>
-                    <td class="s-value" style="font-size:15px;">${{ number_format($contrato->getRawOriginal('total_a_pagar'), 2) }}</td>
+                    <td class="s-value" style="font-size:15px;">${{ number_format($contrato->totalDeuda(), 2) }}</td>
                 </tr>
             </table>
         </div>
