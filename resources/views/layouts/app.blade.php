@@ -33,71 +33,93 @@
             @if(session('sede_local') && auth()->user() && auth()->user()->hasAccessToSedeViews())
                 <span class="badge" data-tour="sede-badge">Sede: {{ session('sede_local') }}</span>
             @endif
-            @auth
-                @if(auth()->user()->isGerente())
-                    <span class="badge" style="background: var(--purple); border: 1px solid var(--purple);">Gerente</span>
-                @elseif(auth()->user()->isAdmin())
-                    <span class="badge">Admin</span>
-                    <span class="badge" id="server-clock" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); font-family: monospace; letter-spacing: 0.5px; margin-left: 5px;" title="Hora del Servidor (Caracas)">
+        @auth
+            @if(auth()->user()->isGerente())
+                <span class="badge" style="
+                    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+                    border: none;
+                    box-shadow: 0 2px 8px rgba(124,58,237,0.45);
+                    letter-spacing: 0.5px;
+                    font-size: 0.78rem;
+                    padding: 4px 10px;
+                    border-radius: 20px;
+                ">👑 Gerente</span>
+            @elseif(auth()->user()->isAdmin())
+                <span class="badge">Admin</span>
+                <span class="badge" id="server-clock" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); font-family: monospace; letter-spacing: 0.5px; margin-left: 5px;" title="Hora del Servidor (Caracas)">
 
-                        {{ \Carbon\Carbon::now()->format('d/m/Y h:i:s A') }}
-                    </span>
-                    <script>
-                        document.addEventListener("DOMContentLoaded", function() {
-                            let serverTime = new Date("{{ \Carbon\Carbon::now()->format('Y/m/d H:i:s') }}");
-                            setInterval(() => {
-                                serverTime.setSeconds(serverTime.getSeconds() + 1);
-                                const d = String(serverTime.getDate()).padStart(2, '0');
-                                const m = String(serverTime.getMonth() + 1).padStart(2, '0');
-                                const y = serverTime.getFullYear();
-                                let hr = serverTime.getHours();
-                                const min = String(serverTime.getMinutes()).padStart(2, '0');
-                                const sec = String(serverTime.getSeconds()).padStart(2, '0');
-                                const ampm = hr >= 12 ? 'PM' : 'AM';
-                                hr = hr % 12;
-                                hr = hr ? hr : 12;
-                                const hrStr = String(hr).padStart(2, '0');
-                                document.getElementById('server-clock').innerText = `${d}/${m}/${y} ${hrStr}:${min}:${sec} ${ampm}`;
-                            }, 1000);
-                        });
-                    </script>
-                @endif
-            @endauth
+                    {{ \Carbon\Carbon::now()->format('d/m/Y h:i:s A') }}
+                </span>
+                <script>
+                    document.addEventListener("DOMContentLoaded", function() {
+                        let serverTime = new Date("{{ \Carbon\Carbon::now()->format('Y/m/d H:i:s') }}");
+                        setInterval(() => {
+                            serverTime.setSeconds(serverTime.getSeconds() + 1);
+                            const d = String(serverTime.getDate()).padStart(2, '0');
+                            const m = String(serverTime.getMonth() + 1).padStart(2, '0');
+                            const y = serverTime.getFullYear();
+                            let hr = serverTime.getHours();
+                            const min = String(serverTime.getMinutes()).padStart(2, '0');
+                            const sec = String(serverTime.getSeconds()).padStart(2, '0');
+                            const ampm = hr >= 12 ? 'PM' : 'AM';
+                            hr = hr % 12;
+                            hr = hr ? hr : 12;
+                            const hrStr = String(hr).padStart(2, '0');
+                            document.getElementById('server-clock').innerText = `${d}/${m}/${y} ${hrStr}:${min}:${sec} ${ampm}`;
+                        }, 1000);
+                    });
+                </script>
+            @endif
+        @endauth
         </div>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
             @auth
                 <nav style="display:flex; gap:8px;">
-                    @if(auth()->user()->isAdmin())
+                    {{-- ── Admin-only links ── --}}
+                    @if(auth()->user()->role === 'admin')
                         <a href="{{ route('admin.dashboard') }}" data-tour="admin-dashboard" class="{{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">Admin</a>
                         <a href="{{ route('admin.movimientos.index') }}" data-tour="admin-movimientos" class="{{ request()->routeIs('admin.movimientos.*') ? 'active' : '' }}">Movimientos</a>
                         <a href="{{ route('admin.productos.index') }}" class="{{ request()->routeIs('admin.productos.*') ? 'active' : '' }}">Productos</a>
                         <a href="{{ route('admin.sync_logs.index') }}" class="{{ request()->routeIs('admin.sync_logs.*') ? 'active' : '' }}">Sync Logs</a>
                         <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">Usuarios</a>
-                        <a href="{{ route('patrimonial.dashboard') }}" class="{{ request()->routeIs('patrimonial.*') ? 'active' : '' }}">🏢 Patrimonial</a>
                     @endif
 
-                    @if(auth()->user()->isComprador() || auth()->user()->isMarketing() || auth()->user()->isGerente())
-                        <a href="{{ route('comprador.dashboard') }}" class="{{ request()->routeIs('comprador.dashboard') ? 'active' : '' }}">
-                            {{ auth()->user()->isMarketing() && !auth()->user()->isGerente() ? 'Marketing' : 'Compras' }}
-                        </a>
-                    @endif
-                    @if(auth()->user()->isFinanzas() || auth()->user()->isGerente())
+                    {{-- ── Gerente links (clean block, no admin tools) ── --}}
+                    @if(auth()->user()->isGerente())
+                        <a href="{{ route('admin.dashboard') }}" class="{{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">Dashboard</a>
+                        <a href="{{ route('comprador.dashboard') }}" class="{{ request()->routeIs('comprador.dashboard') ? 'active' : '' }}">Compras</a>
                         <a href="{{ route('finanzas.flujo_caja') }}" class="{{ request()->routeIs('finanzas.flujo_caja') ? 'active' : '' }}">Flujo de Caja</a>
                         <a href="{{ route('finanzas.gastos_fijos') }}" class="{{ request()->routeIs('finanzas.gastos_fijos') ? 'active' : '' }}">Gastos Fijos</a>
-                    @endif
-                    @if(auth()->user()->isContabilidad() || auth()->user()->isGerente())
                         <a href="{{ route('finanzas.conciliaciones') }}" class="{{ request()->routeIs('finanzas.conciliaciones') ? 'active' : '' }}">Conciliaciones</a>
-                    @endif
-                    @if(auth()->user()->isCobranza() || auth()->user()->isGerente())
                         <a href="{{ route('cobranza.index') }}" class="{{ request()->routeIs('cobranza.*') ? 'active' : '' }}">Cobranza</a>
                         <a href="{{ route('contratos.index') }}" class="{{ request()->routeIs('contratos.*') ? 'active' : '' }}">Contratos</a>
-                        <a href="{{ route('patrimonial.dashboard') }}" class="{{ request()->routeIs('patrimonial.*') ? 'active' : '' }}">🏢 Patrimonial</a>
-                    @endif
-
-                    @if(auth()->user()->isTesoreria() || auth()->user()->isGerente())
                         <a href="{{ route('tesoreria.dashboard') }}" class="{{ request()->routeIs('tesoreria.*') ? 'active' : '' }}">Tesorería</a>
                     @endif
 
+                    {{-- ── Shared role-based links (non-admin, non-gerente) ── --}}
+                    @if(auth()->user()->role !== 'admin' && !auth()->user()->isGerente())
+                        @if(auth()->user()->isComprador() || auth()->user()->isMarketing())
+                            <a href="{{ route('comprador.dashboard') }}" class="{{ request()->routeIs('comprador.dashboard') ? 'active' : '' }}">
+                                {{ auth()->user()->isMarketing() ? 'Marketing' : 'Compras' }}
+                            </a>
+                        @endif
+                        @if(auth()->user()->isFinanzas())
+                            <a href="{{ route('finanzas.flujo_caja') }}" class="{{ request()->routeIs('finanzas.flujo_caja') ? 'active' : '' }}">Flujo de Caja</a>
+                            <a href="{{ route('finanzas.gastos_fijos') }}" class="{{ request()->routeIs('finanzas.gastos_fijos') ? 'active' : '' }}">Gastos Fijos</a>
+                        @endif
+                        @if(auth()->user()->isContabilidad())
+                            <a href="{{ route('finanzas.conciliaciones') }}" class="{{ request()->routeIs('finanzas.conciliaciones') ? 'active' : '' }}">Conciliaciones</a>
+                        @endif
+                        @if(auth()->user()->isCobranza())
+                            <a href="{{ route('cobranza.index') }}" class="{{ request()->routeIs('cobranza.*') ? 'active' : '' }}">Cobranza</a>
+                            <a href="{{ route('contratos.index') }}" class="{{ request()->routeIs('contratos.*') ? 'active' : '' }}">Contratos</a>
+                        @endif
+                        @if(auth()->user()->isTesoreria())
+                            <a href="{{ route('tesoreria.dashboard') }}" class="{{ request()->routeIs('tesoreria.*') ? 'active' : '' }}">Tesorería</a>
+                        @endif
+                    @endif
+
+                    {{-- ── Sede views (ventas, inventario, exportar) ── --}}
                     @if(auth()->user()->hasAccessToSedeViews() && session('sede_local'))
                         <a href="{{ route('ventas.index') }}" data-tour="nav-ventas" class="{{ request()->routeIs('ventas.index') ? 'active' : '' }}">Ventas</a>
                         <a href="{{ route('ventas.mayor_demanda') }}" class="{{ request()->routeIs('ventas.mayor_demanda') ? 'active' : '' }}">Mayor Demanda</a>

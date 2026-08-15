@@ -18,10 +18,12 @@ class Producto extends Model
         'subcategoria',
         'proveedor',
         'activo',
+        'oculto',
     ];
 
     protected $casts = [
         'activo' => 'boolean',
+        'oculto' => 'boolean',
     ];
 
     public function stock(): HasMany

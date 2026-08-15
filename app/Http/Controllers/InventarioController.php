@@ -19,6 +19,22 @@ class InventarioController extends Controller
         private RequisicionPersonalizadaService $reqPersonalizada,
     ) {}
 
+    /**
+     * Returns the email to use as user-scope filter for requisiciones.
+     * Admins and gerentes see the full sede; everyone else sees only their own.
+     */
+    private function scopedUsuario(): ?string
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return null;
+        }
+        if ($user->isAdmin() || $user->isGerente()) {
+            return null; // sin filtro: ven todas las requisiciones de la sede
+        }
+        return $user->email;
+    }
+
     public function index(Request $request): View
     {
         ini_set('memory_limit', '512M');
@@ -83,7 +99,7 @@ class InventarioController extends Controller
             // 2. Get paginated items
             $offset = ($page - 1) * $perPage;
             $itemsSql = "
-                SELECT p.id, p.codigo, p.nombre, p.categoria, p.subcategoria, p.proveedor, p.precio_unidad, p.precio_mayor
+                SELECT p.id, p.codigo, p.nombre, p.categoria, p.subcategoria, p.proveedor, p.precio_unidad, p.precio_mayor, p.url_imagen
                 FROM inventario_v2.productos p 
                 WHERE {$whereSql} AND EXISTS (
                     SELECT 1 FROM inventario_v2.stock_actual sa 
@@ -160,6 +176,7 @@ class InventarioController extends Controller
                         'categoria'       => $item->categoria,
                         'subcategoria'    => $item->subcategoria,
                         'proveedor'       => $item->proveedor,
+                        'url_imagen'      => $item->url_imagen ?? '',
                         'precio_unidad'   => (float) ($item->precio_unidad ?? 0),
                         'precio_mayor'    => (float) ($item->precio_mayor ?? 0),
                         'existencia'      => $stockMap[$sede] ?? 0,
@@ -175,8 +192,8 @@ class InventarioController extends Controller
                 }
             }
 
-            // 4. Load manuales for these products
-            $manuales = $this->reqPersonalizada->loadManuales($sede);
+            // 4. Load manuales for these products (scoped by user when not admin)
+            $manuales = $this->reqPersonalizada->loadManuales($sede, false, $this->scopedUsuario());
             $base = $this->reqPersonalizada->buildRows(
                 $products,
                 $sede,
@@ -258,7 +275,7 @@ class InventarioController extends Controller
                 ->all();
 
             $stockUpdatedAt = $this->products->lastStockUpdate();
-            $manualUpdatedAt = $this->reqPersonalizada->lastUpdatedAt($sede);
+            $manualUpdatedAt = $this->reqPersonalizada->lastUpdatedAt($sede, $this->scopedUsuario());
             $updatedAt = $stockUpdatedAt && $manualUpdatedAt
                 ? max($stockUpdatedAt, $manualUpdatedAt)
                 : ($stockUpdatedAt ?: $manualUpdatedAt);
@@ -271,7 +288,7 @@ class InventarioController extends Controller
                 'subcategorias' => $subcategorias,
                 'sedesOrigen' => $this->reqPersonalizada->sedesOrigen($sede),
                 'sedesStock' => $sedesStock,
-                'totalManual' => $this->reqPersonalizada->countPendientes($sede),
+                'totalManual' => $this->reqPersonalizada->countPendientes($sede, $this->scopedUsuario()),
                 'stockUpdatedAt' => $updatedAt,
             ];
         }
@@ -303,14 +320,14 @@ class InventarioController extends Controller
         $base = $this->reqPersonalizada->buildRows(
             $products,
             $sede,
-            $this->reqPersonalizada->loadManuales($sede),
+            $this->reqPersonalizada->loadManuales($sede, false, $this->scopedUsuario()),
         );
         $rows = $this->paginateCollection(
             $this->reqPersonalizada->applyFilters($base, $filters),
             $request
         );
         $stockUpdatedAt = $this->products->lastStockUpdate();
-        $manualUpdatedAt = $this->reqPersonalizada->lastUpdatedAt($sede);
+        $manualUpdatedAt = $this->reqPersonalizada->lastUpdatedAt($sede, $this->scopedUsuario());
         $updatedAt = $stockUpdatedAt && $manualUpdatedAt
             ? max($stockUpdatedAt, $manualUpdatedAt)
             : ($stockUpdatedAt ?: $manualUpdatedAt);
@@ -326,7 +343,7 @@ class InventarioController extends Controller
             ),
             'sedesOrigen' => $this->reqPersonalizada->sedesOrigen($sede),
             'sedesStock' => $sedesStock,
-            'totalManual' => $this->reqPersonalizada->countPendientes($sede),
+            'totalManual' => $this->reqPersonalizada->countPendientes($sede, $this->scopedUsuario()),
             'stockUpdatedAt' => $updatedAt,
         ];
     }
@@ -362,8 +379,8 @@ class InventarioController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Requisición guardada. El stock se aplicará al exportar el CSV.',
-                'total_manual' => $this->reqPersonalizada->countPendientes($sede),
-                'manuales_list' => $this->reqPersonalizada->getManualesListForProduct($sede, $data['codigo']),
+                'total_manual' => $this->reqPersonalizada->countPendientes($sede, $this->scopedUsuario()),
+                'manuales_list' => $this->reqPersonalizada->getManualesListForProduct($sede, $data['codigo'], $this->scopedUsuario()),
             ]);
         }
 
@@ -415,8 +432,8 @@ class InventarioController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Requisiciones actualizadas.',
-            'total_manual' => $this->reqPersonalizada->countPendientes($sede),
-            'manuales_list' => $this->reqPersonalizada->getManualesListForProduct($sede, $data['codigo']),
+            'total_manual' => $this->reqPersonalizada->countPendientes($sede, $this->scopedUsuario()),
+            'manuales_list' => $this->reqPersonalizada->getManualesListForProduct($sede, $data['codigo'], $this->scopedUsuario()),
         ]);
     }
 
@@ -446,8 +463,8 @@ class InventarioController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Requisición eliminada correctamente.',
-                'total_manual' => $this->reqPersonalizada->countPendientes($sede),
-                'manuales_list' => $this->reqPersonalizada->getManualesListForProduct($sede, $data['codigo']),
+                'total_manual' => $this->reqPersonalizada->countPendientes($sede, $this->scopedUsuario()),
+                'manuales_list' => $this->reqPersonalizada->getManualesListForProduct($sede, $data['codigo'], $this->scopedUsuario()),
             ]);
         }
 
@@ -493,14 +510,14 @@ class InventarioController extends Controller
 
         $updatedAt = collect([
                 $this->products->lastStockUpdate(),
-                $this->reqPersonalizada->lastUpdatedAt($sede),
+                $this->reqPersonalizada->lastUpdatedAt($sede, $this->scopedUsuario()),
             ])
             ->filter()
             ->map(fn ($value) => is_string($value) ? $value : (string) $value)
             ->max();
 
         $changed = $since && $updatedAt !== $since;
-        $totalManual = $this->reqPersonalizada->countPendientes($sede);
+        $totalManual = $this->reqPersonalizada->countPendientes($sede, $this->scopedUsuario());
 
         return response()->json([
             'updated_at' => $updatedAt,

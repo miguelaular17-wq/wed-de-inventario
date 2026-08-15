@@ -21,6 +21,7 @@
             <article class="product-card {{ $hasManual ? 'has-manual' : '' }}"
                 data-codigo="{{ $row['cod_centro'] }}"
                 data-producto="{{ e($row['producto']) }}"
+                data-imagen="{{ $row['url_imagen'] ?? '' }}"
                 data-origen-manual="{{ $row['origen_manual'] ?? '' }}"
                 data-cantidad-manual="{{ $row['cantidad_manual'] ?? 0 }}"
                 data-manuales-list="{{ e(json_encode($manualesList)) }}">

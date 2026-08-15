@@ -67,8 +67,13 @@
      ====================================================== --}}
 <div id="modal-manual" class="modal-overlay" style="display:none;">
     <div class="panel modal-box modal-box-wide">
-        <h2 style="margin:0 0 4px;font-size:1.15rem;">Requisición manual</h2>
-        <p id="modal-producto" class="muted" style="margin:0 0 16px;"></p>
+        <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px;">
+            <img id="modal-producto-img" src="" style="width: 56px; height: 56px; object-fit: contain; background: #f8fafc; padding: 4px; border: 1px solid #e2e8f0; border-radius: 6px; display: none;" onerror="this.style.display='none'">
+            <div>
+                <h2 style="margin:0 0 4px;font-size:1.15rem;">Requisición manual</h2>
+                <p id="modal-producto" class="muted" style="margin:0;"></p>
+            </div>
+        </div>
 
         {{-- ── Sección: Requisiciones existentes ── --}}
         <div id="modal-existentes" style="display:none; margin-bottom:16px;">
@@ -285,6 +290,15 @@
         document.getElementById('manual-producto').value = card.dataset.producto;
         document.getElementById('modal-producto').textContent =
             card.dataset.producto + ' · ' + currentCod;
+            
+        const imgEl = document.getElementById('modal-producto-img');
+        if (card.dataset.imagen) {
+            imgEl.src = card.dataset.imagen;
+            imgEl.style.display = 'block';
+        } else {
+            imgEl.style.display = 'none';
+        }
+
         document.getElementById('manual-cantidad').value = 1;
 
         renderExistentes();

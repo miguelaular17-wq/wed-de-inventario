@@ -15,6 +15,7 @@ class ProductController extends Controller
         $sedes = config('inventario.sedes_stock');
         $sede = strtoupper($request->query('sede', $sedes[0] ?? ''));
         $search = $request->query('buscar', '');
+        $filtroOculto = $request->query('oculto', ''); // '' = visibles, '1' = ocultos
 
         $perPage = 50;
         $page = \Illuminate\Pagination\Paginator::resolveCurrentPage() ?: 1;
@@ -22,6 +23,13 @@ class ProductController extends Controller
         if (config('database.default') === 'pgsql') {
             $query = DB::connection('pgsql')->table('inventario_v2.productos as p')
                 ->where('p.activo', true);
+
+            // Filtro oculto: '' = solo visibles (default), '1' = solo ocultos
+            if ($filtroOculto == 1) {
+                $query->where('p.oculto', true);
+            } else {
+                $query->where('p.oculto', false);
+            }
 
             if ($search) {
                 $query->where(function($q) use ($search) {
@@ -43,12 +51,19 @@ class ProductController extends Controller
             $total = $query->count();
             
             $query->select([
-                'p.id', 'p.codigo', 'p.nombre as producto', 'p.categoria', 'p.proveedor',
+                'p.id', 'p.codigo', 'p.nombre as producto', 'p.categoria', 'p.proveedor', 'p.oculto',
                 'sa.existencia as stock',
                 'vh.ultima_venta', 'vh.ultima_compra', 'vh.venta_promedio', 'vh.ventas_60d'
             ]);
             $query->orderBy('p.nombre');
             
+            \Illuminate\Support\Facades\Log::info('ProductController Index Query', [
+                'filtroOculto' => $filtroOculto,
+                'total' => $total,
+                'sql' => $query->toSql(),
+                'bindings' => $query->getBindings()
+            ]);
+
             $items = $query->forPage($page, $perPage)->get();
             
             // Convert to Collection
@@ -116,38 +131,32 @@ class ProductController extends Controller
         }
 
         return view('admin.productos.index', [
-            'rows' => $paginator,
-            'search' => $search,
-            'sede' => $sede,
-            'sedes' => $sedes,
+            'rows'             => $paginator,
+            'search'           => $search,
+            'sede'             => $sede,
+            'sedes'            => $sedes,
             'sedeSeleccionada' => $sede,
-            'buscar' => $search,
-            'categoriasTree' => $categoriasTree,
+            'buscar'           => $search,
+            'categoriasTree'   => $categoriasTree,
+            'filtroOculto'     => $filtroOculto,
         ]);
     }
 
-    public function destroy($id)
+    /**
+     * Toggle oculto status (hide/show) for a product.
+     */
+    public function toggleOculto($id)
     {
         if (config('database.default') === 'pgsql') {
             $producto = Producto::find($id);
             if ($producto) {
-                // Delete related records to prevent foreign key constraint violations
-                DB::connection('pgsql')->table('inventario_v2.stock_actual')->where('producto_id', $id)->delete();
-                DB::connection('pgsql')->table('inventario_v2.ventas_historicas')->where('producto_id', $id)->delete();
-                DB::connection('pgsql')->table('inventario_v2.historial_ventas_mensuales')->where('producto_id', $id)->delete();
-                DB::connection('pgsql')->table('movimientos')->where('producto_id', $id)->delete();
-                
-                // Now delete the product
-                $producto->delete();
-            }
-        } else {
-            $product = Product::find($id);
-            if ($product) {
-                $product->delete();
+                $producto->oculto = ! $producto->oculto;
+                $producto->save();
+                $label = $producto->oculto ? 'ocultado' : 'restaurado';
+                return redirect()->back()->with('success', "Producto {$label} correctamente.");
             }
         }
-
-        return redirect()->back()->with('success', 'Producto eliminado exitosamente.');
+        return redirect()->back()->with('error', 'Producto no encontrado.');
     }
 
     public function exportJson(Request $request)
@@ -157,7 +166,7 @@ class ProductController extends Controller
         $conExistencia = $request->input('con_existencia', 0);
 
         if (config('database.default') === 'pgsql') {
-            // PostgreSQL: fetch all active products with global existencia (sum across all sedes)
+            // PostgreSQL: fetch all active, visible products with global existencia
             $query = DB::connection('pgsql')
                 ->table('inventario_v2.productos as p')
                 ->leftJoin(
@@ -168,7 +177,8 @@ class ProductController extends Controller
                     ) as sg'),
                     'p.id', '=', 'sg.producto_id'
                 )
-                ->where('p.activo', true);
+                ->where('p.activo', true)
+                ->where('p.oculto', false); // Never export hidden products
 
             if (!empty($categorias)) {
                 $query->whereIn('p.categoria', $categorias);

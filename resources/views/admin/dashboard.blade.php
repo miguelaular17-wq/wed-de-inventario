@@ -68,8 +68,8 @@
         </div>
     </div>
 
+    @if(auth()->user()->role === 'admin')
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
-
         <a href="{{ route('admin.sync.index') }}" class="btn secondary" style="background:#f0fdf4;color:#15803d;border-color:#bbf7d0;">⚡ Control de Sincronizadores</a>
         <a href="{{ route('admin.catalogo-auto.index') }}" class="btn secondary" style="background:#eff6ff;color:#2563eb;border-color:#bfdbfe;">🤖 Automatizador de Catálogos</a>
         @if(session('sede_local'))
@@ -86,6 +86,7 @@
             <button type="submit" class="btn secondary" style="background:#fef2f2;color:#dc2626;border-color:#fca5a5; font-weight: bold;" onclick="return confirm('¡PELIGRO! ¿Estás absolutamente seguro de querer BORRAR TODOS los registros de movimientos, requisiciones y logs de sincronización? Esta acción NO se puede deshacer.')">Borrar Datos BDD</button>
         </form>
     </div>
+    @endif
 
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

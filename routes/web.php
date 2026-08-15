@@ -100,7 +100,7 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     // Admin Products
     Route::get('/productos', [\App\Http\Controllers\Admin\ProductController::class, 'index'])->name('productos.index');
     Route::post('/productos/export-json', [\App\Http\Controllers\Admin\ProductController::class, 'exportJson'])->name('productos.export_json');
-    Route::delete('/productos/{id}', [\App\Http\Controllers\Admin\ProductController::class, 'destroy'])->name('productos.destroy');
+    Route::post('/productos/{id}/toggle-oculto', [\App\Http\Controllers\Admin\ProductController::class, 'toggleOculto'])->name('productos.toggle_oculto');
 
     // Catalog Automator
     Route::get('/catalogo-auto', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'index'])->name('catalogo-auto.index');

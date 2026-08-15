@@ -200,6 +200,7 @@ class RequisicionPersonalizadaService
         ?string $categoria = null,
         ?string $subcategoria = null,
         bool $soloPendientes = true,
+        ?string $usuario = null,
     ): Collection {
         $query = RequisicionManual::query()->where('sede_local', $sedeLocal);
 
@@ -209,6 +210,10 @@ class RequisicionPersonalizadaService
 
         if ($sedeOrigen !== null && $sedeOrigen !== '') {
             $query->where('sede_origen', strtoupper($sedeOrigen));
+        }
+
+        if ($usuario !== null && $usuario !== '') {
+            $query->where('usuario', $usuario);
         }
 
         $rows = $query->orderBy('codigo')->get();
@@ -281,7 +286,7 @@ class RequisicionPersonalizadaService
         return $applied;
     }
 
-    public function loadManuales(string $sedeLocal, bool $soloPendientes = false): Collection
+    public function loadManuales(string $sedeLocal, bool $soloPendientes = false, ?string $usuario = null): Collection
     {
         $query = RequisicionManual::query()->where('sede_local', $sedeLocal);
 
@@ -289,27 +294,40 @@ class RequisicionPersonalizadaService
             $query->whereNull('aplicada_at');
         }
 
+        if ($usuario !== null && $usuario !== '') {
+            $query->where('usuario', $usuario);
+        }
+
         return $query->get();
     }
 
-    public function countPendientes(string $sedeLocal): int
+    public function countPendientes(string $sedeLocal, ?string $usuario = null): int
     {
-        return RequisicionManual::query()
+        $query = RequisicionManual::query()
             ->where('sede_local', $sedeLocal)
-            ->whereNull('aplicada_at')
-            ->count();
+            ->whereNull('aplicada_at');
+
+        if ($usuario !== null && $usuario !== '') {
+            $query->where('usuario', $usuario);
+        }
+
+        return $query->count();
     }
 
-    public function lastUpdatedAt(string $sedeLocal): ?string
+    public function lastUpdatedAt(string $sedeLocal, ?string $usuario = null): ?string
     {
-        return RequisicionManual::query()
-            ->where('sede_local', $sedeLocal)
-            ->max('updated_at');
+        $query = RequisicionManual::query()->where('sede_local', $sedeLocal);
+
+        if ($usuario !== null && $usuario !== '') {
+            $query->where('usuario', $usuario);
+        }
+
+        return $query->max('updated_at');
     }
 
-    public function getManualesListForProduct(string $sedeLocal, string $codigo): array
+    public function getManualesListForProduct(string $sedeLocal, string $codigo, ?string $usuario = null): array
     {
-        $manuales = $this->loadManuales($sedeLocal)->where('codigo', $codigo);
+        $manuales = $this->loadManuales($sedeLocal, false, $usuario)->where('codigo', $codigo);
         return $manuales->map(fn ($m) => [
             'id'        => $m->id,
             'sede_origen' => $m->sede_origen,

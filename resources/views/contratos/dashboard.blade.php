@@ -52,18 +52,6 @@
         </div>
     </div>
 
-    {{-- Importar Excel --}}
-    <div class="panel" style="padding: 16px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-        <div>
-            <strong>📥 Importar contratos desde Excel</strong>
-            <p style="margin: 4px 0 0; color: #64748b; font-size: 0.9rem;">Sube el archivo "RELACION DE CONTRATOS - COBRANZAS.xlsx" o usa el archivo por defecto del servidor.</p>
-        </div>
-        <form method="POST" action="{{ route('contratos.importar') }}" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center;">
-            @csrf
-            <input type="file" name="archivo" accept=".xlsx,.xls" style="padding: 6px; border: 1px solid #ccc; border-radius: 6px;">
-            <button type="submit" style="padding: 8px 20px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Importar</button>
-        </form>
-    </div>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
         {{-- Alertas urgentes --}}

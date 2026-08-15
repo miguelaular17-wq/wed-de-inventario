@@ -27,15 +27,6 @@
         </select>
     </div>
     <div class="field">
-        <label for="tipo">Tipo</label>
-        <select id="tipo" name="tipo">
-            <option value="">Todos</option>
-            @foreach ($tipos as $t)
-                <option value="{{ $t }}" @selected($filters['tipo'] === $t)>{{ $t }}</option>
-            @endforeach
-        </select>
-    </div>
-    <div class="field">
         <label for="desde">Desde</label>
         <input type="date" id="desde" name="desde" value="{{ $filters['desde'] }}">
     </div>
@@ -50,14 +41,13 @@
         <table class="data-table movements-table">
             <thead>
                 <tr>
-                    <th>Fecha</th>
-                    <th>Código</th>
+                    <th style="width:120px">Fecha</th>
+                    <th style="width:160px">Código</th>
                     <th>Producto</th>
-                    <th>Origen → Destino</th>
-                    <th>Tipo</th>
-                    <th>Cant.</th>
-                    <th>Usuario</th>
-                    <th>Nota</th>
+                    <th style="width:160px">Origen → Destino</th>
+                    <th style="width:60px">Cant.</th>
+                    <th style="width:130px">Usuario</th>
+                    <th style="width:200px">Nota</th>
                 </tr>
             </thead>
             <tbody>
@@ -71,32 +61,6 @@
                             <span class="route-arrow">→</span>
                             <span class="route-pill route-pill-dest">{{ config('inventario.display.'.$row['destino'], $row['destino']) }}</span>
                         </td>
-                        <td>
-                            @php
-                                $c = $row['classification'] ?? 'automatica';
-                                if ($c === 'manual') {
-                                    $classLabel = 'Manual';
-                                    $classTag = 'manual';
-                                } elseif ($c === 'mayor_demanda') {
-                                    $classLabel = 'Mayor Demanda';
-                                    $classTag = 'warn';
-                                } elseif ($c === 'migracion') {
-                                    $classLabel = 'Migración';
-                                    $classTag = 'ok';
-                                } elseif (str_starts_with($c, 'sincronizacion_')) {
-                                    $sedeName = config('inventario.display.'.strtoupper(str_replace('sincronizacion_', '', $c)), ucfirst(str_replace('sincronizacion_', '', $c)));
-                                    $classLabel = 'Sync ' . $sedeName;
-                                    $classTag = 'primary';
-                                } elseif ($c === 'sincronizacion') {
-                                    $classLabel = 'Sincronización';
-                                    $classTag = 'primary';
-                                } else {
-                                    $classLabel = 'Automático';
-                                    $classTag = 'req';
-                                }
-                            @endphp
-                            <span class="tag {{ $classTag }}" title="Tipo original: {{ $row['tipo'] }}">{{ $classLabel }}</span>
-                        </td>
                         <td class="cell-qty"><strong>{{ $row['cantidad'] }}</strong></td>
                         <td class="cell-user">{{ $row['usuario'] }}</td>
                         <td class="cell-note">
@@ -107,21 +71,13 @@
                                 @if(! empty($row['manual_note']))
                                     <div class="manual-note {{ ($row['manual_exported'] ?? false) ? 'manual-exported' : '' }}">{{ $row['manual_note'] }}</div>
                                 @endif
-                            @elseif(!empty($row['metadata']['motivo']))
-                                <span class="tag primary">Sincronización</span>
-                                <div class="manual-note">
-                                    {{ $row['metadata']['motivo'] }}
-                                    @if(!empty($row['metadata']['fecha_venta_local']))
-                                        <br><small style="color:var(--muted)">Fecha venta: {{ date('d/m/Y H:i', strtotime($row['metadata']['fecha_venta_local'])) }}</small>
-                                    @endif
-                                </div>
                             @else
                                 —
                             @endif
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8">Sin movimientos registrados.</td></tr>
+                    <tr><td colspan="7">Sin movimientos registrados.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -131,25 +87,29 @@
 
 @push('head')
 <style>
-    .movements-table .cell-nowrap { white-space: nowrap; font-size: .82rem; color: var(--muted); }
-    .movements-table .cell-code { font-family: ui-monospace, monospace; font-size: .82rem; white-space: nowrap; }
-    .movements-table .cell-product { max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .movements-table .cell-qty { text-align: center; }
-    .movements-table .cell-user { white-space: nowrap; font-weight: 500; }
-    .movements-table .cell-route { white-space: nowrap; }
+    /* Make the movimientos table use full width and fit columns properly */
+    .table-wrap-full { overflow-x: auto; }
+    .movements-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+    .movements-table th, .movements-table td { padding: 8px 10px; font-size: .85rem; }
+    .movements-table .cell-nowrap { white-space: nowrap; font-size: .82rem; color: var(--muted); width: 120px; }
+    .movements-table .cell-code { font-family: ui-monospace, monospace; font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 150px; }
+    .movements-table .cell-product { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .movements-table .cell-qty { text-align: center; width: 55px; }
+    .movements-table .cell-user { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; width: 120px; }
+    .movements-table .cell-route { white-space: nowrap; width: 155px; }
+    .movements-table .cell-note { width: 190px; }
     .route-pill {
         display: inline-block;
-        padding: 3px 8px;
+        padding: 2px 7px;
         border-radius: 6px;
         background: #f1f5f9;
-        font-size: .78rem;
+        font-size: .75rem;
         font-weight: 500;
     }
     .route-pill-dest { background: #eef4fc; color: var(--blue); }
-    .route-arrow { color: var(--muted); margin: 0 4px; font-size: .85rem; }
-    .manual-note { margin-top: 4px; color: var(--muted); font-size: .82rem; line-height: 1.3; }
+    .route-arrow { color: var(--muted); margin: 0 3px; font-size: .82rem; }
+    .manual-note { margin-top: 4px; color: var(--muted); font-size: .80rem; line-height: 1.3; }
     .manual-note.manual-exported { color: var(--green); }
-    .cell-note { max-width: 240px; }
 </style>
 @endpush
 
@@ -169,7 +129,7 @@
     function getFilters() {
         const params = new URLSearchParams();
         params.set('since', since);
-        ['q', 'sede', 'tipo', 'desde', 'hasta'].forEach(name => {
+        ['q', 'sede', 'desde', 'hasta'].forEach(name => {
             const el = document.querySelector(`[name="${name}"]`);
             if (el && el.value) {
                 params.set(name, el.value);

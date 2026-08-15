@@ -22,6 +22,22 @@ class RequisicionController extends Controller
         private StockMovementService $stock,
     ) {}
 
+    /**
+     * Returns the email to use as user-scope filter for requisiciones.
+     * Admins and gerentes see the full sede; everyone else sees only their own.
+     */
+    private function scopedUsuario(): ?string
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return null;
+        }
+        if ($user->isAdmin() || $user->isGerente()) {
+            return null;
+        }
+        return $user->email;
+    }
+
     public function form(Request $request): View
     {
         ini_set('memory_limit', '512M');
@@ -49,7 +65,7 @@ class RequisicionController extends Controller
             \App\Services\Profiler::start('RequisicionController::form loadForSede');
             $products = $this->products->loadForSede($sede)->keyBy('cod_centro');
             \App\Services\Profiler::stop('RequisicionController::form loadForSede');
-            $manualCats = $this->reqPersonalizada->loadManuales($sede);
+            $manualCats = $this->reqPersonalizada->loadManuales($sede, false, $this->scopedUsuario());
 
             $subByCat = [];
             $manualCats->each(function ($m) use ($products, &$subByCat) {
@@ -83,6 +99,8 @@ class RequisicionController extends Controller
                 $sedeOrigenKey,
                 $selectedCategoria !== 'Todas' ? $selectedCategoria : null,
                 $selectedSubcategoria,
+                true,
+                $this->scopedUsuario(),
             )->map(function (array $r) use ($products) {
                 $p = $products->get($r['codigo_completo'] ?? $r['codigo']);
 
@@ -101,7 +119,7 @@ class RequisicionController extends Controller
                 'sede' => $sede,
                 'tipoReporte' => $tipoReporte,
                 'sedesOrigen' => $sedesOrigen,
-                'totalRequisicion' => $this->reqPersonalizada->countPendientes($sede),
+                'totalRequisicion' => $this->reqPersonalizada->countPendientes($sede, $this->scopedUsuario()),
                 'categories' => $categories,
                 'subcategories' => $subcategories,
                 'subByCat' => $subByCat,
@@ -270,6 +288,8 @@ class RequisicionController extends Controller
                 $sedeOrigenKey,
                 $categoria !== 'Todas' ? $categoria : null,
                 $subcategoria,
+                true,
+                $this->scopedUsuario(),
             );
 
             if ($lines->isEmpty()) {

@@ -253,6 +253,7 @@ document.getElementById('export-modal').addEventListener('click', function(e) {
 </style>
 
 <form method="GET" action="{{ route('admin.productos.index') }}" class="filter-bar">
+    <input type="hidden" name="page" value="1">
     <div class="field field-wide">
         <label for="buscar">Buscar producto</label>
         <input type="search" id="buscar" name="buscar" value="{{ $buscar ?? '' }}" placeholder="Código o nombre..." autocomplete="off">
@@ -263,6 +264,13 @@ document.getElementById('export-modal').addEventListener('click', function(e) {
             @foreach($sedes as $s)
                 <option value="{{ $s }}" @selected($sedeSeleccionada === $s)>{{ config('inventario.display.'.$s, $s) }}</option>
             @endforeach
+        </select>
+    </div>
+    <div class="field">
+        <label for="oculto">Estado</label>
+        <select id="oculto" name="oculto">
+            <option value="" @selected(empty($filtroOculto))>Visibles</option>
+            <option value="1" @selected($filtroOculto === '1')>Ocultos</option>
         </select>
     </div>
     <div class="field" style="display: flex; align-items: flex-end; gap: 8px;">
@@ -290,8 +298,13 @@ document.getElementById('export-modal').addEventListener('click', function(e) {
             </thead>
             <tbody>
                 @forelse($rows as $row)
-                    <tr>
-                        <td style="font-family: ui-monospace, monospace; font-size: .85rem;">{{ $row['codigo'] ?? '—' }}</td>
+                    <tr style="{{ !empty($row['oculto']) ? 'opacity: 0.6; background: #f8fafc;' : '' }}">
+                        <td style="font-family: ui-monospace, monospace; font-size: .85rem;">
+                            {{ $row['codigo'] ?? '—' }}
+                            @if(!empty($row['oculto']))
+                                <span style="display:inline-block; margin-left:4px; padding:2px 4px; background:#64748b; color:white; font-size:0.65rem; border-radius:4px; font-weight:bold;">OCULTO</span>
+                            @endif
+                        </td>
                         <td style="font-weight: 500;">{{ $row['producto'] ?? '—' }}</td>
                         <td style="color: var(--muted); font-size: .9rem;">{{ $row['categoria'] ?? '—' }}</td>
                         <td style="color: var(--muted); font-size: .9rem;">{{ $row['proveedor'] ?? '—' }}</td>
@@ -308,12 +321,17 @@ document.getElementById('export-modal').addEventListener('click', function(e) {
                             @endif
                         </td>
                         <td style="text-align: center; vertical-align: middle;">
-                            <form method="POST" action="{{ route('admin.productos.destroy', $row['id']) }}" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este producto de la base de datos de forma permanente?')" style="display:inline; margin:0;">
+                            <form method="POST" action="{{ route('admin.productos.toggle_oculto', $row['id']) }}" style="display:inline; margin:0;">
                                 @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn" style="padding:4px 10px; font-size:0.8rem; border-radius:6px; background-color: #dc2626; color: white; border: 0; cursor: pointer; transition: background-color 0.15s;" onmouseover="this.style.backgroundColor='#b91c1c'" onmouseout="this.style.backgroundColor='#dc2626'" title="Eliminar Producto">
-                                    Eliminar
-                                </button>
+                                @if(!empty($row['oculto']))
+                                    <button type="submit" class="btn" style="padding:4px 10px; font-size:0.8rem; border-radius:6px; background-color: #10b981; color: white; border: 0; cursor: pointer; transition: background-color 0.15s;" title="Restaurar Producto">
+                                        Restaurar
+                                    </button>
+                                @else
+                                    <button type="submit" class="btn" style="padding:4px 10px; font-size:0.8rem; border-radius:6px; background-color: #64748b; color: white; border: 0; cursor: pointer; transition: background-color 0.15s;" title="Ocultar Producto" onsubmit="return confirm('¿Estás seguro de que deseas ocultar este producto?')">
+                                        Ocultar
+                                    </button>
+                                @endif
                             </form>
                         </td>
                     </tr>

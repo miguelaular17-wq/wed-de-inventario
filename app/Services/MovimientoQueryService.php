@@ -47,7 +47,8 @@ class MovimientoQueryService
     {
         $query = Movimiento::query()
             ->with('producto')
-            ->orderByDesc('created_at');
+            ->orderByDesc('created_at')
+            ->where('usuario', '!=', 'sistema_sync'); // excluir sincronizaciones automáticas de venta
 
         if ($filters['q'] !== '') {
             $q = $filters['q'];
@@ -263,7 +264,8 @@ class MovimientoQueryService
 
     private function listMovimientosSince(Carbon $sinceAt, array $filters): Collection
     {
-        $query = Movimiento::query()->with('producto');
+        $query = Movimiento::query()->with('producto')
+            ->where('usuario', '!=', 'sistema_sync'); // excluir sincronizaciones automáticas de venta
 
         if ($filters['q'] !== '') {
             $q = $filters['q'];
