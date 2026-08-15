@@ -42,7 +42,10 @@ class InventarioV2Repository
         $rows = DB::connection('pgsql')
             ->table('productos')
             ->where('activo', true)
-            ->where('oculto', false)
+            ->where(function($q) {
+                $q->where('oculto', false)
+                  ->orWhereNull('oculto');
+            })
             ->orderBy('codigo')
             ->get(['id', 'codigo', 'nombre', 'categoria', 'subcategoria', 'proveedor', 'precio_unidad', 'precio_mayor', 'url_imagen'])
             ->all(); // array plano de stdClass — serializa mucho más rápido
