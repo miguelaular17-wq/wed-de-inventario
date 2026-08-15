@@ -42,8 +42,9 @@ class InventarioV2Repository
         $rows = DB::connection('pgsql')
             ->table('productos')
             ->where('activo', true)
+            ->where('oculto', false)
             ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre', 'categoria', 'subcategoria', 'proveedor', 'precio_unidad', 'precio_mayor'])
+            ->get(['id', 'codigo', 'nombre', 'categoria', 'subcategoria', 'proveedor', 'precio_unidad', 'precio_mayor', 'url_imagen'])
             ->all(); // array plano de stdClass — serializa mucho más rápido
         \App\Services\Profiler::stop('InvV2::getGlobalProducts SQL fetch', count($rows));
 

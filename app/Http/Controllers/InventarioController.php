@@ -62,7 +62,7 @@ class InventarioController extends Controller
             $perPage = (int) config('inventario.per_page', 75);
             if ($perPage <= 0) $perPage = 75;
 
-            $whereClauses = ["p.activo = true"];
+            $whereClauses = ["p.activo = true", "p.oculto = false"];
             $bindings = ['sedeLocal' => $sede];
 
             if ($filters['categoria'] !== 'Ninguno') {
