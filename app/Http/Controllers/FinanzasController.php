@@ -2482,12 +2482,53 @@ class FinanzasController extends Controller
     {
         try {
             $request->validate([
-                'archivo' => 'required|file|mimes:xlsx,xls,csv,xlsm|max:5120',
+                'archivo' => 'required|file|mimes:xlsx,xls,csv,xlsm,txt|max:5120',
             ]);
 
             $file = $request->file('archivo');
             $ext = strtolower($file->getClientOriginalExtension());
             $path = $file->getRealPath();
+
+            if ($ext === 'txt') {
+                $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+                $result = [];
+                $cedulas = [];
+                $parsedLines = [];
+                foreach ($lines as $line) {
+                    if (strlen($line) >= 33) {
+                        $cedRawStr = trim(substr($line, 0, 12));
+                        $cedRaw = preg_replace('/[^0-9]/', '', $cedRawStr);
+                        if (empty($cedRaw)) continue;
+
+                        $montoStr = substr($line, 12, 21);
+                        $monto = (float) $montoStr / 100;
+
+                        if ($monto <= 0) continue;
+
+                        $cedulas[] = $cedRaw;
+                        $parsedLines[] = [
+                            'cedRaw' => $cedRaw,
+                            'monto' => $monto
+                        ];
+                    }
+                }
+
+                $clientesDb = \App\Models\Cliente::whereIn('cedula', $cedulas)->get()->keyBy('cedula');
+
+                foreach ($parsedLines as $p) {
+                    $cliente = $clientesDb->get($p['cedRaw']);
+                    $nombre_mostrar = ($cliente && $cliente->nombre) ? $cliente->nombre : $p['cedRaw'];
+                    $result[] = [
+                        'cedula' => $nombre_mostrar,
+                        'monto' => $p['monto'],
+                    ];
+                }
+
+                if (empty($result)) {
+                    return response()->json(['ok' => false, 'error' => 'No se encontraron datos válidos en el archivo TXT. Asegúrate de que tenga el formato correcto.']);
+                }
+                return response()->json(['ok' => true, 'data' => $result]);
+            }
 
             $allSheetsRows = [];
             if ($ext === 'csv') {

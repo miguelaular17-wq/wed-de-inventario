@@ -1165,10 +1165,10 @@
                 <h4 style="margin-top: 0; font-size: 0.95rem; color: var(--blue); display: flex; justify-content: space-between; align-items: center;">
                     Desglose del Pago
                     <div style="font-size: 0.85rem; font-weight: normal;">
-                        <input type="file" id="archivo_desglose" accept=".xlsx, .xls, .csv, .xlsm" style="display: none;" onchange="cargarArchivoDesglose(this)">
+                        <input type="file" id="archivo_desglose" accept=".xlsx, .xls, .csv, .xlsm, .txt" style="display: none;" onchange="cargarArchivoDesglose(this)">
                         <button type="button" onclick="document.getElementById('archivo_desglose').click()" style="padding: 4px 10px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                            Cargar desde archivo (Excel/CSV)
+                            Cargar archivo (Excel/TXT)
                         </button>
                     </div>
                 </h4>
@@ -1909,10 +1909,17 @@ window.cargarArchivoDesglose = async function(input) {
         if (formValues) {
             let tgSelected = formValues.tg === 'OTROS' ? '' : formValues.tg;
             
+            const inputTasa = document.getElementById('tasa_cambio') || document.querySelector('input[name="tasa_cambio"]');
+            let tasa = window.parseLocalNumber(inputTasa ? inputTasa.value : '0') || 0;
+
             data.forEach(row => {
                 // Formatear monto bs
                 let montoBsFormateado = row.monto.toString().replace('.', ',');
-                agregarDesglose(row.cedula, '', montoBsFormateado, formValues.sede, tgSelected);
+                let montoUsd = '';
+                if (tasa > 0) {
+                    montoUsd = (parseFloat(row.monto) / tasa).toFixed(2).replace('.', ',');
+                }
+                agregarDesglose(row.cedula, montoUsd, montoBsFormateado, formValues.sede, tgSelected);
             });
             
             Swal.fire('Éxito', `Se agregaron ${data.length} personas al desglose.`, 'success');
