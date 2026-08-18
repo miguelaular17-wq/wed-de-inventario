@@ -94,6 +94,7 @@
                         <a href="{{ route('cobranza.index') }}" class="{{ request()->routeIs('cobranza.*') ? 'active' : '' }}">Cobranza</a>
                         <a href="{{ route('contratos.index') }}" class="{{ request()->routeIs('contratos.*') ? 'active' : '' }}">Contratos</a>
                         <a href="{{ route('tesoreria.dashboard') }}" class="{{ request()->routeIs('tesoreria.*') ? 'active' : '' }}">Tesorería</a>
+                        <a href="{{ route('patrimonial.dashboard') }}" class="{{ request()->routeIs('patrimonial.*') ? 'active' : '' }}">Patrimonial</a>
                     @endif
 
                     {{-- ── Shared role-based links (non-admin, non-gerente) ── --}}
@@ -113,6 +114,7 @@
                         @if(auth()->user()->isCobranza())
                             <a href="{{ route('cobranza.index') }}" class="{{ request()->routeIs('cobranza.*') ? 'active' : '' }}">Cobranza</a>
                             <a href="{{ route('contratos.index') }}" class="{{ request()->routeIs('contratos.*') ? 'active' : '' }}">Contratos</a>
+                            <a href="{{ route('patrimonial.dashboard') }}" class="{{ request()->routeIs('patrimonial.*') ? 'active' : '' }}">Patrimonial</a>
                         @endif
                         @if(auth()->user()->isTesoreria())
                             <a href="{{ route('tesoreria.dashboard') }}" class="{{ request()->routeIs('tesoreria.*') ? 'active' : '' }}">Tesorería</a>
