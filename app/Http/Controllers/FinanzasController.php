@@ -346,6 +346,8 @@ class FinanzasController extends Controller
                 'desglose_monto_usd' => 'nullable|array',
                 'desglose_sede' => 'nullable|array',
                 'desglose_tipo_gasto' => 'nullable|array',
+                'gasto_fijo_id' => 'nullable|integer|exists:gastos_fijos,id',
+                'monto_pagado_gf' => 'nullable|numeric|min:0',
             ]);
 
             if ($data['categoria_egreso'] === 'traslados') {
@@ -462,6 +464,24 @@ class FinanzasController extends Controller
                 'comprobantes'          => !empty($comprobantes_arr) ? $comprobantes_arr : null,
                 'desglose'              => $desglose,
             ]);
+
+            // ── Vincular con Gasto Fijo si se proporcionó ──
+            if (!empty($data['gasto_fijo_id'])) {
+                $mesIdx = (int) date('n') - 1; // 0-indexed
+                $montoPagado = !empty($data['monto_pagado_gf']) ? (float) $data['monto_pagado_gf'] : ($calc_usd ?? 0);
+                GastoFijoPago::updateOrCreate(
+                    [
+                        'gasto_fijo_id' => (int) $data['gasto_fijo_id'],
+                        'mes_idx'       => $mesIdx,
+                        'anio'          => (int) date('Y'),
+                    ],
+                    [
+                        'monto'     => $montoPagado,
+                        'pagado'    => true,
+                        'pagado_at' => now(),
+                    ]
+                );
+            }
 
             $this->syncTotalesSalidas($data['fecha']);
 
@@ -2290,6 +2310,73 @@ class FinanzasController extends Controller
         return [];
     }
 
+    /**
+     * Returns the list of pending gastos fijos (those with active notifications)
+     * for the egreso modal dropdown to link payments.
+     */
+    public function getGastosFijosParaVincular()
+    {
+        $mesActual = (int) date('n');
+        $diaActual = (int) date('j');
+        $tablaLabels = [
+            0 => 'Grupo Inmobiliario',
+            1 => 'Palacio/Nunes/Euronissi',
+            2 => 'Directivo',
+        ];
+
+        $gastos = \App\Models\GastoFijo::where('visible', true)
+            ->orderBy('grupo_id')->orderBy('orden')->orderBy('id')
+            ->with(['pagos' => function ($q) {
+                $q->where('anio', (int) date('Y'));
+            }])
+            ->get();
+
+        $pendientes = [];
+        foreach ($gastos as $gasto) {
+            if ($gasto->costo <= 0 || empty($gasto->fecha)) continue;
+
+            // Check if already paid this period
+            $mesBusqueda = $mesActual - 1;
+            $pagoRecord = $gasto->pagos->firstWhere('mes_idx', $mesBusqueda);
+            $diasPago = $this->parseDiasPago($gasto->fecha);
+            $isWeekly = in_array(-1, $diasPago);
+
+            if ($pagoRecord && $pagoRecord->pagado) {
+                if ($isWeekly) {
+                    if ($pagoRecord->pagado_at && $pagoRecord->pagado_at->diffInDays(now()) < 7) {
+                        continue; // paid this week
+                    }
+                } else {
+                    continue; // paid this month
+                }
+            }
+
+            // Only include if payment is due within 7 days or is weekly
+            $isDue = $isWeekly;
+            if (!$isDue) {
+                foreach ($diasPago as $dia) {
+                    $diff = $dia - $diaActual;
+                    if ($diff >= 0 && $diff <= 7) { $isDue = true; break; }
+                }
+            }
+            if (!$isDue) continue;
+
+            $pendientes[] = [
+                'id'           => $gasto->id,
+                'servicio'     => $gasto->servicio,
+                'empresa'      => $gasto->empresa,
+                'sede'         => $gasto->sede,
+                'costo'        => (float) $gasto->costo,
+                'grupo_id'     => $gasto->grupo_id,
+                'tabla_label'  => $tablaLabels[$gasto->grupo_id] ?? 'Otro',
+                'fecha'        => $gasto->fecha,
+                'urgente'      => !$isWeekly && in_array(0, array_map(fn($d) => $d - $diaActual, $diasPago)),
+            ];
+        }
+
+        return response()->json($pendientes);
+    }
+
     public function agregarGastoFijo(Request $request)
     {
         $request->validate([
@@ -2338,16 +2425,27 @@ class FinanzasController extends Controller
             'monto' => 'nullable|numeric|min:0',
         ]);
 
-        $pago = \App\Models\GastoFijoPago::updateOrCreate(
-            [
-                'gasto_fijo_id' => $request->gasto_fijo_id,
-                'mes_idx' => $request->mes_idx,
-                'anio' => (int) date('Y'),
-            ],
-            [
-                'monto' => $request->monto !== null && $request->monto !== '' ? $request->monto : null,
-            ]
-        );
+        $montoVal = $request->monto !== null && $request->monto !== '' ? $request->monto : null;
+
+        $pago = \App\Models\GastoFijoPago::firstOrNew([
+            'gasto_fijo_id' => $request->gasto_fijo_id,
+            'mes_idx' => $request->mes_idx,
+            'anio' => (int) date('Y'),
+        ]);
+
+        $pago->monto = $montoVal;
+
+        if ($montoVal !== null) {
+            $pago->pagado = true;
+            if (!$pago->pagado_at) {
+                $pago->pagado_at = now();
+            }
+        } else {
+            $pago->pagado = false;
+            $pago->pagado_at = null;
+        }
+
+        $pago->save();
 
         return response()->json(['ok' => true, 'monto' => $pago->monto]);
     }
@@ -2407,6 +2505,24 @@ class FinanzasController extends Controller
         $gasto = \App\Models\GastoFijo::find($request->gasto_fijo_id);
         if ($gasto) {
             $gasto->costo = $request->costo;
+            $gasto->save();
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function updateGastoFijoCampo(Request $request)
+    {
+        $request->validate([
+            'gasto_fijo_id' => 'required|integer',
+            'campo'         => 'required|in:servicio,empresa',
+            'valor'         => 'nullable|string|max:255',
+        ]);
+
+        $gasto = \App\Models\GastoFijo::find($request->gasto_fijo_id);
+        if ($gasto) {
+            $campo = $request->campo;
+            $gasto->$campo = $request->valor ?? null;
             $gasto->save();
         }
 

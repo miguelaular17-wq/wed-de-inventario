@@ -215,6 +215,7 @@ Route::middleware(['auth', 'role:admin,gerente,finanzas,auditor'])->prefix('fina
     Route::get('/flujo-caja/reporte-diario', [FinanzasController::class, 'reporteDiarioCaja'])->name('finanzas.reporte_diario_caja');
     Route::get('/flujo-caja/api/bcv', [FinanzasController::class, 'fetchBcvApi'])->name('finanzas.api_bcv');
     Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
+    Route::get('/gastos-fijos/pendientes', [FinanzasController::class, 'getGastosFijosParaVincular'])->name('finanzas.gastos_fijos.pendientes');
 
     Route::middleware(['role:admin,gerente,finanzas'])->group(function () {
         Route::post('/flujo-caja/reset', [FinanzasController::class, 'resetDaily'])->name('finanzas.reset_daily');
@@ -230,6 +231,7 @@ Route::middleware(['auth', 'role:admin,gerente,finanzas,auditor'])->prefix('fina
         Route::post('/gastos-fijos/pagado', [FinanzasController::class, 'marcarGastoFijoPagado'])->name('finanzas.gastos_fijos.pagado');
         Route::post('/gastos-fijos/fecha', [FinanzasController::class, 'updateGastoFijoFecha'])->name('finanzas.gastos_fijos.fecha');
         Route::post('/gastos-fijos/costo', [FinanzasController::class, 'updateGastoFijoCosto'])->name('finanzas.gastos_fijos.costo');
+        Route::post('/gastos-fijos/campo', [FinanzasController::class, 'updateGastoFijoCampo'])->name('finanzas.gastos_fijos.campo');
         Route::post('/gastos-fijos/agregar', [FinanzasController::class, 'agregarGastoFijo'])->name('finanzas.gastos_fijos.agregar');
         Route::post('/gastos-fijos/eliminar', [FinanzasController::class, 'eliminarGastoFijoFila'])->name('finanzas.gastos_fijos.eliminar');
     });

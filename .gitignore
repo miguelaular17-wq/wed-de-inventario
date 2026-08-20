@@ -17,12 +17,31 @@
 .phpunit.result.cache
 /bootstrap/cache/*
 /phpunit.xml
-/scripts/sync_sales/
 /database/database.sqlite
-*.py
-*.sql
+
+# Local sync tool (runs on store PCs, not on Render)
+/scripts/sync_sales/
+
+# One-off debug scripts and dumps (do not commit)
+check_*.php
+check_*.py
 test*.php
-temp_*.txt
+test*.html
 debug_*.php
 latency_*.php
 single_*.php
+temp_*.txt
+temp_*.js
+dump_*.php
+*.py
+*.sql
+
+# Local assets / foreign projects / bank dumps
+/Imagenes_Articulos_JRZ/
+/app 1/
+/Nueva carpeta/
+/chrome_extension/
+/articulos_global*.json
+/productos*.json
+/gastos_dump.json
+/output.txt

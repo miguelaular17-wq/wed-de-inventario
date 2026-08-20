@@ -1398,7 +1398,7 @@ async function toggleGastoFijoPanel() {
         const sel = document.getElementById('sel_gasto_fijo');
         sel.innerHTML = '<option value="">Cargando...</option>';
         try {
-            const res = await fetch('{{ route("finanzas.gastos_fijos.pendientes") }}', {
+            const res = await fetch('{{ \Illuminate\Support\Facades\Route::has("finanzas.gastos_fijos.pendientes") ? route("finanzas.gastos_fijos.pendientes") : url("/finanzas/gastos-fijos/pendientes") }}', {
                 headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
             });
             _gfPendientes = await res.json();
