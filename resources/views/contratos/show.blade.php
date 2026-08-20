@@ -407,7 +407,7 @@
             </div>
             <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;">
                 <button type="button" onclick="document.getElementById('modalPago').style.display='none'" style="padding: 8px 20px; background: #94a3b8; color: white; border: none; border-radius: 6px; cursor: pointer;">Cancelar</button>
-                <button type="submit" style="padding: 8px 20px; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Registrar Pago</button>
+                <button type="button" onclick="previsualizarRecibo()" style="padding: 8px 20px; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Registrar Pago</button>
             </div>
         </form>
     </div>
@@ -594,12 +594,379 @@
     </div>
 </div>
 
+{{-- Modal Recibo de Pago --}}
+<div id="modalRecibo" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:2000; align-items:center; justify-content:center; overflow-y:auto;">
+    <div style="background:white; width:95%; max-width:620px; border-radius:4px; box-shadow:0 20px 60px rgba(0,0,0,0.4); margin:20px auto; font-family:'Times New Roman',serif;">
+
+        {{-- Recibo imprimible --}}
+        <div id="reciboContenido" style="padding:30px 40px;">
+
+            {{-- Encabezado --}}
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px;">
+                <div style="text-align:left;">
+                    <img src="/logo_recibo.png" alt="Logo Grupo Jenu" style="height:80px;width:auto;">
+                </div>
+                <div style="text-align:right; font-size:0.78rem; line-height:1.6;">
+                    <div style="font-weight:700; font-size:0.9rem; text-decoration:underline;">Grupo Inmobiliario y de Transporte</div>
+                    <div style="font-weight:700; font-size:0.9rem; text-decoration:underline;">Je Nu &amp; Asociados, C.A.</div>
+                    <div>Rif.: J-50255135-2</div>
+                    <div>Calle Girardot, con Av. Santa Irene, Punto Fijo - Edo.</div>
+                    <div>Falcon, Zona Postal 4102. <strong>Teléfono:</strong> 0412-6937658</div>
+                </div>
+            </div>
+
+            {{-- Fecha y título --}}
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <table style="border-collapse:collapse; font-size:0.8rem;">
+                    <tr>
+                        <th style="border:1px solid #000; padding:3px 10px;">DIA</th>
+                        <th style="border:1px solid #000; padding:3px 10px;">MES</th>
+                        <th style="border:1px solid #000; padding:3px 10px;">AÑO</th>
+                    </tr>
+                    <tr>
+                        <td id="reciboDia" style="border:1px solid #000; padding:3px 10px; text-align:center;"></td>
+                        <td id="reciboMes" style="border:1px solid #000; padding:3px 10px; text-align:center;"></td>
+                        <td id="reciboAnio" style="border:1px solid #000; padding:3px 10px; text-align:center;"></td>
+                    </tr>
+                </table>
+                <div style="text-align:center;">
+                    <div id="reciboControl" style="color:#cc0000; font-weight:700; font-size:1rem;"></div>
+                    <div style="font-weight:900; font-size:1.3rem; letter-spacing:1px;">RECIBO</div>
+                </div>
+                <div style="border:2px solid #000; padding:8px 16px; text-align:center; min-width:80px;">
+                    <div style="font-size:0.7rem; font-weight:700;">BS/$.</div>
+                    <div id="reciboMonto" style="font-size:1.4rem; font-weight:700;"></div>
+                </div>
+            </div>
+
+            <hr style="border:1px solid #000; margin:0 0 14px;">
+
+            {{-- Cuerpo --}}
+            <div style="margin-bottom:12px; display:flex; align-items:baseline; gap:10px;">
+                <span style="font-weight:700; white-space:nowrap;">Recibí de:</span>
+                <span id="reciboCliente" style="border-bottom:1px solid #000; flex:1; padding-bottom:2px; font-weight:600;"></span>
+            </div>
+            <div style="margin-bottom:6px; display:flex; align-items:baseline; gap:10px;">
+                <span style="font-weight:700; white-space:nowrap;">La Suma de:</span>
+                <span id="reciboSumaLetras" style="border-bottom:1px solid #000; flex:1; padding-bottom:2px; font-style:italic;"></span>
+            </div>
+            <div style="text-align:right; font-size:0.8rem; font-weight:700; margin-bottom:14px;">Bolivares / Dólares</div>
+
+            <hr style="border:1px solid #000; margin:0 0 12px;">
+
+            <div style="margin-bottom:20px; display:flex; align-items:baseline; gap:10px;">
+                <span style="font-weight:700; white-space:nowrap;">Por Concepto de</span>
+                <span id="reciboConcepto" style="border-bottom:1px solid #000; flex:1; padding-bottom:2px;"></span>
+            </div>
+
+            <hr style="border:1px solid #000; margin:0 0 20px;">
+
+            {{-- Forma de pago --}}
+            <div style="display:flex; gap:30px; align-items:center; flex-wrap:wrap; margin-bottom:30px;">
+                <div>
+                    <span style="font-weight:700; text-decoration:underline;">Forma de</span><br>
+                    <span style="font-weight:700; text-decoration:underline;">Pago:</span>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:16px; font-size:0.85rem;">
+                    <label>Efectivo <span id="reciboChkEfectivo" style="border:1px solid #000; width:14px; height:14px; display:inline-block; text-align:center; line-height:13px; font-size:11px;"></span></label>
+                    <label>Transferencia Bs <span id="reciboChkTransf" style="border:1px solid #000; width:14px; height:14px; display:inline-block; text-align:center; line-height:13px; font-size:11px;"></span></label>
+                    <label>Pago Movil <span id="reciboChkMovil" style="border:1px solid #000; width:14px; height:14px; display:inline-block; text-align:center; line-height:13px; font-size:11px;"></span></label>
+                    <label>Zelle <span id="reciboChkZelle" style="border:1px solid #000; width:14px; height:14px; display:inline-block; text-align:center; line-height:13px; font-size:11px;"></span></label>
+                    <label>Binance <span id="reciboChkBinance" style="border:1px solid #000; width:14px; height:14px; display:inline-block; text-align:center; line-height:13px; font-size:11px;"></span></label>
+                    <label>Otro <span id="reciboChkOtro" style="border:1px solid #000; width:14px; height:14px; display:inline-block; text-align:center; line-height:13px; font-size:11px;"></span></label>
+                </div>
+                <div style="margin-left:8px; font-size:0.85rem;">Titular: <span id="reciboTitular" style="border-bottom:1px solid #000; min-width:100px; display:inline-block;"></span></div>
+            </div>
+
+            {{-- Firmas --}}
+            <div style="display:flex; justify-content:space-between; margin-top:10px;">
+                <div style="text-align:center; width:40%;">
+                    <img src="/firma_recibo.png" alt="Firma" style="height:56px;width:auto;display:block;margin:0 auto 4px;">
+                    <div style="border-top:1px solid #000; padding-top:6px; font-weight:700; font-size:0.85rem;">Recibi Conforme</div>
+                </div>
+                <div style="text-align:center; width:40%;">
+                    <div style="border-top:1px solid #000; padding-top:6px; font-weight:700; font-size:0.85rem;">Entregue Conforme</div>
+                </div>
+            </div>
+
+        </div>{{-- fin reciboContenido --}}
+
+        {{-- Botones (no se imprimen) --}}
+        <div id="reciboBotones" style="padding:16px 40px 24px; display:flex; gap:12px; justify-content:flex-end; border-top:1px solid #e2e8f0;">
+            <button type="button" onclick="cerrarRecibo()" style="padding:8px 20px; background:#94a3b8; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">← Volver</button>
+            <button type="button" onclick="imprimirRecibo()" style="padding:8px 20px; background:#3b82f6; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">🖨️ Imprimir</button>
+            <button type="button" onclick="confirmarPago()" style="padding:8px 20px; background:#059669; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">✅ Confirmar y Guardar</button>
+        </div>
+    </div>
+</div>
+
 <script>
+// ===== Datos del contrato para el recibo =====
+const reciboClienteNombre = '{{ addslashes($contrato->cliente) }}';
+const reciboNumContrato = '{{ $contrato->numero_contrato }}';
+
 function abrirPago(cuotaId, saldo, numCuota) {
     document.getElementById('formPago').action = '/contratos/cuota/' + cuotaId + '/pagar';
     document.getElementById('pagoMonto').value = saldo;
     document.getElementById('pagoNumCuota').textContent = numCuota;
     document.getElementById('modalPago').style.display = 'flex';
+}
+
+// ===== RECIBO =====
+function numeroALetras(num) {
+    const unidades = ['','UNO','DOS','TRES','CUATRO','CINCO','SEIS','SIETE','OCHO','NUEVE',
+        'DIEZ','ONCE','DOCE','TRECE','CATORCE','QUINCE','DIECISÉIS','DIECISIETE','DIECIOCHO','DIECINUEVE'];
+    const decenas = ['','','VEINTE','TREINTA','CUARENTA','CINCUENTA','SESENTA','SETENTA','OCHENTA','NOVENTA'];
+    const centenas = ['','CIENTO','DOSCIENTOS','TRESCIENTOS','CUATROCIENTOS','QUINIENTOS','SEISCIENTOS','SETECIENTOS','OCHOCIENTOS','NOVECIENTOS'];
+    if (isNaN(num) || num <= 0) return 'CERO';
+    if (num === 100) return 'CIEN';
+    num = Math.round(num);
+    let resultado = '';
+    if (num >= 1000) {
+        let miles = Math.floor(num / 1000);
+        resultado += (miles === 1 ? 'MIL' : numeroALetras(miles) + ' MIL');
+        num = num % 1000;
+        if (num > 0) resultado += ' ';
+    }
+    if (num >= 100) {
+        resultado += centenas[Math.floor(num / 100)];
+        num = num % 100;
+        if (num > 0) resultado += ' ';
+    }
+    if (num >= 20) {
+        resultado += decenas[Math.floor(num / 10)];
+        if (num % 10 > 0) resultado += ' Y ' + unidades[num % 10];
+    } else if (num > 0) {
+        resultado += unidades[num];
+    }
+    return resultado.trim();
+}
+
+function montoEnLetras(monto) {
+    const parts = parseFloat(monto).toFixed(2).split('.');
+    const entero = parseInt(parts[0]);
+    const centavos = parseInt(parts[1]);
+    let letras = numeroALetras(entero) + ' DÓLARES AMERICANOS';
+    if (centavos > 0) letras += ' CON ' + centavos + '/100';
+    return letras;
+}
+
+const mesesNombres = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+
+function previsualizarRecibo() {
+    const form = document.getElementById('formPago');
+    if (!form.checkValidity()) { form.reportValidity(); return; }
+
+    const monto = parseFloat(document.getElementById('pagoMonto').value) || 0;
+    const abono = parseFloat(form.querySelector('[name=abono_capital]').value) || 0;
+    const totalPago = monto + abono;
+    const forma = document.getElementById('pagoFormaPago').value;
+    const fechaVal = form.querySelector('[name=fecha_pago]').value;
+    const comentario = form.querySelector('[name=comentario]').value;
+    const numCuota = document.getElementById('pagoNumCuota').textContent;
+
+    // Fecha
+    let dia='', mes='', anio='';
+    if (fechaVal) {
+        const fd = new Date(fechaVal + 'T00:00:00');
+        dia = String(fd.getDate()).padStart(2,'0');
+        mes = String(fd.getMonth()+1).padStart(2,'0');
+        anio = fd.getFullYear();
+    }
+
+    // Número de control
+    const now = new Date();
+    const ctrl = 'NM-' + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0');
+
+    // Concepto
+    let concepto = 'PAGO CUOTA #' + numCuota + ' - CONTRATO ' + reciboNumContrato;
+    if (fechaVal) concepto += ' - MES DE ' + mesesNombres[parseInt(mes)-1] + ' ' + anio;
+    if (comentario) concepto += ' (' + comentario.toUpperCase() + ')';
+    if (abono > 0) concepto += ' + ABONO A CAPITAL $' + abono.toFixed(2);
+
+    // Llenar recibo
+    document.getElementById('reciboDia').textContent = dia;
+    document.getElementById('reciboMes').textContent = mes;
+    document.getElementById('reciboAnio').textContent = anio;
+    document.getElementById('reciboControl').textContent = 'Control Interno N°. ' + ctrl;
+    document.getElementById('reciboMonto').textContent = totalPago.toFixed(2) + '$';
+    document.getElementById('reciboCliente').textContent = reciboClienteNombre;
+    document.getElementById('reciboSumaLetras').textContent = montoEnLetras(totalPago);
+    document.getElementById('reciboConcepto').textContent = concepto;
+    document.getElementById('reciboTitular').textContent = '';
+
+    // Forma de pago - limpiar todos
+    ['reciboChkEfectivo','reciboChkTransf','reciboChkMovil','reciboChkZelle','reciboChkBinance','reciboChkOtro'].forEach(id => {
+        document.getElementById(id).textContent = '';
+    });
+    const chkMap = {
+        'EFECTIVO': 'reciboChkEfectivo',
+        'TRANSFERENCIA_BCV': 'reciboChkTransf',
+        'TRANSFERENCIA_DIVISAS': 'reciboChkTransf',
+        'DEPOSITO': 'reciboChkTransf',
+        'PAGO_MOVIL': 'reciboChkMovil',
+        'ZELLE': 'reciboChkZelle',
+        'BINANCE': 'reciboChkBinance',
+    };
+    const chkId = chkMap[forma] || 'reciboChkOtro';
+    document.getElementById(chkId).textContent = 'X';
+
+    // Titular (banco destino si aplica)
+    const bancoDest = document.getElementById('pagoBancoDestino')?.value || '';
+    const bancoOrig = document.getElementById('pagoBancoOrigen')?.value || '';
+    document.getElementById('reciboTitular').textContent = bancoDest || bancoOrig || '';
+
+    // Ocultar modal pago y mostrar recibo
+    document.getElementById('modalPago').style.display = 'none';
+    document.getElementById('modalRecibo').style.display = 'flex';
+}
+
+function cerrarRecibo() {
+    document.getElementById('modalRecibo').style.display = 'none';
+    document.getElementById('modalPago').style.display = 'flex';
+}
+
+function imprimirRecibo() {
+    // Recoger datos del recibo en pantalla
+    const dia        = document.getElementById('reciboDia')?.textContent || '';
+    const mes        = document.getElementById('reciboMes')?.textContent || '';
+    const anio       = document.getElementById('reciboAnio')?.textContent || '';
+    const control    = document.getElementById('reciboControl')?.textContent || '';
+    const monto      = document.getElementById('reciboMonto')?.textContent || '';
+    const cliente    = document.getElementById('reciboCliente')?.textContent || '';
+    const sumaLetras = document.getElementById('reciboSumaLetras')?.textContent || '';
+    const concepto   = document.getElementById('reciboConcepto')?.textContent || '';
+    const titular    = document.getElementById('reciboTitular')?.textContent || '';
+
+    function chk(id) { return document.getElementById(id)?.textContent?.trim() === 'X' ? 'X' : ''; }
+    const cEfectivo = chk('reciboChkEfectivo');
+    const cTransf   = chk('reciboChkTransf');
+    const cMovil    = chk('reciboChkMovil');
+    const cZelle    = chk('reciboChkZelle');
+    const cBinance  = chk('reciboChkBinance');
+    const cOtro     = chk('reciboChkOtro');
+
+    function box(val) {
+        return `<span style="border:1.5px solid #000;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:11pt;font-weight:900;">${val}</span>`;
+    }
+
+    const ventana = window.open('', '_blank', 'width=900,height=720');
+    ventana.document.write(`<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>Recibo</title>
+<style>
+@page { size: letter portrait; margin: 20mm 20mm 20mm 20mm; }
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Times New Roman',Times,serif;font-size:13pt;color:#000;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:2px solid #000;margin-bottom:16px;}
+.logo-grupo{font-size:28pt;font-weight:900;line-height:1;}
+.logo-jenu{font-size:26pt;font-weight:900;font-style:italic;line-height:1;}
+.logo-rif{font-size:8pt;color:#555;margin-top:3px;}
+.empresa{text-align:right;font-size:9.5pt;line-height:1.75;}
+.empresa b{font-size:10.5pt;text-decoration:underline;}
+.titulo-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.fecha-tbl{border-collapse:collapse;font-size:10.5pt;}
+.fecha-tbl th,.fecha-tbl td{border:1.5px solid #000;padding:5px 16px;text-align:center;font-weight:700;}
+.ctrl{color:#cc0000;font-weight:700;font-size:13pt;text-align:center;}
+.titulo-recibo{font-size:22pt;font-weight:900;letter-spacing:3px;text-align:center;}
+.monto-box{border:2.5px solid #000;padding:8px 22px;text-align:center;min-width:110px;}
+.monto-label{font-size:9pt;font-weight:700;}
+.monto-val{font-size:22pt;font-weight:900;}
+hr{border:0;border-top:1.5px solid #000;margin:10px 0;}
+.field-row{display:flex;align-items:baseline;gap:14px;margin-bottom:14px;}
+.flabel{font-weight:700;white-space:nowrap;min-width:138px;font-size:13pt;}
+.fval{border-bottom:1.5px solid #000;flex:1;padding-bottom:3px;font-size:13pt;}
+.italic{font-style:italic;}
+.right{text-align:right;font-size:10pt;font-weight:700;margin-bottom:10px;}
+.forma-row{display:flex;align-items:flex-start;gap:20px;margin:22px 0 42px;flex-wrap:wrap;}
+.forma-lbl{font-weight:700;text-decoration:underline;font-size:12pt;line-height:1.6;min-width:78px;}
+.checks{display:flex;flex-wrap:wrap;gap:18px;align-items:center;font-size:11pt;}
+.checks label{display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.titular-txt{font-size:11pt;white-space:nowrap;}
+.titular-line{display:inline-block;border-bottom:1.5px solid #000;min-width:150px;margin-left:6px;}
+.firmas{display:flex;justify-content:space-between;margin-top:60px;}
+.firma{width:42%;text-align:center;}
+.firma-linea{border-top:1.5px solid #000;padding-top:8px;font-weight:700;font-size:11pt;}
+</style>
+</head><body>
+
+<div class="header">
+  <div>
+    <img src="${window.location.origin}/logo_recibo.png" alt="Logo Grupo Jenu" style="height:90px;width:auto;">
+  </div>
+  <div class="empresa">
+    <div><b>Grupo Inmobiliario y de Transporte</b></div>
+    <div><b>Je Nu &amp; Asociados, C.A.</b></div>
+    <div>Rif.: J-50255135-2</div>
+    <div>Calle Girardot, con Av. Santa Irene, Punto Fijo - Edo.</div>
+    <div>Falcon, Zona Postal 4102. <strong>Tel&eacute;fono:</strong> 0412-6937658</div>
+  </div>
+</div>
+
+<div class="titulo-row">
+  <table class="fecha-tbl">
+    <tr><th>DIA</th><th>MES</th><th>A&Ntilde;O</th></tr>
+    <tr><td>${dia}</td><td>${mes}</td><td>${anio}</td></tr>
+  </table>
+  <div>
+    <div class="ctrl">${control}</div>
+    <div class="titulo-recibo">RECIBO</div>
+  </div>
+  <div class="monto-box">
+    <div class="monto-label">BS/$.</div>
+    <div class="monto-val">${monto}</div>
+  </div>
+</div>
+
+<hr>
+
+<div class="field-row">
+  <span class="flabel">Recib&iacute; de:</span>
+  <span class="fval">${cliente}</span>
+</div>
+<div class="field-row">
+  <span class="flabel">La Suma de:</span>
+  <span class="fval italic">${sumaLetras}</span>
+</div>
+<div class="right">Bolivares / D&oacute;lares</div>
+
+<hr>
+
+<div class="field-row">
+  <span class="flabel">Por Concepto de</span>
+  <span class="fval">${concepto}</span>
+</div>
+
+<hr>
+
+<div class="forma-row">
+  <div class="forma-lbl">Forma de<br>Pago:</div>
+  <div class="checks">
+    <label>Efectivo ${box(cEfectivo)}</label>
+    <label>Transferencia Bs ${box(cTransf)}</label>
+    <label>Pago Movil ${box(cMovil)}</label>
+    <label>Zelle ${box(cZelle)}</label>
+    <label>Binance ${box(cBinance)}</label>
+    <label>Otro ${box(cOtro)}</label>
+  </div>
+  <div class="titular-txt">Titular:<span class="titular-line">${titular}</span></div>
+</div>
+
+<div class="firmas">
+  <div class="firma">
+    <img src="${window.location.origin}/firma_recibo.png" alt="Firma" style="height:64px;width:auto;display:block;margin:0 auto 4px;">
+    <div class="firma-linea">Recibi Conforme</div>
+  </div>
+  <div class="firma"><div style="height:68px;"></div><div class="firma-linea">Entregue Conforme</div></div>
+</div>
+
+</body></html>`);
+    ventana.document.close();
+    ventana.focus();
+    setTimeout(() => { ventana.print(); }, 600);
+}
+
+function confirmarPago() {
+    document.getElementById('formPago').submit();
 }
 
 function abrirEditarPago(cuotaId, numeroCuota, montoPagadoActual, abonoCapitalActual) {

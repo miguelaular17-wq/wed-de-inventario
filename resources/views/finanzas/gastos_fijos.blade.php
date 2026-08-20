@@ -32,167 +32,346 @@
 
     /* ── Notifications Panel ── */
     .gf-notif-panel {
-        background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
-        border: 1.5px solid #fbbf24;
-        border-radius: 12px;
-        padding: 18px 22px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
         margin-bottom: 24px;
-        box-shadow: 0 2px 12px rgba(251,191,36,0.15);
+        box-shadow: 0 4px 20px rgba(15,23,42,0.06), 0 1px 3px rgba(15,23,42,0.04);
+        overflow: hidden;
     }
     .gf-notif-header {
         display: flex;
         align-items: center;
-        gap: 10px;
-        margin-bottom: 14px;
-        font-weight: 700;
-        font-size: 1.05rem;
-        color: #92400e;
-    }
-    .gf-notif-header svg { flex-shrink: 0; }
-    .gf-notif-list {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-        gap: 10px;
-    }
-    .gf-notif-item {
-        background: rgba(255,255,255,0.8);
-        border-radius: 8px;
-        padding: 12px 16px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        font-size: 0.9rem;
-        border-left: 4px solid #f59e0b;
-        transition: transform 0.15s;
-    }
-    .gf-notif-item:hover { transform: translateX(3px); }
-    .gf-notif-item.urgente { border-left-color: #ef4444; background: rgba(254,226,226,0.5); }
-    .gf-notif-badge {
-        display: inline-flex;
-        padding: 3px 10px;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        white-space: nowrap;
-    }
-    .gf-notif-badge.hoy { background: #fee2e2; color: #dc2626; }
-    .gf-notif-badge.proximo { background: #fef3c7; color: #d97706; }
-    .gf-notif-badge.semanal { background: #dbeafe; color: #2563eb; }
-    .gf-notif-cost {
-        margin-left: auto;
-        font-weight: 700;
-        color: #0f172a;
-        white-space: nowrap;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .gf-btn-pagar {
-        background: #10b981;
-        border: none;
-        color: white;
-        border-radius: 6px;
-        padding: 5px 8px;
+        justify-content: space-between;
+        padding: 14px 22px;
+        background: linear-gradient(135deg, #1e3a5f 0%, #0f2847 100%);
+        color: #e0eaff;
         cursor: pointer;
-        font-size: 0.85rem;
-        transition: background 0.15s;
+        user-select: none;
+        transition: background 0.2s;
+    }
+    .gf-notif-header:hover {
+        background: linear-gradient(135deg, #234670 0%, #132f52 100%);
+    }
+    .gf-notif-header-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+        font-size: 0.92rem;
+    }
+    .gf-notif-header-left svg { flex-shrink: 0; }
+    .gf-notif-count-badge {
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        min-width: 24px;
+        height: 24px;
+        padding: 0 7px;
+        border-radius: 12px;
+        background: #ef4444;
+        color: #fff;
+        font-size: 0.75rem;
+        font-weight: 800;
+        animation: pulse-badge 2s infinite;
     }
-    .gf-btn-pagar:hover { background: #059669; }
-    .gf-notif-text { flex: 1; min-width: 0; }
-    .gf-notif-text strong { color: #0f172a; }
-    .gf-notif-text small { color: #64748b; display: block; margin-top: 2px; }
+    @keyframes pulse-badge {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+        50% { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+    }
+    .gf-notif-toggle {
+        font-size: 0.75rem;
+        color: #93b8e8;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+    }
+    .gf-notif-toggle svg {
+        transition: transform 0.25s ease;
+    }
+    .gf-notif-panel.collapsed .gf-notif-toggle svg {
+        transform: rotate(-90deg);
+    }
+    .gf-notif-body {
+        max-height: 600px;
+        overflow: hidden;
+        transition: max-height 0.35s cubic-bezier(.4,0,.2,1), opacity 0.25s ease;
+    }
+    .gf-notif-panel.collapsed .gf-notif-body {
+        max-height: 0;
+        opacity: 0;
+    }
+    .gf-notif-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.84rem;
+    }
+    .gf-notif-table thead th {
+        background: #f8fafc;
+        color: #64748b;
+        padding: 8px 14px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid #e2e8f0;
+        text-align: left;
+        white-space: nowrap;
+    }
+    .gf-notif-table thead th:last-child { text-align: center; }
+    .gf-notif-table thead th.th-monto { text-align: right; }
+    .gf-notif-table tbody tr {
+        border-bottom: 1px solid #f1f5f9;
+        transition: background 0.12s;
+    }
+    .gf-notif-table tbody tr:hover {
+        background: #f8fafc;
+    }
+    .gf-notif-table tbody tr.notif-urgente {
+        background: #fef2f2;
+    }
+    .gf-notif-table tbody tr.notif-urgente:hover {
+        background: #fee2e2;
+    }
+    .gf-notif-table tbody td {
+        padding: 10px 14px;
+        vertical-align: middle;
+    }
+    .gf-notif-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        white-space: nowrap;
+    }
+    .gf-notif-badge.hoy {
+        background: linear-gradient(135deg, #dc2626, #b91c1c);
+        color: #fff;
+        animation: pulse-badge 2s infinite;
+    }
+    .gf-notif-badge.proximo {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: #fff;
+    }
+    .gf-notif-badge.semanal {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: #fff;
+    }
+    .notif-servicio {
+        font-weight: 700;
+        color: #0f172a;
+        font-size: 0.85rem;
+    }
+    .notif-empresa {
+        color: #64748b;
+        font-size: 0.78rem;
+    }
+    .notif-grupo {
+        font-size: 0.72rem;
+        color: #94a3b8;
+        font-weight: 600;
+    }
+    .notif-monto {
+        text-align: right;
+        font-weight: 800;
+        font-size: 0.92rem;
+        color: #0f172a;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .gf-btn-pagar {
+        background: linear-gradient(135deg, #10b981, #059669);
+        border: none;
+        color: white;
+        border-radius: 8px;
+        padding: 6px 14px;
+        cursor: pointer;
+        font-size: 0.75rem;
+        font-weight: 700;
+        transition: all 0.18s;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        box-shadow: 0 2px 6px rgba(16,185,129,0.3);
+        letter-spacing: 0.3px;
+    }
+    .gf-btn-pagar:hover {
+        background: linear-gradient(135deg, #059669, #047857);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px rgba(16,185,129,0.35);
+    }
+    .td-accion { text-align: center; }
+    .gf-notif-summary {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 16px;
+        padding: 10px 22px;
+        background: #f8fafc;
+        border-top: 2px solid #e2e8f0;
+        font-size: 0.78rem;
+        color: #64748b;
+    }
+    .gf-notif-summary strong {
+        font-size: 0.95rem;
+        color: #0f172a;
+    }
+    @media (max-width: 768px) {
+        .gf-notif-table thead { display: none; }
+        .gf-notif-table tbody tr {
+            display: flex;
+            flex-wrap: wrap;
+            padding: 10px 14px;
+            gap: 6px;
+            align-items: center;
+        }
+        .gf-notif-table tbody td {
+            padding: 2px 4px;
+            border: none;
+        }
+        .notif-monto { margin-left: auto; }
+    }
 
     /* ── Tabs ── */
     .gf-tabs {
         display: flex;
-        gap: 6px;
+        gap: 4px;
         margin-bottom: 0;
         flex-wrap: wrap;
     }
     .gf-tab {
-        padding: 12px 24px;
+        padding: 11px 22px;
         border: none;
-        background: #e2e8f0;
-        color: #475569;
+        background: #dde3ee;
+        color: #5a6982;
         font-weight: 600;
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         border-radius: 10px 10px 0 0;
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition: all 0.22s cubic-bezier(.4,0,.2,1);
         font-family: 'Inter', sans-serif;
         position: relative;
         bottom: -1px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        letter-spacing: 0.1px;
     }
-    .gf-tab:hover { background: #cbd5e1; color: #1e293b; }
+    .gf-tab:hover { background: #c8d3e6; color: #1e293b; transform: translateY(-1px); }
     .gf-tab.active {
         background: #ffffff;
-        color: #2563eb;
-        box-shadow: 0 -2px 8px rgba(37,99,235,0.1);
-        border: 1px solid #e2e8f0;
-        border-bottom: 1px solid #ffffff;
+        color: #1d4ed8;
+        box-shadow: 0 -3px 12px rgba(37,99,235,0.13);
+        border: 1px solid #d1daf0;
+        border-bottom: 2px solid #ffffff;
         z-index: 2;
     }
+    .gf-tab .tab-icon { font-size: 1.05em; }
 
-    /* ── Sub-Tabs ── */
-    .gf-subtabs {
+    /* ── Sede Filter Bar ── */
+    .gf-sede-filter {
         display: flex;
-        gap: 8px;
-        background: #f8fafc;
-        padding: 12px 16px;
-        border-bottom: 1px solid #e2e8f0;
-        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        background: linear-gradient(135deg, #f0f4fb 0%, #e8eef8 100%);
+        padding: 12px 20px;
+        border-bottom: 1px solid #dde3ee;
     }
-    .gf-subtab {
-        padding: 6px 14px;
-        border: 1px solid #cbd5e1;
-        background: #ffffff;
-        color: #475569;
+    .gf-sede-filter-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .gf-sede-filter-label svg { flex-shrink: 0; }
+    .gf-sede-select {
+        flex: 1;
+        max-width: 480px;
+        padding: 8px 14px;
+        border: 1.5px solid #cbd5e1;
+        border-radius: 10px;
+        font-size: 0.85rem;
         font-weight: 600;
-        font-size: 0.8rem;
-        border-radius: 20px;
+        color: #1e293b;
+        background: #ffffff;
+        font-family: 'Inter', sans-serif;
         cursor: pointer;
-        transition: all 0.2s ease;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        transition: all 0.18s ease;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        padding-right: 34px;
     }
-    .gf-subtab:hover {
-        color: #0f172a;
-        background: #f1f5f9;
-        border-color: #94a3b8;
+    .gf-sede-select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.12), 0 1px 4px rgba(0,0,0,0.06);
     }
-    .gf-subtab.active {
-        background: #2563eb;
-        color: #ffffff;
-        border-color: #2563eb;
-        box-shadow: 0 2px 4px rgba(37,99,235,0.25);
+    .gf-sede-select:hover {
+        border-color: #93c5fd;
+    }
+    .gf-sede-count {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        white-space: nowrap;
+        font-weight: 600;
+    }
+    .gf-sede-count strong {
+        color: #3b82f6;
     }
 
     /* ── Table Wrapper ── */
     .gf-table-wrapper {
         background: #ffffff;
-        border-radius: 0 12px 12px 12px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-        border: 1px solid #e2e8f0;
+        border-radius: 0 14px 14px 14px;
+        box-shadow: 0 8px 32px rgba(15,23,42,0.09), 0 1px 3px rgba(15,23,42,0.04);
+        border: 1px solid #dde3ee;
         overflow: hidden;
-        animation: fadeIn 0.3s ease;
+        animation: fadeInUp 0.3s cubic-bezier(.4,0,.2,1);
     }
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(6px); }
-        to { opacity: 1; transform: translateY(0); }
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
     }
     .gf-table-title {
-        background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%);
-        color: #ffffff;
-        padding: 16px 24px;
-        font-size: 1rem;
+        background: linear-gradient(135deg, #1a3560 0%, #0e2040 60%, #0a1830 100%);
+        color: #e0eaff;
+        padding: 14px 24px;
+        font-size: 0.88rem;
         font-weight: 700;
         text-align: center;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.7px;
         text-transform: uppercase;
+        border-bottom: 2px solid #2a4a7f;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+    .gf-table-title::before {
+        content: '';
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #60a5fa;
+        box-shadow: 0 0 8px #60a5fa;
     }
     .gf-table-scroll {
         overflow-x: auto;
@@ -203,126 +382,388 @@
     .gf-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 0.85rem;
+        font-size: 0.845rem;
         min-width: 900px;
     }
     .gf-table thead th {
-        background: linear-gradient(180deg, #1e3a5f 0%, #162d4a 100%);
-        color: #ffffff;
-        padding: 12px 14px;
+        background: linear-gradient(180deg, #1e3f72 0%, #17305a 100%);
+        color: #c8d9f5;
+        padding: 11px 13px;
         text-align: center;
         font-weight: 700;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         text-transform: uppercase;
-        letter-spacing: 0.3px;
+        letter-spacing: 0.5px;
         white-space: nowrap;
-        border: 1px solid #2a4a6b;
+        border-right: 1px solid #254d8a;
+        border-bottom: none;
         position: sticky;
         top: 0;
         z-index: 1;
     }
+    .gf-table thead th:first-child { border-left: none; text-align: left; padding-left: 16px; }
+    .gf-table thead th.th-month {
+        background: linear-gradient(180deg, #17305a 0%, #112444 100%);
+        color: #93b8e8;
+        font-size: 0.72rem;
+        border-right: 1px solid #1e3a5f;
+    }
+    .gf-table thead th.th-costo {
+        background: linear-gradient(180deg, #1a3d72 0%, #142e59 100%);
+        color: #7dd3fc;
+    }
     .gf-table tbody td {
         padding: 9px 12px;
-        border: 1px solid #e2e8f0;
+        border-right: 1px solid #eef0f6;
+        border-bottom: 1px solid #eef0f6;
         color: #334155;
         vertical-align: middle;
     }
-    .gf-table tbody tr:nth-child(even) { background: #f8fafc; }
-    .gf-table tbody tr:hover { background: #eff6ff; }
+    .gf-table tbody tr:nth-child(even) { background: #f7f9fd; }
+    .gf-table tbody tr:hover { background: #eff4ff; transition: background 0.12s; }
 
     /* Column-specific styles */
     .gf-table .col-sede {
-        font-weight: 600;
-        color: #1e3a5f;
-        font-size: 0.78rem;
-        max-width: 200px;
-        background: #f0f5ff;
+        font-weight: 700;
+        color: #1a3a7a;
+        font-size: 0.72rem;
+        max-width: 160px;
+        min-width: 120px;
+        background: #eef3ff;
+        border-right: 2px solid #c7d7f8;
+        line-height: 1.3;
+        vertical-align: middle;
+        padding: 8px 10px;
     }
-    .gf-table .col-servicio { font-weight: 600; color: #0f172a; white-space: nowrap; }
-    .gf-table .col-fecha { text-align: center; color: #64748b; font-size: 0.82rem; white-space: nowrap; }
-    .gf-table .col-empresa { color: #475569; font-size: 0.82rem; }
+    /* Hide repeated sede name in non-first rows of same group */
+    .gf-table tr.gasto-row:not(.sede-first) .col-sede {
+        color: transparent;
+        font-size: 0;
+        user-select: none;
+    }
+    .gf-table tr.gasto-row:not(.sede-first) .col-sede::after {
+        content: '│';
+        color: #c7d7f8;
+        font-size: 0.9rem;
+        display: block;
+        text-align: center;
+    }
+    /* Sede group visual separator */
+    .gf-table .sede-first td {
+        border-top: 2.5px solid #3b82f6 !important;
+    }
+    .gf-table .sede-first .col-sede {
+        background: linear-gradient(180deg, #dbeafe 0%, #eef3ff 100%);
+        position: relative;
+    }
+    .gf-table .sede-first .col-sede::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: linear-gradient(180deg, #3b82f6, #6366f1);
+        border-radius: 0 2px 2px 0;
+    }
+    .sede-name-main {
+        font-weight: 700;
+        font-size: 0.73rem;
+        color: #1a3a7a;
+        line-height: 1.25;
+    }
+    .sede-name-sub {
+        font-weight: 600;
+        font-size: 0.65rem;
+        color: #64748b;
+        margin-top: 2px;
+        line-height: 1.2;
+        text-transform: uppercase;
+        letter-spacing: 0.2px;
+    }
+    .gf-table .col-servicio {
+        font-weight: 600;
+        color: #0f172a;
+        white-space: nowrap;
+        padding-left: 14px;
+    }
+    .gf-table .col-fecha {
+        text-align: center;
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+    .gf-fecha-badge {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 12px;
+        background: #e0f2fe;
+        color: #0369a1;
+        font-weight: 600;
+        font-size: 0.77rem;
+        border: 1px solid #bae6fd;
+    }
+    .gf-table .col-empresa {
+        color: #64748b;
+        font-size: 0.8rem;
+        font-style: italic;
+    }
     .gf-table .col-costo {
         text-align: right;
         font-weight: 700;
         color: #0f172a;
         white-space: nowrap;
-        background: rgba(37,99,235,0.04);
+        background: rgba(37,99,235,0.045);
+        font-variant-numeric: tabular-nums;
+        border-right: 2px solid #d1daf0;
     }
     .gf-table .col-mes {
         text-align: right;
         white-space: nowrap;
         font-variant-numeric: tabular-nums;
+        font-size: 0.83rem;
     }
-    .gf-table .col-mes.has-value { color: #0f172a; font-weight: 500; }
-    .gf-table .col-mes.no-value { color: #cbd5e1; }
+    .gf-table .col-mes.has-value { color: #1e3a7a; font-weight: 600; }
+    .gf-table .col-mes.no-value { color: #d1d5db; }
 
     /* Editable cells */
     .gf-table td.editable {
-        cursor: text;
-        transition: background 0.2s, outline 0.2s;
+        cursor: default;
+        transition: background 0.18s, outline 0.18s, box-shadow 0.18s;
         position: relative;
+        user-select: none;
     }
-    .gf-table td.editable:hover, .gf-table td.editable:focus {
-        background: #fff8e1;
-        outline: 2px solid #fbbf24;
+    .gf-table td.editable::after {
+        content: '✏';
+        position: absolute;
+        right: 4px;
+        top: 4px;
+        font-size: 0.6rem;
+        color: #c7d3e8;
+        opacity: 0;
+        transition: opacity 0.15s;
+        line-height: 1;
+    }
+    .gf-table td.editable:hover::after { opacity: 1; }
+    .gf-table td.editable:hover {
+        background: #fef9e7 !important;
+        outline: 2px dashed #f59e0b;
         outline-offset: -2px;
         z-index: 2;
+        cursor: pointer;
+    }
+    .gf-table td.editable.editing {
+        background: #fffde7 !important;
+        outline: 2px solid #f59e0b;
+        box-shadow: 0 0 0 4px rgba(245,158,11,0.12);
+        outline-offset: -2px;
+        z-index: 10;
+        padding: 0 !important;
     }
     .gf-table td.editable.saving {
-        opacity: 0.6;
+        opacity: 0.55;
         pointer-events: none;
     }
-    .gf-table td.editable.success {
-        animation: flashGreen 1s ease;
+    .gf-table td.editable.success { animation: flashGreen 1.1s ease; }
+    .gf-table td.editable.error   { animation: flashRed   1.1s ease; }
+    @keyframes flashGreen { 0%,20% { background-color: #bbf7d0 !important; } 100% { background-color: transparent; } }
+    @keyframes flashRed   { 0%,20% { background-color: #fecaca !important; } 100% { background-color: transparent; } }
+
+    /* Inline edit input inside cell */
+    .gf-inline-input {
+        width: 100%;
+        height: 100%;
+        min-height: 34px;
+        border: none;
+        outline: none;
+        background: transparent;
+        font-family: 'Inter', sans-serif;
+        font-size: 0.845rem;
+        font-weight: 700;
+        color: #0f172a;
+        text-align: right;
+        padding: 6px 10px;
+        box-sizing: border-box;
+        font-variant-numeric: tabular-nums;
+        display: block;
     }
-    .gf-table td.editable.error {
-        animation: flashRed 1s ease;
+    .gf-inline-input:focus { outline: none; }
+    /* Text inline input (servicio, empresa) */
+    .gf-inline-input.text {
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.84rem;
+        font-variant-numeric: normal;
     }
-    @keyframes flashGreen { 0% { background-color: #d1fae5; } 100% { background-color: transparent; } }
-    @keyframes flashRed { 0% { background-color: #fee2e2; } 100% { background-color: transparent; } }
 
     /* Total row */
     .gf-table .total-row {
-        background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%) !important;
+        background: linear-gradient(135deg, #1a3560 0%, #0e2040 100%) !important;
     }
     .gf-table .total-row td {
-        color: #ffffff !important;
+        color: #e0eaff !important;
         font-weight: 700 !important;
-        padding: 14px 12px;
-        border-color: #2a4a6b !important;
-        font-size: 0.88rem;
+        padding: 13px 12px;
+        border-color: #2a4a7f !important;
+        font-size: 0.86rem;
+        font-variant-numeric: tabular-nums;
+    }
+    .gf-table .total-row td:first-child { color: #93b8e8 !important; }
+
+    /* Add row */
+    .tr-add-sede td {
+        padding: 7px 10px !important;
+        background: #f7f9fd !important;
+        border: none !important;
+        border-top: 1.5px dashed #d1daf0 !important;
+    }
+    .btn-add-sede {
+        background: none;
+        border: 1.5px dashed #93c5fd;
+        color: #3b82f6;
+        font-size: 0.79rem;
+        font-weight: 600;
+        padding: 5px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.18s;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: 'Inter', sans-serif;
+    }
+    .btn-add-sede:hover {
+        background: #eff6ff;
+        border-color: #2563eb;
+        color: #1d4ed8;
+        box-shadow: 0 2px 8px rgba(37,99,235,0.12);
     }
 
-    /* ── Sede group separator ── */
-    .gf-table .sede-first td.col-sede {
-        border-top: 3px solid #2563eb;
+    /* (sede group separator moved to col-sede styles above) */
+
+    /* Delete button */
+    .col-accion { text-align: center; width: 36px; padding: 4px !important; }
+    .btn-del-row {
+        background: none;
+        border: none;
+        color: #d1d9e6;
+        cursor: pointer;
+        padding: 4px 7px;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        transition: color 0.15s, background 0.15s, transform 0.1s;
+        line-height: 1;
     }
+    .btn-del-row:hover { color: #ef4444; background: #fee2e2; transform: scale(1.15); }
+
+    /* ── Modal ── */
+    .gf-modal-bg {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(10, 18, 38, 0.65);
+        backdrop-filter: blur(3px);
+        z-index: 10000;
+        align-items: center;
+        justify-content: center;
+    }
+    .gf-modal-bg.open { display: flex; }
+    .gf-modal {
+        background: #fff;
+        border-radius: 16px;
+        padding: 30px 34px;
+        width: min(500px, 95vw);
+        box-shadow: 0 24px 64px rgba(0,0,0,0.28), 0 4px 12px rgba(0,0,0,0.1);
+        animation: modalSlideIn 0.25s cubic-bezier(.4,0,.2,1);
+    }
+    @keyframes modalSlideIn {
+        from { opacity: 0; transform: scale(0.96) translateY(12px); }
+        to   { opacity: 1; transform: scale(1)    translateY(0); }
+    }
+    .gf-modal h3 {
+        margin: 0 0 22px 0;
+        font-size: 1.12rem;
+        font-weight: 800;
+        color: #0f172a;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .gf-modal h3::before {
+        content: '';
+        display: inline-block;
+        width: 4px;
+        height: 22px;
+        border-radius: 3px;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+    }
+    .gf-modal label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #475569;
+        margin-bottom: 5px;
+        margin-top: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .gf-modal input, .gf-modal select {
+        width: 100%;
+        padding: 9px 13px;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        background: #f8fafc;
+        box-sizing: border-box;
+        font-family: 'Inter', sans-serif;
+        transition: border-color 0.18s, box-shadow 0.18s;
+    }
+    .gf-modal input:focus, .gf-modal select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        background: #fff;
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+    }
+    .gf-modal-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 24px;
+        justify-content: flex-end;
+    }
+    .btn-modal-cancel {
+        padding: 9px 20px;
+        background: #f1f5f9;
+        border: none;
+        border-radius: 8px;
+        color: #64748b;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: 'Inter', sans-serif;
+        transition: background 0.15s;
+    }
+    .btn-modal-cancel:hover { background: #e2e8f0; }
+    .btn-modal-save {
+        padding: 9px 22px;
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        border: none;
+        border-radius: 8px;
+        color: #fff;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: 'Inter', sans-serif;
+        box-shadow: 0 4px 12px rgba(37,99,235,0.28);
+        transition: opacity 0.15s, transform 0.15s;
+    }
+    .btn-modal-save:hover { opacity: 0.92; transform: translateY(-1px); }
+    .btn-modal-save:disabled { opacity: 0.55; pointer-events: none; }
 
     /* ── Responsive ── */
     @media (max-width: 768px) {
         .gf-page { padding: 12px; }
-        .gf-tabs { gap: 4px; }
-        .gf-tab { padding: 10px 16px; font-size: 0.85rem; }
+        .gf-tabs { gap: 3px; }
+        .gf-tab { padding: 9px 14px; font-size: 0.82rem; }
         .gf-notif-list { grid-template-columns: 1fr; }
     }
-    .col-accion { text-align:center; width:36px; padding:4px !important; }
-    .btn-del-row { background:none; border:none; color:#cbd5e1; cursor:pointer; padding:4px 6px; border-radius:5px; font-size:1rem; transition:color .15s,background .15s; line-height:1; }
-    .btn-del-row:hover { color:#ef4444; background:#fee2e2; }
-    .tr-add-sede td { padding:5px 8px !important; background:#f8fafc !important; border:none !important; border-top:1px dashed #e2e8f0 !important; }
-    .btn-add-sede { background:none; border:1.5px dashed #93c5fd; color:#3b82f6; font-size:0.8rem; font-weight:600; padding:5px 12px; border-radius:6px; cursor:pointer; transition:all .2s; display:inline-flex; align-items:center; gap:5px; font-family:'Inter',sans-serif; }
-    .btn-add-sede:hover { background:#eff6ff; border-color:#3b82f6; }
-    .gf-modal-bg { display:none; position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:10000; align-items:center; justify-content:center; }
-    .gf-modal-bg.open { display:flex; }
-    .gf-modal { background:#fff; border-radius:14px; padding:28px 32px; width:min(480px,95vw); box-shadow:0 20px 60px rgba(0,0,0,.25); }
-    .gf-modal h3 { margin:0 0 20px 0; font-size:1.1rem; font-weight:800; color:#0f172a; }
-    .gf-modal label { display:block; font-size:.8rem; font-weight:600; color:#475569; margin-bottom:4px; margin-top:14px; text-transform:uppercase; letter-spacing:.3px; }
-    .gf-modal input, .gf-modal select { width:100%; padding:9px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:.92rem; background:#f8fafc; box-sizing:border-box; font-family:'Inter',sans-serif; }
-    .gf-modal input:focus, .gf-modal select:focus { outline:none; border-color:#3b82f6; background:#fff; }
-    .gf-modal-actions { display:flex; gap:10px; margin-top:22px; justify-content:flex-end; }
-    .btn-modal-cancel { padding:9px 20px; background:#f1f5f9; border:none; border-radius:8px; color:#64748b; font-weight:600; cursor:pointer; font-family:'Inter',sans-serif; }
-    .btn-modal-cancel:hover { background:#e2e8f0; }
-    .btn-modal-save { padding:9px 22px; background:linear-gradient(135deg,#2563eb,#1d4ed8); border:none; border-radius:8px; color:#fff; font-weight:700; cursor:pointer; font-family:'Inter',sans-serif; }
-    .btn-modal-save:disabled { opacity:.6; pointer-events:none; }</style>
+</style>
 
 <div class="gf-page">
     <!-- Header -->
@@ -336,30 +777,51 @@
 
     <!-- Notifications Panel -->
     @if(count($notificaciones) > 0)
-    <div class="gf-notif-panel">
-        <div class="gf-notif-header">
-            <svg width="22" height="22" fill="none" stroke="#92400e" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-            🔔 Facturas Próximas a Pagar ({{ count($notificaciones) }})
-        </div>
-        <div class="gf-notif-list">
-            @foreach($notificaciones as $notif)
-            <div class="gf-notif-item {{ $notif['urgente'] ? 'urgente' : '' }}">
-                <span class="gf-notif-badge {{ $notif['tipo'] }}">
-                    @if($notif['tipo'] === 'hoy') ⚡ HOY
-                    @elseif($notif['tipo'] === 'proximo') 📅 Día {{ $notif['dia'] ?? '' }}
-                    @else 🔄 {{ $notif['fecha'] }}
-                    @endif
-                </span>
-                <div class="gf-notif-text">
-                    <strong>{{ $notif['servicio'] }}</strong>
-                    <small>{{ $notif['empresa'] }} — {{ $notif['tabla'] }}</small>
-                </div>
-                <div class="gf-notif-cost">
-                    $ {{ number_format($notif['costo'], 2) }}
-                    <button class="gf-btn-pagar" data-costo="{{ $notif['costo'] }}" onclick="marcarPagado({{ $notif['tabla_idx'] }}, {{ $notif['fila_idx'] }}, this)" title="Marcar este gasto como pagado">✔️</button>
-                </div>
+    @php $totalNotif = collect($notificaciones)->sum('costo'); @endphp
+    <div class="gf-notif-panel" id="notifPanel">
+        <div class="gf-notif-header" onclick="document.getElementById('notifPanel').classList.toggle('collapsed')">
+            <div class="gf-notif-header-left">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                Facturas Próximas a Pagar
+                <span class="gf-notif-count-badge">{{ count($notificaciones) }}</span>
             </div>
-            @endforeach
+            <div class="gf-notif-toggle">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+            </div>
+        </div>
+        <div class="gf-notif-body">
+            <table class="gf-notif-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Servicio</th>
+                        <th>Empresa</th>
+                        <th>Grupo</th>
+                        <th class="th-monto">Monto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($notificaciones as $notif)
+                    <tr class="{{ $notif['urgente'] ? 'notif-urgente' : '' }}">
+                        <td>
+                            <span class="gf-notif-badge {{ $notif['tipo'] }}">
+                                @if($notif['tipo'] === 'hoy')⚡ HOY
+                                @elseif($notif['tipo'] === 'proximo')📅 Día {{ $notif['dia'] ?? '' }}
+                                @else🔄 {{ $notif['fecha'] }}
+                                @endif
+                            </span>
+                        </td>
+                        <td class="notif-servicio">{{ $notif['servicio'] }}</td>
+                        <td class="notif-empresa">{{ $notif['empresa'] }}</td>
+                        <td class="notif-grupo">{{ $notif['tabla'] }}</td>
+                        <td class="notif-monto">$ {{ number_format($notif['costo'], 2) }}</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+            <div class="gf-notif-summary">
+                Total pendiente: <strong>$ {{ number_format($totalNotif, 2) }}</strong>
+            </div>
         </div>
     </div>
     @endif
@@ -379,12 +841,27 @@
         @if($tabla['tiene_sede'])
             @php
                 $sedesList = collect($tabla['filas'])->pluck('sede')->filter()->unique()->values();
+                $sedesCount = $sedesList->count();
             @endphp
-            <div class="gf-subtabs">
-                <button class="gf-subtab active" onclick="showSubTab({{ $tIndex }}, 'all', this)">Todas las Sedes</button>
-                @foreach($sedesList as $sedeName)
-                    <button class="gf-subtab" onclick="showSubTab({{ $tIndex }}, '{{ addslashes($sedeName) }}', this)">{{ $sedeName }}</button>
-                @endforeach
+            <div class="gf-sede-filter">
+                <span class="gf-sede-filter-label">
+                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+                    Filtrar Sede
+                </span>
+                <select class="gf-sede-select" onchange="showSubTab({{ $tIndex }}, this.value, this)">
+                    @foreach($sedesList as $sedeName)
+                        @php
+                            $sedeShort = $sedeName;
+                            // Crear nombre corto para el dropdown
+                            $sedeShort = preg_replace('/,\s*C\.?A\.?\s*/i', ' — ', $sedeShort);
+                            $sedeShort = preg_replace('/\s+J\d{9,}/', '', $sedeShort);
+                        @endphp
+                        <option value="{{ addslashes($sedeName) }}">{{ $sedeShort }}</option>
+                    @endforeach
+                </select>
+                <span class="gf-sede-count">
+                    <strong>{{ count($tabla['filas']) }}</strong> gastos
+                </span>
             </div>
         @endif
 
@@ -420,12 +897,25 @@
                             @endfor
                         >
                             @if($tabla['tiene_sede'])
-                                <td class="col-sede">{{ $fila['sede'] ?? '' }}</td>
+                                @php
+                                    $sedeDisplay = $fila['sede'] ?? '';
+                                    // Nombre limpio para la celda de sede
+                                    $sedeClean = preg_replace('/\s+J\d{9,}/', '', $sedeDisplay);
+                                    $sedeParts = preg_split('/,\s*C\.?A\.?\s*/i', $sedeClean, 2);
+                                    $sedeName1 = trim($sedeParts[0] ?? '');
+                                    $sedeName2 = isset($sedeParts[1]) ? trim($sedeParts[1]) : '';
+                                @endphp
+                                <td class="col-sede">
+                                    <div class="sede-name-main">{{ $sedeName1 }}</div>
+                                    @if($sedeName2)
+                                        <div class="sede-name-sub">{{ $sedeName2 }}</div>
+                                    @endif
+                                </td>
                             @endif
-                            <td class="col-servicio">{{ $fila['servicio'] }}</td>
+                            <td class="col-servicio editable" data-type="servicio" data-fidx="{{ $fila['id'] }}" data-original="{{ $fila['servicio'] }}" ondblclick="startInlineTextEdit(this)">{{ $fila['servicio'] }}</td>
                             <td class="col-fecha editable" ondblclick="openFechaModal({{ $fila['id'] }}, this)" data-type="fecha" data-fidx="{{ $fila['id'] }}">{{ $fila['fecha'] }}</td>
-                            <td class="col-empresa">{{ $fila['empresa'] }}</td>
-                            <td class="col-costo editable {{ $fila['costo'] > 0 ? 'has-value' : 'no-value' }}" contenteditable="true" data-type="costo" data-tidx="{{ $tIndex }}" data-fidx="{{ $fila['id'] }}" data-original="{{ $fila['costo'] > 0 ? number_format($fila['costo'], 2, '.', '') : '' }}">
+                            <td class="col-empresa editable" data-type="empresa" data-fidx="{{ $fila['id'] }}" data-original="{{ $fila['empresa'] }}" ondblclick="startInlineTextEdit(this)">{{ $fila['empresa'] }}</td>
+                            <td class="col-costo editable {{ $fila['costo'] > 0 ? 'has-value' : 'no-value' }}" data-type="costo" data-tidx="{{ $tIndex }}" data-fidx="{{ $fila['id'] }}" data-original="{{ $fila['costo'] > 0 ? number_format($fila['costo'], 2, '.', '') : '' }}" ondblclick="startInlineEdit(this)">
                                 @if($fila['costo'] > 0)
                                     {{ number_format($fila['costo'], 2, '.', '') }}
                                 @else
@@ -434,7 +924,7 @@
                             </td>
                             @for($m = 0; $m < $mesActual; $m++)
                                 @php $val = $fila['meses'][$m] ?? null; @endphp
-                                <td class="col-mes editable {{ $val !== null ? 'has-value' : 'no-value' }}" contenteditable="true" data-type="monto" data-tidx="{{ $tIndex }}" data-fidx="{{ $fila['id'] }}" data-midx="{{ $m }}" data-original="{{ $val !== null ? number_format($val, 2, '.', '') : '' }}">
+                                <td class="col-mes editable {{ $val !== null ? 'has-value' : 'no-value' }}" data-type="monto" data-tidx="{{ $tIndex }}" data-fidx="{{ $fila['id'] }}" data-midx="{{ $m }}" data-original="{{ $val !== null ? number_format($val, 2, '.', '') : '' }}" ondblclick="startInlineEdit(this)">
                                     {{ $val !== null ? number_format($val, 2, '.', '') : '' }}
                                 </td>
                             @endfor
@@ -616,9 +1106,11 @@ function showSubTab(tIdx, sedeName, btn) {
     const wrapper = document.getElementById('tabla-' + tIdx);
     if (!wrapper) return;
 
-    // Update active subtab styling
-    wrapper.querySelectorAll('.gf-subtab').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
+    // If btn is a select element, update the dropdown value
+    const sedeSelect = wrapper.querySelector('.gf-sede-select');
+    if (sedeSelect && sedeSelect !== btn) {
+        sedeSelect.value = sedeName;
+    }
 
     const isAll = (sedeName === 'all');
     
@@ -633,6 +1125,7 @@ function showSubTab(tIdx, sedeName, btn) {
     const rows = tbody.querySelectorAll('tr.gasto-row');
     
     let sumCosto = 0;
+    let visibleCount = 0;
     // We get mesActual from blade logic, max 12
     const mesActual = {{ $mesActual }};
     let sumMeses = new Array(mesActual).fill(0);
@@ -641,6 +1134,7 @@ function showSubTab(tIdx, sedeName, btn) {
         const rowSede = row.getAttribute('data-sede');
         if (isAll || rowSede === sedeName) {
             row.style.display = '';
+            visibleCount++;
             
             // Hide/show the sede column cell for this row
             const colSede = row.querySelector('.col-sede');
@@ -655,6 +1149,10 @@ function showSubTab(tIdx, sedeName, btn) {
             row.style.display = 'none';
         }
     });
+
+    // Update visible count
+    const countEl = wrapper.querySelector('.gf-sede-count strong');
+    if (countEl) countEl.innerText = visibleCount;
 
     // Update total row
     const totalRow = wrapper.querySelector('.total-row');
@@ -671,121 +1169,273 @@ function showSubTab(tIdx, sedeName, btn) {
     }
 }
 
-// Editable cells logic
-document.querySelectorAll('.gf-table td.editable').forEach(cell => {
-    // Focus in
-    cell.addEventListener('focus', function() {
-        if (!this.hasAttribute('data-original')) {
-            this.setAttribute('data-original', this.innerText.trim());
-        }
-    });
+// ── Editable cells: doble clic → input inline → Enter/blur guarda ──
+let _activeInlineCell = null;
 
-    // Blur / Focus out
-    cell.addEventListener('blur', function() {
-        const val = this.innerText.trim();
-        const original = this.getAttribute('data-original');
-        
-        if (val === original) return; // No change
+function startInlineEdit(cell) {
+    // Si ya hay otro input abierto, cerrarlo sin guardar
+    if (_activeInlineCell && _activeInlineCell !== cell) {
+        cancelInlineEdit(_activeInlineCell);
+    }
 
-        const type = this.getAttribute('data-type');
-        const tIdx = this.getAttribute('data-tidx');
-        const fIdx = this.getAttribute('data-fidx');
-        
-        this.classList.add('saving');
+    if (cell.classList.contains('editing')) return; // ya está abierto
 
-        if (type === 'monto') {
-            const mIdx = this.getAttribute('data-midx');
-            const numVal = val === '' ? null : window.parseLocalNumber(val.replace(',', ''));
-            
-            fetch("{{ route('finanzas.gastos_fijos.monto') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-                body: JSON.stringify({ tabla_idx: tIdx, fila_idx: fIdx, mes_idx: mIdx, monto: numVal })
-            }).then(async res => {
-                if (!res.ok) throw new Error(await res.text());
-                return res.json();
-            }).then(data => {
-                this.classList.remove('saving');
-                if (data.ok) {
-                    this.setAttribute('data-original', val);
-                    this.classList.add('success');
-                    if(val !== '') {
-                        this.classList.remove('no-value');
-                        this.classList.add('has-value');
-                    } else {
-                        this.classList.add('no-value');
-                        this.classList.remove('has-value');
-                    }
-                    setTimeout(() => this.classList.remove('success'), 1000);
-                    
-                    // Update the row's data attribute so totals are correct
-                    const tr = this.closest('tr');
-                    if (tr) {
-                        tr.setAttribute('data-mes-' + mIdx, numVal || 0);
-                        // Trigger total recalculation for current subtab if active
-                        const activeSubtab = this.closest('.gf-table-wrapper').querySelector('.gf-subtab.active');
-                        if (activeSubtab) {
-                            activeSubtab.click();
-                        } else {
-                            // If no subtabs (e.g. Grupo Inmobiliario), recalculate "all"
-                            showSubTab(tIdx, 'all', null);
-                        }
-                    }
-                } else {
-                    this.classList.add('error');
-                    this.innerText = original;
-                }
-            }).catch(() => {
-                this.classList.remove('saving');
-                this.classList.add('error');
-                this.innerText = original;
-            });
+    const original = cell.getAttribute('data-original') || '';
+    const displayText = cell.innerText.trim();
 
-        } else if (type === 'costo') {
-            const numVal = val === '' ? null : window.parseLocalNumber(val.replace(',', ''));
-            fetch("{{ route('finanzas.gastos_fijos.costo') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-                body: JSON.stringify({ tabla_idx: tIdx, fila_idx: fIdx, costo: numVal })
-            }).then(async res => {
-                if (!res.ok) throw new Error(await res.text());
-                return res.json();
-            }).then(data => {
-                this.classList.remove('saving');
-                if (data.ok) {
-                    this.setAttribute('data-original', val);
-                    this.classList.add('success');
-                    
-                    // Update the row's data attribute so totals are correct
-                    const tr = this.closest('tr');
-                    if (tr) {
-                        tr.setAttribute('data-costo', numVal || 0);
-                        // Trigger total recalculation for current subtab if active
-                        const activeSubtab = this.closest('.gf-table-wrapper').querySelector('.gf-subtab.active');
-                        if (activeSubtab) {
-                            activeSubtab.click();
-                        } else {
-                            // If no subtabs (e.g. Grupo Inmobiliario), recalculate "all"
-                            showSubTab(tIdx, 'all', null);
-                        }
-                    }
-                    setTimeout(() => this.classList.remove('success'), 1000);
-                } else {
-                    this.classList.add('error');
-                    this.innerText = original;
-                }
-            });
-        }
-    });
+    cell.classList.add('editing');
+    _activeInlineCell = cell;
 
-    // Enter key
-    cell.addEventListener('keydown', function(e) {
+    // Guardar el texto actual como span oculto
+    cell._savedHTML = cell.innerHTML;
+
+    // Crear input
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.step = '0.01';
+    input.min = '0';
+    input.className = 'gf-inline-input';
+    input.value = original !== '' ? original : '';
+    input.placeholder = '0.00';
+
+    cell.innerHTML = '';
+    cell.appendChild(input);
+    input.focus();
+    input.select();
+
+    // Enter → guardar
+    input.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
             e.preventDefault();
-            this.blur(); // Triggers the save
+            commitInlineEdit(cell, input);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelInlineEdit(cell);
         }
     });
-});
+
+    // Blur → guardar
+    input.addEventListener('blur', function() {
+        // pequeño delay para que el click en otro elemento no dispare doble guardado
+        setTimeout(() => {
+            if (cell.classList.contains('editing')) {
+                commitInlineEdit(cell, input);
+            }
+        }, 120);
+    });
+}
+
+function cancelInlineEdit(cell) {
+    cell.innerHTML = cell._savedHTML || '';
+    cell.classList.remove('editing');
+    _activeInlineCell = null;
+}
+
+function commitInlineEdit(cell, input) {
+    if (!cell.classList.contains('editing')) return;
+
+    const rawVal = input.value.trim();
+    const original = cell.getAttribute('data-original') || '';
+
+    // Restaurar texto visual mientras se procesa
+    cell.classList.remove('editing');
+    _activeInlineCell = null;
+
+    const numVal = rawVal === '' ? null : parseFloat(rawVal);
+    const displayVal = numVal !== null ? numVal.toFixed(2) : '';
+
+    // Mostrar valor nuevo optimísticamente
+    cell.innerText = displayVal;
+
+    if (rawVal === original || (rawVal === '' && original === '')) {
+        // Sin cambio
+        return;
+    }
+
+    const type = cell.getAttribute('data-type');
+    const tIdx = cell.getAttribute('data-tidx');
+    const fIdx = cell.getAttribute('data-fidx');
+
+    cell.classList.add('saving');
+
+    if (type === 'monto') {
+        const mIdx = cell.getAttribute('data-midx');
+        fetch("{{ route('finanzas.gastos_fijos.monto') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({ gasto_fijo_id: fIdx, mes_idx: mIdx, monto: numVal })
+        }).then(async res => {
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        }).then(data => {
+            cell.classList.remove('saving');
+            if (data.ok) {
+                cell.setAttribute('data-original', displayVal);
+                cell.classList.add('success');
+                cell.innerText = displayVal;
+                if (displayVal !== '') {
+                    cell.classList.remove('no-value');
+                    cell.classList.add('has-value');
+                } else {
+                    cell.classList.add('no-value');
+                    cell.classList.remove('has-value');
+                }
+                setTimeout(() => cell.classList.remove('success'), 1100);
+
+                // Actualizar data-attribute y totales
+                const tr = cell.closest('tr');
+                if (tr) {
+                    tr.setAttribute('data-mes-' + mIdx, numVal || 0);
+                    const sedeSelect = cell.closest('.gf-table-wrapper').querySelector('.gf-sede-select');
+                    if (sedeSelect) {
+                        showSubTab(tIdx, sedeSelect.value, null);
+                    } else {
+                        showSubTab(tIdx, 'all', null);
+                    }
+                }
+            } else {
+                cell.innerText = original;
+                cell.setAttribute('data-original', original);
+                cell.classList.add('error');
+                setTimeout(() => cell.classList.remove('error'), 1100);
+            }
+        }).catch(() => {
+            cell.classList.remove('saving');
+            cell.innerText = original;
+            cell.setAttribute('data-original', original);
+            cell.classList.add('error');
+            setTimeout(() => cell.classList.remove('error'), 1100);
+        });
+
+    } else if (type === 'costo') {
+        fetch("{{ route('finanzas.gastos_fijos.costo') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({ gasto_fijo_id: fIdx, costo: numVal })
+        }).then(async res => {
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        }).then(data => {
+            cell.classList.remove('saving');
+            if (data.ok) {
+                cell.setAttribute('data-original', displayVal);
+                cell.innerText = displayVal;
+                cell.classList.add('success');
+                setTimeout(() => cell.classList.remove('success'), 1100);
+
+                const tr = cell.closest('tr');
+                if (tr) {
+                    tr.setAttribute('data-costo', numVal || 0);
+                    const sedeSelect = cell.closest('.gf-table-wrapper').querySelector('.gf-sede-select');
+                    if (sedeSelect) {
+                        showSubTab(tIdx, sedeSelect.value, null);
+                    } else {
+                        showSubTab(tIdx, 'all', null);
+                    }
+                }
+            } else {
+                cell.innerText = original;
+                cell.setAttribute('data-original', original);
+                cell.classList.add('error');
+                setTimeout(() => cell.classList.remove('error'), 1100);
+            }
+        }).catch(() => {
+            cell.classList.remove('saving');
+            cell.innerText = original;
+            cell.setAttribute('data-original', original);
+            cell.classList.add('error');
+            setTimeout(() => cell.classList.remove('error'), 1100);
+        });
+    }
+}
+
+// ── Edición inline de texto (servicio, empresa) ──
+function startInlineTextEdit(cell) {
+    if (_activeInlineCell && _activeInlineCell !== cell) {
+        cancelInlineEdit(_activeInlineCell);
+    }
+    if (cell.classList.contains('editing')) return;
+
+    const original = cell.getAttribute('data-original') || cell.innerText.trim();
+    cell.classList.add('editing');
+    _activeInlineCell = cell;
+    cell._savedHTML = cell.innerHTML;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'gf-inline-input text';
+    input.value = original;
+    input.placeholder = cell.getAttribute('data-type') === 'servicio' ? 'Servicio...' : 'Empresa...';
+
+    cell.innerHTML = '';
+    cell.appendChild(input);
+    input.focus();
+    input.select();
+
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            commitInlineTextEdit(cell, input);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelInlineEdit(cell);
+        }
+    });
+
+    input.addEventListener('blur', function() {
+        setTimeout(() => {
+            if (cell.classList.contains('editing')) {
+                commitInlineTextEdit(cell, input);
+            }
+        }, 120);
+    });
+}
+
+function commitInlineTextEdit(cell, input) {
+    if (!cell.classList.contains('editing')) return;
+
+    const newVal = input.value.trim();
+    const original = cell.getAttribute('data-original') || '';
+
+    cell.classList.remove('editing');
+    _activeInlineCell = null;
+    cell.innerText = newVal !== '' ? newVal : original;
+
+    if (newVal === original) return;
+
+    const campo = cell.getAttribute('data-type');
+    const fIdx  = cell.getAttribute('data-fidx');
+
+    cell.classList.add('saving');
+
+    fetch("{{ route('finanzas.gastos_fijos.campo') }}", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+        body: JSON.stringify({ gasto_fijo_id: fIdx, campo: campo, valor: newVal || null })
+    }).then(async res => {
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+    }).then(data => {
+        cell.classList.remove('saving');
+        if (data.ok) {
+            cell.setAttribute('data-original', newVal);
+            cell.innerText = newVal;
+            cell.classList.add('success');
+            setTimeout(() => cell.classList.remove('success'), 1100);
+        } else {
+            cell.innerText = original;
+            cell.setAttribute('data-original', original);
+            cell.classList.add('error');
+            setTimeout(() => cell.classList.remove('error'), 1100);
+        }
+    }).catch(() => {
+        cell.classList.remove('saving');
+        cell.innerText = original;
+        cell.setAttribute('data-original', original);
+        cell.classList.add('error');
+        setTimeout(() => cell.classList.remove('error'), 1100);
+    });
+}
 
 // Marcar Pagado logic
 function marcarPagado(tIdx, fIdx, btn) {
@@ -805,13 +1455,14 @@ function marcarPagado(tIdx, fIdx, btn) {
     }).then(data => {
         if (data.ok) {
             // Eliminar la notificación de la UI con animación
-            const item = btn.closest('.gf-notif-item');
+            const item = btn.closest('tr');
             item.style.transform = 'scale(0.9)';
             item.style.opacity = '0';
+            item.style.transition = 'all 0.3s ease';
             setTimeout(() => {
                 item.remove();
                 // Si ya no quedan notificaciones, ocultar el panel
-                if (document.querySelectorAll('.gf-notif-item').length === 0) {
+                if (document.querySelectorAll('.gf-notif-table tbody tr').length === 0) {
                     const notifPanel = document.querySelector('.gf-notif-panel');
                     if (notifPanel) notifPanel.style.display = 'none';
                 }
@@ -824,13 +1475,13 @@ function marcarPagado(tIdx, fIdx, btn) {
         } else {
             btn.disabled = false;
             btn.style.opacity = '1';
-            btn.innerText = '✔️';
+            btn.innerText = '✓ Pagar';
             alert("Error al marcar como pagado.");
         }
     }).catch(err => {
         btn.disabled = false;
         btn.style.opacity = '1';
-        btn.innerText = '✔️';
+        btn.innerText = '✓ Pagar';
         console.error(err);
     });
 }
@@ -1108,6 +1759,15 @@ window.saveFechaModal = function(btn) {
         btn.innerText = 'Guardar Fecha';
     });
 };
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Automatically trigger change event on sede selects so the first sede is shown by default
+    document.querySelectorAll('.gf-sede-select').forEach(select => {
+        if (select.options.length > 0) {
+            select.dispatchEvent(new Event('change'));
+        }
+    });
+});
 </script>
 
 @endsection

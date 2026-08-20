@@ -447,7 +447,9 @@
 
     {{-- BARRA DE BÚSQUEDA / FILTROS --}}
     <div id="barra-filtros-egresos" style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px; margin-bottom:14px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; box-shadow:0 1px 4px rgba(0,0,0,.05);">
-        <input id="filtro-texto" type="text" placeholder="🔍 Buscar motivo o tipo de gasto..." oninput="aplicarFiltros()" style="flex:2; min-width:200px; padding:7px 12px; border:1px solid #cbd5e1; border-radius:7px; font-size:0.875rem; outline:none;">
+        <input id="filtro-texto" type="text" placeholder="🔍 Buscar motivo o tipo de gasto..." oninput="aplicarFiltros()" style="flex:1; min-width:180px; padding:7px 12px; border:1px solid #cbd5e1; border-radius:7px; font-size:0.875rem; outline:none;">
+        <input id="filtro-banco" type="text" placeholder="🏦 Buscar banco..." oninput="aplicarFiltros()" style="flex:1; min-width:120px; padding:7px 12px; border:1px solid #cbd5e1; border-radius:7px; font-size:0.875rem; outline:none;">
+        <input id="filtro-beneficiario" type="text" placeholder="👤 Buscar beneficiario..." oninput="aplicarFiltros()" style="flex:1; min-width:120px; padding:7px 12px; border:1px solid #cbd5e1; border-radius:7px; font-size:0.875rem; outline:none;">
         <select id="filtro-cat" onchange="aplicarFiltros()" style="flex:1; min-width:160px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:7px; font-size:0.875rem; background:#f8fafc;">
             <option value="">🏷 Todos los tipos</option>
             <option value="egresos">Egresos Realizados</option>
@@ -1161,6 +1163,71 @@
                 </label>
             </div>
 
+            {{-- ── VINCULAR CON GASTO FIJO ── --}}
+            <div style="margin-bottom: 10px; border-top: 1px dashed #bfdbfe; padding-top: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; color: #1e40af;">
+                    <input type="checkbox" id="chk_gasto_fijo" onchange="toggleGastoFijoPanel()" style="width: 16px; height: 16px; accent-color: #3b82f6;">
+                    <svg width="16" height="16" fill="none" stroke="#3b82f6" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+                    Este egreso es pago de un Gasto Fijo
+                </label>
+            </div>
+
+            <div id="panel_gasto_fijo" style="display:none; background: linear-gradient(135deg,#eff6ff,#dbeafe); border: 1.5px solid #93c5fd; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;">
+                <div style="margin-bottom: 10px;">
+                    <label style="display:block; font-size:0.8rem; font-weight:700; color:#1e40af; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:5px;">
+                        Gasto Fijo Pendiente
+                    </label>
+                    <select id="sel_gasto_fijo" onchange="onGastoFijoSelected()" style="width:100%; padding:8px 10px; border:1.5px solid #93c5fd; border-radius:7px; font-size:0.88rem; background:white; color:#0f172a;">
+                        <option value="">-- Cargando gastos pendientes... --</option>
+                    </select>
+                </div>
+
+                {{-- Info card del gasto seleccionado --}}
+                <div id="gf_info_card" style="display:none; background:white; border-radius:8px; padding:12px 14px; border:1px solid #bfdbfe; margin-bottom:10px;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; font-size:0.83rem;">
+                        <div>
+                            <span style="color:#64748b; font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; display:block;">Servicio / Tipo</span>
+                            <span id="gf_info_servicio" style="font-weight:700; color:#0f172a;"></span>
+                        </div>
+                        <div>
+                            <span style="color:#64748b; font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; display:block;">Empresa</span>
+                            <span id="gf_info_empresa" style="font-weight:600; color:#334155;"></span>
+                        </div>
+                        <div id="gf_info_sede_row">
+                            <span style="color:#64748b; font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; display:block;">Sede</span>
+                            <span id="gf_info_sede" style="font-weight:600; color:#1d4ed8;"></span>
+                        </div>
+                        <div>
+                            <span style="color:#64748b; font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; display:block;">Grupo</span>
+                            <span id="gf_info_grupo" style="font-weight:600; color:#334155;"></span>
+                        </div>
+                        <div>
+                            <span style="color:#64748b; font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; display:block;">Fecha pago</span>
+                            <span id="gf_info_fecha" style="font-weight:600; color:#334155;"></span>
+                        </div>
+                        <div>
+                            <span style="color:#64748b; font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; display:block;">Costo estimado</span>
+                            <span id="gf_info_costo" style="font-weight:800; color:#059669; font-size:1rem;"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="gf_monto_row" style="display:none;">
+                    <label style="display:block; font-size:0.8rem; font-weight:700; color:#1e40af; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px;">
+                        Monto real pagado (USD)
+                    </label>
+                    <input type="number" id="inp_monto_gf" step="0.01" min="0" placeholder="0.00"
+                        style="width:100%; padding:8px 10px; border:1.5px solid #93c5fd; border-radius:7px; font-size:0.9rem; font-weight:700; color:#0f172a; box-sizing:border-box;"
+                        oninput="syncGFMontoToForm()">
+                    <p style="font-size:0.75rem; color:#3b82f6; margin:4px 0 0; font-style:italic;">
+                        💡 Este monto se registrará en la tabla de Gastos Fijos del mes actual.
+                    </p>
+                </div>
+            </div>
+            {{-- Hidden fields enviados con el form --}}
+            <input type="hidden" id="hid_gasto_fijo_id" name="gasto_fijo_id" value="">
+            <input type="hidden" id="hid_monto_pagado_gf" name="monto_pagado_gf" value="">
+
             <div id="container_desglose" style="display: none; background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px;">
                 <h4 style="margin-top: 0; font-size: 0.95rem; color: var(--blue); display: flex; justify-content: space-between; align-items: center;">
                     Desglose del Pago
@@ -1306,6 +1373,107 @@ function toggleTraslados() {
     document.getElementById('tipo_gasto').required = !isTraslado;
 }
 
+// ── Gasto Fijo Linking Functions ──
+let _gfPendientes = null; // cached list
+
+async function toggleGastoFijoPanel() {
+    const chk = document.getElementById('chk_gasto_fijo');
+    const panel = document.getElementById('panel_gasto_fijo');
+    const hidId = document.getElementById('hid_gasto_fijo_id');
+    const hidMonto = document.getElementById('hid_monto_pagado_gf');
+
+    if (!chk.checked) {
+        panel.style.display = 'none';
+        hidId.value = '';
+        hidMonto.value = '';
+        document.getElementById('gf_info_card').style.display = 'none';
+        document.getElementById('gf_monto_row').style.display = 'none';
+        return;
+    }
+
+    panel.style.display = 'block';
+
+    // Lazy-load the list only once
+    if (!_gfPendientes) {
+        const sel = document.getElementById('sel_gasto_fijo');
+        sel.innerHTML = '<option value="">Cargando...</option>';
+        try {
+            const res = await fetch('{{ route("finanzas.gastos_fijos.pendientes") }}', {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            _gfPendientes = await res.json();
+        } catch (e) {
+            _gfPendientes = [];
+        }
+        buildGastoFijoSelect();
+    } else {
+        buildGastoFijoSelect();
+    }
+}
+
+function buildGastoFijoSelect() {
+    const sel = document.getElementById('sel_gasto_fijo');
+    sel.innerHTML = '<option value="">-- Selecciona un gasto fijo --</option>';
+    if (!_gfPendientes || _gfPendientes.length === 0) {
+        sel.innerHTML = '<option value="">Sin gastos pendientes esta semana</option>';
+        return;
+    }
+    _gfPendientes.forEach(gf => {
+        const opt = document.createElement('option');
+        opt.value = gf.id;
+        const sedeStr = gf.sede ? ` · ${gf.sede.substring(0, 25)}` : '';
+        const urgente = gf.urgente ? '⚡ ' : '';
+        opt.textContent = `${urgente}${gf.servicio}${sedeStr} — $${parseFloat(gf.costo).toFixed(2)}`;
+        sel.appendChild(opt);
+    });
+}
+
+function onGastoFijoSelected() {
+    const sel = document.getElementById('sel_gasto_fijo');
+    const id = parseInt(sel.value);
+    const hidId = document.getElementById('hid_gasto_fijo_id');
+    const card = document.getElementById('gf_info_card');
+    const montoRow = document.getElementById('gf_monto_row');
+
+    if (!id || !_gfPendientes) {
+        card.style.display = 'none';
+        montoRow.style.display = 'none';
+        hidId.value = '';
+        return;
+    }
+
+    const gf = _gfPendientes.find(g => g.id === id);
+    if (!gf) return;
+
+    hidId.value = gf.id;
+
+    document.getElementById('gf_info_servicio').textContent = gf.servicio;
+    document.getElementById('gf_info_empresa').textContent  = gf.empresa || '—';
+    document.getElementById('gf_info_grupo').textContent    = gf.tabla_label;
+    document.getElementById('gf_info_fecha').textContent    = gf.fecha;
+    document.getElementById('gf_info_costo').textContent    = `$ ${parseFloat(gf.costo).toFixed(2)}`;
+
+    const sedeRow = document.getElementById('gf_info_sede_row');
+    if (gf.sede) {
+        document.getElementById('gf_info_sede').textContent = gf.sede;
+        sedeRow.style.display = 'block';
+    } else {
+        sedeRow.style.display = 'none';
+    }
+
+    // Pre-fill monto real with costo estimado
+    const montoInp = document.getElementById('inp_monto_gf');
+    montoInp.value = parseFloat(gf.costo).toFixed(2);
+    document.getElementById('hid_monto_pagado_gf').value = montoInp.value;
+
+    card.style.display = 'block';
+    montoRow.style.display = 'block';
+}
+
+function syncGFMontoToForm() {
+    const val = document.getElementById('inp_monto_gf').value;
+    document.getElementById('hid_monto_pagado_gf').value = val;
+}
 
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -1875,11 +2043,29 @@ window.cargarArchivoDesglose = async function(input) {
             return;
         }
 
-        // Preguntar por sede y tipo de gasto para aplicar a todos
+        const inputForm = input.closest('form');
+        let inputTasa = null;
+        if (inputForm) {
+            inputTasa = inputForm.querySelector('input[name="tasa_cambio"]') || inputForm.querySelector('#tasa_cambio');
+        }
+        if (!inputTasa) {
+            inputTasa = document.getElementById('tasa_cambio') || document.querySelector('input[name="tasa_cambio"]');
+        }
+        
+        let tasa = window.parseLocalNumber(inputTasa ? inputTasa.value : '0') || 0;
+        if (tasa <= 0) {
+            const bcvGlobal = document.getElementById('tasa-bcv-input') || document.querySelector('input[data-field="tasa_bcv_usd"]');
+            tasa = window.parseLocalNumber(bcvGlobal ? bcvGlobal.value : '0') || 0;
+        }
+
+        const catEl = document.getElementById('categoria_egreso');
+        const isDivisas = catEl && catEl.value === 'egreso_divisas';
+
+        // Preguntar por sede, tipo de gasto, moneda y tasa
         const { value: formValues } = await Swal.fire({
-            title: 'Datos extraídos correctamente',
+            title: 'Configurar Archivo',
             html: `
-                <p style="font-size: 14px; color: #475569; margin-bottom: 15px;">Se encontraron <b>${data.length}</b> registros. Selecciona a dónde pertenecen (opcional):</p>
+                <p style="font-size: 14px; color: #475569; margin-bottom: 15px;">Se encontraron <b>${data.length}</b> registros. Configura los detalles:</p>
                 <div style="text-align: left; display: flex; flex-direction: column; gap: 10px;">
                     <label>Sede (opcional)</label>
                     <select id="swal_sede" class="swal2-select" style="margin: 0; width: 100%; font-size: 14px; padding: 6px;">
@@ -1892,6 +2078,21 @@ window.cargarArchivoDesglose = async function(input) {
                         <option value="">-- Ninguno --</option>
                         ${tiposGastoList.map(t => `<option value="${t}">${t}</option>`).join('')}
                     </select>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <div style="flex: 1;">
+                            <label>Moneda del archivo</label>
+                            <select id="swal_currency" class="swal2-select" style="margin: 0; width: 100%; font-size: 14px; padding: 6px;">
+                                <option value="BS" ${!isDivisas ? 'selected' : ''}>Bolívares (Bs)</option>
+                                <option value="USD" ${isDivisas ? 'selected' : ''}>Dólares (USD)</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1;">
+                            <label>Tasa de Cambio</label>
+                            <input type="text" id="swal_tasa" class="swal2-input" placeholder="Ej. 41,50" value="${tasa > 0 ? tasa.toString().replace('.', ',') : ''}" style="margin: 0; width: 100%; font-size: 14px; padding: 6px; box-sizing: border-box;">
+                        </div>
+                    </div>
+                    <small style="color: #64748b; font-size: 12px; margin-top: 5px;">* La tasa de cambio es necesaria para calcular el monto equivalente.</small>
                 </div>
             `,
             focusConfirm: false,
@@ -1901,7 +2102,9 @@ window.cargarArchivoDesglose = async function(input) {
             preConfirm: () => {
                 return {
                     sede: document.getElementById('swal_sede').value,
-                    tg: document.getElementById('swal_tg').value
+                    tg: document.getElementById('swal_tg').value,
+                    currency: document.getElementById('swal_currency').value,
+                    tasaVal: document.getElementById('swal_tasa').value
                 }
             }
         });
@@ -1909,16 +2112,30 @@ window.cargarArchivoDesglose = async function(input) {
         if (formValues) {
             let tgSelected = formValues.tg === 'OTROS' ? '' : formValues.tg;
             
-            const inputTasa = document.getElementById('tasa_cambio') || document.querySelector('input[name="tasa_cambio"]');
-            let tasa = window.parseLocalNumber(inputTasa ? inputTasa.value : '0') || 0;
+            tasa = window.parseLocalNumber(formValues.tasaVal) || 0;
+            if (inputTasa && tasa > 0) {
+                inputTasa.value = formValues.tasaVal;
+            }
 
             data.forEach(row => {
-                // Formatear monto bs
-                let montoBsFormateado = row.monto.toString().replace('.', ',');
                 let montoUsd = '';
-                if (tasa > 0) {
-                    montoUsd = (parseFloat(row.monto) / tasa).toFixed(2).replace('.', ',');
+                let montoBsFormateado = '';
+                let valNumerico = parseFloat(row.monto) || 0;
+
+                if (formValues.currency === 'USD') {
+                    // El archivo tiene montos en USD
+                    montoUsd = valNumerico.toFixed(2).replace('.', ',');
+                    if (tasa > 0) {
+                        montoBsFormateado = (valNumerico * tasa).toFixed(2).replace('.', ',');
+                    }
+                } else {
+                    // El archivo tiene montos en BS
+                    montoBsFormateado = valNumerico.toFixed(2).replace('.', ',');
+                    if (tasa > 0) {
+                        montoUsd = (valNumerico / tasa).toFixed(2).replace('.', ',');
+                    }
                 }
+
                 agregarDesglose(row.cedula, montoUsd, montoBsFormateado, formValues.sede, tgSelected);
             });
             
@@ -2329,6 +2546,8 @@ function cerrarVerEgreso() {
 // ===== FILTROS DE EGRESOS =====
 function aplicarFiltros() {
     const texto = (document.getElementById('filtro-texto')?.value || '').toLowerCase().trim();
+    const banco = (document.getElementById('filtro-banco')?.value || '').toLowerCase().trim();
+    const beneficiario = (document.getElementById('filtro-beneficiario')?.value || '').toLowerCase().trim();
     const cat = document.getElementById('filtro-cat')?.value || '';
 
     // Map section identifiers
@@ -2345,16 +2564,20 @@ function aplicarFiltros() {
     rows.forEach(tr => {
         const rowCat = tr.getAttribute('data-egreso-cat') || '';
         const rowText = tr.textContent.toLowerCase();
+        
         const catMatch = !cat || sectionMap[cat] === rowCat;
         const textMatch = !texto || rowText.includes(texto);
-        const show = catMatch && textMatch;
+        const bancoMatch = !banco || rowText.includes(banco);
+        const beneficiarioMatch = !beneficiario || rowText.includes(beneficiario);
+        
+        const show = catMatch && textMatch && bancoMatch && beneficiarioMatch;
         tr.style.display = show ? '' : 'none';
         if (show) visible++;
     });
 
     const contador = document.getElementById('filtro-contador');
     if (contador) {
-        contador.textContent = texto || cat
+        contador.textContent = texto || cat || banco || beneficiario
             ? `Mostrando ${visible} de ${total} registros`
             : '';
     }
@@ -2362,8 +2585,12 @@ function aplicarFiltros() {
 
 function limpiarFiltros() {
     const txt = document.getElementById('filtro-texto');
+    const txtBanco = document.getElementById('filtro-banco');
+    const txtBeneficiario = document.getElementById('filtro-beneficiario');
     const cat = document.getElementById('filtro-cat');
     if (txt) txt.value = '';
+    if (txtBanco) txtBanco.value = '';
+    if (txtBeneficiario) txtBeneficiario.value = '';
     if (cat) cat.value = '';
     aplicarFiltros();
 }
@@ -2372,7 +2599,7 @@ function limpiarFiltros() {
 
 <!-- Modal Ver Desglose -->
 <div id="modalDesglose" class="modal-overlay" style="display: none; z-index: 1200; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
-    <div class="modal-box" style="background: white; width: 95%; max-width: 500px; padding: 20px; border-radius: 12px; position: relative;">
+    <div class="modal-box" style="background: white; width: 95%; max-width: 500px; max-height: 90vh; overflow-y: auto; padding: 20px; border-radius: 12px; position: relative;">
         <button type="button" onclick="closeDesgloseModal()" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
         <h3 style="margin-top: 0; color: var(--blue);">Desglose de Beneficiarios</h3>
         
