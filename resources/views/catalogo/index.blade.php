@@ -371,6 +371,108 @@
         }
         .filter-actions { grid-column: 1 / -1; justify-content: flex-start; }
     }
+    .filters-bar-wrap { display: block; }
+    .filters-bar-wrap > summary {
+        display: none;
+        list-style: none;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 0.92rem;
+        padding: 4px 2px 8px;
+        color: #0f172a;
+    }
+    .filters-bar-wrap > summary::-webkit-details-marker { display: none; }
+    .product-category, .product-code {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+    }
+    .product-code { max-width: 48%; text-align: right; }
+
+    @media (max-width: 720px) {
+        main:has(.catalogo-page) {
+            padding: 10px 12px 28px;
+        }
+        .catalogo-top {
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        .catalogo-top h1 {
+            font-size: 1.12rem;
+            line-height: 1.25;
+        }
+        .cliente-hint { font-size: 0.78rem; }
+        .catalogo-badge {
+            font-size: 0.74rem;
+            padding: 4px 10px;
+        }
+        .filters-bar {
+            top: 8px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            border-radius: 12px;
+        }
+        .filters-bar-wrap > summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .filters-bar-wrap > summary::after {
+            content: 'Mostrar';
+            font-size: 0.75rem;
+            font-weight: 650;
+            color: #1d4ed8;
+        }
+        .filters-bar-wrap[open] > summary::after { content: 'Ocultar'; }
+        .filters-grid,
+        .filters-grid.is-cliente {
+            grid-template-columns: 1fr;
+        }
+        .filter-item.is-per-page { display: none; }
+        .filter-input {
+            font-size: 1rem;
+            padding: 11px 12px;
+        }
+        .filter-actions {
+            width: 100%;
+        }
+        .filter-actions .btn-custom,
+        .filter-actions .checkbox-item {
+            flex: 1;
+            justify-content: center;
+        }
+        .catalogo-grid { gap: 10px; }
+        .product-info { padding: 8px 8px 10px; gap: 5px; }
+        .product-title {
+            font-size: 0.78rem;
+            min-height: 2.3em;
+        }
+        .product-meta { flex-direction: column; align-items: flex-start; gap: 2px; }
+        .product-code { max-width: 100%; text-align: left; font-size: 0.66rem; }
+        .price-box { gap: 4px; }
+        .price-box > div { padding: 5px 2px; min-width: 0; }
+        .price-label { font-size: 0.55rem; }
+        .price-value {
+            font-size: 0.72rem;
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .btn-cashea {
+            width: calc(100% - 16px);
+            margin: 0 8px 8px;
+            padding: 9px 8px;
+            font-size: 0.78rem;
+        }
+        .stock-badge { font-size: 0.66rem; padding: 2px 7px; }
+        .product-card:hover { transform: none; }
+    }
+    @media (max-width: 380px) {
+        .catalogo-grid { grid-template-columns: 1fr; }
+        .price-value { font-size: 0.86rem; }
+    }
 </style>
 
 <div class="catalogo-page">
@@ -401,7 +503,8 @@
     @endif
 
     <!-- Filtros -->
-    <div class="filters-bar">
+    <details class="filters-bar filters-bar-wrap" open>
+        <summary>Filtros</summary>
         <form action="{{ $formAction }}" method="GET" id="form-filtros">
             <div class="filters-grid {{ $modoCliente ? 'is-cliente' : '' }}">
                 @unless($modoCliente)
@@ -437,7 +540,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="filter-item">
+                <div class="filter-item is-per-page">
                     <label>Mostrar</label>
                     <select name="per_page" class="filter-input">
                         <option value="24" {{ request('per_page') == 24 ? 'selected' : '' }}>24</option>
@@ -524,7 +627,7 @@
             </div>
             @endunless
         </form>
-    </div>
+    </details>
 
     <!-- Catálogo Grid -->
     @if($productos->isEmpty())
@@ -579,7 +682,7 @@
                             <div class="product-category">{{ $prod->categoria ?? 'Sin Categoría' }}</div>
                             <div class="product-code">{{ $prod->codigo }}</div>
                         </div>
-                        <h3 class="product-title" title="{{ $prod->descripcion }}">{{ $prod->descripcion }}</h3>
+                        <h3 class="product-title" title="{{ $prod->descripcion }}">{{ ltrim((string) $prod->descripcion, "/ \t") }}</h3>
                         <div class="price-box">
                             <div>
                                 <span class="price-label">Unidad</span>
@@ -655,6 +758,13 @@
 </div>
 
 <script>
+(function () {
+    const wrap = document.querySelector('.filters-bar-wrap');
+    if (!wrap) return;
+    if (window.matchMedia('(max-width: 720px)').matches) {
+        wrap.removeAttribute('open');
+    }
+})();
 window.openCasheaFromCard = function (card) {
     if (!card) return;
     const NIVELES = [
