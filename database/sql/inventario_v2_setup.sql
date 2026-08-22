@@ -98,6 +98,6 @@ INSERT INTO inventario_v2.config_sede (sede, tiempo_pronostico)
 VALUES ('DORAL', 15), ('VIRTUDES', 15), ('ZAMORA', 15), ('CENTRO', 15), ('SAMBIL', 15)
 ON CONFLICT (sede) DO NOTHING;
 
--- Columnas extra en ventas_historicas (si vienen de esquema anterior)
+-- Columnas extra en ventas_historicas ()
 ALTER TABLE inventario_v2.ventas_historicas ADD COLUMN IF NOT EXISTS ventas_60d NUMERIC(12,4) NOT NULL DEFAULT 0;
 ALTER TABLE inventario_v2.ventas_historicas ADD COLUMN IF NOT EXISTS ultima_venta DATE;

@@ -16,6 +16,7 @@ class SyncService:
     def __init__(self):
         self.stop_event = None
         self.is_syncing = False
+        self.last_detalle_run = None
 
     def start(self, stop_event):
         self.stop_event = stop_event
@@ -75,6 +76,18 @@ class SyncService:
                 else:
                     logger.info("[Apertura] ⏭ Módulo Compras desactivado. Saltando.")
 
+                # ── Módulo 5 y 6: solo la PRIMERA vez. Luego el Timer 2 (periódico).
+                self._run_detalle_solo_primera_vez(
+                    logger, config,
+                    flag_key="inicio_dia_ventas_detalle",
+                    label="Ventas Detalladas",
+                )
+                self._run_detalle_solo_primera_vez(
+                    logger, config,
+                    flag_key="inicio_dia_ajustes",
+                    label="Ajustes Inventario",
+                )
+
                 if success:
                     last_snapshot_date = today
 
@@ -109,7 +122,82 @@ class SyncService:
                 except Exception as poll_err:
                     logger.warning(f"[Loop] Error en heartbeat/poll: {poll_err}")
 
+                # Timer 2: Módulos detallados con intervalo independiente (solo registros nuevos)
+                try:
+                    interval_detalle = config.get("interval_detalle", 10800)
+                    now_ts = time.time()
+                    if self.last_detalle_run is None or (now_ts - self.last_detalle_run) >= interval_detalle:
+                        run_detalle = False
+
+                        if config.get("sync_ventas_detalle", False):
+                            run_detalle = True
+                            logger.info("[Timer2] ▶ Ejecutando sincronización DELTA de Ventas Detalladas...")
+                            try:
+                                from services.ventas_detalle_service import VentasDetalleService
+                                VentasDetalleService.execute()
+                            except Exception as e:
+                                logger.error(f"[Timer2] Error en VentasDetalleService: {e}")
+
+                        if config.get("sync_ajustes", False):
+                            run_detalle = True
+                            logger.info("[Timer2] ▶ Ejecutando sincronización DELTA de Ajustes...")
+                            try:
+                                from services.ajustes_service import AjustesService
+                                AjustesService.execute()
+                            except Exception as e:
+                                logger.error(f"[Timer2] Error en AjustesService: {e}")
+
+                        if run_detalle:
+                            self.last_detalle_run = now_ts
+                except Exception as t2_err:
+                    logger.warning(f"[Timer2] Error: {t2_err}")
+
         self.is_syncing = False
+
+    def _run_detalle_solo_primera_vez(self, logger, config, flag_key, label):
+        """
+        Carga histórica de 1 mes solo si ESTA sede aún no tiene datos.
+        Otras sedes no cuentan. Después, el Timer 2 mantiene el delta de esta sede.
+        """
+        from services.ventas_detalle_service import VentasDetalleService
+        from services.ajustes_service import AjustesService
+
+        service_cls = VentasDetalleService if flag_key == "inicio_dia_ventas_detalle" else AjustesService
+
+        if not config.get(flag_key, False):
+            logger.info(f"[Apertura] ⏭ {label}: no está en el reporte de inicio. Lo cubre el sync periódico.")
+            return
+
+        sede = config.get("sede", "JRZ")
+        try:
+            web_conn = PostgresConnection.get_connection()
+            cur = web_conn.cursor()
+            watermark = service_cls.get_last_sync_date(cur, sede)
+            cur.close()
+            web_conn.close()
+        except Exception as e:
+            logger.error(f"[Apertura] No se pudo consultar histórico de {label} ({sede}): {e}")
+            return
+
+        if watermark:
+            logger.info(
+                f"[Apertura] ⏭ {label} [{sede}]: esta sede ya tiene datos hasta {watermark}. "
+                f"No se recarga en el inicio; lo actualiza el sync periódico de esta sede."
+            )
+            return
+
+        logger.info(f"[Apertura] ▶ Primera carga de {label} para sede {sede} (último mes)...")
+        try:
+            ok = service_cls.execute()
+        except Exception as e:
+            logger.error(f"[Apertura] Error en {label} ({sede}): {e}")
+            return
+
+        if ok:
+            logger.info(
+                f"[Apertura] ✓ {label} [{sede}]: primera carga de esta sede lista. "
+                f"Los siguientes días de {sede} los cubre el sync periódico."
+            )
 
     def _execute_sync_cycle(self):
         logger = AppLogger.get_logger()

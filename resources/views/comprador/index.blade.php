@@ -38,37 +38,125 @@ table.data-table tbody tr.row-mala-distribucion:hover {
     box-shadow: 0 10px 20px rgba(26, 68, 128, 0.08) !important;
     border-color: #93c5fd !important;
 }
+.compras-page .segmented {
+    flex-wrap: wrap;
+    width: auto !important;
+    max-width: 100%;
+}
+.compras-page .tab-btn {
+    white-space: nowrap;
+}
+.compras-page .table-wrap {
+    max-height: calc(100vh - 280px);
+}
+.compras-page table.data-table {
+    font-size: 0.8rem;
+}
+.compras-page table.data-table th,
+.compras-page table.data-table td {
+    padding: 6px 8px;
+}
+.compras-page table.data-table th {
+    font-size: 0.72rem;
+    letter-spacing: 0.01em;
+}
+.qpedir-table td {
+    vertical-align: middle;
+}
+.qpedir-search {
+    width: 100%;
+    max-width: 360px;
+    padding: 8px 12px 8px 32px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+}
 </style>
 @endpush
-<div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+<div class="compras-page">
+<div class="page-header">
     <div>
         <h1 style="margin: 0;">Compras y Distribución</h1>
         <p class="lead" style="margin: 4px 0 0;">Analice el stock global para compras o redistribución de inventario entre sucursales.</p>
     </div>
-    <div style="display: flex; gap: 8px;">
-        @if(!auth()->user()->isMarketing())
-        <a href="{{ route('comprador.sustitutos') }}" class="btn" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-weight: 600; font-size: 0.9rem; border: none; border-radius: 6px; background-color: #10b981; color: #ffffff; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <span>🔄</span> Análisis de Sustitutos
-        </a>
-        <a href="{{ route('comprador.historico') }}" class="btn" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-weight: 600; font-size: 0.9rem; border: none; border-radius: 6px; background-color: #2563eb; color: #ffffff; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <span>📊</span> Histórico Mensual
-        </a>
-        @endif
-    </div>
 </div>
 
+@if(!auth()->user()->isMarketing())
+<div class="panel" style="margin-bottom: 20px; padding: 18px 20px; border: 1px solid #bfdbfe; background: #eff6ff;">
+    <form method="GET" action="{{ route('comprador.quiebre.export') }}" style="display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;">
+        <div style="flex: 1 1 280px;">
+            <h2 style="margin: 0 0 4px; font-size: 1rem; color: #1e3a8a;">Descargar quiebre de inventario</h2>
+            <p style="margin: 0; color: #475569; font-size: 0.82rem; line-height: 1.4;">
+                Muestra el stock actual y el total vendido, descontando devoluciones, durante el período seleccionado.
+            </p>
+        </div>
+        <div class="field" style="margin: 0;">
+            <label for="quiebre-stock-minimo">Stock máximo a incluir</label>
+            <input
+                type="number"
+                id="quiebre-stock-minimo"
+                name="stock_minimo"
+                value="{{ old('stock_minimo', 5) }}"
+                min="0"
+                max="1000000"
+                required
+                style="width: 145px;"
+            >
+        </div>
+        <div class="field" style="margin: 0;">
+            <label for="quiebre-dias">Días a analizar</label>
+            <input
+                type="number"
+                id="quiebre-dias"
+                name="dias"
+                value="{{ old('dias', 30) }}"
+                min="1"
+                max="365"
+                required
+                style="width: 120px;"
+            >
+        </div>
+        <div class="field" style="margin: 0;">
+            <label for="quiebre-sede">Sede</label>
+            <select id="quiebre-sede" name="sede" style="min-width: 150px;">
+                <option value="">Todas</option>
+                @foreach(config('inventario.sedes_stock', []) as $sede)
+                    <option value="{{ $sede }}" @selected(old('sede') === $sede)>
+                        {{ config('inventario.display.'.$sede, $sede) }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+        <button type="submit" class="btn" style="height: 42px; padding: 0 16px; border: 0; background: #2563eb; color: #fff; font-weight: 600;">
+            📥 Descargar CSV
+        </button>
+    </form>
+    @if($errors->has('quiebre') || $errors->has('stock_minimo') || $errors->has('dias') || $errors->has('sede'))
+        <div style="margin-top: 10px; color: #b91c1c; font-size: 0.82rem;">
+            {{ $errors->first('quiebre') ?: $errors->first('stock_minimo') ?: $errors->first('dias') ?: $errors->first('sede') }}
+        </div>
+    @endif
+</div>
+@endif
+
 <!-- Selector de Pestañas (Tabs) -->
-<div class="segmented" style="margin-bottom: 24px; display: flex; width: max-content;">
+@php
+    $activeTab = $activeTab ?? 'productos';
+    $qPedirCount = $qPedirCount ?? (isset($pedidosSolicitados) ? $pedidosSolicitados->count() : 0);
+    $tabHref = function (string $tab, array $extra = []) {
+        return route('comprador.dashboard', array_merge(['tab' => $tab], $extra));
+    };
+@endphp
+<div class="segmented" style="margin-bottom: 16px; display: flex;">
     @if(!auth()->user()->isMarketing())
-        <button type="button" id="tab-btn-dist" class="tab-btn {{ ($statusFilter ?? 'MalaDistribucion') !== 'Comprar' ? 'active' : '' }}" onclick="localStorage.setItem('activeCompradorTab', 'productos-tab'); window.location.href = window.location.pathname + '?status=MalaDistribucion';">Distribución</button>
-        <button type="button" id="tab-btn-compra" class="tab-btn {{ ($statusFilter ?? '') === 'Comprar' ? 'active' : '' }}" onclick="localStorage.setItem('activeCompradorTab', 'productos-tab'); window.location.href = window.location.pathname + '?status=Comprar';">Necesidad de Compra</button>
-        <button type="button" class="tab-btn" onclick="localStorage.setItem('activeCompradorTab', 'proveedores-tab'); window.location.href = window.location.pathname;">General por Proveedor</button>
-        <button type="button" class="tab-btn" onclick="localStorage.setItem('activeCompradorTab', 'sobrestock-tab'); window.location.href = window.location.pathname;">Sobre Stock / Sin Rotación</button>
+        <a href="{{ $tabHref('productos', ['status' => 'MalaDistribucion']) }}" id="tab-btn-dist" class="tab-btn {{ $activeTab === 'productos' && ($statusFilter ?? '') !== 'Comprar' ? 'active' : '' }}" style="text-decoration: none;">Distribución</a>
+        <a href="{{ $tabHref('productos', ['status' => 'Comprar']) }}" id="tab-btn-compra" class="tab-btn {{ $activeTab === 'productos' && ($statusFilter ?? '') === 'Comprar' ? 'active' : '' }}" style="text-decoration: none;">Necesidad de Compra</a>
+        <a href="{{ $tabHref('proveedores') }}" class="tab-btn {{ $activeTab === 'proveedores' ? 'active' : '' }}" style="text-decoration: none;">General por Proveedor</a>
+        <a href="{{ $tabHref('sobrestock') }}" class="tab-btn {{ $activeTab === 'sobrestock' ? 'active' : '' }}" style="text-decoration: none;">Sobre Stock / Sin Rotación</a>
     @else
-        <button type="button" class="tab-btn active" onclick="localStorage.setItem('activeCompradorTab', 'sobrestock-tab'); window.location.href = window.location.pathname;">Sobre Stock / Sin Rotación</button>
+        <a href="{{ $tabHref('sobrestock') }}" class="tab-btn {{ $activeTab === 'sobrestock' ? 'active' : '' }}" style="text-decoration: none;">Sobre Stock / Sin Rotación</a>
     @endif
     @if(!auth()->user()->isMarketing())
-        <button type="button" class="tab-btn" onclick="switchTab('qpedir-tab', this)">Q Pedir @if(isset($pedidosSolicitados) && $pedidosSolicitados->isNotEmpty()) ({{ $pedidosSolicitados->count() }}) @endif</button>
+        <a href="{{ $tabHref('qpedir') }}" class="tab-btn {{ $activeTab === 'qpedir' ? 'active' : '' }}" style="text-decoration: none;">Q Pedir @if($qPedirCount) ({{ $qPedirCount }}) @endif</a>
     @endif
     @if(!auth()->user()->isMarketing())
         <a href="{{ route('comprador.existencias') }}" class="tab-btn" style="text-decoration: none; color: inherit; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;">
@@ -77,15 +165,15 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         </a>
     @endif
     @if(auth()->user()->isMarketing() || auth()->user()->isAdmin())
-        <button type="button" class="tab-btn" onclick="switchTab('publicidad-tab', this)">Efectividad Publicidad</button>
+        <a href="{{ $tabHref('publicidad') }}" class="tab-btn {{ $activeTab === 'publicidad' ? 'active' : '' }}" style="text-decoration: none;">Efectividad Publicidad</a>
     @endif
     @if(!auth()->user()->isComprador() && !auth()->user()->isMarketing())
-        <button type="button" class="tab-btn" onclick="switchTab('cobranzas-tab', this)">Cobranzas</button>
+        <a href="{{ $tabHref('cobranzas') }}" class="tab-btn {{ $activeTab === 'cobranzas' ? 'active' : '' }}" style="text-decoration: none;">Cobranzas</a>
     @endif
 </div>
 
 <!-- Tab Cobranzas -->
-<div id="cobranzas-tab" class="tab-content" style="display: none;">
+<div id="cobranzas-tab" class="tab-content" style="display: {{ ($activeTab ?? '') === 'cobranzas' ? 'block' : 'none' }};">
     @if(!empty($cobranzasData['fecha_actual']))
     <div style="display: flex; gap: 24px; margin-bottom: 24px; flex-wrap: wrap;">
         <!-- Card 1: Por Sede -->
@@ -276,7 +364,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 </div>
 
 <!-- Tab Q Pedir -->
-<div id="qpedir-tab" class="tab-content" style="display: none;">
+<div id="qpedir-tab" class="tab-content" style="display: {{ ($activeTab ?? '') === 'qpedir' ? 'block' : 'none' }};">
     @if(isset($pedidosSolicitados) && $pedidosSolicitados->isNotEmpty())
     <div class="panel pedidos-card" style="background: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; padding: 20px; border-left: 4px solid #f59e0b; margin-bottom: 24px;">
         <h2 style="margin: 0 0 16px; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
@@ -286,6 +374,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <form method="GET" action="{{ route('comprador.dashboard') }}" style="display:flex; gap: 4px; align-items: center;">
+                    <input type="hidden" name="tab" value="qpedir">
                     <input type="date" name="q_pedir_date" value="{{ request('q_pedir_date') }}" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; font-size: 0.8rem;" onchange="this.form.submit()">
                     @if(request('q_pedir_date'))
                         <a href="{{ route('comprador.dashboard') }}" style="text-decoration: none; color: #ef4444; font-size: 0.8rem; margin-right: 8px;">&times; Quitar</a>
@@ -299,6 +388,9 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         <p style="margin:0 0 12px;color:#64748b;font-size:0.88rem;">
             Productos solicitados desde el login. Revisa y marca como atendido cuando los proceses.
         </p>
+        <div style="margin-bottom: 10px;">
+            <input type="search" id="qpedir-filter" class="qpedir-search" placeholder="Filtrar producto, código o categoría…" oninput="filterQPedir(this.value)" style="background: #fff url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2214%22 height=%2214%22 fill=%22%2364748b%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M10 4a6 6 0 104.47 10.03l4.75 4.75 1.41-1.41-4.75-4.75A6 6 0 0010 4zm0 2a4 4 0 110 8 4 4 0 010-8z%22/%3E%3C/svg%3E') no-repeat 10px center;">
+        </div>
 
         <!-- Hidden form for PDF Charts -->
         <form id="pdfChartsForm" method="POST" action="{{ route('comprador.pedidos.pdf') }}" style="display:none;">
@@ -311,45 +403,53 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             <canvas id="hiddenPieChart" width="400" height="400"></canvas>
             <canvas id="hiddenBarChart" width="600" height="400"></canvas>
         </div>
-        @foreach($pedidosSolicitados as $pedido)
-            <div class="pedido-item" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap;">
-                <div>
-                    <div style="font-weight:600; display:flex; align-items:center; gap:8px;">
-                        {{ $pedido->producto }}
-                        @if($pedido->frecuencia > 5)
-                            <span style="background:#10b981;color:white;padding:2px 8px;border-radius:12px;font-size:0.75rem;">Pedidas: {{ $pedido->frecuencia }} veces</span>
-                        @else
-                            <span style="background:#e2e8f0;color:#475569;padding:2px 8px;border-radius:12px;font-size:0.75rem;">Pedidas: {{ $pedido->frecuencia }} veces</span>
-                        @endif
-                    </div>
-                    <div style="font-size:0.8rem;color:#64748b;font-family:monospace;">
-                        {{ $pedido->codigo }}
-                        @if($pedido->categoria) &middot; {{ $pedido->categoria }} @endif
-                    </div>
-                    <div style="font-size:0.78rem;color:#64748b;margin-top:4px;">
-                        Última solicitud: {{ \Carbon\Carbon::parse($pedido->created_at)->diffForHumans() }}
-                    </div>
-                </div>
-                <div class="pedido-actions" style="display: flex; gap: 8px; flex-shrink: 0; align-items: center;">
-                    @if($pedido->estado === 'pendiente' || !$pedido->estado)
-                        <form method="POST" action="{{ route('comprador.pedidos.comprado') }}">
-                            @csrf
-                            <input type="hidden" name="producto" value="{{ $pedido->producto }}">
-                            <button type="submit" class="btn-atender" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #10b981; background: #10b981; color: white;">Comprado</button>
-                        </form>
-                        <form method="POST" action="{{ route('comprador.pedidos.fuera_mercado') }}" onsubmit="return confirm('¿Marcar como fuera de mercado (no se puede comprar)?')">
-                            @csrf
-                            <input type="hidden" name="producto" value="{{ $pedido->producto }}">
-                            <button type="submit" class="btn-eliminar" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #fecaca; background: #fff; color: #ef4444;">Fuera de mercado</button>
-                        </form>
-                    @elseif($pedido->estado === 'comprado')
-                        <span style="color: #10b981; font-weight: 600; font-size: 0.9rem; padding: 6px;">✓ Comprado</span>
-                    @elseif($pedido->estado === 'fuera_de_mercado')
-                        <span style="color: #ef4444; font-weight: 600; font-size: 0.9rem; padding: 6px;">✗ Fuera de mercado</span>
-                    @endif
-                </div>
-            </div>
-        @endforeach
+        <div class="table-wrap">
+            <table class="data-table qpedir-table">
+                <thead>
+                    <tr>
+                        <th style="width: 110px;">Código</th>
+                        <th>Producto</th>
+                        <th style="width: 140px;">Categoría</th>
+                        <th class="col-number" style="width: 80px;">Pedidos</th>
+                        <th style="width: 140px;">Última solicitud</th>
+                        <th style="width: 220px;">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($pedidosSolicitados as $pedido)
+                    <tr class="qpedir-row" data-filter="{{ strtolower($pedido->producto.' '.$pedido->codigo.' '.$pedido->categoria) }}">
+                        <td class="col-code">{{ $pedido->codigo }}</td>
+                        <td style="font-weight: 600;">{{ $pedido->producto }}</td>
+                        <td style="color: var(--muted);">{{ $pedido->categoria ?: '—' }}</td>
+                        <td class="col-number">
+                            <span style="background: {{ $pedido->frecuencia > 5 ? '#10b981' : '#e2e8f0' }}; color: {{ $pedido->frecuencia > 5 ? '#fff' : '#475569' }}; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">{{ $pedido->frecuencia }}</span>
+                        </td>
+                        <td style="color: #64748b; font-size: 0.78rem;">{{ \Carbon\Carbon::parse($pedido->created_at)->diffForHumans() }}</td>
+                        <td>
+                            <div class="pedido-actions" style="display: flex; gap: 6px; align-items: center;">
+                                @if($pedido->estado === 'pendiente' || !$pedido->estado)
+                                    <form method="POST" action="{{ route('comprador.pedidos.comprado') }}">
+                                        @csrf
+                                        <input type="hidden" name="producto" value="{{ $pedido->producto }}">
+                                        <button type="submit" class="btn-atender" style="padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: 1px solid #10b981; background: #10b981; color: white;">Comprado</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('comprador.pedidos.fuera_mercado') }}" onsubmit="return confirm('¿Marcar como fuera de mercado (no se puede comprar)?')">
+                                        @csrf
+                                        <input type="hidden" name="producto" value="{{ $pedido->producto }}">
+                                        <button type="submit" class="btn-eliminar" style="padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: 1px solid #fecaca; background: #fff; color: #ef4444;">Fuera de mercado</button>
+                                    </form>
+                                @elseif($pedido->estado === 'comprado')
+                                    <span style="color: #10b981; font-weight: 600; font-size: 0.8rem;">✓ Comprado</span>
+                                @elseif($pedido->estado === 'fuera_de_mercado')
+                                    <span style="color: #ef4444; font-weight: 600; font-size: 0.8rem;">✗ Fuera de mercado</span>
+                                @endif
+                            </div>
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
     </div>
     @else
     <div class="panel" style="padding: 40px; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 12px; background: #f8fafc;">
@@ -360,12 +460,13 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 
 @if(!auth()->user()->isMarketing())
 <!-- Tab 1: Productos y Distribución -->
-<div id="productos-tab" class="tab-content">
+<div id="productos-tab" class="tab-content" style="display: {{ ($activeTab ?? 'productos') === 'productos' ? 'block' : 'none' }};">
     <div class="panel">
         <h2 style="margin: 0 0 16px; font-size: 1.25rem;">{{ ($statusFilter ?? 'MalaDistribucion') === 'Comprar' ? 'Necesidad de Compra por Producto' : 'Mala Distribución por Producto' }}</h2>
         
         {{-- Barra de búsqueda independiente --}}
         <form method="GET" id="tab1-search-form" style="margin-bottom: 14px; display: flex; align-items: center; gap: 10px;">
+            <input type="hidden" name="tab" value="productos">
             {{-- Preserve all current filter values so they don't reset on search --}}
             <input type="hidden" name="categoria" value="{{ request('categoria', 'Ninguno') }}">
             <input type="hidden" name="subcategoria" value="{{ request('subcategoria', 'Ninguno') }}">
@@ -394,6 +495,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 
         {{-- Filtros de dropdowns --}}
         <form method="GET" class="filter-bar" style="margin-bottom: 20px;">
+            <input type="hidden" name="tab" value="productos">
             {{-- Preserve search term when changing filters --}}
             <input type="hidden" name="q" value="{{ $q ?? '' }}">
             <div class="field">
@@ -566,9 +668,10 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 </div>
 
 <!-- Tab 2: General por Proveedor -->
-<div id="proveedores-tab" class="tab-content" style="display: none;">
+<div id="proveedores-tab" class="tab-content" style="display: {{ ($activeTab ?? '') === 'proveedores' ? 'block' : 'none' }};">
     <!-- Barra de búsqueda de proveedor y filtro de demanda -->
     <form method="GET" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;">
+        <input type="hidden" name="tab" value="proveedores">
         <input type="hidden" name="subcategoria" value="{{ request('subcategoria', 'Ninguno') }}">
         <input type="hidden" name="proveedor" value="{{ request('proveedor', 'Ninguno') }}">
         <input type="hidden" name="status" id="status-filter-2" value="{{ $statusFilter ?? 'MalaDistribucion' }}">
@@ -630,7 +733,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 @endif
 
 <!-- Tab 3: Análisis de Inventario -->
-<div id="sobrestock-tab" class="tab-content" style="display: none;">
+<div id="sobrestock-tab" class="tab-content" style="display: {{ ($activeTab ?? '') === 'sobrestock' ? 'block' : 'none' }};">
     
     {{-- ── Resumen de Riesgo (Cards) ── --}}
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
@@ -659,6 +762,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 
     {{-- ── Barra de búsqueda independiente para Sobrestock ── --}}
     <form method="GET" id="ss-search-form" style="margin-bottom: 14px; display: flex; align-items: center; gap: 10px;">
+        <input type="hidden" name="tab" value="sobrestock">
         {{-- Preserve all sobrestock filter values so they don't reset on search --}}
         <input type="hidden" name="ss_categoria" value="{{ $ssFilters['categoria'] }}">
         <input type="hidden" name="ss_subcategoria" value="{{ $ssFilters['subcategoria'] }}">
@@ -693,6 +797,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 
     {{-- ── Filtros Avanzados ── --}}
     <form method="GET" id="ss-form" class="filter-bar" style="margin-bottom: 20px; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
+        <input type="hidden" name="tab" value="sobrestock">
         {{-- Preserve other tab filters --}}
         <input type="hidden" name="q" value="{{ request('q') }}">
         <input type="hidden" name="categoria" value="{{ request('categoria') }}">
@@ -954,10 +1059,31 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 
 @if(auth()->user()->isMarketing() || auth()->user()->isAdmin())
 <!-- Tab 4: Efectividad Publicidad -->
-<div id="publicidad-tab" class="tab-content" style="display: none;">
+<div id="publicidad-tab" class="tab-content" style="display: {{ ($activeTab ?? '') === 'publicidad' ? 'block' : 'none' }};">
     <div class="panel">
-        <h2 style="margin: 0 0 8px; font-size: 1.25rem; color: var(--blue);">Efectividad de Campañas de Publicidad</h2>
-        <p class="muted" style="margin-bottom: 20px;">Lleva el control de los productos promocionados, su última venta inicial y si han tenido nuevas ventas después del inicio de la campaña.</p>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 8px;">
+            <div>
+                <h2 style="margin: 0 0 8px; font-size: 1.25rem; color: var(--blue);">Efectividad de Campañas de Publicidad</h2>
+                <p class="muted" style="margin: 0 0 12px;">
+                    @if($puedeVerEquipoPublicidad)
+                        Control de productos promocionados por todo el equipo de marketing.
+                    @else
+                        Lleva el control de los productos promocionados, su última venta inicial y si han tenido nuevas ventas después del inicio de la campaña.
+                    @endif
+                </p>
+            </div>
+            @if($puedeVerEquipoPublicidad)
+                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; font-weight: 600; color: var(--muted);">
+                    Filtrar por usuario
+                    <select id="filtro-pub-user" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); min-width: 220px; font-weight: 500; color: var(--text);">
+                        <option value="todos">Todos los usuarios</option>
+                        @foreach($publicidadUsuarios as $pubUser)
+                            <option value="{{ $pubUser->id }}">{{ $pubUser->name }}</option>
+                        @endforeach
+                    </select>
+                </label>
+            @endif
+        </div>
         
         <div class="table-wrap">
             <table class="data-table" style="font-size: 0.85rem;">
@@ -965,6 +1091,9 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                     <tr>
                         <th style="width: 100px;">Código</th>
                         <th>Producto</th>
+                        @if($puedeVerEquipoPublicidad)
+                            <th style="width: 150px;">Usuario</th>
+                        @endif
                         <th style="width: 130px;">Categoría</th>
                         <th style="width: 100px; text-align: right;">Stock Global</th>
                         <th style="width: 150px; text-align: center;">Fecha Publicidad</th>
@@ -976,12 +1105,20 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                 </thead>
                 <tbody>
                     @forelse($publicitadosData as $p)
-                        <tr>
+                        <tr data-user-id="{{ $p['user_id'] ?? '' }}">
                             <td style="font-family: monospace; font-size: 0.85rem; color: var(--blue);">{{ $p['codigo'] }}</td>
                             <td style="font-weight: 500;">
                                 {{ $p['producto'] }}
                                 <div style="font-size: 0.75rem; color: var(--muted);">{{ $p['proveedor'] }}</div>
                             </td>
+                            @if($puedeVerEquipoPublicidad)
+                                <td>
+                                    <span style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; {{ !empty($p['es_propia']) ? 'background:#fdf4ff; color:#a21caf; border:1px solid #f5d0fe;' : 'background:#f1f5f9; color:#475569; border:1px solid #e2e8f0;' }}">
+                                        {{ $p['usuario'] }}
+                                        @if(!empty($p['es_propia'])) (tú) @endif
+                                    </span>
+                                </td>
+                            @endif
                             <td>
                                 <span class="tag" style="background: #f1f5f9; color: var(--muted); border-color: #e2e8f0; font-size: 0.7rem;">{{ $p['categoria'] }}</span>
                             </td>
@@ -1004,18 +1141,22 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                                 @endif
                             </td>
                             <td style="text-align: center;">
-                                <button type="button" 
-                                        onclick="toggleAdvertising({{ $p['id'] }}, this)" 
-                                        class="btn secondary" 
-                                        style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; font-weight: 600; cursor: pointer;"
-                                        data-campaign-row="true">
-                                    ❌ Quitar
-                                </button>
+                                @if(!empty($p['es_propia']) || auth()->user()->isAdmin())
+                                    <button type="button" 
+                                            onclick="toggleAdvertising({{ $p['id'] }}, this)" 
+                                            class="btn secondary" 
+                                            style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; font-weight: 600; cursor: pointer;"
+                                            data-campaign-row="true">
+                                        ❌ Quitar
+                                    </button>
+                                @else
+                                    <span style="font-size: 0.75rem; color: var(--muted);">Solo lectura</span>
+                                @endif
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" style="text-align: center; color: var(--muted); padding: 32px;">
+                            <td colspan="{{ $puedeVerEquipoPublicidad ? 10 : 9 }}" style="text-align: center; color: var(--muted); padding: 32px;">
                                 No hay productos marcados en campaña de publicidad actualmente.
                             </td>
                         </tr>
@@ -1092,7 +1233,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 </div>
 
 <script>
-const allProvidersData = @json($byProvider);
+const allProvidersData = @json(($activeTab ?? '') === 'proveedores' ? $byProvider : []);
 
 function openProviderModalByIndex(index, cardElement) {
     const prov = allProvidersData[index];
@@ -1208,7 +1349,7 @@ async function toggleAdvertising(productId, btn) {
                 }
             });
         } else {
-            alert('Error al actualizar el estado de publicidad.');
+            alert(res.message || 'Error al actualizar el estado de publicidad.');
             btn.innerText = originalText;
         }
     } catch (error) {
@@ -1222,24 +1363,23 @@ async function toggleAdvertising(productId, btn) {
 
 // Restore active tab on page load
 document.addEventListener('DOMContentLoaded', () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlTab = urlParams.get('tab');
-
-    const isMarketing = @json(auth()->user()->isMarketing());
-    let defaultTab = isMarketing ? 'sobrestock-tab' : 'productos-tab';
-    
-    let activeTab = localStorage.getItem('activeCompradorTab') || defaultTab;
-    if (urlTab) {
-        activeTab = urlTab + '-tab';
-        localStorage.setItem('activeCompradorTab', activeTab);
-    }
-    
-    if (isMarketing && activeTab !== 'sobrestock-tab' && activeTab !== 'publicidad-tab' && activeTab !== 'cobranzas-tab') {
-        switchTab('sobrestock-tab', null);
-    } else {
-        switchTab(activeTab, null);
+    const filtroPub = document.getElementById('filtro-pub-user');
+    if (filtroPub) {
+        filtroPub.addEventListener('change', function () {
+            const value = this.value;
+            document.querySelectorAll('#publicidad-tab tbody tr[data-user-id]').forEach(function (row) {
+                row.style.display = (value === 'todos' || row.dataset.userId === value) ? '' : 'none';
+            });
+        });
     }
 });
+
+function filterQPedir(value) {
+    const needle = (value || '').toLowerCase().trim();
+    document.querySelectorAll('#qpedir-tab .qpedir-row').forEach((row) => {
+        row.style.display = !needle || (row.dataset.filter || '').includes(needle) ? '' : 'none';
+    });
+}
 
 function openDistributionModal(code, name, stocks, demands) {
     document.getElementById('modal-product-title').innerText = name;
@@ -1739,6 +1879,5 @@ function generatePdfCharts() {
     }, 500);
 }
 </script>
-    </div>
 </div>
 @endsection

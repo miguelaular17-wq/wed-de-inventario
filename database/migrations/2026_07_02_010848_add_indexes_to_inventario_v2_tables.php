@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (\Illuminate\Support\Facades\DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         \Illuminate\Support\Facades\DB::statement("CREATE INDEX IF NOT EXISTS idx_productos_categoria ON inventario_v2.productos (categoria)");
         \Illuminate\Support\Facades\DB::statement("CREATE INDEX IF NOT EXISTS idx_productos_subcategoria ON inventario_v2.productos (subcategoria)");
         \Illuminate\Support\Facades\DB::statement("CREATE INDEX IF NOT EXISTS idx_productos_proveedor ON inventario_v2.productos (proveedor)");

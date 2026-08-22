@@ -3,13 +3,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Cobranza;
 use App\Models\CobranzaResumen;
+use App\Services\CobranzaIndicatorService;
 use Illuminate\Http\Request;
 use Shuchkin\SimpleXLSX;
 use Illuminate\Support\Facades\Log;
 
 class CobranzaController extends Controller
 {
-    public function index(Request $request) {
+    public function index(Request $request, CobranzaIndicatorService $indicadores) {
         $t0 = microtime(true);
         \Log::info('========== COBRANZA ==========');
         \Log::info('URL: '.$request->fullUrl());
@@ -51,69 +52,11 @@ class CobranzaController extends Controller
             $historialActual = $query->get();
         }
 
-        $gran_total_saldo = 0;
-        $gran_total_clientes = 0;
-        
-        // Acumuladores por estatus con desglose regular/personal y saldo
-        $estatus_totales = [
-            'CRITICO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0, 'saldo_regulares' => 0, 'saldo_personales' => 0],
-            'MOROSO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0, 'saldo_regulares' => 0, 'saldo_personales' => 0],
-            'RECIENTE' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0, 'saldo_regulares' => 0, 'saldo_personales' => 0],
-            'APARTADO' => ['clientes' => 0, 'saldo' => 0, 'regulares' => 0, 'personales' => 0, 'saldo_regulares' => 0, 'saldo_personales' => 0],
-        ];
-
-        // Agrupar por sede
-        $porSede = [];
-        $agrupadoPorSede = $historialActual->groupBy('sede_nombre');
-
-        foreach ($agrupadoPorSede as $sede => $registrosSede) {
-            $saldoSede = $registrosSede->sum('saldo');
-            $clientesSede = $registrosSede->count();
-
-            $porSede[] = (object) [
-                'sede_nombre' => $sede,
-                'total_clientes' => $clientesSede,
-                'total_saldo' => $saldoSede
-            ];
-            
-            $gran_total_saldo += $saldoSede;
-            $gran_total_clientes += $clientesSede;
-
-            foreach ($registrosSede as $r) {
-                $est = strtoupper($r->estatus) ?: 'RECIENTE';
-                if (!isset($estatus_totales[$est])) {
-                    $est = 'RECIENTE';
-                }
-                $estatus_totales[$est]['clientes'] += 1;
-                $estatus_totales[$est]['saldo'] += $r->saldo;
-                if (in_array($r->codigo_cliente, $personalCodes)) {
-                    $estatus_totales[$est]['personales'] += 1;
-                    $estatus_totales[$est]['saldo_personales'] += $r->saldo;
-                } else {
-                    $estatus_totales[$est]['regulares'] += 1;
-                    $estatus_totales[$est]['saldo_regulares'] += $r->saldo;
-                }
-            }
-        }
-
-        // Convertir array estatus a formato que espera la vista
-        $porEstatus = [];
-        foreach($estatus_totales as $k => $v) {
-            $porEstatus[] = (object) [
-                'estatus' => $k,
-                'total_clientes' => $v['clientes'],
-                'total_saldo' => $v['saldo'],
-                'regulares' => $v['regulares'],
-                'personales' => $v['personales'],
-                'saldo_regulares' => $v['saldo_regulares'],
-                'saldo_personales' => $v['saldo_personales'],
-            ];
-        }
-
-        // Ordenar porSede alfabeticamente
-        usort($porSede, function($a, $b) {
-            return strcmp($a->sede_nombre, $b->sede_nombre);
-        });
+        $resumenIndicadores = $indicadores->calcular($historialActual, $personalCodes);
+        $porSede = $resumenIndicadores['por_sede'];
+        $porEstatus = $resumenIndicadores['por_estatus'];
+        $gran_total_saldo = $resumenIndicadores['total_saldo'];
+        $gran_total_clientes = $resumenIndicadores['total_clientes'];
 
         // -------------------------------------------------------------
         // LOGICA COMPARATIVA SEMANAL — lee de cobranza_resumenes
@@ -699,20 +642,194 @@ class CobranzaController extends Controller
 
     public function estadoCuenta($numero_documento)
     {
-        // Obtener la fecha de sincronización más reciente para esta factura
-        $ultimaFechaSync = \App\Models\HistorialCobranza::where('factura_padre', $numero_documento)
-            ->orWhere('numero_documento', $numero_documento)
+        $numero = trim((string) $numero_documento);
+        if ($numero === '') {
+            return response()->json([
+                'ok' => false,
+                'message' => 'No hay número de documento para esta factura.',
+                'lineas' => [],
+            ], 422);
+        }
+
+        $scope = function ($query) use ($numero) {
+            $query->where('numero_documento', $numero)
+                ->orWhere('factura_padre', $numero)
+                ->orWhere('id_documento', $numero);
+        };
+
+        $ultimaFechaSync = \App\Models\HistorialCobranza::query()
+            ->where($scope)
             ->max('fecha_registro');
 
-        $detalles = \App\Models\HistorialCobranza::where(function($q) use ($numero_documento) {
-                $q->where('factura_padre', $numero_documento)
-                  ->orWhere('numero_documento', $numero_documento);
-            })
+        if (! $ultimaFechaSync) {
+            return response()->json([
+                'ok' => true,
+                'numero_documento' => $numero,
+                'lineas' => [],
+                'totales' => [
+                    'articulos' => 0,
+                    'abonos' => 0,
+                    'saldo' => 0,
+                ],
+            ]);
+        }
+
+        $detalles = \App\Models\HistorialCobranza::query()
+            ->where($scope)
             ->where('fecha_registro', $ultimaFechaSync)
-            ->orderBy('fecha_emision', 'asc')
-            ->orderBy('tipo_fila', 'asc')
+            ->orderBy('fecha_emision')
+            ->orderBy('tipo_fila')
+            ->orderBy('id')
             ->get();
-            
-        return response()->json($detalles);
+
+        $cabecera = $detalles->first(function ($row) use ($numero) {
+            return (string) $row->numero_documento === $numero
+                && ((float) $row->saldo_pendiente > 0 || (float) $row->total_factura > 0 || (float) $row->monto_neto > 0);
+        }) ?? $detalles->first(function ($row) {
+            return (float) $row->saldo_pendiente > 0 || (float) $row->total_factura > 0;
+        });
+
+        $saldoReal = round((float) ($cabecera->saldo_pendiente ?? $cabecera->saldo ?? 0), 2);
+        $totalFacturaReal = round((float) ($cabecera->total_factura ?? $cabecera->monto_neto ?? 0), 2);
+
+        $lineas = [];
+        $sumaArticulos = 0.0;
+        $sumaAbonos = 0.0;
+
+        foreach ($detalles as $row) {
+            $tipoFila = (int) $row->tipo_fila;
+            $esAbono = $tipoFila === 2 || strtoupper((string) $row->tipo_documento) === 'ABONO';
+            $cargo = $esAbono ? 0.0 : round((float) ($row->total_renglon ?? 0), 2);
+            $abono = $esAbono ? round((float) ($row->total_abono ?? $row->total_renglon ?? 0), 2) : 0.0;
+            $detalle = trim((string) ($row->detalle ?? ''));
+
+            if ($cargo <= 0 && $abono <= 0 && $detalle === '') {
+                continue;
+            }
+
+            if ($esAbono && $abono <= 0) {
+                continue;
+            }
+
+            if (! $esAbono && $cargo <= 0) {
+                continue;
+            }
+
+            if ($esAbono) {
+                $sumaAbonos += $abono;
+            } else {
+                $sumaArticulos += $cargo;
+            }
+
+            $fecha = $row->fecha_emision
+                ? \Carbon\Carbon::parse($row->fecha_emision)->format('d/m/Y')
+                : '';
+
+            if ($esAbono && $detalle !== '' && abs($abono) > 0.009) {
+                if (preg_match('/\$\s*[\d.,]+/', $detalle, $match)) {
+                    $textoMonto = preg_replace('/[^\d,.\-]/', '', $match[0]);
+                    $textoMonto = str_replace('.', '', $textoMonto);
+                    $textoMonto = str_replace(',', '.', $textoMonto);
+                    $montoEnTexto = (float) $textoMonto;
+                    if ($montoEnTexto > 0 && abs($montoEnTexto - $abono) > 0.05) {
+                        $detalle .= ' · aplicado a esta factura $ ' . number_format($abono, 2, ',', '.');
+                    }
+                }
+            }
+
+            $lineas[] = [
+                'fecha' => $fecha,
+                'fecha_iso' => $row->fecha_emision ? \Carbon\Carbon::parse($row->fecha_emision)->toDateString() : null,
+                'detalle' => $detalle !== '' ? $detalle : ($esAbono ? 'Pago / Abono' : 'Artículo / Cargo'),
+                'cargo' => $cargo,
+                'abono' => $abono,
+                'tipo' => $esAbono ? 'abono' : 'cargo',
+            ];
+        }
+
+        $abonoInicial = 0.0;
+        $cargosAdicionales = 0.0;
+        $abonosNoDetallados = 0.0;
+
+        if ($totalFacturaReal > 0) {
+            $diffArticulos = round($sumaArticulos - $totalFacturaReal, 2);
+            if ($diffArticulos > 0.05) {
+                $abonoInicial = $diffArticulos;
+                $sumaAbonos += $abonoInicial;
+                $lineas[] = [
+                    'fecha' => $cabecera && $cabecera->fecha_emision
+                        ? \Carbon\Carbon::parse($cabecera->fecha_emision)->format('d/m/Y')
+                        : '',
+                    'fecha_iso' => $cabecera && $cabecera->fecha_emision
+                        ? \Carbon\Carbon::parse($cabecera->fecha_emision)->toDateString()
+                        : null,
+                    'detalle' => 'Abono inicial (pago en caja al facturar)',
+                    'cargo' => 0,
+                    'abono' => $abonoInicial,
+                    'tipo' => 'ajuste',
+                ];
+            } elseif ($diffArticulos < -0.05) {
+                $cargosAdicionales = abs($diffArticulos);
+                $sumaArticulos += $cargosAdicionales;
+                $lineas[] = [
+                    'fecha' => $cabecera && $cabecera->fecha_emision
+                        ? \Carbon\Carbon::parse($cabecera->fecha_emision)->format('d/m/Y')
+                        : '',
+                    'fecha_iso' => $cabecera && $cabecera->fecha_emision
+                        ? \Carbon\Carbon::parse($cabecera->fecha_emision)->toDateString()
+                        : null,
+                    'detalle' => 'Cargos adicionales (intereses / impuestos)',
+                    'cargo' => $cargosAdicionales,
+                    'abono' => 0,
+                    'tipo' => 'ajuste',
+                ];
+            }
+
+            $pagosTotales = round($totalFacturaReal - $saldoReal, 2);
+            $faltanteAbonos = round($pagosTotales - $sumaAbonos, 2);
+            if ($faltanteAbonos > 0.05) {
+                $abonosNoDetallados = $faltanteAbonos;
+                $sumaAbonos += $abonosNoDetallados;
+                $lineas[] = [
+                    'fecha' => '',
+                    'fecha_iso' => null,
+                    'detalle' => 'Pagos / abonos no detallados',
+                    'cargo' => 0,
+                    'abono' => $abonosNoDetallados,
+                    'tipo' => 'ajuste',
+                ];
+            }
+        }
+
+        usort($lineas, function ($a, $b) {
+            $fa = $a['fecha_iso'] ?? '9999-12-31';
+            $fb = $b['fecha_iso'] ?? '9999-12-31';
+            if ($fa !== $fb) {
+                return strcmp($fa, $fb);
+            }
+
+            $orden = ['cargo' => 0, 'abono' => 1, 'ajuste' => 2];
+
+            return ($orden[$a['tipo']] ?? 9) <=> ($orden[$b['tipo']] ?? 9);
+        });
+
+        $saldoCalculado = round($sumaArticulos - $sumaAbonos, 2);
+        if ($cabecera === null) {
+            $saldoReal = $saldoCalculado;
+        }
+
+        return response()->json([
+            'ok' => true,
+            'numero_documento' => $numero,
+            'cliente' => $cabecera->nombre_cliente ?? null,
+            'lineas' => $lineas,
+            'totales' => [
+                'articulos' => round($sumaArticulos, 2),
+                'abonos' => round($sumaAbonos, 2),
+                'saldo' => $saldoReal,
+                'saldo_calculado' => $saldoCalculado,
+                'total_factura' => $totalFacturaReal,
+            ],
+        ]);
     }
 }

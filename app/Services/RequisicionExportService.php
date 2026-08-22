@@ -35,7 +35,7 @@ class RequisicionExportService
             $excludeCodes,
         )
         ->map(fn (array $r) => [
-            'codigo' => trim(explode('/', (string) $r['cod_centro'])[0]),
+            'codigo' => $this->normalizarCodigo($r['cod_centro']),
             'producto' => $r['producto'],
             'categoria' => $r['categoria'] ?? '—',
             'subcategoria' => $r['subcategoria'] ?? '—',
@@ -65,7 +65,7 @@ class RequisicionExportService
             $excludeCodes,
         )
         ->map(fn (array $r) => [
-            'codigo' => trim(explode('/', (string) $r['cod_centro'])[0]),
+            'codigo' => $this->normalizarCodigo($r['cod_centro']),
             'unidad' => 'UND',
             'cantidad' => $r['cantidad'],
             'producto' => $r['producto'],
@@ -130,6 +130,10 @@ class RequisicionExportService
         }
 
         $display = config('inventario.display.'.$sedeOrigen, $sedeOrigen);
+        $excludeCodes = array_values(array_unique(array_filter(
+            array_map(fn ($codigo) => $this->normalizarCodigo($codigo), $excludeCodes),
+            fn (string $codigo) => $codigo !== ''
+        )));
 
         return $ventasRows
             ->filter(fn (array $r) => ($r['accion'] ?? '') === 'HACER REQUISICION')
@@ -161,7 +165,11 @@ class RequisicionExportService
                     return true;
                 }
 
-                return ! in_array((string) ($r['cod_centro'] ?? ''), $excludeCodes, true);
+                return ! in_array(
+                    $this->normalizarCodigo($r['cod_centro'] ?? ''),
+                    $excludeCodes,
+                    true
+                );
             })
             ->map(function (array $r) use ($sedeOrigen) {
                 $nec = (int) ($r['sugerido_nec'] ?? 0);
@@ -209,5 +217,10 @@ class RequisicionExportService
         }
 
         return null;
+    }
+
+    private function normalizarCodigo(mixed $codigo): string
+    {
+        return trim(explode('/', (string) $codigo)[0]);
     }
 }

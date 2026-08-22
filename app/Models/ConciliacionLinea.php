@@ -22,4 +22,18 @@ class ConciliacionLinea extends Model
     {
         return $this->belongsTo(TesoreriaIngreso::class, 'tesoreria_ingreso_id');
     }
+
+    public function esCargo(): bool
+    {
+        if ($this->tipo !== null && trim((string) $this->tipo) !== '') {
+            return strtolower(trim((string) $this->tipo)) === 'cargo';
+        }
+
+        return (float) $this->monto < 0;
+    }
+
+    public function esAbono(): bool
+    {
+        return ! $this->esCargo();
+    }
 }

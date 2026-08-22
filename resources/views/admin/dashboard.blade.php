@@ -72,6 +72,7 @@
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
         <a href="{{ route('admin.sync.index') }}" class="btn secondary" style="background:#f0fdf4;color:#15803d;border-color:#bbf7d0;">⚡ Control de Sincronizadores</a>
         <a href="{{ route('admin.catalogo-auto.index') }}" class="btn secondary" style="background:#eff6ff;color:#2563eb;border-color:#bfdbfe;">🤖 Automatizador de Catálogos</a>
+        <a href="{{ route('catalogo.ir_clientes') }}" class="btn secondary" style="background:#f5f3ff;color:#6d28d9;border-color:#ddd6fe;">Catálogo clientes</a>
         @if(session('sede_local'))
             <a href="{{ route('ventas.index') }}" class="btn secondary">Ir a Ventas</a>
         @else

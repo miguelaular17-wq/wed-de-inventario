@@ -9,7 +9,8 @@ SELECT
     ISNULL(a.precio1_moneda2_uni1, 0)                AS precio_unidad,
     ISNULL(a.precio2_moneda2_uni1, ISNULL(a.precio1_moneda2_uni1, 0)) AS precio_mayor,
     c_padre.descripcion                              AS categoria,
-    c_sub.descripcion                                AS subcategoria
+    c_sub.descripcion                                AS subcategoria,
+    ISNULL(a.costo_actual_moneda2, 0)                AS costo_actual
 FROM [dbo].[articulos] a WITH (NOLOCK)
 LEFT JOIN [dbo].[existencias] ex WITH (NOLOCK) 
     ON a.id = ex.id_articulo AND ex.almacen = '01'

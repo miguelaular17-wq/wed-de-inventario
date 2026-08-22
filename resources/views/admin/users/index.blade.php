@@ -9,7 +9,7 @@
             <div class="avatar-circle" style="background: var(--blue);">US</div>
             <div>
                 <h1 style="margin: 0; font-size: 1.5rem;">Gestión de Usuarios</h1>
-                <p class="muted" style="margin: 0; font-size: 0.88rem;">Asigne o cambie la sede autorizada de cada usuario registrado.</p>
+                <p class="muted" style="margin: 0; font-size: 0.88rem;">Rol, sede y permisos extra de vistas que no vienen con el cargo.</p>
             </div>
         </div>
         
@@ -100,6 +100,7 @@
                                         <option value="auditor" @selected($user->role === 'auditor')>Auditor</option>
                                         <option value="tesoreria" @selected($user->role === 'tesoreria')>Tesorería</option>
                                         <option value="gerente" @selected($user->role === 'gerente')>Gerente</option>
+                                        <option value="rrhh" @selected($user->role === 'rrhh')>RRHH</option>
                                     </select>
                                 </div>
                                 <div class="field" style="margin:0;">
@@ -116,6 +117,37 @@
                                     <input type="text" name="password_plain" placeholder="Nueva clave..." style="padding:5px 10px; font-size:0.85rem; border-radius:6px; max-width: 110px; border: 1px solid var(--border);">
                                 </div>
                                 <button type="submit" class="btn" style="padding:6px 14px; font-size:0.8rem; border-radius:6px; background-color: var(--blue);">Guardar</button>
+                                @php
+                                    $inheritedPerms = $user->rolePermissionKeys();
+                                    $extraPerms = $user->extraPermissionKeys();
+                                    $extraCount = count($extraPerms);
+                                @endphp
+                                <details class="perm-extras" data-perm-extras @if(in_array($user->role, ['admin', 'gerente'], true)) hidden @endif>
+                                    <summary>
+                                        Permisos extra
+                                        <span class="perm-extras-count" data-perm-count>{{ $extraCount }}</span>
+                                    </summary>
+                                    <div class="perm-extras-grid">
+                                        @foreach ($assignablePermissions as $permKey => $permLabel)
+                                            @php
+                                                $isInherited = in_array($permKey, $inheritedPerms, true);
+                                                $isChecked = $isInherited
+                                                    || in_array($permKey, $extraPerms, true)
+                                                    || ($permKey === 'marketing.publicidad_equipo' && $user->ver_publicidad_equipo);
+                                            @endphp
+                                            <label class="{{ $isInherited ? 'is-inherited' : '' }}" data-perm-key="{{ $permKey }}">
+                                                <input
+                                                    type="checkbox"
+                                                    name="extra_permissions[]"
+                                                    value="{{ $permKey }}"
+                                                    @checked($isChecked)
+                                                    @disabled($isInherited)
+                                                >
+                                                <span>{{ $permLabel }}</span>
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                </details>
                             </form>
                         </td>
                         <td style="text-align: center; vertical-align: middle;">
@@ -178,13 +210,30 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const rolePermissions = @json($rolePermissions);
+    const assignableKeys = @json(array_keys($assignablePermissions));
+
     document.querySelectorAll('select[name="role"]').forEach(roleSelect => {
         const form = roleSelect.closest('form');
         const sedeSelect = form.querySelector('select[name="sede"]');
-        
+        const extrasBox = form.querySelector('[data-perm-extras]');
+        const noSedeRoles = ['comprador', 'marketing', 'finanzas', 'cobranza', 'contabilidad', 'auditor', 'tesoreria', 'gerente', 'rrhh'];
+
+        const inheritedFor = (role) => {
+            const perms = rolePermissions[role] || [];
+            if (perms.includes('*') || role === 'admin' || role === 'gerente') {
+                return assignableKeys.slice();
+            }
+            const inherited = perms.slice();
+            if (inherited.includes('finanzas.editar') && !inherited.includes('finanzas.ver')) {
+                inherited.push('finanzas.ver');
+            }
+            return inherited;
+        };
+
         const updateSedeState = () => {
             const role = roleSelect.value;
-            if (role === 'comprador' || role === 'marketing' || role === 'finanzas' || role === 'cobranza' || role === 'contabilidad' || role === 'auditor' || role === 'tesoreria') {
+            if (noSedeRoles.includes(role)) {
                 sedeSelect.value = '';
                 sedeSelect.disabled = true;
                 sedeSelect.style.opacity = '0.5';
@@ -194,10 +243,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 sedeSelect.style.opacity = '1';
                 sedeSelect.style.cursor = 'default';
             }
+
+            if (!extrasBox) return;
+            const hideExtras = role === 'admin' || role === 'gerente';
+            extrasBox.hidden = hideExtras;
+            if (hideExtras) return;
+
+            const inherited = inheritedFor(role);
+            extrasBox.querySelectorAll('[data-perm-key]').forEach(label => {
+                const key = label.getAttribute('data-perm-key');
+                const box = label.querySelector('input[type="checkbox"]');
+                const isInherited = inherited.includes(key);
+                label.classList.toggle('is-inherited', isInherited);
+                box.disabled = isInherited;
+                if (isInherited) box.checked = true;
+            });
         };
         
         roleSelect.addEventListener('change', updateSedeState);
-        updateSedeState(); // Run on initial load
+        updateSedeState();
     });
 });
 </script>

@@ -17,6 +17,17 @@ use App\Http\Middleware\EnsureSedeSelected;
 use App\Http\Controllers\CompradorController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PedidoSolicitadoController;
+use App\Http\Controllers\Nomina\AbonoSueldoController;
+use App\Http\Controllers\Nomina\AttendanceController;
+use App\Http\Controllers\Nomina\CargoController;
+use App\Http\Controllers\Nomina\ComisionAjusteController;
+use App\Http\Controllers\Nomina\ComisionController;
+use App\Http\Controllers\Nomina\ConfiguracionController;
+use App\Http\Controllers\Nomina\EmpleadoController;
+use App\Http\Controllers\Nomina\OrganizacionController;
+use App\Http\Controllers\Nomina\PeriodoController;
+use App\Http\Controllers\Nomina\PrestamoController;
+use App\Http\Controllers\Nomina\SedeNominaController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -43,6 +54,10 @@ Route::get('/', function () {
 
         if ($user->isTesoreria()) {
             return redirect()->route('tesoreria.dashboard');
+        }
+
+        if ($user->isRrhh()) {
+            return redirect()->route('nomina.empleados.index');
         }
 
         return redirect()->route('ventas.index');
@@ -116,13 +131,13 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
 
 
 // Sede change views accessible by roles with sede access
-Route::middleware(['auth', 'role:admin,gerente,supervisor,telefonia,sede,comprador'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'permission:operacion'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/sedes', [\App\Http\Controllers\Admin\SedeController::class, 'index'])->name('sedes.index');
     Route::post('/sedes/{sede}/usar', [\App\Http\Controllers\Admin\SedeController::class, 'use'])->name('sedes.use');
 });
 
 // Sede views restricted by role
-Route::middleware(['auth', EnsureSedeSelected::class, 'role:admin,gerente,supervisor,telefonia,sede,comprador'])->group(function () {
+Route::middleware(['auth', EnsureSedeSelected::class, 'permission:operacion'])->group(function () {
     Route::get('/ventas', [VentasController::class, 'index'])->name('ventas.index');
     Route::get('/ventas/sync', [VentasController::class, 'sync'])->name('ventas.sync');
     Route::get('/ventas/mayor-demanda', [VentasController::class, 'mayorDemanda'])->name('ventas.mayor_demanda');
@@ -139,9 +154,10 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'role:admin,gerente,superv
 
 
 // Comprador & Marketing specific routes
-Route::middleware(['auth', 'role:admin,gerente,comprador,marketing'])->prefix('compras')->group(function () {
+Route::middleware(['auth', 'permission:compras'])->prefix('compras')->group(function () {
     Route::get('/', [CompradorController::class, 'index'])->name('comprador.dashboard');
     Route::get('/exportar', [CompradorController::class, 'export'])->name('comprador.export');
+    Route::get('/quiebre-inventario/exportar', [CompradorController::class, 'exportInventoryBreak'])->name('comprador.quiebre.export');
     Route::post('/notificar', [CompradorController::class, 'notifyRedistribution'])->name('comprador.notify');
     Route::post('/publicidad/toggle', [CompradorController::class, 'togglePublicidad'])->name('comprador.publicidad.toggle');
     
@@ -164,8 +180,8 @@ Route::middleware(['auth', 'role:admin,gerente,comprador,marketing'])->prefix('c
 
     // Route for supervisors to download daily report by sede
     Route::get('/pedidos/reporte-diario-sede', [PedidoSolicitadoController::class, 'reporteDiarioSedePdf'])
-        ->withoutMiddleware('role:admin,gerente,comprador,marketing')
-        ->middleware('role:supervisor,admin,gerente')
+        ->withoutMiddleware('permission:compras')
+        ->middleware('permission:compras.reporte_sede')
         ->name('comprador.pedidos.diario_sede');
 
     // Existencias (antes edurar)
@@ -179,7 +195,7 @@ Route::prefix('vendedor')->group(function () {
 });
 
 // Tesoreria routes
-Route::middleware(['auth', 'role:admin,gerente,tesoreria'])->prefix('tesoreria')->name('tesoreria.')->group(function () {
+Route::middleware(['auth', 'permission:tesoreria'])->prefix('tesoreria')->name('tesoreria.')->group(function () {
     Route::get('/', [\App\Http\Controllers\TesoreriaController::class, 'dashboard'])->name('dashboard');
     Route::post('/ingreso-banco', [\App\Http\Controllers\TesoreriaController::class, 'storeIngresoBanco'])->name('ingreso_banco.store');
     Route::post('/lote-punto-venta', [\App\Http\Controllers\TesoreriaController::class, 'storeLotePuntoVenta'])->name('lote_pos.store');
@@ -187,13 +203,67 @@ Route::middleware(['auth', 'role:admin,gerente,tesoreria'])->prefix('tesoreria')
     Route::delete('/lote-punto-venta/{id}', [\App\Http\Controllers\TesoreriaController::class, 'destroyLotePuntoVenta'])->name('lote_pos.destroy');
 });
 
+Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina.')->group(function () {
+    Route::get('/', [EmpleadoController::class, 'index'])->name('index');
+
+    Route::get('/periodos', [PeriodoController::class, 'index'])->name('periodos.index');
+    Route::post('/periodos', [PeriodoController::class, 'store'])->name('periodos.store');
+    Route::get('/periodos/{periodo}', [PeriodoController::class, 'show'])->name('periodos.show');
+    Route::post('/periodos/{periodo}/calcular', [PeriodoController::class, 'calcular'])->name('periodos.calcular');
+    Route::post('/periodos/{periodo}/aprobar', [PeriodoController::class, 'aprobar'])->name('periodos.aprobar');
+    Route::post('/periodos/{periodo}/pagar', [PeriodoController::class, 'pagar'])->name('periodos.pagar');
+    Route::post('/periodos/{periodo}/cerrar', [PeriodoController::class, 'cerrar'])->name('periodos.cerrar');
+
+    Route::get('/comisiones', [ComisionController::class, 'index'])->name('comisiones.index');
+    Route::get('/comisiones/{periodo}', [ComisionController::class, 'show'])->name('comisiones.show');
+
+    Route::get('/empleados', [EmpleadoController::class, 'index'])->name('empleados.index');
+    Route::get('/empleados/create', [EmpleadoController::class, 'create'])->name('empleados.create');
+    Route::post('/empleados', [EmpleadoController::class, 'store'])->name('empleados.store');
+    Route::get('/empleados/{empleado}', [EmpleadoController::class, 'show'])->name('empleados.show');
+    Route::get('/empleados/{empleado}/edit', [EmpleadoController::class, 'edit'])->name('empleados.edit');
+    Route::put('/empleados/{empleado}', [EmpleadoController::class, 'update'])->name('empleados.update');
+
+    Route::post('/empleados/{empleado}/prestamos', [PrestamoController::class, 'store'])->name('prestamos.store');
+    Route::post('/prestamos/{prestamo}/pagos', [PrestamoController::class, 'abonar'])->name('prestamos.abonar');
+    Route::post('/prestamos/{prestamo}/cancelar', [PrestamoController::class, 'cancelar'])->name('prestamos.cancelar');
+    Route::post('/empleados/{empleado}/abonos-sueldo', [AbonoSueldoController::class, 'store'])->name('abonos_sueldo.store');
+    Route::post('/abonos-sueldo/{abono}/cancelar', [AbonoSueldoController::class, 'cancelar'])->name('abonos_sueldo.cancelar');
+    Route::post('/empleados/{empleado}/comision-abonos', [ComisionAjusteController::class, 'storeAbono'])->name('comision_abonos.store');
+    Route::post('/empleados/{empleado}/comision-descuentos', [ComisionAjusteController::class, 'storeDescuento'])->name('comision_descuentos.store');
+    Route::post('/empleados/{empleado}/inasistencias', [AttendanceController::class, 'storeInasistencia'])->name('inasistencias.store');
+    Route::post('/empleados/{empleado}/inasistencias/hoy', [AttendanceController::class, 'marcarFaltoHoy'])->name('inasistencias.hoy');
+    Route::post('/inasistencias/{inasistencia}/cancelar', [AttendanceController::class, 'cancelarInasistencia'])->name('inasistencias.cancelar');
+    Route::post('/empleados/{empleado}/horas-extras', [AttendanceController::class, 'storeHorasExtras'])->name('horas_extras.store');
+    Route::post('/horas-extras/{horaExtra}/cancelar', [AttendanceController::class, 'cancelarHorasExtras'])->name('horas_extras.cancelar');
+
+    Route::get('/organizacion', [OrganizacionController::class, 'index'])->name('organizacion');
+
+    Route::get('/sedes', [SedeNominaController::class, 'index'])->name('sedes.index');
+    Route::post('/sedes', [SedeNominaController::class, 'store'])->name('sedes.store');
+    Route::put('/sedes/{sede}', [SedeNominaController::class, 'update'])->name('sedes.update');
+
+    Route::get('/cargos', [CargoController::class, 'index'])->name('cargos.index');
+    Route::post('/cargos', [CargoController::class, 'store'])->name('cargos.store');
+    Route::put('/cargos/{cargo}', [CargoController::class, 'update'])->name('cargos.update');
+
+    Route::get('/configuracion', [ConfiguracionController::class, 'index'])->name('configuracion.index');
+    Route::put('/configuracion', [ConfiguracionController::class, 'update'])->name('configuracion.update');
+    Route::post('/configuracion/reglas-comision', [ConfiguracionController::class, 'storeRegla'])->name('configuracion.reglas.store');
+    Route::delete('/configuracion/reglas-comision/{regla}', [ConfiguracionController::class, 'destroyRegla'])->name('configuracion.reglas.destroy');
+});
+
 // Notifications routes for all authenticated users
-// Catálogo público - accesible sin login
+// Catálogo público interno
 Route::get('/catalogo', [\App\Http\Controllers\CatalogoController::class, 'index'])->name('catalogo.index');
+Route::get('/catalogo/cliente/{token}', [\App\Http\Controllers\CatalogoController::class, 'cliente'])
+    ->where('token', '[A-Za-z0-9_-]{16,80}')
+    ->name('catalogo.cliente');
 
 Route::middleware('auth')->group(function () {
     // Catálogo Gráfico (solo acciones protegidas)
     Route::get('/catalogo/pdf', [\App\Http\Controllers\CatalogoController::class, 'exportPdf'])->name('catalogo.pdf');
+    Route::get('/catalogo/ir-clientes', [\App\Http\Controllers\CatalogoController::class, 'irClientes'])->name('catalogo.ir_clientes');
     Route::post('/catalogo/upload-image', [\App\Http\Controllers\CatalogoController::class, 'uploadImageByUrl'])->name('catalogo.upload_image');
 
     Route::get('/notificaciones', [NotificationController::class, 'index'])->name('notifications.index');
@@ -208,7 +278,7 @@ Route::middleware('auth')->group(function () {
 });
 
 // Finanzas routes
-Route::middleware(['auth', 'role:admin,gerente,finanzas,auditor'])->prefix('finanzas')->group(function () {
+Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->group(function () {
     Route::get('/flujo-caja', [FinanzasController::class, 'flujoCaja'])->name('finanzas.flujo_caja');
     Route::post('/flujo-caja/parse-desglose', [FinanzasController::class, 'parseArchivoDesglose'])->name('finanzas.parse_desglose');
     Route::get('/flujo-caja/reporte', [FinanzasController::class, 'reporteFlujoCajaBusqueda'])->name('finanzas.flujo_caja.reporte');
@@ -217,7 +287,7 @@ Route::middleware(['auth', 'role:admin,gerente,finanzas,auditor'])->prefix('fina
     Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
     Route::get('/gastos-fijos/pendientes', [FinanzasController::class, 'getGastosFijosParaVincular'])->name('finanzas.gastos_fijos.pendientes');
 
-    Route::middleware(['role:admin,gerente,finanzas'])->group(function () {
+    Route::middleware(['permission:finanzas.editar'])->group(function () {
         Route::post('/flujo-caja/reset', [FinanzasController::class, 'resetDaily'])->name('finanzas.reset_daily');
         Route::post('/flujo-caja/egreso', [FinanzasController::class, 'storeEgreso'])->name('finanzas.store_egreso');
         Route::post('/flujo-caja/egreso/{id}', [FinanzasController::class, 'updateEgreso'])->name('finanzas.update_egreso');
@@ -238,7 +308,7 @@ Route::middleware(['auth', 'role:admin,gerente,finanzas,auditor'])->prefix('fina
 });
 
 // Conciliaciones routes - solo admin y contabilidad
-Route::middleware(['auth', 'role:admin,gerente,contabilidad'])->prefix('finanzas')->group(function () {
+Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->group(function () {
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
     Route::post('/conciliaciones/upload', [FinanzasController::class, 'uploadConciliacion'])->name('finanzas.conciliaciones.upload');
     Route::post('/conciliaciones/process', [FinanzasController::class, 'processConciliacion'])->name('finanzas.conciliaciones.process');
@@ -251,7 +321,7 @@ Route::middleware(['auth', 'role:admin,gerente,contabilidad'])->prefix('finanzas
 });
 
 // Cobranza routes
-Route::middleware(['auth', 'role:admin,gerente,cobranza'])->prefix('cobranza')->group(function () {
+Route::middleware(['auth', 'permission:cobranza'])->prefix('cobranza')->group(function () {
     Route::get('/', [CobranzaController::class, 'index'])->name('cobranza.index');
     Route::get('/pdf', [CobranzaController::class, 'descargarReportePdf'])->name('cobranza.pdf');
     Route::post('/importar', [CobranzaController::class, 'importarExcel'])->name('cobranza.importar');
@@ -268,7 +338,7 @@ Route::middleware(['auth', 'role:admin,gerente,cobranza'])->prefix('cobranza')->
 Route::get('/finanzas/reporte-consolidado', [App\Http\Controllers\FinanzasController::class, 'reporteConsolidado'])->name('finanzas.reporte_consolidado');
 
 // Contratos / Seguimiento de cobranza routes
-Route::middleware(['auth', 'role:admin,gerente,finanzas,cobranza'])->prefix('contratos')->group(function () {
+Route::middleware(['auth', 'permission:contratos'])->prefix('contratos')->group(function () {
     Route::get('/', [App\Http\Controllers\ContratoController::class, 'index'])->name('contratos.index');
     Route::get('/lista', [App\Http\Controllers\ContratoController::class, 'listar'])->name('contratos.lista');
     Route::get('/calendario', [App\Http\Controllers\ContratoController::class, 'calendario'])->name('contratos.calendario');
@@ -316,7 +386,7 @@ Route::get('/pure', function () {
 // ─────────────────────────────────────────────────────────────────────────────
 // GESTIÓN PATRIMONIAL Y ALQUILERES
 // ─────────────────────────────────────────────────────────────────────────────
-Route::middleware(['auth', 'role:admin,gerente,cobranza'])->prefix('patrimonial')->name('patrimonial.')->group(function () {
+Route::middleware(['auth', 'permission:patrimonial'])->prefix('patrimonial')->name('patrimonial.')->group(function () {
     Route::get('/', [\App\Http\Controllers\Patrimonial\DashboardPatrimonialController::class, 'index'])->name('dashboard');
 
     Route::resource('propiedades', \App\Http\Controllers\Patrimonial\PropiedadController::class)->parameters(['propiedades' => 'propiedad']);

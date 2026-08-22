@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -23,6 +24,11 @@ class User extends Authenticatable
     public const ROLE_AUDITOR = 'auditor';
     public const ROLE_TESORERIA = 'tesoreria';
     public const ROLE_GERENTE = 'gerente';
+    public const ROLE_RRHH = 'rrhh';
+
+    /** @var list<string>|null */
+    protected ?array $extraPermissionCache = null;
+
     protected $fillable = [
         'name',
         'email',
@@ -31,6 +37,7 @@ class User extends Authenticatable
         'role',
         'sede',
         'tutorial_step',
+        'ver_publicidad_equipo',
     ];
 
     protected $hidden = [
@@ -42,6 +49,7 @@ class User extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'ver_publicidad_equipo' => 'boolean',
         ];
     }
 
@@ -110,9 +118,124 @@ class User extends Authenticatable
         return $this->role === self::ROLE_GERENTE;
     }
 
+    public function isRrhh(): bool
+    {
+        return $this->role === self::ROLE_RRHH;
+    }
+
+    public function extraPermissions(): HasMany
+    {
+        return $this->hasMany(UserPermission::class);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function extraPermissionKeys(): array
+    {
+        if ($this->extraPermissionCache !== null) {
+            return $this->extraPermissionCache;
+        }
+
+        try {
+            if ($this->relationLoaded('extraPermissions')) {
+                return $this->extraPermissionCache = $this->extraPermissions->pluck('permission')->all();
+            }
+
+            return $this->extraPermissionCache = $this->extraPermissions()->pluck('permission')->all();
+        } catch (\Throwable) {
+            return $this->extraPermissionCache = [];
+        }
+    }
+
+    /**
+     * Permisos que vienen del rol (sin extras).
+     *
+     * @return list<string>
+     */
+    public function rolePermissionKeys(): array
+    {
+        $perms = config('permissions.roles.'.$this->role, []);
+        if (in_array('*', $perms, true) || $this->isAdmin()) {
+            return array_keys(config('permissions.assignable', []));
+        }
+
+        return array_values($perms);
+    }
+
+    public function canAccess(string $permission): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        $owned = array_merge($this->rolePermissionKeys(), $this->extraPermissionKeys());
+
+        if ($permission === 'finanzas.ver' && in_array('finanzas.editar', $owned, true)) {
+            return true;
+        }
+
+        if ($permission === 'marketing.publicidad_equipo' && $this->isMarketing() && (bool) $this->ver_publicidad_equipo) {
+            return true;
+        }
+
+        return in_array($permission, $owned, true);
+    }
+
+    /**
+     * @param  list<string>  $permissions
+     */
+    public function canAccessAny(array $permissions): bool
+    {
+        foreach ($permissions as $permission) {
+            if ($this->canAccess($permission)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<string>  $permissions
+     */
+    public function syncExtraPermissions(array $permissions): void
+    {
+        $assignable = array_keys(config('permissions.assignable', []));
+        $requested = array_values(array_unique(array_intersect($permissions, $assignable)));
+        $rolePerms = config('permissions.roles.'.$this->role, []);
+
+        if (in_array('*', $rolePerms, true) || $this->isAdmin()) {
+            $requested = [];
+        } else {
+            $requested = array_values(array_diff($requested, $rolePerms));
+            if (in_array('finanzas.editar', $requested, true)) {
+                $requested = array_values(array_diff($requested, ['finanzas.ver']));
+            }
+        }
+
+        $this->extraPermissions()->delete();
+        foreach ($requested as $permission) {
+            $this->extraPermissions()->create(['permission' => $permission]);
+        }
+
+        $this->extraPermissionCache = $requested;
+        $this->unsetRelation('extraPermissions');
+    }
+
+    public function canAccessNomina(): bool
+    {
+        return $this->canAccess('nomina');
+    }
+
+    public function canViewTeamPublicidad(): bool
+    {
+        return $this->canAccess('marketing.publicidad_equipo');
+    }
+
     public function hasAccessToSedeViews(): bool
     {
-        return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_SUPERVISOR, self::ROLE_TELEFONIA, self::ROLE_SEDE, self::ROLE_COMPRADOR, self::ROLE_GERENTE], true);
+        return $this->canAccess('operacion');
     }
 
     public function hasAccessToMovimientos(): bool

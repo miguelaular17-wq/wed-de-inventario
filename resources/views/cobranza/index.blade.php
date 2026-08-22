@@ -441,7 +441,7 @@
                                 <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #93c5fd; background-color: #eff6ff; cursor: pointer; color: #1e40af; margin-left: 4px;" onclick="abrirModalLlamadas('{{ $c->codigo }}', '{{ htmlspecialchars($c->cliente) }}')">
                                     📞 Llamadas
                                 </button>
-                                <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #fbbf24; background-color: #fef3c7; cursor: pointer; color: #d97706; margin-left: 4px;" onclick="abrirModalEstadoCuenta('{{ $c->numero_documento }}', '{{ htmlspecialchars($c->cliente) }}')">
+                                <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #fbbf24; background-color: #fef3c7; cursor: pointer; color: #d97706; margin-left: 4px;" onclick='abrirModalEstadoCuenta(@json($c->numero_documento), @json($c->cliente))'>
                                     📝 Edo. Cuenta
                                 </button>
                             </td>
@@ -764,15 +764,22 @@
              return;
         }
 
+        const money = (n) => '$ ' + Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
         try {
-            const res = await fetch(`/cobranza/${encodeURIComponent(numeroDocumento)}/estado-cuenta`);
+            const res = await fetch(`/cobranza/${encodeURIComponent(numeroDocumento)}/estado-cuenta`, {
+                headers: { 'Accept': 'application/json' }
+            });
             const data = await res.json();
+            const lineas = Array.isArray(data) ? data : (data.lineas || []);
+            const totales = data.totales || {};
             
-            if (data.length === 0) {
+            if (!lineas.length) {
                 list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No hay registros detallados sincronizados para esta factura aún. <br><small>Recuerde activar el módulo de cobranzas en el sincronizador de la tienda.</small></div>';
                 return;
             }
-            
+
             let html = `
                 <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
                     <thead>
@@ -785,123 +792,38 @@
                     </thead>
                     <tbody>
             `;
-            
-            let saldoAcumulado = 0;
-            let filasMostradas = 0;
-            
-            // Filtrar filas sin información útil (sin detalle y sin monto)
-            const filesUtiles = data.filter(mov => {
-                const monto = parseFloat(mov.total_renglon || mov.total_abono || 0);
-                const tieneDetalle = mov.detalle && mov.detalle.trim() !== '';
-                return monto > 0 || tieneDetalle || mov.tipo_fila === 2;
-            });
 
-            if (filesUtiles.length === 0) {
-                // Todos los registros son filas vacías → datos incompletos del sincronizador
-                list.innerHTML = `<div style="text-align:center; padding:24px; color:#64748b;">
-                    <div style="font-size:2rem; margin-bottom:8px;">⚠️</div>
-                    <strong>El estado de cuenta existe pero sin desglose de artículos.</strong><br>
-                    <small style="color:#94a3b8;">El sincronizador debe estar actualizado para enviar el detalle por renglón.</small>
-                </div>`;
-                return;
-            }
-
-            // Buscar el saldo real y total de la factura
-            const filaPrincipal = data.find(m => parseFloat(m.saldo_pendiente) > 0 || parseFloat(m.total_factura) > 0);
-            const saldoReal = filaPrincipal ? parseFloat(filaPrincipal.saldo_pendiente || 0) : 0;
-            const totalFacturaReal = filaPrincipal ? parseFloat(filaPrincipal.total_factura || 0) : 0;
-            
-            const sumaArticulos = filesUtiles.filter(m => m.tipo_fila === 1).reduce((acc, m) => acc + parseFloat(m.total_renglon || 0), 0);
-            const abonosEnTabla = filesUtiles.filter(m => m.tipo_fila === 2 || m.tipo_documento === 'ABONO').reduce((acc, m) => acc + parseFloat(m.total_abono || m.total_renglon || 0), 0);
-
-            let abonoInicial = 0;
-            let cargosAdicionales = 0;
-            let abonosNoDetallados = 0;
-
-            if (totalFacturaReal > 0) {
-                if (sumaArticulos > totalFacturaReal) {
-                    abonoInicial = sumaArticulos - totalFacturaReal;
-                } else if (totalFacturaReal > sumaArticulos) {
-                    cargosAdicionales = totalFacturaReal - sumaArticulos;
-                }
-                
-                const pagosTotales = totalFacturaReal - saldoReal;
-                if (pagosTotales > abonosEnTabla) {
-                    abonosNoDetallados = pagosTotales - abonosEnTabla;
-                }
-            }
-
-            filesUtiles.forEach(mov => {
-                const isAbono = mov.tipo_fila === 2 || mov.tipo_documento === 'ABONO';
-                const fecha = mov.fecha_emision ? new Date(mov.fecha_emision).toLocaleDateString('es-VE') : '';
-                const descripcion = mov.detalle || (isAbono ? 'Pago/Abono' : 'Artículo/Cargo');
-                
-                let montoCargo = '';
-                let montoAbono = '';
-                
-                if (!isAbono) {
-                    const r = parseFloat(mov.total_renglon || 0);
-                    montoCargo = r.toFixed(2);
-                } else {
-                    const a = parseFloat(mov.total_abono || mov.total_renglon || 0);
-                    montoAbono = a.toFixed(2);
-                }
-                
+            lineas.forEach((mov) => {
+                const esAjuste = mov.tipo === 'ajuste';
+                const esAbono = mov.tipo === 'abono' || (esAjuste && Number(mov.abono) > 0);
                 html += `
-                    <tr>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${fecha}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${descripcion}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #dc2626;">${montoCargo ? '$ ' + montoCargo : ''}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #16a34a;">${montoAbono ? '$ ' + montoAbono : ''}</td>
+                    <tr style="${esAjuste ? 'background-color: #f0fdf4;' : ''}">
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${esc(mov.fecha || '')}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; ${esAjuste ? 'font-style: italic;' : ''}">${esc(mov.detalle || '')}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #dc2626;">${Number(mov.cargo) > 0 ? money(mov.cargo) : ''}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #16a34a;">${Number(mov.abono) > 0 ? money(mov.abono) : ''}</td>
                     </tr>
                 `;
             });
-            
-            if (cargosAdicionales > 0) {
-                html += `
-                    <tr style="background-color: #fef2f2;">
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">-</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-style: italic;">Cargos adicionales (Intereses / Impuestos)</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #dc2626;">$ ${cargosAdicionales.toFixed(2)}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right;"></td>
-                    </tr>
-                `;
-            }
 
-            if (abonoInicial > 0) {
-                html += `
-                    <tr style="background-color: #f0fdf4;">
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">-</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-style: italic;">Abono Inicial (Pago en Caja al facturar)</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right;"></td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #16a34a;">$ ${abonoInicial.toFixed(2)}</td>
-                    </tr>
-                `;
-            }
-
-            if (abonosNoDetallados > 0) {
-                html += `
-                    <tr style="background-color: #f0fdf4;">
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">-</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-style: italic;">Pagos / Abonos no detallados</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right;"></td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #16a34a;">$ ${abonosNoDetallados.toFixed(2)}</td>
-                    </tr>
-                `;
-            }
+            const saldo = Number(totales.saldo ?? 0);
 
             html += `
                     </tbody>
                     <tfoot>
+                        <tr style="background: #f8fafc;">
+                            <td colspan="2" style="padding: 8px; font-weight: 600; border-top: 1px solid #cbd5e1;">Totales</td>
+                            <td style="padding: 8px; text-align: right; font-weight: 600; color: #dc2626; border-top: 1px solid #cbd5e1;">${money(totales.articulos)}</td>
+                            <td style="padding: 8px; text-align: right; font-weight: 600; color: #16a34a; border-top: 1px solid #cbd5e1;">${money(totales.abonos)}</td>
+                        </tr>
                         <tr>
-                            <td colspan="3" style="padding: 12px 8px; text-align: right; font-weight: bold; border-top: 2px solid #cbd5e1;">Saldo Restante (Real):</td>
-                            <td style="padding: 12px 8px; text-align: right; font-weight: bold; color: ${saldoReal > 0 ? '#dc2626' : '#16a34a'}; border-top: 2px solid #cbd5e1;">$ ${saldoReal.toFixed(2)}</td>
+                            <td colspan="3" style="padding: 12px 8px; text-align: right; font-weight: bold; border-top: 2px solid #cbd5e1;">Saldo restante:</td>
+                            <td style="padding: 12px 8px; text-align: right; font-weight: bold; color: ${saldo > 0 ? '#dc2626' : '#16a34a'}; border-top: 2px solid #cbd5e1;">${money(saldo)}</td>
                         </tr>
                     </tfoot>
                 </table>
             `;
 
-            
             list.innerHTML = html;
         } catch (e) {
             console.error(e);

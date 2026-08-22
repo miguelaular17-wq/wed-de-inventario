@@ -54,4 +54,9 @@ return [
     'sync_interval_ms' => (int) env('SYNC_INTERVAL_MS', 60000),
     'last_stock_update_cache_seconds' => (int) env('LAST_STOCK_UPDATE_CACHE_SECONDS', 30),
     'load_for_sede_cache_seconds' => (int) env('LOAD_FOR_SEDE_CACHE_SECONDS', 1800),
+
+    'catalogo_cliente_token' => env('CATALOGO_CLIENTE_TOKEN', ''),
+
+    /** Sedes que no se ofrecen en el filtro del catálogo. */
+    'catalogo_sedes_ocultas' => ['NUNES', 'MOVISTAR', 'JRZ'],
 ];

@@ -1,0 +1,19 @@
+.git
+.github
+.env
+.env.*
+tests
+vendor
+node_modules
+storage/logs
+storage/framework/cache
+storage/framework/sessions
+storage/framework/testing
+storage/framework/views
+
+# Not needed in the Render image (saves multi-GB and secrets)
+Imagenes_Articulos_JRZ
+app 1
+Nueva carpeta
+chrome_extension
+scripts/sync_sales

@@ -71,7 +71,7 @@
                         @forelse($lotesPuntos as $lote)
                         <tr style="border-bottom: 1px solid #f1f5f9;">
                             <td style="padding: 10px 4px; color: #334155;">{{ \Carbon\Carbon::parse($lote->fecha)->format('d/m/Y') }}</td>
-                            <td style="padding: 10px 4px; color: #475569; font-weight: 500;">{{ $lote->banco }}</td>
+                            <td style="padding: 10px 4px; color: #475569; font-weight: 500;">{{ $lote->banco }}{{ $lote->titular ? ' / '.$lote->titular : '' }}</td>
                             <td style="padding: 10px 4px; font-weight: 500; color: #1e293b;">{{ $lote->lote_referencia }}</td>
                             <td style="padding: 10px 4px; color: #059669; font-weight: 600;">Bs. {{ number_format($lote->monto, 2, ',', '.') }}</td>
                             <td style="padding: 10px 4px; color: #64748b; font-size: 0.9rem;">{{ Str::limit($lote->descripcion ?: '-', 20) }}</td>
@@ -142,23 +142,26 @@
                 <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #475569; margin-bottom: 6px;">Banco</label>
                 <select name="banco" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none;">
                     <option value="">Seleccione un banco...</option>
-                    <option value="BANESCO JRZ">BANESCO JRZ</option>
-                    <option value="BANESCO DORAL">BANESCO DORAL</option>
-                    <option value="BANESCO LNACEH">BANESCO LNACEH</option>
-                    <option value="BANESCO NUNES">BANESCO NUNES</option>
-                    <option value="BANESCO EURONISSI">BANESCO EURONISSI</option>
-                    <option value="MERCANTIL JRZ">MERCANTIL JRZ</option>
-                    <option value="VENEZUELA DORAL">VENEZUELA DORAL</option>
-                    <option value="VENEZUELA LNACEH">VENEZUELA LNACEH</option>
-                    <option value="VENEZUELA JRZ">VENEZUELA JRZ</option>
-                    <option value="TESORO DORAL">TESORO DORAL</option>
-                    <option value="TESORO LNACEH">TESORO LNACEH</option>
-                    <option value="TESORO JRZ">TESORO JRZ</option>
-                    <option value="BNC DORAL">BNC DORAL</option>
-                    <option value="BNC LNACEH">BNC LNACEH</option>
-                    <option value="BNC JRZ">BNC JRZ</option>
-                    <option value="BBVA LNACEH">BBVA LNACEH</option>
-                    <option value="PROVINCIAL JRZ">PROVINCIAL JRZ</option>
+                    <option value="BANESCO">BANESCO</option>
+                    <option value="MERCANTIL">MERCANTIL</option>
+                    <option value="VENEZUELA">VENEZUELA</option>
+                    <option value="TESORO">TESORO</option>
+                    <option value="BNC">BNC</option>
+                    <option value="BBVA">BBVA</option>
+                    <option value="PROVINCIAL">PROVINCIAL</option>
+                    <option value="BANCAMIGA">BANCAMIGA</option>
+                    <option value="BANCARIBE">BANCARIBE</option>
+                </select>
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #475569; margin-bottom: 6px;">Titular</label>
+                <select name="titular" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none;">
+                    <option value="">Seleccione un titular...</option>
+                    <option value="JRZ">JRZ</option>
+                    <option value="DORAL">DORAL</option>
+                    <option value="LNACEH">LNACEH</option>
+                    <option value="NUNES">NUNES</option>
+                    <option value="EURONISSI">EURONISSI</option>
                 </select>
             </div>
             <div style="margin-bottom: 16px;">
@@ -210,8 +213,15 @@
                 </select>
             </div>
             <div style="margin-bottom: 16px;">
-                <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #475569; margin-bottom: 6px;">Titular (Opcional)</label>
-                <input type="text" name="titular" id="edit_pos_titular" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none;">
+                <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #475569; margin-bottom: 6px;">Titular</label>
+                <select name="titular" id="edit_pos_titular" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; outline: none;">
+                    <option value="">Seleccione un titular...</option>
+                    <option value="JRZ">JRZ</option>
+                    <option value="DORAL">DORAL</option>
+                    <option value="LNACEH">LNACEH</option>
+                    <option value="NUNES">NUNES</option>
+                    <option value="EURONISSI">EURONISSI</option>
+                </select>
             </div>
             <div style="margin-bottom: 16px;">
                 <label style="display: block; font-size: 0.875rem; font-weight: 600; color: #475569; margin-bottom: 6px;">Fecha</label>
@@ -237,11 +247,30 @@
 </div>
 
 <script>
+function partesCuentaPos(banco, titular) {
+    const known = ['BANCAMIGA', 'BANCARIBE', 'BANESCO', 'MERCANTIL', 'VENEZUELA', 'TESORO', 'BBVA', 'BNC', 'PROVINCIAL'];
+    const b = (banco || '').toUpperCase().trim();
+    let t = (titular || '').toUpperCase().trim();
+    for (const n of known) {
+        if (b === n || b.startsWith(n + ' ') || b.includes(n)) {
+            const resto = b.replace(n, '').trim();
+            if (!t && resto) t = resto;
+            return [n, t];
+        }
+    }
+    return [b, t];
+}
+
 function editLotePos(id, banco, titular, fecha, lote, monto, desc) {
     document.getElementById('modalEditPos').style.display = 'flex';
     document.getElementById('edit_form_pos').action = '/tesoreria/lote-punto-venta/' + id;
-    document.getElementById('edit_pos_banco').value = banco;
-    document.getElementById('edit_pos_titular').value = titular;
+    const [bancoNorm, titularNorm] = partesCuentaPos(banco, titular);
+    document.getElementById('edit_pos_banco').value = bancoNorm;
+    const selTit = document.getElementById('edit_pos_titular');
+    if (titularNorm && ![...selTit.options].some(o => o.value === titularNorm)) {
+        selTit.add(new Option(titularNorm, titularNorm, true, true));
+    }
+    selTit.value = titularNorm;
     document.getElementById('edit_pos_fecha').value = fecha;
     document.getElementById('edit_pos_lote').value = lote;
     document.getElementById('edit_pos_monto').value = monto;

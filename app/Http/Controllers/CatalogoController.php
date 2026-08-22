@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\User;
 use App\Models\V2\Producto;
 use App\Models\V2\StockActual;
 use Illuminate\Support\Facades\Cache;
@@ -12,7 +13,29 @@ class CatalogoController extends Controller
 {
     public function index(Request $request)
     {
-        // 1. Cargar datos base en caché por 1 hora (3600 segundos)
+        return $this->renderCatalogo($request, false);
+    }
+
+    public function cliente(Request $request, string $token)
+    {
+        abort_unless(hash_equals($this->clienteToken(), $token), 404);
+
+        $request->query->remove('search');
+        $request->request->remove('search');
+        $request->merge(['solo_existencia' => '1']);
+
+        return $this->renderCatalogo($request, true, $token);
+    }
+
+    public function irClientes()
+    {
+        abort_unless(auth()->user()?->role === User::ROLE_ADMIN, 403);
+
+        return redirect()->route('catalogo.cliente', $this->clienteToken());
+    }
+
+    private function renderCatalogo(Request $request, bool $modoCliente, ?string $token = null)
+    {
         $categorias = Cache::remember('catalogo_categorias', 3600, function () {
             return Producto::where('activo', true)
                 ->whereNotNull('categoria')
@@ -40,12 +63,12 @@ class CatalogoController extends Controller
                 ->select('categoria', 'subcategoria')
                 ->distinct()
                 ->get();
-                
+
             $map = [];
-            foreach($data as $row) {
+            foreach ($data as $row) {
                 $map[$row->categoria][] = $row->subcategoria;
             }
-            foreach($map as $cat => &$subs) {
+            foreach ($map as $cat => &$subs) {
                 sort($subs);
             }
             return $map;
@@ -53,20 +76,28 @@ class CatalogoController extends Controller
 
         $sedes = Cache::remember('catalogo_sedes', 3600, function () {
             return StockActual::select('sede')->distinct()->pluck('sede')->sort();
-        });
+        })->reject(fn ($sede) => $this->sedeOcultaEnCatalogo((string) $sede))->values();
 
-        // 2. Aplicar filtros a la consulta base
-        $query = $this->buildQuery($request);
+        $query = $this->buildQuery($request, $modoCliente);
 
-        // Paginación dinámica
         $perPage = $request->input('per_page', 24);
-        if (!in_array($perPage, [24, 48, 72, 96])) {
+        if (! in_array((int) $perPage, [24, 48, 72, 96], true)) {
             $perPage = 24;
         }
 
         $productos = $query->paginate($perPage)->withQueryString();
 
-        return view('catalogo.index', compact('productos', 'categorias', 'subcategorias', 'catSubcatMap', 'sedes'));
+        return view('catalogo.index', [
+            'productos' => $productos,
+            'categorias' => $categorias,
+            'subcategorias' => $subcategorias,
+            'catSubcatMap' => $catSubcatMap,
+            'sedes' => $sedes,
+            'modoCliente' => $modoCliente,
+            'clienteToken' => $token,
+            'casheaLevels' => $this->casheaLevels(),
+            'enlaceCliente' => url('/catalogo/cliente/' . $this->clienteToken()),
+        ]);
     }
 
     public function exportPdf(Request $request)
@@ -85,7 +116,9 @@ class CatalogoController extends Controller
                 $productos = $query->get();
             }
 
-            $sedeFiltro = $request->sede && $request->sede !== 'todas' ? $request->sede : 'Global (Todas)';
+            $sedeFiltro = $request->sede && $request->sede !== 'todas' && ! $this->sedeOcultaEnCatalogo((string) $request->sede)
+                ? $request->sede
+                : 'Global (Todas)';
             $catFiltro = $request->categoria && $request->categoria !== 'todas' ? $request->categoria : 'Todas';
             $subcatFiltro = $request->subcategoria && $request->subcategoria !== 'todas' ? $request->subcategoria : 'Todas';
 
@@ -250,50 +283,47 @@ class CatalogoController extends Controller
         ], 500);
     }
 
-    private function buildQuery(Request $request)
+    private function buildQuery(Request $request, bool $modoCliente = false)
     {
-        // Seleccionamos solo las columnas necesarias
         $query = Producto::select('id', 'codigo', 'nombre as descripcion', 'categoria', 'subcategoria', 'precio_unidad', 'precio_mayor')
             ->where('activo', true);
 
-        // Filtro: Categoría
         if ($request->filled('categoria') && $request->categoria !== 'todas') {
             $query->where('categoria', $request->categoria);
         }
 
-        // Filtro: Subcategoría
         if ($request->filled('subcategoria') && $request->subcategoria !== 'todas') {
             $query->where('subcategoria', $request->subcategoria);
         }
 
-        // Filtro: Búsqueda por Código o Nombre
-        if ($request->filled('search')) {
+        if (! $modoCliente && $request->filled('search')) {
             $search = '%' . $request->search . '%';
-            $query->where(function($q) use ($search) {
-                // ILIKE si es postgres, sino LIKE
+            $query->where(function ($q) use ($search) {
                 $q->where('codigo', 'ilike', $search)
                   ->orWhere('nombre', 'ilike', $search);
             });
         }
 
-        // Sumatoria de existencia (según sede o global)
         $sede = $request->input('sede');
+        if ($this->sedeOcultaEnCatalogo((string) $sede)) {
+            $sede = null;
+        }
         if ($sede && $sede !== 'todas') {
-            $query->withSum(['stock as existencia' => function($q) use ($sede) {
+            $query->withSum(['stock as existencia' => function ($q) use ($sede) {
                 $q->where('sede', $sede);
             }], 'existencia');
         } else {
             $query->withSum('stock as existencia', 'existencia');
         }
 
-        // Filtro: Solo con existencia
-        if ($request->has('solo_existencia') && $request->solo_existencia == '1') {
+        $soloExistencia = $modoCliente || ($request->has('solo_existencia') && $request->solo_existencia == '1');
+        if ($soloExistencia) {
             if ($sede && $sede !== 'todas') {
-                $query->whereHas('stock', function($q) use ($sede) {
+                $query->whereHas('stock', function ($q) use ($sede) {
                     $q->where('sede', $sede)->where('existencia', '>', 0);
                 });
             } else {
-                $query->whereHas('stock', function($q) {
+                $query->whereHas('stock', function ($q) {
                     $q->where('existencia', '>', 0);
                 });
             }
@@ -302,5 +332,56 @@ class CatalogoController extends Controller
         $query->orderBy('nombre', 'asc');
 
         return $query;
+    }
+
+    private function sedeOcultaEnCatalogo(string $sede): bool
+    {
+        $ocultas = array_map('strtoupper', config('inventario.catalogo_sedes_ocultas', ['NUNES', 'MOVISTAR', 'JRZ']));
+
+        return in_array(strtoupper(trim($sede)), $ocultas, true);
+    }
+
+    private function clienteToken(): string
+    {
+        $fromEnv = (string) config('inventario.catalogo_cliente_token', '');
+        if ($fromEnv !== '') {
+            return $fromEnv;
+        }
+
+        $path = storage_path('app/catalogo_cliente_token.txt');
+        if (! is_file($path)) {
+            $dir = dirname($path);
+            if (! is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+            $token = \Illuminate\Support\Str::random(40);
+            file_put_contents($path, $token);
+
+            return $token;
+        }
+
+        return trim((string) file_get_contents($path));
+    }
+
+    private function casheaLevels(): array
+    {
+        $defaultLevels = [1 => 60, 2 => 50, 3 => 40, 4 => 40, 5 => 40, 6 => 40];
+        $path = storage_path('app/cashea_levels.json');
+        if (! is_file($path)) {
+            return $defaultLevels;
+        }
+
+        $stored = json_decode((string) file_get_contents($path), true);
+        if (! is_array($stored)) {
+            return $defaultLevels;
+        }
+
+        foreach (range(1, 6) as $nivel) {
+            if (isset($stored[$nivel])) {
+                $defaultLevels[$nivel] = (int) $stored[$nivel];
+            }
+        }
+
+        return $defaultLevels;
     }
 }

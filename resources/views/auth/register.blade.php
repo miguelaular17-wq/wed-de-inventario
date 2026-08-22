@@ -10,7 +10,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg>
             </div>
             <h1 style="margin: 0; font-size: 1.6rem; font-weight: 700; color: #1e293b;">Crear cuenta</h1>
-            <p class="muted" style="margin: 6px 0 0; font-size: 0.88rem;">Regístrate para usar el inventario de tu sede.</p>
+            <p class="muted" style="margin: 6px 0 0; font-size: 0.88rem;">Regístrate para usar Nexo PD en tu sede.</p>
         </div>
 
         <form method="POST" action="{{ route('register.store') }}" style="display: flex; flex-direction: column; gap: 16px;">

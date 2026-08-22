@@ -140,6 +140,10 @@ class AuthController extends Controller
             return redirect()->route('tesoreria.dashboard');
         }
 
+        if ($user->isRrhh()) {
+            return redirect()->route('nomina.empleados.index');
+        }
+
         if (session()->has('sede_local') || $user->sede) {
             if ($user->sede && ! session()->has('sede_local')) {
                 session(['sede_local' => strtoupper($user->sede)]);

@@ -9,7 +9,7 @@
             id: 0,
             page: '*',
             title: '¡Bienvenido!',
-            text: 'Te guiaremos por las funciones principales de Inventario Multisede: ventas, requisiciones personalizadas y exportación de reportes.',
+            text: 'Te guiaremos por las funciones principales de Nexo PD: ventas, requisiciones personalizadas y exportación de reportes.',
             center: true,
             icon: '👋',
         },

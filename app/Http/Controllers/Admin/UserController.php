@@ -23,7 +23,7 @@ class UserController extends Controller
             });
         }
         
-        $users = $query->orderBy('name')->get();
+        $users = $query->with('extraPermissions')->orderBy('name')->get();
 
         $casheaLevelsPath = storage_path('app/cashea_levels.json');
         $defaultLevels = [
@@ -51,19 +51,31 @@ class UserController extends Controller
             'search' => $search,
             'sedes' => config('inventario.sedes_locales'),
             'casheaLevels' => $casheaLevels,
+            'assignablePermissions' => config('permissions.assignable'),
+            'rolePermissions' => config('permissions.roles'),
         ]);
     }
 
     public function update(Request $request, User $user)
     {
         $data = $request->validate([
-            'role' => ['required', 'string', 'in:admin,supervisor,telefonia,comprador,sede,vendedor,marketing,finanzas,cobranza,contabilidad,auditor,tesoreria,gerente'],
+            'role' => ['required', 'string', 'in:admin,supervisor,telefonia,comprador,sede,vendedor,marketing,finanzas,cobranza,contabilidad,auditor,tesoreria,gerente,rrhh'],
             'sede' => ['nullable', 'string'],
             'password_plain' => ['nullable', 'string', 'min:6'],
+            'ver_publicidad_equipo' => ['nullable', 'boolean'],
+            'extra_permissions' => ['nullable', 'array'],
+            'extra_permissions.*' => ['string'],
         ]);
 
         $user->role = $data['role'];
-        if (in_array($data['role'], ['comprador', 'marketing', 'finanzas', 'cobranza', 'contabilidad', 'auditor', 'tesoreria', 'gerente'], true)) {
+        $extras = $data['extra_permissions'] ?? [];
+        if (in_array('marketing.publicidad_equipo', $extras, true) || $request->boolean('ver_publicidad_equipo')) {
+            $extras[] = 'marketing.publicidad_equipo';
+        }
+
+        $user->ver_publicidad_equipo = $data['role'] === User::ROLE_MARKETING
+            && in_array('marketing.publicidad_equipo', $extras, true);
+        if (in_array($data['role'], ['comprador', 'marketing', 'finanzas', 'cobranza', 'contabilidad', 'auditor', 'tesoreria', 'gerente', 'rrhh'], true)) {
             $user->sede = null;
         } else {
             $user->sede = isset($data['sede']) && $data['sede'] ? strtoupper($data['sede']) : null;
@@ -75,6 +87,7 @@ class UserController extends Controller
         }
 
         $user->save();
+        $user->syncExtraPermissions($extras);
 
         return back()->with('status', 'Usuario actualizado con éxito.');
     }
@@ -121,14 +134,30 @@ class UserController extends Controller
 
     public function export()
     {
-        $users = User::all(['name', 'email', 'password', 'password_plain', 'role', 'sede', 'tutorial_step']);
+        $users = User::with('extraPermissions')->get([
+            'id', 'name', 'email', 'password', 'password_plain', 'role', 'sede', 'tutorial_step', 'ver_publicidad_equipo',
+        ]);
+
+        $payload = $users->map(function (User $user) {
+            return [
+                'name' => $user->name,
+                'email' => $user->email,
+                'password' => $user->password,
+                'password_plain' => $user->password_plain,
+                'role' => $user->role,
+                'sede' => $user->sede,
+                'tutorial_step' => $user->tutorial_step,
+                'ver_publicidad_equipo' => $user->ver_publicidad_equipo,
+                'extra_permissions' => $user->extraPermissionKeys(),
+            ];
+        });
         
         $headers = [
             'Content-type' => 'application/json',
             'Content-Disposition' => 'attachment; filename="respaldo_usuarios_'.date('Ymd_His').'.json"',
         ];
 
-        return response()->json($users, 200, $headers, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        return response()->json($payload, 200, $headers, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
     public function import(Request $request)
@@ -169,6 +198,7 @@ class UserController extends Controller
                 $user->role = $userData['role'] ?? $user->role;
                 $user->sede = $userData['sede'] ?? $user->sede;
                 $user->tutorial_step = $userData['tutorial_step'] ?? $user->tutorial_step;
+                $user->ver_publicidad_equipo = (bool) ($userData['ver_publicidad_equipo'] ?? $user->ver_publicidad_equipo);
                 
                 // Only change password if it's different in the backup to avoid double hashing
                 if (isset($userData['password']) && $user->password !== $userData['password']) {
@@ -182,6 +212,7 @@ class UserController extends Controller
                 }
                 
                 $user->save();
+                $user->syncExtraPermissions($userData['extra_permissions'] ?? []);
                 $updated++;
             } else {
                 // Create new
@@ -192,6 +223,7 @@ class UserController extends Controller
                     'role' => $userData['role'] ?? User::ROLE_VENDEDOR,
                     'sede' => $userData['sede'] ?? null,
                     'tutorial_step' => $userData['tutorial_step'] ?? 0,
+                    'ver_publicidad_equipo' => (bool) ($userData['ver_publicidad_equipo'] ?? false),
                 ]);
                 
                 if (!empty($userData['password_plain'])) {
@@ -201,6 +233,7 @@ class UserController extends Controller
                 }
                 
                 $newUser->save();
+                $newUser->syncExtraPermissions($userData['extra_permissions'] ?? []);
                 $imported++;
             }
         }

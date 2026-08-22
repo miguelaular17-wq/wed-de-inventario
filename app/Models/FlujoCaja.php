@@ -11,12 +11,16 @@ class FlujoCaja extends Model
         'banco', 'titular', 'categoria_cuenta', 'referencia',
         'banco_receptor', 'titular_receptor',
         'monto_usd', 'tasa_cambio', 'diferencial_cambiario', 'monto_bs',
-        'comision', 'motivo', 'categoria_egreso', 'tipo_gasto', 'sede', 'placa_vehiculo', 'oculto', 'comprobante_url',
+        'comision', 'motivo', 'categoria_egreso', 'tipo_gasto', 'nomina_empleado_id',
+        'es_todoticket', 'detalle_todoticket',
+        'sede', 'placa_vehiculo', 'oculto', 'comprobante_url',
         'desglose', 'comprobantes'
     ];
 
     protected $casts = [
         'desglose' => 'array',
         'comprobantes' => 'array',
+        'detalle_todoticket' => 'array',
+        'es_todoticket' => 'boolean',
     ];
 }

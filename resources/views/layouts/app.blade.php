@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
-    <title>@yield('title', 'Inventario Multisede')</title>
+    <title>@yield('title', 'Nexo PD')</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -26,194 +26,7 @@
 </head>
 <body>
 @auth
-<header>
-    <div class="wrap">
-        <div>
-            <strong>Inventario Multisede</strong>
-            @if(session('sede_local') && auth()->user() && auth()->user()->hasAccessToSedeViews())
-                <span class="badge" data-tour="sede-badge">Sede: {{ session('sede_local') }}</span>
-            @endif
-        @auth
-            @if(auth()->user()->isGerente())
-                <span class="badge" style="
-                    background: linear-gradient(135deg, #7c3aed, #5b21b6);
-                    border: none;
-                    box-shadow: 0 2px 8px rgba(124,58,237,0.45);
-                    letter-spacing: 0.5px;
-                    font-size: 0.78rem;
-                    padding: 4px 10px;
-                    border-radius: 20px;
-                ">👑 Gerente</span>
-            @elseif(auth()->user()->isAdmin())
-                <span class="badge">Admin</span>
-                <span class="badge" id="server-clock" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); font-family: monospace; letter-spacing: 0.5px; margin-left: 5px;" title="Hora del Servidor (Caracas)">
-
-                    {{ \Carbon\Carbon::now()->format('d/m/Y h:i:s A') }}
-                </span>
-                <script>
-                    document.addEventListener("DOMContentLoaded", function() {
-                        let serverTime = new Date("{{ \Carbon\Carbon::now()->format('Y/m/d H:i:s') }}");
-                        setInterval(() => {
-                            serverTime.setSeconds(serverTime.getSeconds() + 1);
-                            const d = String(serverTime.getDate()).padStart(2, '0');
-                            const m = String(serverTime.getMonth() + 1).padStart(2, '0');
-                            const y = serverTime.getFullYear();
-                            let hr = serverTime.getHours();
-                            const min = String(serverTime.getMinutes()).padStart(2, '0');
-                            const sec = String(serverTime.getSeconds()).padStart(2, '0');
-                            const ampm = hr >= 12 ? 'PM' : 'AM';
-                            hr = hr % 12;
-                            hr = hr ? hr : 12;
-                            const hrStr = String(hr).padStart(2, '0');
-                            document.getElementById('server-clock').innerText = `${d}/${m}/${y} ${hrStr}:${min}:${sec} ${ampm}`;
-                        }, 1000);
-                    });
-                </script>
-            @endif
-        @endauth
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            @auth
-                <nav style="display:flex; gap:8px;">
-                    {{-- ── Admin-only links ── --}}
-                    @if(auth()->user()->role === 'admin')
-                        <a href="{{ route('admin.dashboard') }}" data-tour="admin-dashboard" class="{{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">Admin</a>
-                        <a href="{{ route('admin.movimientos.index') }}" data-tour="admin-movimientos" class="{{ request()->routeIs('admin.movimientos.*') ? 'active' : '' }}">Movimientos</a>
-                        <a href="{{ route('admin.productos.index') }}" class="{{ request()->routeIs('admin.productos.*') ? 'active' : '' }}">Productos</a>
-                        <a href="{{ route('admin.sync_logs.index') }}" class="{{ request()->routeIs('admin.sync_logs.*') ? 'active' : '' }}">Sync Logs</a>
-                        <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">Usuarios</a>
-                    @endif
-
-                    {{-- ── Gerente links (clean block, no admin tools) ── --}}
-                    @if(auth()->user()->isGerente())
-                        <a href="{{ route('admin.dashboard') }}" class="{{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">Dashboard</a>
-                        <a href="{{ route('comprador.dashboard') }}" class="{{ request()->routeIs('comprador.dashboard') ? 'active' : '' }}">Compras</a>
-                        <a href="{{ route('finanzas.flujo_caja') }}" class="{{ request()->routeIs('finanzas.flujo_caja') ? 'active' : '' }}">Flujo de Caja</a>
-                        <a href="{{ route('finanzas.gastos_fijos') }}" class="{{ request()->routeIs('finanzas.gastos_fijos') ? 'active' : '' }}">Gastos Fijos</a>
-                        <a href="{{ route('finanzas.conciliaciones') }}" class="{{ request()->routeIs('finanzas.conciliaciones') ? 'active' : '' }}">Conciliaciones</a>
-                        <a href="{{ route('cobranza.index') }}" class="{{ request()->routeIs('cobranza.*') ? 'active' : '' }}">Cobranza</a>
-                        <a href="{{ route('contratos.index') }}" class="{{ request()->routeIs('contratos.*') ? 'active' : '' }}">Contratos</a>
-                        <a href="{{ route('tesoreria.dashboard') }}" class="{{ request()->routeIs('tesoreria.*') ? 'active' : '' }}">Tesorería</a>
-                        <a href="{{ route('patrimonial.dashboard') }}" class="{{ request()->routeIs('patrimonial.*') ? 'active' : '' }}">Patrimonial</a>
-                    @endif
-
-                    {{-- ── Shared role-based links (non-admin, non-gerente) ── --}}
-                    @if(auth()->user()->role !== 'admin' && !auth()->user()->isGerente())
-                        @if(auth()->user()->isComprador() || auth()->user()->isMarketing())
-                            <a href="{{ route('comprador.dashboard') }}" class="{{ request()->routeIs('comprador.dashboard') ? 'active' : '' }}">
-                                {{ auth()->user()->isMarketing() ? 'Marketing' : 'Compras' }}
-                            </a>
-                        @endif
-                        @if(auth()->user()->isFinanzas())
-                            <a href="{{ route('finanzas.flujo_caja') }}" class="{{ request()->routeIs('finanzas.flujo_caja') ? 'active' : '' }}">Flujo de Caja</a>
-                            <a href="{{ route('finanzas.gastos_fijos') }}" class="{{ request()->routeIs('finanzas.gastos_fijos') ? 'active' : '' }}">Gastos Fijos</a>
-                        @endif
-                        @if(auth()->user()->isContabilidad())
-                            <a href="{{ route('finanzas.conciliaciones') }}" class="{{ request()->routeIs('finanzas.conciliaciones') ? 'active' : '' }}">Conciliaciones</a>
-                        @endif
-                        @if(auth()->user()->isCobranza())
-                            <a href="{{ route('cobranza.index') }}" class="{{ request()->routeIs('cobranza.*') ? 'active' : '' }}">Cobranza</a>
-                            <a href="{{ route('contratos.index') }}" class="{{ request()->routeIs('contratos.*') ? 'active' : '' }}">Contratos</a>
-                            <a href="{{ route('patrimonial.dashboard') }}" class="{{ request()->routeIs('patrimonial.*') ? 'active' : '' }}">Patrimonial</a>
-                        @endif
-                        @if(auth()->user()->isTesoreria())
-                            <a href="{{ route('tesoreria.dashboard') }}" class="{{ request()->routeIs('tesoreria.*') ? 'active' : '' }}">Tesorería</a>
-                        @endif
-                    @endif
-
-                    {{-- ── Sede views (ventas, inventario, exportar) ── --}}
-                    @if(auth()->user()->hasAccessToSedeViews() && session('sede_local'))
-                        <a href="{{ route('ventas.index') }}" data-tour="nav-ventas" class="{{ request()->routeIs('ventas.index') ? 'active' : '' }}">Ventas</a>
-                        <a href="{{ route('ventas.mayor_demanda') }}" class="{{ request()->routeIs('ventas.mayor_demanda') ? 'active' : '' }}">Mayor Demanda</a>
-                        <a href="{{ route('inventario.index') }}" data-tour="nav-inventario" class="{{ request()->routeIs('inventario.*') ? 'active' : '' }}">Inventario</a>
-                        <a href="{{ route('requisicion.form') }}" data-tour="nav-export" class="{{ request()->routeIs('requisicion.*') ? 'active' : '' }}">Exportar</a>
-                        @if(!in_array(auth()->user()->role, ['supervisor', 'telefonia']))
-                            <a href="{{ route('catalogo.index') }}" data-tour="nav-catalogo" class="{{ request()->routeIs('catalogo.*') ? 'active' : '' }}" style="background-color: var(--blue); color: white; border-radius: 4px; padding: 4px 10px;">Catálogo Visual</a>
-                        @endif
-                    @endif
-                </nav>
-
-                @if(auth()->user()->isComprador())
-                    {{-- Comprador always sees the sede button --}}
-                    @if(session('sede_local'))
-                        <form method="POST" action="{{ route('sede.change') }}" style="margin:0;">
-                            @csrf
-                            <button type="submit" class="btn secondary" style="padding:6px 12px;font-size:.85rem;">📍 {{ session('sede_local') }} · Cambiar</button>
-                        </form>
-                    @else
-                        <a href="{{ route('sede.select') }}" class="btn secondary" style="padding:6px 12px;font-size:.85rem;">📍 Seleccionar sede</a>
-                    @endif
-                @elseif(auth()->user()->hasAccessToSedeViews() && session('sede_local'))
-                    @if(in_array(auth()->user()->role, ['supervisor', 'telefonia'], true))
-                        <span class="btn secondary" style="padding:6px 12px;font-size:.85rem;cursor:default;opacity:0.85;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);">📍 {{ session('sede_local') }}</span>
-                    @else
-                        <form method="POST" action="{{ route('sede.change') }}" style="margin:0;">
-                            @csrf
-                            <button type="submit" class="btn secondary" style="padding:6px 12px;font-size:.85rem;">Cambiar sede</button>
-                        </form>
-                    @endif
-                @endif
-
-                <!-- Notification Bell Dropdown -->
-                <div style="position:relative;" class="notification-dropdown-container">
-                    <a href="{{ route('notifications.index') }}" class="notification-bell" style="position:relative; display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,0.15); color:#fff; text-decoration:none; cursor:pointer;" title="Ver notificaciones">
-                        🔔
-                        @php 
-                            $unreadCount = auth()->user()->notifications()->unread()->count(); 
-                            $latestNotifications = auth()->user()->notifications()->latest()->take(5)->get();
-                        @endphp
-                        @if($unreadCount > 0)
-                            <span style="position:absolute; top:-4px; right:-4px; background:#ef4444; color:#fff; font-size:0.65rem; font-weight:700; border-radius:50%; padding:2px 5px; min-width:14px; text-align:center; line-height:1.2; border: 1.5px solid #1a4480;">
-                                {{ $unreadCount }}
-                            </span>
-                        @endif
-                    </a>
-
-                    <div class="notification-dropdown" style="display:none; position:absolute; right:0; top:100%; margin-top:8px; width:320px; background:#fff; border-radius:8px; box-shadow:0 10px 25px -5px rgba(0,0,0,0.1); border:1px solid #e2e8f0; z-index:50;">
-                        <div style="padding:12px 16px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-                            <strong style="color:#1e293b; font-size:0.95rem;">Notificaciones</strong>
-                            <a href="{{ route('notifications.index') }}" style="font-size:0.8rem; color:#3b82f6; text-decoration:none;">Ver todas</a>
-                        </div>
-                        <div style="max-height:300px; overflow-y:auto; background:#fff;">
-                            @forelse($latestNotifications as $notification)
-                                <div style="padding:12px 16px; border-bottom:1px solid #f1f5f9; background: {{ $notification->read_at ? '#fff' : '#f8fafc' }}; transition:background 0.2s;">
-                                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                                        <strong style="font-size:0.85rem; color:#334155;">
-                                            {{ $notification->sender ? $notification->sender->name : 'Sistema' }}
-                                        </strong>
-                                        <span style="font-size:0.75rem; color:#64748b;">{{ $notification->created_at->diffForHumans() }}</span>
-                                    </div>
-                                    <p style="margin:0; font-size:0.85rem; color:#475569; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">
-                                        {{ $notification->message }}
-                                    </p>
-                                </div>
-                            @empty
-                                <div style="padding:20px; text-align:center; color:#64748b; font-size:0.85rem;">
-                                    No hay notificaciones
-                                </div>
-                            @endforelse
-                        </div>
-                    </div>
-                </div>
-            @endauth
-
-                @if(config('inventario.tutorial_enabled'))
-                <form method="POST" action="{{ route('tutorial.restart') }}" style="margin:0;">
-                    @csrf
-                    <button type="submit" class="btn secondary tour-help-btn" title="Ver tutorial guiado">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                        Ayuda
-                    </button>
-                </form>
-                @endif
-                <span class="badge">{{ auth()->user()->name }}</span>
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button type="submit" class="btn secondary" style="padding:6px 12px;font-size:.85rem;">Salir</button>
-                </form>
-        </div>
-    </div>
-</header>
+    @include('partials.header')
 @endauth
 
 <main>
@@ -234,6 +47,7 @@
 
 <script src="/js/sync-poll.js"></script>
 <script src="/js/auto-filters.js"></script>
+<script src="/js/header-nav.js?v={{ filemtime(public_path('js/header-nav.js')) }}"></script>
 @if(config('inventario.tutorial_enabled'))
 @auth
 <script>
@@ -415,26 +229,6 @@ document.addEventListener("DOMContentLoaded", function() {
         const link = e.target.closest('a');
         if (link && link.href && link.href.startsWith(window.location.origin) && !link.hash) {
             saveScroll();
-        }
-
-        // Notification dropdown toggle
-        const dropdownContainer = e.target.closest('.notification-dropdown-container');
-        const allDropdowns = document.querySelectorAll('.notification-dropdown');
-        
-        if (dropdownContainer) {
-            const dropdown = dropdownContainer.querySelector('.notification-dropdown');
-            const isVisible = dropdown.style.display === 'block';
-            
-            // Close all other dropdowns
-            allDropdowns.forEach(d => d.style.display = 'none');
-            
-            if (!isVisible && e.target.closest('.notification-bell')) {
-                e.preventDefault(); // Prevent navigating to index if clicking the bell to open dropdown
-                dropdown.style.display = 'block';
-            }
-        } else {
-            // Click outside, close dropdown
-            allDropdowns.forEach(d => d.style.display = 'none');
         }
     });
 });

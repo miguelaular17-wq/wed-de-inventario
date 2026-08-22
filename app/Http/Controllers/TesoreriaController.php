@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\TesoreriaIngreso;
+use App\Services\BankReconciliationMatcher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -139,17 +140,19 @@ class TesoreriaController extends Controller
     {
         $request->validate([
             'banco' => 'required|string',
-            'titular' => 'nullable|string',
+            'titular' => 'required|string',
             'fecha' => 'required|date',
             'monto' => 'required|numeric',
             'lote_referencia' => 'required|string',
-            'descripcion' => 'nullable|string'
+            'descripcion' => 'nullable|string',
         ]);
+
+        [$banco, $titular] = $this->separarBancoTitular($request->banco, $request->titular);
 
         TesoreriaIngreso::create([
             'tipo' => 'punto_venta',
-            'banco' => $request->banco,
-            'titular' => $request->titular,
+            'banco' => $banco,
+            'titular' => $titular,
             'fecha' => $request->fecha,
             'monto' => $request->monto,
             'lote_referencia' => $request->lote_referencia,
@@ -166,16 +169,18 @@ class TesoreriaController extends Controller
 
         $request->validate([
             'banco' => 'required|string',
-            'titular' => 'nullable|string',
+            'titular' => 'required|string',
             'fecha' => 'required|date',
             'monto' => 'required|numeric',
             'lote_referencia' => 'required|string',
-            'descripcion' => 'nullable|string'
+            'descripcion' => 'nullable|string',
         ]);
 
+        [$banco, $titular] = $this->separarBancoTitular($request->banco, $request->titular);
+
         $lote->update([
-            'banco' => $request->banco,
-            'titular' => $request->titular,
+            'banco' => $banco,
+            'titular' => $titular,
             'fecha' => $request->fecha,
             'monto' => $request->monto,
             'lote_referencia' => $request->lote_referencia,
@@ -191,5 +196,17 @@ class TesoreriaController extends Controller
         $lote->delete();
         
         return back()->with('success', 'Lote de punto de venta eliminado exitosamente.');
+    }
+
+    /**
+     * Guarda banco y titular por separado (p. ej. BANESCO + DORAL, no "BANESCO DORAL").
+     *
+     * @return array{0:string,1:?string}
+     */
+    private function separarBancoTitular(?string $banco, ?string $titular): array
+    {
+        [$bancoNorm, $titularNorm] = app(BankReconciliationMatcher::class)->partesCuenta($banco, $titular);
+
+        return [$bancoNorm, $titularNorm !== '' ? $titularNorm : null];
     }
 }

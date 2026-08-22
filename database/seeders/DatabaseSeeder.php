@@ -19,5 +19,11 @@ class DatabaseSeeder extends Seeder
         
         // [Producción/Base] Configuración inicial de cuentas (idempotente)
         $this->call(CuentasBancariasSeeder::class);
+
+        // [Producción/Base] Catálogos de nómina (sedes RRHH y cargos)
+        $this->call(NominaCatalogSeeder::class);
+
+        // [Producción/Base] Personal oficial y asignación de sede/área
+        $this->call(NominaPersonalSeeder::class);
     }
 }

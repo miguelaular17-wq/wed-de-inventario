@@ -3,11 +3,12 @@
 @section('title', 'Catálogo de Productos')
 
 @section('content')
+<div class="cat-page">
 <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
     <div>
         <h1 style="margin:0;">Catálogo de Productos</h1>
         <p class="lead" style="margin:4px 0 0;">
-            {{ $rows->total() }} productos · Doble clic en una fila para ver niveles de pago
+            {{ $rows->total() }} productos · Pulsa <strong>Cashea</strong> para ver niveles de pago
         </p>
     </div>
     <div>
@@ -18,9 +19,9 @@
 </div>
 
 {{-- Barra de búsqueda --}}
-<form method="GET" action="{{ route('vendedor.dashboard') }}" style="margin-bottom:20px; display:flex; gap:10px; align-items:center;">
-    <div style="flex:1; max-width:480px; position:relative;">
-        <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none;">🔍</span>
+<form method="GET" action="{{ route('vendedor.dashboard') }}" class="cat-search">
+    <div class="cat-search-field">
+        <span>🔍</span>
         <input
             type="search"
             id="q"
@@ -28,91 +29,89 @@
             value="{{ $q }}"
             placeholder="Buscar por nombre o código… (Enter para buscar)"
             autocomplete="off"
-            style="width:100%; padding:10px 12px 10px 36px; border-radius:8px; border:1.5px solid var(--border); font-size:0.95rem; background:var(--surface); color:var(--text); transition:border-color .2s;"
-            onfocus="this.style.borderColor='var(--blue)'"
-            onblur="this.style.borderColor='var(--border)'"
         >
     </div>
     @if($q)
-        <a href="{{ route('vendedor.dashboard') }}" style="font-size:.85rem; color:var(--muted); text-decoration:none;">✕ Limpiar</a>
+        <a href="{{ route('vendedor.dashboard') }}">✕ Limpiar</a>
     @endif
 </form>
 
 {{-- Tabla --}}
-<section class="table-section-full">
-    <div class="table-wrap table-wrap-full">
-        <table class="data-table" id="vendedor-tabla">
+<section class="cat-panel">
+    <div class="cat-table-wrap">
+        <table class="data-table cat-table" id="vendedor-tabla">
             <thead>
                 <tr>
-                    <th style="width:120px;">Código</th>
                     <th>Producto</th>
-                    <th style="width:160px;">Categoría</th>
-                    <th class="col-number" style="width:110px; color:var(--blue); font-weight:700;">Exist. Global</th>
-                    @foreach ($sedes as $sedeCol)
-                        <th class="col-number" style="width:100px;">{{ config('inventario.display.'.$sedeCol, $sedeCol) }}</th>
-                    @endforeach
-                    <th class="col-number" style="width:120px; color:#16a34a; font-weight:700;">P. Unidad</th>
-                    <th class="col-number" style="width:140px; color:#0284c7; font-weight:700;">Desc. Especial (30%)</th>
-                    <th class="col-number" style="width:120px; color:#7c3aed; font-weight:700;">P. Mayor</th>
+                    <th style="width:42%;">Existencias</th>
+                    <th style="width:340px;">Precios</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse ($rows as $row)
+                    @php
+                        $precioUnidad = (float) ($row['precio_unidad'] ?? 0);
+                        $precioMayor = (float) ($row['precio_mayor'] ?? 0);
+                    @endphp
                     <tr
                         class="vendedor-row"
-                        style="cursor:pointer; transition:background .15s;"
                         data-producto="{{ e($row['producto']) }}"
                         data-codigo="{{ e($row['cod_centro']) }}"
-                        data-precio-unidad="{{ $row['precio_unidad'] ?? 0 }}"
-                        data-precio-mayor="{{ $row['precio_mayor'] ?? 0 }}"
-                        title="Doble clic para ver niveles de pago"
+                        data-precio-unidad="{{ $precioUnidad }}"
+                        data-precio-mayor="{{ $precioMayor }}"
                     >
-                        <td class="col-code">{{ $row['cod_centro'] }}</td>
-                        <td style="font-weight:500;">{{ $row['producto'] }}</td>
-                        <td style="color:var(--muted); font-size:.88rem;">{{ $row['categoria'] }}</td>
-                        <td class="col-number" style="font-weight:700; color:var(--blue); font-size:1.05rem;">
-                            {{ $row['existencia_global'] }}
+                        <td>
+                            <div class="cat-product">
+                                <code class="cat-code">{{ $row['cod_centro'] }}</code>
+                                <div class="cat-name">{{ $row['producto'] }}</div>
+                                @if(!empty($row['categoria']))
+                                    <span class="cat-tag">{{ $row['categoria'] }}</span>
+                                @endif
+                            </div>
                         </td>
-                        @foreach ($sedes as $sedeCol)
-                            @php $stock = $row['stocks'][$sedeCol] ?? 0; @endphp
-                            <td class="col-number" style="{{ $stock > 0 ? 'font-weight:600; color:#0f172a;' : 'color:#94a3b8;' }}">
-                                {{ $stock }}
-                            </td>
-                        @endforeach
-                        <td class="col-number" style="font-weight:700; color:#16a34a;">
-                            @if(($row['precio_unidad'] ?? 0) > 0)
-                                ${{ number_format($row['precio_unidad'], 2) }}
-                            @else
-                                <span style="color:#94a3b8;">—</span>
-                            @endif
-                        </td>
-                        <td class="col-number">
-                            @if(($row['precio_unidad'] ?? 0) > 0)
-                                @php
-                                    $descAmount = $row['precio_unidad'] * 0.30;
-                                    $priceWithDesc = $row['precio_unidad'] * 0.70;
-                                @endphp
-                                <div style="font-weight:700; color:#0284c7;">
-                                    ${{ number_format($descAmount, 2) }}
+                        <td>
+                            <div class="cat-stock">
+                                <div class="cat-stock-global">
+                                    <strong>{{ number_format($row['existencia_global']) }}</strong>
+                                    <span>global</span>
                                 </div>
-                                <div style="font-size:0.75rem; color:var(--muted); margin-top:2px;">
-                                    Neto: ${{ number_format($priceWithDesc, 2) }}
+                                <div class="cat-stock-sedes">
+                                    @foreach ($sedes as $sedeCol)
+                                        @php $stock = (int) ($row['stocks'][$sedeCol] ?? 0); @endphp
+                                        <span class="cat-sede {{ $stock > 0 ? 'has-stock' : 'no-stock' }}">
+                                            {{ config('inventario.display.'.$sedeCol, $sedeCol) }}
+                                            <b>{{ $stock }}</b>
+                                        </span>
+                                    @endforeach
                                 </div>
-                            @else
-                                <span style="color:#94a3b8;">—</span>
-                            @endif
+                            </div>
                         </td>
-                        <td class="col-number" style="font-weight:700; color:#7c3aed;">
-                            @if(($row['precio_mayor'] ?? 0) > 0)
-                                ${{ number_format($row['precio_mayor'], 2) }}
-                            @else
-                                <span style="color:#94a3b8;">—</span>
-                            @endif
+                        <td>
+                            <div class="cat-prices">
+                                <div>
+                                    <span>Unidad</span>
+                                    <strong class="price-unit">{{ $precioUnidad > 0 ? '$'.number_format($precioUnidad, 2) : '—' }}</strong>
+                                </div>
+                                <div>
+                                    <span>Desc. 20%</span>
+                                    @if($precioUnidad > 0)
+                                        <strong class="price-desc">${{ number_format($precioUnidad * 0.20, 2) }}</strong>
+                                        <em>neto ${{ number_format($precioUnidad * 0.80, 2) }}</em>
+                                    @else
+                                        <strong class="price-empty">—</strong>
+                                    @endif
+                                </div>
+                                <div>
+                                    <span>Mayor</span>
+                                    <strong class="price-mayor">{{ $precioMayor > 0 ? '$'.number_format($precioMayor, 2) : '—' }}</strong>
+                                </div>
+                                <button type="button" class="cat-cashea-btn" onclick="event.stopPropagation(); openCasheaFromRow(this)">Cashea</button>
+                            </div>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ 4 + count($sedes) + 3 }}" style="text-align:center; padding:32px; color:var(--muted);">
+                        <td colspan="3" style="text-align:center; padding:40px; color:var(--muted);">
                             No se encontraron productos.
                         </td>
                     </tr>
@@ -123,6 +122,7 @@
 </section>
 
 @include('partials.pagination', ['paginator' => $rows])
+</div>
 
 {{-- ═══════════════════════════════════════════════
      MODAL — Niveles de Cashea
@@ -148,7 +148,7 @@
                     <div id="cashea-pmayor" style="font-size:1.1rem; font-weight:700;"></div>
                 </div>
                 <div style="background:rgba(255,255,255,.15); border-radius:8px; padding:8px 14px;">
-                    <div style="font-size:.75rem; opacity:.8;">Desc. Especial (30%)</div>
+                    <div style="font-size:.75rem; opacity:.8;">Desc. Especial (20%)</div>
                     <div id="cashea-descuento" style="font-size:1.1rem; font-weight:700; color:#e0f2fe;"></div>
                 </div>
             </div>
@@ -194,6 +194,7 @@
     from { opacity:0; transform:translateY(24px); }
     to   { opacity:1; transform:translateY(0); }
 }
+.vendedor-row { cursor: pointer; }
 .vendedor-row:hover { background: #f8faff !important; }
 .nivel-btn {
     display:flex; align-items:center; justify-content:space-between;
@@ -202,6 +203,199 @@
 }
 .nivel-btn:hover { border-color:#6366f1; background:#f5f3ff; transform:translateX(3px); }
 .nivel-btn.activo { border-color:#6366f1; background:#ede9fe; }
+
+main:has(.cat-page) {
+    max-width: none;
+    width: 100%;
+    padding: 20px 28px 40px;
+}
+.cat-page {
+    width: 100%;
+}
+.cat-search {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin: 0 0 18px;
+}
+.cat-search-field {
+    position: relative;
+    flex: 1;
+}
+.cat-search-field span {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: #64748b;
+}
+.cat-search-field input {
+    width: 100%;
+    padding: 12px 14px 12px 42px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border);
+    font-size: 1rem;
+    background: #fff;
+    color: var(--text);
+}
+.cat-search-field input:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+.cat-search a {
+    font-size: 0.88rem;
+    color: var(--muted);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.cat-panel {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+.cat-table-wrap { overflow: visible; border: none; }
+.cat-table { width: 100%; }
+.cat-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f8fafc;
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 14px 20px;
+}
+.cat-table td {
+    vertical-align: middle;
+    padding: 16px 20px;
+}
+
+.cat-product { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.cat-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+    color: #2563eb;
+    background: #eff6ff;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+.cat-name { font-weight: 650; color: #0f172a; line-height: 1.35; font-size: 0.98rem; }
+.cat-tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #64748b;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    padding: 2px 9px;
+}
+
+.cat-stock { display: flex; align-items: center; gap: 16px; }
+.cat-stock-global {
+    min-width: 78px;
+    text-align: center;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+.cat-stock-global strong {
+    display: block;
+    font-size: 1.35rem;
+    color: #1d4ed8;
+    line-height: 1.1;
+}
+.cat-stock-global span {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+.cat-stock-sedes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(110px, 1fr));
+    gap: 8px;
+    flex: 1;
+}
+.cat-sede {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #64748b;
+}
+.cat-sede b { font-size: 0.95rem; }
+.cat-sede.has-stock {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+    color: #166534;
+}
+.cat-sede.no-stock b { color: #94a3b8; font-weight: 500; }
+
+.cat-prices {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px 12px;
+    align-items: start;
+}
+.cat-prices div { display: flex; flex-direction: column; gap: 2px; }
+.cat-prices span {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+.cat-prices strong { font-size: 1.05rem; }
+.cat-prices em {
+    font-style: normal;
+    font-size: 0.72rem;
+    color: #64748b;
+}
+.price-unit { color: #16a34a; }
+.price-desc { color: #0284c7; }
+.price-mayor { color: #7c3aed; }
+.price-empty { color: #94a3b8; }
+.cat-cashea-btn {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    border: 1px solid #ddd6fe;
+    background: #f5f3ff;
+    color: #6d28d9;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+}
+.cat-cashea-btn:hover { background: #ede9fe; }
+
+@media (max-width: 1100px) {
+    .cat-stock-sedes { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
+}
+@media (max-width: 900px) {
+    .cat-page { padding: 0 16px 32px; }
+    .cat-table thead { display: none; }
+    .cat-table, .cat-table tbody, .cat-table tr, .cat-table td { display: block; width: 100%; }
+    .cat-table tr { padding: 16px; border-bottom: 1px solid var(--border); }
+    .cat-table td { padding: 8px 0; }
+    .cat-stock { flex-direction: column; align-items: stretch; }
+    .cat-prices { margin-top: 4px; }
+}
 </style>
 @endpush
 
@@ -229,8 +423,8 @@
         document.getElementById('cashea-punit').textContent   = precioUnit  > 0 ? fmt(precioUnit)  : '—';
         document.getElementById('cashea-pmayor').textContent  = precioMayor > 0 ? fmt(precioMayor) : '—';
         
-        const descEspecial = precioUnit * 0.30;
-        const netoEspecial = precioUnit * 0.70;
+        const descEspecial = precioUnit * 0.20;
+        const netoEspecial = precioUnit * 0.80;
         document.getElementById('cashea-descuento').textContent = precioUnit > 0 ? `${fmt(descEspecial)} (Neto: ${fmt(netoEspecial)})` : '—';
 
         document.getElementById('cashea-resultado').style.display = 'none';
@@ -290,6 +484,11 @@
     window.closeCashea = function () {
         document.getElementById('cashea-overlay').style.display = 'none';
         document.body.style.overflow = '';
+    };
+
+    window.openCasheaFromRow = function (el) {
+        const row = el.closest ? el.closest('tr') : el;
+        if (row) openCashea(row);
     };
 
     // Double-click on any row

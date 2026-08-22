@@ -495,9 +495,17 @@
                                     @endif
                                 </div>
                             </td>
-                            <td>{{ $mov->tipo_gasto ?: '-' }}</td>
+                            <td>{{ $mov->tipo_gasto ?: '-' }}@if($mov->es_todoticket) <span style="display:inline-block;margin-left:4px;background:#d1fae5;color:#065f46;font-size:0.7rem;padding:1px 6px;border-radius:999px;">TodoTicket</span>@endif</td>
                             <td>
                                 {{ $mov->motivo ?: '-' }}
+                                @if(!empty($mov->detalle_todoticket) && is_array($mov->detalle_todoticket))
+                                    <div style="margin-top:4px;font-size:0.75rem;color:#047857;">
+                                        Recarga {{ number_format($mov->detalle_todoticket['recarga'] ?? 0, 2, ',', '.') }}
+                                        · Comisión {{ number_format($mov->detalle_todoticket['comision'] ?? 0, 2, ',', '.') }}
+                                        · IVA {{ number_format($mov->detalle_todoticket['iva'] ?? 0, 2, ',', '.') }}
+                                        · Total Real {{ number_format($mov->detalle_todoticket['total_real'] ?? $mov->monto_bs, 2, ',', '.') }}
+                                    </div>
+                                @endif
                                 @if($mov->desglose)
                                     <div style="margin-top: 5px;">
                                         <button type="button" onclick='verDesglose(@json($mov->desglose))' style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; cursor: pointer;">
@@ -1119,6 +1127,7 @@
                     <option value="097 - INSTALACIONES Y MEJORAS GALPON Y DEPOSITO">097 - INSTALACIONES Y MEJORAS GALPON Y DEPOSITO</option>
                     <option value="098 - MEJORAS INSTALACIONES TIENDAS">098 - MEJORAS INSTALACIONES TIENDAS</option>
                     <option value="099 - DEVOLUCIONES CLIENTES">099 - DEVOLUCIONES CLIENTES</option>
+                    <option value="100 - TODOTICKET">100 - TODOTICKET</option>
                 </select>
             </div>
             
@@ -1142,13 +1151,17 @@
             </div>
 
             <div style="margin-bottom: 10px;">
-                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Beneficiario</label>
+                <label id="beneficiario_label" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Beneficiario</label>
                 <select id="beneficiario" name="beneficiario" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                     <option value="">-- Seleccione un beneficiario --</option>
                     @foreach($proveedores as $prov)
                         <option value="{{ $prov }}">{{ $prov }}</option>
                     @endforeach
                 </select>
+                <input type="hidden" id="nomina_empleado_id" name="nomina_empleado_id" value="">
+                <small id="beneficiario_ayuda" style="display:none; margin-top:4px; color:#047857;">
+                    Solo aparecen empleados activos marcados como Servicio Técnico en su ficha de Nómina.
+                </small>
             </div>
 
             <div style="margin-bottom: 10px;">
@@ -1161,6 +1174,55 @@
                     <input type="checkbox" id="chk_desglose" onchange="toggleDesglose()" style="width: 16px; height: 16px;">
                     Este pago es general y requiere desglose por beneficiarios
                 </label>
+            </div>
+
+            {{-- TodoTicket --}}
+            <div style="margin-bottom: 10px; border-top: 1px dashed #a7f3d0; padding-top: 10px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; color: #065f46;">
+                    <input type="checkbox" id="chk_todoticket" name="es_todoticket" value="1" onchange="toggleTodoTicket()" style="width: 16px; height: 16px; accent-color: #059669;">
+                    Este egreso es pago de TodoTicket
+                </label>
+            </div>
+            <div id="panel_todoticket" style="display:none; background: #ecfdf5; border: 1.5px solid #6ee7b7; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;">
+                <p style="margin: 0 0 10px; font-size: 0.8rem; color: #047857;">Copia los montos del <strong>Detalle Monto a Pagar</strong>. El <strong>Total Real</strong> es lo que se guarda y concilia con el banco.</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Recarga Tarjeta Electrónica</label>
+                        <input type="text" inputmode="decimal" name="tt_recarga" id="tt_recarga" oninput="calcTodoTicket()" placeholder="903.127,29" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Comisión</label>
+                        <input type="text" inputmode="decimal" name="tt_comision" id="tt_comision" oninput="calcTodoTicket()" placeholder="9.031,27" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Total IVA 16%</label>
+                        <input type="text" inputmode="decimal" name="tt_iva" id="tt_iva" oninput="calcTodoTicket()" placeholder="1.445,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención ISLR</label>
+                        <input type="text" inputmode="decimal" name="tt_ret_islr" id="tt_ret_islr" oninput="calcTodoTicket()" placeholder="451,56" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención IVA</label>
+                        <input type="text" inputmode="decimal" name="tt_ret_iva" id="tt_ret_iva" oninput="calcTodoTicket()" placeholder="1.083,75" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención 1x1000 / 1x500 / 1x100</label>
+                        <input type="text" inputmode="decimal" name="tt_ret_1x1000" id="tt_ret_1x1000" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención Resp. Social</label>
+                        <input type="text" inputmode="decimal" name="tt_ret_resp_social" id="tt_ret_resp_social" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención ISAE</label>
+                        <input type="text" inputmode="decimal" name="tt_ret_isae" id="tt_ret_isae" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                </div>
+                <div style="margin-top: 12px; padding: 10px; background: #065f46; color: white; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 700;">Total Real</span>
+                    <strong id="tt_total_real_lbl" style="font-size: 1.15rem;">Bs. 0,00</strong>
+                </div>
             </div>
 
             {{-- ── VINCULAR CON GASTO FIJO ── --}}
@@ -1370,7 +1432,49 @@ function toggleTraslados() {
     // When switching to traslado mode, auto-calc USD if monto_bs already has value
     if (isTraslado) calcTraslado();
     
-    document.getElementById('tipo_gasto').required = !isTraslado;
+    document.getElementById('tipo_gasto').required = !isTraslado && !document.getElementById('chk_todoticket')?.checked;
+}
+
+function formatBsVe(n) {
+    return (n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function calcTodoTicket() {
+    if (!document.getElementById('chk_todoticket')?.checked) return;
+    const num = (id) => Math.abs(window.parseLocalNumber(document.getElementById(id)?.value) || 0);
+    const recarga = num('tt_recarga');
+    const comision = num('tt_comision');
+    const iva = num('tt_iva');
+    const ret = num('tt_ret_islr') + num('tt_ret_iva') + num('tt_ret_1x1000') + num('tt_ret_resp_social') + num('tt_ret_isae');
+    const total = Math.round((recarga + comision + iva - ret) * 100) / 100;
+    document.getElementById('tt_total_real_lbl').innerText = 'Bs. ' + formatBsVe(total);
+    const bs = document.getElementById('monto_bs');
+    if (bs) bs.value = formatBsVe(total);
+    const com = document.getElementById('comision');
+    if (com) com.value = formatBsVe(comision);
+}
+
+function toggleTodoTicket() {
+    const on = document.getElementById('chk_todoticket').checked;
+    document.getElementById('panel_todoticket').style.display = on ? 'block' : 'none';
+    const bs = document.getElementById('monto_bs');
+    const usd = document.getElementById('monto_usd');
+    const tasa = document.getElementById('tasa_cambio');
+    const com = document.getElementById('comision');
+    if (bs) bs.readOnly = on;
+    if (on) {
+        if (window.tsTipoGasto) window.tsTipoGasto.setValue('100 - TODOTICKET');
+        else document.getElementById('tipo_gasto').value = '100 - TODOTICKET';
+        document.getElementById('tipo_gasto').required = false;
+        calcTodoTicket();
+    } else {
+        if (bs) bs.readOnly = false;
+        document.getElementById('tipo_gasto').required = document.getElementById('categoria_egreso').value !== 'traslados';
+        document.getElementById('tt_total_real_lbl').innerText = 'Bs. 0,00';
+    }
+    if (usd) usd.readOnly = on;
+    if (tasa) tasa.readOnly = on;
+    if (com) com.readOnly = on;
 }
 
 // ── Gasto Fijo Linking Functions ──
@@ -1475,6 +1579,56 @@ function syncGFMontoToForm() {
     document.getElementById('hid_monto_pagado_gf').value = val;
 }
 
+const proveedoresBeneficiario = @json($proveedores->values()->map(fn ($nombre) => ['value' => $nombre, 'text' => $nombre]));
+const tecnicosBeneficiario = @json($empleadosServicioTecnico->map(fn ($empleado) => [
+    'value' => (string) $empleado->id,
+    'text' => $empleado->nombre().' · '.$empleado->cedula(),
+])->values());
+
+function actualizarBeneficiariosPorTipoGasto() {
+    const esServicioTecnico = document.getElementById('tipo_gasto')?.value === '058 - SERVICIO TECNICO (GARANTIAS)';
+    const opciones = esServicioTecnico ? tecnicosBeneficiario : proveedoresBeneficiario;
+    const select = document.getElementById('beneficiario');
+    const label = document.getElementById('beneficiario_label');
+    const ayuda = document.getElementById('beneficiario_ayuda');
+
+    if (!select) return;
+    select.required = esServicioTecnico;
+    document.getElementById('nomina_empleado_id').value = '';
+    if (label) label.textContent = esServicioTecnico ? 'Empleado de Servicio Técnico' : 'Beneficiario';
+    if (ayuda) ayuda.style.display = esServicioTecnico ? 'block' : 'none';
+
+    if (window.tsBeneficiario) {
+        window.tsBeneficiario.clear(true);
+        window.tsBeneficiario.clearOptions();
+        window.tsBeneficiario.addOption(opciones);
+        window.tsBeneficiario.refreshOptions(false);
+        window.tsBeneficiario.settings.placeholder = esServicioTecnico
+            ? '-- Seleccione el empleado --'
+            : '-- Seleccione --';
+        window.tsBeneficiario.inputState();
+        return;
+    }
+
+    select.innerHTML = '<option value="">' +
+        (esServicioTecnico ? '-- Seleccione el empleado --' : '-- Seleccione un beneficiario --') +
+        '</option>';
+    opciones.forEach(opcion => select.add(new Option(opcion.text, opcion.value)));
+}
+
+function actualizarTecnicoEdit(selected = null) {
+    const tipo = document.getElementById('edit_tipo_gasto')?.value;
+    const row = document.getElementById('row_tecnico_edit');
+    const select = document.getElementById('edit_nomina_empleado_id');
+    if (!row || !select) return;
+
+    const visible = tipo === '058 - SERVICIO TECNICO (GARANTIAS)';
+    row.style.display = visible ? 'block' : 'none';
+    select.required = visible;
+    if (selected !== null) select.value = String(selected || '');
+    if (!visible) select.value = '';
+}
+
 
 document.addEventListener('DOMContentLoaded', function() {
 
@@ -1492,6 +1646,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     if (srcTG) window.tsTipoGasto = new TomSelect("#tipo_gasto", tsSettings);
     if (dstTG) window.tsEditTipoGasto = new TomSelect("#edit_tipo_gasto", tsSettings);
+    dstTG?.addEventListener('change', () => actualizarTecnicoEdit());
 
     const tsBankSettings = {
         create: false,
@@ -1502,6 +1657,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('banco_titular')) window.tsBancoTitular = new TomSelect("#banco_titular", tsBankSettings);
     if (document.getElementById('banco_titular_receptor')) window.tsBancoTitularReceptor = new TomSelect("#banco_titular_receptor", tsBankSettings);
     if (document.getElementById('beneficiario')) window.tsBeneficiario = new TomSelect("#beneficiario", tsBankSettings);
+    srcTG?.addEventListener('change', actualizarBeneficiariosPorTipoGasto);
+    document.getElementById('beneficiario')?.addEventListener('change', function () {
+        const esServicioTecnico = srcTG?.value === '058 - SERVICIO TECNICO (GARANTIAS)';
+        document.getElementById('nomina_empleado_id').value = esServicioTecnico ? this.value : '';
+    });
+    actualizarBeneficiariosPorTipoGasto();
 
     // Modal functions
     window.openNuevoEgresoModal = function() {
@@ -1991,7 +2152,7 @@ const tiposGastoList = [
     "091 - HONORARIOS PROFESIONALES", "092 - GASTOS DELIVERY", "093 - GASTOS DIRECTIVO",
     "094 - SALDO MOVISTAR", "095 - TASAS Y CONTRIBUCIONES", "096 - PRESTAMO PERSONAL DIVISAS",
     "097 - INSTALACIONES Y MEJORAS GALPON Y DEPOSITO", "098 - MEJORAS INSTALACIONES TIENDAS",
-    "099 - DEVOLUCIONES CLIENTES"
+    "099 - DEVOLUCIONES CLIENTES", "100 - TODOTICKET"
 ];
 
 function buildTipoGastoOptions(selectedValue) {
@@ -2313,6 +2474,7 @@ function abrirEditarEgreso(mov) {
         const dstTG = document.getElementById('edit_tipo_gasto');
         if (dstTG) dstTG.value = mov.tipo_gasto || '';
     }
+    actualizarTecnicoEdit(mov.nomina_empleado_id || '');
 
     // Banco titular
     const bancoVal = (mov.banco || '') + '|' + (mov.titular || '') + '|' + (mov.categoria_cuenta || '');
@@ -2779,6 +2941,16 @@ function limpiarFiltros() {
                 <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tipo de Gasto</label>
                 <select id="edit_tipo_gasto" name="tipo_gasto" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                     <option value="">-- Seleccione --</option>
+                </select>
+            </div>
+
+            <div id="row_tecnico_edit" style="display:none; margin-bottom:10px;">
+                <label style="display:block; margin-bottom:3px; font-weight:500; font-size:.9rem;">Empleado de Servicio Técnico</label>
+                <select id="edit_nomina_empleado_id" name="nomina_empleado_id" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:4px; background:white;">
+                    <option value="">-- Seleccione el empleado --</option>
+                    @foreach($empleadosServicioTecnico as $tecnico)
+                        <option value="{{ $tecnico->id }}">{{ $tecnico->nombre() }} · {{ $tecnico->cedula() }}</option>
+                    @endforeach
                 </select>
             </div>
 

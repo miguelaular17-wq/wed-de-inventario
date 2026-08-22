@@ -7,10 +7,12 @@ use App\Models\GastoFijoPago;
 use App\Models\GastoFijoConfig;
 use App\Models\GastoFijoOculto;
 use App\Models\GastoFijoCustom;
+use App\Models\Nomina\NominaEmpleado;
 use Illuminate\Http\Request;
 use App\Services\Profiler;
 
 use App\Services\BcvRateService;
+use App\Services\TodoTicketPago;
 
 class FinanzasController extends Controller
 {
@@ -217,6 +219,15 @@ class FinanzasController extends Controller
                         ->distinct()
                         ->orderBy('proveedor')
                         ->pluck('proveedor');
+
+        $empleadosServicioTecnico = NominaEmpleado::query()
+            ->with('cliente:id,nombre,cedula')
+            ->where('estado', 'ACTIVO')
+            ->where('es_servicio_tecnico', true)
+            ->whereHas('cliente')
+            ->get()
+            ->sortBy(fn (NominaEmpleado $empleado) => $empleado->nombre(), SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
         
         Profiler::start('FinanzasController::flujoCaja Blade render');
         $result = view('finanzas.flujo_caja', compact(
@@ -233,7 +244,8 @@ class FinanzasController extends Controller
             'fecha_filtro',
             'fecha_desde',
             'fecha_hasta',
-            'proveedores'
+            'proveedores',
+            'empleadosServicioTecnico'
         ));
         Profiler::stop('FinanzasController::flujoCaja Blade render');
 
@@ -307,7 +319,11 @@ class FinanzasController extends Controller
     {
         try {
             // Normalizar campos numéricos: convertir "35.750,00" o "35750,00" → "35750.00"
-            $numericFields = ['monto_usd', 'tasa_cambio', 'diferencial_cambiario', 'monto_bs', 'comision'];
+            $numericFields = [
+                'monto_usd', 'tasa_cambio', 'diferencial_cambiario', 'monto_bs', 'comision',
+                'tt_recarga', 'tt_comision', 'tt_iva', 'tt_ret_islr', 'tt_ret_iva',
+                'tt_ret_1x1000', 'tt_ret_resp_social', 'tt_ret_isae',
+            ];
             $normalized = [];
             foreach ($numericFields as $field) {
                 $val = $request->input($field);
@@ -339,6 +355,7 @@ class FinanzasController extends Controller
                 'motivo' => 'nullable|string',
                 'sede' => 'nullable|string',
                 'beneficiario' => 'nullable|string',
+                'nomina_empleado_id' => 'nullable|integer|exists:nomina_empleados,id',
                 'placa_vehiculo' => 'nullable|string',
                 'fecha' => 'required|date|before_or_equal:today',
                 'desglose_cedula' => 'nullable|array',
@@ -348,7 +365,33 @@ class FinanzasController extends Controller
                 'desglose_tipo_gasto' => 'nullable|array',
                 'gasto_fijo_id' => 'nullable|integer|exists:gastos_fijos,id',
                 'monto_pagado_gf' => 'nullable|numeric|min:0',
+                'es_todoticket' => 'nullable|boolean',
+                'tt_recarga' => 'nullable|numeric',
+                'tt_comision' => 'nullable|numeric',
+                'tt_iva' => 'nullable|numeric',
+                'tt_ret_islr' => 'nullable|numeric',
+                'tt_ret_iva' => 'nullable|numeric',
+                'tt_ret_1x1000' => 'nullable|numeric',
+                'tt_ret_resp_social' => 'nullable|numeric',
+                'tt_ret_isae' => 'nullable|numeric',
             ]);
+
+            $empleadoServicioTecnico = null;
+            if (($data['tipo_gasto'] ?? null) === '058 - SERVICIO TECNICO (GARANTIAS)') {
+                $empleadoServicioTecnico = NominaEmpleado::query()
+                    ->where('estado', 'ACTIVO')
+                    ->where('es_servicio_tecnico', true)
+                    ->with('cliente')
+                    ->find($data['nomina_empleado_id'] ?? 0);
+
+                if (! $empleadoServicioTecnico) {
+                    return back()
+                        ->withInput()
+                        ->with('error', 'Selecciona el empleado de Servicio Técnico al que corresponde este egreso.');
+                }
+
+                $data['beneficiario'] = $empleadoServicioTecnico->nombre();
+            }
 
             if ($data['categoria_egreso'] === 'traslados') {
                 if (empty($data['banco_titular_receptor'])) {
@@ -391,6 +434,35 @@ class FinanzasController extends Controller
             $monto_usd = $data['monto_usd'] ?? 0;
             $monto_bs = $data['monto_bs'] ?? 0;
             $comision = $data['comision'] ?? 0;
+            $esTodoticket = $request->boolean('es_todoticket');
+            $detalleTodoticket = null;
+
+            if ($esTodoticket) {
+                $detalleTodoticket = TodoTicketPago::normalizarDetalle([
+                    'recarga' => $data['tt_recarga'] ?? 0,
+                    'comision' => $data['tt_comision'] ?? 0,
+                    'iva' => $data['tt_iva'] ?? 0,
+                    'ret_islr' => $data['tt_ret_islr'] ?? 0,
+                    'ret_iva' => $data['tt_ret_iva'] ?? 0,
+                    'ret_1x1000' => $data['tt_ret_1x1000'] ?? 0,
+                    'ret_resp_social' => $data['tt_ret_resp_social'] ?? 0,
+                    'ret_isae' => $data['tt_ret_isae'] ?? 0,
+                ]);
+                $monto_bs = $detalleTodoticket['total_real'];
+                $comision = $detalleTodoticket['comision'];
+                if (empty($data['tipo_gasto'])) {
+                    $data['tipo_gasto'] = '100 - TODOTICKET';
+                }
+                if (empty($data['motivo'])) {
+                    $data['motivo'] = 'Pago TodoTicket — Total Real Bs '.number_format($monto_bs, 2, ',', '.');
+                }
+                if ($tasa_bcv > 0 && $monto_usd <= 0) {
+                    $monto_usd = round($monto_bs / $tasa_bcv, 2);
+                }
+                if ($monto_bs <= 0) {
+                    return back()->with('error', 'El Total Real de TodoTicket debe ser mayor a cero. Completa recarga, comisión, IVA y retenciones.');
+                }
+            }
             
             $diferencial_cambiario = array_key_exists('diferencial_cambiario', $data) && $data['diferencial_cambiario'] !== null 
                                      ? $data['diferencial_cambiario'] 
@@ -399,7 +471,15 @@ class FinanzasController extends Controller
             $tasa_cambio = $data['tasa_cambio'] ?? null;
             $calc_usd = $monto_usd > 0 ? $monto_usd : ($tasa_cambio > 0 ? round($monto_bs / $tasa_cambio, 2) : null);
 
-            if ($diferencial_cambiario === null && $data['categoria_egreso'] !== 'traslados' && $data['categoria_egreso'] !== 'egreso_divisas' && $tasa_bcv > 0) {
+            if ($empleadoServicioTecnico && (! $calc_usd || $calc_usd <= 0)) {
+                return back()
+                    ->withInput()
+                    ->with('error', 'El egreso 058 debe tener un monto USD o un monto Bs con tasa de cambio para descontarlo de la comisión.');
+            }
+
+            if ($esTodoticket) {
+                $diferencial_cambiario = 0;
+            } elseif ($diferencial_cambiario === null && $data['categoria_egreso'] !== 'traslados' && $data['categoria_egreso'] !== 'egreso_divisas' && $tasa_bcv > 0) {
                 $diferencial_cambiario = (($calc_usd * $tasa_bcv) - $monto_bs) / $tasa_bcv;
             }
             $diferencial_cambiario = $diferencial_cambiario ?: 0;
@@ -457,6 +537,9 @@ class FinanzasController extends Controller
                 'monto_bs'              => $monto_bs ?? 0,
                 'comision'              => $comision,
                 'tipo_gasto'            => $data['tipo_gasto'] ?? null,
+                'nomina_empleado_id'     => $empleadoServicioTecnico?->id,
+                'es_todoticket'         => $esTodoticket,
+                'detalle_todoticket'    => $detalleTodoticket,
                 'motivo'                => $data['motivo'] ?? null,
                 'sede'                  => $data['sede'] ?? null,
                 'placa_vehiculo'        => $data['placa_vehiculo'] ?? null,
@@ -552,6 +635,7 @@ class FinanzasController extends Controller
             'monto_bs'               => 'nullable|numeric',
             'comision'               => 'nullable|numeric',
             'tipo_gasto'             => 'nullable|string',
+            'nomina_empleado_id'      => 'nullable|integer|exists:nomina_empleados,id',
             'motivo'                 => 'nullable|string',
             'sede'                   => 'nullable|string',
             'placa_vehiculo'         => 'nullable|string',
@@ -571,10 +655,22 @@ class FinanzasController extends Controller
 
         $banco_receptor = null;
         $titular_receptor = null;
+        $empleadoServicioTecnico = null;
         if (!empty($data['banco_titular_receptor'])) {
             $cuentaReceptorInfo = explode('|', $data['banco_titular_receptor']);
             $banco_receptor = $cuentaReceptorInfo[0] ?? null;
             $titular_receptor = $cuentaReceptorInfo[1] ?? null;
+        }
+        if (($data['tipo_gasto'] ?? null) === '058 - SERVICIO TECNICO (GARANTIAS)') {
+            $empleadoServicioTecnico = NominaEmpleado::query()
+                ->where('estado', 'ACTIVO')
+                ->where('es_servicio_tecnico', true)
+                ->with('cliente')
+                ->find($data['nomina_empleado_id'] ?? $egreso->nomina_empleado_id);
+            if (! $empleadoServicioTecnico) {
+                return back()->withInput()->with('error', 'Selecciona el empleado de Servicio Técnico al que corresponde este egreso.');
+            }
+            $titular_receptor = $empleadoServicioTecnico->nombre();
         }
 
         $resumen = \App\Models\FinanzasResumen::where('fecha', $data['fecha'])->first();
@@ -587,6 +683,11 @@ class FinanzasController extends Controller
                                  : $egreso->diferencial_cambiario;
 
         $calc_usd = $monto_usd > 0 ? $monto_usd : (isset($data['tasa_cambio']) && $data['tasa_cambio'] > 0 ? round($monto_bs / $data['tasa_cambio'], 2) : null);
+        if ($empleadoServicioTecnico && (! $calc_usd || $calc_usd <= 0)) {
+            return back()
+                ->withInput()
+                ->with('error', 'El egreso 058 debe tener un monto USD o un monto Bs con tasa de cambio para descontarlo de la comisión.');
+        }
 
         // Manage comprobantes array: start from existing
         $comprobantes = $egreso->comprobantes ?? [];
@@ -646,6 +747,7 @@ class FinanzasController extends Controller
             'monto_bs'              => $data['monto_bs'] ?? 0,
             'comision'              => $data['comision'] ?? 0,
             'tipo_gasto'            => $data['tipo_gasto'] ?? null,
+            'nomina_empleado_id'     => $empleadoServicioTecnico?->id,
             'motivo'                => $data['motivo'] ?? null,
             'sede'                  => $data['sede'] ?? null,
             'placa_vehiculo'        => $data['placa_vehiculo'] ?? null,
@@ -755,7 +857,24 @@ class FinanzasController extends Controller
     }
 
     public function conciliaciones(Request $request) {
-        $banco_filtro = $request->query('banco_filtro');
+        $filterKeys = ['fecha_desde', 'fecha_hasta', 'banco_filtro'];
+
+        if ($request->hasAny($filterKeys)) {
+            $filtrosConciliacion = [
+                'fecha_desde' => $request->input('fecha_desde') ?: null,
+                'fecha_hasta' => $request->input('fecha_hasta') ?: null,
+                'banco_filtro' => $request->input('banco_filtro') ?: null,
+            ];
+            $request->session()->put('conciliaciones.filtros', $filtrosConciliacion);
+        } else {
+            $filtrosConciliacion = $request->session()->get('conciliaciones.filtros', [
+                'fecha_desde' => null,
+                'fecha_hasta' => null,
+                'banco_filtro' => null,
+            ]);
+        }
+
+        $banco_filtro = $filtrosConciliacion['banco_filtro'] ?? null;
 
         // 1. Obtener cuentas bancarias y lista de bancos permitidos
         $cuentasBancarias  = \App\Models\CuentaBancaria::all();
@@ -782,8 +901,12 @@ class FinanzasController extends Controller
         unset($tits);
 
         // 2. Líneas bancarias cargadas
-        $fecha_desde = $request->input('fecha_desde') ? \Carbon\Carbon::parse($request->input('fecha_desde'))->format('Y-m-d') : null;
-        $fecha_hasta = $request->input('fecha_hasta') ? \Carbon\Carbon::parse($request->input('fecha_hasta'))->format('Y-m-d') : null;
+        $fecha_desde = ! empty($filtrosConciliacion['fecha_desde'])
+            ? \Carbon\Carbon::parse($filtrosConciliacion['fecha_desde'])->format('Y-m-d')
+            : null;
+        $fecha_hasta = ! empty($filtrosConciliacion['fecha_hasta'])
+            ? \Carbon\Carbon::parse($filtrosConciliacion['fecha_hasta'])->format('Y-m-d')
+            : null;
 
         $lineas_query = \App\Models\ConciliacionLinea::query()->orderBy('fecha');
         
@@ -819,83 +942,28 @@ class FinanzasController extends Controller
                 ->where('fecha', '>=', $fecha_minima)
                 ->get();
 
+            $matcher = app(\App\Services\BankReconciliationMatcher::class);
             $cambios = false;
             foreach ($lineas_pendientes as $linea) {
-                $banco_linea   = strtolower(trim($linea->banco ?? ''));
-                $titular_linea = strtolower(trim($linea->titular ?? ''));
                 $match         = null;
                 $isTesoreriaMatch = false;
 
-                // Helper: fecha dentro de ventana de ±3 días
-                $fechaOk = function($fechaA, $fechaB) {
-                    return abs(\Carbon\Carbon::parse($fechaA)->diffInDays(\Carbon\Carbon::parse($fechaB))) <= 3;
-                };
-
-                if ($linea->monto > 0) {
-                    // ── INGRESOS: Match con Tesorería ─────────────────────
-                    $match = $tesoreria_posibles->first(function($t) use ($linea, $banco_linea, $titular_linea, $fechaOk) {
-                        $tbanco = strtolower(trim($t->banco ?? ''));
-                        $ttit   = strtolower(trim($t->titular ?? ''));
-                        $titOk  = ($titular_linea === '' || $ttit === '' || $ttit === $titular_linea);
-
-                        // Banco y monto deben coincidir siempre
-                        if ($tbanco !== $banco_linea || (float)$t->monto !== (float)$linea->monto) return false;
-
-                        if ($t->tipo === 'punto_venta') {
-                            // Lote POS: referencia exacta O (titular + fecha ±3 días)
-                            if ($t->lote_referencia && stripos((string)$linea->referencia, (string)$t->lote_referencia) !== false) {
-                                return true; // referencia coincide → match directo
-                            }
-                            return $titOk && $fechaOk($t->fecha, $linea->fecha);
-                        } else {
-                            // Pago Móvil/Transferencia
-                            // 1) Referencia parcial (final): si pasa referencia+monto ya es match
-                            if ($t->lote_referencia && str_ends_with((string)$linea->referencia, (string)$t->lote_referencia)) {
-                                return true;
-                            }
-                            // 2) Monto + fecha ±3 días + titular
-                            return $titOk && $fechaOk($t->fecha, $linea->fecha);
-                        }
-                    });
-
-                    if ($match) $isTesoreriaMatch = true;
-
+                if ($linea->esAbono()) {
+                    $match = $matcher->mejorIngresoTesoreria($linea, $tesoreria_posibles);
+                    if ($match) {
+                        $isTesoreriaMatch = true;
+                    }
                 } else {
-                    // ── EGRESOS: Match con Flujo de Caja ─────────────────
-                    $monto_abs = abs($linea->monto);
-
-                    // Prioridad 1: referencia + monto coinciden → match directo (sin importar fecha)
-                    if ($linea->referencia && $banco_linea) {
-                        $match = $flujos_posibles->first(function($f) use ($linea, $banco_linea, $titular_linea, $monto_abs) {
-                            $fbanco = strtolower(trim($f->banco ?? ''));
-                            $ftit   = strtolower(trim($f->titular ?? ''));
-                            $titOk  = ($titular_linea === '' || $ftit === '' || $ftit === $titular_linea);
-                            return $fbanco == $banco_linea
-                                && $titOk
-                                && ($f->monto_usd == $monto_abs || $f->monto_bs == $monto_abs)
-                                && stripos($f->referencia ?? '', $linea->referencia) !== false;
-                        });
-                    }
-
-                    // Prioridad 2: monto + banco + fecha ±3 días (sin referencia exacta)
-                    if (!$match) {
-                        $match = $flujos_posibles->first(function($f) use ($linea, $banco_linea, $titular_linea, $monto_abs, $fechaOk) {
-                            $fbanco = strtolower(trim($f->banco ?? ''));
-                            $ftit   = strtolower(trim($f->titular ?? ''));
-                            $titOk  = ($titular_linea === '' || $ftit === '' || $ftit === $titular_linea);
-                            return (!$banco_linea || $fbanco == $banco_linea)
-                                && $titOk
-                                && ($f->monto_usd == $monto_abs || $f->monto_bs == $monto_abs)
-                                && $fechaOk($f->fecha, $linea->fecha);
-                        });
-                    }
+                    $match = $matcher->mejorEgreso($linea, $flujos_posibles);
                 }
 
                 if ($match) {
                     $linea->estado = 'conciliado';
                     if ($isTesoreriaMatch) {
                         $linea->tesoreria_ingreso_id = $match->id;
-                        $tesoreria_posibles = $tesoreria_posibles->reject(fn($t) => $t->id == $match->id);
+                        if (($match->tipo ?? '') !== 'punto_venta') {
+                            $tesoreria_posibles = $tesoreria_posibles->reject(fn($t) => $t->id == $match->id);
+                        }
                     } else {
                         $linea->flujo_caja_id = $match->id;
                         $flujos_posibles = $flujos_posibles->reject(fn($f) => $f->id == $match->id);
@@ -1089,7 +1157,8 @@ class FinanzasController extends Controller
 
         return view('finanzas.conciliaciones', compact(
             'lineas', 'bancos', 'cuentasBancarias', 'egresos_ayer',
-            'bancosActivos', 'data_por_banco', 'titularesPorBanco'
+            'bancosActivos', 'data_por_banco', 'titularesPorBanco',
+            'filtrosConciliacion'
         ));
     }
 
@@ -1540,7 +1609,7 @@ class FinanzasController extends Controller
             'referencia' => $linea->referencia,
             'monto' => abs($linea->monto),
             'monto_bs' => abs($linea->monto),
-            'tipo' => $linea->monto < 0 ? 'egreso' : 'ingreso',
+            'tipo' => $linea->esCargo() ? 'egreso' : 'ingreso',
             'categoria_egreso' => 'egreso_realizado',
             'banco' => $banco,
             'titular' => $titular,
@@ -1617,21 +1686,36 @@ class FinanzasController extends Controller
     public function reporteBancoPdf(Request $request) {
         $bk_req = strtolower(trim($request->query('banco', '')));
         $tit_req = strtolower(trim($request->query('titular', '')));
+        $fecha_desde_filtro = $request->query('fecha_desde');
+        $fecha_hasta_filtro = $request->query('fecha_hasta');
         
         if (!$bk_req) {
             return redirect()->back()->with('error', 'Banco no especificado.');
         }
 
-        $fecha_desde = now()->subDays(1)->startOfDay();
-        $lineas_query = \App\Models\ConciliacionLinea::where('created_at', '>=', $fecha_desde)
+        $lineas_query = \App\Models\ConciliacionLinea::query()
             ->whereRaw('LOWER(banco) = ?', [$bk_req]);
+        if ($fecha_desde_filtro) {
+            $lineas_query->whereDate('fecha', '>=', $fecha_desde_filtro);
+        } else {
+            $lineas_query->where('created_at', '>=', now()->subDays(1)->startOfDay());
+        }
+        if ($fecha_hasta_filtro) {
+            $lineas_query->whereDate('fecha', '<=', $fecha_hasta_filtro);
+        }
         $lineas = $lineas_query->get();
 
-        $ayer = now()->subDay()->format('Y-m-d');
         $egresos_query = \App\Models\FlujoCaja::where('tipo', 'egreso')
             ->where('es_conciliado', false)
-            ->where('fecha', $ayer)
             ->whereRaw('LOWER(banco) = ?', [$bk_req]);
+        if ($fecha_desde_filtro) {
+            $egresos_query->whereDate('fecha', '>=', $fecha_desde_filtro);
+        } else {
+            $egresos_query->whereDate('fecha', '>=', now()->subDay()->format('Y-m-d'));
+        }
+        if ($fecha_hasta_filtro) {
+            $egresos_query->whereDate('fecha', '<=', $fecha_hasta_filtro);
+        }
         $egresos_ayer = $egresos_query->orderBy('id')->get();
 
         $comision_keywords = [
@@ -1738,6 +1822,8 @@ class FinanzasController extends Controller
             'total_transito' => $en_transito->sum('monto_bs'),
             'total_sin_registrar' => $sin_registrar->sum('monto'),
             'total_comisiones' => $comisiones->sum('monto'),
+            'fecha_desde' => $fecha_desde_filtro,
+            'fecha_hasta' => $fecha_hasta_filtro,
         ];
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('finanzas.pdf.reporte_banco', ['data' => $data]);

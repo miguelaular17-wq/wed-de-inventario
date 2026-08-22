@@ -8,13 +8,17 @@ use App\Models\Notification;
 use App\Models\PedidoSolicitado;
 use App\Models\User;
 use App\Services\AnalisisInventarioService;
+use App\Services\InventoryBreakReportService;
 use App\Services\ProductRepository;
 use App\Services\VentasCalculator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CompradorController extends Controller
 {
@@ -22,6 +26,7 @@ class CompradorController extends Controller
         private ProductRepository $products,
         private VentasCalculator $ventas,
         private AnalisisInventarioService $analisis,
+        private InventoryBreakReportService $inventoryBreakReport,
     ) {}
 
     /**
@@ -34,6 +39,61 @@ class CompradorController extends Controller
         $tp = (float) $request->query('tp', 60);
         $tv = (float) config('inventario.tiempo_venta_sede', 15);
         $sedes = config('inventario.sedes_stock');
+        $activeTab = $this->resolveActiveTab($request);
+        $needsPurchaseData = in_array($activeTab, ['productos', 'proveedores'], true);
+        $needsAnalysis = $activeTab === 'sobrestock';
+        $needsPublicidad = $activeTab === 'publicidad';
+        $needsCobranzas = $activeTab === 'cobranzas';
+        $needsQPedir = $activeTab === 'qpedir';
+        $needsCatalogFilters = in_array($activeTab, ['productos', 'proveedores', 'sobrestock'], true);
+        $paginatorOpts = ['path' => $request->url(), 'query' => $request->query()];
+        $paginatedItems = new LengthAwarePaginator([], 0, 25, 1, $paginatorOpts);
+        $paginatedAnalysis = new LengthAwarePaginator([], 0, 50, 1, $paginatorOpts + ['pageName' => 'page']);
+        $byProvider = collect();
+        $categorias = [];
+        $proveedores = [];
+        $subcatMap = [];
+        $search = trim((string) $request->query('q', ''));
+        $category = (string) $request->query('categoria', 'Ninguno');
+        $proveedor = (string) $request->query('proveedor', 'Ninguno');
+        $subcategoria = (string) $request->query('subcategoria', 'Ninguno');
+        $statusFilter = (string) $request->query('status', 'Todos');
+        $sedeDestinoFilter = (string) $request->query('sede_destino', 'Todas');
+        $sortFirst = (string) $request->query('sort_first', 'codigo');
+        $dirFirst = (string) $request->query('dir_first', 'asc');
+        $ssFilters = [
+            'categoria' => (string) $request->query('ss_categoria', 'Ninguno'),
+            'subcategoria' => (string) $request->query('ss_subcategoria', 'Ninguno'),
+            'proveedor' => (string) $request->query('ss_proveedor', 'Ninguno'),
+            'sede' => (string) $request->query('ss_sede', 'Todas'),
+            'rotacion_filter' => (string) $request->query('ss_rotacion', 'Todos'),
+            'sobrestock_filter' => (string) $request->query('ss_sobrestock', 'Todos'),
+            'estado_filter' => (string) $request->query('ss_estado', 'Todos'),
+            'semaforo_filter' => (string) $request->query('ss_semaforo', 'Todos'),
+            'min_dias_sin_venta' => $request->query('ss_min_dias'),
+            'min_existencia' => $request->query('ss_min_stock'),
+            'buscar' => $this->resolveBuscarFilter($request),
+        ];
+        $sortBy = (string) $request->query('ss_sort', 'prioridad');
+        $sortDir = (string) $request->query('ss_dir', 'desc');
+        $resumenRiesgo = [
+            'rotacion' => [],
+            'sobrestock' => [],
+            'estados' => [],
+            'semaforo' => ['verde' => 0, 'amarillo' => 0, 'naranja' => 0, 'rojo' => 0],
+        ];
+        $resumenPorSede = [];
+        $analysisItems = collect();
+        $topInmovilizados = collect();
+        $topCompraUrgente = collect();
+        $topRedistribucion = collect();
+        $dashboardStats = [
+            'total_analizados' => 0,
+            'valor_inmovilizado' => 0,
+            'count_compra_urgente' => 0,
+            'count_redistribuir' => 0,
+            'count_saludables' => 0,
+        ];
 
         if (config('database.default') === 'pgsql') {
             $tp = (float) $request->query('tp', 60);
@@ -75,6 +135,7 @@ class CompradorController extends Controller
 
             $whereSql = $whereClauses ? 'AND ' . implode(' AND ', $whereClauses) : '';
 
+            if ($needsPurchaseData) {
             $cteSql = "
                 WITH product_metrics AS (
                     SELECT 
@@ -325,7 +386,9 @@ class CompradorController extends Controller
                     'productos' => $items->values(),
                 ];
             })->sortByDesc('total_unidades')->values();
+            }
 
+            if ($needsCatalogFilters) {
             $stockUpdatedAt = $this->products->lastStockUpdate();
             $stockUpdateMd5 = md5((string) $stockUpdatedAt);
 
@@ -373,7 +436,9 @@ class CompradorController extends Controller
             foreach ($subcatMap as $cat => $subcats) {
                 sort($subcatMap[$cat]);
             }
+            }
 
+            if ($needsAnalysis) {
             // Tab 3 filters setting
             $ssFilters = [
                 'categoria' => (string) $request->query('ss_categoria', 'Ninguno'),
@@ -471,7 +536,9 @@ class CompradorController extends Controller
                 'count_redistribuir' => $analysisItems->filter(fn($i) => $i['accion_recomendada'] === 'Redistribuir')->count(),
                 'count_saludables' => $analysisItems->filter(fn($i) => in_array($i['accion_recomendada'], ['Mantener', 'Revisar compra']))->count(),
             ];
+            }
         } else {
+            if ($needsPurchaseData || $needsCatalogFilters) {
             // Load all products (we can use the central sede JRZ or any)
             Profiler::start('ProductRepository::loadForSede (SQLite path)');
             $rawProducts = $this->products->loadForSede('JRZ');
@@ -621,6 +688,24 @@ class CompradorController extends Controller
                 ];
             })->sortByDesc('total_unidades')->values();
 
+            $categorias = $allProducts->pluck('categoria')->filter()->unique()->sort()->values()->all();
+            $proveedores = $allProducts->pluck('proveedor')->filter()->unique()->sort()->values()->all();
+
+            $subcatMap = [];
+            foreach ($allProducts as $p) {
+                $cat = $p['categoria'] ?? '';
+                $subcat = $p['subcategoria'] ?? '';
+                if ($cat !== '' && $subcat !== '') {
+                    $subcatMap[$cat][$subcat] = true;
+                }
+            }
+            foreach ($subcatMap as $cat => $subcats) {
+                $subcatMap[$cat] = array_keys($subcats);
+                sort($subcatMap[$cat]);
+            }
+            }
+
+            if ($needsAnalysis) {
             // ── Tab 3: Análisis de Inventario (Sobre Stock / Sin Rotación) ──
             $ssFilters = [
                 'categoria' => (string) $request->query('ss_categoria', 'Ninguno'),
@@ -674,32 +759,19 @@ class CompradorController extends Controller
                 'count_redistribuir' => 0,
                 'count_saludables' => 0,
             ];
-
-            $categorias = $allProducts->pluck('categoria')->filter()->unique()->sort()->values()->all();
-            $proveedores = $allProducts->pluck('proveedor')->filter()->unique()->sort()->values()->all();
-            
-            $subcatMap = [];
-            foreach ($allProducts as $p) {
-                $cat = $p['categoria'] ?? '';
-                $subcat = $p['subcategoria'] ?? '';
-                if ($cat !== '' && $subcat !== '') {
-                    $subcatMap[$cat][$subcat] = true;
-                }
-            }
-            foreach ($subcatMap as $cat => $subcats) {
-                $subcatMap[$cat] = array_keys($subcats);
-                sort($subcatMap[$cat]);
             }
         }
 
         $publicitadosData = [];
         $advertisedProductIds = [];
+        $puedeVerEquipoPublicidad = auth()->user()->canViewTeamPublicidad();
+        $publicidadUsuarios = collect();
 
-        if (config('database.default') === 'pgsql') {
-            // Fetch advertised products (Publicidad)
-            $publicitados = \Illuminate\Support\Facades\DB::connection('pgsql')
+        if (($needsPublicidad || $needsAnalysis) && config('database.default') === 'pgsql') {
+            $authId = auth()->id();
+            if ($needsPublicidad) {
+            $publicitadosQuery = \Illuminate\Support\Facades\DB::connection('pgsql')
                 ->table('publicidad_productos as pub')
-                ->where('pub.user_id', auth()->id())
                 ->join('productos as p', 'pub.producto_id', '=', 'p.id')
                 ->leftJoin(
                     \Illuminate\Support\Facades\DB::raw('(SELECT producto_id, SUM(existencia) as total_stock FROM stock_actual GROUP BY producto_id) sa'),
@@ -718,6 +790,7 @@ class CompradorController extends Controller
                     'p.nombre',
                     'p.categoria',
                     'p.proveedor',
+                    'pub.user_id',
                     'pub.fecha_publicidad',
                     'pub.ultima_venta_original',
                     \Illuminate\Support\Facades\DB::raw('COALESCE(sa.total_stock, 0) as total_stock'),
@@ -730,9 +803,28 @@ class CompradorController extends Controller
                           AND m.usuario = 'sistema_sync' 
                           AND m.created_at >= pub.fecha_publicidad
                     ) as cantidad_vendida_desde_pub"),
-                ])
+                ]);
+
+            if (! $puedeVerEquipoPublicidad) {
+                $publicitadosQuery->where('pub.user_id', $authId);
+            }
+
+            $publicitados = $publicitadosQuery
                 ->orderBy('pub.fecha_publicidad', 'desc')
                 ->get();
+
+            $userNames = User::whereIn('id', $publicitados->pluck('user_id')->filter()->unique())
+                ->pluck('name', 'id');
+
+            if ($puedeVerEquipoPublicidad) {
+                $publicidadUsuarios = User::query()
+                    ->where(function ($q) use ($publicitados) {
+                        $q->where('role', User::ROLE_MARKETING)
+                            ->orWhereIn('id', $publicitados->pluck('user_id')->filter()->unique());
+                    })
+                    ->orderBy('name')
+                    ->get(['id', 'name']);
+            }
 
             foreach ($publicitados as $row) {
                 $tuvoVentas = false;
@@ -759,20 +851,31 @@ class CompradorController extends Controller
                     'ultima_venta_actual' => $row->ultima_venta_actual ? \Carbon\Carbon::parse($row->ultima_venta_actual)->format('d/m/Y') : 'Sin datos',
                     'tuvo_ventas' => $tuvoVentas,
                     'cantidad_vendida_desde_pub' => $row->cantidad_vendida_desde_pub ? (int) $row->cantidad_vendida_desde_pub : 0,
+                    'user_id' => $row->user_id,
+                    'usuario' => $userNames[$row->user_id] ?? 'Sin asignar',
+                    'es_propia' => (int) $row->user_id === (int) $authId,
                 ];
+            }
             }
 
             $advertisedProductIds = \Illuminate\Support\Facades\DB::connection('pgsql')
                 ->table('publicidad_productos')
-                ->where('user_id', auth()->id())
+                ->where('user_id', $authId)
                 ->pluck('producto_id')
                 ->toArray();
         }
 
         $qPedirDate = $request->query('q_pedir_date');
         $pedidosSolicitados = collect();
+        $qPedirStats = [];
+        $qPedirCount = 0;
         if (Schema::hasTable('pedidos_solicitados')) {
-            $query = PedidoSolicitado::query();
+            $pendientes = PedidoSolicitado::query()->where('estado', 'pendiente');
+            $qPedirCount = (int) (clone $pendientes)
+                ->selectRaw('COUNT(DISTINCT producto) as aggregate')
+                ->value('aggregate');
+            if ($needsQPedir) {
+            $query = PedidoSolicitado::query()->where('estado', 'pendiente');
             if ($qPedirDate) {
                 $query->whereDate('created_at', $qPedirDate);
             }
@@ -781,10 +884,8 @@ class CompradorController extends Controller
                 ->groupBy('producto')
                 ->orderByDesc('frecuencia')
                 ->get();
-        }
+            $qPedirCount = $pedidosSolicitados->count();
 
-        $qPedirStats = [];
-        if (Schema::hasTable('pedidos_solicitados')) {
             $qPedirStats['global'] = PedidoSolicitado::selectRaw('estado, COUNT(*) as count')->groupBy('estado')->pluck('count', 'estado')->toArray();
             $qPedirStats['categorias'] = PedidoSolicitado::selectRaw('categoria, estado, COUNT(*) as count')
                 ->whereNotNull('categoria')
@@ -793,6 +894,7 @@ class CompradorController extends Controller
                 ->groupBy('categoria')
                 ->map(fn($items) => $items->pluck('count', 'estado')->toArray())
                 ->toArray();
+            }
         }
 
         $cobranzasData = [
@@ -804,7 +906,7 @@ class CompradorController extends Controller
             'detalle' => []
         ];
 
-        if (Schema::hasTable('historial_cobranzas')) {
+        if ($needsCobranzas && Schema::hasTable('historial_cobranzas')) {
             $latestFecha = \App\Models\HistorialCobranza::max('fecha_registro');
             if ($latestFecha) {
                 $cobranzasData['fecha_actual'] = \Carbon\Carbon::parse($latestFecha)->format('d/m/Y');
@@ -903,6 +1005,8 @@ class CompradorController extends Controller
             'sedeDisplay' => config('inventario.display'),
             'publicitadosData' => $publicitadosData,
             'advertisedProductIds' => $advertisedProductIds,
+            'puedeVerEquipoPublicidad' => $puedeVerEquipoPublicidad,
+            'publicidadUsuarios' => $publicidadUsuarios,
             // FASE 2
             'topInmovilizados' => $topInmovilizados ?? collect(),
             'topCompraUrgente' => $topCompraUrgente ?? collect(),
@@ -911,6 +1015,8 @@ class CompradorController extends Controller
             'analysisItems' => $analysisItems ?? collect(),
             'pedidosSolicitados' => $pedidosSolicitados,
             'qPedirStats' => $qPedirStats,
+            'qPedirCount' => $qPedirCount,
+            'activeTab' => $activeTab,
             'buscarQuery' => $this->resolveBuscarFilter($request),
             'cobranzasData' => $cobranzasData,
         ]);
@@ -927,6 +1033,79 @@ class CompradorController extends Controller
         }
 
         return trim((string) $request->query('q', ''));
+    }
+
+    private function resolveActiveTab(Request $request): string
+    {
+        $tab = (string) $request->query('tab', '');
+        $allowed = ['productos', 'proveedores', 'sobrestock', 'qpedir', 'publicidad', 'cobranzas'];
+        if (in_array($tab, $allowed, true)) {
+            return $tab;
+        }
+
+        if ($request->filled('q_pedir_date')) {
+            return 'qpedir';
+        }
+
+        if ($request->has('ss_categoria') || $request->filled('ss_buscar') || $request->has('ss_sort')) {
+            return 'sobrestock';
+        }
+
+        $user = $request->user();
+        if ($user && method_exists($user, 'isMarketing') && $user->isMarketing()) {
+            return 'sobrestock';
+        }
+
+        return 'productos';
+    }
+
+    /**
+     * Export products at or below the selected stock, calculated from invoice details.
+     */
+    public function exportInventoryBreak(Request $request): StreamedResponse|RedirectResponse
+    {
+        $branches = config('inventario.sedes_stock', []);
+        $data = $request->validate([
+            'stock_minimo' => ['required', 'integer', 'min:0', 'max:1000000'],
+            'dias' => ['required', 'integer', 'min:1', 'max:365'],
+            'sede' => ['nullable', 'string', Rule::in($branches)],
+        ]);
+
+        if (config('database.default') !== 'pgsql' || ! Schema::hasTable('ventas_detalle')) {
+            return back()->withErrors([
+                'quiebre' => 'El reporte requiere la base PostgreSQL y el detalle de facturas sincronizado.',
+            ]);
+        }
+
+        $minimumStock = (int) $data['stock_minimo'];
+        $days = (int) $data['dias'];
+        $branch = isset($data['sede']) && $data['sede'] !== '' ? $data['sede'] : null;
+        $rows = $this->inventoryBreakReport->generate($minimumStock, $days, $branch);
+        $filename = 'quiebre_inventario_' . date('Y-m-d_His') . '.csv';
+
+        return response()->streamDownload(function () use ($rows) {
+            $output = fopen('php://output', 'wb');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, [
+                'Código',
+                'Producto',
+                'Sede',
+                'Stock actual',
+                'Total vendido',
+            ], ';');
+
+            foreach ($rows as $row) {
+                fputcsv($output, [
+                    $row['codigo'],
+                    $row['producto'],
+                    config('inventario.display.' . $row['sede'], $row['sede']),
+                    $row['stock_actual'],
+                    $row['total_vendido'],
+                ], ';');
+            }
+
+            fclose($output);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     /**
@@ -1157,52 +1336,68 @@ class CompradorController extends Controller
         }
         
         $userId = auth()->id();
+        $user = auth()->user();
         
         $exists = \Illuminate\Support\Facades\DB::connection('pgsql')
             ->table('publicidad_productos')
             ->where('producto_id', $productoId)
-            ->where('user_id', $userId)
+            ->when(! $user->isAdmin(), fn ($q) => $q->where('user_id', $userId))
             ->first();
             
         if ($exists) {
-            \Illuminate\Support\Facades\DB::connection('pgsql')
+            $delete = \Illuminate\Support\Facades\DB::connection('pgsql')
                 ->table('publicidad_productos')
-                ->where('producto_id', $productoId)
-                ->where('user_id', $userId)
-                ->delete();
+                ->where('producto_id', $productoId);
+            if (! $user->isAdmin()) {
+                $delete->where('user_id', $userId);
+            }
+            $delete->delete();
                 
             return response()->json([
                 'success' => true,
                 'status' => 'removed',
                 'message' => 'Producto retirado de la campaña de publicidad.'
             ]);
-        } else {
-            $lastSaleRow = \Illuminate\Support\Facades\DB::connection('pgsql')
-                ->table('ventas_historicas')
-                ->where('producto_id', $productoId)
-                ->select(\Illuminate\Support\Facades\DB::raw('MAX(ultima_venta) as ultima_venta'))
-                ->first();
-            
-            $lastSaleDate = $lastSaleRow ? $lastSaleRow->ultima_venta : null;
-            $fechaPublicidad = isset($data['fecha_publicidad']) ? \Carbon\Carbon::parse($data['fecha_publicidad']) : now();
-            
-            \Illuminate\Support\Facades\DB::connection('pgsql')
-                ->table('publicidad_productos')
-                ->insert([
-                    'producto_id' => $productoId,
-                    'user_id' => $userId,
-                    'fecha_publicidad' => $fechaPublicidad,
-                    'ultima_venta_original' => $lastSaleDate,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-                
-            return response()->json([
-                'success' => true,
-                'status' => 'added',
-                'message' => 'Producto marcado para campaña de publicidad con éxito.'
-            ]);
         }
+
+        $alreadyTaken = \Illuminate\Support\Facades\DB::connection('pgsql')
+            ->table('publicidad_productos')
+            ->where('producto_id', $productoId)
+            ->first();
+
+        if ($alreadyTaken) {
+            return response()->json([
+                'success' => false,
+                'status' => 'taken',
+                'message' => 'Este producto ya está en campaña de otro usuario.',
+            ], 409);
+        }
+
+        $lastSaleRow = \Illuminate\Support\Facades\DB::connection('pgsql')
+            ->table('ventas_historicas')
+            ->where('producto_id', $productoId)
+            ->select(\Illuminate\Support\Facades\DB::raw('MAX(ultima_venta) as ultima_venta'))
+            ->first();
+        
+        $lastSaleDate = $lastSaleRow ? $lastSaleRow->ultima_venta : null;
+        $fechaPublicidad = isset($data['fecha_publicidad']) ? \Carbon\Carbon::parse($data['fecha_publicidad']) : now();
+        
+        \Illuminate\Support\Facades\DB::connection('pgsql')
+            ->table('publicidad_productos')
+            ->insert([
+                'producto_id' => $productoId,
+                'user_id' => $userId,
+                'fecha_publicidad' => $fechaPublicidad,
+                'ultima_venta_original' => $lastSaleDate,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            
+        return response()->json([
+            'success' => true,
+            'status' => 'added',
+            'message' => 'Producto marcado para campaña de publicidad con éxito.'
+        ]);
     }
 
     public function toggleExclusion(Request $request, $id)

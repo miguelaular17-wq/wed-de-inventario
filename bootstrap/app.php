@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'sede'  => \App\Http\Middleware\EnsureSedeSelected::class,
             'admin' => \App\Http\Middleware\EnsureAdmin::class,
             'role'  => \App\Http\Middleware\EnsureRole::class,
+            'permission' => \App\Http\Middleware\EnsurePermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

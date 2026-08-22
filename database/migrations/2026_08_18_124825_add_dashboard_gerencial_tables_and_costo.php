@@ -12,6 +12,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::unprepared('
             -- 1. Tabla unificada de Ventas Detalladas + Devoluciones
             CREATE TABLE IF NOT EXISTS inventario_v2.ventas_detalle (

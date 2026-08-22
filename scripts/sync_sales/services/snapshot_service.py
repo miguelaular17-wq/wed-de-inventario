@@ -75,6 +75,7 @@ class SnapshotService:
                 precio_mayor  = float(row[8]) if len(row) > 8 and row[8] else 0.0
                 categoria_str = str(row[9]).strip() if len(row) > 9 and row[9] else None
                 subcategoria_str = str(row[10]).strip() if len(row) > 10 and row[10] else ''
+                costo_actual = float(row[11]) if len(row) > 11 and row[11] else 0.0
                 
                 if not categoria_str:
                     categoria_str = subcategoria_str
@@ -148,7 +149,7 @@ class SnapshotService:
                         continue
 
                 if pid not in pid_updates_map or precio_unidad > pid_updates_map[pid][0]:
-                    pid_updates_map[pid] = (precio_unidad, precio_mayor, categoria_str, subcategoria_str)
+                    pid_updates_map[pid] = (precio_unidad, precio_mayor, categoria_str, subcategoria_str, costo_actual)
 
                 pid_stock_map[pid] = pid_stock_map.get(pid, 0) + existencia
                 
@@ -194,8 +195,8 @@ class SnapshotService:
             logger.info(f"[Snapshot] Preparados {len(stock_tuples)} productos conocidos. Enviando...")
             
             updates_tuples = []
-            for pid_r, (pu, pm, cat, subcat) in pid_updates_map.items():
-                updates_tuples.append((pu, pm, cat, subcat, pid_r, pu, pm, cat, subcat))
+            for pid_r, (pu, pm, cat, subcat, costo) in pid_updates_map.items():
+                updates_tuples.append((pu, pm, cat, subcat, costo, costo, pid_r, pu, pm, cat, subcat, costo))
                 
             if updates_tuples:
                 batch_update_query = """
@@ -204,12 +205,14 @@ class SnapshotService:
                         precio_mayor  = CASE WHEN precio_mayor  IS NULL OR precio_mayor  <= 0 THEN %s ELSE precio_mayor  END,
                         categoria     = CASE WHEN categoria = 'Sin categoría' OR categoria IS NULL OR categoria = '' THEN %s ELSE categoria END,
                         subcategoria  = CASE WHEN subcategoria IS NULL OR subcategoria = '' THEN %s ELSE subcategoria END,
+                        costo_actual  = CASE WHEN %s > 0 THEN %s ELSE costo_actual END,
                         updated_at = NOW()
                     WHERE id = %s AND (
                         (%s > 0 AND (precio_unidad IS NULL OR precio_unidad <= 0)) OR
                         (%s > 0 AND (precio_mayor  IS NULL OR precio_mayor  <= 0)) OR
                         (%s != 'Sin categoría' AND (categoria = 'Sin categoría' OR categoria IS NULL OR categoria = '')) OR
-                        (%s != '' AND (subcategoria IS NULL OR subcategoria = ''))
+                        (%s != '' AND (subcategoria IS NULL OR subcategoria = '')) OR
+                        (%s > 0)
                     );
                 """
                 batch_execute_and_commit(batch_update_query, updates_tuples)

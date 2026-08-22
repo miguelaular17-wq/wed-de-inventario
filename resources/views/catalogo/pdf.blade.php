@@ -246,8 +246,8 @@
                             <td class="price-val">${{ number_format($prod->precio_mayor, 2) }}</td>
                         </tr>
                         <tr>
-                            <td>P. Divisa (-30%):</td>
-                            <td class="price-val">${{ number_format($prod->precio_unidad * 0.70, 2) }}</td>
+                            <td>P. Divisa (-20%):</td>
+                            <td class="price-val">${{ number_format($prod->precio_unidad * 0.80, 2) }}</td>
                         </tr>
                     </table>
                 </div>
