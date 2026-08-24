@@ -1,0 +1,517 @@
+<?php
+
+namespace App\Services;
+
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+class GerencialDashboardService
+{
+    /**
+     * @return list<string>
+     */
+    public function sedesVentas(): array
+    {
+        return array_values(config('inventario.sedes_locales', ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL']));
+    }
+
+    /**
+     * @return array{inicio:Carbon,fin:Carbon,anterior_inicio:Carbon,anterior_fin:Carbon,etiqueta:string,preset:string}
+     */
+    public function resolverPeriodo(?string $preset, ?string $desde, ?string $hasta): array
+    {
+        $hoy = Carbon::now('America/Caracas')->startOfDay();
+        $preset = $preset ?: 'mes';
+
+        if ($preset === 'quincena') {
+            $q = app(Nomina\SalaryAdvanceService::class)->quincenaDe($hoy);
+            $inicio = $q['inicio']->copy();
+            $fin = $q['fin']->copy();
+        } elseif ($preset === 'mes_anterior') {
+            $inicio = $hoy->copy()->subMonthNoOverflow()->startOfMonth();
+            $fin = $hoy->copy()->subMonthNoOverflow()->endOfMonth()->startOfDay();
+        } elseif ($preset === 'personalizado' && $desde && $hasta) {
+            $inicio = Carbon::parse($desde)->startOfDay();
+            $fin = Carbon::parse($hasta)->startOfDay();
+            if ($fin->lt($inicio)) {
+                [$inicio, $fin] = [$fin, $inicio];
+            }
+        } else {
+            $preset = 'mes';
+            $inicio = $hoy->copy()->startOfMonth();
+            $fin = $hoy->copy();
+        }
+
+        $dias = $inicio->diffInDays($fin);
+        $anteriorFin = $inicio->copy()->subDay();
+        $anteriorInicio = $anteriorFin->copy()->subDays($dias);
+
+        return [
+            'inicio' => $inicio,
+            'fin' => $fin,
+            'anterior_inicio' => $anteriorInicio,
+            'anterior_fin' => $anteriorFin,
+            'etiqueta' => $inicio->format('d/m/Y').' al '.$fin->format('d/m/Y'),
+            'preset' => $preset,
+        ];
+    }
+
+    /**
+     * @param  array{inicio:Carbon,fin:Carbon,anterior_inicio:Carbon,anterior_fin:Carbon}  $periodo
+     * @return array<string, mixed>
+     */
+    public function resumen(array $periodo, ?string $sede, ?string $categoria, ?string $vendedor, ?string $producto): array
+    {
+        $sedes = $this->sedesVentas();
+        if ($sede && $sede !== 'todas') {
+            $sede = strtoupper(trim($sede));
+            $sedes = in_array($sede, $sedes, true) ? [$sede] : $sedes;
+        }
+
+        $usaLineas = filled($categoria) || filled($vendedor) || filled($producto);
+        $actual = $this->kpisPorSede($periodo['inicio'], $periodo['fin'], $sedes, $usaLineas, $categoria, $vendedor, $producto);
+        $anterior = $this->kpisPorSede($periodo['anterior_inicio'], $periodo['anterior_fin'], $sedes, $usaLineas, $categoria, $vendedor, $producto);
+        $inventario = $this->inventarioPorSede($sedes);
+        $ajustes = $this->ajustesPorSede($periodo['inicio'], $periodo['fin'], $sedes);
+
+        $filas = [];
+        foreach ($sedes as $codigo) {
+            $a = $actual[$codigo] ?? $this->kpiVacio($codigo);
+            $b = $anterior[$codigo] ?? $this->kpiVacio($codigo);
+            $inv = $inventario[$codigo] ?? ['unidades' => 0.0, 'valor' => 0.0];
+            $aju = $ajustes[$codigo] ?? ['unidades' => 0.0, 'valor' => 0.0];
+            $filas[] = $a + [
+                'inventario_unidades' => $inv['unidades'],
+                'inventario_valor' => $inv['valor'],
+                'ajustes_unidades' => $aju['unidades'],
+                'ajustes_valor' => $aju['valor'],
+                'delta_ventas_usd' => $this->delta($a['ventas_usd'], $b['ventas_usd']),
+                'delta_unidades' => $this->delta($a['unidades'], $b['unidades']),
+                'anterior_ventas_usd' => $b['ventas_usd'],
+            ];
+        }
+
+        return [
+            'por_sede' => $filas,
+            'total' => $this->sumarFilas($filas),
+            'usa_lineas' => $usaLineas,
+            'tops' => $usaLineas || Schema::hasTable('ventas_detalle')
+                ? $this->tops($periodo['inicio'], $periodo['fin'], $sedes, $categoria, $vendedor, $producto)
+                : ['productos' => [], 'vendedores' => [], 'categorias' => []],
+            'diario' => $this->diario($periodo['inicio'], $periodo['fin'], $sedes, $usaLineas, $categoria, $vendedor, $producto),
+        ];
+    }
+
+    public function catalogos(): array
+    {
+        $categorias = collect();
+        $vendedores = collect();
+        if (Schema::hasTable('productos')) {
+            $categorias = DB::table('productos')
+                ->whereNotNull('categoria')
+                ->where('categoria', '!=', '')
+                ->distinct()
+                ->orderBy('categoria')
+                ->pluck('categoria');
+        }
+        if (Schema::hasTable('ventas_detalle')) {
+            $vendedores = DB::table('ventas_detalle')
+                ->whereNotNull('vendedor')
+                ->where('vendedor', '!=', '')
+                ->distinct()
+                ->orderBy('vendedor')
+                ->limit(400)
+                ->pluck('vendedor');
+        }
+
+        return compact('categorias', 'vendedores');
+    }
+
+    /**
+     * @param  list<string>  $sedes
+     * @return array<string, array<string, float|int|string>>
+     */
+    private function kpisPorSede(
+        Carbon $inicio,
+        Carbon $fin,
+        array $sedes,
+        bool $usaLineas,
+        ?string $categoria,
+        ?string $vendedor,
+        ?string $producto
+    ): array {
+        $base = [];
+        foreach ($sedes as $sede) {
+            $base[$sede] = $this->kpiVacio($sede);
+        }
+
+        if ($usaLineas || ! Schema::hasTable('ventas_documentos')) {
+            return $this->kpisDesdeLineas($inicio, $fin, $sedes, $base, $categoria, $vendedor, $producto);
+        }
+
+        $docs = DB::table('ventas_documentos')
+            ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes)
+            ->whereRaw("LOWER(TRIM(COALESCE(estado, ''))) = 'registrado'")
+            ->selectRaw('UPPER(TRIM(sede)) as sede')
+            ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='FAC' THEN 1 ELSE 0 END) as facturas")
+            ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN 1 ELSE 0 END) as devoluciones")
+            ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN ABS(total_neto_usd) ELSE 0 END) as devoluciones_usd")
+            ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN ABS(total_neto_bs) ELSE 0 END) as devoluciones_bs")
+            ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN -ABS(total_neto_usd) ELSE ABS(total_neto_usd) END) as ventas_usd")
+            ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN -ABS(total_neto_bs) ELSE ABS(total_neto_bs) END) as ventas_bs")
+            ->groupBy(DB::raw('UPPER(TRIM(sede))'))
+            ->get();
+
+        foreach ($docs as $row) {
+            $sede = (string) $row->sede;
+            if (! isset($base[$sede])) {
+                continue;
+            }
+            $base[$sede]['facturas'] = (int) $row->facturas;
+            $base[$sede]['devoluciones'] = (int) $row->devoluciones;
+            $base[$sede]['devoluciones_usd'] = round((float) $row->devoluciones_usd, 2);
+            $base[$sede]['devoluciones_bs'] = round((float) $row->devoluciones_bs, 2);
+            $base[$sede]['ventas_usd'] = round((float) $row->ventas_usd, 2);
+            $base[$sede]['ventas_bs'] = round((float) $row->ventas_bs, 2);
+        }
+
+        $lineas = $this->kpisDesdeLineas($inicio, $fin, $sedes, [], null, null, null);
+        foreach ($lineas as $sede => $linea) {
+            if (! isset($base[$sede])) {
+                continue;
+            }
+            $base[$sede]['unidades'] = $linea['unidades'];
+            $base[$sede]['margen_usd'] = $linea['margen_usd'];
+        }
+
+        return $base;
+    }
+
+    /**
+     * @param  list<string>  $sedes
+     * @param  array<string, array<string, float|int|string>>  $base
+     * @return array<string, array<string, float|int|string>>
+     */
+    private function kpisDesdeLineas(
+        Carbon $inicio,
+        Carbon $fin,
+        array $sedes,
+        array $base,
+        ?string $categoria,
+        ?string $vendedor,
+        ?string $producto
+    ): array {
+        foreach ($sedes as $sede) {
+            $base[$sede] = $base[$sede] ?? $this->kpiVacio($sede);
+        }
+
+        if (! Schema::hasTable('ventas_detalle')) {
+            return $base;
+        }
+
+        $query = $this->queryLineas($inicio, $fin, $sedes, $categoria, $vendedor, $producto);
+        $query->selectRaw('UPPER(TRIM(vd.sede)) as sede')
+            ->selectRaw("COUNT(DISTINCT CASE WHEN UPPER(vd.tipo_documento)='FAC' THEN vd.numero_documento END) as facturas")
+            ->selectRaw("COUNT(DISTINCT CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN vd.numero_documento END) as devoluciones")
+            ->selectRaw("SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad) ELSE ABS(vd.cantidad) END) as unidades")
+            ->selectRaw($this->sqlImporte('venta').' as ventas_usd')
+            ->selectRaw($this->sqlImporte('neto').' as ventas_neto')
+            ->selectRaw($this->sqlImporte('costo').' as costo')
+            ->selectRaw($this->sqlImporteDev().' as devoluciones_usd')
+            ->groupBy(DB::raw('UPPER(TRIM(vd.sede))'));
+
+        foreach ($query->get() as $row) {
+            $sede = (string) $row->sede;
+            if (! isset($base[$sede])) {
+                continue;
+            }
+            $ventas = round((float) ($row->ventas_neto ?: $row->ventas_usd), 2);
+            $base[$sede]['facturas'] = (int) $row->facturas;
+            $base[$sede]['devoluciones'] = (int) $row->devoluciones;
+            $base[$sede]['devoluciones_usd'] = round((float) $row->devoluciones_usd, 2);
+            $base[$sede]['ventas_usd'] = $ventas;
+            $base[$sede]['unidades'] = round((float) $row->unidades, 2);
+            $base[$sede]['margen_usd'] = round($ventas - (float) $row->costo, 2);
+        }
+
+        return $base;
+    }
+
+    /**
+     * @param  list<string>  $sedes
+     */
+    private function queryLineas(
+        Carbon $inicio,
+        Carbon $fin,
+        array $sedes,
+        ?string $categoria,
+        ?string $vendedor,
+        ?string $producto
+    ) {
+        $query = DB::table('ventas_detalle as vd')
+            ->whereBetween('vd.fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->whereIn(DB::raw('UPPER(TRIM(vd.sede))'), $sedes);
+
+        if (Schema::hasColumn('ventas_detalle', 'anulado')) {
+            $query->where('vd.anulado', false);
+        }
+        if ($vendedor) {
+            $query->whereRaw('UPPER(TRIM(vd.vendedor)) = ?', [mb_strtoupper(trim($vendedor), 'UTF-8')]);
+        }
+        if ($producto) {
+            $like = '%'.$producto.'%';
+            $query->where(function ($q) use ($like) {
+                $q->where('vd.codigo_producto', 'like', $like)
+                    ->orWhere('vd.nombre_producto', 'like', $like);
+            });
+        }
+        if ($categoria && Schema::hasTable('productos')) {
+            $query->leftJoin('productos as p', 'p.id', '=', 'vd.producto_id')
+                ->whereRaw('UPPER(TRIM(p.categoria)) = ?', [mb_strtoupper(trim($categoria), 'UTF-8')]);
+        }
+
+        return $query;
+    }
+
+    private function sqlImporte(string $tipo): string
+    {
+        $campo = match ($tipo) {
+            'neto' => Schema::hasColumn('ventas_detalle', 'precio_neto')
+                ? 'COALESCE(vd.precio_neto, vd.precio_venta)'
+                : 'vd.precio_venta',
+            'costo' => 'COALESCE(vd.costo_unitario, 0)',
+            default => 'vd.precio_venta',
+        };
+
+        return "SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad * {$campo}) ELSE ABS(vd.cantidad * {$campo}) END)";
+    }
+
+    private function sqlImporteDev(): string
+    {
+        $campo = Schema::hasColumn('ventas_detalle', 'precio_neto')
+            ? 'COALESCE(vd.precio_neto, vd.precio_venta)'
+            : 'vd.precio_venta';
+
+        return "SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN ABS(vd.cantidad * {$campo}) ELSE 0 END)";
+    }
+
+    /**
+     * @param  list<string>  $sedes
+     * @return array<string, array{unidades:float,valor:float}>
+     */
+    private function inventarioPorSede(array $sedes): array
+    {
+        $out = [];
+        foreach ($sedes as $sede) {
+            $out[$sede] = ['unidades' => 0.0, 'valor' => 0.0];
+        }
+        if (! Schema::hasTable('stock_actual')) {
+            return $out;
+        }
+
+        $valorSql = Schema::hasTable('productos') && Schema::hasColumn('productos', 'costo_actual')
+            ? 'SUM(sa.existencia * COALESCE(p.costo_actual, 0))'
+            : 'SUM(0)';
+
+        $query = DB::table('stock_actual as sa')
+            ->whereIn(DB::raw('UPPER(TRIM(sa.sede))'), $sedes)
+            ->selectRaw('UPPER(TRIM(sa.sede)) as sede')
+            ->selectRaw('SUM(sa.existencia) as unidades')
+            ->selectRaw($valorSql.' as valor')
+            ->groupBy(DB::raw('UPPER(TRIM(sa.sede))'));
+
+        if (Schema::hasTable('productos') && Schema::hasColumn('productos', 'costo_actual')) {
+            $query->leftJoin('productos as p', 'p.id', '=', 'sa.producto_id');
+        }
+
+        foreach ($query->get() as $row) {
+            $out[(string) $row->sede] = [
+                'unidades' => round((float) $row->unidades, 2),
+                'valor' => round((float) $row->valor, 2),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<string>  $sedes
+     * @return array<string, array{unidades:float,valor:float}>
+     */
+    private function ajustesPorSede(Carbon $inicio, Carbon $fin, array $sedes): array
+    {
+        $out = [];
+        foreach ($sedes as $sede) {
+            $out[$sede] = ['unidades' => 0.0, 'valor' => 0.0];
+        }
+        if (! Schema::hasTable('ajustes_inventario')) {
+            return $out;
+        }
+
+        $rows = DB::table('ajustes_inventario')
+            ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes)
+            ->selectRaw('UPPER(TRIM(sede)) as sede')
+            ->selectRaw('SUM(cantidad) as unidades')
+            ->selectRaw('SUM(cantidad * COALESCE(costo_unitario, 0)) as valor')
+            ->groupBy(DB::raw('UPPER(TRIM(sede))'))
+            ->get();
+
+        foreach ($rows as $row) {
+            $out[(string) $row->sede] = [
+                'unidades' => round((float) $row->unidades, 2),
+                'valor' => round((float) $row->valor, 2),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<string>  $sedes
+     * @return array{productos:list<array<string,mixed>>,vendedores:list<array<string,mixed>>,categorias:list<array<string,mixed>>}
+     */
+    private function tops(Carbon $inicio, Carbon $fin, array $sedes, ?string $categoria, ?string $vendedor, ?string $producto): array
+    {
+        if (! Schema::hasTable('ventas_detalle')) {
+            return ['productos' => [], 'vendedores' => [], 'categorias' => []];
+        }
+
+        $base = $this->queryLineas($inicio, $fin, $sedes, $categoria, $vendedor, $producto);
+        $importe = $this->sqlImporte('neto');
+
+        $productos = (clone $base)
+            ->selectRaw('COALESCE(vd.nombre_producto, vd.codigo_producto, \'Sin nombre\') as nombre')
+            ->selectRaw("SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad) ELSE ABS(vd.cantidad) END) as unidades")
+            ->selectRaw($importe.' as ventas_usd')
+            ->groupBy(DB::raw('COALESCE(vd.nombre_producto, vd.codigo_producto, \'Sin nombre\')'))
+            ->orderByDesc('ventas_usd')
+            ->limit(8)
+            ->get()
+            ->map(fn ($r) => ['nombre' => $r->nombre, 'unidades' => round((float) $r->unidades, 2), 'ventas_usd' => round((float) $r->ventas_usd, 2)])
+            ->all();
+
+        $vendedores = (clone $base)
+            ->selectRaw("COALESCE(NULLIF(TRIM(vd.vendedor), ''), 'Sin vendedor') as nombre")
+            ->selectRaw($importe.' as ventas_usd')
+            ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(vd.vendedor), ''), 'Sin vendedor')"))
+            ->orderByDesc('ventas_usd')
+            ->limit(8)
+            ->get()
+            ->map(fn ($r) => ['nombre' => $r->nombre, 'ventas_usd' => round((float) $r->ventas_usd, 2)])
+            ->all();
+
+        $categorias = [];
+        if (Schema::hasTable('productos')) {
+            $catQuery = $this->queryLineas($inicio, $fin, $sedes, $categoria, $vendedor, $producto);
+            if (! $categoria) {
+                $catQuery->leftJoin('productos as p', 'p.id', '=', 'vd.producto_id');
+            }
+            $categorias = $catQuery
+                ->selectRaw("COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sin categoría') as nombre")
+                ->selectRaw($importe.' as ventas_usd')
+                ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sin categoría')"))
+                ->orderByDesc('ventas_usd')
+                ->limit(8)
+                ->get()
+                ->map(fn ($r) => ['nombre' => $r->nombre, 'ventas_usd' => round((float) $r->ventas_usd, 2)])
+                ->all();
+        }
+
+        return compact('productos', 'vendedores', 'categorias');
+    }
+
+    /**
+     * @param  list<string>  $sedes
+     * @return list<array{fecha:string,ventas_usd:float}>
+     */
+    private function diario(
+        Carbon $inicio,
+        Carbon $fin,
+        array $sedes,
+        bool $usaLineas,
+        ?string $categoria,
+        ?string $vendedor,
+        ?string $producto
+    ): array {
+        if (! $usaLineas && Schema::hasTable('ventas_documentos')) {
+            return DB::table('ventas_documentos')
+                ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+                ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes)
+                ->whereRaw("LOWER(TRIM(COALESCE(estado, ''))) = 'registrado'")
+                ->selectRaw('fecha')
+                ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN -ABS(total_neto_usd) ELSE ABS(total_neto_usd) END) as ventas_usd")
+                ->groupBy('fecha')
+                ->orderBy('fecha')
+                ->get()
+                ->map(fn ($r) => ['fecha' => (string) $r->fecha, 'ventas_usd' => round((float) $r->ventas_usd, 2)])
+                ->all();
+        }
+
+        if (! Schema::hasTable('ventas_detalle')) {
+            return [];
+        }
+
+        return $this->queryLineas($inicio, $fin, $sedes, $categoria, $vendedor, $producto)
+            ->selectRaw('vd.fecha')
+            ->selectRaw($this->sqlImporte('neto').' as ventas_usd')
+            ->groupBy('vd.fecha')
+            ->orderBy('vd.fecha')
+            ->get()
+            ->map(fn ($r) => ['fecha' => (string) $r->fecha, 'ventas_usd' => round((float) $r->ventas_usd, 2)])
+            ->all();
+    }
+
+    /**
+     * @return array<string, float|int|string>
+     */
+    private function kpiVacio(string $sede): array
+    {
+        return [
+            'sede' => $sede,
+            'facturas' => 0,
+            'devoluciones' => 0,
+            'devoluciones_usd' => 0.0,
+            'devoluciones_bs' => 0.0,
+            'ventas_usd' => 0.0,
+            'ventas_bs' => 0.0,
+            'unidades' => 0.0,
+            'margen_usd' => 0.0,
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $filas
+     * @return array<string, mixed>
+     */
+    private function sumarFilas(array $filas): array
+    {
+        $total = $this->kpiVacio('TODAS') + [
+            'inventario_unidades' => 0.0,
+            'inventario_valor' => 0.0,
+            'ajustes_unidades' => 0.0,
+            'ajustes_valor' => 0.0,
+            'anterior_ventas_usd' => 0.0,
+        ];
+        foreach ($filas as $fila) {
+            foreach (['facturas', 'devoluciones', 'devoluciones_usd', 'devoluciones_bs', 'ventas_usd', 'ventas_bs', 'unidades', 'margen_usd', 'inventario_unidades', 'inventario_valor', 'ajustes_unidades', 'ajustes_valor', 'anterior_ventas_usd'] as $campo) {
+                $total[$campo] = ($total[$campo] ?? 0) + ($fila[$campo] ?? 0);
+            }
+        }
+        $total['delta_ventas_usd'] = $this->delta((float) $total['ventas_usd'], (float) $total['anterior_ventas_usd']);
+        $total['delta_unidades'] = $this->delta((float) $total['unidades'], 0);
+
+        return $total;
+    }
+
+    private function delta(float $actual, float $anterior): ?float
+    {
+        if (abs($anterior) < 0.009) {
+            return $actual > 0 ? 100.0 : null;
+        }
+
+        return round((($actual - $anterior) / abs($anterior)) * 100, 1);
+    }
+}

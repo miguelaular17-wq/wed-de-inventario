@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS inventario_v2.nomina_comision_registros (
     nombre_producto         TEXT,
     categoria               VARCHAR(256),
     subcategoria            VARCHAR(256),
-    cantidad                INTEGER NOT NULL DEFAULT 0,
+    cantidad                NUMERIC(18,4) NOT NULL DEFAULT 0,
     precio_unitario         NUMERIC(12,2) NOT NULL DEFAULT 0,
     base_monto              NUMERIC(12,2) NOT NULL DEFAULT 0,
     base_tipo               VARCHAR(24) NOT NULL DEFAULT 'NETO',

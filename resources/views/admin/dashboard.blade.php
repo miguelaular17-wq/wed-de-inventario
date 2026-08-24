@@ -6,6 +6,11 @@
 <div class="panel" data-tour="admin-dashboard">
     <h1 style="margin-top:0;">Panel de administración</h1>
     <p class="muted">Gestión multisede: importación de stock y auditoría de movimientos.</p>
+    @if(auth()->user()?->isGerente() || auth()->user()?->role === 'admin')
+        <p style="margin:12px 0 0;">
+            <a href="{{ route('gerencial.dashboard') }}" class="btn primary">Ver ventas por sede</a>
+        </p>
+    @endif
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:20px 0;">
         <div class="stat-card">

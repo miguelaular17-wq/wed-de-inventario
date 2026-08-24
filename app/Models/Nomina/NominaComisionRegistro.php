@@ -14,6 +14,7 @@ class NominaComisionRegistro extends Model
     protected $casts = [
         'fecha' => 'date',
         'regla_snapshot' => 'array',
+        'cantidad' => 'decimal:4',
         'base_monto' => 'decimal:2',
         'porcentaje' => 'decimal:4',
         'monto_comision' => 'decimal:2',

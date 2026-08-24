@@ -287,7 +287,7 @@ class CommissionCalculationService
             'nombre_producto' => $linea->nombre_producto ?? null,
             'categoria' => $linea->producto_categoria ?? null,
             'subcategoria' => $linea->producto_subcategoria ?? null,
-            'cantidad' => $linea->cantidad ?? 0,
+            'cantidad' => round((float) ($linea->cantidad ?? 0), 4),
             'precio_unitario' => $linea->precio_venta ?? 0,
             'base_monto' => $base,
             'base_tipo' => 'TOTAL',

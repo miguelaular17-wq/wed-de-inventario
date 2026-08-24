@@ -38,12 +38,8 @@ class CobranzaController extends Controller
         
         $historialActual = collect();
         if ($ultimaFecha) {
-            $query = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha)
-                ->whereNotExists(function ($query) {
-                    $query->select(\Illuminate\Support\Facades\DB::raw(1))
-                          ->from('cobranzas_pagadas_manualmente')
-                          ->whereColumn('cobranzas_pagadas_manualmente.id_documento', 'historial_cobranzas.id_documento');
-                });
+            $query = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha);
+            $this->excludePagadasManualmente($query);
             if ($mostrar_clientes === 'regulares') {
                 $query->whereNotIn('codigo_cliente', $personalCodes);
             } elseif ($mostrar_clientes === 'personales') {
@@ -165,13 +161,10 @@ class CobranzaController extends Controller
         }
         
         // Solo se cargan las columnas que usa la vista y usamos alias para compatibilidad
-        $clientes_lista = $queryClientes
-            ->whereNotExists(function ($query) {
-                $query->select(\Illuminate\Support\Facades\DB::raw(1))
-                      ->from('cobranzas_pagadas_manualmente')
-                      ->whereColumn('cobranzas_pagadas_manualmente.id_documento', 'historial_cobranzas.id_documento');
-            })
-            ->leftJoin('cobranza_notas', 'cobranza_notas.id_documento', '=', 'historial_cobranzas.id_documento')
+        $clientes_lista = $queryClientes;
+        $this->excludePagadasManualmente($clientes_lista);
+        $this->joinNotas($clientes_lista);
+        $clientes_lista = $clientes_lista
             ->select([
                 'historial_cobranzas.codigo_cliente as codigo', 
                 'historial_cobranzas.nombre_cliente as cliente', 
@@ -216,11 +209,13 @@ class CobranzaController extends Controller
             'nota' => 'nullable|string'
         ]);
 
+        $clave = $this->claveDocumento($request->id_documento);
+
         if (empty($request->nota)) {
-            \App\Models\CobranzaNota::where('id_documento', $request->id_documento)->delete();
+            \App\Models\CobranzaNota::where('id_documento', $clave)->delete();
         } else {
             \App\Models\CobranzaNota::updateOrCreate(
-                ['id_documento' => $request->id_documento],
+                ['id_documento' => $clave],
                 ['nota' => $request->nota, 'user_id' => auth()->id()]
             );
         }
@@ -453,12 +448,8 @@ class CobranzaController extends Controller
         
         $historialActual = collect();
         if ($ultimaFecha) {
-            $query = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha)
-                ->whereNotExists(function ($q) {
-                    $q->select(\Illuminate\Support\Facades\DB::raw(1))
-                      ->from('cobranzas_pagadas_manualmente')
-                      ->whereColumn('cobranzas_pagadas_manualmente.id_documento', 'historial_cobranzas.id_documento');
-                });
+            $query = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha);
+            $this->excludePagadasManualmente($query);
             if ($mostrar_clientes === 'regulares') {
                 $query->whereNotIn('codigo_cliente', $personalCodes);
             } elseif ($mostrar_clientes === 'personales') {
@@ -520,13 +511,10 @@ class CobranzaController extends Controller
         $clientesPorSede = [];
 
         // Re-fetch historial with notes joined, so we have nota_anclada and es_personal
-        $historialConNotas = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha)
-            ->whereNotExists(function ($q) {
-                $q->select(\Illuminate\Support\Facades\DB::raw(1))
-                  ->from('cobranzas_pagadas_manualmente')
-                  ->whereColumn('cobranzas_pagadas_manualmente.id_documento', 'historial_cobranzas.id_documento');
-            })
-            ->leftJoin('cobranza_notas', 'cobranza_notas.id_documento', '=', 'historial_cobranzas.id_documento')
+        $historialConNotas = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha);
+        $this->excludePagadasManualmente($historialConNotas);
+        $this->joinNotas($historialConNotas);
+        $historialConNotas = $historialConNotas
             ->select([
                 'historial_cobranzas.*',
                 'cobranza_notas.nota as nota_anclada',
@@ -587,10 +575,12 @@ class CobranzaController extends Controller
             'id_documento' => 'required|string',
         ]);
         
+        $clave = $this->claveDocumento($request->id_documento);
+
         \Illuminate\Support\Facades\DB::connection('pgsql')
             ->table('cobranzas_pagadas_manualmente')
             ->insertOrIgnore([
-                'id_documento' => $request->id_documento,
+                'id_documento' => $clave,
                 'user_id' => auth()->id(),
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -831,5 +821,32 @@ class CobranzaController extends Controller
                 'total_factura' => $totalFacturaReal,
             ],
         ]);
+    }
+
+    private function claveDocumento(?string $valor): string
+    {
+        return trim((string) $valor);
+    }
+
+    private function excludePagadasManualmente($query)
+    {
+        return $query->whereNotExists(function ($q) {
+            $q->select(\Illuminate\Support\Facades\DB::raw(1))
+                ->from('cobranzas_pagadas_manualmente as p')
+                ->where(function ($w) {
+                    $w->whereColumn('p.id_documento', 'historial_cobranzas.numero_documento')
+                        ->orWhereColumn('p.id_documento', 'historial_cobranzas.id_documento')
+                        ->orWhereColumn('p.id_documento', 'historial_cobranzas.factura_padre');
+                });
+        });
+    }
+
+    private function joinNotas($query)
+    {
+        return $query->leftJoin('cobranza_notas', function ($join) {
+            $join->whereRaw(
+                'cobranza_notas.id_documento IN (historial_cobranzas.numero_documento, historial_cobranzas.id_documento, historial_cobranzas.factura_padre)'
+            );
+        });
     }
 }

@@ -9,6 +9,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\RequisicionController;
 use App\Http\Controllers\SedeController;
+use App\Http\Controllers\GerencialController;
 use App\Http\Controllers\FinanzasController;
 use App\Http\Controllers\CobranzaController;
 use App\Http\Controllers\VentasController;
@@ -33,6 +34,9 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     if (auth()->check()) {
         $user = auth()->user();
+        if ($user->isGerente()) {
+            return redirect()->route('admin.dashboard');
+        }
         if ($user->isAdmin()) {
             return redirect()->route('admin.dashboard');
         }
@@ -87,6 +91,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/tutorial/avanzar', [\App\Http\Controllers\TutorialController::class, 'advance'])->name('tutorial.advance');
     Route::post('/tutorial/completar', [\App\Http\Controllers\TutorialController::class, 'complete'])->name('tutorial.complete');
     Route::post('/tutorial/reiniciar', [\App\Http\Controllers\TutorialController::class, 'restart'])->name('tutorial.restart');
+});
+
+Route::middleware(['auth', EnsureAdmin::class])->group(function () {
+    Route::get('/gerencial', [GerencialController::class, 'dashboard'])->name('gerencial.dashboard');
 });
 
 Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')->group(function () {

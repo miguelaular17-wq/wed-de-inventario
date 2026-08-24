@@ -413,7 +413,8 @@
                                     <span style="background: var(--blue); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; margin-left: 5px;">PERSONAL</span>
                                 @endif
                                 <div style="margin-top: 4px; font-size: 0.75rem;">
-                                    <span style="cursor: pointer; {{ $c->nota_anclada ? 'color: #ea580c; font-weight: 600;' : 'color: #9ca3af;' }}" onclick="event.stopPropagation(); abrirModalNota('{{ $c->id_documento }}', '{{ htmlspecialchars(addslashes($c->nota_anclada ?? '')) }}')">
+                                    @php $claveNota = $c->numero_documento ?: $c->id_documento; @endphp
+                                    <span style="cursor: pointer; {{ $c->nota_anclada ? 'color: #ea580c; font-weight: 600;' : 'color: #9ca3af;' }}" onclick='event.stopPropagation(); abrirModalNota(@json($claveNota), @json($c->nota_anclada ?? ""))'>
                                         📌 {{ $c->nota_anclada ? $c->nota_anclada : 'Añadir nota...' }}
                                     </span>
                                 </div>
@@ -435,7 +436,7 @@
                                 @endif
                             </td>
                             <td style="text-align: center;" onclick="event.stopPropagation();">
-                                <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #ccc; background-color: #f8f9fa; cursor: pointer; color: #333;" onclick="marcarPagado('{{ $c->id_documento }}', this)">
+                                <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #ccc; background-color: #f8f9fa; cursor: pointer; color: #333;" onclick='marcarPagado(@json($claveNota), this)'>
                                     Pagado
                                 </button>
                                 <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #93c5fd; background-color: #eff6ff; cursor: pointer; color: #1e40af; margin-left: 4px;" onclick="abrirModalLlamadas('{{ $c->codigo }}', '{{ htmlspecialchars($c->cliente) }}')">

@@ -119,7 +119,7 @@ INSERT_QUERY = """
         created_at, updated_at
     ) VALUES (
         %s, %s, %s, %s,
-        NULL, %s, %s, %s,
+        %s, %s, %s, %s,
         %s, %s, %s, %s,
         NULL, %s, NULL,
         %s, %s, %s, %s,
@@ -217,6 +217,7 @@ class CobranzasService:
                 fecha_factura    = row[16]
                 dias_deuda       = int(row[17])          if row[17] is not None else 0
                 estatus          = _calcular_estatus(dias_deuda)
+                id_documento     = factura_padre or numero_documento
 
                 # Clave única por factura para asignar saldo/monto solo una vez
                 clave_factura = (codigo_cliente, numero_documento if tipo_fila == 1 else factura_padre)
@@ -236,6 +237,7 @@ class CobranzasService:
                     sede,             # sede_nombre
                     codigo_cliente,   # codigo_cliente
                     nombre_cliente,   # nombre_cliente
+                    id_documento,     # id_documento (número de factura, estable)
                     fecha_doc,        # fecha_emision (del renglón)
                     tipo_documento,   # tipo_cxc
                     numero_documento, # numero_documento

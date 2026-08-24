@@ -24,6 +24,7 @@
     $isSedeStaff = in_array($u->role, ['supervisor', 'telefonia', 'sede'], true);
 
     if ($u->role === 'admin') {
+        $nav[] = $link('Gerencial', route('gerencial.dashboard'), request()->routeIs('gerencial.*'));
         $nav[] = $link('Dashboard', route('admin.dashboard'), request()->routeIs('admin.dashboard'), 'admin-dashboard');
         $nav[] = $drop('Sistema', [
             $link('Movimientos', route('admin.movimientos.index'), request()->routeIs('admin.movimientos.*'), 'admin-movimientos'),
@@ -34,7 +35,8 @@
     }
 
     if ($u->isGerente()) {
-        $nav[] = $link('Dashboard', route('admin.dashboard'), request()->routeIs('admin.dashboard'));
+        $nav[] = $link('Gerencial', route('admin.dashboard'), request()->routeIs('admin.dashboard'));
+        $nav[] = $link('Ventas gerenciales', route('gerencial.dashboard'), request()->routeIs('gerencial.*'));
     }
 
     if ($sedeItems) {

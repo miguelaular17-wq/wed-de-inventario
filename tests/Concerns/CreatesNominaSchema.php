@@ -87,7 +87,47 @@ trait CreatesNominaSchema
                 $table->string('nombre')->nullable();
                 $table->string('categoria')->nullable();
                 $table->string('subcategoria')->nullable();
+                $table->decimal('costo_actual', 12, 2)->default(0);
                 $table->timestamps();
+            });
+        } elseif (! Schema::hasColumn('productos', 'costo_actual')) {
+            Schema::table('productos', function (Blueprint $table) {
+                $table->decimal('costo_actual', 12, 2)->default(0);
+            });
+        }
+
+        if (! Schema::hasTable('ventas_documentos')) {
+            Schema::create('ventas_documentos', function (Blueprint $table) {
+                $table->id();
+                $table->string('sede', 16);
+                $table->string('tipo_documento', 8);
+                $table->string('numero_documento', 32);
+                $table->date('fecha');
+                $table->string('estado', 24)->default('registrado');
+                $table->decimal('total_neto_bs', 18, 5)->default(0);
+                $table->decimal('total_neto_usd', 18, 5)->default(0);
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasTable('stock_actual')) {
+            Schema::create('stock_actual', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('producto_id');
+                $table->string('sede', 16);
+                $table->integer('existencia')->default(0);
+            });
+        }
+
+        if (! Schema::hasTable('ajustes_inventario')) {
+            Schema::create('ajustes_inventario', function (Blueprint $table) {
+                $table->id();
+                $table->string('sede', 16);
+                $table->string('tipo_movimiento', 8);
+                $table->string('numero_documento', 32);
+                $table->date('fecha');
+                $table->decimal('cantidad', 12, 2)->default(0);
+                $table->decimal('costo_unitario', 12, 2)->default(0);
             });
         }
 
@@ -306,7 +346,7 @@ trait CreatesNominaSchema
                 $table->text('nombre_producto')->nullable();
                 $table->string('categoria')->nullable();
                 $table->string('subcategoria')->nullable();
-                $table->integer('cantidad')->default(0);
+                $table->decimal('cantidad', 18, 4)->default(0);
                 $table->decimal('precio_unitario', 12, 2)->default(0);
                 $table->decimal('base_monto', 12, 2)->default(0);
                 $table->string('base_tipo', 24)->default('NETO');
@@ -474,6 +514,9 @@ trait CreatesNominaSchema
             'nomina_empleados',
             'nomina_cargos',
             'nomina_sedes',
+            'ajustes_inventario',
+            'stock_actual',
+            'ventas_documentos',
             'ventas_detalle',
             'productos',
             'clientes',
