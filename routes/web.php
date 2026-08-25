@@ -338,6 +338,7 @@ Route::middleware(['auth', 'permission:cobranza'])->prefix('cobranza')->group(fu
     Route::post('/marcar-personal', [CobranzaController::class, 'marcarPersonal'])->name('cobranza.marcar_personal');
     Route::post('/marcar-pagado-manualmente', [CobranzaController::class, 'marcarPagadoManualmente'])->name('cobranza.marcar_pagado');
     Route::post('/guardar-nota', [CobranzaController::class, 'guardarNota'])->name('cobranza.guardar_nota');
+    Route::get('/cliente/{codigo_cliente}/estado-cuenta', [CobranzaController::class, 'estadoCuentaCliente'])->name('cobranza.estado_cuenta.cliente');
     Route::get('/{codigo_cliente}/llamadas', [CobranzaController::class, 'obtenerLlamadas'])->name('cobranza.llamadas.get');
     Route::post('/{codigo_cliente}/llamadas', [CobranzaController::class, 'guardarLlamada'])->name('cobranza.llamadas.store');
     Route::delete('/llamadas/{id}', [CobranzaController::class, 'eliminarLlamada'])->name('cobranza.llamadas.destroy');

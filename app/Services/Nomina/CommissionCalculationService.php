@@ -32,7 +32,8 @@ class CommissionCalculationService
      * @return array{
      *     total:float,modo:string,base:float,gastos:float,lineas:int,
      *     base_telefonia:float,base_otros:float,comision_telefonia:float,comision_otros:float,
-     *     pct_telefonia:float,pct_otros:float
+     *     pct_telefonia:float,pct_otros:float,
+     *     ventas_st?:float,base_st?:float,comision_st?:float,lineas_st?:int,pct_st?:float
      * }
      */
     public function calcular(NominaPeriodo $periodo, NominaEmpleado $empleado): array
@@ -59,49 +60,24 @@ class CommissionCalculationService
             return $this->resultado($empleado, 0, 0, 0, 0);
         }
 
-        $pctTelefonia = NominaConfig::getDecimal('comision_telefonia_pct', 0.20);
-        $pctOtros = NominaConfig::getDecimal('comision_otros_pct', 1);
-        $baseTelefonia = 0.0;
-        $baseOtros = 0.0;
-        $comisionTelefonia = 0.0;
-        $comisionOtros = 0.0;
-        $lineasCalculadas = 0;
+        $lineas = $this->lineasVentas($periodo, $claves)->get()
+            ->reject(fn ($linea) => $this->codigoSedeExcluido($linea->sede ?? null))
+            ->values();
 
-        foreach ($this->lineasVentas($periodo, $claves)->get() as $linea) {
-            if ($this->codigoSedeExcluido($linea->sede ?? null)) {
-                continue;
-            }
-
-            $base = $this->baseTotal($linea);
-            $categoria = $linea->producto_categoria ?? null;
-            $grupo = $this->categorias->grupo($categoria);
-            $porcentaje = $grupo === CommissionCategoryService::TELEFONIA ? $pctTelefonia : $pctOtros;
-            $comision = round($base * $porcentaje / 100, 2);
-
-            if ($grupo === CommissionCategoryService::TELEFONIA) {
-                $baseTelefonia += $base;
-                $comisionTelefonia += $comision;
-            } else {
-                $baseOtros += $base;
-                $comisionOtros += $comision;
-            }
-
-            $lineasCalculadas++;
-            $this->registrarLinea($periodo, $empleado, $linea, $grupo, $base, $porcentaje, $comision);
-        }
+        $propias = $this->aplicarVentasPropias($periodo, $empleado, $lineas);
 
         return $this->resultado(
             $empleado,
-            $comisionTelefonia + $comisionOtros,
-            $baseTelefonia + $baseOtros,
+            $propias['comision_telefonia'] + $propias['comision_otros'],
+            $propias['base_telefonia'] + $propias['base_otros'],
             0,
-            $lineasCalculadas,
-            $baseTelefonia,
-            $baseOtros,
-            $comisionTelefonia,
-            $comisionOtros,
-            $pctTelefonia,
-            $pctOtros
+            $propias['lineas'],
+            $propias['base_telefonia'],
+            $propias['base_otros'],
+            $propias['comision_telefonia'],
+            $propias['comision_otros'],
+            $propias['pct_telefonia'],
+            $propias['pct_otros']
         );
     }
 
@@ -118,7 +94,7 @@ class CommissionCalculationService
             ->reject(fn ($linea) => $this->codigoSedeExcluido($linea->sede ?? null))
             ->values();
         $base = round($lineas->sum(fn ($linea) => $this->baseTotal($linea)), 2);
-        $porcentaje = NominaConfig::getDecimal('comision_supervisor_pct', 0.10);
+        $porcentaje = NominaConfig::getDecimal('comision_supervisor_pct', 0.05);
         $total = round($base * $porcentaje / 100, 2);
 
         if ($lineas->isNotEmpty()) {
@@ -133,9 +109,21 @@ class CommissionCalculationService
 
     private function supervisorEquipo(NominaPeriodo $periodo, NominaEmpleado $empleado): array
     {
+        $idsEquipo = NominaEmpleado::query()
+            ->where('supervisor_id', $empleado->id)
+            ->pluck('id');
+
+        if (Schema::hasTable('nomina_empleado_supervisores')) {
+            $idsEquipo = $idsEquipo->merge(
+                DB::table('nomina_empleado_supervisores')
+                    ->where('supervisor_id', $empleado->id)
+                    ->pluck('empleado_id')
+            )->unique()->values();
+        }
+
         $subordinados = NominaEmpleado::query()
             ->with('vendedores')
-            ->where('supervisor_id', $empleado->id)
+            ->whereIn('id', $idsEquipo)
             ->get();
 
         $claves = [];
@@ -178,22 +166,105 @@ class CommissionCalculationService
             : $this->lineasVentas($periodo, $claves)->get()
                 ->reject(fn ($linea) => $this->codigoSedeExcluido($linea->sede ?? null))
                 ->values();
-        $ventas = round($lineas->sum(fn ($linea) => $this->baseLinea($linea, 'NETO')), 2);
-        $gastos = $this->gastosServicioTecnico($periodo, $empleado);
-        $base = max(0, round($ventas - $gastos, 2));
-        $porcentaje = NominaConfig::getDecimal('comision_servicio_tecnico_pct', 50);
-        $total = round($base * $porcentaje / 100, 2);
 
-        if ($lineas->isNotEmpty() || $gastos > 0) {
-            $this->registrarAgregado($periodo, $empleado, 'SERVICIO_TECNICO', $empleado->sede, $base, $porcentaje, $total, [
-                'ventas_usd' => $ventas,
+        $lineasSt = $lineas->filter(fn ($linea) => $this->esLineaServicioTecnico($linea))->values();
+        $lineasVenta = $lineas->reject(fn ($linea) => $this->esLineaServicioTecnico($linea))->values();
+
+        $ventasSt = round($lineasSt->sum(fn ($linea) => $this->baseLinea($linea, 'NETO')), 2);
+        $gastos = $this->gastosServicioTecnico($periodo, $empleado);
+        $baseSt = max(0, round($ventasSt - $gastos, 2));
+        $pctSt = NominaConfig::getDecimal('comision_servicio_tecnico_pct', 50);
+        $comisionSt = round($baseSt * $pctSt / 100, 2);
+
+        if ($lineasSt->isNotEmpty() || $gastos > 0) {
+            $this->registrarAgregado($periodo, $empleado, 'SERVICIO_TECNICO', $empleado->sede, $baseSt, $pctSt, $comisionSt, [
+                'ventas_usd' => $ventasSt,
                 'egresos_058_usd' => $gastos,
-                'lineas_venta' => $lineas->count(),
-                'formula' => 'max(0, ventas - egresos_058_usd) * porcentaje_servicio_tecnico',
+                'lineas_venta' => $lineasSt->count(),
+                'formula' => 'max(0, ventas_st - egresos_058_usd) * porcentaje_servicio_tecnico',
             ]);
         }
 
-        return $this->resultado($empleado, $total, $base, $gastos, $lineas->count());
+        $propias = $this->aplicarVentasPropias($periodo, $empleado, $lineasVenta);
+        $total = round($comisionSt + $propias['comision_telefonia'] + $propias['comision_otros'], 2);
+        $base = round($baseSt + $propias['base_telefonia'] + $propias['base_otros'], 2);
+        $lineasCount = $lineasSt->count() + $propias['lineas'];
+
+        return $this->resultado(
+            $empleado,
+            $total,
+            $base,
+            $gastos,
+            $lineasCount,
+            $propias['base_telefonia'],
+            $propias['base_otros'],
+            $propias['comision_telefonia'],
+            $propias['comision_otros'],
+            $propias['pct_telefonia'],
+            $propias['pct_otros']
+        ) + [
+            'ventas_st' => $ventasSt,
+            'base_st' => $baseSt,
+            'comision_st' => $comisionSt,
+            'lineas_st' => $lineasSt->count(),
+            'pct_st' => $pctSt,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, object>  $lineas
+     * @return array{
+     *     base_telefonia:float,base_otros:float,comision_telefonia:float,comision_otros:float,
+     *     pct_telefonia:float,pct_otros:float,lineas:int
+     * }
+     */
+    private function aplicarVentasPropias(NominaPeriodo $periodo, NominaEmpleado $empleado, Collection $lineas): array
+    {
+        $pctTelefonia = NominaConfig::getDecimal('comision_telefonia_pct', 0.20);
+        $pctOtros = NominaConfig::getDecimal('comision_otros_pct', 1);
+        $baseTelefonia = 0.0;
+        $baseOtros = 0.0;
+        $comisionTelefonia = 0.0;
+        $comisionOtros = 0.0;
+
+        foreach ($lineas as $linea) {
+            $base = $this->baseTotal($linea);
+            $grupo = $this->categorias->grupo($linea->producto_categoria ?? null);
+            $porcentaje = $grupo === CommissionCategoryService::TELEFONIA ? $pctTelefonia : $pctOtros;
+            $comision = round($base * $porcentaje / 100, 2);
+
+            if ($grupo === CommissionCategoryService::TELEFONIA) {
+                $baseTelefonia += $base;
+                $comisionTelefonia += $comision;
+            } else {
+                $baseOtros += $base;
+                $comisionOtros += $comision;
+            }
+
+            $this->registrarLinea($periodo, $empleado, $linea, $grupo, $base, $porcentaje, $comision);
+        }
+
+        return [
+            'base_telefonia' => round($baseTelefonia, 2),
+            'base_otros' => round($baseOtros, 2),
+            'comision_telefonia' => round($comisionTelefonia, 2),
+            'comision_otros' => round($comisionOtros, 2),
+            'pct_telefonia' => $pctTelefonia,
+            'pct_otros' => $pctOtros,
+            'lineas' => $lineas->count(),
+        ];
+    }
+
+    private function esLineaServicioTecnico(object $linea): bool
+    {
+        foreach (['nombre_producto', 'codigo_producto', 'producto_categoria', 'producto_subcategoria'] as $campo) {
+            $normalizado = $this->categorias->normalizar($linea->{$campo} ?? null);
+            if ($normalizado !== 'SIN CATEGORIA' && str_contains($normalizado, 'SERVICIO TECNICO')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function gastosServicioTecnico(NominaPeriodo $periodo, NominaEmpleado $empleado): float

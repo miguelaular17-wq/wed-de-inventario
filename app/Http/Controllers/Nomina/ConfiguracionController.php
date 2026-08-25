@@ -45,7 +45,7 @@ class ConfiguracionController extends Controller
         return view('nomina.configuracion.index', [
             'valorHoraExtra' => $this->attendance->valorHoraEmpresa(),
             'descuentoVentaPct' => NominaConfig::getDecimal('descuento_venta_pct', 20),
-            'comisionSupervisorPct' => NominaConfig::getDecimal('comision_supervisor_pct', 0.10),
+            'comisionSupervisorPct' => NominaConfig::getDecimal('comision_supervisor_pct', 0.05),
             'comisionMarketingPct' => NominaConfig::getDecimal('comision_marketing_pct', 0.10),
             'comisionTelefoniaPct' => NominaConfig::getDecimal('comision_telefonia_pct', 0.20),
             'comisionOtrosPct' => NominaConfig::getDecimal('comision_otros_pct', 1),

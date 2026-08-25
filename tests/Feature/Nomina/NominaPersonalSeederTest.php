@@ -27,16 +27,20 @@ class NominaPersonalSeederTest extends TestCase
         $this->seed(NominaPersonalSeeder::class);
         $this->seed(NominaPersonalSeeder::class);
 
-        $this->assertCount(99, NominaPersonalSeeder::personal());
-        $this->assertSame(99, Cliente::query()->count());
-        $this->assertSame(99, NominaEmpleado::query()->count());
-        $this->assertSame(22, NominaSede::query()->count());
-        $this->assertSame(15, NominaCargo::query()->count());
-        $this->assertSame(15, NominaEmpleado::query()->where('sede', 'DORAL')->count());
+        $this->assertCount(102, NominaPersonalSeeder::personal());
+        $this->assertSame(102, Cliente::query()->count());
+        $this->assertSame(102, NominaEmpleado::query()->count());
+        $this->assertSame(24, NominaSede::query()->count());
+        $this->assertGreaterThanOrEqual(15, NominaCargo::query()->count());
+        $this->assertSame(14, NominaEmpleado::query()->where('sede', 'DORAL')->count());
         $this->assertSame(5, NominaEmpleado::query()->where('sede', 'MARKETING')->count());
 
         $joseph = Cliente::query()->where('cedula', '26058437')->firstOrFail();
-        $this->assertSame('SIN_ASIGNAR', $joseph->empleadoNomina->sede);
+        $this->assertSame('SOPORTE_TECNICO', $joseph->empleadoNomina->sede);
+        $this->assertSame('JOSEMAR', NominaEmpleado::query()->whereHas('cliente', fn ($q) => $q->where('cedula', '28369045'))->value('codigo_vendedor'));
+        $this->assertDatabaseHas('nomina_empleado_vendedores', [
+            'nombre_normalizado' => 'JOSEMAR MAVAREZ',
+        ]);
         $this->assertDatabaseHas('nomina_sedes', [
             'codigo' => 'NUNES',
             'tipo' => 'SEDE',

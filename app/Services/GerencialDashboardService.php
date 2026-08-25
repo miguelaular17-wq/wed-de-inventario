@@ -13,7 +13,9 @@ class GerencialDashboardService
      */
     public function sedesVentas(): array
     {
-        return array_values(config('inventario.sedes_locales', ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL']));
+        return array_values(config('inventario.sedes_gerencial', [
+            'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'JRZ',
+        ]));
     }
 
     /**
@@ -61,7 +63,7 @@ class GerencialDashboardService
      * @param  array{inicio:Carbon,fin:Carbon,anterior_inicio:Carbon,anterior_fin:Carbon}  $periodo
      * @return array<string, mixed>
      */
-    public function resumen(array $periodo, ?string $sede, ?string $categoria, ?string $vendedor, ?string $producto): array
+    public function resumen(array $periodo, ?string $sede, ?string $categoria, ?string $vendedor, ?string $producto, string $ranking = 'usd'): array
     {
         $sedes = $this->sedesVentas();
         if ($sede && $sede !== 'todas') {
@@ -97,7 +99,7 @@ class GerencialDashboardService
             'total' => $this->sumarFilas($filas),
             'usa_lineas' => $usaLineas,
             'tops' => $usaLineas || Schema::hasTable('ventas_detalle')
-                ? $this->tops($periodo['inicio'], $periodo['fin'], $sedes, $categoria, $vendedor, $producto)
+                ? $this->tops($periodo['inicio'], $periodo['fin'], $sedes, $categoria, $vendedor, $producto, $ranking)
                 : ['productos' => [], 'vendedores' => [], 'categorias' => []],
             'diario' => $this->diario($periodo['inicio'], $periodo['fin'], $sedes, $usaLineas, $categoria, $vendedor, $producto),
         ];
@@ -288,6 +290,11 @@ class GerencialDashboardService
         return "SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad * {$campo}) ELSE ABS(vd.cantidad * {$campo}) END)";
     }
 
+    private function sqlUnidades(): string
+    {
+        return "SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad) ELSE ABS(vd.cantidad) END)";
+    }
+
     private function sqlImporteDev(): string
     {
         $campo = Schema::hasColumn('ventas_detalle', 'precio_neto')
@@ -373,7 +380,7 @@ class GerencialDashboardService
      * @param  list<string>  $sedes
      * @return array{productos:list<array<string,mixed>>,vendedores:list<array<string,mixed>>,categorias:list<array<string,mixed>>}
      */
-    private function tops(Carbon $inicio, Carbon $fin, array $sedes, ?string $categoria, ?string $vendedor, ?string $producto): array
+    private function tops(Carbon $inicio, Carbon $fin, array $sedes, ?string $categoria, ?string $vendedor, ?string $producto, string $ranking = 'usd'): array
     {
         if (! Schema::hasTable('ventas_detalle')) {
             return ['productos' => [], 'vendedores' => [], 'categorias' => []];
@@ -381,26 +388,34 @@ class GerencialDashboardService
 
         $base = $this->queryLineas($inicio, $fin, $sedes, $categoria, $vendedor, $producto);
         $importe = $this->sqlImporte('neto');
+        $unidadesSql = $this->sqlUnidades();
+        $orden = $ranking === 'unidades' ? 'unidades' : 'ventas_usd';
+        $mapTop = fn ($r) => [
+            'nombre' => $r->nombre,
+            'unidades' => round((float) $r->unidades, 2),
+            'ventas_usd' => round((float) $r->ventas_usd, 2),
+        ];
 
         $productos = (clone $base)
             ->selectRaw('COALESCE(vd.nombre_producto, vd.codigo_producto, \'Sin nombre\') as nombre')
-            ->selectRaw("SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad) ELSE ABS(vd.cantidad) END) as unidades")
+            ->selectRaw($unidadesSql.' as unidades')
             ->selectRaw($importe.' as ventas_usd')
             ->groupBy(DB::raw('COALESCE(vd.nombre_producto, vd.codigo_producto, \'Sin nombre\')'))
-            ->orderByDesc('ventas_usd')
+            ->orderByDesc($orden)
             ->limit(8)
             ->get()
-            ->map(fn ($r) => ['nombre' => $r->nombre, 'unidades' => round((float) $r->unidades, 2), 'ventas_usd' => round((float) $r->ventas_usd, 2)])
+            ->map($mapTop)
             ->all();
 
         $vendedores = (clone $base)
             ->selectRaw("COALESCE(NULLIF(TRIM(vd.vendedor), ''), 'Sin vendedor') as nombre")
+            ->selectRaw($unidadesSql.' as unidades')
             ->selectRaw($importe.' as ventas_usd')
             ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(vd.vendedor), ''), 'Sin vendedor')"))
-            ->orderByDesc('ventas_usd')
+            ->orderByDesc($orden)
             ->limit(8)
             ->get()
-            ->map(fn ($r) => ['nombre' => $r->nombre, 'ventas_usd' => round((float) $r->ventas_usd, 2)])
+            ->map($mapTop)
             ->all();
 
         $categorias = [];
@@ -411,12 +426,13 @@ class GerencialDashboardService
             }
             $categorias = $catQuery
                 ->selectRaw("COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sin categoría') as nombre")
+                ->selectRaw($unidadesSql.' as unidades')
                 ->selectRaw($importe.' as ventas_usd')
                 ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sin categoría')"))
-                ->orderByDesc('ventas_usd')
+                ->orderByDesc($orden)
                 ->limit(8)
                 ->get()
-                ->map(fn ($r) => ['nombre' => $r->nombre, 'ventas_usd' => round((float) $r->ventas_usd, 2)])
+                ->map($mapTop)
                 ->all();
         }
 

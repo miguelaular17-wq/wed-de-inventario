@@ -104,7 +104,13 @@
                             @if(!empty($desglose['comision']['modo']))
                                 <div class="muted" style="font-size:.72rem;">{{ $desglose['comision']['modo'] }} · base ${{ number_format($desglose['comision']['base'] ?? 0, 2) }}</div>
                                 @if(($desglose['comision']['gastos'] ?? 0) > 0)
-                                    <div class="muted" style="font-size:.72rem;">Egresos 058: ${{ number_format($desglose['comision']['gastos'], 2) }}</div>
+                                    <div class="muted" style="font-size:.72rem;">Egresos 058 (solo ST): ${{ number_format($desglose['comision']['gastos'], 2) }}</div>
+                                @endif
+                                @if(($desglose['comision']['comision_st'] ?? 0) > 0 || ($desglose['comision']['comision_otros'] ?? 0) > 0 || ($desglose['comision']['comision_telefonia'] ?? 0) > 0)
+                                    <div class="muted" style="font-size:.72rem;">
+                                        ST ${{ number_format($desglose['comision']['comision_st'] ?? 0, 2) }}
+                                        · ventas ${{ number_format(($desglose['comision']['comision_telefonia'] ?? 0) + ($desglose['comision']['comision_otros'] ?? 0), 2) }}
+                                    </div>
                                 @endif
                                 @if(!empty($desglose['liquidacion']['fecha_pago']))
                                     <div class="muted" style="font-size:.72rem;">Pago {{ \Carbon\Carbon::parse($desglose['liquidacion']['fecha_pago'])->format('d/m/Y') }}</div>

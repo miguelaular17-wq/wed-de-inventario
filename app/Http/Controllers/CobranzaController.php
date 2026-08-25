@@ -3,6 +3,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Cobranza;
 use App\Models\CobranzaResumen;
+use App\Services\CobranzaHeaderHydrator;
 use App\Services\CobranzaIndicatorService;
 use Illuminate\Http\Request;
 use Shuchkin\SimpleXLSX;
@@ -10,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 
 class CobranzaController extends Controller
 {
-    public function index(Request $request, CobranzaIndicatorService $indicadores) {
+    public function index(Request $request, CobranzaIndicatorService $indicadores, CobranzaHeaderHydrator $encabezados) {
         $t0 = microtime(true);
         \Log::info('========== COBRANZA ==========');
         \Log::info('URL: '.$request->fullUrl());
@@ -45,7 +46,7 @@ class CobranzaController extends Controller
             } elseif ($mostrar_clientes === 'personales') {
                 $query->whereIn('codigo_cliente', $personalCodes);
             }
-            $historialActual = $query->get();
+            $historialActual = $encabezados->anexar($query->get(), $ultimaFecha);
         }
 
         $resumenIndicadores = $indicadores->calcular($historialActual, $personalCodes);
@@ -122,13 +123,18 @@ class CobranzaController extends Controller
         $filtro_estatus = request('filtro_estatus');
         
         $queryClientes = \App\Models\HistorialCobranza::query();
-        
-        // Solo mostrar la fila principal de la factura (donde monto_neto > 0)
-        // Las filas secundarias (detalles de items con monto 0) se omiten en la vista general
-        $queryClientes->where('monto_neto', '>', 0);
-        
-        if ($ultimaFecha) {
-            $queryClientes->where('fecha_registro', $ultimaFecha);
+
+        // Fila cabecera (monto/saldo) del snapshot, o encabezado recuperado
+        // cuando el sync solo trajo abonos de una NDD/FAC sin renglones.
+        $idsLista = $historialActual
+            ->filter(fn ($r) => (float) $r->monto_neto > 0 || (float) $r->saldo > 0)
+            ->pluck('id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($idsLista->isNotEmpty()) {
+            $queryClientes->whereIn('historial_cobranzas.id', $idsLista);
         } else {
             $queryClientes->where('id', '<', 0);
         }
@@ -440,7 +446,7 @@ class CobranzaController extends Controller
         }
     }
 
-    public function descargarReportePdf(Request $request) {
+    public function descargarReportePdf(Request $request, CobranzaHeaderHydrator $encabezados) {
         $ultimaFecha = \App\Models\HistorialCobranza::max('fecha_registro');
         
         $mostrar_clientes = request('mostrar_clientes', 'todos');
@@ -455,7 +461,7 @@ class CobranzaController extends Controller
             } elseif ($mostrar_clientes === 'personales') {
                 $query->whereIn('codigo_cliente', $personalCodes);
             }
-            $historialActual = $query->get();
+            $historialActual = $encabezados->anexar($query->get(), $ultimaFecha);
         }
 
         $gran_total_saldo = 0;
@@ -521,6 +527,9 @@ class CobranzaController extends Controller
             ])
             ->selectRaw('EXISTS(SELECT 1 FROM cliente_personals WHERE cliente_personals.codigo_cliente = historial_cobranzas.codigo_cliente) as es_personal')
             ->get();
+        $historialConNotas = $encabezados->anexar($historialConNotas, $ultimaFecha)
+            ->filter(fn ($r) => (float) $r->monto_neto > 0 || (float) $r->saldo > 0)
+            ->values();
 
         if ($mostrar_clientes === 'regulares') {
             $historialConNotas = $historialConNotas->filter(fn($r) => !in_array($r->codigo_cliente, $personalCodes));
@@ -630,6 +639,160 @@ class CobranzaController extends Controller
         return response()->json(['success' => true, 'message' => 'Llamada eliminada.']);
     }
 
+    public function estadoCuentaCliente(string $codigo_cliente)
+    {
+        $codigo = trim($codigo_cliente);
+        if ($codigo === '') {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Falta el código de cliente.',
+                'lineas' => [],
+            ], 422);
+        }
+
+        $queryFecha = \App\Models\HistorialCobranza::query()
+            ->where('codigo_cliente', $codigo);
+        $this->excludePagadasManualmente($queryFecha);
+        $ultimaFechaSync = $queryFecha->max('fecha_registro');
+
+        if (! $ultimaFechaSync) {
+            return response()->json([
+                'ok' => true,
+                'codigo_cliente' => $codigo,
+                'cliente' => null,
+                'lineas' => [],
+                'por_sede' => [],
+                'totales' => [
+                    'cargos' => 0,
+                    'abonos' => 0,
+                    'saldo' => 0,
+                    'saldo_bs' => 0,
+                    'tasa_bcv' => 0,
+                ],
+            ]);
+        }
+
+        $detalles = \App\Models\HistorialCobranza::query()
+            ->where('codigo_cliente', $codigo)
+            ->where('fecha_registro', $ultimaFechaSync);
+        $this->excludePagadasManualmente($detalles);
+        $detalles = $detalles
+            ->orderBy('fecha_emision')
+            ->orderBy('factura_padre')
+            ->orderBy('tipo_fila')
+            ->orderBy('id')
+            ->get();
+        $detalles = app(CobranzaHeaderHydrator::class)->anexar($detalles, $ultimaFechaSync)
+            ->sortBy([
+                ['fecha_emision', 'asc'],
+                ['factura_padre', 'asc'],
+                ['tipo_fila', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->values();
+
+        $facturasConSaldo = [];
+        $lineas = [];
+        $porSede = [];
+        $cargos = 0.0;
+        $abonos = 0.0;
+        $saldoAcumulado = 0.0;
+
+        foreach ($detalles as $row) {
+            $tipoFila = (int) $row->tipo_fila;
+            $esAbono = $tipoFila === 2 || strtoupper((string) $row->tipo_cxc) === 'ABONO'
+                || strtoupper((string) $row->tipo_documento) === 'ABONO';
+            $factura = trim((string) ($row->factura_padre ?: $row->numero_documento));
+            $sede = strtoupper(trim((string) ($row->sede_nombre ?? '')));
+            $detalle = trim((string) ($row->detalle ?? ''));
+            $cantidad = $row->cantidad !== null ? (float) $row->cantidad : null;
+            $precio = $row->precio_unitario !== null ? (float) $row->precio_unitario : null;
+            $cargo = $esAbono ? 0.0 : round((float) ($row->total_renglon ?? 0), 2);
+            $pagado = $esAbono ? round((float) ($row->total_abono ?? $row->total_renglon ?? 0), 2) : 0.0;
+
+            if ($cargo <= 0 && $pagado <= 0 && $detalle === '') {
+                continue;
+            }
+
+            $claveFactura = $factura !== '' ? $factura : ('row-'.$row->id);
+            $esCabecera = ! $esAbono && ! array_key_exists($claveFactura, $facturasConSaldo)
+                && ((float) $row->saldo_pendiente > 0 || (float) $row->total_factura > 0 || (float) $row->monto_neto > 0);
+
+            $totalFactura = $esCabecera ? round((float) ($row->total_factura ?? $row->monto_neto ?? 0), 2) : null;
+            $saldoFactura = $esCabecera ? round((float) ($row->saldo_pendiente ?? $row->saldo ?? 0), 2) : null;
+
+            if ($esCabecera) {
+                $facturasConSaldo[$claveFactura] = $saldoFactura;
+                $saldoAcumulado = round($saldoAcumulado + $saldoFactura, 2);
+            }
+
+            if ($esAbono) {
+                $abonos += $pagado;
+            } else {
+                $cargos += $cargo;
+            }
+
+            if ($sede !== '') {
+                if (! isset($porSede[$sede])) {
+                    $porSede[$sede] = ['sede' => $sede, 'saldo' => 0.0, 'cargos' => 0.0];
+                }
+                $porSede[$sede]['cargos'] = round($porSede[$sede]['cargos'] + $cargo, 2);
+                if ($esCabecera) {
+                    $porSede[$sede]['saldo'] = round($porSede[$sede]['saldo'] + $saldoFactura, 2);
+                }
+            }
+
+            $dias = (int) ($row->dias_deuda ?? 0);
+            if ($row->fecha_emision && $dias <= 0) {
+                $dias = (int) round(\Carbon\Carbon::parse($row->fecha_emision)->diffInDays(now()));
+            }
+
+            $lineas[] = [
+                'antiguedad' => $this->formatoAntiguedad($dias),
+                'fecha' => $row->fecha_emision ? \Carbon\Carbon::parse($row->fecha_emision)->format('d/m/Y') : '',
+                'sede' => $sede,
+                'tipo_doc' => $esAbono ? 'PAG' : strtoupper((string) ($row->tipo_cxc ?: 'FAC')),
+                'numero_documento' => (string) ($row->numero_documento ?? ''),
+                'factura_padre' => $factura,
+                'descripcion' => $detalle !== '' ? $detalle : ($esAbono ? 'Pago / Abono' : 'Artículo'),
+                'cantidad' => $cantidad,
+                'precio' => $precio,
+                'total' => $esAbono ? null : $cargo,
+                'pagado' => $esAbono ? $pagado : null,
+                'total_factura' => $totalFactura,
+                'saldo_factura' => $saldoFactura,
+                'saldo_acumulado' => $esCabecera || $esAbono ? $saldoAcumulado : null,
+                'tipo' => $esAbono ? 'abono' : 'cargo',
+            ];
+        }
+
+        $tasaBcv = 0.0;
+        try {
+            $tasaBcv = (float) app(\App\Services\BcvRateService::class)->getRateForToday();
+        } catch (\Throwable) {
+            $tasaBcv = 0.0;
+        }
+
+        $saldo = round(array_sum($facturasConSaldo), 2);
+        $cliente = $detalles->first()?->nombre_cliente;
+
+        return response()->json([
+            'ok' => true,
+            'codigo_cliente' => $codigo,
+            'cliente' => $cliente,
+            'fecha_sync' => \Carbon\Carbon::parse($ultimaFechaSync)->format('d/m/Y'),
+            'lineas' => $lineas,
+            'por_sede' => array_values($porSede),
+            'totales' => [
+                'cargos' => round($cargos, 2),
+                'abonos' => round($abonos, 2),
+                'saldo' => $saldo,
+                'tasa_bcv' => $tasaBcv,
+                'saldo_bs' => $tasaBcv > 1 ? round($saldo * $tasaBcv, 2) : 0,
+            ],
+        ]);
+    }
+
     public function estadoCuenta($numero_documento)
     {
         $numero = trim((string) $numero_documento);
@@ -671,6 +834,7 @@ class CobranzaController extends Controller
             ->orderBy('tipo_fila')
             ->orderBy('id')
             ->get();
+        $detalles = app(CobranzaHeaderHydrator::class)->anexar($detalles, $ultimaFechaSync);
 
         $cabecera = $detalles->first(function ($row) use ($numero) {
             return (string) $row->numero_documento === $numero
@@ -821,6 +985,17 @@ class CobranzaController extends Controller
                 'total_factura' => $totalFacturaReal,
             ],
         ]);
+    }
+
+    private function formatoAntiguedad(int $dias): string
+    {
+        $dias = max(0, $dias);
+        $anios = intdiv($dias, 365);
+        $resto = $dias % 365;
+        $meses = intdiv($resto, 30);
+        $diasRestantes = $resto % 30;
+
+        return $anios.'AÑOS;'.$meses.'MESES;'.$diasRestantes.'DIAS';
     }
 
     private function claveDocumento(?string $valor): string

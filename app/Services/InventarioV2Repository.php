@@ -398,6 +398,7 @@ class InventarioV2Repository
                     'proveedor'      => (string) ($row['proveedor'] ?? ''),
                     'precio_unidad'  => (float) ($row['precio_unidad'] ?? 0),
                     'precio_mayor'   => (float) ($row['precio_mayor'] ?? 0),
+                    'costo_actual'   => (float) ($row['costo_actual'] ?? $row['costo'] ?? $row['ultimo_costo_compra'] ?? 0),
                     'activo'         => true,
                     'created_at'     => $now,
                     'updated_at'     => $now,
@@ -408,7 +409,7 @@ class InventarioV2Repository
                 DB::connection('pgsql')->table('productos')->upsert(
                     $chunk,
                     ['codigo'],
-                    ['nombre', 'categoria', 'subcategoria', 'proveedor', 'precio_unidad', 'precio_mayor', 'activo', 'updated_at']
+                    ['nombre', 'categoria', 'subcategoria', 'proveedor', 'precio_unidad', 'precio_mayor', 'costo_actual', 'activo', 'updated_at']
                 );
             }
 

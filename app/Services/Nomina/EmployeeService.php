@@ -43,12 +43,16 @@ class EmployeeService
     {
         return DB::transaction(function () use ($data) {
             $empleado = NominaEmpleado::create($this->payload($data));
+            $this->organization->syncJefes(
+                $empleado,
+                $this->idsJefes($data, $empleado)
+            );
             $this->syncDenormalized($empleado);
 
             NominaAuditLog::registrar('CREAR', 'empleado', $empleado->id, null, $empleado->toArray());
 
             return $empleado->fresh([
-                'cliente', 'sedeCatalogo', 'cargoCatalogo', 'supervisor.cliente',
+                'cliente', 'sedeCatalogo', 'cargoCatalogo', 'supervisor.cliente', 'jefes.cliente',
             ]);
         });
     }
@@ -59,12 +63,16 @@ class EmployeeService
             $anterior = $empleado->toArray();
             $empleado->fill($this->payload($data, $empleado));
             $empleado->save();
+            $this->organization->syncJefes(
+                $empleado,
+                $this->idsJefes($data, $empleado)
+            );
             $this->syncDenormalized($empleado);
 
             NominaAuditLog::registrar('ACTUALIZAR', 'empleado', $empleado->id, $anterior, $empleado->fresh()->toArray());
 
             return $empleado->fresh([
-                'cliente', 'sedeCatalogo', 'cargoCatalogo', 'supervisor.cliente',
+                'cliente', 'sedeCatalogo', 'cargoCatalogo', 'supervisor.cliente', 'jefes.cliente',
             ]);
         });
     }
@@ -72,12 +80,14 @@ class EmployeeService
     private function payload(array $data, ?NominaEmpleado $empleado = null): array
     {
         $cliente = $this->resolveCliente($data, $empleado);
-        $supervisorId = $data['supervisor_id'] ?? null;
-        $supervisorId = $supervisorId ?: null;
-
-        if ($supervisorId) {
-            $this->organization->assertSupervisorValido($supervisorId, $empleado?->id);
+        $supervisorIds = $data['supervisor_ids'] ?? [];
+        if ($supervisorIds === [] && ! empty($data['supervisor_id'])) {
+            $supervisorIds = [$data['supervisor_id']];
         }
+        $supervisorIds = $this->organization->normalizarJefes(
+            is_array($supervisorIds) ? $supervisorIds : [$supervisorIds],
+            $empleado?->id
+        );
 
         $codigoVendedor = NominaEmpleado::normalizarVendedor($data['codigo_vendedor'] ?? null);
         if ($codigoVendedor) {
@@ -104,7 +114,7 @@ class EmployeeService
             'estado' => $data['estado'] ?? 'ACTIVO',
             'sede_id' => ($data['sede_id'] ?? null) ?: null,
             'cargo_id' => ($data['cargo_id'] ?? null) ?: null,
-            'supervisor_id' => $supervisorId,
+            'supervisor_id' => $supervisorIds[0] ?? null,
             'es_supervisor' => (bool) ($data['es_supervisor'] ?? false),
             'es_servicio_tecnico' => (bool) ($data['es_servicio_tecnico'] ?? false),
             'modo_comision' => $data['modo_comision'] ?? $empleado?->modo_comision ?? NominaEmpleado::COMISION_NINGUNA,
@@ -174,5 +184,22 @@ class EmployeeService
         $empleado->sede = $sede?->codigo;
         $empleado->cargo = $cargo?->nombre;
         $empleado->save();
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return list<int>
+     */
+    private function idsJefes(array $data, NominaEmpleado $empleado): array
+    {
+        $ids = $data['supervisor_ids'] ?? [];
+        if ($ids === [] && ! empty($data['supervisor_id'])) {
+            $ids = [$data['supervisor_id']];
+        }
+
+        return $this->organization->normalizarJefes(
+            is_array($ids) ? $ids : [$ids],
+            $empleado->id
+        );
     }
 }

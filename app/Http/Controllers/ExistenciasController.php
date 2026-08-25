@@ -10,7 +10,8 @@ use Illuminate\View\View;
 
 class ExistenciasController extends Controller
 {
-    private array $sedes = ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL'];
+    /** Orden de columnas; Nunes y Movistar también tienen stock. */
+    private const SEDES_BASE = ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'MOVISTAR'];
 
     public function index(Request $request): View
     {
@@ -64,6 +65,7 @@ class ExistenciasController extends Controller
         $dbItems = DB::connection('pgsql')->select($itemsSql, $bindings);
 
         $rows = collect();
+        $sedesPagina = self::SEDES_BASE;
         if (count($dbItems) > 0) {
             $productIds = array_map(fn($i) => (int) $i->id, $dbItems);
 
@@ -74,7 +76,19 @@ class ExistenciasController extends Controller
 
             $stockMap = [];
             foreach ($dbStocks as $row) {
-                $stockMap[(int) $row->producto_id][$row->sede] = (int) $row->existencia;
+                $sede = strtoupper(trim((string) $row->sede));
+                if ($sede === '') {
+                    continue;
+                }
+                $stockMap[(int) $row->producto_id][$sede] = (int) $row->existencia;
+            }
+
+            foreach ($stockMap as $porSede) {
+                foreach (array_keys($porSede) as $sede) {
+                    if (! in_array($sede, $sedesPagina, true)) {
+                        $sedesPagina[] = $sede;
+                    }
+                }
             }
 
             $dbVentas = DB::connection('pgsql')
@@ -84,7 +98,8 @@ class ExistenciasController extends Controller
 
             $ventasMap = [];
             foreach ($dbVentas as $row) {
-                $ventasMap[(int) $row->producto_id][$row->sede] = [
+                $sede = strtoupper(trim((string) $row->sede));
+                $ventasMap[(int) $row->producto_id][$sede] = [
                     'venta_15d'  => round((float) $row->venta_promedio * 15, 1),
                     'ventas_60d' => (float) $row->ventas_60d,
                     'ultima'     => $row->ultima_venta,
@@ -96,12 +111,10 @@ class ExistenciasController extends Controller
                 $sedeStock = $stockMap[$pid] ?? [];
                 $sedeVenta = $ventasMap[$pid] ?? [];
 
-                $globalStock = array_sum($sedeStock);
-
                 $stocks    = [];
                 $ventas15d = [];
-                foreach ($this->sedes as $s) {
-                    $stocks[$s]    = $sedeStock[$s] ?? 0;
+                foreach ($sedesPagina as $s) {
+                    $stocks[$s]    = (int) ($sedeStock[$s] ?? 0);
                     $sv            = $sedeVenta[$s] ?? null;
                     $ventas15d[$s] = $sv ? $sv['venta_15d'] : 0;
                 }
@@ -116,7 +129,7 @@ class ExistenciasController extends Controller
                     'precio_unidad' => (float) ($item->precio_unidad ?? 0),
                     'precio_mayor'  => (float) ($item->precio_mayor ?? 0),
                     'url_imagen'    => $item->url_imagen,
-                    'global_stock'  => $globalStock,
+                    'global_stock'  => array_sum($stocks),
                     'stocks'        => $stocks,
                     'ventas_15d'    => $ventas15d,
                 ]);
@@ -175,7 +188,7 @@ class ExistenciasController extends Controller
             'categorias'    => $categorias,
             'subcategorias' => $subcategorias,
             'proveedores'   => $proveedores,
-            'sedes'         => $this->sedes,
+            'sedes'         => $sedesPagina,
         ]);
     }
 

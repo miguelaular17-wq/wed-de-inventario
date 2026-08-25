@@ -456,8 +456,11 @@ class FinanzasController extends Controller
                 if (empty($data['motivo'])) {
                     $data['motivo'] = 'Pago TodoTicket — Total Real Bs '.number_format($monto_bs, 2, ',', '.');
                 }
-                if ($tasa_bcv > 0 && $monto_usd <= 0) {
-                    $monto_usd = round($monto_bs / $tasa_bcv, 2);
+                $tasaForm = (float) ($data['tasa_cambio'] ?? 0);
+                $tasaUsd = $tasaForm > 0 ? $tasaForm : (float) $tasa_bcv;
+                if ($tasaUsd > 0) {
+                    $monto_usd = round($monto_bs / $tasaUsd, 2);
+                    $data['tasa_cambio'] = $tasaUsd;
                 }
                 if ($monto_bs <= 0) {
                     return back()->with('error', 'El Total Real de TodoTicket debe ser mayor a cero. Completa recarga, comisión, IVA y retenciones.');

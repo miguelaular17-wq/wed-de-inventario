@@ -45,6 +45,8 @@ class GerencialDashboardServiceTest extends TestCase
         $this->assertSame(1, $doral['devoluciones']);
         $this->assertSame(6529.98, $doral['devoluciones_usd']);
         $this->assertEquals(145165.04, $resumen['total']['ventas_usd']);
+        $this->assertContains('NUNES', array_column($resumen['por_sede'], 'sede'));
+        $this->assertContains('JRZ', array_column($resumen['por_sede'], 'sede'));
     }
 
     public function test_gerente_ve_el_dashboard_y_supervisor_no(): void

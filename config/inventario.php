@@ -7,7 +7,9 @@ return [
     */
     'sedes_locales' => ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL'],
 
-    'sedes_stock' => ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL'],
+    'sedes_stock' => ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES'],
+
+    'sedes_gerencial' => ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'JRZ'],
 
     'sede_central' => 'JRZ',
 
@@ -18,6 +20,8 @@ return [
         'ZAMORA' => 'Zamora',
         'CENTRO' => 'Centro',
         'SAMBIL' => 'Sambil',
+        'NUNES' => 'Nunes',
+        'MOVISTAR' => 'Movistar',
     ],
 
     /** Etiquetas de columnas en Excel multisede → clave sede */
@@ -28,6 +32,7 @@ return [
         'ZAMORA' => 'Zamora',
         'CENTRO' => 'Centro',
         'SAMBIL' => 'Sambil',
+        'NUNES' => 'Nunes',
     ],
 
     'tiempo_venta_sede' => 15,

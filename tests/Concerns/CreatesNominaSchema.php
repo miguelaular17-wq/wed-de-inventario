@@ -180,6 +180,16 @@ trait CreatesNominaSchema
             });
         }
 
+        if (! Schema::hasTable('nomina_empleado_supervisores')) {
+            Schema::create('nomina_empleado_supervisores', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('empleado_id');
+                $table->unsignedBigInteger('supervisor_id');
+                $table->timestamps();
+                $table->unique(['empleado_id', 'supervisor_id']);
+            });
+        }
+
         if (! Schema::hasTable('nomina_empleado_vendedores')) {
             Schema::create('nomina_empleado_vendedores', function (Blueprint $table) {
                 $table->id();
@@ -510,6 +520,7 @@ trait CreatesNominaSchema
             'nomina_prestamo_cuotas',
             'nomina_prestamos',
             'nomina_audit_logs',
+            'nomina_empleado_supervisores',
             'nomina_empleado_vendedores',
             'nomina_empleados',
             'nomina_cargos',

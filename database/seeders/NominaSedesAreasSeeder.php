@@ -29,8 +29,10 @@ class NominaSedesAreasSeeder extends Seeder
             ['codigo' => 'FINANZAS', 'nombre' => 'Finanzas', 'tipo' => 'AREA'],
             ['codigo' => 'CUENTAS_COBRAR', 'nombre' => 'Cuentas por cobrar', 'tipo' => 'AREA'],
             ['codigo' => 'RRHH', 'nombre' => 'RRHH', 'tipo' => 'AREA'],
+            ['codigo' => 'SOPORTE_TECNICO', 'nombre' => 'Soporte técnico', 'tipo' => 'AREA'],
             ['codigo' => 'FLOTA', 'nombre' => 'Flota', 'tipo' => 'AREA'],
             ['codigo' => 'MANTENIMIENTO', 'nombre' => 'Mantenimiento', 'tipo' => 'AREA'],
+            ['codigo' => 'GERENCIA', 'nombre' => 'Gerencia', 'tipo' => 'AREA'],
             ['codigo' => 'SIN_ASIGNAR', 'nombre' => 'Sin asignar', 'tipo' => 'AREA'],
         ];
 

@@ -670,6 +670,7 @@
                 <div style="display:flex; flex-wrap:wrap; gap:16px; font-size:0.85rem;">
                     <label>Efectivo <span id="reciboChkEfectivo" style="border:1px solid #000; width:14px; height:14px; display:inline-block; text-align:center; line-height:13px; font-size:11px;"></span></label>
                     <label>Transferencia Bs <span id="reciboChkTransf" style="border:1px solid #000; width:14px; height:14px; display:inline-block; text-align:center; line-height:13px; font-size:11px;"></span></label>
+                    <label>Transferencia en divisa <span id="reciboChkTransfDivisa" style="border:1px solid #000; width:14px; height:14px; display:inline-block; text-align:center; line-height:13px; font-size:11px;"></span></label>
                     <label>Pago Movil <span id="reciboChkMovil" style="border:1px solid #000; width:14px; height:14px; display:inline-block; text-align:center; line-height:13px; font-size:11px;"></span></label>
                     <label>Zelle <span id="reciboChkZelle" style="border:1px solid #000; width:14px; height:14px; display:inline-block; text-align:center; line-height:13px; font-size:11px;"></span></label>
                     <label>Binance <span id="reciboChkBinance" style="border:1px solid #000; width:14px; height:14px; display:inline-block; text-align:center; line-height:13px; font-size:11px;"></span></label>
@@ -796,13 +797,13 @@ function previsualizarRecibo() {
     document.getElementById('reciboTitular').textContent = '';
 
     // Forma de pago - limpiar todos
-    ['reciboChkEfectivo','reciboChkTransf','reciboChkMovil','reciboChkZelle','reciboChkBinance','reciboChkOtro'].forEach(id => {
+    ['reciboChkEfectivo','reciboChkTransf','reciboChkTransfDivisa','reciboChkMovil','reciboChkZelle','reciboChkBinance','reciboChkOtro'].forEach(id => {
         document.getElementById(id).textContent = '';
     });
     const chkMap = {
         'EFECTIVO': 'reciboChkEfectivo',
         'TRANSFERENCIA_BCV': 'reciboChkTransf',
-        'TRANSFERENCIA_DIVISAS': 'reciboChkTransf',
+        'TRANSFERENCIA_DIVISAS': 'reciboChkTransfDivisa',
         'DEPOSITO': 'reciboChkTransf',
         'PAGO_MOVIL': 'reciboChkMovil',
         'ZELLE': 'reciboChkZelle',
@@ -841,6 +842,7 @@ function imprimirRecibo() {
     function chk(id) { return document.getElementById(id)?.textContent?.trim() === 'X' ? 'X' : ''; }
     const cEfectivo = chk('reciboChkEfectivo');
     const cTransf   = chk('reciboChkTransf');
+    const cTransfDivisa = chk('reciboChkTransfDivisa');
     const cMovil    = chk('reciboChkMovil');
     const cZelle    = chk('reciboChkZelle');
     const cBinance  = chk('reciboChkBinance');
@@ -943,6 +945,7 @@ hr{border:0;border-top:1.5px solid #000;margin:10px 0;}
   <div class="checks">
     <label>Efectivo ${box(cEfectivo)}</label>
     <label>Transferencia Bs ${box(cTransf)}</label>
+    <label>Transferencia en divisa ${box(cTransfDivisa)}</label>
     <label>Pago Movil ${box(cMovil)}</label>
     <label>Zelle ${box(cZelle)}</label>
     <label>Binance ${box(cBinance)}</label>

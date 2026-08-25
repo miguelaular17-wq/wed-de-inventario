@@ -46,7 +46,7 @@ class AnalisisInventarioService
             $filters['proveedor'] ?? 'Ninguno',
             $filters['buscar'] ?? ''
         ]));
-        $cacheKey = "analisis_inv_base_{$stockUpdateMd5}_{$filtersHash}";
+        $cacheKey = "analisis_inv_base_v3_{$stockUpdateMd5}_{$filtersHash}";
 
         $bindings = [];
         $whereClauses = [];
@@ -101,7 +101,7 @@ WITH product_metrics AS (
                     p.proveedor,
                     p.precio_mayor,
                     p.precio_unidad,
-                    p.ultimo_costo_compra,
+                    COALESCE(NULLIF(p.costo_actual, 0), NULLIF(p.ultimo_costo_compra, 0), 0) as ultimo_costo_compra,
                     p.ultima_cantidad_compra,
                     COALESCE(sa.total_stock, 0) as total_stock,
                     vh.ultima_venta,

@@ -25,12 +25,7 @@ class AttendanceService
 
     public function valorDia(NominaEmpleado $empleado): float
     {
-        $salarioMensual = (float) $empleado->salario_base;
-        if (strtoupper((string) $empleado->tipo_salario) === 'QUINCENAL') {
-            $salarioMensual *= 2;
-        }
-
-        return round($salarioMensual / 30, 2);
+        return round(((float) $empleado->salario_base) / 30, 2);
     }
 
     public function valorHora(): float

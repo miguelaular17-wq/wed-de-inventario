@@ -40,7 +40,7 @@ class EmpleadoController extends Controller
         $importados = $this->employees->syncFromClientes();
 
         $query = NominaEmpleado::query()
-            ->with(['cliente', 'sedeCatalogo', 'cargoCatalogo', 'supervisor.cliente'])
+            ->with(['cliente', 'sedeCatalogo', 'cargoCatalogo', 'supervisor.cliente', 'jefes.cliente'])
             ->join('clientes', 'clientes.id', '=', 'nomina_empleados.cliente_id')
             ->select('nomina_empleados.*')
             ->orderBy('clientes.nombre');
@@ -112,6 +112,7 @@ class EmpleadoController extends Controller
             'sedeCatalogo',
             'cargoCatalogo',
             'supervisor.cliente',
+            'jefes.cliente',
             'subordinados.cliente',
             'prestamos.cuotas',
             'prestamos.abonos.usuario',
@@ -210,7 +211,7 @@ class EmpleadoController extends Controller
 
     public function edit(NominaEmpleado $empleado): View
     {
-        $empleado->load('cliente');
+        $empleado->load(['cliente', 'jefes']);
 
         return view('nomina.empleados.form', $this->formData($empleado));
     }
@@ -236,6 +237,8 @@ class EmpleadoController extends Controller
             'sede_id' => ['nullable', 'integer', 'exists:nomina_sedes,id'],
             'cargo_id' => ['nullable', 'integer', 'exists:nomina_cargos,id'],
             'supervisor_id' => ['nullable', 'integer', 'exists:nomina_empleados,id'],
+            'supervisor_ids' => ['nullable', 'array', 'max:2'],
+            'supervisor_ids.*' => ['integer', 'exists:nomina_empleados,id'],
             'salario_base' => ['required', 'numeric', 'min:0'],
             'tipo_salario' => ['required', 'in:MENSUAL,QUINCENAL,SOLO_COMISION'],
             'fecha_ingreso' => ['nullable', 'date'],

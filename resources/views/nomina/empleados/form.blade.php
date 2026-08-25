@@ -7,7 +7,7 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">{{ $empleado ? 'Editar empleado' : 'Nuevo empleado' }}</h1>
-            <p class="muted" style="margin:4px 0 0;">Sede o área → Cargo → Supervisor. Hay supervisor de sede y supervisor de área (Marketing, Call center, Inventario).</p>
+            <p class="muted" style="margin:4px 0 0;">Sede o área → Cargo → Supervisor(es). Una sede puede tener dos supervisores. Algunas personas reportan directo a la gerente.</p>
         </div>
         <a href="{{ route('nomina.empleados.index') }}" class="btn secondary">Volver</a>
     </div>
@@ -75,28 +75,53 @@
                     @endforeach
                 </select>
             </div>
-            <div class="field">
-                <label>Supervisor</label>
-                <select name="supervisor_id">
-                    <option value="">— Sin supervisor —</option>
-                    @foreach($supervisores as $sup)
-                        <option value="{{ $sup->id }}" @selected(old('supervisor_id', $empleado?->supervisor_id) == $sup->id)>{{ $sup->nombre() }} · {{ $sup->nombreSede() }}</option>
-                    @endforeach
-                </select>
+            <div class="field field-wide">
+                <label>Supervisores</label>
+                @php
+                    $jefesSel = collect(old('supervisor_ids', $empleado?->jefes?->pluck('id')->all() ?: array_filter([$empleado?->supervisor_id])));
+                @endphp
+                <div class="nomina-sup-picker" data-max="2">
+                    <div class="nomina-sup-chips" data-empty="Sin supervisor asignado">
+                        @foreach($supervisores as $sup)
+                            @if($jefesSel->contains($sup->id))
+                                <button type="button" class="nomina-sup-chip" data-id="{{ $sup->id }}">
+                                    {{ $sup->nombre() }}
+                                    <span aria-hidden="true">×</span>
+                                </button>
+                            @endif
+                        @endforeach
+                    </div>
+                    <input type="search" class="nomina-sup-search" placeholder="Buscar por nombre o sede…" autocomplete="off">
+                    <div class="nomina-sup-list">
+                        @forelse($supervisores as $sup)
+                            <label class="nomina-sup-option">
+                                <input type="checkbox" name="supervisor_ids[]" value="{{ $sup->id }}" @checked($jefesSel->contains($sup->id))>
+                                <span class="nomina-sup-option-text">
+                                    <strong>{{ $sup->nombre() }}</strong>
+                                    <em>{{ $sup->nombreSede() }}{{ $sup->cargoCatalogo?->nombre ? ' · '.$sup->cargoCatalogo->nombre : '' }}</em>
+                                </span>
+                            </label>
+                        @empty
+                            <p class="muted" style="margin:8px 0;">No hay supervisores activos.</p>
+                        @endforelse
+                    </div>
+                    <p class="nomina-sup-hint muted">Hasta dos jefes (sede compartida). Vacío si reporta a la gerente o no tiene supervisor.</p>
+                </div>
             </div>
             <div class="field">
                 <label>Fecha de ingreso</label>
                 <input type="date" name="fecha_ingreso" value="{{ old('fecha_ingreso', optional($empleado?->fecha_ingreso)->format('Y-m-d')) }}">
             </div>
             <div class="field">
-                <label>Salario base (USD)</label>
+                <label>Salario mensual (USD)</label>
                 <input type="number" step="0.01" min="0" name="salario_base" value="{{ old('salario_base', $empleado?->salario_base ?? 0) }}" required>
+                <span class="muted" style="font-size:.78rem;">Como en la relación de personal. La nómina quincenal paga la mitad si el tipo es mensual.</span>
             </div>
             <div class="field">
                 <label>Tipo de salario</label>
                 <select name="tipo_salario">
-                    @foreach(['QUINCENAL' => 'Quincenal', 'MENSUAL' => 'Mensual', 'SOLO_COMISION' => 'Solo comisión'] as $value => $label)
-                        <option value="{{ $value }}" @selected(old('tipo_salario', $empleado?->tipo_salario ?? 'QUINCENAL') === $value)>{{ $label }}</option>
+                    @foreach(['MENSUAL' => 'Mensual (la quincena paga la mitad)', 'QUINCENAL' => 'Quincenal (el monto ya es de la quincena)', 'SOLO_COMISION' => 'Solo comisión'] as $value => $label)
+                        <option value="{{ $value }}" @selected(old('tipo_salario', $empleado?->tipo_salario ?? 'MENSUAL') === $value)>{{ $label }}</option>
                     @endforeach
                 </select>
             </div>
@@ -140,7 +165,6 @@
         </div>
     </form>
 </div>
-@if(!$empleado)
 @push('scripts')
 <script>
 document.getElementById('nomina-cliente')?.addEventListener('change', function () {
@@ -151,7 +175,65 @@ document.getElementById('nomina-cliente')?.addEventListener('change', function (
     cedula.value = opt.dataset.cedula || '';
     nombre.value = opt.dataset.nombre || '';
 });
+
+(function () {
+    const picker = document.querySelector('.nomina-sup-picker');
+    if (!picker) return;
+    const max = Number(picker.dataset.max || 2);
+    const chips = picker.querySelector('.nomina-sup-chips');
+    const search = picker.querySelector('.nomina-sup-search');
+    const options = [...picker.querySelectorAll('.nomina-sup-option')];
+
+    function selectedBoxes() {
+        return options.map((opt) => opt.querySelector('input')).filter((el) => el.checked);
+    }
+
+    function renderChips() {
+        chips.innerHTML = '';
+        selectedBoxes().forEach((input) => {
+            const option = input.closest('.nomina-sup-option');
+            const name = option.querySelector('strong')?.textContent?.trim() || input.value;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'nomina-sup-chip';
+            btn.dataset.id = input.value;
+            btn.innerHTML = name + ' <span aria-hidden="true">×</span>';
+            chips.appendChild(btn);
+        });
+        chips.classList.toggle('is-empty', selectedBoxes().length === 0);
+        const atMax = selectedBoxes().length >= max;
+        options.forEach((opt) => {
+            const input = opt.querySelector('input');
+            input.disabled = atMax && !input.checked;
+            opt.classList.toggle('is-disabled', input.disabled);
+            opt.classList.toggle('is-checked', input.checked);
+        });
+    }
+
+    picker.addEventListener('change', (e) => {
+        if (e.target.matches('input[type="checkbox"]') && selectedBoxes().length > max) {
+            e.target.checked = false;
+        }
+        renderChips();
+    });
+
+    chips.addEventListener('click', (e) => {
+        const btn = e.target.closest('.nomina-sup-chip');
+        if (!btn) return;
+        const input = picker.querySelector('input[value="' + btn.dataset.id + '"]');
+        if (input) input.checked = false;
+        renderChips();
+    });
+
+    search?.addEventListener('input', () => {
+        const q = search.value.trim().toLowerCase();
+        options.forEach((opt) => {
+            opt.hidden = q !== '' && !opt.textContent.toLowerCase().includes(q);
+        });
+    });
+
+    renderChips();
+})();
 </script>
 @endpush
-@endif
 @endsection

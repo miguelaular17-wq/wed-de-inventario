@@ -1452,6 +1452,19 @@ function calcTodoTicket() {
     if (bs) bs.value = formatBsVe(total);
     const com = document.getElementById('comision');
     if (com) com.value = formatBsVe(comision);
+    syncTodoTicketUsd();
+}
+
+function syncTodoTicketUsd() {
+    const usd = document.getElementById('monto_usd');
+    const tasa = document.getElementById('tasa_cambio');
+    const bs = document.getElementById('monto_bs');
+    if (!usd || !tasa || !bs) return;
+    const tasaN = window.parseLocalNumber(tasa.value) || 0;
+    const bsN = window.parseLocalNumber(bs.value) || 0;
+    if (tasaN > 0 && bsN > 0) {
+        usd.value = (bsN / tasaN).toFixed(2).replace('.', ',');
+    }
 }
 
 function toggleTodoTicket() {
@@ -1462,19 +1475,26 @@ function toggleTodoTicket() {
     const tasa = document.getElementById('tasa_cambio');
     const com = document.getElementById('comision');
     if (bs) bs.readOnly = on;
+    if (usd) usd.readOnly = on;
+    if (tasa) tasa.readOnly = false;
+    if (com) com.readOnly = on;
     if (on) {
         if (window.tsTipoGasto) window.tsTipoGasto.setValue('100 - TODOTICKET');
         else document.getElementById('tipo_gasto').value = '100 - TODOTICKET';
         document.getElementById('tipo_gasto').required = false;
+        if (tasa && !(window.parseLocalNumber(tasa.value) > 0)) {
+            const bcv = document.querySelector('input[data-field="tasa_bcv_usd"]');
+            if (bcv && window.parseLocalNumber(bcv.value) > 0) {
+                tasa.value = bcv.value;
+            }
+        }
         calcTodoTicket();
     } else {
         if (bs) bs.readOnly = false;
+        if (usd) usd.readOnly = false;
         document.getElementById('tipo_gasto').required = document.getElementById('categoria_egreso').value !== 'traslados';
         document.getElementById('tt_total_real_lbl').innerText = 'Bs. 0,00';
     }
-    if (usd) usd.readOnly = on;
-    if (tasa) tasa.readOnly = on;
-    if (com) com.readOnly = on;
 }
 
 // ── Gasto Fijo Linking Functions ──
@@ -1768,8 +1788,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const usd = window.parseLocalNumber(usdInput.value) || 0;
         const bs = window.parseLocalNumber(bsInput.value) || 0;
         const tasa = window.parseLocalNumber(tasaInput.value) || 0;
-        
-        if (tasa > 0) {
+        const esTodoTicket = document.getElementById('chk_todoticket')?.checked;
+
+        if (esTodoTicket) {
+            if (tasa > 0 && bs > 0) {
+                usdInput.value = (bs / tasa).toFixed(2).replace(".", ",");
+            }
+        } else if (tasa > 0) {
             if (lastEditedAmount === 'usd') {
                 bsInput.value = (usd * tasa).toFixed(2).replace(".", ",");
             } else if (lastEditedAmount === 'bs') {

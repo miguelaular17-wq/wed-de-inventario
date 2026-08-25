@@ -25,13 +25,15 @@ class GerencialController extends Controller
             'preset' => $periodo['preset'],
             'desde' => $periodo['inicio']->toDateString(),
             'hasta' => $periodo['fin']->toDateString(),
+            'ranking' => $request->query('ranking') === 'unidades' ? 'unidades' : 'usd',
         ];
         $data = $gerencial->resumen(
             $periodo,
             $filtros['sede'],
             $filtros['categoria'],
             $filtros['vendedor'],
-            $filtros['producto']
+            $filtros['producto'],
+            $filtros['ranking']
         );
 
         return view('gerencial.dashboard', [

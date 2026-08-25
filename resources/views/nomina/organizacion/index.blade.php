@@ -7,7 +7,7 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">Estructura organizacional</h1>
-            <p class="muted" style="margin:4px 0 0;">Sede o área → Supervisor → equipo. Las áreas sin tienda (Marketing, Call center, Inventario) también tienen supervisor.</p>
+            <p class="muted" style="margin:4px 0 0;">En cada tienda el personal es de los supervisores de sede. La gerente supervisa a esos supervisores, no al piso.</p>
         </div>
     </div>
 
@@ -45,20 +45,66 @@
     @foreach($arbol as $nodo)
         <div class="nomina-org-sede">
             <h2>{{ $nodo['sede']->etiquetaTipo() }}: {{ $nodo['sede']->nombre }} <span class="muted">{{ $nodo['sede']->codigo }}</span></h2>
-            @forelse($nodo['supervisores'] as $grupo)
-                <div class="nomina-org-sup">
-                    <strong>{{ $nodo['sede']->isArea() ? 'Supervisor de área' : 'Supervisor de sede' }}: <a href="{{ route('nomina.empleados.show', $grupo['supervisor']) }}">{{ $grupo['supervisor']->nombre() }}</a></strong>
-                    <ul>
-                        @forelse($grupo['empleados'] as $emp)
-                            <li><a href="{{ route('nomina.empleados.show', $emp) }}">{{ $emp->nombre() }}</a> · {{ $emp->nombreCargo() }}</li>
-                        @empty
-                            <li class="muted">Sin personal asignado</li>
-                        @endforelse
-                    </ul>
+            @if($nodo['gerentes']->isNotEmpty())
+                <div class="nomina-org-gerente">
+                    <span class="muted">Gerente</span>
+                    <div class="nomina-org-people">
+                        @foreach($nodo['gerentes'] as $gerente)
+                            <a href="{{ route('nomina.empleados.show', $gerente) }}">{{ $gerente->nombre() }}</a>
+                        @endforeach
+                    </div>
+                    <p class="muted" style="margin:6px 0 0; font-size:.78rem;">Supervisa a los supervisores de esta sede.</p>
                 </div>
-            @empty
-                <p class="muted">No hay supervisores en esta sede.</p>
-            @endforelse
+            @endif
+
+            @if($nodo['sede']->isArea())
+                @forelse($nodo['grupos'] as $grupo)
+                    <div class="nomina-org-sup">
+                        <strong>Supervisor de área: <a href="{{ route('nomina.empleados.show', $grupo['supervisor']) }}">{{ $grupo['supervisor']->nombre() }}</a></strong>
+                        <span class="muted"> · {{ $grupo['supervisor']->nombreCargo() }}</span>
+                        <ul>
+                            @forelse($grupo['empleados'] as $emp)
+                                <li><a href="{{ route('nomina.empleados.show', $emp) }}">{{ $emp->nombre() }}</a> · {{ $emp->nombreCargo() }}</li>
+                            @empty
+                                <li class="muted">Sin personal asignado</li>
+                            @endforelse
+                        </ul>
+                    </div>
+                @empty
+                    @if($nodo['gerentes']->isEmpty())
+                        <p class="muted">No hay supervisores en esta área.</p>
+                    @endif
+                @endforelse
+            @else
+                <div class="nomina-org-sup">
+                    <strong>Supervisores de sede</strong>
+                    @if($nodo['supervisores']->isNotEmpty())
+                        <div class="nomina-org-people">
+                            @foreach($nodo['supervisores'] as $sup)
+                                <a href="{{ route('nomina.empleados.show', $sup) }}">{{ $sup->nombre() }}</a>
+                                <span class="muted">{{ $sup->nombreCargo() }}</span>
+                            @endforeach
+                        </div>
+                        <ul>
+                            @forelse($nodo['equipo'] as $emp)
+                                <li><a href="{{ route('nomina.empleados.show', $emp) }}">{{ $emp->nombre() }}</a> · {{ $emp->nombreCargo() }}</li>
+                            @empty
+                                <li class="muted">Sin personal de piso</li>
+                            @endforelse
+                        </ul>
+                    @else
+                        <p class="muted" style="margin:8px 0 0;">No hay supervisores en esta sede.</p>
+                        @if($nodo['equipo']->isNotEmpty())
+                            <ul>
+                                @foreach($nodo['equipo'] as $emp)
+                                    <li><a href="{{ route('nomina.empleados.show', $emp) }}">{{ $emp->nombre() }}</a> · {{ $emp->nombreCargo() }}</li>
+                                @endforeach
+                            </ul>
+                        @endif
+                    @endif
+                </div>
+            @endif
+
             @if($nodo['sin_supervisor']->isNotEmpty())
                 <div class="nomina-org-sup">
                     <strong>Sin supervisor</strong>

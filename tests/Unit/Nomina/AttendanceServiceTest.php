@@ -55,14 +55,14 @@ class AttendanceServiceTest extends TestCase
 
         $resumen = $this->attendance->resumenQuincena($this->empleado);
         $this->assertEquals(1.0, $resumen['dias']);
-        $this->assertEquals(6.67, $resumen['monto_ausencias']);
+        $this->assertEquals(3.33, $resumen['monto_ausencias']);
         $this->assertTrue($resumen['ya_falto_hoy']);
 
         $this->expectException(ValidationException::class);
         $this->attendance->marcarFaltoHoy($this->empleado, auth()->id());
     }
 
-    public function test_cantidad_de_ias_convierte_salario_quincenal_a_mensual(): void
+    public function test_inasistencia_divide_el_salario_base_entre_treinta(): void
     {
         $this->attendance->registrarInasistencia($this->empleado, [
             'fecha' => '2026-08-18',
@@ -70,8 +70,8 @@ class AttendanceServiceTest extends TestCase
             'motivo' => 'IAS',
         ], auth()->id());
 
-        $this->assertEquals(13.34, (float) NominaInasistencia::query()->value('monto'));
-        $this->assertEquals(6.67, (float) NominaInasistencia::query()->value('valor_unitario'));
+        $this->assertEquals(6.66, (float) NominaInasistencia::query()->value('monto'));
+        $this->assertEquals(3.33, (float) NominaInasistencia::query()->value('valor_unitario'));
     }
 
     public function test_salario_mensual_se_divide_directamente_entre_treinta(): void

@@ -13,7 +13,7 @@
 
     <div class="nomina-card" style="margin-top:16px; max-width:900px;">
         <h3>Inasistencias y horas extras</h3>
-        <p class="muted">Valor por día: salario mensual ÷ 30. Si el salario registrado es quincenal, primero se multiplica por 2. Solo el valor de la hora extra es global.</p>
+        <p class="muted">Valor por día: salario mensual ÷ 30. El monto de la ficha ya es mensual; no se multiplica. Solo el valor de la hora extra es global.</p>
         <form method="POST" action="{{ route('nomina.configuracion.update') }}" class="nomina-form-grid">
             @csrf @method('PUT')
             <div class="field">
@@ -48,7 +48,7 @@
                 <label>Participación Servicio Técnico (%)</label>
                 <input type="number" step="0.01" min="0" max="100" name="comision_servicio_tecnico_pct" value="{{ number_format($comisionServicioTecnicoPct, 2, '.', '') }}" required>
             </div>
-            <div class="field field-wide muted">Ventas propias usan el total facturado (cantidad × precio de venta), no el neto de Profit. El supervisor cobra solo equipo o sede, nunca ventas propias. Servicio técnico no cambia.</div>
+            <div class="field field-wide muted">Ventas propias: total facturado (cantidad × precio de venta). Supervisor: solo sede o equipo. Técnico: 058 solo contra líneas ST; el resto de su vendedor se comisiona igual que ventas propias.</div>
             <div class="field" style="display:flex; align-items:flex-end;">
                 <button class="btn primary" type="submit">Guardar</button>
             </div>

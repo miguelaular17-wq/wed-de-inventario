@@ -442,7 +442,7 @@
                                 <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #93c5fd; background-color: #eff6ff; cursor: pointer; color: #1e40af; margin-left: 4px;" onclick="abrirModalLlamadas('{{ $c->codigo }}', '{{ htmlspecialchars($c->cliente) }}')">
                                     📞 Llamadas
                                 </button>
-                                <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #fbbf24; background-color: #fef3c7; cursor: pointer; color: #d97706; margin-left: 4px;" onclick='abrirModalEstadoCuenta(@json($c->numero_documento), @json($c->cliente))'>
+                                <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #fbbf24; background-color: #fef3c7; cursor: pointer; color: #d97706; margin-left: 4px;" onclick='abrirModalEstadoCuenta(@json($c->codigo), @json($c->cliente))'>
                                     📝 Edo. Cuenta
                                 </button>
                             </td>
@@ -519,13 +519,16 @@
 
 <!-- Modal Estado Cuenta -->
 <div id="modal-estado-cuenta" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;">
-    <div class="panel modal-box" style="width: 95%; max-width: 800px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); position: relative; max-height: 90vh; display: flex; flex-direction: column;">
-        <div style="background-color: #d97706; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;">
+    <div class="panel modal-box" style="width: 96%; max-width: 1180px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); position: relative; max-height: 92vh; display: flex; flex-direction: column;">
+        <div style="background-color: #d97706; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
             <h3 id="modalEstadoCuentaTitle" style="margin: 0; font-size: 1.1rem; font-weight: 600;">Estado de Cuenta</h3>
-            <button type="button" onclick="cerrarModalEstadoCuenta()" style="background: transparent; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button type="button" onclick="imprimirEstadoCuenta()" style="background: rgba(255,255,255,.18); border: 0; color: white; padding: 6px 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">Imprimir</button>
+                <button type="button" onclick="cerrarModalEstadoCuenta()" style="background: transparent; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+            </div>
         </div>
         
-        <div style="padding: 20px; flex: 1; overflow-y: auto; background: #f8fafc;">
+        <div id="estadoCuentaPrint" style="padding: 20px; flex: 1; overflow-y: auto; background: #f8fafc;">
             <div id="estadoCuentaList" style="display: flex; flex-direction: column; gap: 10px;">
                 <!-- Cargando... -->
             </div>
@@ -754,75 +757,114 @@
         }
     }
 
-    async function abrirModalEstadoCuenta(numeroDocumento, cliente) {
+    async function abrirModalEstadoCuenta(codigoCliente, cliente) {
         document.getElementById('modal-estado-cuenta').style.display = 'flex';
         document.getElementById('modalEstadoCuentaTitle').innerText = 'Estado de Cuenta: ' + cliente;
         const list = document.getElementById('estadoCuentaList');
-        list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">Cargando detalles...</div>';
-        
-        if (!numeroDocumento) {
-             list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No hay número de documento disponible para esta factura.</div>';
-             return;
+        list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">Cargando relación detallada...</div>';
+
+        if (!codigoCliente) {
+            list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No hay código de cliente para armar el estado de cuenta.</div>';
+            return;
         }
 
-        const money = (n) => '$ ' + Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const money = (n) => n == null || n === '' ? '' : '$ ' + Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const qty = (n) => n == null || n === '' ? '' : Number(n).toLocaleString('es-VE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
         const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
         try {
-            const res = await fetch(`/cobranza/${encodeURIComponent(numeroDocumento)}/estado-cuenta`, {
+            const res = await fetch(`/cobranza/cliente/${encodeURIComponent(codigoCliente)}/estado-cuenta`, {
                 headers: { 'Accept': 'application/json' }
             });
             const data = await res.json();
-            const lineas = Array.isArray(data) ? data : (data.lineas || []);
+            if (!res.ok || data.ok === false) {
+                list.innerHTML = `<div style="text-align:center; padding:20px; color:#b91c1c;">${esc(data.message || 'No se pudo armar el estado de cuenta.')}</div>`;
+                return;
+            }
+            const lineas = data.lineas || [];
             const totales = data.totales || {};
-            
+            const porSede = data.por_sede || [];
+
             if (!lineas.length) {
-                list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No hay registros detallados sincronizados para esta factura aún. <br><small>Recuerde activar el módulo de cobranzas en el sincronizador de la tienda.</small></div>';
+                list.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No hay renglones sincronizados para este cliente. <br><small>El sincronizador de la tienda tiene que tener el módulo de cobranzas activo.</small></div>';
                 return;
             }
 
+            const sedeTxt = porSede.map((s) => `${esc(s.sede)}: ${money(s.saldo)}`).join(' · ') || '—';
             let html = `
-                <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                <div style="display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:12px;">
+                    <div>
+                        <div style="font-size:.75rem; color:#64748b; text-transform:uppercase; letter-spacing:.04em;">Cliente</div>
+                        <div style="font-weight:700; font-size:1.02rem;">${esc(data.cliente || cliente)}</div>
+                        <div style="color:#475569; font-family:ui-monospace,monospace;">${esc(data.codigo_cliente || codigoCliente)}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:.75rem; color:#64748b;">Corte sync</div>
+                        <div style="font-weight:600;">${esc(data.fecha_sync || '')}</div>
+                    </div>
+                </div>
+                <div style="overflow-x:auto; background:white; border:1px solid #e2e8f0; border-radius:10px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem;">
                     <thead>
                         <tr style="background-color: #f1f5f9; color: #475569; text-align: left;">
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Antigüedad</th>
                             <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Fecha</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Detalle</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align: right;">Artículos ($)</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align: right;">Abonos ($)</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Sede</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Doc</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Nº</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Descripción</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;">Cant.</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;">Precio</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;">Total</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;">Pagado</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;">Tot. fac.</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;">Saldo</th>
                         </tr>
                     </thead>
                     <tbody>
             `;
 
             lineas.forEach((mov) => {
-                const esAjuste = mov.tipo === 'ajuste';
-                const esAbono = mov.tipo === 'abono' || (esAjuste && Number(mov.abono) > 0);
+                const esAbono = mov.tipo === 'abono';
                 html += `
-                    <tr style="${esAjuste ? 'background-color: #f0fdf4;' : ''}">
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${esc(mov.fecha || '')}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; ${esAjuste ? 'font-style: italic;' : ''}">${esc(mov.detalle || '')}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #dc2626;">${Number(mov.cargo) > 0 ? money(mov.cargo) : ''}</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #16a34a;">${Number(mov.abono) > 0 ? money(mov.abono) : ''}</td>
+                    <tr style="${esAbono ? 'background-color: #f0fdf4;' : ''}">
+                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; white-space:nowrap; color:#64748b;">${esc(mov.antiguedad || '')}</td>
+                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; white-space:nowrap;">${esc(mov.fecha || '')}</td>
+                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${esc(mov.sede || '')}</td>
+                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; font-weight:700;">${esc(mov.tipo_doc || '')}</td>
+                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${esc(mov.numero_documento || '')}</td>
+                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${esc(mov.descripcion || '')}</td>
+                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right;">${qty(mov.cantidad)}</td>
+                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right;">${money(mov.precio)}</td>
+                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right; color:#b45309;">${money(mov.total)}</td>
+                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right; color:#16a34a;">${money(mov.pagado)}</td>
+                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right;">${money(mov.total_factura)}</td>
+                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right; font-weight:700;">${money(mov.saldo_acumulado ?? mov.saldo_factura)}</td>
                     </tr>
                 `;
             });
-
-            const saldo = Number(totales.saldo ?? 0);
 
             html += `
                     </tbody>
                     <tfoot>
                         <tr style="background: #f8fafc;">
-                            <td colspan="2" style="padding: 8px; font-weight: 600; border-top: 1px solid #cbd5e1;">Totales</td>
-                            <td style="padding: 8px; text-align: right; font-weight: 600; color: #dc2626; border-top: 1px solid #cbd5e1;">${money(totales.articulos)}</td>
+                            <td colspan="8" style="padding: 8px; font-weight: 600; border-top: 1px solid #cbd5e1;">Totales Profit</td>
+                            <td style="padding: 8px; text-align: right; font-weight: 600; color: #b45309; border-top: 1px solid #cbd5e1;">${money(totales.cargos)}</td>
                             <td style="padding: 8px; text-align: right; font-weight: 600; color: #16a34a; border-top: 1px solid #cbd5e1;">${money(totales.abonos)}</td>
-                        </tr>
-                        <tr>
-                            <td colspan="3" style="padding: 12px 8px; text-align: right; font-weight: bold; border-top: 2px solid #cbd5e1;">Saldo restante:</td>
-                            <td style="padding: 12px 8px; text-align: right; font-weight: bold; color: ${saldo > 0 ? '#dc2626' : '#16a34a'}; border-top: 2px solid #cbd5e1;">${money(saldo)}</td>
+                            <td style="padding: 8px; border-top: 1px solid #cbd5e1;"></td>
+                            <td style="padding: 8px; text-align: right; font-weight: 700; color: #dc2626; border-top: 1px solid #cbd5e1;">${money(totales.saldo)}</td>
                         </tr>
                     </tfoot>
                 </table>
+                </div>
+                <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:12px;">
+                    <div style="font-size:.8rem; color:#475569;">Por sede: ${sedeTxt}</div>
+                    <div style="text-align:right;">
+                        ${totales.tasa_bcv > 1 ? `<div style="font-size:.8rem; color:#64748b;">BCV ${Number(totales.tasa_bcv).toLocaleString('es-VE', { maximumFractionDigits: 4 })} · Bs ${Number(totales.saldo_bs).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
+                        <div style="font-size:1.05rem; font-weight:800;">Saldo a pagar ${money(totales.saldo)}</div>
+                    </div>
+                </div>
+                <p style="margin:10px 0 0; font-size:.75rem; color:#94a3b8;">Relación con lo sincronizado desde Profit (artículos, abonos y saldo). El Excel de crédito agrupado por persona o el -30% a mano no está en la web.</p>
             `;
 
             list.innerHTML = html;
@@ -830,6 +872,17 @@
             console.error(e);
             list.innerHTML = '<div style="color:red; padding:10px;">Error al cargar el estado de cuenta.</div>';
         }
+    }
+
+    function imprimirEstadoCuenta() {
+        const nodo = document.getElementById('estadoCuentaPrint');
+        if (!nodo) return;
+        const w = window.open('', 'edo-cuenta');
+        if (!w) return;
+        w.document.write('<!doctype html><html><head><title>Estado de cuenta</title><style>body{font-family:Arial,sans-serif;padding:16px;color:#111} table{width:100%;border-collapse:collapse;font-size:11px} th,td{border-bottom:1px solid #ddd;padding:5px 6px;text-align:left} th{background:#f1f5f9}</style></head><body>' + nodo.innerHTML + '</body></html>');
+        w.document.close();
+        w.focus();
+        w.print();
     }
 
     function cerrarModalEstadoCuenta() {

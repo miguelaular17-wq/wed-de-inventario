@@ -75,7 +75,7 @@
                     <th>Sede</th>
                     <th>Cargo</th>
                     <th>Supervisor</th>
-                    <th>Salario</th>
+                    <th>Salario mensual</th>
                     <th>Estado</th>
                     <th></th>
                 </tr>

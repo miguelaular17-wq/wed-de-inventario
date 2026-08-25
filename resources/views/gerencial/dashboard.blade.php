@@ -77,6 +77,7 @@
                 <button class="btn primary" type="submit">Aplicar</button>
             </div>
         </div>
+        <input type="hidden" name="ranking" value="{{ $filtros['ranking'] }}">
         @if($usaLineas)
             <p class="muted" style="margin:8px 0 0;">Con producto, categoría o vendedor el total es por líneas, no el de la factura de Profit.</p>
         @else
@@ -158,7 +159,29 @@
         </table>
     </div>
 
-    <div class="nomina-split" style="margin-top:20px;">
+    @php
+        $ranking = $filtros['ranking'] ?? 'usd';
+        $rankingUrl = function (string $modo) use ($filtros) {
+            return route('gerencial.dashboard', array_filter([
+                'preset' => $filtros['preset'] ?? null,
+                'desde' => ($filtros['preset'] ?? '') === 'personalizado' ? ($filtros['desde'] ?? null) : null,
+                'hasta' => ($filtros['preset'] ?? '') === 'personalizado' ? ($filtros['hasta'] ?? null) : null,
+                'sede' => ($filtros['sede'] ?? 'todas') !== 'todas' ? $filtros['sede'] : null,
+                'categoria' => $filtros['categoria'] ?: null,
+                'vendedor' => $filtros['vendedor'] ?: null,
+                'producto' => $filtros['producto'] ?: null,
+                'ranking' => $modo,
+            ], fn ($v) => $v !== null && $v !== ''));
+        };
+    @endphp
+    <div class="panel-header-flex" style="margin-top:20px; align-items:center;">
+        <h3 style="margin:0;">Rankings</h3>
+        <div class="segmented">
+            <a href="{{ $rankingUrl('usd') }}" class="{{ $ranking === 'usd' ? 'active' : '' }}">Por USD</a>
+            <a href="{{ $rankingUrl('unidades') }}" class="{{ $ranking === 'unidades' ? 'active' : '' }}">Por unidades</a>
+        </div>
+    </div>
+    <div class="nomina-split" style="margin-top:12px;">
         <div class="nomina-card">
             <h3>Top productos</h3>
             <table class="data-table">
@@ -179,15 +202,16 @@
         <div class="nomina-card">
             <h3>Top vendedores</h3>
             <table class="data-table">
-                <thead><tr><th>Vendedor</th><th>USD</th></tr></thead>
+                <thead><tr><th>Vendedor</th><th>Unds</th><th>USD</th></tr></thead>
                 <tbody>
                     @forelse($tops['vendedores'] as $item)
                         <tr>
                             <td>{{ $item['nombre'] }}</td>
+                            <td>{{ $fmt($item['unidades'] ?? 0, 0) }}</td>
                             <td>${{ $fmt($item['ventas_usd']) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="2" class="muted">Sin datos en el período.</td></tr>
+                        <tr><td colspan="3" class="muted">Sin datos en el período.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -195,15 +219,16 @@
         <div class="nomina-card">
             <h3>Top categorías</h3>
             <table class="data-table">
-                <thead><tr><th>Categoría</th><th>USD</th></tr></thead>
+                <thead><tr><th>Categoría</th><th>Unds</th><th>USD</th></tr></thead>
                 <tbody>
                     @forelse($tops['categorias'] as $item)
                         <tr>
                             <td>{{ $item['nombre'] }}</td>
+                            <td>{{ $fmt($item['unidades'] ?? 0, 0) }}</td>
                             <td>${{ $fmt($item['ventas_usd']) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="2" class="muted">Sin datos en el período.</td></tr>
+                        <tr><td colspan="3" class="muted">Sin datos en el período.</td></tr>
                     @endforelse
                 </tbody>
             </table>

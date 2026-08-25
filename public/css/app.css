@@ -1355,6 +1355,100 @@ table.data-table tbody tr:hover {
 .nomina-kpi strong { font-size: 1.15rem; }
 .nomina-kpi.warn { background: #fff7ed; border-color: #fed7aa; }
 .nomina-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px; }
+.nomina-form-grid .field-wide { grid-column: 1 / -1; }
+
+.nomina-sup-picker {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+    padding: 10px;
+}
+.nomina-sup-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 34px;
+    margin-bottom: 8px;
+}
+.nomina-sup-chips.is-empty::before {
+    content: attr(data-empty);
+    color: var(--muted);
+    font-size: .85rem;
+    align-self: center;
+}
+.nomina-sup-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    background: var(--blue-light);
+    color: var(--blue);
+    font: inherit;
+    font-size: .82rem;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+.nomina-sup-chip span { font-size: 1rem; line-height: 1; opacity: .7; }
+.nomina-sup-chip:hover { background: #dbe7f7; }
+.nomina-sup-search {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: .88rem;
+}
+.nomina-sup-search:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(26, 68, 128, .12);
+}
+.nomina-sup-list {
+    margin-top: 8px;
+    max-height: 220px;
+    overflow: auto;
+    display: grid;
+    gap: 4px;
+}
+.field label.nomina-sup-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: .88rem;
+    font-weight: 500;
+    color: var(--text);
+}
+.nomina-sup-option:hover { background: #f8fafc; }
+.nomina-sup-option.is-checked { background: var(--blue-light); }
+.nomina-sup-option.is-disabled { opacity: .45; cursor: not-allowed; }
+.nomina-sup-picker .nomina-sup-option input[type="checkbox"] {
+    width: 1.05rem;
+    height: 1.05rem;
+    min-width: 1.05rem;
+    max-width: 1.05rem;
+    padding: 0;
+    margin: 3px 0 0;
+    flex: 0 0 1.05rem;
+    accent-color: var(--blue);
+    box-shadow: none;
+    border-radius: 4px;
+}
+.nomina-sup-option-text {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+.nomina-sup-option-text strong { font-weight: 600; line-height: 1.25; color: var(--text); }
+.nomina-sup-option-text em { font-style: normal; font-size: .75rem; color: var(--muted); }
+.nomina-sup-hint { margin: 8px 0 0; font-size: .78rem; }
 .nomina-form h3, .nomina-page h3 { margin: 22px 0 8px; font-size: 1rem; }
 .nomina-inline-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .nomina-inline-form input, .nomina-inline-form select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; min-width: 140px; }
@@ -1368,7 +1462,30 @@ table.data-table tbody tr:hover {
 .nomina-card { border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: #fff; }
 .nomina-org-sede { margin-top: 18px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
 .nomina-org-sede h2 { margin: 0 0 12px; font-size: 1.1rem; }
-.nomina-org-sup { margin: 10px 0 10px 12px; padding-left: 12px; border-left: 3px solid #93c5fd; }
+.nomina-org-gerente {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+.nomina-org-gerente > .muted:first-child {
+    display: block;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-bottom: 4px;
+}
+.nomina-org-people {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    align-items: baseline;
+    margin-top: 6px;
+}
+.nomina-org-people a { font-weight: 700; text-decoration: none; }
+.nomina-org-people a:hover { text-decoration: underline; }
+.nomina-org-sup { margin: 10px 0 0; padding: 12px 14px; border-left: 3px solid #93c5fd; background: #fff; }
 .nomina-org-sup ul { margin: 8px 0 0; padding-left: 18px; }
 .nomina-recibo h4 { margin: 0 0 8px; }
 .nomina-doc-link { font-weight: 700; text-decoration: none; }

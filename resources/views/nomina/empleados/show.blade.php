@@ -28,7 +28,7 @@
             </p>
         </div>
         <div class="nomina-ficha-meta">
-            <div><span>Salario</span><strong>${{ number_format($empleado->salario_base, 2) }}</strong></div>
+            <div><span>Salario mensual</span><strong>${{ number_format($empleado->salario_base, 2) }}</strong></div>
             <div><span>Estado</span><strong>{{ $empleado->estado }}</strong></div>
             <a href="{{ route('nomina.empleados.edit', $empleado) }}" class="btn secondary">Editar</a>
         </div>
@@ -322,12 +322,12 @@
         @endphp
         <div class="nomina-recibo" style="margin-top:16px;">
             <h3>Estructura del recibo (la tienda)</h3>
-            <p class="muted">Quincena {{ $quincenaActual['etiqueta'] }}. Valor diario: ${{ number_format($asistencia['valor_dia'], 2) }} (salario mensual ÷ 30; si es quincenal, salario × 2 ÷ 30) · ${{ number_format($asistencia['valor_hora'], 2) }} por hora extra (<a href="{{ route('nomina.configuracion.index') }}">Configuración</a>).</p>
+            <p class="muted">Quincena {{ $quincenaActual['etiqueta'] }}. Valor diario: ${{ number_format($asistencia['valor_dia'], 2) }} (salario mensual ÷ 30) · ${{ number_format($asistencia['valor_hora'], 2) }} por hora extra (<a href="{{ route('nomina.configuracion.index') }}">Configuración</a>).</p>
             <div class="nomina-split">
                 <div>
                     <h4>Ingresos</h4>
                     <ul>
-                        <li>Salario base: ${{ number_format($empleado->salario_base, 2) }}</li>
+                        <li>Salario mensual: ${{ number_format($empleado->salario_base, 2) }} ({{ $empleado->tipo_salario === 'MENSUAL' ? 'quincena = mitad' : $empleado->tipo_salario }})</li>
                         <li>Horas extras: {{ $horasTxt }}</li>
                         <li>Otros ingresos: —</li>
                     </ul>

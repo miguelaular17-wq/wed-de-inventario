@@ -11,12 +11,19 @@ from utils.logger import AppLogger
 # ─────────────────────────────────────────────────────────────────────────────
 COBRANZAS_QUERY = """
 WITH FacturasActivas AS (
-    SELECT id, codigo_cliente, fecha_emision, estacion, tipo_documento,
-           numero_documento, monto_neto_moneda2, saldo_actual_moneda2
-    FROM cuentas_cobrar WITH(NOLOCK)
-    WHERE saldo_actual_moneda2 > 0.5
-      AND tipo_documento IN ('FAC', 'NDD', 'ND')
-      AND (estado <> 'Anulado' OR estado IS NULL)
+    SELECT cx.id, cx.codigo_cliente, cx.fecha_emision, cx.estacion, cx.tipo_documento,
+           cx.numero_documento, cx.monto_neto_moneda2, cx.saldo_actual_moneda2
+    FROM cuentas_cobrar cx WITH(NOLOCK)
+    WHERE cx.saldo_actual_moneda2 > 0.5
+      AND cx.tipo_documento IN ('FAC', 'NDD', 'ND')
+      AND (cx.estado IS NULL OR cx.estado NOT LIKE '%Anul%')
+      AND NOT EXISTS (
+            SELECT 1
+            FROM documentos_venta dv WITH(NOLOCK)
+            WHERE dv.numero_documento = cx.numero_documento
+              AND dv.tipo_documento   = cx.tipo_documento
+              AND dv.estado LIKE '%Anul%'
+      )
 ),
 RenglonesArticulos AS (
     SELECT
@@ -27,16 +34,22 @@ RenglonesArticulos AS (
         f.estacion,
         f.tipo_documento,
         f.numero_documento,
-        a.descripcion         AS detalle,
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(a.descripcion)), ''),
+            f.tipo_documento + ' ' + LTRIM(RTRIM(CAST(f.numero_documento AS VARCHAR(50))))
+        )                     AS detalle,
         vi.cantidad,
-        (vi.total_neto_moneda2 / NULLIF(vi.cantidad, 0)) AS precio_unitario,
-        vi.total_neto_moneda2 AS total_renglon,
+        CASE WHEN vi.numero_documento IS NULL THEN NULL
+             ELSE (vi.total_neto_moneda2 / NULLIF(vi.cantidad, 0)) END AS precio_unitario,
+        CASE WHEN vi.numero_documento IS NULL THEN f.monto_neto_moneda2
+             ELSE vi.total_neto_moneda2 END AS total_renglon,
         f.monto_neto_moneda2  AS total_factura,
         f.saldo_actual_moneda2 AS saldo_pendiente,
         1                     AS tipo_fila,
-        vi.item_numero
+        ISNULL(vi.item_numero, 0) AS item_numero,
+        f.tipo_documento      AS tipo_padre
     FROM FacturasActivas f
-    JOIN documentos_venta_items vi WITH(NOLOCK)
+    LEFT JOIN documentos_venta_items vi WITH(NOLOCK)
         ON f.numero_documento = vi.numero_documento
        AND f.tipo_documento   = vi.tipo_documento
     LEFT JOIN articulos a WITH(NOLOCK)
@@ -58,10 +71,12 @@ RenglonesPagos AS (
         NULL                   AS total_factura,
         NULL                   AS saldo_pendiente,
         2                      AS tipo_fila,
-        0                      AS item_numero
+        0                      AS item_numero,
+        f.tipo_documento       AS tipo_padre
     FROM FacturasActivas f
     JOIN pagos_cuentas_cobrar pp WITH(NOLOCK) ON f.id = pp.id_factura
     JOIN cuentas_cobrar pago WITH(NOLOCK)     ON pp.id_pago = pago.id
+    WHERE (pago.estado IS NULL OR pago.estado NOT LIKE '%Anul%')
 )
 SELECT
     r.codigo_cliente,
@@ -71,7 +86,7 @@ SELECT
     CASE WHEN r.tipo_fila = 2 THEN 'ABONO' ELSE r.tipo_documento END AS tipo_documento,
     r.numero_documento,
     CASE WHEN r.tipo_fila = 2
-         THEN 'Aplica a FAC: ' + r.factura_padre
+         THEN 'Aplica a ' + ISNULL(r.tipo_padre, 'DOC') + ': ' + r.factura_padre
          ELSE '' END          AS referencia,
     r.factura_padre,
     r.detalle,

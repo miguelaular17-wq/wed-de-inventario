@@ -6,6 +6,7 @@ use App\Models\Cliente;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class NominaEmpleado extends Model
@@ -70,6 +71,18 @@ class NominaEmpleado extends Model
         return $this->belongsTo(self::class, 'supervisor_id');
     }
 
+    public function jefes(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'nomina_empleado_supervisores', 'empleado_id', 'supervisor_id')
+            ->withTimestamps();
+    }
+
+    public function equipo(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'nomina_empleado_supervisores', 'supervisor_id', 'empleado_id')
+            ->withTimestamps();
+    }
+
     public function subordinados(): HasMany
     {
         return $this->hasMany(self::class, 'supervisor_id');
@@ -122,7 +135,8 @@ class NominaEmpleado extends Model
 
     public function nombreSupervisor(): string
     {
-        return $this->supervisor?->nombre() ?? '—';
+        return $this->jefes->map(fn (self $jefe) => $jefe->nombre())->filter()->unique()->implode(' / ')
+            ?: ($this->supervisor?->nombre() ?? '—');
     }
 
     public function isActivo(): bool
@@ -134,9 +148,9 @@ class NominaEmpleado extends Model
     {
         return [
             self::COMISION_VENTAS_PROPIAS => 'Ventas propias (telefonía 0,20% / resto 1%)',
-            self::COMISION_SUPERVISOR_SEDE => 'Supervisor de sede: ventas de la tienda (0,10%)',
+            self::COMISION_SUPERVISOR_SEDE => 'Supervisor de sede: ventas de la tienda (0,05%)',
             self::COMISION_SUPERVISOR_EQUIPO => 'Supervisor de equipo/Marketing: ventas de subordinados (0,10%)',
-            self::COMISION_SERVICIO_TECNICO => 'Servicio Técnico: ventas menos egresos 058',
+            self::COMISION_SERVICIO_TECNICO => 'Servicio Técnico: ST − 058 × 50%; el resto como vendedor (0,20%/1%)',
             self::COMISION_NINGUNA => 'Sin comisión',
         ];
     }

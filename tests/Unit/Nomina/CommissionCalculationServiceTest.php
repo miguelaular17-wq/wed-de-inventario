@@ -23,7 +23,7 @@ class CommissionCalculationServiceTest extends TestCase
         parent::setUp();
         $this->setUpNominaSchema();
         NominaConfig::put('descuento_venta_pct', 0);
-        NominaConfig::put('comision_supervisor_pct', 0.10);
+        NominaConfig::put('comision_supervisor_pct', 0.05);
         NominaConfig::put('comision_marketing_pct', 0.10);
         NominaConfig::put('comision_telefonia_pct', 0.20);
         NominaConfig::put('comision_otros_pct', 1);
@@ -69,7 +69,7 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(1500.0, $resultado['base']);
     }
 
-    public function test_supervisor_de_sede_cobra_cero_punto_diez_sobre_toda_la_tienda(): void
+    public function test_supervisor_de_sede_cobra_cero_punto_cero_cinco_sobre_toda_la_tienda(): void
     {
         $empleado = $this->empleado(NominaEmpleado::COMISION_SUPERVISOR_SEDE, 'SUP-001', true);
         $periodo = $this->periodo();
@@ -78,7 +78,7 @@ class CommissionCalculationServiceTest extends TestCase
 
         $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
 
-        $this->assertSame(1.0, $resultado['total']);
+        $this->assertSame(0.5, $resultado['total']);
         $this->assertSame(1000.0, $resultado['base']);
         $this->assertDatabaseCount('nomina_comision_registros', 1);
     }
@@ -116,7 +116,7 @@ class CommissionCalculationServiceTest extends TestCase
         NominaConfig::put('descuento_venta_pct', 20);
         $empleado = $this->empleado(NominaEmpleado::COMISION_SERVICIO_TECNICO, 'TEC-001', false, true);
         $periodo = $this->periodo();
-        $this->venta('TEC-001', 1000);
+        $this->venta('TEC-001', 1000, ['nombre_producto' => 'SERVICIO TECNICO']);
         DB::table('flujo_cajas')->insert([
             'fecha' => '2026-08-10',
             'tipo' => 'egreso',
@@ -131,9 +131,51 @@ class CommissionCalculationServiceTest extends TestCase
 
         $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
 
-        $this->assertSame(800.0, $resultado['base'] + $resultado['gastos']);
+        $this->assertSame(800.0, $resultado['ventas_st']);
+        $this->assertSame(500.0, $resultado['base_st']);
         $this->assertSame(300.0, $resultado['gastos']);
         $this->assertSame(250.0, $resultado['total']);
+    }
+
+    public function test_servicio_tecnico_aplica_058_solo_a_st_y_el_resto_como_vendedor(): void
+    {
+        NominaConfig::put('descuento_venta_pct', 0);
+        $empleado = $this->empleado(NominaEmpleado::COMISION_SERVICIO_TECNICO, 'TEC-MIX', false, true);
+        $periodo = $this->periodo();
+        $otrosId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-MORRAL',
+            'nombre' => 'Morral',
+            'categoria' => 'PERFUMERIA',
+            'subcategoria' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->venta('TEC-MIX', 304, ['nombre_producto' => 'SERVICIO TECNICO', 'precio_neto' => 304]);
+        $this->venta('TEC-MIX', 49.76, [
+            'producto_id' => $otrosId,
+            'nombre_producto' => 'MORRAL 2EN1 NINA',
+        ]);
+        DB::table('flujo_cajas')->insert([
+            'fecha' => '2026-08-10',
+            'tipo' => 'egreso',
+            'tipo_gasto' => '058 - SERVICIO TECNICO (GARANTIAS)',
+            'nomina_empleado_id' => $empleado->id,
+            'monto_usd' => 58.39,
+            'monto_bs' => 0,
+            'tasa_cambio' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(304.0, $resultado['ventas_st']);
+        $this->assertSame(58.39, $resultado['gastos']);
+        $this->assertSame(245.61, $resultado['base_st']);
+        $this->assertSame(122.81, $resultado['comision_st']);
+        $this->assertSame(49.76, $resultado['base_otros']);
+        $this->assertSame(0.5, $resultado['comision_otros']);
+        $this->assertSame(123.31, $resultado['total']);
     }
 
     public function test_liquidacion_suma_abono_aplica_retencion_y_no_usa_neto(): void
