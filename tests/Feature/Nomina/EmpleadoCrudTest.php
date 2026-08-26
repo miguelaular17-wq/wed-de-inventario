@@ -213,7 +213,7 @@ class EmpleadoCrudTest extends TestCase
 
         $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'abonos']))
             ->assertOk()
-            ->assertSee('Registrar abono de quincena')
+            ->assertSee('Registrar adelanto de quincena')
             ->assertDontSee('No hay préstamos activos.');
 
         $this->post(route('nomina.abonos_sueldo.store', $empleado), [

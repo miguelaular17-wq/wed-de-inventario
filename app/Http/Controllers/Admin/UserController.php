@@ -52,6 +52,7 @@ class UserController extends Controller
             'sedes' => config('inventario.sedes_locales'),
             'casheaLevels' => $casheaLevels,
             'assignablePermissions' => config('permissions.assignable'),
+            'permissionGroups' => config('permissions.groups'),
             'rolePermissions' => config('permissions.roles'),
         ]);
     }

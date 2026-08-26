@@ -23,8 +23,27 @@
     }
     $isSedeStaff = in_array($u->role, ['supervisor', 'telefonia', 'sede'], true);
 
+    $gerencialItems = [];
+    if ($u->canAccess('gerencial')) {
+        $gerencialItems[] = $link('Dashboard', route('gerencial.dashboard'), request()->routeIs('gerencial.dashboard'));
+    }
+    if ($u->canAccess('gerencial.rentabilidad')) {
+        $gerencialItems[] = $link('Rentabilidad', route('gerencial.rentabilidad'), request()->routeIs('gerencial.rentabilidad'));
+    }
+    if ($u->canAccess('gerencial.devoluciones')) {
+        $gerencialItems[] = $link('Devoluciones', route('gerencial.devoluciones'), request()->routeIs('gerencial.devoluciones'));
+    }
+    if ($u->canAccess('gerencial.valorizados')) {
+        $gerencialItems[] = $link('Inventario', route('gerencial.valorizados'), request()->routeIs('gerencial.valorizados'));
+    }
+    if ($u->canAccess('gerencial.ajustes')) {
+        $gerencialItems[] = $link('Ajustes', route('gerencial.ajustes'), request()->routeIs('gerencial.ajustes'));
+    }
+
     if ($u->role === 'admin') {
-        $nav[] = $link('Gerencial', route('gerencial.dashboard'), request()->routeIs('gerencial.*'));
+        if ($gerencialItems) {
+            $nav[] = count($gerencialItems) === 1 ? $gerencialItems[0] : $drop('Gerencial', $gerencialItems);
+        }
         $nav[] = $link('Dashboard', route('admin.dashboard'), request()->routeIs('admin.dashboard'), 'admin-dashboard');
         $nav[] = $drop('Sistema', [
             $link('Movimientos', route('admin.movimientos.index'), request()->routeIs('admin.movimientos.*'), 'admin-movimientos'),
@@ -36,7 +55,11 @@
 
     if ($u->isGerente()) {
         $nav[] = $link('Gerencial', route('admin.dashboard'), request()->routeIs('admin.dashboard'));
-        $nav[] = $link('Ventas gerenciales', route('gerencial.dashboard'), request()->routeIs('gerencial.*'));
+        if ($gerencialItems) {
+            $nav[] = count($gerencialItems) === 1 ? $gerencialItems[0] : $drop('Indicadores', $gerencialItems);
+        }
+    } elseif ($u->role !== 'admin' && $gerencialItems) {
+        $nav[] = count($gerencialItems) === 1 ? $gerencialItems[0] : $drop('Gerencial', $gerencialItems);
     }
 
     if ($sedeItems) {

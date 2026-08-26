@@ -549,6 +549,14 @@
                                     title="Editar egreso"
                                     style="background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">✏️</button>
                                 @endif
+                                @if(auth()->user()->canAccess('finanzas.eliminar'))
+                                <form method="POST" action="{{ route('finanzas.destroy_egreso', $mov->id) }}" style="display:inline;" onsubmit="return confirm('¿Seguro que deseas eliminar este egreso? Esta acción no se puede deshacer.');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" title="Eliminar egreso"
+                                        style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:4px;padding:3px 7px;font-size:0.8rem;cursor:pointer;">🗑️</button>
+                                </form>
+                                @endif
                             </td>
                         </tr>
                     @empty
@@ -660,6 +668,14 @@
                                     title="Editar egreso"
                                     style="background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">✏️</button>
                                 @endif
+                                @if(auth()->user()->canAccess('finanzas.eliminar'))
+                                <form method="POST" action="{{ route('finanzas.destroy_egreso', $mov->id) }}" style="display:inline;" onsubmit="return confirm('¿Seguro que deseas eliminar este avance o egreso? Esta acción no se puede deshacer.');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" title="Eliminar avance o egreso"
+                                        style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:4px;padding:3px 7px;font-size:0.8rem;cursor:pointer;">🗑️</button>
+                                </form>
+                                @endif
                             </td>
                         </tr>
                     @empty
@@ -760,6 +776,14 @@
                                         title="Editar egreso"
                                         style="background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">✏️</button>
                                     @endif
+                                    @if(auth()->user()->canAccess('finanzas.eliminar'))
+                                    <form method="POST" action="{{ route('finanzas.destroy_egreso', $mov->id) }}" style="display:inline;" onsubmit="return confirm('¿Seguro que deseas eliminar este pago en divisas? Esta acción no se puede deshacer.');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" title="Eliminar pago en divisas"
+                                            style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:4px;padding:3px 7px;font-size:0.8rem;cursor:pointer;">🗑️</button>
+                                    </form>
+                                    @endif
                                 </td>
                             </tr>
                         @empty
@@ -858,6 +882,14 @@
                                 <button type="button" onclick='abrirEditarEgreso(@json($mov))'
                                     title="Editar traslado"
                                     style="background: #ede9fe; color: #7c3aed; border: 1px solid #ddd6fe; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">✏️</button>
+                                @endif
+                                @if(auth()->user()->canAccess('finanzas.eliminar'))
+                                <form method="POST" action="{{ route('finanzas.destroy_egreso', $mov->id) }}" style="display:inline;" onsubmit="return confirm('¿Seguro que deseas eliminar esta transferencia? Esta acción no se puede deshacer.');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" title="Eliminar transferencia"
+                                        style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:4px;padding:3px 7px;font-size:0.8rem;cursor:pointer;">🗑️</button>
+                                </form>
                                 @endif
                             </td>
                         </tr>
@@ -1345,6 +1377,7 @@
 function descargarReporteBusqueda() {
     Swal.fire({
         title: 'Selecciona las tablas',
+        text: 'El reporte se descargará en Excel.',
         html: `
             <div style="text-align: left; margin: 15px auto; width: fit-content; display: flex; flex-direction: column; gap: 10px;">
                 <label style="cursor: pointer;"><input type="checkbox" id="rep_egresos" value="egreso_realizado" checked style="margin-right: 8px;"> Egresos Realizados</label>
@@ -1354,7 +1387,7 @@ function descargarReporteBusqueda() {
             </div>
         `,
         showCancelButton: true,
-        confirmButtonText: 'Generar',
+        confirmButtonText: 'Descargar Excel',
         cancelButtonText: 'Cancelar',
         preConfirm: () => {
             let selected = [];

@@ -134,7 +134,7 @@ class GerencialDashboardService
      * @param  list<string>  $sedes
      * @return array<string, array<string, float|int|string>>
      */
-    private function kpisPorSede(
+    public function kpisPorSede(
         Carbon $inicio,
         Carbon $fin,
         array $sedes,
@@ -244,7 +244,7 @@ class GerencialDashboardService
     /**
      * @param  list<string>  $sedes
      */
-    private function queryLineas(
+    public function queryLineas(
         Carbon $inicio,
         Carbon $fin,
         array $sedes,
@@ -277,7 +277,7 @@ class GerencialDashboardService
         return $query;
     }
 
-    private function sqlImporte(string $tipo): string
+    public function sqlImporte(string $tipo): string
     {
         $campo = match ($tipo) {
             'neto' => Schema::hasColumn('ventas_detalle', 'precio_neto')
@@ -295,7 +295,7 @@ class GerencialDashboardService
         return "SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad) ELSE ABS(vd.cantidad) END)";
     }
 
-    private function sqlImporteDev(): string
+    public function sqlImporteDev(): string
     {
         $campo = Schema::hasColumn('ventas_detalle', 'precio_neto')
             ? 'COALESCE(vd.precio_neto, vd.precio_venta)'
@@ -529,5 +529,271 @@ class GerencialDashboardService
         }
 
         return round((($actual - $anterior) / abs($anterior)) * 100, 1);
+    }
+
+    /**
+     * @param  array{inicio:Carbon,fin:Carbon}  $periodo
+     * @return array<string, mixed>
+     */
+    public function devoluciones(array $periodo, ?string $sede, ?string $vendedor, ?string $producto): array
+    {
+        $sedes = $this->filtrarSedes($sede);
+        $kpis = [
+            'documentos' => 0,
+            'usd' => 0.0,
+            'bs' => 0.0,
+            'unidades' => 0.0,
+        ];
+
+        if (Schema::hasTable('ventas_documentos')) {
+            $query = DB::table('ventas_documentos')
+                ->whereBetween('fecha', [$periodo['inicio']->toDateString(), $periodo['fin']->toDateString()])
+                ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes)
+                ->whereRaw("UPPER(TRIM(tipo_documento)) = 'DEV'")
+                ->whereRaw("LOWER(TRIM(COALESCE(estado, ''))) = 'registrado'");
+
+            $kpisRow = (clone $query)
+                ->selectRaw('COUNT(*) as documentos')
+                ->selectRaw('SUM(ABS(total_neto_usd)) as usd')
+                ->selectRaw('SUM(ABS(total_neto_bs)) as bs')
+                ->first();
+            $kpis['documentos'] = (int) ($kpisRow->documentos ?? 0);
+            $kpis['usd'] = round((float) ($kpisRow->usd ?? 0), 2);
+            $kpis['bs'] = round((float) ($kpisRow->bs ?? 0), 2);
+        }
+
+        $porProducto = collect();
+        $porSede = collect();
+        $porMotivo = collect();
+        $motivoTop = null;
+        if (Schema::hasTable('ventas_detalle')) {
+            $lineasQuery = $this->queryLineas($periodo['inicio'], $periodo['fin'], $sedes, null, $vendedor, $producto)
+                ->whereRaw("UPPER(TRIM(vd.tipo_documento)) = 'DEV'");
+
+            $importe = Schema::hasColumn('ventas_detalle', 'precio_neto')
+                ? 'COALESCE(vd.precio_neto, vd.precio_venta)'
+                : 'vd.precio_venta';
+
+            $agg = (clone $lineasQuery)
+                ->selectRaw('COUNT(DISTINCT vd.numero_documento) as documentos')
+                ->selectRaw('SUM(ABS(vd.cantidad)) as unidades')
+                ->selectRaw("SUM(ABS(vd.cantidad * {$importe})) as usd")
+                ->first();
+            $kpis['unidades'] = round((float) ($agg->unidades ?? 0), 2);
+            if ($kpis['documentos'] === 0) {
+                $kpis['documentos'] = (int) ($agg->documentos ?? 0);
+            }
+            if ($kpis['usd'] === 0.0) {
+                $kpis['usd'] = round((float) ($agg->usd ?? 0), 2);
+            }
+
+            $porProducto = (clone $lineasQuery)
+                ->selectRaw('COALESCE(vd.nombre_producto, vd.codigo_producto, \'Sin nombre\') as nombre')
+                ->selectRaw('COALESCE(vd.codigo_producto, \'\') as codigo')
+                ->selectRaw('SUM(ABS(vd.cantidad)) as unidades')
+                ->selectRaw("SUM(ABS(vd.cantidad * {$importe})) as usd")
+                ->groupBy(DB::raw('COALESCE(vd.nombre_producto, vd.codigo_producto, \'Sin nombre\')'), DB::raw("COALESCE(vd.codigo_producto, '')"))
+                ->orderByDesc('usd')
+                ->limit(20)
+                ->get();
+
+            $porSede = (clone $lineasQuery)
+                ->selectRaw('UPPER(TRIM(vd.sede)) as sede')
+                ->selectRaw('COUNT(DISTINCT vd.numero_documento) as documentos')
+                ->selectRaw('SUM(ABS(vd.cantidad)) as unidades')
+                ->selectRaw("SUM(ABS(vd.cantidad * {$importe})) as usd")
+                ->groupBy(DB::raw('UPPER(TRIM(vd.sede))'))
+                ->orderByDesc('usd')
+                ->get();
+
+            $porMotivo = collect();
+            $motivoTop = null;
+            if (Schema::hasColumn('ventas_detalle', 'motivo_devolucion')) {
+                $porMotivo = (clone $lineasQuery)
+                    ->selectRaw("COALESCE(NULLIF(TRIM(vd.motivo_devolucion), ''), 'Sin motivo') as motivo")
+                    ->selectRaw('COUNT(*) as veces')
+                    ->selectRaw('SUM(ABS(vd.cantidad)) as unidades')
+                    ->selectRaw("SUM(ABS(vd.cantidad * {$importe})) as usd")
+                    ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(vd.motivo_devolucion), ''), 'Sin motivo')"))
+                    ->orderByDesc('veces')
+                    ->limit(15)
+                    ->get();
+                $motivoTop = $porMotivo->first();
+            }
+        }
+
+        return compact('kpis', 'porProducto', 'porSede', 'porMotivo', 'motivoTop');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function valorizados(?string $sede, ?string $categoria, ?string $producto): array
+    {
+        $sedes = $this->filtrarSedes($sede);
+        $porSede = $this->inventarioPorSede($sedes);
+        $porCategoria = collect();
+        $productos = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 50);
+
+        if (! Schema::hasTable('stock_actual')) {
+            return [
+                'por_sede' => $porSede,
+                'por_categoria' => $porCategoria,
+                'productos' => $productos,
+                'total_unidades' => array_sum(array_column($porSede, 'unidades')),
+                'total_valor' => array_sum(array_column($porSede, 'valor')),
+            ];
+        }
+
+        $query = DB::table('stock_actual as sa')
+            ->whereIn(DB::raw('UPPER(TRIM(sa.sede))'), $sedes)
+            ->where('sa.existencia', '>', 0);
+
+        $joinProductos = Schema::hasTable('productos');
+        if ($joinProductos) {
+            $query->leftJoin('productos as p', 'p.id', '=', 'sa.producto_id');
+        }
+        if ($categoria && $joinProductos) {
+            $query->whereRaw('UPPER(TRIM(p.categoria)) = ?', [mb_strtoupper(trim($categoria), 'UTF-8')]);
+        }
+        if ($producto) {
+            $like = '%'.$producto.'%';
+            $query->where(function ($q) use ($like, $joinProductos) {
+                if ($joinProductos) {
+                    $q->where('p.codigo', 'like', $like)->orWhere('p.nombre', 'like', $like);
+                }
+                if (Schema::hasColumn('stock_actual', 'codigo_producto')) {
+                    $q->orWhere('sa.codigo_producto', 'like', $like);
+                }
+            });
+        }
+
+        $costoSql = $joinProductos && Schema::hasColumn('productos', 'costo_actual')
+            ? 'COALESCE(p.costo_actual, 0)'
+            : '0';
+
+        if ($joinProductos) {
+            $porCategoria = (clone $query)
+                ->selectRaw("COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sin categoría') as categoria")
+                ->selectRaw('SUM(sa.existencia) as unidades')
+                ->selectRaw("SUM(sa.existencia * {$costoSql}) as valor")
+                ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sin categoría')"))
+                ->orderByDesc('valor')
+                ->get();
+        }
+
+        $productos = (clone $query)
+            ->selectRaw('UPPER(TRIM(sa.sede)) as sede')
+            ->selectRaw($joinProductos ? 'COALESCE(p.codigo, \'\') as codigo' : '\'\' as codigo')
+            ->selectRaw($joinProductos ? 'COALESCE(p.nombre, \'Sin nombre\') as nombre' : '\'Sin nombre\' as nombre')
+            ->selectRaw($joinProductos ? "COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sin categoría') as categoria" : '\'Sin categoría\' as categoria')
+            ->selectRaw('sa.existencia as unidades')
+            ->selectRaw("{$costoSql} as costo")
+            ->selectRaw("sa.existencia * {$costoSql} as valor")
+            ->orderByDesc(DB::raw("sa.existencia * {$costoSql}"))
+            ->paginate(60)
+            ->withQueryString();
+
+        $totalUnidades = array_sum(array_column($porSede, 'unidades'));
+        $totalValor = array_sum(array_column($porSede, 'valor'));
+        if ($categoria || $producto) {
+            $tot = (clone $query)
+                ->selectRaw('SUM(sa.existencia) as unidades')
+                ->selectRaw("SUM(sa.existencia * {$costoSql}) as valor")
+                ->first();
+            $totalUnidades = (float) ($tot->unidades ?? 0);
+            $totalValor = (float) ($tot->valor ?? 0);
+        }
+
+        return [
+            'por_sede' => $porSede,
+            'por_categoria' => $porCategoria,
+            'productos' => $productos,
+            'total_unidades' => $totalUnidades,
+            'total_valor' => $totalValor,
+        ];
+    }
+
+    /**
+     * @param  array{inicio:Carbon,fin:Carbon}  $periodo
+     * @return array<string, mixed>
+     */
+    public function ajustesConsolidados(array $periodo, ?string $sede, ?string $tipo): array
+    {
+        $sedes = $this->filtrarSedes($sede);
+        $vacio = [
+            'kpis' => ['movimientos' => 0, 'unidades' => 0.0, 'valor' => 0.0],
+            'por_sede_tipo' => collect(),
+            'por_motivo' => collect(),
+            'motivo_top' => null,
+        ];
+        if (! Schema::hasTable('ajustes_inventario')) {
+            return $vacio;
+        }
+
+        $query = DB::table('ajustes_inventario')
+            ->whereBetween('fecha', [$periodo['inicio']->toDateString(), $periodo['fin']->toDateString()])
+            ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes);
+        if ($tipo) {
+            $query->whereRaw('UPPER(TRIM(tipo_movimiento)) = ?', [mb_strtoupper(trim($tipo), 'UTF-8')]);
+        }
+
+        $kpisRow = (clone $query)
+            ->selectRaw('COUNT(*) as movimientos')
+            ->selectRaw('SUM(cantidad) as unidades')
+            ->selectRaw('SUM(cantidad * COALESCE(costo_unitario, 0)) as valor')
+            ->first();
+
+        $porSedeTipo = (clone $query)
+            ->selectRaw('UPPER(TRIM(sede)) as sede')
+            ->selectRaw('UPPER(TRIM(tipo_movimiento)) as tipo_movimiento')
+            ->selectRaw('COUNT(*) as movimientos')
+            ->selectRaw('SUM(cantidad) as unidades')
+            ->selectRaw('SUM(cantidad * COALESCE(costo_unitario, 0)) as valor')
+            ->groupBy(DB::raw('UPPER(TRIM(sede))'), DB::raw('UPPER(TRIM(tipo_movimiento))'))
+            ->orderBy('sede')
+            ->orderBy('tipo_movimiento')
+            ->get();
+
+        $porMotivo = collect();
+        $motivoTop = null;
+        if (Schema::hasColumn('ajustes_inventario', 'motivo')) {
+            $porMotivo = (clone $query)
+                ->selectRaw("COALESCE(NULLIF(TRIM(motivo), ''), 'Sin motivo') as motivo")
+                ->selectRaw('COUNT(*) as veces')
+                ->selectRaw('SUM(cantidad) as unidades')
+                ->selectRaw('SUM(cantidad * COALESCE(costo_unitario, 0)) as valor')
+                ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(motivo), ''), 'Sin motivo')"))
+                ->orderByDesc('veces')
+                ->limit(15)
+                ->get();
+            $motivoTop = $porMotivo->first();
+        }
+
+        return [
+            'kpis' => [
+                'movimientos' => (int) ($kpisRow->movimientos ?? 0),
+                'unidades' => round((float) ($kpisRow->unidades ?? 0), 2),
+                'valor' => round((float) ($kpisRow->valor ?? 0), 2),
+            ],
+            'por_sede_tipo' => $porSedeTipo,
+            'por_motivo' => $porMotivo,
+            'motivo_top' => $motivoTop,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function filtrarSedes(?string $sede): array
+    {
+        $sedes = $this->sedesVentas();
+        if ($sede && $sede !== 'todas') {
+            $sede = strtoupper(trim($sede));
+
+            return in_array($sede, $sedes, true) ? [$sede] : $sedes;
+        }
+
+        return $sedes;
     }
 }

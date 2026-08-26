@@ -76,7 +76,12 @@ trait CreatesNominaSchema
                 $table->string('cliente')->nullable();
                 $table->string('vendedor')->nullable();
                 $table->string('factura_origen')->nullable();
+                $table->text('motivo_devolucion')->nullable();
                 $table->boolean('anulado')->default(false);
+            });
+        } elseif (! Schema::hasColumn('ventas_detalle', 'motivo_devolucion')) {
+            Schema::table('ventas_detalle', function (Blueprint $table) {
+                $table->text('motivo_devolucion')->nullable();
             });
         }
 
@@ -126,8 +131,13 @@ trait CreatesNominaSchema
                 $table->string('tipo_movimiento', 8);
                 $table->string('numero_documento', 32);
                 $table->date('fecha');
+                $table->unsignedBigInteger('producto_id')->nullable();
+                $table->string('codigo_producto', 64)->nullable();
+                $table->string('nombre_producto')->nullable();
                 $table->decimal('cantidad', 12, 2)->default(0);
                 $table->decimal('costo_unitario', 12, 2)->default(0);
+                $table->text('motivo')->nullable();
+                $table->string('usuario')->nullable();
             });
         }
 

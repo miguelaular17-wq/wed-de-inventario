@@ -93,8 +93,22 @@ Route::middleware('auth')->group(function () {
     Route::post('/tutorial/reiniciar', [\App\Http\Controllers\TutorialController::class, 'restart'])->name('tutorial.restart');
 });
 
-Route::middleware(['auth', EnsureAdmin::class])->group(function () {
-    Route::get('/gerencial', [GerencialController::class, 'dashboard'])->name('gerencial.dashboard');
+Route::middleware(['auth'])->prefix('gerencial')->group(function () {
+    Route::get('/', [GerencialController::class, 'dashboard'])
+        ->middleware('permission:gerencial')
+        ->name('gerencial.dashboard');
+    Route::get('/devoluciones', [GerencialController::class, 'devoluciones'])
+        ->middleware('permission:gerencial.devoluciones')
+        ->name('gerencial.devoluciones');
+    Route::get('/valorizados', [GerencialController::class, 'valorizados'])
+        ->middleware('permission:gerencial.valorizados')
+        ->name('gerencial.valorizados');
+    Route::get('/ajustes', [GerencialController::class, 'ajustes'])
+        ->middleware('permission:gerencial.ajustes')
+        ->name('gerencial.ajustes');
+    Route::get('/rentabilidad', [GerencialController::class, 'rentabilidad'])
+        ->middleware('permission:gerencial.rentabilidad')
+        ->name('gerencial.rentabilidad');
 });
 
 Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')->group(function () {
@@ -313,6 +327,10 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
         Route::post('/gastos-fijos/agregar', [FinanzasController::class, 'agregarGastoFijo'])->name('finanzas.gastos_fijos.agregar');
         Route::post('/gastos-fijos/eliminar', [FinanzasController::class, 'eliminarGastoFijoFila'])->name('finanzas.gastos_fijos.eliminar');
     });
+
+    Route::delete('/flujo-caja/egreso/{id}', [FinanzasController::class, 'destroyEgreso'])
+        ->middleware('permission:finanzas.eliminar')
+        ->name('finanzas.destroy_egreso');
 });
 
 // Conciliaciones routes - solo admin y contabilidad

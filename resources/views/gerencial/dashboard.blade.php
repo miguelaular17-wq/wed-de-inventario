@@ -16,6 +16,7 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">Dashboard gerencial</h1>
+            <p class="gerencial-pregunta">¿Cómo está funcionando la empresa?</p>
             <p class="muted" style="margin:4px 0 0;">
                 {{ $periodo['etiqueta'] }}
                 · comparado con {{ $periodo['anterior_inicio']->format('d/m/Y') }} al {{ $periodo['anterior_fin']->format('d/m/Y') }}
@@ -23,67 +24,13 @@
         </div>
     </div>
 
-    <form method="GET" action="{{ route('gerencial.dashboard') }}" class="nomina-card" style="margin-top:16px;">
-        <div class="nomina-form-grid">
-            <div class="field">
-                <label>Período</label>
-                <select name="preset" onchange="this.form.hasta.disabled = this.value !== 'personalizado'; this.form.desde.disabled = this.value !== 'personalizado';">
-                    <option value="mes" @selected($filtros['preset']==='mes')>Este mes</option>
-                    <option value="mes_anterior" @selected($filtros['preset']==='mes_anterior')>Mes anterior</option>
-                    <option value="quincena" @selected($filtros['preset']==='quincena')>Quincena actual</option>
-                    <option value="personalizado" @selected($filtros['preset']==='personalizado')>Rango</option>
-                </select>
-            </div>
-            <div class="field">
-                <label>Desde</label>
-                <input type="date" name="desde" value="{{ $filtros['desde'] }}" @disabled($filtros['preset']!=='personalizado')>
-            </div>
-            <div class="field">
-                <label>Hasta</label>
-                <input type="date" name="hasta" value="{{ $filtros['hasta'] }}" @disabled($filtros['preset']!=='personalizado')>
-            </div>
-            <div class="field">
-                <label>Sede</label>
-                <select name="sede">
-                    <option value="todas">Todas las tiendas</option>
-                    @foreach($sedes as $sede)
-                        <option value="{{ $sede }}" @selected($filtros['sede']===$sede)>{{ $sede }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="field">
-                <label>Categoría</label>
-                <select name="categoria">
-                    <option value="">Todas</option>
-                    @foreach($catalogos['categorias'] as $cat)
-                        <option value="{{ $cat }}" @selected($filtros['categoria']===$cat)>{{ $cat }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="field">
-                <label>Vendedor</label>
-                <select name="vendedor">
-                    <option value="">Todos</option>
-                    @foreach($catalogos['vendedores'] as $vend)
-                        <option value="{{ $vend }}" @selected($filtros['vendedor']===$vend)>{{ $vend }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="field">
-                <label>Producto</label>
-                <input name="producto" value="{{ $filtros['producto'] }}" placeholder="Código o nombre">
-            </div>
-            <div class="field" style="display:flex;align-items:flex-end;">
-                <button class="btn primary" type="submit">Aplicar</button>
-            </div>
-        </div>
-        <input type="hidden" name="ranking" value="{{ $filtros['ranking'] }}">
-        @if($usaLineas)
-            <p class="muted" style="margin:8px 0 0;">Con producto, categoría o vendedor el total es por líneas, no el de la factura de Profit.</p>
-        @else
-            <p class="muted" style="margin:8px 0 0;">Las ventas son el total de factura de Profit (FAC − DEV, solo registrados).</p>
-        @endif
-    </form>
+    @include('gerencial._tabs')
+    @include('gerencial._filtros', ['modo' => 'completo', 'action' => route('gerencial.dashboard')])
+    @if($usaLineas)
+        <p class="muted" style="margin:8px 0 0;">Con producto, categoría o vendedor el total es por líneas, no el de la factura de Profit.</p>
+    @else
+        <p class="muted" style="margin:8px 0 0;">Las ventas son el total de factura de Profit (FAC − DEV, solo registrados).</p>
+    @endif
 
     <h3 style="margin:20px 0 8px;">Compañía</h3>
     <div class="nomina-kpis">
@@ -100,6 +47,9 @@
             <span>Devoluciones</span>
             <strong>{{ number_format($total['devoluciones']) }}</strong>
             <div class="muted" style="font-size:.75rem;">${{ $fmt($total['devoluciones_usd']) }}</div>
+            @if(auth()->user()->canAccess('gerencial.devoluciones'))
+                <a href="{{ route('gerencial.devoluciones', request()->except('page')) }}" class="gerencial-kpi-link">Ver módulo</a>
+            @endif
         </div>
         <div class="nomina-kpi">
             <span>Unidades vendidas</span>
@@ -108,16 +58,25 @@
         <div class="nomina-kpi">
             <span>Margen</span>
             <strong>${{ $fmt($total['margen_usd']) }}</strong>
+            @if(auth()->user()->canAccess('gerencial.rentabilidad'))
+                <a href="{{ route('gerencial.rentabilidad', request()->except(['page', 'ranking'])) }}" class="gerencial-kpi-link">Ver rentabilidad</a>
+            @endif
         </div>
         <div class="nomina-kpi">
             <span>Inventario (hoy)</span>
             <strong>${{ $fmt($total['inventario_valor']) }}</strong>
             <div class="muted" style="font-size:.75rem;">{{ $fmt($total['inventario_unidades'], 0) }} unds</div>
+            @if(auth()->user()->canAccess('gerencial.valorizados'))
+                <a href="{{ route('gerencial.valorizados', request()->except(['page', 'ranking'])) }}" class="gerencial-kpi-link">Ver valorizado</a>
+            @endif
         </div>
         <div class="nomina-kpi">
             <span>Ajustes del período</span>
             <strong>{{ $fmt($total['ajustes_unidades'], 0) }}</strong>
             <div class="muted" style="font-size:.75rem;">${{ $fmt($total['ajustes_valor']) }}</div>
+            @if(auth()->user()->canAccess('gerencial.ajustes'))
+                <a href="{{ route('gerencial.ajustes', request()->except(['page', 'ranking'])) }}" class="gerencial-kpi-link">Ver consolidado</a>
+            @endif
         </div>
     </div>
 

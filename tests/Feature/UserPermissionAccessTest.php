@@ -61,6 +61,16 @@ class UserPermissionAccessTest extends TestCase
         $this->assertFalse($user->canAccess('conciliaciones'));
     }
 
+    public function test_finanzas_role_can_delete_egresos_transfers_divisas_and_avances(): void
+    {
+        $finanzas = $this->makeUser(User::ROLE_FINANZAS);
+        $auditor = $this->makeUser(User::ROLE_AUDITOR);
+
+        $this->assertTrue($finanzas->canAccess('finanzas.eliminar'));
+        $this->assertFalse($auditor->canAccess('finanzas.eliminar'));
+        $this->assertFalse($this->makeUser(User::ROLE_VENDEDOR)->canAccess('finanzas.eliminar'));
+    }
+
     private function makeUser(string $role): User
     {
         return User::create([

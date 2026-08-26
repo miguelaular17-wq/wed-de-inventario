@@ -27,7 +27,7 @@ class AbonoSueldoController extends Controller
 
         return redirect()
             ->route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'abonos'])
-            ->with('status', 'Abono registrado. Se descontará del sueldo en esa quincena.');
+            ->with('status', 'Adelanto registrado. Se descontará del sueldo en esa quincena.');
     }
 
     public function cancelar(Request $request, NominaAbonoSueldo $abono): RedirectResponse
@@ -40,6 +40,6 @@ class AbonoSueldoController extends Controller
 
         return redirect()
             ->route('nomina.empleados.show', ['empleado' => $abono->empleado_id, 'tab' => 'abonos'])
-            ->with('status', 'Abono cancelado. El historial se conserva.');
+            ->with('status', 'Adelanto cancelado. El historial se conserva.');
     }
 }

@@ -10,7 +10,7 @@
         'comisiones' => 'Comisiones',
         'nomina' => 'Nómina',
         'prestamos' => 'Préstamos',
-        'abonos' => 'Abonos',
+        'abonos' => 'Adelantos',
         'deducciones' => 'Deducciones',
         'historial' => 'Historial',
     ];
@@ -39,7 +39,7 @@
         <div class="nomina-kpi"><span>Comisiones tienda</span><strong>${{ number_format($comisionQuincena, 2) }}</strong></div>
         <div class="nomina-kpi"><span>Préstamos activos</span><strong>{{ $resumenPrestamos['cantidad'] }}</strong></div>
         <div class="nomina-kpi"><span>Saldo préstamos</span><strong>${{ number_format($resumenPrestamos['saldo'], 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Abonos pendientes</span><strong>${{ number_format($abonosPendientes, 2) }}</strong></div>
+        <div class="nomina-kpi"><span>Adelantos pendientes</span><strong>${{ number_format($abonosPendientes, 2) }}</strong></div>
         <div class="nomina-kpi"><span>Próxima cuota</span><strong>{{ $proxima ? $proxima->fecha_programada->format('d/m/Y') : '—' }}</strong></div>
     </div>
 
@@ -335,7 +335,7 @@
                 <div>
                     <h4>Deducciones</h4>
                     <ul>
-                        <li>Abonos de quincena pendientes: ${{ number_format($abonosPendientes, 2) }}</li>
+                        <li>Adelantos de quincena pendientes: ${{ number_format($abonosPendientes, 2) }}</li>
                         <li>Préstamos (cuota): se aplicará al cerrar la quincena</li>
                         <li>Ausencias: {{ $ausenciasTxt }}</li>
                         <li>Otras deducciones: —</li>
@@ -508,7 +508,7 @@
     @endif
 
     @if($tab === 'abonos')
-        <h3 style="margin-top:16px;">Registrar abono de quincena</h3>
+        <h3 style="margin-top:16px;">Registrar adelanto de quincena</h3>
         <p class="muted">El empleado pide un adelanto durante la quincena. Ese monto se descuenta de su sueldo al cerrar la nómina. No requiere préstamo.</p>
         <p><strong>Quincena actual:</strong> {{ $quincenaActual['etiqueta'] }} · Pendiente por descontar: ${{ number_format($abonosPendientes, 2) }}</p>
         <form method="POST" action="{{ route('nomina.abonos_sueldo.store', $empleado) }}" class="nomina-form-grid">
@@ -516,10 +516,10 @@
             <div class="field"><label>Fecha</label><input type="date" name="fecha" value="{{ now()->format('Y-m-d') }}" required></div>
             <div class="field"><label>Monto</label><input type="number" step="0.01" min="0.01" name="monto" required></div>
             <div class="field field-wide"><label>Motivo</label><input name="motivo" placeholder="Opcional"></div>
-            <div class="field" style="display:flex; align-items:flex-end;"><button class="btn primary" type="submit">Registrar abono</button></div>
+            <div class="field" style="display:flex; align-items:flex-end;"><button class="btn primary" type="submit">Registrar adelanto</button></div>
         </form>
 
-        <h3>Historial de abonos</h3>
+        <h3>Historial de adelantos</h3>
         <table class="data-table">
             <thead><tr><th>Fecha</th><th>Quincena</th><th>Monto</th><th>Estado</th><th>Usuario</th><th>Motivo</th><th></th></tr></thead>
             <tbody>
@@ -533,7 +533,7 @@
                         <td>{{ $abono->motivo ?: '—' }}</td>
                         <td>
                             @if($abono->isPendiente())
-                                <form method="POST" action="{{ route('nomina.abonos_sueldo.cancelar', $abono) }}" onsubmit="return confirm('¿Cancelar este abono? El historial se conserva.')">
+                                <form method="POST" action="{{ route('nomina.abonos_sueldo.cancelar', $abono) }}" onsubmit="return confirm('¿Cancelar este adelanto? El historial se conserva.')">
                                     @csrf
                                     <button class="btn secondary" type="submit">Cancelar</button>
                                 </form>
@@ -541,17 +541,17 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="muted">Sin abonos.</td></tr>
+                    <tr><td colspan="7" class="muted">Sin adelantos.</td></tr>
                 @endforelse
             </tbody>
         </table>
-        <p class="muted" style="margin-top:8px;">Los abonos no se eliminan. Al cerrar la quincena se descuentan del sueldo una sola vez.</p>
+        <p class="muted" style="margin-top:8px;">Los adelantos no se eliminan. Al cerrar la quincena se descuentan del sueldo una sola vez.</p>
     @endif
 
     @if($tab === 'deducciones')
-        <p class="muted" style="margin-top:16px;">Abonos de quincena y cuotas de préstamo descontados en nómina. Cada uno queda ligado al período para no cobrarse dos veces.</p>
+        <p class="muted" style="margin-top:16px;">Adelantos de quincena y cuotas de préstamo descontados en nómina. Cada uno queda ligado al período para no cobrarse dos veces.</p>
 
-        <h3>Abonos de sueldo</h3>
+        <h3>Adelantos de sueldo</h3>
         <table class="data-table">
             <thead><tr><th>Fecha</th><th>Quincena</th><th>Monto</th><th>Período</th><th>Estado</th></tr></thead>
             <tbody>
@@ -564,7 +564,7 @@
                         <td>{{ $abono->estado }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="muted">Sin abonos de sueldo.</td></tr>
+                    <tr><td colspan="5" class="muted">Sin adelantos de sueldo.</td></tr>
                 @endforelse
             </tbody>
         </table>
