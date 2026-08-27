@@ -69,6 +69,20 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(1500.0, $resultado['base']);
     }
 
+    public function test_ignora_ventas_de_sede_excluida_de_comision(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_VENTAS_PROPIAS, 'VEND-EXCL');
+        NominaSede::query()->where('codigo', 'CENTRO')->update(['excluir_comision' => true]);
+        $periodo = $this->periodo();
+        $this->venta('VEND-EXCL', 1000);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(0.0, $resultado['total']);
+        $this->assertSame(0.0, $resultado['base']);
+        $this->assertDatabaseCount('nomina_comision_registros', 0);
+    }
+
     public function test_supervisor_de_sede_cobra_cero_punto_cero_cinco_sobre_toda_la_tienda(): void
     {
         $empleado = $this->empleado(NominaEmpleado::COMISION_SUPERVISOR_SEDE, 'SUP-001', true);

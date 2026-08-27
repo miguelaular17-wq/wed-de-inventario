@@ -31,4 +31,16 @@ class SimpleXlsxWriterTest extends TestCase
         $zip->close();
         @unlink($tmp);
     }
+
+    public function test_no_falla_con_texto_invalido_para_xml(): void
+    {
+        $bin = SimpleXlsxWriter::toString([
+            'Reporte' => [
+                ["Motivo\x00con\x01control", "áéí"],
+            ],
+        ]);
+
+        $this->assertSame('PK', substr($bin, 0, 2));
+        $this->assertNotSame('', $bin);
+    }
 }

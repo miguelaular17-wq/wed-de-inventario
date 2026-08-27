@@ -15,6 +15,15 @@ class CommissionCalculationService
 {
     private const GASTO_SERVICIO_TECNICO = '058 - SERVICIO TECNICO (GARANTIAS)';
 
+    /** @var array<string, bool>|null */
+    private ?array $flags = null;
+
+    /** @var list<string>|null */
+    private ?array $sedesExcluidas = null;
+
+    /** @var list<array<string, mixed>> */
+    private array $registrosPendientes = [];
+
     public function __construct(
         private EmployeeSalesService $sales,
         private CommissionCategoryService $categorias,
@@ -23,7 +32,7 @@ class CommissionCalculationService
 
     public function limpiarPeriodo(NominaPeriodo $periodo): void
     {
-        if (Schema::hasTable('nomina_comision_registros')) {
+        if ($this->flag('nomina_comision_registros')) {
             NominaComisionRegistro::query()->where('periodo_id', $periodo->id)->delete();
         }
     }
@@ -40,17 +49,21 @@ class CommissionCalculationService
     {
         $vacio = $this->resultado($empleado, 0, 0, 0, 0);
 
-        if (! Schema::hasTable('ventas_detalle') || $this->sedeExcluida($empleado)) {
+        if (! $this->flag('ventas_detalle') || $this->sedeExcluida($empleado)) {
             return $vacio;
         }
 
-        return match ($empleado->modo_comision) {
-            NominaEmpleado::COMISION_VENTAS_PROPIAS => $this->ventasPropias($periodo, $empleado),
-            NominaEmpleado::COMISION_SUPERVISOR_SEDE => $this->supervisorSede($periodo, $empleado),
-            NominaEmpleado::COMISION_SUPERVISOR_EQUIPO => $this->supervisorEquipo($periodo, $empleado),
-            NominaEmpleado::COMISION_SERVICIO_TECNICO => $this->servicioTecnico($periodo, $empleado),
-            default => $vacio,
-        };
+        try {
+            return match ($empleado->modo_comision) {
+                NominaEmpleado::COMISION_VENTAS_PROPIAS => $this->ventasPropias($periodo, $empleado),
+                NominaEmpleado::COMISION_SUPERVISOR_SEDE => $this->supervisorSede($periodo, $empleado),
+                NominaEmpleado::COMISION_SUPERVISOR_EQUIPO => $this->supervisorEquipo($periodo, $empleado),
+                NominaEmpleado::COMISION_SERVICIO_TECNICO => $this->servicioTecnico($periodo, $empleado),
+                default => $vacio,
+            };
+        } finally {
+            $this->flushRegistros();
+        }
     }
 
     private function ventasPropias(NominaPeriodo $periodo, NominaEmpleado $empleado): array
@@ -60,9 +73,7 @@ class CommissionCalculationService
             return $this->resultado($empleado, 0, 0, 0, 0);
         }
 
-        $lineas = $this->lineasVentas($periodo, $claves)->get()
-            ->reject(fn ($linea) => $this->codigoSedeExcluido($linea->sede ?? null))
-            ->values();
+        $lineas = $this->lineasVentas($periodo, $claves)->get();
 
         $propias = $this->aplicarVentasPropias($periodo, $empleado, $lineas);
 
@@ -90,9 +101,7 @@ class CommissionCalculationService
 
         $lineas = $this->lineasVentas($periodo)
             ->whereRaw('UPPER(TRIM(vd.sede)) = ?', [mb_strtoupper(trim($codigoSede), 'UTF-8')])
-            ->get()
-            ->reject(fn ($linea) => $this->codigoSedeExcluido($linea->sede ?? null))
-            ->values();
+            ->get();
         $base = round($lineas->sum(fn ($linea) => $this->baseTotal($linea)), 2);
         $porcentaje = NominaConfig::getDecimal('comision_supervisor_pct', 0.05);
         $total = round($base * $porcentaje / 100, 2);
@@ -113,7 +122,7 @@ class CommissionCalculationService
             ->where('supervisor_id', $empleado->id)
             ->pluck('id');
 
-        if (Schema::hasTable('nomina_empleado_supervisores')) {
+        if ($this->flag('nomina_empleado_supervisores')) {
             $idsEquipo = $idsEquipo->merge(
                 DB::table('nomina_empleado_supervisores')
                     ->where('supervisor_id', $empleado->id)
@@ -136,9 +145,7 @@ class CommissionCalculationService
             return $this->resultado($empleado, 0, 0, 0, 0);
         }
 
-        $lineas = $this->lineasVentas($periodo, $claves)->get()
-            ->reject(fn ($linea) => $this->codigoSedeExcluido($linea->sede ?? null))
-            ->values();
+        $lineas = $this->lineasVentas($periodo, $claves)->get();
         $base = round($lineas->sum(fn ($linea) => $this->baseTotal($linea)), 2);
         $porcentaje = NominaConfig::getDecimal('comision_marketing_pct', 0.10);
         $total = round($base * $porcentaje / 100, 2);
@@ -163,9 +170,7 @@ class CommissionCalculationService
         $claves = $this->sales->claves($empleado);
         $lineas = $claves === []
             ? collect()
-            : $this->lineasVentas($periodo, $claves)->get()
-                ->reject(fn ($linea) => $this->codigoSedeExcluido($linea->sede ?? null))
-                ->values();
+            : $this->lineasVentas($periodo, $claves)->get();
 
         $lineasSt = $lineas->filter(fn ($linea) => $this->esLineaServicioTecnico($linea))->values();
         $lineasVenta = $lineas->reject(fn ($linea) => $this->esLineaServicioTecnico($linea))->values();
@@ -269,7 +274,7 @@ class CommissionCalculationService
 
     private function gastosServicioTecnico(NominaPeriodo $periodo, NominaEmpleado $empleado): float
     {
-        if (! Schema::hasTable('flujo_cajas') || ! Schema::hasColumn('flujo_cajas', 'nomina_empleado_id')) {
+        if (! $this->flag('flujo_cajas_st')) {
             return 0.0;
         }
 
@@ -292,14 +297,18 @@ class CommissionCalculationService
             ->whereBetween('vd.fecha', [$periodo->fecha_inicio->toDateString(), $periodo->fecha_fin->toDateString()])
             ->select('vd.*');
 
-        if (Schema::hasColumn('ventas_detalle', 'anulado')) {
+        $excluidas = $this->sedesExcluidas();
+        if ($excluidas !== []) {
+            $query->whereNotIn(DB::raw('UPPER(TRIM(vd.sede))'), $excluidas);
+        }
+        if ($this->flag('ventas_anulado')) {
             $query->where('vd.anulado', false);
         }
         if ($claves !== []) {
             $placeholders = implode(',', array_fill(0, count($claves), '?'));
             $query->whereRaw('UPPER(TRIM(vd.vendedor)) IN ('.$placeholders.')', $claves);
         }
-        if (Schema::hasTable('productos') && Schema::hasColumn('ventas_detalle', 'producto_id')) {
+        if ($this->flag('productos') && $this->flag('ventas_producto_id')) {
             $query->leftJoin('productos as p', 'p.id', '=', 'vd.producto_id')
                 ->addSelect('p.categoria as producto_categoria', 'p.subcategoria as producto_subcategoria');
         }
@@ -321,7 +330,7 @@ class CommissionCalculationService
             : null;
 
         return round(match ($tipo) {
-            'MARGEN' => Schema::hasColumn('ventas_detalle', 'ganancia')
+            'MARGEN' => $this->flag('ventas_ganancia')
                 ? $signo * abs((float) ($linea->ganancia ?? 0))
                 : $total,
             'TOTAL' => $total,
@@ -338,11 +347,11 @@ class CommissionCalculationService
         float $porcentaje,
         float $comision
     ): void {
-        if (! Schema::hasTable('nomina_comision_registros')) {
+        if (! $this->flag('nomina_comision_registros')) {
             return;
         }
 
-        NominaComisionRegistro::create([
+        $this->registrosPendientes[] = [
             'periodo_id' => $periodo->id,
             'empleado_id' => $empleado->id,
             'ventas_detalle_id' => $linea->id,
@@ -350,7 +359,9 @@ class CommissionCalculationService
             'tipo_documento' => $linea->tipo_documento,
             'numero_documento' => $linea->numero_documento,
             'factura_origen' => $linea->factura_origen ?? null,
-            'fecha' => $linea->fecha,
+            'fecha' => $linea->fecha instanceof \DateTimeInterface
+                ? $linea->fecha->format('Y-m-d')
+                : $linea->fecha,
             'cliente' => $linea->cliente ?? null,
             'vendedor' => $linea->vendedor ?? null,
             'producto_id' => $linea->producto_id ?? null,
@@ -370,7 +381,11 @@ class CommissionCalculationService
                 'grupo' => $grupo,
             ],
             'origen' => strtoupper((string) $linea->tipo_documento) === 'DEV' ? 'DEVOLUCION' : 'CALCULO',
-        ]);
+        ];
+
+        if (count($this->registrosPendientes) >= 200) {
+            $this->flushRegistros();
+        }
     }
 
     private function registrarAgregado(
@@ -383,7 +398,7 @@ class CommissionCalculationService
         float $total,
         array $detalle
     ): void {
-        if (! Schema::hasTable('nomina_comision_registros')) {
+        if (! $this->flag('nomina_comision_registros')) {
             return;
         }
 
@@ -413,14 +428,74 @@ class CommissionCalculationService
 
     private function codigoSedeExcluido(?string $codigo): bool
     {
-        if (! $codigo || ! Schema::hasTable('nomina_sedes') || ! Schema::hasColumn('nomina_sedes', 'excluir_comision')) {
+        if (! $codigo) {
             return false;
         }
 
-        return DB::table('nomina_sedes')
-            ->whereRaw('UPPER(TRIM(codigo)) = ?', [mb_strtoupper(trim($codigo), 'UTF-8')])
+        return in_array(mb_strtoupper(trim($codigo), 'UTF-8'), $this->sedesExcluidas(), true);
+    }
+
+    private function flag(string $key): bool
+    {
+        $this->flags ??= [
+            'ventas_detalle' => Schema::hasTable('ventas_detalle'),
+            'ventas_anulado' => Schema::hasTable('ventas_detalle') && Schema::hasColumn('ventas_detalle', 'anulado'),
+            'ventas_producto_id' => Schema::hasTable('ventas_detalle') && Schema::hasColumn('ventas_detalle', 'producto_id'),
+            'ventas_ganancia' => Schema::hasTable('ventas_detalle') && Schema::hasColumn('ventas_detalle', 'ganancia'),
+            'productos' => Schema::hasTable('productos'),
+            'nomina_comision_registros' => Schema::hasTable('nomina_comision_registros'),
+            'nomina_empleado_supervisores' => Schema::hasTable('nomina_empleado_supervisores'),
+            'flujo_cajas_st' => Schema::hasTable('flujo_cajas') && Schema::hasColumn('flujo_cajas', 'nomina_empleado_id'),
+            'nomina_sedes_excluir' => Schema::hasTable('nomina_sedes') && Schema::hasColumn('nomina_sedes', 'excluir_comision'),
+        ];
+
+        return $this->flags[$key] ?? false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function sedesExcluidas(): array
+    {
+        if ($this->sedesExcluidas !== null) {
+            return $this->sedesExcluidas;
+        }
+        if (! $this->flag('nomina_sedes_excluir')) {
+            return $this->sedesExcluidas = [];
+        }
+
+        $this->sedesExcluidas = DB::table('nomina_sedes')
             ->where('excluir_comision', true)
-            ->exists();
+            ->pluck('codigo')
+            ->map(fn ($codigo) => mb_strtoupper(trim((string) $codigo), 'UTF-8'))
+            ->filter()
+            ->values()
+            ->all();
+
+        return $this->sedesExcluidas;
+    }
+
+    private function flushRegistros(): void
+    {
+        if ($this->registrosPendientes === []) {
+            return;
+        }
+
+        $now = now();
+        $filas = [];
+        foreach ($this->registrosPendientes as $fila) {
+            if (isset($fila['regla_snapshot']) && is_array($fila['regla_snapshot'])) {
+                $fila['regla_snapshot'] = json_encode($fila['regla_snapshot']);
+            }
+            $fila['created_at'] = $now;
+            $fila['updated_at'] = $now;
+            $filas[] = $fila;
+        }
+        $this->registrosPendientes = [];
+
+        foreach (array_chunk($filas, 200) as $lote) {
+            NominaComisionRegistro::insert($lote);
+        }
     }
 
     private function resultado(

@@ -18,21 +18,31 @@ class EmployeeService
 
     public function syncFromClientes(): int
     {
-        $yaCargados = NominaEmpleado::query()->pluck('cliente_id')->all();
+        if (Cliente::query()->count() <= NominaEmpleado::query()->count()) {
+            return 0;
+        }
 
+        $yaCargados = NominaEmpleado::query()->pluck('cliente_id');
         $faltantes = Cliente::query()
-            ->when($yaCargados, fn ($q) => $q->whereNotIn('id', $yaCargados))
-            ->orderBy('nombre')
-            ->get(['id']);
+            ->whereNotIn('id', $yaCargados)
+            ->orderBy('id')
+            ->pluck('id');
 
-        foreach ($faltantes as $cliente) {
-            NominaEmpleado::query()->firstOrCreate(
-                ['cliente_id' => $cliente->id],
-                [
+        if ($faltantes->isEmpty()) {
+            return 0;
+        }
+
+        $now = now();
+        foreach ($faltantes->chunk(100) as $lote) {
+            NominaEmpleado::query()->insert(
+                $lote->map(fn ($clienteId) => [
+                    'cliente_id' => $clienteId,
                     'salario_base' => 0,
                     'tipo_salario' => 'QUINCENAL',
                     'estado' => 'ACTIVO',
-                ]
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->all()
             );
         }
 

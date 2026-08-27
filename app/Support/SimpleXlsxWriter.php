@@ -15,32 +15,132 @@ class SimpleXlsxWriter
             $sheets = ['Hoja1' => [['Sin datos']]];
         }
 
-        $tmp = tempnam(sys_get_temp_dir(), 'xlsx');
-        $zip = new ZipArchive;
-        if ($zip->open($tmp, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-            throw new \RuntimeException('No se pudo crear el archivo Excel.');
-        }
-
         $sheetFiles = [];
+        $files = [];
         $i = 1;
         foreach ($sheets as $name => $rows) {
             $safe = self::sheetName((string) $name, $i);
             $sheetFiles[] = $safe;
-            $zip->addFromString('xl/worksheets/sheet'.$i.'.xml', self::sheetXml($rows));
+            $files['xl/worksheets/sheet'.$i.'.xml'] = self::sheetXml($rows);
             $i++;
         }
 
-        $zip->addFromString('[Content_Types].xml', self::contentTypes(count($sheetFiles)));
-        $zip->addFromString('_rels/.rels', self::rootRels());
-        $zip->addFromString('xl/workbook.xml', self::workbookXml($sheetFiles));
-        $zip->addFromString('xl/_rels/workbook.xml.rels', self::workbookRels(count($sheetFiles)));
-        $zip->addFromString('xl/styles.xml', self::stylesXml());
-        $zip->close();
+        $files['[Content_Types].xml'] = self::contentTypes(count($sheetFiles));
+        $files['_rels/.rels'] = self::rootRels();
+        $files['xl/workbook.xml'] = self::workbookXml($sheetFiles);
+        $files['xl/_rels/workbook.xml.rels'] = self::workbookRels(count($sheetFiles));
+        $files['xl/styles.xml'] = self::stylesXml();
 
-        $bin = file_get_contents($tmp) ?: '';
-        @unlink($tmp);
+        return self::writeZip($files);
+    }
 
-        return $bin;
+    /**
+     * @param  array<string, string>  $files
+     */
+    private static function writeZip(array $files): string
+    {
+        if (class_exists(ZipArchive::class)) {
+            $tmp = tempnam(sys_get_temp_dir(), 'xlsx');
+            if ($tmp !== false) {
+                // tempnam() crea un archivo vacío; ZipArchive en Linux a menudo
+                // no puede OVERWRITE ese archivo y lanza 500.
+                @unlink($tmp);
+                $zip = new ZipArchive;
+                if ($zip->open($tmp, ZipArchive::CREATE) === true) {
+                    foreach ($files as $name => $contents) {
+                        $zip->addFromString($name, $contents);
+                    }
+                    $zip->close();
+                    $bin = file_get_contents($tmp) ?: '';
+                    @unlink($tmp);
+                    if ($bin !== '') {
+                        return $bin;
+                    }
+                }
+                @unlink($tmp);
+            }
+        }
+
+        return self::storeZip($files);
+    }
+
+    /**
+     * ZIP sin comprimir (método STORE), por si falta ext-zip.
+     *
+     * @param  array<string, string>  $files
+     */
+    private static function storeZip(array $files): string
+    {
+        $now = getdate();
+        $dosTime = ($now['hours'] << 11) | ($now['minutes'] << 5) | ((int) ($now['seconds'] / 2));
+        $dosDate = (($now['year'] - 1980) << 9) | ($now['mon'] << 5) | $now['mday'];
+
+        $offset = 0;
+        $local = '';
+        $central = '';
+        $count = 0;
+
+        foreach ($files as $name => $data) {
+            $name = str_replace('\\', '/', (string) $name);
+            $crc = crc32($data);
+            $size = strlen($data);
+            $nameLen = strlen($name);
+
+            $localHeader = pack(
+                'VvvvvvVVVvv',
+                0x04034B50,
+                20,
+                0,
+                0,
+                $dosTime,
+                $dosDate,
+                $crc,
+                $size,
+                $size,
+                $nameLen,
+                0
+            );
+            $local .= $localHeader.$name.$data;
+
+            $central .= pack(
+                'VvvvvvvVVVvvvvvVV',
+                0x02014B50,
+                20,
+                20,
+                0,
+                0,
+                $dosTime,
+                $dosDate,
+                $crc,
+                $size,
+                $size,
+                $nameLen,
+                0,
+                0,
+                0,
+                0,
+                0,
+                $offset
+            ).$name;
+
+            $offset += strlen($localHeader) + $nameLen + $size;
+            $count++;
+        }
+
+        $centralSize = strlen($central);
+        $eocd = pack(
+            'VvvvvVVv',
+            0x06054B50,
+            0,
+            0,
+            $count,
+            $count,
+            $centralSize,
+            $offset,
+            0
+        );
+
+        return $local.$central.$eocd;
     }
 
     private static function sheetName(string $name, int $index): string
@@ -51,7 +151,11 @@ class SimpleXlsxWriter
             $name = 'Hoja'.$index;
         }
 
-        return mb_substr($name, 0, 31);
+        if (function_exists('mb_substr')) {
+            return mb_substr($name, 0, 31);
+        }
+
+        return substr($name, 0, 31);
     }
 
     /**
@@ -108,7 +212,12 @@ class SimpleXlsxWriter
 
     private static function xml(string $value): string
     {
-        return htmlspecialchars($value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        $clean = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $value) ?? '';
+        if (function_exists('mb_check_encoding') && ! mb_check_encoding($clean, 'UTF-8')) {
+            $clean = mb_convert_encoding($clean, 'UTF-8', 'UTF-8');
+        }
+
+        return htmlspecialchars($clean, ENT_XML1 | ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
     private static function contentTypes(int $sheets): string
