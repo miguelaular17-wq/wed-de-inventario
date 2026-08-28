@@ -7,6 +7,7 @@ from config.config_manager import ConfigManager
 from config.state_manager import StateManager
 from utils.logger import AppLogger
 from utils.helpers import get_sql_query
+from utils.dates import sanitize_business_date
 from utils.product_matcher import buscar_producto_web
 from services.snapshot_service import SnapshotService
 from services.heartbeat_service import HeartbeatService
@@ -329,27 +330,28 @@ class SyncService:
                     (prod_id, sede, int_cantidad, metadata)
                 )
                 
-                web_cursor.execute(
-                    """
-                    INSERT INTO inventario_v2.ventas_historicas (producto_id, sede, ultima_venta, updated_at, ventas_60d, venta_promedio)
-                    VALUES (%s, %s, %s, NOW(), 0, 0)
-                    ON CONFLICT (producto_id, sede) DO UPDATE
-                        SET ultima_venta = EXCLUDED.ultima_venta, updated_at = NOW();
-                    """,
-                    (prod_id, sede, fecha_str)
-                )
+                if sanitize_business_date(fecha_venta):
+                    web_cursor.execute(
+                        """
+                        INSERT INTO inventario_v2.ventas_historicas (producto_id, sede, ultima_venta, updated_at, ventas_60d, venta_promedio)
+                        VALUES (%s, %s, %s, NOW(), 0, 0)
+                        ON CONFLICT (producto_id, sede) DO UPDATE
+                            SET ultima_venta = EXCLUDED.ultima_venta, updated_at = NOW();
+                        """,
+                        (prod_id, sede, fecha_str)
+                    )
 
-                anio_mes = fecha_str[:7]
-                web_cursor.execute(
-                    """
-                    INSERT INTO inventario_v2.historial_ventas_mensuales (producto_id, sede, anio_mes, cantidad, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, NOW(), NOW())
-                    ON CONFLICT (sede, producto_id, anio_mes) DO UPDATE
-                        SET cantidad = inventario_v2.historial_ventas_mensuales.cantidad + EXCLUDED.cantidad,
-                            updated_at = NOW();
-                    """,
-                    (prod_id, sede, anio_mes, int_cantidad)
-                )
+                    anio_mes = fecha_str[:7]
+                    web_cursor.execute(
+                        """
+                        INSERT INTO inventario_v2.historial_ventas_mensuales (producto_id, sede, anio_mes, cantidad, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, NOW(), NOW())
+                        ON CONFLICT (sede, producto_id, anio_mes) DO UPDATE
+                            SET cantidad = inventario_v2.historial_ventas_mensuales.cantidad + EXCLUDED.cantidad,
+                                updated_at = NOW();
+                        """,
+                        (prod_id, sede, anio_mes, int_cantidad)
+                    )
                 
                 new_last_time = max(new_last_time, fecha_str)
                 

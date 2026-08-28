@@ -68,11 +68,41 @@ class PeriodoController extends Controller
         ]);
     }
 
-    public function calcular(NominaPeriodo $periodo): RedirectResponse
+    public function calcularForm(NominaPeriodo $periodo): View|RedirectResponse
     {
-        $this->periods->calcular($periodo, auth()->id());
+        if ($periodo->estado !== NominaPeriodo::ABIERTO) {
+            return redirect()
+                ->route('nomina.periodos.show', $periodo)
+                ->withErrors(['periodo' => 'Esta quincena ya no está abierta para calcular.']);
+        }
+
+        return view('nomina.periodos.calcular', [
+            'periodo' => $periodo,
+            'candidatos' => $this->periods->empleadosConCuotasPendientes($periodo),
+        ]);
+    }
+
+    public function calcular(Request $request, NominaPeriodo $periodo): RedirectResponse
+    {
+        $data = $request->validate([
+            'descontar_empleado_ids' => ['sometimes', 'array'],
+            'descontar_empleado_ids.*' => ['integer'],
+        ]);
+
+        $this->periods->calcular(
+            $periodo,
+            auth()->id(),
+            $data['descontar_empleado_ids'] ?? []
+        );
 
         return $this->volver($periodo, 'Nómina calculada. Los importes quedaron congelados para revisión.');
+    }
+
+    public function revertir(NominaPeriodo $periodo): RedirectResponse
+    {
+        $this->periods->revertirCalculo($periodo, auth()->id());
+
+        return $this->volver($periodo, 'Se deshizo el cálculo. La quincena volvió a ABIERTA: adelantos, faltas, horas extras y cuotas de préstamo quedaron como estaban.');
     }
 
     public function aprobar(NominaPeriodo $periodo): RedirectResponse

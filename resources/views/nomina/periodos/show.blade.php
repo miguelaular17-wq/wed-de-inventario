@@ -12,20 +12,29 @@
         </div>
         <div>
             @if($periodo->estado === 'ABIERTO')
-                <form method="POST" action="{{ route('nomina.periodos.calcular', $periodo) }}" onsubmit="return confirm('¿Calcular esta quincena? Se aplicarán adelantos, IAS, horas extras y cuotas de préstamo una sola vez.')">
-                    @csrf
-                    <button class="btn primary" type="submit">Calcular nómina</button>
-                </form>
+                <a class="btn primary" href="{{ route('nomina.periodos.calcular.form', $periodo) }}">Calcular nómina</a>
             @elseif($periodo->estado === 'CALCULADO')
-                <form method="POST" action="{{ route('nomina.periodos.aprobar', $periodo) }}" onsubmit="return confirm('¿Aprobar estos importes? Después de aprobar ya no podrán modificarse.')">
-                    @csrf
-                    <button class="btn primary" type="submit">Aprobar nómina</button>
-                </form>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+                    <form method="POST" action="{{ route('nomina.periodos.revertir', $periodo) }}" onsubmit="return confirm('¿Deshacer este cálculo? Se borran los recibos y se revierten adelantos, faltas, horas extras y descuentos de préstamo. La quincena queda ABIERTA otra vez.')">
+                        @csrf
+                        <button class="btn" type="submit">Deshacer cálculo</button>
+                    </form>
+                    <form method="POST" action="{{ route('nomina.periodos.aprobar', $periodo) }}" onsubmit="return confirm('¿Aprobar estos importes? Después de aprobar ya no podrán modificarse.')">
+                        @csrf
+                        <button class="btn primary" type="submit">Aprobar nómina</button>
+                    </form>
+                </div>
             @elseif($periodo->estado === 'APROBADO')
-                <form method="POST" action="{{ route('nomina.periodos.pagar', $periodo) }}" onsubmit="return confirm('¿Confirmar que esta nómina fue pagada?')">
-                    @csrf
-                    <button class="btn primary" type="submit">Marcar como pagada</button>
-                </form>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+                    <form method="POST" action="{{ route('nomina.periodos.revertir', $periodo) }}" onsubmit="return confirm('Esta nómina ya está aprobada. ¿Deshacer el cálculo de todos modos? Volverá a ABIERTA.')">
+                        @csrf
+                        <button class="btn" type="submit">Deshacer cálculo</button>
+                    </form>
+                    <form method="POST" action="{{ route('nomina.periodos.pagar', $periodo) }}" onsubmit="return confirm('¿Confirmar que esta nómina fue pagada?')">
+                        @csrf
+                        <button class="btn primary" type="submit">Marcar como pagada</button>
+                    </form>
+                </div>
             @elseif($periodo->estado === 'PAGADO')
                 <form method="POST" action="{{ route('nomina.periodos.cerrar', $periodo) }}" onsubmit="return confirm('¿Cerrar definitivamente esta quincena? Quedará en modo de solo lectura.')">
                     @csrf
@@ -66,7 +75,7 @@
             @endforeach
         </div>
         @if($periodo->estado === 'ABIERTO')
-        <p class="muted" style="margin-bottom:0;">Al calcular se toma una foto de los salarios activos. Las comisiones se liquidan aparte (retención 10%) y se pagan 3 días después del cierre de la quincena.</p>
+        <p class="muted" style="margin-bottom:0;">Al calcular se toma una foto de los salarios activos y se elige a quién descontar cuotas de préstamo. Las comisiones se liquidan aparte (retención 10%) y se pagan 3 días después del cierre de la quincena.</p>
         @else
             <p class="muted" style="margin-bottom:0;">Los importes, reglas, ventas y egresos 058 utilizados quedaron congelados al calcular.</p>
         @endif

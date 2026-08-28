@@ -120,7 +120,7 @@ class AuthController extends Controller
             return redirect()->route('comprador.dashboard');
         }
 
-        if ($user->isFinanzas()) {
+        if ($user->isFinanzas() || $user->isAuditor()) {
             return redirect()->route('finanzas.flujo_caja');
         }
 
@@ -142,6 +142,10 @@ class AuthController extends Controller
 
         if ($user->isRrhh()) {
             return redirect()->route('nomina.empleados.index');
+        }
+
+        if (! $user->requiresSede()) {
+            return redirect('/');
         }
 
         if (session()->has('sede_local') || $user->sede) {

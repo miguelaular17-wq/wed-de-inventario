@@ -231,7 +231,9 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::get('/periodos', [PeriodoController::class, 'index'])->name('periodos.index');
     Route::post('/periodos', [PeriodoController::class, 'store'])->name('periodos.store');
     Route::get('/periodos/{periodo}', [PeriodoController::class, 'show'])->name('periodos.show');
+    Route::get('/periodos/{periodo}/calcular', [PeriodoController::class, 'calcularForm'])->name('periodos.calcular.form');
     Route::post('/periodos/{periodo}/calcular', [PeriodoController::class, 'calcular'])->name('periodos.calcular');
+    Route::post('/periodos/{periodo}/revertir', [PeriodoController::class, 'revertir'])->name('periodos.revertir');
     Route::post('/periodos/{periodo}/aprobar', [PeriodoController::class, 'aprobar'])->name('periodos.aprobar');
     Route::post('/periodos/{periodo}/pagar', [PeriodoController::class, 'pagar'])->name('periodos.pagar');
     Route::post('/periodos/{periodo}/cerrar', [PeriodoController::class, 'cerrar'])->name('periodos.cerrar');

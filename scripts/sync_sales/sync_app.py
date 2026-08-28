@@ -23,6 +23,25 @@ else:
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 STATE_PATH = os.path.join(BASE_DIR, "state.json")
 
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+try:
+    from utils.dates import sanitize_business_date
+except ImportError:
+    def sanitize_business_date(value, today=None):
+        if value is None:
+            return None
+        text = str(value).strip()[:10]
+        try:
+            year = int(text[:4])
+        except ValueError:
+            return None
+        from datetime import date as _date
+        limit = today or _date.today()
+        if year < 1990 or year > limit.year + 1:
+            return None
+        return text
+
 # Try importing psycopg2
 try:
     import psycopg2
@@ -529,8 +548,16 @@ class SyncApp:
                     CAST(a.existencia AS INT) AS [Centro existencia],
                     COALESCE(sales15.total_qty, 0) AS [Centro promedio 15 dias (60d)],
                     COALESCE(sales60.total_qty, 0) AS [Centro ventas],
-                    CONVERT(VARCHAR(10), a.fecha_ultima_venta, 120) AS [Centro ultima venta],
-                    CONVERT(VARCHAR(10), a.fecha_ultima_compra, 120) AS [Centro ultima compra]
+                    CONVERT(VARCHAR(10), CASE
+                        WHEN a.fecha_ultima_venta >= '19900101'
+                         AND a.fecha_ultima_venta <= DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+                        THEN a.fecha_ultima_venta
+                    END, 120) AS [Centro ultima venta],
+                    CONVERT(VARCHAR(10), CASE
+                        WHEN a.fecha_ultima_compra >= '19900101'
+                         AND a.fecha_ultima_compra <= DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+                        THEN a.fecha_ultima_compra
+                    END, 120) AS [Centro ultima compra]
                 FROM [dbo].[articulos] a WITH (NOLOCK)
                 
                 -- Sales 15d
@@ -804,8 +831,19 @@ class SyncApp:
                     CAST(ISNULL(ex.actual, 0) AS INT)                AS existencia,
                     ISNULL(s15.total_qty, 0)                         AS ventas_15d,
                     ISNULL(s60.total_qty, 0)                         AS ventas_60d,
-                    CONVERT(VARCHAR(19), a.fecha_ultima_venta,  120) AS ultima_venta,
-                    CONVERT(VARCHAR(19), a.fecha_ultima_compra, 120) AS ultima_compra,
+                    CONVERT(VARCHAR(19), COALESCE(
+                        CASE
+                            WHEN a.fecha_ultima_venta >= '19900101'
+                             AND a.fecha_ultima_venta <= DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+                            THEN a.fecha_ultima_venta
+                        END,
+                        s60.ultima_fecha
+                    ), 120) AS ultima_venta,
+                    CONVERT(VARCHAR(19), CASE
+                        WHEN a.fecha_ultima_compra >= '19900101'
+                         AND a.fecha_ultima_compra <= DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+                        THEN a.fecha_ultima_compra
+                    END, 120) AS ultima_compra,
                     a.descripcion                                    AS descripcion,
                     ISNULL(a.precio1_moneda2_uni1, 0)                AS precio_unidad,
                     ISNULL(a.precio2_moneda2_uni1, ISNULL(a.precio1_moneda2_uni1, 0)) AS precio_mayor,
@@ -829,7 +867,13 @@ class SyncApp:
                     GROUP BY ISNULL(a2.codigo, vi.articulo)
                 ) s15 ON s15.articulo = a.codigo
                 LEFT JOIN (
-                    SELECT ISNULL(a2.codigo, vi.articulo) AS articulo, SUM(vi.cantidad) AS total_qty
+                    SELECT ISNULL(a2.codigo, vi.articulo) AS articulo,
+                           SUM(vi.cantidad) AS total_qty,
+                           MAX(CASE
+                                 WHEN v.fecha_emision >= '19900101'
+                                  AND v.fecha_emision <= DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+                                 THEN v.fecha_emision
+                               END) AS ultima_fecha
                     FROM [dbo].[documentos_venta] v WITH (NOLOCK)
                     JOIN [dbo].[documentos_venta_items] vi WITH (NOLOCK)
                         ON v.tipo_documento = vi.tipo_documento
@@ -879,8 +923,8 @@ class SyncApp:
                 existencia    = max(0, int(row[1]) if row[1] else 0)
                 ventas_15d    = float(row[2]) if row[2] else 0.0
                 ventas_60d    = float(row[3]) if row[3] else 0.0
-                ultima_venta  = str(row[4])   if row[4] else None
-                ultima_compra = str(row[5])   if row[5] else None
+                ultima_venta  = sanitize_business_date(row[4]) if len(row) > 4 else None
+                ultima_compra = sanitize_business_date(row[5]) if len(row) > 5 else None
 
                 # ¡LA MAGIA AQUÍ! Solo nos importan los productos que ya existen en Supabase
                 # O los que NO existen pero TIENEN STOCK en esta sede
@@ -1046,8 +1090,20 @@ class SyncApp:
                 ON CONFLICT (producto_id, sede) DO UPDATE
                     SET ventas_60d      = EXCLUDED.ventas_60d,
                         venta_promedio  = EXCLUDED.venta_promedio,
-                        ultima_venta    = EXCLUDED.ultima_venta,
-                        ultima_compra   = EXCLUDED.ultima_compra,
+                        ultima_venta    = CASE
+                            WHEN EXCLUDED.ultima_venta IS NOT NULL THEN EXCLUDED.ultima_venta
+                            WHEN inventario_v2.ventas_historicas.ultima_venta >= DATE '1990-01-01'
+                             AND inventario_v2.ventas_historicas.ultima_venta <= CURRENT_DATE + 1
+                            THEN inventario_v2.ventas_historicas.ultima_venta
+                            ELSE NULL
+                        END,
+                        ultima_compra   = CASE
+                            WHEN EXCLUDED.ultima_compra IS NOT NULL THEN EXCLUDED.ultima_compra
+                            WHEN inventario_v2.ventas_historicas.ultima_compra >= DATE '1990-01-01'
+                             AND inventario_v2.ventas_historicas.ultima_compra <= CURRENT_DATE + 1
+                            THEN inventario_v2.ventas_historicas.ultima_compra
+                            ELSE NULL
+                        END,
                         updated_at      = NOW();
             """
             batch_execute_and_commit(upsert_ventas_query, ventas_tuples)
@@ -1464,28 +1520,29 @@ class SyncApp:
                 )
                 
                 # Update real-time ultima_venta
-                web_cursor.execute(
-                    """
-                    INSERT INTO inventario_v2.ventas_historicas (producto_id, sede, ultima_venta, updated_at, ventas_60d, venta_promedio)
-                    VALUES (%s, %s, %s, NOW(), 0, 0)
-                    ON CONFLICT (producto_id, sede) DO UPDATE
-                        SET ultima_venta = EXCLUDED.ultima_venta, updated_at = NOW();
-                    """,
-                    (prod_id, sede, fecha_str)
-                )
+                if sanitize_business_date(fecha_venta):
+                    web_cursor.execute(
+                        """
+                        INSERT INTO inventario_v2.ventas_historicas (producto_id, sede, ultima_venta, updated_at, ventas_60d, venta_promedio)
+                        VALUES (%s, %s, %s, NOW(), 0, 0)
+                        ON CONFLICT (producto_id, sede) DO UPDATE
+                            SET ultima_venta = EXCLUDED.ultima_venta, updated_at = NOW();
+                        """,
+                        (prod_id, sede, fecha_str)
+                    )
 
-                # Update real-time historial mensual
-                anio_mes = fecha_str[:7]
-                web_cursor.execute(
-                    """
-                    INSERT INTO inventario_v2.historial_ventas_mensuales (producto_id, sede, anio_mes, cantidad, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, NOW(), NOW())
-                    ON CONFLICT (sede, producto_id, anio_mes) DO UPDATE
-                        SET cantidad = inventario_v2.historial_ventas_mensuales.cantidad + EXCLUDED.cantidad,
-                            updated_at = NOW();
-                    """,
-                    (prod_id, sede, anio_mes, int_cantidad)
-                )
+                    # Update real-time historial mensual
+                    anio_mes = fecha_str[:7]
+                    web_cursor.execute(
+                        """
+                        INSERT INTO inventario_v2.historial_ventas_mensuales (producto_id, sede, anio_mes, cantidad, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, NOW(), NOW())
+                        ON CONFLICT (sede, producto_id, anio_mes) DO UPDATE
+                            SET cantidad = inventario_v2.historial_ventas_mensuales.cantidad + EXCLUDED.cantidad,
+                                updated_at = NOW();
+                        """,
+                        (prod_id, sede, anio_mes, int_cantidad)
+                    )
                 
                 # Evitar que fechas en el futuro (ej. errores de tipeo 2626) congelen el sincronizador
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S.999")

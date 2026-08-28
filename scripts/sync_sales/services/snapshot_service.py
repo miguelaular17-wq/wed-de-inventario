@@ -6,6 +6,7 @@ from config.config_manager import ConfigManager
 from config.state_manager import StateManager
 from utils.logger import AppLogger
 from utils.helpers import get_sql_query
+from utils.dates import sanitize_business_date
 import psycopg2.extras
 
 class SnapshotService:
@@ -86,8 +87,8 @@ class SnapshotService:
                 existencia    = max(0, int(row[1]) if row[1] else 0)
                 ventas_15d    = float(row[2]) if row[2] else 0.0
                 ventas_60d    = float(row[3]) if row[3] else 0.0
-                ultima_venta  = str(row[4])   if row[4] else None
-                ultima_compra = str(row[5])   if row[5] else None
+                ultima_venta  = sanitize_business_date(row[4]) if len(row) > 4 else None
+                ultima_compra = sanitize_business_date(row[5]) if len(row) > 5 else None
 
                 if codigo in prod_map:
                     pid = prod_map[codigo]
@@ -234,8 +235,20 @@ class SnapshotService:
                 ON CONFLICT (producto_id, sede) DO UPDATE
                     SET ventas_60d      = EXCLUDED.ventas_60d,
                         venta_promedio  = EXCLUDED.venta_promedio,
-                        ultima_venta    = EXCLUDED.ultima_venta,
-                        ultima_compra   = EXCLUDED.ultima_compra,
+                        ultima_venta    = CASE
+                            WHEN EXCLUDED.ultima_venta IS NOT NULL THEN EXCLUDED.ultima_venta
+                            WHEN inventario_v2.ventas_historicas.ultima_venta >= DATE '1990-01-01'
+                             AND inventario_v2.ventas_historicas.ultima_venta <= CURRENT_DATE + 1
+                            THEN inventario_v2.ventas_historicas.ultima_venta
+                            ELSE NULL
+                        END,
+                        ultima_compra   = CASE
+                            WHEN EXCLUDED.ultima_compra IS NOT NULL THEN EXCLUDED.ultima_compra
+                            WHEN inventario_v2.ventas_historicas.ultima_compra >= DATE '1990-01-01'
+                             AND inventario_v2.ventas_historicas.ultima_compra <= CURRENT_DATE + 1
+                            THEN inventario_v2.ventas_historicas.ultima_compra
+                            ELSE NULL
+                        END,
                         updated_at      = NOW();
             """
             batch_execute_and_commit(upsert_ventas_query, ventas_tuples)

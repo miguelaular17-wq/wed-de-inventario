@@ -227,6 +227,27 @@ class AttendanceService
         });
     }
 
+    public function deshacerPeriodo(int $periodoId): int
+    {
+        $inasistencias = NominaInasistencia::query()
+            ->where('nomina_periodo_id', $periodoId)
+            ->where('estado', 'APLICADO')
+            ->update([
+                'estado' => 'PENDIENTE',
+                'nomina_periodo_id' => null,
+            ]);
+
+        $horas = NominaHoraExtra::query()
+            ->where('nomina_periodo_id', $periodoId)
+            ->where('estado', 'APLICADO')
+            ->update([
+                'estado' => 'PENDIENTE',
+                'nomina_periodo_id' => null,
+            ]);
+
+        return $inasistencias + $horas;
+    }
+
     private function cancelarMovimiento(Model $row, string $entidad, ?string $motivo = null): Model
     {
         if ($row->estado === 'APLICADO') {

@@ -301,6 +301,9 @@ class GerencialDashboardServiceTest extends TestCase
         $this->assertSame('ERROR EN VENTA', \App\Support\ProfitMotivos::ajuste('09', 'AJU'));
         $this->assertSame('TRASLADO ALMACENES', \App\Support\ProfitMotivos::ajuste('001', 'TRA'));
         $this->assertSame('PRODUCTO DEFECTUOSO', \App\Support\ProfitMotivos::devolucion('02'));
+        $this->assertSame('CAMBIO DE PRODUCTO', \App\Support\ProfitMotivos::devolucion('CAMBIO DE PRODUCTO'));
+        $this->assertSame('NO ESPECIFICADO', \App\Support\ProfitMotivos::devolucion('SELECCIONAR...'));
+        $this->assertSame('GARANTÍA', \App\Support\ProfitMotivos::devolucion('GARANTÍA'));
         $this->assertSame('Sin motivo', \App\Support\ProfitMotivos::ajuste('Seleccione un motivo...'));
         $this->assertSame('Sin motivo', \App\Support\ProfitMotivos::devolucion(''));
         $this->assertSame('Conteo', \App\Support\ProfitMotivos::ajuste('Conteo', 'AJU'));

@@ -46,7 +46,7 @@ class AnalisisInventarioService
             $filters['proveedor'] ?? 'Ninguno',
             $filters['buscar'] ?? ''
         ]));
-        $cacheKey = "analisis_inv_base_v3_{$stockUpdateMd5}_{$filtersHash}";
+        $cacheKey = "analisis_inv_base_v4_{$stockUpdateMd5}_{$filtersHash}";
 
         $bindings = [];
         $whereClauses = [];
@@ -115,8 +115,14 @@ WITH product_metrics AS (
                 ) sa ON p.id = sa.producto_id
                 LEFT JOIN (
                     SELECT producto_id,
-                        MAX(ultima_venta) as ultima_venta,
-                        MAX(ultima_compra) as ultima_compra,
+                        MAX(ultima_venta) FILTER (
+                            WHERE ultima_venta >= DATE '1990-01-01'
+                              AND ultima_venta <= CURRENT_DATE + 1
+                        ) as ultima_venta,
+                        MAX(ultima_compra) FILTER (
+                            WHERE ultima_compra >= DATE '1990-01-01'
+                              AND ultima_compra <= CURRENT_DATE + 1
+                        ) as ultima_compra,
                         SUM(ventas_60d) as total_ventas_60d
                     FROM inventario_v2.ventas_historicas 
                     GROUP BY producto_id
@@ -278,8 +284,8 @@ WITH product_metrics AS (
             $rows = DB::connection('pgsql')->select($sql, $bindings);
             $items = collect();
             foreach ($rows as $row) {
-                $ultimaVentaDate = $row->ultima_venta ? \Carbon\Carbon::parse($row->ultima_venta) : null;
-                $ultimaCompraDate = $row->ultima_compra ? \Carbon\Carbon::parse($row->ultima_compra) : null;
+                $ultimaVentaDate = \App\Support\BusinessDate::parseOrNull($row->ultima_venta);
+                $ultimaCompraDate = \App\Support\BusinessDate::parseOrNull($row->ultima_compra);
 
                 $items->push([
                     'id' => (int) $row->id,
@@ -423,7 +429,7 @@ WITH product_metrics AS (
                 $filters['proveedor'] ?? 'Ninguno',
                 $filters['buscar'] ?? ''
             ]));
-            $cacheKey = "analisis_resumen_sedes_{$stockUpdateMd5}_{$filtersHash}";
+            $cacheKey = "analisis_resumen_sedes_v2_{$stockUpdateMd5}_{$filtersHash}";
 
             return \Illuminate\Support\Facades\Cache::remember($cacheKey, 1800, function () use ($sedes, $display, $filters) {
                 $bindings = [];

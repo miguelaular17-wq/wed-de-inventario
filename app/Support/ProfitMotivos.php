@@ -14,6 +14,7 @@ class ProfitMotivos
             '05' => 'GARANTÍA',
             '06' => 'ERROR EN PRECIO',
             '07' => 'CAMBIO DE PRODUCTO',
+            '00' => 'NO ESPECIFICADO',
         ],
         'INV-AJU' => [
             '01' => 'MERCANCÍA DAÑADA PROVEEDOR',
@@ -58,6 +59,11 @@ class ProfitMotivos
 
     public static function devolucion(?string $raw): string
     {
+        $valor = self::limpiar($raw);
+        if (self::esSinEspecificar($valor)) {
+            return 'NO ESPECIFICADO';
+        }
+
         return self::etiqueta($raw, 'DEV');
     }
 
@@ -105,6 +111,17 @@ class ProfitMotivos
         $valor = trim(preg_replace('/\s+/u', ' ', str_replace(["\r", "\n"], ' ', (string) $raw)) ?? '');
 
         return $valor;
+    }
+
+    public static function esSinEspecificar(string $valor): bool
+    {
+        $norm = mb_strtolower($valor, 'UTF-8');
+
+        return in_array($norm, [
+            'seleccionar...',
+            'seleccionar',
+            'no especificado',
+        ], true);
     }
 
     public static function esPlaceholder(string $valor): bool

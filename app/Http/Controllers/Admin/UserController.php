@@ -76,7 +76,7 @@ class UserController extends Controller
 
         $user->ver_publicidad_equipo = $data['role'] === User::ROLE_MARKETING
             && in_array('marketing.publicidad_equipo', $extras, true);
-        if (in_array($data['role'], ['comprador', 'marketing', 'finanzas', 'cobranza', 'contabilidad', 'auditor', 'tesoreria', 'gerente', 'rrhh'], true)) {
+        if (in_array($data['role'], User::ROLES_WITHOUT_SEDE, true)) {
             $user->sede = null;
         } else {
             $user->sede = isset($data['sede']) && $data['sede'] ? strtoupper($data['sede']) : null;

@@ -5,8 +5,16 @@ SELECT
     CAST(a.existencia AS INT) AS [Centro existencia],
     COALESCE(sales15.total_qty, 0) AS [Centro promedio 15 dias (60d)],
     COALESCE(sales60.total_qty, 0) AS [Centro ventas],
-    CONVERT(VARCHAR(10), a.fecha_ultima_venta, 120) AS [Centro ultima venta],
-    CONVERT(VARCHAR(10), a.fecha_ultima_compra, 120) AS [Centro ultima compra]
+    CONVERT(VARCHAR(10), CASE
+        WHEN a.fecha_ultima_venta >= '19900101'
+         AND a.fecha_ultima_venta <= DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+        THEN a.fecha_ultima_venta
+    END, 120) AS [Centro ultima venta],
+    CONVERT(VARCHAR(10), CASE
+        WHEN a.fecha_ultima_compra >= '19900101'
+         AND a.fecha_ultima_compra <= DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+        THEN a.fecha_ultima_compra
+    END, 120) AS [Centro ultima compra]
 FROM [dbo].[articulos] a WITH (NOLOCK)
 
 -- Sales 15d

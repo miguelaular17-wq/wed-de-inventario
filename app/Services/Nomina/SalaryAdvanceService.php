@@ -131,4 +131,15 @@ class SalaryAdvanceService
             return $abonos->count();
         });
     }
+
+    public function deshacerPeriodo(int $periodoId): int
+    {
+        return NominaAbonoSueldo::query()
+            ->where('nomina_periodo_id', $periodoId)
+            ->where('estado', 'DESCONTADO')
+            ->update([
+                'estado' => 'PENDIENTE',
+                'nomina_periodo_id' => null,
+            ]);
+    }
 }

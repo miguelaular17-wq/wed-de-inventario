@@ -122,4 +122,88 @@ class LoanPaymentService
             $restante = round($restante - $aplica, 2);
         }
     }
+
+    public function revertirAbonosDelPeriodo(int $periodoId): void
+    {
+        $marcador = 'período #'.$periodoId;
+        $abonos = NominaPrestamoAbono::query()
+            ->where('tipo', NominaPrestamoAbono::TIPO_NOMINA)
+            ->where('observacion', 'like', '%'.$marcador.'%')
+            ->orderByDesc('id')
+            ->get();
+
+        $cuotasDelPeriodo = NominaPrestamoCuota::query()
+            ->where('nomina_periodo_id', $periodoId)
+            ->get();
+
+        $abonoIds = $abonos->pluck('id')
+            ->merge($cuotasDelPeriodo->pluck('abono_id'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        foreach ($abonoIds as $abonoId) {
+            $abono = NominaPrestamoAbono::query()->find($abonoId);
+            if (! $abono) {
+                continue;
+            }
+            $this->revertirAbono($abono, $periodoId);
+        }
+
+        NominaPrestamoCuota::query()
+            ->where('nomina_periodo_id', $periodoId)
+            ->update(['nomina_periodo_id' => null]);
+    }
+
+    private function revertirAbono(NominaPrestamoAbono $abono, int $periodoId): void
+    {
+        DB::transaction(function () use ($abono, $periodoId) {
+            $prestamo = NominaPrestamo::query()->lockForUpdate()->findOrFail($abono->prestamo_id);
+            $cuotas = NominaPrestamoCuota::query()
+                ->where('abono_id', $abono->id)
+                ->orderByDesc('numero')
+                ->lockForUpdate()
+                ->get();
+
+            $restante = (float) $abono->monto;
+            foreach ($cuotas as $cuota) {
+                if ($restante <= 0) {
+                    break;
+                }
+                $quita = min((float) $cuota->monto_pagado, $restante);
+                $cuota->monto_pagado = round((float) $cuota->monto_pagado - $quita, 2);
+                if ($cuota->monto_pagado <= 0) {
+                    $cuota->monto_pagado = 0;
+                    $cuota->fecha_pago = null;
+                    $cuota->estado = $cuota->fecha_programada->lt(now()->startOfDay())
+                        ? 'VENCIDA'
+                        : 'PENDIENTE';
+                } else {
+                    $cuota->estado = 'PARCIAL';
+                    $cuota->fecha_pago = null;
+                }
+                $cuota->abono_id = null;
+                if ((int) $cuota->nomina_periodo_id === $periodoId) {
+                    $cuota->nomina_periodo_id = null;
+                }
+                $cuota->save();
+                $restante = round($restante - $quita, 2);
+            }
+
+            $prestamo->saldo_pendiente = round((float) $prestamo->saldo_pendiente + (float) $abono->monto, 2);
+            if ($prestamo->estado === 'PAGADO' && $prestamo->saldo_pendiente > 0) {
+                $prestamo->estado = 'ACTIVO';
+            }
+            $prestamo->save();
+
+            NominaAuditLog::registrar('PRESTAMO_ABONO_REVERTIR', 'prestamo', $prestamo->id, [
+                'abono_id' => $abono->id,
+                'monto' => (float) $abono->monto,
+            ], [
+                'periodo_id' => $periodoId,
+            ]);
+
+            $abono->delete();
+        });
+    }
 }

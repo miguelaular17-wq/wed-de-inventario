@@ -10,9 +10,15 @@ class SedeController extends Controller
 {
     public function select(): View|RedirectResponse
     {
-        if (auth()->user() && in_array(auth()->user()->role, ['supervisor', 'telefonia'], true)) {
-            if (auth()->user()->sede) {
-                session()->put('sede_local', strtoupper(auth()->user()->sede));
+        $user = auth()->user();
+
+        if ($user && ! $user->requiresSede()) {
+            return redirect('/');
+        }
+
+        if ($user && in_array($user->role, ['supervisor', 'telefonia'], true)) {
+            if ($user->sede) {
+                session()->put('sede_local', strtoupper($user->sede));
                 return $this->redirectAfterSede();
             }
             abort(403, 'No tienes una sede asignada. Por favor, contacta al administrador.');

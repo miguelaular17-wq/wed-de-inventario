@@ -3,8 +3,19 @@ SELECT
     CAST(ISNULL(ex.actual, 0) AS INT)                AS existencia,
     ISNULL(s15.total_qty, 0)                         AS ventas_15d,
     ISNULL(s60.total_qty, 0)                         AS ventas_60d,
-    CONVERT(VARCHAR(19), a.fecha_ultima_venta,  120) AS ultima_venta,
-    CONVERT(VARCHAR(19), a.fecha_ultima_compra, 120) AS ultima_compra,
+    CONVERT(VARCHAR(19), COALESCE(
+        CASE
+            WHEN a.fecha_ultima_venta >= '19900101'
+             AND a.fecha_ultima_venta <= DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+            THEN a.fecha_ultima_venta
+        END,
+        s60.ultima_fecha
+    ), 120) AS ultima_venta,
+    CONVERT(VARCHAR(19), CASE
+        WHEN a.fecha_ultima_compra >= '19900101'
+         AND a.fecha_ultima_compra <= DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+        THEN a.fecha_ultima_compra
+    END, 120) AS ultima_compra,
     a.descripcion                                    AS descripcion,
     ISNULL(a.precio1_moneda2_uni1, 0)                AS precio_unidad,
     ISNULL(a.precio2_moneda2_uni1, ISNULL(a.precio1_moneda2_uni1, 0)) AS precio_mayor,
@@ -29,7 +40,13 @@ LEFT JOIN (
     GROUP BY ISNULL(a2.codigo, vi.articulo)
 ) s15 ON s15.articulo = a.codigo
 LEFT JOIN (
-    SELECT ISNULL(a2.codigo, vi.articulo) AS articulo, SUM(vi.cantidad) AS total_qty
+    SELECT ISNULL(a2.codigo, vi.articulo) AS articulo,
+           SUM(vi.cantidad) AS total_qty,
+           MAX(CASE
+                 WHEN v.fecha_emision >= '19900101'
+                  AND v.fecha_emision <= DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+                 THEN v.fecha_emision
+               END) AS ultima_fecha
     FROM [dbo].[documentos_venta] v WITH (NOLOCK)
     JOIN [dbo].[documentos_venta_items] vi WITH (NOLOCK)
         ON v.tipo_documento = vi.tipo_documento

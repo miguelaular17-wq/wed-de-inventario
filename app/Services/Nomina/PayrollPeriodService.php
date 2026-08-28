@@ -60,9 +60,14 @@ class PayrollPeriodService
         });
     }
 
-    public function calcular(NominaPeriodo $periodo, ?int $usuarioId = null): NominaPeriodo
+    /**
+     * @param  list<int>  $descontarEmpleadoIds  Empleados a los que sí se les descuenta cuota en esta quincena.
+     */
+    public function calcular(NominaPeriodo $periodo, ?int $usuarioId = null, array $descontarEmpleadoIds = []): NominaPeriodo
     {
-        return DB::transaction(function () use ($periodo, $usuarioId) {
+        $descontarEmpleadoIds = array_values(array_unique(array_map('intval', $descontarEmpleadoIds)));
+
+        return DB::transaction(function () use ($periodo, $usuarioId, $descontarEmpleadoIds) {
             $periodo = NominaPeriodo::query()->lockForUpdate()->findOrFail($periodo->id);
             $this->exigirEstado($periodo, NominaPeriodo::ABIERTO, 'calcular');
 
@@ -96,7 +101,9 @@ class PayrollPeriodService
 
             foreach ($empleados as $empleado) {
                 $comision = $this->commissions->calcular($periodo, $empleado);
-                $cuotas = $cuotasPorEmpleado->get($empleado->id, collect());
+                $cuotas = in_array((int) $empleado->id, $descontarEmpleadoIds, true)
+                    ? $cuotasPorEmpleado->get($empleado->id, collect())
+                    : collect();
                 $prestamosNomina = 0.0;
                 $prestamosComision = 0.0;
 
@@ -107,7 +114,7 @@ class PayrollPeriodService
                         $usuarioId,
                         ((float) $comision['total'] > 0)
                             ? 'Descuento de comisión'
-                            : 'Descuento automático de nómina'
+                            : 'Descuento de nómina'
                     );
                     $montoPrestamo = round(collect($abonosPrestamo)->sum('monto'), 2);
 
@@ -164,6 +171,63 @@ class PayrollPeriodService
             $this->auditarTransicion($periodo, NominaPeriodo::ABIERTO, NominaPeriodo::CALCULADO);
 
             return $periodo->fresh('registros');
+        });
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, array{empleado: NominaEmpleado, cuotas: \Illuminate\Support\Collection<int, NominaPrestamoCuota>, total: float}>
+     */
+    public function empleadosConCuotasPendientes(NominaPeriodo $periodo)
+    {
+        return $this->deductions
+            ->cuotasPendientesDelRango($periodo->fecha_inicio, $periodo->fecha_fin)
+            ->filter(fn (NominaPrestamoCuota $cuota) => $cuota->prestamo?->empleado)
+            ->groupBy(fn (NominaPrestamoCuota $cuota) => (int) $cuota->prestamo->empleado_id)
+            ->map(function ($grupo) {
+                return [
+                    'empleado' => $grupo->first()->prestamo->empleado,
+                    'cuotas' => $grupo->values(),
+                    'total' => round($grupo->sum(fn (NominaPrestamoCuota $cuota) => $cuota->saldo()), 2),
+                ];
+            })
+            ->sortBy(fn (array $fila) => mb_strtolower($fila['empleado']->nombre()))
+            ->values();
+    }
+
+    public function revertirCalculo(NominaPeriodo $periodo, ?int $usuarioId = null): NominaPeriodo
+    {
+        return DB::transaction(function () use ($periodo, $usuarioId) {
+            $periodo = NominaPeriodo::query()->lockForUpdate()->findOrFail($periodo->id);
+
+            if (! in_array($periodo->estado, [NominaPeriodo::CALCULADO, NominaPeriodo::APROBADO], true)) {
+                throw ValidationException::withMessages([
+                    'estado' => 'Solo se puede deshacer un cálculo en estado CALCULADO o APROBADO. Este período está '.$periodo->estado.'.',
+                ]);
+            }
+
+            $desde = $periodo->estado;
+
+            $this->deductions->deshacerPeriodo($periodo->id);
+            $this->commissions->limpiarPeriodo($periodo);
+            $this->settlements->limpiarPeriodo($periodo);
+            NominaRegistro::query()->where('periodo_id', $periodo->id)->delete();
+
+            $periodo->update([
+                'estado' => NominaPeriodo::ABIERTO,
+                'calculado_at' => null,
+                'calculado_por' => null,
+                'aprobado_at' => null,
+                'aprobado_por' => null,
+            ]);
+
+            NominaAuditLog::registrar('PERIODO_REVERTIR_CALCULO', 'periodo', $periodo->id, [
+                'estado' => $desde,
+                'usuario_id' => $usuarioId,
+            ], [
+                'estado' => NominaPeriodo::ABIERTO,
+            ]);
+
+            return $periodo->fresh();
         });
     }
 

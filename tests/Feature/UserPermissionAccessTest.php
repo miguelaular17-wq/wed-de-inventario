@@ -61,6 +61,21 @@ class UserPermissionAccessTest extends TestCase
         $this->assertFalse($user->canAccess('conciliaciones'));
     }
 
+    public function test_auditor_does_not_need_sede_and_skips_selection(): void
+    {
+        $auditor = $this->makeUser(User::ROLE_AUDITOR);
+
+        $this->assertFalse($auditor->requiresSede());
+
+        $this->actingAs($auditor)
+            ->get(route('sede.select'))
+            ->assertRedirect('/');
+
+        $this->actingAs($auditor)
+            ->get('/')
+            ->assertRedirect(route('finanzas.flujo_caja'));
+    }
+
     public function test_finanzas_role_can_delete_egresos_transfers_divisas_and_avances(): void
     {
         $finanzas = $this->makeUser(User::ROLE_FINANZAS);

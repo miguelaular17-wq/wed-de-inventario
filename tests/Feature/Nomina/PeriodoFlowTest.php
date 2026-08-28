@@ -118,6 +118,105 @@ class PeriodoFlowTest extends TestCase
         $this->assertSame(1, NominaPeriodo::query()->count());
     }
 
+    public function test_al_calcular_pregunta_a_quien_descontar_cuotas_y_no_las_aplica_solas(): void
+    {
+        $this->actingAs($this->rrhh);
+
+        $otroCliente = Cliente::create(['cedula' => '27000002', 'nombre' => 'Otro Con Prestamo']);
+        $otro = NominaEmpleado::create([
+            'cliente_id' => $otroCliente->id,
+            'salario_base' => 800,
+            'tipo_salario' => 'QUINCENAL',
+            'estado' => 'ACTIVO',
+            'fecha_ingreso' => '2025-01-01',
+        ]);
+
+        $loan = app(\App\Services\Nomina\LoanService::class);
+        $prestamoElegido = $loan->create($this->empleado, [
+            'fecha' => '2026-08-16',
+            'monto_original' => 110,
+            'numero_cuotas' => 4,
+            'frecuencia' => 'QUINCENAL',
+            'fecha_inicio' => '2026-08-16',
+            'motivo' => 'Arreglo vehiculo',
+        ], $this->rrhh->id);
+        $prestamoOtro = $loan->create($otro, [
+            'fecha' => '2026-08-16',
+            'monto_original' => 200,
+            'numero_cuotas' => 4,
+            'frecuencia' => 'QUINCENAL',
+            'fecha_inicio' => '2026-08-16',
+            'motivo' => 'Otro prestamo',
+        ], $this->rrhh->id);
+
+        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
+        $periodo = NominaPeriodo::query()->firstOrFail();
+
+        $this->get(route('nomina.periodos.calcular.form', $periodo))
+            ->assertOk()
+            ->assertSee('Empleado Quincena')
+            ->assertSee('Otro Con Prestamo')
+            ->assertSee('Arreglo vehiculo');
+
+        $this->post(route('nomina.periodos.calcular', $periodo), [
+            'descontar_empleado_ids' => [$this->empleado->id],
+        ])->assertRedirect(route('nomina.periodos.show', $periodo));
+
+        $this->assertEquals(82.5, (float) $prestamoElegido->fresh()->saldo_pendiente);
+        $this->assertEquals(200.0, (float) $prestamoOtro->fresh()->saldo_pendiente);
+        $this->assertSame(1, $prestamoElegido->cuotas()->whereNotNull('nomina_periodo_id')->count());
+        $this->assertSame(0, $prestamoOtro->cuotas()->whereNotNull('nomina_periodo_id')->count());
+
+        $registro = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
+        $this->assertEquals(27.5, (float) $registro->total_deducciones);
+    }
+
+    public function test_se_puede_deshacer_un_calculo_accidental(): void
+    {
+        $this->actingAs($this->rrhh);
+        $this->crearMovimientos();
+
+        $loan = app(\App\Services\Nomina\LoanService::class);
+        $prestamo = $loan->create($this->empleado, [
+            'fecha' => '2026-08-16',
+            'monto_original' => 110,
+            'numero_cuotas' => 4,
+            'frecuencia' => 'QUINCENAL',
+            'fecha_inicio' => '2026-08-16',
+            'motivo' => 'Arreglo vehiculo',
+        ], $this->rrhh->id);
+
+        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
+        $periodo = NominaPeriodo::query()->firstOrFail();
+
+        $this->post(route('nomina.periodos.calcular', $periodo), [
+            'descontar_empleado_ids' => [$this->empleado->id],
+        ])->assertRedirect();
+
+        $this->assertSame(NominaPeriodo::CALCULADO, $periodo->fresh()->estado);
+        $this->assertEquals(82.5, (float) $prestamo->fresh()->saldo_pendiente);
+
+        $this->post(route('nomina.periodos.revertir', $periodo))->assertRedirect(route('nomina.periodos.show', $periodo));
+
+        $periodo->refresh();
+        $this->assertSame(NominaPeriodo::ABIERTO, $periodo->estado);
+        $this->assertSame(0, NominaRegistro::query()->count());
+        $this->assertEquals(110.0, (float) $prestamo->fresh()->saldo_pendiente);
+        $this->assertSame(0, $prestamo->cuotas()->whereNotNull('nomina_periodo_id')->count());
+        $this->assertDatabaseHas('nomina_abonos_sueldo', [
+            'estado' => 'PENDIENTE',
+            'nomina_periodo_id' => null,
+        ]);
+        $this->assertDatabaseHas('nomina_inasistencias', [
+            'estado' => 'PENDIENTE',
+            'nomina_periodo_id' => null,
+        ]);
+        $this->assertDatabaseHas('nomina_horas_extras', [
+            'estado' => 'PENDIENTE',
+            'nomina_periodo_id' => null,
+        ]);
+    }
+
     private function crearMovimientos(): void
     {
         $quincena = [

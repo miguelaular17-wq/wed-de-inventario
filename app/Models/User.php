@@ -26,6 +26,19 @@ class User extends Authenticatable
     public const ROLE_GERENTE = 'gerente';
     public const ROLE_RRHH = 'rrhh';
 
+    /** Roles de oficina que no eligen ni usan sede de operación. */
+    public const ROLES_WITHOUT_SEDE = [
+        self::ROLE_COMPRADOR,
+        self::ROLE_MARKETING,
+        self::ROLE_FINANZAS,
+        self::ROLE_COBRANZA,
+        self::ROLE_CONTABILIDAD,
+        self::ROLE_AUDITOR,
+        self::ROLE_TESORERIA,
+        self::ROLE_GERENTE,
+        self::ROLE_RRHH,
+    ];
+
     /** @var list<string>|null */
     protected ?array $extraPermissionCache = null;
 
@@ -236,6 +249,11 @@ class User extends Authenticatable
     public function hasAccessToSedeViews(): bool
     {
         return $this->canAccess('operacion');
+    }
+
+    public function requiresSede(): bool
+    {
+        return ! in_array($this->role, self::ROLES_WITHOUT_SEDE, true);
     }
 
     public function hasAccessToMovimientos(): bool

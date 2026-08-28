@@ -29,7 +29,7 @@ class PayrollDeductionService
     public function cuotasPendientesDelRango(Carbon $inicio, Carbon $fin)
     {
         return NominaPrestamoCuota::query()
-            ->with('prestamo')
+            ->with(['prestamo.empleado.cliente'])
             ->whereNull('nomina_periodo_id')
             ->whereIn('estado', ['PENDIENTE', 'VENCIDA', 'PARCIAL'])
             ->whereBetween('fecha_programada', [$inicio->toDateString(), $fin->toDateString()])
@@ -47,7 +47,7 @@ class PayrollDeductionService
         iterable $cuotas,
         int $periodoId,
         ?int $usuarioId = null,
-        string $observacion = 'Descuento automático de nómina'
+        string $observacion = 'Descuento de nómina'
     ): array {
         $abonos = [];
 
@@ -98,5 +98,12 @@ class PayrollDeductionService
         $this->aplicarAdelantosYAsistencia($periodoId, $inicio, $fin);
 
         return $abonos;
+    }
+
+    public function deshacerPeriodo(int $periodoId): void
+    {
+        $this->payments->revertirAbonosDelPeriodo($periodoId);
+        $this->advances->deshacerPeriodo($periodoId);
+        $this->attendance->deshacerPeriodo($periodoId);
     }
 }
