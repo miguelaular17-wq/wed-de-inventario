@@ -293,6 +293,23 @@ trait CreatesNominaSchema
             });
         }
 
+        if (! Schema::hasTable('nomina_descuentos_mercancia')) {
+            Schema::create('nomina_descuentos_mercancia', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('empleado_id');
+                $table->date('fecha');
+                $table->decimal('monto', 12, 2);
+                $table->date('quincena_inicio');
+                $table->date('quincena_fin');
+                $table->string('etiqueta', 64);
+                $table->string('estado', 16)->default('PENDIENTE');
+                $table->unsignedBigInteger('nomina_periodo_id')->nullable();
+                $table->text('motivo')->nullable();
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->timestamps();
+            });
+        }
+
         if (! Schema::hasTable('nomina_config')) {
             Schema::create('nomina_config', function (Blueprint $table) {
                 $table->string('clave', 64)->primary();
@@ -541,6 +558,7 @@ trait CreatesNominaSchema
             'nomina_inasistencias',
             'nomina_config',
             'nomina_abonos_sueldo',
+            'nomina_descuentos_mercancia',
             'nomina_prestamo_abonos',
             'nomina_prestamo_cuotas',
             'nomina_prestamos',

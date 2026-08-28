@@ -18,6 +18,7 @@ use App\Services\Nomina\AttendanceService;
 use App\Services\Nomina\EmployeeSalesService;
 use App\Services\Nomina\EmployeeService;
 use App\Services\Nomina\LoanService;
+use App\Services\Nomina\MerchandiseDeductionService;
 use App\Services\Nomina\OrganizationService;
 use App\Services\Nomina\SalaryAdvanceService;
 use Illuminate\Http\RedirectResponse;
@@ -33,6 +34,7 @@ class EmpleadoController extends Controller
         private SalaryAdvanceService $advances,
         private AttendanceService $attendance,
         private EmployeeSalesService $sales,
+        private MerchandiseDeductionService $mercancia,
     ) {
     }
 
@@ -113,7 +115,7 @@ class EmpleadoController extends Controller
             ->with('status', 'Empleado creado.');
     }
 
-    public function show(Request $request, NominaEmpleado $empleado): View
+    public function show(Request $request, NominaEmpleado $empleado): View|RedirectResponse
     {
         $empleado->load([
             'cliente',
@@ -129,9 +131,16 @@ class EmpleadoController extends Controller
             'abonosSueldo.creador',
             'inasistencias.creador',
             'horasExtras.creador',
+            'descuentosMercancia.creador',
         ]);
 
         $tab = $request->query('tab', 'personal');
+        if ($tab === 'comisiones' && ! $empleado->generaComision()) {
+            return redirect()->route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'mercancia']);
+        }
+        if ($tab === 'mercancia' && $empleado->generaComision()) {
+            return redirect()->route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'comisiones']);
+        }
         $resumenPrestamos = $this->loans->resumenEmpleado($empleado);
         $quincenaActual = $this->advances->quincenaDe(now());
         $ventasResumen = $this->sales->resumen($empleado, $quincenaActual['inicio'], $quincenaActual['fin']);
@@ -193,6 +202,9 @@ class EmpleadoController extends Controller
                 })->orWhere(function ($q) use ($empleado) {
                     $q->where('entidad', 'hora_extra')
                         ->whereIn('entidad_id', $empleado->horasExtras->pluck('id')->all() ?: [0]);
+                })->orWhere(function ($q) use ($empleado) {
+                    $q->where('entidad', 'mercancia')
+                        ->whereIn('entidad_id', $empleado->descuentosMercancia->pluck('id')->all() ?: [0]);
                 });
             })
             ->with('user')
@@ -206,6 +218,8 @@ class EmpleadoController extends Controller
             'resumenPrestamos' => $resumenPrestamos,
             'abonosPendientes' => $this->advances->pendientesDe($empleado),
             'resumenAdelantos' => $this->advances->resumenEmpleado($empleado),
+            'resumenMercancia' => $this->mercancia->resumenEmpleado($empleado),
+            'mercanciaPendiente' => $this->mercancia->pendientesDe($empleado),
             'quincenaActual' => $quincenaActual,
             'asistencia' => $this->attendance->resumenQuincena($empleado),
             'ventasResumen' => $ventasResumen,

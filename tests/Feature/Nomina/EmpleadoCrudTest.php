@@ -63,6 +63,7 @@ class EmpleadoCrudTest extends TestCase
             'cargo_id' => $cargoVen->id,
             'supervisor_id' => $supervisor->id,
             'codigo_vendedor' => 'Juan Perez',
+            'modo_comision' => 'VENTAS_PROPIAS',
             'fecha_ingreso' => '2024-02-01',
         ])->assertRedirect();
 
@@ -374,5 +375,47 @@ class EmpleadoCrudTest extends TestCase
             'es_supervisor' => 1,
             'supervisor_id' => $luis->id,
         ])->assertSessionHasErrors('supervisor_id');
+    }
+
+    public function test_sin_comision_muestra_mercancia_y_no_comisiones(): void
+    {
+        $this->actingAs($this->rrhh);
+
+        $this->post(route('nomina.empleados.store'), [
+            'cedula' => '28501999',
+            'nombre' => 'Maria Alejandra',
+            'salario_base' => 300,
+            'tipo_salario' => 'MENSUAL',
+            'estado' => 'ACTIVO',
+            'modo_comision' => 'SIN_COMISION',
+        ])->assertRedirect();
+
+        $empleado = NominaEmpleado::query()->first();
+
+        $this->get(route('nomina.empleados.show', $empleado))
+            ->assertOk()
+            ->assertSee('Mercancía')
+            ->assertSee('Mercancía pendiente')
+            ->assertDontSee('Comisiones tienda');
+
+        $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'comisiones']))
+            ->assertRedirect(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'mercancia']));
+
+        $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'mercancia']))
+            ->assertOk()
+            ->assertSee('Descuentos de mercancía')
+            ->assertDontSee('Comisiones de marca');
+
+        $this->post(route('nomina.mercancia.store', $empleado), [
+            'fecha' => '2026-08-20',
+            'monto' => 25.5,
+            'motivo' => 'Audifonos',
+        ])->assertRedirect(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'mercancia']));
+
+        $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'mercancia']))
+            ->assertOk()
+            ->assertSee('25.50')
+            ->assertSee('Audifonos')
+            ->assertSee('PENDIENTE');
     }
 }

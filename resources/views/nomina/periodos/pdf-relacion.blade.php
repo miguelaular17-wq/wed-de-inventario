@@ -40,6 +40,7 @@
                 <th>Horas extra</th>
                 <th>IAS</th>
                 <th>Adelantos</th>
+                <th>Mercancía</th>
                 <th>Préstamos</th>
                 <th>Deducciones</th>
                 <th>A pagar USD</th>
@@ -57,6 +58,7 @@
                     <td class="num">{{ number_format($fila['horas_extras'], 2) }}</td>
                     <td class="num">{{ number_format($fila['inasistencias'], 2) }}</td>
                     <td class="num">{{ number_format($fila['adelantos'], 2) }}</td>
+                    <td class="num">{{ number_format($fila['mercancia'], 2) }}</td>
                     <td class="num">{{ number_format($fila['prestamos'], 2) }}</td>
                     <td class="num">{{ number_format($fila['deducciones'], 2) }}</td>
                     <td class="num">{{ number_format($fila['pagar_usd'], 2) }}</td>
@@ -69,6 +71,7 @@
                 <td class="num">{{ number_format($totales['horas_extras'], 2) }}</td>
                 <td class="num">{{ number_format($totales['inasistencias'], 2) }}</td>
                 <td class="num">{{ number_format($totales['adelantos'], 2) }}</td>
+                <td class="num">{{ number_format($totales['mercancia'], 2) }}</td>
                 <td class="num">{{ number_format($totales['prestamos'], 2) }}</td>
                 <td class="num">{{ number_format($totales['deducciones'], 2) }}</td>
                 <td class="num">{{ number_format($totales['pagar_usd'], 2) }}</td>

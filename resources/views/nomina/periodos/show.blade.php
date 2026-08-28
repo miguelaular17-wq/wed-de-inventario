@@ -106,6 +106,7 @@
                     <th>Horas extras</th>
                     <th>IAS</th>
                     <th>Adelantos</th>
+                    <th>Mercancía</th>
                     <th>Préstamos sueldo</th>
                     <th>Total deducciones</th>
                     <th>Nómina a pagar</th>
@@ -144,13 +145,14 @@
                         <td>${{ number_format($desglose['horas_extras'] ?? 0, 2) }}</td>
                         <td>${{ number_format($desglose['inasistencias'] ?? 0, 2) }}</td>
                         <td>${{ number_format($desglose['abonos_sueldo'] ?? 0, 2) }}</td>
+                        <td>${{ number_format($desglose['mercancia'] ?? 0, 2) }}</td>
                         <td>${{ number_format($desglose['prestamos'] ?? 0, 2) }}</td>
                         <td>${{ number_format($registro->total_deducciones, 2) }}</td>
                         <td><strong>${{ number_format($registro->total_pagar, 2) }}</strong></td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="9" class="muted">
+                        <td colspan="10" class="muted">
                             La quincena está abierta. Presiona “Calcular nómina” para generar los recibos.
                         </td>
                     </tr>
@@ -168,7 +170,7 @@
     @if($periodo->estado !== 'ABIERTO')
     <div class="nomina-card" style="margin-top:16px;">
         <h3>Archivo para el banco</h3>
-        <p class="muted">Un TXT por empresa: cédula;monto en Bs (tasa BCV del día);fecha. Tasa BCV hoy: <strong>{{ number_format($tasaBcv, 2) }}</strong>.</p>
+        <p class="muted">Un TXT por empresa, formato banco: <code>V</code> + cédula (9 dígitos) + monto Bs a tasa BCV sin punto (21 dígitos) + fecha <code>ddmmaaaa</code>. Tasa BCV hoy: <strong>{{ number_format($tasaBcv, 2) }}</strong>.</p>
         <table class="data-table">
             <thead><tr><th>Empresa</th><th>Empleados</th><th>Nómina USD</th><th>Nómina Bs</th><th></th></tr></thead>
             <tbody>

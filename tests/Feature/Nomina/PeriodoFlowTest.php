@@ -257,6 +257,31 @@ class PeriodoFlowTest extends TestCase
         $this->assertEquals(10.0, (float) $registro->total_deducciones);
     }
 
+    public function test_descuenta_mercancia_del_sueldo_al_calcular(): void
+    {
+        $this->actingAs($this->rrhh);
+
+        $this->post(route('nomina.mercancia.store', $this->empleado), [
+            'fecha' => '2026-08-20',
+            'monto' => 40,
+            'motivo' => 'Celular',
+        ])->assertRedirect();
+
+        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
+        $periodo = NominaPeriodo::query()->firstOrFail();
+        $this->post(route('nomina.periodos.calcular', $periodo))->assertRedirect();
+
+        $registro = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
+        $this->assertEquals(40.0, (float) $registro->total_deducciones);
+        $this->assertEquals(760.0, (float) $registro->total_pagar);
+        $this->assertDatabaseHas('nomina_descuentos_mercancia', [
+            'empleado_id' => $this->empleado->id,
+            'monto' => 40,
+            'estado' => 'DESCONTADO',
+            'nomina_periodo_id' => $periodo->id,
+        ]);
+    }
+
     public function test_se_puede_deshacer_un_calculo_accidental(): void
     {
         $this->actingAs($this->rrhh);

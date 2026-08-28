@@ -162,6 +162,18 @@ class NominaEmpleado extends Model
         return $this->estado === 'ACTIVO';
     }
 
+    public function generaComision(): bool
+    {
+        $modo = (string) ($this->modo_comision ?: self::COMISION_NINGUNA);
+
+        return $modo !== self::COMISION_NINGUNA;
+    }
+
+    public function descuentosMercancia(): HasMany
+    {
+        return $this->hasMany(NominaDescuentoMercancia::class, 'empleado_id')->orderByDesc('fecha')->orderByDesc('id');
+    }
+
     public static function modosComision(): array
     {
         return [

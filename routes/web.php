@@ -25,6 +25,7 @@ use App\Http\Controllers\Nomina\ComisionAjusteController;
 use App\Http\Controllers\Nomina\ComisionController;
 use App\Http\Controllers\Nomina\ConfiguracionController;
 use App\Http\Controllers\Nomina\EmpleadoController;
+use App\Http\Controllers\Nomina\MercanciaController;
 use App\Http\Controllers\Nomina\EmpresaNominaController;
 use App\Http\Controllers\Nomina\OrganizacionController;
 use App\Http\Controllers\Nomina\PeriodoController;
@@ -256,6 +257,8 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::post('/prestamos/{prestamo}/cancelar', [PrestamoController::class, 'cancelar'])->name('prestamos.cancelar');
     Route::post('/empleados/{empleado}/abonos-sueldo', [AbonoSueldoController::class, 'store'])->name('abonos_sueldo.store');
     Route::post('/abonos-sueldo/{abono}/cancelar', [AbonoSueldoController::class, 'cancelar'])->name('abonos_sueldo.cancelar');
+    Route::post('/empleados/{empleado}/mercancia', [MercanciaController::class, 'store'])->name('mercancia.store');
+    Route::post('/mercancia/{descuento}/cancelar', [MercanciaController::class, 'cancelar'])->name('mercancia.cancelar');
     Route::post('/empleados/{empleado}/comision-abonos', [ComisionAjusteController::class, 'storeAbono'])->name('comision_abonos.store');
     Route::post('/empleados/{empleado}/comision-descuentos', [ComisionAjusteController::class, 'storeDescuento'])->name('comision_descuentos.store');
     Route::post('/empleados/{empleado}/inasistencias', [AttendanceController::class, 'storeInasistencia'])->name('inasistencias.store');

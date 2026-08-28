@@ -14,6 +14,7 @@ class PayrollDeductionService
         private LoanPaymentService $payments,
         private SalaryAdvanceService $advances,
         private AttendanceService $attendance,
+        private MerchandiseDeductionService $mercancia,
     ) {
     }
 
@@ -21,6 +22,7 @@ class PayrollDeductionService
     {
         $this->advances->aplicarAPeriodo($periodoId, $inicio, $fin);
         $this->attendance->aplicarAPeriodo($periodoId, $inicio, $fin);
+        $this->mercancia->aplicarAPeriodo($periodoId, $inicio, $fin);
     }
 
     /**
@@ -131,5 +133,6 @@ class PayrollDeductionService
         $this->payments->revertirAbonosDelPeriodo($periodoId);
         $this->advances->deshacerPeriodo($periodoId);
         $this->attendance->deshacerPeriodo($periodoId);
+        $this->mercancia->deshacerPeriodo($periodoId);
     }
 }

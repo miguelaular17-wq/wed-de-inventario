@@ -7,7 +7,7 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">Empresas</h1>
-            <p class="muted" style="margin:4px 0 0;">Código / RIF de la compañía que paga la nómina. Cada empleado debe pertenecer a una. El TXT del banco se arma por este código.</p>
+            <p class="muted" style="margin:4px 0 0;">Código / RIF de la compañía que paga la nómina. Cada empleado debe pertenecer a una. El TXT del banco (V + cédula, monto Bs y fecha) se arma por este código.</p>
         </div>
     </div>
 

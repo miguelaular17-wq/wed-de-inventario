@@ -197,18 +197,18 @@ class PeriodoController extends Controller
                 'Nómina' => array_merge(
                     [[
                         'Cédula', 'Empleado', 'Empresa', 'Sede',
-                        'Salario USD', 'Horas extra', 'IAS', 'Adelantos', 'Préstamos',
+                        'Salario USD', 'Horas extra', 'IAS', 'Adelantos', 'Mercancía', 'Préstamos',
                         'Deducciones', 'A pagar USD', 'A pagar Bs',
                     ]],
                     array_map(fn ($f) => [
                         $f['cedula'], $f['nombre'], $f['empresa'], $f['sede'],
-                        $f['salario'], $f['horas_extras'], $f['inasistencias'], $f['adelantos'], $f['prestamos'],
+                        $f['salario'], $f['horas_extras'], $f['inasistencias'], $f['adelantos'], $f['mercancia'], $f['prestamos'],
                         $f['deducciones'], $f['pagar_usd'], $f['pagar_bs'],
                     ], $filas),
                     [[
                         'TOTALES', count($filas).' trabajadores', '', '',
                         $totales['salario'], $totales['horas_extras'], $totales['inasistencias'],
-                        $totales['adelantos'], $totales['prestamos'], $totales['deducciones'],
+                        $totales['adelantos'], $totales['mercancia'], $totales['prestamos'], $totales['deducciones'],
                         $totales['pagar_usd'], $totales['pagar_bs'],
                     ]]
                 ),
@@ -238,7 +238,7 @@ class PeriodoController extends Controller
         $filas = [];
         $totales = [
             'salario' => 0.0, 'horas_extras' => 0.0, 'inasistencias' => 0.0,
-            'adelantos' => 0.0, 'prestamos' => 0.0, 'deducciones' => 0.0,
+            'adelantos' => 0.0, 'mercancia' => 0.0, 'prestamos' => 0.0, 'deducciones' => 0.0,
             'pagar_usd' => 0.0, 'pagar_bs' => 0.0,
         ];
 
@@ -254,6 +254,7 @@ class PeriodoController extends Controller
                 'horas_extras' => round((float) ($desglose['horas_extras'] ?? 0), 2),
                 'inasistencias' => round((float) ($desglose['inasistencias'] ?? 0), 2),
                 'adelantos' => round((float) ($desglose['abonos_sueldo'] ?? 0), 2),
+                'mercancia' => round((float) ($desglose['mercancia'] ?? 0), 2),
                 'prestamos' => round((float) ($desglose['prestamos'] ?? 0), 2),
                 'deducciones' => round((float) $registro->total_deducciones, 2),
                 'pagar_usd' => round((float) $registro->total_pagar, 2),

@@ -5,6 +5,7 @@ namespace App\Services\Nomina;
 use App\Models\Nomina\NominaAbonoSueldo;
 use App\Models\Nomina\NominaAuditLog;
 use App\Models\Nomina\NominaComisionDescuento;
+use App\Models\Nomina\NominaDescuentoMercancia;
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaHoraExtra;
 use App\Models\Nomina\NominaInasistencia;
@@ -154,6 +155,7 @@ class PayrollPeriodService
                 $otrosIngresos = $desglose['horas_extras'];
                 $totalDeducciones = $desglose['abonos_sueldo']
                     + $desglose['inasistencias']
+                    + $desglose['mercancia']
                     + $prestamosNomina;
                 $totalPagar = $salario + $otrosIngresos - $totalDeducciones;
 
@@ -340,7 +342,7 @@ class PayrollPeriodService
     }
 
     /**
-     * @return array{horas_extras:float,inasistencias:float,abonos_sueldo:float,prestamos:float}
+     * @return array{horas_extras:float,inasistencias:float,abonos_sueldo:float,mercancia:float,prestamos:float}
      */
     private function desglose(NominaPeriodo $periodo, NominaEmpleado $empleado): array
     {
@@ -361,6 +363,10 @@ class PayrollPeriodService
                 ->where('nomina_periodo_id', $periodo->id)
                 ->sum('monto'), 2),
             'abonos_sueldo' => round((float) NominaAbonoSueldo::query()
+                ->where('empleado_id', $empleado->id)
+                ->where('nomina_periodo_id', $periodo->id)
+                ->sum('monto'), 2),
+            'mercancia' => round((float) NominaDescuentoMercancia::query()
                 ->where('empleado_id', $empleado->id)
                 ->where('nomina_periodo_id', $periodo->id)
                 ->sum('monto'), 2),

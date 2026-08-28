@@ -38,7 +38,7 @@ class PayrollBankFileService
             ]);
         }
 
-        $fecha = Carbon::parse($fechaPago ?? now())->format('d/m/Y');
+        $fecha = Carbon::parse($fechaPago ?? now());
         $lineas = [];
 
         foreach ($periodo->registros as $registro) {
@@ -49,12 +49,12 @@ class PayrollBankFileService
             if ($usd <= 0) {
                 continue;
             }
-            $cedula = preg_replace('/\D+/', '', $registro->empleado->cedula()) ?: '';
-            if ($cedula === '') {
+            $cedula = $registro->empleado->cedula();
+            if (preg_replace('/\D+/', '', $cedula) === '') {
                 continue;
             }
-            $bs = number_format(round($usd * $tasaBcv, 2), 2, '.', '');
-            $lineas[] = $cedula.';'.$bs.';'.$fecha;
+            $bs = round($usd * $tasaBcv, 2);
+            $lineas[] = self::formatearLinea($cedula, $bs, $fecha);
         }
 
         if ($lineas === []) {
@@ -71,5 +71,26 @@ class PayrollBankFileService
         $fecha = Carbon::parse($fechaPago ?? now())->format('Ymd');
 
         return 'nomina_'.$empresa->codigo.'_'.$periodo->id.'_'.$fecha.'.txt';
+    }
+
+    /**
+     * Formato banco: V + cédula (9 dígitos) + 2 espacios + monto Bs en céntimos (21 dígitos) + fecha ddmmyyyy.
+     * Ejemplo: V031475493  00000000000000502151015082026
+     */
+    public static function formatearLinea(string $cedula, float $montoBs, Carbon|string $fecha): string
+    {
+        $digitos = preg_replace('/\D+/', '', $cedula) ?: '0';
+        $digitos = substr($digitos, -9);
+        $identificacion = 'V'.str_pad($digitos, 9, '0', STR_PAD_LEFT);
+
+        $centimos = (int) round(round($montoBs, 2) * 100);
+        if ($centimos < 0) {
+            $centimos = 0;
+        }
+        $monto = str_pad((string) $centimos, 21, '0', STR_PAD_LEFT);
+
+        $dia = Carbon::parse($fecha)->format('dmY');
+
+        return $identificacion.'  '.$monto.$dia;
     }
 }
