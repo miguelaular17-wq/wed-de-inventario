@@ -36,7 +36,9 @@
 @else
     <p class="muted" style="margin:0 0 16px;">
         Exporta requisiciones registradas en <a href="{{ route('inventario.index') }}">Inventario</a>.
-        Al descargar el CSV se <strong>aplica el movimiento de stock</strong> (resta en origen, suma en {{ $sede }}).
+        Al descargar se <strong>aplica el movimiento de stock</strong> (resta en origen, suma en {{ $sede }}).
+        Con <strong>Todas las sedes</strong> sale un CSV por origen (ZIP).
+        Si descargas desde <strong>Virtudes</strong>, todos van con coma; desde cualquier otra sede, todos van con punto y coma (incluido el de Virtudes).
     </p>
 @endif
 

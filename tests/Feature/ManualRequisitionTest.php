@@ -359,4 +359,95 @@ class ManualRequisitionTest extends TestCase
         $this->assertStringContainsString('PROD_STAR', $csvContent);
         $this->assertStringNotContainsString('PROD_NON_STAR', $csvContent);
     }
+
+    public function test_export_manual_todas_las_sedes_genera_un_csv_por_origen(): void
+    {
+        config(['inventario.sedes_stock' => ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA']]);
+        config(['inventario.display' => [
+            'JRZ' => 'JRZ',
+            'DORAL' => 'DORAL',
+            'VIRTUDES' => 'Virtude',
+            'ZAMORA' => 'Zamora',
+        ]]);
+
+        $user = User::create([
+            'name' => 'Admin User',
+            'email' => 'admin_manual_zip@test.local',
+            'password' => 'password123',
+            'role' => 'admin',
+        ]);
+
+        $pJrz = Product::create([
+            'cod_centro' => 'MAN_JRZ',
+            'producto' => 'Item JRZ',
+            'categoria' => 'GENERAL',
+            'subcategoria' => 'GENERAL',
+            'proveedor' => 'Prov',
+        ]);
+        $pVirt = Product::create([
+            'cod_centro' => 'MAN_VIRT',
+            'producto' => 'Item Virtudes',
+            'categoria' => 'GENERAL',
+            'subcategoria' => 'GENERAL',
+            'proveedor' => 'Prov',
+        ]);
+
+        foreach ([$pJrz, $pVirt] as $product) {
+            foreach (['JRZ' => 20, 'VIRTUDES' => 20, 'ZAMORA' => 1] as $sede => $ex) {
+                ProductSedeMetric::create([
+                    'product_id' => $product->id,
+                    'sede' => $sede,
+                    'existencia' => $ex,
+                ]);
+            }
+        }
+
+        RequisicionManual::create([
+            'sede_local' => 'ZAMORA',
+            'codigo' => 'MAN_JRZ',
+            'producto' => 'Item JRZ',
+            'sede_origen' => 'JRZ',
+            'cantidad' => 1,
+            'usuario' => $user->email,
+        ]);
+        RequisicionManual::create([
+            'sede_local' => 'ZAMORA',
+            'codigo' => 'MAN_VIRT',
+            'producto' => 'Item Virtudes',
+            'sede_origen' => 'VIRTUDES',
+            'cantidad' => 2,
+            'usuario' => $user->email,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['sede_local' => 'ZAMORA'])
+            ->post(route('requisicion.export'), [
+                'tipo_reporte' => 'personalizada',
+                'sede_origen' => 'Todas',
+                'categoria' => 'Todas',
+                'subcategoria' => 'Todas',
+            ]);
+
+        $response->assertOk();
+        $this->assertStringContainsString('application/zip', (string) $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('Requisicion_manual_ZAMORA_por_sede.zip', (string) $response->headers->get('Content-Disposition'));
+
+        $tmp = tempnam(sys_get_temp_dir(), 'zip');
+        file_put_contents($tmp, $response->getContent());
+        $zip = new \ZipArchive();
+        $this->assertTrue($zip->open($tmp) === true);
+        $jrz = $zip->getFromName('Requisicion_manual_JRZ.csv');
+        $virt = $zip->getFromName('Requisicion_manual_Virtude.csv');
+        $zip->close();
+        @unlink($tmp);
+
+        $this->assertNotFalse($jrz);
+        $this->assertNotFalse($virt);
+        $this->assertStringContainsString('codigo;unidad;cantidad', $jrz);
+        $this->assertStringContainsString('MAN_JRZ;UND;1', $jrz);
+        $this->assertStringContainsString('codigo;unidad;cantidad', $virt);
+        $this->assertStringContainsString('MAN_VIRT;UND;2', $virt);
+        $this->assertStringNotContainsString('MAN_VIRT', $jrz);
+        $this->assertStringNotContainsString('MAN_JRZ', $virt);
+    }
 }

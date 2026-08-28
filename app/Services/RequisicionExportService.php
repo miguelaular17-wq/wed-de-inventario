@@ -188,19 +188,38 @@ class RequisicionExportService
             ->values();
     }
 
-    public function toCsv(Collection $lines): string
+    public function toCsv(Collection $lines, string $delimiter = ';'): string
     {
-        $out = "codigo;unidad;cantidad\n";
+        if ($delimiter === '') {
+            $delimiter = ';';
+        }
+
+        $out = implode($delimiter, ['codigo', 'unidad', 'cantidad'])."\n";
         foreach ($lines as $line) {
-            $out .= sprintf(
-                "%s;%s;%d\n",
-                $line['codigo'],
-                $line['unidad'],
-                $line['cantidad']
-            );
+            $out .= implode($delimiter, [
+                (string) $line['codigo'],
+                (string) $line['unidad'],
+                (string) ((int) $line['cantidad']),
+            ])."\n";
         }
 
         return $out;
+    }
+
+    /**
+     * Separador del CSV según la sede que descarga (sede local), no el origen.
+     * Virtudes: coma. Cualquier otra sede: punto y coma, incluso si el archivo es de Virtudes.
+     */
+    public function csvDelimiterForSede(?string $sedeLocal): string
+    {
+        $key = strtoupper(trim((string) $sedeLocal));
+        $label = strtoupper((string) config('inventario.display.'.$key, $key));
+
+        if ($key === 'VIRTUDES' || str_contains($key, 'VIRTUD') || str_contains($label, 'VIRTUD')) {
+            return ',';
+        }
+
+        return ';';
     }
 
     public function resolveSedeKey(string $displayOrKey): ?string

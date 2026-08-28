@@ -273,6 +273,7 @@ class RequisicionController extends Controller
         $sedeOrigen = (string) $request->input('sede_origen');
         $categoria = (string) $request->input('categoria', 'Todas');
         $subcategoria = (string) $request->input('subcategoria', 'Todas');
+        $delimiter = $this->export->csvDelimiterForSede($sede);
 
         if ($tipoReporte === 'personalizada') {
             $sedeOrigenKey = ($sedeOrigen === 'Todas' || $sedeOrigen === '')
@@ -303,11 +304,35 @@ class RequisicionController extends Controller
                 auth()->user()?->email,
             );
 
-            $filename = $sedeOrigenKey
-                ? 'Requisicion_manual_'.config('inventario.display.'.$sedeOrigenKey, $sedeOrigenKey).'.csv'
-                : 'Requisicion_manual_'.$sede.'_todas.csv';
+            if ($sedeOrigenKey === null) {
+                $porSede = $lines->groupBy(fn (array $line) => strtoupper((string) ($line['sede_origen'] ?? '')));
+                $zip = new \ZipArchive();
+                $zipFile = tempnam(sys_get_temp_dir(), 'zip');
+                if ($zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+                    return back()->withErrors(['export' => 'No se pudo crear el archivo ZIP.']);
+                }
 
-            return response($this->export->toCsv($lines), 200, [
+                foreach ($porSede as $origenKey => $grupo) {
+                    if ($origenKey === '' || $grupo->isEmpty()) {
+                        continue;
+                    }
+                    $display = config('inventario.display.'.$origenKey, $origenKey);
+                    $zip->addFromString(
+                        'Requisicion_manual_'.$display.'.csv',
+                        $this->export->toCsv($grupo->values(), $delimiter)
+                    );
+                }
+                $zip->close();
+
+                return response()->download(
+                    $zipFile,
+                    'Requisicion_manual_'.$sede.'_por_sede.zip'
+                )->deleteFileAfterSend(true);
+            }
+
+            $filename = 'Requisicion_manual_'.config('inventario.display.'.$sedeOrigenKey, $sedeOrigenKey).'.csv';
+
+            return response($this->export->toCsv($lines, $delimiter), 200, [
                 'Content-Type' => 'text/csv; charset=UTF-8',
                 'Content-Disposition' => 'attachment; filename="'.$filename.'"',
             ]);
@@ -374,7 +399,7 @@ class RequisicionController extends Controller
                     $this->stock->applyRequisition($lines, $origSede, $sede, null, $tipoReporte);
                     
                     // Generate CSV content
-                    $csvContent = $this->export->toCsv($lines);
+                    $csvContent = $this->export->toCsv($lines, $delimiter);
                     
                     // Add to ZIP
                     $zip->addFromString('Requisicion_'.$sede.'_desde_'.$origSede.'.csv', $csvContent);
@@ -441,7 +466,7 @@ class RequisicionController extends Controller
 
         $filename = 'Requisicion_'.$sede.'_desde_'.$sedeOrigenKey.'.csv';
 
-        return response($this->export->toCsv($lines), 200, [
+        return response($this->export->toCsv($lines, $delimiter), 200, [
             'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);

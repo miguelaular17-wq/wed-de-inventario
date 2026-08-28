@@ -39,4 +39,20 @@ class RequisicionExportServiceTest extends TestCase
             ['231554531221']
         ));
     }
+
+    public function test_el_separador_lo_define_la_sede_que_descarga(): void
+    {
+        $service = new RequisicionExportService();
+        $lines = collect([[
+            'codigo' => 'ABC123',
+            'unidad' => 'UND',
+            'cantidad' => 2,
+        ]]);
+
+        $this->assertSame("codigo,unidad,cantidad\nABC123,UND,2\n", $service->toCsv($lines, $service->csvDelimiterForSede('VIRTUDES')));
+        $this->assertSame("codigo;unidad;cantidad\nABC123;UND;2\n", $service->toCsv($lines, $service->csvDelimiterForSede('ZAMORA')));
+        $this->assertSame("codigo;unidad;cantidad\nABC123;UND;2\n", $service->toCsv($lines, $service->csvDelimiterForSede('CENTRO')));
+        $this->assertSame(',', $service->csvDelimiterForSede('Virtude'));
+        $this->assertSame(';', $service->csvDelimiterForSede('JRZ'));
+    }
 }
