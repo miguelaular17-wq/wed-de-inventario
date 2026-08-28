@@ -84,6 +84,29 @@ class PeriodoFlowTest extends TestCase
             'nomina_periodo_id' => $periodo->id,
         ]);
 
+        $this->get(route('nomina.periodos.show', $periodo))
+            ->assertOk()
+            ->assertSee('Descargar relación PDF')
+            ->assertSee('Descargar Excel');
+
+        $pdf = $this->get(route('nomina.periodos.relacion', $periodo));
+        $pdf->assertOk();
+        $pdf->assertHeader('content-disposition');
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        $xlsx = $this->get(route('nomina.periodos.relacion', ['periodo' => $periodo, 'formato' => 'xlsx']));
+        $xlsx->assertOk();
+        $tmp = tempnam(sys_get_temp_dir(), 'xlsx');
+        file_put_contents($tmp, $xlsx->getContent());
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($tmp) === true);
+        $sheet = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        @unlink($tmp);
+        $this->assertStringContainsString('Empleado Quincena', $sheet);
+        $this->assertStringContainsString('A pagar USD', $sheet);
+        $this->assertStringNotContainsString('Comisión', $sheet);
+
         $this->post(route('nomina.periodos.aprobar', $periodo))->assertRedirect();
         $this->assertSame(NominaPeriodo::APROBADO, $periodo->fresh()->estado);
 
@@ -171,6 +194,69 @@ class PeriodoFlowTest extends TestCase
         $this->assertEquals(27.5, (float) $registro->total_deducciones);
     }
 
+    public function test_permite_descontar_una_cuota_o_un_parcial_y_lo_registra(): void
+    {
+        $this->actingAs($this->rrhh);
+
+        $loan = app(\App\Services\Nomina\LoanService::class);
+        $prestamoUno = $loan->create($this->empleado, [
+            'fecha' => '2026-08-16',
+            'monto_original' => 110,
+            'numero_cuotas' => 4,
+            'frecuencia' => 'QUINCENAL',
+            'fecha_inicio' => '2026-08-16',
+            'motivo' => 'Arreglo vehiculo',
+        ], $this->rrhh->id);
+        $prestamoDos = $loan->create($this->empleado, [
+            'fecha' => '2026-08-16',
+            'monto_original' => 80,
+            'numero_cuotas' => 4,
+            'frecuencia' => 'QUINCENAL',
+            'fecha_inicio' => '2026-08-16',
+            'motivo' => 'Prestamo personal',
+        ], $this->rrhh->id);
+
+        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
+        $periodo = NominaPeriodo::query()->firstOrFail();
+
+        $cuotaUno = $prestamoUno->cuotas()->orderBy('numero')->firstOrFail();
+        $cuotaDos = $prestamoDos->cuotas()->orderBy('numero')->firstOrFail();
+
+        $this->get(route('nomina.periodos.calcular.form', $periodo))
+            ->assertOk()
+            ->assertSee('name="descuentos['.$cuotaUno->id.'][aplicar]"', false)
+            ->assertSee('Parcial $');
+
+        $this->post(route('nomina.periodos.calcular', $periodo), [
+            'descuentos' => [
+                $cuotaUno->id => [
+                    'aplicar' => '1',
+                    'cuota_id' => $cuotaUno->id,
+                    'monto' => '10.00',
+                ],
+                $cuotaDos->id => [
+                    'cuota_id' => $cuotaDos->id,
+                    'monto' => '20.00',
+                ],
+            ],
+        ])->assertRedirect(route('nomina.periodos.show', $periodo));
+
+        $this->assertEquals(100.0, (float) $prestamoUno->fresh()->saldo_pendiente);
+        $this->assertEquals(80.0, (float) $prestamoDos->fresh()->saldo_pendiente);
+        $this->assertSame('PARCIAL', $cuotaUno->fresh()->estado);
+        $this->assertEquals(10.0, (float) $cuotaUno->fresh()->monto_pagado);
+        $this->assertDatabaseHas('nomina_prestamo_abonos', [
+            'prestamo_id' => $prestamoUno->id,
+            'cuota_id' => $cuotaUno->id,
+            'monto' => 10,
+            'tipo' => 'DESCUENTO_NOMINA',
+        ]);
+        $this->assertSame(0, $prestamoDos->cuotas()->whereNotNull('nomina_periodo_id')->count());
+
+        $registro = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
+        $this->assertEquals(10.0, (float) $registro->total_deducciones);
+    }
+
     public function test_se_puede_deshacer_un_calculo_accidental(): void
     {
         $this->actingAs($this->rrhh);
@@ -215,6 +301,34 @@ class PeriodoFlowTest extends TestCase
             'estado' => 'PENDIENTE',
             'nomina_periodo_id' => null,
         ]);
+    }
+
+    public function test_exporta_txt_banco_por_empresa_en_bolivares(): void
+    {
+        \Illuminate\Support\Facades\Cache::put('tasa_bcv_'.date('Y-m-d'), 40.0, 3600);
+
+        $empresa = \App\Models\Nomina\NominaEmpresa::create([
+            'codigo' => 'J401722296',
+            'nombre' => 'INVERSIONES DORAL PARAGUANÁ, C.A.',
+            'estado' => 'ACTIVO',
+        ]);
+        $this->empleado->update(['empresa_id' => $empresa->id]);
+        $this->actingAs($this->rrhh);
+        $this->crearMovimientos();
+        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
+        $periodo = NominaPeriodo::query()->firstOrFail();
+        $this->post(route('nomina.periodos.calcular', $periodo))->assertRedirect();
+
+        $this->get(route('nomina.periodos.show', $periodo))
+            ->assertOk()
+            ->assertSee('Archivo para el banco')
+            ->assertSee('J401722296');
+
+        $txt = $this->get(route('nomina.periodos.banco', [$periodo, $empresa]))
+            ->assertOk()
+            ->streamedContent();
+
+        $this->assertStringContainsString('27000001;30400.00;'.now()->format('d/m/Y'), $txt);
     }
 
     private function crearMovimientos(): void

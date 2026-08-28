@@ -39,7 +39,7 @@
         <div class="nomina-kpi"><span>Comisiones tienda</span><strong>${{ number_format($comisionQuincena, 2) }}</strong></div>
         <div class="nomina-kpi"><span>Préstamos activos</span><strong>{{ $resumenPrestamos['cantidad'] }}</strong></div>
         <div class="nomina-kpi"><span>Saldo préstamos</span><strong>${{ number_format($resumenPrestamos['saldo'], 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Adelantos pendientes</span><strong>${{ number_format($abonosPendientes, 2) }}</strong></div>
+        <div class="nomina-kpi"><span>Adelantos acumulado</span><strong>${{ number_format($resumenAdelantos['acumulado'], 2) }}</strong></div>
         <div class="nomina-kpi"><span>Próxima cuota</span><strong>{{ $proxima ? $proxima->fecha_programada->format('d/m/Y') : '—' }}</strong></div>
     </div>
 
@@ -62,6 +62,7 @@
     @if($tab === 'laboral')
         <div class="nomina-form-grid" style="margin-top:16px;">
             <div><span class="muted">Sede</span><div>{{ $empleado->nombreSede() }}</div></div>
+            <div><span class="muted">Empresa</span><div>{{ $empleado->nombreEmpresa() }}</div></div>
             <div><span class="muted">Cargo</span><div>{{ $empleado->nombreCargo() }}</div></div>
             <div><span class="muted">Supervisor</span><div>{{ $empleado->nombreSupervisor() }}</div></div>
             <div><span class="muted">Ingreso</span><div>{{ optional($empleado->fecha_ingreso)->format('d/m/Y') ?: '—' }}</div></div>
@@ -511,6 +512,12 @@
         <h3 style="margin-top:16px;">Registrar adelanto de quincena</h3>
         <p class="muted">El empleado pide un adelanto durante la quincena. Ese monto se descuenta de su sueldo al cerrar la nómina. No requiere préstamo.</p>
         <p><strong>Quincena actual:</strong> {{ $quincenaActual['etiqueta'] }} · Pendiente por descontar: ${{ number_format($abonosPendientes, 2) }}</p>
+        <div class="nomina-kpis" style="margin:12px 0;">
+            <div class="nomina-kpi"><span>Acumulado</span><strong>${{ number_format($resumenAdelantos['acumulado'], 2) }}</strong></div>
+            <div class="nomina-kpi"><span>Pendiente</span><strong>${{ number_format($resumenAdelantos['pendiente'], 2) }}</strong></div>
+            <div class="nomina-kpi"><span>Ya descontado</span><strong>${{ number_format($resumenAdelantos['descontado'], 2) }}</strong></div>
+            <div class="nomina-kpi"><span>Adelantos</span><strong>{{ $resumenAdelantos['cantidad'] }}</strong></div>
+        </div>
         <form method="POST" action="{{ route('nomina.abonos_sueldo.store', $empleado) }}" class="nomina-form-grid">
             @csrf
             <div class="field"><label>Fecha</label><input type="date" name="fecha" value="{{ now()->format('Y-m-d') }}" required></div>

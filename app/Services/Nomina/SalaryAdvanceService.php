@@ -95,6 +95,41 @@ class SalaryAdvanceService
         return $abono;
     }
 
+    /**
+     * @return array{acumulado:float,pendiente:float,descontado:float,esta_quincena:float,cantidad:int}
+     */
+    public function kpis(?Carbon $enFecha = null): array
+    {
+        $vivos = fn () => NominaAbonoSueldo::query()->whereIn('estado', ['PENDIENTE', 'DESCONTADO']);
+        $quincena = $this->quincenaDe($enFecha ?? now());
+
+        return [
+            'acumulado' => round((float) $vivos()->sum('monto'), 2),
+            'pendiente' => round((float) $vivos()->where('estado', 'PENDIENTE')->sum('monto'), 2),
+            'descontado' => round((float) $vivos()->where('estado', 'DESCONTADO')->sum('monto'), 2),
+            'esta_quincena' => round((float) $vivos()
+                ->whereDate('quincena_inicio', $quincena['inicio']->toDateString())
+                ->whereDate('quincena_fin', $quincena['fin']->toDateString())
+                ->sum('monto'), 2),
+            'cantidad' => (int) $vivos()->count(),
+        ];
+    }
+
+    /**
+     * @return array{acumulado:float,pendiente:float,descontado:float,cantidad:int}
+     */
+    public function resumenEmpleado(NominaEmpleado $empleado): array
+    {
+        $abonos = $empleado->abonosSueldo->whereIn('estado', ['PENDIENTE', 'DESCONTADO']);
+
+        return [
+            'acumulado' => round((float) $abonos->sum('monto'), 2),
+            'pendiente' => round((float) $abonos->where('estado', 'PENDIENTE')->sum('monto'), 2),
+            'descontado' => round((float) $abonos->where('estado', 'DESCONTADO')->sum('monto'), 2),
+            'cantidad' => $abonos->count(),
+        ];
+    }
+
     public function pendientesDe(NominaEmpleado $empleado, ?Carbon $enFecha = null): float
     {
         $query = $empleado->abonosSueldo()->where('estado', 'PENDIENTE');

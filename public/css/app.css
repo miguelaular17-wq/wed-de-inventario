@@ -1537,6 +1537,44 @@ table.data-table tbody tr:hover {
     margin-top: 16px;
 }
 .gerencial-chart { position: relative; height: 220px; margin-bottom: 12px; }
+.gerencial-chart-tall { height: 280px; }
+.gerencial-abc-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0;
+    font-size: 0.85rem;
+}
+.gerencial-abc-bar span:first-child { width: 1.4rem; font-weight: 800; }
+.gerencial-abc-track {
+    flex: 1;
+    height: 14px;
+    background: #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.gerencial-abc-track i {
+    display: block;
+    height: 100%;
+    border-radius: 8px;
+}
+.gerencial-abc-a { background: #059669; }
+.gerencial-abc-b { background: #d97706; }
+.gerencial-abc-c { background: #dc2626; }
+.gerencial-abc-badge {
+    display: inline-block;
+    min-width: 1.5rem;
+    text-align: center;
+    font-weight: 800;
+    border-radius: 4px;
+    padding: 1px 6px;
+    color: #fff;
+    font-size: 0.75rem;
+}
+.gerencial-matriz td, .gerencial-matriz th { text-align: center; }
+.gerencial-matriz .is-core { background: #ecfdf5; }
+.gerencial-matriz .is-buy { background: #fef2f2; }
+.gerencial-matriz .is-liq { background: #fff7ed; }
 .gerencial-row-alert td { background: #fef2f2; }
 .gerencial-clase { font-weight: 700; }
 .gerencial-alertas {

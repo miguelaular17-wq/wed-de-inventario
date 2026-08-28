@@ -43,6 +43,12 @@
             @else
                 <span class="tag ok">CERRADO</span>
             @endif
+            @if($periodo->estado !== 'ABIERTO' && $periodo->registros->isNotEmpty())
+                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px;">
+                    <a class="btn primary" href="{{ route('nomina.periodos.relacion', $periodo) }}">Descargar relación PDF</a>
+                    <a class="btn" href="{{ route('nomina.periodos.relacion', ['periodo' => $periodo, 'formato' => 'xlsx']) }}">Descargar Excel</a>
+                </div>
+            @endif
         </div>
     </div>
 
@@ -82,6 +88,15 @@
     </div>
 
     <div class="table-wrap" style="margin-top:16px;">
+        @if($periodo->estado !== 'ABIERTO' && $periodo->registros->isNotEmpty())
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+                <h3 style="margin:0;">Relación de nómina (sin comisiones)</h3>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <a class="btn primary" href="{{ route('nomina.periodos.relacion', $periodo) }}">Descargar PDF</a>
+                    <a class="btn" href="{{ route('nomina.periodos.relacion', ['periodo' => $periodo, 'formato' => 'xlsx']) }}">Descargar Excel</a>
+                </div>
+            </div>
+        @endif
         <table class="data-table">
             <thead>
                 <tr>
@@ -149,6 +164,42 @@
         <a href="{{ route('nomina.comisiones.show', $periodo) }}">Ver liquidación de comisiones</a>
         (pago {{ $periodo->fecha_pago_comision?->format('d/m/Y') ?: $periodo->fecha_fin?->copy()->addDays(3)->format('d/m/Y') }}).
     </p>
+
+    @if($periodo->estado !== 'ABIERTO')
+    <div class="nomina-card" style="margin-top:16px;">
+        <h3>Archivo para el banco</h3>
+        <p class="muted">Un TXT por empresa: cédula;monto en Bs (tasa BCV del día);fecha. Tasa BCV hoy: <strong>{{ number_format($tasaBcv, 2) }}</strong>.</p>
+        <table class="data-table">
+            <thead><tr><th>Empresa</th><th>Empleados</th><th>Nómina USD</th><th>Nómina Bs</th><th></th></tr></thead>
+            <tbody>
+                @forelse($bancoPorEmpresa as $fila)
+                    <tr>
+                        <td>
+                            @if($fila->empresa)
+                                <strong>{{ $fila->empresa->codigo }}</strong>
+                                <div class="muted" style="font-size:.78rem;">{{ $fila->empresa->nombre }}</div>
+                            @else
+                                <span class="muted">Sin empresa asignada</span>
+                            @endif
+                        </td>
+                        <td>{{ $fila->empleados }}</td>
+                        <td>${{ number_format($fila->usd, 2) }}</td>
+                        <td>Bs {{ number_format($fila->usd * $tasaBcv, 2) }}</td>
+                        <td style="text-align:right;">
+                            @if($fila->empresa)
+                                <a class="btn primary" href="{{ route('nomina.periodos.banco', [$periodo, $fila->empresa]) }}">Descargar TXT</a>
+                            @else
+                                <span class="muted">Asigna empresa en la ficha</span>
+                            @endif
+                        </td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5" class="muted">No hay recibos calculados.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+    @endif
 
     <div class="nomina-card" style="margin-top:16px;">
         <h3>Historial del período</h3>

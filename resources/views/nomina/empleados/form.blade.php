@@ -67,6 +67,17 @@
                 </select>
             </div>
             <div class="field">
+                <label>Empresa (código / RIF)</label>
+                <select name="empresa_id">
+                    <option value="">— Seleccionar —</option>
+                    @foreach($empresas as $empresa)
+                        <option value="{{ $empresa->id }}" @selected(old('empresa_id', $empleado?->empresa_id) == $empresa->id)>
+                            {{ $empresa->codigo }} · {{ $empresa->nombre }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="field">
                 <label>Cargo</label>
                 <select name="cargo_id">
                     <option value="">— Seleccionar —</option>

@@ -45,10 +45,14 @@ class NominaPrestamoCuota extends Model
 
     public function puedeDescontarseEnNomina(): bool
     {
-        if ($this->nomina_periodo_id) {
+        if ($this->saldo() <= 0 || $this->estado === 'PAGADA') {
             return false;
         }
 
-        return in_array($this->estado, ['PENDIENTE', 'VENCIDA', 'PARCIAL'], true) && $this->saldo() > 0;
+        if ($this->nomina_periodo_id && $this->estado !== 'PARCIAL') {
+            return false;
+        }
+
+        return in_array($this->estado, ['PENDIENTE', 'VENCIDA', 'PARCIAL'], true);
     }
 }

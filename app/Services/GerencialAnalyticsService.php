@@ -11,7 +11,10 @@ use Illuminate\Support\Facades\Schema;
 
 class GerencialAnalyticsService
 {
-    public function __construct(private GerencialDashboardService $base) {}
+    public function __construct(
+        private GerencialDashboardService $base,
+        private GerencialAbcService $abc,
+    ) {}
 
     public function devoluciones(array $periodo, ?string $sede, ?string $vendedor, ?string $producto, bool $conDetalle = false): array
     {
@@ -59,7 +62,7 @@ class GerencialAnalyticsService
         if (Schema::hasColumn('ventas_detalle', 'motivo_devolucion')) {
             $porMotivo = (clone $dev)
                 ->selectRaw("COALESCE(NULLIF(TRIM(vd.motivo_devolucion), ''), 'Sin motivo') as motivo")
-                ->selectRaw('COUNT(*) as veces')
+                ->selectRaw("COUNT(DISTINCT vd.sede || '-' || vd.numero_documento) as veces")
                 ->selectRaw('SUM(ABS(vd.cantidad)) as unidades')
                 ->selectRaw("SUM(ABS(vd.cantidad * {$precio})) as usd")
                 ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(vd.motivo_devolucion), ''), 'Sin motivo')"))
@@ -237,7 +240,7 @@ class GerencialAnalyticsService
             }
         }
 
-        $metricas = $this->metricasProductoInventario($sedes, $hoy);
+        $metricas = $this->metricasProductoInventario($sedes, $hoy, $categoria, $producto);
         $clases = [
             'Normal' => ['productos' => 0, 'valor' => 0.0, 'color' => 'verde'],
             'Vigilar' => ['productos' => 0, 'valor' => 0.0, 'color' => 'amarillo'],
@@ -278,6 +281,8 @@ class GerencialAnalyticsService
             'gt6m' => round($gt6m, 2),
         ];
 
+        $abc = $this->abcInventario($periodo, $sedes, $categoria, $producto, $metricas);
+
         return [
             'kpis' => $kpis,
             'por_sede' => $porSede,
@@ -285,7 +290,7 @@ class GerencialAnalyticsService
             'por_marca' => $porMarca,
             'clasificacion' => $clases,
             'rotacion' => $rotacion,
-        ];
+        ] + $abc;
     }
 
     public function ajustes(array $periodo, ?string $sede, ?string $tipo): array
@@ -309,21 +314,21 @@ class GerencialAnalyticsService
             return $vacio;
         }
 
+        $tiposOk = $this->base->tiposAjustePermitidos();
+        $docs = $this->base->sqlCountDocumentosAjuste();
         $baseAjustes = DB::table('ajustes_inventario')
             ->whereBetween('fecha', [$periodo['inicio']->toDateString(), $periodo['fin']->toDateString()])
-            ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes);
-        $tipos = (clone $baseAjustes)
-            ->selectRaw('UPPER(TRIM(tipo_movimiento)) as tipo')
-            ->distinct()
-            ->orderBy('tipo')
-            ->pluck('tipo');
+            ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes)
+            ->whereIn(DB::raw('UPPER(TRIM(tipo_movimiento))'), $tiposOk);
+        $tipos = collect($tiposOk);
         $query = clone $baseAjustes;
-        if ($tipo) {
-            $query->whereRaw('UPPER(TRIM(tipo_movimiento)) = ?', [mb_strtoupper(trim($tipo), 'UTF-8')]);
+        $tipoNorm = $tipo ? mb_strtoupper(trim($tipo), 'UTF-8') : '';
+        if ($tipoNorm !== '' && in_array($tipoNorm, $tiposOk, true)) {
+            $query->whereRaw('UPPER(TRIM(tipo_movimiento)) = ?', [$tipoNorm]);
         }
 
         $kpisRow = (clone $query)
-            ->selectRaw('COUNT(*) as movimientos')
+            ->selectRaw("{$docs} as movimientos")
             ->selectRaw('SUM(cantidad) as unidades')
             ->selectRaw('SUM(cantidad * COALESCE(costo_unitario, 0)) as valor')
             ->selectRaw('SUM(CASE WHEN cantidad > 0 THEN cantidad ELSE 0 END) as entradas_und')
@@ -334,7 +339,7 @@ class GerencialAnalyticsService
 
         $porTipo = (clone $query)
             ->selectRaw('UPPER(TRIM(tipo_movimiento)) as tipo')
-            ->selectRaw('COUNT(*) as movimientos')
+            ->selectRaw("{$docs} as movimientos")
             ->selectRaw('SUM(CASE WHEN cantidad > 0 THEN cantidad ELSE 0 END) as entradas')
             ->selectRaw('SUM(CASE WHEN cantidad < 0 THEN ABS(cantidad) ELSE 0 END) as salidas')
             ->selectRaw('SUM(cantidad * COALESCE(costo_unitario, 0)) as valor')
@@ -344,7 +349,7 @@ class GerencialAnalyticsService
 
         $porSede = (clone $query)
             ->selectRaw('UPPER(TRIM(sede)) as sede')
-            ->selectRaw('COUNT(*) as movimientos')
+            ->selectRaw("{$docs} as movimientos")
             ->selectRaw('SUM(CASE WHEN cantidad > 0 THEN cantidad ELSE 0 END) as entradas')
             ->selectRaw('SUM(CASE WHEN cantidad < 0 THEN ABS(cantidad) ELSE 0 END) as salidas')
             ->selectRaw('SUM(cantidad) as diferencia')
@@ -359,7 +364,7 @@ class GerencialAnalyticsService
             $porMotivo = (clone $query)
                 ->selectRaw("COALESCE(NULLIF(TRIM(motivo), ''), 'Sin motivo') as motivo")
                 ->selectRaw('UPPER(TRIM(tipo_movimiento)) as tipo')
-                ->selectRaw('COUNT(*) as veces')
+                ->selectRaw("{$docs} as veces")
                 ->selectRaw('SUM(cantidad) as unidades')
                 ->selectRaw('SUM(cantidad * COALESCE(costo_unitario, 0)) as valor')
                 ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(motivo), ''), 'Sin motivo')"), DB::raw('UPPER(TRIM(tipo_movimiento))'))
@@ -374,7 +379,7 @@ class GerencialAnalyticsService
         if (Schema::hasColumn('ajustes_inventario', 'usuario')) {
             $usuarios = (clone $query)
                 ->selectRaw("COALESCE(NULLIF(TRIM(usuario), ''), 'Sin usuario') as usuario")
-                ->selectRaw('COUNT(*) as movimientos')
+                ->selectRaw("{$docs} as movimientos")
                 ->selectRaw('SUM(cantidad * COALESCE(costo_unitario, 0)) as valor')
                 ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(usuario), ''), 'Sin usuario')"))
                 ->orderByDesc('movimientos')
@@ -383,7 +388,7 @@ class GerencialAnalyticsService
             $usuarios = $this->resolverUsuariosAjustes($usuarios)->take(10)->values();
         }
 
-        $alertas = $this->alertasAjustes($porSede, $usuarios, $query);
+        $alertas = $this->alertasAjustes($porSede, $usuarios, $query, $docs);
 
         return [
             'kpis' => [
@@ -525,6 +530,128 @@ class GerencialAnalyticsService
             'por_marca' => collect(),
             'clasificacion' => [],
             'rotacion' => [],
+            'abc_resumen_rotacion' => ['A' => $this->abcResumenVacio(), 'B' => $this->abcResumenVacio(), 'C' => $this->abcResumenVacio()],
+            'abc_resumen_margen' => ['A' => $this->abcResumenVacio(), 'B' => $this->abcResumenVacio(), 'C' => $this->abcResumenVacio()],
+            'abc_pareto' => collect(),
+            'abc_matriz' => $this->abcMatrizVacia(),
+            'abc_alertas' => [],
+            'abc_total' => 0,
+        ];
+    }
+
+    /**
+     * @return array{productos:int,pct_items:float,pct_valor:float}
+     */
+    private function abcResumenVacio(): array
+    {
+        return ['productos' => 0, 'pct_items' => 0.0, 'pct_valor' => 0.0];
+    }
+
+    /**
+     * @return array<string, array<string, array{productos:int,unidades:float,valor_inv:float}>>
+     */
+    private function abcMatrizVacia(): array
+    {
+        $celda = static fn () => ['productos' => 0, 'unidades' => 0.0, 'valor_inv' => 0.0];
+
+        return [
+            'A' => ['A' => $celda(), 'B' => $celda(), 'C' => $celda()],
+            'B' => ['A' => $celda(), 'B' => $celda(), 'C' => $celda()],
+            'C' => ['A' => $celda(), 'B' => $celda(), 'C' => $celda()],
+        ];
+    }
+
+    /**
+     * @param  list<string>  $sedes
+     * @param  list<array<string, mixed>>  $metricas
+     * @return array<string, mixed>
+     */
+    private function abcInventario(array $periodo, array $sedes, ?string $categoria, ?string $producto, array $metricas): array
+    {
+        $vacio = [
+            'abc_resumen_rotacion' => ['A' => $this->abcResumenVacio(), 'B' => $this->abcResumenVacio(), 'C' => $this->abcResumenVacio()],
+            'abc_resumen_margen' => ['A' => $this->abcResumenVacio(), 'B' => $this->abcResumenVacio(), 'C' => $this->abcResumenVacio()],
+            'abc_pareto' => collect(),
+            'abc_matriz' => $this->abcMatrizVacia(),
+            'abc_alertas' => [],
+            'abc_total' => 0,
+        ];
+        if (! Schema::hasTable('ventas_detalle')) {
+            return $vacio;
+        }
+
+        $unidadesSql = $this->base->sqlUnidadesNetas();
+        $precio = $this->campoPrecio();
+        $costo = Schema::hasColumn('ventas_detalle', 'costo_unitario') ? 'COALESCE(vd.costo_unitario, 0)' : '0';
+        $ventasSql = "SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad * {$precio}) ELSE ABS(vd.cantidad * {$precio}) END)";
+        $costoSql = "SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad * {$costo}) ELSE ABS(vd.cantidad * {$costo}) END)";
+
+        $query = $this->base->queryLineas($periodo['inicio'], $periodo['fin'], $sedes, $categoria, null, $producto);
+        if (Schema::hasTable('productos') && ! $categoria) {
+            $query->leftJoin('productos as p', 'p.id', '=', 'vd.producto_id');
+        }
+        $catSql = Schema::hasTable('productos')
+            ? "COALESCE(NULLIF(TRIM(MAX(p.categoria)), ''), 'Sin categoría')"
+            : "'Sin categoría'";
+
+        $ventas = $query
+            ->selectRaw("COALESCE(CAST(vd.producto_id AS TEXT), vd.codigo_producto, 'sin') as clave")
+            ->selectRaw('MAX(vd.producto_id) as producto_id')
+            ->selectRaw('MAX(vd.codigo_producto) as codigo')
+            ->selectRaw("MAX(COALESCE(vd.nombre_producto, vd.codigo_producto, 'Sin nombre')) as nombre")
+            ->selectRaw("{$catSql} as categoria")
+            ->selectRaw("{$unidadesSql} as unidades")
+            ->selectRaw("{$ventasSql} as ventas")
+            ->selectRaw("{$costoSql} as costo")
+            ->groupBy(DB::raw("COALESCE(CAST(vd.producto_id AS TEXT), vd.codigo_producto, 'sin')"))
+            ->havingRaw("{$unidadesSql} > 0")
+            ->get()
+            ->map(function ($row) {
+                $row->utilidad = round((float) $row->ventas - (float) $row->costo, 2);
+                $row->unidades = round((float) $row->unidades, 2);
+
+                return $row;
+            });
+
+        if ($ventas->isEmpty()) {
+            return $vacio;
+        }
+
+        $porRotacion = $this->abc->clasificar($ventas->map(fn ($row) => clone $row), 'unidades');
+        $porMargen = $this->abc->clasificar($ventas->map(fn ($row) => clone $row), 'utilidad');
+        $margenPorClave = $porMargen->mapWithKeys(fn ($row) => [(string) $row->clave => $row->abc]);
+
+        $stock = collect($metricas)->keyBy(fn ($m) => (string) ($m['producto_id'] ?? ''));
+        $matriz = $this->abcMatrizVacia();
+        $alertas = [];
+        foreach ($porRotacion as $row) {
+            $row->abc_rotacion = $row->abc;
+            $row->abc_margen = $margenPorClave[(string) $row->clave] ?? 'C';
+            $inv = $stock->get((string) ($row->producto_id ?? ''));
+            $row->clase_inv = $inv['clase'] ?? 'Sin stock';
+            $row->valor_inv = (float) ($inv['valor'] ?? 0);
+            $rot = $row->abc_rotacion;
+            $mar = $row->abc_margen;
+            $matriz[$rot][$mar]['productos']++;
+            $matriz[$rot][$mar]['unidades'] += (float) $row->unidades;
+            $matriz[$rot][$mar]['valor_inv'] += $row->valor_inv;
+            $nombre = $row->nombre ?: $row->codigo;
+            if ($rot === 'A' && ($row->clase_inv === 'Crítico / Sin Rotación')) {
+                $alertas[] = "{$nombre}: A en rotación y stock crítico — prioridad de compra.";
+            } elseif ($rot === 'A' && $row->clase_inv === 'Sobrestock') {
+                $alertas[] = "{$nombre}: A en rotación con sobrestock — vende mucho y hay de más.";
+            } elseif ($rot === 'C' && $row->clase_inv === 'Sobrestock') {
+                $alertas[] = "{$nombre}: C en rotación con sobrestock — candidato a liquidar.";
+            }
+        }
+
+        return [
+            'abc_resumen_rotacion' => $this->abc->resumen($porRotacion),
+            'abc_resumen_margen' => $this->abc->resumen($porMargen),
+            'abc_pareto' => $porRotacion->take(20)->values(),
+            'abc_matriz' => $matriz,
+            'abc_alertas' => array_slice($alertas, 0, 8),
+            'abc_total' => $porRotacion->count(),
         ];
     }
 
@@ -532,7 +659,7 @@ class GerencialAnalyticsService
      * @param  list<string>  $sedes
      * @return list<array<string, mixed>>
      */
-    private function metricasProductoInventario(array $sedes, Carbon $hoy): array
+    private function metricasProductoInventario(array $sedes, Carbon $hoy, ?string $categoria = null, ?string $producto = null): array
     {
         if (! Schema::hasTable('stock_actual') || ! Schema::hasTable('productos')) {
             return [];
@@ -541,7 +668,17 @@ class GerencialAnalyticsService
         $stock = DB::table('stock_actual as sa')
             ->join('productos as p', 'p.id', '=', 'sa.producto_id')
             ->whereIn(DB::raw('UPPER(TRIM(sa.sede))'), $sedes)
-            ->where('sa.existencia', '>', 0)
+            ->where('sa.existencia', '>', 0);
+        if ($categoria) {
+            $stock->whereRaw('UPPER(TRIM(p.categoria)) = ?', [mb_strtoupper(trim($categoria), 'UTF-8')]);
+        }
+        if ($producto) {
+            $like = '%'.$producto.'%';
+            $stock->where(function ($q) use ($like) {
+                $q->where('p.codigo', 'like', $like)->orWhere('p.nombre', 'like', $like);
+            });
+        }
+        $stock = $stock
             ->selectRaw('sa.producto_id')
             ->selectRaw('MAX(p.codigo) as codigo')
             ->selectRaw('MAX(p.nombre) as nombre')
@@ -586,6 +723,7 @@ class GerencialAnalyticsService
             $promMes = $v60 / 2;
             $meses = $promMes > 0 ? round((float) $row->unidades / $promMes, 1) : 999.0;
             $out[] = [
+                'producto_id' => (int) $id,
                 'codigo' => $row->codigo,
                 'nombre' => $row->nombre,
                 'unidades' => (float) $row->unidades,
@@ -619,7 +757,7 @@ class GerencialAnalyticsService
         return 'Crítico / Sin Rotación';
     }
 
-    private function alertasAjustes(Collection $porSede, Collection $usuarios, $query): array
+    private function alertasAjustes(Collection $porSede, Collection $usuarios, $query, string $docs): array
     {
         $alertas = [];
         $avgMov = $porSede->avg('movimientos') ?: 0;
@@ -645,7 +783,7 @@ class GerencialAnalyticsService
         if (Schema::hasColumn('ajustes_inventario', 'codigo_producto')) {
             $prod = (clone $query)
                 ->selectRaw("COALESCE(NULLIF(TRIM(codigo_producto), ''), 'Sin código') as codigo")
-                ->selectRaw('COUNT(*) as veces')
+                ->selectRaw("{$docs} as veces")
                 ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(codigo_producto), ''), 'Sin código')"))
                 ->orderByDesc('veces')
                 ->first();

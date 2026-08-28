@@ -41,12 +41,15 @@ class GerencialDashboardServiceTest extends TestCase
         $doral = collect($resumen['por_sede'])->firstWhere('sede', 'DORAL');
 
         $this->assertSame(145115.04, $doral['ventas_usd']);
+        $this->assertSame(151645.02, $doral['ventas_brutas']);
+        $this->assertSame(145115.04, $doral['venta_neta']);
         $this->assertSame(1, $doral['facturas']);
         $this->assertSame(1, $doral['devoluciones']);
         $this->assertSame(6529.98, $doral['devoluciones_usd']);
         $this->assertEquals(145165.04, $resumen['total']['ventas_usd']);
         $this->assertContains('NUNES', array_column($resumen['por_sede'], 'sede'));
         $this->assertContains('JRZ', array_column($resumen['por_sede'], 'sede'));
+        $this->assertContains('MOVISTAR', array_column($resumen['por_sede'], 'sede'));
     }
 
     public function test_gerente_ve_el_dashboard_y_supervisor_no(): void
@@ -223,7 +226,8 @@ class GerencialDashboardServiceTest extends TestCase
             ->assertOk()
             ->assertSee('Valorizados de inventarios')
             ->assertSee('HOGAR')
-            ->assertSee('Clasificación de inventario');
+            ->assertSee('Clasificación de inventario')
+            ->assertSee('Análisis ABC / Pareto de rotación');
 
         $this->actingAs($gerente)
             ->get(route('gerencial.ajustes'))
@@ -233,7 +237,8 @@ class GerencialDashboardServiceTest extends TestCase
             ->assertSee('Conteo')
             ->assertSee('Entradas vs salidas')
             ->assertSee('RICARDO GIMENEZ')
-            ->assertDontSee('V3065986');
+            ->assertDontSee('V3065986')
+            ->assertDontSee('>SAL<');
 
         $this->actingAs($gerente)
             ->get(route('gerencial.rentabilidad'))
@@ -276,6 +281,12 @@ class GerencialDashboardServiceTest extends TestCase
                 'cantidad' => 1, 'precio_venta' => 10, 'precio_neto' => 10, 'costo_unitario' => 4,
                 'vendedor' => 'Ana', 'motivo_devolucion' => 'Cliente no conforme', 'anulado' => false,
             ],
+            [
+                'sede' => 'DORAL', 'tipo_documento' => 'DEV', 'numero_documento' => 'D-1', 'item_numero' => 2,
+                'fecha' => '2026-08-11', 'codigo_producto' => 'X2', 'nombre_producto' => 'Funda',
+                'cantidad' => 1, 'precio_venta' => 5, 'precio_neto' => 5, 'costo_unitario' => 1,
+                'vendedor' => 'Ana', 'motivo_devolucion' => 'Cliente no conforme', 'anulado' => false,
+            ],
         ]);
 
         $base = app(GerencialDashboardService::class);
@@ -284,15 +295,16 @@ class GerencialDashboardServiceTest extends TestCase
 
         $dev = $analytics->devoluciones($periodo, 'DORAL', null, null, false);
         $this->assertSame(1, $dev['kpis']['documentos']);
-        $this->assertEquals(10.0, $dev['kpis']['usd']);
-        $this->assertEquals(10.0, $dev['kpis']['pct_ventas']);
+        $this->assertEquals(15.0, $dev['kpis']['usd']);
+        $this->assertEquals(15.0, $dev['kpis']['pct_ventas']);
         $this->assertSame('Cliente no conforme', $dev['porMotivo']->first()->motivo);
+        $this->assertSame(1, (int) $dev['porMotivo']->first()->veces);
 
         $rent = $analytics->rentabilidad($periodo, 'DORAL', null, null, null);
-        $this->assertEquals(90.0, $rent['kpis']['ventas']);
-        $this->assertEquals(36.0, $rent['kpis']['costo']);
-        $this->assertEquals(54.0, $rent['kpis']['utilidad']);
-        $this->assertEquals(60.0, $rent['kpis']['margen_pct']);
+        $this->assertEquals(85.0, $rent['kpis']['ventas']);
+        $this->assertEquals(35.0, $rent['kpis']['costo']);
+        $this->assertEquals(50.0, $rent['kpis']['utilidad']);
+        $this->assertEquals(58.8, $rent['kpis']['margen_pct']);
     }
 
     public function test_motivos_de_profit_traducen_codigos_y_placeholders(): void
@@ -307,5 +319,107 @@ class GerencialDashboardServiceTest extends TestCase
         $this->assertSame('Sin motivo', \App\Support\ProfitMotivos::ajuste('Seleccione un motivo...'));
         $this->assertSame('Sin motivo', \App\Support\ProfitMotivos::devolucion(''));
         $this->assertSame('Conteo', \App\Support\ProfitMotivos::ajuste('Conteo', 'AJU'));
+    }
+
+    public function test_ajustes_solo_aju_car_des_y_cuentan_documentos(): void
+    {
+        DB::table('ajustes_inventario')->insert([
+            [
+                'sede' => 'DORAL',
+                'tipo_movimiento' => 'AJU',
+                'numero_documento' => 'DOC-1',
+                'fecha' => now()->toDateString(),
+                'codigo_producto' => 'P1',
+                'nombre_producto' => 'Uno',
+                'cantidad' => 2,
+                'costo_unitario' => 10,
+                'motivo' => 'Conteo',
+                'usuario' => 'Ana',
+            ],
+            [
+                'sede' => 'DORAL',
+                'tipo_movimiento' => 'AJU',
+                'numero_documento' => 'DOC-1',
+                'fecha' => now()->toDateString(),
+                'codigo_producto' => 'P2',
+                'nombre_producto' => 'Dos',
+                'cantidad' => 3,
+                'costo_unitario' => 10,
+                'motivo' => 'Conteo',
+                'usuario' => 'Ana',
+            ],
+            [
+                'sede' => 'DORAL',
+                'tipo_movimiento' => 'TRA',
+                'numero_documento' => 'T-1',
+                'fecha' => now()->toDateString(),
+                'codigo_producto' => 'P1',
+                'nombre_producto' => 'Uno',
+                'cantidad' => 50,
+                'costo_unitario' => 10,
+                'motivo' => 'Traslado',
+                'usuario' => 'Ana',
+            ],
+        ]);
+
+        $periodo = app(GerencialDashboardService::class)->resolverPeriodo('mes', null, null);
+        $data = app(\App\Services\GerencialAnalyticsService::class)->ajustes($periodo, 'DORAL', null);
+
+        $this->assertSame(1, $data['kpis']['movimientos']);
+        $this->assertEquals(5.0, $data['kpis']['unidades']);
+        $this->assertSame(['AJU', 'CAR', 'DES'], $data['tipos']->all());
+        $this->assertSame(['AJU'], $data['por_tipo']->pluck('tipo')->all());
+        $this->assertSame(1, (int) $data['por_tipo']->first()->movimientos);
+        $this->assertSame(1, (int) $data['por_motivo']->first()->veces);
+        $this->assertSame(1, (int) $data['usuarios']->first()->movimientos);
+    }
+
+    public function test_inventario_abc_rota_por_unidades_y_top_20(): void
+    {
+        $ids = [];
+        foreach ([['P80', 'Alpha', 'HOGAR', 80], ['P15', 'Beta', 'CEL', 15], ['P5', 'Gamma', 'HOGAR', 5]] as [$codigo, $nombre, $cat, $und]) {
+            $ids[$codigo] = DB::table('productos')->insertGetId([
+                'codigo' => $codigo,
+                'nombre' => $nombre,
+                'categoria' => $cat,
+                'costo_actual' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('stock_actual')->insert([
+                'producto_id' => $ids[$codigo],
+                'sede' => 'DORAL',
+                'existencia' => 10,
+            ]);
+            DB::table('ventas_detalle')->insert([
+                'sede' => 'DORAL',
+                'tipo_documento' => 'FAC',
+                'numero_documento' => 'F-'.$codigo,
+                'item_numero' => 1,
+                'fecha' => '2026-08-10',
+                'producto_id' => $ids[$codigo],
+                'codigo_producto' => $codigo,
+                'nombre_producto' => $nombre,
+                'cantidad' => $und,
+                'precio_venta' => 2,
+                'precio_neto' => 2,
+                'costo_unitario' => 1,
+                'anulado' => false,
+            ]);
+        }
+
+        $periodo = app(GerencialDashboardService::class)->resolverPeriodo('mes', null, null);
+        $data = app(\App\Services\GerencialAnalyticsService::class)->valorizados($periodo, 'DORAL', null, null);
+
+        $this->assertSame(3, $data['abc_total']);
+        $this->assertSame('Alpha', $data['abc_pareto']->first()->nombre);
+        $this->assertSame('A', $data['abc_pareto']->first()->abc_rotacion);
+        $this->assertSame('C', $data['abc_pareto']->last()->abc_rotacion);
+        $this->assertLessThanOrEqual(20, $data['abc_pareto']->count());
+        $this->assertSame(1, $data['abc_matriz']['A']['A']['productos']);
+
+        $hogar = app(\App\Services\GerencialAnalyticsService::class)->valorizados($periodo, 'DORAL', 'HOGAR', null);
+        $this->assertSame(2, $hogar['abc_total']);
+        $this->assertSame(['Alpha', 'Gamma'], $hogar['abc_pareto']->pluck('nombre')->all());
     }
 }

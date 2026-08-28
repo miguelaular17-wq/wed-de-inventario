@@ -122,6 +122,7 @@
             $link('Organigrama', route('nomina.organizacion'), request()->routeIs('nomina.organizacion')),
             $link('Sedes y áreas', route('nomina.sedes.index'), request()->routeIs('nomina.sedes.*')),
             $link('Cargos', route('nomina.cargos.index'), request()->routeIs('nomina.cargos.*')),
+            $link('Empresas', route('nomina.empresas.index'), request()->routeIs('nomina.empresas.*')),
             $link('Configuración', route('nomina.configuracion.index'), request()->routeIs('nomina.configuracion.*')),
         ]);
     }

@@ -37,6 +37,7 @@ class NominaEmpleado extends Model
         'es_servicio_tecnico',
         'modo_comision',
         'codigo_vendedor',
+        'empresa_id',
     ];
 
     protected $casts = [
@@ -59,6 +60,11 @@ class NominaEmpleado extends Model
     public function sedeCatalogo(): BelongsTo
     {
         return $this->belongsTo(NominaSede::class, 'sede_id');
+    }
+
+    public function empresa(): BelongsTo
+    {
+        return $this->belongsTo(NominaEmpresa::class, 'empresa_id');
     }
 
     public function cargoCatalogo(): BelongsTo
@@ -121,6 +127,18 @@ class NominaEmpleado extends Model
     public function cedula(): string
     {
         return $this->cliente?->cedula ?? '';
+    }
+
+    public function nombreEmpresa(): string
+    {
+        $empresa = $this->empresa;
+
+        return $empresa ? $empresa->codigo.' · '.$empresa->nombre : '—';
+    }
+
+    public function codigoEmpresa(): string
+    {
+        return $this->empresa?->codigo ?? '—';
     }
 
     public function nombreSede(): string

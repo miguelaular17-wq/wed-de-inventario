@@ -23,6 +23,13 @@
         <div class="nomina-kpi"><span>Préstamos activos</span><strong>{{ $kpis['activos'] }}</strong></div>
         <div class="nomina-kpi warn"><span>Con cuotas vencidas</span><strong>{{ $kpis['vencidos'] }}</strong></div>
     </div>
+    <div class="nomina-kpis">
+        <div class="nomina-kpi"><span>Adelantos acumulado</span><strong>${{ number_format($kpisAdelantos['acumulado'], 2) }}</strong></div>
+        <div class="nomina-kpi"><span>Adelantos pendientes</span><strong>${{ number_format($kpisAdelantos['pendiente'], 2) }}</strong></div>
+        <div class="nomina-kpi"><span>Esta quincena</span><strong>${{ number_format($kpisAdelantos['esta_quincena'], 2) }}</strong></div>
+        <div class="nomina-kpi"><span>Descontado en nómina</span><strong>${{ number_format($kpisAdelantos['descontado'], 2) }}</strong></div>
+        <div class="nomina-kpi"><span>Adelantos registrados</span><strong>{{ $kpisAdelantos['cantidad'] }}</strong></div>
+    </div>
 
     <form method="GET" class="filter-bar" style="margin-top:16px;">
         <div class="field field-wide">
@@ -33,6 +40,15 @@
             <label>Sede / área</label>
             <select name="sede_id">
                 @include('nomina.partials.sede-options', ['unidades' => $sedes, 'selected' => $filters['sede_id'] ?? '', 'placeholder' => 'Todas'])
+            </select>
+        </div>
+        <div class="field">
+            <label>Empresa</label>
+            <select name="empresa_id">
+                <option value="">Todas</option>
+                @foreach($empresas as $empresa)
+                    <option value="{{ $empresa->id }}" @selected(($filters['empresa_id'] ?? '') == $empresa->id)>{{ $empresa->codigo }} · {{ $empresa->nombre }}</option>
+                @endforeach
             </select>
         </div>
         <div class="field">
@@ -72,10 +88,12 @@
             <thead>
                 <tr>
                     <th>Empleado</th>
+                    <th>Empresa</th>
                     <th>Sede</th>
                     <th>Cargo</th>
                     <th>Supervisor</th>
                     <th>Salario mensual</th>
+                    <th>Adelantos</th>
                     <th>Estado</th>
                     <th></th>
                 </tr>
@@ -87,10 +105,16 @@
                             <strong>{{ $empleado->nombre() }}</strong>
                             <div class="muted" style="font-size:.82rem;">{{ $empleado->cedula() }}</div>
                         </td>
+                        <td>{{ $empleado->codigoEmpresa() }}</td>
                         <td>{{ $empleado->nombreSede() }}</td>
                         <td>{{ $empleado->nombreCargo() }}</td>
                         <td>{{ $empleado->nombreSupervisor() }}</td>
                         <td>${{ number_format($empleado->salario_base, 2) }}</td>
+                        <td>
+                            <a href="{{ route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'abonos']) }}">
+                                ${{ number_format((float) ($empleado->adelantos_acumulado ?? 0), 2) }}
+                            </a>
+                        </td>
                         <td><span class="tag {{ $empleado->isActivo() ? 'ok' : 'no' }}">{{ $empleado->estado }}</span></td>
                         <td style="text-align:right;">
                             <a href="{{ route('nomina.empleados.show', $empleado) }}">Ficha</a>
@@ -98,7 +122,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="muted" style="text-align:center; padding:24px;">No hay personas en la tabla clientes.</td>
+                        <td colspan="9" class="muted" style="text-align:center; padding:24px;">No hay personas en la tabla clientes.</td>
                     </tr>
                 @endforelse
             </tbody>

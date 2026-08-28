@@ -142,7 +142,8 @@ class EmpleadoCrudTest extends TestCase
             ->assertOk()
             ->assertSee('MIGUEL AULAR')
             ->assertSee('DIANA BUSTILLO')
-            ->assertSee('28766068');
+            ->assertSee('28766068')
+            ->assertSee('Adelantos acumulado');
 
         $this->assertEquals(2, NominaEmpleado::query()->count());
     }

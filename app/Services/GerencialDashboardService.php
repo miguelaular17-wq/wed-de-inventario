@@ -14,7 +14,7 @@ class GerencialDashboardService
     public function sedesVentas(): array
     {
         return array_values(config('inventario.sedes_gerencial', [
-            'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'JRZ',
+            'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'JRZ', 'MOVISTAR',
         ]));
     }
 
@@ -83,7 +83,14 @@ class GerencialDashboardService
             $b = $anterior[$codigo] ?? $this->kpiVacio($codigo);
             $inv = $inventario[$codigo] ?? ['unidades' => 0.0, 'valor' => 0.0];
             $aju = $ajustes[$codigo] ?? ['unidades' => 0.0, 'valor' => 0.0];
+            $ventaNeta = (float) $a['ventas_usd'];
+            $ventasBrutas = (float) ($a['ventas_brutas'] ?? ($ventaNeta + (float) $a['devoluciones_usd']));
+            $utilidad = (float) $a['margen_usd'];
             $filas[] = $a + [
+                'ventas_brutas' => round($ventasBrutas, 2),
+                'venta_neta' => round($ventaNeta, 2),
+                'utilidad' => round($utilidad, 2),
+                'margen_pct' => $ventaNeta > 0 ? round($utilidad / $ventaNeta * 100, 1) : 0.0,
                 'inventario_unidades' => $inv['unidades'],
                 'inventario_valor' => $inv['valor'],
                 'ajustes_unidades' => $aju['unidades'],
@@ -159,6 +166,7 @@ class GerencialDashboardService
             ->selectRaw('UPPER(TRIM(sede)) as sede')
             ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='FAC' THEN 1 ELSE 0 END) as facturas")
             ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN 1 ELSE 0 END) as devoluciones")
+            ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='FAC' THEN ABS(total_neto_usd) ELSE 0 END) as ventas_brutas")
             ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN ABS(total_neto_usd) ELSE 0 END) as devoluciones_usd")
             ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN ABS(total_neto_bs) ELSE 0 END) as devoluciones_bs")
             ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN -ABS(total_neto_usd) ELSE ABS(total_neto_usd) END) as ventas_usd")
@@ -175,6 +183,7 @@ class GerencialDashboardService
             $base[$sede]['devoluciones'] = (int) $row->devoluciones;
             $base[$sede]['devoluciones_usd'] = round((float) $row->devoluciones_usd, 2);
             $base[$sede]['devoluciones_bs'] = round((float) $row->devoluciones_bs, 2);
+            $base[$sede]['ventas_brutas'] = round((float) $row->ventas_brutas, 2);
             $base[$sede]['ventas_usd'] = round((float) $row->ventas_usd, 2);
             $base[$sede]['ventas_bs'] = round((float) $row->ventas_bs, 2);
         }
@@ -218,6 +227,7 @@ class GerencialDashboardService
             ->selectRaw("COUNT(DISTINCT CASE WHEN UPPER(vd.tipo_documento)='FAC' THEN vd.numero_documento END) as facturas")
             ->selectRaw("COUNT(DISTINCT CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN vd.numero_documento END) as devoluciones")
             ->selectRaw("SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad) ELSE ABS(vd.cantidad) END) as unidades")
+            ->selectRaw($this->sqlImporteFac().' as ventas_brutas')
             ->selectRaw($this->sqlImporte('venta').' as ventas_usd')
             ->selectRaw($this->sqlImporte('neto').' as ventas_neto')
             ->selectRaw($this->sqlImporte('costo').' as costo')
@@ -233,6 +243,7 @@ class GerencialDashboardService
             $base[$sede]['facturas'] = (int) $row->facturas;
             $base[$sede]['devoluciones'] = (int) $row->devoluciones;
             $base[$sede]['devoluciones_usd'] = round((float) $row->devoluciones_usd, 2);
+            $base[$sede]['ventas_brutas'] = round((float) ($row->ventas_brutas ?? ($ventas + (float) $row->devoluciones_usd)), 2);
             $base[$sede]['ventas_usd'] = $ventas;
             $base[$sede]['unidades'] = round((float) $row->unidades, 2);
             $base[$sede]['margen_usd'] = round($ventas - (float) $row->costo, 2);
@@ -290,9 +301,23 @@ class GerencialDashboardService
         return "SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad * {$campo}) ELSE ABS(vd.cantidad * {$campo}) END)";
     }
 
+    public function sqlImporteFac(): string
+    {
+        $campo = Schema::hasColumn('ventas_detalle', 'precio_neto')
+            ? 'COALESCE(vd.precio_neto, vd.precio_venta)'
+            : 'vd.precio_venta';
+
+        return "SUM(CASE WHEN UPPER(vd.tipo_documento)='FAC' THEN ABS(vd.cantidad * {$campo}) ELSE 0 END)";
+    }
+
     private function sqlUnidades(): string
     {
         return "SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad) ELSE ABS(vd.cantidad) END)";
+    }
+
+    public function sqlUnidadesNetas(): string
+    {
+        return $this->sqlUnidades();
     }
 
     public function sqlImporteDev(): string
@@ -360,6 +385,7 @@ class GerencialDashboardService
         $rows = DB::table('ajustes_inventario')
             ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
             ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes)
+            ->whereIn(DB::raw('UPPER(TRIM(tipo_movimiento))'), $this->tiposAjustePermitidos())
             ->selectRaw('UPPER(TRIM(sede)) as sede')
             ->selectRaw('SUM(cantidad) as unidades')
             ->selectRaw('SUM(cantidad * COALESCE(costo_unitario, 0)) as valor')
@@ -389,17 +415,28 @@ class GerencialDashboardService
         $base = $this->queryLineas($inicio, $fin, $sedes, $categoria, $vendedor, $producto);
         $importe = $this->sqlImporte('neto');
         $unidadesSql = $this->sqlUnidades();
-        $orden = $ranking === 'unidades' ? 'unidades' : 'ventas_usd';
+        $clientesSql = "COUNT(DISTINCT CASE WHEN UPPER(vd.tipo_documento)='FAC' THEN vd.numero_documento END)";
+        $utilidadSql = '('.$importe.') - ('.$this->sqlImporte('costo').')';
+        $orden = match ($ranking) {
+            'unidades' => 'unidades',
+            'clientes' => 'clientes',
+            'utilidad' => 'utilidad',
+            default => 'ventas_usd',
+        };
         $mapTop = fn ($r) => [
             'nombre' => $r->nombre,
             'unidades' => round((float) $r->unidades, 2),
             'ventas_usd' => round((float) $r->ventas_usd, 2),
+            'clientes' => (int) $r->clientes,
+            'utilidad' => round((float) $r->utilidad, 2),
         ];
 
         $productos = (clone $base)
             ->selectRaw('COALESCE(vd.nombre_producto, vd.codigo_producto, \'Sin nombre\') as nombre')
             ->selectRaw($unidadesSql.' as unidades')
             ->selectRaw($importe.' as ventas_usd')
+            ->selectRaw($clientesSql.' as clientes')
+            ->selectRaw($utilidadSql.' as utilidad')
             ->groupBy(DB::raw('COALESCE(vd.nombre_producto, vd.codigo_producto, \'Sin nombre\')'))
             ->orderByDesc($orden)
             ->limit(8)
@@ -411,6 +448,8 @@ class GerencialDashboardService
             ->selectRaw("COALESCE(NULLIF(TRIM(vd.vendedor), ''), 'Sin vendedor') as nombre")
             ->selectRaw($unidadesSql.' as unidades')
             ->selectRaw($importe.' as ventas_usd')
+            ->selectRaw($clientesSql.' as clientes')
+            ->selectRaw($utilidadSql.' as utilidad')
             ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(vd.vendedor), ''), 'Sin vendedor')"))
             ->orderByDesc($orden)
             ->limit(8)
@@ -428,6 +467,8 @@ class GerencialDashboardService
                 ->selectRaw("COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sin categoría') as nombre")
                 ->selectRaw($unidadesSql.' as unidades')
                 ->selectRaw($importe.' as ventas_usd')
+                ->selectRaw($clientesSql.' as clientes')
+                ->selectRaw($utilidadSql.' as utilidad')
                 ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sin categoría')"))
                 ->orderByDesc($orden)
                 ->limit(8)
@@ -491,6 +532,7 @@ class GerencialDashboardService
             'devoluciones' => 0,
             'devoluciones_usd' => 0.0,
             'devoluciones_bs' => 0.0,
+            'ventas_brutas' => 0.0,
             'ventas_usd' => 0.0,
             'ventas_bs' => 0.0,
             'unidades' => 0.0,
@@ -510,14 +552,19 @@ class GerencialDashboardService
             'ajustes_unidades' => 0.0,
             'ajustes_valor' => 0.0,
             'anterior_ventas_usd' => 0.0,
+            'venta_neta' => 0.0,
+            'utilidad' => 0.0,
+            'margen_pct' => 0.0,
         ];
         foreach ($filas as $fila) {
-            foreach (['facturas', 'devoluciones', 'devoluciones_usd', 'devoluciones_bs', 'ventas_usd', 'ventas_bs', 'unidades', 'margen_usd', 'inventario_unidades', 'inventario_valor', 'ajustes_unidades', 'ajustes_valor', 'anterior_ventas_usd'] as $campo) {
+            foreach (['facturas', 'devoluciones', 'devoluciones_usd', 'devoluciones_bs', 'ventas_brutas', 'ventas_usd', 'ventas_bs', 'unidades', 'margen_usd', 'inventario_unidades', 'inventario_valor', 'ajustes_unidades', 'ajustes_valor', 'anterior_ventas_usd', 'venta_neta', 'utilidad'] as $campo) {
                 $total[$campo] = ($total[$campo] ?? 0) + ($fila[$campo] ?? 0);
             }
         }
         $total['delta_ventas_usd'] = $this->delta((float) $total['ventas_usd'], (float) $total['anterior_ventas_usd']);
         $total['delta_unidades'] = $this->delta((float) $total['unidades'], 0);
+        $ventaNeta = (float) $total['venta_neta'] ?: (float) $total['ventas_usd'];
+        $total['margen_pct'] = $ventaNeta > 0 ? round((float) $total['utilidad'] / $ventaNeta * 100, 1) : 0.0;
 
         return $total;
     }
@@ -731,15 +778,19 @@ class GerencialDashboardService
             return $vacio;
         }
 
+        $tiposOk = $this->tiposAjustePermitidos();
+        $docs = $this->sqlCountDocumentosAjuste();
         $query = DB::table('ajustes_inventario')
             ->whereBetween('fecha', [$periodo['inicio']->toDateString(), $periodo['fin']->toDateString()])
-            ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes);
-        if ($tipo) {
-            $query->whereRaw('UPPER(TRIM(tipo_movimiento)) = ?', [mb_strtoupper(trim($tipo), 'UTF-8')]);
+            ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes)
+            ->whereIn(DB::raw('UPPER(TRIM(tipo_movimiento))'), $tiposOk);
+        $tipoNorm = $tipo ? mb_strtoupper(trim($tipo), 'UTF-8') : '';
+        if ($tipoNorm !== '' && in_array($tipoNorm, $tiposOk, true)) {
+            $query->whereRaw('UPPER(TRIM(tipo_movimiento)) = ?', [$tipoNorm]);
         }
 
         $kpisRow = (clone $query)
-            ->selectRaw('COUNT(*) as movimientos')
+            ->selectRaw("{$docs} as movimientos")
             ->selectRaw('SUM(cantidad) as unidades')
             ->selectRaw('SUM(cantidad * COALESCE(costo_unitario, 0)) as valor')
             ->first();
@@ -747,7 +798,7 @@ class GerencialDashboardService
         $porSedeTipo = (clone $query)
             ->selectRaw('UPPER(TRIM(sede)) as sede')
             ->selectRaw('UPPER(TRIM(tipo_movimiento)) as tipo_movimiento')
-            ->selectRaw('COUNT(*) as movimientos')
+            ->selectRaw("{$docs} as movimientos")
             ->selectRaw('SUM(cantidad) as unidades')
             ->selectRaw('SUM(cantidad * COALESCE(costo_unitario, 0)) as valor')
             ->groupBy(DB::raw('UPPER(TRIM(sede))'), DB::raw('UPPER(TRIM(tipo_movimiento))'))
@@ -760,7 +811,7 @@ class GerencialDashboardService
         if (Schema::hasColumn('ajustes_inventario', 'motivo')) {
             $porMotivo = (clone $query)
                 ->selectRaw("COALESCE(NULLIF(TRIM(motivo), ''), 'Sin motivo') as motivo")
-                ->selectRaw('COUNT(*) as veces')
+                ->selectRaw("{$docs} as veces")
                 ->selectRaw('SUM(cantidad) as unidades')
                 ->selectRaw('SUM(cantidad * COALESCE(costo_unitario, 0)) as valor')
                 ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(motivo), ''), 'Sin motivo')"))
@@ -780,6 +831,19 @@ class GerencialDashboardService
             'por_motivo' => $porMotivo,
             'motivo_top' => $motivoTop,
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function tiposAjustePermitidos(): array
+    {
+        return ['AJU', 'CAR', 'DES'];
+    }
+
+    public function sqlCountDocumentosAjuste(): string
+    {
+        return "COUNT(DISTINCT TRIM(sede) || '-' || TRIM(tipo_movimiento) || '-' || TRIM(numero_documento))";
     }
 
     /**

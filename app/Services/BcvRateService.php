@@ -74,6 +74,10 @@ class BcvRateService
      */
     private function fetchFromDatabase(): ?float
     {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('finanzas_resumen')) {
+            return null;
+        }
+
         Profiler::start('BcvRateService::fetchFromDatabase');
         $ultimo = FinanzasResumen::orderBy('fecha', 'desc')->first();
         $result = $ultimo ? (float) $ultimo->tasa_bcv_usd : null;

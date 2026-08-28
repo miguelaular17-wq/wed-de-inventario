@@ -10,6 +10,7 @@ use App\Models\Nomina\NominaComisionAbono;
 use App\Models\Nomina\NominaComisionDescuento;
 use App\Models\Nomina\NominaComisionRegistro;
 use App\Models\Nomina\NominaEmpleado;
+use App\Models\Nomina\NominaEmpresa;
 use App\Models\Nomina\NominaLiquidacionComision;
 use App\Models\Nomina\NominaSede;
 use App\Models\User;
@@ -40,7 +41,10 @@ class EmpleadoController extends Controller
         $importados = $this->employees->syncFromClientes();
 
         $query = NominaEmpleado::query()
-            ->with(['cliente', 'sedeCatalogo', 'cargoCatalogo', 'supervisor.cliente', 'jefes.cliente'])
+            ->with(['cliente', 'sedeCatalogo', 'cargoCatalogo', 'empresa', 'supervisor.cliente', 'jefes.cliente'])
+            ->withSum([
+                'abonosSueldo as adelantos_acumulado' => fn ($q) => $q->whereIn('estado', ['PENDIENTE', 'DESCONTADO']),
+            ], 'monto')
             ->join('clientes', 'clientes.id', '=', 'nomina_empleados.cliente_id')
             ->select('nomina_empleados.*')
             ->orderBy('clientes.nombre');
@@ -56,6 +60,9 @@ class EmpleadoController extends Controller
         if ($request->filled('sede_id')) {
             $query->where('sede_id', $request->query('sede_id'));
         }
+        if ($request->filled('empresa_id')) {
+            $query->where('empresa_id', $request->query('empresa_id'));
+        }
         if ($request->filled('cargo_id')) {
             $query->where('cargo_id', $request->query('cargo_id'));
         }
@@ -69,10 +76,12 @@ class EmpleadoController extends Controller
         return view('nomina.empleados.index', [
             'empleados' => $query->paginate(40)->withQueryString(),
             'sedes' => NominaSede::query()->ordenCatalogo()->get(),
+            'empresas' => NominaEmpresa::query()->orderBy('nombre')->get(),
             'cargos' => NominaCargo::query()->orderBy('nombre')->get(),
             'supervisores' => $this->organization->supervisoresDisponibles(),
             'kpis' => $this->loans->kpis(),
-            'filters' => $request->only(['q', 'sede_id', 'cargo_id', 'supervisor_id', 'estado']),
+            'kpisAdelantos' => $this->advances->kpis(),
+            'filters' => $request->only(['q', 'sede_id', 'empresa_id', 'cargo_id', 'supervisor_id', 'estado']),
             'importados' => $importados,
         ]);
     }
@@ -110,6 +119,7 @@ class EmpleadoController extends Controller
             'cliente',
             'user',
             'sedeCatalogo',
+            'empresa',
             'cargoCatalogo',
             'supervisor.cliente',
             'jefes.cliente',
@@ -195,6 +205,7 @@ class EmpleadoController extends Controller
             'tab' => $tab,
             'resumenPrestamos' => $resumenPrestamos,
             'abonosPendientes' => $this->advances->pendientesDe($empleado),
+            'resumenAdelantos' => $this->advances->resumenEmpleado($empleado),
             'quincenaActual' => $quincenaActual,
             'asistencia' => $this->attendance->resumenQuincena($empleado),
             'ventasResumen' => $ventasResumen,
@@ -235,6 +246,7 @@ class EmpleadoController extends Controller
             'telefono' => ['nullable', 'string', 'max:64'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],
             'sede_id' => ['nullable', 'integer', 'exists:nomina_sedes,id'],
+            'empresa_id' => ['nullable', 'integer', 'exists:nomina_empresas,id'],
             'cargo_id' => ['nullable', 'integer', 'exists:nomina_cargos,id'],
             'supervisor_id' => ['nullable', 'integer', 'exists:nomina_empleados,id'],
             'supervisor_ids' => ['nullable', 'array', 'max:2'],
@@ -258,6 +270,7 @@ class EmpleadoController extends Controller
         return [
             'empleado' => $empleado,
             'sedes' => NominaSede::query()->where('estado', 'ACTIVO')->ordenCatalogo()->get(),
+            'empresas' => NominaEmpresa::query()->where('estado', 'ACTIVO')->orderBy('nombre')->get(),
             'cargos' => NominaCargo::query()->where('estado', 'ACTIVO')->orderBy('nombre')->get(),
             'supervisores' => $this->organization->supervisoresDisponibles($empleado?->id),
             'usuarios' => User::query()->orderBy('name')->get(['id', 'name', 'email', 'role']),

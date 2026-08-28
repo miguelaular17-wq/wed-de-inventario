@@ -28,32 +28,49 @@ class PayrollDeductionService
      */
     public function cuotasPendientesDelRango(Carbon $inicio, Carbon $fin)
     {
+        $inicioStr = $inicio->toDateString();
+        $finStr = $fin->toDateString();
+
         return NominaPrestamoCuota::query()
             ->with(['prestamo.empleado.cliente'])
-            ->whereNull('nomina_periodo_id')
             ->whereIn('estado', ['PENDIENTE', 'VENCIDA', 'PARCIAL'])
-            ->whereBetween('fecha_programada', [$inicio->toDateString(), $fin->toDateString()])
+            ->where(function ($query) use ($inicioStr, $finStr) {
+                $query->where(function ($rango) use ($inicioStr, $finStr) {
+                    $rango->whereNull('nomina_periodo_id')
+                        ->whereBetween('fecha_programada', [$inicioStr, $finStr]);
+                })->orWhere(function ($resto) use ($finStr) {
+                    $resto->where('estado', 'PARCIAL')
+                        ->whereDate('fecha_programada', '<=', $finStr);
+                });
+            })
             ->whereHas('prestamo', fn ($q) => $q->whereIn('estado', ['PENDIENTE', 'ACTIVO']))
             ->orderBy('prestamo_id')
             ->orderBy('numero')
-            ->get();
+            ->get()
+            ->filter(fn (NominaPrestamoCuota $cuota) => $cuota->saldo() > 0)
+            ->values();
     }
 
     /**
      * @param  iterable<NominaPrestamoCuota>  $cuotas
+     * @param  array<int, float>  $montosPorCuotaId  Si falta una cuota, se descuenta el saldo completo.
      * @return list<NominaPrestamoAbono>
      */
     public function aplicarCuotas(
         iterable $cuotas,
         int $periodoId,
         ?int $usuarioId = null,
-        string $observacion = 'Descuento de nómina'
+        string $observacion = 'Descuento de nómina',
+        array $montosPorCuotaId = [],
     ): array {
         $abonos = [];
 
-        DB::transaction(function () use ($cuotas, $periodoId, $usuarioId, $observacion, &$abonos) {
+        DB::transaction(function () use ($cuotas, $periodoId, $usuarioId, $observacion, $montosPorCuotaId, &$abonos) {
             foreach ($cuotas as $cuota) {
                 $cuota->refresh();
+                if ((int) $cuota->nomina_periodo_id === $periodoId) {
+                    continue;
+                }
                 if (! $cuota->puedeDescontarseEnNomina()) {
                     continue;
                 }
@@ -63,8 +80,17 @@ class PayrollDeductionService
                     continue;
                 }
 
+                $saldo = $cuota->saldo();
+                $monto = array_key_exists((int) $cuota->id, $montosPorCuotaId)
+                    ? round((float) $montosPorCuotaId[(int) $cuota->id], 2)
+                    : $saldo;
+                $monto = min($monto, $saldo);
+                if ($monto <= 0) {
+                    continue;
+                }
+
                 $abono = $this->payments->registrarAbono($prestamo, [
-                    'monto' => $cuota->saldo(),
+                    'monto' => $monto,
                     'tipo' => NominaPrestamoAbono::TIPO_NOMINA,
                     'fecha' => $cuota->fecha_programada->toDateString(),
                     'cuota_id' => $cuota->id,

@@ -25,6 +25,7 @@ use App\Http\Controllers\Nomina\ComisionAjusteController;
 use App\Http\Controllers\Nomina\ComisionController;
 use App\Http\Controllers\Nomina\ConfiguracionController;
 use App\Http\Controllers\Nomina\EmpleadoController;
+use App\Http\Controllers\Nomina\EmpresaNominaController;
 use App\Http\Controllers\Nomina\OrganizacionController;
 use App\Http\Controllers\Nomina\PeriodoController;
 use App\Http\Controllers\Nomina\PrestamoController;
@@ -237,6 +238,8 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::post('/periodos/{periodo}/aprobar', [PeriodoController::class, 'aprobar'])->name('periodos.aprobar');
     Route::post('/periodos/{periodo}/pagar', [PeriodoController::class, 'pagar'])->name('periodos.pagar');
     Route::post('/periodos/{periodo}/cerrar', [PeriodoController::class, 'cerrar'])->name('periodos.cerrar');
+    Route::get('/periodos/{periodo}/banco/{empresa}', [PeriodoController::class, 'exportarBanco'])->name('periodos.banco');
+    Route::get('/periodos/{periodo}/relacion', [PeriodoController::class, 'relacion'])->name('periodos.relacion');
 
     Route::get('/comisiones', [ComisionController::class, 'index'])->name('comisiones.index');
     Route::get('/comisiones/{periodo}', [ComisionController::class, 'show'])->name('comisiones.show');
@@ -270,6 +273,10 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::get('/cargos', [CargoController::class, 'index'])->name('cargos.index');
     Route::post('/cargos', [CargoController::class, 'store'])->name('cargos.store');
     Route::put('/cargos/{cargo}', [CargoController::class, 'update'])->name('cargos.update');
+
+    Route::get('/empresas', [EmpresaNominaController::class, 'index'])->name('empresas.index');
+    Route::post('/empresas', [EmpresaNominaController::class, 'store'])->name('empresas.store');
+    Route::put('/empresas/{empresa}', [EmpresaNominaController::class, 'update'])->name('empresas.update');
 
     Route::get('/configuracion', [ConfiguracionController::class, 'index'])->name('configuracion.index');
     Route::put('/configuracion', [ConfiguracionController::class, 'update'])->name('configuracion.update');

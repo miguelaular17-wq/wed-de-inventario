@@ -81,37 +81,32 @@
     </div>
 
     <h3 style="margin:20px 0 8px;">Por sede</h3>
+    <p class="muted" style="margin:0 0 8px;">Montos: Ventas (sin restar devoluciones), DEV y Venta neta. Luego FAC y DEV son cantidad de documentos. Utilidad usa el costo de las líneas.</p>
     <div class="table-wrap">
         <table class="data-table">
             <thead>
                 <tr>
                     <th>Sede</th>
-                    <th>Ventas USD</th>
-                    <th>Vs anterior</th>
-                    <th>Ventas Bs</th>
-                    <th>FAC</th>
+                    <th>Ventas</th>
                     <th>DEV</th>
-                    <th>Valor DEV</th>
-                    <th>Unidades</th>
-                    <th>Margen</th>
-                    <th>Inventario</th>
-                    <th>Ajustes</th>
+                    <th>Venta neta</th>
+                    <th>FAC</th>
+                    <th>Nº DEV</th>
+                    <th>Utilidad</th>
+                    <th>% de utilidad</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach($porSede as $fila)
                     <tr>
                         <td><strong>{{ $fila['sede'] }}</strong></td>
-                        <td>${{ $fmt($fila['ventas_usd']) }}</td>
-                        <td>{{ $deltaTxt($fila['delta_ventas_usd']) }}</td>
-                        <td>{{ $fmt($fila['ventas_bs'], 0) }}</td>
+                        <td>${{ $fmt($fila['ventas_brutas'] ?? ($fila['venta_neta'] + $fila['devoluciones_usd'])) }}</td>
+                        <td>${{ $fmt($fila['devoluciones_usd']) }}</td>
+                        <td>${{ $fmt($fila['venta_neta'] ?? $fila['ventas_usd']) }}</td>
                         <td>{{ number_format($fila['facturas']) }}</td>
                         <td>{{ number_format($fila['devoluciones']) }}</td>
-                        <td>${{ $fmt($fila['devoluciones_usd']) }}</td>
-                        <td>{{ $fmt($fila['unidades'], 0) }}</td>
-                        <td>${{ $fmt($fila['margen_usd']) }}</td>
-                        <td>${{ $fmt($fila['inventario_valor']) }}</td>
-                        <td>{{ $fmt($fila['ajustes_unidades'], 0) }}</td>
+                        <td>${{ $fmt($fila['utilidad'] ?? $fila['margen_usd']) }}</td>
+                        <td>{{ $fmt($fila['margen_pct'] ?? 0, 1) }}%</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -132,28 +127,35 @@
                 'ranking' => $modo,
             ], fn ($v) => $v !== null && $v !== ''));
         };
+        $rankingMeta = match ($ranking) {
+            'unidades' => ['header' => 'Unds', 'celda' => fn ($item) => $fmt($item['unidades'] ?? 0, 0)],
+            'clientes' => ['header' => 'Clientes', 'celda' => fn ($item) => number_format($item['clientes'] ?? 0)],
+            'utilidad' => ['header' => 'Utilidad', 'celda' => fn ($item) => '$'.$fmt($item['utilidad'] ?? 0)],
+            default => ['header' => 'USD', 'celda' => fn ($item) => '$'.$fmt($item['ventas_usd'] ?? 0)],
+        };
     @endphp
     <div class="panel-header-flex" style="margin-top:20px; align-items:center;">
         <h3 style="margin:0;">Rankings</h3>
         <div class="segmented">
             <a href="{{ $rankingUrl('usd') }}" class="{{ $ranking === 'usd' ? 'active' : '' }}">Por USD</a>
             <a href="{{ $rankingUrl('unidades') }}" class="{{ $ranking === 'unidades' ? 'active' : '' }}">Por unidades</a>
+            <a href="{{ $rankingUrl('clientes') }}" class="{{ $ranking === 'clientes' ? 'active' : '' }}">Por clientes</a>
+            <a href="{{ $rankingUrl('utilidad') }}" class="{{ $ranking === 'utilidad' ? 'active' : '' }}">Por utilidad</a>
         </div>
     </div>
     <div class="nomina-split" style="margin-top:12px;">
         <div class="nomina-card">
             <h3>Top productos</h3>
             <table class="data-table">
-                <thead><tr><th>Producto</th><th>Unds</th><th>USD</th></tr></thead>
+                <thead><tr><th>Producto</th><th>{{ $rankingMeta['header'] }}</th></tr></thead>
                 <tbody>
                     @forelse($tops['productos'] as $item)
                         <tr>
                             <td>{{ $item['nombre'] }}</td>
-                            <td>{{ $fmt($item['unidades'], 0) }}</td>
-                            <td>${{ $fmt($item['ventas_usd']) }}</td>
+                            <td>{{ $rankingMeta['celda']($item) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="3" class="muted">Sin datos en el período.</td></tr>
+                        <tr><td colspan="2" class="muted">Sin datos en el período.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -161,16 +163,15 @@
         <div class="nomina-card">
             <h3>Top vendedores</h3>
             <table class="data-table">
-                <thead><tr><th>Vendedor</th><th>Unds</th><th>USD</th></tr></thead>
+                <thead><tr><th>Vendedor</th><th>{{ $rankingMeta['header'] }}</th></tr></thead>
                 <tbody>
                     @forelse($tops['vendedores'] as $item)
                         <tr>
                             <td>{{ $item['nombre'] }}</td>
-                            <td>{{ $fmt($item['unidades'] ?? 0, 0) }}</td>
-                            <td>${{ $fmt($item['ventas_usd']) }}</td>
+                            <td>{{ $rankingMeta['celda']($item) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="3" class="muted">Sin datos en el período.</td></tr>
+                        <tr><td colspan="2" class="muted">Sin datos en el período.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -178,16 +179,15 @@
         <div class="nomina-card">
             <h3>Top categorías</h3>
             <table class="data-table">
-                <thead><tr><th>Categoría</th><th>Unds</th><th>USD</th></tr></thead>
+                <thead><tr><th>Categoría</th><th>{{ $rankingMeta['header'] }}</th></tr></thead>
                 <tbody>
                     @forelse($tops['categorias'] as $item)
                         <tr>
                             <td>{{ $item['nombre'] }}</td>
-                            <td>{{ $fmt($item['unidades'] ?? 0, 0) }}</td>
-                            <td>${{ $fmt($item['ventas_usd']) }}</td>
+                            <td>{{ $rankingMeta['celda']($item) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="3" class="muted">Sin datos en el período.</td></tr>
+                        <tr><td colspan="2" class="muted">Sin datos en el período.</td></tr>
                     @endforelse
                 </tbody>
             </table>

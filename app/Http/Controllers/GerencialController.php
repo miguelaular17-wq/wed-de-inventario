@@ -109,7 +109,9 @@ class GerencialController extends Controller
                 'preset' => $periodo['preset'],
                 'desde' => $periodo['inicio']->toDateString(),
                 'hasta' => $periodo['fin']->toDateString(),
-                'ranking' => $request->query('ranking') === 'unidades' ? 'unidades' : 'usd',
+                'ranking' => in_array($request->query('ranking'), ['usd', 'unidades', 'clientes', 'utilidad'], true)
+                    ? $request->query('ranking')
+                    : 'usd',
             ],
             'sedes' => $gerencial->sedesVentas(),
             'catalogos' => $gerencial->catalogos(),

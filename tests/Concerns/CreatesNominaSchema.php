@@ -164,6 +164,16 @@ trait CreatesNominaSchema
             });
         }
 
+        if (! Schema::hasTable('nomina_empresas')) {
+            Schema::create('nomina_empresas', function (Blueprint $table) {
+                $table->id();
+                $table->string('codigo', 32)->unique();
+                $table->string('nombre', 160);
+                $table->string('estado', 16)->default('ACTIVO');
+                $table->timestamps();
+            });
+        }
+
         if (! Schema::hasTable('nomina_empleados')) {
             Schema::create('nomina_empleados', function (Blueprint $table) {
                 $table->id();
@@ -178,6 +188,7 @@ trait CreatesNominaSchema
                 $table->string('tipo_salario', 24)->default('QUINCENAL');
                 $table->string('estado', 16)->default('ACTIVO');
                 $table->unsignedBigInteger('sede_id')->nullable();
+                $table->unsignedBigInteger('empresa_id')->nullable();
                 $table->unsignedBigInteger('cargo_id')->nullable();
                 $table->unsignedBigInteger('supervisor_id')->nullable();
                 $table->boolean('es_supervisor')->default(false);
@@ -187,6 +198,10 @@ trait CreatesNominaSchema
                 $table->decimal('valor_dia', 12, 2)->nullable();
                 $table->decimal('valor_hora_extra', 12, 2)->nullable();
                 $table->timestamps();
+            });
+        } elseif (! Schema::hasColumn('nomina_empleados', 'empresa_id')) {
+            Schema::table('nomina_empleados', function (Blueprint $table) {
+                $table->unsignedBigInteger('empresa_id')->nullable();
             });
         }
 
@@ -533,6 +548,7 @@ trait CreatesNominaSchema
             'nomina_empleado_supervisores',
             'nomina_empleado_vendedores',
             'nomina_empleados',
+            'nomina_empresas',
             'nomina_cargos',
             'nomina_sedes',
             'ajustes_inventario',

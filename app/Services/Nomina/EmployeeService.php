@@ -129,6 +129,7 @@ class EmployeeService
             'es_servicio_tecnico' => (bool) ($data['es_servicio_tecnico'] ?? false),
             'modo_comision' => $data['modo_comision'] ?? $empleado?->modo_comision ?? NominaEmpleado::COMISION_NINGUNA,
             'codigo_vendedor' => $codigoVendedor,
+            'empresa_id' => ($data['empresa_id'] ?? null) ?: null,
         ];
     }
 

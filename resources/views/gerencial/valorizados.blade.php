@@ -10,7 +10,7 @@
         <div>
             <h1 style="margin:0;">Valorizados de inventarios</h1>
             <p class="gerencial-pregunta">¿Dónde está nuestro dinero y qué tan sano está el inventario?</p>
-            <p class="muted" style="margin:4px 0 0;">Stock a hoy × costo. El período se usa para conectar con el resto de dashboards.</p>
+            <p class="muted" style="margin:4px 0 0;">Stock a hoy × costo. El período alimenta el ABC de rotación (unidades vendidas).</p>
         </div>
     </div>
 
@@ -79,6 +79,105 @@
                             <td>${{ $fmt($fila['valor']) }}</td>
                         </tr>
                     @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="nomina-card" style="margin-top:16px;">
+        <h3>Análisis ABC / Pareto de rotación</h3>
+        <p class="muted" style="margin-top:0;">
+            A ≈ 80% de las unidades vendidas, B el siguiente 15%, C el resto.
+            El gráfico muestra los 20 de mayor rotación. Usa el filtro <strong>Categoría</strong> para ver el resto.
+            @if($filtros['categoria'])
+                Filtrado: {{ $filtros['categoria'] }} ({{ number_format($abc_total) }} productos).
+            @else
+                {{ number_format($abc_total) }} productos con venta en el período.
+            @endif
+        </p>
+        <div class="gerencial-grid-2">
+            <div>
+                @foreach(['A' => 'abc-a', 'B' => 'abc-b', 'C' => 'abc-c'] as $clase => $css)
+                    @php $r = $abc_resumen_rotacion[$clase]; @endphp
+                    <div class="gerencial-abc-bar">
+                        <span>{{ $clase }}</span>
+                        <div class="gerencial-abc-track"><i class="gerencial-{{ $css }}" style="width: {{ min(100, $r['pct_valor']) }}%;"></i></div>
+                        <span>{{ $fmt($r['pct_valor'], 1) }}% · {{ number_format($r['productos']) }} prod.</span>
+                    </div>
+                @endforeach
+                <div class="gerencial-chart gerencial-chart-tall" style="margin-top:16px;"><canvas id="chart-abc-pareto"></canvas></div>
+            </div>
+            <div>
+                <h4 style="margin:0 0 8px;">ABC rotación × ABC margen</h4>
+                <p class="muted" style="margin-top:0;font-size:.78rem;">Filas = rotación (unidades). Columnas = margen ($).</p>
+                <table class="data-table gerencial-matriz">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Margen A</th>
+                            <th>Margen B</th>
+                            <th>Margen C</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach(['A' => 'Rotación A', 'B' => 'Rotación B', 'C' => 'Rotación C'] as $rot => $label)
+                            <tr>
+                                <th>{{ $label }}</th>
+                                @foreach(['A', 'B', 'C'] as $mar)
+                                    @php
+                                        $cell = $abc_matriz[$rot][$mar];
+                                        $cls = '';
+                                        if ($rot === 'A' && $mar === 'A') $cls = 'is-core';
+                                        if ($rot === 'A' && $mar === 'C') $cls = 'is-buy';
+                                        if ($rot === 'C' && $mar === 'C') $cls = 'is-liq';
+                                    @endphp
+                                    <td class="{{ $cls }}">
+                                        <strong>{{ number_format($cell['productos']) }}</strong>
+                                        <div class="muted" style="font-size:.72rem;">{{ $fmt($cell['unidades'], 0) }} und</div>
+                                    </td>
+                                @endforeach
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+                @if($abc_alertas)
+                    <ul class="muted" style="margin:12px 0 0;padding-left:18px;font-size:.82rem;">
+                        @foreach($abc_alertas as $alerta)
+                            <li>{{ $alerta }}</li>
+                        @endforeach
+                    </ul>
+                @endif
+            </div>
+        </div>
+        <div class="table-wrap" style="margin-top:12px;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Unds</th>
+                        <th>%</th>
+                        <th>% acum.</th>
+                        <th>Margen $</th>
+                        <th>ABC rot.</th>
+                        <th>ABC mar.</th>
+                        <th>Inventario</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($abc_pareto as $fila)
+                        <tr>
+                            <td>{{ $fila->nombre ?: $fila->codigo }}</td>
+                            <td>{{ $fmt($fila->unidades, 0) }}</td>
+                            <td>{{ $fmt($fila->pct, 1) }}%</td>
+                            <td>{{ $fmt($fila->pct_acum, 1) }}%</td>
+                            <td>${{ $fmt($fila->utilidad) }}</td>
+                            <td><span class="gerencial-abc-badge gerencial-abc-{{ strtolower($fila->abc_rotacion) }}">{{ $fila->abc_rotacion }}</span></td>
+                            <td><span class="gerencial-abc-badge gerencial-abc-{{ strtolower($fila->abc_margen) }}">{{ $fila->abc_margen }}</span></td>
+                            <td>{{ $fila->clase_inv }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="8" class="muted">Sin ventas de unidades en el período. Cambia el período o la categoría.</td></tr>
+                    @endforelse
                 </tbody>
             </table>
         </div>
@@ -205,6 +304,58 @@ if (canvas && porSede.length) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: { legend: { position: 'right' } }
+        }
+    });
+}
+const canvasAbc = document.getElementById('chart-abc-pareto');
+const pareto = @json($abc_pareto->values());
+if (canvasAbc && pareto.length) {
+    const labels = pareto.map(r => (r.nombre || r.codigo || '').slice(0, 28));
+    new Chart(canvasAbc, {
+        data: {
+            labels,
+            datasets: [
+                {
+                    type: 'bar',
+                    label: 'Unidades',
+                    data: pareto.map(r => Number(r.unidades)),
+                    backgroundColor: '#1e3a8a',
+                    yAxisID: 'y',
+                },
+                {
+                    type: 'line',
+                    label: '% acumulado',
+                    data: pareto.map(r => Number(r.pct_acum)),
+                    borderColor: '#dc2626',
+                    backgroundColor: '#dc2626',
+                    yAxisID: 'y1',
+                    tension: 0.2,
+                },
+                {
+                    type: 'line',
+                    label: '80%',
+                    data: labels.map(() => 80),
+                    borderColor: '#94a3b8',
+                    borderDash: [6, 4],
+                    pointRadius: 0,
+                    yAxisID: 'y1',
+                },
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'top' } },
+            scales: {
+                y: { beginAtZero: true, title: { display: true, text: 'Unidades' } },
+                y1: {
+                    min: 0,
+                    max: 100,
+                    position: 'right',
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: '% acum.' },
+                }
+            }
         }
     });
 }

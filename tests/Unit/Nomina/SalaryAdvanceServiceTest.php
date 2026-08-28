@@ -111,4 +111,28 @@ class SalaryAdvanceServiceTest extends TestCase
         $this->assertEquals('CANCELADO', $abono->fresh()->estado);
         $this->assertEquals(0.0, $service->pendientesDe($this->empleado));
     }
+
+    public function test_kpis_acumulan_adelantos_sin_cancelados(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-20'));
+        $service = app(SalaryAdvanceService::class);
+        $service->create($this->empleado, ['fecha' => '2026-08-20', 'monto' => 40], auth()->id());
+        $service->create($this->empleado, ['fecha' => '2026-08-05', 'monto' => 10], auth()->id());
+        $cancelado = $service->create($this->empleado, ['fecha' => '2026-08-06', 'monto' => 99], auth()->id());
+        $service->cancelar($cancelado);
+        $descontado = $service->create($this->empleado, ['fecha' => '2026-07-20', 'monto' => 25], auth()->id());
+        $descontado->estado = 'DESCONTADO';
+        $descontado->save();
+
+        $kpis = $service->kpis();
+        $this->assertEquals(75.0, $kpis['acumulado']);
+        $this->assertEquals(50.0, $kpis['pendiente']);
+        $this->assertEquals(25.0, $kpis['descontado']);
+        $this->assertEquals(40.0, $kpis['esta_quincena']);
+        $this->assertSame(3, $kpis['cantidad']);
+
+        $resumen = $service->resumenEmpleado($this->empleado->fresh('abonosSueldo'));
+        $this->assertEquals(75.0, $resumen['acumulado']);
+        Carbon::setTestNow();
+    }
 }

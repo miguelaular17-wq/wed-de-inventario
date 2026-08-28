@@ -84,11 +84,15 @@
         </div>
         <div class="nomina-card">
             <h3>Por sede</h3>
+            <p class="muted" style="margin-top:0;">Torta = % de documentos de ajuste de cada sede.</p>
+            <div class="gerencial-chart"><canvas id="chart-ajustes-sede"></canvas></div>
+            @php $totalMovSede = max(1, (int) $por_sede->sum('movimientos')); @endphp
             <table class="data-table">
                 <thead>
                     <tr>
                         <th>Sede</th>
                         <th>Movimientos</th>
+                        <th>%</th>
                         <th>Entradas</th>
                         <th>Salidas</th>
                         <th>Diferencia</th>
@@ -96,15 +100,17 @@
                 </thead>
                 <tbody>
                     @forelse($por_sede as $fila)
+                        @php $pctSede = ((int) $fila->movimientos / $totalMovSede) * 100; @endphp
                         <tr>
                             <td><strong>{{ $fila->sede }}</strong></td>
                             <td>{{ number_format($fila->movimientos) }}</td>
+                            <td>{{ $fmt($pctSede, 1) }}%</td>
                             <td>+{{ $fmt($fila->entradas, 0) }}</td>
                             <td>−{{ $fmt($fila->salidas, 0) }}</td>
                             <td>{{ ($fila->diferencia >= 0 ? '+' : '').$fmt($fila->diferencia, 0) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="muted">Sin movimientos por sede.</td></tr>
+                        <tr><td colspan="6" class="muted">Sin movimientos por sede.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -160,6 +166,7 @@
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
+const colores = ['#1e3a8a','#dc2626','#d97706','#059669','#7c3aed','#64748b','#0ea5e9','#be185d'];
 const porTipo = @json($por_tipo->values());
 const canvas = document.getElementById('chart-ajustes-tipo');
 if (canvas && porTipo.length) {
@@ -177,6 +184,37 @@ if (canvas && porTipo.length) {
             maintainAspectRatio: false,
             plugins: { legend: { position: 'top' } },
             scales: { x: { stacked: false }, y: { beginAtZero: true } }
+        }
+    });
+}
+const porSede = @json($por_sede->values());
+const canvasSede = document.getElementById('chart-ajustes-sede');
+const totalMov = porSede.reduce((acc, r) => acc + Number(r.movimientos || 0), 0);
+if (canvasSede && totalMov > 0) {
+    new Chart(canvasSede, {
+        type: 'doughnut',
+        data: {
+            labels: porSede.map(r => r.sede),
+            datasets: [{
+                data: porSede.map(r => Number(r.movimientos)),
+                backgroundColor: colores,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'right' },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            const n = Number(ctx.parsed) || 0;
+                            const pct = ((n / totalMov) * 100).toFixed(1);
+                            return `${ctx.label}: ${pct}% (${n.toLocaleString()} docs)`;
+                        }
+                    }
+                }
+            }
         }
     });
 }

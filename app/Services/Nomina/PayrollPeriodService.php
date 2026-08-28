@@ -61,13 +61,18 @@ class PayrollPeriodService
     }
 
     /**
-     * @param  list<int>  $descontarEmpleadoIds  Empleados a los que sí se les descuenta cuota en esta quincena.
+     * @param  list<int>  $descontarEmpleadoIds  Atajo: descuenta todas las cuotas pendientes de esos empleados.
+     * @param  list<array{cuota_id:int, monto?:float|null}>  $descuentosCuotas
      */
-    public function calcular(NominaPeriodo $periodo, ?int $usuarioId = null, array $descontarEmpleadoIds = []): NominaPeriodo
-    {
+    public function calcular(
+        NominaPeriodo $periodo,
+        ?int $usuarioId = null,
+        array $descontarEmpleadoIds = [],
+        array $descuentosCuotas = []
+    ): NominaPeriodo {
         $descontarEmpleadoIds = array_values(array_unique(array_map('intval', $descontarEmpleadoIds)));
 
-        return DB::transaction(function () use ($periodo, $usuarioId, $descontarEmpleadoIds) {
+        return DB::transaction(function () use ($periodo, $usuarioId, $descontarEmpleadoIds, $descuentosCuotas) {
             $periodo = NominaPeriodo::query()->lockForUpdate()->findOrFail($periodo->id);
             $this->exigirEstado($periodo, NominaPeriodo::ABIERTO, 'calcular');
 
@@ -95,15 +100,18 @@ class PayrollPeriodService
             $this->commissions->limpiarPeriodo($periodo);
             $this->settlements->limpiarPeriodo($periodo);
 
-            $cuotasPorEmpleado = $this->deductions
-                ->cuotasPendientesDelRango($periodo->fecha_inicio, $periodo->fecha_fin)
-                ->groupBy(fn (NominaPrestamoCuota $cuota) => (int) $cuota->prestamo->empleado_id);
+            $cuotasPendientes = $this->deductions
+                ->cuotasPendientesDelRango($periodo->fecha_inicio, $periodo->fecha_fin);
+            $porEmpleado = $this->resolverDescuentosPrestamo(
+                $cuotasPendientes,
+                $descontarEmpleadoIds,
+                $descuentosCuotas
+            );
 
             foreach ($empleados as $empleado) {
                 $comision = $this->commissions->calcular($periodo, $empleado);
-                $cuotas = in_array((int) $empleado->id, $descontarEmpleadoIds, true)
-                    ? $cuotasPorEmpleado->get($empleado->id, collect())
-                    : collect();
+                $seleccion = $porEmpleado[$empleado->id] ?? ['cuotas' => collect(), 'montos' => []];
+                $cuotas = $seleccion['cuotas'];
                 $prestamosNomina = 0.0;
                 $prestamosComision = 0.0;
 
@@ -114,7 +122,8 @@ class PayrollPeriodService
                         $usuarioId,
                         ((float) $comision['total'] > 0)
                             ? 'Descuento de comisión'
-                            : 'Descuento de nómina'
+                            : 'Descuento de nómina',
+                        $seleccion['montos']
                     );
                     $montoPrestamo = round(collect($abonosPrestamo)->sum('monto'), 2);
 
@@ -172,6 +181,63 @@ class PayrollPeriodService
 
             return $periodo->fresh('registros');
         });
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, NominaPrestamoCuota>  $cuotasPendientes
+     * @param  list<int>  $descontarEmpleadoIds
+     * @param  list<array{cuota_id:int, monto?:float|null}>  $descuentosCuotas
+     * @return array<int, array{cuotas: \Illuminate\Support\Collection<int, NominaPrestamoCuota>, montos: array<int, float>}>
+     */
+    private function resolverDescuentosPrestamo($cuotasPendientes, array $descontarEmpleadoIds, array $descuentosCuotas): array
+    {
+        $porId = $cuotasPendientes->keyBy('id');
+        $resultado = [];
+
+        $filas = array_values(array_filter($descuentosCuotas, function ($fila) {
+            return is_array($fila) && (int) ($fila['cuota_id'] ?? 0) > 0;
+        }));
+
+        if ($filas !== []) {
+            foreach ($filas as $fila) {
+                $cuota = $porId->get((int) $fila['cuota_id']);
+                if (! $cuota || ! $cuota->prestamo?->empleado) {
+                    continue;
+                }
+                $empleadoId = (int) $cuota->prestamo->empleado_id;
+                $saldo = $cuota->saldo();
+                $monto = array_key_exists('monto', $fila) && $fila['monto'] !== null && $fila['monto'] !== ''
+                    ? round((float) $fila['monto'], 2)
+                    : $saldo;
+                $monto = min(max($monto, 0), $saldo);
+                if ($monto <= 0) {
+                    continue;
+                }
+                if (! isset($resultado[$empleadoId])) {
+                    $resultado[$empleadoId] = ['cuotas' => collect(), 'montos' => []];
+                }
+                $resultado[$empleadoId]['cuotas']->push($cuota);
+                $resultado[$empleadoId]['montos'][(int) $cuota->id] = $monto;
+            }
+
+            return $resultado;
+        }
+
+        $cuotasPorEmpleado = $cuotasPendientes->groupBy(
+            fn (NominaPrestamoCuota $cuota) => (int) $cuota->prestamo->empleado_id
+        );
+        foreach ($descontarEmpleadoIds as $empleadoId) {
+            $grupo = $cuotasPorEmpleado->get($empleadoId, collect());
+            if ($grupo->isEmpty()) {
+                continue;
+            }
+            $resultado[$empleadoId] = [
+                'cuotas' => $grupo->values(),
+                'montos' => $grupo->mapWithKeys(fn (NominaPrestamoCuota $cuota) => [(int) $cuota->id => $cuota->saldo()])->all(),
+            ];
+        }
+
+        return $resultado;
     }
 
     /**

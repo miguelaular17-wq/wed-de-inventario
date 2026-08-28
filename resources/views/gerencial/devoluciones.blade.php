@@ -58,6 +58,7 @@
     <div class="gerencial-grid-2">
         <div class="nomina-card">
             <h3>Análisis por motivo</h3>
+            <p class="muted" style="margin-top:0;">Cantidad = número de documentos DEV, no líneas.</p>
             <div class="gerencial-chart"><canvas id="chart-motivos"></canvas></div>
             <table class="data-table">
                 <thead><tr><th>Motivo</th><th>Cantidad</th><th>Valor</th><th>%</th></tr></thead>
@@ -77,6 +78,8 @@
         </div>
         <div class="nomina-card">
             <h3>Comparación por sede</h3>
+            <p class="muted" style="margin-top:0;">Torta = % DEV de cada sede (valor DEV / ventas).</p>
+            <div class="gerencial-chart"><canvas id="chart-sede-pct"></canvas></div>
             <table class="data-table">
                 <thead>
                     <tr>
@@ -187,6 +190,7 @@
 <script>
 const motivos = @json($porMotivo->values());
 const canvas = document.getElementById('chart-motivos');
+const colores = ['#1e3a8a','#dc2626','#d97706','#059669','#7c3aed','#64748b','#0ea5e9','#be185d'];
 if (canvas && motivos.length) {
     new Chart(canvas, {
         type: 'doughnut',
@@ -194,13 +198,40 @@ if (canvas && motivos.length) {
             labels: motivos.map(r => r.motivo),
             datasets: [{
                 data: motivos.map(r => Number(r.usd)),
-                backgroundColor: ['#1e3a8a','#dc2626','#d97706','#059669','#7c3aed','#64748b','#0ea5e9','#be185d'],
+                backgroundColor: colores,
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: { legend: { position: 'right' } }
+        }
+    });
+}
+const sedes = @json($porSede->values());
+const sedesPct = sedes.filter(r => Number(r.pct) > 0);
+const canvasSede = document.getElementById('chart-sede-pct');
+if (canvasSede && sedesPct.length) {
+    new Chart(canvasSede, {
+        type: 'doughnut',
+        data: {
+            labels: sedesPct.map(r => r.sede),
+            datasets: [{
+                data: sedesPct.map(r => Number(r.pct)),
+                backgroundColor: colores,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'right' },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `${ctx.label}: ${ctx.parsed}%`
+                    }
+                }
+            }
         }
     });
 }
