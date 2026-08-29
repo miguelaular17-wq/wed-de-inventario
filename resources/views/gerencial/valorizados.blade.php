@@ -9,12 +9,10 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">Valorizados de inventarios</h1>
-            <p class="gerencial-pregunta">¿Dónde está nuestro dinero y qué tan sano está el inventario?</p>
-            <p class="muted" style="margin:4px 0 0;">Stock a hoy × costo. El período alimenta el ABC de rotación (unidades vendidas).</p>
+            @include('gerencial._tabs')
         </div>
     </div>
 
-    @include('gerencial._tabs')
     @include('gerencial._filtros', ['modo' => 'valorizados', 'action' => route('gerencial.valorizados')])
 
     <div class="nomina-kpis">
@@ -86,15 +84,6 @@
 
     <div class="nomina-card" style="margin-top:16px;">
         <h3>Análisis ABC / Pareto de rotación</h3>
-        <p class="muted" style="margin-top:0;">
-            A ≈ 80% de las unidades vendidas, B el siguiente 15%, C el resto.
-            El gráfico muestra los 20 de mayor rotación. Usa el filtro <strong>Categoría</strong> para ver el resto.
-            @if($filtros['categoria'])
-                Filtrado: {{ $filtros['categoria'] }} ({{ number_format($abc_total) }} productos).
-            @else
-                {{ number_format($abc_total) }} productos con venta en el período.
-            @endif
-        </p>
         <div class="gerencial-grid-2">
             <div>
                 @foreach(['A' => 'abc-a', 'B' => 'abc-b', 'C' => 'abc-c'] as $clase => $css)
@@ -109,7 +98,7 @@
             </div>
             <div>
                 <h4 style="margin:0 0 8px;">ABC rotación × ABC margen</h4>
-                <p class="muted" style="margin-top:0;font-size:.78rem;">Filas = rotación (unidades). Columnas = margen ($).</p>
+                <p class="muted" style="margin:0 0 8px;">Clic en un recuadro para ver esos productos.</p>
                 <table class="data-table gerencial-matriz">
                     <thead>
                         <tr>
@@ -132,21 +121,16 @@
                                         if ($rot === 'C' && $mar === 'C') $cls = 'is-liq';
                                     @endphp
                                     <td class="{{ $cls }}">
-                                        <strong>{{ number_format($cell['productos']) }}</strong>
-                                        <div class="muted" style="font-size:.72rem;">{{ $fmt($cell['unidades'], 0) }} und</div>
+                                        <button type="button" class="gerencial-matriz-btn" data-rot="{{ $rot }}" data-mar="{{ $mar }}" @disabled($cell['productos'] < 1)>
+                                            <strong>{{ number_format($cell['productos']) }}</strong>
+                                            <div class="muted" style="font-size:.72rem;">{{ $fmt($cell['unidades'], 0) }} und</div>
+                                        </button>
                                     </td>
                                 @endforeach
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
-                @if($abc_alertas)
-                    <ul class="muted" style="margin:12px 0 0;padding-left:18px;font-size:.82rem;">
-                        @foreach($abc_alertas as $alerta)
-                            <li>{{ $alerta }}</li>
-                        @endforeach
-                    </ul>
-                @endif
             </div>
         </div>
         <div class="table-wrap" style="margin-top:12px;">
@@ -283,6 +267,31 @@
         </div>
     </div>
 </div>
+
+<div id="modal-abc-celda" class="modal-overlay" hidden>
+    <div class="panel modal-box modal-wide" role="dialog" aria-modal="true" aria-labelledby="modal-abc-titulo">
+        <div class="panel-header-flex">
+            <div>
+                <h3 id="modal-abc-titulo" style="margin:0;">Productos</h3>
+                <p class="muted" id="modal-abc-meta" style="margin:4px 0 0;"></p>
+            </div>
+            <button type="button" class="btn" id="modal-abc-cerrar">Cerrar</button>
+        </div>
+        <div class="table-wrap" style="max-height:60vh;overflow:auto;margin-top:12px;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th><button type="button" class="gerencial-sort" data-sort="unidades">Unds</button></th>
+                        <th><button type="button" class="gerencial-sort is-active" data-sort="utilidad">Margen $</button></th>
+                        <th>Inventario</th>
+                    </tr>
+                </thead>
+                <tbody id="modal-abc-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
@@ -359,5 +368,80 @@ if (canvasAbc && pareto.length) {
         }
     });
 }
+
+const matrizAbc = @json($abc_matriz);
+const modalAbc = document.getElementById('modal-abc-celda');
+const modalAbcTitulo = document.getElementById('modal-abc-titulo');
+const modalAbcMeta = document.getElementById('modal-abc-meta');
+const modalAbcBody = document.getElementById('modal-abc-body');
+function escHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+function dineroAbc(n) {
+    return Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function abrirModalAbc() {
+    if (!modalAbc) return;
+    modalAbc.hidden = false;
+}
+function cerrarModalAbc() {
+    if (!modalAbc) return;
+    modalAbc.hidden = true;
+}
+let abcItemsActuales = [];
+let abcOrden = 'utilidad';
+function pintarFilasAbc() {
+    if (!modalAbcBody) return;
+    if (!abcItemsActuales.length) {
+        modalAbcBody.innerHTML = '<tr><td colspan="4" class="muted">No hay productos en esta casilla.</td></tr>';
+        return;
+    }
+    const items = abcItemsActuales.slice().sort((a, b) => {
+        const va = Number(a[abcOrden] || 0);
+        const vb = Number(b[abcOrden] || 0);
+        return vb - va;
+    });
+    modalAbcBody.innerHTML = items.map((it) => (
+            '<tr>'
+            + '<td>' + escHtml(it.nombre || '—') + '</td>'
+            + '<td>' + Number(it.unidades || 0).toLocaleString('en-US') + '</td>'
+        + '<td>$' + dineroAbc(it.utilidad) + '</td>'
+        + '<td>' + escHtml(it.clase_inv || '—') + '</td>'
+        + '</tr>'
+    )).join('');
+}
+function abrirCeldaAbc(rot, mar) {
+    const cell = matrizAbc?.[rot]?.[mar] || { items: [], productos: 0, unidades: 0 };
+    abcItemsActuales = cell.items || [];
+    abcOrden = 'utilidad';
+    document.querySelectorAll('.gerencial-sort').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.sort === abcOrden);
+    });
+    if (modalAbcTitulo) modalAbcTitulo.textContent = 'Rotación ' + rot + ' × Margen ' + mar;
+    if (modalAbcMeta) {
+        modalAbcMeta.textContent = abcItemsActuales.length
+            ? abcItemsActuales.length + ' producto' + (abcItemsActuales.length === 1 ? '' : 's') + ' · ' + Number(cell.unidades || 0).toLocaleString('en-US') + ' und · mayor a menor'
+            : 'Sin productos en este recuadro';
+    }
+    pintarFilasAbc();
+    abrirModalAbc();
+}
+document.querySelectorAll('.gerencial-sort').forEach((btn) => {
+    btn.addEventListener('click', () => {
+        abcOrden = btn.dataset.sort || 'utilidad';
+        document.querySelectorAll('.gerencial-sort').forEach((b) => b.classList.toggle('is-active', b === btn));
+        pintarFilasAbc();
+    });
+});
+document.querySelectorAll('.gerencial-matriz-btn').forEach((btn) => {
+    btn.addEventListener('click', () => abrirCeldaAbc(btn.dataset.rot, btn.dataset.mar));
+});
+if (modalAbc) {
+    modalAbc.addEventListener('click', (e) => { if (e.target === modalAbc) cerrarModalAbc(); });
+}
+document.getElementById('modal-abc-cerrar')?.addEventListener('click', cerrarModalAbc);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarModalAbc(); });
 </script>
 @endpush

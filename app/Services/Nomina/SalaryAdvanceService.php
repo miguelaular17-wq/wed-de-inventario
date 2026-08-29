@@ -177,4 +177,64 @@ class SalaryAdvanceService
                 'nomina_periodo_id' => null,
             ]);
     }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, NominaAbonoSueldo>
+     */
+    public function delDia(Carbon|string $fecha)
+    {
+        $dia = Carbon::parse($fecha)->toDateString();
+
+        return NominaAbonoSueldo::query()
+            ->with(['empleado.cliente', 'empleado.empresa', 'creador'])
+            ->whereDate('fecha', $dia)
+            ->where('estado', '!=', 'CANCELADO')
+            ->orderBy('id')
+            ->get();
+    }
+
+    public function generarTxtDelDia(Carbon|string $fecha, float $tasaBcv): string
+    {
+        if ($tasaBcv <= 0) {
+            throw ValidationException::withMessages([
+                'tasa_bcv' => 'No hay tasa BCV del día. Cárgala en Flujo de caja o reintenta más tarde.',
+            ]);
+        }
+
+        $dia = Carbon::parse($fecha)->startOfDay();
+        $porEmpleado = $this->delDia($dia)
+            ->groupBy('empleado_id')
+            ->map(function ($grupo) {
+                $empleado = $grupo->first()->empleado;
+
+                return [
+                    'empleado' => $empleado,
+                    'usd' => round((float) $grupo->sum('monto'), 2),
+                ];
+            })
+            ->filter(fn ($fila) => $fila['empleado'] && $fila['usd'] > 0);
+
+        $lineas = [];
+        foreach ($porEmpleado as $fila) {
+            $cedula = $fila['empleado']->cedula();
+            if (preg_replace('/\D+/', '', $cedula) === '') {
+                continue;
+            }
+            $bs = round($fila['usd'] * $tasaBcv, 2);
+            $lineas[] = PayrollBankFileService::formatearLinea($cedula, $bs, $dia);
+        }
+
+        if ($lineas === []) {
+            throw ValidationException::withMessages([
+                'fecha' => 'Ese día no hay adelantos para generar el TXT.',
+            ]);
+        }
+
+        return implode("\r\n", $lineas)."\r\n";
+    }
+
+    public function nombreArchivoDelDia(Carbon|string $fecha): string
+    {
+        return 'adelantos_'.Carbon::parse($fecha)->format('Ymd').'.txt';
+    }
 }

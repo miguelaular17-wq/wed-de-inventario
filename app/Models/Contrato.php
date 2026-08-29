@@ -85,7 +85,7 @@ class Contrato extends Model
 
     public function estatusGeneral(): string
     {
-        if ($this->estado === 'liquidado') return 'LIQUIDADO';
+        if ($this->esLiquidado()) return 'LIQUIDADO';
 
         $vencidas = $this->cuotas()->where('estatus', 'vencido')->where('acumulada', false)->count();
         $pendientes = $this->cuotas()->whereIn('estatus', ['pendiente', 'parcial'])->count();
@@ -94,6 +94,24 @@ class Contrato extends Model
         // Si tiene saldo de capital pendiente aunque cuotas estén pagadas, sigue siendo deudor
         if ((float) $this->attributes['total_a_pagar'] > 0) return 'ACTIVO';
         return 'PAGADO';
+    }
+
+    public function esLiquidado(): bool
+    {
+        return $this->estado === 'liquidado' || ! $this->activo;
+    }
+
+    public function esSinComision(): bool
+    {
+        return (float) $this->interes_porcentaje == 0.0;
+    }
+
+    public function scopeVigente($query)
+    {
+        return $query->where('activo', true)
+            ->where(function ($q) {
+                $q->whereNull('estado')->orWhere('estado', '!=', 'liquidado');
+            });
     }
 
     public function getTotalAPagarAttribute($value): float

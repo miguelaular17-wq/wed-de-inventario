@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\GerencialAnalyticsService;
 use App\Services\GerencialDashboardService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -71,6 +72,28 @@ class GerencialController extends Controller
 
         return view('gerencial.ajustes', $ctx + $data + [
             'tipo' => $request->query('tipo'),
+        ]);
+    }
+
+    public function ajustesUsuario(Request $request, GerencialDashboardService $gerencial, GerencialAnalyticsService $analytics): JsonResponse
+    {
+        $ctx = $this->contexto($request, $gerencial);
+        $codigos = $request->query('codigos', []);
+        if (! is_array($codigos)) {
+            $codigos = $codigos !== null && $codigos !== '' ? [(string) $codigos] : [];
+        }
+
+        $items = $analytics->detalleAjustesUsuario(
+            $ctx['periodo'],
+            $ctx['filtros']['sede'],
+            $request->query('tipo'),
+            $codigos,
+            $request->query('clave')
+        );
+
+        return response()->json([
+            'items' => $items,
+            'total' => count($items),
         ]);
     }
 

@@ -7,6 +7,7 @@ use App\Models\Nomina\NominaAuditLog;
 use App\Models\Nomina\NominaEmpresa;
 use App\Models\Nomina\NominaPeriodo;
 use App\Services\BcvRateService;
+use App\Services\Nomina\LoanDiscountPlanService;
 use App\Services\Nomina\PayrollBankFileService;
 use App\Services\Nomina\PayrollPeriodService;
 use App\Support\SimpleXlsxWriter;
@@ -22,6 +23,7 @@ class PeriodoController extends Controller
         private PayrollPeriodService $periods,
         private PayrollBankFileService $bankFile,
         private BcvRateService $bcv,
+        private LoanDiscountPlanService $loanPlans,
     ) {
     }
 
@@ -91,7 +93,11 @@ class PeriodoController extends Controller
 
         return view('nomina.periodos.calcular', [
             'periodo' => $periodo,
-            'candidatos' => $this->periods->empleadosConCuotasPendientes($periodo),
+            'planes' => $this->loanPlans->planesDeQuincena([
+                'inicio' => $periodo->fecha_inicio,
+                'fin' => $periodo->fecha_fin,
+                'etiqueta' => $periodo->etiqueta,
+            ]),
         ]);
     }
 
@@ -104,6 +110,7 @@ class PeriodoController extends Controller
             'descuentos.*.aplicar' => ['sometimes'],
             'descuentos.*.cuota_id' => ['required_with:descuentos.*.aplicar', 'integer'],
             'descuentos.*.monto' => ['nullable', 'numeric', 'min:0'],
+            'descuentos.*.destino' => ['nullable', 'in:NOMINA,COMISION'],
         ]);
 
         $descuentos = [];
@@ -116,6 +123,7 @@ class PeriodoController extends Controller
                 'monto' => array_key_exists('monto', $fila) && $fila['monto'] !== null && $fila['monto'] !== ''
                     ? (float) $fila['monto']
                     : null,
+                'destino' => $fila['destino'] ?? null,
             ];
         }
 
@@ -123,7 +131,8 @@ class PeriodoController extends Controller
             $periodo,
             auth()->id(),
             $data['descontar_empleado_ids'] ?? [],
-            $descuentos
+            $descuentos,
+            $request->has('descuentos') || $request->has('descontar_empleado_ids')
         );
 
         return $this->volver($periodo, 'Nómina calculada. Los importes quedaron congelados para revisión.');

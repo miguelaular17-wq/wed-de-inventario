@@ -7,7 +7,6 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">Liquidación de comisiones</h1>
-            <p class="muted" style="margin:4px 0 0;">Se pagan 3 días después de cerrar cada quincena. No forman parte del recibo de sueldo.</p>
         </div>
     </div>
 

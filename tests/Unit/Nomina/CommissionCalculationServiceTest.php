@@ -214,6 +214,50 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(22.0, (float) $liq->total_pagar);
     }
 
+    public function test_no_liquida_comision_a_inactivos_ni_sin_comision(): void
+    {
+        $sinComision = $this->empleado(NominaEmpleado::COMISION_NINGUNA, 'SIN-001');
+        $inactivo = $this->empleado(NominaEmpleado::COMISION_VENTAS_PROPIAS, 'INA-001');
+        $inactivo->update(['estado' => 'INACTIVO']);
+        $activo = $this->empleado(NominaEmpleado::COMISION_VENTAS_PROPIAS, 'ACT-001');
+        $periodo = $this->periodo();
+        $this->venta('SIN-001', 900);
+        $this->venta('INA-001', 800);
+        $this->venta('ACT-001', 700);
+
+        app(\App\Services\Nomina\PayrollPeriodService::class)->calcular($periodo);
+
+        $this->assertDatabaseHas('nomina_registros', ['empleado_id' => $sinComision->id, 'periodo_id' => $periodo->id]);
+        $this->assertDatabaseMissing('nomina_registros', ['empleado_id' => $inactivo->id, 'periodo_id' => $periodo->id]);
+        $this->assertDatabaseMissing('nomina_liquidaciones_comision', ['empleado_id' => $sinComision->id, 'periodo_id' => $periodo->id]);
+        $this->assertDatabaseMissing('nomina_liquidaciones_comision', ['empleado_id' => $inactivo->id, 'periodo_id' => $periodo->id]);
+        $this->assertDatabaseHas('nomina_liquidaciones_comision', ['empleado_id' => $activo->id, 'periodo_id' => $periodo->id]);
+        $this->assertSame(700.0, (float) \App\Models\Nomina\NominaLiquidacionComision::query()->where('empleado_id', $activo->id)->value('base_total'));
+    }
+
+    public function test_txt_de_comisiones_es_por_empresa(): void
+    {
+        $empresa = \App\Models\Nomina\NominaEmpresa::create([
+            'codigo' => 'EMP1',
+            'nombre' => 'Empresa 1',
+            'estado' => 'ACTIVO',
+        ]);
+        $empleado = $this->empleado(NominaEmpleado::COMISION_VENTAS_PROPIAS, 'TXT-001');
+        $empleado->update(['empresa_id' => $empresa->id]);
+        $periodo = $this->periodo();
+        $this->venta('TXT-001', 1000);
+        app(\App\Services\Nomina\PayrollPeriodService::class)->calcular($periodo);
+
+        $bank = app(\App\Services\Nomina\PayrollBankFileService::class);
+        $txt = $bank->generarComisiones($periodo, $empresa, 100, '2026-08-18');
+
+        $this->assertStringContainsString('V', $txt);
+        $this->assertSame('comision_EMP1_'.$periodo->id.'_20260818.txt', $bank->nombreArchivoComisiones($periodo, $empresa, '2026-08-18'));
+        $resumen = $bank->resumenComisionesPorEmpresa($periodo->load('liquidacionesComision.empleado.empresa'));
+        $this->assertSame(1, $resumen->count());
+        $this->assertSame('EMP1', $resumen->first()->empresa->codigo);
+    }
+
     private function empleado(string $modo, string $codigo, bool $supervisor = false, bool $tecnico = false): NominaEmpleado
     {
         $sede = NominaSede::query()->firstOrCreate(

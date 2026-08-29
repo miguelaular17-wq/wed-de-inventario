@@ -24,6 +24,7 @@ use App\Http\Controllers\Nomina\CargoController;
 use App\Http\Controllers\Nomina\ComisionAjusteController;
 use App\Http\Controllers\Nomina\ComisionController;
 use App\Http\Controllers\Nomina\ConfiguracionController;
+use App\Http\Controllers\Nomina\DeduccionController;
 use App\Http\Controllers\Nomina\EmpleadoController;
 use App\Http\Controllers\Nomina\MercanciaController;
 use App\Http\Controllers\Nomina\EmpresaNominaController;
@@ -108,6 +109,9 @@ Route::middleware(['auth'])->prefix('gerencial')->group(function () {
     Route::get('/ajustes', [GerencialController::class, 'ajustes'])
         ->middleware('permission:gerencial.ajustes')
         ->name('gerencial.ajustes');
+    Route::get('/ajustes/usuario', [GerencialController::class, 'ajustesUsuario'])
+        ->middleware('permission:gerencial.ajustes')
+        ->name('gerencial.ajustes.usuario');
     Route::get('/rentabilidad', [GerencialController::class, 'rentabilidad'])
         ->middleware('permission:gerencial.rentabilidad')
         ->name('gerencial.rentabilidad');
@@ -244,6 +248,7 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
 
     Route::get('/comisiones', [ComisionController::class, 'index'])->name('comisiones.index');
     Route::get('/comisiones/{periodo}', [ComisionController::class, 'show'])->name('comisiones.show');
+    Route::get('/comisiones/{periodo}/banco/{empresa}', [ComisionController::class, 'exportarBanco'])->name('comisiones.banco');
 
     Route::get('/empleados', [EmpleadoController::class, 'index'])->name('empleados.index');
     Route::get('/empleados/create', [EmpleadoController::class, 'create'])->name('empleados.create');
@@ -252,11 +257,18 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::get('/empleados/{empleado}/edit', [EmpleadoController::class, 'edit'])->name('empleados.edit');
     Route::put('/empleados/{empleado}', [EmpleadoController::class, 'update'])->name('empleados.update');
 
+    Route::get('/prestamos', [PrestamoController::class, 'index'])->name('prestamos.index');
+    Route::post('/prestamos/programar', [PrestamoController::class, 'programar'])->name('prestamos.programar');
     Route::post('/empleados/{empleado}/prestamos', [PrestamoController::class, 'store'])->name('prestamos.store');
     Route::post('/prestamos/{prestamo}/pagos', [PrestamoController::class, 'abonar'])->name('prestamos.abonar');
     Route::post('/prestamos/{prestamo}/cancelar', [PrestamoController::class, 'cancelar'])->name('prestamos.cancelar');
+    Route::get('/adelantos', [AbonoSueldoController::class, 'index'])->name('adelantos.index');
+    Route::post('/adelantos', [AbonoSueldoController::class, 'storeEscritorio'])->name('adelantos.store');
+    Route::get('/adelantos/txt', [AbonoSueldoController::class, 'exportarTxt'])->name('adelantos.txt');
     Route::post('/empleados/{empleado}/abonos-sueldo', [AbonoSueldoController::class, 'store'])->name('abonos_sueldo.store');
     Route::post('/abonos-sueldo/{abono}/cancelar', [AbonoSueldoController::class, 'cancelar'])->name('abonos_sueldo.cancelar');
+    Route::post('/empleados/{empleado}/deducciones', [DeduccionController::class, 'store'])->name('deducciones.store');
+    Route::post('/deducciones/{deduccion}/cancelar', [DeduccionController::class, 'cancelar'])->name('deducciones.cancelar');
     Route::post('/empleados/{empleado}/mercancia', [MercanciaController::class, 'store'])->name('mercancia.store');
     Route::post('/mercancia/{descuento}/cancelar', [MercanciaController::class, 'cancelar'])->name('mercancia.cancelar');
     Route::post('/empleados/{empleado}/comision-abonos', [ComisionAjusteController::class, 'storeAbono'])->name('comision_abonos.store');

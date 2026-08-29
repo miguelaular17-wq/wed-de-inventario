@@ -16,21 +16,11 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">Dashboard gerencial</h1>
-            <p class="gerencial-pregunta">¿Cómo está funcionando la empresa?</p>
-            <p class="muted" style="margin:4px 0 0;">
-                {{ $periodo['etiqueta'] }}
-                · comparado con {{ $periodo['anterior_inicio']->format('d/m/Y') }} al {{ $periodo['anterior_fin']->format('d/m/Y') }}
-            </p>
+            @include('gerencial._tabs')
         </div>
     </div>
 
-    @include('gerencial._tabs')
     @include('gerencial._filtros', ['modo' => 'completo', 'action' => route('gerencial.dashboard')])
-    @if($usaLineas)
-        <p class="muted" style="margin:8px 0 0;">Con producto, categoría o vendedor el total es por líneas, no el de la factura de Profit.</p>
-    @else
-        <p class="muted" style="margin:8px 0 0;">Las ventas son el total de factura de Profit (FAC − DEV, solo registrados).</p>
-    @endif
 
     <h3 style="margin:20px 0 8px;">Compañía</h3>
     <div class="nomina-kpis">
@@ -81,7 +71,6 @@
     </div>
 
     <h3 style="margin:20px 0 8px;">Por sede</h3>
-    <p class="muted" style="margin:0 0 8px;">Montos: Ventas (sin restar devoluciones), DEV y Venta neta. Luego FAC y DEV son cantidad de documentos. Utilidad usa el costo de las líneas.</p>
     <div class="table-wrap">
         <table class="data-table">
             <thead>

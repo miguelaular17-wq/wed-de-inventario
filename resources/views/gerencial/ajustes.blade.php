@@ -2,15 +2,22 @@
 
 @section('title', 'Consolidados de ajustes de inventarios')
 
-@php $fmt = fn ($n, $d = 2) => number_format((float) $n, $d); @endphp
+@php
+    $fmt = fn ($n, $d = 2) => number_format((float) $n, $d);
+    $filtrosAjustesJs = [
+        'preset' => $filtros['preset'] ?? 'mes',
+        'desde' => $filtros['desde'] ?? '',
+        'hasta' => $filtros['hasta'] ?? '',
+        'sede' => $filtros['sede'] ?? 'todas',
+        'tipo' => $tipo ?? '',
+    ];
+@endphp
 
 @section('content')
 <div class="panel nomina-page">
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">Consolidados de ajustes de inventarios</h1>
-            <p class="gerencial-pregunta">¿Por qué está cambiando el inventario y quién genera esos movimientos?</p>
-            <p class="muted" style="margin:4px 0 0;">{{ $periodo['etiqueta'] }}</p>
         </div>
     </div>
 
@@ -138,14 +145,20 @@
         </div>
         <div class="nomina-card">
             <h3>Auditoría — usuarios que realizan ajustes</h3>
-            <p class="muted">No implica irregularidad: sirve para detectar patrones.</p>
             <table class="data-table">
                 <thead><tr><th>Usuario</th><th>Movimientos</th><th>Valor</th></tr></thead>
                 <tbody>
                     @forelse($usuarios as $fila)
+                        @php $codigosUsuario = $fila->codigos ?? array_values(array_filter([$fila->usuario_raw ?? $fila->codigo ?? $fila->usuario])); @endphp
                         <tr>
                             <td>
-                                <strong>{{ $fila->nombre ?: $fila->usuario }}</strong>
+                                <button type="button"
+                                    class="link-usuario-ajuste"
+                                    data-nombre="{{ $fila->nombre ?: $fila->usuario }}"
+                                    data-clave="{{ $fila->clave ?? '' }}"
+                                    data-codigos="{{ implode('||', $codigosUsuario) }}">
+                                    {{ $fila->nombre ?: $fila->usuario }}
+                                </button>
                                 @if(!empty($fila->codigo) && $fila->codigo !== 'Sin usuario' && ($fila->nombre ?? '') !== '')
                                     <div class="muted" style="font-size:.75rem;">{{ $fila->codigo }}</div>
                                 @endif
@@ -157,6 +170,35 @@
                         <tr><td colspan="3" class="muted">Sin usuario registrado en los movimientos.</td></tr>
                     @endforelse
                 </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="modal-ajustes-usuario" class="modal-overlay" style="display:none;" hidden>
+    <div class="panel modal-box modal-wide" role="dialog" aria-modal="true" aria-labelledby="modal-ajustes-titulo">
+        <div class="panel-header-flex">
+            <div>
+                <h3 id="modal-ajustes-titulo" style="margin:0;">Ajustes del usuario</h3>
+                <p class="muted" id="modal-ajustes-meta" style="margin:4px 0 0;"></p>
+            </div>
+            <button type="button" class="btn" id="modal-ajustes-cerrar">Cerrar</button>
+        </div>
+        <div class="table-wrap" style="max-height:60vh;overflow:auto;margin-top:12px;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Sede</th>
+                        <th>Tipo</th>
+                        <th>Documento</th>
+                        <th>Producto</th>
+                        <th>Cant.</th>
+                        <th>Valor</th>
+                        <th>Motivo</th>
+                    </tr>
+                </thead>
+                <tbody id="modal-ajustes-body"></tbody>
             </table>
         </div>
     </div>
@@ -218,5 +260,91 @@ if (canvasSede && totalMov > 0) {
         }
     });
 }
+
+const modalAjustes = document.getElementById('modal-ajustes-usuario');
+const modalAjustesBody = document.getElementById('modal-ajustes-body');
+const modalAjustesTitulo = document.getElementById('modal-ajustes-titulo');
+const modalAjustesMeta = document.getElementById('modal-ajustes-meta');
+const urlAjustesUsuario = @json(route('gerencial.ajustes.usuario'));
+const filtrosAjustes = @json($filtrosAjustesJs);
+
+function escHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+function dinero(n) {
+    return Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function abrirModalAjustes() {
+    if (!modalAjustes) return;
+    modalAjustes.hidden = false;
+    modalAjustes.style.display = 'flex';
+}
+function cerrarModalAjustes() {
+    if (!modalAjustes) return;
+    modalAjustes.hidden = true;
+    modalAjustes.style.display = 'none';
+}
+function cargarAjustesUsuario(boton) {
+    const nombre = boton.dataset.nombre || 'Usuario';
+    const rawCodigos = boton.dataset.codigos || '';
+    let codigos = rawCodigos.split('||').map((c) => c.trim()).filter(Boolean);
+    if (codigos.length === 0) {
+        try { const parsed = JSON.parse(rawCodigos || '[]'); if (Array.isArray(parsed)) codigos = parsed; } catch (e) { codigos = []; }
+    }
+    if (modalAjustesTitulo) modalAjustesTitulo.textContent = nombre;
+    if (modalAjustesMeta) modalAjustesMeta.textContent = 'Cargando ajustes…';
+    if (modalAjustesBody) modalAjustesBody.innerHTML = '<tr><td colspan="8" class="muted">Cargando…</td></tr>';
+    abrirModalAjustes();
+
+    const params = new URLSearchParams(filtrosAjustes);
+    (Array.isArray(codigos) ? codigos : []).forEach((c) => params.append('codigos[]', c));
+    if (boton.dataset.clave) params.set('clave', boton.dataset.clave);
+
+    fetch(urlAjustesUsuario + '?' + params.toString(), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+    })
+        .then((r) => { if (!r.ok) throw new Error('No se pudieron cargar los ajustes.'); return r.json(); })
+        .then((data) => {
+            const items = data.items || [];
+            if (modalAjustesMeta) {
+                modalAjustesMeta.textContent = items.length
+                    ? items.length + ' movimiento' + (items.length === 1 ? '' : 's') + ' en el período'
+                    : 'Sin ajustes en el período';
+            }
+            if (!modalAjustesBody) return;
+            if (!items.length) {
+                modalAjustesBody.innerHTML = '<tr><td colspan="8" class="muted">Este usuario no tiene ajustes en el filtro actual.</td></tr>';
+                return;
+            }
+            modalAjustesBody.innerHTML = items.map((it) => {
+                const cant = Number(it.cantidad || 0);
+                const signo = cant > 0 ? '+' : '';
+                return '<tr>'
+                    + '<td>' + escHtml(it.fecha || '') + '</td>'
+                    + '<td>' + escHtml(it.sede || '') + '</td>'
+                    + '<td>' + escHtml(it.tipo || '') + '</td>'
+                    + '<td>' + escHtml(it.documento || '') + '</td>'
+                    + '<td>' + escHtml(it.producto || it.codigo || '—') + '</td>'
+                    + '<td>' + signo + cant.toLocaleString('en-US') + '</td>'
+                    + '<td>$' + dinero(it.valor) + '</td>'
+                    + '<td>' + escHtml(it.motivo || '—') + '</td>'
+                    + '</tr>';
+            }).join('');
+        })
+        .catch((err) => {
+            if (modalAjustesMeta) modalAjustesMeta.textContent = '';
+            if (modalAjustesBody) modalAjustesBody.innerHTML = '<tr><td colspan="8" class="muted">' + (err.message || 'Error') + '</td></tr>';
+        });
+}
+document.querySelectorAll('.link-usuario-ajuste').forEach((btn) => {
+    btn.addEventListener('click', () => cargarAjustesUsuario(btn));
+});
+if (modalAjustes) {
+    modalAjustes.addEventListener('click', (e) => { if (e.target === modalAjustes) cerrarModalAjustes(); });
+}
+document.getElementById('modal-ajustes-cerrar')?.addEventListener('click', cerrarModalAjustes);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarModalAjustes(); });
 </script>
 @endpush

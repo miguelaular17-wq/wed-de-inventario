@@ -39,4 +39,21 @@ class NominaLiquidacionComision extends Model
     {
         return $this->belongsTo(NominaEmpleado::class, 'empleado_id');
     }
+
+    public function scopeVisibles($query)
+    {
+        return $query
+            ->where('modo', '!=', NominaEmpleado::COMISION_NINGUNA)
+            ->whereHas('empleado', fn ($q) => $q->comisionables());
+    }
+
+    public function totalVentas(): float
+    {
+        $total = (float) $this->base_total;
+        if ($total > 0) {
+            return $total;
+        }
+
+        return round((float) $this->base_telefonia + (float) $this->base_otros, 2);
+    }
 }

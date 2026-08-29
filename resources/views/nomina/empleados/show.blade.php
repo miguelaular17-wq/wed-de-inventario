@@ -18,7 +18,6 @@
         'prestamos' => 'Préstamos',
         'abonos' => 'Adelantos',
         'deducciones' => 'Deducciones',
-        'historial' => 'Historial',
     ];
     $proxima = $resumenPrestamos['proxima_cuota'] ?? null;
 @endphp
@@ -27,10 +26,10 @@
 <div class="panel nomina-page">
     <div class="nomina-ficha-head">
         <div>
-            <a href="{{ route('nomina.empleados.index') }}" class="muted" style="font-size:.82rem;">← Empleados</a>
+            <a href="{{ route('nomina.empleados.index') }}" class="muted" style="font-size:.82rem;">← Volver</a>
             <h1 style="margin:4px 0 0;">{{ $empleado->nombre() }}</h1>
             <p class="muted" style="margin:4px 0 0;">
-                {{ $empleado->nombreCargo() }} · {{ $empleado->nombreSede() }} · Supervisor: {{ $empleado->nombreSupervisor() }}
+                Cargo: {{ $empleado->nombreCargo() }}  · Supervisor: {{ $empleado->nombreSupervisor() }}
             </p>
         </div>
         <div class="nomina-ficha-meta">
@@ -60,27 +59,25 @@
     </nav>
 
     @if($tab === 'personal')
-        <div class="nomina-form-grid" style="margin-top:16px;">
+        <div class="nomina-form-grid nomina-ficha-datos" style="margin-top:16px;">
             <div><span class="muted">Cédula</span><div>{{ $empleado->cedula() }}</div></div>
             <div><span class="muted">Nombre</span><div>{{ $empleado->nombre() }}</div></div>
             <div><span class="muted">Email</span><div>{{ $empleado->email ?: '—' }}</div></div>
             <div><span class="muted">Teléfono</span><div>{{ $empleado->telefono ?: '—' }}</div></div>
-            <div><span class="muted">Usuario</span><div>{{ $empleado->user?->name ?: '—' }}</div></div>
         </div>
     @endif
 
     @if($tab === 'laboral')
-        <div class="nomina-form-grid" style="margin-top:16px;">
+        <div class="nomina-form-grid nomina-ficha-datos" style="margin-top:16px;">
             <div><span class="muted">Sede</span><div>{{ $empleado->nombreSede() }}</div></div>
             <div><span class="muted">Empresa</span><div>{{ $empleado->nombreEmpresa() }}</div></div>
             <div><span class="muted">Cargo</span><div>{{ $empleado->nombreCargo() }}</div></div>
             <div><span class="muted">Supervisor</span><div>{{ $empleado->nombreSupervisor() }}</div></div>
             <div><span class="muted">Ingreso</span><div>{{ optional($empleado->fecha_ingreso)->format('d/m/Y') ?: '—' }}</div></div>
-            <div><span class="muted">Tipo de salario</span><div>{{ $empleado->tipo_salario }}</div></div>
             <div><span class="muted">Es supervisor</span><div>{{ $empleado->es_supervisor ? 'Sí' : 'No' }}</div></div>
             <div><span class="muted">Servicio Técnico</span><div>{{ $empleado->es_servicio_tecnico ? 'Sí' : 'No' }}</div></div>
-            <div><span class="muted">Modo de comisión</span><div>{{ \App\Models\Nomina\NominaEmpleado::modosComision()[$empleado->modo_comision] ?? $empleado->modo_comision }}</div></div>
             <div><span class="muted">Código de vendedor</span><div>{{ $empleado->codigo_vendedor ?: '—' }}</div></div>
+            <div class="field-wide"><span class="muted">Modo de comisión</span><div>{{ \App\Models\Nomina\NominaEmpleado::modosComision()[$empleado->modo_comision] ?? $empleado->modo_comision }}</div></div>
         </div>
 
         @if($empleado->subordinados->isNotEmpty())
@@ -96,19 +93,11 @@
     @if($tab === 'ventas')
         <p class="muted" style="margin-top:16px;">
             Quincena {{ $quincenaActual['etiqueta'] }}.
-            Total = precio de las líneas.
-            @if(($ventasResumen['descuento_pct'] ?? 0) > 0)
-                Descuento efectivo {{ number_format($ventasResumen['descuento_pct'], 2) }}% calculado con el neto real de Profit.
-            @endif
         </p>
         <p>
             <strong>{{ $ventasResumen['facturas'] }} facturas</strong>
             · {{ $ventasResumen['lineas'] }} líneas
             · Facturado ${{ number_format($ventasResumen['total'], 2) }}
-            @if(($ventasResumen['descuento_pct'] ?? 0) > 0)
-                · Descuento ${{ number_format($ventasResumen['descuento'], 2) }}
-                · Neto ${{ number_format($ventasResumen['neto'], 2) }}
-            @endif
         </p>
 
         @if(!empty($ventaDetalle['factura']))
@@ -252,7 +241,6 @@
             <h3>Liquidaciones</h3>
             <p class="muted">
                 Modo: <strong>{{ \App\Models\Nomina\NominaEmpleado::modosComision()[$empleado->modo_comision] ?? $empleado->modo_comision }}</strong>.
-                Se pagan 3 días después de la quincena. El supervisor no cobra ventas propias.
             </p>
             <table class="data-table">
                 <thead><tr><th>Período</th><th>Pago</th><th>Comisión</th><th>Abonos</th><th>Retención</th><th>Desc.</th><th>A pagar</th></tr></thead>
@@ -275,7 +263,7 @@
         </div>
 
         <div class="nomina-card" style="margin-top:16px;">
-            <h3>Abono de meta / comisión</h3>
+            <h3>Bonificaciones</h3>
             <form method="POST" action="{{ route('nomina.comision_abonos.store', $empleado) }}" class="nomina-form-grid">
                 @csrf
                 <div class="field"><label>Fecha</label><input type="date" name="fecha" value="{{ now()->format('Y-m-d') }}" required></div>
@@ -312,6 +300,7 @@
                         <option value="PERDIDA">Pérdida</option>
                         <option value="DANO">Daño</option>
                         <option value="OTRO">Otro</option>
+                        <option value="MERCANCIA">Mercancía</option>
                     </select>
                 </div>
                 <div class="field"><label>Monto</label><input type="number" step="0.01" min="0.01" name="monto" required></div>
@@ -372,13 +361,13 @@
                 : '—';
         @endphp
         <div class="nomina-recibo" style="margin-top:16px;">
-            <h3>Estructura del recibo (la tienda)</h3>
-            <p class="muted">Quincena {{ $quincenaActual['etiqueta'] }}. Valor diario: ${{ number_format($asistencia['valor_dia'], 2) }} (salario mensual ÷ 30) · ${{ number_format($asistencia['valor_hora'], 2) }} por hora extra (<a href="{{ route('nomina.configuracion.index') }}">Configuración</a>).</p>
+            <h3>Estructura del recibo</h3>
+            <p class="muted">Quincena {{ $quincenaActual['etiqueta'] }}. Valor diario: ${{ number_format($asistencia['valor_dia'], 2) }} · hora extra: ${{ number_format($asistencia['valor_hora'], 2) }}.</p>
             <div class="nomina-split">
                 <div>
                     <h4>Ingresos</h4>
                     <ul>
-                        <li>Salario mensual: ${{ number_format($empleado->salario_base, 2) }} ({{ $empleado->tipo_salario === 'MENSUAL' ? 'quincena = mitad' : $empleado->tipo_salario }})</li>
+                        <li>Salario mensual: ${{ number_format($empleado->salario_base, 2) }}</li>
                         <li>Horas extras: {{ $horasTxt }}</li>
                         <li>Otros ingresos: —</li>
                     </ul>
@@ -390,18 +379,13 @@
                         <li>Préstamos (cuota): se aplicará al cerrar la quincena</li>
                         <li>Ausencias: {{ $ausenciasTxt }}</li>
                         @if($empleado->generaComision())
-                            <li>Otras deducciones: —</li>
+                            <li>Otras deducciones: ${{ number_format($deduccionesPendientes ?? 0, 2) }}</li>
                         @else
                             <li>Mercancía pendiente: ${{ number_format($mercanciaPendiente, 2) }}</li>
                         @endif
                     </ul>
                 </div>
             </div>
-            @if($empleado->generaComision())
-                <p class="muted">Las comisiones se pagan aparte, 3 días después de la quincena. Si el empleado gana comisión, el préstamo se descuenta de esa liquidación; si no, del sueldo.</p>
-            @else
-                <p class="muted">Este personal no genera comisión. Los descuentos de mercancía se restan del sueldo al calcular la quincena.</p>
-            @endif
         </div>
 
         <h3>Inasistencias (IAS)</h3>
@@ -482,6 +466,37 @@
     @endif
 
     @if($tab === 'prestamos')
+        <p>
+            <strong>Quincena actual:</strong> {{ $quincenaActual['etiqueta'] }}
+            · <a href="{{ route('nomina.prestamos.index') }}">Escritorio de préstamos</a>
+        </p>
+        @if(($planesPrestamo ?? collect())->isNotEmpty())
+            <div class="nomina-card" style="margin-top:12px;">
+                <h3 style="margin-top:0;">Descuento de esta quincena</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Préstamo</th>
+                            <th>Cuota</th>
+                            <th>Monto</th>
+                            <th>Se aplica en</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($planesPrestamo as $plan)
+                            <tr>
+                                <td>#{{ $plan->prestamo_id }}</td>
+                                <td>#{{ $plan->cuota_id }}</td>
+                                <td>${{ number_format((float) $plan->monto, 2) }}</td>
+                                <td>{{ $plan->etiquetaDestino() }}</td>
+                                <td>{{ $plan->estado }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
         <h3 style="margin-top:16px;">Registrar préstamo</h3>
         <form method="POST" action="{{ route('nomina.prestamos.store', $empleado) }}" class="nomina-form-grid">
             @csrf
@@ -542,15 +557,24 @@
                     </form>
                 @endif
                 <table class="data-table">
-                    <thead><tr><th>#</th><th>Fecha</th><th>Monto</th><th>Pagado</th><th>Estado</th><th>Nómina</th></tr></thead>
+                    <thead><tr><th>#</th><th>Fecha</th><th>Monto</th><th>Pagado</th><th>Estado</th><th>Esta quincena</th><th>Nómina</th></tr></thead>
                     <tbody>
                         @foreach($prestamo->cuotas as $cuota)
+                            @php $plan = ($planesPrestamo ?? collect())->get($cuota->id); @endphp
                             <tr>
                                 <td>{{ $cuota->numero }}</td>
                                 <td>{{ $cuota->fecha_programada->format('d/m/Y') }}</td>
                                 <td>${{ number_format($cuota->monto, 2) }}</td>
                                 <td>${{ number_format($cuota->monto_pagado, 2) }}</td>
                                 <td>{{ $cuota->estado }}</td>
+                                <td>
+                                    @if($plan)
+                                        ${{ number_format((float) $plan->monto, 2) }} · {{ $plan->etiquetaDestino() }}
+                                        <span class="muted">({{ $plan->estado }})</span>
+                                    @else
+                                        —
+                                    @endif
+                                </td>
                                 <td>{{ $cuota->nomina_periodo_id ? '#'.$cuota->nomina_periodo_id : '—' }}</td>
                             </tr>
                         @endforeach
@@ -568,8 +592,10 @@
 
     @if($tab === 'abonos')
         <h3 style="margin-top:16px;">Registrar adelanto de quincena</h3>
-        <p class="muted">El empleado pide un adelanto durante la quincena. Ese monto se descuenta de su sueldo al cerrar la nómina. No requiere préstamo.</p>
-        <p><strong>Quincena actual:</strong> {{ $quincenaActual['etiqueta'] }} · Pendiente por descontar: ${{ number_format($abonosPendientes, 2) }}</p>
+        <p>
+            <strong>Quincena actual:</strong> {{ $quincenaActual['etiqueta'] }} · Pendiente por descontar: ${{ number_format($abonosPendientes, 2) }}
+            · <a href="{{ route('nomina.adelantos.index') }}">Escritorio de adelantos</a>
+        </p>
         <div class="nomina-kpis" style="margin:12px 0;">
             <div class="nomina-kpi"><span>Acumulado</span><strong>${{ number_format($resumenAdelantos['acumulado'], 2) }}</strong></div>
             <div class="nomina-kpi"><span>Pendiente</span><strong>${{ number_format($resumenAdelantos['pendiente'], 2) }}</strong></div>
@@ -614,99 +640,44 @@
     @endif
 
     @if($tab === 'deducciones')
-        <p class="muted" style="margin-top:16px;">Adelantos, mercancía, inasistencias y cuotas de préstamo descontados en nómina. Cada uno queda ligado al período para no cobrarse dos veces.</p>
+        <h3 style="margin-top:16px;">Descuento de nómina</h3>
+        <p class="muted">Cualquier descuento del sueldo por un motivo (daño, pérdida, acuerdo, etc.). Se resta una sola vez al calcular esa quincena. Adelantos, faltas, préstamos y mercancía siguen en sus pestañas.</p>
+        <div class="nomina-kpis" style="margin:12px 0;">
+            <div class="nomina-kpi"><span>Pendiente</span><strong>${{ number_format($resumenDeducciones['pendiente'] ?? 0, 2) }}</strong></div>
+            <div class="nomina-kpi"><span>Ya descontado</span><strong>${{ number_format($resumenDeducciones['descontado'] ?? 0, 2) }}</strong></div>
+            <div class="nomina-kpi"><span>Acumulado</span><strong>${{ number_format($resumenDeducciones['acumulado'] ?? 0, 2) }}</strong></div>
+        </div>
+        <form method="POST" action="{{ route('nomina.deducciones.store', $empleado) }}" class="nomina-form-grid">
+            @csrf
+            <div class="field"><label>Fecha</label><input type="date" name="fecha" value="{{ now()->format('Y-m-d') }}" required></div>
+            <div class="field"><label>Monto</label><input type="number" step="0.01" min="0.01" name="monto" required></div>
+            <div class="field field-wide"><label>Motivo</label><input name="motivo" placeholder="Ej. rotura de mercancía, acuerdo de pago…" required></div>
+            <div class="field" style="display:flex; align-items:flex-end;"><button class="btn primary" type="submit">Registrar descuento</button></div>
+        </form>
 
-        <h3>Adelantos de sueldo</h3>
+        <h3>Historial</h3>
         <table class="data-table">
-            <thead><tr><th>Fecha</th><th>Quincena</th><th>Monto</th><th>Período</th><th>Estado</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Quincena</th><th>Monto</th><th>Motivo</th><th>Estado</th><th>Usuario</th><th></th></tr></thead>
             <tbody>
-                @forelse($empleado->abonosSueldo as $abono)
-                    <tr>
-                        <td>{{ $abono->fecha->format('d/m/Y') }}</td>
-                        <td>{{ $abono->etiqueta }}</td>
-                        <td>${{ number_format($abono->monto, 2) }}</td>
-                        <td>{{ $abono->nomina_periodo_id ? '#'.$abono->nomina_periodo_id : 'Pendiente' }}</td>
-                        <td>{{ $abono->estado }}</td>
-                    </tr>
-                @empty
-                    <tr><td colspan="5" class="muted">Sin adelantos de sueldo.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
-
-        <h3>Mercancía</h3>
-        <table class="data-table">
-            <thead><tr><th>Fecha</th><th>Quincena</th><th>Monto</th><th>Período</th><th>Estado</th><th>Detalle</th></tr></thead>
-            <tbody>
-                @forelse($empleado->descuentosMercancia as $item)
+                @forelse($empleado->deducciones as $item)
                     <tr>
                         <td>{{ $item->fecha->format('d/m/Y') }}</td>
                         <td>{{ $item->etiqueta }}</td>
                         <td>${{ number_format($item->monto, 2) }}</td>
-                        <td>{{ $item->nomina_periodo_id ? '#'.$item->nomina_periodo_id : 'Pendiente' }}</td>
-                        <td>{{ $item->estado }}</td>
-                        <td>{{ $item->motivo ?: '—' }}</td>
+                        <td>{{ $item->motivo }}</td>
+                        <td>{{ $item->estado }}{{ $item->nomina_periodo_id ? ' · nómina #'.$item->nomina_periodo_id : '' }}</td>
+                        <td>{{ $item->creador?->name ?: '—' }}</td>
+                        <td>
+                            @if($item->isPendiente())
+                                <form method="POST" action="{{ route('nomina.deducciones.cancelar', $item) }}" onsubmit="return confirm('¿Cancelar este descuento? El historial se conserva.')">
+                                    @csrf
+                                    <button class="btn secondary" type="submit">Cancelar</button>
+                                </form>
+                            @endif
+                        </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="muted">Sin descuentos de mercancía.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
-
-        <h3>Inasistencias</h3>
-        <table class="data-table">
-            <thead><tr><th>Fecha</th><th>Días</th><th>Monto</th><th>Período</th><th>Estado</th></tr></thead>
-            <tbody>
-                @forelse($empleado->inasistencias as $falta)
-                    <tr>
-                        <td>{{ $falta->fecha->format('d/m/Y') }}</td>
-                        <td>{{ number_format($falta->cantidad, 2) }}</td>
-                        <td>${{ number_format($falta->monto, 2) }}</td>
-                        <td>{{ $falta->nomina_periodo_id ? '#'.$falta->nomina_periodo_id : 'Pendiente' }}</td>
-                        <td>{{ $falta->estado }}</td>
-                    </tr>
-                @empty
-                    <tr><td colspan="5" class="muted">Sin inasistencias.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
-
-        <h3>Cuotas de préstamo</h3>
-        <table class="data-table">
-            <thead><tr><th>Préstamo</th><th>Cuota</th><th>Fecha</th><th>Monto</th><th>Período</th><th>Estado</th></tr></thead>
-            <tbody>
-                @php
-                    $cuotasNomina = $empleado->prestamos->flatMap->cuotas->whereNotNull('nomina_periodo_id');
-                @endphp
-                @forelse($cuotasNomina as $cuota)
-                    <tr>
-                        <td>#{{ $cuota->prestamo_id }}</td>
-                        <td>{{ $cuota->numero }}</td>
-                        <td>{{ $cuota->fecha_programada->format('d/m/Y') }}</td>
-                        <td>${{ number_format($cuota->monto, 2) }}</td>
-                        <td>#{{ $cuota->nomina_periodo_id }}</td>
-                        <td>{{ $cuota->estado }}</td>
-                    </tr>
-                @empty
-                    <tr><td colspan="6" class="muted">Aún no hay cuotas de préstamo aplicadas por nómina.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
-    @endif
-
-    @if($tab === 'historial')
-        <table class="data-table" style="margin-top:16px;">
-            <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr></thead>
-            <tbody>
-                @forelse($historial as $log)
-                    <tr>
-                        <td>{{ $log->created_at?->format('d/m/Y H:i') }}</td>
-                        <td>{{ $log->user?->name ?: 'Sistema' }}</td>
-                        <td>{{ $log->accion }}</td>
-                        <td class="muted" style="font-size:.82rem;">{{ \Illuminate\Support\Str::limit(json_encode($log->valores_nuevos ?? $log->valores_anteriores), 140) }}</td>
-                    </tr>
-                @empty
-                    <tr><td colspan="4" class="muted">Sin movimientos auditados.</td></tr>
+                    <tr><td colspan="7" class="muted">Sin descuentos registrados.</td></tr>
                 @endforelse
             </tbody>
         </table>

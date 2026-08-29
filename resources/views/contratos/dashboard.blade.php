@@ -69,7 +69,7 @@
                             </div>
                         </div>
                         <div style="text-align: right;">
-                            <div style="font-weight: 700; color: #dc2626;">${{ number_format($alerta->saldo, 2) }}</div>
+                            <div style="font-weight: 700; color: #dc2626;">${{ number_format($alerta->montoVisible(), 2) }}</div>
                             @if($alerta->diasAtraso() > 0)
                                 <span style="font-size: 0.75rem; background: #fef2f2; color: #dc2626; padding: 2px 6px; border-radius: 4px;">{{ $alerta->diasAtraso() }} días vencida</span>
                             @else

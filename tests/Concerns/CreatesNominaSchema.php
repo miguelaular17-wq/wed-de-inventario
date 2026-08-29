@@ -293,6 +293,23 @@ trait CreatesNominaSchema
             });
         }
 
+        if (! Schema::hasTable('nomina_deducciones')) {
+            Schema::create('nomina_deducciones', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('empleado_id');
+                $table->date('fecha');
+                $table->decimal('monto', 12, 2);
+                $table->date('quincena_inicio');
+                $table->date('quincena_fin');
+                $table->string('etiqueta', 64);
+                $table->string('estado', 16)->default('PENDIENTE');
+                $table->unsignedBigInteger('nomina_periodo_id')->nullable();
+                $table->text('motivo');
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->timestamps();
+            });
+        }
+
         if (! Schema::hasTable('nomina_descuentos_mercancia')) {
             Schema::create('nomina_descuentos_mercancia', function (Blueprint $table) {
                 $table->id();
@@ -530,6 +547,25 @@ trait CreatesNominaSchema
             });
         }
 
+        if (! Schema::hasTable('nomina_prestamo_planes')) {
+            Schema::create('nomina_prestamo_planes', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('empleado_id');
+                $table->unsignedBigInteger('prestamo_id');
+                $table->unsignedBigInteger('cuota_id');
+                $table->date('quincena_inicio');
+                $table->date('quincena_fin');
+                $table->string('etiqueta', 64);
+                $table->decimal('monto', 12, 2);
+                $table->string('destino', 16)->default('NOMINA');
+                $table->string('estado', 16)->default('PENDIENTE');
+                $table->unsignedBigInteger('nomina_periodo_id')->nullable();
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->timestamps();
+                $table->unique(['cuota_id', 'quincena_inicio']);
+            });
+        }
+
         if (! Schema::hasTable('nomina_prestamo_abonos')) {
             Schema::create('nomina_prestamo_abonos', function (Blueprint $table) {
                 $table->id();
@@ -559,6 +595,8 @@ trait CreatesNominaSchema
             'nomina_config',
             'nomina_abonos_sueldo',
             'nomina_descuentos_mercancia',
+            'nomina_deducciones',
+            'nomina_prestamo_planes',
             'nomina_prestamo_abonos',
             'nomina_prestamo_cuotas',
             'nomina_prestamos',

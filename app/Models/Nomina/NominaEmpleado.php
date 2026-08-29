@@ -169,9 +169,41 @@ class NominaEmpleado extends Model
         return $modo !== self::COMISION_NINGUNA;
     }
 
+    public function scopeActivos($query)
+    {
+        return $query->where('estado', 'ACTIVO');
+    }
+
+    public function scopeComisionables($query)
+    {
+        return $query->activos()->where('modo_comision', '!=', self::COMISION_NINGUNA);
+    }
+
+    public function scopeBuscar($query, ?string $termino)
+    {
+        $termino = trim((string) $termino);
+        if ($termino === '') {
+            return $query;
+        }
+
+        $like = '%'.mb_strtolower($termino, 'UTF-8').'%';
+
+        return $query->where(function ($q) use ($like) {
+            $q->whereHas('cliente', function ($cliente) use ($like) {
+                $cliente->whereRaw('LOWER(nombre) LIKE ?', [$like])
+                    ->orWhereRaw('LOWER(cedula) LIKE ?', [$like]);
+            })->orWhereRaw('LOWER(codigo_vendedor) LIKE ?', [$like]);
+        });
+    }
+
     public function descuentosMercancia(): HasMany
     {
         return $this->hasMany(NominaDescuentoMercancia::class, 'empleado_id')->orderByDesc('fecha')->orderByDesc('id');
+    }
+
+    public function deducciones(): HasMany
+    {
+        return $this->hasMany(NominaDeduccion::class, 'empleado_id')->orderByDesc('fecha')->orderByDesc('id');
     }
 
     public static function modosComision(): array

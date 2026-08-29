@@ -237,8 +237,27 @@ class GerencialDashboardServiceTest extends TestCase
             ->assertSee('Conteo')
             ->assertSee('Entradas vs salidas')
             ->assertSee('RICARDO GIMENEZ')
-            ->assertDontSee('V3065986')
             ->assertDontSee('>SAL<');
+
+        $this->actingAs($gerente)
+            ->get(route('gerencial.ajustes.usuario', [
+                'preset' => 'mes',
+                'sede' => 'todas',
+                'codigos' => ['V30657986', '30657986'],
+            ]))
+            ->assertOk()
+            ->assertJsonFragment(['documento' => 'A-1'])
+            ->assertJsonFragment(['documento' => 'A-2'])
+            ->assertJsonMissing(['documento' => 'A-3']);
+
+        $this->actingAs($gerente)
+            ->get(route('gerencial.ajustes.usuario', [
+                'preset' => 'mes',
+                'sede' => 'todas',
+                'clave' => '30657986',
+            ]))
+            ->assertOk()
+            ->assertJsonFragment(['documento' => 'A-1']);
 
         $this->actingAs($gerente)
             ->get(route('gerencial.rentabilidad'))
@@ -417,6 +436,7 @@ class GerencialDashboardServiceTest extends TestCase
         $this->assertSame('C', $data['abc_pareto']->last()->abc_rotacion);
         $this->assertLessThanOrEqual(20, $data['abc_pareto']->count());
         $this->assertSame(1, $data['abc_matriz']['A']['A']['productos']);
+        $this->assertSame('Alpha', $data['abc_matriz']['A']['A']['items'][0]['nombre']);
 
         $hogar = app(\App\Services\GerencialAnalyticsService::class)->valorizados($periodo, 'DORAL', 'HOGAR', null);
         $this->assertSame(2, $hogar['abc_total']);

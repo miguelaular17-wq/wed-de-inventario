@@ -3,6 +3,7 @@
 namespace App\Services\Nomina;
 
 use App\Models\Nomina\NominaEmpresa;
+use App\Models\Nomina\NominaLiquidacionComision;
 use App\Models\Nomina\NominaPeriodo;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -66,11 +67,87 @@ class PayrollBankFileService
         return implode("\r\n", $lineas)."\r\n";
     }
 
+    /**
+     * @return Collection<int, object{empresa:?NominaEmpresa,empleados:int,usd:float}>
+     */
+    public function resumenComisionesPorEmpresa(NominaPeriodo $periodo): Collection
+    {
+        $liquidaciones = $periodo->relationLoaded('liquidacionesComision')
+            ? $periodo->liquidacionesComision
+            : NominaLiquidacionComision::query()
+                ->where('periodo_id', $periodo->id)
+                ->with('empleado.empresa')
+                ->get();
+
+        return $liquidaciones
+            ->filter(fn ($liq) => $liq->empleado && $liq->empleado->generaComision() && $liq->empleado->isActivo())
+            ->groupBy(fn ($liq) => (string) ($liq->empleado->empresa_id ?: '0'))
+            ->map(function (Collection $grupo) {
+                $empleado = $grupo->first()->empleado;
+
+                return (object) [
+                    'empresa' => $empleado?->empresa,
+                    'empleados' => $grupo->count(),
+                    'usd' => round((float) $grupo->sum('total_pagar'), 2),
+                ];
+            })
+            ->sortBy(fn ($fila) => $fila->empresa?->codigo ?? 'zzzz')
+            ->values();
+    }
+
+    public function generarComisiones(NominaPeriodo $periodo, NominaEmpresa $empresa, float $tasaBcv, Carbon|string|null $fechaPago = null): string
+    {
+        if ($tasaBcv <= 0) {
+            throw ValidationException::withMessages([
+                'tasa_bcv' => 'No hay tasa BCV del día. Cárgala en Flujo de caja o reintenta más tarde.',
+            ]);
+        }
+
+        $fecha = Carbon::parse($fechaPago ?? $periodo->fecha_pago_comision ?? now());
+        $liquidaciones = NominaLiquidacionComision::query()
+            ->where('periodo_id', $periodo->id)
+            ->visibles()
+            ->with('empleado.cliente')
+            ->get();
+
+        $lineas = [];
+        foreach ($liquidaciones as $liq) {
+            if ((int) ($liq->empleado?->empresa_id) !== (int) $empresa->id) {
+                continue;
+            }
+            $usd = (float) $liq->total_pagar;
+            if ($usd <= 0) {
+                continue;
+            }
+            $cedula = $liq->empleado->cedula();
+            if (preg_replace('/\D+/', '', $cedula) === '') {
+                continue;
+            }
+            $bs = round($usd * $tasaBcv, 2);
+            $lineas[] = self::formatearLinea($cedula, $bs, $fecha);
+        }
+
+        if ($lineas === []) {
+            throw ValidationException::withMessages([
+                'empresa' => 'Esa empresa no tiene comisiones a pagar en esta quincena.',
+            ]);
+        }
+
+        return implode("\r\n", $lineas)."\r\n";
+    }
+
     public function nombreArchivo(NominaPeriodo $periodo, NominaEmpresa $empresa, Carbon|string|null $fechaPago = null): string
     {
         $fecha = Carbon::parse($fechaPago ?? now())->format('Ymd');
 
         return 'nomina_'.$empresa->codigo.'_'.$periodo->id.'_'.$fecha.'.txt';
+    }
+
+    public function nombreArchivoComisiones(NominaPeriodo $periodo, NominaEmpresa $empresa, Carbon|string|null $fechaPago = null): string
+    {
+        $fecha = Carbon::parse($fechaPago ?? $periodo->fecha_pago_comision ?? now())->format('Ymd');
+
+        return 'comision_'.$empresa->codigo.'_'.$periodo->id.'_'.$fecha.'.txt';
     }
 
     /**

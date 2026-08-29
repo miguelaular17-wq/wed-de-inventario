@@ -26,6 +26,25 @@ class ContratoCuota extends Model
         'notificaciones_enviadas' => 'array',
     ];
 
+    public function scopeDeContratosVigentes($query)
+    {
+        return $query->whereHas('contrato', fn ($q) => $q->vigente());
+    }
+
+    public function montoVisible(): float
+    {
+        $contrato = $this->contrato;
+        if ($contrato && $contrato->esSinComision()) {
+            $deuda = (float) ($contrato->getAttributes()['total_a_pagar'] ?? $contrato->total_a_pagar);
+
+            return $deuda > 0 ? $deuda : (float) $this->saldo;
+        }
+
+        $saldo = (float) $this->saldo;
+
+        return $saldo > 0 ? $saldo : (float) $this->monto;
+    }
+
     public function contrato(): BelongsTo
     {
         return $this->belongsTo(Contrato::class);
@@ -75,11 +94,10 @@ class ContratoCuota extends Model
 
         foreach ($cuotasVencidas as $cuota) {
             $contrato = $cuota->contrato;
-            if ($contrato && $contrato->estado !== 'liquidado') {
-                $cuota->update(['estatus' => 'vencido']);
-            } else {
-                $cuota->update(['estatus' => 'vencido']);
+            if ($contrato && $contrato->esLiquidado()) {
+                continue;
             }
+            $cuota->update(['estatus' => 'vencido']);
         }
     }
 }

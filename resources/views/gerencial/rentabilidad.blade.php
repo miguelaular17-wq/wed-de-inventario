@@ -9,12 +9,10 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">Rentabilidad</h1>
-            <p class="gerencial-pregunta">¿Cuánto estamos ganando realmente?</p>
-            <p class="muted" style="margin:4px 0 0;">{{ $periodo['etiqueta'] }} · ventas − costo (FAC − DEV)</p>
+            @include('gerencial._tabs')
         </div>
     </div>
 
-    @include('gerencial._tabs')
     @include('gerencial._filtros', ['modo' => 'rentabilidad', 'action' => route('gerencial.rentabilidad')])
 
     <div class="nomina-kpis">
@@ -119,7 +117,6 @@
     <div class="gerencial-grid-2" style="margin-top:16px;">
         <div class="nomina-card">
             <h3>Venden mucho, dejan poco</h3>
-            <p class="muted">Mayor volumen de ventas con menor % de margen.</p>
             <table class="data-table">
                 <thead><tr><th>Producto</th><th>Ventas</th><th>% margen</th></tr></thead>
                 <tbody>
@@ -137,7 +134,6 @@
         </div>
         <div class="nomina-card">
             <h3>Mejor rentabilidad</h3>
-            <p class="muted">Mayor % de margen entre los productos con ventas.</p>
             <table class="data-table">
                 <thead><tr><th>Producto</th><th>Ventas</th><th>% margen</th></tr></thead>
                 <tbody>

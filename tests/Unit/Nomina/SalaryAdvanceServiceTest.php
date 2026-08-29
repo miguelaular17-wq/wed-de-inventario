@@ -7,6 +7,7 @@ use App\Models\Nomina\NominaAbonoSueldo;
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\User;
 use App\Services\Nomina\PayrollDeductionService;
+use App\Services\Nomina\PayrollBankFileService;
 use App\Services\Nomina\SalaryAdvanceService;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -134,5 +135,20 @@ class SalaryAdvanceServiceTest extends TestCase
         $resumen = $service->resumenEmpleado($this->empleado->fresh('abonosSueldo'));
         $this->assertEquals(75.0, $resumen['acumulado']);
         Carbon::setTestNow();
+    }
+
+    public function test_txt_del_dia_agrupa_por_empleado_y_omite_cancelados(): void
+    {
+        $service = app(SalaryAdvanceService::class);
+        $service->create($this->empleado, ['fecha' => '2026-08-29', 'monto' => 20], auth()->id());
+        $service->create($this->empleado, ['fecha' => '2026-08-29', 'monto' => 10], auth()->id());
+        $otro = $service->create($this->empleado, ['fecha' => '2026-08-29', 'monto' => 99], auth()->id());
+        $service->cancelar($otro);
+
+        $txt = $service->generarTxtDelDia('2026-08-29', 100);
+        $linea = PayrollBankFileService::formatearLinea('999002', 3000.00, '2026-08-29');
+
+        $this->assertSame($linea."\r\n", $txt);
+        $this->assertSame('adelantos_20260829.txt', $service->nombreArchivoDelDia('2026-08-29'));
     }
 }

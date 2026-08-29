@@ -17,12 +17,15 @@ use App\Models\User;
 use App\Services\Nomina\AttendanceService;
 use App\Services\Nomina\EmployeeSalesService;
 use App\Services\Nomina\EmployeeService;
+use App\Services\Nomina\LoanDiscountPlanService;
 use App\Services\Nomina\LoanService;
 use App\Services\Nomina\MerchandiseDeductionService;
+use App\Services\Nomina\OtherDeductionService;
 use App\Services\Nomina\OrganizationService;
 use App\Services\Nomina\SalaryAdvanceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class EmpleadoController extends Controller
@@ -31,10 +34,12 @@ class EmpleadoController extends Controller
         private EmployeeService $employees,
         private OrganizationService $organization,
         private LoanService $loans,
+        private LoanDiscountPlanService $loanPlans,
         private SalaryAdvanceService $advances,
         private AttendanceService $attendance,
         private EmployeeSalesService $sales,
         private MerchandiseDeductionService $mercancia,
+        private OtherDeductionService $otrasDeducciones,
     ) {
     }
 
@@ -52,11 +57,7 @@ class EmpleadoController extends Controller
             ->orderBy('clientes.nombre');
 
         if ($search = trim((string) $request->query('q', ''))) {
-            $query->where(function ($q) use ($search) {
-                $q->where('clientes.nombre', 'like', "%{$search}%")
-                    ->orWhere('clientes.cedula', 'like', "%{$search}%")
-                    ->orWhere('nomina_empleados.codigo_vendedor', 'like', "%{$search}%");
-            });
+            $query->buscar($search);
         }
 
         if ($request->filled('sede_id')) {
@@ -117,7 +118,7 @@ class EmpleadoController extends Controller
 
     public function show(Request $request, NominaEmpleado $empleado): View|RedirectResponse
     {
-        $empleado->load([
+        $relaciones = [
             'cliente',
             'user',
             'sedeCatalogo',
@@ -132,7 +133,14 @@ class EmpleadoController extends Controller
             'inasistencias.creador',
             'horasExtras.creador',
             'descuentosMercancia.creador',
-        ]);
+        ];
+        if (Schema::hasTable('nomina_deducciones')) {
+            $relaciones[] = 'deducciones.creador';
+        }
+        $empleado->load($relaciones);
+        if (! Schema::hasTable('nomina_deducciones')) {
+            $empleado->setRelation('deducciones', collect());
+        }
 
         $tab = $request->query('tab', 'personal');
         if ($tab === 'comisiones' && ! $empleado->generaComision()) {
@@ -205,6 +213,9 @@ class EmpleadoController extends Controller
                 })->orWhere(function ($q) use ($empleado) {
                     $q->where('entidad', 'mercancia')
                         ->whereIn('entidad_id', $empleado->descuentosMercancia->pluck('id')->all() ?: [0]);
+                })->orWhere(function ($q) use ($empleado) {
+                    $q->where('entidad', 'deduccion')
+                        ->whereIn('entidad_id', $empleado->deducciones->pluck('id')->all() ?: [0]);
                 });
             })
             ->with('user')
@@ -216,10 +227,13 @@ class EmpleadoController extends Controller
             'empleado' => $empleado,
             'tab' => $tab,
             'resumenPrestamos' => $resumenPrestamos,
+            'planesPrestamo' => $this->loanPlans->planesDeEmpleado($empleado, $quincenaActual),
             'abonosPendientes' => $this->advances->pendientesDe($empleado),
             'resumenAdelantos' => $this->advances->resumenEmpleado($empleado),
             'resumenMercancia' => $this->mercancia->resumenEmpleado($empleado),
             'mercanciaPendiente' => $this->mercancia->pendientesDe($empleado),
+            'resumenDeducciones' => $this->otrasDeducciones->resumenEmpleado($empleado),
+            'deduccionesPendientes' => $this->otrasDeducciones->pendientesDe($empleado),
             'quincenaActual' => $quincenaActual,
             'asistencia' => $this->attendance->resumenQuincena($empleado),
             'ventasResumen' => $ventasResumen,

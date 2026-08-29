@@ -229,6 +229,56 @@ class EmpleadoCrudTest extends TestCase
             ->assertSee('40.00')
             ->assertSee('PENDIENTE')
             ->assertSee('Adelanto');
+
+        $this->get(route('nomina.adelantos.index', ['q' => 'abel', 'fecha' => '2026-08-20']))
+            ->assertOk()
+            ->assertSee('Abel Yajuris')
+            ->assertSee('Cargar adelanto');
+
+        $this->post(route('nomina.adelantos.store'), [
+            'empleado_id' => $empleado->id,
+            'fecha' => '2026-08-20',
+            'monto' => 15,
+            'motivo' => 'Caja',
+            'q' => 'Abel',
+        ])->assertRedirect(route('nomina.adelantos.index', ['fecha' => '2026-08-20', 'q' => 'Abel']));
+
+        $this->get(route('nomina.adelantos.index', ['fecha' => '2026-08-20']))
+            ->assertOk()
+            ->assertSee('15.00')
+            ->assertSee('Caja');
+    }
+
+    public function test_registra_descuento_de_nomina_por_motivo(): void
+    {
+        $this->actingAs($this->rrhh);
+
+        $this->post(route('nomina.empleados.store'), [
+            'cedula' => '28501946',
+            'nombre' => 'Ana Perez',
+            'salario_base' => 100,
+            'tipo_salario' => 'QUINCENAL',
+            'estado' => 'ACTIVO',
+        ])->assertRedirect();
+
+        $empleado = NominaEmpleado::query()->first();
+
+        $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'deducciones']))
+            ->assertOk()
+            ->assertSee('Descuento de nómina')
+            ->assertDontSee('Sin adelantos de sueldo.');
+
+        $this->post(route('nomina.deducciones.store', $empleado), [
+            'fecha' => '2026-08-20',
+            'monto' => 12.5,
+            'motivo' => 'Rotura de vitrina',
+        ])->assertRedirect(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'deducciones']));
+
+        $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'deducciones']))
+            ->assertOk()
+            ->assertSee('12.50')
+            ->assertSee('Rotura de vitrina')
+            ->assertSee('PENDIENTE');
     }
 
     public function test_registra_inasistencia_y_horas_extras_en_recibo(): void

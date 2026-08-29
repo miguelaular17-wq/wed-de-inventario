@@ -7,7 +7,6 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">Períodos de nómina</h1>
-            <p class="muted" style="margin:4px 0 0;">Abre una quincena y completa el ciclo de cálculo, aprobación, pago y cierre.</p>
         </div>
     </div>
 
@@ -22,7 +21,6 @@
 
     <div class="nomina-card" style="margin-top:16px;">
         <h3>Abrir quincena</h3>
-        <p class="muted">Selecciona cualquier fecha; el sistema abrirá automáticamente del 1 al 15 o del 16 al último día del mes.</p>
         <form method="POST" action="{{ route('nomina.periodos.store') }}" class="nomina-inline-form">
             @csrf
             <div class="field">

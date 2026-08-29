@@ -7,9 +7,12 @@ use App\Models\Nomina\NominaAbonoSueldo;
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaHoraExtra;
 use App\Models\Nomina\NominaInasistencia;
+use App\Models\Nomina\NominaLiquidacionComision;
 use App\Models\Nomina\NominaPeriodo;
+use App\Models\Nomina\NominaPrestamoPlan;
 use App\Models\Nomina\NominaRegistro;
 use App\Models\User;
+use Carbon\Carbon;
 use Tests\Concerns\CreatesNominaSchema;
 use Tests\TestCase;
 
@@ -177,9 +180,9 @@ class PeriodoFlowTest extends TestCase
 
         $this->get(route('nomina.periodos.calcular.form', $periodo))
             ->assertOk()
-            ->assertSee('Empleado Quincena')
-            ->assertSee('Otro Con Prestamo')
-            ->assertSee('Arreglo vehiculo');
+            ->assertSee('Préstamos de esta quincena')
+            ->assertDontSee('Marcar todos')
+            ->assertDontSee('name="descuentos[', false);
 
         $this->post(route('nomina.periodos.calcular', $periodo), [
             'descontar_empleado_ids' => [$this->empleado->id],
@@ -224,8 +227,8 @@ class PeriodoFlowTest extends TestCase
 
         $this->get(route('nomina.periodos.calcular.form', $periodo))
             ->assertOk()
-            ->assertSee('name="descuentos['.$cuotaUno->id.'][aplicar]"', false)
-            ->assertSee('Parcial $');
+            ->assertDontSee('Parcial $')
+            ->assertDontSee('name="descuentos['.$cuotaUno->id.'][aplicar]"', false);
 
         $this->post(route('nomina.periodos.calcular', $periodo), [
             'descuentos' => [
@@ -400,5 +403,113 @@ class PeriodoFlowTest extends TestCase
             'estado' => 'PENDIENTE',
             'created_by' => $this->rrhh->id,
         ]);
+    }
+
+    public function test_escritorio_de_prestamos_programa_descuento_y_alimenta_la_ficha(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-20'));
+        $this->actingAs($this->rrhh);
+
+        $loan = app(\App\Services\Nomina\LoanService::class);
+        $prestamo = $loan->create($this->empleado, [
+            'fecha' => '2026-08-16',
+            'monto_original' => 110,
+            'numero_cuotas' => 4,
+            'frecuencia' => 'QUINCENAL',
+            'fecha_inicio' => '2026-08-16',
+            'motivo' => 'Arreglo vehiculo',
+        ], $this->rrhh->id);
+        $cuota = $prestamo->cuotas()->orderBy('numero')->firstOrFail();
+
+        $this->get(route('nomina.prestamos.index'))
+            ->assertOk()
+            ->assertSee('Empleado Quincena')
+            ->assertSee('Arreglo vehiculo');
+
+        $this->post(route('nomina.prestamos.programar'), [
+            'descuentos' => [
+                $cuota->id => [
+                    'aplicar' => '1',
+                    'cuota_id' => $cuota->id,
+                    'monto' => '10.00',
+                    'destino' => 'NOMINA',
+                ],
+            ],
+        ])->assertRedirect(route('nomina.prestamos.index'));
+
+        $this->assertDatabaseHas('nomina_prestamo_planes', [
+            'cuota_id' => $cuota->id,
+            'empleado_id' => $this->empleado->id,
+            'monto' => 10,
+            'destino' => NominaPrestamoPlan::DESTINO_NOMINA,
+            'estado' => NominaPrestamoPlan::PENDIENTE,
+        ]);
+
+        $this->get(route('nomina.empleados.show', ['empleado' => $this->empleado, 'tab' => 'prestamos']))
+            ->assertOk()
+            ->assertSee('Descuento de esta quincena')
+            ->assertSee('Nómina')
+            ->assertSee('10.00');
+
+        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
+        $periodo = NominaPeriodo::query()->firstOrFail();
+        $this->post(route('nomina.periodos.calcular', $periodo))->assertRedirect();
+
+        $this->assertEquals(100.0, (float) $prestamo->fresh()->saldo_pendiente);
+        $this->assertSame('APLICADO', NominaPrestamoPlan::query()->where('cuota_id', $cuota->id)->value('estado'));
+        $registro = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
+        $this->assertEquals(10.0, (float) $registro->total_deducciones);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_plan_de_prestamo_puede_descontarse_de_comision(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-20'));
+        $this->actingAs($this->rrhh);
+
+        $this->empleado->update(['modo_comision' => NominaEmpleado::COMISION_VENTAS_PROPIAS]);
+
+        $loan = app(\App\Services\Nomina\LoanService::class);
+        $prestamo = $loan->create($this->empleado, [
+            'fecha' => '2026-08-16',
+            'monto_original' => 110,
+            'numero_cuotas' => 4,
+            'frecuencia' => 'QUINCENAL',
+            'fecha_inicio' => '2026-08-16',
+            'motivo' => 'Prestamo personal',
+        ], $this->rrhh->id);
+        $cuota = $prestamo->cuotas()->orderBy('numero')->firstOrFail();
+
+        $this->post(route('nomina.prestamos.programar'), [
+            'descuentos' => [
+                $cuota->id => [
+                    'aplicar' => '1',
+                    'cuota_id' => $cuota->id,
+                    'monto' => '27.50',
+                    'destino' => 'COMISION',
+                ],
+            ],
+        ])->assertRedirect();
+
+        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
+        $periodo = NominaPeriodo::query()->firstOrFail();
+        $this->post(route('nomina.periodos.calcular', $periodo))->assertRedirect();
+
+        $this->assertEquals(82.5, (float) $prestamo->fresh()->saldo_pendiente);
+        $registro = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
+        $this->assertEquals(0.0, (float) $registro->total_deducciones);
+        $liquidacion = NominaLiquidacionComision::query()
+            ->where('empleado_id', $this->empleado->id)
+            ->where('periodo_id', $periodo->id)
+            ->firstOrFail();
+        $this->assertEquals(27.5, (float) $liquidacion->prestamos);
+        $this->assertDatabaseHas('nomina_prestamo_planes', [
+            'cuota_id' => $cuota->id,
+            'destino' => NominaPrestamoPlan::DESTINO_COMISION,
+            'estado' => NominaPrestamoPlan::APLICADO,
+        ]);
+
+        Carbon::setTestNow();
     }
 }

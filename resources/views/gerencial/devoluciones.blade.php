@@ -13,8 +13,7 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">Devoluciones en ventas</h1>
-            <p class="gerencial-pregunta">¿Qué estamos devolviendo, dónde, por qué y cuánto dinero estamos perdiendo?</p>
-            <p class="muted" style="margin:4px 0 0;">{{ $periodo['etiqueta'] }}</p>
+            @include('gerencial._tabs')
         </div>
         @if(! $verDetalle)
             <a class="btn primary" href="{{ $detalleUrl }}">Ver devoluciones</a>
@@ -23,7 +22,7 @@
         @endif
     </div>
 
-    @include('gerencial._tabs')
+
     @include('gerencial._filtros', ['modo' => 'devoluciones', 'action' => route('gerencial.devoluciones')])
 
     <div class="nomina-kpis">
@@ -58,7 +57,6 @@
     <div class="gerencial-grid-2">
         <div class="nomina-card">
             <h3>Análisis por motivo</h3>
-            <p class="muted" style="margin-top:0;">Cantidad = número de documentos DEV, no líneas.</p>
             <div class="gerencial-chart"><canvas id="chart-motivos"></canvas></div>
             <table class="data-table">
                 <thead><tr><th>Motivo</th><th>Cantidad</th><th>Valor</th><th>%</th></tr></thead>
@@ -78,7 +76,6 @@
         </div>
         <div class="nomina-card">
             <h3>Comparación por sede</h3>
-            <p class="muted" style="margin-top:0;">Torta = % DEV de cada sede (valor DEV / ventas).</p>
             <div class="gerencial-chart"><canvas id="chart-sede-pct"></canvas></div>
             <table class="data-table">
                 <thead>
@@ -109,7 +106,6 @@
 
     <div class="nomina-card" style="margin-top:16px;">
         <h3>Productos más devueltos</h3>
-        <p class="muted" style="margin-top:0;">El % usa unidades vendidas del mismo período, no solo el conteo de devoluciones.</p>
         <div class="table-wrap">
             <table class="data-table">
                 <thead>

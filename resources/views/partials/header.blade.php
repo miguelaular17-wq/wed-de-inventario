@@ -118,6 +118,8 @@
         $nav[] = $drop('Nómina', [
             $link('Períodos', route('nomina.periodos.index'), request()->routeIs('nomina.periodos.*')),
             $link('Comisiones', route('nomina.comisiones.index'), request()->routeIs('nomina.comisiones.*')),
+            $link('Adelantos', route('nomina.adelantos.index'), request()->routeIs('nomina.adelantos.*')),
+            $link('Préstamos', route('nomina.prestamos.index'), request()->routeIs('nomina.prestamos.*')),
             $link('Empleados', route('nomina.empleados.index'), request()->routeIs('nomina.empleados.*')),
             $link('Organigrama', route('nomina.organizacion'), request()->routeIs('nomina.organizacion')),
             $link('Sedes y áreas', route('nomina.sedes.index'), request()->routeIs('nomina.sedes.*')),

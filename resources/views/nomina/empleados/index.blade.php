@@ -7,7 +7,6 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">Empleados</h1>
-            <p class="muted" style="margin:4px 0 0;">Personas tomadas de la tabla <strong>clientes</strong>. Completa sede, cargo y salario en cada ficha. Las comisiones de marca no se mezclan con la nómina de la tienda.</p>
         </div>
         <a href="{{ route('nomina.empleados.create') }}" class="btn primary">Nuevo empleado</a>
     </div>

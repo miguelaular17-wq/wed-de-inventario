@@ -410,6 +410,80 @@ class GerencialAnalyticsService
         ];
     }
 
+    /**
+     * @param  list<string>  $codigos
+     * @return list<array<string, mixed>>
+     */
+    public function detalleAjustesUsuario(array $periodo, ?string $sede, ?string $tipo, array $codigos, ?string $clave = null): array
+    {
+        if (! Schema::hasTable('ajustes_inventario') || ! Schema::hasColumn('ajustes_inventario', 'usuario')) {
+            return [];
+        }
+
+        $codigos = $this->variantesUsuarioAjuste($codigos, $clave);
+        if ($codigos === []) {
+            return [];
+        }
+
+        $sedes = $this->base->filtrarSedes($sede);
+        $tiposOk = $this->base->tiposAjustePermitidos();
+        $query = DB::table('ajustes_inventario')
+            ->whereBetween('fecha', [$periodo['inicio']->toDateString(), $periodo['fin']->toDateString()])
+            ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes)
+            ->whereIn(DB::raw('UPPER(TRIM(tipo_movimiento))'), $tiposOk);
+
+        $tipoNorm = $tipo ? mb_strtoupper(trim($tipo), 'UTF-8') : '';
+        if ($tipoNorm !== '' && in_array($tipoNorm, $tiposOk, true)) {
+            $query->whereRaw('UPPER(TRIM(tipo_movimiento)) = ?', [$tipoNorm]);
+        }
+
+        $query->where(function ($q) use ($codigos) {
+            foreach ($codigos as $codigo) {
+                if (strcasecmp($codigo, 'Sin usuario') === 0) {
+                    $q->orWhereRaw("COALESCE(NULLIF(TRIM(usuario), ''), 'Sin usuario') = 'Sin usuario'");
+                    continue;
+                }
+                $q->orWhereRaw('UPPER(TRIM(usuario)) = ?', [mb_strtoupper($codigo, 'UTF-8')]);
+            }
+        });
+
+        return $query
+            ->orderByRaw('ABS(cantidad * COALESCE(costo_unitario, 0)) DESC')
+            ->orderByDesc('fecha')
+            ->orderBy('sede')
+            ->orderBy('numero_documento')
+            ->limit(300)
+            ->get([
+                'fecha',
+                'sede',
+                'tipo_movimiento',
+                'numero_documento',
+                'codigo_producto',
+                'nombre_producto',
+                'cantidad',
+                'costo_unitario',
+                'motivo',
+                'usuario',
+            ])
+            ->map(function ($row) {
+                $cantidad = (float) $row->cantidad;
+                $costo = (float) ($row->costo_unitario ?? 0);
+
+                return [
+                    'fecha' => $row->fecha,
+                    'sede' => $row->sede,
+                    'tipo' => strtoupper(trim((string) $row->tipo_movimiento)),
+                    'documento' => $row->numero_documento,
+                    'codigo' => $row->codigo_producto,
+                    'producto' => $row->nombre_producto,
+                    'cantidad' => $cantidad,
+                    'valor' => round($cantidad * $costo, 2),
+                    'motivo' => $row->motivo ?: 'Sin motivo',
+                ];
+            })
+            ->all();
+    }
+
     public function rentabilidad(array $periodo, ?string $sede, ?string $categoria, ?string $vendedor, ?string $producto): array
     {
         $sedes = $this->base->filtrarSedes($sede);
@@ -548,11 +622,11 @@ class GerencialAnalyticsService
     }
 
     /**
-     * @return array<string, array<string, array{productos:int,unidades:float,valor_inv:float}>>
+     * @return array<string, array<string, array{productos:int,unidades:float,valor_inv:float,items:list<array<string, mixed>>}>>
      */
     private function abcMatrizVacia(): array
     {
-        $celda = static fn () => ['productos' => 0, 'unidades' => 0.0, 'valor_inv' => 0.0];
+        $celda = static fn () => ['productos' => 0, 'unidades' => 0.0, 'valor_inv' => 0.0, 'items' => []];
 
         return [
             'A' => ['A' => $celda(), 'B' => $celda(), 'C' => $celda()],
@@ -635,6 +709,13 @@ class GerencialAnalyticsService
             $matriz[$rot][$mar]['productos']++;
             $matriz[$rot][$mar]['unidades'] += (float) $row->unidades;
             $matriz[$rot][$mar]['valor_inv'] += $row->valor_inv;
+            $matriz[$rot][$mar]['items'][] = [
+                'nombre' => $row->nombre ?: $row->codigo,
+                'codigo' => $row->codigo,
+                'unidades' => (float) $row->unidades,
+                'utilidad' => (float) $row->utilidad,
+                'clase_inv' => $row->clase_inv,
+            ];
             $nombre = $row->nombre ?: $row->codigo;
             if ($rot === 'A' && ($row->clase_inv === 'Crítico / Sin Rotación')) {
                 $alertas[] = "{$nombre}: A en rotación y stock crítico — prioridad de compra.";
@@ -642,6 +723,16 @@ class GerencialAnalyticsService
                 $alertas[] = "{$nombre}: A en rotación con sobrestock — vende mucho y hay de más.";
             } elseif ($rot === 'C' && $row->clase_inv === 'Sobrestock') {
                 $alertas[] = "{$nombre}: C en rotación con sobrestock — candidato a liquidar.";
+            }
+        }
+
+        foreach (['A', 'B', 'C'] as $rot) {
+            foreach (['A', 'B', 'C'] as $mar) {
+                usort($matriz[$rot][$mar]['items'], static function ($a, $b) {
+                    $porMargen = $b['utilidad'] <=> $a['utilidad'];
+
+                    return $porMargen !== 0 ? $porMargen : ($b['unidades'] <=> $a['unidades']);
+                });
             }
         }
 
@@ -838,6 +929,7 @@ class GerencialAnalyticsService
                 $codigo = trim((string) $row->usuario);
                 $match = $this->resolverCliente($codigo, $catalogo);
                 $claveRaw = $this->claveCedula($codigo);
+                $row->usuario_raw = $codigo !== '' ? $codigo : 'Sin usuario';
                 $row->nombre = $match['nombre'] ?? null;
                 $row->codigo = $match['cedula'] ?? $codigo;
                 $row->usuario = $row->nombre ?: $codigo;
@@ -850,6 +942,7 @@ class GerencialAnalyticsService
                 $first = clone $grupo->first();
                 $first->movimientos = $grupo->sum('movimientos');
                 $first->valor = $grupo->sum(fn ($r) => (float) $r->valor);
+                $first->codigos = $grupo->pluck('usuario_raw')->unique()->values()->all();
                 if ($first->nombre) {
                     $first->usuario = $first->nombre;
                 }
@@ -939,5 +1032,29 @@ class GerencialAnalyticsService
     private function claveCedula(string $raw): string
     {
         return preg_replace('/\D+/', '', strtoupper(trim($raw))) ?? '';
+    }
+
+    /**
+     * @param  list<string>  $codigos
+     * @return list<string>
+     */
+    private function variantesUsuarioAjuste(array $codigos, ?string $clave = null): array
+    {
+        $out = [];
+        foreach (array_merge($codigos, [$clave]) as $codigo) {
+            $codigo = trim((string) $codigo);
+            if ($codigo === '') {
+                continue;
+            }
+            $out[] = $codigo;
+            $out[] = mb_strtoupper($codigo, 'UTF-8');
+            $digitos = $this->claveCedula($codigo);
+            if ($digitos !== '') {
+                $out[] = $digitos;
+                $out[] = 'V'.$digitos;
+            }
+        }
+
+        return array_values(array_unique($out));
     }
 }

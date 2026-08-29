@@ -5,12 +5,14 @@ namespace App\Services\Nomina;
 use App\Models\Nomina\NominaAbonoSueldo;
 use App\Models\Nomina\NominaAuditLog;
 use App\Models\Nomina\NominaComisionDescuento;
+use App\Models\Nomina\NominaDeduccion;
 use App\Models\Nomina\NominaDescuentoMercancia;
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaHoraExtra;
 use App\Models\Nomina\NominaInasistencia;
 use App\Models\Nomina\NominaPeriodo;
 use App\Models\Nomina\NominaPrestamoCuota;
+use App\Models\Nomina\NominaPrestamoPlan;
 use App\Models\Nomina\NominaRegistro;
 use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
@@ -24,6 +26,7 @@ class PayrollPeriodService
         private PayrollDeductionService $deductions,
         private CommissionCalculationService $commissions,
         private CommissionSettlementService $settlements,
+        private LoanDiscountPlanService $loanPlans,
     ) {
     }
 
@@ -63,17 +66,18 @@ class PayrollPeriodService
 
     /**
      * @param  list<int>  $descontarEmpleadoIds  Atajo: descuenta todas las cuotas pendientes de esos empleados.
-     * @param  list<array{cuota_id:int, monto?:float|null}>  $descuentosCuotas
+     * @param  list<array{cuota_id:int, monto?:float|null, destino?:string|null}>  $descuentosCuotas
      */
     public function calcular(
         NominaPeriodo $periodo,
         ?int $usuarioId = null,
         array $descontarEmpleadoIds = [],
-        array $descuentosCuotas = []
+        array $descuentosCuotas = [],
+        bool $formularioPresente = false
     ): NominaPeriodo {
         $descontarEmpleadoIds = array_values(array_unique(array_map('intval', $descontarEmpleadoIds)));
 
-        return DB::transaction(function () use ($periodo, $usuarioId, $descontarEmpleadoIds, $descuentosCuotas) {
+        return DB::transaction(function () use ($periodo, $usuarioId, $descontarEmpleadoIds, $descuentosCuotas, $formularioPresente) {
             $periodo = NominaPeriodo::query()->lockForUpdate()->findOrFail($periodo->id);
             $this->exigirEstado($periodo, NominaPeriodo::ABIERTO, 'calcular');
 
@@ -101,8 +105,17 @@ class PayrollPeriodService
             $this->commissions->limpiarPeriodo($periodo);
             $this->settlements->limpiarPeriodo($periodo);
 
-            $cuotasPendientes = $this->deductions
-                ->cuotasPendientesDelRango($periodo->fecha_inicio, $periodo->fecha_fin);
+            $planes = $this->loanPlans->paraCalcular($periodo);
+            if ($descuentosCuotas === [] && $descontarEmpleadoIds === [] && ! $formularioPresente) {
+                $descuentosCuotas = $planes;
+            } else {
+                $descuentosCuotas = $this->loanPlans->completarDestinos($descuentosCuotas, $planes);
+            }
+
+            $cuotasPendientes = $this->anexarCuotas(
+                $this->deductions->cuotasPendientesDelRango($periodo->fecha_inicio, $periodo->fecha_fin),
+                $descuentosCuotas
+            );
             $porEmpleado = $this->resolverDescuentosPrestamo(
                 $cuotasPendientes,
                 $descontarEmpleadoIds,
@@ -110,36 +123,37 @@ class PayrollPeriodService
             );
 
             foreach ($empleados as $empleado) {
-                $comision = $this->commissions->calcular($periodo, $empleado);
-                $seleccion = $porEmpleado[$empleado->id] ?? ['cuotas' => collect(), 'montos' => []];
-                $cuotas = $seleccion['cuotas'];
-                $prestamosNomina = 0.0;
-                $prestamosComision = 0.0;
+                $comisionable = $empleado->generaComision();
+                $comision = $comisionable
+                    ? $this->commissions->calcular($periodo, $empleado)
+                    : [
+                        'total' => 0.0,
+                        'modo' => $empleado->modo_comision ?: NominaEmpleado::COMISION_NINGUNA,
+                        'base' => 0.0,
+                        'gastos' => 0.0,
+                        'lineas' => 0,
+                        'base_telefonia' => 0.0,
+                        'base_otros' => 0.0,
+                        'comision_telefonia' => 0.0,
+                        'comision_otros' => 0.0,
+                        'pct_telefonia' => 0.0,
+                        'pct_otros' => 0.0,
+                    ];
+                $seleccion = $porEmpleado[$empleado->id] ?? ['cuotas' => collect(), 'montos' => [], 'destinos' => []];
+                [$prestamosNomina, $prestamosComision] = $this->aplicarPrestamosSeleccion(
+                    $empleado,
+                    $seleccion,
+                    $comision,
+                    $periodo,
+                    $usuarioId
+                );
 
-                if ($cuotas->isNotEmpty()) {
-                    $abonosPrestamo = $this->deductions->aplicarCuotas(
-                        $cuotas,
-                        $periodo->id,
-                        $usuarioId,
-                        ((float) $comision['total'] > 0)
-                            ? 'Descuento de comisión'
-                            : 'Descuento de nómina',
-                        $seleccion['montos']
-                    );
-                    $montoPrestamo = round(collect($abonosPrestamo)->sum('monto'), 2);
-
-                    if ((float) $comision['total'] > 0) {
-                        $prestamosComision = $montoPrestamo;
-                        $this->registrarDescuentoPrestamoComision($periodo, $empleado, $prestamosComision, $usuarioId);
-                    } else {
-                        $prestamosNomina = $montoPrestamo;
-                    }
-                }
-
-                $liquidacion = $this->settlements->liquidar($periodo, $empleado, $comision, $prestamosComision);
+                $liquidacion = $comisionable
+                    ? $this->settlements->liquidar($periodo, $empleado, $comision, $prestamosComision)
+                    : null;
                 $desglose = $this->desglose($periodo, $empleado);
                 $desglose['comision'] = $comision;
-                $desglose['liquidacion'] = [
+                $desglose['liquidacion'] = $liquidacion ? [
                     'comision_total' => (float) $liquidacion->comision_total,
                     'abonos' => (float) $liquidacion->abonos,
                     'retencion' => (float) $liquidacion->retencion,
@@ -147,6 +161,14 @@ class PayrollPeriodService
                     'prestamos' => (float) $liquidacion->prestamos,
                     'total_pagar' => (float) $liquidacion->total_pagar,
                     'fecha_pago' => $liquidacion->fecha_pago?->toDateString(),
+                ] : [
+                    'comision_total' => 0.0,
+                    'abonos' => 0.0,
+                    'retencion' => 0.0,
+                    'descuentos' => 0.0,
+                    'prestamos' => 0.0,
+                    'total_pagar' => 0.0,
+                    'fecha_pago' => null,
                 ];
                 $desglose['prestamos'] = $prestamosNomina;
                 $desglose['prestamos_comision'] = $prestamosComision;
@@ -156,6 +178,7 @@ class PayrollPeriodService
                 $totalDeducciones = $desglose['abonos_sueldo']
                     + $desglose['inasistencias']
                     + $desglose['mercancia']
+                    + $desglose['otras_deducciones']
                     + $prestamosNomina;
                 $totalPagar = $salario + $otrosIngresos - $totalDeducciones;
 
@@ -163,7 +186,7 @@ class PayrollPeriodService
                     'periodo_id' => $periodo->id,
                     'empleado_id' => $empleado->id,
                     'salario_base' => $salario,
-                    'total_comisiones' => $liquidacion->total_pagar,
+                    'total_comisiones' => $liquidacion?->total_pagar ?? 0,
                     'total_bonificaciones' => 0,
                     'total_otros_ingresos' => $otrosIngresos,
                     'total_deducciones' => $totalDeducciones,
@@ -188,8 +211,8 @@ class PayrollPeriodService
     /**
      * @param  \Illuminate\Support\Collection<int, NominaPrestamoCuota>  $cuotasPendientes
      * @param  list<int>  $descontarEmpleadoIds
-     * @param  list<array{cuota_id:int, monto?:float|null}>  $descuentosCuotas
-     * @return array<int, array{cuotas: \Illuminate\Support\Collection<int, NominaPrestamoCuota>, montos: array<int, float>}>
+     * @param  list<array{cuota_id:int, monto?:float|null, destino?:string|null}>  $descuentosCuotas
+     * @return array<int, array{cuotas: \Illuminate\Support\Collection<int, NominaPrestamoCuota>, montos: array<int, float>, destinos: array<int, string|null>}>
      */
     private function resolverDescuentosPrestamo($cuotasPendientes, array $descontarEmpleadoIds, array $descuentosCuotas): array
     {
@@ -216,10 +239,15 @@ class PayrollPeriodService
                     continue;
                 }
                 if (! isset($resultado[$empleadoId])) {
-                    $resultado[$empleadoId] = ['cuotas' => collect(), 'montos' => []];
+                    $resultado[$empleadoId] = ['cuotas' => collect(), 'montos' => [], 'destinos' => []];
                 }
                 $resultado[$empleadoId]['cuotas']->push($cuota);
                 $resultado[$empleadoId]['montos'][(int) $cuota->id] = $monto;
+                $destino = $fila['destino'] ?? null;
+                $resultado[$empleadoId]['destinos'][(int) $cuota->id] = in_array($destino, [
+                    NominaPrestamoPlan::DESTINO_NOMINA,
+                    NominaPrestamoPlan::DESTINO_COMISION,
+                ], true) ? $destino : null;
             }
 
             return $resultado;
@@ -236,6 +264,7 @@ class PayrollPeriodService
             $resultado[$empleadoId] = [
                 'cuotas' => $grupo->values(),
                 'montos' => $grupo->mapWithKeys(fn (NominaPrestamoCuota $cuota) => [(int) $cuota->id => $cuota->saldo()])->all(),
+                'destinos' => [],
             ];
         }
 
@@ -243,12 +272,117 @@ class PayrollPeriodService
     }
 
     /**
+     * @param  \Illuminate\Support\Collection<int, NominaPrestamoCuota>  $cuotas
+     * @param  list<array{cuota_id:int}>  $descuentosCuotas
+     * @return \Illuminate\Support\Collection<int, NominaPrestamoCuota>
+     */
+    private function anexarCuotas($cuotas, array $descuentosCuotas)
+    {
+        $ids = collect($descuentosCuotas)
+            ->map(fn ($fila) => (int) ($fila['cuota_id'] ?? 0))
+            ->filter()
+            ->unique()
+            ->values();
+        $faltan = $ids->diff($cuotas->pluck('id'));
+        if ($faltan->isEmpty()) {
+            return $cuotas;
+        }
+
+        $extra = NominaPrestamoCuota::query()
+            ->with(['prestamo.empleado.cliente'])
+            ->whereIn('id', $faltan->all())
+            ->get();
+
+        return $cuotas->concat($extra)->unique('id')->values();
+    }
+
+    /**
+     * @param  array{cuotas: \Illuminate\Support\Collection<int, NominaPrestamoCuota>, montos: array<int, float>, destinos: array<int, string|null>}  $seleccion
+     * @param  array<string, mixed>  $comision
+     * @return array{0:float,1:float}
+     */
+    private function aplicarPrestamosSeleccion(
+        NominaEmpleado $empleado,
+        array $seleccion,
+        array $comision,
+        NominaPeriodo $periodo,
+        ?int $usuarioId
+    ): array {
+        $cuotasNomina = collect();
+        $cuotasComision = collect();
+        $montosNomina = [];
+        $montosComision = [];
+
+        foreach ($seleccion['cuotas'] as $cuota) {
+            $id = (int) $cuota->id;
+            $destino = $seleccion['destinos'][$id]
+                ?? $this->destinoAutomatico($empleado, $comision);
+            if ($destino === NominaPrestamoPlan::DESTINO_COMISION && $empleado->generaComision()) {
+                $cuotasComision->push($cuota);
+                $montosComision[$id] = $seleccion['montos'][$id] ?? $cuota->saldo();
+            } else {
+                $cuotasNomina->push($cuota);
+                $montosNomina[$id] = $seleccion['montos'][$id] ?? $cuota->saldo();
+            }
+        }
+
+        $prestamosNomina = 0.0;
+        $prestamosComision = 0.0;
+        $aplicadas = [];
+
+        if ($cuotasNomina->isNotEmpty()) {
+            $abonos = $this->deductions->aplicarCuotas(
+                $cuotasNomina,
+                $periodo->id,
+                $usuarioId,
+                'Descuento de nómina',
+                $montosNomina
+            );
+            $prestamosNomina = round(collect($abonos)->sum('monto'), 2);
+            $aplicadas = array_merge($aplicadas, $cuotasNomina->pluck('id')->all());
+        }
+
+        if ($cuotasComision->isNotEmpty()) {
+            $abonos = $this->deductions->aplicarCuotas(
+                $cuotasComision,
+                $periodo->id,
+                $usuarioId,
+                'Descuento de comisión',
+                $montosComision
+            );
+            $prestamosComision = round(collect($abonos)->sum('monto'), 2);
+            $this->registrarDescuentoPrestamoComision($periodo, $empleado, $prestamosComision, $usuarioId);
+            $aplicadas = array_merge($aplicadas, $cuotasComision->pluck('id')->all());
+        }
+
+        $this->loanPlans->marcarAplicados($periodo, array_map('intval', $aplicadas));
+
+        return [$prestamosNomina, $prestamosComision];
+    }
+
+    /**
+     * @param  array<string, mixed>  $comision
+     */
+    private function destinoAutomatico(NominaEmpleado $empleado, array $comision): string
+    {
+        if ($empleado->generaComision() && (float) ($comision['total'] ?? 0) > 0) {
+            return NominaPrestamoPlan::DESTINO_COMISION;
+        }
+
+        return NominaPrestamoPlan::DESTINO_NOMINA;
+    }
+
+    /**
      * @return \Illuminate\Support\Collection<int, array{empleado: NominaEmpleado, cuotas: \Illuminate\Support\Collection<int, NominaPrestamoCuota>, total: float}>
      */
     public function empleadosConCuotasPendientes(NominaPeriodo $periodo)
     {
-        return $this->deductions
-            ->cuotasPendientesDelRango($periodo->fecha_inicio, $periodo->fecha_fin)
+        $cuotas = $this->anexarCuotas(
+            $this->deductions->cuotasPendientesDelRango($periodo->fecha_inicio, $periodo->fecha_fin),
+            $this->loanPlans->paraCalcular($periodo)
+        );
+
+        return $cuotas
             ->filter(fn (NominaPrestamoCuota $cuota) => $cuota->prestamo?->empleado)
             ->groupBy(fn (NominaPrestamoCuota $cuota) => (int) $cuota->prestamo->empleado_id)
             ->map(function ($grupo) {
@@ -276,6 +410,7 @@ class PayrollPeriodService
             $desde = $periodo->estado;
 
             $this->deductions->deshacerPeriodo($periodo->id);
+            $this->loanPlans->deshacerPeriodo($periodo->id);
             $this->commissions->limpiarPeriodo($periodo);
             $this->settlements->limpiarPeriodo($periodo);
             NominaRegistro::query()->where('periodo_id', $periodo->id)->delete();
@@ -370,6 +505,12 @@ class PayrollPeriodService
                 ->where('empleado_id', $empleado->id)
                 ->where('nomina_periodo_id', $periodo->id)
                 ->sum('monto'), 2),
+            'otras_deducciones' => Schema::hasTable('nomina_deducciones')
+                ? round((float) NominaDeduccion::query()
+                    ->where('empleado_id', $empleado->id)
+                    ->where('nomina_periodo_id', $periodo->id)
+                    ->sum('monto'), 2)
+                : 0.0,
             'prestamos' => round((float) $prestamos, 2),
         ];
     }

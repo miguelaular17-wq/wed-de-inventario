@@ -1082,12 +1082,33 @@ table.data-table tbody tr:hover { background: #f8fafc; }
     padding: 20px;
     backdrop-filter: blur(2px);
 }
+.modal-overlay[hidden] {
+    display: none !important;
+}
 
 .modal-box {
     max-width: 440px;
     width: 100%;
     margin: 0;
     animation: modalIn .2s ease;
+}
+
+.modal-box.modal-wide {
+    max-width: 960px;
+}
+
+.link-usuario-ajuste {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--blue, #1d4ed8);
+    font-weight: 700;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+}
+.link-usuario-ajuste:hover {
+    text-decoration: underline;
 }
 
 @keyframes modalIn {
@@ -1356,6 +1377,27 @@ table.data-table tbody tr:hover {
 .nomina-kpi.warn { background: #fff7ed; border-color: #fed7aa; }
 .nomina-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px; }
 .nomina-form-grid .field-wide { grid-column: 1 / -1; }
+.nomina-ficha-datos {
+    grid-template-columns: repeat(4, minmax(160px, 1fr));
+    align-items: start;
+}
+.nomina-ficha-datos > div {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    min-width: 0;
+}
+.nomina-ficha-datos .muted {
+    display: block;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-bottom: 4px;
+}
+@media (max-width: 900px) {
+    .nomina-ficha-datos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 .nomina-sup-picker {
     border: 1px solid var(--border);
@@ -1491,6 +1533,37 @@ table.data-table tbody tr:hover {
 .nomina-doc-link { font-weight: 700; text-decoration: none; }
 .nomina-doc-link:hover { text-decoration: underline; }
 .nomina-page .data-table tr.is-active td { background: #eff6ff; }
+.nomina-page .cuotas-cell { min-width: 320px; }
+.nomina-page .cuota-linea {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 118px;
+    gap: 6px 10px;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #eef2f7;
+}
+.nomina-page .cuota-linea:last-child { border-bottom: 0; padding-bottom: 0; }
+.nomina-page .cuota-linea.has-destino { grid-template-columns: auto minmax(0, 1fr) 118px 132px; }
+.nomina-page .cuota-linea-check { display: flex; align-items: center; margin: 0; }
+.nomina-page .cuota-linea-info { min-width: 0; line-height: 1.3; font-size: .86rem; }
+.nomina-page .cuota-linea-info .muted { display: block; font-size: .75rem; }
+.nomina-page .cuota-linea-monto,
+.nomina-page .cuota-linea-destino { display: flex; flex-direction: column; gap: 2px; }
+.nomina-page .cuota-linea-monto label,
+.nomina-page .cuota-linea-destino label {
+    font-size: .68rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+.nomina-page .cuota-linea-monto input,
+.nomina-page .cuota-linea-destino select {
+    width: 100%;
+    max-width: 132px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
 
 .gerencial-tabs {
     display: flex;
@@ -1575,6 +1648,34 @@ table.data-table tbody tr:hover {
 .gerencial-matriz .is-core { background: #ecfdf5; }
 .gerencial-matriz .is-buy { background: #fef2f2; }
 .gerencial-matriz .is-liq { background: #fff7ed; }
+.gerencial-matriz-btn {
+    width: 100%;
+    background: none;
+    border: 0;
+    padding: 8px 4px;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+}
+.gerencial-matriz-btn:hover:not(:disabled) {
+    text-decoration: underline;
+}
+.gerencial-matriz-btn:disabled {
+    cursor: default;
+    opacity: .55;
+}
+.gerencial-sort {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    font-weight: 700;
+    color: inherit;
+    cursor: pointer;
+}
+.gerencial-sort.is-active {
+    text-decoration: underline;
+}
 .gerencial-row-alert td { background: #fef2f2; }
 .gerencial-clase { font-weight: 700; }
 .gerencial-alertas {

@@ -67,9 +67,9 @@
                                 default => '#3b82f6',
                             };
                         @endphp
-                        <a href="{{ route('contratos.show', $cuo->contrato_id) }}" title="{{ $cuo->contrato->cliente ?? '' }} - ${{ number_format($cuo->saldo, 2) }}"
+                        <a href="{{ route('contratos.show', $cuo->contrato_id) }}" title="{{ $cuo->contrato->cliente ?? '' }} - ${{ number_format($cuo->montoVisible(), 2) }}"
                            style="display: block; background: {{ $dotColor }}15; border-left: 3px solid {{ $dotColor }}; padding: 2px 6px; margin-bottom: 3px; border-radius: 0 4px 4px 0; text-decoration: none; font-size: 0.7rem; color: {{ $dotColor }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                            {{ Str::limit($cuo->contrato->cliente ?? '—', 15) }} · ${{ number_format($cuo->saldo, 0) }}
+                            {{ Str::limit($cuo->contrato->cliente ?? '—', 15) }} · ${{ number_format($cuo->montoVisible(), 0) }}
                         </a>
                     @endforeach
 

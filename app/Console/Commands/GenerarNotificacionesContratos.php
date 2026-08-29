@@ -47,6 +47,7 @@ class GenerarNotificacionesContratos extends Command
             // addDays(-(1)) = addDays(-1) = ayer, correcto: la cuota venció ayer
 
             $cuotas = ContratoCuota::with('contrato')
+                ->deContratosVigentes()
                 ->where('fecha_vencimiento', $fechaBuscada->toDateString())
                 ->whereIn('estatus', ['pendiente', 'vencido', 'parcial'])
                 ->get();
@@ -55,7 +56,7 @@ class GenerarNotificacionesContratos extends Command
                 if ($cuota->yaNotificado($config['tipo'])) continue;
 
                 $contrato = $cuota->contrato;
-                if (!$contrato || !$contrato->activo) continue;
+                if (!$contrato || $contrato->esLiquidado()) continue;
 
                 $mensaje = "Cuota #{$cuota->numero_cuota} del contrato {$contrato->numero_contrato} ({$contrato->cliente}) {$config['msg']}. Saldo: \${$cuota->saldo}";
 
@@ -96,6 +97,9 @@ class GenerarNotificacionesContratos extends Command
 
         foreach ($cuotasVencidas as $cuota) {
             $contrato = $cuota->contrato;
+            if ($contrato && $contrato->esLiquidado()) {
+                continue;
+            }
             if ($contrato && $contrato->estado !== 'liquidado') {
                 $saldoCuota = (float) $cuota->saldo;
                 $nuevoTotal = (float) $contrato->total_a_pagar + $saldoCuota;

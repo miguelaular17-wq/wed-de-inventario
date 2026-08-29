@@ -81,22 +81,13 @@
             @endforeach
         </div>
         @if($periodo->estado === 'ABIERTO')
-        <p class="muted" style="margin-bottom:0;">Al calcular se toma una foto de los salarios activos y se elige a quién descontar cuotas de préstamo. Las comisiones se liquidan aparte (retención 10%) y se pagan 3 días después del cierre de la quincena.</p>
+        <p class="muted" style="margin-bottom:0;">Al calcular se toma una foto de los salarios activos. Las cuotas de préstamo salen de lo que armaste en <a href="{{ route('nomina.prestamos.index') }}">Préstamos</a> (nómina o comisión). Las comisiones se liquidan aparte (retención 10%) y se pagan 3 días después del cierre de la quincena.</p>
         @else
             <p class="muted" style="margin-bottom:0;">Los importes, reglas, ventas y egresos 058 utilizados quedaron congelados al calcular.</p>
         @endif
     </div>
 
     <div class="table-wrap" style="margin-top:16px;">
-        @if($periodo->estado !== 'ABIERTO' && $periodo->registros->isNotEmpty())
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-                <h3 style="margin:0;">Relación de nómina (sin comisiones)</h3>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <a class="btn primary" href="{{ route('nomina.periodos.relacion', $periodo) }}">Descargar PDF</a>
-                    <a class="btn" href="{{ route('nomina.periodos.relacion', ['periodo' => $periodo, 'formato' => 'xlsx']) }}">Descargar Excel</a>
-                </div>
-            </div>
-        @endif
         <table class="data-table">
             <thead>
                 <tr>
@@ -107,6 +98,7 @@
                     <th>IAS</th>
                     <th>Adelantos</th>
                     <th>Mercancía</th>
+                    <th>Otros desc.</th>
                     <th>Préstamos sueldo</th>
                     <th>Total deducciones</th>
                     <th>Nómina a pagar</th>
@@ -146,13 +138,14 @@
                         <td>${{ number_format($desglose['inasistencias'] ?? 0, 2) }}</td>
                         <td>${{ number_format($desglose['abonos_sueldo'] ?? 0, 2) }}</td>
                         <td>${{ number_format($desglose['mercancia'] ?? 0, 2) }}</td>
+                        <td>${{ number_format($desglose['otras_deducciones'] ?? 0, 2) }}</td>
                         <td>${{ number_format($desglose['prestamos'] ?? 0, 2) }}</td>
                         <td>${{ number_format($registro->total_deducciones, 2) }}</td>
                         <td><strong>${{ number_format($registro->total_pagar, 2) }}</strong></td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="10" class="muted">
+                        <td colspan="11" class="muted">
                             La quincena está abierta. Presiona “Calcular nómina” para generar los recibos.
                         </td>
                     </tr>
@@ -170,7 +163,7 @@
     @if($periodo->estado !== 'ABIERTO')
     <div class="nomina-card" style="margin-top:16px;">
         <h3>Archivo para el banco</h3>
-        <p class="muted">Un TXT por empresa, formato banco: <code>V</code> + cédula (9 dígitos) + monto Bs a tasa BCV sin punto (21 dígitos) + fecha <code>ddmmaaaa</code>. Tasa BCV hoy: <strong>{{ number_format($tasaBcv, 2) }}</strong>.</p>
+        <p class="muted">Tasa BCV hoy: <strong>{{ number_format($tasaBcv, 2) }}</strong>.</p>
         <table class="data-table">
             <thead><tr><th>Empresa</th><th>Empleados</th><th>Nómina USD</th><th>Nómina Bs</th><th></th></tr></thead>
             <tbody>
@@ -203,22 +196,5 @@
     </div>
     @endif
 
-    <div class="nomina-card" style="margin-top:16px;">
-        <h3>Historial del período</h3>
-        <table class="data-table">
-            <thead><tr><th>Fecha</th><th>Acción</th><th>Usuario</th></tr></thead>
-            <tbody>
-                @forelse($historial as $log)
-                    <tr>
-                        <td>{{ $log->created_at?->format('d/m/Y H:i') }}</td>
-                        <td>{{ $log->accion }}</td>
-                        <td>{{ $log->user?->name ?: 'Sistema' }}</td>
-                    </tr>
-                @empty
-                    <tr><td colspan="3" class="muted">Sin eventos.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
 </div>
 @endsection

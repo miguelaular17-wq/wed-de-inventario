@@ -26,14 +26,14 @@ class ContratoController extends Controller
 
         // KPIs de cuotas
         $totalContratos    = Contrato::where('activo', true)->count();
-        $vencidas          = ContratoCuota::where('estatus', 'vencido')->count();
-        $porVencer3        = ContratoCuota::whereIn('estatus', ['pendiente', 'parcial'])
+        $vencidas          = ContratoCuota::deContratosVigentes()->where('estatus', 'vencido')->count();
+        $porVencer3        = ContratoCuota::deContratosVigentes()->whereIn('estatus', ['pendiente', 'parcial'])
                                 ->whereBetween('fecha_vencimiento', [$hoy, $hoy->copy()->addDays(3)])->count();
-        $porVencer7        = ContratoCuota::whereIn('estatus', ['pendiente', 'parcial'])
+        $porVencer7        = ContratoCuota::deContratosVigentes()->whereIn('estatus', ['pendiente', 'parcial'])
                                 ->whereBetween('fecha_vencimiento', [$hoy, $hoy->copy()->addDays(7)])->count();
-        $porVencer15       = ContratoCuota::whereIn('estatus', ['pendiente', 'parcial'])
+        $porVencer15       = ContratoCuota::deContratosVigentes()->whereIn('estatus', ['pendiente', 'parcial'])
                                 ->whereBetween('fecha_vencimiento', [$hoy, $hoy->copy()->addDays(15)])->count();
-        $montoPendiente    = ContratoCuota::whereIn('estatus', ['pendiente', 'vencido', 'parcial'])->sum('saldo');
+        $montoPendiente    = ContratoCuota::deContratosVigentes()->whereIn('estatus', ['pendiente', 'vencido', 'parcial'])->sum('saldo');
         $cobradoMes        = ContratoCuota::where('estatus', 'pagado')
                                 ->whereMonth('fecha_pago', $hoy->month)
                                 ->whereYear('fecha_pago', $hoy->year)
@@ -41,6 +41,7 @@ class ContratoController extends Controller
 
         // Alertas urgentes del día: cuotas que vencen hoy o ya están vencidas
         $alertasHoy = ContratoCuota::with('contrato')
+            ->deContratosVigentes()
             ->where(function ($q) use ($hoy) {
                 $q->where('fecha_vencimiento', $hoy)
                   ->orWhere(function ($q2) use ($hoy) {
@@ -899,6 +900,7 @@ class ContratoController extends Controller
         $fin    = $inicio->copy()->endOfMonth();
 
         $cuotas = ContratoCuota::with('contrato')
+            ->deContratosVigentes()
             ->whereBetween('fecha_vencimiento', [$inicio, $fin])
             ->whereIn('estatus', ['pendiente', 'vencido', 'parcial'])
             ->get()
