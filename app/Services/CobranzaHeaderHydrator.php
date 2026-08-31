@@ -59,7 +59,7 @@ class CobranzaHeaderHydrator
                 continue;
             }
 
-            $header = HistorialCobranza::query()
+            $header = HistorialCobranza::cuentasOperativas()
                 ->where('sede_nombre', $abono->sede_nombre)
                 ->where('codigo_cliente', $abono->codigo_cliente)
                 ->where('fecha_registro', '<', $fechaSnapshot)

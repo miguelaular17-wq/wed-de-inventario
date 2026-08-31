@@ -39,7 +39,7 @@ class CobranzaController extends Controller
         
         $historialActual = collect();
         if ($ultimaFecha) {
-            $query = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha);
+            $query = \App\Models\HistorialCobranza::cuentasOperativas()->where('fecha_registro', $ultimaFecha);
             $this->excludePagadasManualmente($query);
             if ($mostrar_clientes === 'regulares') {
                 $query->whereNotIn('codigo_cliente', $personalCodes);
@@ -55,59 +55,53 @@ class CobranzaController extends Controller
         $gran_total_saldo = $resumenIndicadores['total_saldo'];
         $gran_total_clientes = $resumenIndicadores['total_clientes'];
 
-        // -------------------------------------------------------------
-        // LOGICA COMPARATIVA SEMANAL — lee de cobranza_resumenes
-        // Cada "Guardar Resumen" inserta una fila con fecha_registro,
-        // lo que permite comparar semana a semana sin reescanear historial.
-        // -------------------------------------------------------------
+        // Comparativa: mismas reglas que los indicadores (sin EXP*, pagadas, encabezados).
         $fechas_semanal = [];
         $semanal_list = [];
         $estatusColors = ['CRITICO' => '#ef4444', 'MOROSO' => '#eab308', 'RECIENTE' => '#84cc16'];
+        $ultimaFechaDia = $ultimaFecha ? \Carbon\Carbon::parse($ultimaFecha)->toDateString() : null;
 
         try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('cobranza_resumenes') &&
-                \Illuminate\Support\Facades\Schema::hasColumn('cobranza_resumenes', 'fecha_registro')) {
+            $fechasLunes = $this->fechasComparativaSemanal();
 
-                // Obtener las últimas 4 fechas distintas guardadas en los resúmenes
-                $fechasResumen = \Illuminate\Support\Facades\DB::connection('pgsql')
-                    ->table('cobranza_resumenes')
-                    ->select('fecha_registro')
-                    ->whereNotNull('fecha_registro')
-                    ->distinct()
-                    ->orderBy('fecha_registro', 'desc')
-                    ->limit(4)
-                    ->pluck('fecha_registro')
-                    ->toArray();
+            if (count($fechasLunes) > 1) {
+                $fechas_semanal = array_map(
+                    fn ($f) => \Carbon\Carbon::parse($f)->format('d/m'),
+                    $fechasLunes
+                );
 
-                if (!empty($fechasResumen)) {
-                    $fechasResumen = array_reverse($fechasResumen); // orden cronológico
-                    $fechas_semanal = array_map(
-                        fn($f) => \Carbon\Carbon::parse($f)->format('d/m'),
-                        $fechasResumen
-                    );
-
-                    // Cargar todos los resúmenes de esas fechas de una sola consulta
-                    $resumenesPorFecha = \App\Models\CobranzaResumen::whereIn('fecha_registro', $fechasResumen)->get();
-
-                    $estatusKeys = ['CRITICO', 'MOROSO', 'RECIENTE'];
-                    foreach ($estatusKeys as $est) {
-                        $campoSaldo  = strtolower($est) . '_saldo';
-                        $row = ['estatus' => $est, 'color' => $estatusColors[$est], 'lunes' => []];
-                        $prevSaldo = null;
-                        foreach ($fechasResumen as $fecha) {
-                            // Sumar saldo de todas las sedes para esa fecha y estatus
-                            $saldo = $resumenesPorFecha
-                                ->where('fecha_registro', $fecha)
-                                ->sum($campoSaldo);
-                            $efectividad = '-';
-                            if ($prevSaldo !== null && $prevSaldo > 0) {
-                                $efectividad = round((($prevSaldo - $saldo) / $prevSaldo) * 100, 0) . '%';
-                            }
-                            $row['lunes'][] = ['saldo' => $saldo, 'efectividad' => $efectividad];
-                            $prevSaldo = $saldo;
-                        }
-                        $semanal_list[] = $row;
+                $saldosPorFecha = [];
+                foreach ($fechasLunes as $fecha) {
+                    if ($ultimaFechaDia && $fecha === $ultimaFechaDia) {
+                        $porEstatusFecha = collect($resumenIndicadores['por_estatus'])->keyBy('estatus');
+                    } else {
+                        $porEstatusFecha = collect(
+                            $indicadores->calcular(
+                                $this->snapshotCobranza($fecha, $encabezados, $personalCodes, $mostrar_clientes),
+                                $personalCodes
+                            )['por_estatus']
+                        )->keyBy('estatus');
                     }
+                    $saldosPorFecha[$fecha] = [
+                        'CRITICO' => (float) ($porEstatusFecha->get('CRITICO')->total_saldo ?? 0),
+                        'MOROSO' => (float) ($porEstatusFecha->get('MOROSO')->total_saldo ?? 0),
+                        'RECIENTE' => (float) ($porEstatusFecha->get('RECIENTE')->total_saldo ?? 0),
+                    ];
+                }
+
+                foreach (['CRITICO', 'MOROSO', 'RECIENTE'] as $est) {
+                    $row = ['estatus' => $est, 'color' => $estatusColors[$est], 'lunes' => []];
+                    $prevSaldo = null;
+                    foreach ($fechasLunes as $fecha) {
+                        $saldo = $saldosPorFecha[$fecha][$est];
+                        $efectividad = '-';
+                        if ($prevSaldo !== null && $prevSaldo > 0) {
+                            $efectividad = round((($prevSaldo - $saldo) / $prevSaldo) * 100, 0) . '%';
+                        }
+                        $row['lunes'][] = ['saldo' => $saldo, 'efectividad' => $efectividad];
+                        $prevSaldo = $saldo;
+                    }
+                    $semanal_list[] = $row;
                 }
             }
         } catch (\Exception $e) {
@@ -122,7 +116,7 @@ class CobranzaController extends Controller
         $fecha_hasta = request('fecha_hasta');
         $filtro_estatus = request('filtro_estatus');
         
-        $queryClientes = \App\Models\HistorialCobranza::query();
+        $queryClientes = \App\Models\HistorialCobranza::cuentasOperativas();
 
         // Fila cabecera (monto/saldo) del snapshot, o encabezado recuperado
         // cuando el sync solo trajo abonos de una NDD/FAC sin renglones.
@@ -367,69 +361,48 @@ class CobranzaController extends Controller
         }
     }
 
-    public function guardarResumen(Request $request) {
+    public function guardarResumen(
+        Request $request,
+        CobranzaIndicatorService $indicadores,
+        CobranzaHeaderHydrator $encabezados
+    ) {
         try {
             $ultimaFecha = \App\Models\HistorialCobranza::max('fecha_registro');
             if (!$ultimaFecha) {
                 return redirect()->back()->with('error', 'No hay datos en el historial para guardar el resumen.');
             }
 
-            // Normalizar la fecha como string YYYY-MM-DD (evita problemas de cast Carbon vs string)
             $fechaStr = \Carbon\Carbon::parse($ultimaFecha)->toDateString();
-
-            // Verificar si ya existe un resumen guardado para esta fecha
-            // (evitar duplicados si el usuario presiona el botón dos veces el mismo día)
-            $yaExiste = \Illuminate\Support\Facades\DB::table('cobranza_resumenes')
-                ->whereNotNull('fecha_registro')
-                ->whereRaw("fecha_registro::date = ?", [$fechaStr])
-                ->exists();
-
-            if ($yaExiste) {
-                return redirect()->back()->with('info',
-                    'Ya existe un resumen guardado para el ' . \Carbon\Carbon::parse($fechaStr)->format('d/m/Y') .
-                    '. No se insertaron duplicados.'
-                );
-            }
-
-            $historialActual = \App\Models\HistorialCobranza::where('fecha_registro', $fechaStr)->get();
+            $personalCodes = \App\Models\ClientePersonal::pluck('codigo_cliente')->toArray();
+            $historialActual = $this->snapshotCobranza($fechaStr, $encabezados, $personalCodes, 'todos');
 
             if ($historialActual->isEmpty()) {
                 return redirect()->back()->with('error', 'No se encontraron registros en el historial para la fecha ' . $fechaStr . '.');
             }
 
+            \Illuminate\Support\Facades\DB::table('cobranza_resumenes')
+                ->whereRaw('fecha_registro::date = ?', [$fechaStr])
+                ->delete();
+
             $agrupadoPorSede = $historialActual->groupBy('sede_nombre');
 
             foreach ($agrupadoPorSede as $sede => $registrosSede) {
-                $saldoSede    = $registrosSede->sum('saldo');
-                $clientesSede = $registrosSede->count();
+                $calc = $indicadores->calcular($registrosSede, $personalCodes);
+                $porEst = collect($calc['por_estatus'])->keyBy('estatus');
 
-                $crit_c = 0; $crit_s = 0.0;
-                $moro_c = 0; $moro_s = 0.0;
-                $reci_c = 0; $reci_s = 0.0;
-                $apar_c = 0; $apar_s = 0.0;
-
-                foreach ($registrosSede as $r) {
-                    $est = strtoupper($r->estatus ?? '') ?: 'RECIENTE';
-                    if ($est === 'CRITICO')      { $crit_c++; $crit_s += (float)$r->saldo; }
-                    elseif ($est === 'MOROSO')   { $moro_c++; $moro_s += (float)$r->saldo; }
-                    elseif ($est === 'RECIENTE') { $reci_c++; $reci_s += (float)$r->saldo; }
-                    else                         { $apar_c++; $apar_s += (float)$r->saldo; }
-                }
-
-                // INSERT nuevo registro — nunca actualiza, para alimentar la comparativa semanal
                 \Illuminate\Support\Facades\DB::table('cobranza_resumenes')->insert([
                     'fecha_registro'    => $fechaStr,
                     'sede_nombre'       => $sede,
-                    'total_clientes'    => $clientesSede,
-                    'total_saldo'       => $saldoSede,
-                    'critico_clientes'  => $crit_c,
-                    'critico_saldo'     => $crit_s,
-                    'moroso_clientes'   => $moro_c,
-                    'moroso_saldo'      => $moro_s,
-                    'reciente_clientes' => $reci_c,
-                    'reciente_saldo'    => $reci_s,
-                    'apartado_clientes' => $apar_c,
-                    'apartado_saldo'    => $apar_s,
+                    'total_clientes'    => $calc['total_clientes'],
+                    'total_saldo'       => $calc['total_saldo'],
+                    'critico_clientes'  => (int) ($porEst->get('CRITICO')->total_clientes ?? 0),
+                    'critico_saldo'     => (float) ($porEst->get('CRITICO')->total_saldo ?? 0),
+                    'moroso_clientes'   => (int) ($porEst->get('MOROSO')->total_clientes ?? 0),
+                    'moroso_saldo'      => (float) ($porEst->get('MOROSO')->total_saldo ?? 0),
+                    'reciente_clientes' => (int) ($porEst->get('RECIENTE')->total_clientes ?? 0),
+                    'reciente_saldo'    => (float) ($porEst->get('RECIENTE')->total_saldo ?? 0),
+                    'apartado_clientes' => (int) ($porEst->get('APARTADO')->total_clientes ?? 0),
+                    'apartado_saldo'    => (float) ($porEst->get('APARTADO')->total_saldo ?? 0),
                     'created_at'        => now(),
                     'updated_at'        => now(),
                 ]);
@@ -437,7 +410,7 @@ class CobranzaController extends Controller
 
             return redirect()->back()->with('success',
                 'Resumen del ' . \Carbon\Carbon::parse($fechaStr)->format('d/m/Y') .
-                ' guardado exitosamente (' . $agrupadoPorSede->count() . ' sedes). Los datos alimentarán la Comparativa Semanal de Efectividad.'
+                ' actualizado (' . $agrupadoPorSede->count() . ' sedes), igual a los indicadores de cobranza.'
             );
 
         } catch (\Exception $e) {
@@ -454,7 +427,7 @@ class CobranzaController extends Controller
         
         $historialActual = collect();
         if ($ultimaFecha) {
-            $query = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha);
+            $query = \App\Models\HistorialCobranza::cuentasOperativas()->where('fecha_registro', $ultimaFecha);
             $this->excludePagadasManualmente($query);
             if ($mostrar_clientes === 'regulares') {
                 $query->whereNotIn('codigo_cliente', $personalCodes);
@@ -517,7 +490,7 @@ class CobranzaController extends Controller
         $clientesPorSede = [];
 
         // Re-fetch historial with notes joined, so we have nota_anclada and es_personal
-        $historialConNotas = \App\Models\HistorialCobranza::where('fecha_registro', $ultimaFecha);
+        $historialConNotas = \App\Models\HistorialCobranza::cuentasOperativas()->where('fecha_registro', $ultimaFecha);
         $this->excludePagadasManualmente($historialConNotas);
         $this->joinNotas($historialConNotas);
         $historialConNotas = $historialConNotas
@@ -1001,6 +974,70 @@ class CobranzaController extends Controller
     private function claveDocumento(?string $valor): string
     {
         return trim((string) $valor);
+    }
+
+    private function fechasComparativaSemanal(): array
+    {
+        $fechas = [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('cobranza_resumenes') &&
+            \Illuminate\Support\Facades\Schema::hasColumn('cobranza_resumenes', 'fecha_registro')) {
+            $fechas = \Illuminate\Support\Facades\DB::connection('pgsql')
+                ->table('cobranza_resumenes')
+                ->select('fecha_registro')
+                ->whereNotNull('fecha_registro')
+                ->distinct()
+                ->orderByDesc('fecha_registro')
+                ->limit(4)
+                ->pluck('fecha_registro')
+                ->map(fn ($f) => \Carbon\Carbon::parse($f)->toDateString())
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        if (count($fechas) < 2) {
+            $fechas = \App\Models\HistorialCobranza::query()
+                ->select('fecha_registro')
+                ->whereRaw('EXTRACT(DOW FROM fecha_registro::date) = 1')
+                ->distinct()
+                ->orderByDesc('fecha_registro')
+                ->limit(4)
+                ->pluck('fecha_registro')
+                ->map(fn ($f) => \Carbon\Carbon::parse($f)->toDateString())
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        sort($fechas);
+
+        return $fechas;
+    }
+
+    private function snapshotCobranza(
+        $dia,
+        CobranzaHeaderHydrator $encabezados,
+        array $personalCodes,
+        string $mostrarClientes = 'todos'
+    ) {
+        $fechaStr = \Carbon\Carbon::parse($dia)->toDateString();
+        $snap = \App\Models\HistorialCobranza::query()
+            ->whereRaw('fecha_registro::date = ?', [$fechaStr])
+            ->max('fecha_registro');
+
+        if (! $snap) {
+            return collect();
+        }
+
+        $query = \App\Models\HistorialCobranza::cuentasOperativas()->where('fecha_registro', $snap);
+        $this->excludePagadasManualmente($query);
+        if ($mostrarClientes === 'regulares') {
+            $query->whereNotIn('codigo_cliente', $personalCodes);
+        } elseif ($mostrarClientes === 'personales') {
+            $query->whereIn('codigo_cliente', $personalCodes);
+        }
+
+        return $encabezados->anexar($query->get(), $snap);
     }
 
     private function excludePagadasManualmente($query)

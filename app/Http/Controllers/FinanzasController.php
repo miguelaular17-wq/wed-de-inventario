@@ -116,10 +116,7 @@ class FinanzasController extends Controller
     {
         // El saldo inicial es TOTAL DISPONIBILIDAD (TASA BCV)
         // que equivale a la suma de reporte_usd de ALTO y BAJO movimiento
-        $saldoCalculado = \App\Models\CuentaBancaria::whereIn('categoria_reporte', [
-            'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO',
-            'BANCA NACIONAL - BAJO MOVIMIENTO'
-        ])->sum('reporte_usd');
+        $saldoCalculado = \App\Models\CuentaBancaria::where('mostrar_en_principal', true)->sum('reporte_usd');
 
         if ($resumen->saldo_inicial != $saldoCalculado) {
             $resumen->saldo_inicial = $saldoCalculado;
@@ -1990,7 +1987,31 @@ class FinanzasController extends Controller
 
     public function reporteConsolidado()
     {
-        $cuentas = \App\Models\CuentaBancaria::orderBy('orden')->get()->groupBy('categoria_reporte');
+        $categoriasConsolidado = [
+            'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO',
+            'BANCA NACIONAL - BAJO MOVIMIENTO',
+            'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS',
+            'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS',
+            'BANCA INTERNACIONAL / BILLETERAS',
+            'CUENTAS INTERNACIONALES CERRADAS (FONDOS POR LIBERAR)',
+            'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS',
+        ];
+
+        $cuentas = \App\Models\CuentaBancaria::whereIn('categoria_reporte', $categoriasConsolidado)
+            ->orderBy('orden')
+            ->get()
+            ->filter(function ($cuenta) {
+                $cat = (string) $cuenta->categoria_reporte;
+                if (in_array($cat, [
+                    'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO',
+                    'BANCA NACIONAL - BAJO MOVIMIENTO',
+                ], true)) {
+                    return (bool) $cuenta->mostrar_en_principal;
+                }
+
+                return true;
+            })
+            ->groupBy('categoria_reporte');
         
         $resumen = \App\Models\FinanzasResumen::firstOrCreate(
             ['fecha' => date('Y-m-d')],
@@ -2014,9 +2035,10 @@ class FinanzasController extends Controller
 
         $fecha = $request->query('fecha', date('Y-m-d'));
 
-        $movimientos = \App\Models\FlujoCaja::where('fecha', $fecha)->orderBy('fecha', 'desc')->get();
+        $movimientos = \App\Models\FlujoCaja::where('fecha', $fecha)->where('oculto', false)->orderBy('fecha', 'desc')->get();
         $egresos_realizados = $movimientos->where('categoria_egreso', 'egreso_realizado');
         $otros_egresos = $movimientos->where('categoria_egreso', 'otros_egresos');
+        $egresos_divisas = $movimientos->where('categoria_egreso', 'egreso_divisas');
         
         $cuentasBancarias = \App\Models\CuentaBancaria::where('mostrar_en_principal', true)->orderBy('orden')->get();
         $resumen = \App\Models\FinanzasResumen::firstOrCreate(
@@ -2041,7 +2063,8 @@ class FinanzasController extends Controller
         $result = view('finanzas.reporte_diario_caja', compact(
             'movimientos', 
             'egresos_realizados', 
-            'otros_egresos', 
+            'otros_egresos',
+            'egresos_divisas',
             'cuentasBancarias',
             'resumen',
             'total_salidas_bs',
@@ -2250,9 +2273,12 @@ class FinanzasController extends Controller
         // 2. Reiniciar todas las cuentas bancarias a 0, EXCEPTUANDO algunas categorias
         $excluidas = [
             'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA',
+            'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS',
+            'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS',
             'BANCA INTERNACIONAL / BILLETERAS',
+            'CUENTAS INTERNACIONALES CERRADAS (FONDOS POR LIBERAR)',
             'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS',
-            'TARJETAS INTERNACIONALES DE TERCEROS'
+            'TARJETAS INTERNACIONALES DE TERCEROS',
         ];
 
         \App\Models\CuentaBancaria::whereNotIn('categoria_reporte', $excluidas)

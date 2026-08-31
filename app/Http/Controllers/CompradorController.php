@@ -910,7 +910,7 @@ class CompradorController extends Controller
             $latestFecha = \App\Models\HistorialCobranza::max('fecha_registro');
             if ($latestFecha) {
                 $cobranzasData['fecha_actual'] = \Carbon\Carbon::parse($latestFecha)->format('d/m/Y');
-                $detalles = \App\Models\HistorialCobranza::where('fecha_registro', $latestFecha)->get();
+                $detalles = \App\Models\HistorialCobranza::cuentasOperativas()->where('fecha_registro', $latestFecha)->get();
                 $cobranzasData['detalle'] = $detalles;
                 
                 $totalSaldo = $detalles->sum('saldo');
@@ -952,7 +952,13 @@ class CompradorController extends Controller
                     if (!empty($fechasLunes)) {
                         $fechasLunes = array_reverse($fechasLunes); // Chronological order
                         $cobranzasData['fechas_semanal'] = array_map(fn($f) => \Carbon\Carbon::parse($f)->format('d/m'), $fechasLunes);
-                        $historialLunes = \App\Models\HistorialCobranza::whereIn('fecha_registro', $fechasLunes)->get();
+                        $historialLunes = \App\Models\HistorialCobranza::cuentasOperativas()
+                            ->cabeceras()
+                            ->whereRaw(
+                                'fecha_registro::date IN ('.implode(',', array_fill(0, count($fechasLunes), '?')).')',
+                                array_map(fn ($f) => \Carbon\Carbon::parse($f)->toDateString(), $fechasLunes)
+                            )
+                            ->get();
                         
                         $estatusKeys = ['CRITICO', 'MOROSO', 'RECIENTE'];
                         $semanalList = [];

@@ -16,6 +16,7 @@ WITH FacturasActivas AS (
     FROM cuentas_cobrar cx WITH(NOLOCK)
     WHERE cx.saldo_actual_moneda2 > 0.5
       AND cx.tipo_documento IN ('FAC', 'NDD', 'ND')
+      AND UPPER(LTRIM(RTRIM(ISNULL(cx.codigo_cliente, '')))) NOT LIKE 'EXP%'
       AND (cx.estado IS NULL OR cx.estado NOT LIKE '%Anul%')
       AND NOT EXISTS (
             SELECT 1

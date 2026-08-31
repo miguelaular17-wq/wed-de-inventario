@@ -939,7 +939,8 @@ class GerencialAnalyticsService
             })
             ->groupBy('clave')
             ->map(function (Collection $grupo) {
-                $first = clone $grupo->first();
+                $named = $grupo->first(fn ($r) => ! empty($r->nombre));
+                $first = clone ($named ?: $grupo->first());
                 $first->movimientos = $grupo->sum('movimientos');
                 $first->valor = $grupo->sum(fn ($r) => (float) $r->valor);
                 $first->codigos = $grupo->pluck('usuario_raw')->unique()->values()->all();
@@ -992,26 +993,92 @@ class GerencialAnalyticsService
     private function resolverCliente(string $codigo, array $catalogo): ?array
     {
         $clave = $this->claveCedula($codigo);
-        if ($clave === '') {
-            return null;
-        }
-        if (isset($catalogo['por_clave'][$clave])) {
-            return $catalogo['por_clave'][$clave];
+        if ($clave !== '') {
+            if (isset($catalogo['por_clave'][$clave])) {
+                return $catalogo['por_clave'][$clave];
+            }
+
+            // Profit a veces guarda la cédula con un dígito de menos (V3065986 = V30657986).
+            if (strlen($clave) < 6) {
+                return null;
+            }
+            $hits = [];
+            foreach ($catalogo['lista'] as $cliente) {
+                if (strlen($cliente['clave']) === strlen($clave) + 1
+                    && $this->esSubsecuencia($clave, $cliente['clave'])) {
+                    $hits[] = $cliente;
+                }
+            }
+
+            return count($hits) === 1 ? $hits[0] : null;
         }
 
-        // Profit a veces guarda la cédula con un dígito de menos (V3065986 = V30657986).
-        if (strlen($clave) < 6) {
+        return $this->resolverClientePorNombre($codigo, $catalogo);
+    }
+
+    /**
+     * @param  array{por_clave: array<string, array{nombre: string, cedula: string, clave: string}>, lista: list<array{nombre: string, cedula: string, clave: string}>}  $catalogo
+     * @return array{nombre: string, cedula: string, clave: string}|null
+     */
+    private function resolverClientePorNombre(string $nombre, array $catalogo): ?array
+    {
+        $norm = $this->normalizarNombre($nombre);
+        $tokens = $this->tokensNombre($norm);
+        if (count($tokens) < 2) {
             return null;
         }
+
         $hits = [];
         foreach ($catalogo['lista'] as $cliente) {
-            if (strlen($cliente['clave']) === strlen($clave) + 1
-                && $this->esSubsecuencia($clave, $cliente['clave'])) {
-                $hits[] = $cliente;
+            $cn = $this->normalizarNombre($cliente['nombre']);
+            if ($cn === $norm || $this->nombreEsAlias($tokens, $this->tokensNombre($cn))) {
+                $hits[$cliente['clave']] = $cliente;
             }
         }
 
-        return count($hits) === 1 ? $hits[0] : null;
+        return count($hits) === 1 ? reset($hits) : null;
+    }
+
+    private function normalizarNombre(string $nombre): string
+    {
+        $nombre = trim(preg_replace('/\s+/', ' ', $nombre) ?? '');
+
+        return mb_strtoupper($nombre, 'UTF-8');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function tokensNombre(string $nombre): array
+    {
+        if ($nombre === '') {
+            return [];
+        }
+
+        return array_values(array_filter(explode(' ', $nombre), fn ($t) => $t !== ''));
+    }
+
+    /**
+     * @param  list<string>  $corto
+     * @param  list<string>  $largo
+     */
+    private function nombreEsAlias(array $corto, array $largo): bool
+    {
+        if ($corto === [] || $largo === [] || count($corto) > count($largo)) {
+            return false;
+        }
+
+        $j = 0;
+        foreach ($largo as $token) {
+            if ($token === $corto[$j]) {
+                $j++;
+                if ($j === count($corto)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function esSubsecuencia(string $needle, string $haystack): bool

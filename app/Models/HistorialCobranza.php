@@ -14,4 +14,14 @@ class HistorialCobranza extends Model
     protected $connection = 'pgsql';
 
     protected $guarded = [];
+
+    public function scopeCuentasOperativas($query)
+    {
+        return $query->whereRaw("UPPER(BTRIM(COALESCE(codigo_cliente, ''))) NOT LIKE 'EXP%'");
+    }
+
+    public function scopeCabeceras($query)
+    {
+        return $query->where('monto_neto', '>', 0);
+    }
 }

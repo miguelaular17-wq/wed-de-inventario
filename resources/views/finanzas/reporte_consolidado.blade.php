@@ -35,7 +35,11 @@
     }
     .tasa-cell { display: flex; align-items: center; border-right: 2px solid #002060; }
     .tasa-cell:last-child { border-right: none; }
-    .tasa-label { background-color: #d9e1f2; padding: 4px 12px; font-weight: bold; font-size: 12px; border-right: 1px solid #002060; text-align: center; color: #002060; }
+    .tasa-label { padding: 4px 12px; font-weight: bold; font-size: 12px; border-right: 1px solid #002060; text-align: center; color: #002060; }
+    .tasa-label-bcv { background-color: #e2efda; }
+    .tasa-label-par { background-color: #d9e1f2; }
+    .bg-pink { background-color: #fce4ec !important; }
+    .bg-lime { background-color: #c6e0b4 !important; color: #000 !important; }
     .tasa-value { padding: 4px 8px; font-weight: bold; font-size: 14px; background: #fff; }
     
     .report-grid {
@@ -163,11 +167,11 @@
 
     <div class="tasa-box">
         <div class="tasa-cell">
-            <div class="tasa-label">TASA<br>BCV</div>
+            <div class="tasa-label tasa-label-bcv">TASA<br>BCV</div>
             <div class="tasa-value"><input type="text" inputmode="decimal" class="report-input save-resumen" data-field="tasa_bcv_usd" value="{{ $resumen->tasa_bcv_usd }}" style="font-size: 14px; width: 80px !important; text-align: center;" id="tasa_bcv"></div>
         </div>
         <div class="tasa-cell">
-            <div class="tasa-label">TASA<br>PARALELO</div>
+            <div class="tasa-label tasa-label-par">TASA<br>PARALELO</div>
             <div class="tasa-value"><input type="text" inputmode="decimal" class="report-input save-resumen" data-field="tasa_paralelo" value="{{ $resumen->tasa_paralelo }}" style="font-size: 14px; width: 80px !important; text-align: center;" id="tasa_paralelo"></div>
         </div>
     </div>
@@ -177,62 +181,35 @@
         <!-- LEFT GROUP (Col 1 & 2 + Planificacion + Disp BS/USD) -->
         <div style="display: flex; flex-direction: column; gap: 8px;">
             
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <!-- COLUMN 1: ALTO Y MEDIO -->
-                <div>
-                    <table class="report-table" id="table-alto">
-                        <thead>
-                            <tr><th colspan="4">BANCA NACIONAL<br>ALTO Y MEDIANO MOVIMIENTO</th></tr>
-                            <tr><th style="width: 25%">BANCO</th><th style="width: 35%">TITULAR</th><th style="width: 20%">BS</th><th style="width: 20%">USD</th></tr>
-                        </thead>
-                        <tbody>
-                            @php $alto = isset($cuentas['BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO']) ? $cuentas['BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO'] : []; @endphp
-                            @foreach($alto as $c)
-                            <tr>
-                                <td>{{ $c->banco }}</td>
-                                <td>{{ $c->titular }}</td>
-                                <td><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-alto-bs currency-input" data-id="{{ $c->id }}" data-field="reporte_bs" value="{{ $c->reporte_bs }}"></div></td>
-                                <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-alto-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="2" class="text-center bg-light-blue" style="font-weight: bold;">TOTALES</td>
-                                <td class="text-right bg-green"><div class="currency-wrap"><span class="currency-symbol">Bs.</span><span id="tot_alto_bs_sum">0.00</span></div></td>
-                                <td class="text-right bg-green"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_alto_usd_sum">0.00</span></div></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-
-                <!-- COLUMN 2: BAJO MOVIMIENTO -->
-                <div>
-                    <table class="report-table" id="table-bajo">
-                        <thead>
-                            <tr><th colspan="4">BANCA NACIONAL<br>BAJO MOVIMIENTO</th></tr>
-                            <tr><th style="width: 25%">BANCO</th><th style="width: 35%">TITULAR</th><th style="width: 20%">BS</th><th style="width: 20%">USD</th></tr>
-                        </thead>
-                        <tbody>
-                            @php $bajo = isset($cuentas['BANCA NACIONAL - BAJO MOVIMIENTO']) ? $cuentas['BANCA NACIONAL - BAJO MOVIMIENTO'] : []; @endphp
-                            @foreach($bajo as $c)
-                            <tr>
-                                <td>{{ $c->banco }}</td>
-                                <td>{{ $c->titular }}</td>
-                                <td><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-bajo-bs currency-input" data-id="{{ $c->id }}" data-field="reporte_bs" value="{{ $c->reporte_bs }}"></div></td>
-                                <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-bajo-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="2" class="text-center bg-light-blue" style="font-weight: bold;">TOTALES</td>
-                                <td class="text-right bg-green"><div class="currency-wrap"><span class="currency-symbol">Bs.</span><span id="tot_bajo_bs_sum">0.00</span></div></td>
-                                <td class="text-right bg-green"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_bajo_usd_sum">0.00</span></div></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
+            <div>
+                <table class="report-table" id="table-nacional">
+                    <thead>
+                        <tr><th colspan="4">BANCA NACIONAL</th></tr>
+                        <tr><th style="width: 25%">BANCO</th><th style="width: 35%">TITULAR</th><th style="width: 20%">BS</th><th style="width: 20%">USD</th></tr>
+                    </thead>
+                    <tbody>
+                        @php
+                            $alto = isset($cuentas['BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO']) ? $cuentas['BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO'] : collect();
+                            $bajo = isset($cuentas['BANCA NACIONAL - BAJO MOVIMIENTO']) ? $cuentas['BANCA NACIONAL - BAJO MOVIMIENTO'] : collect();
+                            $nacional = collect($alto)->concat($bajo)->sortBy('orden')->values();
+                        @endphp
+                        @foreach($nacional as $c)
+                        <tr>
+                            <td>{{ $c->banco }}</td>
+                            <td>{{ $c->titular }}</td>
+                            <td><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-nac-bs currency-input" data-id="{{ $c->id }}" data-field="reporte_bs" value="{{ $c->reporte_bs }}"></div></td>
+                            <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-nac-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="2" class="text-center bg-dark-blue" style="font-weight: bold;">TOTALES</td>
+                            <td class="text-right bg-green"><div class="currency-wrap"><span class="currency-symbol">Bs.</span><span id="tot_nac_bs_sum">0.00</span></div></td>
+                            <td class="text-right bg-green"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_nac_usd_sum">0.00</span></div></td>
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
 
             <!-- PLANIFICACION -->
@@ -276,12 +253,8 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td>BANCA ALTO Y MEDIO MOVIMIENTO</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_bs_alto">0.00</span></div></td>
-                        </tr>
-                        <tr>
-                            <td>BANCA BAJO MOVIMIENTO</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_bs_bajo">0.00</span></div></td>
+                            <td>BANCA NACIONAL</td>
+                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_bs_nac">0.00</span></div></td>
                         </tr>
                         <tr class="bg-light-blue">
                             <td style="font-weight: bold;">TOTAL DISPONIBILIDAD (TASA BCV)</td>
@@ -319,7 +292,7 @@
                             <td style="font-weight: bold;">DISPONIBLE PARA USO<br>(TASA PARALELO)</td>
                             <td class="text-right" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_uso_par">0.00</span></div></td>
                         </tr>
-                        <tr>
+                        <tr class="bg-pink">
                             <td style="font-weight: bold;">PÉRDIDA POR DIFERENCIAL CAMBIARIO</td>
                             <td class="text-right" style="color: red; font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="perdida_dif">-0.00</span></div></td>
                         </tr>
@@ -341,55 +314,81 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td>BANCA NACIONAL MONEDA EXTRANJERA</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_nacional">0.00</span></div></td>
+                            <td>FONDOS OPERATIVOS</td>
+                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_op">0.00</span></div></td>
                         </tr>
                         <tr>
-                            <td>BANCA INTERNACIONAL</td>
+                            <td>FONDOS NO OPERATIVOS</td>
+                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_noop_nac">0.00</span></div></td>
+                        </tr>
+                        <tr>
+                            <td>BANCA INTERNACIONAL / BILLETERAS</td>
                             <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_inter">0.00</span></div></td>
+                        </tr>
+                        <tr>
+                            <td>CUENTAS CERRADAS (FONDOS POR LIBERAR)</td>
+                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_cerr">0.00</span></div></td>
                         </tr>
                         <tr>
                             <td>CUENTAS NO OPERATIVAS</td>
                             <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_noop">0.00</span></div></td>
                         </tr>
-                        <tr>
-                            <td>TARJETAS INTERNACIONALES DE TERCEROS</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_terceros">0.00</span></div></td>
-                        </tr>
-                        <tr class="bg-light-blue">
+                        <tr class="bg-dark-blue">
                             <td style="font-weight: bold;">TOTAL DISPONIBILIDAD USD</td>
                             <td class="text-right" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_tot">0.00</span></div></td>
                         </tr>
-                        <tr class="bg-light-blue">
+                        <tr>
                             <td style="font-weight: bold;">DISPONIBLE USD PARA USO</td>
-                            <td class="text-right bg-green" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_uso">0.00</span></div></td>
+                            <td class="text-right bg-lime" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_uso">0.00</span></div></td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- MIDDLE GROUP (Col 3: Moneda Extranjera) -->
-        <div>
-            <table class="report-table" id="table-extranjera">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <table class="report-table" id="table-operativos">
                 <thead>
-                    <tr><th colspan="3">BANCA NACIONAL / TARJETAS<br>MONEDA EXTRANJERA</th></tr>
+                    <tr><th colspan="3">BANCA NACIONAL MONEDA EXTRANJERA<br>(FONDOS OPERATIVOS)</th></tr>
                     <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
                 </thead>
                 <tbody>
-                    @php $extranjera = isset($cuentas['BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA']) ? $cuentas['BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA'] : []; @endphp
-                    @foreach($extranjera as $c)
+                    @php $operativos = isset($cuentas['BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS']) ? $cuentas['BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS'] : []; @endphp
+                    @foreach($operativos as $c)
                     <tr>
                         <td>{{ $c->banco }}</td>
                         <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-extranjera-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
+                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-op-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
                     </tr>
                     @endforeach
                 </tbody>
                 <tfoot>
                     <tr>
                         <td colspan="2" class="text-center bg-light-blue" style="font-weight: bold;">TOTALES</td>
-                        <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_extranjera_usd_sum">0.00</span></div></td>
+                        <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_op_usd_sum">0.00</span></div></td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            <table class="report-table" id="table-no-op-nac">
+                <thead>
+                    <tr><th colspan="3">BANCA NACIONAL MONEDA EXTRANJERA<br>(FONDOS NO OPERATIVOS)</th></tr>
+                    <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
+                </thead>
+                <tbody>
+                    @php $fx_noop = isset($cuentas['BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS']) ? $cuentas['BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS'] : []; @endphp
+                    @foreach($fx_noop as $c)
+                    <tr>
+                        <td>{{ $c->banco }}</td>
+                        <td>{{ $c->titular }}</td>
+                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-fxnoop-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
+                    </tr>
+                    @endforeach
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="2" class="text-center bg-light-blue" style="font-weight: bold;">TOTALES</td>
+                        <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_fxnoop_usd_sum">0.00</span></div></td>
                     </tr>
                 </tfoot>
             </table>
@@ -421,6 +420,29 @@
                 </tfoot>
             </table>
 
+            <table class="report-table" id="table-cerradas">
+                <thead>
+                    <tr><th colspan="3">CUENTAS INTERNACIONALES CERRADAS<br>(FONDOS POR LIBERAR)</th></tr>
+                    <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
+                </thead>
+                <tbody>
+                    @php $cerradas = isset($cuentas['CUENTAS INTERNACIONALES CERRADAS (FONDOS POR LIBERAR)']) ? $cuentas['CUENTAS INTERNACIONALES CERRADAS (FONDOS POR LIBERAR)'] : []; @endphp
+                    @foreach($cerradas as $c)
+                    <tr>
+                        <td>{{ $c->banco }}</td>
+                        <td>{{ $c->titular }}</td>
+                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-cerr-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
+                    </tr>
+                    @endforeach
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="2" class="bg-light-blue"></td>
+                        <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_cerr_usd_sum">0.00</span></div></td>
+                    </tr>
+                </tfoot>
+            </table>
+
             <!-- NO OPERATIVAS -->
             <table class="report-table" id="table-no-operativas">
                 <thead>
@@ -441,30 +463,6 @@
                     <tr>
                         <td colspan="2" class="bg-light-blue"></td>
                         <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_noop_usd_sum">0.00</span></div></td>
-                    </tr>
-                </tfoot>
-            </table>
-
-            <!-- TERCEROS -->
-            <table class="report-table" id="table-terceros">
-                <thead>
-                    <tr><th colspan="3">TARJETAS INTERNACIONALES<br>DE TERCEROS</th></tr>
-                    <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
-                </thead>
-                <tbody>
-                    @php $terceros = isset($cuentas['TARJETAS INTERNACIONALES DE TERCEROS']) ? $cuentas['TARJETAS INTERNACIONALES DE TERCEROS'] : []; @endphp
-                    @foreach($terceros as $c)
-                    <tr>
-                        <td>{{ $c->banco }}</td>
-                        <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-terceros-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
-                    </tr>
-                    @endforeach
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="2" class="bg-light-blue"></td>
-                        <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_terceros_usd_sum">0.00</span></div></td>
                     </tr>
                 </tfoot>
             </table>
@@ -547,68 +545,57 @@ document.addEventListener('DOMContentLoaded', function() {
         let bcv = window.parseLocalNumber(document.getElementById('tasa_bcv').value) || 1;
         
         // Sums
-        let sum_alto_bs = 0, sum_alto_usd = 0;
-        document.querySelectorAll('.calc-alto-bs').forEach(el => sum_alto_bs += window.parseLocalNumber(el.value) || 0);
-        document.querySelectorAll('.calc-alto-usd').forEach(el => sum_alto_usd += window.parseLocalNumber(el.value) || 0);
-        document.getElementById('tot_alto_bs_sum').innerText = sum_alto_bs.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('tot_alto_usd_sum').innerText = sum_alto_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        let fmt = (n) => n.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-        let sum_bajo_bs = 0, sum_bajo_usd = 0;
-        document.querySelectorAll('.calc-bajo-bs').forEach(el => sum_bajo_bs += window.parseLocalNumber(el.value) || 0);
-        document.querySelectorAll('.calc-bajo-usd').forEach(el => sum_bajo_usd += window.parseLocalNumber(el.value) || 0);
-        document.getElementById('tot_bajo_bs_sum').innerText = sum_bajo_bs.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('tot_bajo_usd_sum').innerText = sum_bajo_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        let sum_nac_bs = 0, sum_nac_usd = 0;
+        document.querySelectorAll('.calc-nac-bs').forEach(el => sum_nac_bs += window.parseLocalNumber(el.value) || 0);
+        document.querySelectorAll('.calc-nac-usd').forEach(el => sum_nac_usd += window.parseLocalNumber(el.value) || 0);
+        document.getElementById('tot_nac_bs_sum').innerText = fmt(sum_nac_bs);
+        document.getElementById('tot_nac_usd_sum').innerText = fmt(sum_nac_usd);
 
-        let sum_ext_usd = 0;
-        document.querySelectorAll('.calc-extranjera-usd').forEach(el => sum_ext_usd += window.parseLocalNumber(el.value) || 0);
-        document.getElementById('tot_extranjera_usd_sum').innerText = sum_ext_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        let sum_op_usd = 0;
+        document.querySelectorAll('.calc-op-usd').forEach(el => sum_op_usd += window.parseLocalNumber(el.value) || 0);
+        document.getElementById('tot_op_usd_sum').innerText = fmt(sum_op_usd);
+
+        let sum_fxnoop_usd = 0;
+        document.querySelectorAll('.calc-fxnoop-usd').forEach(el => sum_fxnoop_usd += window.parseLocalNumber(el.value) || 0);
+        document.getElementById('tot_fxnoop_usd_sum').innerText = fmt(sum_fxnoop_usd);
 
         let sum_bill_usd = 0;
         document.querySelectorAll('.calc-billeteras-usd').forEach(el => sum_bill_usd += window.parseLocalNumber(el.value) || 0);
-        document.getElementById('tot_billeteras_usd_sum').innerText = sum_bill_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('tot_billeteras_usd_sum').innerText = fmt(sum_bill_usd);
+
+        let sum_cerr_usd = 0;
+        document.querySelectorAll('.calc-cerr-usd').forEach(el => sum_cerr_usd += window.parseLocalNumber(el.value) || 0);
+        document.getElementById('tot_cerr_usd_sum').innerText = fmt(sum_cerr_usd);
 
         let sum_noop_usd = 0;
         document.querySelectorAll('.calc-noop-usd').forEach(el => sum_noop_usd += window.parseLocalNumber(el.value) || 0);
-        document.getElementById('tot_noop_usd_sum').innerText = sum_noop_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('tot_noop_usd_sum').innerText = fmt(sum_noop_usd);
 
-        let sum_terc_usd = 0;
-        document.querySelectorAll('.calc-terceros-usd').forEach(el => sum_terc_usd += window.parseLocalNumber(el.value) || 0);
-        document.getElementById('tot_terceros_usd_sum').innerText = sum_terc_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        
-        // Update variables to display in blocks
-        document.getElementById('disp_bs_alto').innerText = (sum_alto_usd).toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('disp_bs_bajo').innerText = (sum_bajo_usd).toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        
-        document.getElementById('disp_usd_nacional').innerText = (sum_ext_usd).toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('disp_usd_inter').innerText = (sum_bill_usd).toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('disp_usd_noop').innerText = (sum_noop_usd).toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('disp_usd_terceros').innerText = (sum_terc_usd).toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        
-        // --- CALCULOS DISPONIBILIDAD USD (Según Excel) ---
-        let disp_usd_tot = sum_ext_usd + sum_bill_usd + sum_noop_usd + sum_terc_usd;
-        let elDispUsdTot = document.getElementById('disp_usd_tot');
-        if (elDispUsdTot) elDispUsdTot.innerText = disp_usd_tot.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('disp_bs_nac').innerText = fmt(sum_nac_usd);
+        document.getElementById('disp_usd_op').innerText = fmt(sum_op_usd);
+        document.getElementById('disp_usd_noop_nac').innerText = fmt(sum_fxnoop_usd);
+        document.getElementById('disp_usd_inter').innerText = fmt(sum_bill_usd);
+        document.getElementById('disp_usd_cerr').innerText = fmt(sum_cerr_usd);
+        document.getElementById('disp_usd_noop').innerText = fmt(sum_noop_usd);
 
-        let disp_usd_uso = sum_bill_usd + sum_terc_usd;
-        let elDispUsdUso = document.getElementById('disp_usd_uso');
-        if (elDispUsdUso) elDispUsdUso.innerText = disp_usd_uso.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        
+        let disp_usd_tot = sum_op_usd + sum_fxnoop_usd + sum_bill_usd + sum_cerr_usd + sum_noop_usd;
+        document.getElementById('disp_usd_tot').innerText = fmt(disp_usd_tot);
+        document.getElementById('disp_usd_uso').innerText = fmt(sum_op_usd + sum_bill_usd);
+
         let sum_plan_bs = 0, sum_plan_usd = 0;
         document.querySelectorAll('.calc-plan-bs').forEach(el => sum_plan_bs += window.parseLocalNumber(el.value) || 0);
         document.querySelectorAll('.calc-plan-usd').forEach(el => sum_plan_usd += window.parseLocalNumber(el.value) || 0);
-        document.getElementById('tot_plan_bs').innerText = sum_plan_bs.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('tot_plan_usd').innerText = sum_plan_usd.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('tot_plan_bs').innerText = fmt(sum_plan_bs);
+        document.getElementById('tot_plan_usd').innerText = fmt(sum_plan_usd);
 
-        // --- CALCULOS DISPONIBILIDAD BOLIVARES (Según Excel) ---
         let tasa_paralelo = window.parseLocalNumber(document.getElementById('tasa_paralelo').value) || 1;
+        let disp_bs_tot_bcv = sum_nac_usd;
+        document.getElementById('disp_bs_tot_bcv').innerText = fmt(disp_bs_tot_bcv);
 
-        // TOTAL DISPONIBILIDAD (TASA BCV) -> Suma de Bancas (USD)
-        let disp_bs_tot_bcv = sum_alto_usd + sum_bajo_usd;
-        document.getElementById('disp_bs_tot_bcv').innerText = disp_bs_tot_bcv.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
-        // TOTAL DISPONIBILIDAD (TASA PARALELO) -> Suma de Bancas (Bs) / Tasa Paralelo
-        let disp_bs_tot_par = tasa_paralelo > 0 ? (sum_alto_bs + sum_bajo_bs) / tasa_paralelo : 0;
-        document.getElementById('disp_bs_tot_par').innerText = disp_bs_tot_par.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        let disp_bs_tot_par = tasa_paralelo > 0 ? sum_nac_bs / tasa_paralelo : 0;
+        document.getElementById('disp_bs_tot_par').innerText = fmt(disp_bs_tot_par);
 
         // Descuentos / Retenciones
         let bloqueado = window.parseLocalNumber(document.querySelector('input[data-field="bloqueado_compra_divisas"]').value) || 0;
@@ -638,6 +625,15 @@ document.addEventListener('DOMContentLoaded', function() {
         
         let elBrecha = document.getElementById('brecha_porc');
         if(elBrecha) elBrecha.innerText = brecha_porc.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '%';
+
+        let elProyBs = document.getElementById('proy_bs_fondos');
+        if (elProyBs) elProyBs.innerText = fmt(disp_uso_bcv);
+        let elProyUsd = document.getElementById('proy_usd_fondos');
+        if (elProyUsd) elProyUsd.innerText = fmt(sum_op_usd + sum_bill_usd);
+        let elProyBsLiq = document.getElementById('proy_bs_liq');
+        if (elProyBsLiq) elProyBsLiq.innerText = fmt(disp_uso_bcv);
+        let elProyUsdLiq = document.getElementById('proy_usd_liq');
+        if (elProyUsdLiq) elProyUsdLiq.innerText = fmt(sum_op_usd + sum_bill_usd);
     }
 
     document.querySelectorAll('.report-input').forEach(input => {
@@ -666,7 +662,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 let bcv = window.parseLocalNumber(this.value) || 1;
                 if (bcv <= 0) return;
 
-                document.querySelectorAll('.calc-alto-bs, .calc-bajo-bs').forEach(bsInput => {
+                document.querySelectorAll('.calc-nac-bs').forEach(bsInput => {
                     let bsVal = window.parseLocalNumber(bsInput.value) || 0;
                     let usdVal = bsVal / bcv;
                     

@@ -17,57 +17,72 @@ class CuentasBancariasSeeder extends Seeder
                 ['banco' => 'BANESCO', 'titular' => 'DORAL', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'BANESCO', 'titular' => 'LNACEH', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'BANESCO', 'titular' => 'NUNES', 'color_tc' => '#ff0000', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BANESCO', 'titular' => 'GRUPO JENU', 'color_tc' => '#0070c0', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BANESCO', 'titular' => 'JOSE JEREZ', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'BANESCO', 'titular' => 'EURONISSI', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
+                ['banco' => 'BANESCO', 'titular' => 'GRUPO JENU', 'color_tc' => '#0070c0', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
+                ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JENU', 'color_tc' => '#0070c0', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
+                ['banco' => 'MERCANTIL', 'titular' => 'JRZ', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'BNC', 'titular' => 'GRUPO JRZ', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BNC', 'titular' => 'DORAL', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'BNC', 'titular' => 'LNACEH', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'BNC', 'titular' => 'L.S. CASHEA', 'color_tc' => '#ffff00', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JENU', 'color_tc' => '#0070c0', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'MERCANTIL', 'titular' => 'JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BBVA', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BANCARIBE', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BANCARIBE', 'titular' => 'JOSE JEREZ', 'color_tc' => '#ff0000', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BANCAMIGA', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
+                ['banco' => 'BANCARIBE', 'titular' => 'GRUPO JRZ', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
+                ['banco' => 'BANCARIBE', 'titular' => 'DORAL', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
+                ['banco' => 'VENEZUELA', 'titular' => 'GRUPO JRZ', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
+                ['banco' => 'VENEZUELA', 'titular' => 'DORAL', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
+                ['banco' => 'VENEZUELA', 'titular' => 'LNACEH', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
+                ['banco' => 'BBVA', 'titular' => 'LNACEH', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
+                ['banco' => 'BANCAMIGA', 'titular' => 'DORAL', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
+
+                ['banco' => 'BANESCO', 'titular' => 'JOSE JEREZ', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'BNC', 'titular' => 'DORAL', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'BANCARIBE', 'titular' => 'JOSE JEREZ', 'color_tc' => '#ff0000', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => false],
 
                 // =========================================================
-                // BANCA NACIONAL - BAJO MOVIMIENTO (Mostrar en principal: true)
+                // BANCA NACIONAL - BAJO MOVIMIENTO (ocultas del reporte diario)
                 // =========================================================
-                ['banco' => 'MERCANTIL', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'MERCANTIL', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'TESORO', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'TESORO', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'TESORO', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'TESORO', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'VENEZUELA', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'VENEZUELA', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'VENEZUELA', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'VENEZUELA', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BANCARIBE', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BANCAMIGA', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BBVA', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BNC', 'titular' => 'DORAL CASHEA', 'color_tc' => '#ffff00', 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BNC', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BNC', 'titular' => 'EURONISSI', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BANCARIBE', 'titular' => 'EURONISSI', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => true],
+                ['banco' => 'MERCANTIL', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'MERCANTIL', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'TESORO', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'TESORO', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'TESORO', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'TESORO', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'VENEZUELA', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'BANCAMIGA', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'BBVA', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'BNC', 'titular' => 'DORAL CASHEA', 'color_tc' => '#ffff00', 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'BNC', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'BNC', 'titular' => 'EURONISSI', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => false],
+                ['banco' => 'BANCARIBE', 'titular' => 'EURONISSI', 'color_tc' => null, 'cat' => 'BANCA NACIONAL - BAJO MOVIMIENTO', 'principal' => false],
 
                 // =========================================================
-                // BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA (Mostrar en principal: false)
+                // BANCA NACIONAL MONEDA EXTRANJERA — FONDOS OPERATIVOS
+                // =========================================================
+                ['banco' => 'BNC', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
+                ['banco' => 'BNC', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
+                ['banco' => 'BNC', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
+                ['banco' => 'BANCARIBE', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
+                ['banco' => 'BANCARIBE', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
+                ['banco' => 'TESORO', 'titular' => 'JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
+                ['banco' => 'TESORO', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
+                ['banco' => 'TESORO', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
+                ['banco' => 'BANCAMIGA', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
+
+                // =========================================================
+                // BANCA NACIONAL MONEDA EXTRANJERA — FONDOS NO OPERATIVOS
+                // =========================================================
+                ['banco' => 'BANESCO', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
+                ['banco' => 'BANESCO', 'titular' => 'GRUPO JENU', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
+                ['banco' => 'BANESCO', 'titular' => 'EURONISSI', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
+                ['banco' => 'BANESCO', 'titular' => 'NUNES', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
+
+                // =========================================================
+                // BANCA NACIONAL / TARJETAS (fuera del consolidado nuevo)
                 // =========================================================
                 ['banco' => 'BANESCO', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
-                ['banco' => 'BANESCO', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
-                ['banco' => 'BANESCO', 'titular' => 'NUNES', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'BANESCO', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
-                ['banco' => 'BANESCO', 'titular' => 'GRUPO JENU', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'BANESCO', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
-                ['banco' => 'BNC', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
-                ['banco' => 'BNC', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
-                ['banco' => 'BNC', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'BNC TIPO B', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'BNC TIPO A', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'TRJ BNC', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
-                ['banco' => 'BNC', 'titular' => 'L.S. CASHEA', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'BNC', 'titular' => 'DORAL CASHEA', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'MERCANTIL', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
@@ -75,17 +90,11 @@ class CuentasBancariasSeeder extends Seeder
                 ['banco' => 'BBVA USD', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'BBVA EUR', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'BBVA', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
-                ['banco' => 'BANCARIBE', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
-                ['banco' => 'BANCARIBE', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'BANCARIBE', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
-                ['banco' => 'TESORO', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'TESORO', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
-                ['banco' => 'TESORO', 'titular' => 'JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
-                ['banco' => 'TESORO', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'TRJ TESORO', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'VENEZUELA', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'VENEZUELA', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
-                ['banco' => 'BANCAMIGA', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
                 ['banco' => 'BANCAMIGA', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA', 'principal' => false],
 
                 // =========================================================
@@ -95,8 +104,9 @@ class CuentasBancariasSeeder extends Seeder
                 ['banco' => 'BINANCE', 'titular' => 'GRUPO JENU', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
                 ['banco' => 'WELLS FARGO', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
                 ['banco' => 'AMERANT', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
-                ['banco' => 'CITIZENS MM', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
-                ['banco' => 'CITIZENS CH', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
+
+                ['banco' => 'CITIZENS MM', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'CUENTAS INTERNACIONALES CERRADAS (FONDOS POR LIBERAR)', 'principal' => false],
+                ['banco' => 'CITIZENS CH', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'CUENTAS INTERNACIONALES CERRADAS (FONDOS POR LIBERAR)', 'principal' => false],
 
                 // =========================================================
                 // BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS (Mostrar en principal: false)
@@ -122,7 +132,8 @@ class CuentasBancariasSeeder extends Seeder
                 \App\Models\CuentaBancaria::updateOrCreate(
                     [
                         'banco' => $cuenta['banco'],
-                        'titular' => $cuenta['titular']
+                        'titular' => $cuenta['titular'],
+                        'categoria_reporte' => $cuenta['cat'],
                     ],
                     [
                         'color_tc' => $cuenta['color_tc'],

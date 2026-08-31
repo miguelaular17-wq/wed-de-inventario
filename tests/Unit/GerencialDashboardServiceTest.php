@@ -393,6 +393,50 @@ class GerencialDashboardServiceTest extends TestCase
         $this->assertSame(1, (int) $data['usuarios']->first()->movimientos);
     }
 
+    public function test_ajustes_unen_mismo_usuario_por_nombre_corto_y_cedula(): void
+    {
+        DB::table('clientes')->insert([
+            'cedula' => 'V30657986',
+            'nombre' => 'RICARDO DAVID GIMENEZ PAEZ',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('ajustes_inventario')->insert([
+            [
+                'sede' => 'DORAL',
+                'tipo_movimiento' => 'AJU',
+                'numero_documento' => 'A-1',
+                'fecha' => now()->toDateString(),
+                'codigo_producto' => 'P1',
+                'nombre_producto' => 'Uno',
+                'cantidad' => 1,
+                'costo_unitario' => 10,
+                'motivo' => 'Conteo',
+                'usuario' => 'RICARDO GIMENEZ',
+            ],
+            [
+                'sede' => 'DORAL',
+                'tipo_movimiento' => 'AJU',
+                'numero_documento' => 'A-2',
+                'fecha' => now()->toDateString(),
+                'codigo_producto' => 'P1',
+                'nombre_producto' => 'Uno',
+                'cantidad' => 1,
+                'costo_unitario' => 5,
+                'motivo' => 'Conteo',
+                'usuario' => '30657986',
+            ],
+        ]);
+
+        $periodo = app(GerencialDashboardService::class)->resolverPeriodo('mes', null, null);
+        $data = app(\App\Services\GerencialAnalyticsService::class)->ajustes($periodo, 'DORAL', null);
+
+        $this->assertCount(1, $data['usuarios']);
+        $this->assertSame('RICARDO DAVID GIMENEZ PAEZ', $data['usuarios']->first()->usuario);
+        $this->assertSame(2, (int) $data['usuarios']->first()->movimientos);
+        $this->assertEquals(15.0, (float) $data['usuarios']->first()->valor);
+    }
+
     public function test_inventario_abc_rota_por_unidades_y_top_20(): void
     {
         $ids = [];

@@ -29,13 +29,14 @@
         .bg-black { background-color: #000; color: #fff; }
         .bg-light-gray { background-color: #e5e7eb; }
         .bg-green { background-color: #dcfce7; }
+        .bg-lime { background-color: #c6efce; }
         .bg-white { background-color: #ffffff; }
         
         /* Legend Colors */
-        .color-orange { background-color: #f97316; }
-        .color-red { background-color: #ef4444; }
-        .color-yellow { background-color: #eab308; }
-        .color-blue { background-color: #3b82f6; }
+        .color-orange { background-color: #f4b183; }
+        .color-red { background-color: #ff0000; }
+        .color-yellow { background-color: #ffff00; }
+        .color-blue { background-color: #0070c0; }
         .color-white { background-color: #ffffff; }
 
         .text-right { text-align: right; }
@@ -148,10 +149,9 @@
                 <table class="thick-border" style="margin-top: 15px;">
                     <tr class="bg-light-gray"><th colspan="2">TIPO DE CUENTA</th></tr>
                     <tr><td class="text-center bg-white" style="width: 80%;">P.V/TRANSF/P.M</td><td class="color-orange" style="width: 20%;"></td></tr>
-                    <tr><td class="text-center bg-white">TERCEROS P.V/P.M</td><td class="color-red"></td></tr>
+                    <tr><td class="text-center bg-white">TERCEROS</td><td class="color-red"></td></tr>
                     <tr><td class="text-center bg-white">CASHEA</td><td class="color-yellow"></td></tr>
                     <tr><td class="text-center bg-white">AVANCES</td><td class="color-blue"></td></tr>
-                    <tr><td class="text-center bg-white">B/MOVIMIENTO</td><td class="color-white"></td></tr>
                 </table>
 
                 <!-- RESUMEN FINANCIERO -->
@@ -312,6 +312,47 @@
                             <td class="text-right text-success" style="font-weight: bold;">$ {{ number_format($o_bs / ($resumen->tasa_bcv_usd ?: 1), 2, ',', '.') }}</td>
                             <td class="text-right text-success thick-border-left thick-border-right" style="font-weight: bold;">$ {{ number_format($o_comision / ($resumen->tasa_bcv_usd ?: 1), 2, ',', '.') }}</td>
                             <td class="bg-white"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <!-- EGRESOS EN DIVISAS -->
+                <table class="thick-border" style="margin-top: 5px;">
+                    <thead>
+                        <tr class="bg-light-gray thick-border-bottom">
+                            <th colspan="4">EGRESOS EN DIVISAS</th>
+                        </tr>
+                        <tr style="font-size: 7px;">
+                            <th class="bg-lime" style="width: 18%;">USD</th>
+                            <th class="bg-light-gray" style="width: 22%;">BANCO</th>
+                            <th class="bg-light-gray" style="width: 22%;">TITULAR</th>
+                            <th class="bg-light-gray" style="width: 38%;">MOTIVO</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @php $d_usd = 0; @endphp
+                        @foreach($egresos_divisas as $d)
+                            @php $d_usd += $d->monto_usd; @endphp
+                            <tr>
+                                <td class="text-right bg-lime thick-border-left">$ {{ number_format($d->monto_usd, 2, ',', '.') }}</td>
+                                <td>{{ $d->banco }}</td>
+                                <td>{{ $d->titular }}</td>
+                                <td class="thick-border-right">{{ $d->motivo }}</td>
+                            </tr>
+                        @endforeach
+                        @for($i = count($egresos_divisas); $i < 3; $i++)
+                            <tr>
+                                <td class="text-right bg-lime thick-border-left">$ -</td>
+                                <td></td>
+                                <td></td>
+                                <td class="thick-border-right">&nbsp;</td>
+                            </tr>
+                        @endfor
+                    </tbody>
+                    <tfoot class="thick-border-top">
+                        <tr>
+                            <td class="text-right bg-lime thick-border-left" style="font-weight: bold;">$ {{ $d_usd > 0 ? number_format($d_usd, 2, ',', '.') : '-' }}</td>
+                            <td colspan="3" class="bg-white thick-border-right"></td>
                         </tr>
                     </tfoot>
                 </table>

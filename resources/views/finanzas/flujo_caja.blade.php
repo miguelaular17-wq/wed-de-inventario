@@ -363,7 +363,7 @@
                     <div class="color-indicator" style="background-color: #f4b183;"></div>
                 </div>
                 <div class="widget-row">
-                    <span class="widget-label">TERCEROS P.V/P.M</span>
+                    <span class="widget-label">TERCEROS</span>
                     <div class="color-indicator" style="background-color: #ff0000;"></div>
                 </div>
                 <div class="widget-row">
@@ -373,10 +373,6 @@
                 <div class="widget-row">
                     <span class="widget-label">AVANCES</span>
                     <div class="color-indicator" style="background-color: #0070c0;"></div>
-                </div>
-                <div class="widget-row">
-                    <span class="widget-label">B/MOVIMIENTO</span>
-                    <div class="color-indicator" style="background-color: #f1f5f9; border: 1px solid #e2e8f0;"></div>
                 </div>
             </div>
 
@@ -722,12 +718,11 @@
     </div>
 </div>
 
-    <!-- EGRESOS EN DIVISAS (no aparece en reportes) -->
+    <!-- EGRESOS EN DIVISAS -->
     <div class="dashboard-container" style="margin-top: 10px;">
         <h3 style="margin-bottom: 15px; color: #166534; display: flex; align-items: center; gap: 8px;">
             <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v20m-7-7h14m-14-6h14"/></svg>
             EGRESOS EN DIVISAS
-            <span style="font-size: 0.75rem; font-weight: 400; background: #dcfce7; color: #166534; padding: 2px 10px; border-radius: 20px; margin-left: 6px;">No incluidos en el reporte</span>
         </h3>
         <div class="panel" style="padding: 0; overflow: hidden; margin-bottom: 30px; border: 1.5px solid #dcfce7;">
             <div class="table-wrap">
