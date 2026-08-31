@@ -236,7 +236,7 @@ class PeriodoController extends Controller
         $filas = [];
         $totales = [
             'salario' => 0.0, 'horas_extras' => 0.0, 'inasistencias' => 0.0,
-            'adelantos' => 0.0, 'bonificaciones' => 0.0, 'prestamos' => 0.0, 'deducciones' => 0.0,
+            'adelantos' => 0.0, 'bonificaciones' => 0.0, 'ajustes_deduccion' => 0.0, 'prestamos' => 0.0, 'deducciones' => 0.0,
             'pagar_usd' => 0.0, 'pagar_bs' => 0.0,
         ];
 
@@ -257,6 +257,7 @@ class PeriodoController extends Controller
                 'inasistencias' => round((float) ($desglose['inasistencias'] ?? 0), 2),
                 'adelantos' => round((float) ($desglose['abonos_sueldo'] ?? 0), 2),
                 'bonificaciones' => $registro->montoBonificaciones(),
+                'ajustes_deduccion' => $registro->montoDeduccionesAjuste(),
                 'prestamos' => round((float) ($desglose['prestamos'] ?? 0), 2),
                 'deducciones' => round((float) $registro->total_deducciones, 2),
                 'pagar_usd' => round((float) $registro->total_pagar, 2),
@@ -282,21 +283,22 @@ class PeriodoController extends Controller
     {
         $cuerpo = array_map(fn ($f) => [
             $f['cedula'], $f['nombre'], $f['sede'],
-            $f['salario'], $f['horas_extras'], $f['inasistencias'], $f['adelantos'], $f['bonificaciones'], $f['prestamos'],
+            $f['salario'], $f['horas_extras'], $f['inasistencias'], $f['adelantos'], $f['bonificaciones'],
+            $f['ajustes_deduccion'], $f['prestamos'],
             $f['deducciones'], $f['pagar_usd'], $f['pagar_bs'],
         ], $filas);
 
         return array_merge(
             [[
                 'Cédula', 'Empleado', 'Sede',
-                'Salario USD', 'Horas extra', 'Ausencias', 'Adelantos', 'Bonificaciones', 'Préstamos',
+                'Salario USD', 'Horas extra', 'Ausencias', 'Adelantos', 'Bonificaciones', 'Deducciones', 'Préstamos',
                 'Total deducciones', 'Total Pagar USD', 'Total a Pagar BCV',
             ]],
             $cuerpo,
             [[
                 'TOTALES', count($filas).' trabajadores', '',
                 $totales['salario'], $totales['horas_extras'], $totales['inasistencias'],
-                $totales['adelantos'], $totales['bonificaciones'], $totales['prestamos'], $totales['deducciones'],
+                $totales['adelantos'], $totales['bonificaciones'], $totales['ajustes_deduccion'], $totales['prestamos'], $totales['deducciones'],
                 $totales['pagar_usd'], $totales['pagar_bs'],
             ]]
         );
@@ -360,7 +362,7 @@ class PeriodoController extends Controller
     {
         $totales = [
             'salario' => 0.0, 'horas_extras' => 0.0, 'inasistencias' => 0.0,
-            'adelantos' => 0.0, 'bonificaciones' => 0.0, 'prestamos' => 0.0, 'deducciones' => 0.0,
+            'adelantos' => 0.0, 'bonificaciones' => 0.0, 'ajustes_deduccion' => 0.0, 'prestamos' => 0.0, 'deducciones' => 0.0,
             'pagar_usd' => 0.0, 'pagar_bs' => 0.0,
         ];
         foreach ($filas as $fila) {
