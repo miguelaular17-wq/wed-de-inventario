@@ -16,7 +16,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use ZipArchive;
 
 class PeriodoController extends Controller
 {
@@ -308,48 +307,49 @@ class PeriodoController extends Controller
      */
     private function descargarZipPorSedeYArea(NominaPeriodo $periodo, array $filas, string $nombreBase, float $tasaBcv)
     {
-        $grupos = collect($filas)->groupBy('grupo_clave');
-        $tmp = tempnam(sys_get_temp_dir(), 'nomzip');
-        if ($tmp === false) {
-            return back()->withErrors(['periodo' => 'No se pudo armar el ZIP.']);
-        }
-        @unlink($tmp);
-        $zip = new ZipArchive;
-        if ($zip->open($tmp, ZipArchive::CREATE) !== true) {
-            return back()->withErrors(['periodo' => 'No se pudo armar el ZIP.']);
-        }
+        ini_set('memory_limit', '512M');
 
-        $logoPath = $this->logoNominaPdf();
-        foreach ($grupos as $grupoFilas) {
-            $lista = $grupoFilas->values()->all();
-            if ($lista === []) {
-                continue;
+        try {
+            $archivos = [];
+            $logoPath = $this->logoNominaPdf();
+            foreach (collect($filas)->groupBy('grupo_clave') as $grupoFilas) {
+                $lista = $grupoFilas->values()->all();
+                if ($lista === []) {
+                    continue;
+                }
+                $totales = $this->totalesDeFilas($lista);
+                $tipo = ($lista[0]['grupo_tipo'] ?? 'SEDE') === 'AREA' ? 'Area' : 'Sede';
+                $sedeNombre = (string) ($lista[0]['sede'] ?? 'sin_sede');
+                $pdf = Pdf::loadView('nomina.periodos.pdf-relacion', [
+                    'periodo' => $periodo,
+                    'filas' => $lista,
+                    'totales' => $totales,
+                    'tasaBcv' => $tasaBcv,
+                    'logoPath' => $logoPath,
+                    'grupoTitulo' => ($tipo === 'Area' ? 'Area' : 'Sede').': '.$sedeNombre,
+                ])->setPaper('a4', 'landscape');
+                $archivos[$tipo.'_'.$this->slugArchivo($sedeNombre).'.pdf'] = $pdf->output();
+                unset($pdf);
             }
-            $totales = $this->totalesDeFilas($lista);
-            $tipo = ($lista[0]['grupo_tipo'] ?? 'SEDE') === 'AREA' ? 'Area' : 'Sede';
-            $sedeNombre = (string) ($lista[0]['sede'] ?? 'sin_sede');
-            $pdf = Pdf::loadView('nomina.periodos.pdf-relacion', [
-                'periodo' => $periodo,
-                'filas' => $lista,
-                'totales' => $totales,
-                'tasaBcv' => $tasaBcv,
-                'logoPath' => $logoPath,
-                'grupoTitulo' => ($tipo === 'Area' ? 'Área' : 'Sede').': '.$sedeNombre,
-            ])->setPaper('a4', 'landscape');
-            $zip->addFromString(
-                $tipo.'_'.$this->slugArchivo($sedeNombre).'.pdf',
-                $pdf->output()
-            );
+
+            if ($archivos === []) {
+                return back()->withErrors(['periodo' => 'No hay recibos para armar el ZIP.']);
+            }
+
+            $binario = SimpleXlsxWriter::zipFiles($archivos);
+            if ($binario === '') {
+                return back()->withErrors(['periodo' => 'No se pudo armar el ZIP.']);
+            }
+
+            return response($binario, 200, [
+                'Content-Type' => 'application/zip',
+                'Content-Disposition' => 'attachment; filename="'.$nombreBase.'_por_sede_y_area.zip"',
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withErrors(['periodo' => 'No se pudo armar el ZIP.']);
         }
-
-        $zip->close();
-        $binario = file_get_contents($tmp) ?: '';
-        @unlink($tmp);
-
-        return response($binario, 200, [
-            'Content-Type' => 'application/zip',
-            'Content-Disposition' => 'attachment; filename="'.$nombreBase.'_por_sede_y_area.zip"',
-        ]);
     }
 
     /**
@@ -374,14 +374,16 @@ class PeriodoController extends Controller
 
     private function logoNominaPdf(): ?string
     {
-        foreach (['logo.png'] as $file) {
-            $path = public_path($file);
-            if (is_file($path)) {
-                return $path;
-            }
+        $path = public_path('logo.png');
+        if (! is_file($path)) {
+            return null;
+        }
+        $raw = @file_get_contents($path);
+        if ($raw === false || $raw === '') {
+            return null;
         }
 
-        return null;
+        return 'data:image/png;base64,'.base64_encode($raw);
     }
 
     private function slugArchivo(string $texto): string

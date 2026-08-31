@@ -43,4 +43,22 @@ class SimpleXlsxWriterTest extends TestCase
         $this->assertSame('PK', substr($bin, 0, 2));
         $this->assertNotSame('', $bin);
     }
+
+    public function test_zip_files_empaqueta_binarios(): void
+    {
+        $bin = SimpleXlsxWriter::zipFiles([
+            'Sede_Doral.pdf' => "%PDF-1.4\n%",
+            'Area_Marketing.pdf' => "%PDF-1.4\n%",
+        ]);
+
+        $this->assertSame('PK', substr($bin, 0, 2));
+        $tmp = tempnam(sys_get_temp_dir(), 'zipf');
+        file_put_contents($tmp, $bin);
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($tmp) === true);
+        $this->assertNotFalse($zip->locateName('Sede_Doral.pdf'));
+        $this->assertNotFalse($zip->locateName('Area_Marketing.pdf'));
+        $zip->close();
+        @unlink($tmp);
+    }
 }

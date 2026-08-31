@@ -35,6 +35,16 @@ class SimpleXlsxWriter
     }
 
     /**
+     * Empaqueta archivos en un ZIP (ext-zip o STORE puro si falla).
+     *
+     * @param  array<string, string>  $files
+     */
+    public static function zipFiles(array $files): string
+    {
+        return self::writeZip($files);
+    }
+
+    /**
      * @param  array<string, string>  $files
      */
     private static function writeZip(array $files): string
@@ -45,17 +55,21 @@ class SimpleXlsxWriter
                 // tempnam() crea un archivo vacío; ZipArchive en Linux a menudo
                 // no puede OVERWRITE ese archivo y lanza 500.
                 @unlink($tmp);
-                $zip = new ZipArchive;
-                if ($zip->open($tmp, ZipArchive::CREATE) === true) {
-                    foreach ($files as $name => $contents) {
-                        $zip->addFromString($name, $contents);
+                try {
+                    $zip = new ZipArchive;
+                    if ($zip->open($tmp, ZipArchive::CREATE) === true) {
+                        foreach ($files as $name => $contents) {
+                            $zip->addFromString($name, $contents);
+                        }
+                        $zip->close();
+                        $bin = file_get_contents($tmp) ?: '';
+                        @unlink($tmp);
+                        if ($bin !== '') {
+                            return $bin;
+                        }
                     }
-                    $zip->close();
-                    $bin = file_get_contents($tmp) ?: '';
+                } catch (\Throwable) {
                     @unlink($tmp);
-                    if ($bin !== '') {
-                        return $bin;
-                    }
                 }
                 @unlink($tmp);
             }
