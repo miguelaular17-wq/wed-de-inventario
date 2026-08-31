@@ -114,11 +114,17 @@
         }
     }
 
+    if ($u->role !== 'admin' && ! $u->canAccess('nomina') && $u->canAccess('nomina.equipo')) {
+        $nav[] = $link('Nómina del equipo', route('nomina.equipo.index'), request()->routeIs('nomina.equipo.*'));
+    }
+
     if ($u->role !== 'admin' && $u->canAccess('nomina')) {
         $nav[] = $drop('Nómina', [
             $link('Períodos', route('nomina.periodos.index'), request()->routeIs('nomina.periodos.*')),
             $link('Comisiones', route('nomina.comisiones.index'), request()->routeIs('nomina.comisiones.*')),
             $link('Adelantos', route('nomina.adelantos.index'), request()->routeIs('nomina.adelantos.*')),
+            $link('Deducciones y bonos', route('nomina.ajustes.index'), request()->routeIs('nomina.ajustes.index', 'nomina.ajustes.escritorio')),
+            $link('Horas extras', route('nomina.horas_extras.index'), request()->routeIs('nomina.horas_extras.index', 'nomina.horas_extras.masivas')),
             $link('Préstamos', route('nomina.prestamos.index'), request()->routeIs('nomina.prestamos.*')),
             $link('Empleados', route('nomina.empleados.index'), request()->routeIs('nomina.empleados.*')),
             $link('Organigrama', route('nomina.organizacion'), request()->routeIs('nomina.organizacion')),

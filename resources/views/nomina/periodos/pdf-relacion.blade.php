@@ -6,7 +6,10 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Helvetica, Arial, sans-serif; font-size: 10px; color: #1e293b; }
-        .header { width: 100%; margin-bottom: 14px; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px; }
+        .header { display: table; width: 100%; margin-bottom: 14px; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px; }
+        .header-logo { display: table-cell; vertical-align: middle; width: 120px; }
+        .header-logo img { height: 52px; width: auto; }
+        .header-titles { display: table-cell; vertical-align: middle; }
         h1 { font-size: 16px; color: #1e3a8a; text-transform: uppercase; }
         .sub { color: #64748b; margin-top: 4px; }
         table { width: 100%; border-collapse: collapse; }
@@ -19,14 +22,22 @@
 </head>
 <body>
     <div class="header">
-        <h1>Relación de nómina</h1>
-        <div class="sub">
-            Quincena {{ $periodo->etiqueta }}
-            · Estado {{ $periodo->estado }}
-            · Tasa BCV {{ number_format($tasaBcv, 2) }}
-            · {{ now()->format('d/m/Y H:i') }}
+        @if(!empty($logoPath))
+            <div class="header-logo"><img src="{{ $logoPath }}" alt="Logo"></div>
+        @endif
+        <div class="header-titles">
+            <h1>Relación de nómina</h1>
+            @if(!empty($grupoTitulo))
+                <div class="sub" style="font-weight:bold;color:#1e3a8a;">{{ $grupoTitulo }}</div>
+            @endif
+            <div class="sub">
+                Quincena {{ $periodo->etiqueta }}
+                · Estado {{ $periodo->estado }}
+                · Tasa BCV {{ number_format($tasaBcv, 2) }}
+                · {{ now()->format('d/m/Y H:i') }}
+            </div>
+            <div class="sub">Solo sueldo (salario, horas extras y deducciones). No incluye comisiones.</div>
         </div>
-        <div class="sub">Solo sueldo (salario, horas extras y deducciones). No incluye comisiones.</div>
     </div>
 
     <table>
@@ -34,17 +45,16 @@
             <tr>
                 <th>Cédula</th>
                 <th>Empleado</th>
-                <th>Empresa</th>
                 <th>Sede</th>
                 <th>Salario USD</th>
                 <th>Horas extra</th>
-                <th>IAS</th>
+                <th>Ausencias</th>
                 <th>Adelantos</th>
-                <th>Mercancía</th>
+                <th>Bonificaciones</th>
                 <th>Préstamos</th>
-                <th>Deducciones</th>
-                <th>A pagar USD</th>
-                <th>A pagar Bs</th>
+                <th>Total deducciones</th>
+                <th>Total Pagar USD</th>
+                <th>Total a Pagar BCV</th>
             </tr>
         </thead>
         <tbody>
@@ -52,13 +62,12 @@
                 <tr>
                     <td>{{ $fila['cedula'] }}</td>
                     <td>{{ $fila['nombre'] }}</td>
-                    <td>{{ $fila['empresa'] }}</td>
                     <td>{{ $fila['sede'] }}</td>
                     <td class="num">{{ number_format($fila['salario'], 2) }}</td>
                     <td class="num">{{ number_format($fila['horas_extras'], 2) }}</td>
                     <td class="num">{{ number_format($fila['inasistencias'], 2) }}</td>
                     <td class="num">{{ number_format($fila['adelantos'], 2) }}</td>
-                    <td class="num">{{ number_format($fila['mercancia'], 2) }}</td>
+                    <td class="num">{{ number_format($fila['bonificaciones'], 2) }}</td>
                     <td class="num">{{ number_format($fila['prestamos'], 2) }}</td>
                     <td class="num">{{ number_format($fila['deducciones'], 2) }}</td>
                     <td class="num">{{ number_format($fila['pagar_usd'], 2) }}</td>
@@ -66,12 +75,12 @@
                 </tr>
             @endforeach
             <tr class="tot">
-                <td colspan="4">Totales ({{ count($filas) }} trabajadores)</td>
+                <td colspan="3">Totales ({{ count($filas) }} trabajadores)</td>
                 <td class="num">{{ number_format($totales['salario'], 2) }}</td>
                 <td class="num">{{ number_format($totales['horas_extras'], 2) }}</td>
                 <td class="num">{{ number_format($totales['inasistencias'], 2) }}</td>
                 <td class="num">{{ number_format($totales['adelantos'], 2) }}</td>
-                <td class="num">{{ number_format($totales['mercancia'], 2) }}</td>
+                <td class="num">{{ number_format($totales['bonificaciones'], 2) }}</td>
                 <td class="num">{{ number_format($totales['prestamos'], 2) }}</td>
                 <td class="num">{{ number_format($totales['deducciones'], 2) }}</td>
                 <td class="num">{{ number_format($totales['pagar_usd'], 2) }}</td>

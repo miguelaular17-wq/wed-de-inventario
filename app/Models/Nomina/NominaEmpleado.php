@@ -206,6 +206,11 @@ class NominaEmpleado extends Model
         return $this->hasMany(NominaDeduccion::class, 'empleado_id')->orderByDesc('fecha')->orderByDesc('id');
     }
 
+    public function ajustes(): HasMany
+    {
+        return $this->hasMany(NominaEmpleadoAjuste::class, 'empleado_id')->orderByDesc('fecha')->orderByDesc('id');
+    }
+
     public static function modosComision(): array
     {
         return [

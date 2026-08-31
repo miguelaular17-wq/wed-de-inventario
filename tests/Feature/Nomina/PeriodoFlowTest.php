@@ -11,6 +11,7 @@ use App\Models\Nomina\NominaLiquidacionComision;
 use App\Models\Nomina\NominaPeriodo;
 use App\Models\Nomina\NominaPrestamoPlan;
 use App\Models\Nomina\NominaRegistro;
+use App\Models\Nomina\NominaSede;
 use App\Models\User;
 use Carbon\Carbon;
 use Tests\Concerns\CreatesNominaSchema;
@@ -107,8 +108,11 @@ class PeriodoFlowTest extends TestCase
         $zip->close();
         @unlink($tmp);
         $this->assertStringContainsString('Empleado Quincena', $sheet);
-        $this->assertStringContainsString('A pagar USD', $sheet);
+        $this->assertStringContainsString('Total Pagar USD', $sheet);
+        $this->assertStringContainsString('Ausencias', $sheet);
+        $this->assertStringContainsString('Total a Pagar BCV', $sheet);
         $this->assertStringNotContainsString('Comisión', $sheet);
+        $this->assertStringNotContainsString('Empresa', $sheet);
 
         $this->post(route('nomina.periodos.aprobar', $periodo))->assertRedirect();
         $this->assertSame(NominaPeriodo::APROBADO, $periodo->fresh()->estado);
@@ -511,5 +515,72 @@ class PeriodoFlowTest extends TestCase
         ]);
 
         Carbon::setTestNow();
+    }
+
+    public function test_zip_de_relacion_separa_sede_y_area(): void
+    {
+        $this->actingAs($this->rrhh);
+
+        $sede = NominaSede::create([
+            'nombre' => 'Doral',
+            'codigo' => 'DORAL',
+            'tipo' => 'SEDE',
+            'estado' => 'ACTIVO',
+        ]);
+        $area = NominaSede::create([
+            'nombre' => 'Marketing',
+            'codigo' => 'MARKETING',
+            'tipo' => 'AREA',
+            'estado' => 'ACTIVO',
+        ]);
+
+        $this->empleado->update(['sede_id' => $sede->id]);
+        $otro = NominaEmpleado::create([
+            'cliente_id' => Cliente::create(['cedula' => '27000002', 'nombre' => 'Persona Area'])->id,
+            'salario_base' => 100,
+            'tipo_salario' => 'QUINCENAL',
+            'estado' => 'ACTIVO',
+            'sede_id' => $area->id,
+        ]);
+
+        $periodo = NominaPeriodo::create([
+            'fecha_inicio' => '2026-07-16',
+            'fecha_fin' => '2026-07-31',
+            'etiqueta' => '16/07/2026 al 31/07/2026',
+            'estado' => NominaPeriodo::CALCULADO,
+        ]);
+        NominaRegistro::create([
+            'periodo_id' => $periodo->id,
+            'empleado_id' => $this->empleado->id,
+            'salario_base' => 800,
+            'total_pagar' => 800,
+        ]);
+        NominaRegistro::create([
+            'periodo_id' => $periodo->id,
+            'empleado_id' => $otro->id,
+            'salario_base' => 100,
+            'total_pagar' => 100,
+        ]);
+
+        $response = $this->get(route('nomina.periodos.relacion', ['periodo' => $periodo, 'formato' => 'zip']));
+        $response->assertOk();
+        $this->assertStringContainsString('zip', (string) $response->headers->get('content-disposition'));
+
+        $tmp = tempnam(sys_get_temp_dir(), 'ziprel');
+        file_put_contents($tmp, $response->getContent());
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($tmp) === true);
+        $nombres = [];
+        $pdfSede = '';
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $nombres[] = $zip->getNameIndex($i);
+        }
+        $pdfSede = (string) $zip->getFromName('Sede_Doral.pdf');
+        $zip->close();
+        @unlink($tmp);
+
+        $this->assertContains('Sede_Doral.pdf', $nombres);
+        $this->assertContains('Area_Marketing.pdf', $nombres);
+        $this->assertStringStartsWith('%PDF', $pdfSede);
     }
 }

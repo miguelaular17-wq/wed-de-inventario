@@ -9,7 +9,9 @@ use App\Models\Nomina\NominaHoraExtra;
 use App\Models\Nomina\NominaInasistencia;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class AttendanceService
@@ -20,7 +22,32 @@ class AttendanceService
 
     public function valorHoraEmpresa(): float
     {
-        return NominaConfig::getDecimal('valor_hora_extra');
+        return $this->valorHoraTrabajador();
+    }
+
+    public function valorHoraTrabajador(): float
+    {
+        if (NominaConfig::query()->find('valor_hora_extra_trabajador')) {
+            return NominaConfig::getDecimal('valor_hora_extra_trabajador', 1);
+        }
+
+        $legado = NominaConfig::getDecimal('valor_hora_extra', 1);
+
+        return $legado > 0 ? $legado : 1.0;
+    }
+
+    public function valorHoraSupervisor(): float
+    {
+        return NominaConfig::getDecimal('valor_hora_extra_supervisor', 1.5);
+    }
+
+    public function usaTarifaHoraSupervisor(NominaEmpleado $empleado): bool
+    {
+        return (bool) $empleado->es_supervisor
+            || in_array((string) $empleado->modo_comision, [
+                NominaEmpleado::COMISION_SUPERVISOR_SEDE,
+                NominaEmpleado::COMISION_SUPERVISOR_EQUIPO,
+            ], true);
     }
 
     public function valorDia(NominaEmpleado $empleado): float
@@ -28,17 +55,31 @@ class AttendanceService
         return round(((float) $empleado->salario_base) / 30, 2);
     }
 
-    public function valorHora(): float
+    public function valorHora(?NominaEmpleado $empleado = null): float
     {
-        return $this->valorHoraEmpresa();
+        if ($empleado && $this->usaTarifaHoraSupervisor($empleado)) {
+            return $this->valorHoraSupervisor();
+        }
+
+        return $this->valorHoraTrabajador();
     }
 
     public function guardarTarifasEmpresa(array $data): void
     {
-        NominaConfig::put('valor_hora_extra', round((float) $data['valor_hora_extra'], 2));
+        $trabajador = array_key_exists('valor_hora_extra_trabajador', $data)
+            ? round((float) $data['valor_hora_extra_trabajador'], 2)
+            : round((float) ($data['valor_hora_extra'] ?? $this->valorHoraTrabajador()), 2);
+        $supervisor = array_key_exists('valor_hora_extra_supervisor', $data)
+            ? round((float) $data['valor_hora_extra_supervisor'], 2)
+            : $this->valorHoraSupervisor();
+
+        NominaConfig::put('valor_hora_extra', $trabajador);
+        NominaConfig::put('valor_hora_extra_trabajador', $trabajador);
+        NominaConfig::put('valor_hora_extra_supervisor', $supervisor);
 
         NominaAuditLog::registrar('TARIFAS_EMPRESA', 'nomina_config', null, null, [
-            'valor_hora_extra' => round((float) $data['valor_hora_extra'], 2),
+            'valor_hora_extra_trabajador' => $trabajador,
+            'valor_hora_extra_supervisor' => $supervisor,
         ]);
     }
 
@@ -108,25 +149,30 @@ class AttendanceService
     {
         $fecha = Carbon::parse($data['fecha'] ?? now())->startOfDay();
         $horas = round((float) ($data['horas'] ?? 0), 2);
-        $valor = $this->valorHora();
+        $unidad = (($data['unidad'] ?? 'HORAS') === 'DIAS') ? 'DIAS' : 'HORAS';
+        $valor = $unidad === 'DIAS' ? $this->valorDia($empleado) : $this->valorHora($empleado);
 
         if ($horas <= 0) {
             throw ValidationException::withMessages([
-                'horas' => 'Las horas extras deben ser mayores a cero.',
+                'horas' => $unidad === 'DIAS'
+                    ? 'Los días extras deben ser mayores a cero.'
+                    : 'Las horas extras deben ser mayores a cero.',
             ]);
         }
 
         if ($valor <= 0) {
             throw ValidationException::withMessages([
-                'valor_hora_extra' => 'Define el valor por hora extra en Configuración de nómina antes de registrarlas.',
+                $unidad === 'DIAS' ? 'valor_dia' : 'valor_hora_extra' => $unidad === 'DIAS'
+                    ? 'El empleado debe tener un salario base mayor a cero para calcular el valor del día.'
+                    : 'Define el valor por hora extra en Configuración de nómina antes de registrarlas.',
             ]);
         }
 
         $quincena = $this->quincenas->quincenaDe($fecha);
         $monto = round($horas * $valor, 2);
 
-        return DB::transaction(function () use ($empleado, $data, $fecha, $horas, $valor, $monto, $quincena, $usuarioId) {
-            $row = NominaHoraExtra::create([
+        return DB::transaction(function () use ($empleado, $data, $fecha, $horas, $unidad, $valor, $monto, $quincena, $usuarioId) {
+            $payload = [
                 'empleado_id' => $empleado->id,
                 'fecha' => $fecha->toDateString(),
                 'horas' => $horas,
@@ -138,17 +184,93 @@ class AttendanceService
                 'estado' => 'PENDIENTE',
                 'motivo' => $data['motivo'] ?? null,
                 'created_by' => $usuarioId,
-            ]);
+            ];
+            if (Schema::hasColumn('nomina_horas_extras', 'unidad')) {
+                $payload['unidad'] = $unidad;
+            }
+
+            $row = NominaHoraExtra::create($payload);
 
             NominaAuditLog::registrar('HORA_EXTRA_CREAR', 'hora_extra', $row->id, null, [
                 'empleado_id' => $empleado->id,
                 'fecha' => $fecha->toDateString(),
+                'unidad' => $unidad,
                 'horas' => $horas,
                 'monto' => $monto,
             ]);
 
             return $row;
         });
+    }
+
+    public function empleadosDeSede(int $sedeId, string $alcance = 'TODOS'): Collection
+    {
+        $empleados = NominaEmpleado::query()
+            ->activos()
+            ->where('sede_id', $sedeId)
+            ->with(['cliente', 'sedeCatalogo', 'cargoCatalogo'])
+            ->join('clientes', 'clientes.id', '=', 'nomina_empleados.cliente_id')
+            ->select('nomina_empleados.*')
+            ->orderBy('clientes.nombre')
+            ->get();
+
+        if ($alcance === 'SUPERVISORES') {
+            return $empleados->filter(fn (NominaEmpleado $empleado) => $this->usaTarifaHoraSupervisor($empleado))->values();
+        }
+
+        if ($alcance === 'TRABAJADORES') {
+            return $empleados->filter(fn (NominaEmpleado $empleado) => ! $this->usaTarifaHoraSupervisor($empleado))->values();
+        }
+
+        return $empleados->values();
+    }
+
+    public function registrarHorasExtrasMasivas(array $empleadoIds, array $data, ?int $usuarioId = null): Collection
+    {
+        $sedeId = (int) ($data['sede_id'] ?? 0);
+        $alcance = (string) ($data['alcance'] ?? 'TODOS');
+        $ids = collect($empleadoIds)->map(fn ($id) => (int) $id)->unique()->filter();
+
+        if ($sedeId <= 0) {
+            throw ValidationException::withMessages([
+                'sede_id' => 'Elige la sede o área.',
+            ]);
+        }
+
+        $permitidos = $this->empleadosDeSede($sedeId, $alcance)->keyBy('id');
+        if ($ids->isEmpty()) {
+            $ids = $permitidos->keys();
+        }
+
+        $seleccionados = $ids
+            ->map(fn (int $id) => $permitidos->get($id))
+            ->filter();
+
+        if ($seleccionados->isEmpty()) {
+            throw ValidationException::withMessages([
+                'empleado_ids' => 'Selecciona al menos una persona activa de esa sede.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($seleccionados, $data, $usuarioId) {
+            return $seleccionados
+                ->map(fn (NominaEmpleado $empleado) => $this->registrarHorasExtras($empleado, $data, $usuarioId))
+                ->values();
+        });
+    }
+
+    public function extrasDelDia(Carbon|string $fecha, ?int $sedeId = null): Collection
+    {
+        $dia = Carbon::parse($fecha)->toDateString();
+
+        return NominaHoraExtra::query()
+            ->with(['empleado.cliente', 'empleado.sedeCatalogo', 'creador'])
+            ->whereDate('fecha', $dia)
+            ->when($sedeId, function ($query) use ($sedeId) {
+                $query->whereHas('empleado', fn ($empleado) => $empleado->where('sede_id', $sedeId));
+            })
+            ->orderByDesc('id')
+            ->get();
     }
 
     public function cancelarInasistencia(NominaInasistencia $row, ?string $motivo = null): NominaInasistencia
@@ -191,7 +313,8 @@ class AttendanceService
 
         return [
             'valor_dia' => $this->valorDia($empleado),
-            'valor_hora' => $this->valorHora(),
+            'valor_hora' => $this->valorHora($empleado),
+            'hora_supervisor' => $this->usaTarifaHoraSupervisor($empleado),
             'dias' => round((float) $ausencias->sum('cantidad'), 2),
             'monto_ausencias' => round((float) $ausencias->sum('monto'), 2),
             'horas' => round((float) $horas->sum('horas'), 2),

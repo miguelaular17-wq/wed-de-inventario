@@ -6,16 +6,25 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class NominaHoraExtra extends Model
+class NominaEmpleadoAjuste extends Model
 {
-    protected $table = 'nomina_horas_extras';
+    public const TIPO_DEDUCCION = 'DEDUCCION';
+    public const TIPO_BONIFICACION = 'BONIFICACION';
+
+    public const DESTINO_NOMINA = 'NOMINA';
+    public const DESTINO_COMISION = 'COMISION';
+
+    public const PENDIENTE = 'PENDIENTE';
+    public const APLICADO = 'APLICADO';
+    public const CANCELADO = 'CANCELADO';
+
+    protected $table = 'nomina_empleado_ajustes';
 
     protected $fillable = [
         'empleado_id',
         'fecha',
-        'horas',
-        'unidad',
-        'valor_unitario',
+        'tipo',
+        'destino',
         'monto',
         'quincena_inicio',
         'quincena_fin',
@@ -30,8 +39,6 @@ class NominaHoraExtra extends Model
         'fecha' => 'date',
         'quincena_inicio' => 'date',
         'quincena_fin' => 'date',
-        'horas' => 'decimal:2',
-        'valor_unitario' => 'decimal:2',
         'monto' => 'decimal:2',
     ];
 
@@ -47,16 +54,21 @@ class NominaHoraExtra extends Model
 
     public function isPendiente(): bool
     {
-        return $this->estado === 'PENDIENTE';
+        return $this->estado === self::PENDIENTE;
     }
 
-    public function esDias(): bool
+    public function esBonificacion(): bool
     {
-        return ($this->unidad ?? 'HORAS') === 'DIAS';
+        return $this->tipo === self::TIPO_BONIFICACION;
     }
 
-    public function etiquetaUnidad(): string
+    public function etiquetaTipo(): string
     {
-        return $this->esDias() ? 'Días' : 'Horas';
+        return $this->esBonificacion() ? 'Bonificación' : 'Deducción';
+    }
+
+    public function etiquetaDestino(): string
+    {
+        return $this->destino === self::DESTINO_COMISION ? 'Comisión' : 'Nómina';
     }
 }

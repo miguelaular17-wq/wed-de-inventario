@@ -2,6 +2,7 @@
 
 namespace App\Services\Nomina;
 
+use App\Models\Nomina\NominaEmpleadoAjuste;
 use App\Models\Nomina\NominaComisionAbono;
 use App\Models\Nomina\NominaComisionDescuento;
 use App\Models\Nomina\NominaConfig;
@@ -12,6 +13,10 @@ use Illuminate\Support\Facades\Schema;
 
 class CommissionSettlementService
 {
+    public function __construct(private AjusteService $ajustes)
+    {
+    }
+
     public function limpiarPeriodo(NominaPeriodo $periodo): void
     {
         if (Schema::hasTable('nomina_liquidaciones_comision')) {
@@ -46,8 +51,10 @@ class CommissionSettlementService
         array $calculo,
         float $prestamos = 0
     ): NominaLiquidacionComision {
-        $abonos = $this->aplicarAbonos($periodo, $empleado);
-        $descuentos = $this->aplicarDescuentos($periodo, $empleado);
+        $abonos = $this->aplicarAbonos($periodo, $empleado)
+            + $this->ajustes->aplicarComision($periodo, $empleado, NominaEmpleadoAjuste::TIPO_BONIFICACION);
+        $descuentos = $this->aplicarDescuentos($periodo, $empleado)
+            + $this->ajustes->aplicarComision($periodo, $empleado, NominaEmpleadoAjuste::TIPO_DEDUCCION);
         $comisionTotal = round((float) ($calculo['total'] ?? 0), 2);
         $bruto = round($comisionTotal + $abonos, 2);
         $retencionPct = NominaConfig::getDecimal('retencion_comision_pct', 10);

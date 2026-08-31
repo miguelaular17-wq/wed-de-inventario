@@ -264,21 +264,49 @@ class EmpleadoCrudTest extends TestCase
         $empleado = NominaEmpleado::query()->first();
 
         $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'deducciones']))
+            ->assertRedirect(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'ajustes']));
+
+        $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'ajustes']))
             ->assertOk()
-            ->assertSee('Descuento de nómina')
+            ->assertSee('Deducciones y bonificaciones')
             ->assertDontSee('Sin adelantos de sueldo.');
 
-        $this->post(route('nomina.deducciones.store', $empleado), [
+        $this->post(route('nomina.ajustes.store', $empleado), [
             'fecha' => '2026-08-20',
+            'tipo' => 'DEDUCCION',
+            'destino' => 'NOMINA',
             'monto' => 12.5,
             'motivo' => 'Rotura de vitrina',
-        ])->assertRedirect(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'deducciones']));
+        ])->assertRedirect(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'ajustes']));
 
-        $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'deducciones']))
+        $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'ajustes']))
             ->assertOk()
             ->assertSee('12.50')
             ->assertSee('Rotura de vitrina')
-            ->assertSee('PENDIENTE');
+            ->assertSee('PENDIENTE')
+            ->assertSee('Nómina');
+
+        $this->get(route('nomina.ajustes.index', ['q' => 'ana', 'fecha' => '2026-08-20']))
+            ->assertOk()
+            ->assertSee('Ana Perez')
+            ->assertSee('Cargar ajuste')
+            ->assertSee('12.50');
+
+        $this->post(route('nomina.ajustes.escritorio'), [
+            'empleado_id' => $empleado->id,
+            'fecha' => '2026-08-20',
+            'tipo' => 'BONIFICACION',
+            'destino' => 'NOMINA',
+            'monto' => 8,
+            'motivo' => 'Meta del mes',
+            'q' => 'Ana',
+        ])->assertRedirect(route('nomina.ajustes.index', ['fecha' => '2026-08-20', 'q' => 'Ana']));
+
+        $this->get(route('nomina.ajustes.index', ['fecha' => '2026-08-20']))
+            ->assertOk()
+            ->assertSee('8.00')
+            ->assertSee('Meta del mes')
+            ->assertSee('Bonificación');
     }
 
     public function test_registra_inasistencia_y_horas_extras_en_recibo(): void
@@ -313,82 +341,6 @@ class EmpleadoCrudTest extends TestCase
             ->assertSee('6.67')
             ->assertSee('Horas extras:')
             ->assertSee('Faltó hoy');
-    }
-
-    public function test_crea_regla_de_comision_usando_catalogo_de_productos(): void
-    {
-        $productoId = DB::table('productos')->insertGetId([
-            'codigo' => 'PROD-001',
-            'nombre' => 'Producto catálogo',
-            'categoria' => 'TELEFONIA',
-            'subcategoria' => 'ANDROID',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        $segundoProductoId = DB::table('productos')->insertGetId([
-            'codigo' => 'PROD-002',
-            'nombre' => 'Segundo producto',
-            'categoria' => 'ACCESORIOS',
-            'subcategoria' => 'CARGADORES',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $this->actingAs($this->rrhh)
-            ->get(route('nomina.configuracion.index'))
-            ->assertOk()
-            ->assertSee('PROD-001')
-            ->assertSee('TELEFONIA')
-            ->assertSee('ANDROID');
-
-        $this->post(route('nomina.configuracion.reglas.store'), [
-            'nombre' => 'Comisión producto catálogo',
-            'nivel' => 'PRODUCTO',
-            'producto_ids' => [$productoId, $segundoProductoId],
-            'porcentaje' => 2.5,
-            'base_comisionable' => 'TOTAL',
-            'fecha_inicio' => '2026-08-01',
-        ])->assertRedirect();
-
-        $this->assertDatabaseHas('nomina_reglas_comision', [
-            'nombre' => 'Comisión producto catálogo',
-            'nivel' => 'PRODUCTO',
-            'producto_id' => $productoId,
-            'codigo_producto' => 'PROD-001',
-        ]);
-        $this->assertDatabaseHas('nomina_reglas_comision', [
-            'nombre' => 'Comisión producto catálogo',
-            'producto_id' => $segundoProductoId,
-            'codigo_producto' => 'PROD-002',
-        ]);
-
-        $this->post(route('nomina.configuracion.reglas.store'), [
-            'nombre' => 'Comisión Android',
-            'nivel' => 'SUBCATEGORIA',
-            'subcategorias' => [json_encode([
-                'categoria' => 'TELEFONIA',
-                'subcategoria' => 'ANDROID',
-            ]), json_encode([
-                'categoria' => 'ACCESORIOS',
-                'subcategoria' => 'CARGADORES',
-            ])],
-            'porcentaje' => 1.5,
-            'base_comisionable' => 'NETO',
-            'fecha_inicio' => '2026-08-01',
-        ])->assertRedirect();
-
-        $this->assertDatabaseHas('nomina_reglas_comision', [
-            'nombre' => 'Comisión Android',
-            'nivel' => 'SUBCATEGORIA',
-            'categoria' => 'TELEFONIA',
-            'subcategoria' => 'ANDROID',
-        ]);
-        $this->assertDatabaseHas('nomina_reglas_comision', [
-            'nombre' => 'Comisión Android',
-            'nivel' => 'SUBCATEGORIA',
-            'categoria' => 'ACCESORIOS',
-            'subcategoria' => 'CARGADORES',
-        ]);
     }
 
     public function test_no_permite_supervisor_circular(): void

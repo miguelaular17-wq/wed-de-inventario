@@ -14,6 +14,7 @@ use App\Models\Nomina\NominaEmpresa;
 use App\Models\Nomina\NominaLiquidacionComision;
 use App\Models\Nomina\NominaSede;
 use App\Models\User;
+use App\Services\Nomina\AjusteService;
 use App\Services\Nomina\AttendanceService;
 use App\Services\Nomina\EmployeeSalesService;
 use App\Services\Nomina\EmployeeService;
@@ -40,6 +41,7 @@ class EmpleadoController extends Controller
         private EmployeeSalesService $sales,
         private MerchandiseDeductionService $mercancia,
         private OtherDeductionService $otrasDeducciones,
+        private AjusteService $ajustes,
     ) {
     }
 
@@ -137,12 +139,21 @@ class EmpleadoController extends Controller
         if (Schema::hasTable('nomina_deducciones')) {
             $relaciones[] = 'deducciones.creador';
         }
+        if (Schema::hasTable('nomina_empleado_ajustes')) {
+            $relaciones[] = 'ajustes.creador';
+        }
         $empleado->load($relaciones);
         if (! Schema::hasTable('nomina_deducciones')) {
             $empleado->setRelation('deducciones', collect());
         }
+        if (! Schema::hasTable('nomina_empleado_ajustes')) {
+            $empleado->setRelation('ajustes', collect());
+        }
 
         $tab = $request->query('tab', 'personal');
+        if ($tab === 'deducciones') {
+            return redirect()->route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'ajustes']);
+        }
         if ($tab === 'comisiones' && ! $empleado->generaComision()) {
             return redirect()->route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'mercancia']);
         }
@@ -216,6 +227,9 @@ class EmpleadoController extends Controller
                 })->orWhere(function ($q) use ($empleado) {
                     $q->where('entidad', 'deduccion')
                         ->whereIn('entidad_id', $empleado->deducciones->pluck('id')->all() ?: [0]);
+                })->orWhere(function ($q) use ($empleado) {
+                    $q->where('entidad', 'ajuste')
+                        ->whereIn('entidad_id', $empleado->ajustes->pluck('id')->all() ?: [0]);
                 });
             })
             ->with('user')
@@ -234,6 +248,7 @@ class EmpleadoController extends Controller
             'mercanciaPendiente' => $this->mercancia->pendientesDe($empleado),
             'resumenDeducciones' => $this->otrasDeducciones->resumenEmpleado($empleado),
             'deduccionesPendientes' => $this->otrasDeducciones->pendientesDe($empleado),
+            'resumenAjustes' => $this->ajustes->resumenEmpleado($empleado, $quincenaActual),
             'quincenaActual' => $quincenaActual,
             'asistencia' => $this->attendance->resumenQuincena($empleado),
             'ventasResumen' => $ventasResumen,

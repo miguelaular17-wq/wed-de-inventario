@@ -47,6 +47,7 @@
                 <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px;">
                     <a class="btn primary" href="{{ route('nomina.periodos.relacion', $periodo) }}">Descargar relación PDF</a>
                     <a class="btn" href="{{ route('nomina.periodos.relacion', ['periodo' => $periodo, 'formato' => 'xlsx']) }}">Descargar Excel</a>
+                    <a class="btn" href="{{ route('nomina.periodos.relacion', ['periodo' => $periodo, 'formato' => 'zip']) }}">ZIP PDF por sede y área</a>
                 </div>
             @endif
         </div>
@@ -97,8 +98,8 @@
                     <th>Horas extras</th>
                     <th>IAS</th>
                     <th>Adelantos</th>
-                    <th>Mercancía</th>
-                    <th>Otros desc.</th>
+                    <th>Bonificaciones</th>
+                    <th>Deducciones</th>
                     <th>Préstamos sueldo</th>
                     <th>Total deducciones</th>
                     <th>Nómina a pagar</th>
@@ -107,7 +108,7 @@
             <tbody>
                 @forelse($periodo->registros as $registro)
                     @php
-                        $desglose = json_decode($registro->observaciones ?: '{}', true) ?: [];
+                        $desglose = $registro->desglose();
                     @endphp
                     <tr>
                         <td>
@@ -137,8 +138,8 @@
                         <td>${{ number_format($desglose['horas_extras'] ?? 0, 2) }}</td>
                         <td>${{ number_format($desglose['inasistencias'] ?? 0, 2) }}</td>
                         <td>${{ number_format($desglose['abonos_sueldo'] ?? 0, 2) }}</td>
-                        <td>${{ number_format($desglose['mercancia'] ?? 0, 2) }}</td>
-                        <td>${{ number_format($desglose['otras_deducciones'] ?? 0, 2) }}</td>
+                        <td>${{ number_format($registro->montoBonificaciones(), 2) }}</td>
+                        <td>${{ number_format($registro->montoDeduccionesAjuste(), 2) }}</td>
                         <td>${{ number_format($desglose['prestamos'] ?? 0, 2) }}</td>
                         <td>${{ number_format($registro->total_deducciones, 2) }}</td>
                         <td><strong>${{ number_format($registro->total_pagar, 2) }}</strong></td>

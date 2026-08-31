@@ -19,6 +19,7 @@ use App\Http\Controllers\CompradorController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PedidoSolicitadoController;
 use App\Http\Controllers\Nomina\AbonoSueldoController;
+use App\Http\Controllers\Nomina\AjusteController;
 use App\Http\Controllers\Nomina\AttendanceController;
 use App\Http\Controllers\Nomina\CargoController;
 use App\Http\Controllers\Nomina\ComisionAjusteController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\Nomina\ComisionController;
 use App\Http\Controllers\Nomina\ConfiguracionController;
 use App\Http\Controllers\Nomina\DeduccionController;
 use App\Http\Controllers\Nomina\EmpleadoController;
+use App\Http\Controllers\Nomina\EquipoNominaController;
 use App\Http\Controllers\Nomina\MercanciaController;
 use App\Http\Controllers\Nomina\EmpresaNominaController;
 use App\Http\Controllers\Nomina\OrganizacionController;
@@ -269,6 +271,10 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::post('/abonos-sueldo/{abono}/cancelar', [AbonoSueldoController::class, 'cancelar'])->name('abonos_sueldo.cancelar');
     Route::post('/empleados/{empleado}/deducciones', [DeduccionController::class, 'store'])->name('deducciones.store');
     Route::post('/deducciones/{deduccion}/cancelar', [DeduccionController::class, 'cancelar'])->name('deducciones.cancelar');
+    Route::get('/ajustes', [AjusteController::class, 'index'])->name('ajustes.index');
+    Route::post('/ajustes', [AjusteController::class, 'storeEscritorio'])->name('ajustes.escritorio');
+    Route::post('/empleados/{empleado}/ajustes', [AjusteController::class, 'store'])->name('ajustes.store');
+    Route::post('/ajustes/{ajuste}/cancelar', [AjusteController::class, 'cancelar'])->name('ajustes.cancelar');
     Route::post('/empleados/{empleado}/mercancia', [MercanciaController::class, 'store'])->name('mercancia.store');
     Route::post('/mercancia/{descuento}/cancelar', [MercanciaController::class, 'cancelar'])->name('mercancia.cancelar');
     Route::post('/empleados/{empleado}/comision-abonos', [ComisionAjusteController::class, 'storeAbono'])->name('comision_abonos.store');
@@ -276,6 +282,8 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::post('/empleados/{empleado}/inasistencias', [AttendanceController::class, 'storeInasistencia'])->name('inasistencias.store');
     Route::post('/empleados/{empleado}/inasistencias/hoy', [AttendanceController::class, 'marcarFaltoHoy'])->name('inasistencias.hoy');
     Route::post('/inasistencias/{inasistencia}/cancelar', [AttendanceController::class, 'cancelarInasistencia'])->name('inasistencias.cancelar');
+    Route::get('/horas-extras', [AttendanceController::class, 'indexHorasExtras'])->name('horas_extras.index');
+    Route::post('/horas-extras', [AttendanceController::class, 'storeHorasExtrasMasivas'])->name('horas_extras.masivas');
     Route::post('/empleados/{empleado}/horas-extras', [AttendanceController::class, 'storeHorasExtras'])->name('horas_extras.store');
     Route::post('/horas-extras/{horaExtra}/cancelar', [AttendanceController::class, 'cancelarHorasExtras'])->name('horas_extras.cancelar');
 
@@ -295,8 +303,11 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
 
     Route::get('/configuracion', [ConfiguracionController::class, 'index'])->name('configuracion.index');
     Route::put('/configuracion', [ConfiguracionController::class, 'update'])->name('configuracion.update');
-    Route::post('/configuracion/reglas-comision', [ConfiguracionController::class, 'storeRegla'])->name('configuracion.reglas.store');
-    Route::delete('/configuracion/reglas-comision/{regla}', [ConfiguracionController::class, 'destroyRegla'])->name('configuracion.reglas.destroy');
+});
+
+Route::middleware(['auth', 'permission:nomina.equipo'])->prefix('nomina/equipo')->name('nomina.equipo.')->group(function () {
+    Route::get('/', [EquipoNominaController::class, 'index'])->name('index');
+    Route::get('/{periodo}', [EquipoNominaController::class, 'show'])->name('show');
 });
 
 // Notifications routes for all authenticated users

@@ -5,6 +5,7 @@ namespace App\Services\Nomina;
 use App\Models\Nomina\NominaAbonoSueldo;
 use App\Models\Nomina\NominaAuditLog;
 use App\Models\Nomina\NominaComisionDescuento;
+use App\Models\Nomina\NominaEmpleadoAjuste;
 use App\Models\Nomina\NominaDeduccion;
 use App\Models\Nomina\NominaDescuentoMercancia;
 use App\Models\Nomina\NominaEmpleado;
@@ -27,6 +28,7 @@ class PayrollPeriodService
         private CommissionCalculationService $commissions,
         private CommissionSettlementService $settlements,
         private LoanDiscountPlanService $loanPlans,
+        private AjusteService $ajustes,
     ) {
     }
 
@@ -174,7 +176,8 @@ class PayrollPeriodService
                 $desglose['prestamos_comision'] = $prestamosComision;
 
                 $salario = $this->salarioDelPeriodo($empleado);
-                $otrosIngresos = $desglose['horas_extras'];
+                $bonificacionesNomina = $desglose['bonificaciones_nomina'];
+                $otrosIngresos = $desglose['horas_extras'] + $bonificacionesNomina;
                 $totalDeducciones = $desglose['abonos_sueldo']
                     + $desglose['inasistencias']
                     + $desglose['mercancia']
@@ -187,10 +190,10 @@ class PayrollPeriodService
                     'empleado_id' => $empleado->id,
                     'salario_base' => $salario,
                     'total_comisiones' => $liquidacion?->total_pagar ?? 0,
-                    'total_bonificaciones' => 0,
+                    'total_bonificaciones' => $bonificacionesNomina,
                     'total_otros_ingresos' => $otrosIngresos,
                     'total_deducciones' => $totalDeducciones,
-                    'total_ajustes' => 0,
+                    'total_ajustes' => $bonificacionesNomina - $desglose['deducciones_ajuste_nomina'],
                     'total_pagar' => $totalPagar,
                     'observaciones' => json_encode($desglose, JSON_UNESCAPED_UNICODE),
                 ]);
@@ -505,14 +508,39 @@ class PayrollPeriodService
                 ->where('empleado_id', $empleado->id)
                 ->where('nomina_periodo_id', $periodo->id)
                 ->sum('monto'), 2),
-            'otras_deducciones' => Schema::hasTable('nomina_deducciones')
-                ? round((float) NominaDeduccion::query()
-                    ->where('empleado_id', $empleado->id)
-                    ->where('nomina_periodo_id', $periodo->id)
-                    ->sum('monto'), 2)
-                : 0.0,
+            'otras_deducciones' => $this->otrasDeduccionesNomina($periodo, $empleado),
+            'deducciones_ajuste_nomina' => $this->ajustes->totalAplicado(
+                $periodo,
+                $empleado,
+                NominaEmpleadoAjuste::DESTINO_NOMINA,
+                NominaEmpleadoAjuste::TIPO_DEDUCCION
+            ),
+            'bonificaciones_nomina' => $this->ajustes->totalAplicado(
+                $periodo,
+                $empleado,
+                NominaEmpleadoAjuste::DESTINO_NOMINA,
+                NominaEmpleadoAjuste::TIPO_BONIFICACION
+            ),
             'prestamos' => round((float) $prestamos, 2),
         ];
+    }
+
+    private function otrasDeduccionesNomina(NominaPeriodo $periodo, NominaEmpleado $empleado): float
+    {
+        $viejas = Schema::hasTable('nomina_deducciones')
+            ? (float) NominaDeduccion::query()
+                ->where('empleado_id', $empleado->id)
+                ->where('nomina_periodo_id', $periodo->id)
+                ->sum('monto')
+            : 0.0;
+        $ajustes = $this->ajustes->totalAplicado(
+            $periodo,
+            $empleado,
+            NominaEmpleadoAjuste::DESTINO_NOMINA,
+            NominaEmpleadoAjuste::TIPO_DEDUCCION
+        );
+
+        return round($viejas + $ajustes, 2);
     }
 
     private function salarioDelPeriodo(NominaEmpleado $empleado): float

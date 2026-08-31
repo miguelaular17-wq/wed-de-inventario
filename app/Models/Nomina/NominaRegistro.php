@@ -47,4 +47,31 @@ class NominaRegistro extends Model
     {
         return $this->hasMany(NominaAjuste::class, 'nomina_registro_id');
     }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function desglose(): array
+    {
+        return json_decode($this->observaciones ?: '{}', true) ?: [];
+    }
+
+    public function montoBonificaciones(): float
+    {
+        $desglose = $this->desglose();
+
+        return round((float) ($desglose['bonificaciones_nomina'] ?? $this->total_bonificaciones ?? 0), 2);
+    }
+
+    public function montoDeduccionesAjuste(): float
+    {
+        $desglose = $this->desglose();
+
+        return round(
+            (float) ($desglose['deducciones_ajuste_nomina'] ?? 0)
+            + (float) ($desglose['otras_deducciones'] ?? 0)
+            + (float) ($desglose['mercancia'] ?? 0),
+            2
+        );
+    }
 }

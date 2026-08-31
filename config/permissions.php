@@ -18,6 +18,7 @@ return [
         'contratos' => 'Contratos',
         'patrimonial' => 'Patrimonial',
         'nomina' => 'Nómina',
+        'nomina.equipo' => 'Nómina del equipo (tras calcular, sin comisiones)',
         'marketing.publicidad_equipo' => 'Ver publicidad del equipo',
         'gerencial' => 'Dashboard gerencial',
         'gerencial.devoluciones' => 'Devoluciones en ventas',
@@ -40,7 +41,7 @@ return [
         'Cobranza' => ['cobranza'],
         'Contratos' => ['contratos'],
         'Patrimonial' => ['patrimonial'],
-        'Nómina' => ['nomina'],
+        'Nómina' => ['nomina', 'nomina.equipo'],
         'Gerencial' => ['gerencial', 'gerencial.devoluciones', 'gerencial.valorizados', 'gerencial.ajustes', 'gerencial.rentabilidad'],
     ],
 

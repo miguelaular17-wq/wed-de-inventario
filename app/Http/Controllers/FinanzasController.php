@@ -1964,6 +1964,10 @@ class FinanzasController extends Controller
             }
             $resumen->$field = is_numeric($value) ? (float)$value : 0;
             $resumen->save();
+
+            if ($field === 'tasa_bcv_usd') {
+                $this->bcvRate->forgetTodayCache();
+            }
             
             if ($field === 'tasa_bcv_usd' && $resumen->tasa_bcv_usd > 0) {
                 $cuentas = \App\Models\CuentaBancaria::whereIn('categoria_reporte', [

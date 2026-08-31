@@ -17,7 +17,7 @@
         'nomina' => 'Nómina',
         'prestamos' => 'Préstamos',
         'abonos' => 'Adelantos',
-        'deducciones' => 'Deducciones',
+        'ajustes' => 'Deducciones y bonos',
     ];
     $proxima = $resumenPrestamos['proxima_cuota'] ?? null;
 @endphp
@@ -262,68 +262,11 @@
             </table>
         </div>
 
-        <div class="nomina-card" style="margin-top:16px;">
-            <h3>Bonificaciones</h3>
-            <form method="POST" action="{{ route('nomina.comision_abonos.store', $empleado) }}" class="nomina-form-grid">
-                @csrf
-                <div class="field"><label>Fecha</label><input type="date" name="fecha" value="{{ now()->format('Y-m-d') }}" required></div>
-                <div class="field"><label>Monto</label><input type="number" step="0.01" min="0.01" name="monto" required></div>
-                <div class="field field-wide"><label>Motivo</label><input name="motivo" placeholder="Meta, bono, etc."></div>
-                <div class="field" style="display:flex; align-items:flex-end;"><button class="btn primary" type="submit">Registrar abono</button></div>
-            </form>
-            <table class="data-table" style="margin-top:12px;">
-                <thead><tr><th>Fecha</th><th>Monto</th><th>Estado</th><th>Motivo</th></tr></thead>
-                <tbody>
-                    @forelse($abonosComision as $abono)
-                        <tr>
-                            <td>{{ $abono->fecha->format('d/m/Y') }}</td>
-                            <td>${{ number_format($abono->monto, 2) }}</td>
-                            <td>{{ $abono->estado }}</td>
-                            <td>{{ $abono->motivo ?: '—' }}</td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="4" class="muted">Sin abonos de comisión.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-        <div class="nomina-card" style="margin-top:16px;">
-            <h3>Descuento de comisión</h3>
-            <form method="POST" action="{{ route('nomina.comision_descuentos.store', $empleado) }}" class="nomina-form-grid">
-                @csrf
-                <div class="field"><label>Fecha</label><input type="date" name="fecha" value="{{ now()->format('Y-m-d') }}" required></div>
-                <div class="field">
-                    <label>Tipo</label>
-                    <select name="tipo" required>
-                        <option value="FALTANTE">Faltante</option>
-                        <option value="PERDIDA">Pérdida</option>
-                        <option value="DANO">Daño</option>
-                        <option value="OTRO">Otro</option>
-                        <option value="MERCANCIA">Mercancía</option>
-                    </select>
-                </div>
-                <div class="field"><label>Monto</label><input type="number" step="0.01" min="0.01" name="monto" required></div>
-                <div class="field field-wide"><label>Motivo</label><input name="motivo"></div>
-                <div class="field" style="display:flex; align-items:flex-end;"><button class="btn primary" type="submit">Registrar descuento</button></div>
-            </form>
-            <table class="data-table" style="margin-top:12px;">
-                <thead><tr><th>Fecha</th><th>Tipo</th><th>Monto</th><th>Estado</th><th>Motivo</th></tr></thead>
-                <tbody>
-                    @forelse($descuentosComision as $desc)
-                        <tr>
-                            <td>{{ $desc->fecha->format('d/m/Y') }}</td>
-                            <td>{{ $desc->tipo }}</td>
-                            <td>${{ number_format($desc->monto, 2) }}</td>
-                            <td>{{ $desc->estado }}</td>
-                            <td>{{ $desc->motivo ?: '—' }}</td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="5" class="muted">Sin descuentos de comisión.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+        <p class="muted" style="margin-top:16px;">
+            Bonificaciones y descuentos se cargan en
+            <a href="{{ route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'ajustes']) }}">Deducciones y bonos</a>,
+            eligiendo si van a nómina o a comisión.
+        </p>
 
         <div class="nomina-card" style="margin-top:16px;">
             <h3>Detalle de líneas</h3>
@@ -362,14 +305,14 @@
         @endphp
         <div class="nomina-recibo" style="margin-top:16px;">
             <h3>Estructura del recibo</h3>
-            <p class="muted">Quincena {{ $quincenaActual['etiqueta'] }}. Valor diario: ${{ number_format($asistencia['valor_dia'], 2) }} · hora extra: ${{ number_format($asistencia['valor_hora'], 2) }}.</p>
+            <p class="muted">Quincena {{ $quincenaActual['etiqueta'] }}. Valor diario: ${{ number_format($asistencia['valor_dia'], 2) }} · hora extra: ${{ number_format($asistencia['valor_hora'], 2) }}{{ ! empty($asistencia['hora_supervisor']) ? ' (supervisor)' : ' (trabajador)' }}.</p>
             <div class="nomina-split">
                 <div>
                     <h4>Ingresos</h4>
                     <ul>
                         <li>Salario mensual: ${{ number_format($empleado->salario_base, 2) }}</li>
                         <li>Horas extras: {{ $horasTxt }}</li>
-                        <li>Otros ingresos: —</li>
+                        <li>Bonificaciones de nómina: ${{ number_format($resumenAjustes['bonos'] ?? 0, 2) }}</li>
                     </ul>
                 </div>
                 <div>
@@ -379,7 +322,7 @@
                         <li>Préstamos (cuota): se aplicará al cerrar la quincena</li>
                         <li>Ausencias: {{ $ausenciasTxt }}</li>
                         @if($empleado->generaComision())
-                            <li>Otras deducciones: ${{ number_format($deduccionesPendientes ?? 0, 2) }}</li>
+                            <li>Otras deducciones: ${{ number_format(($deduccionesPendientes ?? 0) + ($resumenAjustes['pendiente_nomina'] ?? 0), 2) }}</li>
                         @else
                             <li>Mercancía pendiente: ${{ number_format($mercanciaPendiente, 2) }}</li>
                         @endif
@@ -430,28 +373,44 @@
             </tbody>
         </table>
 
-        <h3>Horas extras</h3>
-        <form method="POST" action="{{ route('nomina.horas_extras.store', $empleado) }}" class="nomina-form-grid">
+        <h3>Horas o días extras</h3>
+        <p class="muted" style="margin-top:0;">
+            Horas: {{ ! empty($asistencia['hora_supervisor']) ? 'supervisor $'.number_format($asistencia['valor_hora'], 2) : 'trabajador $'.number_format($asistencia['valor_hora'], 2) }}.
+            Días: salario ÷ 30 (${{ number_format($asistencia['valor_dia'] ?? 0, 2) }}).
+            <a href="{{ route('nomina.horas_extras.index', ['sede_id' => $empleado->sede_id]) }}">Aplicar a varios de la sede</a>
+        </p>
+        <form method="POST" action="{{ route('nomina.horas_extras.store', $empleado) }}" class="nomina-form-grid" id="form-extras">
             @csrf
             <div class="field"><label>Fecha</label><input type="date" name="fecha" value="{{ now()->format('Y-m-d') }}" required></div>
-            <div class="field"><label>Horas</label><input type="number" step="0.25" min="0.25" name="horas" required></div>
+            <div class="field">
+                <label>Tipo</label>
+                <select name="unidad" id="extra-unidad" onchange="sincronizarExtraUnidad()">
+                    <option value="HORAS">Horas</option>
+                    <option value="DIAS">Días</option>
+                </select>
+            </div>
+            <div class="field">
+                <label id="extra-cantidad-label">Horas</label>
+                <input type="number" step="0.25" min="0.25" name="horas" required>
+            </div>
             <div class="field field-wide"><label>Motivo</label><input name="motivo" placeholder="Opcional"></div>
-            <div class="field" style="display:flex; align-items:flex-end;"><button class="btn primary" type="submit">Registrar horas extras</button></div>
+            <div class="field" style="display:flex; align-items:flex-end;"><button class="btn primary" type="submit" id="extra-submit">Registrar extras</button></div>
         </form>
         <table class="data-table" style="margin-top:12px;">
-            <thead><tr><th>Fecha</th><th>Horas</th><th>Valor/hora</th><th>Monto</th><th>Estado</th><th>Motivo</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Cantidad</th><th>Tipo</th><th>Valor</th><th>Monto</th><th>Estado</th><th>Motivo</th><th></th></tr></thead>
             <tbody>
                 @forelse($empleado->horasExtras as $extra)
                     <tr>
                         <td>{{ $extra->fecha->format('d/m/Y') }}</td>
                         <td>{{ number_format($extra->horas, 2) }}</td>
+                        <td>{{ $extra->etiquetaUnidad() }}</td>
                         <td>${{ number_format($extra->valor_unitario, 2) }}</td>
                         <td>${{ number_format($extra->monto, 2) }}</td>
                         <td>{{ $extra->estado }}</td>
                         <td>{{ $extra->motivo ?: '—' }}</td>
                         <td>
                             @if($extra->isPendiente())
-                                <form method="POST" action="{{ route('nomina.horas_extras.cancelar', $extra) }}" onsubmit="return confirm('¿Cancelar estas horas extras?')">
+                                <form method="POST" action="{{ route('nomina.horas_extras.cancelar', $extra) }}" onsubmit="return confirm('¿Cancelar este extra?')">
                                     @csrf
                                     <button class="btn secondary" type="submit">Cancelar</button>
                                 </form>
@@ -459,10 +418,19 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="muted">Sin horas extras.</td></tr>
+                    <tr><td colspan="8" class="muted">Sin horas ni días extras.</td></tr>
                 @endforelse
             </tbody>
         </table>
+        <script>
+        function sincronizarExtraUnidad() {
+            const dias = document.getElementById('extra-unidad')?.value === 'DIAS';
+            const label = document.getElementById('extra-cantidad-label');
+            const btn = document.getElementById('extra-submit');
+            if (label) label.textContent = dias ? 'Días' : 'Horas';
+            if (btn) btn.textContent = dias ? 'Registrar días extras' : 'Registrar horas extras';
+        }
+        </script>
     @endif
 
     @if($tab === 'prestamos')
@@ -639,37 +607,60 @@
         <p class="muted" style="margin-top:8px;">Los adelantos no se eliminan. Al cerrar la quincena se descuentan del sueldo una sola vez.</p>
     @endif
 
-    @if($tab === 'deducciones')
-        <h3 style="margin-top:16px;">Descuento de nómina</h3>
-        <p class="muted">Cualquier descuento del sueldo por un motivo (daño, pérdida, acuerdo, etc.). Se resta una sola vez al calcular esa quincena. Adelantos, faltas, préstamos y mercancía siguen en sus pestañas.</p>
+    @if($tab === 'ajustes')
+        <h3 style="margin-top:16px;">Deducciones y bonificaciones</h3>
+        <p class="muted">
+            Quincena {{ $quincenaActual['etiqueta'] }}. Elige si es un descuento o un bono, y si se aplica en
+            <strong>nómina</strong> o en <strong>comisión</strong>. Queda en la ficha y se usa al calcular.
+            También puedes cargarlos desde
+            <a href="{{ route('nomina.ajustes.index') }}">Deducciones y bonos</a>.
+        </p>
         <div class="nomina-kpis" style="margin:12px 0;">
-            <div class="nomina-kpi"><span>Pendiente</span><strong>${{ number_format($resumenDeducciones['pendiente'] ?? 0, 2) }}</strong></div>
-            <div class="nomina-kpi"><span>Ya descontado</span><strong>${{ number_format($resumenDeducciones['descontado'] ?? 0, 2) }}</strong></div>
-            <div class="nomina-kpi"><span>Acumulado</span><strong>${{ number_format($resumenDeducciones['acumulado'] ?? 0, 2) }}</strong></div>
+            <div class="nomina-kpi"><span>Deducciones quincena</span><strong>${{ number_format($resumenAjustes['deducciones'] ?? 0, 2) }}</strong></div>
+            <div class="nomina-kpi"><span>Bonos quincena</span><strong>${{ number_format($resumenAjustes['bonos'] ?? 0, 2) }}</strong></div>
+            <div class="nomina-kpi"><span>Pendiente nómina</span><strong>${{ number_format($resumenAjustes['pendiente_nomina'] ?? 0, 2) }}</strong></div>
+            <div class="nomina-kpi"><span>Pendiente comisión</span><strong>${{ number_format($resumenAjustes['pendiente_comision'] ?? 0, 2) }}</strong></div>
         </div>
-        <form method="POST" action="{{ route('nomina.deducciones.store', $empleado) }}" class="nomina-form-grid">
+        <form method="POST" action="{{ route('nomina.ajustes.store', $empleado) }}" class="nomina-form-grid">
             @csrf
             <div class="field"><label>Fecha</label><input type="date" name="fecha" value="{{ now()->format('Y-m-d') }}" required></div>
+            <div class="field">
+                <label>Qué es</label>
+                <select name="tipo" required>
+                    <option value="DEDUCCION">Deducción</option>
+                    <option value="BONIFICACION">Bonificación</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Se aplica en</label>
+                <select name="destino" required>
+                    <option value="NOMINA">Nómina</option>
+                    @if($empleado->generaComision())
+                        <option value="COMISION">Comisión</option>
+                    @endif
+                </select>
+            </div>
             <div class="field"><label>Monto</label><input type="number" step="0.01" min="0.01" name="monto" required></div>
-            <div class="field field-wide"><label>Motivo</label><input name="motivo" placeholder="Ej. rotura de mercancía, acuerdo de pago…" required></div>
-            <div class="field" style="display:flex; align-items:flex-end;"><button class="btn primary" type="submit">Registrar descuento</button></div>
+            <div class="field field-wide"><label>Motivo</label><input name="motivo" placeholder="Meta, daño, acuerdo…" required></div>
+            <div class="field" style="display:flex; align-items:flex-end;"><button class="btn primary" type="submit">Registrar</button></div>
         </form>
 
-        <h3>Historial</h3>
+        <h3>Lo que lleva</h3>
         <table class="data-table">
-            <thead><tr><th>Fecha</th><th>Quincena</th><th>Monto</th><th>Motivo</th><th>Estado</th><th>Usuario</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Quincena</th><th>Tipo</th><th>Destino</th><th>Monto</th><th>Motivo</th><th>Estado</th><th></th></tr></thead>
             <tbody>
-                @forelse($empleado->deducciones as $item)
+                @forelse($empleado->ajustes as $item)
                     <tr>
                         <td>{{ $item->fecha->format('d/m/Y') }}</td>
                         <td>{{ $item->etiqueta }}</td>
-                        <td>${{ number_format($item->monto, 2) }}</td>
+                        <td>{{ $item->etiquetaTipo() }}</td>
+                        <td>{{ $item->etiquetaDestino() }}</td>
+                        <td>${{ number_format((float) $item->monto, 2) }}</td>
                         <td>{{ $item->motivo }}</td>
-                        <td>{{ $item->estado }}{{ $item->nomina_periodo_id ? ' · nómina #'.$item->nomina_periodo_id : '' }}</td>
-                        <td>{{ $item->creador?->name ?: '—' }}</td>
+                        <td>{{ $item->estado }}</td>
                         <td>
                             @if($item->isPendiente())
-                                <form method="POST" action="{{ route('nomina.deducciones.cancelar', $item) }}" onsubmit="return confirm('¿Cancelar este descuento? El historial se conserva.')">
+                                <form method="POST" action="{{ route('nomina.ajustes.cancelar', $item) }}" onsubmit="return confirm('¿Cancelar este ajuste? El historial se conserva.')">
                                     @csrf
                                     <button class="btn secondary" type="submit">Cancelar</button>
                                 </form>
@@ -677,7 +668,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="muted">Sin descuentos registrados.</td></tr>
+                    <tr><td colspan="8" class="muted">Sin deducciones ni bonificaciones.</td></tr>
                 @endforelse
             </tbody>
         </table>

@@ -28,21 +28,34 @@ class BcvRateService
     /**
      * Retorna la tasa BCV del día actual.
      * Orden de resolución:
-     *  1. Caché de Laravel (clave diaria).
-     *  2. API externa ve.dolarapi.com.
-     *  3. Último valor guardado en finanzas_resumen.
-     *  4. Valor de emergencia: 1.
+     *  1. Tasa del flujo de caja de hoy (finanzas_resumen.tasa_bcv_usd).
+     *  2. Caché de Laravel (clave diaria, API).
+     *  3. API externa ve.dolarapi.com.
+     *  4. Último valor guardado en finanzas_resumen (cualquier fecha).
+     *  5. Valor de emergencia: 1.
      */
     public function getRateForToday(): float
     {
         Profiler::start('BcvRateService::getRateForToday');
+
+        $fromFlujoHoy = $this->fetchFromDatabase(date('Y-m-d'));
+        if ($fromFlujoHoy !== null) {
+            Profiler::stop('BcvRateService::getRateForToday');
+            return $fromFlujoHoy;
+        }
+
         $cacheKey = 'tasa_bcv_' . date('Y-m-d');
 
         $result = Cache::remember($cacheKey, self::TTL_SECONDS, function () {
             return $this->fetchFromApi() ?? $this->fetchFromDatabase() ?? 1.0;
         });
         Profiler::stop('BcvRateService::getRateForToday');
-        return $result;
+        return (float) $result;
+    }
+
+    public function forgetTodayCache(): void
+    {
+        Cache::forget('tasa_bcv_' . date('Y-m-d'));
     }
 
     /**
@@ -69,19 +82,26 @@ class BcvRateService
     }
 
     /**
-     * Lee la tasa más reciente almacenada en finanzas_resumen.
-     * Sirve de fallback cuando la API no responde.
+     * Lee la tasa en finanzas_resumen (flujo de caja).
+     * Con $fecha: solo ese día. Sin $fecha: el registro más reciente.
      */
-    private function fetchFromDatabase(): ?float
+    private function fetchFromDatabase(?string $fecha = null): ?float
     {
         if (! \Illuminate\Support\Facades\Schema::hasTable('finanzas_resumen')) {
             return null;
         }
 
         Profiler::start('BcvRateService::fetchFromDatabase');
-        $ultimo = FinanzasResumen::orderBy('fecha', 'desc')->first();
-        $result = $ultimo ? (float) $ultimo->tasa_bcv_usd : null;
+        $query = FinanzasResumen::query()->where('tasa_bcv_usd', '>', 0);
+        if ($fecha !== null) {
+            $query->whereDate('fecha', $fecha);
+            $row = $query->first();
+        } else {
+            $row = $query->orderByDesc('fecha')->first();
+        }
+        $result = $row ? (float) $row->tasa_bcv_usd : null;
         Profiler::stop('BcvRateService::fetchFromDatabase');
+
         return $result;
     }
 }

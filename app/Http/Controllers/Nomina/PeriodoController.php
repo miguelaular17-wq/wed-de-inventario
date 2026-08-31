@@ -16,6 +16,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use ZipArchive;
 
 class PeriodoController extends Controller
 {
@@ -201,26 +202,13 @@ class PeriodoController extends Controller
         [$filas, $totales] = $this->filasRelacionNomina($periodo, $tasaBcv);
         $nombreBase = 'relacion_nomina_'.$periodo->id.'_'.$periodo->fecha_inicio?->format('Ymd');
 
+        if ($request->query('formato') === 'zip') {
+            return $this->descargarZipPorSedeYArea($periodo, $filas, $nombreBase, $tasaBcv);
+        }
+
         if ($request->query('formato') === 'xlsx') {
             $xlsx = SimpleXlsxWriter::toString([
-                'Nómina' => array_merge(
-                    [[
-                        'Cédula', 'Empleado', 'Empresa', 'Sede',
-                        'Salario USD', 'Horas extra', 'IAS', 'Adelantos', 'Mercancía', 'Préstamos',
-                        'Deducciones', 'A pagar USD', 'A pagar Bs',
-                    ]],
-                    array_map(fn ($f) => [
-                        $f['cedula'], $f['nombre'], $f['empresa'], $f['sede'],
-                        $f['salario'], $f['horas_extras'], $f['inasistencias'], $f['adelantos'], $f['mercancia'], $f['prestamos'],
-                        $f['deducciones'], $f['pagar_usd'], $f['pagar_bs'],
-                    ], $filas),
-                    [[
-                        'TOTALES', count($filas).' trabajadores', '', '',
-                        $totales['salario'], $totales['horas_extras'], $totales['inasistencias'],
-                        $totales['adelantos'], $totales['mercancia'], $totales['prestamos'], $totales['deducciones'],
-                        $totales['pagar_usd'], $totales['pagar_bs'],
-                    ]]
-                ),
+                'Nómina' => $this->hojaRelacion($filas, $totales),
             ]);
 
             return response($xlsx, 200, [
@@ -234,6 +222,8 @@ class PeriodoController extends Controller
             'filas' => $filas,
             'totales' => $totales,
             'tasaBcv' => $tasaBcv,
+            'logoPath' => $this->logoNominaPdf(),
+            'grupoTitulo' => null,
         ])->setPaper('a4', 'landscape');
 
         return $pdf->download($nombreBase.'.pdf');
@@ -247,23 +237,27 @@ class PeriodoController extends Controller
         $filas = [];
         $totales = [
             'salario' => 0.0, 'horas_extras' => 0.0, 'inasistencias' => 0.0,
-            'adelantos' => 0.0, 'mercancia' => 0.0, 'prestamos' => 0.0, 'deducciones' => 0.0,
+            'adelantos' => 0.0, 'bonificaciones' => 0.0, 'prestamos' => 0.0, 'deducciones' => 0.0,
             'pagar_usd' => 0.0, 'pagar_bs' => 0.0,
         ];
 
         $registros = $periodo->registros->sortBy(fn ($r) => mb_strtoupper($r->empleado?->nombre() ?? '', 'UTF-8'));
         foreach ($registros as $registro) {
-            $desglose = json_decode($registro->observaciones ?: '{}', true) ?: [];
+            $desglose = $registro->desglose();
+            $sede = $registro->empleado?->sedeCatalogo;
+            $sedeNombre = $sede?->nombre ?? $registro->empleado?->sede ?? 'Sin sede';
+            $sedeTipo = $sede?->tipo === 'AREA' ? 'AREA' : 'SEDE';
             $fila = [
                 'cedula' => $registro->empleado?->cedula() ?? '',
                 'nombre' => $registro->empleado?->nombre() ?? 'Sin nombre',
-                'empresa' => $registro->empleado?->nombreEmpresa() ?? '—',
-                'sede' => $registro->empleado?->nombreSede() ?? '—',
+                'sede' => $sedeNombre,
+                'grupo_tipo' => $sedeTipo,
+                'grupo_clave' => $sedeTipo.'|'.mb_strtoupper((string) ($sede?->codigo ?? $sedeNombre), 'UTF-8'),
                 'salario' => round((float) $registro->salario_base, 2),
                 'horas_extras' => round((float) ($desglose['horas_extras'] ?? 0), 2),
                 'inasistencias' => round((float) ($desglose['inasistencias'] ?? 0), 2),
                 'adelantos' => round((float) ($desglose['abonos_sueldo'] ?? 0), 2),
-                'mercancia' => round((float) ($desglose['mercancia'] ?? 0), 2),
+                'bonificaciones' => $registro->montoBonificaciones(),
                 'prestamos' => round((float) ($desglose['prestamos'] ?? 0), 2),
                 'deducciones' => round((float) $registro->total_deducciones, 2),
                 'pagar_usd' => round((float) $registro->total_pagar, 2),
@@ -275,11 +269,127 @@ class PeriodoController extends Controller
                     $totales[$k] = round($v + (float) $fila[$k], 2);
                 }
             }
-            $totales['pagar_usd'] = round($totales['pagar_usd'], 2);
-            $totales['pagar_bs'] = round($totales['pagar_bs'], 2);
         }
 
         return [$filas, $totales];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $filas
+     * @param  array<string, float>  $totales
+     * @return list<list<string|int|float|null>>
+     */
+    private function hojaRelacion(array $filas, array $totales): array
+    {
+        $cuerpo = array_map(fn ($f) => [
+            $f['cedula'], $f['nombre'], $f['sede'],
+            $f['salario'], $f['horas_extras'], $f['inasistencias'], $f['adelantos'], $f['bonificaciones'], $f['prestamos'],
+            $f['deducciones'], $f['pagar_usd'], $f['pagar_bs'],
+        ], $filas);
+
+        return array_merge(
+            [[
+                'Cédula', 'Empleado', 'Sede',
+                'Salario USD', 'Horas extra', 'Ausencias', 'Adelantos', 'Bonificaciones', 'Préstamos',
+                'Total deducciones', 'Total Pagar USD', 'Total a Pagar BCV',
+            ]],
+            $cuerpo,
+            [[
+                'TOTALES', count($filas).' trabajadores', '',
+                $totales['salario'], $totales['horas_extras'], $totales['inasistencias'],
+                $totales['adelantos'], $totales['bonificaciones'], $totales['prestamos'], $totales['deducciones'],
+                $totales['pagar_usd'], $totales['pagar_bs'],
+            ]]
+        );
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $filas
+     */
+    private function descargarZipPorSedeYArea(NominaPeriodo $periodo, array $filas, string $nombreBase, float $tasaBcv)
+    {
+        $grupos = collect($filas)->groupBy('grupo_clave');
+        $tmp = tempnam(sys_get_temp_dir(), 'nomzip');
+        if ($tmp === false) {
+            return back()->withErrors(['periodo' => 'No se pudo armar el ZIP.']);
+        }
+        @unlink($tmp);
+        $zip = new ZipArchive;
+        if ($zip->open($tmp, ZipArchive::CREATE) !== true) {
+            return back()->withErrors(['periodo' => 'No se pudo armar el ZIP.']);
+        }
+
+        $logoPath = $this->logoNominaPdf();
+        foreach ($grupos as $grupoFilas) {
+            $lista = $grupoFilas->values()->all();
+            if ($lista === []) {
+                continue;
+            }
+            $totales = $this->totalesDeFilas($lista);
+            $tipo = ($lista[0]['grupo_tipo'] ?? 'SEDE') === 'AREA' ? 'Area' : 'Sede';
+            $sedeNombre = (string) ($lista[0]['sede'] ?? 'sin_sede');
+            $pdf = Pdf::loadView('nomina.periodos.pdf-relacion', [
+                'periodo' => $periodo,
+                'filas' => $lista,
+                'totales' => $totales,
+                'tasaBcv' => $tasaBcv,
+                'logoPath' => $logoPath,
+                'grupoTitulo' => ($tipo === 'Area' ? 'Área' : 'Sede').': '.$sedeNombre,
+            ])->setPaper('a4', 'landscape');
+            $zip->addFromString(
+                $tipo.'_'.$this->slugArchivo($sedeNombre).'.pdf',
+                $pdf->output()
+            );
+        }
+
+        $zip->close();
+        $binario = file_get_contents($tmp) ?: '';
+        @unlink($tmp);
+
+        return response($binario, 200, [
+            'Content-Type' => 'application/zip',
+            'Content-Disposition' => 'attachment; filename="'.$nombreBase.'_por_sede_y_area.zip"',
+        ]);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $filas
+     * @return array<string, float>
+     */
+    private function totalesDeFilas(array $filas): array
+    {
+        $totales = [
+            'salario' => 0.0, 'horas_extras' => 0.0, 'inasistencias' => 0.0,
+            'adelantos' => 0.0, 'bonificaciones' => 0.0, 'prestamos' => 0.0, 'deducciones' => 0.0,
+            'pagar_usd' => 0.0, 'pagar_bs' => 0.0,
+        ];
+        foreach ($filas as $fila) {
+            foreach ($totales as $k => $v) {
+                $totales[$k] = round($v + (float) ($fila[$k] ?? 0), 2);
+            }
+        }
+
+        return $totales;
+    }
+
+    private function logoNominaPdf(): ?string
+    {
+        foreach (['logo.png'] as $file) {
+            $path = public_path($file);
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+
+        return null;
+    }
+
+    private function slugArchivo(string $texto): string
+    {
+        $texto = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $texto) ?: $texto;
+        $texto = (string) preg_replace('/[^A-Za-z0-9]+/', '_', $texto);
+
+        return trim($texto, '_') ?: 'sin_nombre';
     }
 
     private function volver(NominaPeriodo $periodo, string $status): RedirectResponse

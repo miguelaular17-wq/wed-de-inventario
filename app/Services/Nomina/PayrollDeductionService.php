@@ -16,6 +16,7 @@ class PayrollDeductionService
         private AttendanceService $attendance,
         private MerchandiseDeductionService $mercancia,
         private OtherDeductionService $otrasDeducciones,
+        private AjusteService $ajustes,
     ) {
     }
 
@@ -25,6 +26,7 @@ class PayrollDeductionService
         $this->attendance->aplicarAPeriodo($periodoId, $inicio, $fin);
         $this->mercancia->aplicarAPeriodo($periodoId, $inicio, $fin);
         $this->otrasDeducciones->aplicarAPeriodo($periodoId, $inicio, $fin);
+        $this->ajustes->aplicarNominaAPeriodo($periodoId, $inicio, $fin);
     }
 
     /**
@@ -137,5 +139,6 @@ class PayrollDeductionService
         $this->attendance->deshacerPeriodo($periodoId);
         $this->mercancia->deshacerPeriodo($periodoId);
         $this->otrasDeducciones->deshacerPeriodo($periodoId);
+        $this->ajustes->deshacerPeriodo($periodoId);
     }
 }

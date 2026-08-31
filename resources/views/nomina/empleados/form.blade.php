@@ -55,6 +55,7 @@
                         <option value="{{ $user->id }}" @selected(old('user_id', $empleado?->user_id) == $user->id)>{{ $user->name }} ({{ $user->role }})</option>
                     @endforeach
                 </select>
+                <small class="muted">Obligatorio en supervisores: así el permiso de nómina del equipo sabe quién es.</small>
             </div>
         </div>
 

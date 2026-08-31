@@ -534,6 +534,7 @@ trait CreatesNominaSchema
                 $table->unsignedBigInteger('empleado_id');
                 $table->date('fecha');
                 $table->decimal('horas', 8, 2);
+                $table->string('unidad', 8)->default('HORAS');
                 $table->decimal('valor_unitario', 12, 2);
                 $table->decimal('monto', 12, 2);
                 $table->date('quincena_inicio');
@@ -542,6 +543,37 @@ trait CreatesNominaSchema
                 $table->string('estado', 16)->default('PENDIENTE');
                 $table->unsignedBigInteger('nomina_periodo_id')->nullable();
                 $table->text('motivo')->nullable();
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasTable('nomina_ajustes')) {
+            Schema::create('nomina_ajustes', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('nomina_registro_id');
+                $table->string('tipo', 24);
+                $table->string('concepto');
+                $table->decimal('monto', 12, 2);
+                $table->unsignedBigInteger('usuario_id')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasTable('nomina_empleado_ajustes')) {
+            Schema::create('nomina_empleado_ajustes', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('empleado_id');
+                $table->date('fecha');
+                $table->string('tipo', 16);
+                $table->string('destino', 16)->default('NOMINA');
+                $table->decimal('monto', 12, 2);
+                $table->date('quincena_inicio');
+                $table->date('quincena_fin');
+                $table->string('etiqueta', 64);
+                $table->string('estado', 16)->default('PENDIENTE');
+                $table->unsignedBigInteger('nomina_periodo_id')->nullable();
+                $table->text('motivo');
                 $table->unsignedBigInteger('created_by')->nullable();
                 $table->timestamps();
             });
@@ -595,6 +627,8 @@ trait CreatesNominaSchema
             'nomina_config',
             'nomina_abonos_sueldo',
             'nomina_descuentos_mercancia',
+            'nomina_empleado_ajustes',
+            'nomina_ajustes',
             'nomina_deducciones',
             'nomina_prestamo_planes',
             'nomina_prestamo_abonos',

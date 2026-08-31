@@ -4,6 +4,7 @@ namespace App\Services\Nomina;
 
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaSede;
+use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -196,5 +197,61 @@ class OrganizationService
         }
 
         return false;
+    }
+
+    public function empleadoDelUsuario(User $user): ?NominaEmpleado
+    {
+        return NominaEmpleado::query()
+            ->with(['cliente', 'sedeCatalogo', 'cargoCatalogo'])
+            ->where('user_id', $user->id)
+            ->first();
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function idsPersonalACargo(User $user): array
+    {
+        $yo = $this->empleadoDelUsuario($user);
+        if (! $yo) {
+            return [];
+        }
+
+        $ids = NominaEmpleado::query()
+            ->where('supervisor_id', $yo->id)
+            ->pluck('id');
+
+        if (Schema::hasTable('nomina_empleado_supervisores')) {
+            $ids = $ids->merge($yo->equipo()->pluck('nomina_empleados.id'));
+        }
+
+        foreach ($this->tree() as $nodo) {
+            $esGerente = $nodo['gerentes']->contains('id', $yo->id);
+            $esSupervisor = $nodo['supervisores']->contains('id', $yo->id);
+
+            if ($esGerente) {
+                $ids = $ids
+                    ->merge($nodo['supervisores']->pluck('id'))
+                    ->merge($nodo['equipo']->pluck('id'))
+                    ->merge($nodo['grupos']->flatMap(fn (array $grupo) => $grupo['empleados']->pluck('id')))
+                    ->merge($nodo['sin_supervisor']->pluck('id'));
+            } elseif ($esSupervisor) {
+                if ($nodo['sede']->isArea()) {
+                    $grupo = $nodo['grupos']->first(fn (array $item) => (int) $item['supervisor']->id === (int) $yo->id);
+                    if ($grupo) {
+                        $ids = $ids->merge($grupo['empleados']->pluck('id'));
+                    }
+                } else {
+                    $ids = $ids->merge($nodo['equipo']->pluck('id'));
+                }
+            }
+        }
+
+        return $ids
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->reject(fn (int $id) => $id === (int) $yo->id)
+            ->values()
+            ->all();
     }
 }
