@@ -79,7 +79,7 @@ class InventarioController extends Controller
             }
 
             if (auth()->check() && auth()->user()->isTelefonia()) {
-                $whereClauses[] = "LOWER(p.categoria) IN ('telefonia', 'accesorios electronicos', 'accesorios tecnologicos', 'electronica')";
+                $whereClauses[] = 'LOWER(p.categoria) IN ('.$this->sqlCategoriasTelefonia().')';
             }
 
             $whereSql = implode(' AND ', $whereClauses);
@@ -213,7 +213,7 @@ class InventarioController extends Controller
             $stockUpdateMd5 = md5((string) $stockUpdatedAt);
 
             $isTelefonia = auth()->check() && auth()->user()->isTelefonia();
-            $roleKey = $isTelefonia ? '_telefonia' : '';
+            $roleKey = $isTelefonia ? '_telefonia_v2' : '';
 
             $cacheKeyCat = "inventario_cats_{$sede}_{$stockUpdateMd5}{$roleKey}";
             $categorias = \Illuminate\Support\Facades\Cache::remember($cacheKeyCat, 1800, function () use ($sede, $isTelefonia) {
@@ -231,7 +231,7 @@ class InventarioController extends Controller
                     });
 
                 if ($isTelefonia) {
-                    $query->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(p.categoria)'), ['telefonia', 'accesorios electronicos', 'accesorios tecnologicos', 'electronica']);
+                    $query->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(p.categoria)'), $this->categoriasTelefoniaLower());
                 }
 
                 return $query->distinct()
@@ -260,7 +260,7 @@ class InventarioController extends Controller
                 }
 
                 if ($isTelefonia) {
-                    $subQuery->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(p.categoria)'), ['telefonia', 'accesorios electronicos', 'accesorios tecnologicos', 'electronica']);
+                    $subQuery->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(p.categoria)'), $this->categoriasTelefoniaLower());
                 }
                 
                 return $subQuery->distinct()
@@ -524,5 +524,23 @@ class InventarioController extends Controller
             'changed' => $changed,
             'total_manual' => $totalManual,
         ]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function categoriasTelefoniaLower(): array
+    {
+        return array_map(
+            static fn (string $cat) => mb_strtolower(trim($cat), 'UTF-8'),
+            config('inventario.categorias_telefonia', [])
+        );
+    }
+
+    private function sqlCategoriasTelefonia(): string
+    {
+        return collect($this->categoriasTelefoniaLower())
+            ->map(fn (string $cat) => "'".str_replace("'", "''", $cat)."'")
+            ->implode(', ');
     }
 }

@@ -481,6 +481,11 @@ class GerencialDashboardServiceTest extends TestCase
         $this->assertLessThanOrEqual(20, $data['abc_pareto']->count());
         $this->assertSame(1, $data['abc_matriz']['A']['A']['productos']);
         $this->assertSame('Alpha', $data['abc_matriz']['A']['A']['items'][0]['nombre']);
+        $porCat = $data['abc_por_categoria']->keyBy('categoria');
+        $this->assertSame(85, (int) $porCat['HOGAR']->pct_rot);
+        $this->assertSame(85, (int) $porCat['HOGAR']->pct_ut);
+        $this->assertSame(15, (int) $porCat['CEL']->pct_rot);
+        $this->assertSame(15, (int) $porCat['CEL']->pct_ut);
 
         $hogar = app(\App\Services\GerencialAnalyticsService::class)->valorizados($periodo, 'DORAL', 'HOGAR', null);
         $this->assertSame(2, $hogar['abc_total']);

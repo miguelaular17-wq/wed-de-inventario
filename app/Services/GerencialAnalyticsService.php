@@ -608,6 +608,7 @@ class GerencialAnalyticsService
             'abc_resumen_margen' => ['A' => $this->abcResumenVacio(), 'B' => $this->abcResumenVacio(), 'C' => $this->abcResumenVacio()],
             'abc_pareto' => collect(),
             'abc_matriz' => $this->abcMatrizVacia(),
+            'abc_por_categoria' => collect(),
             'abc_alertas' => [],
             'abc_total' => 0,
         ];
@@ -647,6 +648,7 @@ class GerencialAnalyticsService
             'abc_resumen_margen' => ['A' => $this->abcResumenVacio(), 'B' => $this->abcResumenVacio(), 'C' => $this->abcResumenVacio()],
             'abc_pareto' => collect(),
             'abc_matriz' => $this->abcMatrizVacia(),
+            'abc_por_categoria' => collect(),
             'abc_alertas' => [],
             'abc_total' => 0,
         ];
@@ -741,6 +743,7 @@ class GerencialAnalyticsService
             'abc_resumen_margen' => $this->abc->resumen($porMargen),
             'abc_pareto' => $porRotacion->take(20)->values(),
             'abc_matriz' => $matriz,
+            'abc_por_categoria' => $this->abcPorCategoria($ventas),
             'abc_alertas' => array_slice($alertas, 0, 8),
             'abc_total' => $porRotacion->count(),
         ];
@@ -828,6 +831,63 @@ class GerencialAnalyticsService
         }
 
         return $out;
+    }
+
+    /**
+     * Participación de cada categoría en unidades (rotación) y en utilidad.
+     *
+     * @return \Illuminate\Support\Collection<int, object>
+     */
+    private function abcPorCategoria($ventas)
+    {
+        $grupos = collect($ventas)->groupBy(fn ($row) => trim((string) ($row->categoria ?? '')) ?: 'Sin categoría');
+        $totalUnd = (float) $grupos->sum(fn ($items) => $items->sum(fn ($row) => max(0.0, (float) $row->unidades)));
+        $totalUt = (float) $grupos->sum(fn ($items) => $items->sum(fn ($row) => max(0.0, (float) $row->utilidad)));
+        $filas = $grupos->map(function ($items, $nombre) use ($totalUnd, $totalUt) {
+            $und = (float) $items->sum(fn ($row) => max(0.0, (float) $row->unidades));
+            $ut = (float) $items->sum(fn ($row) => max(0.0, (float) $row->utilidad));
+            return (object) [
+                'categoria' => $nombre,
+                'unidades' => $und,
+                'utilidad' => $ut,
+                'pct_rot' => $totalUnd > 0 ? (int) round($und / $totalUnd * 100) : 0,
+                'pct_ut' => $totalUt > 0 ? (int) round($ut / $totalUt * 100) : 0,
+            ];
+        })->sortBy('categoria', SORT_NATURAL | SORT_FLAG_CASE)->values();
+
+        $maxRot = max(1, (int) $filas->max('pct_rot'));
+        $maxUt = max(1, (int) $filas->max('pct_ut'));
+
+        return $filas->map(function ($row) use ($maxRot, $maxUt) {
+            $row->color_rot = $this->calorParticipacion((int) $row->pct_rot, $maxRot);
+            $row->color_ut = $this->calorParticipacion((int) $row->pct_ut, $maxUt);
+
+            return $row;
+        });
+    }
+
+    /**
+     * @return array{bg:string, fg:string}
+     */
+    private function calorParticipacion(int $pct, int $max): array
+    {
+        $t = $max > 0 ? min(1.0, max(0.0, $pct / $max)) : 0.0;
+        if ($t < 0.5) {
+            $u = $t * 2;
+            $r = (int) round(244 + (255 - 244) * $u);
+            $g = (int) round(199 + (235 - 199) * $u);
+            $b = (int) round(195 + (156 - 195) * $u);
+        } else {
+            $u = ($t - 0.5) * 2;
+            $r = (int) round(255 + (146 - 255) * $u);
+            $g = (int) round(235 + (208 - 235) * $u);
+            $b = (int) round(156 + (80 - 156) * $u);
+        }
+
+        return [
+            'bg' => sprintf('#%02x%02x%02x', $r, $g, $b),
+            'fg' => $t >= 0.55 ? '#14532d' : '#7f1d1d',
+        ];
     }
 
     private function clasificar(int $diasSinVenta, float $meses): string

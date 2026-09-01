@@ -131,6 +131,48 @@
                         @endforeach
                     </tbody>
                 </table>
+                <h4 style="margin:14px 0 4px;font-size:.9rem;">Participación por categoría</h4>
+                <p class="muted" style="margin:0 0 6px;font-size:.75rem;">% de unidades y de utilidad del período.</p>
+                <div class="gerencial-abc-cat-wrap">
+                    <table class="data-table gerencial-abc-cat">
+                        <colgroup>
+                            <col>
+                            <col style="width:4.5rem">
+                            <col style="width:4.5rem">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>Categoría</th>
+                                <th>Rot %</th>
+                                <th>Ut %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($abc_por_categoria as $fila)
+                                <tr>
+                                    <td>{{ $fila->categoria }}</td>
+                                    <td style="background:{{ $fila->color_rot['bg'] }};color:{{ $fila->color_rot['fg'] }};">
+                                        {{ number_format($fila->pct_rot, 0, ',', '.') }}%
+                                    </td>
+                                    <td style="background:{{ $fila->color_ut['bg'] }};color:{{ $fila->color_ut['fg'] }};">
+                                        {{ number_format($fila->pct_ut, 0, ',', '.') }}%
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="3" class="muted">Sin ventas en el período.</td></tr>
+                            @endforelse
+                        </tbody>
+                        @if($abc_por_categoria->isNotEmpty())
+                            <tfoot>
+                                <tr>
+                                    <th>Total</th>
+                                    <th>100%</th>
+                                    <th>100%</th>
+                                </tr>
+                            </tfoot>
+                        @endif
+                    </table>
+                </div>
             </div>
         </div>
         <div class="table-wrap" style="margin-top:12px;">

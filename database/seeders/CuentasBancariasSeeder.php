@@ -17,7 +17,7 @@ class CuentasBancariasSeeder extends Seeder
                 ['banco' => 'BANESCO', 'titular' => 'DORAL', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'BANESCO', 'titular' => 'LNACEH', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'BANESCO', 'titular' => 'NUNES', 'color_tc' => '#ff0000', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'BANESCO', 'titular' => 'EURONISSI', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
+                ['banco' => 'BANESCO', 'titular' => 'EURONISSI', 'color_tc' => '#ff0000', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'BANESCO', 'titular' => 'GRUPO JENU', 'color_tc' => '#0070c0', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JENU', 'color_tc' => '#0070c0', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'MERCANTIL', 'titular' => 'JRZ', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
@@ -73,6 +73,9 @@ class CuentasBancariasSeeder extends Seeder
                 ['banco' => 'BANESCO', 'titular' => 'GRUPO JENU', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
                 ['banco' => 'BANESCO', 'titular' => 'EURONISSI', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
                 ['banco' => 'BANESCO', 'titular' => 'NUNES', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
+                ['banco' => 'BNC', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
+                ['banco' => 'BNC', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
+                ['banco' => 'BNC', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
 
                 // =========================================================
                 // BANCA NACIONAL / TARJETAS (fuera del consolidado nuevo)

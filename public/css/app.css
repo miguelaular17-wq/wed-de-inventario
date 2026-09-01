@@ -1664,6 +1664,39 @@ table.data-table tbody tr:hover {
     cursor: default;
     opacity: .55;
 }
+.gerencial-abc-cat-wrap {
+    max-height: 220px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+.gerencial-abc-cat {
+    table-layout: fixed;
+    min-width: 0 !important;
+    font-size: 0.72rem !important;
+}
+.gerencial-abc-cat th,
+.gerencial-abc-cat td {
+    padding: 3px 6px !important;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.gerencial-abc-cat thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.gerencial-abc-cat th:nth-child(2),
+.gerencial-abc-cat th:nth-child(3),
+.gerencial-abc-cat td:nth-child(2),
+.gerencial-abc-cat td:nth-child(3) {
+    text-align: right;
+    font-weight: 700;
+    width: 4.5rem;
+}
+.gerencial-abc-cat tfoot th { background: #e2e8f0; font-weight: 800; }
 .gerencial-sort {
     background: none;
     border: 0;

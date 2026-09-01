@@ -87,12 +87,10 @@ class ProductRepository
             mb_strtoupper(trim($category))
         );
 
-        $allowed = [
-            'TELEFONIA',
-            'ACCESORIOS ELECTRONICOS',
-            'ACCESORIOS TECNOLOGICOS',
-            'ELECTRONICA'
-        ];
+        $allowed = array_map(
+            static fn (string $cat) => mb_strtoupper(trim($cat), 'UTF-8'),
+            config('inventario.categorias_telefonia', [])
+        );
 
         return in_array($normalized, $allowed, true);
     }

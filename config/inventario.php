@@ -64,4 +64,21 @@ return [
 
     /** Sedes que no se ofrecen en el filtro del catálogo. */
     'catalogo_sedes_ocultas' => ['NUNES', 'MOVISTAR', 'JRZ'],
+
+    /**
+     * Categorías visibles para el rol telefonía (Ventas / Inventario),
+     * alineadas con el grupo de la web y de comisiones.
+     */
+    'categorias_telefonia' => [
+        'TELEFONIA',
+        'ACCESORIOS TECNOLOGICOS',
+        'ACCESORIOS ELECTRONICOS',
+        'ELECTRONICA',
+        'AMAZFIT',
+        'ARGOM',
+        'BLACKVIEW',
+        'FORROS',
+        'INVICTA',
+        'RELOJES INTELIGENTES',
+    ],
 ];

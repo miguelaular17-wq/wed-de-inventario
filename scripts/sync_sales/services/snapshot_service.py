@@ -193,6 +193,22 @@ class SnapshotService:
                 logger.info(f"[Snapshot] No hay datos conocidos para actualizar (omitidos {skipped} desconocidos).")
                 return True
 
+            pids_vistos = list(pid_stock_map.keys())
+            if pids_vistos:
+                wc.execute(
+                    """
+                    UPDATE inventario_v2.productos
+                    SET activo = true, updated_at = NOW()
+                    WHERE id = ANY(%s)
+                      AND COALESCE(activo, false) = false
+                    """,
+                    (pids_vistos,),
+                )
+                reactivados = wc.rowcount
+                web_conn.commit()
+                if reactivados:
+                    logger.info(f"[Snapshot] Reactivados {reactivados} productos que estaban inactivos en la web.")
+
             logger.info(f"[Snapshot] Preparados {len(stock_tuples)} productos conocidos. Enviando...")
             
             updates_tuples = []
