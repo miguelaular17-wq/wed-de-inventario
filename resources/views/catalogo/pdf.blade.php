@@ -3,6 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <title>Catálogo de Productos</title>
+@php
+    use App\Support\VentaDescuento;
+    $descEtiqueta = VentaDescuento::etiqueta();
+    $netoFactor = VentaDescuento::factorNeto();
+@endphp
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -246,8 +251,8 @@
                             <td class="price-val">${{ number_format($prod->precio_mayor, 2) }}</td>
                         </tr>
                         <tr>
-                            <td>P. Divisa (-20%):</td>
-                            <td class="price-val">${{ number_format($prod->precio_unidad * 0.80, 2) }}</td>
+                            <td>P. Divisa (-{{ $descEtiqueta }}):</td>
+                            <td class="price-val">${{ number_format($prod->precio_unidad * $netoFactor, 2) }}</td>
                         </tr>
                     </table>
                 </div>

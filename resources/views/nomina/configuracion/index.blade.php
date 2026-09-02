@@ -37,6 +37,10 @@
                 <input type="number" step="0.0001" min="0" max="100" name="comision_marketing_pct" value="{{ number_format($comisionMarketingPct, 4, '.', '') }}" required>
             </div>
             <div class="field">
+                <label>Comisión Nunes — venta total sede (%)</label>
+                <input type="number" step="0.0001" min="0" max="100" name="comision_nunes_pct" value="{{ number_format($comisionNunesPct, 4, '.', '') }}" required>
+            </div>
+            <div class="field">
                 <label>Telefonía (%)</label>
                 <input type="number" step="0.0001" min="0" max="100" name="comision_telefonia_pct" value="{{ number_format($comisionTelefoniaPct, 4, '.', '') }}" required>
             </div>
@@ -52,7 +56,7 @@
                 <label>Participación Servicio Técnico (%)</label>
                 <input type="number" step="0.01" min="0" max="100" name="comision_servicio_tecnico_pct" value="{{ number_format($comisionServicioTecnicoPct, 2, '.', '') }}" required>
             </div>
-            <div class="field field-wide muted">Ventas propias y supervisores: venta neta (cantidad × precio neto, igual que gerencial y Profit). Técnico: 058 solo contra líneas ST; el resto de su vendedor se comisiona igual que ventas propias.</div>
+            <div class="field field-wide muted">Ventas propias y Movistar: venta neta (cantidad × precio neto, igual que gerencial y Profit). Movistar no incluye facturas ST de Virtudes ni Movistar. Técnico: comisiona ST solo en Virtudes/Movistar; 058 contra esas líneas. Nunes: {{ number_format($comisionNunesPct, 2) }}% sobre venta neta total de la sede Nunes.</div>
             <div class="field" style="display:flex; align-items:flex-end;">
                 <button class="btn primary" type="submit">Guardar</button>
             </div>

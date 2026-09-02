@@ -41,6 +41,9 @@ return [
     'minimo_sugerido_ventas' => 3,
     'minimo_inv_solicitar' => 6,
 
+    /** Descuento estándar de venta (catálogo, vendedor, respaldo sin precio_neto). */
+    'descuento_venta_pct' => 25,
+
     'req_colores' => ['Todos', 'Verde', 'Amarillo', 'Rojo'],
 
     'tipos_movimiento' => ['REQUISICION', 'PEDIDO', 'SURTIDO', 'AJUSTE', 'IMPORT'],

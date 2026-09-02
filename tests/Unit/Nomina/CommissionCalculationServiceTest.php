@@ -25,6 +25,7 @@ class CommissionCalculationServiceTest extends TestCase
         NominaConfig::put('descuento_venta_pct', 0);
         NominaConfig::put('comision_supervisor_pct', 0.05);
         NominaConfig::put('comision_marketing_pct', 0.10);
+        NominaConfig::put('comision_nunes_pct', 0.60);
         NominaConfig::put('comision_telefonia_pct', 0.20);
         NominaConfig::put('comision_otros_pct', 1);
         NominaConfig::put('comision_servicio_tecnico_pct', 50);
@@ -167,12 +168,60 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(0.95, $resultado['total']);
     }
 
+    public function test_comision_nunes_cobra_sobre_venta_neta_total_de_la_sede(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_NUNES, 'NUNES-001');
+        $periodo = $this->periodo();
+        $this->venta('OTRO-001', 1000, ['sede' => 'NUNES']);
+        $this->documento('NUNES', 1000);
+        $this->venta('OTRO-002', 500, ['sede' => 'CENTRO']);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(1000.0, $resultado['base']);
+        $this->assertSame(6.0, $resultado['total']);
+    }
+
+    public function test_movistar_excluye_facturas_de_servicio_tecnico(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_MOVISTAR, 'MOV-001');
+        $periodo = $this->periodo();
+        $otrosId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-MOV',
+            'nombre' => 'Accesorio',
+            'categoria' => 'PERFUMERIA',
+            'subcategoria' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->venta('MOV-001', 200, ['producto_id' => $otrosId, 'numero_documento' => 'MOV-1', 'sede' => 'MOVISTAR']);
+        $this->venta('MOV-001', 300, ['nombre_producto' => 'SERVICIO TECNICO', 'numero_documento' => 'ST-1', 'sede' => 'VIRTUDES']);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(200.0, $resultado['base']);
+        $this->assertSame(2.0, $resultado['total']);
+        $this->assertSame(1, $resultado['lineas']);
+    }
+
+    public function test_movistar_no_excluye_st_de_otras_sedes(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_MOVISTAR, 'MOV-002');
+        $periodo = $this->periodo();
+        $this->venta('MOV-002', 200, ['numero_documento' => 'VEN-1', 'sede' => 'DORAL']);
+        $this->venta('MOV-002', 300, ['nombre_producto' => 'SERVICIO TECNICO', 'numero_documento' => 'ST-DORAL', 'sede' => 'DORAL']);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(500.0, $resultado['base']);
+    }
+
     public function test_servicio_tecnico_resta_egresos_058_en_usd_del_mismo_periodo(): void
     {
         NominaConfig::put('descuento_venta_pct', 20);
         $empleado = $this->empleado(NominaEmpleado::COMISION_SERVICIO_TECNICO, 'TEC-001', false, true);
         $periodo = $this->periodo();
-        $this->venta('TEC-001', 1000, ['nombre_producto' => 'SERVICIO TECNICO']);
+        $this->venta('TEC-001', 1000, ['nombre_producto' => 'SERVICIO TECNICO', 'sede' => 'VIRTUDES']);
         DB::table('flujo_cajas')->insert([
             'fecha' => '2026-08-10',
             'tipo' => 'egreso',
@@ -206,7 +255,7 @@ class CommissionCalculationServiceTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $this->venta('TEC-MIX', 304, ['nombre_producto' => 'SERVICIO TECNICO', 'precio_neto' => 304]);
+        $this->venta('TEC-MIX', 304, ['nombre_producto' => 'SERVICIO TECNICO', 'precio_neto' => 304, 'sede' => 'MOVISTAR']);
         $this->venta('TEC-MIX', 49.76, [
             'producto_id' => $otrosId,
             'nombre_producto' => 'MORRAL 2EN1 NINA',

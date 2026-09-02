@@ -192,6 +192,7 @@ class ComisionController extends Controller
                 $esSupervisor = in_array($liq->modo, [
                     NominaEmpleado::COMISION_SUPERVISOR_SEDE,
                     NominaEmpleado::COMISION_SUPERVISOR_EQUIPO,
+                    NominaEmpleado::COMISION_NUNES,
                 ], true);
                 $fila = $base + [
                     'ventas' => $liq->totalVentas(),

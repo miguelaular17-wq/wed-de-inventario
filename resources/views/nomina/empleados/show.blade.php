@@ -610,9 +610,6 @@
     @if($tab === 'ajustes')
         <h3 style="margin-top:16px;">Deducciones y bonificaciones</h3>
         <p class="muted">
-            Quincena {{ $quincenaActual['etiqueta'] }}. Elige si es un descuento o un bono, y si se aplica en
-            <strong>nómina</strong> o en <strong>comisión</strong>. Queda en la ficha y se usa al calcular.
-            También puedes cargarlos desde
             <a href="{{ route('nomina.ajustes.index') }}">Deducciones y bonos</a>.
         </p>
         <div class="nomina-kpis" style="margin:12px 0;">

@@ -15,6 +15,11 @@ class CommissionCalculationService
 {
     private const GASTO_SERVICIO_TECNICO = '058 - SERVICIO TECNICO (GARANTIAS)';
 
+    private const SEDE_NUNES = 'NUNES';
+
+    /** Sedes donde las facturas de servicio técnico tienen reglas especiales. */
+    private const SEDES_ST_FACTURAS = ['VIRTUDES', 'MOVISTAR'];
+
     /** @var array<string, bool>|null */
     private ?array $flags = null;
 
@@ -49,16 +54,22 @@ class CommissionCalculationService
     {
         $vacio = $this->resultado($empleado, 0, 0, 0, 0);
 
-        if (! $this->flag('ventas_detalle') || $this->sedeExcluida($empleado)) {
+        if (! $this->flag('ventas_detalle')) {
+            return $vacio;
+        }
+
+        if ($this->sedeExcluida($empleado) && $empleado->modo_comision !== NominaEmpleado::COMISION_NUNES) {
             return $vacio;
         }
 
         try {
             return match ($empleado->modo_comision) {
-                NominaEmpleado::COMISION_VENTAS_PROPIAS => $this->ventasPropias($periodo, $empleado),
+                NominaEmpleado::COMISION_VENTAS_PROPIAS => $this->ventasVendedor($periodo, $empleado),
+                NominaEmpleado::COMISION_MOVISTAR => $this->ventasMovistar($periodo, $empleado),
                 NominaEmpleado::COMISION_SUPERVISOR_SEDE => $this->supervisorSede($periodo, $empleado),
                 NominaEmpleado::COMISION_SUPERVISOR_EQUIPO => $this->supervisorEquipo($periodo, $empleado),
                 NominaEmpleado::COMISION_SERVICIO_TECNICO => $this->servicioTecnico($periodo, $empleado),
+                NominaEmpleado::COMISION_NUNES => $this->comisionNunes($periodo, $empleado),
                 default => $vacio,
             };
         } finally {
@@ -66,7 +77,7 @@ class CommissionCalculationService
         }
     }
 
-    private function ventasPropias(NominaPeriodo $periodo, NominaEmpleado $empleado): array
+    private function ventasVendedor(NominaPeriodo $periodo, NominaEmpleado $empleado, bool $excluirFacturasSt = false): array
     {
         $claves = $this->sales->claves($empleado);
         if ($claves === []) {
@@ -74,10 +85,15 @@ class CommissionCalculationService
         }
 
         $lineas = $this->lineasVentas($periodo, $claves)->get();
+        if ($excluirFacturasSt) {
+            $lineas = $this->excluirFacturasServicioTecnico($lineas);
+        }
 
         $propias = $this->aplicarVentasPropias($periodo, $empleado, $lineas);
         if ($this->flag('ventas_documentos') && $this->flag('ventas_documentos_vendedor')) {
-            $netoDocumentos = $this->ventaNetaVendedor($periodo, $claves);
+            $netoDocumentos = $excluirFacturasSt
+                ? $this->ventaNetaDocumentosDeLineas($periodo, $lineas)
+                : $this->ventaNetaVendedor($periodo, $claves);
             if ($netoDocumentos > 0) {
                 $propias = $this->ajustarBasesAVentaDocumento($propias, $netoDocumentos);
             }
@@ -96,6 +112,35 @@ class CommissionCalculationService
             $propias['pct_telefonia'],
             $propias['pct_otros']
         );
+    }
+
+    private function ventasMovistar(NominaPeriodo $periodo, NominaEmpleado $empleado): array
+    {
+        return $this->ventasVendedor($periodo, $empleado, true);
+    }
+
+    private function comisionNunes(NominaPeriodo $periodo, NominaEmpleado $empleado): array
+    {
+        if ($this->codigoSedeExcluido(self::SEDE_NUNES)) {
+            return $this->resultado($empleado, 0, 0, 0, 0);
+        }
+
+        $lineas = $this->lineasVentas($periodo)
+            ->whereRaw('UPPER(TRIM(vd.sede)) = ?', [self::SEDE_NUNES])
+            ->get();
+        $base = $this->ventaNetaSede($periodo, self::SEDE_NUNES, $lineas);
+        $porcentaje = NominaConfig::getDecimal('comision_nunes_pct', 0.60);
+        $total = round($base * $porcentaje / 100, 2);
+
+        if ($base > 0 || $lineas->isNotEmpty()) {
+            $this->registrarAgregado($periodo, $empleado, 'NUNES', self::SEDE_NUNES, $base, $porcentaje, $total, [
+                'lineas_venta' => $lineas->count(),
+                'formula' => 'venta_neta_sede_nunes * porcentaje_nunes',
+                'fuente' => $this->flag('ventas_documentos') ? 'ventas_documentos' : 'ventas_detalle',
+            ]);
+        }
+
+        return $this->resultado($empleado, $total, $base, 0, $lineas->count());
     }
 
     private function supervisorSede(NominaPeriodo $periodo, NominaEmpleado $empleado): array
@@ -211,6 +256,92 @@ class CommissionCalculationService
         ];
     }
 
+    /**
+     * Excluye facturas ST solo en sedes Virtudes y Movistar (modo Movistar).
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $lineas
+     * @return \Illuminate\Support\Collection<int, object>
+     */
+    private function excluirFacturasServicioTecnico(Collection $lineas): Collection
+    {
+        return $lineas
+            ->groupBy(fn ($linea) => $this->claveDocumento($linea))
+            ->reject(fn ($grupo) => $this->esFacturaStExcluibleMovistar($grupo))
+            ->flatten(1)
+            ->values();
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, object>  $lineasFactura
+     */
+    private function esFacturaStExcluibleMovistar(Collection $lineasFactura): bool
+    {
+        if (! $lineasFactura->every(fn ($linea) => $this->esLineaServicioTecnico($linea))) {
+            return false;
+        }
+
+        return $this->esSedeStFactura($lineasFactura->first());
+    }
+
+    private function esSedeStFactura(object $linea): bool
+    {
+        $sede = mb_strtoupper(trim((string) ($linea->sede ?? '')), 'UTF-8');
+
+        return in_array($sede, self::SEDES_ST_FACTURAS, true);
+    }
+
+    /**
+     * Venta neta por cabecera solo de los documentos presentes en las líneas filtradas.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $lineas
+     */
+    private function ventaNetaDocumentosDeLineas(NominaPeriodo $periodo, Collection $lineas): float
+    {
+        if ($lineas->isEmpty() || ! $this->flag('ventas_documentos')) {
+            return round($lineas->sum(fn ($linea) => $this->baseVentaNeta($linea)), 2);
+        }
+
+        $total = 0.0;
+        $docs = $lineas
+            ->map(fn ($linea) => [
+                'sede' => mb_strtoupper(trim((string) ($linea->sede ?? '')), 'UTF-8'),
+                'tipo' => mb_strtoupper(trim((string) ($linea->tipo_documento ?? 'FAC')), 'UTF-8'),
+                'numero' => trim((string) ($linea->numero_documento ?? '')),
+            ])
+            ->unique(fn ($doc) => $doc['sede'].'|'.$doc['tipo'].'|'.$doc['numero'])
+            ->values();
+
+        foreach ($docs as $doc) {
+            if ($doc['sede'] === '' || $doc['numero'] === '') {
+                continue;
+            }
+
+            $row = DB::table('ventas_documentos')
+                ->whereBetween('fecha', [$periodo->fecha_inicio->toDateString(), $periodo->fecha_fin->toDateString()])
+                ->whereRaw('UPPER(TRIM(sede)) = ?', [$doc['sede']])
+                ->whereRaw('UPPER(TRIM(tipo_documento)) = ?', [$doc['tipo']])
+                ->where('numero_documento', $doc['numero'])
+                ->whereRaw("LOWER(TRIM(COALESCE(estado, ''))) = 'registrado'")
+                ->first();
+
+            if (! $row) {
+                continue;
+            }
+
+            $signo = $doc['tipo'] === 'DEV' ? -1 : 1;
+            $total += $signo * abs((float) ($row->total_neto_usd ?? 0));
+        }
+
+        return round($total, 2);
+    }
+
+    private function claveDocumento(object $linea): string
+    {
+        return mb_strtoupper(trim((string) ($linea->sede ?? '')), 'UTF-8')
+            .'|'.mb_strtoupper(trim((string) ($linea->tipo_documento ?? 'FAC')), 'UTF-8')
+            .'|'.trim((string) ($linea->numero_documento ?? ''));
+    }
+
     private function supervisorEquipo(NominaPeriodo $periodo, NominaEmpleado $empleado): array
     {
         $idsEquipo = NominaEmpleado::query()
@@ -267,7 +398,9 @@ class CommissionCalculationService
             ? collect()
             : $this->lineasVentas($periodo, $claves)->get();
 
-        $lineasSt = $lineas->filter(fn ($linea) => $this->esLineaServicioTecnico($linea))->values();
+        $lineasSt = $lineas
+            ->filter(fn ($linea) => $this->esLineaServicioTecnico($linea) && $this->esSedeStFactura($linea))
+            ->values();
         $lineasVenta = $lineas->reject(fn ($linea) => $this->esLineaServicioTecnico($linea))->values();
 
         $ventasSt = round($lineasSt->sum(fn ($linea) => $this->baseLinea($linea, 'NETO')), 2);

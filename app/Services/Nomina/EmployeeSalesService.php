@@ -38,7 +38,7 @@ class EmployeeSalesService
 
     public function porcentajeDescuento(): float
     {
-        return NominaConfig::getDecimal('descuento_venta_pct', 20);
+        return NominaConfig::getDecimal('descuento_venta_pct', 25);
     }
 
     /**

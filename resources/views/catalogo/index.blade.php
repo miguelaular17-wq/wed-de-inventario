@@ -4,6 +4,13 @@
 
 @section('content')
 @php
+    use App\Support\VentaDescuento;
+    $descPct = VentaDescuento::porcentaje();
+    $descFactor = VentaDescuento::factorDescuento();
+    $netoFactor = VentaDescuento::factorNeto();
+    $descEtiqueta = VentaDescuento::etiqueta();
+@endphp
+@php
     $modoCliente = $modoCliente ?? false;
     $casheaLevels = $casheaLevels ?? [1 => 60, 2 => 50, 3 => 40, 4 => 40, 5 => 40, 6 => 40];
     $formAction = $modoCliente
@@ -693,8 +700,8 @@
                                 <span class="price-value">${{ number_format($prod->precio_mayor, 2) }}</span>
                             </div>
                             <div>
-                                <span class="price-label">-20%</span>
-                                <span class="price-value is-deal">${{ number_format($prod->precio_unidad * 0.80, 2) }}</span>
+                                <span class="price-label">-{{ $descEtiqueta }}</span>
+                                <span class="price-value is-deal">${{ number_format($prod->precio_unidad * $netoFactor, 2) }}</span>
                             </div>
                         </div>
                     </div>
@@ -725,7 +732,7 @@
                     <div id="cashea-pmayor" style="font-size:1.1rem; font-weight:700;"></div>
                 </div>
                 <div style="background:rgba(255,255,255,.15); border-radius:8px; padding:8px 14px;">
-                    <div style="font-size:.75rem; opacity:.8;">Desc. Especial (20%)</div>
+                    <div style="font-size:.75rem; opacity:.8;">Desc. Especial ({{ $descEtiqueta }})</div>
                     <div id="cashea-descuento" style="font-size:1.1rem; font-weight:700; color:#e0f2fe;"></div>
                 </div>
             </div>
@@ -786,7 +793,7 @@ window.openCasheaFromCard = function (card) {
     document.getElementById('cashea-punit').textContent = precioUnit > 0 ? fmt(precioUnit) : '—';
     document.getElementById('cashea-pmayor').textContent = precioMayor > 0 ? fmt(precioMayor) : '—';
     document.getElementById('cashea-descuento').textContent = precioUnit > 0
-        ? fmt(precioUnit * 0.20) + ' (Neto: ' + fmt(precioUnit * 0.80) + ')'
+        ? fmt(precioUnit * {{ $descFactor }}) + ' (Neto: ' + fmt(precioUnit * {{ $netoFactor }}) + ')'
         : '—';
     document.getElementById('cashea-resultado').style.display = 'none';
 

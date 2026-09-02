@@ -3,6 +3,13 @@
 @section('title', 'Catálogo de Productos')
 
 @section('content')
+@php
+    use App\Support\VentaDescuento;
+    $descPct = VentaDescuento::porcentaje();
+    $descFactor = VentaDescuento::factorDescuento();
+    $netoFactor = VentaDescuento::factorNeto();
+    $descEtiqueta = VentaDescuento::etiqueta();
+@endphp
 <div class="cat-page">
 <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
     <div>
@@ -93,10 +100,10 @@
                                     <strong class="price-unit">{{ $precioUnidad > 0 ? '$'.number_format($precioUnidad, 2) : '—' }}</strong>
                                 </div>
                                 <div>
-                                    <span>Desc. 20%</span>
+                                    <span>Desc. {{ $descEtiqueta }}</span>
                                     @if($precioUnidad > 0)
-                                        <strong class="price-desc">${{ number_format($precioUnidad * 0.20, 2) }}</strong>
-                                        <em>neto ${{ number_format($precioUnidad * 0.80, 2) }}</em>
+                                        <strong class="price-desc">${{ number_format($precioUnidad * $descFactor, 2) }}</strong>
+                                        <em>neto ${{ number_format($precioUnidad * $netoFactor, 2) }}</em>
                                     @else
                                         <strong class="price-empty">—</strong>
                                     @endif
@@ -148,7 +155,7 @@
                     <div id="cashea-pmayor" style="font-size:1.1rem; font-weight:700;"></div>
                 </div>
                 <div style="background:rgba(255,255,255,.15); border-radius:8px; padding:8px 14px;">
-                    <div style="font-size:.75rem; opacity:.8;">Desc. Especial (20%)</div>
+                    <div style="font-size:.75rem; opacity:.8;">Desc. Especial ({{ $descEtiqueta }})</div>
                     <div id="cashea-descuento" style="font-size:1.1rem; font-weight:700; color:#e0f2fe;"></div>
                 </div>
             </div>
@@ -423,8 +430,8 @@ main:has(.cat-page) {
         document.getElementById('cashea-punit').textContent   = precioUnit  > 0 ? fmt(precioUnit)  : '—';
         document.getElementById('cashea-pmayor').textContent  = precioMayor > 0 ? fmt(precioMayor) : '—';
         
-        const descEspecial = precioUnit * 0.20;
-        const netoEspecial = precioUnit * 0.80;
+        const descEspecial = precioUnit * {{ $descFactor }};
+        const netoEspecial = precioUnit * {{ $netoFactor }};
         document.getElementById('cashea-descuento').textContent = precioUnit > 0 ? `${fmt(descEspecial)} (Neto: ${fmt(netoEspecial)})` : '—';
 
         document.getElementById('cashea-resultado').style.display = 'none';
