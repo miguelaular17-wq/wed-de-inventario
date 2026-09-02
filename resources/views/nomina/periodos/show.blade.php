@@ -88,8 +88,10 @@
         @endif
     </div>
 
-    <div class="table-wrap" style="margin-top:16px;">
-        <table class="data-table">
+    @include('nomina.partials.empleado-tabla-buscador', ['target' => 'tabla-nomina-periodo'])
+
+    <div class="table-wrap" style="margin-top:8px;">
+        <table class="data-table" id="tabla-nomina-periodo">
             <thead>
                 <tr>
                     <th>Empleado</th>
@@ -110,7 +112,12 @@
                     @php
                         $desglose = $registro->desglose();
                     @endphp
-                    <tr>
+                    <tr data-empleado-buscar="{{ mb_strtolower(trim(implode(' ', array_filter([
+                        $registro->empleado->nombre(),
+                        $registro->empleado->cedula(),
+                        $registro->empleado->nombreSede(),
+                        $registro->empleado->nombreCargo(),
+                    ])))) }}">
                         <td>
                             <a href="{{ route('nomina.empleados.show', ['empleado' => $registro->empleado, 'tab' => 'nomina']) }}">
                                 {{ $registro->empleado->nombre() }}

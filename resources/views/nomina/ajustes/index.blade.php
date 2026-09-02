@@ -21,10 +21,10 @@
         <div class="nomina-kpi"><span>Personas hoy</span><strong>{{ $delDia->pluck('empleado_id')->unique()->count() }}</strong></div>
     </div>
 
-    <form method="GET" class="filter-bar" style="margin-top:16px;">
+    <form method="GET" class="filter-bar" style="margin-top:16px;" id="ajustes-filtro">
         <div class="field">
-            <label>Fecha del día</label>
-            <input type="date" name="fecha" value="{{ $fecha }}">
+            <label for="ajustes-fecha">Fecha del día</label>
+            <input type="date" name="fecha" id="ajustes-fecha" value="{{ $fecha }}">
         </div>
         <div class="field field-wide">
             <label>Buscar personal</label>
@@ -59,10 +59,10 @@
                             <td>{{ $empleado->cedula() ?: '—' }}</td>
                             <td>{{ $empleado->nombreSede() }}</td>
                             <td>
-                                <form method="POST" action="{{ route('nomina.ajustes.escritorio') }}" class="nomina-inline-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                                <form method="POST" action="{{ route('nomina.ajustes.escritorio') }}" class="nomina-inline-form ajuste-registro-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                                     @csrf
                                     <input type="hidden" name="empleado_id" value="{{ $empleado->id }}">
-                                    <input type="hidden" name="fecha" value="{{ $fecha }}">
+                                    <input type="hidden" name="fecha" class="ajuste-fecha-campo" value="{{ $fecha }}">
                                     <input type="hidden" name="q" value="{{ $q }}">
                                     <select name="tipo" required>
                                         <option value="DEDUCCION">Deducción</option>
@@ -138,3 +138,30 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const fechaInput = document.getElementById('ajustes-fecha');
+    if (!fechaInput) return;
+
+    function fechaSeleccionada() {
+        return fechaInput.value || '';
+    }
+
+    function sincronizarFechaRegistro() {
+        const valor = fechaSeleccionada();
+        document.querySelectorAll('.ajuste-fecha-campo').forEach(function (campo) {
+            campo.value = valor;
+        });
+    }
+
+    fechaInput.addEventListener('change', sincronizarFechaRegistro);
+    sincronizarFechaRegistro();
+
+    document.querySelectorAll('.ajuste-registro-form').forEach(function (form) {
+        form.addEventListener('submit', sincronizarFechaRegistro);
+    });
+});
+</script>
+@endpush

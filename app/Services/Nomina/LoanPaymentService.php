@@ -125,22 +125,33 @@ class LoanPaymentService
 
     public function revertirAbonosDelPeriodo(int $periodoId): void
     {
-        $marcador = 'período #'.$periodoId;
+        $this->revertirAbonosPorObservacion($periodoId, 'Descuento de nómina período #'.$periodoId, true);
+    }
+
+    public function revertirAbonosComisionDelPeriodo(int $periodoId): void
+    {
+        $this->revertirAbonosPorObservacion($periodoId, 'Descuento de comisión período #'.$periodoId, false);
+    }
+
+    private function revertirAbonosPorObservacion(int $periodoId, string $marcador, bool $limpiarCuotasDelPeriodo): void
+    {
         $abonos = NominaPrestamoAbono::query()
             ->where('tipo', NominaPrestamoAbono::TIPO_NOMINA)
             ->where('observacion', 'like', '%'.$marcador.'%')
             ->orderByDesc('id')
             ->get();
 
-        $cuotasDelPeriodo = NominaPrestamoCuota::query()
-            ->where('nomina_periodo_id', $periodoId)
-            ->get();
-
-        $abonoIds = $abonos->pluck('id')
-            ->merge($cuotasDelPeriodo->pluck('abono_id'))
-            ->filter()
-            ->unique()
-            ->values();
+        $abonoIds = $abonos->pluck('id');
+        if ($limpiarCuotasDelPeriodo) {
+            $cuotasDelPeriodo = NominaPrestamoCuota::query()
+                ->where('nomina_periodo_id', $periodoId)
+                ->get();
+            $abonoIds = $abonoIds
+                ->merge($cuotasDelPeriodo->pluck('abono_id'))
+                ->filter()
+                ->unique()
+                ->values();
+        }
 
         foreach ($abonoIds as $abonoId) {
             $abono = NominaPrestamoAbono::query()->find($abonoId);
@@ -150,9 +161,11 @@ class LoanPaymentService
             $this->revertirAbono($abono, $periodoId);
         }
 
-        NominaPrestamoCuota::query()
-            ->where('nomina_periodo_id', $periodoId)
-            ->update(['nomina_periodo_id' => null]);
+        if ($limpiarCuotasDelPeriodo) {
+            NominaPrestamoCuota::query()
+                ->where('nomina_periodo_id', $periodoId)
+                ->update(['nomina_periodo_id' => null]);
+        }
     }
 
     private function revertirAbono(NominaPrestamoAbono $abono, int $periodoId): void

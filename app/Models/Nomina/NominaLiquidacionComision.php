@@ -56,4 +56,53 @@ class NominaLiquidacionComision extends Model
 
         return round((float) $this->base_telefonia + (float) $this->base_otros, 2);
     }
+
+    public function esServicioTecnico(): bool
+    {
+        return $this->modo === NominaEmpleado::COMISION_SERVICIO_TECNICO;
+    }
+
+    public function ventasSt(): float
+    {
+        $snap = $this->snapshot ?? [];
+        if (array_key_exists('ventas_st', $snap)) {
+            return round((float) $snap['ventas_st'], 2);
+        }
+
+        if ($this->esServicioTecnico()) {
+            return round($this->baseStNeta() + $this->egresos058(), 2);
+        }
+
+        return 0.0;
+    }
+
+    public function egresos058(): float
+    {
+        $snap = $this->snapshot ?? [];
+
+        if (array_key_exists('gastos', $snap)) {
+            return round((float) $snap['gastos'], 2);
+        }
+
+        if (array_key_exists('egresos_058_usd', $snap)) {
+            return round((float) $snap['egresos_058_usd'], 2);
+        }
+
+        return 0.0;
+    }
+
+    public function baseStNeta(): float
+    {
+        $snap = $this->snapshot ?? [];
+        if (array_key_exists('base_st', $snap)) {
+            return round((float) $snap['base_st'], 2);
+        }
+
+        return round(max(0, $this->ventasSt() - $this->egresos058()), 2);
+    }
+
+    public function ventasOtrosProductos(): float
+    {
+        return round((float) $this->base_telefonia + (float) $this->base_otros, 2);
+    }
 }

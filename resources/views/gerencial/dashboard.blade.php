@@ -81,6 +81,7 @@
                     <th>Venta neta</th>
                     <th>FAC</th>
                     <th>Nº DEV</th>
+                    <th>Productos</th>
                     <th>Utilidad</th>
                     <th>% de utilidad</th>
                 </tr>
@@ -94,6 +95,7 @@
                         <td>${{ $fmt($fila['venta_neta'] ?? $fila['ventas_usd']) }}</td>
                         <td>{{ number_format($fila['facturas']) }}</td>
                         <td>{{ number_format($fila['devoluciones']) }}</td>
+                        <td>{{ number_format($fila['productos']) }}</td>
                         <td>${{ $fmt($fila['utilidad'] ?? $fila['margen_usd']) }}</td>
                         <td>{{ $fmt($fila['margen_pct'] ?? 0, 1) }}%</td>
                     </tr>

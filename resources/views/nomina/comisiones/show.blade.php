@@ -12,15 +12,42 @@
                 Pago el {{ $periodo->fecha_pago_comision?->format('d/m/Y') ?: $periodo->fecha_fin?->copy()->addDays(3)->format('d/m/Y') }}.
             </p>
         </div>
-        <a class="btn secondary" href="{{ route('nomina.periodos.show', $periodo) }}">Ver nómina</a>
+        <div>
+            <a class="btn secondary" href="{{ route('nomina.periodos.show', $periodo) }}">Ver nómina</a>
+            @if($periodo->estado !== 'ABIERTO' && $periodo->estado !== 'CERRADO' && $liquidaciones->isNotEmpty())
+                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px;">
+                    <form method="POST" action="{{ route('nomina.comisiones.recalcular', $periodo) }}" onsubmit="return confirm('¿Recalcular solo las comisiones de esta quincena? La nómina (sueldos y deducciones) no se modifica.')">
+                        @csrf
+                        <button class="btn" type="submit">Recalcular comisiones</button>
+                    </form>
+                    <a class="btn primary" href="{{ route('nomina.comisiones.relacion', $periodo) }}">Descargar relación PDF</a>
+                    <a class="btn" href="{{ route('nomina.comisiones.relacion', ['periodo' => $periodo, 'formato' => 'xlsx']) }}">Descargar Excel</a>
+                    <a class="btn" href="{{ route('nomina.comisiones.relacion', ['periodo' => $periodo, 'formato' => 'zip']) }}">ZIP PDF por sede y área</a>
+                </div>
+            @elseif($periodo->estado !== 'ABIERTO' && $liquidaciones->isNotEmpty())
+                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px;">
+                    <a class="btn primary" href="{{ route('nomina.comisiones.relacion', $periodo) }}">Descargar relación PDF</a>
+                    <a class="btn" href="{{ route('nomina.comisiones.relacion', ['periodo' => $periodo, 'formato' => 'xlsx']) }}">Descargar Excel</a>
+                    <a class="btn" href="{{ route('nomina.comisiones.relacion', ['periodo' => $periodo, 'formato' => 'zip']) }}">ZIP PDF por sede y área</a>
+                </div>
+            @endif
+        </div>
     </div>
 
     @php
+        $liquidacionesSt = $liquidaciones->filter(fn ($l) => $l->esServicioTecnico())->values();
+        $liquidacionesVentas = $liquidaciones->reject(fn ($l) => $l->esServicioTecnico())->values();
         $totalBruto = (float) $liquidaciones->sum('comision_total');
         $totalAbonos = (float) $liquidaciones->sum('abonos');
         $totalRetencion = (float) $liquidaciones->sum('retencion');
         $totalDescuentos = (float) $liquidaciones->sum('descuentos') + (float) $liquidaciones->sum('prestamos');
         $totalPagar = (float) $liquidaciones->sum('total_pagar');
+        $buscarAttrs = fn ($liq) => mb_strtolower(trim(implode(' ', array_filter([
+            $liq->empleado->nombre(),
+            $liq->empleado->cedula(),
+            $liq->empleado->nombreSede(),
+            $liq->empleado->nombreCargo(),
+        ]))));
     @endphp
 
     <div class="nomina-kpis">
@@ -31,12 +58,15 @@
         <div class="nomina-kpi"><span>A pagar</span><strong>${{ number_format($totalPagar, 2) }}</strong></div>
     </div>
 
-    <div class="table-wrap" style="margin-top:16px;">
-        <table class="data-table">
+    <h3 style="margin:20px 0 0;">Supervisores y vendedores</h3>
+    @include('nomina.partials.empleado-tabla-buscador', ['target' => 'tabla-comisiones-ventas'])
+
+    <div class="table-wrap" style="margin-top:8px;">
+        <table class="data-table" id="tabla-comisiones-ventas">
             <thead>
                 <tr>
                     <th>Empleado</th>
-                    <th>Ventas</th>
+                    <th>Venta neta</th>
                     <th>Base telefonía</th>
                     <th>Base otros</th>
                     <th>Comisión</th>
@@ -47,15 +77,12 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse($liquidaciones as $liq)
-                    <tr>
+                @forelse($liquidacionesVentas as $liq)
+                    <tr data-empleado-buscar="{{ $buscarAttrs($liq) }}">
                         <td>
                             <a href="{{ route('nomina.empleados.show', ['empleado' => $liq->empleado, 'tab' => 'comisiones']) }}">
                                 {{ $liq->empleado->nombre() }}
                             </a>
-                        </td>
-                        <td>
-                            ${{ number_format($liq->totalVentas(), 2) }}
                             @if($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_SEDE)
                                 <div class="muted" style="font-size:.72rem;">Sede {{ $liq->empleado->nombreSede() }}</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_EQUIPO)
@@ -63,9 +90,17 @@
                             @endif
                         </td>
                         @if(in_array($liq->modo, [\App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_SEDE, \App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_EQUIPO], true))
+                            <td>
+                                <strong>${{ number_format($liq->totalVentas(), 2) }}</strong>
+                                <div class="muted" style="font-size:.72rem;">Venta neta</div>
+                            </td>
                             <td class="muted">—</td>
                             <td class="muted">—</td>
                         @else
+                            <td>
+                                <strong>${{ number_format($liq->totalVentas(), 2) }}</strong>
+                                <div class="muted" style="font-size:.72rem;">Tel + otros (neto)</div>
+                            </td>
                             <td>${{ number_format($liq->base_telefonia, 2) }}</td>
                             <td>${{ number_format($liq->base_otros, 2) }}</td>
                         @endif
@@ -76,7 +111,73 @@
                         <td><strong>${{ number_format($liq->total_pagar, 2) }}</strong></td>
                     </tr>
                 @empty
-                    <tr><td colspan="9" class="muted">Esta quincena todavía no tiene liquidaciones. Calcúlala desde Períodos.</td></tr>
+                    <tr><td colspan="9" class="muted">Sin liquidaciones de supervisores o vendedores en esta quincena.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    <h3 style="margin:24px 0 0;">Servicio técnico</h3>
+    @include('nomina.partials.empleado-tabla-buscador', ['target' => 'tabla-comisiones-st'])
+
+    <div class="table-wrap" style="margin-top:8px;">
+        <table class="data-table" id="tabla-comisiones-st">
+            <thead>
+                <tr>
+                    <th>Empleado</th>
+                    <th>Facturas ST</th>
+                    <th>Egresos 058</th>
+                    <th>Otros productos</th>
+                    <th>Comisión</th>
+                    <th>Abonos</th>
+                    <th>Retención</th>
+                    <th>Desc. / préstamos</th>
+                    <th>A pagar</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($liquidacionesSt as $liq)
+                    <tr data-empleado-buscar="{{ $buscarAttrs($liq) }}">
+                        <td>
+                            <a href="{{ route('nomina.empleados.show', ['empleado' => $liq->empleado, 'tab' => 'comisiones']) }}">
+                                {{ $liq->empleado->nombre() }}
+                            </a>
+                            <div class="muted" style="font-size:.72rem;">Servicio técnico</div>
+                        </td>
+                        <td>
+                            @if($liq->ventasSt() > 0)
+                                <strong>${{ number_format($liq->ventasSt(), 2) }}</strong>
+                                @if($liq->baseStNeta() !== $liq->ventasSt())
+                                    <div class="muted" style="font-size:.72rem;">Base neta ST: ${{ number_format($liq->baseStNeta(), 2) }}</div>
+                                @endif
+                            @else
+                                <span class="muted">—</span>
+                            @endif
+                        </td>
+                        <td>
+                            @if($liq->egresos058() > 0)
+                                ${{ number_format($liq->egresos058(), 2) }}
+                            @else
+                                <span class="muted">—</span>
+                            @endif
+                        </td>
+                        <td>
+                            @if($liq->ventasOtrosProductos() > 0)
+                                <div>Tel: ${{ number_format($liq->base_telefonia, 2) }}</div>
+                                <div>Otros: ${{ number_format($liq->base_otros, 2) }}</div>
+                                <div class="muted" style="font-size:.72rem;">Total: ${{ number_format($liq->ventasOtrosProductos(), 2) }}</div>
+                            @else
+                                <span class="muted">—</span>
+                            @endif
+                        </td>
+                        <td>${{ number_format($liq->comision_total, 2) }}</td>
+                        <td>${{ number_format($liq->abonos, 2) }}</td>
+                        <td>${{ number_format($liq->retencion, 2) }}</td>
+                        <td>${{ number_format((float) $liq->descuentos + (float) $liq->prestamos, 2) }}</td>
+                        <td><strong>${{ number_format($liq->total_pagar, 2) }}</strong></td>
+                    </tr>
+                @empty
+                    <tr><td colspan="9" class="muted">Sin liquidaciones de servicio técnico en esta quincena.</td></tr>
                 @endforelse
             </tbody>
         </table>

@@ -25,6 +25,8 @@ return [
         'gerencial.valorizados' => 'Valorizados de inventarios',
         'gerencial.ajustes' => 'Consolidados de ajustes de inventarios',
         'gerencial.rentabilidad' => 'Rentabilidad gerencial',
+        'servicio' => 'Servicio técnico',
+        'servicio.inventario' => 'Inventario de repuestos (servicio técnico)',
     ],
 
     /*
@@ -43,6 +45,7 @@ return [
         'Patrimonial' => ['patrimonial'],
         'Nómina' => ['nomina', 'nomina.equipo'],
         'Gerencial' => ['gerencial', 'gerencial.devoluciones', 'gerencial.valorizados', 'gerencial.ajustes', 'gerencial.rentabilidad'],
+        'Servicio técnico' => ['servicio', 'servicio.inventario'],
     ],
 
     'roles' => [
@@ -59,6 +62,7 @@ return [
         'cobranza' => ['cobranza', 'contratos', 'patrimonial'],
         'tesoreria' => ['tesoreria'],
         'rrhh' => ['nomina'],
+        'tecnico' => ['servicio'],
         'vendedor' => [],
     ],
 ];

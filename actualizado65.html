@@ -1,0 +1,3494 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PD ServTec — Gestión de Servicio Técnico</title>
+<style>
+:root {
+  --azul:#1a56db; --azul-c:#e8f0fe; --verde:#1a7f4b; --rojo:#c0392b;
+  --med:#4a5568; --suave:#a0aec0; --borde:#e2e8f0; --fondo:#f7f8fc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--fondo); color: #1a202c; font-size: 15px; }
+
+.auth-screen { display: none; position: fixed; inset: 0; background: linear-gradient(135deg, #1a56db 0%, #1a7f4b 100%); z-index: 2000; align-items: center; justify-content: center; }
+.auth-screen.visible { display: flex; }
+.auth-card { background: #fff; border-radius: 14px; padding: 40px; width: 100%; max-width: 400px; }
+.auth-card h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+.auth-card p { font-size: 14px; color: var(--med); margin-bottom: 24px; }
+.auth-form { display: flex; flex-direction: column; gap: 14px; }
+.auth-form input { padding: 10px 14px; border: 1px solid var(--borde); border-radius: 8px; font-size: 14px; font-family: inherit; }
+.auth-form button { padding: 11px 16px; background: var(--azul); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.auth-form button:hover { opacity: 0.9; }
+.auth-toggle { margin-top: 16px; text-align: center; font-size: 13px; }
+.auth-toggle button { background: none; border: none; color: var(--azul); cursor: pointer; text-decoration: underline; }
+.auth-error { background: #fde8e8; color: #9b2626; padding: 10px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; display: none; }
+.auth-error.show { display: block; }
+
+.layout { display: flex; min-height: 100vh; }
+.sidebar { width: 220px; background: #1a202c; color: #e2e8f0; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; position: sticky; top: 0; align-self: flex-start; }
+.sb-logo { padding: 20px; border-bottom: 1px solid #2d3748; }
+.sb-logo h1 { font-size: 17px; font-weight: 700; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 20px; cursor: pointer; color: #a0aec0; font-size: 13.5px; border-left: 3px solid transparent; }
+.nav-item:hover { background: #2d3748; }
+.nav-item.activo { background: #2d3748; color: #fff; border-left-color: var(--azul); }
+.sb-footer { padding: 14px 20px; border-top: 1px solid #2d3748; margin-top: auto; font-size: 12px; }
+.btn-logout { width: 100%; padding: 8px; background: #3a4556; color: #e2e8f0; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; margin-top: 8px; }
+
+.main { flex: 1; display: flex; flex-direction: column; }
+.topbar { background: #fff; border-bottom: 1px solid var(--borde); padding: 14px 28px; }
+.topbar h2 { font-size: 17px; font-weight: 600; }
+.contenido { padding: 24px 28px; overflow-y: auto; flex: 1; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 15px; border-radius: 8px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; }
+.btn-azul { background: var(--azul); color: #fff; }
+.btn-gris { background: var(--azul-c); color: var(--azul); border: 1px solid #c5d5f8; }
+.btn-rojo { background: #fdecea; color: var(--rojo); border: 1px solid #f5c6c2; }
+.btn-sm { padding: 5px 11px; font-size: 12px; }
+
+.tabla-wrap { background: #fff; border: 1px solid var(--borde); border-radius: 10px; overflow: hidden; }
+.tabla-top { padding: 13px 16px; border-bottom: 1px solid var(--borde); display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+table { width: 100%; border-collapse: collapse; }
+th { padding: 10px 14px; text-align: left; font-size: 11.5px; font-weight: 600; color: var(--suave); background: #f8f9fb; border-bottom: 1px solid var(--borde); }
+td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid #f2f4f8; }
+tr:hover td { background: #fafbff; }
+
+.badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.b-listo { background: #d1f2e1; color: #1a5e3a; }
+.b-info { background: #e8f4fd; color: #1a6fa8; }
+
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; align-items: center; justify-content: center; }
+.overlay.open { display: flex; }
+.modal { background: #fff; border-radius: 14px; padding: 26px; width: 100%; max-width: 400px; max-height: 92vh; overflow-y: auto; }
+.mh { display: flex; justify-content: space-between; margin-bottom: 20px; }
+.mh h3 { font-size: 16px; font-weight: 600; }
+.mh p { font-size: 12px; color: var(--med); margin-top: 3px; }
+.mclose { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--suave); }
+.mfoot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--borde); }
+
+.fg { margin-bottom: 14px; }
+.fg label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; }
+.fg input { width: 100%; padding: 8px 11px; border: 1px solid var(--borde); border-radius: 8px; font-size: 13px; font-family: inherit; }
+
+.alerta { padding: 11px 14px; border-radius: 8px; font-size: 12px; border-left: 4px solid; }
+.alerta-info { background: #e8f4fd; border-color: #1a6fa8; color: #1a4a70; }
+.stat-card { background:#fff; border:1px solid var(--borde); border-radius:10px; padding:20px; text-align:center; }
+.stat-num { font-size:32px; font-weight:700; color:var(--azul); }
+.stat-lbl { font-size:12px; color:var(--med); margin-top:4px; }
+.badge-estado { display:inline-block; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600; }
+.est-pendiente { background:#fff3cd; color:#856404; }
+.est-en_proceso { background:#cfe2ff; color:#0a58ca; }
+.est-listo, .est-pagado, .est-completada { background:#d1f2e1; color:#1a5e3a; }
+.est-entregado, .est-cancelado { background:#e2e3e5; color:#41464b; }
+.est-no_reparable { background:#fdecea; color:#9b2626; }
+.est-enviado_proveedor { background:#fde8cf; color:#9a5b00; }
+.est-soporte_pd { background:#e7ddff; color:#5b3aa0; }
+
+/* ===== RESPONSIVE / MÓVIL ===== */
+@media (max-width: 768px) {
+  body { font-size: 14px; }
+
+  /* Sidebar como barra superior horizontal desplazable */
+  .layout { flex-direction: column; }
+  .sidebar {
+    width: 100%; height: auto; flex-direction: row; align-items: center;
+    position: sticky; top: 0; z-index: 500;
+    overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+  }
+  .sb-logo { flex: 0 0 auto; border-bottom: none; border-right: 1px solid #2d3748; padding: 12px 14px; white-space: nowrap; }
+  .sb-logo h1 { font-size: 15px; }
+  .nav-item { flex: 0 0 auto; padding: 12px 14px; white-space: nowrap; border-left: 3px solid transparent; }
+  .nav-item.activo { border-left-color: transparent; border-bottom: 3px solid var(--azul); }
+  .sb-footer { flex: 0 0 auto; margin-top: 0; margin-left: auto; border-top: none; padding: 8px 12px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .sb-footer .btn-logout { width: auto; margin-top: 0; padding: 7px 12px; }
+
+  /* Topbar y contenido más compactos */
+  .topbar { padding: 12px 16px; }
+  .topbar h2 { font-size: 16px; }
+  .contenido { padding: 16px 13px; }
+
+  /* Tablas con desplazamiento horizontal */
+  .tabla-wrap { overflow-x: auto; overflow-y: hidden; }
+  .tabla-wrap table { min-width: 640px; }
+
+  /* Modales y pantalla de acceso a ancho casi completo */
+  .overlay { padding: 12px; }
+  .modal { padding: 18px; max-width: 100%; }
+  .auth-card { padding: 26px 22px; }
+  .auth-card h1 { font-size: 24px; }
+
+  /* Formularios de 2-3 columnas pasan a una sola columna */
+  .modal div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 420px) {
+  .stat-num { font-size: 26px; }
+  .contenido { padding: 12px 10px; }
+  .nav-item { padding: 11px 11px; font-size: 13px; }
+}
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div class="auth-screen visible" id="auth-screen">
+  <div class="auth-card">
+    <h1 id="auth-title">Iniciar sesión</h1>
+    <p id="auth-subtitle">Ingresa a tu cuenta PD ServTec</p>
+    <div class="auth-error" id="auth-error"></div>
+    <form class="auth-form" id="auth-form" onsubmit="handleAuthSubmit(event)">
+      <input type="email" id="auth-email" placeholder="Tu email" required>
+      <div id="password-wrapper" style="position:relative;">
+        <input type="password" id="auth-password" placeholder="Contraseña" required style="width:100%;padding-right:40px;box-sizing:border-box;">
+        <button type="button" onclick="toggleVerPwd()" title="Mostrar/ocultar contraseña" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--med);padding:0;" id="btn-ver-pwd">👁️</button>
+      </div>
+      <button type="submit" id="auth-btn">Iniciar sesión</button>
+    </form>
+    <div class="auth-toggle" id="auth-toggle">
+      <span style="font-size:11px;"><button type="button" onclick="toggleOlvidePassword()" style="background:none;border:none;color:var(--med);cursor:pointer;text-decoration:underline;font-size:11px;">¿Olvidaste tu contraseña?</button></span><br>
+      <span style="font-size:11px;">🛒 <button type="button" onclick="toggleVendedorLogin()">Acceso de vendedor (solo consulta)</button></span>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="layout" id="main-layout" style="display:none;">
+
+<nav class="sidebar">
+  <div class="sb-logo">
+    <h1>⚙️ PD ServTec</h1>
+    <p>Departamento Técnico</p>
+  </div>
+  <div class="nav-item activo" data-sec="dashboard" onclick="ir('dashboard')"><span>🏠</span> Dashboard</div>
+  <div class="nav-item" data-sec="ordenes" onclick="ir('ordenes')"><span>📋</span> Órdenes de servicio</div>
+  <div class="nav-item" data-sec="reparaciones" onclick="ir('reparaciones')"><span>🛡️</span> Garantías / Interno</div>
+  <div class="nav-item" data-sec="facturas" onclick="ir('facturas')"><span>🧾</span> Facturas</div>
+  <div class="nav-item" data-sec="inventario" onclick="ir('inventario')"><span>📦</span> Inventario</div>
+  <div class="nav-item" data-sec="promedios" onclick="ir('promedios')"><span>📊</span> Promedios</div>
+  <div class="nav-item" data-sec="perfil" onclick="ir('perfil')"><span>👤</span> Mi perfil</div>
+  <div class="nav-item" id="nav-tec" data-sec="tecnicos" onclick="ir('tecnicos')" style="display:none;"><span>👥</span> Gestionar usuarios</div>
+  <div class="nav-item" id="nav-sedes" data-sec="sedes" onclick="ir('sedes')" style="display:none;"><span>🏢</span> Sedes</div>
+  <div class="nav-item" id="nav-config" data-sec="config" onclick="ir('config')" style="display:none;"><span>⚙️</span> Configuración</div>
+  <div class="sb-footer">
+    <div id="user-email">—</div>
+    <button class="btn-logout" onclick="handleLogout()">Cerrar sesión</button>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <h2 id="tb-titulo">Dashboard</h2>
+  </div>
+  <div class="contenido">
+
+    <div id="sec-dashboard" class="seccion visible">
+      <div id="dash-alerta-tecnicos" style="display:none;background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:13px;color:#856404;"></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">
+        <div class="stat-card" style="border-top:3px solid #1a56db;">
+          <div class="stat-num" id="dash-ordenes">—</div>
+          <div class="stat-lbl">📋 Órdenes totales</div>
+        </div>
+        <div class="stat-card" style="border-top:3px solid #f59e0b;">
+          <div class="stat-num" id="dash-pendientes">—</div>
+          <div class="stat-lbl">⏳ Pendientes</div>
+        </div>
+        <div class="stat-card" style="border-top:3px solid #10b981;">
+          <div class="stat-num" id="dash-reparaciones">—</div>
+          <div class="stat-lbl">🛡️ Garantías / Interno</div>
+        </div>
+        <div class="stat-card" style="border-top:3px solid #8b5cf6;">
+          <div class="stat-num" id="dash-ingresos">—</div>
+          <div class="stat-lbl">💰 Ingresos cobrados</div>
+        </div>
+        <div class="stat-card" style="border-top:3px solid #f97316;">
+          <div class="stat-num" id="dash-ingresos-pendientes">—</div>
+          <div class="stat-lbl">🕐 Por cobrar</div>
+        </div>
+        <div class="stat-card" style="border-top:3px solid #ef4444;">
+          <div class="stat-num" id="dash-stock-bajo">—</div>
+          <div class="stat-lbl">📦 Repuestos bajo stock</div>
+        </div>
+      </div>
+      <div class="tabla-wrap">
+        <div class="tabla-top"><strong>Información del sistema</strong></div>
+        <table>
+          <tbody>
+            <tr><td>Usuario</td><td><strong id="info-user">—</strong></td></tr>
+            <tr><td>Rol</td><td><strong id="info-rol">—</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="tabla-wrap" style="margin-top:16px;">
+        <div class="tabla-top">
+          <strong>📋 Actividad reciente</strong>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <select id="dash-filtro-sede" onchange="window._dashPagina=1; renderDashboard()" style="padding:5px 8px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;">
+              <option value="">🏢 Todas las sedes</option>
+            </select>
+            <select id="dash-filtro-tipo" onchange="window._dashPagina=1; renderActividadReciente()" style="padding:5px 8px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;">
+              <option value="">Todo</option>
+              <option value="orden">📋 Órdenes</option>
+              <option value="factura">🧾 Facturas</option>
+              <option value="garantia">🛡️ Garantías</option>
+            </select>
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <label style="font-size:11px;color:var(--med);">Desde</label>
+              <input type="date" id="dash-fecha-desde" onchange="window._dashPagina=1; renderActividadReciente()" style="padding:5px 7px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;color:#374151;">
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <label style="font-size:11px;color:var(--med);">Hasta</label>
+              <input type="date" id="dash-fecha-hasta" onchange="window._dashPagina=1; renderActividadReciente()" style="padding:5px 7px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;color:#374151;">
+            </span>
+            <button onclick="window._dashPagina=1; limpiarFechas('dash', renderActividadReciente)" title="Limpiar fechas" style="padding:4px 8px;border:1px solid var(--borde);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:var(--med);">✕ Fechas</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Tipo</th><th>N°</th><th>Cliente / Producto</th><th>Estado</th><th>Monto</th><th>Fecha</th><th>Ver</th></tr></thead>
+          <tbody id="t-dash-actividad"><tr><td colspan="7" style="text-align:center;color:var(--med);">Cargando...</td></tr></tbody>
+        </table>
+        <div id="dash-pager" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--borde);"></div>
+      </div>
+    </div>
+
+    <div id="sec-tecnicos" class="seccion" style="display:none;">
+      <div class="tabla-wrap">
+        <div class="tabla-top">
+          <strong>Usuarios bajo tu supervisión</strong>
+          <button class="btn btn-azul btn-sm" id="btn-crear-tecnico">+ Crear usuario</button>
+        </div>
+        <table>
+          <thead><tr><th>Email</th><th>Sede</th><th>Estado</th><th>Creado</th><th>Acciones</th></tr></thead>
+          <tbody id="t-tecnicos"><tr><td colspan="5" style="text-align:center;color:var(--med);">Sin usuarios creados.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SEDES -->
+    <div id="sec-sedes" class="seccion" style="display:none;">
+      <div class="tabla-wrap">
+        <div class="tabla-top">
+          <strong>Sedes</strong>
+          <button class="btn btn-azul btn-sm" onclick="abrirModal('m-sede')">+ Nueva sede</button>
+        </div>
+        <table>
+          <thead><tr><th>Nombre</th><th>Dirección</th><th>Técnicos</th><th>Acciones</th></tr></thead>
+          <tbody id="t-sedes"><tr><td colspan="4" style="text-align:center;color:var(--med);">Sin sedes creadas.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CONFIGURACIÓN -->
+    <div id="sec-config" class="seccion" style="display:none;">
+
+      <!-- Tabs -->
+      <div style="display:flex;gap:4px;margin-bottom:18px;">
+        <button id="cfg-tab-sedes" class="btn btn-azul btn-sm" onclick="cfgTab('sedes')">🏢 Editar sedes</button>
+        <button id="cfg-tab-clave" class="btn btn-gris btn-sm" onclick="cfgTab('clave')">🔑 Clave maestra</button>
+        <button id="cfg-tab-historial" class="btn btn-gris btn-sm" onclick="cfgTab('historial')">📋 Historial de cambios</button>
+        <button id="cfg-tab-vendedor" class="btn btn-gris btn-sm" onclick="cfgTab('vendedor')">🛒 Acceso de vendedor</button>
+      </div>
+
+      <!-- Panel: editar sedes -->
+      <div id="cfg-panel-sedes">
+        <div class="tabla-wrap">
+          <div class="tabla-top"><strong>Editar información de sedes</strong></div>
+          <div id="cfg-sedes-lista" style="display:flex;flex-direction:column;gap:12px;padding:16px;">
+            <p style="color:var(--med);font-size:13px;">Cargando sedes...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel: cambiar clave maestra -->
+      <div id="cfg-panel-clave" style="display:none;">
+        <div class="tabla-wrap" style="max-width:460px;">
+          <div class="tabla-top"><strong>Cambiar clave maestra</strong></div>
+          <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+            <div class="alerta alerta-info">La clave maestra se usa para eliminar registros y acceder a funciones sensibles.</div>
+            <div class="fg"><label>Clave actual</label><input type="password" id="cfg-clave-actual" placeholder="Clave actual"></div>
+            <div class="fg"><label>Nueva clave</label><input type="password" id="cfg-clave-nueva" placeholder="Nueva clave (mínimo 6 caracteres)"></div>
+            <div class="fg"><label>Confirmar nueva clave</label><input type="password" id="cfg-clave-confirmar" placeholder="Repite la nueva clave"></div>
+            <div id="cfg-clave-msg" style="display:none;padding:10px;border-radius:6px;font-size:13px;"></div>
+            <button class="btn btn-azul" onclick="cambiarClaveMaestra()">🔑 Actualizar clave maestra</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel: acceso de vendedor -->
+      <div id="cfg-panel-vendedor" style="display:none;">
+        <div class="tabla-wrap" style="max-width:460px;">
+          <div class="tabla-top"><strong>Acceso de vendedor (solo lectura)</strong></div>
+          <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+            <div class="alerta alerta-info">Define el <strong>usuario</strong> y la <strong>contraseña</strong> que tus vendedores usarán para consultar las órdenes, facturas y garantías. Pueden compartir estas mismas credenciales. Es una cuenta de solo lectura.</div>
+            <div class="fg"><label>Usuario</label><input type="text" id="cfg-vend-usuario" placeholder="Ej: ventas" autocomplete="off"></div>
+            <div class="fg"><label>Contraseña</label><input type="text" id="cfg-vend-clave" placeholder="Contraseña para vendedores" autocomplete="off"></div>
+            <div id="cfg-vend-msg" style="display:none;padding:10px;border-radius:6px;font-size:13px;"></div>
+            <button class="btn btn-azul" onclick="guardarAccesoVendedor()">💾 Guardar acceso de vendedor</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel: historial de cambios -->
+      <div id="cfg-panel-historial" style="display:none;">
+        <div class="tabla-wrap">
+          <div class="tabla-top">
+            <strong>Historial de cambios</strong>
+            <select id="cfg-filtro-historial" onchange="renderHistorial()" style="padding:5px 8px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;">
+              <option value="">Todos los tipos</option>
+              <option value="sede">🏢 Sedes</option>
+              <option value="clave">🔑 Clave maestra</option>
+              <option value="tecnico">👤 Técnicos</option>
+            </select>
+          </div>
+          <table>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Antes</th><th>Después</th></tr></thead>
+            <tbody id="t-historial"><tr><td colspan="5" style="text-align:center;color:var(--med);">Sin cambios registrados.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ÓRDENES DE SERVICIO -->
+    <div id="sec-ordenes" class="seccion" style="display:none;">
+      <div class="tabla-wrap">
+        <div class="tabla-top">
+          <strong>Órdenes de servicio</strong>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <select id="ord-filtro-sede" onchange="renderOrdenes()" style="padding:5px 8px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;">
+              <option value="">🏢 Todas las sedes</option>
+            </select>
+            <select id="ord-filtro-estado" onchange="renderOrdenes()" style="padding:5px 8px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;">
+              <option value="">📋 Todos los estados</option>
+              <option value="pendiente">⏳ Pendiente</option>
+              <option value="en_proceso">🔧 En proceso</option>
+              <option value="listo">✅ Listo</option>
+              <option value="entregado">📦 Entregado</option>
+              <option value="cancelado">❌ Cancelado</option>
+            </select>
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <label style="font-size:11px;color:var(--med);">Desde</label>
+              <input type="date" id="ord-fecha-desde" onchange="renderOrdenes()" style="padding:5px 7px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;color:#374151;">
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <label style="font-size:11px;color:var(--med);">Hasta</label>
+              <input type="date" id="ord-fecha-hasta" onchange="renderOrdenes()" style="padding:5px 7px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;color:#374151;">
+            </span>
+            <button onclick="limpiarFechas('ord',renderOrdenes)" title="Limpiar fechas" style="padding:4px 8px;border:1px solid var(--borde);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:var(--med);">✕ Fechas</button>
+            <button id="btn-nueva-orden" class="btn btn-azul btn-sm" onclick="abrirNuevaOrden()">+ Nueva orden</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>N°</th><th>Cliente</th><th>Equipo</th><th>Estado</th><th>Sede</th><th>Técnico</th><th>Prioridad</th><th>Fecha</th><th>Acciones</th></tr></thead>
+          <tbody id="t-ordenes"><tr><td colspan="9" style="text-align:center;color:var(--med);">Sin órdenes.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- GARANTÍAS Y SERVICIO INTERNO -->
+    <div id="sec-reparaciones" class="seccion" style="display:none;">
+      <div class="tabla-wrap">
+        <div class="tabla-top">
+          <strong>Garantías y Servicio Interno</strong>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <select id="rep-filtro-sede" onchange="renderReparaciones()" style="padding:5px 8px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;">
+              <option value="">🏢 Todas las sedes</option>
+            </select>
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <label style="font-size:11px;color:var(--med);">Desde</label>
+              <input type="date" id="rep-fecha-desde" onchange="renderReparaciones()" style="padding:5px 7px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;color:#374151;">
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <label style="font-size:11px;color:var(--med);">Hasta</label>
+              <input type="date" id="rep-fecha-hasta" onchange="renderReparaciones()" style="padding:5px 7px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;color:#374151;">
+            </span>
+            <button onclick="limpiarFechas('rep',renderReparaciones)" title="Limpiar fechas" style="padding:4px 8px;border:1px solid var(--borde);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:var(--med);">✕ Fechas</button>
+            <button id="btn-nueva-reparacion" class="btn btn-azul btn-sm" onclick="abrirModal('m-reparacion')">+ Nuevo registro</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Tipo</th><th>Producto</th><th>Cliente</th><th>Categoría</th><th>Acción</th><th>Estado</th><th>Costo interno</th><th>Técnico</th><th>Fecha</th><th>Acciones</th></tr></thead>
+          <tbody id="t-reparaciones"><tr><td colspan="10" style="text-align:center;color:var(--med);">Sin registros.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- FACTURAS -->
+    <div id="sec-facturas" class="seccion" style="display:none;">
+      <div class="tabla-wrap">
+        <div class="tabla-top">
+          <strong>Facturas</strong>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <select id="fac-filtro-sede" onchange="renderFacturas()" style="padding:5px 8px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;">
+              <option value="">🏢 Todas las sedes</option>
+            </select>
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <label style="font-size:11px;color:var(--med);">Desde</label>
+              <input type="date" id="fac-fecha-desde" onchange="renderFacturas()" style="padding:5px 7px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;color:#374151;">
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <label style="font-size:11px;color:var(--med);">Hasta</label>
+              <input type="date" id="fac-fecha-hasta" onchange="renderFacturas()" style="padding:5px 7px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;color:#374151;">
+            </span>
+            <button onclick="limpiarFechas('fac',renderFacturas)" title="Limpiar fechas" style="padding:4px 8px;border:1px solid var(--borde);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:var(--med);">✕ Fechas</button>
+            <button id="btn-nueva-factura" class="btn btn-azul btn-sm" onclick="abrirModal('m-factura')">+ Nueva factura</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>N° Factura</th><th>Cliente</th><th>Monto</th><th>Estado</th><th>Técnico</th><th>Fecha</th><th>Acciones</th></tr></thead>
+          <tbody id="t-facturas"><tr><td colspan="7" style="text-align:center;color:var(--med);">Sin facturas.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- INVENTARIO -->
+    <div id="sec-inventario" class="seccion" style="display:none;">
+      <!-- Barra de búsqueda -->
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <input type="text" id="inv-buscar" placeholder="🔍 Buscar repuesto por nombre o categoría..." oninput="filtrarInventario()" style="flex:1;min-width:200px;padding:9px 12px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+        <select id="inv-filtro-sede" onchange="filtrarInventario()" style="padding:9px 12px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+          <option value="">🏢 Todas las sedes</option>
+        </select>
+        <select id="inv-filtro-cat" onchange="filtrarInventario()" style="padding:9px 12px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+          <option value="">Todas las categorías</option>
+          <option value="telefonia">📱 Telefonía</option>
+          <option value="pantalla">🖥️ Pantalla</option>
+          <option value="bateria">🔋 Batería</option>
+          <option value="pin_carga">🔌 Pin de carga</option>
+          <option value="flex_carga">➿ Flex de carga</option>
+          <option value="camara">📷 Cámara</option>
+          <option value="tapa">🪟 Tapa</option>
+          <option value="carcasa">🧰 Carcasa</option>
+          <option value="boton">🔘 Botón</option>
+          <option value="relojes">⌚ Relojes</option>
+          <option value="computacion">💻 Computación</option>
+          <option value="electrodomesticos">🏠 Electrodomésticos</option>
+          <option value="electronicos">🔌 Electrónicos</option>
+          <option value="otro">📦 Otro</option>
+        </select>
+        <span id="inv-admin-acc" style="display:none;gap:10px;">
+          <button id="btn-agregar-repuesto" class="btn btn-azul btn-sm" onclick="abrirModal('m-repuesto')">+ Agregar repuesto</button>
+          <button id="btn-importar-inv" class="btn btn-gris btn-sm" onclick="abrirImportar()">📥 Importar Excel</button>
+        </span>
+      </div>
+      <!-- Tabs -->
+      <div style="display:flex;gap:4px;margin-bottom:14px;">
+        <button id="inv-tab-stock" class="btn btn-azul btn-sm" onclick="invTab('stock')">📦 Stock</button>
+        <button id="inv-tab-movimientos" class="btn btn-gris btn-sm" onclick="invTab('movimientos')">📋 Historial de movimientos</button>
+      </div>
+      <!-- Tabla stock -->
+      <div id="inv-panel-stock">
+        <div class="tabla-wrap">
+          <div class="tabla-top"><strong>Inventario de repuestos</strong><span id="inv-alerta-stock" style="font-size:12px;color:#c0392b;"></span></div>
+          <table>
+            <thead><tr><th>Código</th><th>Repuesto</th><th>Categoría</th><th>Sede</th><th>Stock</th><th>Mín.</th><th>Costo</th><th>Venta</th><th>Acciones</th></tr></thead>
+            <tbody id="t-inventario"><tr><td colspan="9" style="text-align:center;color:var(--med);">Sin repuestos.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Tabla movimientos -->
+      <div id="inv-panel-movimientos" style="display:none;">
+        <div class="tabla-wrap">
+          <div class="tabla-top"><strong>Historial de movimientos</strong></div>
+          <table>
+            <thead><tr><th>Fecha</th><th>Repuesto</th><th>Tipo</th><th>Cantidad</th><th>Motivo</th><th>Orden</th></tr></thead>
+            <tbody id="t-movimientos"><tr><td colspan="6" style="text-align:center;color:var(--med);">Sin movimientos.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROMEDIOS -->
+    <div id="sec-promedios" class="seccion" style="display:none;">
+      <div id="prom-filtros" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px;">
+        <span style="font-size:13px;color:var(--med);font-weight:600;">Filtrar:</span>
+        <span id="prom-filtros-sup" style="display:none;gap:8px;align-items:center;">
+          <select id="prom-filtro-tecnico" onchange="renderPromedios()" style="padding:6px 9px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+            <option value="">👤 Todos los técnicos</option>
+          </select>
+          <select id="prom-filtro-sede" onchange="renderPromedios()" style="padding:6px 9px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+            <option value="">🏢 Todas las sedes</option>
+          </select>
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:4px;">
+              <label style="font-size:11px;color:var(--med);">Desde</label>
+              <input type="date" id="prom-fecha-desde" onchange="renderPromedios()" style="padding:5px 7px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;color:#374151;">
+            </span>
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <label style="font-size:11px;color:var(--med);">Hasta</label>
+              <input type="date" id="prom-fecha-hasta" onchange="renderPromedios()" style="padding:5px 7px;border:1px solid var(--borde);border-radius:6px;font-size:12px;font-family:inherit;color:#374151;">
+            </span>
+            <button onclick="limpiarFechas('prom',renderPromedios)" title="Limpiar fechas" style="padding:4px 8px;border:1px solid var(--borde);background:#fff;border-radius:6px;font-size:12px;cursor:pointer;color:var(--med);">✕ Fechas</button>
+        <button class="btn btn-gris btn-sm" type="button" onclick="limpiarFiltrosPromedios()">✕ Limpiar</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;" id="cards-promedios">
+        <div class="stat-card" style="border-top:3px solid #1a56db;"><div class="stat-num" id="avg-ordenes">—</div><div class="stat-lbl">📋 Órdenes totales</div></div>
+        <div class="stat-card" style="border-top:3px solid #f59e0b;"><div class="stat-num" id="avg-pendientes">—</div><div class="stat-lbl">⏳ Pendientes</div></div>
+        <div class="stat-card" style="border-top:3px solid #10b981;"><div class="stat-num" id="avg-entregadas">—</div><div class="stat-lbl">📦 Entregadas</div></div>
+        <div class="stat-card" style="border-top:3px solid #8b5cf6;"><div class="stat-num" id="avg-ingresos">—</div><div class="stat-lbl">💰 Ingresos totales</div></div>
+        <div class="stat-card" style="border-top:3px solid #f97316;"><div class="stat-num" id="avg-repuestos">—</div><div class="stat-lbl">🔩 Total Repuestos</div></div>
+        <div class="stat-card" style="border-top:3px solid #ef4444;"><div class="stat-num" id="avg-manoobra">—</div><div class="stat-lbl">🛠️ Total Mano de obra</div></div>
+        <div class="stat-card" style="border-top:3px solid #0ea5e9;"><div class="stat-num" id="avg-ing-tecnico">—</div><div class="stat-lbl">👨‍🔧 Ingresos del técnico (50%)</div></div>
+        <div class="stat-card" style="border-top:3px solid #1a7f4b;"><div class="stat-num" id="avg-ing-empresa">—</div><div class="stat-lbl">🏢 Ingresos empresa (50%)</div></div>
+      </div>
+      <div class="tabla-wrap">
+        <div class="tabla-top"><strong>Resumen por estado de órdenes</strong></div>
+        <table>
+          <thead><tr><th>Estado</th><th>Cantidad</th><th>% del total</th></tr></thead>
+          <tbody id="t-promedios"><tr><td colspan="3" style="text-align:center;color:var(--med);">Sin datos.</td></tr></tbody>
+        </table>
+      </div>
+      <div class="tabla-wrap" id="sec-comisiones" style="margin-top:24px;">
+        <div class="tabla-top" style="display:flex;justify-content:space-between;align-items:center;">
+          <strong>💰 Comisiones por técnico</strong>
+          <span style="font-size:12px;color:var(--med);">Basado en órdenes entregadas y facturas cobradas en el rango seleccionado</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Técnico</th>
+              <th>Órdenes entregadas</th>
+              <th>Facturas cobradas</th>
+              <th>Mano de obra total</th>
+              <th>Comisión (50%)</th>
+            </tr>
+          </thead>
+          <tbody id="t-comisiones"><tr><td colspan="5" style="text-align:center;color:var(--med);">Sin datos.</td></tr></tbody>
+        </table>
+        <div id="comisiones-total" style="text-align:right;padding:10px 16px;font-weight:700;font-size:14px;color:#1a56db;"></div>
+      </div>
+    </div>
+
+    <!-- MI PERFIL -->
+    <div id="sec-perfil" class="seccion" style="display:none;">
+      <div class="tabla-wrap" style="max-width:500px;">
+        <div class="tabla-top"><strong>Mi perfil</strong></div>
+        <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+          <div class="fg"><label>Email</label><input type="email" id="perfil-email" readonly style="background:#f8f9fb;color:var(--med);"></div>
+          <div class="fg"><label>Rol</label><input type="text" id="perfil-rol" readonly style="background:#f8f9fb;color:var(--med);"></div>
+          <div class="fg"><label>Nueva contraseña</label><input type="password" id="perfil-pwd" placeholder="Deja en blanco si no deseas cambiarla"></div>
+          <div class="fg"><label>Confirmar contraseña</label><input type="password" id="perfil-pwd2" placeholder="Repite la nueva contraseña"></div>
+          <div id="perfil-msg" style="display:none;padding:10px;border-radius:6px;font-size:13px;"></div>
+          <button class="btn btn-azul" onclick="guardarPerfil()">💾 Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div>
+
+<!-- MODAL: Crear técnico -->
+<div class="overlay" id="m-tecnico">
+<div class="modal">
+  <div class="mh">
+    <div><h3>👤 Crear usuario</h3><p>Crea un nuevo usuario (técnico, supervisor o gerente)</p></div>
+    <button class="mclose" type="button" onclick="cerrarModal('m-tecnico')">✕</button>
+  </div>
+  <div class="fg"><label>Email *</label><input type="email" id="t-email" placeholder="tecnico@ejemplo.com"></div>
+  <div class="fg"><label>Contraseña *</label><input type="password" id="t-password" placeholder="Contraseña"></div>
+  <div class="fg"><label>Rol *</label>
+    <select id="t-rol" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="tecnico">👨‍🔧 Técnico</option>
+      <option value="supervisor">🗂️ Supervisor</option>
+      <option value="gerente">⭐ Gerente</option>
+      <option value="rrhh">👥 RRHH</option>
+    </select>
+  </div>
+  <div class="fg"><label>Sede</label>
+    <select id="t-sede" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="">— Sin sede asignada —</option>
+    </select>
+  </div>
+  <div class="alerta alerta-info">La contraseña debe darse al usuario de forma segura.</div>
+  <div class="mfoot">
+    <button class="btn btn-gris btn-sm" type="button" onclick="cerrarModal('m-tecnico')">Cancelar</button>
+    <button class="btn btn-azul btn-sm" id="btn-guardar-tec">✅ Crear</button>
+  </div>
+</div></div>
+
+<!-- MODAL: Nueva sede -->
+<div class="overlay" id="m-sede">
+<div class="modal" style="max-width:440px;">
+  <div class="mh">
+    <div><h3>🏢 Nueva sede</h3><p>Registra una sucursal o punto de servicio</p></div>
+    <button class="mclose" type="button" onclick="cerrarModal('m-sede')">✕</button>
+  </div>
+  <div class="fg"><label>Nombre *</label><input type="text" id="sede-nombre" placeholder="Ej: Sucursal Centro"></div>
+  <div class="fg"><label>Dirección</label><input type="text" id="sede-direccion" placeholder="Ej: Av. Principal 123"></div>
+  <div class="mfoot">
+    <button class="btn btn-gris btn-sm" type="button" onclick="cerrarModal('m-sede')">Cancelar</button>
+    <button class="btn btn-azul btn-sm" onclick="guardarSede()">✅ Crear sede</button>
+  </div>
+</div></div>
+
+<!-- MODAL: Asignar técnico a sede -->
+<div class="overlay" id="m-asignar-sede">
+<div class="modal" style="max-width:400px;">
+  <div class="mh">
+    <div><h3>👤 Asignar sede</h3><p id="asignar-tec-email" style="font-size:12px;color:var(--med);">—</p></div>
+    <button class="mclose" type="button" onclick="cerrarModal('m-asignar-sede')">✕</button>
+  </div>
+  <input type="hidden" id="asignar-tec-id">
+  <div class="fg"><label>Sede</label>
+    <select id="asignar-sede-select" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="">— Sin sede —</option>
+    </select>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-gris btn-sm" type="button" onclick="cerrarModal('m-asignar-sede')">Cancelar</button>
+    <button class="btn btn-azul btn-sm" onclick="guardarAsignacionSede()">✅ Guardar</button>
+  </div>
+</div></div>
+
+<!-- MODAL: Nueva orden -->
+<div class="overlay" id="m-orden">
+<div class="modal" style="max-width:480px;">
+  <div class="mh">
+    <div><h3>📋 Nueva orden</h3><p>Registrá una orden de servicio</p></div>
+    <button class="mclose" type="button" onclick="cerrarModal('m-orden')">✕</button>
+  </div>
+  <div class="fg"><label>Nombre del cliente *</label><input type="text" id="o-cliente" placeholder="Nombre completo"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="fg"><label>Tipo de equipo *</label><input type="text" id="o-tipo" placeholder="Ej: Celular, PC..."></div>
+    <div class="fg"><label>Marca</label><input type="text" id="o-marca" placeholder="Ej: Samsung, Apple..."></div>
+  </div>
+  <div class="fg"><label>Modelo</label><input type="text" id="o-modelo" placeholder="Ej: Galaxy A52, iPhone 13..."></div>
+  <div class="fg"><label>Falla / Problema</label><input type="text" id="o-falla" placeholder="Describí el problema"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="fg"><label>Prioridad</label>
+      <select id="o-prioridad" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+        <option value="normal">Normal</option>
+        <option value="urgente">🔴 Urgente</option>
+        <option value="baja">🔵 Baja</option>
+      </select>
+    </div>
+    <div class="fg"><label>Estado</label>
+      <select id="o-estado" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+        <option value="pendiente">⏳ Pendiente</option>
+        <option value="en_proceso">🔧 En proceso</option>
+        <option value="listo">✅ Listo</option>
+        <option value="entregado">📦 Entregado</option>
+      </select>
+    </div>
+  </div>
+  <div class="fg"><label>Accesorios incluidos</label><input type="text" id="o-accesorios" placeholder="Ej: cargador, funda..."></div>
+  <div class="fg"><label>🏢 Sede actual</label>
+    <select id="o-sede" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="">— Sin sede —</option>
+    </select>
+  </div>
+  <div class="fg"><label>Notas</label><input type="text" id="o-notas" placeholder="Observaciones adicionales"></div>
+  <div class="mfoot">
+    <button class="btn btn-gris btn-sm" type="button" onclick="cerrarModal('m-orden')">Cancelar</button>
+    <button class="btn btn-azul btn-sm" onclick="guardarOrden()">✅ Guardar</button>
+  </div>
+</div></div>
+
+<!-- MODAL: Editar orden -->
+<div class="overlay" id="m-editar-orden">
+<div class="modal" style="max-width:480px;">
+  <div class="mh">
+    <div><h3>✏️ Editar orden</h3><p id="edit-orden-titulo">—</p></div>
+    <button class="mclose" type="button" onclick="cerrarModal('m-editar-orden')">✕</button>
+  </div>
+  <input type="hidden" id="edit-orden-id">
+  <div class="fg"><label>Estado</label>
+    <select id="edit-estado" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="pendiente">⏳ Pendiente</option>
+      <option value="en_proceso">🔧 En proceso</option>
+      <option value="listo">✅ Listo</option>
+      <option value="entregado">📦 Entregado</option>
+    </select>
+  </div>
+  <div class="fg"><label>Prioridad</label>
+    <select id="edit-prioridad" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="normal">Normal</option>
+      <option value="urgente">🔴 Urgente</option>
+      <option value="baja">🔵 Baja</option>
+    </select>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="fg"><label>Presupuesto ($)</label><input type="number" id="edit-presupuesto" placeholder="0.00" min="0"></div>
+    <div class="fg"><label>Mano de obra ($)</label><input type="number" id="edit-mano-obra" placeholder="0.00" min="0"></div>
+  </div>
+  <div class="fg"><label>Costo de repuestos ($)</label><input type="number" id="edit-repuestos" placeholder="0.00" min="0"></div>
+
+  <!-- Sección repuestos de inventario -->
+  <div style="border:1px solid var(--borde);border-radius:8px;padding:12px;margin-top:4px;">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;">
+      <input type="checkbox" id="edit-usar-inventario" onchange="toggleInventarioOrden()" style="width:15px;height:15px;">
+      📦 Usar repuesto del inventario
+    </label>
+    <div id="edit-inventario-panel" style="display:none;margin-top:10px;">
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <input type="text" id="edit-inv-buscar" placeholder="Buscar repuesto..." oninput="filtrarInvOrden()" style="flex:1;padding:7px 10px;border:1px solid var(--borde);border-radius:8px;font-size:12px;font-family:inherit;">
+      </div>
+      <div id="edit-inv-lista" style="max-height:160px;overflow-y:auto;border:1px solid var(--borde);border-radius:8px;background:#fafafa;"></div>
+      <!-- Repuestos seleccionados -->
+      <div id="edit-inv-seleccionados" style="margin-top:8px;display:flex;flex-direction:column;gap:4px;"></div>
+    </div>
+  </div>
+
+  <div class="fg"><label>🏢 Sede actual (transferir entre sedes)</label>
+    <select id="edit-sede" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="">— Sin sede —</option>
+    </select>
+  </div>
+  <div class="fg"><label>Notas</label><input type="text" id="edit-notas" placeholder="Observaciones"></div>
+  <div style="background:#f8f9fb;border-radius:8px;padding:10px 14px;font-size:13px;margin-top:4px;">
+    Costo total (MO + repuestos): <strong id="edit-total">$0</strong>
+  </div>
+  <div id="edit-advertencia" style="display:none;background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:10px 14px;font-size:13px;color:#92400e;margin-top:4px;">
+    ⚠️ Los costos superan el presupuesto acordado. Contactá al cliente para confirmar antes de marcar como entregado.
+  </div>
+  <div class="fg" style="margin-top:8px;"><label>📜 Línea de tiempo</label><div id="edit-timeline" style="max-height:170px;overflow-y:auto;background:#f8f9fb;border:1px solid var(--borde);border-radius:8px;padding:6px 12px;">—</div></div>
+  <div class="mfoot">
+    <button class="btn btn-gris btn-sm" type="button" onclick="cerrarModal('m-editar-orden')">Cancelar</button>
+    <button class="btn btn-azul btn-sm" onclick="guardarEditOrden()">💾 Guardar cambios</button>
+  </div>
+</div></div>
+
+<!-- MODAL: Nueva garantía / servicio interno -->
+<div class="overlay" id="m-reparacion">
+<div class="modal" style="max-width:480px;">
+  <div class="mh">
+    <div><h3>��️ Nuevo registro</h3><p>Garantía de venta o servicio interno</p></div>
+    <button class="mclose" type="button" onclick="cerrarModal('m-reparacion')">✕</button>
+  </div>
+  <div class="fg"><label>Tipo *</label>
+    <select id="r-tipo" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="garantia">🛡️ Garantía de venta</option>
+      <option value="interno">🔧 Servicio interno</option>
+    </select>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="fg"><label>Cliente</label><input type="text" id="r-cliente" placeholder="Nombre del cliente"></div>
+    <div class="fg"><label>Teléfono / contacto</label><input type="text" id="r-cliente-tel" placeholder="Ej: 0414-1234567"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="fg"><label>Producto *</label><input type="text" id="r-descripcion" placeholder="Ej: Reloj Casio, TV Samsung..."></div>
+    <div class="fg"><label>Categoría</label>
+      <select id="r-categoria" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+        <option value="telefonia">📱 Telefonía</option>
+        <option value="pantalla">🖥️ Pantalla</option>
+        <option value="bateria">🔋 Batería</option>
+        <option value="pin_carga">🔌 Pin de carga</option>
+        <option value="flex_carga">➿ Flex de carga</option>
+        <option value="camara">📷 Cámara</option>
+        <option value="tapa">🪟 Tapa</option>
+        <option value="carcasa">🧰 Carcasa</option>
+        <option value="boton">🔘 Botón</option>
+        <option value="relojes">⌚ Relojes</option>
+        <option value="computacion">💻 Computación</option>
+        <option value="electrodomesticos">🏠 Electrodomésticos</option>
+        <option value="electronicos">🔌 Electrónicos</option>
+        <option value="otro">📦 Otro</option>
+      </select>
+    </div>
+  </div>
+  <div class="fg"><label>N° comprobante / factura de venta</label><input type="text" id="r-orden" placeholder="Solo para garantías"></div>
+  <div class="fg"><label>Falla reportada</label><input type="text" id="r-falla" placeholder="Qué falla presenta el producto"></div>
+  <div class="fg"><label>Acción tomada</label>
+    <select id="r-accion" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="reparado">🔧 Reparado</option>
+      <option value="reemplazado">🔄 Reemplazado</option>
+      <option value="sin_cobertura">❌ Sin cobertura</option>
+      <option value="pendiente">⏳ Pendiente evaluación</option>
+    </select>
+  </div>
+  <div class="fg"><label>Repuestos / materiales usados</label><input type="text" id="r-repuestos" placeholder="Ej: pantalla, batería..."></div>
+  <div class="fg"><label>Costo interno ($)</label><input type="number" id="r-costo" placeholder="0.00" min="0"></div>
+  <div class="fg"><label>Estado</label>
+    <select id="r-estado" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="en_proceso">🔧 En proceso</option>
+      <option value="enviado_proveedor">📦 Enviado a Proveedor</option>
+      <option value="soporte_pd">🛠️ Soporte Técnico PD</option>
+      <option value="completada">✅ Resuelto</option>
+      <option value="no_reparable">❌ No reparable</option>
+    </select>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-gris btn-sm" type="button" onclick="cerrarModal('m-reparacion')">Cancelar</button>
+    <button class="btn btn-azul btn-sm" onclick="guardarReparacion()">✅ Guardar</button>
+  </div>
+</div></div>
+
+<!-- MODAL: Editar garantía / interno -->
+<div class="overlay" id="m-editar-reparacion">
+<div class="modal" style="max-width:480px;">
+  <div class="mh">
+    <div><h3>✏️ Editar registro</h3><p id="edit-rep-titulo" style="font-size:12px;color:var(--med);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">—</p></div>
+    <button class="mclose" type="button" onclick="cerrarModal('m-editar-reparacion')">✕</button>
+  </div>
+  <input type="hidden" id="edit-rep-id">
+  <div class="fg"><label>Estado</label>
+    <select id="edit-rep-estado" onchange="toggleBitacoraLockLive()" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="en_proceso">🔧 En proceso</option>
+      <option value="enviado_proveedor">📦 Enviado a Proveedor</option>
+      <option value="soporte_pd">🛠️ Soporte Técnico PD</option>
+      <option value="completada">✅ Resuelto</option>
+      <option value="no_reparable">❌ No reparable</option>
+    </select>
+  </div>
+  <div class="fg"><label>Acción tomada</label>
+    <select id="edit-rep-accion" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="reparado">🔧 Reparado</option>
+      <option value="reemplazado">🔄 Reemplazado</option>
+      <option value="sin_cobertura">❌ Sin cobertura</option>
+      <option value="pendiente">⏳ Pendiente evaluación</option>
+    </select>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="fg"><label>Cliente</label><input type="text" id="edit-rep-cliente" placeholder="Nombre del cliente"></div>
+    <div class="fg"><label>Teléfono / contacto</label><input type="text" id="edit-rep-cliente-tel" placeholder="Ej: 0414-1234567"></div>
+  </div>
+  <div class="fg"><label>Producto</label><input type="text" id="edit-rep-descripcion" placeholder="Nombre del producto"></div>
+  <div class="fg"><label>Repuestos / materiales</label><input type="text" id="edit-rep-repuestos" placeholder="Ej: pantalla, batería..."></div>
+  <div class="fg"><label>Costo interno ($)</label><input type="number" id="edit-rep-costo" placeholder="0.00" min="0"></div>
+  <div class="fg" style="margin-top:8px;"><label>📜 Línea de tiempo</label><div id="rep-timeline" style="max-height:170px;overflow-y:auto;background:#f8f9fb;border:1px solid var(--borde);border-radius:8px;padding:6px 12px;">—</div></div>
+  <div class="fg" style="margin-top:8px;"><label>📝 Bitácora de avances</label>
+    <div id="rep-bitacora-lista" style="max-height:160px;overflow-y:auto;background:#f8f9fb;border:1px solid var(--borde);border-radius:8px;padding:6px 12px;">—</div>
+    <div id="rep-bitacora-edit" style="display:none;margin-top:8px;">
+      <textarea id="rep-bitacora-input" rows="2" placeholder="Escribe un avance del caso..." style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;"></textarea>
+      <button class="btn btn-azul btn-sm" type="button" onclick="agregarAvance()" style="margin-top:6px;">➕ Agregar avance</button>
+    </div>
+    <div id="rep-bitacora-lock" style="display:none;font-size:12px;color:var(--med);margin-top:6px;background:#f1f3f5;border-radius:8px;padding:8px 12px;">🔒 Bitácora bloqueada: el caso fue resuelto.</div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-sm" type="button" style="background:#0f766e;color:#fff;" onclick="if(_repActual)exportarGarantiaPDF(_repActual)">📄 Exportar PDF</button>
+    <button class="btn btn-gris btn-sm" type="button" onclick="cerrarModal('m-editar-reparacion')">Cancelar</button>
+    <button class="btn btn-azul btn-sm" onclick="guardarEditReparacion()">💾 Guardar cambios</button>
+  </div>
+</div></div>
+
+<!-- MODAL: Nueva factura -->
+<div class="overlay" id="m-factura">
+<div class="modal">
+  <div class="mh">
+    <div><h3>🧾 Nueva factura</h3><p>Emitir factura al cliente</p></div>
+    <button class="mclose" type="button" onclick="cerrarModal('m-factura')">✕</button>
+  </div>
+  <div class="fg"><label>Cliente *</label><input type="text" id="f-cliente" placeholder="Nombre del cliente"></div>
+  <div class="fg"><label>Descripción *</label><input type="text" id="f-descripcion" placeholder="Servicio prestado"></div>
+  <div class="fg"><label>Presupuesto ($)</label><input type="number" id="f-presupuesto" placeholder="0.00" min="0"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="fg"><label>Mano de obra ($)</label><input type="number" id="f-manoobra" placeholder="0.00" min="0" oninput="recalcFacturaTotal('f')"></div>
+    <div class="fg"><label>Refacción ($)</label><input type="number" id="f-refaccion" placeholder="0.00" min="0" oninput="recalcFacturaTotal('f')"></div>
+  </div>
+  <div class="fg"><label>Monto total ($) *</label><input type="number" id="f-monto" placeholder="0.00" min="0"></div>
+  <div class="fg"><label>Estado</label>
+    <select id="f-estado" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="pendiente">⏳ Pendiente</option>
+      <option value="pagado">✅ Pagada</option>
+      <option value="cancelado">❌ Cancelada</option>
+    </select>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-gris btn-sm" type="button" onclick="cerrarModal('m-factura')">Cancelar</button>
+    <button class="btn btn-azul btn-sm" onclick="guardarFactura()">✅ Guardar</button>
+  </div>
+</div></div>
+
+<!-- MODAL: Editar factura -->
+<div class="overlay" id="m-editar-factura">
+<div class="modal" style="max-width:440px;">
+  <div class="mh">
+    <div><h3>🧾 Factura</h3><p id="edit-fac-titulo" style="font-size:12px;color:var(--med);">—</p></div>
+    <button class="mclose" type="button" onclick="cerrarModal('m-editar-factura')">✕</button>
+  </div>
+  <input type="hidden" id="edit-fac-id">
+  <div class="fg"><label>Cliente</label><input type="text" id="edit-fac-cliente" placeholder="Nombre del cliente"></div>
+  <div class="fg"><label>Descripción</label><input type="text" id="edit-fac-descripcion" placeholder="Servicio prestado"></div>
+  <div class="fg"><label>Presupuesto ($)</label><input type="number" id="edit-fac-presupuesto" placeholder="0.00" min="0"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="fg"><label>Mano de obra ($)</label><input type="number" id="edit-fac-manoobra" placeholder="0.00" min="0" oninput="recalcFacturaTotal('edit-fac')"></div>
+    <div class="fg"><label>Refacción ($)</label><input type="number" id="edit-fac-refaccion" placeholder="0.00" min="0" oninput="recalcFacturaTotal('edit-fac')"></div>
+  </div>
+  <div class="fg"><label>Monto total ($)</label><input type="number" id="edit-fac-monto" placeholder="0.00" min="0"></div>
+  <div class="fg"><label>Estado</label>
+    <select id="edit-fac-estado" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="pendiente">⏳ Pendiente</option>
+      <option value="pagado">✅ Pagada</option>
+      <option value="cancelado">❌ Cancelada</option>
+    </select>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-gris btn-sm" type="button" onclick="cerrarModal('m-editar-factura')">Cancelar</button>
+    <button class="btn btn-azul btn-sm" onclick="guardarEditFactura()">💾 Guardar cambios</button>
+  </div>
+</div></div>
+
+<!-- MODAL: Nuevo repuesto -->
+<div class="overlay" id="m-repuesto">
+<div class="modal" style="max-width:480px;">
+  <div class="mh">
+    <div><h3>📦 Agregar repuesto</h3><p>Registra un ítem de inventario</p></div>
+    <button class="mclose" type="button" onclick="cerrarModal('m-repuesto')">✕</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="fg"><label>Nombre *</label><input type="text" id="inv-nombre" placeholder="Ej: Pantalla OLED iPhone 13"></div>
+    <div class="fg"><label>Código</label><input type="text" id="inv-codigo" placeholder="Ej: REP-001"></div>
+  </div>
+  <div class="fg"><label>Categoría</label>
+    <select id="inv-categoria" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="telefonia">📱 Telefonía</option>
+      <option value="pantalla">🖥️ Pantalla</option>
+      <option value="bateria">🔋 Batería</option>
+      <option value="pin_carga">🔌 Pin de carga</option>
+      <option value="flex_carga">➿ Flex de carga</option>
+      <option value="camara">📷 Cámara</option>
+      <option value="tapa">🪟 Tapa</option>
+      <option value="carcasa">🧰 Carcasa</option>
+      <option value="boton">🔘 Botón</option>
+      <option value="relojes">⌚ Relojes</option>
+      <option value="computacion">💻 Computación</option>
+      <option value="electrodomesticos">🏠 Electrodomésticos</option>
+      <option value="electronicos">🔌 Electrónicos</option>
+      <option value="otro">📦 Otro</option>
+    </select>
+  </div>
+  <div class="fg"><label>Sede *</label>
+    <select id="inv-sede" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;"><option value="">— Sin sede —</option></select>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+    <div class="fg"><label>Stock inicial *</label><input type="number" id="inv-stock" placeholder="0" min="0"></div>
+    <div class="fg"><label>Stock mínimo</label><input type="number" id="inv-stock-min" placeholder="0" min="0"></div>
+    <div class="fg"><label>Fecha ingreso</label><input type="date" id="inv-fecha"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="fg"><label>Costo ($)</label><input type="number" id="inv-costo" placeholder="0.00" min="0"></div>
+    <div class="fg"><label>Precio de venta ($)</label><input type="number" id="inv-precio" placeholder="0.00" min="0"></div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-gris btn-sm" type="button" onclick="cerrarModal('m-repuesto')">Cancelar</button>
+    <button class="btn btn-azul btn-sm" onclick="guardarRepuesto()">✅ Guardar</button>
+  </div>
+</div></div>
+
+<!-- MODAL: Ajuste de stock -->
+<div class="overlay" id="m-ajuste-stock">
+<div class="modal" style="max-width:400px;">
+  <div class="mh">
+    <div><h3>🔄 Ajustar stock</h3><p id="ajuste-repuesto-nombre">—</p></div>
+    <button class="mclose" type="button" onclick="cerrarModal('m-ajuste-stock')">✕</button>
+  </div>
+  <input type="hidden" id="ajuste-repuesto-id">
+  <input type="hidden" id="ajuste-stock-ref">
+  <div style="display:flex;gap:8px;margin-bottom:14px;">
+    <button id="ajuste-btn-entrada" class="btn btn-azul btn-sm" onclick="setTipoAjuste('entrada')" style="flex:1;">➕ Entrada</button>
+    <button id="ajuste-btn-salida" class="btn btn-gris btn-sm" onclick="setTipoAjuste('salida')" style="flex:1;">➖ Salida</button>
+  </div>
+  <input type="hidden" id="ajuste-tipo" value="entrada">
+  <div class="fg"><label>Cantidad *</label><input type="number" id="ajuste-cantidad" placeholder="0" min="1" oninput="recalcAjuste()"></div>
+  <div class="fg"><label>Motivo</label>
+    <select id="ajuste-motivo" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+      <option value="compra">🛒 Compra de stock</option>
+      <option value="devolucion">🔄 Devolución</option>
+      <option value="usado_reparacion">🔧 Usado en reparación</option>
+      <option value="ajuste_manual">✏️ Ajuste manual</option>
+      <option value="perdida">❌ Pérdida / daño</option>
+    </select>
+  </div>
+  <div class="fg"><label>Notas</label><input type="text" id="ajuste-notas" placeholder="Observaciones adicionales"></div>
+  <div style="background:#f8f9fb;border-radius:8px;padding:10px 14px;font-size:13px;">
+    Stock actual: <strong id="ajuste-stock-actual">—</strong> &nbsp;→&nbsp; Nuevo stock: <strong id="ajuste-stock-nuevo" style="color:var(--azul);">—</strong>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-gris btn-sm" type="button" onclick="cerrarModal('m-ajuste-stock')">Cancelar</button>
+    <button class="btn btn-azul btn-sm" onclick="guardarAjusteStock()">✅ Confirmar</button>
+  </div>
+</div></div>
+
+<!-- MODAL: Importar inventario (Excel/CSV) -->
+<div class="overlay" id="m-importar">
+<div class="modal" style="max-width:520px;">
+  <div class="mh">
+    <div><h3>📥 Importar inventario</h3><p>Carga masiva de repuestos desde Excel o CSV</p></div>
+    <button class="mclose" type="button" onclick="cerrarModal('m-importar')">✕</button>
+  </div>
+  <div class="fg"><label>Sede destino</label>
+    <select id="imp-sede" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;"><option value="">— Sin sede —</option></select>
+  </div>
+  <div class="fg"><label>Archivo (.xlsx, .xls o .csv) *</label>
+    <input type="file" id="imp-file" accept=".xlsx,.xls,.csv" onchange="previewImport()" style="width:100%;padding:8px 11px;border:1px solid var(--borde);border-radius:8px;font-size:13px;font-family:inherit;">
+  </div>
+  <div style="background:#f0f6ff;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--med);line-height:1.5;">
+    Encabezados esperados en la primera fila (separados por <strong>;</strong>): <strong>nombre</strong> (obligatorio), codigo, categoria, stock, stock_minimo, costo, venta.<br>
+    Categorías válidas (puedes escribirlas con acentos y espacios): pantalla, batería, pin de carga, flex de carga, cámara, tapa, carcasa, botón, telefonía, relojes, computación, electrodomésticos, electrónicos, otro.<br>
+    <a href="#" onclick="descargarPlantillaInv();return false;" style="color:var(--azul);font-weight:600;">⬇️ Descargar plantilla CSV</a>
+  </div>
+  <div id="imp-preview" style="font-size:13px;margin-top:10px;"></div>
+  <div class="mfoot">
+    <button class="btn btn-gris btn-sm" type="button" onclick="cerrarModal('m-importar')">Cancelar</button>
+    <button class="btn btn-azul btn-sm" id="imp-confirm" onclick="confirmarImport()" disabled>✅ Importar</button>
+  </div>
+</div></div>
+
+<!-- MODAL: Preview orden entregada (solo lectura) -->
+<div class="overlay" id="m-preview-orden">
+<div class="modal" style="max-width:500px;">
+  <div class="mh">
+    <div><h3>🔒 Detalle de orden</h3><p id="prev-titulo">—</p></div>
+    <button class="mclose" type="button" onclick="cerrarModal('m-preview-orden')">✕</button>
+  </div>
+  <div style="display:grid;gap:10px;padding:4px 0;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="fg"><label>Cliente</label><input type="text" id="prev-cliente" readonly style="background:#f8f9fb;color:var(--med);"></div>
+      <div class="fg"><label>Estado</label><input type="text" id="prev-estado" readonly style="background:#f8f9fb;color:var(--med);"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="fg"><label>Tipo de equipo</label><input type="text" id="prev-tipo" readonly style="background:#f8f9fb;color:var(--med);"></div>
+      <div class="fg"><label>Marca / Modelo</label><input type="text" id="prev-equipo" readonly style="background:#f8f9fb;color:var(--med);"></div>
+    </div>
+    <div class="fg"><label>🏢 Sede actual</label><input type="text" id="prev-sede" readonly style="background:#f8f9fb;color:var(--med);"></div>
+    <div class="fg"><label>Falla reportada</label><input type="text" id="prev-falla" readonly style="background:#f8f9fb;color:var(--med);"></div>
+    <div class="fg"><label>Accesorios</label><input type="text" id="prev-accesorios" readonly style="background:#f8f9fb;color:var(--med);"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+      <div class="fg"><label>Presupuesto</label><input type="text" id="prev-presupuesto" readonly style="background:#f8f9fb;color:var(--med);"></div>
+      <div class="fg"><label>Mano de obra</label><input type="text" id="prev-mano-obra" readonly style="background:#f8f9fb;color:var(--med);"></div>
+      <div class="fg"><label>Repuestos</label><input type="text" id="prev-repuestos-costo" readonly style="background:#f8f9fb;color:var(--med);"></div>
+    </div>
+    <div class="fg"><label>Notas</label><input type="text" id="prev-notas" readonly style="background:#f8f9fb;color:var(--med);"></div>
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;font-size:13px;">
+      Costo total: <strong id="prev-total" style="color:#15803d;">—</strong> &nbsp;|&nbsp; Fecha de ingreso: <strong id="prev-fecha">—</strong>
+    </div>
+    <div class="fg"><label>📜 Línea de tiempo</label><div id="prev-timeline" style="max-height:190px;overflow-y:auto;background:#f8f9fb;border:1px solid var(--borde);border-radius:8px;padding:6px 12px;">—</div></div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-gris btn-sm" type="button" onclick="cerrarModal('m-preview-orden')">Cerrar</button>
+  </div>
+</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script>
+// La clave maestra se verifica en el servidor (RPC verificar_clave_maestra). Nunca se guarda en el cliente.
+let auth_mode = 'login';
+let user = null;
+let role = null;
+let userSede = null;
+
+// Helper: aplica filtro de visibilidad según rol
+//  - supervisor ve TODO el sistema
+//  - técnico ve solo los registros de su sede (o los suyos si no tiene sede)
+function limpiarFechas(prefix, renderFn) {
+  const d = document.getElementById(prefix + '-fecha-desde');
+  const h = document.getElementById(prefix + '-fecha-hasta');
+  if (d) d.value = '';
+  if (h) h.value = '';
+  if (renderFn) renderFn();
+}
+
+function esSoloLectura() { return role === 'gerente' || role === 'vendedor' || role === 'gerente'; }
+
+// Solo supervisor y vendedor tienen vista global (todas las sedes).
+// El supervisor queda limitado a su sede (como un técnico, pero en solo lectura).
+function tieneVistaGlobal() { return role === 'gerente' || role === 'vendedor'; }
+function filtroPorRol(query) {
+  if (tieneVistaGlobal()) return query;
+  if (userSede) return query.eq('sede_id', userSede);
+  return query.eq('usuario_id', user.id);
+}
+function filtroOrdenesPorRol(query) {
+  // Igual que filtroPorRol pero el técnico/supervisor también ve las órdenes que su sede transfirió (siguen visibles en origen)
+  if (tieneVistaGlobal()) return query;
+  if (userSede) return query.or(`sede_id.eq.${userSede},sede_origen_transfer.eq.${userSede}`);
+  return query.eq('usuario_id', user.id);
+}
+function filtroReparacionesPorRol(query) {
+  if (tieneVistaGlobal()) return query;
+  if (userSede) return query.eq('sede_id', userSede);
+  return query.eq('tecnico_id', user.id);
+}
+let sb = null;
+
+async function initApp(intento = 0) {
+  if (!window.supabase) {
+    if (intento > 30) {
+      err('No se pudo cargar la conexión. Recargá la página.');
+      return;
+    }
+    setTimeout(() => initApp(intento + 1), 200);
+    return;
+  }
+  
+  sb = window.supabase.createClient(
+    'https://rqbltbaoqhtmsatrvbob.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJxYmx0YmFvcWh0bXNhdHJ2Ym9iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzODU0MTEsImV4cCI6MjA5NTk2MTQxMX0.5Agi3ghV14sppTigAQWKcwY5kUEl9S525aH2eU1MR2I',
+    { auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false } }
+  );
+
+  // Detectar enlace de recuperación de contraseña (redirigido desde email)
+  const _hashParams = new URLSearchParams(window.location.hash.substring(1));
+  if (_hashParams.get('type') === 'recovery' && _hashParams.get('access_token')) {
+    const { error: _sessErr } = await sb.auth.setSession({
+      access_token: _hashParams.get('access_token'),
+      refresh_token: _hashParams.get('refresh_token') || '',
+    });
+    window.history.replaceState(null, '', window.location.pathname);
+    if (!_sessErr) { showCambiarPasswordScreen(); }
+    else { showAuth(); }
+  } else {
+    // No autologin — siempre mostrar pantalla de login al abrir
+    showAuth();
+  }
+
+  sb.auth.onAuthStateChange(async (evt, sess) => {
+    if (evt === 'SIGNED_IN' && sess?.user) {
+      user = sess.user;
+      const {data: u} = await sb.from('usuarios').select('rol,estado,sede_id').eq('id', user.id).single();
+      role = u?.rol;
+      userSede = u?.sede_id || null;
+
+      // Bloquear acceso si técnico pendiente o rechazado
+      if ((role === 'tecnico' || role === 'vendedor' || role === 'gerente' || role === 'rrhh') && u?.estado !== 'activo') {
+        await sb.auth.signOut();
+        const msgs = {
+          pendiente: '⏳ Tu cuenta está pendiente de aprobación por el supervisor. Intenta más tarde.',
+          rechazado: '❌ Tu cuenta ha sido rechazada. Contacta al supervisor.',
+        };
+        err(msgs[u?.estado] || '❌ Tu cuenta no está activa.');
+        return;
+      }
+
+      document.getElementById('user-email').textContent = user.email;
+      if (role === 'gerente') {
+        document.getElementById('nav-tec').style.display = 'flex';
+        document.getElementById('nav-sedes').style.display = 'flex';
+        document.getElementById('nav-config').style.display = 'flex';
+      }
+      aplicarPermisosRol();
+      showApp();
+    } else if (evt === 'SIGNED_OUT') {
+      showAuth();
+    } else if (evt === 'PASSWORD_RECOVERY') {
+      showCambiarPasswordScreen();
+    }
+  });
+}
+
+function showAuth() {
+  document.getElementById('auth-screen').classList.add('visible');
+  document.getElementById('main-layout').style.display = 'none';
+}
+
+// Oculta botones de creación para el supervisor y resetea items del menú según el rol.
+function aplicarPermisosRol() {
+  const esSup = role === 'gerente' || role === 'rrhh';
+  const esVend = role === 'vendedor';
+  const soloLectura = esSup || esVend;
+  // Botones de creación: ocultos para usuarios de solo lectura, visibles para técnico
+  ['btn-nueva-orden','btn-nueva-reparacion','btn-nueva-factura'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = soloLectura ? 'none' : '';
+  });
+  const esRRHH = role === 'rrhh';
+  if (esRRHH) {
+    // RRHH: solo ve Promedios
+    document.querySelectorAll('.nav-item').forEach(n => {
+      n.style.display = n.getAttribute('data-sec') === 'promedios' ? 'flex' : 'none';
+    });
+    return;
+  }
+  if (esVend) {
+    // El vendedor ve Órdenes y Garantías (+ cerrar sesión), en solo lectura
+    const visiblesVend = ['ordenes', 'reparaciones'];
+    document.querySelectorAll('.nav-item').forEach(n => {
+      n.style.display = visiblesVend.includes(n.getAttribute('data-sec')) ? 'flex' : 'none';
+    });
+  } else {
+    // Resto de roles: items estándar visibles; administración según el rol
+    const esEnc = role === 'gerente';
+    document.querySelectorAll('.nav-item').forEach(n => {
+      if (n.id === 'nav-sedes' || n.id === 'nav-config') {
+        n.style.display = esSup ? 'flex' : 'none'; // Sedes y Configuración: solo supervisor
+      } else if (n.id === 'nav-tec') {
+        n.style.display = esSup ? 'flex' : 'none'; // Gestionar técnicos: solo supervisor
+      } else {
+        n.style.display = 'flex';
+      }
+    });
+    // El botón de crear técnico es exclusivo del supervisor
+    const btnCrearTec = document.getElementById('btn-crear-tecnico');
+    if (btnCrearTec) btnCrearTec.style.display = esSup ? '' : 'none';
+  }
+}
+
+function showApp() {
+  document.getElementById('auth-screen').classList.remove('visible');
+  document.getElementById('main-layout').style.display = 'flex';
+  document.getElementById('user-email').textContent = user.email;
+  document.getElementById('info-user').textContent = user.email;
+  document.getElementById('info-rol').textContent = role === 'gerente' ? '👔 Gerente' : role === 'supervisor' ? '🗂️ Supervisor' : role === 'vendedor' ? '💼 Vendedor' : role === 'rrhh' ? '👥 RRHH' : '👨‍🔧 Técnico';
+  ir(role === 'vendedor' ? 'ordenes' : (role === 'rrhh' ? 'promedios' : 'dashboard'));
+}
+
+function err(msg) {
+  const e = document.getElementById('auth-error');
+  e.textContent = msg;
+  e.classList.add('show');
+}
+
+function toggleVerPwd() {
+  const input = document.getElementById('auth-password');
+  const btn = document.getElementById('btn-ver-pwd');
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    input.type = 'password';
+    btn.textContent = '👁️';
+  }
+}
+
+async function handleAuthSubmit(evt) {
+  evt.preventDefault();
+  const email = document.getElementById('auth-email').value.trim();
+  const pwd = document.getElementById('auth-password').value;
+  const err_el = document.getElementById('auth-error');
+  const btn = document.getElementById('auth-btn');
+  err_el.classList.remove('show');
+
+  if (!sb) { err('Conectando con el servidor, esperá un momento e intentá de nuevo.'); return false; }
+  if (!email || !pwd) { err('Por favor completa todos los campos.'); return false; }
+
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Cargando...';
+
+  try {
+    if (auth_mode === 'login') {
+      const {error} = await sb.auth.signInWithPassword({email, password: pwd});
+      if (error) {
+        if (error.message.includes('Invalid login credentials') || error.message.includes('invalid_credentials')) {
+          throw new Error('Correo o contraseña incorrectos. Verifica tus datos.');
+        } else if (error.message.includes('Email not confirmed')) {
+          throw new Error('Debes confirmar tu correo electrónico antes de iniciar sesión.');
+        } else if (error.message.includes('User not found') || error.message.includes('user_not_found')) {
+          throw new Error('No existe una cuenta con ese correo.');
+        } else {
+          throw new Error(error.message);
+        }
+      }
+    } else if (auth_mode === 'vendedor') {
+      const usuario = email;
+      // Verificar usuario/clave con la RPC
+      const {data: ok, error: rpcErr} = await sb.rpc('verificar_vendedor', { p_usuario: usuario, p_clave: pwd });
+      if (rpcErr) throw new Error('No se pudo validar el acceso: ' + rpcErr.message);
+      if (!ok) { err('Usuario o contraseña incorrectos.'); btn.disabled = false; btn.textContent = originalText; return false; }
+      // Iniciar sesión con la cuenta interna de vendedor
+      const VEND_EMAIL = 'vendedor.sistema@pdservtec.app';
+      const VEND_PWD = 'Pd$ervTec_Vend_2026_f1xed_KQ7z';
+      let r = await sb.auth.signInWithPassword({ email: VEND_EMAIL, password: VEND_PWD });
+      if (r.error) {
+        const su = await sb.auth.signUp({ email: VEND_EMAIL, password: VEND_PWD, options: { data: { rol: 'vendedor' } } });
+        if (su.error && !/already|registered|exists/i.test(su.error.message)) throw new Error(su.error.message);
+        r = await sb.auth.signInWithPassword({ email: VEND_EMAIL, password: VEND_PWD });
+        if (r.error) {
+          if (/not confirmed/i.test(r.error.message)) throw new Error('La cuenta interna de vendedor no está confirmada. En Supabase > Authentication > Users, confirma manualmente el email vendedor.sistema@pdservtec.app.');
+          throw new Error('No se pudo iniciar la sesión de vendedor: ' + r.error.message);
+        }
+      }
+      return false;
+    } else if (auth_mode === 'reset-password') {
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname,
+      });
+      if (error) throw new Error(error.message);
+      btn.disabled = false; btn.textContent = originalText;
+      alert('📧 Si ese correo está registrado, recibirás un enlace para restablecer tu contraseña. Revisa también la carpeta de spam.');
+      volverLogin();
+      return false;
+    }
+  } catch (e) {
+    err(e.message);
+  }
+  btn.disabled = false;
+  btn.textContent = originalText;
+  return false;
+}
+
+const BTN_STYLE = 'background:none;border:none;color:var(--azul);cursor:pointer;text-decoration:underline;';
+const BTN_VOLVER = `<button type="button" onclick="volverLogin()" style="${BTN_STYLE}">← Volver al inicio de sesión</button>`;
+
+function volverLogin() {
+  auth_mode = 'login';
+  document.getElementById('auth-title').textContent = 'Iniciar sesión';
+  document.getElementById('auth-subtitle').textContent = 'Ingresa a tu cuenta PD ServTec';
+  document.getElementById('auth-btn').textContent = 'Iniciar sesión';
+  document.getElementById('auth-btn').style.display = '';
+  const emailInput = document.getElementById('auth-email');
+  emailInput.type = 'email';
+  emailInput.placeholder = 'Tu email';
+  emailInput.style.display = '';
+  emailInput.required = true;
+  document.getElementById('password-wrapper').style.display = '';
+  const npCont = document.getElementById('nueva-pwd-container');
+  if (npCont) npCont.style.display = 'none';
+  document.getElementById('auth-toggle').style.display = 'block';
+  document.getElementById('auth-toggle').innerHTML = '<span style="font-size:11px;"><button type="button" onclick="toggleOlvidePassword()" style="' + BTN_STYLE + 'color:var(--med);">¿Olvidaste tu contraseña?</button></span><br><span style="font-size:11px;">🛒 <button type="button" onclick="toggleVendedorLogin()" style="' + BTN_STYLE + '">Acceso de vendedor (solo consulta)</button></span>';
+  document.getElementById('auth-error').classList.remove('show');
+}
+
+function toggleOlvidePassword() {
+  auth_mode = 'reset-password';
+  document.getElementById('auth-title').textContent = 'Recuperar contraseña';
+  document.getElementById('auth-subtitle').textContent = 'Te enviaremos un enlace a tu correo';
+  document.getElementById('auth-btn').textContent = 'Enviar enlace';
+  document.getElementById('password-wrapper').style.display = 'none';
+  document.getElementById('auth-toggle').style.display = 'block';
+  document.getElementById('auth-toggle').innerHTML = BTN_VOLVER;
+  document.getElementById('auth-error').classList.remove('show');
+}
+
+function showCambiarPasswordScreen() {
+  document.getElementById('auth-title').textContent = 'Nueva contraseña';
+  document.getElementById('auth-subtitle').textContent = 'Escribe tu nueva contraseña para continuar';
+  document.getElementById('auth-email').style.display = 'none';
+  document.getElementById('password-wrapper').style.display = 'none';
+  document.getElementById('auth-btn').style.display = 'none';
+  document.getElementById('auth-toggle').style.display = 'none';
+  document.getElementById('auth-error').classList.remove('show');
+  if (!document.getElementById('nueva-pwd-container')) {
+    const cont = document.createElement('div');
+    cont.id = 'nueva-pwd-container';
+    cont.innerHTML = '<input type="password" id="nueva-pwd" placeholder="Nueva contraseña" required style="width:100%;box-sizing:border-box;margin-bottom:10px;"><input type="password" id="nueva-pwd-confirm" placeholder="Confirmar contraseña" required style="width:100%;box-sizing:border-box;"><button type="button" id="btn-cambiar-pwd" onclick="guardarNuevaPassword()" style="width:100%;margin-top:12px;padding:12px;background:var(--azul);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;">🔒 Guardar contraseña</button>';
+    document.getElementById('auth-form').appendChild(cont);
+  }
+  document.getElementById('nueva-pwd-container').style.display = 'block';
+  document.getElementById('auth-screen').classList.add('visible');
+  document.getElementById('main-layout').style.display = 'none';
+}
+
+async function guardarNuevaPassword() {
+  const pwd = document.getElementById('nueva-pwd').value;
+  const confirm = document.getElementById('nueva-pwd-confirm').value;
+  const errEl = document.getElementById('auth-error');
+  errEl.classList.remove('show');
+  if (pwd.length < 6) { errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; errEl.classList.add('show'); return; }
+  if (pwd !== confirm) { errEl.textContent = 'Las contraseñas no coinciden.'; errEl.classList.add('show'); return; }
+  const btn = document.getElementById('btn-cambiar-pwd');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  const { error } = await sb.auth.updateUser({ password: pwd });
+  if (error) {
+    errEl.textContent = 'Error: ' + error.message;
+    errEl.classList.add('show');
+    btn.disabled = false; btn.textContent = '🔒 Guardar contraseña';
+    return;
+  }
+  await sb.auth.signOut();
+  volverLogin();
+  alert('✅ Contraseña actualizada correctamente. Ahora puedes iniciar sesión con tu nueva contraseña.');
+}
+
+function toggleVendedorLogin() {
+  auth_mode = 'vendedor';
+  document.getElementById('auth-title').textContent = 'Acceso de vendedor';
+  document.getElementById('auth-subtitle').textContent = 'Consulta de órdenes — solo lectura';
+  document.getElementById('auth-btn').textContent = 'Entrar';
+  const emailInput = document.getElementById('auth-email');
+  emailInput.type = 'text';
+  emailInput.placeholder = 'Usuario';
+  emailInput.value = '';
+  document.getElementById('auth-password').value = '';
+  document.getElementById('auth-toggle').style.display = 'block';
+  document.getElementById('auth-toggle').innerHTML = BTN_VOLVER;
+  document.getElementById('auth-error').classList.remove('show');
+}
+
+async function handleLogout() {
+  if (confirm('¿Cerrar sesión?')) {
+    await sb.auth.signOut();
+    user = null;
+    role = null;
+  }
+}
+
+function ir(sec) {
+  document.querySelectorAll('.seccion').forEach(s => s.style.display = 'none');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('activo'));
+  const titulos = {
+    dashboard:'Dashboard', ordenes:'Órdenes de servicio', reparaciones:'Garantías / Servicio Interno',
+    facturas:'Facturas', inventario:'Inventario', promedios:'Promedios',
+    perfil:'Mi perfil', tecnicos:'Gestionar usuarios', sedes:'Sedes', config:'Configuración'
+  };
+  document.getElementById('sec-' + sec).style.display = 'block';
+  document.querySelector('[data-sec="' + sec + '"]').classList.add('activo');
+  document.getElementById('tb-titulo').textContent = titulos[sec] || sec;
+  if (sec === 'dashboard') renderDashboard();
+  if (sec === 'tecnicos') renderTecnicos();
+  if (sec === 'ordenes') renderOrdenes();
+  if (sec === 'reparaciones') renderReparaciones();
+  if (sec === 'facturas') renderFacturas();
+  if (sec === 'inventario') renderInventario();
+  if (sec === 'promedios') renderPromedios();
+  if (sec === 'perfil') cargarPerfil();
+  if (sec === 'sedes') renderSedes();
+  if (sec === 'config') renderConfig();
+}
+
+function abrirModal(id) { document.getElementById(id).classList.add('open'); }
+
+// ── DASHBOARD ─────────────────────��──────────────────────
+async function renderDashboard() {
+  await cargarSedesEnSelects();
+  poblarFiltroSede('dash-filtro-sede');
+  const dashSede = (role === 'gerente') ? (document.getElementById('dash-filtro-sede')?.value || '') : '';
+  const dashFD = document.getElementById('dash-fecha-desde')?.value || '';
+  const dashFH = document.getElementById('dash-fecha-hasta')?.value || '';
+  let qOrdSum = filtroOrdenesPorRol(sb.from('ordenes').select('estado,presupuesto,costo_mano_obra,costo_refacciones'));
+  if (dashFD) qOrdSum = qOrdSum.gte('created_at', dashFD + 'T00:00:00');
+  if (dashFH) qOrdSum = qOrdSum.lte('created_at', dashFH + 'T23:59:59');
+  let qRep = filtroReparacionesPorRol(sb.from('reparaciones').select('id,descripcion,orden_ref,estado,created_at,sede_id'));
+  let qFac = filtroPorRol(sb.from('facturas').select('*'));
+  let qOrdAll = filtroOrdenesPorRol(sb.from('ordenes').select('*')).order('created_at', {ascending:false}).limit(30);
+  if (dashSede) {
+    qOrdSum = qOrdSum.eq('sede_id', dashSede);
+    qRep = qRep.eq('sede_id', dashSede);
+    qFac = qFac.eq('sede_id', dashSede);
+    qOrdAll = qOrdAll.eq('sede_id', dashSede);
+  }
+  const [ordRes, repRes, facRes, invRes, entregadasRes] = await Promise.all([
+    qOrdSum,
+    qRep,
+    qFac.order('created_at', {ascending:false}),
+    sb.from('inventario').select('stock,stock_minimo'),
+    qOrdAll
+  ]);
+  const ordenes = ordRes.data || [];
+  const todasOrdenes = entregadasRes.data || [];
+  const pendientes = ordenes.filter(o => o.estado === 'pendiente').length;
+
+  // Ingresos cobrados = órdenes entregadas + facturas pagadas
+  const ingresosOrdenes = todasOrdenes
+    .filter(o => o.estado === 'entregado')
+    .reduce((a, o) => a + (parseFloat(o.presupuesto) || (parseFloat(o.costo_mano_obra)||0) + (parseFloat(o.costo_refacciones)||0)), 0);
+  const facData = facRes.data || [];
+  const ingresosFacPagadas = facData.filter(f => f.estado_pago === 'pagado').reduce((a,f) => a + Number(f.total||0), 0);
+  const ingresosCobrados = ingresosOrdenes + ingresosFacPagadas;
+
+  const ingresosFacPendientes = facData.filter(f => f.estado_pago === 'pendiente').reduce((a,f) => a + Number(f.total||0), 0);
+  const ingresosOrdenesPendientes = todasOrdenes.filter(o => o.estado === 'listo').reduce((a, o) => a + (parseFloat(o.presupuesto) || 0), 0);
+  const ingresosPorCobrar = ingresosFacPendientes + ingresosOrdenesPendientes;
+
+  const stockBajo = (invRes.data||[]).filter(i => i.stock <= (i.stock_minimo || 0)).length;
+  document.getElementById('dash-ordenes').textContent = ordenes.length;
+  document.getElementById('dash-pendientes').textContent = pendientes;
+  document.getElementById('dash-reparaciones').textContent = (repRes.data||[]).length;
+  document.getElementById('dash-ingresos').textContent = fmtUSD(ingresosCobrados);
+  document.getElementById('dash-ingresos-pendientes').textContent = fmtUSD(ingresosPorCobrar);
+  document.getElementById('dash-stock-bajo').textContent = stockBajo;
+
+  // Alerta de técnicos pendientes (solo supervisor)
+  if (role === 'gerente') {
+    const {data: tecsPend} = await sb.from('usuarios').select('id').in('rol',['tecnico','supervisor']).eq('creado_por', user.id).eq('estado','pendiente');
+    const alerta = document.getElementById('dash-alerta-tecnicos');
+    if (alerta) {
+      if (tecsPend && tecsPend.length > 0) {
+        alerta.style.display = 'block';
+        alerta.innerHTML = `⏳ <strong>${tecsPend.length} técnico(s) pendiente(s) de aprobación.</strong> <button class="btn btn-sm" style="background:#856404;color:#fff;margin-left:8px;font-size:11px;" onclick="ir('tecnicos')">Ver ahora</button>`;
+      } else {
+        alerta.style.display = 'none';
+      }
+    }
+  }
+
+  // Guardar datos para filtro
+  window._dashOrdenes = todasOrdenes;
+  window._dashFacturas = facData;
+  window._dashGarantias = repRes.data || [];
+  renderActividadReciente();
+}
+
+function renderActividadReciente() {
+  const filtro = document.getElementById('dash-filtro-tipo')?.value || '';
+  const filtroSede = document.getElementById('dash-filtro-sede')?.value || '';
+  const dashFD = document.getElementById('dash-fecha-desde')?.value || '';
+  const dashFH = document.getElementById('dash-fecha-hasta')?.value || '';
+  const fdTs = dashFD ? new Date(dashFD + 'T00:00:00').getTime() : null;
+  const fhTs = dashFH ? new Date(dashFH + 'T23:59:59').getTime() : null;
+  const labelEst = {pendiente:'⏳ Pendiente', en_proceso:'🔧 En proceso', listo:'✅ Listo', entregado:'📦 Entregado', pagada:'✅ Pagada', anulada:'❌ Anulada', enviado_proveedor:'📦 Enviado a Proveedor', soporte_pd:'🛠️ Soporte Técnico PD', completada:'✅ Resuelto', no_reparable:'❌ No reparable'};
+  const estColor = {pendiente:'est-pendiente', en_proceso:'est-en_proceso', listo:'est-listo', entregado:'est-entregado', pagada:'est-listo', anulada:'est-entregado', enviado_proveedor:'est-enviado_proveedor', soporte_pd:'est-soporte_pd', completada:'est-listo', no_reparable:'est-no_reparable'};
+
+  let filas = [];
+
+  if (!filtro || filtro === 'orden') {
+    (window._dashOrdenes||[]).forEach(o => {
+      if (filtroSede && (o.sede_id||'') !== filtroSede) return;
+      const ts = new Date(o.created_at).getTime();
+      if (fdTs && ts < fdTs) return;
+      if (fhTs && ts > fhTs) return;
+      const monto = parseFloat(o.presupuesto) || (parseFloat(o.costo_mano_obra)||0) + (parseFloat(o.costo_refacciones)||0);
+      const entregado = o.estado === 'entregado';
+      filas.push({
+        fecha: new Date(o.created_at),
+        html: `<tr>
+          <td><span style="font-size:11px;background:#dbeafe;color:#1e40af;padding:2px 7px;border-radius:10px;font-weight:600;">📋 Orden</span></td>
+          <td>#${o.numero}</td>
+          <td>${o.nombre_cliente}<br><span style="font-size:11px;color:var(--med);">${[o.marca,o.modelo].filter(Boolean).join(' ')||o.tipo_equipo||''}</span></td>
+          <td><span class="badge-estado ${estColor[o.estado]||''}">${labelEst[o.estado]||o.estado}</span></td>
+          <td>${fmtUSD(monto)}</td>
+          <td>${fmtFecha(o.created_at)}</td>
+          <td>${(esSoloLectura() || entregado)
+            ? `<button class="btn btn-sm" style="background:#fef3c7;color:#92400e;font-size:11px;" onclick="abrirPreviewOrden(${JSON.stringify(o).replace(/"/g,'&quot;')})">👁️ Ver</button>`
+            : `<button class="btn btn-azul btn-sm" style="font-size:11px;" onclick="abrirEditOrden(${JSON.stringify(o).replace(/"/g,'&quot;')})">✏️</button>`}
+          </td>
+        </tr>`
+      });
+    });
+  }
+
+  if (!filtro || filtro === 'factura') {
+    (window._dashFacturas||[]).forEach(f => {
+      if (filtroSede && (f.sede_id||'') !== filtroSede) return;
+      const ts = new Date(f.created_at).getTime();
+      if (fdTs && ts < fdTs) return;
+      if (fhTs && ts > fhTs) return;
+      filas.push({
+        fecha: new Date(f.created_at),
+        html: `<tr>
+          <td><span style="font-size:11px;background:#fef9c3;color:#854d0e;padding:2px 7px;border-radius:10px;font-weight:600;">🧾 Factura</span></td>
+          <td>#${f.numero||'���'}</td>
+          <td>${f.nombre_cliente||'—'}</td>
+          <td><span class="badge-estado ${estColor[f.estado_pago]||''}">${labelEst[f.estado_pago]||f.estado_pago}</span></td>
+          <td>${fmtUSD(f.total)}</td>
+          <td>${fmtFecha(f.fecha||f.created_at)}</td>
+          <td>—</td>
+        </tr>`
+      });
+    });
+  }
+
+  if (!filtro || filtro === 'garantia') {
+    const labelTipoG = {garantia:'🛡️ Garantía', interno:'🔧 Interno'};
+    (window._dashGarantias||[]).forEach(g => {
+      if (filtroSede && (g.sede_id||'') !== filtroSede) return;
+      const ts = new Date(g.created_at).getTime();
+      if (fdTs && ts < fdTs) return;
+      if (fhTs && ts > fhTs) return;
+      filas.push({
+        fecha: new Date(g.created_at),
+        html: `<tr>
+          <td><span style="font-size:11px;background:#f0fdf4;color:#166534;padding:2px 7px;border-radius:10px;font-weight:600;">${labelTipoG[g.orden_ref]||'������️ Garantía'}</span></td>
+          <td>—</td>
+          <td>${g.descripcion||'—'}</td>
+          <td><span class="badge-estado ${estColor[g.estado]||''}">${labelEst[g.estado]||g.estado}</span></td>
+          <td>—</td>
+          <td>${fmtFecha(g.created_at)}</td>
+          <td>—</td>
+        </tr>`
+      });
+    });
+  }
+
+  filas.sort((a,b) => b.fecha - a.fecha);
+  // Paginación: 10 ítems por página
+  const tb = document.getElementById('t-dash-actividad');
+  const pagerEl = document.getElementById('dash-pager');
+  const porPagina = 10;
+  const total = filas.length;
+  const totalPaginas = Math.max(1, Math.ceil(total / porPagina));
+  if (!Number.isInteger(window._dashPagina) || window._dashPagina < 1) window._dashPagina = 1;
+  if (window._dashPagina > totalPaginas) window._dashPagina = totalPaginas;
+  const pagina = window._dashPagina;
+  const inicio = (pagina - 1) * porPagina;
+  const paginaFilas = filas.slice(inicio, inicio + porPagina);
+  tb.innerHTML = total
+    ? paginaFilas.map(f => f.html).join('')
+    : '<tr><td colspan="7" style="text-align:center;color:var(--med);">Sin actividad reciente.</td></tr>';
+  if (pagerEl) {
+    if (total <= porPagina) {
+      pagerEl.innerHTML = '';
+    } else {
+      const desde = inicio + 1;
+      const hasta = Math.min(inicio + porPagina, total);
+      pagerEl.innerHTML = `
+        <button class="btn btn-sm" ${pagina === 1 ? 'disabled' : ''} onclick="cambiarPaginaDash(-1)" style="font-size:12px;">← Anterior</button>
+        <span style="font-size:12px;color:var(--med);">Mostrando <strong>${desde}–${hasta}</strong> de <strong>${total}</strong> — Página ${pagina}/${totalPaginas}</span>
+        <button class="btn btn-sm" ${pagina === totalPaginas ? 'disabled' : ''} onclick="cambiarPaginaDash(1)" style="font-size:12px;">Siguiente →</button>
+      `;
+    }
+  }
+}
+
+function cambiarPaginaDash(delta) {
+  window._dashPagina = (window._dashPagina || 1) + delta;
+  renderActividadReciente();
+}
+
+function abrirPreviewOrden(o) {
+  const total = (parseFloat(o.costo_mano_obra)||0) + (parseFloat(o.costo_refacciones)||0);
+  document.getElementById('prev-titulo').textContent = `#${o.numero} — ${o.nombre_cliente}`;
+  document.getElementById('prev-cliente').value = o.nombre_cliente || '—';
+  document.getElementById('prev-estado').value = labelEstado(o.estado);
+  document.getElementById('prev-tipo').value = o.tipo_equipo || '—';
+  document.getElementById('prev-equipo').value = [o.marca, o.modelo].filter(Boolean).join(' ') || '—';
+  document.getElementById('prev-sede').value = o.sede_id && _sedeMap[o.sede_id] ? _sedeMap[o.sede_id] : '—';
+  document.getElementById('prev-falla').value = o.falla || '—';
+  document.getElementById('prev-accesorios').value = o.accesorios || '—';
+  document.getElementById('prev-presupuesto').value = o.presupuesto ? fmtUSD(o.presupuesto) : '—';
+  document.getElementById('prev-mano-obra').value = o.costo_mano_obra ? fmtUSD(o.costo_mano_obra) : '—';
+  document.getElementById('prev-repuestos-costo').value = o.costo_refacciones ? fmtUSD(o.costo_refacciones) : '—';
+  document.getElementById('prev-notas').value = o.notas || '—';
+  document.getElementById('prev-total').textContent = fmtUSD(total);
+  document.getElementById('prev-fecha').textContent = fmtFecha(o.created_at);
+  cargarTimeline('orden', o.id, 'prev-timeline');
+  abrirModal('m-preview-orden');
+}
+
+// Genera un PDF imprimible de la orden (cliente, equipo, total del servicio y línea de tiempo).
+async function exportarOrdenPDF(o) {
+  let eventos = [];
+  try {
+    const { data } = await sb.from('orden_timeline').select('*')
+      .eq('entidad', 'orden').eq('orden_id', String(o.id))
+      .order('created_at', { ascending: true });
+    eventos = data || [];
+  } catch (_) {}
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const total = (parseFloat(o.costo_mano_obra)||0) + (parseFloat(o.costo_refacciones)||0);
+  const sedeNom = o.sede_id && _sedeMap[o.sede_id] ? _sedeMap[o.sede_id] : '—';
+  const tecnico = nombreTec(o.usuario_id) || '—';
+  const equipo = [o.marca, o.modelo].filter(Boolean).join(' ') || o.tipo_equipo || '—';
+  const prioridad = o.prioridad === 'urgente' ? '🔴 Urgente' : (o.prioridad === 'baja' ? '🔵 Baja' : 'Normal');
+  const iconTl = {creacion:'🆕', estado:'🔄', envio:'📦', recepcion:'📥', accion:'🛠️'};
+  const filasTimeline = eventos.length
+    ? eventos.map(ev => `<tr><td style="width:34px;font-size:16px;text-align:center;">${iconTl[ev.tipo]||'•'}</td><td>${esc(ev.descripcion)}</td><td style="white-space:nowrap;color:#666;font-size:11px;">${fmtFechaHora(ev.created_at)}</td></tr>`).join('')
+    : '<tr><td colspan="3" style="text-align:center;color:#999;padding:12px;">Sin eventos registrados.</td></tr>';
+  const numero = esc(o.numero || (o.id||'').slice(0,6).toUpperCase());
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Orden #${numero} — PD ServTec</title>
+<style>
+*{box-sizing:border-box;}
+body{font-family:Arial,Helvetica,sans-serif;color:#1a202c;margin:32px;font-size:13px;}
+.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #2563eb;padding-bottom:14px;margin-bottom:6px;}
+.head h1{margin:0;font-size:20px;}
+.head .sub{color:#666;font-size:12px;margin-top:2px;}
+.orden-num{text-align:right;}
+.orden-num .n{font-size:22px;font-weight:bold;color:#2563eb;}
+.orden-num .f{color:#666;font-size:12px;}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:#2563eb;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin:22px 0 10px;}
+table.kv{width:100%;border-collapse:collapse;}
+table.kv td{padding:5px 8px;vertical-align:top;border-bottom:1px solid #f0f2f6;}
+table.kv td.k{width:170px;color:#666;font-weight:bold;}
+.costos{width:100%;border-collapse:collapse;margin-top:6px;}
+.costos td{padding:8px;}
+.costos tr.total td{border-top:2px solid #2563eb;font-weight:bold;font-size:16px;color:#15803d;}
+.costos td.r{text-align:right;}
+table.tl{width:100%;border-collapse:collapse;}
+table.tl td{padding:6px 8px;border-bottom:1px solid #f0f2f6;vertical-align:top;}
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;background:#eef2ff;color:#3730a3;font-size:12px;}
+.foot{margin-top:30px;text-align:center;color:#999;font-size:10px;border-top:1px solid #e2e8f0;padding-top:10px;}
+@media print{body{margin:0;}}
+</style></head><body>
+<div class="head"><div><h1>⚙️ PD ServTec</h1><div class="sub">Departamento Técnico — Orden de servicio</div></div>
+<div class="orden-num"><div class="n">#${numero}</div><div class="f">Ingreso: ${fmtFecha(o.created_at)}</div></div></div>
+<h2>Cliente</h2><table class="kv">
+<tr><td class="k">Nombre</td><td>${esc(o.nombre_cliente || '—')}</td></tr>
+<tr><td class="k">Estado de la orden</td><td><span class="badge">${esc(labelEstado(o.estado))}</span></td></tr>
+<tr><td class="k">Sede</td><td>${esc(sedeNom)}</td></tr>
+<tr><td class="k">Técnico</td><td>${esc(tecnico)}</td></tr></table>
+<h2>Equipo en servicio</h2><table class="kv">
+<tr><td class="k">Tipo de equipo</td><td>${esc(o.tipo_equipo || '—')}</td></tr>
+<tr><td class="k">Marca / Modelo</td><td>${esc(equipo)}</td></tr>
+<tr><td class="k">Falla reportada</td><td>${esc(o.falla || '—')}</td></tr>
+<tr><td class="k">Accesorios</td><td>${esc(o.accesorios || '—')}</td></tr>
+<tr><td class="k">Prioridad</td><td>${prioridad}</td></tr>
+${o.notas ? `<tr><td class="k">Notas</td><td>${esc(o.notas)}</td></tr>` : ''}</table>
+<h2>Presupuesto del servicio</h2><table class="costos">
+<tr class="total"><td>Total del servicio</td><td class="r">${fmtUSD(total)}</td></tr></table>
+<h2>Avance (línea de tiempo)</h2><table class="tl">${filasTimeline}</table>
+<div class="foot">Documento generado por PD ServTec el ${fmtFechaHora(new Date().toISOString())}</div>
+<scr`+`ipt>window.onload=function(){setTimeout(function(){window.print();},350);};<\/scr`+`ipt>
+</body></html>`;
+  const win = window.open('', '_blank');
+  if (!win) { alert('Permite las ventanas emergentes para poder exportar el PDF.'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+async function exportarGarantiaPDF(r) {
+  let eventos = [];
+  try {
+    const { data } = await sb.from('orden_timeline').select('*')
+      .eq('entidad', 'garantia').eq('orden_id', String(r.id))
+      .order('created_at', { ascending: true });
+    eventos = data || [];
+  } catch (_) {}
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const total = parseFloat(r.costo) || 0;
+  const sedeNom = r.sede_id && _sedeMap[r.sede_id] ? _sedeMap[r.sede_id] : '—';
+  const tecnico = nombreTec(r.tecnico_id) || '—';
+  const iconTl = {creacion:'🆕', estado:'🔄', envio:'📦', recepcion:'📥', accion:'🛠️'};
+  const filasTimeline = eventos.length
+    ? eventos.map(ev => `<tr><td style="width:34px;font-size:16px;text-align:center;">${iconTl[ev.tipo]||'•'}</td><td>${esc(ev.descripcion)}</td><td style="white-space:nowrap;color:#666;font-size:11px;">${fmtFechaHora(ev.created_at)}</td></tr>`).join('')
+    : '<tr><td colspan="3" style="text-align:center;color:#999;padding:12px;">Sin eventos registrados.</td></tr>';
+  const numero = esc((r.id||'').slice(0,6).toUpperCase());
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Garantía #${numero} — PD ServTec</title>
+<style>
+*{box-sizing:border-box;}
+body{font-family:Arial,Helvetica,sans-serif;color:#1a202c;margin:32px;font-size:13px;}
+.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #2563eb;padding-bottom:14px;margin-bottom:6px;}
+.head h1{margin:0;font-size:20px;}
+.head .sub{color:#666;font-size:12px;margin-top:2px;}
+.orden-num{text-align:right;}
+.orden-num .n{font-size:22px;font-weight:bold;color:#2563eb;}
+.orden-num .f{color:#666;font-size:12px;}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:#2563eb;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin:22px 0 10px;}
+table.kv{width:100%;border-collapse:collapse;}
+table.kv td{padding:5px 8px;vertical-align:top;border-bottom:1px solid #f0f2f6;}
+table.kv td.k{width:170px;color:#666;font-weight:bold;}
+.costos{width:100%;border-collapse:collapse;margin-top:6px;}
+.costos td{padding:8px;}
+.costos tr.total td{border-top:2px solid #2563eb;font-weight:bold;font-size:16px;color:#15803d;}
+.costos td.r{text-align:right;}
+table.tl{width:100%;border-collapse:collapse;}
+table.tl td{padding:6px 8px;border-bottom:1px solid #f0f2f6;vertical-align:top;}
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;background:#eef2ff;color:#3730a3;font-size:12px;}
+.foot{margin-top:30px;text-align:center;color:#999;font-size:10px;border-top:1px solid #e2e8f0;padding-top:10px;}
+@media print{body{margin:0;}}
+</style></head><body>
+<div class="head"><div><h1>🛡️ PD ServTec</h1><div class="sub">Departamento Técnico — Garantía / Servicio Interno</div></div>
+<div class="orden-num"><div class="n">#${numero}</div><div class="f">Ingreso: ${fmtFecha(r.created_at)}</div></div></div>
+<h2>Cliente</h2><table class="kv">
+<tr><td class="k">Nombre</td><td>${esc(r.cliente_nombre || '—')}</td></tr>
+<tr><td class="k">Teléfono</td><td>${esc(r.cliente_telefono || '—')}</td></tr>
+<tr><td class="k">Estado</td><td><span class="badge">${esc(labelEstado(r.estado))}</span></td></tr>
+<tr><td class="k">Sede</td><td>${esc(sedeNom)}</td></tr>
+<tr><td class="k">Técnico</td><td>${esc(tecnico)}</td></tr></table>
+<h2>Detalle del servicio</h2><table class="kv">
+<tr><td class="k">Tipo</td><td>${esc(labelTipo(r.orden_ref))}</td></tr>
+<tr><td class="k">Producto</td><td>${esc(r.descripcion || '—')}</td></tr>
+<tr><td class="k">Categoría</td><td>${esc(labelCategoria(r.repuestos))}</td></tr>
+<tr><td class="k">Acción</td><td>${esc(labelAccion(r.accion || 'pendiente'))}</td></tr>
+${r.notas_rep ? `<tr><td class="k">Repuestos / Notas</td><td>${esc(r.notas_rep)}</td></tr>` : ''}</table>
+<h2>Costo del servicio</h2><table class="costos">
+<tr class="total"><td>Total</td><td class="r">${fmtUSD(total)}</td></tr></table>
+<h2>Avance (línea de tiempo)</h2><table class="tl">${filasTimeline}</table>
+<div class="foot">Documento generado por PD ServTec el ${fmtFechaHora(new Date().toISOString())}</div>
+<scr`+`ipt>window.onload=function(){setTimeout(function(){window.print();},350);};<\/scr`+`ipt>
+</body></html>`;
+  const win = window.open('', '_blank');
+  if (!win) { alert('Permite las ventanas emergentes para poder exportar el PDF.'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+// repuestos seleccionados del inventario para esta orden
+let _repuestosSeleccionados = []; // [{id, nombre, cantidad, venta}]
+let _sedeAnterior = null; // para detectar transferencias entre sedes al editar orden
+let _estadoAnterior = null; // estado previo de la orden al abrir el editor
+let _ordenEditNumero = null; // número de la orden en edición
+let _repEstadoAnterior = null; // estado previo de la garantía/interno
+let _repAccionAnterior = null; // acción previa de la garantía/interno
+let _repSedeActual = null; // sede de la garantía/interno en edición
+let _repBitacora = [];
+let _repBitacoraId = null;
+let _repActual = null; // registro de garantía abierto en el modal (para exportar PDF)
+let _repResuelto = false;
+let _repPuedeEditarBitacora = false;
+
+async function abrirEditOrden(o) {
+  if (esSoloLectura()) { abrirPreviewOrden(o); return; }
+  const entregado = o.estado === 'entregado';
+  _repuestosSeleccionados = [];
+  _sedeAnterior = o.sede_id || null;
+  _estadoAnterior = o.estado || null;
+  _ordenEditNumero = o.numero || null;
+  await cargarSedesEnSelects();
+  document.getElementById('edit-orden-id').value = o.id;
+  document.getElementById('edit-orden-titulo').textContent = `#${o.numero} — ${o.nombre_cliente}`;
+  document.getElementById('edit-estado').value = o.estado || 'pendiente';
+  document.getElementById('edit-prioridad').value = o.prioridad || 'normal';
+  document.getElementById('edit-presupuesto').value = o.presupuesto || '';
+  document.getElementById('edit-mano-obra').value = o.costo_mano_obra || '';
+  document.getElementById('edit-repuestos').value = o.costo_refacciones || '';
+  document.getElementById('edit-sede').value = o.sede_id || '';
+  document.getElementById('edit-notas').value = o.notas || '';
+  // Reset inventario panel
+  document.getElementById('edit-usar-inventario').checked = false;
+  document.getElementById('edit-inventario-panel').style.display = 'none';
+  document.getElementById('edit-inv-buscar').value = '';
+  document.getElementById('edit-inv-lista').innerHTML = '';
+  document.getElementById('edit-inv-seleccionados').innerHTML = '';
+  // Bloquear todo si ya fue entregado
+  ['edit-estado','edit-prioridad','edit-presupuesto','edit-mano-obra','edit-repuestos','edit-sede','edit-notas','edit-usar-inventario'].forEach(id => {
+    document.getElementById(id).disabled = entregado;
+  });
+  const guardarBtn = document.querySelector('#m-editar-orden .btn-azul');
+  if (entregado) {
+    guardarBtn.disabled = true;
+    guardarBtn.textContent = '🔒 Orden entregada';
+    guardarBtn.style.background = '#9ca3af';
+  } else {
+    guardarBtn.disabled = false;
+    guardarBtn.textContent = '💾 Guardar cambios';
+    guardarBtn.style.background = '';
+  }
+  document.getElementById('edit-advertencia').style.display = 'none';
+  actualizarTotalEdit();
+  cargarTimeline('orden', o.id, 'edit-timeline');
+  abrirModal('m-editar-orden');
+}
+
+function toggleInventarioOrden() {
+  const usar = document.getElementById('edit-usar-inventario').checked;
+  document.getElementById('edit-inventario-panel').style.display = usar ? 'block' : 'none';
+  if (usar) cargarListaInvOrden();
+}
+
+async function cargarListaInvOrden() {
+  const _sedeOrden = (document.getElementById('edit-sede')||{}).value || '';
+  let _qInv = sb.from('inventario').select('id,nombre,stock,venta,categoria,sede_id').gt('stock', 0);
+  if (_sedeOrden) _qInv = _qInv.eq('sede_id', _sedeOrden);
+  const {data} = await _qInv.order('nombre');
+  _invDisponible = data || [];
+  renderInvOrdenLista(_invDisponible);
+}
+
+let _invDisponible = [];
+
+function filtrarInvOrden() {
+  const q = document.getElementById('edit-inv-buscar').value.toLowerCase();
+  renderInvOrdenLista(_invDisponible.filter(i => i.nombre.toLowerCase().includes(q)));
+}
+
+function renderInvOrdenLista(data) {
+  const lista = document.getElementById('edit-inv-lista');
+  lista.innerHTML = data.length ? data.map(i => {
+    const yaAgregado = _repuestosSeleccionados.find(r => r.id === i.id);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-bottom:1px solid #f0f0f0;font-size:12px;">
+      <span>${_catEmoji(i.categoria)} <strong>${i.nombre}</strong> <span style="color:var(--med);">Stock: ${i.stock}</span></span>
+      <button class="btn btn-sm" style="background:${yaAgregado?'#d1fae5;color:#065f46':'var(--azul);color:#fff'};font-size:11px;padding:3px 8px;" 
+        onclick="agregarRepuestoOrden(${i.id},'${i.nombre.replace(/'/g,"\'")}',${i.stock},${i.venta||0})"
+        ${yaAgregado?'disabled':''}>
+        ${yaAgregado?'✓ Agregado':'+ Agregar'}
+      </button>
+    </div>`;
+  }).join('') : '<div style="padding:10px;text-align:center;color:var(--med);font-size:12px;">Sin repuestos disponibles.</div>';
+}
+
+function agregarRepuestoOrden(id, nombre, stock, venta) {
+  if (_repuestosSeleccionados.find(r => r.id === id)) return;
+  _repuestosSeleccionados.push({id, nombre, cantidad: 1, stock, venta});
+  renderSeleccionados();
+  renderInvOrdenLista(_invDisponible.filter(i => {
+    const q = document.getElementById('edit-inv-buscar').value.toLowerCase();
+    return i.nombre.toLowerCase().includes(q);
+  }));
+}
+
+function renderSeleccionados() {
+  const el = document.getElementById('edit-inv-seleccionados');
+  if (!_repuestosSeleccionados.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div style="font-size:11px;color:var(--med);margin-bottom:4px;">Repuestos a descontar al marcar como Listo:</div>' +
+    _repuestosSeleccionados.map((r,idx) => `
+    <div style="display:flex;align-items:center;gap:6px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:5px 8px;font-size:12px;">
+      <span style="flex:1;"><strong>${r.nombre}</strong></span>
+      <label style="font-size:11px;">Cant:</label>
+      <input type="number" value="${r.cantidad}" min="1" max="${r.stock}" 
+        style="width:50px;padding:3px 5px;border:1px solid var(--borde);border-radius:4px;font-size:12px;"
+        onchange="cambiarCantRepuesto(${idx}, this.value)">
+      <span style="color:var(--med);font-size:11px;">/ ${r.stock}</span>
+      <button onclick="quitarRepuesto(${idx})" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:14px;">✕</button>
+    </div>`).join('');
+  // Actualizar costo de repuestos automáticamente
+  const totalRepuestos = _repuestosSeleccionados.reduce((a,r) => a + (r.venta * r.cantidad), 0);
+  document.getElementById('edit-repuestos').value = totalRepuestos.toFixed(2);
+  actualizarTotalEdit();
+}
+
+function cambiarCantRepuesto(idx, val) {
+  const cant = Math.max(1, Math.min(parseInt(val)||1, _repuestosSeleccionados[idx].stock));
+  _repuestosSeleccionados[idx].cantidad = cant;
+  renderSeleccionados();
+}
+function quitarRepuesto(idx) {
+  _repuestosSeleccionados.splice(idx, 1);
+  renderSeleccionados();
+  renderInvOrdenLista(_invDisponible.filter(i => {
+    const q = document.getElementById('edit-inv-buscar').value.toLowerCase();
+    return i.nombre.toLowerCase().includes(q);
+  }));
+}
+
+function actualizarTotalEdit() {
+  const p = parseFloat(document.getElementById('edit-presupuesto').value) || 0;
+  const m = parseFloat(document.getElementById('edit-mano-obra').value) || 0;
+  const r = parseFloat(document.getElementById('edit-repuestos').value) || 0;
+  const costos = m + r;
+  const totalEl = document.getElementById('edit-total');
+  const warnEl = document.getElementById('edit-advertencia');
+  totalEl.textContent = fmtUSD(costos);
+  if (p > 0 && costos > p) {
+    totalEl.style.color = '#c0392b';
+    warnEl.style.display = 'block';
+  } else {
+    totalEl.style.color = '';
+    warnEl.style.display = 'none';
+  }
+}
+
+async function guardarEditOrden() {
+  const id = document.getElementById('edit-orden-id').value;
+  const nuevoEstado = document.getElementById('edit-estado').value;
+  const p = parseFloat(document.getElementById('edit-presupuesto').value) || 0;
+  const m = parseFloat(document.getElementById('edit-mano-obra').value) || 0;
+  const r = parseFloat(document.getElementById('edit-repuestos').value) || 0;
+
+  if (nuevoEstado === 'entregado' && (m + r) > p && p > 0) {
+    if (!confirm('⚠️ Los costos superan el presupuesto. ¿Confirmas que el cliente aprobó el monto adicional y deseas marcarla como entregada?')) return;
+  }
+
+  const nuevaSede = document.getElementById('edit-sede').value || null;
+  const huboTransferencia = (_sedeAnterior || null) !== (nuevaSede || null);
+  const updateObj = {
+    estado: nuevoEstado,
+    prioridad: document.getElementById('edit-prioridad').value,
+    presupuesto: p || null,
+    costo_mano_obra: m || null,
+    costo_refacciones: r || null,
+    sede_id: nuevaSede,
+    notas: document.getElementById('edit-notas').value.trim()
+  };
+  if (huboTransferencia && nuevaSede) {
+    // La orden pasa a la sede destino pero queda "a la espera de confirmación" y sigue visible en la sede origen
+    updateObj.sede_origen_transfer = _sedeAnterior;
+    updateObj.transfer_estado = 'pendiente';
+  }
+  const {error} = await sb.from('ordenes').update(updateObj).eq('id', id);
+  if (error) {
+    if (error.code === '42501' || /policy|rls|permission/i.test(error.message)) {
+      alert('No tienes permiso para transferir esta orden a otra sede. Pide a tu supervisor que actualice las políticas de seguridad (RLS) de la tabla "ordenes".');
+    } else {
+      alert('Error: ' + error.message);
+    }
+    return;
+  }
+
+  // Registrar avance de estado en la línea de tiempo
+  if (nuevoEstado !== _estadoAnterior) {
+    await registrarEvento('orden', id, _ordenEditNumero, 'estado',
+      `Estado: "${labelEstado(_estadoAnterior)}" → "${labelEstado(nuevoEstado)}"`,
+      { estado_anterior: _estadoAnterior, estado_nuevo: nuevoEstado, sede_destino: nuevaSede });
+  }
+
+  // Si cambió la sede, registrar la transferencia y avisar al usuario
+  if (huboTransferencia) {
+    const nomAntes = _sedeAnterior ? (_sedeMap[_sedeAnterior] || 'Desconocida') : 'Sin sede';
+    const nomNueva = nuevaSede ? (_sedeMap[nuevaSede] || 'Desconocida') : 'Sin sede';
+    const titulo = document.getElementById('edit-orden-titulo').textContent;
+    await registrarCambio('orden', `Orden ${titulo} transferida: "${nomAntes}" → "${nomNueva}"`, {sede: nomAntes}, {sede: nomNueva});
+    await registrarEvento('orden', id, _ordenEditNumero, 'envio',
+      `📦 Enviada desde "${nomAntes}" → "${nomNueva}" · esperando confirmación`,
+      { sede_origen: _sedeAnterior, sede_destino: nuevaSede });
+    if (role === 'tecnico' && nuevaSede !== userSede) {
+      alert(`✅ Orden ${titulo} enviada a "${nomNueva}".\n\nSeguirá visible en tu lista marcada como "esperando confirmación" hasta que el técnico de esa sede confirme la recepción.`);
+    }
+  }
+
+  // Si estado es "listo", descontar repuestos del inventario
+  if (nuevoEstado === 'listo' && _repuestosSeleccionados.length > 0) {
+    const fallos = [];
+    for (const rep of _repuestosSeleccionados) {
+      // Obtener stock actual
+      const {data: inv, error: invErr} = await sb.from('inventario').select('stock,nombre').eq('id', rep.id).single();
+      if (invErr || !inv) { fallos.push(rep.nombre || rep.id); continue; }
+      const nuevoStock = Math.max(0, inv.stock - rep.cantidad);
+      const {error: updErr} = await sb.from('inventario').update({stock: nuevoStock}).eq('id', rep.id);
+      if (updErr) { fallos.push(inv.nombre || rep.id); continue; }
+      await sb.from('movimientos_inventario').insert([{
+        inventario_id: rep.id,
+        usuario_id: user.id,
+        orden_id: parseInt(id),
+        cantidad: rep.cantidad,
+        tipo: 'salida',
+        motivo: 'usado_reparacion',
+        notas: `Orden #${document.getElementById('edit-orden-titulo').textContent}`
+      }]);
+    }
+    if (fallos.length) alert('⚠️ No se pudo descontar el stock de: ' + fallos.join(', ') + '. Revisa el inventario manualmente.');
+    _repuestosSeleccionados = [];
+  }
+
+  cerrarModal('m-editar-orden');
+  renderOrdenes();
+  renderDashboard();
+}
+
+// ── ÓRDENES ──────────────────────────────────────────────
+function ordenTieneAdvertencia(o) {
+  const presupuesto = parseFloat(o.presupuesto) || 0;
+  const costos = (parseFloat(o.costo_mano_obra) || 0) + (parseFloat(o.costo_refacciones) || 0);
+  return costos > 0 && presupuesto > 0 && costos > presupuesto;
+}
+function poblarFiltroSede(id) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">🏢 Todas las sedes</option>' + Object.entries(_sedeMap||{}).map(([sid,nom]) => `<option value="${sid}">${nom}</option>`).join('');
+  sel.value = prev;
+  // El filtro por sede se muestra a quien tiene vista global (supervisor y vendedor);
+  // los demás roles ya están limitados a su sede.
+  sel.style.display = tieneVistaGlobal() ? '' : 'none';
+}
+function poblarFiltroSedeOrdenes() { poblarFiltroSede('ord-filtro-sede'); }
+
+async function renderOrdenes() {
+  await cargarSedesEnSelects();
+  await cargarUsuariosMap();
+  poblarFiltroSedeOrdenes();
+  const filtroSede = document.getElementById('ord-filtro-sede')?.value || '';
+  const filtroEstado = document.getElementById('ord-filtro-estado')?.value || '';
+  const ordFD = document.getElementById('ord-fecha-desde')?.value || '';
+  const ordFH = document.getElementById('ord-fecha-hasta')?.value || '';
+  let _qOrd = filtroOrdenesPorRol(sb.from('ordenes').select('*'));
+  if (ordFD) _qOrd = _qOrd.gte('created_at', ordFD + 'T00:00:00');
+  if (ordFH) _qOrd = _qOrd.lte('created_at', ordFH + 'T23:59:59');
+  const {data} = await _qOrd.order('created_at', {ascending:false});
+  let rows = data || [];
+  if (filtroSede) rows = rows.filter(o => (o.sede_id || '') === filtroSede);
+  if (filtroEstado) rows = rows.filter(o => o.estado === filtroEstado);
+  const tb = document.getElementById('t-ordenes');
+  tb.innerHTML = (rows && rows.length) ?
+    rows.map(o => {
+      const entregado = o.estado === 'entregado';
+      const advertencia = ordenTieneAdvertencia(o);
+      const advertBadge = advertencia ? ' <span title="Costos superan el presupuesto — contactar cliente" style="cursor:help;font-size:15px;">⚠️</span>' : '';
+      const soloVer = esSoloLectura() || entregado;
+      const editBtn = soloVer
+        ? `<button class="btn btn-sm" style="background:#e2e3e5;color:#555;" title="Ver detalle" onclick="abrirPreviewOrden(${JSON.stringify(o).replace(/"/g,'&quot;')})">👁️</button>`
+        : `<button class="btn btn-azul btn-sm" onclick="abrirEditOrden(${JSON.stringify(o).replace(/"/g,'&quot;')})">✏️</button>`;
+      const sedeNombre = o.sede_id && _sedeMap[o.sede_id] ? _sedeMap[o.sede_id] : null;
+      let transferBadge = '', confirmBtn = '';
+      if (o.sede_origen_transfer) {
+        const origenNom = _sedeMap[o.sede_origen_transfer] || 'otra sede';
+        const destinoNom = sedeNombre || 'destino';
+        const pend = o.transfer_estado === 'pendiente';
+        if (o.sede_origen_transfer === userSede) {
+          transferBadge = `<br><span style="font-size:11px;color:${pend?'#b45309':'#15803d'};">📤 Transferida a ${destinoNom}${pend ? ' · ⏳ esperando confirmación' : ' · ✅ recibida'}</span>`;
+        } else if (o.sede_id === userSede && pend) {
+          transferBadge = `<br><span style="font-size:11px;color:#b45309;">📥 Recibida de ${origenNom} · ⏳ por confirmar</span>`;
+        } else if (o.sede_id === userSede) {
+          transferBadge = `<br><span style="font-size:11px;color:#15803d;">📥 Recibida de ${origenNom}</span>`;
+        } else if (esSoloLectura()) {
+          transferBadge = `<br><span style="font-size:11px;color:${pend?'#b45309':'#15803d'};">↪️ ${origenNom} → ${destinoNom}${pend ? ' · ⏳ pendiente' : ' · ✅ confirmada'}</span>`;
+        }
+        if (pend && o.sede_id === userSede && role === 'tecnico') {
+          confirmBtn = `<button class="btn btn-sm" style="background:#16a34a;color:#fff;" title="Confirmar recepción de esta orden" onclick="confirmarRecepcion('${o.id}', ${o.numero || 'null'}, '${o.sede_origen_transfer||''}')">✅ Recibir</button>`;
+        }
+      }
+      const sedeCell = (sedeNombre
+        ? `<span class="badge b-listo">🏢 ${sedeNombre}</span>`
+        : '<span style="color:var(--med);font-size:12px;">Sin sede</span>') + transferBadge;
+      return `<tr${advertencia ? ' style="background:#fffbeb;"' : ''}>
+        <td>#${o.numero || o.id.slice(0,6).toUpperCase()}${advertBadge}</td>
+        <td>${o.nombre_cliente}</td>
+        <td>${[o.marca, o.modelo].filter(Boolean).join(' ') || o.tipo_equipo || '—'}</td>
+        <td><span class="badge-estado est-${o.estado}">${labelEstado(o.estado)}</span></td>
+        <td>${sedeCell}</td>
+        <td><span style="font-size:12px;color:var(--med);">👤 ${nombreTec(o.usuario_id)}</span></td>
+        <td>${o.prioridad === 'urgente' ? '🔴 Urgente' : o.prioridad === 'baja' ? '🔵 Baja' : 'Normal'}</td>
+        <td>${fmtFecha(o.created_at)}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${confirmBtn}
+          ${editBtn}
+          <button class="btn btn-sm" style="background:#0f766e;color:#fff;" title="Exportar PDF" onclick="exportarOrdenPDF(${JSON.stringify(o).replace(/"/g,'&quot;')})">📄</button>
+          ${role === 'vendedor' ? '' : `<button class="btn btn-rojo btn-sm" onclick="delOrden('${o.id}')">🗑</button>`}
+        </td>
+      </tr>`;
+    }).join('') :
+    '<tr><td colspan="9" style="text-align:center;color:var(--med);">Sin órdenes.</td></tr>';
+}
+async function confirmarRecepcion(id, numero, sedeOrigen) {
+  if (!confirm('¿Confirmas que recibiste esta orden en tu sede?')) return;
+  const {error} = await sb.from('ordenes').update({ transfer_estado: 'aceptada' }).eq('id', id);
+  if (error) { alert('Error al confirmar la recepción: ' + error.message); return; }
+  const origenNom = sedeOrigen && _sedeMap[sedeOrigen] ? _sedeMap[sedeOrigen] : 'otra sede';
+  await registrarEvento('orden', id, numero, 'recepcion',
+    `📥 Recepción confirmada en "${_sedeMap[userSede] || 'esta sede'}" (desde "${origenNom}")`,
+    { sede_origen: sedeOrigen || null, sede_destino: userSede });
+  renderOrdenes();
+  renderDashboard();
+}
+async function guardarOrden() {
+  const nombre_cliente = document.getElementById('o-cliente').value.trim();
+  const tipo_equipo = document.getElementById('o-tipo').value.trim();
+  if (!nombre_cliente || !tipo_equipo) { alert('Completa el cliente y tipo de equipo.'); return; }
+  const { data: ultOrden } = await sb.from('ordenes').select('numero').order('numero', {ascending:false}).limit(1);
+  const siguiente = ultOrden && ultOrden.length && ultOrden[0].numero ? ultOrden[0].numero + 1 : 1;
+  if (esSoloLectura()) { alert('Tu rol no permite crear órdenes.'); return; }
+  // El técnico crea la orden en su propia sede por defecto, pero puede elegir otra
+  const sede_id = document.getElementById('o-sede').value || userSede || null;
+  if (!sede_id) { alert('Selecciona una sede para la orden. Si no aparece ninguna, pide a tu supervisor que te asigne una.'); return; }
+  const estadoInicial = document.getElementById('o-estado').value;
+  const {data: nuevaOrden, error} = await sb.from('ordenes').insert([{
+    usuario_id: user.id,
+    numero: siguiente,
+    nombre_cliente,
+    tipo_equipo,
+    marca: document.getElementById('o-marca').value.trim(),
+    modelo: document.getElementById('o-modelo').value.trim(),
+    falla: document.getElementById('o-falla').value.trim(),
+    prioridad: document.getElementById('o-prioridad').value,
+    estado: estadoInicial,
+    accesorios: document.getElementById('o-accesorios').value.trim(),
+    notas: document.getElementById('o-notas').value.trim(),
+    sede_id
+  }]).select('id,numero').single();
+  if (error) { alert('Error: ' + error.message); return; }
+  if (nuevaOrden) {
+    await registrarEvento('orden', nuevaOrden.id, nuevaOrden.numero, 'creacion',
+      `Orden creada en estado "${labelEstado(estadoInicial)}"`,
+      { estado_nuevo: estadoInicial, sede_destino: sede_id });
+  }
+  cerrarModal('m-orden');
+  ['o-cliente','o-tipo','o-marca','o-modelo','o-falla','o-accesorios','o-notas'].forEach(id => document.getElementById(id).value='');
+  renderOrdenes();
+}
+
+// ── GARANTÍAS / SERVICIO INTERNO ────────���──���─────────────
+const labelTipo = t => ({garantia:'🛡️ Garantía', interno:'🔧 Interno'}[t] || t || '—');
+const labelAccion = a => ({reparado:'🔧 Reparado', reemplazado:'🔄 Reemplazado', sin_cobertura:'❌ Sin cobertura', pendiente:'⏳ Pendiente'}[a] || a || '—');
+// Fuente única de categorías de inventario/garantías
+const CATEGORIAS_INV = [
+  {v:'telefonia', e:'📱', n:'Telefonía'},
+  {v:'pantalla', e:'🖥️', n:'Pantalla'},
+  {v:'bateria', e:'🔋', n:'Batería'},
+  {v:'pin_carga', e:'🔌', n:'Pin de carga'},
+  {v:'flex_carga', e:'➿', n:'Flex de carga'},
+  {v:'camara', e:'📷', n:'Cámara'},
+  {v:'tapa', e:'🪟', n:'Tapa'},
+  {v:'carcasa', e:'🧰', n:'Carcasa'},
+  {v:'boton', e:'🔘', n:'Botón'},
+  {v:'relojes', e:'⌚', n:'Relojes'},
+  {v:'computacion', e:'💻', n:'Computación'},
+  {v:'electrodomesticos', e:'🏠', n:'Electrodomésticos'},
+  {v:'electronicos', e:'🔌', n:'Electrónicos'},
+  {v:'otro', e:'📦', n:'Otro'},
+];
+const _catMap = Object.fromEntries(CATEGORIAS_INV.map(c => [c.v, c]));
+const labelCategoria = c => { const x = _catMap[c]; return x ? (x.e + ' ' + x.n) : (c || '—'); };
+const _catEmoji = c => (_catMap[c] ? _catMap[c].e : '📦');
+
+function esResolucion(e){ return e === 'completada' || e === 'no_reparable'; }
+function parseBitacora(r){
+  try { if (!r || !r.bitacora) return []; return typeof r.bitacora === 'string' ? JSON.parse(r.bitacora) : r.bitacora; }
+  catch(e){ return []; }
+}
+function renderBitacora(editable){
+  const cont = document.getElementById('rep-bitacora-lista');
+  if (!cont) return;
+  cont.innerHTML = (_repBitacora && _repBitacora.length)
+    ? _repBitacora.map((b,i)=>`<div style="padding:6px 0;border-bottom:1px solid var(--borde);font-size:12px;">
+        <div style="color:var(--med);margin-bottom:2px;">🕒 ${fmtFechaHora(b.t)} · 👤 ${b.u||'—'}${editable?` <span onclick="quitarAvance(${i})" style="float:right;cursor:pointer;color:#c0392b;">🗑</span>`:''}</div>
+        <div style="white-space:pre-wrap;">${(b.txt||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>
+      </div>`).join('')
+    : '<span style="color:var(--med);font-size:12px;">Sin avances registrados.</span>';
+  const ed = document.getElementById('rep-bitacora-edit');
+  if (ed) ed.style.display = editable ? 'block' : 'none';
+  const lk = document.getElementById('rep-bitacora-lock');
+  if (lk) lk.style.display = (!editable && _repResuelto) ? 'block' : 'none';
+}
+function toggleBitacoraLockLive(){
+  const sel = document.getElementById('edit-rep-estado');
+  if (!sel) return;
+  _repResuelto = esResolucion(sel.value);
+  renderBitacora(_repPuedeEditarBitacora && !_repResuelto);
+}
+async function agregarAvance(){
+  if (!_repPuedeEditarBitacora) return;
+  if (_repResuelto) { alert('La bitácora está bloqueada porque el caso ya fue resuelto.'); return; }
+  const inp = document.getElementById('rep-bitacora-input');
+  const txt = (inp.value||'').trim();
+  if (!txt) { alert('Escribe el avance antes de agregarlo.'); return; }
+  _repBitacora.push({ t: new Date().toISOString(), u: user.email, txt });
+  const {error} = await sb.from('reparaciones').update({ bitacora: JSON.stringify(_repBitacora) }).eq('id', _repBitacoraId);
+  if (error) { alert('Error al guardar el avance: ' + error.message); _repBitacora.pop(); return; }
+  inp.value = '';
+  renderBitacora(true);
+  await registrarEvento('garantia', _repBitacoraId, null, 'accion', `Avance en bitácora: ${txt.slice(0,80)}`, { sede_destino: _repSedeActual });
+}
+async function quitarAvance(i){
+  if (!_repPuedeEditarBitacora || _repResuelto) return;
+  if (!confirm('¿Eliminar este avance de la bitácora?')) return;
+  _repBitacora.splice(i,1);
+  const {error} = await sb.from('reparaciones').update({ bitacora: JSON.stringify(_repBitacora) }).eq('id', _repBitacoraId);
+  if (error) { alert('Error: ' + error.message); return; }
+  renderBitacora(true);
+}
+
+
+async function renderReparaciones() {
+  await cargarUsuariosMap();
+  await cargarSedesEnSelects();
+  poblarFiltroSede('rep-filtro-sede');
+  const filtroSedeRep = tieneVistaGlobal() ? (document.getElementById('rep-filtro-sede')?.value || '') : '';
+  const repFD = document.getElementById('rep-fecha-desde')?.value || '';
+  const repFH = document.getElementById('rep-fecha-hasta')?.value || '';
+  let _qRep = filtroReparacionesPorRol(sb.from('reparaciones').select('*'));
+  if (repFD) _qRep = _qRep.gte('created_at', repFD + 'T00:00:00');
+  if (repFH) _qRep = _qRep.lte('created_at', repFH + 'T23:59:59');
+  const {data} = await _qRep.order('created_at', {ascending:false});
+  let rows = data || [];
+  if (filtroSedeRep) rows = rows.filter(r => (r.sede_id || '') === filtroSedeRep);
+  const tb = document.getElementById('t-reparaciones');
+  tb.innerHTML = (rows && rows.length) ?
+    rows.map(r => {
+      const completada = r.estado === 'completada';
+      const soloVer = esSoloLectura() || completada;
+      const editBtn = soloVer
+        ? `<button class="btn btn-sm" style="background:#e2e3e5;color:#555;" title="Ver detalle" onclick="abrirPreviewGarantia(${JSON.stringify(r).replace(/"/g,'&quot;')})">👁️</button>`
+        : `<button class="btn btn-azul btn-sm" onclick="abrirEditReparacion(${JSON.stringify(r).replace(/"/g,'&quot;')})">✏️</button>`;
+      return `<tr${completada ? ' style="background:#f0fdf4;"' : ''}>
+        <td>${labelTipo(r.orden_ref)}</td>
+        <td>${r.descripcion}</td>
+        <td>${r.cliente_nombre || '—'}</td>
+        <td>${labelCategoria(r.repuestos)}</td>
+        <td>${labelAccion(r.accion || 'pendiente')}</td>
+        <td><span class="badge-estado est-${r.estado}">${labelEstado(r.estado)}</span></td>
+        <td>${fmtUSD(r.costo)}</td>
+        <td><span style="font-size:12px;color:var(--med);">👤 ${nombreTec(r.tecnico_id)}</span></td>
+        <td>${fmtFecha(r.created_at)}</td>
+        <td style="display:flex;gap:4px;">
+          ${editBtn}
+          <button class="btn btn-sm" style="background:#0f766e;color:#fff;" title="Exportar PDF" onclick="exportarGarantiaPDF(${JSON.stringify(r).replace(/"/g,'&quot;')})">📄</button>
+          ${role === 'vendedor' ? '' : `<button class="btn btn-rojo btn-sm" onclick="delGarantia('${r.id}')">🗑</button>`}
+        </td>
+      </tr>`;
+    }).join('') :
+    '<tr><td colspan="10" style="text-align:center;color:var(--med);">Sin registros.</td></tr>';
+}
+async function guardarReparacion() {
+  if (esSoloLectura()) { alert('Tu rol no permite crear registros.'); return; }
+  const descripcion = document.getElementById('r-descripcion').value.trim();
+  if (!descripcion) { alert('Ingresa el nombre del producto.'); return; }
+  const estadoInicialRep = document.getElementById('r-estado').value;
+  const tipoRep = document.getElementById('r-tipo').value;
+  const {data: nuevaRep, error} = await sb.from('reparaciones').insert([{
+    tecnico_id: user.id,
+    sede_id: userSede || null,
+    orden_ref: tipoRep,
+    descripcion,
+    cliente_nombre: document.getElementById('r-cliente').value.trim(),
+    cliente_telefono: document.getElementById('r-cliente-tel').value.trim(),
+    bitacora: '[]',
+    repuestos: document.getElementById('r-categoria').value,
+    accion: document.getElementById('r-accion').value,
+    notas_rep: document.getElementById('r-repuestos').value.trim(),
+    comprobante: document.getElementById('r-orden').value.trim(),
+    costo: parseFloat(document.getElementById('r-costo').value) || 0,
+    estado: estadoInicialRep
+  }]).select('id').single();
+  if (error) { alert('Error: ' + error.message); return; }
+  if (nuevaRep) {
+    await registrarEvento('garantia', nuevaRep.id, null, 'creacion',
+      `${labelTipo(tipoRep)} creada en estado "${labelEstado(estadoInicialRep)}"`,
+      { estado_nuevo: estadoInicialRep, sede_destino: userSede || null });
+  }
+  cerrarModal('m-reparacion');
+  ['r-descripcion','r-repuestos','r-costo','r-orden','r-cliente','r-cliente-tel'].forEach(id => document.getElementById(id).value='');
+  renderReparaciones();
+}
+function abrirEditReparacion(r) {
+  if (esSoloLectura()) { abrirPreviewGarantia(r); return; }
+  const completada = r.estado === 'completada';
+  document.getElementById('edit-rep-id').value = r.id;
+  document.getElementById('edit-rep-titulo').textContent = r.descripcion;
+  _repEstadoAnterior = r.estado || null;
+  _repAccionAnterior = r.accion || null;
+  _repSedeActual = r.sede_id || null;
+  document.getElementById('edit-rep-estado').value = r.estado || 'en_proceso';
+  document.getElementById('edit-rep-accion').value = r.accion || 'pendiente';
+  document.getElementById('edit-rep-descripcion').value = r.descripcion || '';
+  document.getElementById('edit-rep-repuestos').value = r.notas_rep || '';
+  document.getElementById('edit-rep-costo').value = r.costo || '';
+  document.getElementById('edit-rep-cliente').value = r.cliente_nombre || '';
+  document.getElementById('edit-rep-cliente-tel').value = r.cliente_telefono || '';
+  ['edit-rep-estado','edit-rep-accion','edit-rep-descripcion','edit-rep-repuestos','edit-rep-costo','edit-rep-cliente','edit-rep-cliente-tel'].forEach(id => {
+    document.getElementById(id).disabled = completada;
+  });
+  const btn = document.querySelector('#m-editar-reparacion .btn-azul');
+  if (completada) {
+    btn.disabled = true;
+    btn.textContent = '🔒 Registro cerrado';
+    btn.style.background = '#9ca3af';
+  } else {
+    btn.disabled = false;
+    btn.textContent = '💾 Guardar cambios';
+    btn.style.background = '';
+  }
+  _repBitacoraId = r.id;
+  _repActual = r;
+  _repBitacora = parseBitacora(r);
+  _repPuedeEditarBitacora = true;
+  _repResuelto = esResolucion(r.estado);
+  renderBitacora(_repPuedeEditarBitacora && !_repResuelto);
+  cargarTimeline('garantia', r.id, 'rep-timeline');
+  abrirModal('m-editar-reparacion');
+}
+
+function abrirPreviewGarantia(r) {
+  document.getElementById('edit-rep-id').value = r.id;
+  document.getElementById('edit-rep-titulo').textContent = `🔒 ${r.descripcion}`;
+  document.getElementById('edit-rep-estado').value = r.estado || '';
+  document.getElementById('edit-rep-accion').value = r.accion || '';
+  document.getElementById('edit-rep-descripcion').value = r.descripcion || '';
+  document.getElementById('edit-rep-repuestos').value = r.notas_rep || '';
+  document.getElementById('edit-rep-costo').value = r.costo || '';
+  document.getElementById('edit-rep-cliente').value = r.cliente_nombre || '';
+  document.getElementById('edit-rep-cliente-tel').value = r.cliente_telefono || '';
+  ['edit-rep-estado','edit-rep-accion','edit-rep-descripcion','edit-rep-repuestos','edit-rep-costo','edit-rep-cliente','edit-rep-cliente-tel'].forEach(id => {
+    document.getElementById(id).disabled = true;
+  });
+  const btn = document.querySelector('#m-editar-reparacion .btn-azul');
+  btn.disabled = true;
+  btn.textContent = '🔒 Registro cerrado';
+  btn.style.background = '#9ca3af';
+  _repSedeActual = r.sede_id || null;
+  _repBitacoraId = r.id;
+  _repActual = r;
+  _repBitacora = parseBitacora(r);
+  _repPuedeEditarBitacora = false;
+  _repResuelto = esResolucion(r.estado);
+  renderBitacora(false);
+  cargarTimeline('garantia', r.id, 'rep-timeline');
+  abrirModal('m-editar-reparacion');
+}
+
+async function delGarantia(id) {
+  const clave = prompt('Ingresa la clave para eliminar este registro:');
+  if (clave === null) return;
+  const {data: _claveOk} = await sb.rpc('verificar_clave_maestra', { p_clave: clave });
+  if (!_claveOk) { alert('Clave incorrecta.'); return; }
+  if (!confirm('¿Eliminar este registro de garantía/interno?')) return;
+  const {error} = await sb.from('reparaciones').delete().eq('id', id);
+  if (error) { alert('No se pudo eliminar el registro: ' + error.message); return; }
+  renderReparaciones();
+}
+async function guardarEditReparacion() {
+  const id = document.getElementById('edit-rep-id').value;
+  const nuevoEstadoRep = document.getElementById('edit-rep-estado').value;
+  const nuevaAccionRep = document.getElementById('edit-rep-accion').value;
+  const {error} = await sb.from('reparaciones').update({
+    estado: nuevoEstadoRep,
+    accion: nuevaAccionRep,
+    descripcion: document.getElementById('edit-rep-descripcion').value.trim(),
+    notas_rep: document.getElementById('edit-rep-repuestos').value.trim(),
+    cliente_nombre: document.getElementById('edit-rep-cliente').value.trim(),
+    cliente_telefono: document.getElementById('edit-rep-cliente-tel').value.trim(),
+    costo: parseFloat(document.getElementById('edit-rep-costo').value) || 0
+  }).eq('id', id);
+  if (error) { alert('Error: ' + error.message); return; }
+  if (nuevoEstadoRep !== _repEstadoAnterior) {
+    await registrarEvento('garantia', id, null, 'estado',
+      `Estado: "${labelEstado(_repEstadoAnterior)}" → "${labelEstado(nuevoEstadoRep)}"`,
+      { estado_anterior: _repEstadoAnterior, estado_nuevo: nuevoEstadoRep, sede_destino: _repSedeActual });
+  }
+  if (nuevaAccionRep !== _repAccionAnterior) {
+    await registrarEvento('garantia', id, null, 'accion',
+      `Acción: "${labelAccion(_repAccionAnterior)}" → "${labelAccion(nuevaAccionRep)}"`,
+      { sede_destino: _repSedeActual });
+  }
+  cerrarModal('m-editar-reparacion');
+  renderReparaciones();
+}
+
+// ── FACTURAS ─────────────────────────────────────────────
+async function renderFacturas() {
+  await cargarUsuariosMap();
+  await cargarSedesEnSelects();
+  poblarFiltroSede('fac-filtro-sede');
+  const filtroSedeFac = (role === 'gerente') ? (document.getElementById('fac-filtro-sede')?.value || '') : '';
+  const facFD = document.getElementById('fac-fecha-desde')?.value || '';
+  const facFH = document.getElementById('fac-fecha-hasta')?.value || '';
+  let _qFac = filtroPorRol(sb.from('facturas').select('*'));
+  if (facFD) _qFac = _qFac.gte('created_at', facFD + 'T00:00:00');
+  if (facFH) _qFac = _qFac.lte('created_at', facFH + 'T23:59:59');
+  const {data} = await _qFac.order('created_at', {ascending:false});
+  let rows = data || [];
+  if (filtroSedeFac) rows = rows.filter(f => (f.sede_id || '') === filtroSedeFac);
+  const tb = document.getElementById('t-facturas');
+  tb.innerHTML = (rows && rows.length) ?
+    rows.map(f => {
+      const pagada = f.estado_pago === 'pagado';
+      const soloVer = esSoloLectura() || pagada;
+      const editBtn = soloVer
+        ? `<button class="btn btn-sm" style="background:#e2e3e5;color:#555;" title="Ver detalle" onclick="abrirPreviewFactura(${JSON.stringify(f).replace(/"/g,'&quot;')})">👁️</button>`
+        : `<button class="btn btn-azul btn-sm" onclick="abrirEditFactura(${JSON.stringify(f).replace(/"/g,'&quot;')})">✏️</button>`;
+      return `<tr${pagada ? ' style="background:#f0fdf4;"' : ''}>
+        <td>#${f.numero || '—'}</td>
+        <td>${f.nombre_cliente || '—'}</td>
+        <td>${fmtUSD(f.total)}</td>
+        <td><span class="badge-estado est-${f.estado_pago}">${labelEstado(f.estado_pago)}</span></td>
+        <td><span style="font-size:12px;color:var(--med);">👤 ${nombreTec(f.usuario_id)}</span></td>
+        <td>${fmtFecha(f.fecha || f.created_at)}</td>
+        <td style="display:flex;gap:4px;">
+          ${editBtn}
+          ${role === 'vendedor' ? '' : `<button class="btn btn-rojo btn-sm" onclick="delFactura('${f.id}')">🗑</button>`}
+        </td>
+      </tr>`;
+    }).join('') :
+    '<tr><td colspan="7" style="text-align:center;color:var(--med);">Sin facturas.</td></tr>';
+}
+
+function abrirEditFactura(f) {
+  if (esSoloLectura()) { abrirPreviewFactura(f); return; }
+  document.getElementById('edit-fac-id').value = f.id;
+  document.getElementById('edit-fac-titulo').textContent = `#${f.numero} — ${f.nombre_cliente}`;
+  document.getElementById('edit-fac-cliente').value = f.nombre_cliente || '';
+  document.getElementById('edit-fac-descripcion').value = f.descripcion || '';
+  document.getElementById('edit-fac-presupuesto').value = f.presupuesto || '';
+  document.getElementById('edit-fac-manoobra').value = f.costo_mano_obra || '';
+  document.getElementById('edit-fac-refaccion').value = f.costo_refacciones || '';
+  document.getElementById('edit-fac-monto').value = f.total || '';
+  document.getElementById('edit-fac-estado').value = f.estado_pago || 'pendiente';
+  ['edit-fac-cliente','edit-fac-descripcion','edit-fac-presupuesto','edit-fac-manoobra','edit-fac-refaccion','edit-fac-monto','edit-fac-estado'].forEach(id => {
+    document.getElementById(id).disabled = false;
+  });
+  const btn = document.querySelector('#m-editar-factura .btn-azul');
+  btn.disabled = false;
+  btn.textContent = '💾 Guardar cambios';
+  btn.style.background = '';
+  abrirModal('m-editar-factura');
+}
+
+function abrirPreviewFactura(f) {
+  document.getElementById('edit-fac-id').value = f.id;
+  document.getElementById('edit-fac-titulo').textContent = `��� #${f.numero} — ${f.nombre_cliente}`;
+  document.getElementById('edit-fac-cliente').value = f.nombre_cliente || '';
+  document.getElementById('edit-fac-descripcion').value = f.descripcion || '';
+  document.getElementById('edit-fac-presupuesto').value = f.presupuesto || '';
+  document.getElementById('edit-fac-manoobra').value = f.costo_mano_obra || '';
+  document.getElementById('edit-fac-refaccion').value = f.costo_refacciones || '';
+  document.getElementById('edit-fac-monto').value = f.total || '';
+  document.getElementById('edit-fac-estado').value = f.estado_pago || '';
+  ['edit-fac-cliente','edit-fac-descripcion','edit-fac-presupuesto','edit-fac-manoobra','edit-fac-refaccion','edit-fac-monto','edit-fac-estado'].forEach(id => {
+    document.getElementById(id).disabled = true;
+  });
+  const btn = document.querySelector('#m-editar-factura .btn-azul');
+  btn.disabled = true;
+  btn.textContent = '🔒 Factura pagada';
+  btn.style.background = '#9ca3af';
+  abrirModal('m-editar-factura');
+}
+
+async function guardarEditFactura() {
+  const id = document.getElementById('edit-fac-id').value;
+  const {error} = await sb.from('facturas').update({
+    nombre_cliente: document.getElementById('edit-fac-cliente').value.trim(),
+    descripcion: document.getElementById('edit-fac-descripcion').value.trim(),
+    presupuesto: parseFloat(document.getElementById('edit-fac-presupuesto').value) || null,
+    costo_mano_obra: parseFloat(document.getElementById('edit-fac-manoobra').value) || null,
+    costo_refacciones: parseFloat(document.getElementById('edit-fac-refaccion').value) || null,
+    total: parseFloat(document.getElementById('edit-fac-monto').value) || 0,
+    estado_pago: document.getElementById('edit-fac-estado').value
+  }).eq('id', id);
+  if (error) { alert('Error: ' + error.message); return; }
+  cerrarModal('m-editar-factura');
+  renderFacturas();
+  renderDashboard();
+}
+
+async function delFactura(id) {
+  const clave = prompt('Ingresa la clave para eliminar esta factura:');
+  if (clave === null) return;
+  const {data: _claveOk} = await sb.rpc('verificar_clave_maestra', { p_clave: clave });
+  if (!_claveOk) { alert('Clave incorrecta.'); return; }
+  if (!confirm('¿Eliminar esta factura?')) return;
+  const {error} = await sb.from('facturas').delete().eq('id', id);
+  if (error) { alert('No se pudo eliminar la factura: ' + error.message); return; }
+  renderFacturas();
+  renderDashboard();
+}
+function recalcFacturaTotal(pfx) {
+  const moEl = document.getElementById(pfx+'-manoobra');
+  const rfEl = document.getElementById(pfx+'-refaccion');
+  const totEl = document.getElementById(pfx+'-monto');
+  if (!totEl) return;
+  const hasBreakdown = (moEl && moEl.value.trim() !== '') || (rfEl && rfEl.value.trim() !== '');
+  if (hasBreakdown) {
+    const mo = parseFloat(moEl && moEl.value) || 0;
+    const rf = parseFloat(rfEl && rfEl.value) || 0;
+    totEl.value = (mo + rf).toFixed(2);
+  }
+}
+async function guardarFactura() {
+  if (esSoloLectura()) { alert('Tu rol no permite crear facturas.'); return; }
+  const nombre_cliente = document.getElementById('f-cliente').value.trim();
+  const total = parseFloat(document.getElementById('f-monto').value);
+  if (!nombre_cliente || !total) { alert('Completa el cliente y el monto.'); return; }
+  const { data: ultFac } = await sb.from('facturas').select('numero').order('numero', {ascending:false}).limit(1);
+  const siguiente = ultFac && ultFac.length && ultFac[0].numero ? ultFac[0].numero + 1 : 1;
+  const {error} = await sb.from('facturas').insert([{
+    usuario_id: user.id,
+    sede_id: userSede || null,
+    numero: siguiente,
+    nombre_cliente,
+    descripcion: document.getElementById('f-descripcion').value.trim(),
+    presupuesto: parseFloat(document.getElementById('f-presupuesto').value) || null,
+    costo_mano_obra: parseFloat(document.getElementById('f-manoobra').value) || null,
+    costo_refacciones: parseFloat(document.getElementById('f-refaccion').value) || null,
+    total,
+    estado_pago: document.getElementById('f-estado').value,
+    fecha: fechaHoyLocal()
+  }]);
+  if (error) { alert('Error: ' + error.message); return; }
+  cerrarModal('m-factura');
+  ['f-cliente','f-descripcion','f-monto','f-presupuesto','f-manoobra','f-refaccion'].forEach(id => document.getElementById(id).value='');
+  renderFacturas();
+}
+
+// ── INVENTARIO ──────���─────────────────────��─────���────────
+let _invData = [];
+
+function invTab(tab) {
+  document.getElementById('inv-panel-stock').style.display = tab === 'stock' ? 'block' : 'none';
+  document.getElementById('inv-panel-movimientos').style.display = tab === 'movimientos' ? 'block' : 'none';
+  document.getElementById('inv-tab-stock').className = tab === 'stock' ? 'btn btn-azul btn-sm' : 'btn btn-gris btn-sm';
+  document.getElementById('inv-tab-movimientos').className = tab === 'movimientos' ? 'btn btn-azul btn-sm' : 'btn btn-gris btn-sm';
+  if (tab === 'movimientos') renderMovimientos();
+}
+
+async function renderInventario() {
+  if (!Object.keys(_sedeMap||{}).length) await cargarSedesEnSelects();
+  const puedeGestionar = (role === 'gerente' || role === 'gerente');
+  const accAdmin = document.getElementById('inv-admin-acc');
+  if (accAdmin) accAdmin.style.display = puedeGestionar ? 'inline-flex' : 'none';
+  const {data} = await sb.from('inventario').select('*').order('nombre');
+  _invData = data || [];
+  filtrarInventario();
+  const bajos = _invData.filter(i => i.stock <= (i.stock_minimo || 0)).length;
+  const alerta = document.getElementById('inv-alerta-stock');
+  alerta.textContent = bajos > 0 ? `⚠️ ${bajos} repuesto(s) con stock bajo` : '';
+}
+
+function renderTablaInventario(data) {
+  const puedeGestionar = (role === 'gerente' || role === 'gerente');
+  const tb = document.getElementById('t-inventario');
+  tb.innerHTML = (data && data.length) ?
+    data.map(i => {
+      const bajo = i.stock <= (i.stock_minimo || 0);
+      const sedeNom = i.sede_id && _sedeMap[i.sede_id] ? _sedeMap[i.sede_id] : '';
+      return `<tr${bajo ? ' style="background:#fff5f5;"' : ''}>
+        <td style="font-size:11px;color:var(--med);">${i.codigo || '—'}</td>
+        <td><strong>${i.nombre}</strong></td>
+        <td>${labelCategoria(i.categoria)}</td>
+        <td>${sedeNom ? `<span class="badge b-listo">${sedeNom}</span>` : '<span style="color:var(--med);font-size:12px;">— Sin sede —</span>'}</td>
+        <td style="color:${bajo ? '#c0392b' : 'inherit'};font-weight:${bajo ? '700' : 'normal'};">${i.stock}${bajo ? ' ⚠️' : ''}</td>
+        <td style="color:var(--med);">${i.stock_minimo ?? '—'}</td>
+        <td>${fmtUSD(i.costo)}</td>
+        <td>${fmtUSD(i.venta)}</td>
+        <td style="display:flex;gap:4px;">
+          ${puedeGestionar ? `<button class="btn btn-azul btn-sm" onclick="abrirAjusteStock(${i.id},'${i.nombre.replace(/'/g,"\'")}',${i.stock})" title="Ajustar stock">🔄</button>
+          <button class="btn btn-rojo btn-sm" onclick="delRegistro('inventario','${i.id}',renderInventario)">🗑</button>` : '<span style="color:var(--med);font-size:12px;">Solo lectura</span>'}
+        </td>
+      </tr>`;
+    }).join('') :
+    '<tr><td colspan="9" style="text-align:center;color:var(--med);">Sin repuestos.</td></tr>';
+}
+
+function filtrarInventario() {
+  const q = document.getElementById('inv-buscar').value.toLowerCase();
+  const cat = document.getElementById('inv-filtro-cat').value;
+  const sede = (document.getElementById('inv-filtro-sede')||{}).value || '';
+  const filtrado = _invData.filter(i =>
+    (!q || i.nombre.toLowerCase().includes(q) || (i.codigo||'').toLowerCase().includes(q)) &&
+    (!cat || i.categoria === cat) &&
+    (!sede || (i.sede_id||'') === sede)
+  );
+  renderTablaInventario(filtrado);
+}
+
+async function guardarRepuesto() {
+  if (role !== 'gerente' && role !== 'supervisor') { alert('Solo el gerente o el supervisor pueden cargar inventario.'); return; }
+  const nombre = document.getElementById('inv-nombre').value.trim();
+  const stock = parseInt(document.getElementById('inv-stock').value) || 0;
+  if (!nombre) { alert('Ingresa el nombre del repuesto.'); return; }
+  const {data, error} = await sb.from('inventario').insert([{
+    usuario_id: user.id,
+    sede_id: document.getElementById('inv-sede').value || null,
+    nombre,
+    codigo: document.getElementById('inv-codigo').value.trim(),
+    categoria: document.getElementById('inv-categoria').value,
+    stock,
+    stock_minimo: parseInt(document.getElementById('inv-stock-min').value) || 0,
+    costo: parseFloat(document.getElementById('inv-costo').value) || 0,
+    venta: parseFloat(document.getElementById('inv-precio').value) || 0,
+    fecha_ingreso: document.getElementById('inv-fecha').value || null
+  }]).select();
+  if (error) { alert('Error: ' + error.message); return; }
+  // Registrar movimiento de entrada inicial
+  if (data && data[0] && stock > 0) {
+    await sb.from('movimientos_inventario').insert([{
+      inventario_id: data[0].id,
+      usuario_id: user.id,
+      cantidad: stock,
+      tipo: 'entrada',
+      motivo: 'compra'
+    }]);
+  }
+  cerrarModal('m-repuesto');
+  ['inv-nombre','inv-codigo','inv-stock','inv-stock-min','inv-costo','inv-precio','inv-fecha'].forEach(id => document.getElementById(id).value='');
+  renderInventario();
+}
+
+// ── AJUSTE DE STOCK ──────────────────────────────────────
+// ── IMPORTACIÓN DE INVENTARIO (EXCEL/CSV) ──────────────
+let _impRows = [];
+async function abrirImportar() {
+  if (role !== 'gerente' && role !== 'supervisor') { alert('Solo el gerente o el supervisor pueden importar inventario.'); return; }
+  const sel = document.getElementById('imp-sede');
+  if (sel && sel.options.length <= 1) await cargarSedesEnSelects();
+  document.getElementById('imp-file').value = '';
+  document.getElementById('imp-preview').innerHTML = '';
+  document.getElementById('imp-confirm').disabled = true;
+  _impRows = [];
+  abrirModal('m-importar');
+}
+function descargarPlantillaInv() {
+  // Mismo formato que la plantilla de referencia: separado por punto y coma (;)
+  const csv = 'nombre;codigo;categoria;stock;stock_minimo;costo;venta\nPantalla OLED iPhone 13;Rep-1;telefonia;5;1;40;65\nBatería Samsung A51;Rep-B2;telefonia;3;1;15;25\n';
+  const blob = new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'plantilla_inventario.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function _normCatInv(c) {
+  let v = (c||'').toString().trim().toLowerCase();
+  v = v.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // quitar acentos
+  v = v.replace(/\s+/g, '_'); // espacios -> guion bajo
+  const sinonimos = { 'pin_de_carga':'pin_carga', 'pin':'pin_carga', 'flex_de_carga':'flex_carga', 'flex':'flex_carga', 'bateria':'bateria', 'pila':'bateria', 'camara':'camara', 'telefono':'telefonia', 'telefonos':'telefonia' };
+  if (sinonimos[v]) v = sinonimos[v];
+  const ok = CATEGORIAS_INV.map(x => x.v);
+  return ok.includes(v) ? v : 'otro';
+}
+async function previewImport() {
+  const f = document.getElementById('imp-file').files[0];
+  const prev = document.getElementById('imp-preview');
+  const btn = document.getElementById('imp-confirm');
+  _impRows = []; btn.disabled = true;
+  if (!f) { prev.innerHTML = ''; return; }
+  try {
+    let json = [];
+    const nombreArchivo = (f.name || '').toLowerCase();
+    if (nombreArchivo.endsWith('.csv') || f.type === 'text/csv') {
+      // CSV: detectar separador (la plantilla usa punto y coma ";", también se acepta coma ",")
+      let txt = await f.text();
+      if (txt.charCodeAt(0) === 0xFEFF) txt = txt.slice(1); // quitar BOM
+      const lineas = txt.split(/\r?\n/).filter(l => l.trim() !== '');
+      if (!lineas.length) { prev.innerHTML = '<span style="color:#c0392b;">El archivo est������ vacío.</span>'; return; }
+      const sep = (lineas[0].split(';').length > lineas[0].split(',').length) ? ';' : ',';
+      const parseLinea = (l) => {
+        const out = []; let cur = ''; let q = false;
+        for (let i = 0; i < l.length; i++) { const ch = l[i];
+          if (q) { if (ch === '"') { if (l[i+1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+          else { if (ch === '"') q = true; else if (ch === sep) { out.push(cur); cur = ''; } else cur += ch; } }
+        out.push(cur); return out;
+      };
+      const headers = parseLinea(lineas[0]).map(h => h.trim());
+      json = lineas.slice(1).map(l => {
+        const cols = parseLinea(l);
+        const obj = {}; headers.forEach((h, idx) => obj[h] = (cols[idx] !== undefined ? cols[idx] : ''));
+        return obj;
+      });
+    } else {
+      if (typeof XLSX === 'undefined') { prev.innerHTML = '<span style="color:#c0392b;">No se pudo cargar el lector de Excel. Revisa tu conexión a internet e inténtalo de nuevo.</span>'; return; }
+      const buf = await f.arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      json = XLSX.utils.sheet_to_json(ws, {defval:''});
+    }
+    _impRows = json.map(r => {
+      const get = (...keys) => { for (const k of Object.keys(r)) { if (keys.includes(k.toString().trim().toLowerCase())) return r[k]; } return ''; };
+      return {
+        nombre: (get('nombre','repuesto','name','producto')||'').toString().trim(),
+        codigo: (get('codigo','código','code','sku')||'').toString().trim(),
+        categoria: _normCatInv(get('categoria','categoría','category')),
+        stock: parseInt(get('stock','cantidad','existencia')) || 0,
+        stock_minimo: parseInt(get('stock_minimo','stock minimo','stock mínimo','minimo','mínimo','min')) || 0,
+        costo: parseFloat(get('costo','cost','costo_unitario')) || 0,
+        venta: parseFloat(get('venta','precio','precio_venta','price','precio de venta')) || 0
+      };
+    }).filter(r => r.nombre);
+    if (!_impRows.length) { prev.innerHTML = '<span style="color:#c0392b;">No se encontraron filas válidas. Asegúrate de incluir una columna "nombre".</span>'; return; }
+    prev.innerHTML = `✅ <strong>${_impRows.length}</strong> repuesto(s) detectado(s) y listos para importar.`;
+    btn.disabled = false;
+  } catch (e) {
+    prev.innerHTML = '<span style="color:#c0392b;">Error al leer el archivo: ' + e.message + '</span>';
+  }
+}
+async function confirmarImport() {
+  if (role !== 'gerente' && role !== 'supervisor') { alert('Solo el gerente o el supervisor pueden importar inventario.'); return; }
+  if (!_impRows.length) return;
+  const sede = document.getElementById('imp-sede').value || null;
+  const btn = document.getElementById('imp-confirm');
+  btn.disabled = true; btn.textContent = 'Importando...';
+  const filas = _impRows.map(r => ({ usuario_id: user.id, sede_id: sede, nombre: r.nombre, codigo: r.codigo, categoria: r.categoria, stock: r.stock, stock_minimo: r.stock_minimo, costo: r.costo, venta: r.venta }));
+  const {data, error} = await sb.from('inventario').insert(filas).select('id,stock');
+  if (error) { alert('Error al importar: ' + error.message); btn.disabled = false; btn.textContent = '✅ Importar'; return; }
+  const movs = (data||[]).filter(d => d.stock > 0).map(d => ({ inventario_id: d.id, usuario_id: user.id, cantidad: d.stock, tipo: 'entrada', motivo: 'compra', notas: 'Importación masiva' }));
+  if (movs.length) await sb.from('movimientos_inventario').insert(movs);
+  cerrarModal('m-importar');
+  document.getElementById('imp-file').value = ''; _impRows = [];
+  btn.disabled = false; btn.textContent = '✅ Importar';
+  alert(`✅ ${filas.length} repuesto(s) importados correctamente.`);
+  renderInventario();
+}
+
+function abrirAjusteStock(id, nombre, stockActual) {
+  document.getElementById('ajuste-repuesto-id').value = id;
+  document.getElementById('ajuste-stock-ref').value = stockActual;
+  document.getElementById('ajuste-repuesto-nombre').textContent = nombre;
+  document.getElementById('ajuste-stock-actual').textContent = stockActual;
+  document.getElementById('ajuste-stock-nuevo').textContent = stockActual;
+  document.getElementById('ajuste-cantidad').value = '';
+  document.getElementById('ajuste-notas').value = '';
+  setTipoAjuste('entrada');
+  abrirModal('m-ajuste-stock');
+}
+function setTipoAjuste(tipo) {
+  document.getElementById('ajuste-tipo').value = tipo;
+  document.getElementById('ajuste-btn-entrada').className = tipo === 'entrada' ? 'btn btn-azul btn-sm' : 'btn btn-gris btn-sm';
+  document.getElementById('ajuste-btn-salida').className = tipo === 'salida' ? 'btn btn-rojo btn-sm' : 'btn btn-gris btn-sm';
+  recalcAjuste();
+}
+function recalcAjuste() {
+  const actual = parseInt(document.getElementById('ajuste-stock-ref').value) || 0;
+  const cant = parseInt(document.getElementById('ajuste-cantidad').value) || 0;
+  const tipo = document.getElementById('ajuste-tipo').value;
+  const nuevo = tipo === 'entrada' ? actual + cant : actual - cant;
+  const el = document.getElementById('ajuste-stock-nuevo');
+  el.textContent = nuevo;
+  el.style.color = nuevo < 0 ? '#c0392b' : 'var(--azul)';
+}
+async function guardarAjusteStock() {
+  if (role !== 'gerente' && role !== 'supervisor') { alert('Solo el gerente o el supervisor pueden ajustar el stock.'); return; }
+  const id = parseInt(document.getElementById('ajuste-repuesto-id').value);
+  const actual = parseInt(document.getElementById('ajuste-stock-ref').value) || 0;
+  const cant = parseInt(document.getElementById('ajuste-cantidad').value) || 0;
+  const tipo = document.getElementById('ajuste-tipo').value;
+  if (!cant || cant < 1) { alert('Ingresa una cantidad válida.'); return; }
+  const nuevo = tipo === 'entrada' ? actual + cant : actual - cant;
+  if (nuevo < 0) { alert('El stock no puede quedar negativo.'); return; }
+  const {error} = await sb.from('inventario').update({stock: nuevo}).eq('id', id);
+  if (error) { alert('Error: ' + error.message); return; }
+  await sb.from('movimientos_inventario').insert([{
+    inventario_id: id,
+    usuario_id: user.id,
+    cantidad: cant,
+    tipo,
+    motivo: document.getElementById('ajuste-motivo').value,
+    notas: document.getElementById('ajuste-notas').value.trim()
+  }]);
+  cerrarModal('m-ajuste-stock');
+  renderInventario();
+}
+
+async function renderMovimientos() {
+  const {data} = await sb.from('movimientos_inventario')
+    .select('*, inventario(nombre)')
+    .order('created_at', {ascending:false})
+    .limit(100);
+  const tb = document.getElementById('t-movimientos');
+  const motivoLabel = {compra:'🛒 Compra', devolucion:'🔄 Devolución', usado_reparacion:'🔧 Reparación', ajuste_manual:'✏️ Ajuste manual', perdida:'❌ Pérdida'};
+  tb.innerHTML = (data && data.length) ?
+    data.map(m => `<tr>
+      <td>${fmtFecha(m.created_at)}</td>
+      <td>${m.inventario?.nombre || '—'}</td>
+      <td><span style="color:${m.tipo==='entrada'?'#15803d':'#c0392b'};font-weight:600;">${m.tipo==='entrada'?'➕ Entrada':'➖ Salida'}</span></td>
+      <td style="font-weight:700;">${m.cantidad}</td>
+      <td>${motivoLabel[m.motivo] || m.motivo || '—'}</td>
+      <td>${m.orden_id ? '#'+m.orden_id : '—'}</td>
+    </tr>`).join('') :
+    '<tr><td colspan="6" style="text-align:center;color:var(--med);">Sin movimientos.</td></tr>';
+}
+
+// ── PROMEDIOS ────────────────────────────────────────────
+async function renderPromedios() {
+  const esSup = role === 'gerente';
+  const barra = document.getElementById('prom-filtros');
+  if (barra) barra.style.display = 'flex';
+  const barraSupFiltros = document.getElementById('prom-filtros-sup');
+  if (barraSupFiltros) barraSupFiltros.style.display = esSup ? 'inline-flex' : 'none';
+  if (esSup) await cargarFiltrosPromedios();
+  const fTec = esSup ? (document.getElementById('prom-filtro-tecnico')?.value || '') : '';
+  const fSede = esSup ? (document.getElementById('prom-filtro-sede')?.value || '') : '';
+  let qOrd = filtroOrdenesPorRol(sb.from('ordenes').select('estado,presupuesto,costo_refacciones,costo_mano_obra,created_at'));
+  let qFac = filtroPorRol(sb.from('facturas').select('total,estado_pago,costo_mano_obra,costo_refacciones'));
+  if (fTec) { qOrd = qOrd.eq('usuario_id', fTec); qFac = qFac.eq('usuario_id', fTec); }
+  if (fSede) { qOrd = qOrd.eq('sede_id', fSede); qFac = qFac.eq('sede_id', fSede); }
+  const promFD = document.getElementById('prom-fecha-desde')?.value || '';
+  const promFH = document.getElementById('prom-fecha-hasta')?.value || '';
+  if (promFD) { qOrd = qOrd.gte('created_at', promFD + 'T00:00:00'); qFac = qFac.gte('created_at', promFD + 'T00:00:00'); }
+  if (promFH) { qOrd = qOrd.lte('created_at', promFH + 'T23:59:59'); qFac = qFac.lte('created_at', promFH + 'T23:59:59'); }
+  const [ordRes, facRes] = await Promise.all([qOrd, qFac]);
+  const ordenes = ordRes.data || [];
+  const facturas = facRes.data || [];
+  const entregadas = ordenes.filter(o => o.estado === 'entregado').length;
+  const pendientes = ordenes.length - entregadas;
+  // Desglose de facturas: si la factura trae mano de obra / refacción se usa ese desglose.
+  // Si no (facturas antiguas sin desglose), se asume que todo el monto es mano de obra (comportamiento previo).
+  const facTieneDesglose = f => ((Number(f.costo_mano_obra)||0) + (Number(f.costo_refacciones)||0)) > 0;
+  const facManoObra = f => facTieneDesglose(f) ? (Number(f.costo_mano_obra)||0) : (Number(f.total)||0);
+  const facRefaccion = f => Number(f.costo_refacciones)||0;
+  const totalRepuestos = ordenes.reduce((a,o) => a + (Number(o.costo_refacciones)||0), 0)
+    + facturas.reduce((a,f) => a + facRefaccion(f), 0);
+  const totalManoObra = ordenes.reduce((a,o) => a + (Number(o.costo_mano_obra)||0), 0)
+    + facturas.reduce((a,f) => a + facManoObra(f), 0);
+  // Ingresos totales = TODOS los cargos de órdenes (cobradas y por cobrar) + TODAS las facturas
+  const cargoOrden = o => (Number(o.presupuesto) || ((Number(o.costo_mano_obra)||0) + (Number(o.costo_refacciones)||0)));
+  const ingresosOrdenes = ordenes.reduce((a,o) => a + cargoOrden(o), 0);
+  const ingresosFacturas = facturas.reduce((a,f) => a + (Number(f.total)||0), 0);
+  const ingresos = ingresosOrdenes + ingresosFacturas;
+  // Mano de obra cerrada = órdenes entregadas (mano de obra) + facturas pagadas (solo la parte de mano de obra)
+  const manoObraCerrada =
+    ordenes.filter(o => o.estado === 'entregado').reduce((a,o) => a + (Number(o.costo_mano_obra)||0), 0)
+    + facturas.filter(f => f.estado_pago === 'pagado').reduce((a,f) => a + facManoObra(f), 0);
+  const ingTecnico = manoObraCerrada * 0.5;
+  const ingEmpresa = manoObraCerrada - ingTecnico;
+  document.getElementById('avg-ordenes').textContent = ordenes.length;
+  document.getElementById('avg-pendientes').textContent = pendientes;
+  document.getElementById('avg-entregadas').textContent = entregadas;
+  document.getElementById('avg-ingresos').textContent = fmtUSD(ingresos);
+  document.getElementById('avg-repuestos').textContent = fmtUSD(totalRepuestos);
+  document.getElementById('avg-manoobra').textContent = fmtUSD(totalManoObra);
+  document.getElementById('avg-ing-tecnico').textContent = fmtUSD(ingTecnico);
+  document.getElementById('avg-ing-empresa').textContent = fmtUSD(ingEmpresa);
+  // Tabla de comisiones (visible para gerente y rrhh)
+  const secCom = document.getElementById('sec-comisiones');
+  if (secCom) {
+    const showCom = role === 'gerente' || role === 'rrhh';
+    secCom.style.display = showCom ? '' : 'none';
+    if (showCom) await renderComisiones(promFD, promFH);
+  }
+  const conteo = {};
+  ordenes.forEach(o => { conteo[o.estado] = (conteo[o.estado]||0) + 1; });
+  const total = ordenes.length || 1;
+  const tb = document.getElementById('t-promedios');
+  tb.innerHTML = Object.entries(conteo).length ?
+    Object.entries(conteo).map(([est, cant]) =>
+      `<tr><td><span class="badge-estado est-${est}">${labelEstado(est)}</span></td><td>${cant}</td><td>${Math.round(cant/total*100)}%</td></tr>`
+    ).join('') :
+    '<tr><td colspan="3" style="text-align:center;color:var(--med);">Sin datos.</td></tr>';
+}
+
+
+// ── COMISIONES POR TECNICO ───────────────────────────────
+async function renderComisiones(promFD, promFH) {
+  const tb = document.getElementById('t-comisiones');
+  const totalEl = document.getElementById('comisiones-total');
+  if (!tb) return;
+
+  // Queries paralelas: ordenes entregadas + facturas pagadas
+  let qOrd = sb.from('ordenes')
+    .select('usuario_id, costo_mano_obra, presupuesto, costo_refacciones, estado')
+    .eq('estado', 'entregado');
+  let qFac = sb.from('facturas')
+    .select('usuario_id, total, costo_mano_obra, estado_pago')
+    .eq('estado_pago', 'pagado');
+
+  if (promFD) { qOrd = qOrd.gte('created_at', promFD + 'T00:00:00'); qFac = qFac.gte('created_at', promFD + 'T00:00:00'); }
+  if (promFH) { qOrd = qOrd.lte('created_at', promFH + 'T23:59:59'); qFac = qFac.lte('created_at', promFH + 'T23:59:59'); }
+
+  const [ordRes, facRes, usrRes] = await Promise.all([
+    qOrd, qFac,
+    sb.from('usuarios').select('id,email,nombre')
+  ]);
+
+  const ordenes   = ordRes.data  || [];
+  const facturas  = facRes.data  || [];
+  const usuarios  = usrRes.data  || [];
+  const usrMap    = {};
+  usuarios.forEach(u => { usrMap[u.id] = u.nombre || (u.email||'').split('@')[0]; });
+
+  // Agrupar por tecnico
+  const data = {};
+  const ensure = id => {
+    if (!data[id]) data[id] = { ordenes: 0, facturas: 0, manoObra: 0 };
+  };
+
+  ordenes.forEach(o => {
+    if (!o.usuario_id) return;
+    ensure(o.usuario_id);
+    data[o.usuario_id].ordenes++;
+    const mo = Number(o.costo_mano_obra) || 0;
+    data[o.usuario_id].manoObra += mo;
+  });
+
+  facturas.forEach(f => {
+    if (!f.usuario_id) return;
+    ensure(f.usuario_id);
+    data[f.usuario_id].facturas++;
+    // Si la factura tiene desglose de mano de obra se usa ese campo; si no, se cuenta el total
+    const mo = Number(f.costo_mano_obra) > 0 ? Number(f.costo_mano_obra) : Number(f.total) || 0;
+    data[f.usuario_id].manoObra += mo;
+  });
+
+  const entries = Object.entries(data);
+  if (!entries.length) {
+    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--med);">Sin datos para el rango seleccionado.</td></tr>';
+    if (totalEl) totalEl.textContent = '';
+    return;
+  }
+
+  // Ordenar por mano de obra desc
+  entries.sort((a, b) => b[1].manoObra - a[1].manoObra);
+
+  let totalComision = 0;
+  tb.innerHTML = entries.map(([uid, d]) => {
+    const comision = d.manoObra * 0.5;
+    totalComision += comision;
+    const nombre = usrMap[uid] || uid;
+    return `<tr>
+      <td><strong>${nombre}</strong></td>
+      <td style="text-align:center;">${d.ordenes}</td>
+      <td style="text-align:center;">${d.facturas}</td>
+      <td style="text-align:right;">${fmtUSD(d.manoObra)}</td>
+      <td style="text-align:right;font-weight:700;color:#059669;">${fmtUSD(comision)}</td>
+    </tr>`;
+  }).join('');
+
+  if (totalEl) totalEl.textContent = `Total comisiones: ${fmtUSD(totalComision)}`;
+}
+async function cargarFiltrosPromedios() {
+  const selTec = document.getElementById('prom-filtro-tecnico');
+  const selSede = document.getElementById('prom-filtro-sede');
+  if (!selTec || !selSede) return;
+  if (selTec.options.length > 1 && selSede.options.length > 1) return;
+  const [usrRes, sedeRes] = await Promise.all([
+    sb.from('usuarios').select('id,email').order('email'),
+    sb.from('sedes').select('id,nombre').order('nombre')
+  ]);
+  const prevT = selTec.value, prevS = selSede.value;
+  selTec.innerHTML = '<option value="">👤 Todos los técnicos</option>' + (usrRes.data||[]).map(u => `<option value="${u.id}">${(u.email||'').split('@')[0]}</option>`).join('');
+  selSede.innerHTML = '<option value="">🏢 Todas las sedes</option>' + (sedeRes.data||[]).map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
+  selTec.value = prevT; selSede.value = prevS;
+}
+function limpiarFiltrosPromedios() {
+  const selTec = document.getElementById('prom-filtro-tecnico');
+  const selSede = document.getElementById('prom-filtro-sede');
+  const fd = document.getElementById('prom-fecha-desde');
+  const fh = document.getElementById('prom-fecha-hasta');
+  if (selTec) selTec.value = '';
+  if (selSede) selSede.value = '';
+  if (fd) fd.value = '';
+  if (fh) fh.value = '';
+  renderPromedios();
+}
+
+// ── PERFIL ───────────────────────────────────────────────
+function cargarPerfil() {
+  document.getElementById('perfil-email').value = user.email;
+  document.getElementById('perfil-rol').value = role === 'gerente' ? '👔 Gerente' : (role === 'gerente' ? '🗂️ Supervisor' : (role === 'vendedor' ? '💼 Vendedor' : '👨���🔧 Técnico'));
+}
+async function guardarPerfil() {
+  const pwd = document.getElementById('perfil-pwd').value;
+  const pwd2 = document.getElementById('perfil-pwd2').value;
+  const msg = document.getElementById('perfil-msg');
+  if (!pwd) { showMsg(msg, 'Ingresa una nueva contraseña.', false); return; }
+  if (pwd !== pwd2) { showMsg(msg, 'Las contraseñas no coinciden.', false); return; }
+  if (pwd.length < 6) { showMsg(msg, 'La contraseña debe tener al menos 6 caracteres.', false); return; }
+  const {error} = await sb.auth.updateUser({password: pwd});
+  if (error) { showMsg(msg, 'Error: ' + error.message, false); return; }
+  document.getElementById('perfil-pwd').value = '';
+  document.getElementById('perfil-pwd2').value = '';
+  showMsg(msg, '✅ Contraseña actualizada correctamente.', true);
+}
+function showMsg(el, txt, ok) {
+  el.style.display = 'block';
+  el.style.background = ok ? '#d1f2e1' : '#fdecea';
+  el.style.color = ok ? '#1a5e3a' : '#9b2626';
+  el.textContent = txt;
+  setTimeout(() => el.style.display = 'none', 3500);
+}
+
+// ── HELPERS ──────────────────────────────────────────────
+function labelEstado(e) {
+  const m = {pendiente:'⏳ Pendiente', en_proceso:'🔧 En proceso', listo:'✅ Listo',
+    entregado:'📦 Entregado', completada:'✅ Completada', no_reparable:'❌ No reparable',
+    enviado_proveedor:'📦 Enviado a Proveedor', soporte_pd:'🛠️ Soporte Técnico PD',
+    pagada:'✅ Pagada', anulada:'❌ Anulada'};
+  return m[e] || e;
+}
+function fechaHoyLocal() {
+  // Fecha de hoy en horario local como YYYY-MM-DD (evita el desfase de un día al guardar en UTC).
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+function fmtFecha(f) {
+  if (!f) return '—';
+  // Si llega como fecha pura YYYY-MM-DD, parsear en horario LOCAL para evitar que
+  // new Date() la interprete como UTC y reste un día en zonas con offset negativo (ej. Caracas UTC-4).
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(f).trim());
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(f);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-MX');
+}
+function fmtFechaHora(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-MX') + ' ' + d.toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit'});
+}
+async function registrarEvento(entidad, refId, numero, tipo, descripcion, extra) {
+  extra = extra || {};
+  try {
+    await sb.from('orden_timeline').insert([{
+      entidad: entidad || 'orden',
+      orden_id: String(refId),
+      numero: numero || null,
+      tipo,
+      descripcion,
+      estado_anterior: extra.estado_anterior || null,
+      estado_nuevo: extra.estado_nuevo || null,
+      sede_origen: extra.sede_origen || null,
+      sede_destino: extra.sede_destino || null
+    }]);
+  } catch (e) { console.warn('No se pudo registrar el evento', e); }
+}
+async function cargarTimeline(entidad, refId, containerId) {
+  const cont = document.getElementById(containerId);
+  if (!cont) return;
+  cont.innerHTML = '<span style="color:var(--med);font-size:12px;">Cargando…</span>';
+  const {data, error} = await sb.from('orden_timeline').select('*').eq('entidad', entidad || 'orden').eq('orden_id', String(refId)).order('created_at', {ascending:true});
+  if (error) { cont.innerHTML = '<span style="color:var(--med);font-size:12px;">No se pudo cargar la línea de tiempo.</span>'; return; }
+  if (!data || !data.length) { cont.innerHTML = '<span style="color:var(--med);font-size:12px;">Sin eventos registrados todavía.</span>'; return; }
+  const icon = {creacion:'🆕', estado:'🔄', envio:'📦', recepcion:'📥', accion:'🛠️'};
+  cont.innerHTML = data.map((ev, i) => `
+    <div style="display:flex;gap:8px;padding:7px 0;${i < data.length-1 ? 'border-bottom:1px solid #eef1f6;' : ''}">
+      <div style="font-size:15px;line-height:1.2;">${icon[ev.tipo]||'•'}</div>
+      <div style="flex:1;">
+        <div style="font-size:12.5px;color:#1a202c;">${ev.descripcion}</div>
+        <div style="font-size:11px;color:var(--med);margin-top:2px;">🕒 ${fmtFechaHora(ev.created_at)}</div>
+      </div>
+    </div>`).join('');
+}
+function fmtUSD(n) {
+  const v = Number(n) || 0;
+  return 'USD $' + v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+async function delRegistro(tabla, id, cb) {
+  if (!confirm('¿Eliminar este registro?')) return;
+  // Si es un repuesto del inventario, primero hay que borrar sus movimientos (llave foránea)
+  if (tabla === 'inventario') {
+    const {error: movErr} = await sb.from('movimientos_inventario').delete().eq('inventario_id', id);
+    if (movErr) { alert('No se pudo eliminar el historial de movimientos del repuesto: ' + movErr.message); return; }
+  }
+  const {error} = await sb.from(tabla).delete().eq('id', id);
+  if (error) { alert('No se pudo eliminar el registro: ' + error.message); return; }
+  cb();
+}
+
+async function delOrden(id) {
+  const clave = prompt('Ingresa la clave para eliminar esta orden:');
+  if (clave === null) return;
+  const {data: _claveOk} = await sb.rpc('verificar_clave_maestra', { p_clave: clave });
+  if (!_claveOk) {
+    alert('❌ Clave incorrecta. No se eliminó la orden.');
+    return;
+  }
+  if (!confirm('¿Estás seguro? Esta acción no se puede deshacer.')) return;
+  const {error} = await sb.from('ordenes').delete().eq('id', id);
+  if (error) { alert('No se pudo eliminar la orden: ' + error.message); return; }
+  renderOrdenes();
+  renderDashboard();
+}
+
+async function renderTecnicos() {
+  if (role !== 'gerente') return;
+  // El supervisor ve los usuarios que él creó + todos los demás supervisores (excepto él mismo)
+  const {data: tecnicos} = await sb.from('usuarios').select('*')
+    .in('rol', ['tecnico', 'supervisor', 'gerente'])
+    .or(`creado_por.eq.${user.id},rol.eq.supervisor`)
+    .neq('id', user.id);
+  const {data: sedes} = await sb.from('sedes').select('id,nombre')
+    .eq('gerente_id', user.id);
+  const sedeMap = {};
+  (sedes||[]).forEach(s => sedeMap[s.id] = s.nombre);
+
+  const pendientes = (tecnicos||[]).filter(t => t.estado === 'pendiente');
+  const activos = (tecnicos||[]).filter(t => t.estado === 'activo');
+  const rechazados = (tecnicos||[]).filter(t => t.estado === 'rechazado');
+
+  const badgeEstado = e => ({
+    activo: '<span class="badge b-listo">✅ Activo</span>',
+    pendiente: '<span class="badge" style="background:#fff3cd;color:#856404;">⏳ Pendiente</span>',
+    rechazado: '<span class="badge" style="background:#fdecea;color:#9b2626;">❌ Rechazado</span>'
+  }[e] || e);
+
+  const filasTec = t => `<tr>
+    <td>${t.email}${t.rol === 'gerente' ? ' <span class="badge" style="background:#fef3c7;color:#92400e;">⭐ Gerente</span>' : t.rol === 'gerente' ? ' <span class="badge" style="background:#e8f0fe;color:#1a56db;">👔 Supervisor</span>' : ''}</td>
+    <td>${t.sede_id ? `<span class="badge b-listo">${sedeMap[t.sede_id]||'—'}</span>` : '<span style="color:var(--med);font-size:12px;">Sin sede</span>'}</td>
+    <td>${badgeEstado(t.estado)}</td>
+    <td style="font-size:12px;">${new Date(t.fecha_creacion||t.created_at).toLocaleDateString('es-MX')}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap;">
+      ${t.estado === 'pendiente' ? `
+        <button class="btn btn-sm" style="background:#d1f2e1;color:#1a5e3a;" onclick="aprobarTec('${t.id}','${t.email}')">✅ Aprobar</button>
+        <button class="btn btn-sm" style="background:#fdecea;color:#9b2626;" onclick="rechazarTec('${t.id}','${t.email}')">❌ Rechazar</button>
+      ` : ''}${t.estado === 'rechazado' ? `
+        <button class="btn btn-sm" style="background:#d1f2e1;color:#1a5e3a;" onclick="aprobarTec('${t.id}','${t.email}')">✅ Aprobar</button>
+      ` : ''}${t.estado === 'activo' ? `
+        <button class="btn btn-azul btn-sm" onclick="abrirAsignarSede('${t.id}','${t.email}','${t.sede_id||''}')">🏢</button>
+      ` : ''}<button class="btn btn-rojo btn-sm" onclick="delTec('${t.id}')">🗑</button>
+    </td>
+  </tr>`;
+
+  const tb = document.getElementById('t-tecnicos');
+
+  if (!tecnicos || !tecnicos.length) {
+    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--med);">Sin usuarios.</td></tr>';
+    return;
+  }
+
+  let html = '';
+  if (pendientes.length) html += `<tr><td colspan="5" style="background:#fffbeb;font-size:11px;font-weight:700;color:#856404;padding:6px 12px;">⏳ PENDIENTES DE APROBACIÓN (${pendientes.length})</td></tr>` + pendientes.map(filasTec).join('');
+  if (activos.length) html += `<tr><td colspan="5" style="background:#f0fdf4;font-size:11px;font-weight:700;color:#1a5e3a;padding:6px 12px;">✅ ACTIVOS (${activos.length})</td></tr>` + activos.map(filasTec).join('');
+  if (rechazados.length) html += `<tr><td colspan="5" style="background:#fdecea;font-size:11px;font-weight:700;color:#9b2626;padding:6px 12px;">❌ RECHAZADOS (${rechazados.length})</td></tr>` + rechazados.map(filasTec).join('');
+  tb.innerHTML = html;
+}
+
+// ── SEDES ─────────────────────────────────────────────────
+async function renderSedes() {
+  if (role !== 'gerente') return;
+  const {data: sedes} = await sb.from('sedes').select('*').eq('gerente_id', user.id);
+  const {data: tecnicos} = await sb.from('usuarios').select('sede_id').eq('rol','tecnico').eq('creado_por', user.id);
+  const conteo = {};
+  (tecnicos||[]).forEach(t => { if (t.sede_id) conteo[t.sede_id] = (conteo[t.sede_id]||0)+1; });
+  const tb = document.getElementById('t-sedes');
+  tb.innerHTML = (sedes && sedes.length) ?
+    sedes.map(s => `<tr>
+      <td><strong>${s.nombre}</strong></td>
+      <td style="color:var(--med);font-size:12px;">${s.direccion||'—'}</td>
+      <td><span class="badge b-listo">${conteo[s.id]||0} técnico(s)</span></td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn btn-rojo btn-sm" onclick="delSede('${s.id}')">🗑</button>
+      </td>
+    </tr>`).join('') :
+    '<tr><td colspan="4" style="text-align:center;color:var(--med);">Sin sedes creadas.</td></tr>';
+}
+
+async function guardarSede() {
+  const nombre = document.getElementById('sede-nombre').value.trim();
+  if (!nombre) { alert('Ingresa el nombre de la sede.'); return; }
+  const {error} = await sb.from('sedes').insert([{
+    nombre,
+    direccion: document.getElementById('sede-direccion').value.trim(),
+    gerente_id: user.id
+  }]);
+  if (error) { alert('Error: ' + error.message); return; }
+  document.getElementById('sede-nombre').value = '';
+  document.getElementById('sede-direccion').value = '';
+  cerrarModal('m-sede');
+  renderSedes();
+  await cargarSedesEnSelects();
+}
+
+async function delSede(id) {
+  const clave = prompt('Ingresa la clave para eliminar esta sede:');
+  if (clave === null) return;
+  const {data: _claveOk} = await sb.rpc('verificar_clave_maestra', { p_clave: clave });
+  if (!_claveOk) { alert('Clave incorrecta.'); return; }
+  if (!confirm('¿Eliminar esta sede? Los técnicos asignados quedarán sin sede.')) return;
+  // Desasignar técnicos de esta sede
+  const {error: desErr} = await sb.from('usuarios').update({sede_id: null}).eq('sede_id', id);
+  if (desErr) { alert('No se pudieron desasignar los técnicos de la sede: ' + desErr.message); return; }
+  const {error} = await sb.from('sedes').delete().eq('id', id);
+  if (error) { alert('No se pudo eliminar la sede: ' + error.message); return; }
+  renderSedes();
+  await cargarSedesEnSelects();
+}
+
+let _sedeMap = {};
+let _usuariosMap = {};
+async function cargarUsuariosMap() {
+  const {data: usrs} = await sb.from('usuarios').select('id,email');
+  _usuariosMap = {};
+  (usrs||[]).forEach(u => { _usuariosMap[u.id] = u.email; });
+}
+function nombreTec(id) {
+  if (!id) return '—';
+  const email = _usuariosMap[id];
+  if (!email) return 'Desconocido';
+  // Mostrar la parte antes del @ para compactar
+  return email.split('@')[0];
+}
+async function cargarSedesEnSelects() {
+  // Cargar TODAS las sedes (todos los usuarios necesitan verlas).
+  // El supervisor crea sedes; los técnicos necesitan poder seleccionarlas para crear/transferir órdenes.
+  const {data: sedes} = await sb.from('sedes').select('id,nombre').order('nombre');
+  _sedeMap = {};
+  (sedes||[]).forEach(s => { _sedeMap[s.id] = s.nombre; });
+  const opts = '<option value="">— Sin sede —</option>' + (sedes||[]).map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
+  ['t-sede', 'asignar-sede-select', 'o-sede', 'edit-sede', 'inv-sede', 'imp-sede'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = opts;
+  });
+  // Filtro de sede del inventario
+  const selInv = document.getElementById('inv-filtro-sede');
+  if (selInv) {
+    const selV = selInv.value;
+    selInv.innerHTML = '<option value="">🏢 Todas las sedes</option>' + (sedes||[]).map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
+    selInv.value = selV;
+  }
+  // Filtro de sede en el Dashboard (vendedor / técnico / supervisor)
+  const selDash = document.getElementById('dash-filtro-sede');
+  if (selDash) {
+    const sel = selDash.value;
+    selDash.innerHTML = '<option value="">🏢 Todas las sedes</option>' + (sedes||[]).map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
+    selDash.value = sel;
+  }
+  window._sedeMap = _sedeMap;
+}
+
+// Refresca userSede desde la BD en caso de que el supervisor haya asignado/cambiado
+// la sede del técnico después de que iniciara sesión.
+async function refrescarMiSede() {
+  if (!user) return;
+  const {data: u} = await sb.from('usuarios').select('sede_id').eq('id', user.id).single();
+  userSede = u?.sede_id || null;
+}
+
+async function abrirNuevaOrden() {
+  await refrescarMiSede();
+  await cargarSedesEnSelects();
+  if (role === 'tecnico' && !userSede) {
+    alert('Aún no tienes una sede asignada. Pide a tu supervisor que te asigne una sede antes de crear órdenes.');
+    return;
+  }
+  // Preseleccionar la sede del técnico por defecto
+  document.getElementById('o-sede').value = userSede || '';
+  abrirModal('m-orden');
+}
+
+async function abrirAsignarSede(tecId, email, sedeActual) {
+  await cargarSedesEnSelects();
+  document.getElementById('asignar-tec-id').value = tecId;
+  document.getElementById('asignar-tec-email').textContent = email;
+  if (sedeActual) document.getElementById('asignar-sede-select').value = sedeActual;
+  abrirModal('m-asignar-sede');
+}
+
+async function guardarAsignacionSede() {
+  const id = document.getElementById('asignar-tec-id').value;
+  const sede_id = document.getElementById('asignar-sede-select').value || null;
+  const {error} = await sb.from('usuarios').update({sede_id}).eq('id', id);
+  if (error) { alert('Error: ' + error.message); return; }
+  cerrarModal('m-asignar-sede');
+  renderTecnicos();
+}
+
+// ── CONFIGURACIÓN ─────────────────────────────────────────
+function cfgTab(tab) {
+  ['sedes','clave','historial','vendedor'].forEach(t => {
+    document.getElementById('cfg-panel-' + t).style.display = t === tab ? 'block' : 'none';
+    document.getElementById('cfg-tab-' + t).className = t === tab ? 'btn btn-azul btn-sm' : 'btn btn-gris btn-sm';
+  });
+  if (tab === 'historial') renderHistorial();
+  if (tab === 'sedes') renderConfigSedes();
+  if (tab === 'vendedor') renderConfigVendedor();
+}
+
+async function renderConfigVendedor() {
+  if (role !== 'gerente') return;
+  const {data} = await sb.from('vendedor_cuenta').select('usuario,clave').eq('id', 1).maybeSingle();
+  document.getElementById('cfg-vend-usuario').value = data?.usuario || '';
+  document.getElementById('cfg-vend-clave').value = data?.clave || '';
+}
+
+async function guardarAccesoVendedor() {
+  const usuario = document.getElementById('cfg-vend-usuario').value.trim();
+  const clave = document.getElementById('cfg-vend-clave').value.trim();
+  const msg = document.getElementById('cfg-vend-msg');
+  const mostrar = (txt, ok) => { msg.style.display='block'; msg.textContent=txt; msg.style.background = ok?'#d1f2e1':'#fdecea'; msg.style.color = ok?'#1a5e3a':'#9b2626'; };
+  if (!usuario || !clave) { mostrar('Completa usuario y contraseña.', false); return; }
+  if (clave.length < 4) { mostrar('La contraseña debe tener al menos 4 caracteres.', false); return; }
+  const {error} = await sb.from('vendedor_cuenta').upsert({ id: 1, usuario, clave });
+  if (error) { mostrar('Error al guardar: ' + error.message, false); return; }
+  mostrar('✅ Acceso de vendedor actualizado. Usuario: ' + usuario, true);
+}
+
+async function renderConfig() {
+  if (role !== 'gerente') return;
+  cfgTab('sedes');
+}
+
+async function renderConfigSedes() {
+  const {data: sedes} = await sb.from('sedes').select('*').eq('gerente_id', user.id);
+  const lista = document.getElementById('cfg-sedes-lista');
+  if (!sedes || !sedes.length) {
+    lista.innerHTML = '<p style="color:var(--med);font-size:13px;">No hay sedes creadas. Créalas desde la sección Sedes.</p>';
+    return;
+  }
+  lista.innerHTML = sedes.map(s => `
+    <div style="border:1px solid var(--borde);border-radius:10px;padding:16px;display:grid;gap:10px;">
+      <div style="font-weight:600;font-size:14px;">🏢 ${s.nombre}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label>Nombre</label><input type="text" id="cfg-sede-nombre-${s.id}" value="${s.nombre}"></div>
+        <div class="fg"><label>Dirección</label><input type="text" id="cfg-sede-dir-${s.id}" value="${s.direccion||''}"></div>
+      </div>
+      <div>
+        <button class="btn btn-azul btn-sm" onclick="guardarEditSede('${s.id}','${s.nombre}','${s.direccion||''}')">💾 Guardar cambios</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function guardarEditSede(id, nombreAntes, dirAntes) {
+  const nombreNuevo = document.getElementById('cfg-sede-nombre-' + id).value.trim();
+  const dirNueva = document.getElementById('cfg-sede-dir-' + id).value.trim();
+  if (!nombreNuevo) { alert('El nombre no puede estar vacío.'); return; }
+  const {error} = await sb.from('sedes').update({nombre: nombreNuevo, direccion: dirNueva}).eq('id', id);
+  if (error) { alert('Error: ' + error.message); return; }
+  // Registrar en historial
+  await registrarCambio('sede', `Sede editada: "${nombreAntes}" ��� "${nombreNuevo}"`, {nombre: nombreAntes, direccion: dirAntes}, {nombre: nombreNuevo, direccion: dirNueva});
+  alert('✅ Sede actualizada.');
+  renderConfigSedes();
+  renderSedes();
+}
+
+async function cambiarClaveMaestra() {
+  const actual = document.getElementById('cfg-clave-actual').value;
+  const nueva = document.getElementById('cfg-clave-nueva').value;
+  const confirmar = document.getElementById('cfg-clave-confirmar').value;
+  const msg = document.getElementById('cfg-clave-msg');
+  const showMsg = (txt, ok) => {
+    msg.style.display = 'block';
+    msg.style.background = ok ? '#d1f2e1' : '#fdecea';
+    msg.style.color = ok ? '#1a5e3a' : '#9b2626';
+    msg.textContent = txt;
+    setTimeout(() => msg.style.display = 'none', 3500);
+  };
+  const {data: _actualOk} = await sb.rpc('verificar_clave_maestra', { p_clave: actual });
+  if (!_actualOk) { showMsg('La clave actual es incorrecta.', false); return; }
+  if (nueva.length < 6) { showMsg('La nueva clave debe tener al menos 6 caracteres.', false); return; }
+  if (nueva !== confirmar) { showMsg('Las claves no coinciden.', false); return; }
+  // Guardar en Supabase (upsert por gerente_id)
+  const {error} = await sb.from('configuracion').upsert({
+    gerente_id: user.id,
+    clave_maestra: nueva,
+    updated_at: new Date().toISOString()
+  }, {onConflict: 'gerente_id'});
+  if (error) { showMsg('Error al guardar: ' + error.message, false); return; }
+  await registrarCambio('clave', 'Clave maestra actualizada', null, null);
+  ['cfg-clave-actual','cfg-clave-nueva','cfg-clave-confirmar'].forEach(id => document.getElementById(id).value = '');
+  showMsg('✅ Clave maestra actualizada y guardada correctamente.', true);
+}
+
+async function registrarCambio(tipo, descripcion, antes, despues) {
+  await sb.from('historial_cambios').insert([{
+    usuario_id: user.id,
+    tipo,
+    descripcion,
+    datos_anteriores: antes ? JSON.stringify(antes) : null,
+    datos_nuevos: despues ? JSON.stringify(despues) : null
+  }]);
+}
+
+async function renderHistorial() {
+  const filtro = document.getElementById('cfg-filtro-historial').value;
+  let q = sb.from('historial_cambios').select('*').eq('usuario_id', user.id).order('created_at', {ascending:false}).limit(100);
+  if (filtro) q = q.eq('tipo', filtro);
+  const {data} = await q;
+  const tb = document.getElementById('t-historial');
+  const tipoIcon = {sede:'🏢', clave:'🔑', tecnico:'👤'};
+  tb.innerHTML = (data && data.length) ?
+    data.map(h => `<tr>
+      <td style="font-size:12px;white-space:nowrap;">${fmtFecha(h.created_at)}</td>
+      <td><span style="font-size:11px;background:#e2e8f0;padding:2px 7px;border-radius:10px;">${tipoIcon[h.tipo]||'📝'} ${h.tipo}</span></td>
+      <td style="font-size:12px;">${h.descripcion}</td>
+      <td style="font-size:11px;color:var(--med);max-width:150px;overflow:hidden;text-overflow:ellipsis;">${h.datos_anteriores ? JSON.parse(h.datos_anteriores).nombre || JSON.stringify(JSON.parse(h.datos_anteriores)) : '—'}</td>
+      <td style="font-size:11px;color:#15803d;max-width:150px;overflow:hidden;text-overflow:ellipsis;">${h.datos_nuevos ? JSON.parse(h.datos_nuevos).nombre || JSON.stringify(JSON.parse(h.datos_nuevos)) : '—'}</td>
+    </tr>`).join('') :
+    '<tr><td colspan="5" style="text-align:center;color:var(--med);">Sin cambios registrados.</td></tr>';
+}
+
+async function aprobarTec(id, email) {
+  const {error} = await sb.from('usuarios').update({estado: 'activo'}).eq('id', id);
+  if (error) { alert('Error: ' + error.message); return; }
+  await registrarCambio('tecnico', `Técnico aprobado: ${email}`, {estado:'pendiente'}, {estado:'activo'});
+  renderTecnicos();
+}
+
+async function rechazarTec(id, email) {
+  if (!confirm(`¿Rechazar la cuenta de ${email}? El técnico no podrá iniciar sesión.`)) return;
+  const {error} = await sb.from('usuarios').update({estado: 'rechazado'}).eq('id', id);
+  if (error) { alert('Error: ' + error.message); return; }
+  await registrarCambio('tecnico', `Técnico rechazado: ${email}`, {estado:'pendiente'}, {estado:'rechazado'});
+  renderTecnicos();
+}
+
+async function delTec(id) {
+  const clave = prompt('Ingresa la clave para eliminar este técnico:');
+  if (clave === null) return;
+  const {data: _claveOk} = await sb.rpc('verificar_clave_maestra', { p_clave: clave });
+  if (!_claveOk) { alert('Clave incorrecta.'); return; }
+  if (!confirm('¿Eliminar este técnico?')) return;
+  const {error} = await sb.from('usuarios').delete().eq('id', id);
+  if (error) { alert('No se pudo eliminar el usuario. Es posible que tenga órdenes, facturas o registros asociados.\nDetalle: ' + error.message); return; }
+  await registrarCambio('tecnico', `Técnico eliminado (ID: ${id})`, {id}, null);
+  renderTecnicos();
+}
+
+document.getElementById('btn-crear-tecnico').addEventListener('click', async () => {
+  document.getElementById('t-email').value = '';
+  document.getElementById('t-password').value = '';
+  const _selRol = document.getElementById('t-rol'); if (_selRol) _selRol.value = 'tecnico';
+  await cargarSedesEnSelects();
+  abrirModal('m-tecnico');
+});
+
+document.getElementById('btn-guardar-tec').addEventListener('click', async () => {
+  if (role !== 'gerente') { alert('Solo el gerente puede crear cuentas.'); return; }
+  const email = document.getElementById('t-email').value.trim();
+  const pwd = document.getElementById('t-password').value;
+  const sede_id = document.getElementById('t-sede').value || null;
+  const rolNuevo = (document.getElementById('t-rol')||{}).value || 'tecnico';
+  if (!email || !pwd) { alert('Por favor completa todos los campos.'); return; }
+  const etiquetaRol = rolNuevo === 'supervisor' ? 'Supervisor' : rolNuevo === 'gerente' ? 'Gerente' : 'Técnico';
+  try {
+    // La creación la realiza la Edge Function 'crear-usuario' con service_role:
+    // valida que quien llama es supervisor y crea cuenta + perfil sin afectar la sesión actual.
+    const { data, error } = await sb.functions.invoke('crear-usuario', {
+      body: { email, password: pwd, rol: rolNuevo, sede_id }
+    });
+    if (error) {
+      let msg = error.message || 'No se pudo crear el usuario.';
+      try { const ctx = await error.context.json(); if (ctx && ctx.error) msg = ctx.error; } catch (_) {}
+      throw new Error(msg);
+    }
+    if (data && data.error) throw new Error(data.error);
+    await registrarCambio('usuario', `${etiquetaRol} creado: ${email}`, null, {email, sede_id, rol: rolNuevo});
+    cerrarModal('m-tecnico');
+    renderTecnicos();
+    alert('✅ ' + etiquetaRol + ' ' + email + ' creado correctamente. Contraseña: ' + pwd);
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+});
+
+function cerrarModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+['edit-presupuesto','edit-mano-obra','edit-repuestos'].forEach(id => {
+  document.getElementById(id).addEventListener('input', actualizarTotalEdit);
+});
+
+document.querySelectorAll('.overlay').forEach(el => {
+  el.addEventListener('click', e => {
+    if (e.target.classList.contains('overlay')) e.target.classList.remove('open');
+  });
+});
+
+initApp();
+</script>
+
+</body>
+</html>

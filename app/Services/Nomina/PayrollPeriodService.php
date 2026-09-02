@@ -211,6 +211,90 @@ class PayrollPeriodService
         });
     }
 
+    public function recalcularComisiones(NominaPeriodo $periodo, ?int $usuarioId = null): NominaPeriodo
+    {
+        return DB::transaction(function () use ($periodo, $usuarioId) {
+            $periodo = NominaPeriodo::query()->lockForUpdate()->findOrFail($periodo->id);
+
+            if ($periodo->estado === NominaPeriodo::CERRADO) {
+                throw ValidationException::withMessages([
+                    'estado' => 'No se pueden recalcular comisiones de una quincena cerrada.',
+                ]);
+            }
+
+            if ($periodo->estado === NominaPeriodo::ABIERTO) {
+                throw ValidationException::withMessages([
+                    'estado' => 'Calcula la nómina primero. Después podrás recalcular solo las comisiones.',
+                ]);
+            }
+
+            $this->deductions->revertirPrestamosComisionDelPeriodo($periodo->id);
+            $this->loanPlans->deshacerComisionPeriodo($periodo->id);
+            $this->commissions->limpiarPeriodo($periodo);
+            $this->settlements->limpiarPeriodo($periodo);
+
+            $descuentosCuotas = $this->loanPlans->planesComisionPendientes($periodo);
+            $cuotasPendientes = $this->anexarCuotas(collect(), $descuentosCuotas);
+            $porEmpleado = $this->resolverDescuentosPrestamo($cuotasPendientes, [], $descuentosCuotas);
+
+            $empleados = NominaEmpleado::query()
+                ->with(['cliente', 'sedeCatalogo', 'vendedores'])
+                ->comisionables()
+                ->where('estado', 'ACTIVO')
+                ->where(function ($query) use ($periodo) {
+                    $query->whereNull('fecha_ingreso')
+                        ->orWhereDate('fecha_ingreso', '<=', $periodo->fecha_fin->toDateString());
+                })
+                ->orderBy('id')
+                ->get();
+
+            foreach ($empleados as $empleado) {
+                $comision = $this->commissions->calcular($periodo, $empleado);
+                $seleccion = $porEmpleado[$empleado->id] ?? ['cuotas' => collect(), 'montos' => [], 'destinos' => []];
+                [, $prestamosComision] = $this->aplicarPrestamosSeleccion(
+                    $empleado,
+                    $seleccion,
+                    $comision,
+                    $periodo,
+                    $usuarioId
+                );
+                $liquidacion = $this->settlements->liquidar($periodo, $empleado, $comision, $prestamosComision);
+
+                $registro = NominaRegistro::query()
+                    ->where('periodo_id', $periodo->id)
+                    ->where('empleado_id', $empleado->id)
+                    ->first();
+
+                if ($registro) {
+                    $desglose = $registro->desglose();
+                    $desglose['comision'] = $comision;
+                    $desglose['liquidacion'] = [
+                        'comision_total' => (float) $liquidacion->comision_total,
+                        'abonos' => (float) $liquidacion->abonos,
+                        'retencion' => (float) $liquidacion->retencion,
+                        'descuentos' => (float) $liquidacion->descuentos,
+                        'prestamos' => (float) $liquidacion->prestamos,
+                        'total_pagar' => (float) $liquidacion->total_pagar,
+                        'fecha_pago' => $liquidacion->fecha_pago?->toDateString(),
+                    ];
+                    $desglose['prestamos_comision'] = $prestamosComision;
+                    $registro->update([
+                        'total_comisiones' => (float) $liquidacion->total_pagar,
+                        'observaciones' => json_encode($desglose, JSON_UNESCAPED_UNICODE),
+                    ]);
+                }
+            }
+
+            NominaAuditLog::registrar('COMISION_RECALCULAR', 'periodo', $periodo->id, null, [
+                'etiqueta' => $periodo->etiqueta,
+                'estado' => $periodo->estado,
+                'usuario_id' => $usuarioId,
+            ]);
+
+            return $periodo->fresh();
+        });
+    }
+
     /**
      * @param  \Illuminate\Support\Collection<int, NominaPrestamoCuota>  $cuotasPendientes
      * @param  list<int>  $descontarEmpleadoIds

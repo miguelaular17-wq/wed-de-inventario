@@ -111,6 +111,7 @@ trait CreatesNominaSchema
                 $table->string('estado', 24)->default('registrado');
                 $table->decimal('total_neto_bs', 18, 5)->default(0);
                 $table->decimal('total_neto_usd', 18, 5)->default(0);
+                $table->string('vendedor', 128)->nullable();
                 $table->timestamps();
             });
         }

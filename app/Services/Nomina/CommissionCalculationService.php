@@ -76,6 +76,12 @@ class CommissionCalculationService
         $lineas = $this->lineasVentas($periodo, $claves)->get();
 
         $propias = $this->aplicarVentasPropias($periodo, $empleado, $lineas);
+        if ($this->flag('ventas_documentos') && $this->flag('ventas_documentos_vendedor')) {
+            $netoDocumentos = $this->ventaNetaVendedor($periodo, $claves);
+            if ($netoDocumentos > 0) {
+                $propias = $this->ajustarBasesAVentaDocumento($propias, $netoDocumentos);
+            }
+        }
 
         return $this->resultado(
             $empleado,
@@ -99,21 +105,110 @@ class CommissionCalculationService
             return $this->resultado($empleado, 0, 0, 0, 0);
         }
 
+        $codigoSede = mb_strtoupper(trim($codigoSede), 'UTF-8');
         $lineas = $this->lineasVentas($periodo)
-            ->whereRaw('UPPER(TRIM(vd.sede)) = ?', [mb_strtoupper(trim($codigoSede), 'UTF-8')])
+            ->whereRaw('UPPER(TRIM(vd.sede)) = ?', [$codigoSede])
             ->get();
-        $base = round($lineas->sum(fn ($linea) => $this->baseTotal($linea)), 2);
+        $base = $this->ventaNetaSede($periodo, $codigoSede, $lineas);
         $porcentaje = NominaConfig::getDecimal('comision_supervisor_pct', 0.05);
         $total = round($base * $porcentaje / 100, 2);
 
-        if ($lineas->isNotEmpty()) {
+        if ($base > 0 || $lineas->isNotEmpty()) {
             $this->registrarAgregado($periodo, $empleado, 'SUPERVISOR_SEDE', $codigoSede, $base, $porcentaje, $total, [
                 'lineas_venta' => $lineas->count(),
-                'formula' => 'ventas_totales_sede * porcentaje_supervisor',
+                'formula' => 'venta_neta_sede * porcentaje_supervisor',
+                'fuente' => $this->flag('ventas_documentos') ? 'ventas_documentos' : 'ventas_detalle',
             ]);
         }
 
         return $this->resultado($empleado, $total, $base, 0, $lineas->count());
+    }
+
+    /**
+     * Venta neta de la sede: misma lógica que el dashboard gerencial sin filtros.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $lineas
+     */
+    private function ventaNetaSede(NominaPeriodo $periodo, string $codigoSede, $lineas): float
+    {
+        if ($this->flag('ventas_documentos')) {
+            $row = DB::table('ventas_documentos')
+                ->whereBetween('fecha', [$periodo->fecha_inicio->toDateString(), $periodo->fecha_fin->toDateString()])
+                ->whereRaw('UPPER(TRIM(sede)) = ?', [$codigoSede])
+                ->whereRaw("LOWER(TRIM(COALESCE(estado, ''))) = 'registrado'")
+                ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN -ABS(total_neto_usd) ELSE ABS(total_neto_usd) END) as venta_neta")
+                ->first();
+
+            return round((float) ($row->venta_neta ?? 0), 2);
+        }
+
+        return round($lineas->sum(fn ($linea) => $this->baseVentaNeta($linea)), 2);
+    }
+
+    /**
+     * Venta neta del vendedor según cabeceras de documento (misma fuente que Profit).
+     *
+     * @param  list<string>  $claves
+     */
+    private function ventaNetaVendedor(NominaPeriodo $periodo, array $claves): float
+    {
+        if ($claves === []) {
+            return 0.0;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($claves), '?'));
+        $query = DB::table('ventas_documentos')
+            ->whereBetween('fecha', [$periodo->fecha_inicio->toDateString(), $periodo->fecha_fin->toDateString()])
+            ->whereRaw('UPPER(TRIM(vendedor)) IN ('.$placeholders.')', $claves)
+            ->whereRaw("LOWER(TRIM(COALESCE(estado, ''))) = 'registrado'");
+
+        $excluidas = $this->sedesExcluidas();
+        if ($excluidas !== []) {
+            $query->whereNotIn(DB::raw('UPPER(TRIM(sede))'), $excluidas);
+        }
+
+        $row = $query
+            ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN -ABS(total_neto_usd) ELSE ABS(total_neto_usd) END) as venta_neta")
+            ->first();
+
+        return round((float) ($row->venta_neta ?? 0), 2);
+    }
+
+    /**
+     * Si la suma de líneas no coincide con ventas_documentos, reparte la diferencia
+     * proporcionalmente entre telefonía y otros (misma base que Profit).
+     *
+     * @param  array{
+     *     base_telefonia:float,base_otros:float,comision_telefonia:float,comision_otros:float,
+     *     pct_telefonia:float,pct_otros:float,lineas:int
+     * }  $propias
+     * @return array{
+     *     base_telefonia:float,base_otros:float,comision_telefonia:float,comision_otros:float,
+     *     pct_telefonia:float,pct_otros:float,lineas:int
+     * }
+     */
+    private function ajustarBasesAVentaDocumento(array $propias, float $netoDocumentos): array
+    {
+        $netoLineas = round($propias['base_telefonia'] + $propias['base_otros'], 2);
+        if ($netoLineas <= 0 || abs($netoDocumentos - $netoLineas) < 0.01) {
+            return $propias;
+        }
+
+        $factor = $netoDocumentos / $netoLineas;
+        $baseTelefonia = round($propias['base_telefonia'] * $factor, 2);
+        $baseOtros = round($netoDocumentos - $baseTelefonia, 2);
+        $pctTelefonia = $propias['pct_telefonia'];
+        $pctOtros = $propias['pct_otros'];
+
+        return [
+            'base_telefonia' => $baseTelefonia,
+            'base_otros' => $baseOtros,
+            'comision_telefonia' => round($baseTelefonia * $pctTelefonia / 100, 2),
+            'comision_otros' => round($baseOtros * $pctOtros / 100, 2),
+            'pct_telefonia' => $pctTelefonia,
+            'pct_otros' => $pctOtros,
+            'lineas' => $propias['lineas'],
+        ];
     }
 
     private function supervisorEquipo(NominaPeriodo $periodo, NominaEmpleado $empleado): array
@@ -146,7 +241,7 @@ class CommissionCalculationService
         }
 
         $lineas = $this->lineasVentas($periodo, $claves)->get();
-        $base = round($lineas->sum(fn ($linea) => $this->baseTotal($linea)), 2);
+        $base = round($lineas->sum(fn ($linea) => $this->baseVentaNeta($linea)), 2);
         $porcentaje = NominaConfig::getDecimal('comision_marketing_pct', 0.10);
         $total = round($base * $porcentaje / 100, 2);
 
@@ -154,7 +249,7 @@ class CommissionCalculationService
             $this->registrarAgregado($periodo, $empleado, 'SUPERVISOR_EQUIPO', $empleado->sede, $base, $porcentaje, $total, [
                 'lineas_venta' => $lineas->count(),
                 'subordinados' => $subordinados->count(),
-                'formula' => 'ventas_totales_equipo * porcentaje_marketing',
+                'formula' => 'venta_neta_equipo * porcentaje_marketing',
             ]);
         }
 
@@ -191,6 +286,12 @@ class CommissionCalculationService
         }
 
         $propias = $this->aplicarVentasPropias($periodo, $empleado, $lineasVenta);
+        if ($this->flag('ventas_documentos') && $this->flag('ventas_documentos_vendedor') && $claves !== []) {
+            $netoDocumentos = $this->ventaNetaVendedor($periodo, $claves);
+            if ($netoDocumentos > 0) {
+                $propias = $this->ajustarBasesAVentaDocumento($propias, $netoDocumentos);
+            }
+        }
         $total = round($comisionSt + $propias['comision_telefonia'] + $propias['comision_otros'], 2);
         $base = round($baseSt + $propias['base_telefonia'] + $propias['base_otros'], 2);
         $lineasCount = $lineasSt->count() + $propias['lineas'];
@@ -233,7 +334,7 @@ class CommissionCalculationService
         $comisionOtros = 0.0;
 
         foreach ($lineas as $linea) {
-            $base = $this->baseTotal($linea);
+            $base = $this->baseVentaNeta($linea);
             $grupo = $this->categorias->grupo($linea->producto_categoria ?? null);
             $porcentaje = $grupo === CommissionCategoryService::TELEFONIA ? $pctTelefonia : $pctOtros;
             $comision = round($base * $porcentaje / 100, 2);
@@ -316,9 +417,16 @@ class CommissionCalculationService
         return $query->orderBy('vd.id');
     }
 
-    private function baseTotal(object $linea): float
+    /** Misma base que el dashboard gerencial: cantidad × precio_neto (o precio_venta si no hay neto). */
+    private function baseVentaNeta(object $linea): float
     {
-        return $this->baseLinea($linea, 'TOTAL');
+        $signo = strtoupper((string) ($linea->tipo_documento ?? 'FAC')) === 'DEV' ? -1 : 1;
+        $cantidad = abs((float) ($linea->cantidad ?? 0));
+        $precio = ($this->flag('ventas_precio_neto') && $linea->precio_neto !== null)
+            ? (float) $linea->precio_neto
+            : (float) ($linea->precio_venta ?? 0);
+
+        return round($signo * $cantidad * $precio, 2);
     }
 
     private function baseLinea(object $linea, string $tipo): float
@@ -370,9 +478,11 @@ class CommissionCalculationService
             'categoria' => $linea->producto_categoria ?? null,
             'subcategoria' => $linea->producto_subcategoria ?? null,
             'cantidad' => round((float) ($linea->cantidad ?? 0), 4),
-            'precio_unitario' => $linea->precio_venta ?? 0,
+            'precio_unitario' => ($this->flag('ventas_precio_neto') && $linea->precio_neto !== null)
+                ? $linea->precio_neto
+                : ($linea->precio_venta ?? 0),
             'base_monto' => $base,
-            'base_tipo' => 'TOTAL',
+            'base_tipo' => 'NETO',
             'porcentaje' => $porcentaje,
             'monto_comision' => $comision,
             'regla_id' => null,
@@ -439,9 +549,12 @@ class CommissionCalculationService
     {
         $this->flags ??= [
             'ventas_detalle' => Schema::hasTable('ventas_detalle'),
+            'ventas_documentos' => Schema::hasTable('ventas_documentos'),
+            'ventas_documentos_vendedor' => Schema::hasTable('ventas_documentos') && Schema::hasColumn('ventas_documentos', 'vendedor'),
             'ventas_anulado' => Schema::hasTable('ventas_detalle') && Schema::hasColumn('ventas_detalle', 'anulado'),
             'ventas_producto_id' => Schema::hasTable('ventas_detalle') && Schema::hasColumn('ventas_detalle', 'producto_id'),
             'ventas_ganancia' => Schema::hasTable('ventas_detalle') && Schema::hasColumn('ventas_detalle', 'ganancia'),
+            'ventas_precio_neto' => Schema::hasTable('ventas_detalle') && Schema::hasColumn('ventas_detalle', 'precio_neto'),
             'productos' => Schema::hasTable('productos'),
             'nomina_comision_registros' => Schema::hasTable('nomina_comision_registros'),
             'nomina_empleado_supervisores' => Schema::hasTable('nomina_empleado_supervisores'),

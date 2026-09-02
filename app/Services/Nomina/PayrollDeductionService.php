@@ -141,4 +141,9 @@ class PayrollDeductionService
         $this->otrasDeducciones->deshacerPeriodo($periodoId);
         $this->ajustes->deshacerPeriodo($periodoId);
     }
+
+    public function revertirPrestamosComisionDelPeriodo(int $periodoId): void
+    {
+        $this->payments->revertirAbonosComisionDelPeriodo($periodoId);
+    }
 }

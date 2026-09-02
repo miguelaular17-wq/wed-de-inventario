@@ -59,6 +59,7 @@
                                     'admin' => 'admin',
                                     'supervisor' => 'req',
                                     'telefonia' => 'manual',
+                                    'tecnico' => 'req',
                                     'gerente' => 'ok',
                                     'comprador' => 'warn',
                                     'marketing' => 'primary',
@@ -90,6 +91,7 @@
                                         <option value="admin" @selected($user->role === 'admin')>Admin</option>
                                         <option value="supervisor" @selected($user->role === 'supervisor')>Supervisor</option>
                                         <option value="telefonia" @selected($user->role === 'telefonia')>Telefonía</option>
+                                        <option value="tecnico" @selected($user->role === 'tecnico')>Técnico</option>
                                         <option value="comprador" @selected($user->role === 'comprador')>Comprador</option>
                                         <option value="sede" @selected($user->role === 'sede')>Sede</option>
                                         <option value="vendedor" @selected($user->role === 'vendedor')>Vendedor</option>

@@ -274,6 +274,45 @@ class LoanDiscountPlanService
             ]);
     }
 
+    public function deshacerComisionPeriodo(int $periodoId): void
+    {
+        if (! $this->disponible()) {
+            return;
+        }
+
+        NominaPrestamoPlan::query()
+            ->where('nomina_periodo_id', $periodoId)
+            ->where('destino', NominaPrestamoPlan::DESTINO_COMISION)
+            ->update([
+                'estado' => NominaPrestamoPlan::PENDIENTE,
+                'nomina_periodo_id' => null,
+            ]);
+    }
+
+    /**
+     * @return list<array{cuota_id:int, monto:float, destino:string}>
+     */
+    public function planesComisionPendientes(NominaPeriodo $periodo): array
+    {
+        if (! $this->disponible()) {
+            return [];
+        }
+
+        return NominaPrestamoPlan::query()
+            ->whereDate('quincena_inicio', $periodo->fecha_inicio->toDateString())
+            ->whereDate('quincena_fin', $periodo->fecha_fin->toDateString())
+            ->where('destino', NominaPrestamoPlan::DESTINO_COMISION)
+            ->where('estado', NominaPrestamoPlan::PENDIENTE)
+            ->get()
+            ->map(fn (NominaPrestamoPlan $plan) => [
+                'cuota_id' => (int) $plan->cuota_id,
+                'monto' => (float) $plan->monto,
+                'destino' => $plan->destino,
+            ])
+            ->values()
+            ->all();
+    }
+
     /**
      * @return array{deudores:int, saldo:float, programado:float, nomina:float, comision:float}
      */

@@ -25,6 +25,7 @@ class User extends Authenticatable
     public const ROLE_TESORERIA = 'tesoreria';
     public const ROLE_GERENTE = 'gerente';
     public const ROLE_RRHH = 'rrhh';
+    public const ROLE_TECNICO = 'tecnico';
 
     /** Roles de oficina que no eligen ni usan sede de operación. */
     public const ROLES_WITHOUT_SEDE = [
@@ -37,6 +38,13 @@ class User extends Authenticatable
         self::ROLE_TESORERIA,
         self::ROLE_GERENTE,
         self::ROLE_RRHH,
+    ];
+
+    /** Roles con sede fija asignada; no pueden cambiarla. */
+    public const ROLES_SEDE_LOCKED = [
+        self::ROLE_SUPERVISOR,
+        self::ROLE_TELEFONIA,
+        self::ROLE_TECNICO,
     ];
 
     /** @var list<string>|null */
@@ -134,6 +142,21 @@ class User extends Authenticatable
     public function isRrhh(): bool
     {
         return $this->role === self::ROLE_RRHH;
+    }
+
+    public function isTecnico(): bool
+    {
+        return $this->role === self::ROLE_TECNICO;
+    }
+
+    public function sedeIsLocked(): bool
+    {
+        return in_array($this->role, self::ROLES_SEDE_LOCKED, true);
+    }
+
+    public function scopesServicioToOwnSede(): bool
+    {
+        return $this->isTecnico();
     }
 
     public function extraPermissions(): HasMany

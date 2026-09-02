@@ -18,6 +18,11 @@ use App\Http\Middleware\EnsureSedeSelected;
 use App\Http\Controllers\CompradorController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PedidoSolicitadoController;
+use App\Http\Controllers\ServicioTecnico\DashboardController as ServicioDashboardController;
+use App\Http\Controllers\ServicioTecnico\FacturaController;
+use App\Http\Controllers\ServicioTecnico\OrdenController;
+use App\Http\Controllers\ServicioTecnico\ReparacionController;
+use App\Http\Controllers\ServicioTecnico\RepuestoController;
 use App\Http\Controllers\Nomina\AbonoSueldoController;
 use App\Http\Controllers\Nomina\AjusteController;
 use App\Http\Controllers\Nomina\AttendanceController;
@@ -67,6 +72,10 @@ Route::get('/', function () {
 
         if ($user->isRrhh()) {
             return redirect()->route('nomina.empleados.index');
+        }
+
+        if ($user->isTecnico()) {
+            return redirect()->route('servicio.dashboard');
         }
 
         return redirect()->route('ventas.index');
@@ -250,6 +259,8 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
 
     Route::get('/comisiones', [ComisionController::class, 'index'])->name('comisiones.index');
     Route::get('/comisiones/{periodo}', [ComisionController::class, 'show'])->name('comisiones.show');
+    Route::get('/comisiones/{periodo}/relacion', [ComisionController::class, 'relacion'])->name('comisiones.relacion');
+    Route::post('/comisiones/{periodo}/recalcular', [ComisionController::class, 'recalcular'])->name('comisiones.recalcular');
     Route::get('/comisiones/{periodo}/banco/{empresa}', [ComisionController::class, 'exportarBanco'])->name('comisiones.banco');
 
     Route::get('/empleados', [EmpleadoController::class, 'index'])->name('empleados.index');
@@ -420,6 +431,58 @@ Route::middleware(['auth', 'permission:contratos'])->prefix('contratos')->group(
     Route::post('/{id}/ajustar-cuota-fija', [App\Http\Controllers\ContratoController::class, 'ajustarCuotaFija'])->name('contratos.ajustarCuotaFija');
     Route::get('/{id}/reporte', [App\Http\Controllers\ContratoController::class, 'reporte'])->name('contratos.reporte');
 });
+
+Route::middleware(['auth', EnsureSedeSelected::class, 'permission:servicio'])
+    ->prefix('servicio-tecnico')
+    ->group(function () {
+        Route::get('/dashboard', [ServicioDashboardController::class, 'index'])->name('servicio.dashboard');
+
+        Route::prefix('reparaciones')->name('servicio.reparaciones.')->group(function () {
+            Route::get('/', [ReparacionController::class, 'index'])->name('index');
+            Route::get('/crear', [ReparacionController::class, 'create'])->name('create');
+            Route::post('/', [ReparacionController::class, 'store'])->name('store');
+            Route::get('/{reparacion}', [ReparacionController::class, 'show'])->whereNumber('reparacion')->name('show');
+            Route::get('/{reparacion}/editar', [ReparacionController::class, 'edit'])->whereNumber('reparacion')->name('edit');
+            Route::put('/{reparacion}', [ReparacionController::class, 'update'])->whereNumber('reparacion')->name('update');
+            Route::delete('/{reparacion}', [ReparacionController::class, 'destroy'])->whereNumber('reparacion')->name('destroy');
+        });
+
+        Route::prefix('facturas')->name('servicio.facturas.')->group(function () {
+            Route::get('/', [FacturaController::class, 'index'])->name('index');
+            Route::get('/crear', [FacturaController::class, 'create'])->name('create');
+            Route::post('/', [FacturaController::class, 'store'])->name('store');
+            Route::get('/{factura}', [FacturaController::class, 'show'])->whereNumber('factura')->name('show');
+            Route::get('/{factura}/editar', [FacturaController::class, 'edit'])->whereNumber('factura')->name('edit');
+            Route::put('/{factura}', [FacturaController::class, 'update'])->whereNumber('factura')->name('update');
+            Route::delete('/{factura}', [FacturaController::class, 'destroy'])->whereNumber('factura')->name('destroy');
+        });
+
+        Route::middleware('permission:servicio.inventario')
+            ->prefix('repuestos')
+            ->name('servicio.repuestos.')
+            ->group(function () {
+                Route::get('/', [RepuestoController::class, 'index'])->name('index');
+                Route::get('/crear', [RepuestoController::class, 'create'])->name('create');
+                Route::post('/', [RepuestoController::class, 'store'])->name('store');
+                Route::get('/importar', [RepuestoController::class, 'importForm'])->name('import');
+                Route::post('/importar', [RepuestoController::class, 'importStore'])->name('import.store');
+                Route::get('/plantilla.csv', [RepuestoController::class, 'plantillaCsv'])->name('plantilla');
+                Route::get('/{repuesto}/editar', [RepuestoController::class, 'edit'])->name('edit');
+                Route::put('/{repuesto}', [RepuestoController::class, 'update'])->name('update');
+                Route::post('/{repuesto}/ajustar-stock', [RepuestoController::class, 'ajustarStock'])->name('ajustar_stock');
+            });
+
+        Route::name('servicio.ordenes.')->group(function () {
+            Route::get('/', [OrdenController::class, 'index'])->name('index');
+            Route::get('/crear', [OrdenController::class, 'create'])->name('create');
+            Route::post('/', [OrdenController::class, 'store'])->name('store');
+            Route::get('/{orden}', [OrdenController::class, 'show'])->whereNumber('orden')->name('show');
+            Route::get('/{orden}/editar', [OrdenController::class, 'edit'])->whereNumber('orden')->name('edit');
+            Route::put('/{orden}', [OrdenController::class, 'update'])->whereNumber('orden')->name('update');
+            Route::post('/{orden}/confirmar-recepcion', [OrdenController::class, 'confirmarRecepcion'])->whereNumber('orden')->name('confirmar_recepcion');
+            Route::delete('/{orden}', [OrdenController::class, 'destroy'])->whereNumber('orden')->name('destroy');
+        });
+    });
 
 Route::get('/ping', function () { return 'OK'; });
 

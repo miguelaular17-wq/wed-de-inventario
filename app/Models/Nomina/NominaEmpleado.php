@@ -214,8 +214,8 @@ class NominaEmpleado extends Model
     public static function modosComision(): array
     {
         return [
-            self::COMISION_VENTAS_PROPIAS => 'Ventas propias (telefonía 0,20% / resto 1%)',
-            self::COMISION_SUPERVISOR_SEDE => 'Supervisor de sede: ventas de la tienda (0,05%)',
+            self::COMISION_VENTAS_PROPIAS => 'Ventas propias: venta neta (telefonía 0,20% / resto 1%)',
+            self::COMISION_SUPERVISOR_SEDE => 'Supervisor de sede: venta neta de la tienda (0,05%)',
             self::COMISION_SUPERVISOR_EQUIPO => 'Supervisor de equipo/Marketing: ventas de subordinados (0,10%)',
             self::COMISION_SERVICIO_TECNICO => 'Servicio Técnico: ST − 058 × 50%; el resto como vendedor (0,20%/1%)',
             self::COMISION_NINGUNA => 'Sin comisión',

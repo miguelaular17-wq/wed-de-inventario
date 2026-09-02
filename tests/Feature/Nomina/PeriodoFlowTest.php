@@ -14,6 +14,7 @@ use App\Models\Nomina\NominaRegistro;
 use App\Models\Nomina\NominaSede;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Tests\Concerns\CreatesNominaSchema;
 use Tests\TestCase;
 
@@ -582,5 +583,153 @@ class PeriodoFlowTest extends TestCase
         $this->assertContains('Sede_Doral.pdf', $nombres);
         $this->assertContains('Area_Marketing.pdf', $nombres);
         $this->assertStringStartsWith('%PDF', $pdfSede);
+    }
+
+    public function test_zip_de_relacion_comisiones_separa_sede_y_area(): void
+    {
+        $this->actingAs($this->rrhh);
+
+        $sede = NominaSede::create([
+            'nombre' => 'Doral',
+            'codigo' => 'DORAL',
+            'tipo' => 'SEDE',
+            'estado' => 'ACTIVO',
+        ]);
+        $area = NominaSede::create([
+            'nombre' => 'Marketing',
+            'codigo' => 'MARKETING',
+            'tipo' => 'AREA',
+            'estado' => 'ACTIVO',
+        ]);
+
+        $this->empleado->update(['sede_id' => $sede->id, 'modo_comision' => NominaEmpleado::COMISION_VENTAS_PROPIAS]);
+        $tecnico = NominaEmpleado::create([
+            'cliente_id' => Cliente::create(['cedula' => '27000003', 'nombre' => 'Tecnico Area'])->id,
+            'salario_base' => 0,
+            'tipo_salario' => 'SOLO_COMISION',
+            'estado' => 'ACTIVO',
+            'sede_id' => $area->id,
+            'modo_comision' => NominaEmpleado::COMISION_SERVICIO_TECNICO,
+            'es_servicio_tecnico' => true,
+        ]);
+
+        $periodo = NominaPeriodo::create([
+            'fecha_inicio' => '2026-07-16',
+            'fecha_fin' => '2026-07-31',
+            'etiqueta' => '16/07/2026 al 31/07/2026',
+            'estado' => NominaPeriodo::CALCULADO,
+        ]);
+
+        NominaLiquidacionComision::create([
+            'periodo_id' => $periodo->id,
+            'empleado_id' => $this->empleado->id,
+            'modo' => NominaEmpleado::COMISION_VENTAS_PROPIAS,
+            'base_total' => 1000,
+            'base_telefonia' => 200,
+            'base_otros' => 800,
+            'comision_total' => 10,
+            'total_pagar' => 9,
+        ]);
+        NominaLiquidacionComision::create([
+            'periodo_id' => $periodo->id,
+            'empleado_id' => $tecnico->id,
+            'modo' => NominaEmpleado::COMISION_SERVICIO_TECNICO,
+            'base_total' => 300,
+            'comision_total' => 150,
+            'total_pagar' => 135,
+            'snapshot' => ['ventas_st' => 300, 'gastos' => 0],
+        ]);
+
+        $response = $this->get(route('nomina.comisiones.relacion', ['periodo' => $periodo, 'formato' => 'zip']));
+        $response->assertOk();
+        $this->assertStringContainsString('zip', (string) $response->headers->get('content-disposition'));
+
+        $tmp = tempnam(sys_get_temp_dir(), 'zipcom');
+        file_put_contents($tmp, $response->getContent());
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($tmp) === true);
+        $nombres = [];
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $nombres[] = $zip->getNameIndex($i);
+        }
+        $pdfSede = (string) $zip->getFromName('Sede_Doral.pdf');
+        $zip->close();
+        @unlink($tmp);
+
+        $this->assertContains('Sede_Doral.pdf', $nombres);
+        $this->assertContains('Area_Marketing.pdf', $nombres);
+        $this->assertStringStartsWith('%PDF', $pdfSede);
+    }
+
+    public function test_recalcula_solo_comisiones_sin_tocar_nomina(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-20'));
+        $this->actingAs($this->rrhh);
+
+        $this->empleado->update([
+            'modo_comision' => NominaEmpleado::COMISION_VENTAS_PROPIAS,
+            'codigo_vendedor' => 'VEND-RECALC',
+        ]);
+        $this->crearMovimientos();
+
+        DB::table('ventas_detalle')->insert([
+            'sede' => 'CENTRO',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => '88888',
+            'fecha' => '2026-08-18',
+            'cantidad' => 1,
+            'precio_venta' => 1000,
+            'costo_unitario' => 0,
+            'ganancia' => 1000,
+            'vendedor' => 'VEND-RECALC',
+            'anulado' => false,
+        ]);
+
+        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
+        $periodo = NominaPeriodo::query()->firstOrFail();
+        $this->post(route('nomina.periodos.calcular', $periodo))->assertRedirect();
+
+        $registroAntes = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
+        $salarioAntes = (float) $registroAntes->total_pagar;
+        $deduccionesAntes = (float) $registroAntes->total_deducciones;
+        $comisionAntes = (float) $registroAntes->total_comisiones;
+
+        DB::table('ventas_detalle')->insert([
+            'sede' => 'CENTRO',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => '99999',
+            'fecha' => '2026-08-18',
+            'cantidad' => 1,
+            'precio_venta' => 5000,
+            'costo_unitario' => 0,
+            'ganancia' => 5000,
+            'vendedor' => 'VEND-RECALC',
+            'anulado' => false,
+        ]);
+
+        $this->post(route('nomina.comisiones.recalcular', $periodo))
+            ->assertRedirect(route('nomina.comisiones.show', $periodo));
+
+        $registroDespues = $registroAntes->fresh();
+        $this->assertSame($salarioAntes, (float) $registroDespues->total_pagar);
+        $this->assertSame($deduccionesAntes, (float) $registroDespues->total_deducciones);
+        $this->assertGreaterThan($comisionAntes, (float) $registroDespues->total_comisiones);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_no_recalcula_comisiones_de_quincena_cerrada(): void
+    {
+        $this->actingAs($this->rrhh);
+
+        $periodo = NominaPeriodo::create([
+            'fecha_inicio' => '2026-07-16',
+            'fecha_fin' => '2026-07-31',
+            'etiqueta' => '16/07/2026 al 31/07/2026',
+            'estado' => NominaPeriodo::CERRADO,
+        ]);
+
+        $this->post(route('nomina.comisiones.recalcular', $periodo))
+            ->assertSessionHasErrors('estado');
     }
 }

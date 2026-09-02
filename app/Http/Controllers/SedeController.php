@@ -16,7 +16,7 @@ class SedeController extends Controller
             return redirect('/');
         }
 
-        if ($user && in_array($user->role, ['supervisor', 'telefonia'], true)) {
+        if ($user && $user->sedeIsLocked()) {
             if ($user->sede) {
                 session()->put('sede_local', strtoupper($user->sede));
                 return $this->redirectAfterSede();
@@ -35,8 +35,8 @@ class SedeController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        if (auth()->user() && in_array(auth()->user()->role, ['supervisor', 'telefonia'], true)) {
-            return redirect()->route('ventas.index')->withErrors(['error' => 'No tienes permiso para cambiar de sede.']);
+        if (auth()->user()?->sedeIsLocked()) {
+            return $this->redirectAfterSede()->withErrors(['error' => 'No tienes permiso para cambiar de sede.']);
         }
 
         $sedes = config('inventario.sedes_locales');
@@ -53,8 +53,8 @@ class SedeController extends Controller
 
     public function change(): RedirectResponse
     {
-        if (auth()->user() && in_array(auth()->user()->role, ['supervisor', 'telefonia'], true)) {
-            return redirect()->route('ventas.index')->withErrors(['error' => 'No tienes permiso para cambiar de sede.']);
+        if (auth()->user()?->sedeIsLocked()) {
+            return $this->redirectAfterSede()->withErrors(['error' => 'No tienes permiso para cambiar de sede.']);
         }
 
         session()->forget('sede_local');
@@ -72,6 +72,10 @@ class SedeController extends Controller
 
         if ($user && ($user->isComprador() || $user->isMarketing())) {
             return redirect()->route('comprador.dashboard');
+        }
+
+        if ($user && $user->isTecnico()) {
+            return redirect()->route('servicio.ordenes.index');
         }
 
         return redirect()->route('ventas.index');

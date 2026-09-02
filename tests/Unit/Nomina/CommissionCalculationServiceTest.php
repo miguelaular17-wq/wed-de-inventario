@@ -88,13 +88,30 @@ class CommissionCalculationServiceTest extends TestCase
         $empleado = $this->empleado(NominaEmpleado::COMISION_SUPERVISOR_SEDE, 'SUP-001', true);
         $periodo = $this->periodo();
         $this->venta('SUP-001', 400);
+        $this->documento('CENTRO', 400);
         $this->venta('OTRO-001', 600);
+        $this->documento('CENTRO', 600);
 
         $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
 
         $this->assertSame(0.5, $resultado['total']);
         $this->assertSame(1000.0, $resultado['base']);
         $this->assertDatabaseCount('nomina_comision_registros', 1);
+    }
+
+    public function test_supervisor_de_sede_usa_venta_neta_con_precio_neto(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_SUPERVISOR_SEDE, 'SUP-NETO', true);
+        $periodo = $this->periodo();
+        $this->venta('OTRO-001', 1000, ['precio_neto' => 800]);
+        $this->documento('CENTRO', 800);
+        $this->venta('OTRO-002', 500, ['precio_neto' => 400]);
+        $this->documento('CENTRO', 400);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(1200.0, $resultado['base']);
+        $this->assertSame(0.6, $resultado['total']);
     }
 
     public function test_supervisor_de_equipo_cobra_solo_ventas_de_subordinados(): void
@@ -112,7 +129,7 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(2000.0, $resultado['base']);
     }
 
-    public function test_ventas_propias_usan_total_facturado_aunque_exista_precio_neto(): void
+    public function test_ventas_propias_usan_precio_neto_cuando_existe(): void
     {
         NominaConfig::put('descuento_venta_pct', 20);
         $empleado = $this->empleado(NominaEmpleado::COMISION_VENTAS_PROPIAS, 'VEND-NETO');
@@ -121,8 +138,33 @@ class CommissionCalculationServiceTest extends TestCase
 
         $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
 
-        $this->assertSame(1000.0, $resultado['base']);
-        $this->assertSame(10.0, $resultado['total']);
+        $this->assertSame(910.25, $resultado['base']);
+        $this->assertSame(9.1, $resultado['total']);
+    }
+
+    public function test_ventas_propias_ajustan_a_ventas_documentos_cuando_difiere_de_lineas(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_VENTAS_PROPIAS, 'VEND-DOC');
+        $periodo = $this->periodo();
+        $otrosId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-DOC',
+            'nombre' => 'Accesorio',
+            'categoria' => 'PERFUMERIA',
+            'subcategoria' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->venta('VEND-DOC', 100, [
+            'producto_id' => $otrosId,
+            'precio_neto' => 80,
+            'numero_documento' => 'DOC-1',
+        ]);
+        $this->documento('CENTRO', 95, 'FAC', 'VEND-DOC', 'DOC-1');
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(95.0, $resultado['base']);
+        $this->assertSame(0.95, $resultado['total']);
     }
 
     public function test_servicio_tecnico_resta_egresos_058_en_usd_del_mismo_periodo(): void
@@ -307,6 +349,22 @@ class CommissionCalculationServiceTest extends TestCase
             'ganancia' => $monto,
             'vendedor' => $vendedor,
             'anulado' => false,
+        ]);
+    }
+
+    private function documento(string $sede, float $monto, string $tipo = 'FAC', ?string $vendedor = null, ?string $numero = null): void
+    {
+        DB::table('ventas_documentos')->insert([
+            'sede' => $sede,
+            'tipo_documento' => $tipo,
+            'numero_documento' => $numero ?? (string) random_int(10000, 99999),
+            'fecha' => '2026-08-10',
+            'estado' => 'registrado',
+            'total_neto_bs' => 0,
+            'total_neto_usd' => $monto,
+            'vendedor' => $vendedor,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 }

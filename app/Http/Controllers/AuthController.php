@@ -144,6 +144,14 @@ class AuthController extends Controller
             return redirect()->route('nomina.empleados.index');
         }
 
+        if ($user->isTecnico()) {
+            if ($user->sede && ! session()->has('sede_local')) {
+                session(['sede_local' => strtoupper($user->sede)]);
+            }
+
+            return redirect()->route('servicio.dashboard');
+        }
+
         if (! $user->requiresSede()) {
             return redirect('/');
         }

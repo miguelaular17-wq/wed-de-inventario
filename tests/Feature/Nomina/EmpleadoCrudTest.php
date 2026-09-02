@@ -309,6 +309,48 @@ class EmpleadoCrudTest extends TestCase
             ->assertSee('Bonificación');
     }
 
+    public function test_ajuste_escritorio_guarda_fecha_pasada_enviada(): void
+    {
+        $this->actingAs($this->rrhh);
+
+        $this->post(route('nomina.empleados.store'), [
+            'cedula' => '28369045',
+            'nombre' => 'Josemar Del Carmen',
+            'salario_base' => 100,
+            'tipo_salario' => 'QUINCENAL',
+            'estado' => 'ACTIVO',
+            'modo_comision' => 'VENTAS_PROPIAS',
+        ])->assertRedirect();
+
+        $empleado = NominaEmpleado::query()->firstOrFail();
+
+        $this->post(route('nomina.ajustes.escritorio'), [
+            'empleado_id' => $empleado->id,
+            'fecha' => '2026-08-10',
+            'tipo' => 'BONIFICACION',
+            'destino' => 'COMISION',
+            'monto' => 30,
+            'motivo' => 'carro',
+            'q' => 'Josemar',
+        ])->assertRedirect(route('nomina.ajustes.index', ['fecha' => '2026-08-10', 'q' => 'Josemar']));
+
+        $this->assertDatabaseHas('nomina_empleado_ajustes', [
+            'empleado_id' => $empleado->id,
+            'tipo' => 'BONIFICACION',
+            'destino' => 'COMISION',
+            'monto' => 30,
+            'motivo' => 'carro',
+            'estado' => 'PENDIENTE',
+        ]);
+        $ajuste = $empleado->fresh()->ajustes()->firstOrFail();
+        $this->assertSame('2026-08-10', $ajuste->fecha->toDateString());
+
+        $this->get(route('nomina.ajustes.index', ['fecha' => '2026-08-10']))
+            ->assertOk()
+            ->assertSee('30.00')
+            ->assertSee('carro');
+    }
+
     public function test_registra_inasistencia_y_horas_extras_en_recibo(): void
     {
         $this->actingAs($this->rrhh);

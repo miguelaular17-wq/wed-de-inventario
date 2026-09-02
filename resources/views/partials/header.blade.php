@@ -72,6 +72,21 @@
         }
     }
 
+    if ($u->canAccess('servicio')) {
+        $servicioItems = [
+            $link('Dashboard', route('servicio.dashboard'), request()->routeIs('servicio.dashboard')),
+            $link('Órdenes', route('servicio.ordenes.index'), request()->routeIs('servicio.ordenes.*')),
+            $link('Garantías', route('servicio.reparaciones.index'), request()->routeIs('servicio.reparaciones.*')),
+            $link('Facturas', route('servicio.facturas.index'), request()->routeIs('servicio.facturas.*')),
+        ];
+        if ($u->canAccess('servicio.inventario')) {
+            $servicioItems[] = $link('Repuestos', route('servicio.repuestos.index'), request()->routeIs('servicio.repuestos.*'));
+        }
+        $nav[] = count($servicioItems) === 1
+            ? $servicioItems[0]
+            : $drop('Servicio técnico', $servicioItems);
+    }
+
     if ($u->isGerente()) {
         $nav[] = $link('Compras', route('comprador.dashboard'), request()->routeIs('comprador.*'));
         $nav[] = $drop('Finanzas', [
@@ -150,6 +165,7 @@
         'auditor' => 'Auditor',
         'tesoreria' => 'Tesorería',
         'rrhh' => 'RRHH',
+        'tecnico' => 'Técnico',
     ];
     $roleLabel = $roleLabels[$u->role] ?? ucfirst($u->role);
     $nameParts = preg_split('/\s+/', trim($u->name)) ?: [];
@@ -166,7 +182,7 @@
                 <img src="{{ asset('logo.png') }}" alt="" class="app-logo" width="32" height="32">
                 <strong>Nexo <span class="app-brand-pd">PD</span></strong>
             </a>
-            @if(session('sede_local') && $u->hasAccessToSedeViews())
+            @if(session('sede_local') && ($u->hasAccessToSedeViews() || $u->isTecnico()))
                 <span class="badge app-sede-badge" data-tour="sede-badge">{{ session('sede_local') }}</span>
             @endif
             @if($u->isGerente())
@@ -236,8 +252,10 @@
                 @else
                     <a href="{{ route('sede.select') }}" class="btn secondary app-sede-btn">Seleccionar sede</a>
                 @endif
+            @elseif($u->isTecnico() && session('sede_local'))
+                <span class="btn secondary app-sede-btn app-sede-locked">{{ session('sede_local') }}</span>
             @elseif($u->hasAccessToSedeViews() && session('sede_local'))
-                @if(in_array($u->role, ['supervisor', 'telefonia'], true))
+                @if($u->sedeIsLocked())
                     <span class="btn secondary app-sede-btn app-sede-locked">{{ session('sede_local') }}</span>
                 @else
                     <form method="POST" action="{{ route('sede.change') }}" class="app-inline-form">

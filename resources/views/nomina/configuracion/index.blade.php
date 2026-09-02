@@ -52,7 +52,7 @@
                 <label>Participación Servicio Técnico (%)</label>
                 <input type="number" step="0.01" min="0" max="100" name="comision_servicio_tecnico_pct" value="{{ number_format($comisionServicioTecnicoPct, 2, '.', '') }}" required>
             </div>
-            <div class="field field-wide muted">Ventas propias: total facturado (cantidad × precio de venta). Supervisor: solo sede o equipo. Técnico: 058 solo contra líneas ST; el resto de su vendedor se comisiona igual que ventas propias.</div>
+            <div class="field field-wide muted">Ventas propias y supervisores: venta neta (cantidad × precio neto, igual que gerencial y Profit). Técnico: 058 solo contra líneas ST; el resto de su vendedor se comisiona igual que ventas propias.</div>
             <div class="field" style="display:flex; align-items:flex-end;">
                 <button class="btn primary" type="submit">Guardar</button>
             </div>
