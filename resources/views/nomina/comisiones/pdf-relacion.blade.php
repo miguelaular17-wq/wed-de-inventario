@@ -105,7 +105,6 @@
                     <th>Sede</th>
                     <th>Facturas ST</th>
                     <th>Egresos 058</th>
-                    <th>Otros productos</th>
                     <th>Comisión</th>
                     <th>Abonos</th>
                     <th>Retención</th>
@@ -122,7 +121,6 @@
                         <td>{{ $fila['sede'] }}</td>
                         <td class="num">{{ number_format($fila['facturas_st'], 2) }}</td>
                         <td class="num">{{ number_format($fila['egresos_058'], 2) }}</td>
-                        <td class="num">{{ number_format($fila['otros_productos'], 2) }}</td>
                         <td class="num">{{ number_format($fila['comision'], 2) }}</td>
                         <td class="num">{{ number_format($fila['abonos'], 2) }}</td>
                         <td class="num">{{ number_format($fila['retencion'], 2) }}</td>
@@ -135,7 +133,6 @@
                     <td colspan="3">Totales ({{ count($filasSt) }} empleados)</td>
                     <td class="num">{{ number_format($totalesSt['facturas_st'], 2) }}</td>
                     <td class="num">{{ number_format($totalesSt['egresos_058'], 2) }}</td>
-                    <td class="num">{{ number_format($totalesSt['otros_productos'], 2) }}</td>
                     <td class="num">{{ number_format($totalesSt['comision'], 2) }}</td>
                     <td class="num">{{ number_format($totalesSt['abonos'], 2) }}</td>
                     <td class="num">{{ number_format($totalesSt['retencion'], 2) }}</td>

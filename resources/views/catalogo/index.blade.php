@@ -793,7 +793,7 @@ window.openCasheaFromCard = function (card) {
     document.getElementById('cashea-punit').textContent = precioUnit > 0 ? fmt(precioUnit) : '—';
     document.getElementById('cashea-pmayor').textContent = precioMayor > 0 ? fmt(precioMayor) : '—';
     document.getElementById('cashea-descuento').textContent = precioUnit > 0
-        ? fmt(precioUnit * {{ $descFactor }}) + ' (Neto: ' + fmt(precioUnit * {{ $netoFactor }}) + ')'
+        ? fmt(precioUnit * {{ $netoFactor }})
         : '—';
     document.getElementById('cashea-resultado').style.display = 'none';
 

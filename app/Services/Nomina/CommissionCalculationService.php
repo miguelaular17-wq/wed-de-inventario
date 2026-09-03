@@ -65,6 +65,9 @@ class CommissionCalculationService
                 NominaEmpleado::COMISION_MOVISTAR => $this->ventasMovistar($periodo, $empleado),
                 NominaEmpleado::COMISION_SUPERVISOR_SEDE => $this->supervisorSede($periodo, $empleado),
                 NominaEmpleado::COMISION_SUPERVISOR_EQUIPO => $this->supervisorEquipo($periodo, $empleado),
+                NominaEmpleado::COMISION_DIGITAL => $this->comisionDigital($periodo, $empleado),
+                NominaEmpleado::COMISION_PCP => $this->comisionPcp($periodo, $empleado),
+                NominaEmpleado::COMISION_SAMBIL => $this->comisionSambil($periodo, $empleado),
                 NominaEmpleado::COMISION_SERVICIO_TECNICO => $this->servicioTecnico($periodo, $empleado),
                 NominaEmpleado::COMISION_NUNES => $this->comisionNunes($periodo, $empleado),
                 default => $vacio,
@@ -142,6 +145,48 @@ class CommissionCalculationService
 
     private function supervisorSede(NominaPeriodo $periodo, NominaEmpleado $empleado): array
     {
+        return $this->comisionSobreSedeEmpleado(
+            $periodo,
+            $empleado,
+            'comision_supervisor_pct',
+            0.05,
+            'SUPERVISOR_SEDE',
+            'venta_neta_sede * porcentaje_supervisor'
+        );
+    }
+
+    private function comisionPcp(NominaPeriodo $periodo, NominaEmpleado $empleado): array
+    {
+        return $this->comisionSobreSedeEmpleado(
+            $periodo,
+            $empleado,
+            'comision_pcp_pct',
+            0.015,
+            'PCP',
+            'venta_neta_tienda * porcentaje_pcp'
+        );
+    }
+
+    private function comisionSambil(NominaPeriodo $periodo, NominaEmpleado $empleado): array
+    {
+        return $this->comisionSobreSedeEmpleado(
+            $periodo,
+            $empleado,
+            'comision_sambil_pct',
+            0.20,
+            'SAMBIL',
+            'venta_neta_tienda * porcentaje_sambil'
+        );
+    }
+
+    private function comisionSobreSedeEmpleado(
+        NominaPeriodo $periodo,
+        NominaEmpleado $empleado,
+        string $configKey,
+        float $defaultPct,
+        string $modoRegistro,
+        string $formula
+    ): array {
         $codigoSede = $empleado->sedeCatalogo?->codigo ?? $empleado->sede;
         if (! $codigoSede || $this->codigoSedeExcluido($codigoSede)) {
             return $this->resultado($empleado, 0, 0, 0, 0);
@@ -152,13 +197,13 @@ class CommissionCalculationService
             ->whereRaw('UPPER(TRIM(vd.sede)) = ?', [$codigoSede])
             ->get();
         $base = $this->ventaNetaSede($periodo, $codigoSede, $lineas);
-        $porcentaje = NominaConfig::getDecimal('comision_supervisor_pct', 0.05);
+        $porcentaje = NominaConfig::getDecimal($configKey, $defaultPct);
         $total = round($base * $porcentaje / 100, 2);
 
         if ($base > 0 || $lineas->isNotEmpty()) {
-            $this->registrarAgregado($periodo, $empleado, 'SUPERVISOR_SEDE', $codigoSede, $base, $porcentaje, $total, [
+            $this->registrarAgregado($periodo, $empleado, $modoRegistro, $codigoSede, $base, $porcentaje, $total, [
                 'lineas_venta' => $lineas->count(),
-                'formula' => 'venta_neta_sede * porcentaje_supervisor',
+                'formula' => $formula,
                 'fuente' => $this->flag('ventas_documentos') ? 'ventas_documentos' : 'ventas_detalle',
             ]);
         }
@@ -322,6 +367,36 @@ class CommissionCalculationService
 
     private function supervisorEquipo(NominaPeriodo $periodo, NominaEmpleado $empleado): array
     {
+        return $this->comisionSobreEquipo(
+            $periodo,
+            $empleado,
+            'comision_marketing_pct',
+            0.10,
+            'SUPERVISOR_EQUIPO',
+            'venta_neta_equipo * porcentaje_marketing'
+        );
+    }
+
+    private function comisionDigital(NominaPeriodo $periodo, NominaEmpleado $empleado): array
+    {
+        return $this->comisionSobreEquipo(
+            $periodo,
+            $empleado,
+            'comision_digital_pct',
+            0.30,
+            'DIGITAL',
+            'venta_neta_trabajadores * porcentaje_digital'
+        );
+    }
+
+    private function comisionSobreEquipo(
+        NominaPeriodo $periodo,
+        NominaEmpleado $empleado,
+        string $configKey,
+        float $defaultPct,
+        string $modoRegistro,
+        string $formula
+    ): array {
         $idsEquipo = NominaEmpleado::query()
             ->where('supervisor_id', $empleado->id)
             ->pluck('id');
@@ -351,14 +426,14 @@ class CommissionCalculationService
 
         $lineas = $this->lineasVentas($periodo, $claves)->get();
         $base = round($lineas->sum(fn ($linea) => $this->baseVentaNeta($linea)), 2);
-        $porcentaje = NominaConfig::getDecimal('comision_marketing_pct', 0.10);
+        $porcentaje = NominaConfig::getDecimal($configKey, $defaultPct);
         $total = round($base * $porcentaje / 100, 2);
 
         if ($lineas->isNotEmpty()) {
-            $this->registrarAgregado($periodo, $empleado, 'SUPERVISOR_EQUIPO', $empleado->sede, $base, $porcentaje, $total, [
+            $this->registrarAgregado($periodo, $empleado, $modoRegistro, $empleado->sede, $base, $porcentaje, $total, [
                 'lineas_venta' => $lineas->count(),
                 'subordinados' => $subordinados->count(),
-                'formula' => 'venta_neta_equipo * porcentaje_marketing',
+                'formula' => $formula,
             ]);
         }
 
@@ -397,8 +472,8 @@ class CommissionCalculationService
         }
 
         $propias = $this->aplicarVentasPropias($periodo, $empleado, $lineasVenta);
-        if ($this->flag('ventas_documentos') && $this->flag('ventas_documentos_vendedor') && $claves !== []) {
-            $netoDocumentos = $this->ventaNetaVendedor($periodo, $claves);
+        if ($this->flag('ventas_documentos') && $this->flag('ventas_documentos_vendedor') && $lineasVenta->isNotEmpty()) {
+            $netoDocumentos = $this->ventaNetaDocumentosDeLineas($periodo, $lineasVenta);
             if ($netoDocumentos > 0) {
                 $propias = $this->ajustarBasesAVentaDocumento($propias, $netoDocumentos);
             }

@@ -130,6 +130,51 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(2000.0, $resultado['base']);
     }
 
+    public function test_digital_cobra_cero_punto_tres_sobre_ventas_de_trabajadores(): void
+    {
+        $digital = $this->empleado(NominaEmpleado::COMISION_DIGITAL, 'DIG-001', true);
+        $vendedor = $this->empleado(NominaEmpleado::COMISION_VENTAS_PROPIAS, 'VEND-DIG');
+        $vendedor->update(['supervisor_id' => $digital->id]);
+        $periodo = $this->periodo();
+        $this->venta('VEND-DIG', 1000);
+        $this->venta('DIG-001', 5000);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $digital);
+
+        $this->assertSame(1000.0, $resultado['base']);
+        $this->assertSame(3.0, $resultado['total']);
+    }
+
+    public function test_pcp_cobra_cero_punto_cero_uno_cinco_sobre_tienda(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_PCP, 'PCP-001', true);
+        $periodo = $this->periodo();
+        $this->venta('PCP-001', 400);
+        $this->documento('CENTRO', 400);
+        $this->venta('OTRO-PCP', 600);
+        $this->documento('CENTRO', 600);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(1000.0, $resultado['base']);
+        $this->assertSame(0.15, $resultado['total']);
+    }
+
+    public function test_sambil_cobra_cero_punto_dos_sobre_tienda(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_SAMBIL, 'SAM-001', true);
+        $periodo = $this->periodo();
+        $this->venta('SAM-001', 400);
+        $this->documento('CENTRO', 400);
+        $this->venta('OTRO-SAM', 600);
+        $this->documento('CENTRO', 600);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(1000.0, $resultado['base']);
+        $this->assertSame(2.0, $resultado['total']);
+    }
+
     public function test_ventas_propias_usan_precio_neto_cuando_existe(): void
     {
         NominaConfig::put('descuento_venta_pct', 20);
@@ -339,6 +384,51 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(3.0, (float) $liq->retencion);
         $this->assertSame(5.0, (float) $liq->prestamos);
         $this->assertSame(22.0, (float) $liq->total_pagar);
+    }
+
+    public function test_servicio_tecnico_liquida_sin_retencion(): void
+    {
+        NominaConfig::put('descuento_venta_pct', 0);
+        $empleado = $this->empleado(NominaEmpleado::COMISION_SERVICIO_TECNICO, 'TEC-RET', false, true);
+        $periodo = $this->periodo();
+        $this->venta('TEC-RET', 200, ['nombre_producto' => 'SERVICIO TECNICO', 'sede' => 'VIRTUDES']);
+
+        $calculo = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+        $liq = app(CommissionSettlementService::class)->liquidar($periodo, $empleado, $calculo);
+
+        $this->assertSame(100.0, (float) $liq->comision_total);
+        $this->assertSame(0.0, (float) $liq->retencion);
+        $this->assertSame(100.0, (float) $liq->total_pagar);
+    }
+
+    public function test_servicio_tecnico_retiene_solo_sobre_otros_productos(): void
+    {
+        NominaConfig::put('descuento_venta_pct', 0);
+        $empleado = $this->empleado(NominaEmpleado::COMISION_SERVICIO_TECNICO, 'TEC-MIX-RET', false, true);
+        $periodo = $this->periodo();
+        $otrosId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-OTRO-RET',
+            'nombre' => 'Otro',
+            'categoria' => 'PERFUMERIA',
+            'subcategoria' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->venta('TEC-MIX-RET', 200, ['nombre_producto' => 'SERVICIO TECNICO', 'sede' => 'VIRTUDES']);
+        $this->venta('TEC-MIX-RET', 100, [
+            'producto_id' => $otrosId,
+            'nombre_producto' => 'PRODUCTO OTRO',
+        ]);
+
+        $calculo = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+        $liq = app(CommissionSettlementService::class)->liquidar($periodo, $empleado, $calculo);
+
+        // ST 50% de 200 = 100; otros 1% de 100 = 1; reten 10% solo sobre 1.
+        $this->assertSame(101.0, (float) $liq->comision_total);
+        $this->assertSame(1.0, (float) $liq->comision_otros + (float) $liq->comision_telefonia);
+        $this->assertSame(0.1, (float) $liq->retencion);
+        $this->assertSame(0.1, $liq->retencionOtrosProductos());
+        $this->assertSame(100.9, (float) $liq->total_pagar);
     }
 
     public function test_no_liquida_comision_a_inactivos_ni_sin_comision(): void

@@ -105,4 +105,35 @@ class NominaLiquidacionComision extends Model
     {
         return round((float) $this->base_telefonia + (float) $this->base_otros, 2);
     }
+
+    public function comisionOtrosProductos(): float
+    {
+        return round((float) $this->comision_telefonia + (float) $this->comision_otros, 2);
+    }
+
+    public function comisionSt(): float
+    {
+        $snap = $this->snapshot ?? [];
+        if (array_key_exists('comision_st', $snap)) {
+            return round((float) $snap['comision_st'], 2);
+        }
+
+        return round(max(0, (float) $this->comision_total - $this->comisionOtrosProductos()), 2);
+    }
+
+    /**
+     * Retención aplicable a la fila de Supervisores (Otros productos + abonos).
+     * En ST la comisión de servicio técnico no retiene.
+     */
+    public function retencionOtrosProductos(?float $pct = null): float
+    {
+        $porcentaje = $pct ?? (float) $this->retencion_pct;
+        if ($porcentaje <= 0) {
+            $porcentaje = NominaConfig::getDecimal('retencion_comision_pct', 10);
+        }
+
+        $retenible = round($this->comisionOtrosProductos() + (float) $this->abonos, 2);
+
+        return round($retenible * $porcentaje / 100, 2);
+    }
 }

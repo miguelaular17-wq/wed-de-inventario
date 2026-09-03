@@ -17,6 +17,9 @@ class NominaEmpleado extends Model
     public const COMISION_SERVICIO_TECNICO = 'SERVICIO_TECNICO';
     public const COMISION_NUNES = 'NUNES';
     public const COMISION_MOVISTAR = 'MOVISTAR';
+    public const COMISION_DIGITAL = 'DIGITAL';
+    public const COMISION_PCP = 'PCP';
+    public const COMISION_SAMBIL = 'SAMBIL';
     public const COMISION_NINGUNA = 'SIN_COMISION';
 
     protected $table = 'nomina_empleados';
@@ -219,10 +222,31 @@ class NominaEmpleado extends Model
             self::COMISION_VENTAS_PROPIAS => 'Ventas propias: venta neta (telefonía 0,20% / resto 1%)',
             self::COMISION_SUPERVISOR_SEDE => 'Supervisor de sede: venta neta de la tienda (0,05%)',
             self::COMISION_SUPERVISOR_EQUIPO => 'Supervisor de equipo/Marketing: ventas de subordinados (0,10%)',
-            self::COMISION_SERVICIO_TECNICO => 'Servicio Técnico: ST − 058 × 50%; el resto como vendedor (0,20%/1%)',
+            self::COMISION_DIGITAL => 'Digital: venta neta de sus trabajadores (0,30%)',
+            self::COMISION_PCP => 'PCP: venta neta de la tienda (0,015%)',
+            self::COMISION_SAMBIL => 'Sambil: venta neta de la tienda (0,20%)',
+            self::COMISION_SERVICIO_TECNICO => 'Servicio Técnico: ST − 058 × 50%; el resto como vendedor (0,20%/1%); sin retención',
             self::COMISION_NUNES => 'Nunes: venta neta total de la sede Nunes (0,60%)',
             self::COMISION_MOVISTAR => 'Movistar: venta neta propia sin facturas ST (telefonía 0,20% / resto 1%)',
             self::COMISION_NINGUNA => 'Sin comisión',
+        ];
+    }
+
+    public static function modosComisionAgregadosSede(): array
+    {
+        return [
+            self::COMISION_SUPERVISOR_SEDE,
+            self::COMISION_NUNES,
+            self::COMISION_PCP,
+            self::COMISION_SAMBIL,
+        ];
+    }
+
+    public static function modosComisionAgregadosEquipo(): array
+    {
+        return [
+            self::COMISION_SUPERVISOR_EQUIPO,
+            self::COMISION_DIGITAL,
         ];
     }
 

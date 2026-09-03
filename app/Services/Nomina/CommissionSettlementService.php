@@ -46,8 +46,20 @@ class CommissionSettlementService
             + $this->ajustes->aplicarComision($periodo, $empleado, NominaEmpleadoAjuste::TIPO_DEDUCCION);
         $comisionTotal = round((float) ($calculo['total'] ?? 0), 2);
         $bruto = round($comisionTotal + $abonos, 2);
+        $modo = (string) ($calculo['modo'] ?? $empleado->modo_comision);
         $retencionPct = NominaConfig::getDecimal('retencion_comision_pct', 10);
-        $retencion = round($bruto * $retencionPct / 100, 2);
+        if ($modo === NominaEmpleado::COMISION_SERVICIO_TECNICO) {
+            // Retención solo sobre la parte de Otros productos (+ abonos), no sobre ST.
+            $retenible = round(
+                (float) ($calculo['comision_telefonia'] ?? 0)
+                + (float) ($calculo['comision_otros'] ?? 0)
+                + $abonos,
+                2
+            );
+        } else {
+            $retenible = $bruto;
+        }
+        $retencion = round($retenible * $retencionPct / 100, 2);
         $prestamos = round($prestamos, 2);
         $totalPagar = round($bruto - $retencion - $descuentos - $prestamos, 2);
         $fechaPago = $periodo->fecha_pago_comision

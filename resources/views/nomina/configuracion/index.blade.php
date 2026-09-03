@@ -41,6 +41,18 @@
                 <input type="number" step="0.0001" min="0" max="100" name="comision_nunes_pct" value="{{ number_format($comisionNunesPct, 4, '.', '') }}" required>
             </div>
             <div class="field">
+                <label>Comisión Digital — ventas de trabajadores (%)</label>
+                <input type="number" step="0.0001" min="0" max="100" name="comision_digital_pct" value="{{ number_format($comisionDigitalPct, 4, '.', '') }}" required>
+            </div>
+            <div class="field">
+                <label>Comisión PCP — venta neta tienda (%)</label>
+                <input type="number" step="0.0001" min="0" max="100" name="comision_pcp_pct" value="{{ number_format($comisionPcpPct, 4, '.', '') }}" required>
+            </div>
+            <div class="field">
+                <label>Comisión Sambil — venta neta tienda (%)</label>
+                <input type="number" step="0.0001" min="0" max="100" name="comision_sambil_pct" value="{{ number_format($comisionSambilPct, 4, '.', '') }}" required>
+            </div>
+            <div class="field">
                 <label>Telefonía (%)</label>
                 <input type="number" step="0.0001" min="0" max="100" name="comision_telefonia_pct" value="{{ number_format($comisionTelefoniaPct, 4, '.', '') }}" required>
             </div>
@@ -56,7 +68,7 @@
                 <label>Participación Servicio Técnico (%)</label>
                 <input type="number" step="0.01" min="0" max="100" name="comision_servicio_tecnico_pct" value="{{ number_format($comisionServicioTecnicoPct, 2, '.', '') }}" required>
             </div>
-            <div class="field field-wide muted">Ventas propias y Movistar: venta neta (cantidad × precio neto, igual que gerencial y Profit). Movistar no incluye facturas de servicio técnico. Técnico: facturas ST propias menos egreso 058. Nunes: {{ number_format($comisionNunesPct, 2) }}% sobre venta neta total de la sede Nunes.</div>
+            <div class="field field-wide muted">Ventas propias y Movistar: venta neta (cantidad × precio neto, igual que gerencial y Profit). Movistar no incluye facturas de servicio técnico. Técnico: facturas ST propias menos egreso 058, sin retención; también aparece en Supervisores/vendedores con el desglose de Otros productos. Digital: {{ number_format($comisionDigitalPct, 2) }}% sobre ventas de subordinados. PCP: {{ number_format($comisionPcpPct, 3) }}% y Sambil: {{ number_format($comisionSambilPct, 2) }}% sobre venta neta de la tienda. Nunes: {{ number_format($comisionNunesPct, 2) }}% sobre venta neta total de la sede Nunes.</div>
             <div class="field" style="display:flex; align-items:flex-end;">
                 <button class="btn primary" type="submit">Guardar</button>
             </div>

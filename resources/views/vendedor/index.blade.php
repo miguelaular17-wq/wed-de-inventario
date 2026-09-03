@@ -430,9 +430,8 @@ main:has(.cat-page) {
         document.getElementById('cashea-punit').textContent   = precioUnit  > 0 ? fmt(precioUnit)  : '—';
         document.getElementById('cashea-pmayor').textContent  = precioMayor > 0 ? fmt(precioMayor) : '—';
         
-        const descEspecial = precioUnit * {{ $descFactor }};
         const netoEspecial = precioUnit * {{ $netoFactor }};
-        document.getElementById('cashea-descuento').textContent = precioUnit > 0 ? `${fmt(descEspecial)} (Neto: ${fmt(netoEspecial)})` : '—';
+        document.getElementById('cashea-descuento').textContent = precioUnit > 0 ? fmt(netoEspecial) : '—';
 
         document.getElementById('cashea-resultado').style.display = 'none';
 

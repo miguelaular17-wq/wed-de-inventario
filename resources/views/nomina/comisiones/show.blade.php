@@ -36,7 +36,11 @@
 
     @php
         $liquidacionesSt = $liquidaciones->filter(fn ($l) => $l->esServicioTecnico())->values();
-        $liquidacionesVentas = $liquidaciones->reject(fn ($l) => $l->esServicioTecnico())->values();
+        $liquidacionesVentas = $liquidaciones->values();
+        $modosAgregados = array_merge(
+            \App\Models\Nomina\NominaEmpleado::modosComisionAgregadosSede(),
+            \App\Models\Nomina\NominaEmpleado::modosComisionAgregadosEquipo()
+        );
         $totalBruto = (float) $liquidaciones->sum('comision_total');
         $totalAbonos = (float) $liquidaciones->sum('abonos');
         $totalRetencion = (float) $liquidaciones->sum('retencion');
@@ -78,41 +82,66 @@
             </thead>
             <tbody>
                 @forelse($liquidacionesVentas as $liq)
+                    @php
+                        $esSt = $liq->esServicioTecnico();
+                        $esAgregado = in_array($liq->modo, $modosAgregados, true);
+                        $ventaMostrada = $esSt ? $liq->ventasOtrosProductos() : $liq->totalVentas();
+                        $comisionMostrada = $esSt ? $liq->comisionOtrosProductos() : (float) $liq->comision_total;
+                        $abonosMostrados = (float) $liq->abonos;
+                        $retencionMostrada = $esSt ? $liq->retencionOtrosProductos() : (float) $liq->retencion;
+                        $descuentosMostrados = $esSt ? 0.0 : ((float) $liq->descuentos + (float) $liq->prestamos);
+                        $pagarMostrado = $esSt
+                            ? round($comisionMostrada + $abonosMostrados - $retencionMostrada, 2)
+                            : (float) $liq->total_pagar;
+                    @endphp
                     <tr data-empleado-buscar="{{ $buscarAttrs($liq) }}">
                         <td>
                             <a href="{{ route('nomina.empleados.show', ['empleado' => $liq->empleado, 'tab' => 'comisiones']) }}">
                                 {{ $liq->empleado->nombre() }}
                             </a>
-                            @if($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_SEDE)
+                            @if($esSt)
+                                <div class="muted" style="font-size:.72rem;">ST · Otros productos</div>
+                            @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_SEDE)
                                 <div class="muted" style="font-size:.72rem;">Sede {{ $liq->empleado->nombreSede() }}</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_EQUIPO)
                                 <div class="muted" style="font-size:.72rem;">Ventas del equipo</div>
+                            @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_DIGITAL)
+                                <div class="muted" style="font-size:.72rem;">Digital · ventas de trabajadores</div>
+                            @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_PCP)
+                                <div class="muted" style="font-size:.72rem;">PCP · venta neta tienda</div>
+                            @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_SAMBIL)
+                                <div class="muted" style="font-size:.72rem;">Sambil · venta neta tienda</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_NUNES)
                                 <div class="muted" style="font-size:.72rem;">Venta neta sede Nunes</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_MOVISTAR)
                                 <div class="muted" style="font-size:.72rem;">Sin facturas ST</div>
                             @endif
                         </td>
-                        @if(in_array($liq->modo, [\App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_SEDE, \App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_EQUIPO, \App\Models\Nomina\NominaEmpleado::COMISION_NUNES], true))
+                        @if($esAgregado)
                             <td>
-                                <strong>${{ number_format($liq->totalVentas(), 2) }}</strong>
+                                <strong>${{ number_format($ventaMostrada, 2) }}</strong>
                                 <div class="muted" style="font-size:.72rem;">Venta neta</div>
                             </td>
                             <td class="muted">—</td>
                             <td class="muted">—</td>
                         @else
                             <td>
-                                <strong>${{ number_format($liq->totalVentas(), 2) }}</strong>
-                                <div class="muted" style="font-size:.72rem;">Tel + otros (neto)</div>
+                                <strong>${{ number_format($ventaMostrada, 2) }}</strong>
+                                <div class="muted" style="font-size:.72rem;">{{ $esSt ? 'Otros productos (neto)' : 'Tel + otros (neto)' }}</div>
                             </td>
                             <td>${{ number_format($liq->base_telefonia, 2) }}</td>
                             <td>${{ number_format($liq->base_otros, 2) }}</td>
                         @endif
-                        <td>${{ number_format($liq->comision_total, 2) }}</td>
-                        <td>${{ number_format($liq->abonos, 2) }}</td>
-                        <td>${{ number_format($liq->retencion, 2) }}</td>
-                        <td>${{ number_format((float) $liq->descuentos + (float) $liq->prestamos, 2) }}</td>
-                        <td><strong>${{ number_format($liq->total_pagar, 2) }}</strong></td>
+                        <td>${{ number_format($comisionMostrada, 2) }}</td>
+                        <td>${{ number_format($abonosMostrados, 2) }}</td>
+                        <td>${{ number_format($retencionMostrada, 2) }}</td>
+                        <td>${{ number_format($descuentosMostrados, 2) }}</td>
+                        <td>
+                            <strong>${{ number_format($pagarMostrado, 2) }}</strong>
+                            @if($esSt)
+                                <div class="muted" style="font-size:.72rem;">Parte ST abajo, sin retención</div>
+                            @endif
+                        </td>
                     </tr>
                 @empty
                     <tr><td colspan="9" class="muted">Sin liquidaciones de supervisores o vendedores en esta quincena.</td></tr>
@@ -131,7 +160,6 @@
                     <th>Empleado</th>
                     <th>Facturas ST</th>
                     <th>Egresos 058</th>
-                    <th>Otros productos</th>
                     <th>Comisión</th>
                     <th>Abonos</th>
                     <th>Retención</th>
@@ -141,6 +169,11 @@
             </thead>
             <tbody>
                 @forelse($liquidacionesSt as $liq)
+                    @php
+                        $comisionSt = $liq->comisionSt();
+                        $descuentosSt = (float) $liq->descuentos + (float) $liq->prestamos;
+                        $pagarSt = round($comisionSt - $descuentosSt, 2);
+                    @endphp
                     <tr data-empleado-buscar="{{ $buscarAttrs($liq) }}">
                         <td>
                             <a href="{{ route('nomina.empleados.show', ['empleado' => $liq->empleado, 'tab' => 'comisiones']) }}">
@@ -165,23 +198,17 @@
                                 <span class="muted">—</span>
                             @endif
                         </td>
+                        <td>${{ number_format($comisionSt, 2) }}</td>
+                        <td>$0.00</td>
                         <td>
-                            @if($liq->ventasOtrosProductos() > 0)
-                                <div>Tel: ${{ number_format($liq->base_telefonia, 2) }}</div>
-                                <div>Otros: ${{ number_format($liq->base_otros, 2) }}</div>
-                                <div class="muted" style="font-size:.72rem;">Total: ${{ number_format($liq->ventasOtrosProductos(), 2) }}</div>
-                            @else
-                                <span class="muted">—</span>
-                            @endif
+                            $0.00
+                            <div class="muted" style="font-size:.72rem;">Sin retención</div>
                         </td>
-                        <td>${{ number_format($liq->comision_total, 2) }}</td>
-                        <td>${{ number_format($liq->abonos, 2) }}</td>
-                        <td>${{ number_format($liq->retencion, 2) }}</td>
-                        <td>${{ number_format((float) $liq->descuentos + (float) $liq->prestamos, 2) }}</td>
-                        <td><strong>${{ number_format($liq->total_pagar, 2) }}</strong></td>
+                        <td>${{ number_format($descuentosSt, 2) }}</td>
+                        <td><strong>${{ number_format($pagarSt, 2) }}</strong></td>
                     </tr>
                 @empty
-                    <tr><td colspan="9" class="muted">Sin liquidaciones de servicio técnico en esta quincena.</td></tr>
+                    <tr><td colspan="8" class="muted">Sin liquidaciones de servicio técnico en esta quincena.</td></tr>
                 @endforelse
             </tbody>
         </table>
