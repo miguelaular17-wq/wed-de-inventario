@@ -230,6 +230,7 @@ class PayrollPeriodService
 
             $this->deductions->revertirPrestamosComisionDelPeriodo($periodo->id);
             $this->loanPlans->deshacerComisionPeriodo($periodo->id);
+            $this->ajustes->deshacerComisionPeriodo($periodo->id);
             $this->commissions->limpiarPeriodo($periodo);
             $this->settlements->limpiarPeriodo($periodo);
 

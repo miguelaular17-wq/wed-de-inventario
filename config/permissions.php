@@ -20,6 +20,7 @@ return [
         'nomina' => 'Nómina',
         'nomina.equipo' => 'Nómina del equipo (tras calcular, sin comisiones)',
         'marketing.publicidad_equipo' => 'Ver publicidad del equipo',
+        'meta' => 'Metas de quincena (marcar productos)',
         'gerencial' => 'Dashboard gerencial',
         'gerencial.devoluciones' => 'Devoluciones en ventas',
         'gerencial.valorizados' => 'Valorizados de inventarios',
@@ -35,7 +36,7 @@ return [
      */
     'groups' => [
         'Operaciones' => ['operacion'],
-        'Compras y Marketing' => ['compras', 'marketing.publicidad_equipo'],
+        'Compras y Marketing' => ['compras', 'marketing.publicidad_equipo', 'meta'],
         'Reportes' => ['compras.reporte_sede'],
         'Finanzas' => ['finanzas.ver', 'finanzas.editar', 'finanzas.eliminar'],
         'Conciliaciones bancarias' => ['conciliaciones'],

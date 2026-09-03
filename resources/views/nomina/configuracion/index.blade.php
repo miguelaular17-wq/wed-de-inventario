@@ -56,7 +56,7 @@
                 <label>Participación Servicio Técnico (%)</label>
                 <input type="number" step="0.01" min="0" max="100" name="comision_servicio_tecnico_pct" value="{{ number_format($comisionServicioTecnicoPct, 2, '.', '') }}" required>
             </div>
-            <div class="field field-wide muted">Ventas propias y Movistar: venta neta (cantidad × precio neto, igual que gerencial y Profit). Movistar no incluye facturas ST de Virtudes ni Movistar. Técnico: comisiona ST solo en Virtudes/Movistar; 058 contra esas líneas. Nunes: {{ number_format($comisionNunesPct, 2) }}% sobre venta neta total de la sede Nunes.</div>
+            <div class="field field-wide muted">Ventas propias y Movistar: venta neta (cantidad × precio neto, igual que gerencial y Profit). Movistar no incluye facturas de servicio técnico. Técnico: facturas ST propias menos egreso 058. Nunes: {{ number_format($comisionNunesPct, 2) }}% sobre venta neta total de la sede Nunes.</div>
             <div class="field" style="display:flex; align-items:flex-end;">
                 <button class="btn primary" type="submit">Guardar</button>
             </div>

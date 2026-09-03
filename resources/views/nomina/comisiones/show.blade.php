@@ -90,7 +90,7 @@
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_NUNES)
                                 <div class="muted" style="font-size:.72rem;">Venta neta sede Nunes</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_MOVISTAR)
-                                <div class="muted" style="font-size:.72rem;">Sin facturas ST (Virtudes/Movistar)</div>
+                                <div class="muted" style="font-size:.72rem;">Sin facturas ST</div>
                             @endif
                         </td>
                         @if(in_array($liq->modo, [\App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_SEDE, \App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_EQUIPO, \App\Models\Nomina\NominaEmpleado::COMISION_NUNES], true))

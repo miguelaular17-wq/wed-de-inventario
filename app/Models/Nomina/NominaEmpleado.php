@@ -221,7 +221,7 @@ class NominaEmpleado extends Model
             self::COMISION_SUPERVISOR_EQUIPO => 'Supervisor de equipo/Marketing: ventas de subordinados (0,10%)',
             self::COMISION_SERVICIO_TECNICO => 'Servicio Técnico: ST − 058 × 50%; el resto como vendedor (0,20%/1%)',
             self::COMISION_NUNES => 'Nunes: venta neta total de la sede Nunes (0,60%)',
-            self::COMISION_MOVISTAR => 'Movistar: venta neta propia sin facturas ST en Virtudes/Movistar (telefonía 0,20% / resto 1%)',
+            self::COMISION_MOVISTAR => 'Movistar: venta neta propia sin facturas ST (telefonía 0,20% / resto 1%)',
             self::COMISION_NINGUNA => 'Sin comisión',
         ];
     }

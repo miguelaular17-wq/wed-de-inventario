@@ -204,7 +204,7 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(1, $resultado['lineas']);
     }
 
-    public function test_movistar_no_excluye_st_de_otras_sedes(): void
+    public function test_movistar_excluye_st_de_cualquier_sede(): void
     {
         $empleado = $this->empleado(NominaEmpleado::COMISION_MOVISTAR, 'MOV-002');
         $periodo = $this->periodo();
@@ -213,7 +213,7 @@ class CommissionCalculationServiceTest extends TestCase
 
         $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
 
-        $this->assertSame(500.0, $resultado['base']);
+        $this->assertSame(200.0, $resultado['base']);
     }
 
     public function test_servicio_tecnico_resta_egresos_058_en_usd_del_mismo_periodo(): void
@@ -281,6 +281,42 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(49.76, $resultado['base_otros']);
         $this->assertSame(0.5, $resultado['comision_otros']);
         $this->assertSame(123.31, $resultado['total']);
+    }
+
+    public function test_servicio_tecnico_cuenta_facturas_st_aunque_no_sean_de_virtudes(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_SERVICIO_TECNICO, 'TEC-DORAL', tecnico: true);
+        $periodo = $this->periodo();
+        $this->venta('TEC-DORAL', 400, ['nombre_producto' => 'SERVICIO TECNICO', 'sede' => 'DORAL']);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(400.0, $resultado['ventas_st']);
+        $this->assertSame(200.0, $resultado['comision_st']);
+    }
+
+    public function test_recalculo_vuelve_a_aplicar_abonos_de_la_quincena(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_VENTAS_PROPIAS, 'VEND-ABO');
+        $periodo = $this->periodo();
+        $this->venta('VEND-ABO', 1000);
+        $abono = NominaComisionAbono::create([
+            'empleado_id' => $empleado->id,
+            'fecha' => '2026-08-18',
+            'monto' => 20,
+            'estado' => 'PENDIENTE',
+        ]);
+
+        $calculo = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+        $liq = app(CommissionSettlementService::class)->liquidar($periodo, $empleado, $calculo);
+        $this->assertSame(20.0, (float) $liq->abonos);
+
+        app(CommissionSettlementService::class)->limpiarPeriodo($periodo);
+        $liq2 = app(CommissionSettlementService::class)->liquidar($periodo, $empleado, $calculo);
+
+        $this->assertSame(20.0, (float) $liq2->abonos);
+        $this->assertSame('APLICADO', $abono->fresh()->estado);
+        $this->assertSame($periodo->id, $abono->fresh()->periodo_id);
     }
 
     public function test_liquidacion_suma_abono_aplica_retencion_y_no_usa_neto(): void

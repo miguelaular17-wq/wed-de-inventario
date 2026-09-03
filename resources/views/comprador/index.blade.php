@@ -167,6 +167,9 @@ table.data-table tbody tr.row-mala-distribucion:hover {
     @if(auth()->user()->isMarketing() || auth()->user()->isAdmin())
         <a href="{{ $tabHref('publicidad') }}" class="tab-btn {{ $activeTab === 'publicidad' ? 'active' : '' }}" style="text-decoration: none;">Efectividad Publicidad</a>
     @endif
+    @if(!empty($puedeMarcarMeta))
+        <a href="{{ route('metas.index') }}" class="tab-btn" style="text-decoration: none;">Metas quincena</a>
+    @endif
     @if(!auth()->user()->isComprador() && !auth()->user()->isMarketing())
         <a href="{{ $tabHref('cobranzas') }}" class="tab-btn {{ $activeTab === 'cobranzas' ? 'active' : '' }}" style="text-decoration: none;">Cobranzas</a>
     @endif
@@ -943,6 +946,9 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                         @if(auth()->user()->isMarketing() || auth()->user()->isAdmin())
                             <th style="width: 120px; text-align: center;">Publicidad</th>
                         @endif
+                        @if(!empty($puedeMarcarMeta))
+                            <th style="width: 110px; text-align: center;">Meta</th>
+                        @endif
                         <th style="width: 110px; text-align: center;">Últ. Venta</th>
                         <th style="width: 110px; text-align: center;">Últ. Compra</th>
                     </tr>
@@ -1025,6 +1031,22 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                                     </button>
                                 </td>
                             @endif
+                            @if(!empty($puedeMarcarMeta))
+                                <td style="text-align: center;">
+                                    @php
+                                        $sedesMetaItem = $metaSedesPorProducto[$item['id']] ?? [];
+                                        $tieneMeta = count($sedesMetaItem) > 0;
+                                    @endphp
+                                    <button type="button"
+                                            class="btn {{ $tieneMeta ? 'primary' : 'secondary' }} btn-meta-producto"
+                                            data-producto-id="{{ $item['id'] }}"
+                                            data-codigo="{{ $item['codigo'] ?? '' }}"
+                                            data-sedes-meta="{{ json_encode(array_values($sedesMetaItem)) }}"
+                                            style="padding: 4px 8px; font-size: 0.75rem; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                                        {{ $tieneMeta ? '🎯 Meta ('.count($sedesMetaItem).')' : '➕ Meta' }}
+                                    </button>
+                                </td>
+                            @endif
                             <td style="text-align: center; font-size: 0.8rem;">
                                 @if($item['ultima_venta'])
                                     <span style="{{ $item['dias_sin_venta'] > 90 ? 'color: #dc2626; font-weight: 600;' : '' }}">{{ $item['ultima_venta'] }}</span>
@@ -1042,7 +1064,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ (auth()->user()->isMarketing() || auth()->user()->isAdmin()) ? 15 : 14 }}" style="text-align: center; color: var(--muted); padding: 24px;">
+                            <td colspan="{{ ((auth()->user()->isMarketing() || auth()->user()->isAdmin()) ? 15 : 14) + (!empty($puedeMarcarMeta) ? 1 : 0) }}" style="text-align: center; color: var(--muted); padding: 24px;">
                                 No se encontraron productos con los filtros seleccionados.
                             </td>
                         </tr>
@@ -1181,6 +1203,20 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         </div>
     </div>
 </div>
+
+@if(!empty($puedeMarcarMeta))
+<div id="meta-modal" class="modal-overlay" hidden style="z-index: 1200;" data-sedes='@json($sedesMetaDisponibles ?? [])' onclick="if(event.target===this)cerrarMetaModal()">
+    <div class="panel modal-box" style="width: 95%; max-width: 420px; position: relative; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
+        <button type="button" class="modal-close" onclick="cerrarMetaModal()" aria-label="Cerrar">×</button>
+        <h3 style="margin: 0 0 6px; font-size: 1.15rem; color: var(--blue);">Meta de quincena</h3>
+        <p class="muted" style="margin: 0 0 12px; font-size: 0.85rem;">Producto <span id="meta-modal-codigo" style="font-family: monospace;"></span>. Elige la sede; se guarda el stock actual como cantidad inicial.</p>
+        <div id="meta-modal-sedes" style="max-height: 55vh; overflow: auto;"></div>
+        <div style="margin-top: 12px; text-align: right;">
+            <a href="{{ route('metas.index') }}" class="btn secondary" style="font-size: .8rem;">Ver panel de metas</a>
+        </div>
+    </div>
+</div>
+@endif
 
 <!-- Modal de Desglose de Compras -->
 <div id="comprar-modal" class="modal-overlay" style="display: none; z-index: 1100;">
@@ -1360,6 +1396,129 @@ async function toggleAdvertising(productId, btn) {
         btn.disabled = false;
     }
 }
+
+@if(!empty($puedeMarcarMeta))
+const sedesMetaFallback = @json(array_values($sedesMetaDisponibles ?? []));
+let metaProductoActual = null;
+let metaBtnActual = null;
+
+function sedesMetaLista() {
+    const modal = document.getElementById('meta-modal');
+    let fromModal = [];
+    try {
+        fromModal = JSON.parse(modal?.getAttribute('data-sedes') || '[]');
+    } catch (e) {
+        fromModal = [];
+    }
+    return (Array.isArray(fromModal) && fromModal.length) ? fromModal : sedesMetaFallback;
+}
+
+function abrirMetaProducto(btn) {
+    const modal = document.getElementById('meta-modal');
+    const list = document.getElementById('meta-modal-sedes');
+    if (!modal || !list) {
+        alert('No se pudo abrir el selector de sede.');
+        return;
+    }
+    metaProductoActual = Number(btn.dataset.productoId);
+    metaBtnActual = btn;
+    let sedesActivas = [];
+    try {
+        sedesActivas = JSON.parse(btn.getAttribute('data-sedes-meta') || '[]');
+    } catch (e) {
+        sedesActivas = [];
+    }
+    if (!Array.isArray(sedesActivas)) sedesActivas = [];
+
+    document.getElementById('meta-modal-codigo').innerText = btn.dataset.codigo || ('#' + metaProductoActual);
+    const sedes = sedesMetaLista();
+    if (!sedes.length) {
+        list.innerHTML = '<p class="muted">No hay sedes configuradas.</p>';
+    } else {
+        list.innerHTML = sedes.map(sede => {
+            const activa = sedesActivas.includes(sede);
+            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:${activa ? '#eff6ff' : '#fff'};">
+                <span style="font-weight:600;">${sede}</span>
+                <button type="button" class="btn ${activa ? 'primary' : 'secondary'}" style="padding:4px 10px;font-size:.75rem;"
+                    data-sede="${sede}">${activa ? 'Quitar meta' : 'Marcar meta'}</button>
+            </div>`;
+        }).join('');
+        list.querySelectorAll('button[data-sede]').forEach(b => {
+            b.addEventListener('click', () => toggleMetaSede(b.dataset.sede, b));
+        });
+    }
+    modal.hidden = false;
+    modal.style.display = 'flex';
+}
+
+function cerrarMetaModal() {
+    const modal = document.getElementById('meta-modal');
+    if (modal) {
+        modal.hidden = true;
+        modal.style.display = 'none';
+    }
+    metaProductoActual = null;
+    metaBtnActual = null;
+}
+
+async function toggleMetaSede(sede, btn) {
+    if (!metaProductoActual || !metaBtnActual) return;
+    let sedesActivas = [];
+    try {
+        sedesActivas = JSON.parse(metaBtnActual.getAttribute('data-sedes-meta') || '[]');
+    } catch (e) {
+        sedesActivas = [];
+    }
+    if (!Array.isArray(sedesActivas)) sedesActivas = [];
+    const quitar = sedesActivas.includes(sede);
+    btn.disabled = true;
+    try {
+        const response = await fetch(quitar ? "{{ route('metas.destroy') }}" : "{{ route('metas.store') }}", {
+            method: quitar ? 'DELETE' : 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ producto_id: metaProductoActual, sede })
+        });
+        const res = await response.json();
+        if (!response.ok || !res.success) {
+            alert(res.message || 'No se pudo actualizar la meta.');
+            return;
+        }
+        let next = sedesActivas.slice();
+        if (quitar) {
+            next = next.filter(s => s !== sede);
+        } else if (!next.includes(sede)) {
+            next.push(sede);
+        }
+        metaBtnActual.setAttribute('data-sedes-meta', JSON.stringify(next));
+        metaBtnActual.innerText = next.length ? ('🎯 Meta (' + next.length + ')') : '➕ Meta';
+        metaBtnActual.className = 'btn ' + (next.length ? 'primary' : 'secondary') + ' btn-meta-producto';
+        metaBtnActual.style.padding = '4px 8px';
+        metaBtnActual.style.fontSize = '0.75rem';
+        metaBtnActual.style.borderRadius = '6px';
+        metaBtnActual.style.fontWeight = '600';
+        metaBtnActual.style.cursor = 'pointer';
+        abrirMetaProducto(metaBtnActual);
+    } catch (e) {
+        console.error(e);
+        alert('Error de conexión.');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.btn-meta-producto');
+    if (btn) {
+        e.preventDefault();
+        abrirMetaProducto(btn);
+    }
+});
+@endif
 
 // Restore active tab on page load
 document.addEventListener('DOMContentLoaded', () => {

@@ -766,6 +766,13 @@ class CompradorController extends Controller
         $advertisedProductIds = [];
         $puedeVerEquipoPublicidad = auth()->user()->canViewTeamPublicidad();
         $publicidadUsuarios = collect();
+        $puedeMarcarMeta = auth()->user()->canAccess('meta');
+        $metaSedesPorProducto = $puedeMarcarMeta
+            ? app(\App\Services\MetaQuincenaService::class)->sedesMetaPorProducto()
+            : [];
+        $sedesMetaDisponibles = $puedeMarcarMeta
+            ? array_values(app(\App\Services\MetaQuincenaService::class)->sedesDisponibles())
+            : [];
 
         if (($needsPublicidad || $needsAnalysis) && config('database.default') === 'pgsql') {
             $authId = auth()->id();
@@ -1013,6 +1020,9 @@ class CompradorController extends Controller
             'advertisedProductIds' => $advertisedProductIds,
             'puedeVerEquipoPublicidad' => $puedeVerEquipoPublicidad,
             'publicidadUsuarios' => $publicidadUsuarios,
+            'puedeMarcarMeta' => $puedeMarcarMeta,
+            'metaSedesPorProducto' => $metaSedesPorProducto,
+            'sedesMetaDisponibles' => $sedesMetaDisponibles,
             // FASE 2
             'topInmovilizados' => $topInmovilizados ?? collect(),
             'topCompraUrgente' => $topCompraUrgente ?? collect(),

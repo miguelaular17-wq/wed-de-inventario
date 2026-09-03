@@ -221,6 +221,22 @@ class AjusteService
         return round((float) $items->sum('monto'), 2);
     }
 
+    public function deshacerComisionPeriodo(int $periodoId): int
+    {
+        if (! $this->disponible()) {
+            return 0;
+        }
+
+        return NominaEmpleadoAjuste::query()
+            ->where('nomina_periodo_id', $periodoId)
+            ->where('destino', NominaEmpleadoAjuste::DESTINO_COMISION)
+            ->where('estado', NominaEmpleadoAjuste::APLICADO)
+            ->update([
+                'estado' => NominaEmpleadoAjuste::PENDIENTE,
+                'nomina_periodo_id' => null,
+            ]);
+    }
+
     public function deshacerPeriodo(int $periodoId): int
     {
         if (! $this->disponible()) {

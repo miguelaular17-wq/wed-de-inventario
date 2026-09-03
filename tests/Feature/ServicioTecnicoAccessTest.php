@@ -21,6 +21,20 @@ class ServicioTecnicoAccessTest extends TestCase
         $this->ensureStOrdenesExtras();
     }
 
+    public function test_gerente_abre_servicio_sin_sede_seleccionada(): void
+    {
+        $gerente = User::create([
+            'name' => 'Gerente ST',
+            'email' => 'gerente-st-'.uniqid().'@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_GERENTE,
+        ]);
+
+        $this->actingAs($gerente)
+            ->get(route('servicio.ordenes.index'))
+            ->assertOk();
+    }
+
     public function test_tecnico_can_use_servicio_and_cannot_use_finanzas_or_gerencial(): void
     {
         $user = $this->makeTecnico();

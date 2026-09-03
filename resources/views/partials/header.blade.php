@@ -72,7 +72,7 @@
         }
     }
 
-    if ($u->canAccess('servicio')) {
+    if ($u->canAccess('servicio') && $u->role !== 'admin') {
         $servicioItems = [
             $link('Dashboard', route('servicio.dashboard'), request()->routeIs('servicio.dashboard')),
             $link('Órdenes', route('servicio.ordenes.index'), request()->routeIs('servicio.ordenes.*')),
@@ -131,6 +131,10 @@
 
     if ($u->role !== 'admin' && ! $u->canAccess('nomina') && $u->canAccess('nomina.equipo')) {
         $nav[] = $link('Nómina del equipo', route('nomina.equipo.index'), request()->routeIs('nomina.equipo.*'));
+    }
+
+    if ($u->role !== 'admin' && app(\App\Services\MetaQuincenaService::class)->puedeVerMetas($u)) {
+        $nav[] = $link('Metas', route('metas.index'), request()->routeIs('metas.*'));
     }
 
     if ($u->role !== 'admin' && $u->canAccess('nomina')) {
@@ -244,6 +248,15 @@
 
         <div class="app-header-actions">
             @if($u->isComprador())
+                @if(session('sede_local'))
+                    <form method="POST" action="{{ route('sede.change') }}" class="app-inline-form">
+                        @csrf
+                        <button type="submit" class="btn secondary app-sede-btn">{{ session('sede_local') }} · Cambiar</button>
+                    </form>
+                @else
+                    <a href="{{ route('sede.select') }}" class="btn secondary app-sede-btn">Seleccionar sede</a>
+                @endif
+            @elseif($u->isGerente())
                 @if(session('sede_local'))
                     <form method="POST" action="{{ route('sede.change') }}" class="app-inline-form">
                         @csrf

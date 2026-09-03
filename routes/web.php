@@ -16,6 +16,7 @@ use App\Http\Controllers\VentasController;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureSedeSelected;
 use App\Http\Controllers\CompradorController;
+use App\Http\Controllers\MetaQuincenaController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PedidoSolicitadoController;
 use App\Http\Controllers\ServicioTecnico\DashboardController as ServicioDashboardController;
@@ -226,6 +227,21 @@ Route::middleware(['auth', 'permission:compras'])->prefix('compras')->group(func
     // Existencias (antes edurar)
     Route::get('/existencias', [\App\Http\Controllers\ExistenciasController::class, 'index'])->name('comprador.existencias');
     Route::get('/existencias/subcategorias', [\App\Http\Controllers\ExistenciasController::class, 'getSubcategorias'])->name('comprador.existencias.subcategorias');
+});
+
+// Metas de quincena (marketing marca; supervisores ven y asignan responsable)
+Route::middleware(['auth'])->prefix('metas')->name('metas.')->group(function () {
+    Route::get('/', [MetaQuincenaController::class, 'index'])->name('index');
+    Route::post('/', [MetaQuincenaController::class, 'store'])
+        ->middleware('permission:meta')
+        ->name('store');
+    Route::delete('/', [MetaQuincenaController::class, 'destroy'])
+        ->middleware('permission:meta')
+        ->name('destroy');
+    Route::patch('/{meta}/responsable', [MetaQuincenaController::class, 'asignarResponsable'])->name('responsable');
+    Route::get('/sedes-activas', [MetaQuincenaController::class, 'sedesMeta'])
+        ->middleware('permission:meta')
+        ->name('sedes');
 });
 
 // Vendedor specific routes (Now public for inventory checking)

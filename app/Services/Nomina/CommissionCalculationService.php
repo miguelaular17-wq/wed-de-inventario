@@ -17,9 +17,6 @@ class CommissionCalculationService
 
     private const SEDE_NUNES = 'NUNES';
 
-    /** Sedes donde las facturas de servicio técnico tienen reglas especiales. */
-    private const SEDES_ST_FACTURAS = ['VIRTUDES', 'MOVISTAR'];
-
     /** @var array<string, bool>|null */
     private ?array $flags = null;
 
@@ -257,7 +254,7 @@ class CommissionCalculationService
     }
 
     /**
-     * Excluye facturas ST solo en sedes Virtudes y Movistar (modo Movistar).
+     * Excluye facturas donde todas las líneas son servicio técnico (modo Movistar).
      *
      * @param  \Illuminate\Support\Collection<int, object>  $lineas
      * @return \Illuminate\Support\Collection<int, object>
@@ -266,28 +263,9 @@ class CommissionCalculationService
     {
         return $lineas
             ->groupBy(fn ($linea) => $this->claveDocumento($linea))
-            ->reject(fn ($grupo) => $this->esFacturaStExcluibleMovistar($grupo))
+            ->reject(fn ($grupo) => $grupo->every(fn ($linea) => $this->esLineaServicioTecnico($linea)))
             ->flatten(1)
             ->values();
-    }
-
-    /**
-     * @param  \Illuminate\Support\Collection<int, object>  $lineasFactura
-     */
-    private function esFacturaStExcluibleMovistar(Collection $lineasFactura): bool
-    {
-        if (! $lineasFactura->every(fn ($linea) => $this->esLineaServicioTecnico($linea))) {
-            return false;
-        }
-
-        return $this->esSedeStFactura($lineasFactura->first());
-    }
-
-    private function esSedeStFactura(object $linea): bool
-    {
-        $sede = mb_strtoupper(trim((string) ($linea->sede ?? '')), 'UTF-8');
-
-        return in_array($sede, self::SEDES_ST_FACTURAS, true);
     }
 
     /**
@@ -399,7 +377,7 @@ class CommissionCalculationService
             : $this->lineasVentas($periodo, $claves)->get();
 
         $lineasSt = $lineas
-            ->filter(fn ($linea) => $this->esLineaServicioTecnico($linea) && $this->esSedeStFactura($linea))
+            ->filter(fn ($linea) => $this->esLineaServicioTecnico($linea))
             ->values();
         $lineasVenta = $lineas->reject(fn ($linea) => $this->esLineaServicioTecnico($linea))->values();
 

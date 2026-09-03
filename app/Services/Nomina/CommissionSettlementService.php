@@ -23,22 +23,11 @@ class CommissionSettlementService
             NominaLiquidacionComision::query()->where('periodo_id', $periodo->id)->delete();
         }
 
-        if (Schema::hasTable('nomina_comision_abonos')) {
-            NominaComisionAbono::query()
-                ->where('periodo_id', $periodo->id)
-                ->update(['periodo_id' => null, 'estado' => 'PENDIENTE']);
-        }
-
         if (Schema::hasTable('nomina_comision_descuentos')) {
             NominaComisionDescuento::query()
                 ->where('periodo_id', $periodo->id)
                 ->where('tipo', 'PRESTAMO')
                 ->delete();
-
-            NominaComisionDescuento::query()
-                ->where('periodo_id', $periodo->id)
-                ->where('tipo', '!=', 'PRESTAMO')
-                ->update(['periodo_id' => null, 'estado' => 'PENDIENTE']);
         }
     }
 
@@ -95,8 +84,15 @@ class CommissionSettlementService
 
         $items = NominaComisionAbono::query()
             ->where('empleado_id', $empleado->id)
-            ->where('estado', 'PENDIENTE')
-            ->whereBetween('fecha', [$periodo->fecha_inicio->toDateString(), $periodo->fecha_fin->toDateString()])
+            ->where(function ($q) use ($periodo) {
+                $q->where('periodo_id', $periodo->id)
+                    ->orWhere(function ($q2) use ($periodo) {
+                        [$desde, $hasta] = $this->rangoFechasComision($periodo);
+                        $q2->where('estado', 'PENDIENTE')
+                            ->whereDate('fecha', '>=', $desde)
+                            ->whereDate('fecha', '<=', $hasta);
+                    });
+            })
             ->get();
 
         foreach ($items as $item) {
@@ -117,9 +113,16 @@ class CommissionSettlementService
 
         $items = NominaComisionDescuento::query()
             ->where('empleado_id', $empleado->id)
-            ->where('estado', 'PENDIENTE')
             ->where('tipo', '!=', 'PRESTAMO')
-            ->whereBetween('fecha', [$periodo->fecha_inicio->toDateString(), $periodo->fecha_fin->toDateString()])
+            ->where(function ($q) use ($periodo) {
+                $q->where('periodo_id', $periodo->id)
+                    ->orWhere(function ($q2) use ($periodo) {
+                        [$desde, $hasta] = $this->rangoFechasComision($periodo);
+                        $q2->where('estado', 'PENDIENTE')
+                            ->whereDate('fecha', '>=', $desde)
+                            ->whereDate('fecha', '<=', $hasta);
+                    });
+            })
             ->get();
 
         foreach ($items as $item) {
@@ -130,5 +133,22 @@ class CommissionSettlementService
         }
 
         return round((float) $items->sum('monto'), 2);
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    private function rangoFechasComision(NominaPeriodo $periodo): array
+    {
+        $inicio = $periodo->fecha_inicio->toDateString();
+        $fin = $periodo->fecha_fin->toDateString();
+        $pago = $periodo->fecha_pago_comision?->toDateString()
+            ?? $periodo->fecha_fin?->copy()->addDays(3)->toDateString();
+
+        if ($pago && $pago > $fin) {
+            $fin = $pago;
+        }
+
+        return [$inicio, $fin];
     }
 }

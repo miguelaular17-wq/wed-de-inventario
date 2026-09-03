@@ -22,6 +22,17 @@ class EnsureSedeSelected
                 return $next($request);
             }
 
+            // Gerente (y roles sin sede propia): servicio técnico se filtra en pantalla, no exige sede operativa.
+            $user = $request->user();
+            if (
+                $request->routeIs('servicio.*')
+                && $user
+                && ! $user->scopesServicioToOwnSede()
+            ) {
+                \App\Services\Profiler::stop('Middleware::EnsureSedeSelected');
+                return $next($request);
+            }
+
             \App\Services\Profiler::stop('Middleware::EnsureSedeSelected');
             return redirect()->route('sede.select');
         }
