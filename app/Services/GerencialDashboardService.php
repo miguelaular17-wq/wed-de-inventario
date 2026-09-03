@@ -195,6 +195,7 @@ class GerencialDashboardService
             }
             $base[$sede]['unidades'] = $linea['unidades'];
             $base[$sede]['margen_usd'] = $linea['margen_usd'];
+            $base[$sede]['productos'] = $linea['productos'];
         }
 
         return $base;
@@ -232,6 +233,7 @@ class GerencialDashboardService
             ->selectRaw($this->sqlImporte('neto').' as ventas_neto')
             ->selectRaw($this->sqlImporte('costo').' as costo')
             ->selectRaw($this->sqlImporteDev().' as devoluciones_usd')
+            ->selectRaw($this->sqlProductosDistintos().' as productos')
             ->groupBy(DB::raw('UPPER(TRIM(vd.sede))'));
 
         foreach ($query->get() as $row) {
@@ -247,6 +249,7 @@ class GerencialDashboardService
             $base[$sede]['ventas_usd'] = $ventas;
             $base[$sede]['unidades'] = round((float) $row->unidades, 2);
             $base[$sede]['margen_usd'] = round($ventas - (float) $row->costo, 2);
+            $base[$sede]['productos'] = (int) $row->productos;
         }
 
         return $base;
@@ -327,6 +330,11 @@ class GerencialDashboardService
             : 'vd.precio_venta';
 
         return "SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN ABS(vd.cantidad * {$campo}) ELSE 0 END)";
+    }
+
+    public function sqlProductosDistintos(): string
+    {
+        return "COUNT(DISTINCT CASE WHEN UPPER(vd.tipo_documento)='FAC' THEN COALESCE(NULLIF(TRIM(vd.codigo_producto), ''), NULLIF(TRIM(vd.nombre_producto), ''), CAST(vd.producto_id AS TEXT)) END)";
     }
 
     /**
@@ -537,6 +545,7 @@ class GerencialDashboardService
             'ventas_bs' => 0.0,
             'unidades' => 0.0,
             'margen_usd' => 0.0,
+            'productos' => 0,
         ];
     }
 
@@ -557,7 +566,7 @@ class GerencialDashboardService
             'margen_pct' => 0.0,
         ];
         foreach ($filas as $fila) {
-            foreach (['facturas', 'devoluciones', 'devoluciones_usd', 'devoluciones_bs', 'ventas_brutas', 'ventas_usd', 'ventas_bs', 'unidades', 'margen_usd', 'inventario_unidades', 'inventario_valor', 'ajustes_unidades', 'ajustes_valor', 'anterior_ventas_usd', 'venta_neta', 'utilidad'] as $campo) {
+            foreach (['facturas', 'devoluciones', 'devoluciones_usd', 'devoluciones_bs', 'ventas_brutas', 'ventas_usd', 'ventas_bs', 'unidades', 'margen_usd', 'productos', 'inventario_unidades', 'inventario_valor', 'ajustes_unidades', 'ajustes_valor', 'anterior_ventas_usd', 'venta_neta', 'utilidad'] as $campo) {
                 $total[$campo] = ($total[$campo] ?? 0) + ($fila[$campo] ?? 0);
             }
         }
