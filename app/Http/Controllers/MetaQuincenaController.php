@@ -49,7 +49,14 @@ class MetaQuincenaController extends Controller
             'sede' => ['required', 'string', 'max:32'],
         ]);
 
-        $meta = $metas->marcar((int) $data['producto_id'], $data['sede'], $request->user());
+        try {
+            $meta = $metas->marcar((int) $data['producto_id'], $data['sede'], $request->user());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => collect($e->errors())->flatten()->first() ?: 'No se pudo marcar la meta.',
+            ], 422);
+        }
 
         return response()->json([
             'success' => true,
@@ -121,6 +128,21 @@ class MetaQuincenaController extends Controller
             'quincena' => $metas->quincenaActual(),
             'sedes' => $metas->sedesDisponibles(),
             'por_producto' => $metas->sedesMetaPorProducto(),
+        ]);
+    }
+
+    public function stockProducto(Request $request, int $producto, MetaQuincenaService $metas): JsonResponse
+    {
+        abort_unless($request->user()->canAccess('meta'), 403);
+
+        $stock = $metas->stockPorSedes($producto);
+        $activas = $metas->sedesMetaPorProducto()[$producto] ?? [];
+
+        return response()->json([
+            'success' => true,
+            'producto_id' => $producto,
+            'stock' => $stock,
+            'sedes_meta' => array_values($activas),
         ]);
     }
 }

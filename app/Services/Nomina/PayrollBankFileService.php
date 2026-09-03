@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 class PayrollBankFileService
 {
     /**
-     * @return Collection<int, object{empresa:?NominaEmpresa,empleados:int,usd:float}>
+     * @return Collection<int, object{empresa:?NominaEmpresa,empleados:int,usd:float,personas:Collection<int, object{id:int,nombre:string,cedula:string}>}>
      */
     public function resumenPorEmpresa(NominaPeriodo $periodo): Collection
     {
@@ -25,6 +25,7 @@ class PayrollBankFileService
                     'empresa' => $empleado?->empresa,
                     'empleados' => $grupo->count(),
                     'usd' => round((float) $grupo->sum('total_pagar'), 2),
+                    'personas' => $this->personasDelGrupo($grupo->map(fn ($r) => $r->empleado)->filter()),
                 ];
             })
             ->sortBy(fn ($fila) => $fila->empresa?->codigo ?? 'zzzz')
@@ -68,7 +69,7 @@ class PayrollBankFileService
     }
 
     /**
-     * @return Collection<int, object{empresa:?NominaEmpresa,empleados:int,usd:float}>
+     * @return Collection<int, object{empresa:?NominaEmpresa,empleados:int,usd:float,personas:Collection<int, object{id:int,nombre:string,cedula:string}>}>
      */
     public function resumenComisionesPorEmpresa(NominaPeriodo $periodo): Collection
     {
@@ -76,7 +77,7 @@ class PayrollBankFileService
             ? $periodo->liquidacionesComision
             : NominaLiquidacionComision::query()
                 ->where('periodo_id', $periodo->id)
-                ->with('empleado.empresa')
+                ->with(['empleado.empresa', 'empleado.cliente'])
                 ->get();
 
         return $liquidaciones
@@ -89,9 +90,27 @@ class PayrollBankFileService
                     'empresa' => $empleado?->empresa,
                     'empleados' => $grupo->count(),
                     'usd' => round((float) $grupo->sum('total_pagar'), 2),
+                    'personas' => $this->personasDelGrupo($grupo->map(fn ($liq) => $liq->empleado)->filter()),
                 ];
             })
             ->sortBy(fn ($fila) => $fila->empresa?->codigo ?? 'zzzz')
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, \App\Models\Nomina\NominaEmpleado>  $empleados
+     * @return Collection<int, object{id:int,nombre:string,cedula:string}>
+     */
+    private function personasDelGrupo(Collection $empleados): Collection
+    {
+        return $empleados
+            ->unique(fn ($empleado) => (int) $empleado->id)
+            ->map(fn ($empleado) => (object) [
+                'id' => (int) $empleado->id,
+                'nombre' => $empleado->nombre(),
+                'cedula' => $empleado->cedula(),
+            ])
+            ->sortBy(fn ($persona) => mb_strtolower($persona->nombre))
             ->values();
     }
 

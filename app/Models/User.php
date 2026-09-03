@@ -211,6 +211,10 @@ class User extends Authenticatable
             return true;
         }
 
+        if ($permission === 'meta.ver' && in_array('meta', $owned, true)) {
+            return true;
+        }
+
         if ($permission === 'marketing.publicidad_equipo' && $this->isMarketing() && (bool) $this->ver_publicidad_equipo) {
             return true;
         }

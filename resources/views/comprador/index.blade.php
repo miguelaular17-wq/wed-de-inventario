@@ -1209,7 +1209,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
     <div class="panel modal-box" style="width: 95%; max-width: 420px; position: relative; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
         <button type="button" class="modal-close" onclick="cerrarMetaModal()" aria-label="Cerrar">×</button>
         <h3 style="margin: 0 0 6px; font-size: 1.15rem; color: var(--blue);">Meta de quincena</h3>
-        <p class="muted" style="margin: 0 0 12px; font-size: 0.85rem;">Producto <span id="meta-modal-codigo" style="font-family: monospace;"></span>. Elige la sede; se guarda el stock actual como cantidad inicial.</p>
+        <p class="muted" style="margin: 0 0 12px; font-size: 0.85rem;">Producto <span id="meta-modal-codigo" style="font-family: monospace;"></span>. Solo sedes con stock; se guarda esa cantidad como inicial.</p>
         <div id="meta-modal-sedes" style="max-height: 55vh; overflow: auto;"></div>
         <div style="margin-top: 12px; text-align: right;">
             <a href="{{ route('metas.index') }}" class="btn secondary" style="font-size: .8rem;">Ver panel de metas</a>
@@ -1401,19 +1401,43 @@ async function toggleAdvertising(productId, btn) {
 const sedesMetaFallback = @json(array_values($sedesMetaDisponibles ?? []));
 let metaProductoActual = null;
 let metaBtnActual = null;
+let metaStockPorSede = {};
 
-function sedesMetaLista() {
-    const modal = document.getElementById('meta-modal');
-    let fromModal = [];
-    try {
-        fromModal = JSON.parse(modal?.getAttribute('data-sedes') || '[]');
-    } catch (e) {
-        fromModal = [];
-    }
-    return (Array.isArray(fromModal) && fromModal.length) ? fromModal : sedesMetaFallback;
+function fmtStock(n) {
+    const v = Number(n || 0);
+    return Number.isInteger(v) ? v.toLocaleString('es-VE') : v.toLocaleString('es-VE', { maximumFractionDigits: 2 });
 }
 
-function abrirMetaProducto(btn) {
+function pintarSedesMeta(list, sedesActivas) {
+    const filas = sedesMetaFallback
+        .map(sede => ({
+            sede,
+            stock: Number(metaStockPorSede[sede] ?? 0),
+            activa: sedesActivas.includes(sede),
+        }))
+        .filter(row => row.activa || row.stock > 0);
+
+    if (!filas.length) {
+        list.innerHTML = '<p class="muted">Este producto no tiene stock en ninguna sede.</p>';
+        return;
+    }
+
+    list.innerHTML = filas.map(row => {
+        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:${row.activa ? '#eff6ff' : '#fff'};">
+            <div>
+                <div style="font-weight:600;">${row.sede}</div>
+                <div class="muted" style="font-size:.78rem;">Stock: <strong style="color:var(--text);">${fmtStock(row.stock)} u.</strong></div>
+            </div>
+            <button type="button" class="btn ${row.activa ? 'primary' : 'secondary'}" style="padding:4px 10px;font-size:.75rem;"
+                data-sede="${row.sede}">${row.activa ? 'Quitar meta' : 'Marcar meta'}</button>
+        </div>`;
+    }).join('');
+    list.querySelectorAll('button[data-sede]').forEach(b => {
+        b.addEventListener('click', () => toggleMetaSede(b.dataset.sede, b));
+    });
+}
+
+async function abrirMetaProducto(btn) {
     const modal = document.getElementById('meta-modal');
     const list = document.getElementById('meta-modal-sedes');
     if (!modal || !list) {
@@ -1431,24 +1455,29 @@ function abrirMetaProducto(btn) {
     if (!Array.isArray(sedesActivas)) sedesActivas = [];
 
     document.getElementById('meta-modal-codigo').innerText = btn.dataset.codigo || ('#' + metaProductoActual);
-    const sedes = sedesMetaLista();
-    if (!sedes.length) {
-        list.innerHTML = '<p class="muted">No hay sedes configuradas.</p>';
-    } else {
-        list.innerHTML = sedes.map(sede => {
-            const activa = sedesActivas.includes(sede);
-            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:${activa ? '#eff6ff' : '#fff'};">
-                <span style="font-weight:600;">${sede}</span>
-                <button type="button" class="btn ${activa ? 'primary' : 'secondary'}" style="padding:4px 10px;font-size:.75rem;"
-                    data-sede="${sede}">${activa ? 'Quitar meta' : 'Marcar meta'}</button>
-            </div>`;
-        }).join('');
-        list.querySelectorAll('button[data-sede]').forEach(b => {
-            b.addEventListener('click', () => toggleMetaSede(b.dataset.sede, b));
-        });
-    }
+    list.innerHTML = '<p class="muted">Cargando stock por sede…</p>';
     modal.hidden = false;
     modal.style.display = 'flex';
+
+    try {
+        const response = await fetch(`{{ url('/metas/productos') }}/${metaProductoActual}/stock`, {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const res = await response.json();
+        if (!response.ok || !res.success) {
+            list.innerHTML = `<p class="muted">${res.message || 'No se pudo cargar el stock.'}</p>`;
+            return;
+        }
+        metaStockPorSede = res.stock || {};
+        if (Array.isArray(res.sedes_meta)) {
+            sedesActivas = res.sedes_meta;
+            metaBtnActual.setAttribute('data-sedes-meta', JSON.stringify(sedesActivas));
+        }
+        pintarSedesMeta(list, sedesActivas);
+    } catch (e) {
+        console.error(e);
+        list.innerHTML = '<p class="muted">Error de conexión al cargar stock.</p>';
+    }
 }
 
 function cerrarMetaModal() {
@@ -1459,6 +1488,7 @@ function cerrarMetaModal() {
     }
     metaProductoActual = null;
     metaBtnActual = null;
+    metaStockPorSede = {};
 }
 
 async function toggleMetaSede(sede, btn) {
@@ -1471,6 +1501,10 @@ async function toggleMetaSede(sede, btn) {
     }
     if (!Array.isArray(sedesActivas)) sedesActivas = [];
     const quitar = sedesActivas.includes(sede);
+    if (!quitar && Number(metaStockPorSede[sede] ?? 0) <= 0) {
+        alert('No hay stock en ' + sede + ' para marcar como meta.');
+        return;
+    }
     btn.disabled = true;
     try {
         const response = await fetch(quitar ? "{{ route('metas.destroy') }}" : "{{ route('metas.store') }}", {
@@ -1502,7 +1536,8 @@ async function toggleMetaSede(sede, btn) {
         metaBtnActual.style.borderRadius = '6px';
         metaBtnActual.style.fontWeight = '600';
         metaBtnActual.style.cursor = 'pointer';
-        abrirMetaProducto(metaBtnActual);
+        const list = document.getElementById('meta-modal-sedes');
+        if (list) pintarSedesMeta(list, next);
     } catch (e) {
         console.error(e);
         alert('Error de conexión.');

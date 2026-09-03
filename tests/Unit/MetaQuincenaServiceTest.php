@@ -145,7 +145,7 @@ class MetaQuincenaServiceTest extends TestCase
         $this->assertSame(10.0, $fila['vendido']);
     }
 
-    public function test_ruta_metas_exige_permiso_o_supervisor(): void
+    public function test_ruta_metas_exige_permiso_ver(): void
     {
         $user = User::create([
             'name' => 'Sede',
@@ -164,6 +164,10 @@ class MetaQuincenaServiceTest extends TestCase
             'role' => User::ROLE_SUPERVISOR,
             'sede' => 'DORAL',
         ]);
-        $this->actingAs($supervisor)->get(route('metas.index'))->assertOk();
+        $this->actingAs($supervisor)->get(route('metas.index'))->assertForbidden();
+
+        UserPermission::create(['user_id' => $supervisor->id, 'permission' => 'meta.ver']);
+        $supervisor->unsetRelation('extraPermissions');
+        $this->actingAs($supervisor->fresh())->get(route('metas.index'))->assertOk();
     }
 }

@@ -202,6 +202,14 @@
                                 <div class="muted" style="font-size:.78rem;">{{ $fila->empresa->nombre }}</div>
                             @else
                                 <span class="muted">Sin empresa asignada</span>
+                                @foreach(($fila->personas ?? collect()) as $persona)
+                                    <div style="font-size:.78rem;margin-top:4px;">
+                                        <a href="{{ route('nomina.empleados.show', ['empleado' => $persona->id, 'tab' => 'comisiones']) }}">
+                                            {{ $persona->nombre }}
+                                        </a>
+                                        <span class="muted">· {{ $persona->cedula !== '' ? $persona->cedula : 'Sin cédula' }}</span>
+                                    </div>
+                                @endforeach
                             @endif
                         </td>
                         <td>{{ $fila->empleados }}</td>

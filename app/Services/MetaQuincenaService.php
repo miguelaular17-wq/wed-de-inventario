@@ -67,12 +67,19 @@ class MetaQuincenaService
             return $existente;
         }
 
+        $stock = $this->stockActual($productoId, $sede);
+        if ($stock <= 0) {
+            throw ValidationException::withMessages([
+                'sede' => 'No hay stock en '.$sede.' para marcar como meta.',
+            ]);
+        }
+
         return MetaQuincenaProducto::create([
             'producto_id' => $productoId,
             'sede' => $sede,
             'quincena_inicio' => $q['inicio']->toDateString(),
             'quincena_fin' => $q['fin']->toDateString(),
-            'cantidad_inicial' => $this->stockActual($productoId, $sede),
+            'cantidad_inicial' => $stock,
             'creado_por_user_id' => $user?->id,
         ]);
     }
@@ -129,7 +136,7 @@ class MetaQuincenaService
             ->orderBy('sede')
             ->orderBy('id');
 
-        if (! $user->isAdmin() && ! $user->isGerente() && ! $user->canAccess('meta')) {
+        if (! $user->isGerente() && ! $user->canAccess('meta')) {
             $sedes = $this->sedesDelSupervisor($user);
             if ($sedes === []) {
                 return collect();
@@ -229,17 +236,12 @@ class MetaQuincenaService
             return false;
         }
 
-        if ($user->canAccess('meta') || $user->isGerente()) {
-            return true;
-        }
+        return $user->canAccess('meta.ver') || $user->canAccess('meta');
+    }
 
-        if ($user->role === 'supervisor') {
-            return true;
-        }
-
-        $yo = $this->org->empleadoDelUsuario($user);
-
-        return (bool) ($yo && $yo->es_supervisor);
+    public function puedeAsignarResponsable(User $user): bool
+    {
+        return $this->puedeVerMetas($user);
     }
 
     /**
@@ -291,6 +293,37 @@ class MetaQuincenaService
             ->value('existencia');
 
         return round((float) ($valor ?? 0), 2);
+    }
+
+    /**
+     * Stock por sede disponible para metas (incluye 0).
+     *
+     * @return array<string, float>
+     */
+    public function stockPorSedes(int $productoId): array
+    {
+        $out = [];
+        foreach ($this->sedesDisponibles() as $sede) {
+            $out[$sede] = 0.0;
+        }
+
+        if (! Schema::hasTable('stock_actual')) {
+            return $out;
+        }
+
+        $rows = DB::table('stock_actual')
+            ->where('producto_id', $productoId)
+            ->whereIn(DB::raw('UPPER(TRIM(sede))'), array_keys($out))
+            ->selectRaw('UPPER(TRIM(sede)) as sede')
+            ->selectRaw('SUM(existencia) as existencia')
+            ->groupBy(DB::raw('UPPER(TRIM(sede))'))
+            ->get();
+
+        foreach ($rows as $row) {
+            $out[(string) $row->sede] = round((float) $row->existencia, 2);
+        }
+
+        return $out;
     }
 
     public function unidadesVendidas(int $productoId, string $sede, Carbon|string $inicio, Carbon|string $fin): float

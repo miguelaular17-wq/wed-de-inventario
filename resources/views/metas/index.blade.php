@@ -5,6 +5,10 @@
 @section('content')
 @php
     $fmt = fn ($n, $d = 0) => number_format((float) $n, $d);
+    $conteoPorSede = $filas->groupBy('sede')->map->count();
+    $sedesMarcador = $puedeMarcar
+        ? collect($sedesDisponibles ?? [])
+        : $conteoPorSede->keys()->sort()->values();
 @endphp
 <div class="panel nomina-page">
     <div class="panel-header-flex">
@@ -30,6 +34,22 @@
         <div class="nomina-kpi"><span>Stock actual</span><strong>{{ $fmt($filas->sum('cantidad_actual')) }} u.</strong></div>
         <div class="nomina-kpi"><span>Vendido (facturas)</span><strong>{{ $fmt($filas->sum('vendido')) }} u.</strong></div>
     </div>
+
+    @if($puedeMarcar && $sedesMarcador->isNotEmpty())
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center;">
+            <span class="muted" style="font-size:.78rem;font-weight:600;margin-right:4px;">Por sede</span>
+            @foreach($sedesMarcador as $sede)
+                @php $n = (int) ($conteoPorSede[$sede] ?? 0); @endphp
+                <span
+                    title="{{ $n }} producto{{ $n === 1 ? '' : 's' }} meta en {{ $sede }}"
+                    style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;border:1px solid {{ $n > 0 ? '#bfdbfe' : 'var(--border)' }};background:{{ $n > 0 ? '#eff6ff' : '#f8fafc' }};font-size:.78rem;font-weight:600;color:{{ $n > 0 ? '#1a4480' : 'var(--muted)' }};"
+                >
+                    {{ $sede }}
+                    <span style="min-width:1.35rem;height:1.35rem;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:{{ $n > 0 ? '#1a4480' : '#cbd5e1' }};color:#fff;font-size:.72rem;line-height:1;">{{ $n }}</span>
+                </span>
+            @endforeach
+        </div>
+    @endif
 
     <div class="table-wrap" style="margin-top:16px;">
         <table class="data-table" id="tabla-metas">

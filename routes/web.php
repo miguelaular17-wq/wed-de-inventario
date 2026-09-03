@@ -242,6 +242,10 @@ Route::middleware(['auth'])->prefix('metas')->name('metas.')->group(function () 
     Route::get('/sedes-activas', [MetaQuincenaController::class, 'sedesMeta'])
         ->middleware('permission:meta')
         ->name('sedes');
+    Route::get('/productos/{producto}/stock', [MetaQuincenaController::class, 'stockProducto'])
+        ->middleware('permission:meta')
+        ->whereNumber('producto')
+        ->name('stock');
 });
 
 // Vendedor specific routes (Now public for inventory checking)
