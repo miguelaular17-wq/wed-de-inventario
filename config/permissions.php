@@ -18,7 +18,7 @@ return [
         'contratos' => 'Contratos',
         'patrimonial' => 'Patrimonial',
         'nomina' => 'Nómina',
-        'nomina.equipo' => 'Nómina del equipo (tras calcular, sin comisiones)',
+        'nomina.equipo' => 'Nómina y comisiones del equipo (tras calcular)',
         'marketing.publicidad_equipo' => 'Ver publicidad del equipo',
         'meta' => 'Metas de quincena (marcar productos)',
         'meta.ver' => 'Metas de quincena (solo ver / supervisor)',

@@ -60,8 +60,12 @@ class StFactura extends Model
 
     public function scopeVisiblePara(Builder $query, User $user): Builder
     {
+        if ($user->veSoloSusFacturasTaller()) {
+            $query->where('tecnico_id', $user->id);
+        }
+
         if ($user->scopesServicioToOwnSede()) {
-            return $query->where('sede', strtoupper((string) $user->sede));
+            $query->where('sede', strtoupper((string) $user->sede));
         }
 
         return $query;

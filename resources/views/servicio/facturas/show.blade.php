@@ -8,7 +8,9 @@
             <h2 style="margin:0;">{{ $factura->codigo() }}</h2>
             <p class="muted">{{ $factura->sede }} · {{ $factura->etiquetaEstadoPago() }} · {{ $factura->fecha?->format('d/m/Y') }}</p>
         </div>
-        <a class="btn primary" href="{{ route('servicio.facturas.edit', $factura) }}">Editar</a>
+        @if($puedeEditar ?? false)
+            <a class="btn primary" href="{{ route('servicio.facturas.edit', $factura) }}">Editar</a>
+        @endif
     </div>
     <div class="panel" style="padding:24px;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;">
@@ -17,10 +19,13 @@
             <div><span class="muted">Presupuesto</span><div>${{ number_format($factura->presupuesto ?? 0, 2) }}</div></div>
             <div><span class="muted">Mano de obra</span><div>${{ number_format($factura->costo_mano_obra ?? 0, 2) }}</div></div>
             <div><span class="muted">Refacciones</span><div>${{ number_format($factura->costo_refacciones ?? 0, 2) }}</div></div>
+            @if($factura->tecnico)
+                <div><span class="muted">Técnico</span><div>{{ $factura->tecnico->name }}</div></div>
+            @endif
         </div>
         <hr style="border:none;border-top:1px dashed #e2e8f0;margin:20px 0;">
         <p class="muted">Descripción</p><p>{{ $factura->descripcion ?: '—' }}</p>
-        @if($puedeEliminar)
+        @if($puedeEliminar ?? false)
             <form method="POST" action="{{ route('servicio.facturas.destroy', $factura) }}" style="margin-top:16px;" onsubmit="return confirm('¿Eliminar esta factura?')">
                 @csrf @method('DELETE')
                 <button class="btn secondary" type="submit">Eliminar</button>

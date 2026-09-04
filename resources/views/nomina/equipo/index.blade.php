@@ -8,8 +8,8 @@
         <div>
             <h1 style="margin:0;">Nómina del equipo</h1>
             <p class="muted" style="margin:4px 0 0;">
-                Solo ves a tu personal a cargo, después de que RRHH calcule la quincena. No incluye comisiones.
-            Tu ficha debe tener seleccionado este usuario.
+                Solo ves a tu personal a cargo, después de que RRHH calcule la quincena (nómina y comisiones).
+                Tu ficha debe tener seleccionado este usuario.
             </p>
         </div>
     </div>
@@ -58,10 +58,11 @@
                                 ? '$'.number_format($periodo->equipo_total ?? 0, 2)
                                 : '—' }}
                         </td>
-                        <td>
+                        <td style="display:flex;gap:8px;flex-wrap:wrap;">
                             @if($periodo->equipo_count)
-                                <a class="btn secondary" href="{{ route('nomina.equipo.show', $periodo) }}">Ver equipo</a>
+                                <a class="btn secondary" href="{{ route('nomina.equipo.show', $periodo) }}">Ver nómina</a>
                             @endif
+                            <a class="btn" href="{{ route('nomina.equipo.comisiones', $periodo) }}">Ver comisiones</a>
                         </td>
                     </tr>
                 @empty

@@ -56,7 +56,7 @@
 
     <div class="nomina-kpis">
         <div class="nomina-kpi"><span>Comisión</span><strong>${{ number_format($totalBruto, 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Abonos</span><strong>${{ number_format($totalAbonos, 2) }}</strong></div>
+        <div class="nomina-kpi"><span>Bonos</span><strong>${{ number_format($totalAbonos, 2) }}</strong></div>
         <div class="nomina-kpi warn"><span>Retención 10%</span><strong>${{ number_format($totalRetencion, 2) }}</strong></div>
         <div class="nomina-kpi warn"><span>Descuentos</span><strong>${{ number_format($totalDescuentos, 2) }}</strong></div>
         <div class="nomina-kpi"><span>A pagar</span><strong>${{ number_format($totalPagar, 2) }}</strong></div>
@@ -71,10 +71,10 @@
                 <tr>
                     <th>Empleado</th>
                     <th>Venta neta</th>
-                    <th>Base telefonía</th>
-                    <th>Base otros</th>
+                    <th>Ventas telefonía</th>
+                    <th>Ventas otros</th>
                     <th>Comisión</th>
-                    <th>Abonos</th>
+                    <th>Bonos</th>
                     <th>Retención</th>
                     <th>Desc. / préstamos</th>
                     <th>A pagar</th>
@@ -161,7 +161,7 @@
                     <th>Facturas ST</th>
                     <th>Egresos 058</th>
                     <th>Comisión</th>
-                    <th>Abonos</th>
+                    <th>Bonos</th>
                     <th>Retención</th>
                     <th>Desc. / préstamos</th>
                     <th>A pagar</th>

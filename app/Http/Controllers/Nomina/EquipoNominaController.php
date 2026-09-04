@@ -54,13 +54,38 @@ class EquipoNominaController extends Controller
         $filtro = $ids === [] ? [0] : $ids;
 
         $registros = $periodo->registros()
-            ->with(['empleado.cliente', 'empleado.sedeCatalogo'])
+            ->with(['empleado.cliente', 'empleado.sedeCatalogo', 'empleado.cargoCatalogo'])
             ->whereIn('empleado_id', $filtro)
             ->get();
 
         return view('nomina.equipo.show', [
             'periodo' => $periodo,
             'registros' => $registros,
+        ]);
+    }
+
+    public function comisiones(NominaPeriodo $periodo): View
+    {
+        abort_unless(in_array($periodo->estado, [
+            NominaPeriodo::CALCULADO,
+            NominaPeriodo::APROBADO,
+            NominaPeriodo::PAGADO,
+            NominaPeriodo::CERRADO,
+        ], true), 404);
+
+        $ids = $this->organization->idsPersonalACargo(auth()->user());
+        $filtro = $ids === [] ? [0] : $ids;
+
+        $liquidaciones = $periodo->liquidacionesComision()
+            ->visibles()
+            ->with(['empleado.cliente', 'empleado.sedeCatalogo', 'empleado.cargoCatalogo'])
+            ->whereIn('empleado_id', $filtro)
+            ->orderBy('id')
+            ->get();
+
+        return view('nomina.equipo.comisiones', [
+            'periodo' => $periodo,
+            'liquidaciones' => $liquidaciones,
         ]);
     }
 }

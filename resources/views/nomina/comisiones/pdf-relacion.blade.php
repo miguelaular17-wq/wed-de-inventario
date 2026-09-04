@@ -48,12 +48,12 @@
                 <tr>
                     <th>Cédula</th>
                     <th>Empleado</th>
-                    <th>Sede</th>
+                    <th>Cargo</th>
                     <th>Venta neta</th>
-                    <th>Base tel.</th>
-                    <th>Base otros</th>
-                    <th>Comisión</th>
-                    <th>Abonos</th>
+                    <th>Ventas telefonía</th>
+                    <th>Ventas otros</th>
+                    <th>Bonos</th>
+                    <th>Total comisiones</th>
                     <th>Retención</th>
                     <th>Desc. / prést.</th>
                     <th>A pagar USD</th>
@@ -65,12 +65,12 @@
                     <tr>
                         <td>{{ $fila['cedula'] }}</td>
                         <td>{{ $fila['nombre'] }}</td>
-                        <td>{{ $fila['sede'] }}</td>
+                        <td>{{ $fila['cargo'] }}</td>
                         <td class="num">{{ number_format($fila['ventas'], 2) }}</td>
                         <td class="num">{{ $fila['es_supervisor'] ? '—' : number_format($fila['base_telefonia'], 2) }}</td>
                         <td class="num">{{ $fila['es_supervisor'] ? '—' : number_format($fila['base_otros'], 2) }}</td>
-                        <td class="num">{{ number_format($fila['comision'], 2) }}</td>
                         <td class="num">{{ number_format($fila['abonos'], 2) }}</td>
+                        <td class="num">{{ number_format($fila['total_comisiones'], 2) }}</td>
                         <td class="num">{{ number_format($fila['retencion'], 2) }}</td>
                         <td class="num">{{ number_format($fila['descuentos'], 2) }}</td>
                         <td class="num">{{ number_format($fila['pagar_usd'], 2) }}</td>
@@ -82,8 +82,8 @@
                     <td class="num">{{ number_format($totalesVentas['ventas'], 2) }}</td>
                     <td class="num">{{ number_format($totalesVentas['base_telefonia'], 2) }}</td>
                     <td class="num">{{ number_format($totalesVentas['base_otros'], 2) }}</td>
-                    <td class="num">{{ number_format($totalesVentas['comision'], 2) }}</td>
                     <td class="num">{{ number_format($totalesVentas['abonos'], 2) }}</td>
+                    <td class="num">{{ number_format($totalesVentas['total_comisiones'], 2) }}</td>
                     <td class="num">{{ number_format($totalesVentas['retencion'], 2) }}</td>
                     <td class="num">{{ number_format($totalesVentas['descuentos'], 2) }}</td>
                     <td class="num">{{ number_format($totalesVentas['pagar_usd'], 2) }}</td>
@@ -102,11 +102,9 @@
                 <tr>
                     <th>Cédula</th>
                     <th>Empleado</th>
-                    <th>Sede</th>
                     <th>Facturas ST</th>
-                    <th>Egresos 058</th>
+                    <th>Egresos</th>
                     <th>Comisión</th>
-                    <th>Abonos</th>
                     <th>Retención</th>
                     <th>Desc. / prést.</th>
                     <th>A pagar USD</th>
@@ -118,11 +116,9 @@
                     <tr>
                         <td>{{ $fila['cedula'] }}</td>
                         <td>{{ $fila['nombre'] }}</td>
-                        <td>{{ $fila['sede'] }}</td>
                         <td class="num">{{ number_format($fila['facturas_st'], 2) }}</td>
                         <td class="num">{{ number_format($fila['egresos_058'], 2) }}</td>
                         <td class="num">{{ number_format($fila['comision'], 2) }}</td>
-                        <td class="num">{{ number_format($fila['abonos'], 2) }}</td>
                         <td class="num">{{ number_format($fila['retencion'], 2) }}</td>
                         <td class="num">{{ number_format($fila['descuentos'], 2) }}</td>
                         <td class="num">{{ number_format($fila['pagar_usd'], 2) }}</td>
@@ -130,11 +126,10 @@
                     </tr>
                 @endforeach
                 <tr class="tot">
-                    <td colspan="3">Totales ({{ count($filasSt) }} empleados)</td>
+                    <td colspan="2">Totales ({{ count($filasSt) }} empleados)</td>
                     <td class="num">{{ number_format($totalesSt['facturas_st'], 2) }}</td>
                     <td class="num">{{ number_format($totalesSt['egresos_058'], 2) }}</td>
                     <td class="num">{{ number_format($totalesSt['comision'], 2) }}</td>
-                    <td class="num">{{ number_format($totalesSt['abonos'], 2) }}</td>
                     <td class="num">{{ number_format($totalesSt['retencion'], 2) }}</td>
                     <td class="num">{{ number_format($totalesSt['descuentos'], 2) }}</td>
                     <td class="num">{{ number_format($totalesSt['pagar_usd'], 2) }}</td>
@@ -146,6 +141,6 @@
         <p class="empty">Sin liquidaciones de servicio técnico.</p>
     @endif
 
-    <p class="note">El sueldo de nómina se paga aparte y no aparece en este documento.</p>
+    <p class="note">El sueldo de nómina se paga aparte y no aparece en este documento. Total comisiones = comisión + bonos.</p>
 </body>
 </html>

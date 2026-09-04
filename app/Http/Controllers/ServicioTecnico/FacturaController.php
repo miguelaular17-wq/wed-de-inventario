@@ -5,15 +5,30 @@ namespace App\Http\Controllers\ServicioTecnico;
 use App\Http\Controllers\Controller;
 use App\Models\StFactura;
 use App\Models\User;
+use App\Services\Nomina\SalaryAdvanceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class FacturaController extends Controller
 {
+    public function __construct(private SalaryAdvanceService $quincenas)
+    {
+    }
+
     public function index(Request $request): View
     {
         $user = $request->user();
+        $soloSus = $user->veSoloSusFacturasTaller();
+        $quincena = $this->quincenas->quincenaDe(now());
+
+        $desde = $request->query('desde');
+        $hasta = $request->query('hasta');
+        if ($soloSus && ! $request->filled('desde') && ! $request->filled('hasta')) {
+            $desde = $quincena['inicio']->toDateString();
+            $hasta = $quincena['fin']->toDateString();
+        }
+
         $query = StFactura::query()->visiblePara($user)->orderByDesc('fecha')->orderByDesc('numero');
 
         if (! $user->scopesServicioToOwnSede() && $request->filled('sede')) {
@@ -22,11 +37,11 @@ class FacturaController extends Controller
         if ($request->filled('estado_pago')) {
             $query->where('estado_pago', $request->query('estado_pago'));
         }
-        if ($request->filled('desde')) {
-            $query->whereDate('fecha', '>=', $request->query('desde'));
+        if ($desde) {
+            $query->whereDate('fecha', '>=', $desde);
         }
-        if ($request->filled('hasta')) {
-            $query->whereDate('fecha', '<=', $request->query('hasta'));
+        if ($hasta) {
+            $query->whereDate('fecha', '<=', $hasta);
         }
         if ($q = trim((string) $request->query('q', ''))) {
             $like = $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
@@ -39,44 +54,51 @@ class FacturaController extends Controller
             });
         }
 
-        return view('servicio.facturas.index', array_merge($this->formData(), [
+        return view('servicio.facturas.index', array_merge($this->formData($user), [
             'facturas' => $query->paginate(30)->withQueryString(),
             'filtroSede' => $user->scopesServicioToOwnSede() ? strtoupper((string) $user->sede) : $request->query('sede'),
             'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
+            'soloSusFacturas' => $soloSus,
+            'quincena' => $quincena,
+            'filtroDesde' => $desde,
+            'filtroHasta' => $hasta,
         ]));
     }
 
-    public function create(): View
+    public function create(): RedirectResponse
     {
-        return view('servicio.facturas.create', $this->formData());
+        return redirect()
+            ->route('servicio.facturas.index')
+            ->withErrors(['factura' => 'Ya no se pueden crear facturas de taller desde aquí.']);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(): RedirectResponse
     {
-        $user = $request->user();
-        $data = $this->validated($request, $user);
-        $factura = StFactura::crearEnSede($data, $user);
-
-        return redirect()
-            ->route('servicio.facturas.show', $factura)
-            ->with('status', 'Factura '.$factura->codigo().' registrada.');
+        abort(403, 'Ya no se pueden crear facturas de taller.');
     }
 
     public function show(Request $request, StFactura $factura): View
     {
-        $this->authorizeRecord($request->user(), $factura);
+        $user = $request->user();
+        $this->authorizeRecord($user, $factura);
+        $puedeEditar = $this->puedeGestionar($user);
 
-        return view('servicio.facturas.show', array_merge($this->formData(), [
+        return view('servicio.facturas.show', array_merge($this->formData($user), [
             'factura' => $factura->load(['tecnico', 'creador']),
-            'puedeEliminar' => ! $request->user()->isTecnico(),
+            'puedeEliminar' => $puedeEditar,
+            'puedeEditar' => $puedeEditar,
         ]));
     }
 
-    public function edit(Request $request, StFactura $factura): View
+    public function edit(Request $request, StFactura $factura): View|RedirectResponse
     {
-        $this->authorizeRecord($request->user(), $factura);
+        $user = $request->user();
+        if (! $this->puedeGestionar($user)) {
+            abort(403, 'No puedes editar facturas de taller.');
+        }
+        $this->authorizeRecord($user, $factura);
 
-        return view('servicio.facturas.edit', array_merge($this->formData(), [
+        return view('servicio.facturas.edit', array_merge($this->formData($user), [
             'factura' => $factura,
         ]));
     }
@@ -84,13 +106,16 @@ class FacturaController extends Controller
     public function update(Request $request, StFactura $factura): RedirectResponse
     {
         $user = $request->user();
+        if (! $this->puedeGestionar($user)) {
+            abort(403, 'No puedes editar facturas de taller.');
+        }
         $this->authorizeRecord($user, $factura);
         $data = $this->validated($request, $user, $factura);
         unset($data['sede'], $data['numero']);
         $data['updated_by'] = $user->id;
         $data['total'] = (float) ($data['costo_mano_obra'] ?? $factura->costo_mano_obra ?? 0)
             + (float) ($data['costo_refacciones'] ?? $factura->costo_refacciones ?? 0);
-        if (isset($data['total']) && $request->filled('total') && (float) $request->input('total') > 0) {
+        if ($request->filled('total') && (float) $request->input('total') > 0) {
             $data['total'] = (float) $request->input('total');
         }
         $factura->update($data);
@@ -102,10 +127,11 @@ class FacturaController extends Controller
 
     public function destroy(Request $request, StFactura $factura): RedirectResponse
     {
-        if ($request->user()->isTecnico()) {
-            abort(403, 'Los técnicos no pueden eliminar facturas.');
+        $user = $request->user();
+        if (! $this->puedeGestionar($user)) {
+            abort(403, 'No puedes eliminar facturas de taller.');
         }
-        $this->authorizeRecord($request->user(), $factura);
+        $this->authorizeRecord($user, $factura);
         $codigo = $factura->codigo();
         $factura->delete();
 
@@ -114,12 +140,19 @@ class FacturaController extends Controller
             ->with('status', 'Factura '.$codigo.' eliminada.');
     }
 
-    private function formData(): array
+    private function formData(User $user): array
     {
         return [
             'estadosPago' => config('servicio_tecnico.estados_pago_factura'),
             'sedes' => config('inventario.sedes_locales'),
+            'puedeCrearFactura' => false,
+            'puedeGestionarFacturas' => $this->puedeGestionar($user),
         ];
+    }
+
+    private function puedeGestionar(User $user): bool
+    {
+        return $user->isAdmin() || $user->isGerente();
     }
 
     private function validated(Request $request, User $user, ?StFactura $factura = null): array
@@ -163,6 +196,9 @@ class FacturaController extends Controller
 
     private function authorizeRecord(User $user, StFactura $factura): void
     {
+        if ($user->veSoloSusFacturasTaller() && (int) $factura->tecnico_id !== (int) $user->id) {
+            abort(403, 'Solo puedes ver tus propias facturas.');
+        }
         if ($user->scopesServicioToOwnSede() && strtoupper((string) $factura->sede) !== strtoupper((string) $user->sede)) {
             abort(403, 'Esta factura pertenece a otra sede.');
         }

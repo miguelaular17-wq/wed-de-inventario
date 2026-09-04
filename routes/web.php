@@ -338,6 +338,7 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
 
 Route::middleware(['auth', 'permission:nomina.equipo'])->prefix('nomina/equipo')->name('nomina.equipo.')->group(function () {
     Route::get('/', [EquipoNominaController::class, 'index'])->name('index');
+    Route::get('/{periodo}/comisiones', [EquipoNominaController::class, 'comisiones'])->name('comisiones');
     Route::get('/{periodo}', [EquipoNominaController::class, 'show'])->name('show');
 });
 

@@ -71,7 +71,7 @@ class ComisionController extends Controller
         $liquidaciones = NominaLiquidacionComision::query()
             ->where('periodo_id', $periodo->id)
             ->visibles()
-            ->with(['empleado.cliente', 'empleado.sedeCatalogo'])
+            ->with(['empleado.cliente', 'empleado.sedeCatalogo', 'empleado.cargoCatalogo'])
             ->orderBy('id')
             ->get();
 
@@ -167,6 +167,7 @@ class ComisionController extends Controller
             $base = [
                 'cedula' => $meta['cedula'],
                 'nombre' => $meta['nombre'],
+                'cargo' => $meta['cargo'],
                 'sede' => $meta['sede'],
                 'grupo_tipo' => $meta['grupo_tipo'],
                 'grupo_clave' => $meta['grupo_clave'],
@@ -177,6 +178,7 @@ class ComisionController extends Controller
                 'pagar_usd' => round((float) $liq->total_pagar, 2),
                 'pagar_bs' => round((float) $liq->total_pagar * $tasaBcv, 2),
             ];
+            $base['total_comisiones'] = round($base['comision'] + $base['abonos'], 2);
 
             if ($liq->esServicioTecnico()) {
                 $comisionSt = $liq->comisionSt();
@@ -189,20 +191,20 @@ class ComisionController extends Controller
                 $fila = [
                     'cedula' => $meta['cedula'],
                     'nombre' => $meta['nombre'],
+                    'cargo' => $meta['cargo'],
                     'sede' => $meta['sede'],
                     'grupo_tipo' => $meta['grupo_tipo'],
                     'grupo_clave' => $meta['grupo_clave'],
                     'facturas_st' => $liq->ventasSt(),
                     'egresos_058' => $liq->egresos058(),
                     'comision' => $comisionSt,
-                    'abonos' => 0.0,
                     'retencion' => 0.0,
                     'descuentos' => $descuentos,
                     'pagar_usd' => $pagarSt,
                     'pagar_bs' => round($pagarSt * $tasaBcv, 2),
                 ];
                 $filasSt[] = $fila;
-                foreach (['facturas_st', 'egresos_058', 'comision', 'abonos', 'retencion', 'descuentos', 'pagar_usd', 'pagar_bs'] as $k) {
+                foreach (['facturas_st', 'egresos_058', 'comision', 'retencion', 'descuentos', 'pagar_usd', 'pagar_bs'] as $k) {
                     $totalesSt[$k] = round($totalesSt[$k] + (float) $fila[$k], 2);
                 }
 
@@ -210,6 +212,7 @@ class ComisionController extends Controller
                 $filaVentas = [
                     'cedula' => $meta['cedula'],
                     'nombre' => $meta['nombre'],
+                    'cargo' => $meta['cargo'],
                     'sede' => $meta['sede'],
                     'grupo_tipo' => $meta['grupo_tipo'],
                     'grupo_clave' => $meta['grupo_clave'],
@@ -219,13 +222,14 @@ class ComisionController extends Controller
                     'es_supervisor' => false,
                     'comision' => $comisionOtros,
                     'abonos' => $abonos,
+                    'total_comisiones' => round($comisionOtros + $abonos, 2),
                     'retencion' => $retencion,
                     'descuentos' => 0.0,
                     'pagar_usd' => $pagarOtros,
                     'pagar_bs' => round($pagarOtros * $tasaBcv, 2),
                 ];
                 $filasVentas[] = $filaVentas;
-                foreach (['ventas', 'base_telefonia', 'base_otros', 'comision', 'abonos', 'retencion', 'descuentos', 'pagar_usd', 'pagar_bs'] as $k) {
+                foreach (['ventas', 'base_telefonia', 'base_otros', 'comision', 'abonos', 'total_comisiones', 'retencion', 'descuentos', 'pagar_usd', 'pagar_bs'] as $k) {
                     $totalesVentas[$k] = round($totalesVentas[$k] + (float) $filaVentas[$k], 2);
                 }
             } else {
@@ -240,7 +244,7 @@ class ComisionController extends Controller
                     'es_supervisor' => $esSupervisor,
                 ];
                 $filasVentas[] = $fila;
-                foreach (['ventas', 'base_telefonia', 'base_otros', 'comision', 'abonos', 'retencion', 'descuentos', 'pagar_usd', 'pagar_bs'] as $k) {
+                foreach (['ventas', 'base_telefonia', 'base_otros', 'comision', 'abonos', 'total_comisiones', 'retencion', 'descuentos', 'pagar_usd', 'pagar_bs'] as $k) {
                     $totalesVentas[$k] = round($totalesVentas[$k] + (float) $fila[$k], 2);
                 }
             }
@@ -250,7 +254,7 @@ class ComisionController extends Controller
     }
 
     /**
-     * @return array{cedula: string, nombre: string, sede: string, grupo_tipo: string, grupo_clave: string}
+     * @return array{cedula: string, nombre: string, cargo: string, sede: string, grupo_tipo: string, grupo_clave: string}
      */
     private function metaEmpleado(NominaLiquidacionComision $liq): array
     {
@@ -262,6 +266,7 @@ class ComisionController extends Controller
         return [
             'cedula' => $empleado?->cedula() ?? '',
             'nombre' => $empleado?->nombre() ?? 'Sin nombre',
+            'cargo' => $empleado?->nombreCargo() ?? '—',
             'sede' => $sedeNombre,
             'grupo_tipo' => $sedeTipo,
             'grupo_clave' => $sedeTipo.'|'.mb_strtoupper((string) ($sede?->codigo ?? $sedeNombre), 'UTF-8'),
@@ -342,24 +347,24 @@ class ComisionController extends Controller
     private function hojaVentas(array $filas, array $totales): array
     {
         $cuerpo = array_map(fn ($f) => [
-            $f['cedula'], $f['nombre'], $f['sede'],
+            $f['cedula'], $f['nombre'], $f['cargo'],
             $f['ventas'],
             $f['es_supervisor'] ? null : $f['base_telefonia'],
             $f['es_supervisor'] ? null : $f['base_otros'],
-            $f['comision'], $f['abonos'], $f['retencion'], $f['descuentos'],
+            $f['abonos'], $f['total_comisiones'], $f['retencion'], $f['descuentos'],
             $f['pagar_usd'], $f['pagar_bs'],
         ], $filas);
 
         return array_merge(
             [[
-                'Cédula', 'Empleado', 'Sede', 'Ventas', 'Base telefonía', 'Base otros',
-                'Comisión', 'Abonos', 'Retención', 'Desc. / préstamos', 'A pagar USD', 'A pagar BCV',
+                'Cédula', 'Empleado', 'Cargo', 'Venta neta', 'Ventas telefonía', 'Ventas otros',
+                'Bonos', 'Total comisiones', 'Retención', 'Desc. / préstamos', 'A pagar USD', 'A pagar BCV',
             ]],
             $cuerpo,
             [[
                 'TOTALES', count($filas).' empleados', '',
                 $totales['ventas'], $totales['base_telefonia'], $totales['base_otros'],
-                $totales['comision'], $totales['abonos'], $totales['retencion'], $totales['descuentos'],
+                $totales['abonos'], $totales['total_comisiones'], $totales['retencion'], $totales['descuentos'],
                 $totales['pagar_usd'], $totales['pagar_bs'],
             ]]
         );
@@ -373,22 +378,22 @@ class ComisionController extends Controller
     private function hojaSt(array $filas, array $totales): array
     {
         $cuerpo = array_map(fn ($f) => [
-            $f['cedula'], $f['nombre'], $f['sede'],
+            $f['cedula'], $f['nombre'],
             $f['facturas_st'], $f['egresos_058'],
-            $f['comision'], $f['abonos'], $f['retencion'], $f['descuentos'],
+            $f['comision'], $f['retencion'], $f['descuentos'],
             $f['pagar_usd'], $f['pagar_bs'],
         ], $filas);
 
         return array_merge(
             [[
-                'Cédula', 'Empleado', 'Sede', 'Facturas ST', 'Egresos 058',
-                'Comisión', 'Abonos', 'Retención', 'Desc. / préstamos', 'A pagar USD', 'A pagar BCV',
+                'Cédula', 'Empleado', 'Facturas ST', 'Egresos',
+                'Comisión', 'Retención', 'Desc. / préstamos', 'A pagar USD', 'A pagar BCV',
             ]],
             $cuerpo,
             [[
-                'TOTALES', count($filas).' empleados', '',
+                'TOTALES', count($filas).' empleados',
                 $totales['facturas_st'], $totales['egresos_058'],
-                $totales['comision'], $totales['abonos'], $totales['retencion'], $totales['descuentos'],
+                $totales['comision'], $totales['retencion'], $totales['descuentos'],
                 $totales['pagar_usd'], $totales['pagar_bs'],
             ]]
         );
@@ -431,7 +436,8 @@ class ComisionController extends Controller
     {
         return [
             'ventas' => 0.0, 'base_telefonia' => 0.0, 'base_otros' => 0.0,
-            'comision' => 0.0, 'abonos' => 0.0, 'retencion' => 0.0, 'descuentos' => 0.0,
+            'comision' => 0.0, 'abonos' => 0.0, 'total_comisiones' => 0.0,
+            'retencion' => 0.0, 'descuentos' => 0.0,
             'pagar_usd' => 0.0, 'pagar_bs' => 0.0,
         ];
     }
@@ -441,7 +447,7 @@ class ComisionController extends Controller
     {
         return [
             'facturas_st' => 0.0, 'egresos_058' => 0.0,
-            'comision' => 0.0, 'abonos' => 0.0, 'retencion' => 0.0, 'descuentos' => 0.0,
+            'comision' => 0.0, 'retencion' => 0.0, 'descuentos' => 0.0,
             'pagar_usd' => 0.0, 'pagar_bs' => 0.0,
         ];
     }

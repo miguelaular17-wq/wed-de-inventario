@@ -149,6 +149,39 @@ class User extends Authenticatable
         return $this->role === self::ROLE_TECNICO;
     }
 
+    /**
+     * Ficha de nómina de servicio técnico enlazada a este usuario.
+     */
+    public function empleadoServicioTecnico(): ?\App\Models\Nomina\NominaEmpleado
+    {
+        try {
+            if (! \Illuminate\Support\Facades\Schema::hasTable('nomina_empleados')) {
+                return null;
+            }
+
+            return \App\Models\Nomina\NominaEmpleado::query()
+                ->where('user_id', $this->id)
+                ->where('es_servicio_tecnico', true)
+                ->where('estado', 'ACTIVO')
+                ->first();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Técnico (rol o ficha ST enlazada): solo ve sus facturas de taller.
+     * Gerente y admin ven todas.
+     */
+    public function veSoloSusFacturasTaller(): bool
+    {
+        if ($this->isAdmin() || $this->isGerente()) {
+            return false;
+        }
+
+        return $this->isTecnico() || $this->empleadoServicioTecnico() !== null;
+    }
+
     public function sedeIsLocked(): bool
     {
         return in_array($this->role, self::ROLES_SEDE_LOCKED, true);

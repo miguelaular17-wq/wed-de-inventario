@@ -37,9 +37,7 @@ class ServicioTecnicoViewsSmokeTest extends TestCase
             ->assertSee('Producto');
 
         $this->get(route('servicio.facturas.create'))
-            ->assertOk()
-            ->assertSee('Nueva factura')
-            ->assertSee('Cliente');
+            ->assertRedirect(route('servicio.facturas.index'));
     }
 
     public function test_index_pages_render_empty_state(): void
@@ -63,7 +61,8 @@ class ServicioTecnicoViewsSmokeTest extends TestCase
         $this->get(route('servicio.facturas.index'))
             ->assertOk()
             ->assertSee('Facturas de taller')
-            ->assertSee('Aún no hay facturas');
+            ->assertSee('No hay facturas')
+            ->assertDontSee('Nueva factura');
     }
 
     private function ensureStTables(): void
@@ -92,6 +91,7 @@ class ServicioTecnicoViewsSmokeTest extends TestCase
                 $table->decimal('total', 12, 2);
                 $table->string('estado_pago', 16)->default('pendiente');
                 $table->date('fecha');
+                $table->unsignedBigInteger('tecnico_id')->nullable();
                 $table->timestamps();
                 $table->unique(['sede', 'numero']);
             });

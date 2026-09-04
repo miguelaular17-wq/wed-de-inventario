@@ -100,14 +100,72 @@ class ServicioTecnicoFase3Test extends TestCase
                 'costo_refacciones' => 45,
                 'estado_pago' => 'pendiente',
             ])
-            ->assertRedirect();
+            ->assertForbidden();
 
-        $factura = StFactura::query()->where('cliente_nombre', 'Cliente factura')->first();
-        $this->assertNotNull($factura);
-        $this->assertSame('DORAL', $factura->sede);
-        $this->assertSame(1, $factura->numero);
-        $this->assertSame(75.0, (float) $factura->total);
-        $this->assertSame('F-DORAL-0001', $factura->codigo());
+        $this->assertNull(StFactura::query()->where('cliente_nombre', 'Cliente factura')->first());
+    }
+
+    public function test_tecnico_solo_ve_sus_facturas_de_la_quincena(): void
+    {
+        $tecnico = $this->makeTecnico();
+        $otro = $this->makeTecnico();
+        $hoy = now()->toDateString();
+
+        StFactura::create([
+            'sede' => 'DORAL',
+            'numero' => 1,
+            'cliente_nombre' => 'Mia',
+            'total' => 40,
+            'estado_pago' => 'pendiente',
+            'fecha' => $hoy,
+            'tecnico_id' => $tecnico->id,
+        ]);
+        StFactura::create([
+            'sede' => 'DORAL',
+            'numero' => 2,
+            'cliente_nombre' => 'Ajena',
+            'total' => 50,
+            'estado_pago' => 'pendiente',
+            'fecha' => $hoy,
+            'tecnico_id' => $otro->id,
+        ]);
+
+        $this->actingAs($tecnico)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->get(route('servicio.facturas.index'))
+            ->assertOk()
+            ->assertSee('Mia')
+            ->assertDontSee('Ajena')
+            ->assertDontSee('Nueva factura');
+    }
+
+    public function test_gerente_ve_todas_las_facturas(): void
+    {
+        $gerente = User::create([
+            'name' => 'Gerente ST',
+            'email' => 'ger-st3-'.uniqid().'@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_GERENTE,
+            'sede' => null,
+        ]);
+        $tecnico = $this->makeTecnico();
+        $hoy = now()->toDateString();
+
+        StFactura::create([
+            'sede' => 'DORAL',
+            'numero' => 10,
+            'cliente_nombre' => 'De tecnico',
+            'total' => 40,
+            'estado_pago' => 'pendiente',
+            'fecha' => $hoy,
+            'tecnico_id' => $tecnico->id,
+        ]);
+
+        $this->actingAs($gerente)
+            ->get(route('servicio.facturas.index'))
+            ->assertOk()
+            ->assertSee('De tecnico')
+            ->assertDontSee('Nueva factura');
     }
 
     public function test_tecnico_no_puede_eliminar_factura(): void

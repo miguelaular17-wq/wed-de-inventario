@@ -52,7 +52,6 @@
         <a class="btn" href="{{ route('servicio.reparaciones.index') }}">Ver garantías</a>
         <a class="btn" href="{{ route('servicio.facturas.index') }}">Ver facturas</a>
         <a class="btn primary" href="{{ route('servicio.reparaciones.create') }}">+ Garantía</a>
-        <a class="btn primary" href="{{ route('servicio.facturas.create') }}">+ Factura</a>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">

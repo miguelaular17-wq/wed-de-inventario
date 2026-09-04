@@ -243,7 +243,7 @@
                 Modo: <strong>{{ \App\Models\Nomina\NominaEmpleado::modosComision()[$empleado->modo_comision] ?? $empleado->modo_comision }}</strong>.
             </p>
             <table class="data-table">
-                <thead><tr><th>Período</th><th>Pago</th><th>Comisión</th><th>Abonos</th><th>Retención</th><th>Desc.</th><th>A pagar</th></tr></thead>
+                <thead><tr><th>Período</th><th>Pago</th><th>Comisión</th><th>Bonos</th><th>Retención</th><th>Desc.</th><th>A pagar</th></tr></thead>
                 <tbody>
                     @forelse($liquidaciones as $liq)
                         <tr>
@@ -612,6 +612,7 @@
         <p class="muted">
             <a href="{{ route('nomina.ajustes.index') }}">Deducciones y bonos</a>.
         </p>
+        
         <div class="nomina-kpis" style="margin:12px 0;">
             <div class="nomina-kpi"><span>Deducciones quincena</span><strong>${{ number_format($resumenAjustes['deducciones'] ?? 0, 2) }}</strong></div>
             <div class="nomina-kpi"><span>Bonos quincena</span><strong>${{ number_format($resumenAjustes['bonos'] ?? 0, 2) }}</strong></div>

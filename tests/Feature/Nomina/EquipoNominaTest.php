@@ -4,6 +4,7 @@ namespace Tests\Feature\Nomina;
 
 use App\Models\Cliente;
 use App\Models\Nomina\NominaEmpleado;
+use App\Models\Nomina\NominaLiquidacionComision;
 use App\Models\Nomina\NominaPeriodo;
 use App\Models\Nomina\NominaRegistro;
 use App\Models\Nomina\NominaSede;
@@ -53,6 +54,7 @@ class EquipoNominaTest extends TestCase
             'tipo_salario' => 'QUINCENAL',
             'estado' => 'ACTIVO',
             'supervisor_id' => $fichaSupervisor->id,
+            'modo_comision' => NominaEmpleado::COMISION_VENTAS_PROPIAS,
         ]);
 
         $this->ajeno = NominaEmpleado::create([
@@ -60,6 +62,7 @@ class EquipoNominaTest extends TestCase
             'salario_base' => 400,
             'tipo_salario' => 'QUINCENAL',
             'estado' => 'ACTIVO',
+            'modo_comision' => NominaEmpleado::COMISION_VENTAS_PROPIAS,
         ]);
 
         $this->calculado = NominaPeriodo::create([
@@ -100,6 +103,32 @@ class EquipoNominaTest extends TestCase
             'total_pagar' => 400,
             'observaciones' => json_encode(['liquidacion' => ['total_pagar' => 72]]),
         ]);
+
+        NominaLiquidacionComision::create([
+            'periodo_id' => $this->calculado->id,
+            'empleado_id' => $this->aCargo->id,
+            'modo' => NominaEmpleado::COMISION_VENTAS_PROPIAS,
+            'base_total' => 1000,
+            'base_telefonia' => 700,
+            'base_otros' => 300,
+            'comision_total' => 45.50,
+            'abonos' => 0,
+            'retencion' => 4.55,
+            'descuentos' => 0,
+            'prestamos' => 0,
+            'total_pagar' => 40.95,
+        ]);
+
+        NominaLiquidacionComision::create([
+            'periodo_id' => $this->calculado->id,
+            'empleado_id' => $this->ajeno->id,
+            'modo' => NominaEmpleado::COMISION_VENTAS_PROPIAS,
+            'base_total' => 2000,
+            'base_telefonia' => 1500,
+            'base_otros' => 500,
+            'comision_total' => 80,
+            'total_pagar' => 72,
+        ]);
     }
 
     public function test_sin_permiso_no_entra(): void
@@ -109,7 +138,7 @@ class EquipoNominaTest extends TestCase
             ->assertRedirect('/');
     }
 
-    public function test_con_permiso_ve_solo_su_equipo_y_sin_comision(): void
+    public function test_con_permiso_ve_solo_su_equipo_sin_sueldo(): void
     {
         $this->supervisor->syncExtraPermissions(['nomina.equipo']);
 
@@ -118,21 +147,40 @@ class EquipoNominaTest extends TestCase
             ->assertOk()
             ->assertSee('16/08/2026 al 31/08/2026')
             ->assertDontSee('01/08/2026 al 15/08/2026')
-            ->assertSee('294.00');
+            ->assertSee('294.00')
+            ->assertSee('Ver comisiones');
 
         $this->get(route('nomina.equipo.show', $this->calculado))
             ->assertOk()
             ->assertSee('Ana Equipo')
             ->assertSee('294.00')
             ->assertDontSee('Luis Ajeno')
-            ->assertDontSee('Comisión')
+            ->assertDontSee('>Salario<')
             ->assertDontSee('Mercancía')
             ->assertSee('Bonificaciones')
             ->assertSee('Deducciones')
-            ->assertDontSee('50.00');
+            ->assertSee('Ver comisiones')
+            ->assertDontSee('45.50');
 
         $this->get(route('nomina.equipo.show', $this->abierto))->assertNotFound();
         $this->get(route('nomina.periodos.show', $this->calculado))->assertRedirect('/');
+    }
+
+    public function test_con_permiso_ve_comisiones_solo_de_su_equipo(): void
+    {
+        $this->supervisor->syncExtraPermissions(['nomina.equipo']);
+
+        $this->actingAs($this->supervisor->fresh())
+            ->get(route('nomina.equipo.comisiones', $this->calculado))
+            ->assertOk()
+            ->assertSee('Ana Equipo')
+            ->assertSee('45.50')
+            ->assertSee('40.95')
+            ->assertDontSee('Luis Ajeno')
+            ->assertDontSee('72.00');
+
+        $this->get(route('nomina.equipo.comisiones', $this->abierto))->assertNotFound();
+        $this->get(route('nomina.comisiones.show', $this->calculado))->assertRedirect('/');
     }
 
     public function test_sin_usuario_en_la_ficha_no_muestra_el_equipo(): void
@@ -227,6 +275,6 @@ class EquipoNominaTest extends TestCase
             ->assertSee('GEOVANNI JESUS GUTIERREZ MARTINEZ')
             ->assertSee('180.00')
             ->assertDontSee('Luis Ajeno')
-            ->assertDontSee('Comisión');
+            ->assertDontSee('>Salario<');
     }
 }
