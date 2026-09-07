@@ -105,6 +105,31 @@ class MetaQuincenaServiceTest extends TestCase
         $this->assertSame('2026-09-15', $meta->quincena_fin->toDateString());
     }
 
+    public function test_stock_por_sedes_incluye_almacen_jrz_en_el_total(): void
+    {
+        $productoId = DB::table('productos')->insertGetId([
+            'codigo' => 'META666',
+            'nombre' => 'Perfume',
+            'categoria' => 'PERFUMERIA',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('stock_actual')->insert([
+            ['producto_id' => $productoId, 'sede' => 'DORAL', 'existencia' => 16],
+            ['producto_id' => $productoId, 'sede' => 'VIRTUDES', 'existencia' => 11],
+            ['producto_id' => $productoId, 'sede' => 'ZAMORA', 'existencia' => 24],
+            ['producto_id' => $productoId, 'sede' => 'CENTRO', 'existencia' => 15],
+            ['producto_id' => $productoId, 'sede' => 'JRZ', 'existencia' => 600],
+        ]);
+
+        $stock = app(MetaQuincenaService::class)->stockPorSedes($productoId);
+
+        $this->assertSame(16.0, $stock['DORAL']);
+        $this->assertSame(600.0, $stock['JRZ']);
+        $this->assertEquals(666.0, array_sum($stock));
+        $this->assertNotContains('JRZ', app(MetaQuincenaService::class)->sedesMarcables());
+    }
+
     public function test_listado_calcula_vendido_y_stock_actual(): void
     {
         $productoId = DB::table('productos')->insertGetId([

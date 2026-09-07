@@ -86,6 +86,54 @@ class UserPermissionAccessTest extends TestCase
         $this->assertFalse($this->makeUser(User::ROLE_VENDEDOR)->canAccess('finanzas.eliminar'));
     }
 
+    public function test_supervisor_can_be_limited_to_sobrestock_compras_tab(): void
+    {
+        $user = $this->makeUser(User::ROLE_SUPERVISOR);
+        $user->syncExtraPermissions(['compras.sobrestock']);
+
+        $this->assertFalse($user->canAccess('compras'));
+        $this->assertTrue($user->canEnterCompras());
+        $this->assertTrue($user->canAccessComprasTab('sobrestock'));
+        $this->assertFalse($user->canAccessComprasTab('distribucion'));
+        $this->assertFalse($user->canAccessComprasTab('qpedir'));
+        $this->assertFalse($user->canAccessComprasTab('existencias'));
+        $this->assertSame(
+            ['tab' => 'sobrestock'],
+            $user->defaultComprasRouteParams()
+        );
+
+        $this->actingAs($user)
+            ->get(route('comprador.dashboard', ['tab' => 'productos']))
+            ->assertRedirect(route('comprador.dashboard', ['tab' => 'sobrestock']));
+
+        $this->actingAs($user)
+            ->get(route('comprador.existencias'))
+            ->assertForbidden();
+    }
+
+    public function test_full_compras_extra_still_unlocks_every_tab(): void
+    {
+        $user = $this->makeUser(User::ROLE_SUPERVISOR);
+        $user->syncExtraPermissions(['compras']);
+
+        $this->assertTrue($user->hasFullComprasAccess());
+        $this->assertTrue($user->canAccessComprasTab('distribucion'));
+        $this->assertTrue($user->canAccessComprasTab('sobrestock'));
+        $this->assertTrue($user->canAccessComprasTab('existencias'));
+    }
+
+    public function test_supervisor_does_not_see_catalog_prices_without_permission(): void
+    {
+        $supervisor = $this->makeUser(User::ROLE_SUPERVISOR);
+        $vendedor = $this->makeUser(User::ROLE_VENDEDOR);
+
+        $this->assertFalse($supervisor->canSeeCatalogoPrecios());
+        $this->assertTrue($vendedor->canSeeCatalogoPrecios());
+
+        $supervisor->syncExtraPermissions(['catalogo.precios']);
+        $this->assertTrue($supervisor->fresh()->canSeeCatalogoPrecios());
+    }
+
     private function makeUser(string $role): User
     {
         return User::create([

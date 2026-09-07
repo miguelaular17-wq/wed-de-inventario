@@ -206,6 +206,126 @@ class User extends Authenticatable
         return $this->canAccess('servicio') && ! $this->scopesServicioToOwnSede();
     }
 
+    /**
+     * Tablas de Compras que se pueden asignar aparte del permiso completo.
+     *
+     * @return array<string, string> tab => permission
+     */
+    public static function comprasTabPermissions(): array
+    {
+        return [
+            'distribucion' => 'compras.distribucion',
+            'necesidad' => 'compras.necesidad',
+            'proveedores' => 'compras.proveedores',
+            'sobrestock' => 'compras.sobrestock',
+            'qpedir' => 'compras.qpedir',
+            'existencias' => 'compras.existencias',
+            'publicidad' => 'compras.publicidad',
+        ];
+    }
+
+    public function hasFullComprasAccess(): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        $owned = array_merge($this->rolePermissionKeys(), $this->extraPermissionKeys());
+
+        return in_array('compras', $owned, true);
+    }
+
+    public function canEnterCompras(): bool
+    {
+        if ($this->hasFullComprasAccess()) {
+            return true;
+        }
+
+        foreach (self::comprasTabPermissions() as $permission) {
+            if ($this->canAccess($permission)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function canAccessComprasTab(string $tab): bool
+    {
+        if ($this->hasFullComprasAccess()) {
+            return true;
+        }
+
+        if ($tab === 'publicidad' && $this->isMarketing()) {
+            return true;
+        }
+
+        $permission = self::comprasTabPermissions()[$tab] ?? null;
+
+        return $permission ? $this->canAccess($permission) : false;
+    }
+
+    /**
+     * Query string del primer tab de compras permitido (dashboard).
+     *
+     * @return array<string, string>
+     */
+    public function defaultComprasRouteParams(): array
+    {
+        if ($this->canAccessComprasTab('distribucion')) {
+            return ['tab' => 'productos'];
+        }
+        if ($this->canAccessComprasTab('necesidad')) {
+            return ['tab' => 'productos', 'status' => 'Comprar'];
+        }
+        if ($this->canAccessComprasTab('proveedores')) {
+            return ['tab' => 'proveedores'];
+        }
+        if ($this->canAccessComprasTab('sobrestock')) {
+            return ['tab' => 'sobrestock'];
+        }
+        if ($this->canAccessComprasTab('qpedir')) {
+            return ['tab' => 'qpedir'];
+        }
+        if ($this->canAccessComprasTab('publicidad')) {
+            return ['tab' => 'publicidad'];
+        }
+
+        return ['tab' => 'productos'];
+    }
+
+    public function defaultComprasUrl(): string
+    {
+        if (
+            ! $this->hasFullComprasAccess()
+            && $this->canAccessComprasTab('existencias')
+            && ! $this->canAccessComprasTab('distribucion')
+            && ! $this->canAccessComprasTab('necesidad')
+            && ! $this->canAccessComprasTab('proveedores')
+            && ! $this->canAccessComprasTab('sobrestock')
+            && ! $this->canAccessComprasTab('qpedir')
+            && ! $this->canAccessComprasTab('publicidad')
+        ) {
+            return route('comprador.existencias');
+        }
+
+        return route('comprador.dashboard', $this->defaultComprasRouteParams());
+    }
+
+    public function canSeeCatalogoExistencias(): bool
+    {
+        return $this->isVendedor()
+            || $this->canAccess('catalogo.existencias')
+            || $this->canSeeCatalogoPrecios();
+    }
+
+    public function canSeeCatalogoPrecios(): bool
+    {
+        return $this->isVendedor()
+            || $this->isComprador()
+            || $this->canAccess('catalogo.precios');
+    }
+
     public function extraPermissions(): HasMany
     {
         return $this->hasMany(UserPermission::class);

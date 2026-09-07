@@ -160,10 +160,22 @@
         background: linear-gradient(135deg, #f59e0b, #d97706);
         color: #fff;
     }
-    .gf-notif-badge.semanal {
-        background: linear-gradient(135deg, #3b82f6, #2563eb);
+    .gf-notif-badge.vencido {
+        background: linear-gradient(135deg, #9f1239, #be123c);
         color: #fff;
     }
+    .btn-notif-pagar {
+        padding: 5px 10px;
+        border: none;
+        border-radius: 7px;
+        background: #16a34a;
+        color: #fff;
+        font-size: 0.72rem;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .btn-notif-pagar:hover { background: #15803d; }
     .notif-servicio {
         font-weight: 700;
         color: #0f172a;
@@ -782,7 +794,7 @@
         <div class="gf-notif-header" onclick="document.getElementById('notifPanel').classList.toggle('collapsed')">
             <div class="gf-notif-header-left">
                 <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-                Facturas Próximas a Pagar
+                Facturas pendientes de pago
                 <span class="gf-notif-count-badge">{{ count($notificaciones) }}</span>
             </div>
             <div class="gf-notif-toggle">
@@ -798,6 +810,7 @@
                         <th>Empresa</th>
                         <th>Grupo</th>
                         <th class="th-monto">Monto</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -807,9 +820,23 @@
                             <span class="gf-notif-badge {{ $notif['tipo'] }}">
                                 @if($notif['tipo'] === 'hoy')⚡ HOY
                                 @elseif($notif['tipo'] === 'proximo')📅 Día {{ $notif['dia'] ?? '' }}
+                                @elseif($notif['tipo'] === 'vencido')
+                                    ⚠ {{ $notif['mes_nombre'] ?? '' }} · Día {{ $notif['dia'] ?? '' }}
                                 @else🔄 {{ $notif['fecha'] }}
                                 @endif
                             </span>
+                        </td>
+                        <td class="notif-servicio">{{ $notif['servicio'] }}</td>
+                        <td class="notif-empresa">{{ $notif['empresa'] }}</td>
+                        <td class="notif-grupo">{{ $notif['tabla'] }}</td>
+                        <td class="notif-monto">$ {{ number_format($notif['costo'], 2) }}</td>
+                        <td>
+                            <button type="button" class="btn-notif-pagar"
+                                data-costo="{{ $notif['costo'] }}"
+                                onclick="marcarPagado({{ (int) $notif['tabla_idx'] }}, {{ (int) $notif['gasto_fijo_id'] }}, this, {{ (int) ($notif['mes_idx'] ?? ($mesActual - 1)) }})">
+                                ✓ Pagar
+                            </button>
+                        </td>
                         </td>
                         <td class="notif-servicio">{{ $notif['servicio'] }}</td>
                         <td class="notif-empresa">{{ $notif['empresa'] }}</td>
@@ -1438,7 +1465,7 @@ function commitInlineTextEdit(cell, input) {
 }
 
 // Marcar Pagado logic
-function marcarPagado(tIdx, fIdx, btn) {
+function marcarPagado(tIdx, fIdx, btn, mesIdx) {
     btn.disabled = true;
     btn.style.opacity = '0.5';
     btn.innerText = '⏳';
@@ -1448,7 +1475,7 @@ function marcarPagado(tIdx, fIdx, btn) {
     fetch("{{ route('finanzas.gastos_fijos.pagado') }}", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-        body: JSON.stringify({ tabla_idx: tIdx, fila_idx: fIdx, costo: costo })
+        body: JSON.stringify({ gasto_fijo_id: fIdx, costo: costo, mes_idx: mesIdx })
     }).then(async res => {
         if (!res.ok) throw new Error(await res.text());
         return res.json();

@@ -12,6 +12,31 @@ use Illuminate\Support\Facades\Schema;
 
 class PedidoSolicitadoController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware(function ($request, $next) {
+            $name = $request->route()?->getName();
+            if ($name === 'comprador.pedidos.diario_sede') {
+                return $next($request);
+            }
+
+            if (in_array($name, [
+                'comprador.pedidos.comprado',
+                'comprador.pedidos.fuera_mercado',
+                'comprador.pedidos.excel',
+                'comprador.pedidos.pdf',
+                'comprador.pedidos.diario',
+            ], true)) {
+                $user = $request->user();
+                if (! $user || ! $user->canAccessComprasTab('qpedir')) {
+                    abort(403, 'Acceso denegado. Permisos insuficientes.');
+                }
+            }
+
+            return $next($request);
+        });
+    }
+
     public function categorias(): JsonResponse
     {
         if (config('database.default') === 'pgsql') {

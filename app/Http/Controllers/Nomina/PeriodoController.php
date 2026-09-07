@@ -196,6 +196,7 @@ class PeriodoController extends Controller
             'registros.empleado.cliente',
             'registros.empleado.empresa',
             'registros.empleado.sedeCatalogo',
+            'registros.empleado.cargoCatalogo',
         ]);
         $tasaBcv = $this->bcv->getRateForToday();
         [$filas, $totales] = $this->filasRelacionNomina($periodo, $tasaBcv);
@@ -235,8 +236,8 @@ class PeriodoController extends Controller
     {
         $filas = [];
         $totales = [
-            'salario' => 0.0, 'horas_extras' => 0.0, 'inasistencias' => 0.0,
-            'adelantos' => 0.0, 'bonificaciones' => 0.0, 'ajustes_deduccion' => 0.0, 'prestamos' => 0.0, 'deducciones' => 0.0,
+            'salario' => 0.0, 'horas_extras' => 0.0, 'bonificaciones' => 0.0, 'total_asignaciones' => 0.0,
+            'inasistencias' => 0.0, 'adelantos' => 0.0, 'ajustes_deduccion' => 0.0, 'prestamos' => 0.0, 'deducciones' => 0.0,
             'pagar_usd' => 0.0, 'pagar_bs' => 0.0,
         ];
 
@@ -246,17 +247,22 @@ class PeriodoController extends Controller
             $sede = $registro->empleado?->sedeCatalogo;
             $sedeNombre = $sede?->nombre ?? $registro->empleado?->sede ?? 'Sin sede';
             $sedeTipo = $sede?->tipo === 'AREA' ? 'AREA' : 'SEDE';
+            $salario = round((float) $registro->salario_base, 2);
+            $horasExtras = round((float) ($desglose['horas_extras'] ?? 0), 2);
+            $bonificaciones = $registro->montoBonificaciones();
             $fila = [
                 'cedula' => $registro->empleado?->cedula() ?? '',
                 'nombre' => $registro->empleado?->nombre() ?? 'Sin nombre',
+                'cargo' => $registro->empleado?->nombreCargo() ?? '—',
                 'sede' => $sedeNombre,
                 'grupo_tipo' => $sedeTipo,
                 'grupo_clave' => $sedeTipo.'|'.mb_strtoupper((string) ($sede?->codigo ?? $sedeNombre), 'UTF-8'),
-                'salario' => round((float) $registro->salario_base, 2),
-                'horas_extras' => round((float) ($desglose['horas_extras'] ?? 0), 2),
+                'salario' => $salario,
+                'horas_extras' => $horasExtras,
+                'bonificaciones' => $bonificaciones,
+                'total_asignaciones' => round($salario + $horasExtras + $bonificaciones, 2),
                 'inasistencias' => round((float) ($desglose['inasistencias'] ?? 0), 2),
                 'adelantos' => round((float) ($desglose['abonos_sueldo'] ?? 0), 2),
-                'bonificaciones' => $registro->montoBonificaciones(),
                 'ajustes_deduccion' => $registro->montoDeduccionesAjuste(),
                 'prestamos' => round((float) ($desglose['prestamos'] ?? 0), 2),
                 'deducciones' => round((float) $registro->total_deducciones, 2),
@@ -282,24 +288,25 @@ class PeriodoController extends Controller
     private function hojaRelacion(array $filas, array $totales): array
     {
         $cuerpo = array_map(fn ($f) => [
-            $f['cedula'], $f['nombre'], $f['sede'],
-            $f['salario'], $f['horas_extras'], $f['inasistencias'], $f['adelantos'], $f['bonificaciones'],
-            $f['ajustes_deduccion'], $f['prestamos'],
+            $f['cedula'], $f['nombre'], $f['cargo'],
+            $f['salario'], $f['horas_extras'], $f['bonificaciones'], $f['total_asignaciones'],
+            $f['inasistencias'], $f['adelantos'], $f['ajustes_deduccion'], $f['prestamos'],
             $f['deducciones'], $f['pagar_usd'], $f['pagar_bs'],
         ], $filas);
 
         return array_merge(
             [[
-                'Cédula', 'Empleado', 'Sede',
-                'Salario USD', 'Horas extra', 'Ausencias', 'Adelantos', 'Bonificaciones', 'Deducciones', 'Préstamos',
+                'Cédula', 'Empleado', 'Cargo',
+                'Salario USD', 'Horas extra', 'Bonificaciones', 'Total asignaciones',
+                'Ausencias', 'Adelantos', 'Deducciones', 'Préstamos',
                 'Total deducciones', 'Total Pagar USD', 'Total a Pagar BCV',
             ]],
             $cuerpo,
             [[
                 'TOTALES', count($filas).' trabajadores', '',
-                $totales['salario'], $totales['horas_extras'], $totales['inasistencias'],
-                $totales['adelantos'], $totales['bonificaciones'], $totales['ajustes_deduccion'], $totales['prestamos'], $totales['deducciones'],
-                $totales['pagar_usd'], $totales['pagar_bs'],
+                $totales['salario'], $totales['horas_extras'], $totales['bonificaciones'], $totales['total_asignaciones'],
+                $totales['inasistencias'], $totales['adelantos'], $totales['ajustes_deduccion'], $totales['prestamos'],
+                $totales['deducciones'], $totales['pagar_usd'], $totales['pagar_bs'],
             ]]
         );
     }
@@ -361,8 +368,8 @@ class PeriodoController extends Controller
     private function totalesDeFilas(array $filas): array
     {
         $totales = [
-            'salario' => 0.0, 'horas_extras' => 0.0, 'inasistencias' => 0.0,
-            'adelantos' => 0.0, 'bonificaciones' => 0.0, 'ajustes_deduccion' => 0.0, 'prestamos' => 0.0, 'deducciones' => 0.0,
+            'salario' => 0.0, 'horas_extras' => 0.0, 'bonificaciones' => 0.0, 'total_asignaciones' => 0.0,
+            'inasistencias' => 0.0, 'adelantos' => 0.0, 'ajustes_deduccion' => 0.0, 'prestamos' => 0.0, 'deducciones' => 0.0,
             'pagar_usd' => 0.0, 'pagar_bs' => 0.0,
         ];
         foreach ($filas as $fila) {

@@ -15,22 +15,34 @@
         $onDash = request()->routeIs('comprador.dashboard');
         $tab = (string) request()->query('tab', '');
         if ($tab === '') {
-            $tab = $u->isMarketing() ? 'sobrestock' : 'productos';
+            $tab = $u->defaultComprasRouteParams()['tab'] ?? ($u->isMarketing() ? 'sobrestock' : 'productos');
         }
         $status = (string) request()->query('status', '');
         $dash = fn (string $t, array $extra = []) => route('comprador.dashboard', array_merge(['tab' => $t], $extra));
 
         if (! $u->isMarketing()) {
-            $items[] = $link('Distribución', $dash('productos', ['status' => 'MalaDistribucion']), $onDash && $tab === 'productos' && $status !== 'Comprar');
-            $items[] = $link('Necesidad de Compra', $dash('productos', ['status' => 'Comprar']), $onDash && $tab === 'productos' && $status === 'Comprar');
-            $items[] = $link('General por Proveedor', $dash('proveedores'), $onDash && $tab === 'proveedores');
-            $items[] = $link('Sobre Stock / Sin Rotación', $dash('sobrestock'), $onDash && $tab === 'sobrestock');
-            $items[] = $link('Q Pedir', $dash('qpedir'), $onDash && $tab === 'qpedir');
-            $items[] = $link('Existencias Globales', route('comprador.existencias'), request()->routeIs('comprador.existencias'));
-        } else {
+            if ($u->canAccessComprasTab('distribucion')) {
+                $items[] = $link('Distribución', $dash('productos', ['status' => 'MalaDistribucion']), $onDash && $tab === 'productos' && $status !== 'Comprar');
+            }
+            if ($u->canAccessComprasTab('necesidad')) {
+                $items[] = $link('Necesidad de Compra', $dash('productos', ['status' => 'Comprar']), $onDash && $tab === 'productos' && $status === 'Comprar');
+            }
+            if ($u->canAccessComprasTab('proveedores')) {
+                $items[] = $link('General por Proveedor', $dash('proveedores'), $onDash && $tab === 'proveedores');
+            }
+            if ($u->canAccessComprasTab('sobrestock')) {
+                $items[] = $link('Sobre Stock / Sin Rotación', $dash('sobrestock'), $onDash && $tab === 'sobrestock');
+            }
+            if ($u->canAccessComprasTab('qpedir')) {
+                $items[] = $link('Q Pedir', $dash('qpedir'), $onDash && $tab === 'qpedir');
+            }
+            if ($u->canAccessComprasTab('existencias')) {
+                $items[] = $link('Existencias Globales', route('comprador.existencias'), request()->routeIs('comprador.existencias'));
+            }
+        } elseif ($u->canAccessComprasTab('sobrestock')) {
             $items[] = $link('Sobre Stock / Sin Rotación', $dash('sobrestock'), $onDash && $tab === 'sobrestock');
         }
-        if ($u->isMarketing() || $u->isAdmin()) {
+        if ($u->canAccessComprasTab('publicidad')) {
             $items[] = $link('Efectividad Publicidad', $dash('publicidad'), $onDash && $tab === 'publicidad');
         }
 
@@ -42,6 +54,9 @@
         $sedeItems[] = $link('Ventas', route('ventas.index'), request()->routeIs('ventas.index'), 'nav-ventas');
         $sedeItems[] = $link('Mayor Demanda', route('ventas.mayor_demanda'), request()->routeIs('ventas.mayor_demanda'));
         $sedeItems[] = $link('Inventario', route('inventario.index'), request()->routeIs('inventario.*'), 'nav-inventario');
+        if ($u->canSeeCatalogoExistencias() && ! $u->isVendedor()) {
+            $sedeItems[] = $link('Stock', route('vendedor.dashboard'), request()->routeIs('vendedor.dashboard'));
+        }
         $sedeItems[] = $link('Exportar', route('requisicion.form'), request()->routeIs('requisicion.*'), 'nav-export');
         if (! in_array($u->role, ['supervisor', 'telefonia'], true)) {
             $sedeItems[] = $link('Catálogo Visual', route('catalogo.index'), request()->routeIs('catalogo.*'), 'nav-catalogo', true);
@@ -88,6 +103,10 @@
         $nav[] = count($gerencialItems) === 1 ? $gerencialItems[0] : $drop('Gerencial', $gerencialItems);
     }
 
+    if ($u->isVendedor()) {
+        $nav[] = $link('Stock', route('vendedor.dashboard'), request()->routeIs('vendedor.dashboard'));
+    }
+
     if ($sedeItems) {
         if ($isSedeStaff) {
             foreach ($sedeItems as $item) {
@@ -132,11 +151,13 @@
             $link('Patrimonial', route('patrimonial.dashboard'), request()->routeIs('patrimonial.*')),
         ]);
     } elseif ($u->role !== 'admin') {
-        if ($u->canAccess('compras')) {
+        if ($u->canEnterCompras()) {
             $comprasItems = $comprasNavItems();
-            $nav[] = count($comprasItems) === 1
-                ? $comprasItems[0]
-                : $drop($u->isMarketing() ? 'Marketing' : 'Compras', $comprasItems);
+            if ($comprasItems) {
+                $nav[] = count($comprasItems) === 1
+                    ? $comprasItems[0]
+                    : $drop($u->isMarketing() ? 'Marketing' : 'Compras', $comprasItems);
+            }
         }
         if ($u->canAccess('finanzas.ver')) {
             $nav[] = $link('Flujo de Caja', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*'));

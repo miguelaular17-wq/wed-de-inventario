@@ -207,7 +207,7 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'permission:operacion'])->
 
 
 // Comprador & Marketing specific routes
-Route::middleware(['auth', 'permission:compras'])->prefix('compras')->group(function () {
+Route::middleware(['auth', 'permission:compras,compras.distribucion,compras.necesidad,compras.proveedores,compras.sobrestock,compras.qpedir,compras.existencias,compras.publicidad'])->prefix('compras')->group(function () {
     Route::get('/', [CompradorController::class, 'index'])->name('comprador.dashboard');
     Route::get('/exportar', [CompradorController::class, 'export'])->name('comprador.export');
     Route::get('/quiebre-inventario/exportar', [CompradorController::class, 'exportInventoryBreak'])->name('comprador.quiebre.export');
@@ -233,7 +233,7 @@ Route::middleware(['auth', 'permission:compras'])->prefix('compras')->group(func
 
     // Route for supervisors to download daily report by sede
     Route::get('/pedidos/reporte-diario-sede', [PedidoSolicitadoController::class, 'reporteDiarioSedePdf'])
-        ->withoutMiddleware('permission:compras')
+        ->withoutMiddleware('permission')
         ->middleware('permission:compras.reporte_sede')
         ->name('comprador.pedidos.diario_sede');
 

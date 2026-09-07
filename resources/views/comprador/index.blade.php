@@ -13,6 +13,7 @@
         'publicidad' => 'Efectividad Publicidad',
     ];
     $pageTitle = $pageTitles[$activeTab] ?? 'Compras y Distribución';
+    $puedePublicitar = auth()->user()?->canAccessComprasTab('publicidad') ?? false;
 @endphp
 @push('head')
 <style>
@@ -726,7 +727,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                             <a href="{{ $sortUrl('meses_inventario') }}" style="color: inherit; text-decoration: none;">Meses inv {{ $sortIcon('meses_inventario') }}</a>
                         </th>
                         <th style="width: 120px; text-align: center;">Sobrestock</th>
-                        @if(auth()->user()->isMarketing() || auth()->user()->isAdmin())
+                        @if(!empty($puedePublicitar))
                             <th style="width: 120px; text-align: center;">Publicidad</th>
                         @endif
                         @if(!empty($puedeMarcarMeta))
@@ -801,7 +802,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                                     {{ $item['sobrestock'] }}
                                 </span>
                             </td>
-                            @if(auth()->user()->isMarketing() || auth()->user()->isAdmin())
+                            @if(!empty($puedePublicitar))
                                 <td style="text-align: center;">
                                     @php
                                         $isAdvertised = in_array($item['id'], $advertisedProductIds, true);
@@ -847,7 +848,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ ((auth()->user()->isMarketing() || auth()->user()->isAdmin()) ? 15 : 14) + (!empty($puedeMarcarMeta) ? 1 : 0) }}" style="text-align: center; color: var(--muted); padding: 24px;">
+                            <td colspan="{{ ((!empty($puedePublicitar)) ? 15 : 14) + (!empty($puedeMarcarMeta) ? 1 : 0) }}" style="text-align: center; color: var(--muted); padding: 24px;">
                                 No se encontraron productos con los filtros seleccionados.
                             </td>
                         </tr>
@@ -862,7 +863,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
     </div>
 </div>
 
-@if(auth()->user()->isMarketing() || auth()->user()->isAdmin())
+@if(!empty($puedePublicitar))
 <!-- Tab 4: Efectividad Publicidad -->
 <div id="publicidad-tab" class="tab-content" style="display: {{ ($activeTab ?? '') === 'publicidad' ? 'block' : 'none' }};">
     <div class="panel">
@@ -992,7 +993,8 @@ table.data-table tbody tr.row-mala-distribucion:hover {
     <div class="panel modal-box" style="width: 95%; max-width: 420px; position: relative; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
         <button type="button" class="modal-close" onclick="cerrarMetaModal()" aria-label="Cerrar">×</button>
         <h3 style="margin: 0 0 6px; font-size: 1.15rem; color: var(--blue);">Meta de quincena</h3>
-        <p class="muted" style="margin: 0 0 12px; font-size: 0.85rem;">Producto <span id="meta-modal-codigo" style="font-family: monospace;"></span>. Solo sedes con stock; se guarda esa cantidad como inicial.</p>
+        <p class="muted" style="margin: 0 0 12px; font-size: 0.85rem;">Producto <span id="meta-modal-codigo" style="font-family: monospace;"></span>. El stock de la tabla es la suma de todas las sedes (incluye almacén). Solo se marca meta en tiendas.</p>
+        <p id="meta-modal-total" class="muted" style="margin: 0 0 12px; font-size: 0.85rem;"></p>
         <div id="meta-modal-sedes" style="max-height: 55vh; overflow: auto;"></div>
         <div style="margin-top: 12px; text-align: right;">
             <a href="{{ route('metas.index') }}" class="btn secondary" style="font-size: .8rem;">Ver panel de metas</a>
@@ -1185,6 +1187,8 @@ const sedesMetaFallback = @json(array_values($sedesMetaDisponibles ?? []));
 let metaProductoActual = null;
 let metaBtnActual = null;
 let metaStockPorSede = {};
+let metaSedesMarcables = sedesMetaFallback.slice();
+let metaSedeCentral = 'JRZ';
 
 function fmtStock(n) {
     const v = Number(n || 0);
@@ -1192,13 +1196,20 @@ function fmtStock(n) {
 }
 
 function pintarSedesMeta(list, sedesActivas) {
-    const filas = sedesMetaFallback
+    const sedes = [...new Set([...sedesMetaFallback, ...Object.keys(metaStockPorSede)])];
+    const filas = sedes
         .map(sede => ({
             sede,
             stock: Number(metaStockPorSede[sede] ?? 0),
             activa: sedesActivas.includes(sede),
+            marcable: metaSedesMarcables.includes(sede),
+            esAlmacen: sede === metaSedeCentral,
         }))
-        .filter(row => row.activa || row.stock > 0);
+        .filter(row => row.activa || row.stock > 0)
+        .sort((a, b) => {
+            if (a.esAlmacen !== b.esAlmacen) return a.esAlmacen ? 1 : -1;
+            return a.sede.localeCompare(b.sede);
+        });
 
     if (!filas.length) {
         list.innerHTML = '<p class="muted">Este producto no tiene stock en ninguna sede.</p>';
@@ -1206,13 +1217,16 @@ function pintarSedesMeta(list, sedesActivas) {
     }
 
     list.innerHTML = filas.map(row => {
+        const etiqueta = row.esAlmacen ? row.sede + ' (almacén)' : row.sede;
+        const accion = row.marcable
+            ? `<button type="button" class="btn ${row.activa ? 'primary' : 'secondary'}" style="padding:4px 10px;font-size:.75rem;" data-sede="${row.sede}">${row.activa ? 'Quitar meta' : 'Marcar meta'}</button>`
+            : '<span class="muted" style="font-size:.75rem;">No se marca meta</span>';
         return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:${row.activa ? '#eff6ff' : '#fff'};">
             <div>
-                <div style="font-weight:600;">${row.sede}</div>
+                <div style="font-weight:600;">${etiqueta}</div>
                 <div class="muted" style="font-size:.78rem;">Stock: <strong style="color:var(--text);">${fmtStock(row.stock)} u.</strong></div>
             </div>
-            <button type="button" class="btn ${row.activa ? 'primary' : 'secondary'}" style="padding:4px 10px;font-size:.75rem;"
-                data-sede="${row.sede}">${row.activa ? 'Quitar meta' : 'Marcar meta'}</button>
+            ${accion}
         </div>`;
     }).join('');
     list.querySelectorAll('button[data-sede]').forEach(b => {
@@ -1252,6 +1266,15 @@ async function abrirMetaProducto(btn) {
             return;
         }
         metaStockPorSede = res.stock || {};
+        metaSedesMarcables = Array.isArray(res.sedes_marcables) && res.sedes_marcables.length
+            ? res.sedes_marcables
+            : sedesMetaFallback.slice();
+        if (res.sede_central) metaSedeCentral = String(res.sede_central).toUpperCase();
+        const totalEl = document.getElementById('meta-modal-total');
+        if (totalEl) {
+            const total = Number(res.total ?? Object.values(metaStockPorSede).reduce((a, b) => a + Number(b || 0), 0));
+            totalEl.textContent = 'Total (todas las sedes): ' + fmtStock(total) + ' u.';
+        }
         if (Array.isArray(res.sedes_meta)) {
             sedesActivas = res.sedes_meta;
             metaBtnActual.setAttribute('data-sedes-meta', JSON.stringify(sedesActivas));

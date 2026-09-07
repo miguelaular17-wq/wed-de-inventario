@@ -43,6 +43,19 @@ class CompradorController extends Controller
             return redirect()->route('cobranza.index');
         }
         $activeTab = $this->resolveActiveTab($request);
+        $user = $request->user();
+        $requestedTab = (string) $request->query('tab', '');
+        if (
+            $user
+            && $requestedTab !== ''
+            && in_array($requestedTab, ['productos', 'proveedores', 'sobrestock', 'qpedir', 'publicidad'], true)
+            && ! $user->canAccessComprasTab($this->comprasTabKey($requestedTab, $request))
+        ) {
+            return redirect()->to($user->defaultComprasUrl());
+        }
+        if ($user && ! $user->canAccessComprasTab($this->comprasTabKey($activeTab, $request))) {
+            return redirect()->to($user->defaultComprasUrl());
+        }
         $needsPurchaseData = in_array($activeTab, ['productos', 'proveedores'], true);
         $needsAnalysis = $activeTab === 'sobrestock';
         $needsPublicidad = $activeTab === 'publicidad';
@@ -963,23 +976,53 @@ class CompradorController extends Controller
         return trim((string) $request->query('q', ''));
     }
 
+    private function comprasTabKey(string $activeTab, Request $request): string
+    {
+        if ($activeTab === 'productos') {
+            return (string) $request->query('status') === 'Comprar' ? 'necesidad' : 'distribucion';
+        }
+
+        return $activeTab;
+    }
+
+    private function denyUnlessComprasTab(string $tab): void
+    {
+        $user = request()->user();
+        if (! $user || ! $user->canAccessComprasTab($tab)) {
+            abort(403, 'Acceso denegado. Permisos insuficientes.');
+        }
+    }
+
     private function resolveActiveTab(Request $request): string
     {
+        $user = $request->user();
         $tab = (string) $request->query('tab', '');
         $allowed = ['productos', 'proveedores', 'sobrestock', 'qpedir', 'publicidad'];
         if (in_array($tab, $allowed, true)) {
-            return $tab;
+            $key = $this->comprasTabKey($tab, $request);
+            if (! $user || $user->canAccessComprasTab($key)) {
+                return $tab;
+            }
         }
 
-        if ($request->filled('q_pedir_date')) {
+        if ($request->filled('q_pedir_date') && (! $user || $user->canAccessComprasTab('qpedir'))) {
             return 'qpedir';
         }
 
-        if ($request->has('ss_categoria') || $request->filled('ss_buscar') || $request->has('ss_sort')) {
+        if (
+            ($request->has('ss_categoria') || $request->filled('ss_buscar') || $request->has('ss_sort'))
+            && (! $user || $user->canAccessComprasTab('sobrestock'))
+        ) {
             return 'sobrestock';
         }
 
-        $user = $request->user();
+        if ($user) {
+            $params = $user->defaultComprasRouteParams();
+            if (($params['tab'] ?? '') !== '') {
+                return $params['tab'];
+            }
+        }
+
         if ($user && method_exists($user, 'isMarketing') && $user->isMarketing()) {
             return 'sobrestock';
         }
@@ -992,6 +1035,7 @@ class CompradorController extends Controller
      */
     public function exportInventoryBreak(Request $request): StreamedResponse|RedirectResponse
     {
+        $this->denyUnlessComprasTab('sobrestock');
         $branches = config('inventario.sedes_stock', []);
         $data = $request->validate([
             'stock_minimo' => ['required', 'integer', 'min:0', 'max:1000000'],
@@ -1041,6 +1085,7 @@ class CompradorController extends Controller
      */
     public function notifyRedistribution(Request $request): RedirectResponse|\Illuminate\Http\JsonResponse
     {
+        $this->denyUnlessComprasTab('distribucion');
         $data = $request->validate([
             'codigo' => ['required', 'string'],
             'producto' => ['required', 'string'],
@@ -1101,6 +1146,17 @@ class CompradorController extends Controller
      */
     public function export(Request $request): \Symfony\Component\HttpFoundation\Response
     {
+        $user = $request->user();
+        if (
+            ! $user
+            || (
+                ! $user->canAccessComprasTab('distribucion')
+                && ! $user->canAccessComprasTab('necesidad')
+                && ! $user->canAccessComprasTab('proveedores')
+            )
+        ) {
+            abort(403, 'Acceso denegado. Permisos insuficientes.');
+        }
         $tp = (float) $request->query('tp', 60);
         $tv = (float) config('inventario.tiempo_venta_sede', 15);
         $sedes = config('inventario.sedes_stock');
@@ -1248,6 +1304,7 @@ class CompradorController extends Controller
      */
     public function togglePublicidad(Request $request): \Illuminate\Http\JsonResponse
     {
+        $this->denyUnlessComprasTab('publicidad');
         $data = $request->validate([
             'producto_id' => ['required', 'integer'],
             'fecha_publicidad' => ['nullable', 'date'],
@@ -1330,6 +1387,16 @@ class CompradorController extends Controller
 
     public function toggleExclusion(Request $request, $id)
     {
+        $user = $request->user();
+        if (
+            ! $user
+            || (
+                ! $user->canAccessComprasTab('distribucion')
+                && ! $user->canAccessComprasTab('necesidad')
+            )
+        ) {
+            abort(403, 'Acceso denegado. Permisos insuficientes.');
+        }
         $current = \Illuminate\Support\Facades\DB::connection('pgsql')
             ->table('inventario_v2.productos')
             ->where('id', $id)

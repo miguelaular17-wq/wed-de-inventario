@@ -142,7 +142,10 @@ class MetaQuincenaController extends Controller
             'success' => true,
             'producto_id' => $producto,
             'stock' => $stock,
+            'total' => round(array_sum($stock), 2),
             'sedes_meta' => array_values($activas),
+            'sedes_marcables' => $metas->sedesMarcables(),
+            'sede_central' => mb_strtoupper(trim((string) config('inventario.sede_central', 'JRZ')), 'UTF-8'),
         ]);
     }
 }

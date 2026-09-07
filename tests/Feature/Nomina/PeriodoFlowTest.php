@@ -109,6 +109,8 @@ class PeriodoFlowTest extends TestCase
         $zip->close();
         @unlink($tmp);
         $this->assertStringContainsString('Empleado Quincena', $sheet);
+        $this->assertStringContainsString('Cargo', $sheet);
+        $this->assertStringContainsString('Total asignaciones', $sheet);
         $this->assertStringContainsString('Total Pagar USD', $sheet);
         $this->assertStringContainsString('Ausencias', $sheet);
         $this->assertStringContainsString('Total a Pagar BCV', $sheet);

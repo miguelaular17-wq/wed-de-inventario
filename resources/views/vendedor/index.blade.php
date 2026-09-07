@@ -9,6 +9,7 @@
     $descFactor = VentaDescuento::factorDescuento();
     $netoFactor = VentaDescuento::factorNeto();
     $descEtiqueta = VentaDescuento::etiqueta();
+    $verPrecios = auth()->user()?->canSeeCatalogoPrecios() ?? true;
 @endphp
 <div class="cat-page">
 <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
@@ -50,8 +51,10 @@
             <thead>
                 <tr>
                     <th>Producto</th>
-                    <th style="width:42%;">Existencias</th>
-                    <th style="width:340px;">Precios</th>
+                    <th style="width:{{ $verPrecios ? '42%' : '58%' }};">Existencias</th>
+                    @if($verPrecios)
+                        <th style="width:340px;">Precios</th>
+                    @endif
                 </tr>
             </thead>
             <tbody>
@@ -93,6 +96,7 @@
                                 </div>
                             </div>
                         </td>
+                        @if($verPrecios)
                         <td>
                             <div class="cat-prices">
                                 <div>
@@ -115,10 +119,11 @@
                                 <button type="button" class="cat-cashea-btn" onclick="event.stopPropagation(); openCasheaFromRow(this)">Cashea</button>
                             </div>
                         </td>
+                        @endif
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="3" style="text-align:center; padding:40px; color:var(--muted);">
+                        <td colspan="{{ $verPrecios ? 3 : 2 }}" style="text-align:center; padding:40px; color:var(--muted);">
                             No se encontraron productos.
                         </td>
                     </tr>

@@ -15,6 +15,11 @@ class ExistenciasController extends Controller
 
     public function index(Request $request): View
     {
+        $user = $request->user();
+        if (! $user || ! $user->canAccessComprasTab('existencias')) {
+            abort(403, 'Acceso denegado. Permisos insuficientes.');
+        }
+
         ini_set('memory_limit', '512M');
 
         $filters = [
@@ -194,6 +199,11 @@ class ExistenciasController extends Controller
 
     public function getSubcategorias(Request $request): JsonResponse
     {
+        $user = $request->user();
+        if (! $user || ! $user->canAccessComprasTab('existencias')) {
+            abort(403, 'Acceso denegado. Permisos insuficientes.');
+        }
+
         $categoria = (string) $request->query('categoria', '');
         if ($categoria === '' || $categoria === 'Ninguno') {
             return response()->json([]);

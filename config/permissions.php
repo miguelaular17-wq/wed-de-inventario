@@ -7,8 +7,17 @@ return [
      */
     'assignable' => [
         'operacion' => 'Operación (ventas, inventario, exportar)',
-        'compras' => 'Compras / Marketing',
+        'compras' => 'Compras / Marketing (todas las tablas)',
+        'compras.distribucion' => 'Compras: Distribución',
+        'compras.necesidad' => 'Compras: Necesidad de compra',
+        'compras.proveedores' => 'Compras: General por proveedor',
+        'compras.sobrestock' => 'Compras: Sobre stock / sin rotación',
+        'compras.qpedir' => 'Compras: Q Pedir',
+        'compras.existencias' => 'Compras: Existencias globales',
+        'compras.publicidad' => 'Compras: Efectividad publicidad',
         'compras.reporte_sede' => 'Reporte diario de pedidos por sede',
+        'catalogo.existencias' => 'Catálogo: tabla de stock (existencias por sede)',
+        'catalogo.precios' => 'Catálogo: ver precios y Cashea',
         'finanzas.ver' => 'Flujo de caja y gastos fijos (ver)',
         'finanzas.editar' => 'Flujo de caja y gastos fijos (editar)',
         'finanzas.eliminar' => 'Eliminar egresos, traslados, divisas y avances',
@@ -37,8 +46,20 @@ return [
      * Las claves deben existir en "assignable".
      */
     'groups' => [
-        'Operaciones' => ['operacion'],
-        'Compras y Marketing' => ['compras', 'marketing.publicidad_equipo', 'meta', 'meta.ver'],
+        'Operaciones' => ['operacion', 'catalogo.existencias', 'catalogo.precios'],
+        'Compras y Marketing' => [
+            'compras',
+            'compras.distribucion',
+            'compras.necesidad',
+            'compras.proveedores',
+            'compras.sobrestock',
+            'compras.qpedir',
+            'compras.existencias',
+            'compras.publicidad',
+            'marketing.publicidad_equipo',
+            'meta',
+            'meta.ver',
+        ],
         'Reportes' => ['compras.reporte_sede'],
         'Finanzas' => ['finanzas.ver', 'finanzas.editar', 'finanzas.eliminar'],
         'Conciliaciones bancarias' => ['conciliaciones'],

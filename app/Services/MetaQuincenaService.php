@@ -296,7 +296,8 @@ class MetaQuincenaService
     }
 
     /**
-     * Stock por sede disponible para metas (incluye 0).
+     * Stock por sede. Incluye almacén (JRZ) y cualquier sede con existencia,
+     * para que el total coincida con la columna Stock del listado.
      *
      * @return array<string, float>
      */
@@ -306,6 +307,10 @@ class MetaQuincenaService
         foreach ($this->sedesDisponibles() as $sede) {
             $out[$sede] = 0.0;
         }
+        $central = mb_strtoupper(trim((string) config('inventario.sede_central', 'JRZ')), 'UTF-8');
+        if ($central !== '') {
+            $out[$central] = $out[$central] ?? 0.0;
+        }
 
         if (! Schema::hasTable('stock_actual')) {
             return $out;
@@ -313,17 +318,35 @@ class MetaQuincenaService
 
         $rows = DB::table('stock_actual')
             ->where('producto_id', $productoId)
-            ->whereIn(DB::raw('UPPER(TRIM(sede))'), array_keys($out))
             ->selectRaw('UPPER(TRIM(sede)) as sede')
             ->selectRaw('SUM(existencia) as existencia')
             ->groupBy(DB::raw('UPPER(TRIM(sede))'))
             ->get();
 
         foreach ($rows as $row) {
-            $out[(string) $row->sede] = round((float) $row->existencia, 2);
+            $sede = (string) $row->sede;
+            if ($sede === '') {
+                continue;
+            }
+            $out[$sede] = round((float) $row->existencia, 2);
         }
 
         return $out;
+    }
+
+    /**
+     * Sedes donde se puede marcar meta (tiendas). El almacén central no entra.
+     *
+     * @return list<string>
+     */
+    public function sedesMarcables(): array
+    {
+        $central = mb_strtoupper(trim((string) config('inventario.sede_central', 'JRZ')), 'UTF-8');
+
+        return array_values(array_filter(
+            $this->sedesDisponibles(),
+            fn (string $sede) => $sede !== $central
+        ));
     }
 
     public function unidadesVendidas(int $productoId, string $sede, Carbon|string $inicio, Carbon|string $fin): float

@@ -10,6 +10,11 @@ class CompradorSustitutosController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
+        if (! $user || ! $user->hasFullComprasAccess()) {
+            abort(403, 'Acceso denegado. Permisos insuficientes.');
+        }
+
         $q = $request->input('q');
         $categoria = $request->input('categoria');
 

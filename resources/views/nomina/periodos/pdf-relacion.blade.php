@@ -13,8 +13,8 @@
         h1 { font-size: 16px; color: #1e3a8a; text-transform: uppercase; }
         .sub { color: #64748b; margin-top: 4px; }
         table { width: 100%; border-collapse: collapse; }
-        th { background: #dbeafe; color: #1e3a8a; font-size: 8px; text-transform: uppercase; padding: 5px 4px; border: 1px solid #bfdbfe; text-align: center; }
-        td { padding: 4px 5px; border: 1px solid #e2e8f0; font-size: 9px; }
+        th { background: #dbeafe; color: #1e3a8a; font-size: 7px; text-transform: uppercase; padding: 5px 3px; border: 1px solid #bfdbfe; text-align: center; }
+        td { padding: 4px 4px; border: 1px solid #e2e8f0; font-size: 8px; }
         .num { text-align: right; white-space: nowrap; }
         .tot td { font-weight: bold; background: #f1f5f9; }
         .note { margin-top: 10px; color: #64748b; font-size: 8px; }
@@ -45,12 +45,13 @@
             <tr>
                 <th>Cédula</th>
                 <th>Empleado</th>
-                <th>Sede</th>
+                <th>Cargo</th>
                 <th>Salario USD</th>
                 <th>Horas extra</th>
+                <th>Bonificaciones</th>
+                <th>Total asignaciones</th>
                 <th>Ausencias</th>
                 <th>Adelantos</th>
-                <th>Bonificaciones</th>
                 <th>Deducciones</th>
                 <th>Préstamos</th>
                 <th>Total deducciones</th>
@@ -63,12 +64,13 @@
                 <tr>
                     <td>{{ $fila['cedula'] }}</td>
                     <td>{{ $fila['nombre'] }}</td>
-                    <td>{{ $fila['sede'] }}</td>
+                    <td>{{ $fila['cargo'] }}</td>
                     <td class="num">{{ number_format($fila['salario'], 2) }}</td>
                     <td class="num">{{ number_format($fila['horas_extras'], 2) }}</td>
+                    <td class="num">{{ number_format($fila['bonificaciones'], 2) }}</td>
+                    <td class="num">{{ number_format($fila['total_asignaciones'], 2) }}</td>
                     <td class="num">{{ number_format($fila['inasistencias'], 2) }}</td>
                     <td class="num">{{ number_format($fila['adelantos'], 2) }}</td>
-                    <td class="num">{{ number_format($fila['bonificaciones'], 2) }}</td>
                     <td class="num">{{ number_format($fila['ajustes_deduccion'], 2) }}</td>
                     <td class="num">{{ number_format($fila['prestamos'], 2) }}</td>
                     <td class="num">{{ number_format($fila['deducciones'], 2) }}</td>
@@ -80,9 +82,10 @@
                 <td colspan="3">Totales ({{ count($filas) }} trabajadores)</td>
                 <td class="num">{{ number_format($totales['salario'], 2) }}</td>
                 <td class="num">{{ number_format($totales['horas_extras'], 2) }}</td>
+                <td class="num">{{ number_format($totales['bonificaciones'], 2) }}</td>
+                <td class="num">{{ number_format($totales['total_asignaciones'], 2) }}</td>
                 <td class="num">{{ number_format($totales['inasistencias'], 2) }}</td>
                 <td class="num">{{ number_format($totales['adelantos'], 2) }}</td>
-                <td class="num">{{ number_format($totales['bonificaciones'], 2) }}</td>
                 <td class="num">{{ number_format($totales['ajustes_deduccion'] ?? 0, 2) }}</td>
                 <td class="num">{{ number_format($totales['prestamos'], 2) }}</td>
                 <td class="num">{{ number_format($totales['deducciones'], 2) }}</td>

@@ -10,6 +10,11 @@ class CompradorVentasController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
+        if (! $user || ! $user->hasFullComprasAccess()) {
+            abort(403, 'Acceso denegado. Permisos insuficientes.');
+        }
+
         // Default to last 6 months if no range provided
         $startMonth = $request->input('start_month', Carbon::now()->subMonths(5)->format('Y-m'));
         $endMonth = $request->input('end_month', Carbon::now()->format('Y-m'));
@@ -128,6 +133,11 @@ class CompradorVentasController extends Controller
 
     public function export(Request $request)
     {
+        $user = $request->user();
+        if (! $user || ! $user->hasFullComprasAccess()) {
+            abort(403, 'Acceso denegado. Permisos insuficientes.');
+        }
+
         $startMonth = $request->input('start_month', Carbon::now()->subMonths(5)->format('Y-m'));
         $endMonth = $request->input('end_month', Carbon::now()->format('Y-m'));
 

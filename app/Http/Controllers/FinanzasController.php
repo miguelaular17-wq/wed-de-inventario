@@ -13,12 +13,16 @@ use Illuminate\Http\Request;
 use App\Services\Profiler;
 
 use App\Services\BcvRateService;
+use App\Services\GastoFijoPendienteService;
 use App\Services\TodoTicketPago;
 use App\Support\SimpleXlsxWriter;
 
 class FinanzasController extends Controller
 {
-    public function __construct(private BcvRateService $bcvRate) {}
+            public function __construct(
+        private BcvRateService $bcvRate,
+        private GastoFijoPendienteService $gastosFijosPendientes,
+    ) {}
     private function getCuentas()
     {
         return [
@@ -602,7 +606,22 @@ class FinanzasController extends Controller
                 }
 
                 if (!empty($data['gasto_fijo_id'])) {
+                    $gastoFijo = \App\Models\GastoFijo::query()
+                        ->with(['pagos' => function ($q) {
+                            $q->where('anio', (int) date('Y'));
+                        }])
+                        ->find((int) $data['gasto_fijo_id']);
                     $mesIdx = (int) date('n') - 1;
+                    if ($gastoFijo) {
+                        $periodos = $this->gastosFijosPendientes->periodosPendientes(
+                            (string) $gastoFijo->fecha,
+                            (float) $gastoFijo->costo,
+                            $gastoFijo->pagos
+                        );
+                        if ($periodos !== []) {
+                            $mesIdx = (int) $periodos[0]['mes_idx'];
+                        }
+                    }
                     $montoPagado = !empty($data['monto_pagado_gf']) ? (float) $data['monto_pagado_gf'] : ($calc_usd ?? 0);
                     GastoFijoPago::updateOrCreate(
                         [
@@ -2445,8 +2464,7 @@ class FinanzasController extends Controller
     public function gastosFijos()
     {
         $mesActual = (int) date('n'); // 1-12
-        $diaActual = (int) date('j');
-        $nombresMeses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+        $nombresMeses = GastoFijoPendienteService::NOMBRES_MESES;
 
         $tablas = [
             0 => [
@@ -2502,104 +2520,42 @@ class FinanzasController extends Controller
             ];
         }
 
-        // ── GENERAR NOTIFICACIONES ──
+        // ── GENERAR NOTIFICACIONES (siguen visibles hasta marcar pagado) ──
         $notificaciones = [];
         $tablaLabels = ['Grupo Inmobiliario', 'Palacio/Nunes/Euronissi', 'Directivo'];
 
         foreach ($tablas as $tIdx => $tabla) {
-            foreach ($tabla['filas'] as $fIdx => $fila) {
-                if (empty($fila['fecha']) || $fila['costo'] <= 0) continue;
-
-                // Check if already paid for current period
-                $mesBusqueda = $mesActual - 1;
-                $pagoRecord = $fila['pagos_models']->firstWhere('mes_idx', $mesBusqueda);
-
-                if ($pagoRecord && $pagoRecord->pagado) {
-                    // For weekly payments, check if paid within last 7 days
-                    $diasPagoCheck = $this->parseDiasPago($fila['fecha']);
-                    $isWeekly = in_array(-1, $diasPagoCheck);
-                    if ($isWeekly) {
-                        if ($pagoRecord->pagado_at && $pagoRecord->pagado_at->diffInDays(now()) < 7) {
-                            continue; // Skip - paid this week
-                        }
-                    } else {
-                        continue; // Skip - paid this month
-                    }
-                }
-
-                $diasPago = $this->parseDiasPago($fila['fecha']);
-                foreach ($diasPago as $dia) {
-                    if ($dia === -1) {
-                        $notificaciones[] = [
-                            'tipo' => 'semanal',
-                            'servicio' => $fila['servicio'],
-                            'empresa' => $fila['empresa'],
-                            'costo' => $fila['costo'],
-                            'fecha' => $fila['fecha'],
-                            'tabla' => $tablaLabels[$tIdx],
-                            'tabla_idx' => $tIdx,
-                            'fila_idx' => $fila['id'], // Now using gasto_fijo_id
-                            'gasto_fijo_id' => $fila['id'],
-                            'urgente' => false,
-                        ];
-                        break;
-                    }
-                    $diff = $dia - $diaActual;
-                    if ($diff >= 0 && $diff <= 7) {
-                        $notificaciones[] = [
-                            'tipo' => $diff === 0 ? 'hoy' : 'proximo',
-                            'servicio' => $fila['servicio'],
-                            'empresa' => $fila['empresa'],
-                            'costo' => $fila['costo'],
-                            'fecha' => $fila['fecha'],
-                            'dia' => $dia,
-                            'tabla' => $tablaLabels[$tIdx],
-                            'tabla_idx' => $tIdx,
-                            'fila_idx' => $fila['id'], // Now using gasto_fijo_id
-                            'gasto_fijo_id' => $fila['id'],
-                            'urgente' => $diff <= 2,
-                        ];
-                        break;
-                    }
+            foreach ($tabla['filas'] as $fila) {
+                foreach ($this->gastosFijosPendientes->periodosPendientes((string) $fila['fecha'], (float) $fila['costo'], $fila['pagos_models']) as $periodo) {
+                    $notificaciones[] = [
+                        'tipo' => $periodo['tipo'],
+                        'servicio' => $fila['servicio'],
+                        'empresa' => $fila['empresa'],
+                        'costo' => $fila['costo'],
+                        'fecha' => $fila['fecha'],
+                        'dia' => $periodo['dia'],
+                        'mes_idx' => $periodo['mes_idx'],
+                        'mes_nombre' => $periodo['mes_nombre'],
+                        'tabla' => $tablaLabels[$tIdx],
+                        'tabla_idx' => $tIdx,
+                        'fila_idx' => $fila['id'],
+                        'gasto_fijo_id' => $fila['id'],
+                        'urgente' => $periodo['urgente'],
+                    ];
                 }
             }
         }
 
-        usort($notificaciones, fn($a, $b) => ($b['urgente'] ?? false) <=> ($a['urgente'] ?? false));
+        usort($notificaciones, function ($a, $b) {
+            $urgencia = ($b['urgente'] ?? false) <=> ($a['urgente'] ?? false);
+            if ($urgencia !== 0) {
+                return $urgencia;
+            }
+
+            return ($a['mes_idx'] ?? 0) <=> ($b['mes_idx'] ?? 0);
+        });
 
         return view('finanzas.gastos_fijos', compact('tablas', 'mesActual', 'nombresMeses', 'notificaciones'));
-    }
-
-    private function parseDiasPago(string $fecha): array
-    {
-        $f = strtolower(trim($fecha));
-        if (empty($f)) return [];
-
-        // "17 de cada mes" / "17 DE CADA MES"
-        if (preg_match('/^(\d+)\s+de\s+cada/i', $f, $m)) return [(int)$m[1]];
-
-        // "1-5 de cada mes" / "8-15 de cada mes"
-        if (preg_match('/^(\d+)\s*-\s*(\d+)\s+de\s+cada/i', $f, $m)) return [(int)$m[1]];
-
-        // "1 AL 5 DE CADA MES"
-        if (preg_match('/^(\d+)\s+al\s+(\d+)/i', $f, $m)) return [(int)$m[1]];
-
-        // "1 - 15 de cada mes"
-        if (preg_match('/^(\d+)\s*-\s*(\d+)/i', $f, $m)) return [(int)$m[1]];
-
-        // "8" (just a number)
-        if (preg_match('/^(\d+)$/', $f, $m)) return [(int)$m[1]];
-
-        // "1ERO D/C MES"
-        if (preg_match('/^1ero/i', $f)) return [1];
-
-        // "5 D/C MES"
-        if (preg_match('/^(\d+)\s+d\/c/i', $f, $m)) return [(int)$m[1]];
-
-        // Weekly: SABADO, VIERNES, LUNES, TODOS LOS LUNES
-        if (preg_match('/sabado|viernes|lunes/i', $f)) return [-1];
-
-        return [];
     }
 
     /**
@@ -2608,8 +2564,6 @@ class FinanzasController extends Controller
      */
     public function getGastosFijosParaVincular()
     {
-        $mesActual = (int) date('n');
-        $diaActual = (int) date('j');
         $tablaLabels = [
             0 => 'Grupo Inmobiliario',
             1 => 'Palacio/Nunes/Euronissi',
@@ -2625,33 +2579,12 @@ class FinanzasController extends Controller
 
         $pendientes = [];
         foreach ($gastos as $gasto) {
-            if ($gasto->costo <= 0 || empty($gasto->fecha)) continue;
-
-            // Check if already paid this period
-            $mesBusqueda = $mesActual - 1;
-            $pagoRecord = $gasto->pagos->firstWhere('mes_idx', $mesBusqueda);
-            $diasPago = $this->parseDiasPago($gasto->fecha);
-            $isWeekly = in_array(-1, $diasPago);
-
-            if ($pagoRecord && $pagoRecord->pagado) {
-                if ($isWeekly) {
-                    if ($pagoRecord->pagado_at && $pagoRecord->pagado_at->diffInDays(now()) < 7) {
-                        continue; // paid this week
-                    }
-                } else {
-                    continue; // paid this month
-                }
+            $periodos = $this->gastosFijosPendientes->periodosPendientes((string) $gasto->fecha, (float) $gasto->costo, $gasto->pagos);
+            if ($periodos === []) {
+                continue;
             }
 
-            // Only include if payment is due within 7 days or is weekly
-            $isDue = $isWeekly;
-            if (!$isDue) {
-                foreach ($diasPago as $dia) {
-                    $diff = $dia - $diaActual;
-                    if ($diff >= 0 && $diff <= 7) { $isDue = true; break; }
-                }
-            }
-            if (!$isDue) continue;
+            $masUrgente = collect($periodos)->sortByDesc('urgente')->first();
 
             $pendientes[] = [
                 'id'           => $gasto->id,
@@ -2662,7 +2595,8 @@ class FinanzasController extends Controller
                 'grupo_id'     => $gasto->grupo_id,
                 'tabla_label'  => $tablaLabels[$gasto->grupo_id] ?? 'Otro',
                 'fecha'        => $gasto->fecha,
-                'urgente'      => !$isWeekly && in_array(0, array_map(fn($d) => $d - $diaActual, $diasPago)),
+                'urgente'      => (bool) ($masUrgente['urgente'] ?? false),
+                'mes_idx'      => $masUrgente['mes_idx'] ?? ((int) date('n') - 1),
             ];
         }
 
@@ -2747,14 +2681,16 @@ class FinanzasController extends Controller
         $request->validate([
             'gasto_fijo_id' => 'required|integer',
             'costo' => 'nullable|numeric|min:0',
+            'mes_idx' => 'nullable|integer|min:0|max:11',
         ]);
 
         $mesActual = (int) date('n');
+        $mesIdx = $request->filled('mes_idx') ? (int) $request->mes_idx : $mesActual - 1;
 
         $pago = \App\Models\GastoFijoPago::updateOrCreate(
             [
                 'gasto_fijo_id' => $request->gasto_fijo_id,
-                'mes_idx' => $mesActual - 1,
+                'mes_idx' => $mesIdx,
                 'anio' => (int) date('Y'),
             ],
             [
