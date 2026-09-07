@@ -6,17 +6,20 @@ use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Tests\Concerns\CreatesNominaSchema;
+use Tests\Concerns\CreatesServicioEquipoSchema;
 use Tests\TestCase;
 
 class ServicioTecnicoViewsSmokeTest extends TestCase
 {
     use CreatesNominaSchema;
+    use CreatesServicioEquipoSchema;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->setUpNominaSchema();
         $this->ensureStTables();
+        $this->ensureStEquipoBitacoraSchema();
     }
 
     public function test_create_pages_render_for_tecnico(): void

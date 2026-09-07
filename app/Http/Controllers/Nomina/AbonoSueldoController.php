@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use ZipArchive;
 
 class AbonoSueldoController extends Controller
 {
@@ -41,12 +42,26 @@ class AbonoSueldoController extends Controller
 
         $delDia = $this->advances->delDia($fecha);
         $quincena = $this->advances->quincenaDe($fecha);
+        $txtPorEmpresa = $delDia
+            ->groupBy(fn ($abono) => (string) ($abono->empleado?->empresa_id ?: '0'))
+            ->map(function ($grupo) {
+                $empleado = $grupo->first()->empleado;
+
+                return (object) [
+                    'empresa' => $empleado?->empresa,
+                    'empleados' => $grupo->pluck('empleado_id')->unique()->count(),
+                    'usd' => round((float) $grupo->sum('monto'), 2),
+                ];
+            })
+            ->sortBy(fn ($fila) => $fila->empresa?->nombre ?? 'zzzz')
+            ->values();
 
         return view('nomina.adelantos.index', [
             'fecha' => $fecha->toDateString(),
             'q' => $q,
             'resultados' => $resultados,
             'delDia' => $delDia,
+            'txtPorEmpresa' => $txtPorEmpresa,
             'totalDia' => round((float) $delDia->sum('monto'), 2),
             'quincena' => $quincena,
             'kpis' => $this->advances->kpis($fecha),
@@ -79,13 +94,61 @@ class AbonoSueldoController extends Controller
     {
         $fecha = $this->fechaConsulta($request);
         $tasa = $this->bcv->getRateForToday();
-        $contenido = $this->advances->generarTxtDelDia($fecha, $tasa);
-        $nombre = $this->advances->nombreArchivoDelDia($fecha);
 
-        return response()->streamDownload(function () use ($contenido) {
-            echo $contenido;
-        }, $nombre, [
-            'Content-Type' => 'text/plain; charset=UTF-8',
+        try {
+            $archivos = $this->advances->archivosTxtDelDia($fecha, $tasa);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()
+                ->route('nomina.adelantos.index', ['fecha' => $fecha->toDateString()])
+                ->withErrors($e->errors());
+        }
+
+        $empresaId = $request->query('empresa');
+        if ($empresaId !== null && $empresaId !== '') {
+            $archivo = $archivos->first(fn ($a) => (int) ($a->empresa?->id ?? 0) === (int) $empresaId);
+            if (! $archivo) {
+                return redirect()
+                    ->route('nomina.adelantos.index', ['fecha' => $fecha->toDateString()])
+                    ->withErrors(['empresa' => 'Esa empresa no tiene adelantos en esta fecha.']);
+            }
+
+            return response()->streamDownload(function () use ($archivo) {
+                echo $archivo->contenido;
+            }, $archivo->archivo, [
+                'Content-Type' => 'text/plain; charset=UTF-8',
+            ]);
+        }
+
+        if ($archivos->count() === 1) {
+            $archivo = $archivos->first();
+
+            return response()->streamDownload(function () use ($archivo) {
+                echo $archivo->contenido;
+            }, $archivo->archivo, [
+                'Content-Type' => 'text/plain; charset=UTF-8',
+            ]);
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'adelantos_zip_');
+        $zip = new ZipArchive;
+        if ($zip->open($tmp, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            @unlink($tmp);
+
+            return redirect()
+                ->route('nomina.adelantos.index', ['fecha' => $fecha->toDateString()])
+                ->withErrors(['fecha' => 'No se pudo armar el ZIP de adelantos.']);
+        }
+        foreach ($archivos as $archivo) {
+            $zip->addFromString($archivo->archivo, $archivo->contenido);
+        }
+        $zip->close();
+        $binario = file_get_contents($tmp);
+        @unlink($tmp);
+
+        return response()->streamDownload(function () use ($binario) {
+            echo $binario;
+        }, $this->advances->nombreZipDelDia($fecha), [
+            'Content-Type' => 'application/zip',
         ]);
     }
 

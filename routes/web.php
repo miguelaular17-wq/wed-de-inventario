@@ -19,6 +19,7 @@ use App\Http\Controllers\CompradorController;
 use App\Http\Controllers\MetaQuincenaController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PedidoSolicitadoController;
+use App\Http\Controllers\ServicioTecnico\CelularesController;
 use App\Http\Controllers\ServicioTecnico\DashboardController as ServicioDashboardController;
 use App\Http\Controllers\ServicioTecnico\FacturaController;
 use App\Http\Controllers\ServicioTecnico\OrdenController;
@@ -76,13 +77,25 @@ Route::get('/', function () {
         }
 
         if ($user->isTecnico()) {
-            return redirect()->route('servicio.dashboard');
+            return redirect()->route('servicio.celulares.hub');
         }
 
         return redirect()->route('ventas.index');
     }
 
     return redirect()->route('login');
+});
+
+/** Acceso rápido ST: público, como Existencias (sin login). */
+Route::get('/ir/servicio-tecnico', function () {
+    return redirect()->route('servicio.celulares.hub');
+})->name('goto.servicio');
+
+Route::prefix('servicio-tecnico/celulares')->name('servicio.celulares.')->group(function () {
+    Route::get('/', [CelularesController::class, 'hub'])->name('hub');
+    Route::get('/bitacora', [CelularesController::class, 'bitacora'])->name('bitacora');
+    Route::get('/lookup-imei', [CelularesController::class, 'lookupImei'])->name('lookup_imei');
+    Route::get('/{equipo}', [CelularesController::class, 'show'])->whereNumber('equipo')->name('show');
 });
 
 Route::middleware('guest')->group(function () {
@@ -291,7 +304,10 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::put('/empleados/{empleado}', [EmpleadoController::class, 'update'])->name('empleados.update');
 
     Route::get('/prestamos', [PrestamoController::class, 'index'])->name('prestamos.index');
+    Route::post('/prestamos', [PrestamoController::class, 'storeEscritorio'])->name('prestamos.escritorio');
+    Route::get('/prestamos/txt', [PrestamoController::class, 'exportarTxt'])->name('prestamos.txt');
     Route::post('/prestamos/programar', [PrestamoController::class, 'programar'])->name('prestamos.programar');
+    Route::post('/prestamos/empleado/{empleado}/cobrar', [PrestamoController::class, 'cobrar'])->name('prestamos.cobrar');
     Route::post('/empleados/{empleado}/prestamos', [PrestamoController::class, 'store'])->name('prestamos.store');
     Route::post('/prestamos/{prestamo}/pagos', [PrestamoController::class, 'abonar'])->name('prestamos.abonar');
     Route::post('/prestamos/{prestamo}/cancelar', [PrestamoController::class, 'cancelar'])->name('prestamos.cancelar');
@@ -453,10 +469,26 @@ Route::middleware(['auth', 'permission:contratos'])->prefix('contratos')->group(
     Route::get('/{id}/reporte', [App\Http\Controllers\ContratoController::class, 'reporte'])->name('contratos.reporte');
 });
 
+Route::middleware(['auth', EnsureSedeSelected::class])
+    ->prefix('servicio-tecnico')
+    ->group(function () {
+        Route::name('servicio.ordenes.')->group(function () {
+            Route::get('/crear', [OrdenController::class, 'create'])->name('create');
+            Route::post('/', [OrdenController::class, 'store'])->name('store');
+            Route::get('/{orden}', [OrdenController::class, 'show'])->whereNumber('orden')->name('show');
+            Route::get('/{orden}/pdf/recepcion', [OrdenController::class, 'pdfRecepcion'])->whereNumber('orden')->name('recepcion_pdf');
+            Route::get('/{orden}/backup/{backup}/pdf', [OrdenController::class, 'pdfBackup'])->whereNumber(['orden', 'backup'])->name('backup_pdf');
+        });
+    });
+
 Route::middleware(['auth', EnsureSedeSelected::class, 'permission:servicio'])
     ->prefix('servicio-tecnico')
     ->group(function () {
         Route::get('/dashboard', [ServicioDashboardController::class, 'index'])->name('servicio.dashboard');
+
+        Route::prefix('celulares')->name('servicio.celulares.')->group(function () {
+            Route::get('/por-recibir', [CelularesController::class, 'porRecibir'])->name('por_recibir');
+        });
 
         Route::prefix('reparaciones')->name('servicio.reparaciones.')->group(function () {
             Route::get('/', [ReparacionController::class, 'index'])->name('index');
@@ -495,9 +527,8 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'permission:servicio'])
 
         Route::name('servicio.ordenes.')->group(function () {
             Route::get('/', [OrdenController::class, 'index'])->name('index');
-            Route::get('/crear', [OrdenController::class, 'create'])->name('create');
-            Route::post('/', [OrdenController::class, 'store'])->name('store');
-            Route::get('/{orden}', [OrdenController::class, 'show'])->whereNumber('orden')->name('show');
+            Route::get('/{orden}/pdf/conformidad', [OrdenController::class, 'pdfConformidad'])->whereNumber('orden')->name('conformidad_pdf');
+            Route::post('/{orden}/conformidad', [OrdenController::class, 'guardarConformidad'])->whereNumber('orden')->name('conformidad');
             Route::get('/{orden}/editar', [OrdenController::class, 'edit'])->whereNumber('orden')->name('edit');
             Route::put('/{orden}', [OrdenController::class, 'update'])->whereNumber('orden')->name('update');
             Route::post('/{orden}/confirmar-recepcion', [OrdenController::class, 'confirmarRecepcion'])->whereNumber('orden')->name('confirmar_recepcion');

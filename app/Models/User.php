@@ -192,6 +192,20 @@ class User extends Authenticatable
         return $this->isTecnico();
     }
 
+    public function puedeTransferirServicio(): bool
+    {
+        if ($this->isAdmin() || $this->isGerente()) {
+            return true;
+        }
+
+        if ($this->canAccess('servicio.transferir')) {
+            return true;
+        }
+
+        // Supervisores u otros con acceso ST completo (no técnico acotado a su sede).
+        return $this->canAccess('servicio') && ! $this->scopesServicioToOwnSede();
+    }
+
     public function extraPermissions(): HasMany
     {
         return $this->hasMany(UserPermission::class);

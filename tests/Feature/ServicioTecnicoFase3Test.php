@@ -10,17 +10,20 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use Tests\Concerns\CreatesNominaSchema;
+use Tests\Concerns\CreatesServicioEquipoSchema;
 use Tests\TestCase;
 
 class ServicioTecnicoFase3Test extends TestCase
 {
     use CreatesNominaSchema;
+    use CreatesServicioEquipoSchema;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->setUpNominaSchema();
         $this->ensureStTables();
+        $this->ensureStEquipoBitacoraSchema();
     }
 
     public function test_tecnico_accede_al_dashboard(): void

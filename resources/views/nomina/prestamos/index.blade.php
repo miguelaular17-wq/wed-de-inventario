@@ -8,165 +8,288 @@
         <div>
             <h1 style="margin:0;">Préstamos</h1>
             <p class="muted" style="margin:4px 0 0;">
-                Quincena {{ $quincena['etiqueta'] }}. Marca quién debe y cuánto se descuenta ahora. Si ganan comisión, eliges de dónde sale; si no, va a esta nómina. Queda en la ficha y se usa al calcular.
+                Quincena {{ $quincena['etiqueta'] }}. Lista de deudores (suma de todos sus préstamos).
+                Abre a la persona para cobrar o programar descuento de nómina/comisión.
             </p>
         </div>
     </div>
 
     <div class="nomina-kpis">
         <div class="nomina-kpi"><span>Deudores</span><strong>{{ $kpis['deudores'] }}</strong></div>
+        <div class="nomina-kpi"><span>Total prestado</span><strong>${{ number_format($kpis['total_prestamo'] ?? 0, 2) }}</strong></div>
+        <div class="nomina-kpi"><span>Total pagado</span><strong>${{ number_format($kpis['total_pagado'] ?? 0, 2) }}</strong></div>
         <div class="nomina-kpi"><span>Saldo vivo</span><strong>${{ number_format($kpis['saldo'], 2) }}</strong></div>
         <div class="nomina-kpi"><span>Esta quincena</span><strong>${{ number_format($kpis['programado'], 2) }}</strong></div>
-        <div class="nomina-kpi"><span>A nómina</span><strong>${{ number_format($kpis['nomina'], 2) }}</strong></div>
-        <div class="nomina-kpi"><span>A comisión</span><strong>${{ number_format($kpis['comision'], 2) }}</strong></div>
         <div class="nomina-kpi"><span>Pendiente global</span><strong>${{ number_format($kpisGlobales['total_pendiente'], 2) }}</strong></div>
     </div>
 
     <form method="GET" class="filter-bar" style="margin-top:16px;">
+        <div class="field">
+            <label>Fecha TXT</label>
+            <input type="date" name="fecha" value="{{ $fecha }}">
+        </div>
         <div class="field field-wide">
             <label>Buscar</label>
             <input type="text" name="q" value="{{ $q }}" placeholder="Nombre o cédula" autofocus>
         </div>
-        <div class="field" style="display:flex;align-items:flex-end;">
+        <div class="field" style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;">
             <button class="btn primary" type="submit">Buscar</button>
+            <a class="btn" href="{{ route('nomina.prestamos.txt', ['fecha' => $fecha]) }}">Descargar TXT por empresa</a>
         </div>
     </form>
+    <p class="muted" style="margin-top:8px;">
+        Tasa flujo de caja (BCV) hoy: <strong>{{ number_format($tasaBcv, 2) }}</strong>.
+        El banco pide un TXT por empresa (si hay varias, baja un ZIP).
+        @if($kpis['nomina'] > 0 || $kpis['comision'] > 0)
+            · Programado: nómina ${{ number_format($kpis['nomina'], 2) }} · comisión ${{ number_format($kpis['comision'], 2) }}
+        @endif
+    </p>
 
-    <form method="POST" action="{{ route('nomina.prestamos.programar') }}" id="form-prestamos-quincena" style="margin-top:16px;">
-        @csrf
-        <input type="hidden" name="q" value="{{ $q }}">
+    @if(($txtPorEmpresa ?? collect())->isNotEmpty())
+        <div class="nomina-card" style="margin-top:16px;">
+            <h3 style="margin-top:0;">TXT del {{ \Carbon\Carbon::parse($fecha)->format('d/m/Y') }}</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Empresa</th>
+                        <th>Personas</th>
+                        <th>Monto USD</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($txtPorEmpresa as $fila)
+                        <tr>
+                            <td>
+                                <strong>{{ $fila->empresa?->nombre ?: 'Sin empresa' }}</strong>
+                                @if($fila->empresa?->codigo)
+                                    <div class="muted" style="font-size:.75rem;">{{ $fila->empresa->codigo }}</div>
+                                @endif
+                            </td>
+                            <td>{{ $fila->empleados }}</td>
+                            <td>${{ number_format($fila->usd, 2) }}</td>
+                            <td>
+                                <a class="btn secondary" href="{{ route('nomina.prestamos.txt', ['fecha' => $fecha, 'empresa' => $fila->empresa->id ?? 0]) }}">TXT</a>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
 
-        <div class="nomina-card">
-            <h3>Quién debe</h3>
-            @if($deudores->isEmpty())
-                <p class="muted" style="margin-bottom:0;">Nadie tiene cuotas pendientes{{ $q !== '' ? ' que coincidan con “'.$q.'”' : '' }}.</p>
-            @else
-                <p class="muted">Si no marcas, la cuota no entra en esta quincena. Un parcial deja el resto en el préstamo. La barra nómina/comisión solo aparece cuando esa persona genera comisión.</p>
-                <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-                    <button type="button" class="btn secondary" onclick="marcarCuotas(true)">Marcar todos</button>
-                    <button type="button" class="btn secondary" onclick="marcarCuotas(false)">Ninguno</button>
-                </div>
-                <div class="table-wrap">
-                    <table class="data-table">
-                        <thead>
+    <div class="nomina-card" style="margin-top:16px;">
+        <h3 style="margin-top:0;">Generar préstamo</h3>
+        @if($q === '')
+            <p class="muted" style="margin-bottom:0;">Busca por nombre o cédula para registrar un préstamo a cualquier empleado.</p>
+        @else
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Empleado</th>
+                        <th>Cédula</th>
+                        <th>Sede</th>
+                        <th>Monto / motivo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($resultadosAlta as $empleado)
+                        <tr>
+                            <td>
+                                <strong>{{ $empleado->nombre() }}</strong>
+                                <div class="muted" style="font-size:.75rem;">{{ $empleado->nombreCargo() }}</div>
+                            </td>
+                            <td>{{ $empleado->cedula() ?: '—' }}</td>
+                            <td>{{ $empleado->nombreSede() }}</td>
+                            <td>
+                                <form method="POST" action="{{ route('nomina.prestamos.escritorio') }}" class="nomina-inline-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                                    @csrf
+                                    <input type="hidden" name="empleado_id" value="{{ $empleado->id }}">
+                                    <input type="hidden" name="fecha" value="{{ $fecha }}">
+                                    <input type="hidden" name="q" value="{{ $q }}">
+                                    <input type="number" step="0.01" min="0.01" name="monto_original" placeholder="Monto $" required style="width:120px;">
+                                    <input name="motivo" placeholder="Motivo (opcional)" style="min-width:160px;flex:1;">
+                                    <button class="btn primary" type="submit">Registrar</button>
+                                </form>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="4" class="muted">Ningún activo coincide con “{{ $q }}”.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        @endif
+    </div>
+
+    <div class="nomina-card" style="margin-top:16px;">
+        <h3 style="margin-top:0;" id="lista-deudores">Quién debe</h3>
+        @if($deudores->isEmpty())
+            <p class="muted" style="margin-bottom:0;">Nadie tiene saldo pendiente{{ $q !== '' ? ' que coincida con “'.$q.'”' : '' }}.</p>
+        @else
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Empleado</th>
+                            <th>Préstamos</th>
+                            <th>Total prestado</th>
+                            <th>Pagado</th>
+                            <th>Saldo</th>
+                            <th>Esta quincena</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($deudores as $fila)
+                            @php
+                                $empleado = $fila['empleado'];
+                                $programado = ($planesPorEmpleado->get($empleado->id) ?? collect())->sum('monto');
+                            @endphp
                             <tr>
-                                <th style="width:72px;">Descontar</th>
-                                <th>Empleado</th>
-                                <th>Cuotas</th>
-                                <th>A descontar</th>
+                                <td>
+                                    <strong>{{ $empleado->nombre() }}</strong>
+                                    @if($empleado->cedula())
+                                        <div class="muted" style="font-size:.75rem;">C.I. {{ $empleado->cedula() }}</div>
+                                    @endif
+                                    @if($fila['genera_comision'])
+                                        <div class="muted" style="font-size:.75rem;">Gana comisión</div>
+                                    @endif
+                                </td>
+                                <td>{{ $fila['cantidad'] }}</td>
+                                <td>${{ number_format($fila['total_prestamo'], 2) }}</td>
+                                <td>${{ number_format($fila['total_pagado'], 2) }}</td>
+                                <td><strong>${{ number_format($fila['saldo'], 2) }}</strong></td>
+                                <td>
+                                    @if($programado > 0)
+                                        ${{ number_format((float) $programado, 2) }}
+                                    @else
+                                        <span class="muted">—</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    <a class="btn primary" style="padding:4px 10px;font-size:.8rem;" href="#cobrar-{{ $empleado->id }}">Cobrar / descontar</a>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($deudores as $fila)
-                                @php $empleado = $fila['empleado']; @endphp
-                                <tr data-empleado-id="{{ $empleado->id }}">
-                                    <td>
-                                        <button type="button" class="btn secondary" style="padding:4px 8px;font-size:.75rem;" onclick="marcarEmpleado({{ $empleado->id }}, true)">Todas</button>
-                                    </td>
-                                    <td>
-                                        <a href="{{ route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'prestamos']) }}">
-                                            <strong>{{ $empleado->nombre() }}</strong>
-                                        </a>
-                                        @if($empleado->cedula())
-                                            <div class="muted" style="font-size:.75rem;">C.I. {{ $empleado->cedula() }}</div>
-                                        @endif
-                                        <div class="muted" style="font-size:.75rem;">Saldo ${{ number_format($fila['saldo'], 2) }}</div>
-                                    </td>
-                                    <td class="cuotas-cell">
-                                        @foreach($fila['cuotas'] as $cuota)
-                                            @include('nomina.partials.cuota-descuento-linea', [
-                                                'cuota' => $cuota,
-                                                'empleado' => $empleado,
-                                                'plan' => $planes->get($cuota->id),
-                                            ])
-                                        @endforeach
-                                    </td>
-                                    <td>
-                                        <strong class="total-empleado" data-empleado="{{ $empleado->id }}">$0.00</strong>
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-                <div class="nomina-card" style="margin-top:12px;background:#f8fafc;">
-                    <h3 style="margin-top:0;">Esta quincena</h3>
-                    <ul id="registro-descuentos" style="margin:0;padding-left:18px;"></ul>
-                    <p style="margin:10px 0 0;"><strong>Total: <span id="registro-total">$0.00</span></strong></p>
-                </div>
-                <div style="margin-top:16px;">
-                    <button class="btn primary" type="submit">Guardar para esta quincena</button>
-                </div>
-            @endif
-        </div>
-    </form>
-</div>
-@endsection
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </div>
 
-@push('scripts')
-<script>
-function marcarCuotas(valor) {
-    document.querySelectorAll('.cuota-check').forEach((el) => {
-        el.checked = valor;
-        sincronizarCuota(el);
-    });
+    @if($delDia->isNotEmpty())
+        <div class="nomina-card" style="margin-top:16px;">
+            <h3 style="margin-top:0;">Préstamos del {{ \Carbon\Carbon::parse($fecha)->format('d/m/Y') }}</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Empleado</th>
+                        <th>Empresa</th>
+                        <th>Monto</th>
+                        <th>Motivo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($delDia as $p)
+                        <tr>
+                            <td>{{ $p->id }}</td>
+                            <td>{{ $p->empleado?->nombre() ?: '—' }}</td>
+                            <td>{{ $p->empleado?->empresa?->nombre ?: 'Sin empresa' }}</td>
+                            <td>${{ number_format((float) $p->monto_original, 2) }}</td>
+                            <td>{{ $p->motivo ?: '—' }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+</div>
+
+<style>
+.prestamo-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(15, 23, 42, .45);
 }
-function marcarEmpleado(empleadoId, valor) {
-    document.querySelectorAll('.cuota-check[data-empleado="'+empleadoId+'"]').forEach((el) => {
-        el.checked = valor;
-        sincronizarCuota(el);
-    });
+.prestamo-modal:target {
+    display: flex;
 }
-function sincronizarCuota(check) {
-    const linea = check.closest('.cuota-linea');
-    const monto = linea?.querySelector('.cuota-monto');
-    if (monto) {
-        monto.disabled = !check.checked;
-        if (check.checked && (!monto.value || Number(monto.value) <= 0)) {
-            monto.value = monto.max;
-        }
-    }
-    actualizarRegistro();
+.prestamo-modal-backdrop {
+    position: absolute;
+    inset: 0;
 }
-function actualizarRegistro() {
-    const items = [];
-    let total = 0;
-    const porEmpleado = {};
-    document.querySelectorAll('.cuota-check:checked').forEach((el) => {
-        const linea = el.closest('.cuota-linea');
-        const montoEl = linea?.querySelector('.cuota-monto');
-        const destEl = linea?.querySelector('.cuota-destino');
-        const max = Number(el.dataset.max || 0);
-        let monto = Number(montoEl?.value || max);
-        if (monto > max) monto = max;
-        if (monto <= 0) return;
-        total += monto;
-        const emp = el.dataset.empleado;
-        porEmpleado[emp] = (porEmpleado[emp] || 0) + monto;
-        const dest = destEl
-            ? (destEl.value === 'COMISION' ? ' · comisión' : ' · nómina')
-            : '';
-        items.push(
-            (el.dataset.nombre || 'Empleado')
-            + ' · cuota #' + (el.dataset.cuota || '')
-            + ' · ' + (el.dataset.motivo || '')
-            + ' · $' + monto.toFixed(2)
-            + dest
-        );
-    });
-    const ul = document.getElementById('registro-descuentos');
-    if (ul) {
-        ul.innerHTML = items.length
-            ? items.map((t) => '<li>' + t + '</li>').join('')
-            : '<li class="muted">Aún no hay cuotas marcadas.</li>';
-    }
-    const tot = document.getElementById('registro-total');
-    if (tot) tot.textContent = '$' + total.toFixed(2);
-    document.querySelectorAll('.total-empleado').forEach((cel) => {
-        const n = porEmpleado[cel.dataset.empleado] || 0;
-        cel.textContent = '$' + n.toFixed(2);
-    });
+.prestamo-modal form {
+    position: relative;
+    z-index: 1;
 }
-document.addEventListener('DOMContentLoaded', actualizarRegistro);
-</script>
-@endpush
+.prestamo-modal-pago { display: none; }
+.prestamo-modal:has(select[name="modo"] option[value="PAGO"]:checked) .prestamo-modal-pago { display: block; }
+</style>
+
+@foreach($deudores as $fila)
+    @php $empleado = $fila['empleado']; @endphp
+    <div id="cobrar-{{ $empleado->id }}" class="prestamo-modal">
+        <a class="prestamo-modal-backdrop" href="#lista-deudores" aria-label="Cerrar"></a>
+        <form method="POST" action="{{ route('nomina.prestamos.cobrar', $empleado) }}" class="nomina-card" style="margin:0;max-width:480px;width:100%;">
+            @csrf
+            <input type="hidden" name="q" value="{{ $q }}">
+            <h3 style="margin-top:0;">{{ $empleado->nombre() }}</h3>
+            <p class="muted" style="margin-top:0;">Saldo pendiente: ${{ number_format($fila['saldo'], 2) }}</p>
+
+            <div class="nomina-form-grid">
+                <div class="field">
+                    <label>Fecha</label>
+                    <input type="date" name="fecha" value="{{ now()->format('Y-m-d') }}" required>
+                </div>
+                <div class="field">
+                    <label>Monto ($)</label>
+                    <input type="number" step="0.01" min="0.01" max="{{ $fila['saldo'] }}" name="monto" required>
+                </div>
+                <div class="field field-wide">
+                    <label>Acción</label>
+                    <select name="modo">
+                        <option value="PAGO">Registrar pago ahora</option>
+                        <option value="NOMINA">Descontar de nómina (esta quincena)</option>
+                        @if($fila['genera_comision'])
+                            <option value="COMISION">Descontar de comisión (esta quincena)</option>
+                        @endif
+                    </select>
+                </div>
+                <div class="field field-wide prestamo-modal-pago">
+                    <label>Tipo de pago</label>
+                    <select name="tipo">
+                        <option value="EFECTIVO">Pago en efectivo</option>
+                        <option value="TRANSFERENCIA">Transferencia</option>
+                        <option value="EXTRAORDINARIO">Abono extraordinario</option>
+                        <option value="AJUSTE">Ajuste</option>
+                    </select>
+                </div>
+                <div class="field field-wide">
+                    <label>Préstamo (opcional)</label>
+                    <select name="prestamo_id">
+                        <option value="">FIFO automático (más antiguos primero)</option>
+                        @foreach($fila['prestamos'] as $p)
+                            <option value="{{ $p->id }}">#{{ $p->id }} · ${{ number_format((float) $p->saldo_pendiente, 2) }}{{ $p->motivo ? ' · '.$p->motivo : '' }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="field field-wide">
+                    <label>Observación</label>
+                    <input name="observacion" placeholder="Opcional">
+                </div>
+            </div>
+
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+                <a class="btn secondary" href="#lista-deudores">Cancelar</a>
+                <button type="submit" class="btn primary">Confirmar</button>
+            </div>
+        </form>
+    </div>
+@endforeach
+@endsection

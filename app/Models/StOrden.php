@@ -19,6 +19,14 @@ class StOrden extends Model
     public const TRANSFER_PENDIENTE = 'pendiente';
     public const TRANSFER_ACEPTADA = 'aceptada';
 
+    public const TIPO_ST = 'ST';
+    public const TIPO_GARANTIA = 'GARANTIA';
+
+    public const TIPOS_GESTION = [
+        self::TIPO_ST => 'Servicio técnico',
+        self::TIPO_GARANTIA => 'Garantía',
+    ];
+
     public const ESTADOS = [
         self::ESTADO_PENDIENTE => 'Pendiente',
         self::ESTADO_EN_PROCESO => 'En proceso',
@@ -39,10 +47,13 @@ class StOrden extends Model
     protected $fillable = [
         'sede',
         'numero',
+        'tipo_gestion',
+        'equipo_id',
         'cliente_nombre',
         'cliente_telefono',
         'cliente_cedula',
         'equipo',
+        'imei',
         'serial',
         'falla',
         'accesorios',
@@ -52,6 +63,13 @@ class StOrden extends Model
         'fecha_ingreso',
         'fecha_prometida',
         'observaciones',
+        'inspeccion_recepcion',
+        'firma_recepcion_cliente',
+        'firma_recepcion_empleado',
+        'conformidad_trabajo',
+        'firma_conformidad_cliente',
+        'firma_conformidad_empleado',
+        'conformidad_at',
         'presupuesto',
         'costo_mano_obra',
         'costo_refacciones',
@@ -59,6 +77,7 @@ class StOrden extends Model
         'updated_by',
         'tecnico_id',
         'sede_origen_transfer',
+        'sede_destino_transfer',
         'transfer_estado',
         'repuestos_descontados_at',
     ];
@@ -72,7 +91,52 @@ class StOrden extends Model
             'costo_mano_obra' => 'decimal:2',
             'costo_refacciones' => 'decimal:2',
             'repuestos_descontados_at' => 'datetime',
+            'inspeccion_recepcion' => 'array',
+            'conformidad_at' => 'datetime',
         ];
+    }
+
+    /**
+     * @return list<array{clave:string,etiqueta:string,estado:string}>
+     */
+    public function itemsInspeccionRecepcion(): array
+    {
+        $guardado = is_array($this->inspeccion_recepcion) ? $this->inspeccion_recepcion : [];
+        $items = [];
+        foreach (config('servicio_tecnico.checklist_recepcion', []) as $clave => $etiqueta) {
+            $estado = $guardado[$clave] ?? '';
+            if (is_array($estado)) {
+                $estado = (string) ($estado['estado'] ?? '');
+            }
+            $items[] = [
+                'clave' => $clave,
+                'etiqueta' => $etiqueta,
+                'estado' => in_array($estado, ['ok', 'dano', 'na'], true) ? $estado : '',
+            ];
+        }
+
+        return $items;
+    }
+
+    public function etiquetaEstadoInspeccion(?string $estado): string
+    {
+        return match ($estado) {
+            'ok' => 'OK',
+            'dano' => 'Daño / falla',
+            'na' => 'N/A',
+            default => '—',
+        };
+    }
+
+    public function backupVigente(): ?StBackup
+    {
+        return $this->backups->firstWhere('estado', StBackup::ESTADO_ENTREGADO)
+            ?? $this->backups->sortByDesc('id')->first();
+    }
+
+    public function tieneConformidad(): bool
+    {
+        return $this->conformidad_at !== null || filled($this->firma_conformidad_cliente);
     }
 
     public function creador(): BelongsTo
@@ -88,6 +152,26 @@ class StOrden extends Model
     public function tecnico(): BelongsTo
     {
         return $this->belongsTo(User::class, 'tecnico_id');
+    }
+
+    public function equipoCelular(): BelongsTo
+    {
+        return $this->belongsTo(StEquipo::class, 'equipo_id');
+    }
+
+    public function backups(): HasMany
+    {
+        return $this->hasMany(StBackup::class, 'orden_id');
+    }
+
+    public function etiquetaTipoGestion(): string
+    {
+        return self::TIPOS_GESTION[$this->tipo_gestion ?? self::TIPO_ST] ?? (string) $this->tipo_gestion;
+    }
+
+    public function esGarantia(): bool
+    {
+        return ($this->tipo_gestion ?? self::TIPO_ST) === self::TIPO_GARANTIA;
     }
 
     public function repuestosLineas(): HasMany
@@ -157,7 +241,6 @@ class StOrden extends Model
     {
         $max = static::query()
             ->where('sede', strtoupper($sede))
-            ->lockForUpdate()
             ->max('numero');
 
         return ((int) $max) + 1;
@@ -169,6 +252,7 @@ class StOrden extends Model
             $sede = strtoupper((string) $datos['sede']);
             $datos['sede'] = $sede;
             $datos['numero'] = self::siguienteNumero($sede);
+            $datos['tipo_gestion'] = strtoupper((string) ($datos['tipo_gestion'] ?? self::TIPO_ST));
             $datos['created_by'] = $user->id;
             $datos['updated_by'] = $user->id;
             $datos['tecnico_id'] = $datos['tecnico_id'] ?? ($user->isTecnico() ? $user->id : null);
@@ -182,6 +266,29 @@ class StOrden extends Model
                 'descripcion' => 'Orden '.$orden->codigo().' registrada',
                 'created_at' => now(),
             ]);
+
+            if ($orden->equipo_id) {
+                $equipo = StEquipo::query()->find($orden->equipo_id);
+                if ($equipo) {
+                    app(\App\Services\ServicioTecnico\StEquipoService::class)->registrarEvento(
+                        $equipo,
+                        $user,
+                        \App\Models\StEquipoEvento::TIPO_REGISTRO,
+                        'Orden creada',
+                        sprintf(
+                            '%s · Falla: %s',
+                            $orden->etiquetaTipoGestion(),
+                            $orden->falla ?: '—'
+                        ),
+                        $orden,
+                        $sede,
+                        [
+                            'tipo_gestion' => $orden->tipo_gestion,
+                            'cliente' => $orden->cliente_nombre,
+                        ]
+                    );
+                }
+            }
 
             return $orden;
         });

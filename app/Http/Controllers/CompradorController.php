@@ -32,18 +32,20 @@ class CompradorController extends Controller
     /**
      * Display the Comprador panel showing products to buy and poor distributions.
      */
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
         ini_set('memory_limit', '512M');
         Profiler::start('CompradorController::index');
         $tp = (float) $request->query('tp', 60);
         $tv = (float) config('inventario.tiempo_venta_sede', 15);
         $sedes = config('inventario.sedes_stock');
+        if ((string) $request->query('tab') === 'cobranzas') {
+            return redirect()->route('cobranza.index');
+        }
         $activeTab = $this->resolveActiveTab($request);
         $needsPurchaseData = in_array($activeTab, ['productos', 'proveedores'], true);
         $needsAnalysis = $activeTab === 'sobrestock';
         $needsPublicidad = $activeTab === 'publicidad';
-        $needsCobranzas = $activeTab === 'cobranzas';
         $needsQPedir = $activeTab === 'qpedir';
         $needsCatalogFilters = in_array($activeTab, ['productos', 'proveedores', 'sobrestock'], true);
         $paginatorOpts = ['path' => $request->url(), 'query' => $request->query()];
@@ -904,94 +906,6 @@ class CompradorController extends Controller
             }
         }
 
-        $cobranzasData = [
-            'fecha_actual' => null,
-            'sede_list' => [],
-            'estatus_list' => [],
-            'fechas_semanal' => [],
-            'semanal_list' => [],
-            'detalle' => []
-        ];
-
-        if ($needsCobranzas && Schema::hasTable('historial_cobranzas')) {
-            $latestFecha = \App\Models\HistorialCobranza::max('fecha_registro');
-            if ($latestFecha) {
-                $cobranzasData['fecha_actual'] = \Carbon\Carbon::parse($latestFecha)->format('d/m/Y');
-                $detalles = \App\Models\HistorialCobranza::cuentasOperativas()->where('fecha_registro', $latestFecha)->get();
-                $cobranzasData['detalle'] = $detalles;
-                
-                $totalSaldo = $detalles->sum('saldo');
-                
-                $sedeList = $detalles->groupBy('sede_nombre')->map(function ($items, $sede) use ($totalSaldo) {
-                    $s = $items->sum('saldo');
-                    return [
-                        'sede' => $sede ?: 'N/A',
-                        'clientes' => $items->count(),
-                        'saldo' => $s,
-                        'porcentaje' => $totalSaldo > 0 ? round(($s / $totalSaldo) * 100, 2) : 0
-                    ];
-                })->values()->sortByDesc('saldo');
-                $cobranzasData['sede_list'] = $sedeList;
-                
-                $estatusColors = ['CRITICO' => '#ef4444', 'MOROSO' => '#eab308', 'RECIENTE' => '#84cc16'];
-                $estatusList = $detalles->groupBy('estatus')->map(function ($items, $estatus) use ($totalSaldo, $estatusColors) {
-                    $s = $items->sum('saldo');
-                    return [
-                        'estatus' => $estatus ?: 'OTROS',
-                        'clientes' => $items->count(),
-                        'saldo' => $s,
-                        'color' => $estatusColors[$estatus] ?? '#94a3b8',
-                        'porcentaje' => $totalSaldo > 0 ? round(($s / $totalSaldo) * 100, 2) : 0
-                    ];
-                })->values()->sortByDesc('saldo');
-                $cobranzasData['estatus_list'] = $estatusList;
-                
-                try {
-                    $fechasLunes = \Illuminate\Support\Facades\DB::connection('pgsql')->table('historial_cobranzas')
-                        ->select('fecha_registro')
-                        ->whereRaw("EXTRACT(DOW FROM fecha_registro::date) = 1")
-                        ->distinct()
-                        ->orderBy('fecha_registro', 'desc')
-                        ->limit(4)
-                        ->pluck('fecha_registro')
-                        ->toArray();
-                        
-                    if (!empty($fechasLunes)) {
-                        $fechasLunes = array_reverse($fechasLunes); // Chronological order
-                        $cobranzasData['fechas_semanal'] = array_map(fn($f) => \Carbon\Carbon::parse($f)->format('d/m'), $fechasLunes);
-                        $historialLunes = \App\Models\HistorialCobranza::cuentasOperativas()
-                            ->cabeceras()
-                            ->whereRaw(
-                                'fecha_registro::date IN ('.implode(',', array_fill(0, count($fechasLunes), '?')).')',
-                                array_map(fn ($f) => \Carbon\Carbon::parse($f)->toDateString(), $fechasLunes)
-                            )
-                            ->get();
-                        
-                        $estatusKeys = ['CRITICO', 'MOROSO', 'RECIENTE'];
-                        $semanalList = [];
-                        foreach ($estatusKeys as $est) {
-                            $row = ['estatus' => $est, 'color' => $estatusColors[$est], 'lunes' => []];
-                            $prevSaldo = null;
-                            foreach ($fechasLunes as $fecha) {
-                                $saldo = $historialLunes->where('fecha_registro', $fecha)->where('estatus', $est)->sum('saldo');
-                                $efectividad = '-';
-                                if ($prevSaldo !== null && $prevSaldo > 0) {
-                                    // Efectividad: reduccion de deuda (saldo anterior - saldo actual) / saldo anterior
-                                    $efectividad = round((($prevSaldo - $saldo) / $prevSaldo) * 100, 0) . '%';
-                                }
-                                $row['lunes'][] = ['saldo' => $saldo, 'efectividad' => $efectividad];
-                                $prevSaldo = $saldo;
-                            }
-                            $semanalList[] = $row;
-                        }
-                        $cobranzasData['semanal_list'] = $semanalList;
-                    }
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error("Error en cobranzas semanal: " . $e->getMessage());
-                }
-            }
-        }
-
         Profiler::start('CompradorController::index Blade render');
         $viewResult = view('comprador.index', [
             'productos' => $paginatedItems,
@@ -1033,8 +947,6 @@ class CompradorController extends Controller
             'qPedirStats' => $qPedirStats,
             'qPedirCount' => $qPedirCount,
             'activeTab' => $activeTab,
-            'buscarQuery' => $this->resolveBuscarFilter($request),
-            'cobranzasData' => $cobranzasData,
         ]);
         Profiler::stop('CompradorController::index Blade render');
         Profiler::stop('CompradorController::index');
@@ -1054,7 +966,7 @@ class CompradorController extends Controller
     private function resolveActiveTab(Request $request): string
     {
         $tab = (string) $request->query('tab', '');
-        $allowed = ['productos', 'proveedores', 'sobrestock', 'qpedir', 'publicidad', 'cobranzas'];
+        $allowed = ['productos', 'proveedores', 'sobrestock', 'qpedir', 'publicidad'];
         if (in_array($tab, $allowed, true)) {
             return $tab;
         }

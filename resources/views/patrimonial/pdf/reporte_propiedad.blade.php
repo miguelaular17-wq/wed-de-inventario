@@ -94,12 +94,12 @@
             <td class="info-label">Responsable</td>
             <td class="info-value">{{ $propiedad->responsable ?: 'N/A' }}</td>
         </tr>
-        @if($propiedad->valor_inversion)
         <tr>
-            <td class="info-label">Valor Inversión</td>
-            <td class="info-value" colspan="3" style="font-weight:600;">${{ number_format($propiedad->valor_inversion, 2) }}</td>
+            <td class="info-label">Costo de la propiedad</td>
+            <td class="info-value" colspan="3" style="font-weight:600;">
+                {{ $propiedad->valor_inversion !== null ? '$'.number_format((float) $propiedad->valor_inversion, 2) : '—' }}
+            </td>
         </tr>
-        @endif
         @if($alquilerActivo)
         <tr>
             <td class="info-label">Inquilino Activo</td>
@@ -112,6 +112,10 @@
 
     {{-- KPIs TOTALES --}}
     <div class="kpi-bar">
+        <div class="kpi-cell">
+            <div class="kpi-label">Costo de la propiedad</div>
+            <div class="kpi-value blue">${{ number_format((float) ($propiedad->valor_inversion ?? 0), 2) }}</div>
+        </div>
         <div class="kpi-cell">
             <div class="kpi-label">Ingresos Totales</div>
             <div class="kpi-value green">${{ number_format($totales['ingresos'], 2) }}</div>

@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FlujoCaja;
+use App\Models\CuentaPorPagar;
 use App\Models\ConciliacionBancaria;
 use App\Models\GastoFijoPago;
 use App\Models\GastoFijoConfig;
@@ -226,6 +227,17 @@ class FinanzasController extends Controller
             ->get()
             ->sortBy(fn (NominaEmpleado $empleado) => $empleado->nombre(), SORT_NATURAL | SORT_FLAG_CASE)
             ->values();
+
+        $cuentas_por_pagar = collect();
+        if (\Illuminate\Support\Facades\Schema::hasTable('cuentas_por_pagar')) {
+            $cuentas_por_pagar = CuentaPorPagar::query()
+                ->with(['pagos' => function ($query) {
+                    $query->orderBy('fecha')->orderBy('id');
+                }])
+                ->orderByRaw("CASE WHEN estado = 'abierta' THEN 0 ELSE 1 END")
+                ->orderByDesc('id')
+                ->get();
+        }
         
         Profiler::start('FinanzasController::flujoCaja Blade render');
         $result = view('finanzas.flujo_caja', compact(
@@ -243,7 +255,8 @@ class FinanzasController extends Controller
             'fecha_desde',
             'fecha_hasta',
             'proveedores',
-            'empleadosServicioTecnico'
+            'empleadosServicioTecnico',
+            'cuentas_por_pagar'
         ));
         Profiler::stop('FinanzasController::flujoCaja Blade render');
 
@@ -319,6 +332,7 @@ class FinanzasController extends Controller
             // Normalizar campos numéricos: convertir "35.750,00" o "35750,00" → "35750.00"
             $numericFields = [
                 'monto_usd', 'tasa_cambio', 'diferencial_cambiario', 'monto_bs', 'comision',
+                'monto_total_gasto',
                 'tt_recarga', 'tt_comision', 'tt_iva', 'tt_ret_islr', 'tt_ret_iva',
                 'tt_ret_1x1000', 'tt_ret_resp_social', 'tt_ret_isae',
             ];
@@ -372,6 +386,9 @@ class FinanzasController extends Controller
                 'tt_ret_1x1000' => 'nullable|numeric',
                 'tt_ret_resp_social' => 'nullable|numeric',
                 'tt_ret_isae' => 'nullable|numeric',
+                'monto_total_gasto' => 'nullable|numeric|min:0',
+                'es_cuenta_por_pagar' => 'nullable|boolean',
+                'cuenta_por_pagar_id' => 'nullable|integer',
             ]);
 
             $empleadoServicioTecnico = null;
@@ -522,50 +539,85 @@ class FinanzasController extends Controller
                 }
             }
 
-            FlujoCaja::create([
-                'fecha'                 => $data['fecha'],
-                'tipo'                  => 'egreso',
-                'categoria_egreso'      => $data['categoria_egreso'],
-                'banco'                 => $banco,
-                'titular'               => $titular,
-                'categoria_cuenta'      => $categoria_cuenta,
-                'banco_receptor'        => $banco_receptor,
-                'titular_receptor'      => $titular_receptor,
-                'referencia'            => $data['referencia'] ?? null,
-                'monto_usd'             => $calc_usd ?? 0,
-                'tasa_cambio'           => $tasa_cambio ?? 0,
-                'diferencial_cambiario' => $diferencial_cambiario ?? 0,
-                'monto_bs'              => $monto_bs ?? 0,
-                'comision'              => $comision,
-                'tipo_gasto'            => $data['tipo_gasto'] ?? null,
-                'nomina_empleado_id'     => $empleadoServicioTecnico?->id,
-                'es_todoticket'         => $esTodoticket,
-                'detalle_todoticket'    => $detalleTodoticket,
-                'motivo'                => $data['motivo'] ?? null,
-                'sede'                  => $data['sede'] ?? null,
-                'placa_vehiculo'        => $data['placa_vehiculo'] ?? null,
-                'comprobante_url'       => $comprobante_url,
-                'comprobantes'          => !empty($comprobantes_arr) ? $comprobantes_arr : null,
-                'desglose'              => $desglose,
-            ]);
-
-            // ── Vincular con Gasto Fijo si se proporcionó ──
-            if (!empty($data['gasto_fijo_id'])) {
-                $mesIdx = (int) date('n') - 1; // 0-indexed
-                $montoPagado = !empty($data['monto_pagado_gf']) ? (float) $data['monto_pagado_gf'] : ($calc_usd ?? 0);
-                GastoFijoPago::updateOrCreate(
-                    [
-                        'gasto_fijo_id' => (int) $data['gasto_fijo_id'],
-                        'mes_idx'       => $mesIdx,
-                        'anio'          => (int) date('Y'),
-                    ],
-                    [
-                        'monto'     => $montoPagado,
-                        'pagado'    => true,
-                        'pagado_at' => now(),
-                    ]
+            $cuentaPorPagarId = null;
+            if (\Illuminate\Support\Facades\Schema::hasTable('cuentas_por_pagar')) {
+                [$cuentaPorPagarId, $errorCuenta] = $this->prepararCuentaPorPagar(
+                    $request,
+                    $data,
+                    (float) ($calc_usd ?? 0),
+                    (float) ($monto_bs ?? 0),
+                    $titular_receptor
                 );
+                if ($errorCuenta) {
+                    return redirect()->back()->withInput()->with('error', $errorCuenta);
+                }
             }
+
+            \Illuminate\Support\Facades\DB::transaction(function () use (
+                $data, $banco, $titular, $categoria_cuenta, $banco_receptor, $titular_receptor,
+                $calc_usd, $tasa_cambio, $diferencial_cambiario, $monto_bs, $comision,
+                $empleadoServicioTecnico, $esTodoticket, $detalleTodoticket,
+                $comprobante_url, $comprobantes_arr, $desglose, &$cuentaPorPagarId
+            ) {
+                if ($cuentaPorPagarId === 0) {
+                    $nueva = $this->crearCuentaPorPagar($data, (float) ($calc_usd ?? 0), (float) ($monto_bs ?? 0), $titular_receptor);
+                    $cuentaPorPagarId = $nueva->id;
+                }
+
+                $payload = [
+                    'fecha'                 => $data['fecha'],
+                    'tipo'                  => 'egreso',
+                    'categoria_egreso'      => $data['categoria_egreso'],
+                    'banco'                 => $banco,
+                    'titular'               => $titular,
+                    'categoria_cuenta'      => $categoria_cuenta,
+                    'banco_receptor'        => $banco_receptor,
+                    'titular_receptor'      => $titular_receptor,
+                    'referencia'            => $data['referencia'] ?? null,
+                    'monto_usd'             => $calc_usd ?? 0,
+                    'tasa_cambio'           => $tasa_cambio ?? 0,
+                    'diferencial_cambiario' => $diferencial_cambiario ?? 0,
+                    'monto_bs'              => $monto_bs ?? 0,
+                    'comision'              => $comision,
+                    'tipo_gasto'            => $data['tipo_gasto'] ?? null,
+                    'nomina_empleado_id'     => $empleadoServicioTecnico?->id,
+                    'es_todoticket'         => $esTodoticket,
+                    'detalle_todoticket'    => $detalleTodoticket,
+                    'motivo'                => $data['motivo'] ?? null,
+                    'sede'                  => $data['sede'] ?? null,
+                    'placa_vehiculo'        => $data['placa_vehiculo'] ?? null,
+                    'comprobante_url'       => $comprobante_url,
+                    'comprobantes'          => !empty($comprobantes_arr) ? $comprobantes_arr : null,
+                    'desglose'              => $desglose,
+                ];
+
+                if ($cuentaPorPagarId && \Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'cuenta_por_pagar_id')) {
+                    $payload['cuenta_por_pagar_id'] = $cuentaPorPagarId;
+                }
+
+                FlujoCaja::create($payload);
+
+                if ($cuentaPorPagarId) {
+                    CuentaPorPagar::query()->find($cuentaPorPagarId)?->recalcular();
+                }
+
+                if (!empty($data['gasto_fijo_id'])) {
+                    $mesIdx = (int) date('n') - 1;
+                    $montoPagado = !empty($data['monto_pagado_gf']) ? (float) $data['monto_pagado_gf'] : ($calc_usd ?? 0);
+                    GastoFijoPago::updateOrCreate(
+                        [
+                            'gasto_fijo_id' => (int) $data['gasto_fijo_id'],
+                            'mes_idx'       => $mesIdx,
+                            'anio'          => (int) date('Y'),
+                        ],
+                        [
+                            'monto'     => $montoPagado,
+                            'pagado'    => true,
+                            'pagado_at' => now(),
+                        ]
+                    );
+                }
+            });
 
             $this->syncTotalesSalidas($data['fecha']);
 
@@ -574,6 +626,86 @@ class FinanzasController extends Controller
             \Illuminate\Support\Facades\Log::error('Error registrando egreso: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Error del sistema: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * @return array{0: int|null, 1: string|null}  id 0 = crear en transacción, null = no aplica
+     */
+    private function prepararCuentaPorPagar(Request $request, array $data, float $calcUsd, float $montoBs, ?string $beneficiario): array
+    {
+        $cuentaId = (int) ($data['cuenta_por_pagar_id'] ?? 0);
+        $marcar = $request->boolean('es_cuenta_por_pagar');
+
+        if ($cuentaId <= 0 && ! $marcar) {
+            return [null, null];
+        }
+
+        if ($cuentaId > 0) {
+            $cuenta = CuentaPorPagar::query()->find($cuentaId);
+            if (! $cuenta) {
+                return [null, 'La cuenta por pagar no existe.'];
+            }
+            if (! $cuenta->estaAbierta()) {
+                return [null, 'Esa cuenta por pagar ya está saldada.'];
+            }
+            $pago = $this->montoPagoContraCuenta($cuenta, $calcUsd, $montoBs);
+            if ($pago === null) {
+                return [null, 'Indica el monto del pago en la misma moneda de la cuenta ('.$cuenta->moneda.').'];
+            }
+            if ($pago <= 0) {
+                return [null, 'El pago debe ser mayor a cero.'];
+            }
+            if ($pago - (float) $cuenta->saldo > 0.01) {
+                return [null, 'El pago ('.number_format($pago, 2, ',', '.').') supera el saldo pendiente ('.number_format((float) $cuenta->saldo, 2, ',', '.').').'];
+            }
+
+            return [$cuenta->id, null];
+        }
+
+        $moneda = $calcUsd > 0 ? 'USD' : 'BS';
+        $pago = $moneda === 'USD' ? $calcUsd : $montoBs;
+        if ($pago <= 0) {
+            return [null, 'Para abrir una cuenta por pagar el abono de hoy debe ser mayor a cero.'];
+        }
+
+        $total = (float) ($data['monto_total_gasto'] ?? 0);
+        if ($total <= 0) {
+            return [null, 'Indica el monto total del gasto para registrar la cuenta por pagar.'];
+        }
+        if ($total + 0.01 < $pago) {
+            return [null, 'El monto total del gasto no puede ser menor al pago de hoy.'];
+        }
+
+        return [0, null];
+    }
+
+    private function crearCuentaPorPagar(array $data, float $calcUsd, float $montoBs, ?string $beneficiario): CuentaPorPagar
+    {
+        $moneda = $calcUsd > 0 ? 'USD' : 'BS';
+        $total = (float) ($data['monto_total_gasto'] ?? 0);
+
+        return CuentaPorPagar::query()->create([
+            'fecha' => $data['fecha'],
+            'beneficiario' => $beneficiario ?: ($data['beneficiario'] ?? null),
+            'tipo_gasto' => $data['tipo_gasto'] ?? null,
+            'motivo' => $data['motivo'] ?? null,
+            'sede' => $data['sede'] ?? null,
+            'moneda' => $moneda,
+            'monto_total' => $total,
+            'monto_pagado' => 0,
+            'saldo' => $total,
+            'estado' => 'abierta',
+            'created_by' => auth()->id(),
+        ]);
+    }
+
+    private function montoPagoContraCuenta(CuentaPorPagar $cuenta, float $calcUsd, float $montoBs): ?float
+    {
+        if (strtoupper((string) $cuenta->moneda) === 'BS') {
+            return $montoBs > 0 ? $montoBs : null;
+        }
+
+        return $calcUsd > 0 ? $calcUsd : null;
     }
 
     private function uploadComprobante($file, ?string $referencia): ?string
@@ -757,6 +889,10 @@ class FinanzasController extends Controller
             'desglose'              => $desglose,
         ]);
 
+        if (!empty($egreso->cuenta_por_pagar_id)) {
+            CuentaPorPagar::query()->find($egreso->cuenta_por_pagar_id)?->recalcular();
+        }
+
         $this->syncTotalesSalidas($data['fecha']);
         
         if ($old_fecha != $data['fecha']) {
@@ -782,6 +918,7 @@ class FinanzasController extends Controller
             })
             ->findOrFail($id);
         $fecha = $egreso->fecha;
+        $cuentaPorPagarId = $egreso->cuenta_por_pagar_id ?? null;
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($egreso) {
             if (\Illuminate\Support\Facades\Schema::hasTable('conciliacion_lineas')) {
@@ -795,6 +932,10 @@ class FinanzasController extends Controller
 
             $egreso->delete();
         });
+
+        if ($cuentaPorPagarId) {
+            CuentaPorPagar::query()->find($cuentaPorPagarId)?->recalcular();
+        }
 
         $this->syncTotalesSalidas($fecha);
 

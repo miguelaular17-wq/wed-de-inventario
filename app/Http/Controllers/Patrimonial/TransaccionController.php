@@ -106,7 +106,13 @@ class TransaccionController extends Controller
             // Incluir transacciones detalladas
             $txs = $p->transacciones()->where('mes', $mes)->where('anio', $anio)->orderBy('fecha')->get();
             return array_merge(
-                ['propiedad' => $p->nombre, 'tipo' => $p->tipo, 'codigo' => $p->codigo, 'transacciones' => $txs],
+                [
+                    'propiedad' => $p->nombre,
+                    'tipo' => $p->tipo,
+                    'codigo' => $p->codigo,
+                    'valor_inversion' => $p->valor_inversion,
+                    'transacciones' => $txs,
+                ],
                 $balance
             );
         });

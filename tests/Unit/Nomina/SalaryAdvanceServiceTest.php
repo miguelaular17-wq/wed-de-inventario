@@ -5,6 +5,7 @@ namespace Tests\Unit\Nomina;
 use App\Models\Cliente;
 use App\Models\Nomina\NominaAbonoSueldo;
 use App\Models\Nomina\NominaEmpleado;
+use App\Models\Nomina\NominaEmpresa;
 use App\Models\User;
 use App\Services\Nomina\PayrollDeductionService;
 use App\Services\Nomina\PayrollBankFileService;
@@ -149,6 +150,32 @@ class SalaryAdvanceServiceTest extends TestCase
         $linea = PayrollBankFileService::formatearLinea('999002', 3000.00, '2026-08-29');
 
         $this->assertSame($linea."\r\n", $txt);
-        $this->assertSame('adelantos_20260829.txt', $service->nombreArchivoDelDia('2026-08-29'));
+        $this->assertSame('adelantos_SIN_EMPRESA_20260829.txt', $service->nombreArchivoEmpresa('2026-08-29', 'SIN_EMPRESA'));
+    }
+
+    public function test_txt_del_dia_separa_un_archivo_por_empresa(): void
+    {
+        $doral = NominaEmpresa::create(['codigo' => 'J401722296', 'nombre' => 'Doral', 'estado' => 'ACTIVO']);
+        $nunes = NominaEmpresa::create(['codigo' => 'J123', 'nombre' => 'Nunes', 'estado' => 'ACTIVO']);
+        $this->empleado->update(['empresa_id' => $doral->id]);
+
+        $otro = NominaEmpleado::create([
+            'cliente_id' => Cliente::create(['cedula' => '888111', 'nombre' => 'Otra Persona'])->id,
+            'salario_base' => 100,
+            'tipo_salario' => 'QUINCENAL',
+            'estado' => 'ACTIVO',
+            'empresa_id' => $nunes->id,
+        ]);
+
+        $service = app(SalaryAdvanceService::class);
+        $service->create($this->empleado, ['fecha' => '2026-08-29', 'monto' => 10], auth()->id());
+        $service->create($otro, ['fecha' => '2026-08-29', 'monto' => 20], auth()->id());
+
+        $archivos = $service->archivosTxtDelDia('2026-08-29', 40);
+        $this->assertCount(2, $archivos);
+        $this->assertSame('adelantos_J123_20260829.txt', $archivos->firstWhere('nombre', 'Nunes')->archivo);
+        $this->assertSame('adelantos_J401722296_20260829.txt', $archivos->firstWhere('nombre', 'Doral')->archivo);
+        $this->assertStringContainsString(PayrollBankFileService::formatearLinea('999002', 400.00, '2026-08-29'), $archivos->firstWhere('nombre', 'Doral')->contenido);
+        $this->assertStringContainsString(PayrollBankFileService::formatearLinea('888111', 800.00, '2026-08-29'), $archivos->firstWhere('nombre', 'Nunes')->contenido);
     }
 }

@@ -122,7 +122,7 @@
                         <input type="date" name="fecha_adquisicion" value="{{ old('fecha_adquisicion') }}">
                     </div>
                     <div class="form-group">
-                        <label>Valor / Inversión Inicial ($)</label>
+                        <label>Costo de la propiedad ($)</label>
                         <input type="number" name="valor_inversion" value="{{ old('valor_inversion') }}" min="0" step="0.01" placeholder="0.00">
                     </div>
                 </div>

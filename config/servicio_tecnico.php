@@ -60,4 +60,24 @@ return [
         'pagado' => 'Pagado',
         'anulado' => 'Anulado',
     ],
+
+    'checklist_recepcion' => [
+        'encendido' => 'Enciende y se apaga',
+        'pantalla' => 'Pantalla (manchas, golpes, touch)',
+        'carcasa' => 'Carcasa, marco y golpes',
+        'camara' => 'Cámaras frontal y trasera',
+        'audio' => 'Altavoz, auricular y micrófono',
+        'botones' => 'Botones (volumen, encendido)',
+        'carga' => 'Carga / pin de carga',
+        'sim' => 'Bandeja SIM y ranuras',
+        'humedad' => 'Sin indicios de humedad',
+        'biometria' => 'Huella / Face ID',
+        'imei_coincide' => 'IMEI coincide con el equipo',
+        'bateria' => 'Batería (no hinchada)',
+    ],
+
+    'backup_condiciones' => "El equipo de backup es propiedad de Palacio de los Detalles y se entrega en calidad de préstamo temporal mientras se realiza el servicio o garantía del equipo del cliente.\n"
+        ."El cliente se compromete a devolverlo en las mismas condiciones físicas y de funcionamiento en que lo recibió, salvo el desgaste normal de uso.\n"
+        ."En caso de pérdida, robo o daño atribuible al cliente, este deberá responder por el valor del equipo según inventario de la empresa.\n"
+        .'El préstamo no implica transferencia de propiedad ni garantía adicional sobre el equipo de backup.',
 ];

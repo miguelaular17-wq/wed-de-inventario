@@ -11,10 +11,18 @@ use Illuminate\View\View;
 
 class AuthController extends Controller
 {
-    public function showLogin(): View|RedirectResponse
+    public function showLogin(Request $request): View|RedirectResponse
     {
         if (Auth::check()) {
             return $this->redirectAfterLogin(Auth::user());
+        }
+
+        if ($request->query('next') === 'registrar') {
+            $create = route('servicio.ordenes.create');
+            if ($request->filled('equipo_id')) {
+                $create .= '?equipo_id='.(int) $request->query('equipo_id');
+            }
+            session(['url.intended' => $create]);
         }
 
         return view('auth.login');
@@ -112,36 +120,36 @@ class AuthController extends Controller
     private function redirectAfterLogin(User $user): RedirectResponse
     {
         if ($user->isAdmin()) {
-            return redirect()->route('admin.dashboard');
+            return redirect()->intended(route('admin.dashboard'));
         }
 
 
         if ($user->isComprador() || $user->isMarketing()) {
-            return redirect()->route('comprador.dashboard');
+            return redirect()->intended(route('comprador.dashboard'));
         }
 
         if ($user->isFinanzas() || $user->isAuditor()) {
-            return redirect()->route('finanzas.flujo_caja');
+            return redirect()->intended(route('finanzas.flujo_caja'));
         }
 
         if ($user->isCobranza()) {
-            return redirect()->route('cobranza.index');
+            return redirect()->intended(route('cobranza.index'));
         }
 
         if ($user->isContabilidad()) {
-            return redirect()->route('finanzas.conciliaciones');
+            return redirect()->intended(route('finanzas.conciliaciones'));
         }
 
         if ($user->isVendedor()) {
-            return redirect()->route('vendedor.dashboard');
+            return redirect()->intended(route('vendedor.dashboard'));
         }
 
         if ($user->isTesoreria()) {
-            return redirect()->route('tesoreria.dashboard');
+            return redirect()->intended(route('tesoreria.dashboard'));
         }
 
         if ($user->isRrhh()) {
-            return redirect()->route('nomina.empleados.index');
+            return redirect()->intended(route('nomina.empleados.index'));
         }
 
         if ($user->isTecnico()) {
@@ -149,11 +157,11 @@ class AuthController extends Controller
                 session(['sede_local' => strtoupper($user->sede)]);
             }
 
-            return redirect()->route('servicio.dashboard');
+            return redirect()->intended(route('servicio.celulares.hub'));
         }
 
         if (! $user->requiresSede()) {
-            return redirect('/');
+            return redirect()->intended('/');
         }
 
         if (session()->has('sede_local') || $user->sede) {
@@ -161,7 +169,7 @@ class AuthController extends Controller
                 session(['sede_local' => strtoupper($user->sede)]);
             }
 
-            return redirect()->route('ventas.index');
+            return redirect()->intended(route('ventas.index'));
         }
 
         return redirect()->route('sede.select');

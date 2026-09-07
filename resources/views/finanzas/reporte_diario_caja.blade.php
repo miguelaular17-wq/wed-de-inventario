@@ -15,8 +15,10 @@
         
         /* General Tables */
         table { border-collapse: collapse; width: 100%; margin-bottom: 5px; }
-        th, td { border: 1px solid black; padding: 2px; }
+        th, td { border: 1px solid black; padding: 2px 4px; vertical-align: middle; }
         th { text-align: center; font-weight: bold; }
+        td { white-space: nowrap; }
+        td.motivo { white-space: normal; word-break: break-word; max-width: 220px; }
         
         /* Specific borders */
         .thick-border { border: 2px solid black !important; }
@@ -87,13 +89,13 @@
                             <th colspan="7">DISPONIBILIDAD EN TIEMPO REAL</th>
                         </tr>
                         <tr style="font-size: 7px;">
-                            <th style="width: 2%;">TC</th>
-                            <th style="width: 15%;">BANCO</th>
-                            <th style="width: 23%;">TITULAR</th>
-                            <th style="width: 15%;">BS TC</th>
-                            <th style="width: 15%;">BS DISPONIBLES</th>
-                            <th style="width: 15%;">USD TC</th>
-                            <th style="width: 15%;">USD DISP.</th>
+                            <th>TC</th>
+                            <th>BANCO</th>
+                            <th>TITULAR</th>
+                            <th>BS TC</th>
+                            <th>BS DISPONIBLES</th>
+                            <th>USD TC</th>
+                            <th>USD DISP.</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -115,7 +117,7 @@
                             <tr>
                                 <td class="thick-border-left thick-border-right" style="background-color: {{ $bgColor }}; -webkit-print-color-adjust: exact; print-color-adjust: exact;"></td>
                                 <td>{{ $c->banco }}</td>
-                                <td class="thick-border-right">{{ $c->titular }}</td>
+                                <td class="thick-border-right motivo">{{ $c->titular }}</td>
                                 <td class="text-right">Bs. {{ number_format($c->bs_tc, 2, ',', '.') }}</td>
                                 <td class="text-right thick-border-right">Bs. {{ number_format($c->bs_disponibles, 2, ',', '.') }}</td>
                                 <td class="text-right">$ {{ number_format($c->usd_tc, 2, ',', '.') }}</td>
@@ -184,12 +186,12 @@
                     <thead class="bg-light-gray thick-border-bottom">
                         <tr><th colspan="6">EGRESOS REALIZADOS</th></tr>
                         <tr style="font-size: 7px;">
-                            <th style="width: 10%;">USD</th>
-                            <th style="width: 10%;">TASA CAMBIO</th>
-                            <th class="text-danger" style="width: 12%;">DIF. CAMBIARIO</th>
-                            <th style="width: 15%;">BS</th>
-                            <th style="width: 12%;">COMISION</th>
-                            <th style="width: 41%;">MOTIVO</th>
+                            <th>USD</th>
+                            <th>TASA CAMBIO</th>
+                            <th class="text-danger">DIF. CAMBIARIO</th>
+                            <th>BS</th>
+                            <th>COMISION</th>
+                            <th>MOTIVO</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -212,20 +214,9 @@
                                 <td class="text-right thick-border-left thick-border-right">{{ number_format($e->diferencial_cambiario, 2, ',', '.') }}</td>
                                 <td class="text-right">Bs. {{ number_format($e->monto_bs, 2, ',', '.') }}</td>
                                 <td class="text-right thick-border-left thick-border-right">Bs. {{ number_format($e->comision, 2, ',', '.') }}</td>
-                                <td>{{ $e->motivo }}</td>
+                                <td class="motivo">{{ $e->motivo }}</td>
                             </tr>
                         @endforeach
-                        <!-- Llenar filas vacías si hay pocos para mantener la estructura visual (opcional) -->
-                        @for($i = count($egresos_realizados); $i < 15; $i++)
-                            <tr>
-                                <td class="text-right thick-border-left thick-border-right">$ -</td>
-                                <td class="text-center">-</td>
-                                <td class="text-right thick-border-left thick-border-right">-</td>
-                                <td class="text-right">Bs. -</td>
-                                <td class="text-right thick-border-left thick-border-right">Bs. -</td>
-                                <td>&nbsp;</td>
-                            </tr>
-                        @endfor
                     </tbody>
                     <tfoot class="thick-border-top bg-light-gray">
                         <tr>
@@ -281,19 +272,9 @@
                                 <td class="text-right thick-border-left thick-border-right">{{ number_format($o->diferencial_cambiario, 2, ',', '.') }}</td>
                                 <td class="text-right">Bs. {{ number_format($o->monto_bs, 2, ',', '.') }}</td>
                                 <td class="text-right thick-border-left thick-border-right">Bs. {{ number_format($o->comision, 2, ',', '.') }}</td>
-                                <td>{{ $o->motivo }}</td>
+                                <td class="motivo">{{ $o->motivo }}</td>
                             </tr>
                         @endforeach
-                        @for($i = count($otros_egresos); $i < 3; $i++)
-                            <tr>
-                                <td class="text-right thick-border-left thick-border-right">$ -</td>
-                                <td class="text-center">-</td>
-                                <td class="text-right thick-border-left thick-border-right">-</td>
-                                <td class="text-right">Bs. -</td>
-                                <td class="text-right thick-border-left thick-border-right">Bs. -</td>
-                                <td>&nbsp;</td>
-                            </tr>
-                        @endfor
                     </tbody>
                     <tfoot class="thick-border-top bg-light-gray">
                         <tr>
@@ -323,10 +304,10 @@
                             <th colspan="4">EGRESOS EN DIVISAS</th>
                         </tr>
                         <tr style="font-size: 7px;">
-                            <th class="bg-lime" style="width: 18%;">USD</th>
-                            <th class="bg-light-gray" style="width: 22%;">BANCO</th>
-                            <th class="bg-light-gray" style="width: 22%;">TITULAR</th>
-                            <th class="bg-light-gray" style="width: 38%;">MOTIVO</th>
+                            <th class="bg-lime">USD</th>
+                            <th class="bg-light-gray">BANCO</th>
+                            <th class="bg-light-gray">TITULAR</th>
+                            <th class="bg-light-gray">MOTIVO</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -337,17 +318,9 @@
                                 <td class="text-right bg-lime thick-border-left">$ {{ number_format($d->monto_usd, 2, ',', '.') }}</td>
                                 <td>{{ $d->banco }}</td>
                                 <td>{{ $d->titular }}</td>
-                                <td class="thick-border-right">{{ $d->motivo }}</td>
+                                <td class="thick-border-right motivo">{{ $d->motivo }}</td>
                             </tr>
                         @endforeach
-                        @for($i = count($egresos_divisas); $i < 3; $i++)
-                            <tr>
-                                <td class="text-right bg-lime thick-border-left">$ -</td>
-                                <td></td>
-                                <td></td>
-                                <td class="thick-border-right">&nbsp;</td>
-                            </tr>
-                        @endfor
                     </tbody>
                     <tfoot class="thick-border-top">
                         <tr>

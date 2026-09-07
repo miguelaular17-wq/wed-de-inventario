@@ -29,6 +29,7 @@ return [
         'gerencial.rentabilidad' => 'Rentabilidad gerencial',
         'servicio' => 'Servicio técnico',
         'servicio.inventario' => 'Inventario de repuestos (servicio técnico)',
+        'servicio.transferir' => 'Transferir celulares / órdenes entre sedes',
     ],
 
     /*
@@ -47,7 +48,7 @@ return [
         'Patrimonial' => ['patrimonial'],
         'Nómina' => ['nomina', 'nomina.equipo'],
         'Gerencial' => ['gerencial', 'gerencial.devoluciones', 'gerencial.valorizados', 'gerencial.ajustes', 'gerencial.rentabilidad'],
-        'Servicio técnico' => ['servicio', 'servicio.inventario'],
+        'Servicio técnico' => ['servicio', 'servicio.inventario', 'servicio.transferir'],
     ],
 
     'roles' => [

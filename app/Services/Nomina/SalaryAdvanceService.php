@@ -193,7 +193,12 @@ class SalaryAdvanceService
             ->get();
     }
 
-    public function generarTxtDelDia(Carbon|string $fecha, float $tasaBcv): string
+    /**
+     * Un TXT bancario por empresa (misma regla que nómina).
+     *
+     * @return \Illuminate\Support\Collection<int, object{empresa:?NominaEmpresa,clave:string,nombre:string,contenido:string,archivo:string,empleados:int,usd:float}>
+     */
+    public function archivosTxtDelDia(Carbon|string $fecha, float $tasaBcv)
     {
         if ($tasaBcv <= 0) {
             throw ValidationException::withMessages([
@@ -214,27 +219,87 @@ class SalaryAdvanceService
             })
             ->filter(fn ($fila) => $fila['empleado'] && $fila['usd'] > 0);
 
-        $lineas = [];
-        foreach ($porEmpleado as $fila) {
-            $cedula = $fila['empleado']->cedula();
-            if (preg_replace('/\D+/', '', $cedula) === '') {
+        $porEmpresa = $porEmpleado->groupBy(function ($fila) {
+            $empresa = $fila['empleado']->empresa;
+
+            return $empresa?->id ? 'emp-'.$empresa->id : 'sin-empresa';
+        });
+
+        $archivos = collect();
+        foreach ($porEmpresa as $clave => $filas) {
+            $lineas = [];
+            $usd = 0.0;
+            $empresa = $filas->first()['empleado']->empresa;
+            foreach ($filas as $fila) {
+                $cedula = $fila['empleado']->cedula();
+                if (preg_replace('/\D+/', '', $cedula) === '') {
+                    continue;
+                }
+                $usd = round($usd + $fila['usd'], 2);
+                $bs = round($fila['usd'] * $tasaBcv, 2);
+                $lineas[] = PayrollBankFileService::formatearLinea($cedula, $bs, $dia);
+            }
+            if ($lineas === []) {
                 continue;
             }
-            $bs = round($fila['usd'] * $tasaBcv, 2);
-            $lineas[] = PayrollBankFileService::formatearLinea($cedula, $bs, $dia);
+
+            $codigo = $empresa?->codigo ?: 'SIN_EMPRESA';
+            $archivos->push((object) [
+                'empresa' => $empresa,
+                'clave' => $clave,
+                'nombre' => $empresa?->nombre ?: 'Sin empresa',
+                'contenido' => implode("\r\n", $lineas)."\r\n",
+                'archivo' => $this->nombreArchivoEmpresa($dia, $codigo),
+                'empleados' => $filas->count(),
+                'usd' => $usd,
+            ]);
         }
 
-        if ($lineas === []) {
+        if ($archivos->isEmpty()) {
             throw ValidationException::withMessages([
                 'fecha' => 'Ese día no hay adelantos para generar el TXT.',
             ]);
         }
 
-        return implode("\r\n", $lineas)."\r\n";
+        return $archivos->sortBy('archivo')->values();
     }
 
-    public function nombreArchivoDelDia(Carbon|string $fecha): string
+    public function generarTxtDelDia(Carbon|string $fecha, float $tasaBcv, ?int $empresaId = null): string
     {
-        return 'adelantos_'.Carbon::parse($fecha)->format('Ymd').'.txt';
+        $archivos = $this->archivosTxtDelDia($fecha, $tasaBcv);
+        if ($empresaId !== null) {
+            $archivo = $archivos->first(fn ($a) => (int) ($a->empresa?->id ?? 0) === $empresaId);
+            if (! $archivo) {
+                throw ValidationException::withMessages([
+                    'empresa' => 'Esa empresa no tiene adelantos en esta fecha.',
+                ]);
+            }
+
+            return $archivo->contenido;
+        }
+
+        return $archivos->pluck('contenido')->implode('');
+    }
+
+    public function nombreArchivoDelDia(Carbon|string $fecha, ?string $codigoEmpresa = null): string
+    {
+        $fechaStr = Carbon::parse($fecha)->format('Ymd');
+        if ($codigoEmpresa) {
+            return $this->nombreArchivoEmpresa($fecha, $codigoEmpresa);
+        }
+
+        return 'adelantos_'.$fechaStr.'.txt';
+    }
+
+    public function nombreArchivoEmpresa(Carbon|string $fecha, string $codigoEmpresa): string
+    {
+        $codigo = preg_replace('/[^A-Za-z0-9_-]+/', '_', $codigoEmpresa) ?: 'SIN_EMPRESA';
+
+        return 'adelantos_'.$codigo.'_'.Carbon::parse($fecha)->format('Ymd').'.txt';
+    }
+
+    public function nombreZipDelDia(Carbon|string $fecha): string
+    {
+        return 'adelantos_'.Carbon::parse($fecha)->format('Ymd').'_por_empresa.zip';
     }
 }

@@ -8,7 +8,7 @@
         <div>
             <h1 style="margin:0;">Adelantos de sueldo</h1>
             <p class="muted" style="margin:4px 0 0;">
-                Quincena {{ $quincena['etiqueta'] }}. Busca a la persona, cárgale el abono y descarga el TXT del día.
+                Quincena {{ $quincena['etiqueta'] }}. Busca a la persona, cárgale el abono y descarga el TXT por empresa.
             </p>
         </div>
     </div>
@@ -32,10 +32,47 @@
         </div>
         <div class="field" style="display:flex;align-items:flex-end;gap:8px;">
             <button class="btn primary" type="submit">Buscar</button>
-            <a class="btn" href="{{ route('nomina.adelantos.txt', ['fecha' => $fecha]) }}">Descargar TXT</a>
+            <a class="btn" href="{{ route('nomina.adelantos.txt', ['fecha' => $fecha]) }}">Descargar TXT por empresa</a>
         </div>
     </form>
-    <p class="muted" style="margin-top:8px;">Tasa BCV hoy: <strong>{{ number_format($tasaBcv, 2) }}</strong>. El TXT usa el formato del banco, un archivo por fecha.</p>
+    <p class="muted" style="margin-top:8px;">Tasa BCV hoy: <strong>{{ number_format($tasaBcv, 2) }}</strong>. El banco pide un TXT por empresa (si hay varias, baja un ZIP).</p>
+
+    @if(($txtPorEmpresa ?? collect())->isNotEmpty())
+        <div class="nomina-card" style="margin-top:16px;">
+            <h3 style="margin-top:0;">TXT del {{ \Carbon\Carbon::parse($fecha)->format('d/m/Y') }}</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Empresa</th>
+                        <th>Personas</th>
+                        <th>Monto USD</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($txtPorEmpresa as $fila)
+                        <tr>
+                            <td>
+                                <strong>{{ $fila->empresa?->nombre ?: 'Sin empresa' }}</strong>
+                                @if($fila->empresa?->codigo)
+                                    <div class="muted" style="font-size:.75rem;">{{ $fila->empresa->codigo }}</div>
+                                @endif
+                            </td>
+                            <td>{{ $fila->empleados }}</td>
+                            <td>${{ number_format($fila->usd, 2) }}</td>
+                            <td>
+                                @if($fila->empresa)
+                                    <a class="btn secondary" href="{{ route('nomina.adelantos.txt', ['fecha' => $fecha, 'empresa' => $fila->empresa->id]) }}">TXT</a>
+                                @else
+                                    <a class="btn secondary" href="{{ route('nomina.adelantos.txt', ['fecha' => $fecha, 'empresa' => 0]) }}">TXT</a>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
 
     <div class="nomina-card" style="margin-top:16px;">
         <h3>Cargar adelanto</h3>

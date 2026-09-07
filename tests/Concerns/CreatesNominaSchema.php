@@ -506,6 +506,29 @@ trait CreatesNominaSchema
                 $table->decimal('monto_usd', 12, 2)->default(0);
                 $table->decimal('monto_bs', 14, 2)->default(0);
                 $table->decimal('tasa_cambio', 14, 4)->default(0);
+                $table->unsignedBigInteger('cuenta_por_pagar_id')->nullable();
+                $table->timestamps();
+            });
+        } elseif (! Schema::hasColumn('flujo_cajas', 'cuenta_por_pagar_id')) {
+            Schema::table('flujo_cajas', function (Blueprint $table) {
+                $table->unsignedBigInteger('cuenta_por_pagar_id')->nullable();
+            });
+        }
+
+        if (! Schema::hasTable('cuentas_por_pagar')) {
+            Schema::create('cuentas_por_pagar', function (Blueprint $table) {
+                $table->id();
+                $table->date('fecha');
+                $table->string('beneficiario')->nullable();
+                $table->string('tipo_gasto')->nullable();
+                $table->text('motivo')->nullable();
+                $table->string('sede')->nullable();
+                $table->string('moneda', 8)->default('USD');
+                $table->decimal('monto_total', 14, 2)->default(0);
+                $table->decimal('monto_pagado', 14, 2)->default(0);
+                $table->decimal('saldo', 14, 2)->default(0);
+                $table->string('estado', 16)->default('abierta');
+                $table->unsignedBigInteger('created_by')->nullable();
                 $table->timestamps();
             });
         }
@@ -585,7 +608,7 @@ trait CreatesNominaSchema
                 $table->id();
                 $table->unsignedBigInteger('empleado_id');
                 $table->unsignedBigInteger('prestamo_id');
-                $table->unsignedBigInteger('cuota_id');
+                $table->unsignedBigInteger('cuota_id')->nullable();
                 $table->date('quincena_inicio');
                 $table->date('quincena_fin');
                 $table->string('etiqueta', 64);
@@ -595,7 +618,7 @@ trait CreatesNominaSchema
                 $table->unsignedBigInteger('nomina_periodo_id')->nullable();
                 $table->unsignedBigInteger('created_by')->nullable();
                 $table->timestamps();
-                $table->unique(['cuota_id', 'quincena_inicio']);
+                $table->unique(['prestamo_id', 'quincena_inicio']);
             });
         }
 

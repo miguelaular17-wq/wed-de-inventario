@@ -10,6 +10,32 @@
         $active = collect($items)->contains(fn ($item) => $item['active']);
         return ['type' => 'drop', 'label' => $label, 'active' => $active, 'items' => $items];
     };
+    $comprasNavItems = function () use ($u, $link) {
+        $items = [];
+        $onDash = request()->routeIs('comprador.dashboard');
+        $tab = (string) request()->query('tab', '');
+        if ($tab === '') {
+            $tab = $u->isMarketing() ? 'sobrestock' : 'productos';
+        }
+        $status = (string) request()->query('status', '');
+        $dash = fn (string $t, array $extra = []) => route('comprador.dashboard', array_merge(['tab' => $t], $extra));
+
+        if (! $u->isMarketing()) {
+            $items[] = $link('Distribución', $dash('productos', ['status' => 'MalaDistribucion']), $onDash && $tab === 'productos' && $status !== 'Comprar');
+            $items[] = $link('Necesidad de Compra', $dash('productos', ['status' => 'Comprar']), $onDash && $tab === 'productos' && $status === 'Comprar');
+            $items[] = $link('General por Proveedor', $dash('proveedores'), $onDash && $tab === 'proveedores');
+            $items[] = $link('Sobre Stock / Sin Rotación', $dash('sobrestock'), $onDash && $tab === 'sobrestock');
+            $items[] = $link('Q Pedir', $dash('qpedir'), $onDash && $tab === 'qpedir');
+            $items[] = $link('Existencias Globales', route('comprador.existencias'), request()->routeIs('comprador.existencias'));
+        } else {
+            $items[] = $link('Sobre Stock / Sin Rotación', $dash('sobrestock'), $onDash && $tab === 'sobrestock');
+        }
+        if ($u->isMarketing() || $u->isAdmin()) {
+            $items[] = $link('Efectividad Publicidad', $dash('publicidad'), $onDash && $tab === 'publicidad');
+        }
+
+        return $items;
+    };
 
     $sedeItems = [];
     if ($u->hasAccessToSedeViews() && session('sede_local')) {
@@ -74,21 +100,26 @@
 
     if ($u->canAccess('servicio') && $u->role !== 'admin') {
         $servicioItems = [
+            $link('Celulares', route('servicio.celulares.hub'), request()->routeIs('servicio.celulares.*')),
             $link('Dashboard', route('servicio.dashboard'), request()->routeIs('servicio.dashboard')),
             $link('Órdenes', route('servicio.ordenes.index'), request()->routeIs('servicio.ordenes.*')),
-            $link('Garantías', route('servicio.reparaciones.index'), request()->routeIs('servicio.reparaciones.*')),
+            $link('Por recibir', route('servicio.celulares.por_recibir'), request()->routeIs('servicio.celulares.por_recibir')),
             $link('Facturas', route('servicio.facturas.index'), request()->routeIs('servicio.facturas.*')),
         ];
         if ($u->canAccess('servicio.inventario')) {
             $servicioItems[] = $link('Repuestos', route('servicio.repuestos.index'), request()->routeIs('servicio.repuestos.*'));
         }
+        // Garantías legacy ocultas del menú principal: usar orden tipada GARANTIA.
         $nav[] = count($servicioItems) === 1
             ? $servicioItems[0]
             : $drop('Servicio técnico', $servicioItems);
     }
 
     if ($u->isGerente()) {
-        $nav[] = $link('Compras', route('comprador.dashboard'), request()->routeIs('comprador.*'));
+        $comprasItems = $comprasNavItems();
+        $nav[] = count($comprasItems) === 1
+            ? $comprasItems[0]
+            : $drop('Compras', $comprasItems);
         $nav[] = $drop('Finanzas', [
             $link('Flujo de Caja', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*')),
             $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*')),
@@ -102,11 +133,10 @@
         ]);
     } elseif ($u->role !== 'admin') {
         if ($u->canAccess('compras')) {
-            $nav[] = $link(
-                $u->isMarketing() ? 'Marketing' : 'Compras',
-                route('comprador.dashboard'),
-                request()->routeIs('comprador.*')
-            );
+            $comprasItems = $comprasNavItems();
+            $nav[] = count($comprasItems) === 1
+                ? $comprasItems[0]
+                : $drop($u->isMarketing() ? 'Marketing' : 'Compras', $comprasItems);
         }
         if ($u->canAccess('finanzas.ver')) {
             $nav[] = $link('Flujo de Caja', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*'));

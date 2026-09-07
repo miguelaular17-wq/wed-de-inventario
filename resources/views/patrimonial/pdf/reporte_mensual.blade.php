@@ -28,6 +28,9 @@
 
         /* SECTION */
         .section-title { font-size: 11px; font-weight: bold; color: #fff; background: #1e3a8a; padding: 6px 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0; }
+        .section-title-bar { width: 100%; border-collapse: collapse; color: #fff; }
+        .section-title-bar td { padding: 0; border: none; background: transparent; color: #fff; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; vertical-align: middle; }
+        .section-title-bar .valor { text-align: right; white-space: nowrap; font-weight: 700; }
 
         /* MAIN TABLE */
         .data-table { width: 100%; border-collapse: collapse; margin-bottom: 22px; }
@@ -131,7 +134,19 @@
     {{-- DETALLE DE TRANSACCIONES POR PROPIEDAD --}}
     @foreach($reporte as $row)
         @if(isset($row['transacciones']) && $row['transacciones']->isNotEmpty())
-            <div class="section-title" style="margin-top: 14px;">&#128203; {{ $row['propiedad'] }} — Transacciones</div>
+            <div class="section-title" style="margin-top: 14px;">
+                <table class="section-title-bar">
+                    <tr>
+                        <td>{{ $row['propiedad'] }} — Transacciones</td>
+                        <td class="valor">
+                            Valor
+                            {{ isset($row['valor_inversion']) && $row['valor_inversion'] !== null
+                                ? '$'.number_format((float) $row['valor_inversion'], 2)
+                                : '—' }}
+                        </td>
+                    </tr>
+                </table>
+            </div>
             <table class="tx-table" style="margin-bottom: 14px;">
                 <thead>
                     <tr>

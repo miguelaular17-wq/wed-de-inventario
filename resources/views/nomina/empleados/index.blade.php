@@ -20,7 +20,7 @@
         <div class="nomina-kpi"><span>Pendiente por cobrar</span><strong>${{ number_format($kpis['total_pendiente'], 2) }}</strong></div>
         <div class="nomina-kpi"><span>Cobrado este mes</span><strong>${{ number_format($kpis['cobrado_mes'], 2) }}</strong></div>
         <div class="nomina-kpi"><span>Préstamos activos</span><strong>{{ $kpis['activos'] }}</strong></div>
-        <div class="nomina-kpi warn"><span>Con cuotas vencidas</span><strong>{{ $kpis['vencidos'] }}</strong></div>
+        <div class="nomina-kpi warn"><span>Saldo préstamos</span><strong>${{ number_format($kpis['total_pendiente'] ?? 0, 2) }}</strong></div>
     </div>
     <div class="nomina-kpis">
         <div class="nomina-kpi"><span>Adelantos acumulado</span><strong>${{ number_format($kpisAdelantos['acumulado'], 2) }}</strong></div>

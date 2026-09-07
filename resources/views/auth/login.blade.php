@@ -44,6 +44,12 @@
                 </div>
             @endif
 
+            @if (session('status'))
+                <div class="nexo-login-status">{{ session('status') }}</div>
+            @elseif (request('next') === 'registrar')
+                <div class="nexo-login-status">Inicia sesión para registrar un celular.</div>
+            @endif
+
             <form method="POST" action="{{ route('login.store') }}" class="nexo-login-fields">
                 @csrf
                 <div class="auth-field">
@@ -87,6 +93,10 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                         Q Pedir
                     </button>
+                    <a href="{{ route('servicio.celulares.hub') }}" class="nexo-login-chip">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                        Servicio técnico
+                    </a>
                 </div>
             </div>
 
@@ -348,6 +358,16 @@
         font-size: 0.9rem;
     }
 
+    .nexo-login-status {
+        background: #eff6ff;
+        border-left: 4px solid #3b82f6;
+        color: #1e40af;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+    }
+
     .nexo-login-fields {
         display: flex;
         flex-direction: column;
@@ -452,6 +472,12 @@
         border-color: #e879f9;
         color: #86198f;
         background: #fdf4ff;
+    }
+
+    .nexo-login-chip.is-active {
+        border-color: #a855f7;
+        color: #7e22ce;
+        background: #faf5ff;
     }
 
     .nexo-login-footer {

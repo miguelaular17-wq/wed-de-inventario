@@ -5,6 +5,8 @@ namespace App\Services\Nomina;
 use App\Models\Nomina\NominaAuditLog;
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaPeriodo;
+use App\Models\Nomina\NominaPrestamo;
+use App\Models\Nomina\NominaPrestamoAbono;
 use App\Models\Nomina\NominaPrestamoCuota;
 use App\Models\Nomina\NominaPrestamoPlan;
 use Illuminate\Support\Facades\DB;
@@ -81,7 +83,7 @@ class LoanDiscountPlanService
             ->whereDate('quincena_fin', $quincena['fin']->toDateString())
             ->whereIn('estado', [NominaPrestamoPlan::PENDIENTE, NominaPrestamoPlan::APLICADO])
             ->get()
-            ->keyBy('cuota_id');
+            ->keyBy('id');
     }
 
     /**
@@ -99,7 +101,7 @@ class LoanDiscountPlanService
             ->whereDate('quincena_fin', $quincena['fin']->toDateString())
             ->whereIn('estado', [NominaPrestamoPlan::PENDIENTE, NominaPrestamoPlan::APLICADO])
             ->get()
-            ->keyBy('cuota_id');
+            ->keyBy('id');
     }
 
     /**
@@ -313,8 +315,9 @@ class LoanDiscountPlanService
             ->all();
     }
 
-    /**
-     * @return array{deudores:int, saldo:float, programado:float, nomina:float, comision:float}
+/**
+     * @param  list<array{cuota_id:int, monto:float, destino:string}>|\Illuminate\Support\Collection  $deudores
+     * @return array{deudores:int, saldo:float, programado:float, nomina:float, comision:float, total_prestamo:float, total_pagado:float}
      */
     public function kpis(array $quincena, $deudores): array
     {
@@ -323,9 +326,190 @@ class LoanDiscountPlanService
         return [
             'deudores' => $deudores->count(),
             'saldo' => round((float) $deudores->sum('saldo'), 2),
+            'total_prestamo' => round((float) $deudores->sum('total_prestamo'), 2),
+            'total_pagado' => round((float) $deudores->sum('total_pagado'), 2),
             'programado' => round((float) $planes->sum('monto'), 2),
             'nomina' => round((float) $planes->where('destino', NominaPrestamoPlan::DESTINO_NOMINA)->sum('monto'), 2),
             'comision' => round((float) $planes->where('destino', NominaPrestamoPlan::DESTINO_COMISION)->sum('monto'), 2),
         ];
+    }
+
+    /**
+     * Programa descuento libre (sin cuota) para la quincena actual, FIFO sobre préstamos activos.
+     */
+    public function programarLibreEmpleado(
+        NominaEmpleado $empleado,
+        float $monto,
+        string $destino,
+        array $quincena,
+        ?int $usuarioId = null,
+        ?int $prestamoId = null,
+    ): int {
+        if (! $this->disponible()) {
+            throw ValidationException::withMessages([
+                'planes' => 'Falta migrar la tabla de planes de préstamo.',
+            ]);
+        }
+
+        $monto = round($monto, 2);
+        if ($monto <= 0) {
+            throw ValidationException::withMessages(['monto' => 'El monto debe ser mayor a cero.']);
+        }
+
+        $destino = $destino === NominaPrestamoPlan::DESTINO_COMISION
+            ? NominaPrestamoPlan::DESTINO_COMISION
+            : NominaPrestamoPlan::DESTINO_NOMINA;
+        if ($destino === NominaPrestamoPlan::DESTINO_COMISION && ! $empleado->generaComision()) {
+            $destino = NominaPrestamoPlan::DESTINO_NOMINA;
+        }
+
+        $query = NominaPrestamo::query()
+            ->where('empleado_id', $empleado->id)
+            ->whereIn('estado', ['PENDIENTE', 'ACTIVO'])
+            ->where('saldo_pendiente', '>', 0)
+            ->orderBy('fecha')
+            ->orderBy('id');
+        if ($prestamoId) {
+            $query->where('id', $prestamoId);
+        }
+        $prestamos = $query->get();
+        $saldoTotal = round((float) $prestamos->sum('saldo_pendiente'), 2);
+        if ($prestamos->isEmpty()) {
+            throw ValidationException::withMessages(['monto' => 'Este empleado no tiene saldo pendiente.']);
+        }
+        if ($monto - $saldoTotal > 0.009) {
+            throw ValidationException::withMessages([
+                'monto' => 'El monto no puede superar el saldo pendiente ($'.number_format($saldoTotal, 2).').',
+            ]);
+        }
+
+        $guardados = 0;
+        $restante = $monto;
+
+        DB::transaction(function () use ($prestamos, $quincena, $destino, $usuarioId, $empleado, &$restante, &$guardados) {
+            foreach ($prestamos as $prestamo) {
+                if ($restante <= 0) {
+                    break;
+                }
+                $aplica = min($restante, (float) $prestamo->saldo_pendiente);
+                if ($aplica <= 0) {
+                    continue;
+                }
+
+                $existente = NominaPrestamoPlan::query()
+                    ->where('prestamo_id', $prestamo->id)
+                    ->whereDate('quincena_inicio', $quincena['inicio']->toDateString())
+                    ->whereNull('cuota_id')
+                    ->first();
+
+                if ($existente && $existente->estado === NominaPrestamoPlan::APLICADO) {
+                    continue;
+                }
+
+                $datos = [
+                    'empleado_id' => $empleado->id,
+                    'prestamo_id' => $prestamo->id,
+                    'cuota_id' => null,
+                    'quincena_inicio' => $quincena['inicio']->toDateString(),
+                    'quincena_fin' => $quincena['fin']->toDateString(),
+                    'etiqueta' => $quincena['etiqueta'],
+                    'monto' => $aplica,
+                    'destino' => $destino,
+                    'estado' => NominaPrestamoPlan::PENDIENTE,
+                    'created_by' => $usuarioId,
+                ];
+
+                if ($existente) {
+                    $existente->update($datos);
+                    $plan = $existente;
+                } else {
+                    $plan = NominaPrestamoPlan::create($datos);
+                }
+
+                NominaAuditLog::registrar('PRESTAMO_PLAN', 'prestamo', $prestamo->id, null, [
+                    'plan_id' => $plan->id,
+                    'empleado_id' => $empleado->id,
+                    'monto' => $aplica,
+                    'destino' => $destino,
+                    'quincena' => $quincena['etiqueta'],
+                    'libre' => true,
+                ]);
+
+                $guardados++;
+                $restante = round($restante - $aplica, 2);
+            }
+        });
+
+        return $guardados;
+    }
+
+    /**
+     * Aplica planes libres (sin cuota) pendientes del empleado en el período.
+     *
+     * @return array{0:float,1:float} [nómina, comisión]
+     */
+    public function aplicarLibresEmpleado(
+        NominaEmpleado $empleado,
+        NominaPeriodo $periodo,
+        ?int $usuarioId = null,
+    ): array {
+        if (! $this->disponible()) {
+            return [0.0, 0.0];
+        }
+
+        $planes = NominaPrestamoPlan::query()
+            ->with('prestamo')
+            ->where('empleado_id', $empleado->id)
+            ->whereDate('quincena_inicio', $periodo->fecha_inicio->toDateString())
+            ->whereDate('quincena_fin', $periodo->fecha_fin->toDateString())
+            ->where('estado', NominaPrestamoPlan::PENDIENTE)
+            ->whereNull('cuota_id')
+            ->orderBy('id')
+            ->get();
+
+        if ($planes->isEmpty()) {
+            return [0.0, 0.0];
+        }
+
+        $payments = app(LoanPaymentService::class);
+        $nomina = 0.0;
+        $comision = 0.0;
+
+        DB::transaction(function () use ($planes, $periodo, $usuarioId, $payments, &$nomina, &$comision) {
+            foreach ($planes as $plan) {
+                $prestamo = NominaPrestamo::query()->lockForUpdate()->find($plan->prestamo_id);
+                if (! $prestamo || in_array($prestamo->estado, ['PAGADO', 'CANCELADO'], true)) {
+                    $plan->delete();
+                    continue;
+                }
+
+                $monto = min(round((float) $plan->monto, 2), (float) $prestamo->saldo_pendiente);
+                if ($monto <= 0) {
+                    $plan->delete();
+                    continue;
+                }
+
+                $esComision = $plan->destino === NominaPrestamoPlan::DESTINO_COMISION;
+                $payments->registrarAbono($prestamo, [
+                    'fecha' => $periodo->fecha_fin->toDateString(),
+                    'monto' => $monto,
+                    'tipo' => NominaPrestamoAbono::TIPO_NOMINA,
+                    'observacion' => ($esComision ? 'Descuento de comisión' : 'Descuento de nómina').' período #'.$periodo->id,
+                ], $usuarioId);
+
+                $plan->estado = NominaPrestamoPlan::APLICADO;
+                $plan->nomina_periodo_id = $periodo->id;
+                $plan->monto = $monto;
+                $plan->save();
+
+                if ($esComision) {
+                    $comision = round($comision + $monto, 2);
+                } else {
+                    $nomina = round($nomina + $monto, 2);
+                }
+            }
+        });
+
+        return [$nomina, $comision];
     }
 }

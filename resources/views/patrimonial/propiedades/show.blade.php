@@ -137,8 +137,8 @@
                     <span class="info-value">{{ optional($propiedad->fecha_adquisicion)->format('d/m/Y') ?? '—' }}</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">Inversión Inicial</span>
-                    <span class="info-value">{{ $propiedad->valor_inversion ? '$' . number_format($propiedad->valor_inversion, 2) : '—' }}</span>
+                    <span class="info-label">Costo de la propiedad</span>
+                    <span class="info-value">{{ $propiedad->valor_inversion !== null ? '$' . number_format($propiedad->valor_inversion, 2) : '—' }}</span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">Observaciones</span>

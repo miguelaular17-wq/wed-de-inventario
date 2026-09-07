@@ -718,6 +718,65 @@
     </div>
 </div>
 
+    <!-- CUENTAS POR PAGAR -->
+    <div class="dashboard-container" style="margin-top: 10px;">
+        <h3 style="margin-bottom: 15px; color: #9a3412; display: flex; align-items: center; gap: 8px;">
+            CUENTAS POR PAGAR
+        </h3>
+        <div class="panel" style="padding: 0; overflow: hidden; margin-bottom: 30px; border: 1.5px solid #fed7aa;">
+            <div class="table-wrap">
+                <table class="data-table" style="width: 100%;">
+                    <thead>
+                        <tr style="background: #fff7ed;">
+                            <th style="width: 100px;">Fecha</th>
+                            <th>Beneficiario</th>
+                            <th>Tipo Gasto</th>
+                            <th>Motivo</th>
+                            <th class="col-number" style="text-align: right;">Monto total</th>
+                            <th class="col-number" style="text-align: right;">Pagado</th>
+                            <th class="col-number" style="text-align: right;">Saldo</th>
+                            <th>Estado</th>
+                            <th style="text-align: center; width: 160px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($cuentas_por_pagar as $cuentaPp)
+                            @php
+                                $simbolo = strtoupper((string) $cuentaPp->moneda) === 'BS' ? 'Bs. ' : '$';
+                            @endphp
+                            <tr style="cursor: pointer;" onclick="openHistorialCuentaPorPagar({{ (int) $cuentaPp->id }})">
+                                <td>{{ optional($cuentaPp->fecha)->format('Y-m-d') ?? $cuentaPp->fecha }}</td>
+                                <td>{{ $cuentaPp->beneficiario ?: '-' }}</td>
+                                <td>{{ $cuentaPp->tipo_gasto ?: '-' }}</td>
+                                <td>{{ $cuentaPp->motivo ?: '-' }}</td>
+                                <td class="col-number" style="text-align: right; font-weight: 500;">{{ $simbolo }}{{ number_format((float) $cuentaPp->monto_total, 2) }}</td>
+                                <td class="col-number" style="text-align: right;">{{ $simbolo }}{{ number_format((float) $cuentaPp->monto_pagado, 2) }}</td>
+                                <td class="col-number" style="text-align: right; font-weight: 600; color: {{ $cuentaPp->estaAbierta() ? '#c2410c' : '#166534' }};">{{ $simbolo }}{{ number_format((float) $cuentaPp->saldo, 2) }}</td>
+                                <td>
+                                    @if($cuentaPp->estaAbierta())
+                                        <span style="background:#ffedd5;color:#9a3412;font-size:0.75rem;padding:2px 8px;border-radius:999px;">Abierta</span>
+                                    @else
+                                        <span style="background:#dcfce7;color:#166534;font-size:0.75rem;padding:2px 8px;border-radius:999px;">Pagada</span>
+                                    @endif
+                                </td>
+                                <td style="text-align: center; white-space: nowrap;" onclick="event.stopPropagation();">
+                                    <button type="button" onclick="openHistorialCuentaPorPagar({{ (int) $cuentaPp->id }})" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 3px 8px; font-size: 0.8rem; cursor: pointer; margin-right: 4px;">Historial</button>
+                                    @if($cuentaPp->estaAbierta() && !auth()->user()->isAuditor())
+                                        <button type="button" onclick="openPagoCuentaPorPagar({{ (int) $cuentaPp->id }})" style="background: #1a4273; color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 0.8rem; cursor: pointer;">Pagar</button>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="9" style="text-align: center; color: #64748b; padding: 16px;">No hay cuentas por pagar. Márcalas al registrar un egreso con el monto total del gasto.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- EGRESOS EN DIVISAS -->
     <div class="dashboard-container" style="margin-top: 10px;">
         <h3 style="margin-bottom: 15px; color: #166534; display: flex; align-items: center; gap: 8px;">
@@ -939,7 +998,7 @@
     <div class="panel modal-box" style="width: 95%; max-width: 600px; position: relative; padding: 15px 20px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); max-height: 95vh; overflow-y: auto;">
         <button type="button" class="modal-close" onclick="closeNuevoEgresoModal()" aria-label="Cerrar" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
         <h3 style="margin: 0 0 15px; font-size: 1.1rem; color: var(--blue); display: flex; justify-content: space-between; align-items: center;">
-            <span>Nuevo Egreso</span>
+            <span id="nuevoEgresoModalTitulo">Nuevo Egreso</span>
             <button type="button" id="btn-ocr" onclick="document.getElementById('ocr-upload').click()" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 5px;">
                 <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                 <span id="ocr-btn-text">Escanear Recibo</span>
@@ -949,6 +1008,8 @@
         
         <form id="formNuevoEgreso" method="POST" action="{{ route('finanzas.store_egreso') }}" enctype="multipart/form-data" onsubmit="return validarDesglose(event)">
             @csrf
+            <input type="hidden" name="cuenta_por_pagar_id" id="cuenta_por_pagar_id" value="">
+            <div id="banner_pago_cuenta" style="display:none; margin-bottom: 12px; padding: 10px 12px; background: #fff7ed; border: 1px solid #fdba74; border-radius: 8px; color: #9a3412; font-size: 0.85rem;"></div>
             <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 1;">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tipo de Egreso</label>
@@ -1019,6 +1080,11 @@
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;" id="lbl_monto_bs">Monto BS</label>
                     <input type="text" inputmode="decimal" name="monto_bs" id="monto_bs" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
+            </div>
+
+            <div id="row_monto_total_gasto" style="margin-bottom: 10px;">
+                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto total del gasto</label>
+                <input type="text" inputmode="decimal" name="monto_total_gasto" id="monto_total_gasto" placeholder="Total de la cuenta (si hoy solo abonas una parte)" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
 
             <div id="row_diferencial" style="display: flex; gap: 15px; margin-bottom: 10px;">
@@ -1189,6 +1255,9 @@
                 <small id="beneficiario_ayuda" style="display:none; margin-top:4px; color:#047857;">
                     Solo aparecen empleados activos marcados como Servicio Técnico en su ficha de Nómina.
                 </small>
+                <small id="beneficiario_ayuda_libre" style="display:block; margin-top:4px; color:#64748b;">
+                    Puedes elegir de la lista o escribir un nombre y pulsar Enter.
+                </small>
             </div>
 
             <div style="margin-bottom: 10px;">
@@ -1196,18 +1265,22 @@
                 <input type="text" name="motivo" placeholder="Ej. Pago de internet mensual..." style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
 
-            <div style="margin-bottom: 15px; margin-top: 15px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 0.95rem;">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 12px 0 10px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem; white-space: nowrap;">
                     <input type="checkbox" id="chk_desglose" onchange="toggleDesglose()" style="width: 16px; height: 16px;">
-                    Este pago es general y requiere desglose por beneficiarios
+                    Desglose
                 </label>
-            </div>
-
-            {{-- TodoTicket --}}
-            <div style="margin-bottom: 10px; border-top: 1px dashed #a7f3d0; padding-top: 10px;">
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; color: #065f46;">
+                <label id="row_cuenta_por_pagar" style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem; color: #9a3412; white-space: nowrap;">
+                    <input type="checkbox" id="chk_cuenta_por_pagar" name="es_cuenta_por_pagar" value="1" style="width: 16px; height: 16px; accent-color: #ea580c;">
+                    Cuenta por pagar
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem; color: #065f46; white-space: nowrap;">
                     <input type="checkbox" id="chk_todoticket" name="es_todoticket" value="1" onchange="toggleTodoTicket()" style="width: 16px; height: 16px; accent-color: #059669;">
-                    Este egreso es pago de TodoTicket
+                    TodoTicket
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem; color: #1e40af; white-space: nowrap;">
+                    <input type="checkbox" id="chk_gasto_fijo" onchange="toggleGastoFijoPanel()" style="width: 16px; height: 16px; accent-color: #3b82f6;">
+                    Gasto fijo
                 </label>
             </div>
             <div id="panel_todoticket" style="display:none; background: #ecfdf5; border: 1.5px solid #6ee7b7; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;">
@@ -1250,15 +1323,6 @@
                     <span style="font-weight: 700;">Total Real</span>
                     <strong id="tt_total_real_lbl" style="font-size: 1.15rem;">Bs. 0,00</strong>
                 </div>
-            </div>
-
-            {{-- ── VINCULAR CON GASTO FIJO ── --}}
-            <div style="margin-bottom: 10px; border-top: 1px dashed #bfdbfe; padding-top: 10px;">
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: 0.95rem; color: #1e40af;">
-                    <input type="checkbox" id="chk_gasto_fijo" onchange="toggleGastoFijoPanel()" style="width: 16px; height: 16px; accent-color: #3b82f6;">
-                    <svg width="16" height="16" fill="none" stroke="#3b82f6" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
-                    Este egreso es pago de un Gasto Fijo
-                </label>
             </div>
 
             <div id="panel_gasto_fijo" style="display:none; background: linear-gradient(135deg,#eff6ff,#dbeafe); border: 1.5px solid #93c5fd; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;">
@@ -1359,6 +1423,36 @@
     </div>
 </div>
 
+<div id="historialCuentaModal" class="modal-overlay" style="display: none; z-index: 1200;">
+    <div class="panel modal-box" style="width: 95%; max-width: 1100px; position: relative; padding: 15px 20px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); max-height: 95vh; overflow-y: auto;">
+        <button type="button" class="modal-close" onclick="closeHistorialCuentaPorPagar()" aria-label="Cerrar" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
+        <h3 id="historialCuentaTitulo" style="margin: 0 0 8px; font-size: 1.1rem; color: #9a3412;">Historial</h3>
+        <p id="historialCuentaResumen" style="margin: 0 0 12px; color: #64748b; font-size: 0.9rem;"></p>
+        <div class="table-wrap">
+            <table class="data-table" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th style="width: 100px;">Fecha</th>
+                        <th>Origen ➔ Destino (Beneficiario)</th>
+                        <th>Tipo Gasto</th>
+                        <th>Motivo</th>
+                        <th class="col-number" style="text-align: right;">USD</th>
+                        <th class="col-number" style="text-align: right;">Tasa Cambio</th>
+                        <th class="col-number" style="text-align: right;">Dif. Cambiario</th>
+                        <th class="col-number" style="text-align: right;">BS</th>
+                        <th class="col-number" style="text-align: right;">Comisión</th>
+                    </tr>
+                </thead>
+                <tbody id="historialCuentaBody"></tbody>
+            </table>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top: 14px;">
+            <button type="button" onclick="closeHistorialCuentaPorPagar()" style="padding: 8px 16px; background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer;">Cerrar</button>
+            <button type="button" id="historialCuentaPagarBtn" onclick="" style="padding: 8px 16px; background-color: #1a4273; color: white; border: none; border-radius: 6px; cursor: pointer; display:none;">Pagar</button>
+        </div>
+    </div>
+</div>
+
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -1367,6 +1461,40 @@
         z-index: 9999 !important;
     }
 </style>
+
+@php
+    $cuentasPorPagarJs = ($cuentas_por_pagar ?? collect())->map(function ($cuenta) {
+        return [
+            'id' => $cuenta->id,
+            'fecha' => optional($cuenta->fecha)->format('Y-m-d'),
+            'beneficiario' => $cuenta->beneficiario,
+            'tipo_gasto' => $cuenta->tipo_gasto,
+            'motivo' => $cuenta->motivo,
+            'sede' => $cuenta->sede,
+            'moneda' => $cuenta->moneda,
+            'monto_total' => (float) $cuenta->monto_total,
+            'monto_pagado' => (float) $cuenta->monto_pagado,
+            'saldo' => (float) $cuenta->saldo,
+            'abierta' => $cuenta->estaAbierta(),
+            'pagos' => $cuenta->pagos->map(function ($mov) {
+                return [
+                    'fecha' => $mov->fecha,
+                    'banco' => $mov->banco,
+                    'titular' => $mov->titular,
+                    'banco_receptor' => $mov->banco_receptor,
+                    'titular_receptor' => $mov->titular_receptor,
+                    'tipo_gasto' => $mov->tipo_gasto,
+                    'motivo' => $mov->motivo,
+                    'monto_usd' => (float) $mov->monto_usd,
+                    'tasa_cambio' => (float) $mov->tasa_cambio,
+                    'diferencial_cambiario' => (float) $mov->diferencial_cambiario,
+                    'monto_bs' => (float) $mov->monto_bs,
+                    'comision' => (float) $mov->comision,
+                ];
+            })->values(),
+        ];
+    })->values();
+@endphp
 
 <script>
 function descargarReporteBusqueda() {
@@ -1639,27 +1767,31 @@ function actualizarBeneficiariosPorTipoGasto() {
     const select = document.getElementById('beneficiario');
     const label = document.getElementById('beneficiario_label');
     const ayuda = document.getElementById('beneficiario_ayuda');
+    const ayudaLibre = document.getElementById('beneficiario_ayuda_libre');
 
     if (!select) return;
     select.required = esServicioTecnico;
     document.getElementById('nomina_empleado_id').value = '';
     if (label) label.textContent = esServicioTecnico ? 'Empleado de Servicio Técnico' : 'Beneficiario';
     if (ayuda) ayuda.style.display = esServicioTecnico ? 'block' : 'none';
+    if (ayudaLibre) ayudaLibre.style.display = esServicioTecnico ? 'none' : 'block';
 
     if (window.tsBeneficiario) {
         window.tsBeneficiario.clear(true);
         window.tsBeneficiario.clearOptions();
         window.tsBeneficiario.addOption(opciones);
         window.tsBeneficiario.refreshOptions(false);
+        window.tsBeneficiario.settings.create = !esServicioTecnico;
+        window.tsBeneficiario.settings.createOnBlur = !esServicioTecnico;
         window.tsBeneficiario.settings.placeholder = esServicioTecnico
             ? '-- Seleccione el empleado --'
-            : '-- Seleccione --';
+            : 'Seleccione o escriba un beneficiario';
         window.tsBeneficiario.inputState();
         return;
     }
 
     select.innerHTML = '<option value="">' +
-        (esServicioTecnico ? '-- Seleccione el empleado --' : '-- Seleccione un beneficiario --') +
+        (esServicioTecnico ? '-- Seleccione el empleado --' : 'Seleccione o escriba un beneficiario') +
         '</option>';
     opciones.forEach(opcion => select.add(new Option(opcion.text, opcion.value)));
 }
@@ -1704,7 +1836,21 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     if (document.getElementById('banco_titular')) window.tsBancoTitular = new TomSelect("#banco_titular", tsBankSettings);
     if (document.getElementById('banco_titular_receptor')) window.tsBancoTitularReceptor = new TomSelect("#banco_titular_receptor", tsBankSettings);
-    if (document.getElementById('beneficiario')) window.tsBeneficiario = new TomSelect("#beneficiario", tsBankSettings);
+    if (document.getElementById('beneficiario')) {
+        window.tsBeneficiario = new TomSelect("#beneficiario", {
+            create: true,
+            createOnBlur: true,
+            persist: true,
+            sortField: { field: "text", direction: "asc" },
+            placeholder: 'Seleccione o escriba un beneficiario',
+            maxOptions: null,
+            render: {
+                option_create: function (data, escape) {
+                    return '<div class="create">Usar «<strong>' + escape(data.input) + '</strong>»</div>';
+                }
+            }
+        });
+    }
     srcTG?.addEventListener('change', actualizarBeneficiariosPorTipoGasto);
     document.getElementById('beneficiario')?.addEventListener('change', function () {
         const esServicioTecnico = srcTG?.value === '058 - SERVICIO TECNICO (GARANTIAS)';
@@ -1712,15 +1858,117 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     actualizarBeneficiariosPorTipoGasto();
 
-    // Modal functions
+    window.CUENTAS_POR_PAGAR = @json($cuentasPorPagarJs);
+
+    function fmtNum(n) {
+        const v = Number(n || 0);
+        return v ? v.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
+    }
+
+    window.resetNuevoEgresoCuenta = function() {
+        const idInput = document.getElementById('cuenta_por_pagar_id');
+        const banner = document.getElementById('banner_pago_cuenta');
+        const titulo = document.getElementById('nuevoEgresoModalTitulo');
+        const chk = document.getElementById('chk_cuenta_por_pagar');
+        const rowChk = document.getElementById('row_cuenta_por_pagar');
+        const rowTotal = document.getElementById('row_monto_total_gasto');
+        const totalInput = document.getElementById('monto_total_gasto');
+        if (idInput) idInput.value = '';
+        if (banner) { banner.style.display = 'none'; banner.textContent = ''; }
+        if (titulo) titulo.textContent = 'Nuevo Egreso';
+        if (chk) chk.checked = false;
+        if (rowChk) rowChk.style.display = 'flex';
+        if (rowTotal) rowTotal.style.display = '';
+        if (totalInput) totalInput.value = '';
+        const submitBtn = document.querySelector('#nuevoEgresoModal button[type="submit"]');
+        if (submitBtn) submitBtn.innerText = 'Guardar Egreso';
+    };
+
     window.openNuevoEgresoModal = function() {
+        window.resetNuevoEgresoCuenta();
         document.getElementById('nuevoEgresoModal').style.display = 'flex';
     };
     window.closeNuevoEgresoModal = function() {
         document.getElementById('nuevoEgresoModal').style.display = 'none';
+        window.resetNuevoEgresoCuenta();
         // Reset multi-comprobante
         multiFiles = [];
         renderCompGrid();
+    };
+
+    window.openHistorialCuentaPorPagar = function(id) {
+        const cuenta = (window.CUENTAS_POR_PAGAR || []).find(c => Number(c.id) === Number(id));
+        if (!cuenta) return;
+        const sim = String(cuenta.moneda).toUpperCase() === 'BS' ? 'Bs. ' : '$';
+        document.getElementById('historialCuentaTitulo').textContent = 'Historial — ' + (cuenta.beneficiario || cuenta.motivo || ('Cuenta #' + cuenta.id));
+        document.getElementById('historialCuentaResumen').textContent =
+            'Total ' + sim + fmtNum(cuenta.monto_total) + ' · Pagado ' + sim + fmtNum(cuenta.monto_pagado) + ' · Saldo ' + sim + fmtNum(cuenta.saldo);
+        const body = document.getElementById('historialCuentaBody');
+        body.innerHTML = (cuenta.pagos || []).map(mov => {
+            const destino = mov.banco_receptor || mov.titular_receptor
+                ? `<div style="color:#94a3b8;font-size:1.2rem;">➔</div>
+                   <div><strong style="color:#10b981;">${mov.banco_receptor || ''}</strong><br><span class="muted" style="font-size:0.85rem;">${mov.titular_receptor || ''}</span></div>`
+                : '';
+            return `<tr>
+                <td>${mov.fecha || '-'}</td>
+                <td>
+                    <div style="display:flex;gap:15px;align-items:center;">
+                        <div><strong style="color:var(--blue);">${mov.banco || ''}</strong><br><span class="muted" style="font-size:0.85rem;">${mov.titular || ''}</span></div>
+                        ${destino}
+                    </div>
+                </td>
+                <td>${mov.tipo_gasto || '-'}</td>
+                <td>${mov.motivo || '-'}</td>
+                <td class="col-number" style="text-align:right;">${mov.monto_usd ? '$' + fmtNum(mov.monto_usd) : '-'}</td>
+                <td class="col-number" style="text-align:right;">${mov.tasa_cambio ? fmtNum(mov.tasa_cambio) : '-'}</td>
+                <td class="col-number" style="text-align:right;color:var(--danger);">${mov.diferencial_cambiario ? fmtNum(mov.diferencial_cambiario) : '-'}</td>
+                <td class="col-number" style="text-align:right;">${mov.monto_bs ? 'Bs.' + fmtNum(mov.monto_bs) : '-'}</td>
+                <td class="col-number" style="text-align:right;">${mov.comision ? fmtNum(mov.comision) : '-'}</td>
+            </tr>`;
+        }).join('') || `<tr><td colspan="9" style="text-align:center;padding:20px;color:#64748b;">Sin pagos registrados.</td></tr>`;
+        const pagarBtn = document.getElementById('historialCuentaPagarBtn');
+        if (cuenta.abierta) {
+            pagarBtn.style.display = 'inline-block';
+            pagarBtn.onclick = function() { closeHistorialCuentaPorPagar(); openPagoCuentaPorPagar(cuenta.id); };
+        } else {
+            pagarBtn.style.display = 'none';
+        }
+        document.getElementById('historialCuentaModal').style.display = 'flex';
+    };
+
+    window.closeHistorialCuentaPorPagar = function() {
+        document.getElementById('historialCuentaModal').style.display = 'none';
+    };
+
+    window.openPagoCuentaPorPagar = function(id) {
+        const cuenta = (window.CUENTAS_POR_PAGAR || []).find(c => Number(c.id) === Number(id));
+        if (!cuenta || !cuenta.abierta) return;
+        window.resetNuevoEgresoCuenta();
+        document.getElementById('cuenta_por_pagar_id').value = cuenta.id;
+        document.getElementById('nuevoEgresoModalTitulo').textContent = 'Pagar cuenta por pagar';
+        const sim = String(cuenta.moneda).toUpperCase() === 'BS' ? 'Bs. ' : '$';
+        const banner = document.getElementById('banner_pago_cuenta');
+        banner.style.display = 'block';
+        banner.textContent = 'Abono a ' + (cuenta.beneficiario || cuenta.motivo || ('cuenta #' + cuenta.id)) +
+            '. Saldo pendiente: ' + sim + fmtNum(cuenta.saldo) + ' de ' + sim + fmtNum(cuenta.monto_total) + '. Completa los mismos campos de un egreso.';
+        document.getElementById('row_cuenta_por_pagar').style.display = 'none';
+        document.getElementById('row_monto_total_gasto').style.display = 'none';
+        const chk = document.getElementById('chk_cuenta_por_pagar');
+        if (chk) chk.checked = false;
+        const motivo = document.querySelector('#formNuevoEgreso input[name="motivo"]');
+        if (motivo && !motivo.value && cuenta.motivo) motivo.value = cuenta.motivo;
+        if (window.tsTipoGasto && cuenta.tipo_gasto) {
+            window.tsTipoGasto.setValue(cuenta.tipo_gasto);
+        }
+        if (window.tsBeneficiario && cuenta.beneficiario) {
+            try {
+                window.tsBeneficiario.addOption({ value: cuenta.beneficiario, text: cuenta.beneficiario });
+                window.tsBeneficiario.setValue(cuenta.beneficiario);
+            } catch (e) {}
+        }
+        const submitBtn = document.querySelector('#nuevoEgresoModal button[type="submit"]');
+        if (submitBtn) submitBtn.innerText = 'Registrar pago';
+        document.getElementById('nuevoEgresoModal').style.display = 'flex';
     };
 
     // ===== MULTI-COMPROBANTE (máx 6) =====
@@ -2130,6 +2378,16 @@ function handleOcrSaldosUpload(event) {
 }
 
 function validarDesglose(event) {
+    const chkCuenta = document.getElementById('chk_cuenta_por_pagar');
+    const cuentaId = document.getElementById('cuenta_por_pagar_id')?.value;
+    if (chkCuenta && chkCuenta.checked && !cuentaId) {
+        const total = window.parseLocalNumber(document.getElementById('monto_total_gasto')?.value) || 0;
+        if (total <= 0) {
+            alert('Indica el monto total del gasto para marcar esta cuenta por pagar.');
+            event.preventDefault();
+            return false;
+        }
+    }
     const chk = document.getElementById('chk_desglose');
     if (chk && chk.checked) {
         const montoBsInput = document.getElementById('monto_bs');
@@ -3030,7 +3288,7 @@ function limpiarFiltros() {
             <div style="margin-bottom: 15px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 0.95rem;">
                     <input type="checkbox" id="chk_desglose_edit" onchange="toggleDesgloseEdit()" style="width: 16px; height: 16px;">
-                    Este pago requiere desglose por beneficiarios
+                    Desglose
                 </label>
             </div>
             <div id="container_desglose_edit" style="display: none; background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px;">

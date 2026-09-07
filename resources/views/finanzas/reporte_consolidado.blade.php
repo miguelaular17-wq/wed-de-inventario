@@ -50,7 +50,7 @@
     
     .report-table { 
         width: 100%; 
-        table-layout: fixed; 
+        table-layout: auto; 
         border-collapse: collapse; 
         border: 2px solid #002060; 
         font-size: 10px; 
@@ -59,10 +59,16 @@
     }
     .report-table th, .report-table td { 
         border: 1px solid #999; 
-        padding: 3px 4px; 
+        padding: 3px 6px; 
         word-wrap: break-word; 
-        overflow: hidden; 
+        overflow-wrap: anywhere; 
         vertical-align: middle; 
+        white-space: normal;
+    }
+    .report-table .currency-wrap {
+        justify-content: flex-end;
+        gap: 4px;
+        white-space: nowrap;
     }
     .report-table th { font-weight: bold; text-align: center; }
     .report-table thead tr:first-child th { 
@@ -185,7 +191,7 @@
                 <table class="report-table" id="table-nacional">
                     <thead>
                         <tr><th colspan="4">BANCA NACIONAL</th></tr>
-                        <tr><th style="width: 25%">BANCO</th><th style="width: 35%">TITULAR</th><th style="width: 20%">BS</th><th style="width: 20%">USD</th></tr>
+                        <tr><th>BANCO</th><th>TITULAR</th><th>BS</th><th>USD</th></tr>
                     </thead>
                     <tbody>
                         @php
@@ -218,7 +224,7 @@
                     <thead>
                         <tr><th colspan="6">PLANIFICACION DE PAGOS A EJECUTAR EN EL DIA</th></tr>
                         <tr class="bg-dark-blue">
-                            <th style="width: 25%">RAZON SOCIAL</th><th style="width: 15%">TOTAL BS</th><th style="width: 10%">TASA</th><th style="width: 15%">TOTAL $</th><th style="width: 15%">FACTURA</th><th style="width: 20%">CONCEPTO</th>
+                            <th>RAZON SOCIAL</th><th>TOTAL BS</th><th>TASA</th><th>TOTAL $</th><th>FACTURA</th><th>CONCEPTO</th>
                         </tr>
                     </thead>
                     <tbody>

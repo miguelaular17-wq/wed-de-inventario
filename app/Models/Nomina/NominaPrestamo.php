@@ -60,9 +60,13 @@ class NominaPrestamo extends Model
         return round((float) $this->monto_original - (float) $this->saldo_pendiente, 2);
     }
 
+    public function sinCuotas(): bool
+    {
+        return true;
+    }
+
     public function proximaCuota(): ?NominaPrestamoCuota
     {
-        return $this->cuotas
-            ->first(fn (NominaPrestamoCuota $cuota) => in_array($cuota->estado, ['PENDIENTE', 'VENCIDA', 'PARCIAL'], true));
+        return null;
     }
 }

@@ -8,17 +8,20 @@ use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Tests\Concerns\CreatesNominaSchema;
+use Tests\Concerns\CreatesServicioEquipoSchema;
 use Tests\TestCase;
 
 class ServicioTecnicoFase2Test extends TestCase
 {
     use CreatesNominaSchema;
+    use CreatesServicioEquipoSchema;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->setUpNominaSchema();
         $this->ensureStTables();
+        $this->ensureStEquipoBitacoraSchema();
     }
 
     public function test_marcar_listo_descuenta_stock_en_servidor(): void
@@ -81,6 +84,15 @@ class ServicioTecnicoFase2Test extends TestCase
             'sede' => 'VIRTUDES',
         ]);
 
+        // Orden ya existente en destino con el mismo número → fuerza renumeración al transferir.
+        StOrden::crearEnSede([
+            'sede' => 'VIRTUDES',
+            'cliente_nombre' => 'Ya en destino',
+            'prioridad' => 'normal',
+            'fecha_ingreso' => now()->toDateString(),
+            'estado' => StOrden::ESTADO_PENDIENTE,
+        ], $supervisor);
+
         $orden = StOrden::crearEnSede([
             'sede' => 'DORAL',
             'cliente_nombre' => 'Transfer test',
@@ -88,6 +100,7 @@ class ServicioTecnicoFase2Test extends TestCase
             'fecha_ingreso' => now()->toDateString(),
             'estado' => StOrden::ESTADO_PENDIENTE,
         ], $supervisor);
+        $numeroOrigen = (int) $orden->numero;
 
         $this->actingAs($supervisor)
             ->withSession(['sede_local' => 'DORAL'])
@@ -103,6 +116,8 @@ class ServicioTecnicoFase2Test extends TestCase
         $this->assertSame('VIRTUDES', $orden->sede);
         $this->assertSame('DORAL', $orden->sede_origen_transfer);
         $this->assertSame(StOrden::TRANSFER_PENDIENTE, $orden->transfer_estado);
+        $this->assertSame(2, (int) $orden->numero);
+        $this->assertNotSame($numeroOrigen, (int) $orden->numero);
 
         $this->actingAs($tecnicoDestino)
             ->withSession(['sede_local' => 'VIRTUDES'])

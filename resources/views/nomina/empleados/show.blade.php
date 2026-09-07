@@ -19,7 +19,6 @@
         'abonos' => 'Adelantos',
         'ajustes' => 'Deducciones y bonos',
     ];
-    $proxima = $resumenPrestamos['proxima_cuota'] ?? null;
 @endphp
 
 @section('content')
@@ -49,7 +48,7 @@
         <div class="nomina-kpi"><span>Préstamos activos</span><strong>{{ $resumenPrestamos['cantidad'] }}</strong></div>
         <div class="nomina-kpi"><span>Saldo préstamos</span><strong>${{ number_format($resumenPrestamos['saldo'], 2) }}</strong></div>
         <div class="nomina-kpi"><span>Adelantos acumulado</span><strong>${{ number_format($resumenAdelantos['acumulado'], 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Próxima cuota</span><strong>{{ $proxima ? $proxima->fecha_programada->format('d/m/Y') : '—' }}</strong></div>
+        <div class="nomina-kpi"><span>Pagado en préstamos</span><strong>${{ number_format($empleado->prestamos->sum(fn ($p) => $p->totalPagado()), 2) }}</strong></div>
     </div>
 
     <nav class="nomina-tabs">
@@ -445,7 +444,6 @@
                     <thead>
                         <tr>
                             <th>Préstamo</th>
-                            <th>Cuota</th>
                             <th>Monto</th>
                             <th>Se aplica en</th>
                             <th>Estado</th>
@@ -455,7 +453,6 @@
                         @foreach($planesPrestamo as $plan)
                             <tr>
                                 <td>#{{ $plan->prestamo_id }}</td>
-                                <td>#{{ $plan->cuota_id }}</td>
                                 <td>${{ number_format((float) $plan->monto, 2) }}</td>
                                 <td>{{ $plan->etiquetaDestino() }}</td>
                                 <td>{{ $plan->estado }}</td>
@@ -466,22 +463,13 @@
             </div>
         @endif
         <h3 style="margin-top:16px;">Registrar préstamo</h3>
+        <p class="muted" style="margin-top:0;">Sin cuotas: solo saldo total e historial de cómo se va pagando.</p>
         <form method="POST" action="{{ route('nomina.prestamos.store', $empleado) }}" class="nomina-form-grid">
             @csrf
             <div class="field"><label>Fecha</label><input type="date" name="fecha" value="{{ now()->format('Y-m-d') }}" required></div>
             <div class="field"><label>Monto original</label><input type="number" step="0.01" min="0.01" name="monto_original" required></div>
-            <div class="field"><label>Número de cuotas</label><input type="number" min="1" max="120" name="numero_cuotas" value="20" required></div>
-            <div class="field">
-                <label>Frecuencia</label>
-                <select name="frecuencia">
-                    <option value="QUINCENAL">Quincenal</option>
-                    <option value="SEMANAL">Semanal</option>
-                    <option value="MENSUAL">Mensual</option>
-                </select>
-            </div>
-            <div class="field"><label>Inicio de cobro</label><input type="date" name="fecha_inicio" value="{{ now()->format('Y-m-d') }}" required></div>
             <div class="field field-wide"><label>Motivo</label><input name="motivo" placeholder="Observación"></div>
-            <div class="field" style="display:flex; align-items:flex-end;"><button class="btn primary" type="submit">Generar calendario</button></div>
+            <div class="field" style="display:flex; align-items:flex-end;"><button class="btn primary" type="submit">Registrar préstamo</button></div>
         </form>
 
         @foreach($empleado->prestamos as $prestamo)
@@ -490,7 +478,7 @@
                     <div>
                         <strong>Préstamo #{{ $prestamo->id }}</strong>
                         <span class="tag {{ $prestamo->estado === 'PAGADO' ? 'ok' : ($prestamo->estado === 'CANCELADO' ? 'no' : 'warn') }}">{{ $prestamo->estado }}</span>
-                        <div class="muted">{{ $prestamo->fecha->format('d/m/Y') }} · {{ $prestamo->numero_cuotas }} cuotas {{ strtolower($prestamo->frecuencia) }} · cuota ${{ number_format($prestamo->valor_cuota, 2) }}</div>
+                        <div class="muted">{{ $prestamo->fecha->format('d/m/Y') }} · Saldo libre · original ${{ number_format((float) $prestamo->monto_original, 2) }}</div>
                     </div>
                     <div>
                         Pagado ${{ number_format($prestamo->totalPagado(), 2) }} · Saldo ${{ number_format($prestamo->saldo_pendiente, 2) }}
@@ -500,7 +488,7 @@
                 @if(!in_array($prestamo->estado, ['PAGADO', 'CANCELADO'], true))
                     <form method="POST" action="{{ route('nomina.prestamos.abonar', $prestamo) }}" class="nomina-form-grid" style="margin:12px 0;">
                         @csrf
-                        <div class="field field-wide"><strong>Pago extra a este préstamo</strong></div>
+                        <div class="field field-wide"><strong>Registrar pago a este préstamo</strong></div>
                         <div class="field"><label>Fecha</label><input type="date" name="fecha" value="{{ now()->format('Y-m-d') }}" required></div>
                         <div class="field"><label>Monto</label><input type="number" step="0.01" min="0.01" max="{{ $prestamo->saldo_pendiente }}" name="monto" required></div>
                         <div class="field">
@@ -511,41 +499,39 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="field">
-                            <label>Cuota (opcional)</label>
-                            <select name="cuota_id">
-                                <option value="">FIFO automático</option>
-                                @foreach($prestamo->cuotas->whereIn('estado', ['PENDIENTE','VENCIDA','PARCIAL']) as $cuota)
-                                    <option value="{{ $cuota->id }}">#{{ $cuota->numero }} · {{ $cuota->fecha_programada->format('d/m/Y') }} · ${{ number_format($cuota->saldo(), 2) }}</option>
-                                @endforeach
-                            </select>
-                        </div>
                         <div class="field"><label>Observación</label><input name="observacion"></div>
                         <div class="field" style="display:flex; align-items:flex-end;"><button class="btn primary" type="submit">Registrar pago</button></div>
                     </form>
                 @endif
+                <h4 style="margin:12px 0 8px; font-size:.95rem;">Historial de pagos</h4>
                 <table class="data-table">
-                    <thead><tr><th>#</th><th>Fecha</th><th>Monto</th><th>Pagado</th><th>Estado</th><th>Esta quincena</th><th>Nómina</th></tr></thead>
+                    <thead><tr><th>Fecha</th><th>Monto</th><th>Tipo</th><th>Saldo después</th><th>Observación</th></tr></thead>
                     <tbody>
-                        @foreach($prestamo->cuotas as $cuota)
-                            @php $plan = ($planesPrestamo ?? collect())->get($cuota->id); @endphp
+                        @php
+                            $saldoCorrido = (float) $prestamo->monto_original;
+                            $abonosCronologicos = $prestamo->abonos->sortBy([
+                                ['fecha', 'asc'],
+                                ['id', 'asc'],
+                            ])->values();
+                            $filasHistorial = [];
+                            foreach ($abonosCronologicos as $abono) {
+                                $saldoCorrido = round($saldoCorrido - (float) $abono->monto, 2);
+                                $filasHistorial[] = ['abono' => $abono, 'saldo' => max(0, $saldoCorrido)];
+                            }
+                            $filasHistorial = array_reverse($filasHistorial);
+                        @endphp
+                        @forelse($filasHistorial as $fila)
+                            @php $abono = $fila['abono']; @endphp
                             <tr>
-                                <td>{{ $cuota->numero }}</td>
-                                <td>{{ $cuota->fecha_programada->format('d/m/Y') }}</td>
-                                <td>${{ number_format($cuota->monto, 2) }}</td>
-                                <td>${{ number_format($cuota->monto_pagado, 2) }}</td>
-                                <td>{{ $cuota->estado }}</td>
-                                <td>
-                                    @if($plan)
-                                        ${{ number_format((float) $plan->monto, 2) }} · {{ $plan->etiquetaDestino() }}
-                                        <span class="muted">({{ $plan->estado }})</span>
-                                    @else
-                                        —
-                                    @endif
-                                </td>
-                                <td>{{ $cuota->nomina_periodo_id ? '#'.$cuota->nomina_periodo_id : '—' }}</td>
+                                <td>{{ $abono->fecha->format('d/m/Y') }}</td>
+                                <td>${{ number_format((float) $abono->monto, 2) }}</td>
+                                <td>{{ \App\Models\Nomina\NominaPrestamoAbono::tipos()[$abono->tipo] ?? $abono->tipo }}</td>
+                                <td>${{ number_format($fila['saldo'], 2) }}</td>
+                                <td>{{ $abono->observacion ?: '—' }}</td>
                             </tr>
-                        @endforeach
+                        @empty
+                            <tr><td colspan="5" class="muted">Aún no hay pagos. El saldo pendiente es ${{ number_format($prestamo->saldo_pendiente, 2) }}.</td></tr>
+                        @endforelse
                     </tbody>
                 </table>
                 @if(!in_array($prestamo->estado, ['PAGADO', 'CANCELADO'], true))

@@ -17,20 +17,21 @@ class DashboardController extends Controller
     public function index(Request $request): View
     {
         $user = $request->user();
+        $metricas = $this->dashboard->metricas(
+            $user,
+            $request->query('sede'),
+            $request->query('desde'),
+            $request->query('hasta'),
+        );
 
         return view('servicio.dashboard', [
-            'metricas' => $this->dashboard->metricas(
-                $user,
-                $request->query('sede'),
-                $request->query('desde'),
-                $request->query('hasta'),
-            ),
+            'metricas' => $metricas,
             'sedes' => config('inventario.sedes_locales'),
             'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
             'filtros' => [
                 'sede' => $request->query('sede'),
-                'desde' => $request->query('desde'),
-                'hasta' => $request->query('hasta'),
+                'desde' => $metricas['rango']['desde'] ?? $request->query('desde'),
+                'hasta' => $metricas['rango']['hasta'] ?? $request->query('hasta'),
             ],
         ]);
     }

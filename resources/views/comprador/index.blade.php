@@ -3,6 +3,17 @@
 @section('title', 'Panel de Compras y Distribución')
 
 @section('content')
+@php
+    $activeTab = $activeTab ?? 'productos';
+    $pageTitles = [
+        'productos' => ($statusFilter ?? '') === 'Comprar' ? 'Necesidad de Compra' : 'Distribución',
+        'proveedores' => 'General por Proveedor',
+        'sobrestock' => 'Sobre Stock / Sin Rotación',
+        'qpedir' => 'Q Pedir',
+        'publicidad' => 'Efectividad Publicidad',
+    ];
+    $pageTitle = $pageTitles[$activeTab] ?? 'Compras y Distribución';
+@endphp
 @push('head')
 <style>
 /* Clases de fila para hover */
@@ -75,7 +86,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 <div class="compras-page">
 <div class="page-header">
     <div>
-        <h1 style="margin: 0;">Compras y Distribución</h1>
+        <h1 style="margin: 0;">{{ $pageTitle ?? 'Compras y Distribución' }}</h1>
         <p class="lead" style="margin: 4px 0 0;">Analice el stock global para compras o redistribución de inventario entre sucursales.</p>
     </div>
 </div>
@@ -137,234 +148,6 @@ table.data-table tbody tr.row-mala-distribucion:hover {
     @endif
 </div>
 @endif
-
-<!-- Selector de Pestañas (Tabs) -->
-@php
-    $activeTab = $activeTab ?? 'productos';
-    $qPedirCount = $qPedirCount ?? (isset($pedidosSolicitados) ? $pedidosSolicitados->count() : 0);
-    $tabHref = function (string $tab, array $extra = []) {
-        return route('comprador.dashboard', array_merge(['tab' => $tab], $extra));
-    };
-@endphp
-<div class="segmented" style="margin-bottom: 16px; display: flex;">
-    @if(!auth()->user()->isMarketing())
-        <a href="{{ $tabHref('productos', ['status' => 'MalaDistribucion']) }}" id="tab-btn-dist" class="tab-btn {{ $activeTab === 'productos' && ($statusFilter ?? '') !== 'Comprar' ? 'active' : '' }}" style="text-decoration: none;">Distribución</a>
-        <a href="{{ $tabHref('productos', ['status' => 'Comprar']) }}" id="tab-btn-compra" class="tab-btn {{ $activeTab === 'productos' && ($statusFilter ?? '') === 'Comprar' ? 'active' : '' }}" style="text-decoration: none;">Necesidad de Compra</a>
-        <a href="{{ $tabHref('proveedores') }}" class="tab-btn {{ $activeTab === 'proveedores' ? 'active' : '' }}" style="text-decoration: none;">General por Proveedor</a>
-        <a href="{{ $tabHref('sobrestock') }}" class="tab-btn {{ $activeTab === 'sobrestock' ? 'active' : '' }}" style="text-decoration: none;">Sobre Stock / Sin Rotación</a>
-    @else
-        <a href="{{ $tabHref('sobrestock') }}" class="tab-btn {{ $activeTab === 'sobrestock' ? 'active' : '' }}" style="text-decoration: none;">Sobre Stock / Sin Rotación</a>
-    @endif
-    @if(!auth()->user()->isMarketing())
-        <a href="{{ $tabHref('qpedir') }}" class="tab-btn {{ $activeTab === 'qpedir' ? 'active' : '' }}" style="text-decoration: none;">Q Pedir @if($qPedirCount) ({{ $qPedirCount }}) @endif</a>
-    @endif
-    @if(!auth()->user()->isMarketing())
-        <a href="{{ route('comprador.existencias') }}" class="tab-btn" style="text-decoration: none; color: inherit; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;">
-            <svg style="width: 16px; height: 16px; margin-right: 6px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-            Existencias Globales
-        </a>
-    @endif
-    @if(auth()->user()->isMarketing() || auth()->user()->isAdmin())
-        <a href="{{ $tabHref('publicidad') }}" class="tab-btn {{ $activeTab === 'publicidad' ? 'active' : '' }}" style="text-decoration: none;">Efectividad Publicidad</a>
-    @endif
-    @if(!empty($puedeMarcarMeta))
-        <a href="{{ route('metas.index') }}" class="tab-btn" style="text-decoration: none;">Metas quincena</a>
-    @endif
-    @if(!auth()->user()->isComprador() && !auth()->user()->isMarketing())
-        <a href="{{ $tabHref('cobranzas') }}" class="tab-btn {{ $activeTab === 'cobranzas' ? 'active' : '' }}" style="text-decoration: none;">Cobranzas</a>
-    @endif
-</div>
-
-<!-- Tab Cobranzas -->
-<div id="cobranzas-tab" class="tab-content" style="display: {{ ($activeTab ?? '') === 'cobranzas' ? 'block' : 'none' }};">
-    @if(!empty($cobranzasData['fecha_actual']))
-    <div style="display: flex; gap: 24px; margin-bottom: 24px; flex-wrap: wrap;">
-        <!-- Card 1: Por Sede -->
-        <div class="panel" style="flex: 1; min-width: 300px; background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
-            <h3 style="text-align: center; font-size: 0.9rem; font-weight: 700; margin-bottom: 16px;">INDICADORES DE COBRANZA POR SEDE AL<br>{{ $cobranzasData['fecha_actual'] }}</h3>
-            <table class="table" style="width: 100%; border-collapse: collapse;">
-                <thead>
-                    <tr style="background: #e0f2fe; color: #0369a1; text-align: left; font-size: 0.8rem;">
-                        <th style="padding: 8px;">SEDE ▼</th>
-                        <th style="padding: 8px; text-align: center;">CLIENTE</th>
-                        <th style="padding: 8px; text-align: right;">SALDO</th>
-                        <th style="padding: 8px; text-align: right;">% GLOBAL</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @php $totCliSede = 0; $totSalSede = 0; $totPorSede = 0; @endphp
-                    @foreach($cobranzasData['sede_list'] as $s)
-                    @php $totCliSede += $s['clientes']; $totSalSede += $s['saldo']; $totPorSede += $s['porcentaje']; @endphp
-                    <tr style="border-bottom: 1px solid #f1f5f9; font-size: 0.85rem;">
-                        <td style="padding: 8px;">{{ $s['sede'] }}</td>
-                        <td style="padding: 8px; text-align: center;">{{ $s['clientes'] }}</td>
-                        <td style="padding: 8px; text-align: right;">{{ number_format($s['saldo'], 2, ',', '.') }}</td>
-                        <td style="padding: 8px; text-align: right;">{{ $s['porcentaje'] }}%</td>
-                    </tr>
-                    @endforeach
-                </tbody>
-                <tfoot>
-                    <tr style="background: #dbeafe; font-weight: bold; font-size: 0.85rem;">
-                        <td style="padding: 8px;">Total general</td>
-                        <td style="padding: 8px; text-align: center;">{{ $totCliSede }}</td>
-                        <td style="padding: 8px; text-align: right;">{{ number_format($totSalSede, 2, ',', '.') }}</td>
-                        <td style="padding: 8px; text-align: right;">100%</td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-
-        <!-- Card 2: Por Estatus -->
-        <div class="panel" style="flex: 1; min-width: 300px; background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
-            <h3 style="text-align: center; font-size: 0.9rem; font-weight: 700; margin-bottom: 16px;">INDICADORES DE COBRANZA POR ESTATUS AL<br>{{ $cobranzasData['fecha_actual'] }}</h3>
-            <table class="table" style="width: 100%; border-collapse: collapse;">
-                <thead>
-                    <tr style="background: #e0f2fe; color: #0369a1; text-align: left; font-size: 0.8rem;">
-                        <th style="padding: 8px;">ESTATUS ▼</th>
-                        <th style="padding: 8px; text-align: center;">CLIENTE</th>
-                        <th style="padding: 8px; text-align: right;">SALDO</th>
-                        <th style="padding: 8px; text-align: right;">% GLOBAL</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @php $totCliEst = 0; $totSalEst = 0; @endphp
-                    @foreach($cobranzasData['estatus_list'] as $e)
-                    @php $totCliEst += $e['clientes']; $totSalEst += $e['saldo']; @endphp
-                    <tr style="background: {{ $e['color'] }}; color: #fff; font-size: 0.85rem; font-weight: 600;">
-                        <td style="padding: 8px;">{{ $e['estatus'] }}</td>
-                        <td style="padding: 8px; text-align: center;">{{ $e['clientes'] }}</td>
-                        <td style="padding: 8px; text-align: right;">{{ number_format($e['saldo'], 2, ',', '.') }}</td>
-                        <td style="padding: 8px; text-align: right;">{{ $e['porcentaje'] }}%</td>
-                    </tr>
-                    @endforeach
-                </tbody>
-                <tfoot>
-                    <tr style="background: #dbeafe; font-weight: bold; font-size: 0.85rem; color: #333;">
-                        <td style="padding: 8px;">Total general</td>
-                        <td style="padding: 8px; text-align: center;">{{ $totCliEst }}</td>
-                        <td style="padding: 8px; text-align: right;">{{ number_format($totSalEst, 2, ',', '.') }}</td>
-                        <td style="padding: 8px; text-align: right;">100%</td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </div>
-
-    <!-- Comparativa Semanal -->
-    @if(!empty($cobranzasData['fechas_semanal']))
-    <div class="panel" style="background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; margin-bottom: 24px; overflow-x: auto;">
-        <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 16px; color: #333;">Comparativa Semanal</h3>
-        <table class="table" style="width: 100%; border-collapse: collapse; text-align: right; min-width: 600px;">
-            <thead>
-                <tr style="background: #3b82f6; color: white; font-size: 0.8rem;">
-                    <th style="padding: 10px; text-align: left;">ESTATUS</th>
-                    @foreach($cobranzasData['fechas_semanal'] as $index => $fecha)
-                        <th style="padding: 10px;">LUNES<br>{{ $fecha }}</th>
-                        @if($index > 0)
-                            <th style="padding: 10px;">% DE EFECTIVIDAD</th>
-                        @endif
-                    @endforeach
-                </tr>
-            </thead>
-            <tbody>
-                @php $totalesLunes = []; @endphp
-                @foreach($cobranzasData['semanal_list'] as $row)
-                <tr style="border-bottom: 1px solid #e2e8f0; font-size: 0.85rem;">
-                    <td style="padding: 10px; background: {{ $row['color'] }}; color: white; font-weight: 600; text-align: left;">{{ $row['estatus'] }}</td>
-                    @foreach($row['lunes'] as $index => $lun)
-                        @php 
-                            if(!isset($totalesLunes[$index])) $totalesLunes[$index] = 0;
-                            $totalesLunes[$index] += $lun['saldo'];
-                        @endphp
-                        <td style="padding: 10px;">{{ number_format($lun['saldo'], 2, ',', '.') }}</td>
-                        @if($index > 0)
-                            <td style="padding: 10px; color: {{ str_starts_with($lun['efectividad'], '-') ? '#ef4444' : '#10b981' }}; font-weight: 600;">{{ $lun['efectividad'] }}</td>
-                        @endif
-                    @endforeach
-                </tr>
-                @endforeach
-                <tr style="background: #f8fafc; font-weight: 700; font-size: 0.85rem;">
-                    <td style="padding: 10px; text-align: left;">TOTALES</td>
-                    @foreach($totalesLunes as $index => $tot)
-                        <td style="padding: 10px;">{{ number_format($tot, 2, ',', '.') }}</td>
-                        @if($index > 0)
-                            @php
-                                $prev = $totalesLunes[$index - 1];
-                                $ef = $prev > 0 ? round((($prev - $tot) / $prev) * 100, 0) . '%' : '-';
-                            @endphp
-                            <td style="padding: 10px;">{{ $ef }}</td>
-                        @endif
-                    @endforeach
-                </tr>
-            </tbody>
-        </table>
-    </div>
-    @endif
-
-    <!-- Detalle de Clientes -->
-    <div class="panel" style="background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <h3 style="font-size: 1rem; font-weight: 700; color: #1e3a8a; margin: 0;">Detalle de Clientes</h3>
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <label style="font-size: 0.85rem; color: #64748b;">Filtrar por Sede:</label>
-                <select id="cobranzas-sede-filter" onchange="filterCobranzas(this.value)" style="padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; outline: none;">
-                    <option value="ALL">Todas las Sedes</option>
-                    @foreach($cobranzasData['sede_list'] as $s)
-                        <option value="{{ $s['sede'] }}">{{ $s['sede'] }}</option>
-                    @endforeach
-                </select>
-            </div>
-        </div>
-        <div style="overflow-x: auto; max-height: 500px;">
-            <table class="table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
-                <thead style="position: sticky; top: 0; background: #fff; z-index: 10; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
-                    <tr style="color: #0369a1; text-align: left;">
-                        <th style="padding: 12px 8px;">CÓDIGO</th>
-                        <th style="padding: 12px 8px;">CLIENTE</th>
-                        <th style="padding: 12px 8px; text-align: right;">SALDO USD</th>
-                        <th style="padding: 12px 8px; text-align: right;">SALDO BS (Ref)</th>
-                        <th style="padding: 12px 8px; text-align: center;">FECHA EMISIÓN</th>
-                        <th style="padding: 12px 8px; text-align: center;">ESTATUS</th>
-                    </tr>
-                </thead>
-                <tbody id="cobranzas-tbody">
-                    @foreach($cobranzasData['detalle'] as $det)
-                    <tr class="cobranza-row" data-sede="{{ $det->sede_nombre }}" style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="padding: 10px 8px;">{{ $det->codigo_cliente }}</td>
-                        <td style="padding: 10px 8px; font-weight: 600;">{{ $det->nombre_cliente }}</td>
-                        <td style="padding: 10px 8px; text-align: right;">{{ number_format($det->saldo, 2, ',', '.') }}</td>
-                        <td style="padding: 10px 8px; text-align: right; color: #64748b;">{{ number_format($det->saldo * 40, 2, ',', '.') }}</td>
-                        <td style="padding: 10px 8px; text-align: center;">{{ \Carbon\Carbon::parse($det->fecha_emision)->format('d/m/Y') }}</td>
-                        <td style="padding: 10px 8px; text-align: center;">
-                            <span style="padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; color: #fff; font-weight: 600; background: {{ $det->estatus === 'CRITICO' ? '#ef4444' : ($det->estatus === 'MOROSO' ? '#eab308' : '#84cc16') }};">
-                                {{ $det->estatus }}
-                            </span>
-                        </td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
-    </div>
-    
-    <script>
-        function filterCobranzas(sede) {
-            const rows = document.querySelectorAll('.cobranza-row');
-            rows.forEach(row => {
-                if (sede === 'ALL' || row.dataset.sede === sede) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-        }
-    </script>
-    @else
-    <div class="panel" style="padding: 40px; text-align: center; color: var(--muted);">
-        <p>No hay datos de cobranzas registrados. El sincronizador subirá esta información próximamente.</p>
-    </div>
-    @endif
-</div>
 
 <!-- Tab Q Pedir -->
 <div id="qpedir-tab" class="tab-content" style="display: {{ ($activeTab ?? '') === 'qpedir' ? 'block' : 'none' }};">

@@ -149,6 +149,16 @@ class PayrollPeriodService
                     $periodo,
                     $usuarioId
                 );
+                [$libreNomina, $libreComision] = $this->loanPlans->aplicarLibresEmpleado(
+                    $empleado,
+                    $periodo,
+                    $usuarioId
+                );
+                $prestamosNomina = round($prestamosNomina + $libreNomina, 2);
+                $prestamosComision = round($prestamosComision + $libreComision, 2);
+                if ($libreComision > 0) {
+                    $this->registrarDescuentoPrestamoComision($periodo, $empleado, $libreComision, $usuarioId);
+                }
 
                 $liquidacion = $comisionable
                     ? $this->settlements->liquidar($periodo, $empleado, $comision, $prestamosComision)
@@ -259,6 +269,15 @@ class PayrollPeriodService
                     $periodo,
                     $usuarioId
                 );
+                [, $libreComision] = $this->loanPlans->aplicarLibresEmpleado(
+                    $empleado,
+                    $periodo,
+                    $usuarioId
+                );
+                $prestamosComision = round($prestamosComision + $libreComision, 2);
+                if ($libreComision > 0) {
+                    $this->registrarDescuentoPrestamoComision($periodo, $empleado, $libreComision, $usuarioId);
+                }
                 $liquidacion = $this->settlements->liquidar($periodo, $empleado, $comision, $prestamosComision);
 
                 $registro = NominaRegistro::query()

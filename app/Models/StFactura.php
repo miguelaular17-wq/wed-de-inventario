@@ -75,7 +75,6 @@ class StFactura extends Model
     {
         $max = static::query()
             ->where('sede', strtoupper($sede))
-            ->lockForUpdate()
             ->max('numero');
 
         return ((int) $max) + 1;

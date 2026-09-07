@@ -4,13 +4,21 @@ namespace App\Services\ServicioTecnico;
 
 use App\Models\StFactura;
 use App\Models\StOrden;
-use App\Models\StReparacion;
 use App\Models\StRepuesto;
 use App\Models\User;
+use App\Services\MetaQuincenaService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class StDashboardService
 {
+    private const GASTO_058 = '058 - SERVICIO TECNICO (GARANTIAS)';
+
+    public function __construct(
+        private readonly MetaQuincenaService $quincenas,
+    ) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -20,24 +28,31 @@ class StDashboardService
             ? strtoupper((string) $user->sede)
             : ($sede ? strtoupper($sede) : null);
 
+        $quincena = $this->quincenas->quincenaActual();
+        $desdeQ = $desde ?: ($quincena['inicio'] ?? null);
+        $hastaQ = $hasta ?: ($quincena['fin'] ?? null);
+        if ($desdeQ instanceof Carbon) {
+            $desdeQ = $desdeQ->toDateString();
+        }
+        if ($hastaQ instanceof Carbon) {
+            $hastaQ = $hastaQ->toDateString();
+        }
+
         $ordenesQuery = StOrden::query()->visiblePara($user);
-        $reparacionesQuery = StReparacion::query()->visiblePara($user);
         $facturasQuery = StFactura::query()->visiblePara($user);
         $repuestosQuery = StRepuesto::query()->visiblePara($user)->activos();
 
         if ($sedeFiltro) {
             $ordenesQuery->where('sede', $sedeFiltro);
-            $reparacionesQuery->where('sede', $sedeFiltro);
             $facturasQuery->where('sede', $sedeFiltro);
             $repuestosQuery->where('sede', $sedeFiltro);
         }
 
-        $this->aplicarRango($ordenesQuery, $desde, $hasta);
-        $this->aplicarRango($reparacionesQuery, $desde, $hasta);
-        $this->aplicarRango($facturasQuery, $desde, $hasta, 'fecha');
+        $this->aplicarRango($ordenesQuery, $desdeQ, $hastaQ, 'fecha_ingreso');
+        $this->aplicarRango($facturasQuery, $desdeQ, $hastaQ, 'fecha');
 
         $ordenes = (clone $ordenesQuery)->get();
-        $facturas = (clone $facturasQuery)->get();
+        $facturas = (clone $facturasQuery)->with('tecnico')->get();
 
         $ingresosOrdenes = $ordenes
             ->where('estado', StOrden::ESTADO_ENTREGADO)
@@ -64,6 +79,32 @@ class StDashboardService
             return [$estado => $ordenes->where('estado', $estado)->count()];
         });
 
+        $porRecibirQuery = StOrden::query()
+            ->visiblePara($user)
+            ->where('transfer_estado', StOrden::TRANSFER_PENDIENTE)
+            ->with('equipoCelular');
+        if ($user->scopesServicioToOwnSede()) {
+            $porRecibirQuery->where('sede', strtoupper((string) $user->sede));
+        } elseif ($sedeFiltro) {
+            $porRecibirQuery->where('sede', $sedeFiltro);
+        }
+        $porRecibir = $porRecibirQuery->orderByDesc('updated_at')->limit(10)->get();
+
+        $facturasPorTrabajador = $facturas
+            ->groupBy(fn (StFactura $f) => $f->tecnico_id ?: 0)
+            ->map(function ($group) {
+                /** @var \Illuminate\Support\Collection<int, StFactura> $group */
+                $first = $group->first();
+
+                return [
+                    'nombre' => $first?->tecnico?->name ?: 'Sin técnico',
+                    'cantidad' => $group->count(),
+                    'total' => round((float) $group->sum('total'), 2),
+                ];
+            })
+            ->sortByDesc('total')
+            ->values();
+
         $actividad = collect()
             ->merge($ordenes->map(fn (StOrden $o) => [
                 'tipo' => 'orden',
@@ -71,13 +112,6 @@ class StDashboardService
                 'titulo' => $o->codigo().' · '.$o->cliente_nombre,
                 'estado' => $o->etiquetaEstado(),
                 'url' => route('servicio.ordenes.show', $o),
-            ]))
-            ->merge((clone $reparacionesQuery)->orderByDesc('created_at')->limit(15)->get()->map(fn (StReparacion $r) => [
-                'tipo' => 'garantía',
-                'fecha' => $r->created_at,
-                'titulo' => $r->producto.' · '.($r->cliente_nombre ?: 'Sin cliente'),
-                'estado' => $r->etiquetaEstado(),
-                'url' => route('servicio.reparaciones.show', $r),
             ]))
             ->merge($facturas->map(fn (StFactura $f) => [
                 'tipo' => 'factura',
@@ -93,14 +127,69 @@ class StDashboardService
         return [
             'total_ordenes' => $ordenes->count(),
             'pendientes' => $ordenes->where('estado', StOrden::ESTADO_PENDIENTE)->count(),
-            'reparaciones' => (clone $reparacionesQuery)->count(),
+            'por_recibir_count' => $porRecibir->count(),
+            'por_recibir' => $porRecibir,
             'ingresos_cobrados' => $ingresosOrdenes + $ingresosFacturas,
             'por_cobrar' => $porCobrarOrdenes + $porCobrarFacturas,
             'stock_bajo' => $stockBajo,
             'por_estado' => $porEstado,
             'actividad' => $actividad,
             'sede_filtro' => $sedeFiltro,
+            'quincena' => $quincena,
+            'egresos_058' => $this->egresos058Quincena($desdeQ, $hastaQ, $sedeFiltro, $user),
+            'facturas_por_trabajador' => $facturasPorTrabajador,
+            'rango' => [
+                'desde' => $desdeQ,
+                'hasta' => $hastaQ,
+            ],
         ];
+    }
+
+    /**
+     * @return list<array{nombre:string,monto:float,cantidad:int}>
+     */
+    private function egresos058Quincena(?string $desde, ?string $hasta, ?string $sede, User $user): array
+    {
+        if (! $desde || ! $hasta || ! Schema::hasTable('flujo_cajas')) {
+            return [];
+        }
+
+        $query = DB::table('flujo_cajas as fc')
+            ->leftJoin('nomina_empleados as ne', 'ne.id', '=', 'fc.nomina_empleado_id')
+            ->leftJoin('clientes as c', 'c.id', '=', 'ne.cliente_id')
+            ->where('fc.tipo_gasto', self::GASTO_058)
+            ->whereBetween('fc.fecha', [$desde, $hasta])
+            ->selectRaw("COALESCE(c.nombre, fc.descripcion, 'Sin asignar') as nombre")
+            ->selectRaw('COUNT(*) as cantidad')
+            ->selectRaw('COALESCE(SUM(CASE
+                WHEN fc.monto_usd IS NOT NULL AND fc.monto_usd <> 0 THEN ABS(fc.monto_usd)
+                WHEN fc.tasa_cambio IS NOT NULL AND fc.tasa_cambio > 0 THEN ABS(fc.monto_bs) / fc.tasa_cambio
+                ELSE 0 END), 0) as monto')
+            ->groupBy(DB::raw("COALESCE(c.nombre, fc.descripcion, 'Sin asignar')"))
+            ->orderByDesc('monto');
+
+        if ($sede && Schema::hasColumn('flujo_cajas', 'sede')) {
+            $query->whereRaw('UPPER(TRIM(fc.sede)) = ?', [strtoupper($sede)]);
+        }
+
+        if ($user->veSoloSusFacturasTaller()) {
+            $empleado = $user->empleadoServicioTecnico();
+            if ($empleado) {
+                $query->where('fc.nomina_empleado_id', $empleado->id);
+            } else {
+                return [];
+            }
+        }
+
+        try {
+            return $query->get()->map(fn ($row) => [
+                'nombre' => (string) $row->nombre,
+                'monto' => round((float) $row->monto, 2),
+                'cantidad' => (int) $row->cantidad,
+            ])->all();
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     private function aplicarRango($query, ?string $desde, ?string $hasta, string $column = 'created_at'): void

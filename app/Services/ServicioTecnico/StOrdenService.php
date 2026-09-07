@@ -60,7 +60,7 @@ class StOrdenService
 
     public function transferir(StOrden $orden, string $sedeDestino, User $user): void
     {
-        if ($user->scopesServicioToOwnSede()) {
+        if (! $user->puedeTransferirServicio()) {
             throw ValidationException::withMessages([
                 'sede' => 'No tienes permiso para transferir órdenes entre sedes.',
             ]);
@@ -84,15 +84,50 @@ class StOrdenService
         }
 
         $sedeOrigen = strtoupper((string) $orden->sede);
+        $codigoAnterior = $orden->codigo();
+
+        // (sede, numero) es único: al cambiar de sede hay que tomar el siguiente número allí.
         $orden->sede_origen_transfer = $sedeOrigen;
+        $orden->sede_destino_transfer = $sedeDestino;
         $orden->transfer_estado = StOrden::TRANSFER_PENDIENTE;
         $orden->sede = $sedeDestino;
+        $orden->numero = StOrden::siguienteNumero($sedeDestino);
 
         $this->registrarEvento($orden, $user, StOrdenEvento::TIPO_TRANSFERENCIA, sprintf(
-            'Transferencia pendiente: %s → %s',
+            'Transferencia pendiente: %s → %s (%s → %s)',
             $sedeOrigen,
-            $sedeDestino
-        ), ['origen' => $sedeOrigen, 'destino' => $sedeDestino]);
+            $sedeDestino,
+            $codigoAnterior,
+            $orden->codigo()
+        ), [
+            'origen' => $sedeOrigen,
+            'destino' => $sedeDestino,
+            'codigo_anterior' => $codigoAnterior,
+            'codigo_nuevo' => $orden->codigo(),
+        ]);
+
+        if ($orden->equipo_id && ($equipo = $orden->equipoCelular ?: \App\Models\StEquipo::query()->find($orden->equipo_id))) {
+            $equipo->estado_actual = \App\Models\StEquipo::ESTADO_EN_TRANSITO;
+            $equipo->save();
+
+            app(StEquipoService::class)->registrarEvento(
+                $equipo,
+                $user,
+                \App\Models\StEquipoEvento::TIPO_ENVIO,
+                'Enviado a '.$sedeDestino,
+                sprintf('Orden %s (antes %s) · Desde %s', $orden->codigo(), $codigoAnterior, $sedeOrigen),
+                $orden,
+                $sedeOrigen,
+                [
+                    'origen' => $sedeOrigen,
+                    'destino' => $sedeDestino,
+                    'codigo_anterior' => $codigoAnterior,
+                    'codigo_nuevo' => $orden->codigo(),
+                ]
+            );
+        }
+
+        $orden->save();
     }
 
     public function confirmarRecepcion(StOrden $orden, User $user): StOrden
@@ -118,6 +153,26 @@ class StOrdenService
             $orden->sede,
             $orden->sede_origen_transfer
         ));
+
+        if ($orden->equipo_id && ($equipo = $orden->equipoCelular ?: \App\Models\StEquipo::query()->find($orden->equipo_id))) {
+            $equipo->sede_actual = strtoupper((string) $orden->sede);
+            $equipo->estado_actual = \App\Models\StEquipo::ESTADO_EN_TALLER;
+            $equipo->save();
+
+            app(StEquipoService::class)->registrarEvento(
+                $equipo,
+                $user,
+                \App\Models\StEquipoEvento::TIPO_RECEPCION,
+                'Recibido en ST '.$orden->sede,
+                sprintf('Orden %s · Enviado desde %s', $orden->codigo(), $orden->sede_origen_transfer),
+                $orden,
+                (string) $orden->sede,
+                [
+                    'origen' => $orden->sede_origen_transfer,
+                    'destino' => $orden->sede,
+                ]
+            );
+        }
 
         return $orden->fresh();
     }

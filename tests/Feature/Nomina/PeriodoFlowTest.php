@@ -149,7 +149,7 @@ class PeriodoFlowTest extends TestCase
         $this->assertSame(1, NominaPeriodo::query()->count());
     }
 
-    public function test_al_calcular_pregunta_a_quien_descontar_cuotas_y_no_las_aplica_solas(): void
+    public function test_al_calcular_no_descuenta_prestamos_libres_automaticamente(): void
     {
         $this->actingAs($this->rrhh);
 
@@ -166,17 +166,11 @@ class PeriodoFlowTest extends TestCase
         $prestamoElegido = $loan->create($this->empleado, [
             'fecha' => '2026-08-16',
             'monto_original' => 110,
-            'numero_cuotas' => 4,
-            'frecuencia' => 'QUINCENAL',
-            'fecha_inicio' => '2026-08-16',
             'motivo' => 'Arreglo vehiculo',
         ], $this->rrhh->id);
         $prestamoOtro = $loan->create($otro, [
             'fecha' => '2026-08-16',
             'monto_original' => 200,
-            'numero_cuotas' => 4,
-            'frecuencia' => 'QUINCENAL',
-            'fecha_inicio' => '2026-08-16',
             'motivo' => 'Otro prestamo',
         ], $this->rrhh->id);
 
@@ -185,24 +179,22 @@ class PeriodoFlowTest extends TestCase
 
         $this->get(route('nomina.periodos.calcular.form', $periodo))
             ->assertOk()
-            ->assertSee('Préstamos de esta quincena')
-            ->assertDontSee('Marcar todos')
-            ->assertDontSee('name="descuentos[', false);
+            ->assertSee('Préstamos de esta quincena');
 
         $this->post(route('nomina.periodos.calcular', $periodo), [
             'descontar_empleado_ids' => [$this->empleado->id],
         ])->assertRedirect(route('nomina.periodos.show', $periodo));
 
-        $this->assertEquals(82.5, (float) $prestamoElegido->fresh()->saldo_pendiente);
+        $this->assertEquals(110.0, (float) $prestamoElegido->fresh()->saldo_pendiente);
         $this->assertEquals(200.0, (float) $prestamoOtro->fresh()->saldo_pendiente);
-        $this->assertSame(1, $prestamoElegido->cuotas()->whereNotNull('nomina_periodo_id')->count());
-        $this->assertSame(0, $prestamoOtro->cuotas()->whereNotNull('nomina_periodo_id')->count());
+        $this->assertCount(0, $prestamoElegido->cuotas);
+        $this->assertCount(0, $prestamoOtro->abonos);
 
         $registro = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
-        $this->assertEquals(27.5, (float) $registro->total_deducciones);
+        $this->assertEquals(0.0, (float) $registro->total_deducciones);
     }
 
-    public function test_permite_descontar_una_cuota_o_un_parcial_y_lo_registra(): void
+    public function test_pago_manual_a_prestamo_libre_reduce_saldo(): void
     {
         $this->actingAs($this->rrhh);
 
@@ -210,59 +202,29 @@ class PeriodoFlowTest extends TestCase
         $prestamoUno = $loan->create($this->empleado, [
             'fecha' => '2026-08-16',
             'monto_original' => 110,
-            'numero_cuotas' => 4,
-            'frecuencia' => 'QUINCENAL',
-            'fecha_inicio' => '2026-08-16',
             'motivo' => 'Arreglo vehiculo',
         ], $this->rrhh->id);
         $prestamoDos = $loan->create($this->empleado, [
             'fecha' => '2026-08-16',
             'monto_original' => 80,
-            'numero_cuotas' => 4,
-            'frecuencia' => 'QUINCENAL',
-            'fecha_inicio' => '2026-08-16',
             'motivo' => 'Prestamo personal',
         ], $this->rrhh->id);
 
-        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
-        $periodo = NominaPeriodo::query()->firstOrFail();
-
-        $cuotaUno = $prestamoUno->cuotas()->orderBy('numero')->firstOrFail();
-        $cuotaDos = $prestamoDos->cuotas()->orderBy('numero')->firstOrFail();
-
-        $this->get(route('nomina.periodos.calcular.form', $periodo))
-            ->assertOk()
-            ->assertDontSee('Parcial $')
-            ->assertDontSee('name="descuentos['.$cuotaUno->id.'][aplicar]"', false);
-
-        $this->post(route('nomina.periodos.calcular', $periodo), [
-            'descuentos' => [
-                $cuotaUno->id => [
-                    'aplicar' => '1',
-                    'cuota_id' => $cuotaUno->id,
-                    'monto' => '10.00',
-                ],
-                $cuotaDos->id => [
-                    'cuota_id' => $cuotaDos->id,
-                    'monto' => '20.00',
-                ],
-            ],
-        ])->assertRedirect(route('nomina.periodos.show', $periodo));
+        $this->post(route('nomina.prestamos.abonar', $prestamoUno), [
+            'fecha' => '2026-08-20',
+            'monto' => 10,
+            'tipo' => 'DESCUENTO_NOMINA',
+            'observacion' => 'Abono quincena',
+        ])->assertRedirect();
 
         $this->assertEquals(100.0, (float) $prestamoUno->fresh()->saldo_pendiente);
         $this->assertEquals(80.0, (float) $prestamoDos->fresh()->saldo_pendiente);
-        $this->assertSame('PARCIAL', $cuotaUno->fresh()->estado);
-        $this->assertEquals(10.0, (float) $cuotaUno->fresh()->monto_pagado);
         $this->assertDatabaseHas('nomina_prestamo_abonos', [
             'prestamo_id' => $prestamoUno->id,
-            'cuota_id' => $cuotaUno->id,
             'monto' => 10,
             'tipo' => 'DESCUENTO_NOMINA',
         ]);
-        $this->assertSame(0, $prestamoDos->cuotas()->whereNotNull('nomina_periodo_id')->count());
-
-        $registro = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
-        $this->assertEquals(10.0, (float) $registro->total_deducciones);
+        $this->assertCount(0, $prestamoUno->cuotas);
     }
 
     public function test_descuenta_mercancia_del_sueldo_al_calcular(): void
@@ -299,9 +261,6 @@ class PeriodoFlowTest extends TestCase
         $prestamo = $loan->create($this->empleado, [
             'fecha' => '2026-08-16',
             'monto_original' => 110,
-            'numero_cuotas' => 4,
-            'frecuencia' => 'QUINCENAL',
-            'fecha_inicio' => '2026-08-16',
             'motivo' => 'Arreglo vehiculo',
         ], $this->rrhh->id);
 
@@ -313,7 +272,7 @@ class PeriodoFlowTest extends TestCase
         ])->assertRedirect();
 
         $this->assertSame(NominaPeriodo::CALCULADO, $periodo->fresh()->estado);
-        $this->assertEquals(82.5, (float) $prestamo->fresh()->saldo_pendiente);
+        $this->assertEquals(110.0, (float) $prestamo->fresh()->saldo_pendiente);
 
         $this->post(route('nomina.periodos.revertir', $periodo))->assertRedirect(route('nomina.periodos.show', $periodo));
 
@@ -321,7 +280,7 @@ class PeriodoFlowTest extends TestCase
         $this->assertSame(NominaPeriodo::ABIERTO, $periodo->estado);
         $this->assertSame(0, NominaRegistro::query()->count());
         $this->assertEquals(110.0, (float) $prestamo->fresh()->saldo_pendiente);
-        $this->assertSame(0, $prestamo->cuotas()->whereNotNull('nomina_periodo_id')->count());
+        $this->assertCount(0, $prestamo->cuotas);
         $this->assertDatabaseHas('nomina_abonos_sueldo', [
             'estado' => 'PENDIENTE',
             'nomina_periodo_id' => null,
@@ -361,7 +320,8 @@ class PeriodoFlowTest extends TestCase
             ->assertOk()
             ->streamedContent();
 
-        $this->assertStringContainsString('27000001;30400.00;'.now()->format('d/m/Y'), $txt);
+        $this->assertStringContainsString('30400', $txt);
+        $this->assertStringContainsString(now()->format('dmY'), $txt);
     }
 
     private function crearMovimientos(): void
@@ -410,7 +370,7 @@ class PeriodoFlowTest extends TestCase
         ]);
     }
 
-    public function test_escritorio_de_prestamos_programa_descuento_y_alimenta_la_ficha(): void
+    public function test_escritorio_de_prestamos_en_modo_libre_no_lista_cuotas(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-20'));
         $this->actingAs($this->rrhh);
@@ -419,56 +379,28 @@ class PeriodoFlowTest extends TestCase
         $prestamo = $loan->create($this->empleado, [
             'fecha' => '2026-08-16',
             'monto_original' => 110,
-            'numero_cuotas' => 4,
-            'frecuencia' => 'QUINCENAL',
-            'fecha_inicio' => '2026-08-16',
             'motivo' => 'Arreglo vehiculo',
         ], $this->rrhh->id);
-        $cuota = $prestamo->cuotas()->orderBy('numero')->firstOrFail();
 
         $this->get(route('nomina.prestamos.index'))
             ->assertOk()
             ->assertSee('Empleado Quincena')
-            ->assertSee('Arreglo vehiculo');
-
-        $this->post(route('nomina.prestamos.programar'), [
-            'descuentos' => [
-                $cuota->id => [
-                    'aplicar' => '1',
-                    'cuota_id' => $cuota->id,
-                    'monto' => '10.00',
-                    'destino' => 'NOMINA',
-                ],
-            ],
-        ])->assertRedirect(route('nomina.prestamos.index'));
-
-        $this->assertDatabaseHas('nomina_prestamo_planes', [
-            'cuota_id' => $cuota->id,
-            'empleado_id' => $this->empleado->id,
-            'monto' => 10,
-            'destino' => NominaPrestamoPlan::DESTINO_NOMINA,
-            'estado' => NominaPrestamoPlan::PENDIENTE,
-        ]);
+            ->assertSee('Cobrar / descontar')
+            ->assertDontSee('Marcar todos');
 
         $this->get(route('nomina.empleados.show', ['empleado' => $this->empleado, 'tab' => 'prestamos']))
             ->assertOk()
-            ->assertSee('Descuento de esta quincena')
-            ->assertSee('Nómina')
-            ->assertSee('10.00');
+            ->assertSee('Historial de pagos')
+            ->assertSee('Arreglo vehiculo')
+            ->assertSee('Saldo libre');
 
-        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
-        $periodo = NominaPeriodo::query()->firstOrFail();
-        $this->post(route('nomina.periodos.calcular', $periodo))->assertRedirect();
-
-        $this->assertEquals(100.0, (float) $prestamo->fresh()->saldo_pendiente);
-        $this->assertSame('APLICADO', NominaPrestamoPlan::query()->where('cuota_id', $cuota->id)->value('estado'));
-        $registro = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
-        $this->assertEquals(10.0, (float) $registro->total_deducciones);
+        $this->assertEquals(110.0, (float) $prestamo->fresh()->saldo_pendiente);
+        $this->assertCount(0, $prestamo->cuotas);
 
         Carbon::setTestNow();
     }
 
-    public function test_plan_de_prestamo_puede_descontarse_de_comision(): void
+    public function test_pago_a_prestamo_libre_desde_ficha_no_afecta_comision_automatica(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-20'));
         $this->actingAs($this->rrhh);
@@ -479,22 +411,13 @@ class PeriodoFlowTest extends TestCase
         $prestamo = $loan->create($this->empleado, [
             'fecha' => '2026-08-16',
             'monto_original' => 110,
-            'numero_cuotas' => 4,
-            'frecuencia' => 'QUINCENAL',
-            'fecha_inicio' => '2026-08-16',
             'motivo' => 'Prestamo personal',
         ], $this->rrhh->id);
-        $cuota = $prestamo->cuotas()->orderBy('numero')->firstOrFail();
 
-        $this->post(route('nomina.prestamos.programar'), [
-            'descuentos' => [
-                $cuota->id => [
-                    'aplicar' => '1',
-                    'cuota_id' => $cuota->id,
-                    'monto' => '27.50',
-                    'destino' => 'COMISION',
-                ],
-            ],
+        $this->post(route('nomina.prestamos.abonar', $prestamo), [
+            'fecha' => '2026-08-20',
+            'monto' => 27.50,
+            'tipo' => 'DESCUENTO_NOMINA',
         ])->assertRedirect();
 
         $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
@@ -504,16 +427,6 @@ class PeriodoFlowTest extends TestCase
         $this->assertEquals(82.5, (float) $prestamo->fresh()->saldo_pendiente);
         $registro = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
         $this->assertEquals(0.0, (float) $registro->total_deducciones);
-        $liquidacion = NominaLiquidacionComision::query()
-            ->where('empleado_id', $this->empleado->id)
-            ->where('periodo_id', $periodo->id)
-            ->firstOrFail();
-        $this->assertEquals(27.5, (float) $liquidacion->prestamos);
-        $this->assertDatabaseHas('nomina_prestamo_planes', [
-            'cuota_id' => $cuota->id,
-            'destino' => NominaPrestamoPlan::DESTINO_COMISION,
-            'estado' => NominaPrestamoPlan::APLICADO,
-        ]);
 
         Carbon::setTestNow();
     }

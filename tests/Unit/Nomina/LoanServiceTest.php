@@ -5,11 +5,10 @@ namespace Tests\Unit\Nomina;
 use App\Models\Cliente;
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaPrestamoAbono;
+use App\Models\Nomina\NominaPrestamoCuota;
 use App\Models\User;
 use App\Services\Nomina\LoanPaymentService;
 use App\Services\Nomina\LoanService;
-use App\Services\Nomina\PayrollDeductionService;
-use Carbon\Carbon;
 use Tests\Concerns\CreatesNominaSchema;
 use Tests\TestCase;
 
@@ -41,7 +40,7 @@ class LoanServiceTest extends TestCase
         ]);
     }
 
-    public function test_genera_calendario_y_abonos_reducen_saldo(): void
+    public function test_crea_prestamo_libre_y_abonos_reducen_saldo(): void
     {
         $loan = app(LoanService::class);
         $payments = app(LoanPaymentService::class);
@@ -49,14 +48,12 @@ class LoanServiceTest extends TestCase
         $prestamo = $loan->create($this->empleado, [
             'fecha' => '2026-08-01',
             'monto_original' => 2000,
-            'numero_cuotas' => 20,
-            'frecuencia' => 'QUINCENAL',
-            'fecha_inicio' => '2026-08-01',
             'motivo' => 'Prueba',
         ], auth()->id());
 
-        $this->assertCount(20, $prestamo->cuotas);
-        $this->assertEquals(100.0, (float) $prestamo->valor_cuota);
+        $this->assertTrue($prestamo->sinCuotas());
+        $this->assertCount(0, $prestamo->cuotas);
+        $this->assertSame('LIBRE', $prestamo->frecuencia);
         $this->assertEquals(2000.0, (float) $prestamo->saldo_pendiente);
 
         for ($i = 0; $i < 3; $i++) {
@@ -69,31 +66,86 @@ class LoanServiceTest extends TestCase
 
         $prestamo->refresh();
         $this->assertEquals(1700.0, (float) $prestamo->saldo_pendiente);
-        $this->assertEquals(3, $prestamo->cuotas()->where('estado', 'PAGADA')->count());
+        $this->assertCount(3, $prestamo->abonos);
+        $this->assertCount(0, $prestamo->cuotas);
     }
 
-    public function test_no_descuenta_dos_veces_la_misma_cuota_en_nomina(): void
+    public function test_convertir_todos_elimina_cuotas_y_conserva_abonos(): void
     {
         $loan = app(LoanService::class);
-        $payroll = app(PayrollDeductionService::class);
+        $payments = app(LoanPaymentService::class);
 
         $prestamo = $loan->create($this->empleado, [
-            'fecha' => '2026-08-01',
-            'monto_original' => 200,
-            'numero_cuotas' => 2,
-            'frecuencia' => 'QUINCENAL',
-            'fecha_inicio' => '2026-08-01',
+            'fecha' => '2026-09-01',
+            'monto_original' => 100,
+            'motivo' => 'Viejo',
+        ], auth()->id());
+
+        // Simula préstamo antiguo con cuotas.
+        $prestamo->numero_cuotas = 2;
+        $prestamo->valor_cuota = 50;
+        $prestamo->frecuencia = 'QUINCENAL';
+        $prestamo->save();
+        NominaPrestamoCuota::create([
+            'prestamo_id' => $prestamo->id,
+            'numero' => 1,
+            'fecha_programada' => '2026-09-01',
+            'monto' => 50,
+            'monto_pagado' => 0,
+            'estado' => 'PENDIENTE',
+        ]);
+        NominaPrestamoCuota::create([
+            'prestamo_id' => $prestamo->id,
+            'numero' => 2,
+            'fecha_programada' => '2026-09-15',
+            'monto' => 50,
+            'monto_pagado' => 0,
+            'estado' => 'PENDIENTE',
         ]);
 
-        $inicio = Carbon::parse('2026-08-01');
-        $fin = Carbon::parse('2026-08-15');
+        $payments->registrarAbono($prestamo->fresh(), [
+            'fecha' => '2026-09-04',
+            'monto' => 25,
+            'tipo' => NominaPrestamoAbono::TIPO_EFECTIVO,
+        ], auth()->id());
 
-        $primero = $payroll->aplicarCuotasDelPeriodo(10, $inicio, $fin, auth()->id());
-        $segundo = $payroll->aplicarCuotasDelPeriodo(10, $inicio, $fin, auth()->id());
+        $convertidos = $loan->convertirTodosAModoLibre();
+        $this->assertGreaterThanOrEqual(1, $convertidos);
 
-        $this->assertCount(1, $primero);
-        $this->assertCount(0, $segundo);
-        $this->assertEquals(100.0, (float) $prestamo->fresh()->saldo_pendiente);
-        $this->assertEquals(10, $prestamo->cuotas()->first()->nomina_periodo_id);
+        $prestamo->refresh();
+        $this->assertSame(0, (int) $prestamo->numero_cuotas);
+        $this->assertSame('LIBRE', $prestamo->frecuencia);
+        $this->assertCount(0, $prestamo->cuotas);
+        $this->assertCount(1, $prestamo->abonos);
+        $this->assertEquals(75.0, (float) $prestamo->saldo_pendiente);
+    }
+
+    public function test_prestamo_libre_cierra_al_pagar_total(): void
+    {
+        $loan = app(LoanService::class);
+        $payments = app(LoanPaymentService::class);
+
+        $prestamo = $loan->create($this->empleado, [
+            'fecha' => '2026-09-01',
+            'monto_original' => 100,
+            'motivo' => 'Libre',
+        ], auth()->id());
+
+        $payments->registrarAbono($prestamo->fresh(), [
+            'fecha' => '2026-09-04',
+            'monto' => 40,
+            'tipo' => NominaPrestamoAbono::TIPO_EFECTIVO,
+        ], auth()->id());
+
+        $payments->registrarAbono($prestamo->fresh(), [
+            'fecha' => '2026-09-10',
+            'monto' => 60,
+            'tipo' => NominaPrestamoAbono::TIPO_NOMINA,
+        ], auth()->id());
+
+        $prestamo->refresh();
+        $this->assertEquals(0.0, (float) $prestamo->saldo_pendiente);
+        $this->assertSame('PAGADO', $prestamo->estado);
+        $this->assertCount(2, $prestamo->abonos);
     }
 }

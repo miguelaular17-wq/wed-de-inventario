@@ -1,0 +1,397 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\StEquipo;
+use App\Models\StEquipoEvento;
+use App\Models\StOrden;
+use App\Models\User;
+use App\Services\ServicioTecnico\StEquipoService;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
+use Tests\Concerns\CreatesNominaSchema;
+use Tests\TestCase;
+
+class StCelularesBitacoraTest extends TestCase
+{
+    use CreatesNominaSchema;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->setUpNominaSchema();
+        $this->ensureTables();
+    }
+
+    public function test_imei_unico_exige_confirmacion_para_reutilizar(): void
+    {
+        $service = app(StEquipoService::class);
+        $service->resolverOCrear([
+            'imei' => '350000000000001',
+            'marca' => 'Apple',
+            'modelo' => 'iPhone 13',
+            'sede_actual' => 'DORAL',
+        ]);
+
+        try {
+            $service->resolverOCrear([
+                'imei' => '350000000000001',
+                'marca' => 'Apple',
+                'modelo' => 'iPhone 13',
+            ]);
+            $this->fail('Debía exigir confirmación de equipo existente');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('imei', $e->errors());
+            $this->assertArrayHasKey('equipo_existente_id', $e->errors());
+        }
+
+        $reuso = $service->resolverOCrear([
+            'imei' => '350000000000001',
+            'serial' => 'SN-1',
+        ], true);
+
+        $this->assertFalse($reuso['creado']);
+        $this->assertTrue($reuso['existia']);
+        $this->assertSame(1, StEquipo::query()->count());
+    }
+
+    public function test_crear_orden_con_imei_escribe_bitacora_y_se_consulta(): void
+    {
+        $user = $this->makeTecnico();
+
+        $this->actingAs($user)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.store'), [
+                'cliente_nombre' => 'Cliente Bitacora',
+                'prioridad' => 'normal',
+                'tipo_gestion' => 'ST',
+                'imei' => '359998887776665',
+                'marca' => 'Samsung',
+                'modelo' => 'S23',
+                'falla' => 'No enciende',
+            ])
+            ->assertRedirect();
+
+        $equipo = StEquipo::query()->where('imei', '359998887776665')->first();
+        $this->assertNotNull($equipo);
+        $this->assertSame('DORAL', $equipo->sede_actual);
+
+        $orden = StOrden::query()->where('equipo_id', $equipo->id)->first();
+        $this->assertNotNull($orden);
+        $this->assertSame('ST', $orden->tipo_gestion);
+
+        $this->assertSame(1, StEquipoEvento::query()->where('equipo_id', $equipo->id)->count());
+
+        $this->get(route('servicio.celulares.bitacora', ['q' => '359998887776665']))
+            ->assertOk()
+            ->assertSee('Samsung S23');
+
+        $this->get(route('servicio.celulares.show', $equipo))
+            ->assertOk()
+            ->assertSee('Orden creada')
+            ->assertSee('No enciende')
+            ->assertSee($orden->codigo());
+    }
+
+    public function test_hub_y_login_chip_ruta_existen(): void
+    {
+        $user = $this->makeTecnico();
+
+        $this->actingAs($user)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->get(route('servicio.celulares.hub'))
+            ->assertOk()
+            ->assertSee('Consultar bitácora')
+            ->assertSee('Registrar celular');
+    }
+
+    public function test_wizard_local_con_backup_genera_documento(): void
+    {
+        $user = $this->makeTecnico();
+
+        $response = $this->actingAs($user)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.store'), [
+                'tipo_gestion' => 'GARANTIA',
+                'cliente_nombre' => 'Cliente Backup',
+                'prioridad' => 'normal',
+                'falla' => 'Pantalla rota',
+                'imei' => '351112223334445',
+                'marca' => 'Apple',
+                'modelo' => 'iPhone 12',
+                'entrega_backup' => '1',
+                'backup_marca' => 'Xiaomi',
+                'backup_modelo' => 'Redmi Note',
+                'backup_imei' => '359998887776661',
+                'backup_estado_fisico' => 'Buen estado',
+                'backup_firma_cliente' => 'Cliente Backup',
+            ]);
+
+        $orden = StOrden::query()->where('cliente_nombre', 'Cliente Backup')->first();
+        $this->assertNotNull($orden);
+        $this->assertSame('GARANTIA', $orden->tipo_gestion);
+        $backup = \App\Models\StBackup::query()->where('orden_id', $orden->id)->first();
+        $this->assertNotNull($backup);
+
+        $response->assertRedirect(route('servicio.ordenes.show', $orden));
+
+        $this->get(route('servicio.ordenes.backup_pdf', ['orden' => $orden, 'backup' => $backup]))
+            ->assertOk();
+
+        $recepcion = $this->get(route('servicio.ordenes.recepcion_pdf', $orden));
+        $recepcion->assertOk();
+        $this->assertStringContainsString('application/pdf', (string) $recepcion->headers->get('content-type'));
+    }
+
+    public function test_checklist_y_conformidad_quedan_en_la_orden(): void
+    {
+        $user = $this->makeTecnico();
+        $firma = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+        $this->actingAs($user)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.store'), [
+                'cliente_nombre' => 'Cliente Check',
+                'prioridad' => 'normal',
+                'tipo_gestion' => 'ST',
+                'imei' => '350011122233344',
+                'marca' => 'Samsung',
+                'modelo' => 'A15',
+                'falla' => 'No carga',
+                'inspeccion' => [
+                    'pantalla' => ['estado' => 'ok'],
+                    'carga' => ['estado' => 'dano'],
+                    'humedad' => ['estado' => 'na'],
+                ],
+                'firma_recepcion_cliente' => $firma,
+            ])
+            ->assertRedirect();
+
+        $orden = StOrden::query()->where('cliente_nombre', 'Cliente Check')->first();
+        $this->assertNotNull($orden);
+        $this->assertSame('ok', $orden->inspeccion_recepcion['pantalla'] ?? null);
+        $this->assertSame('dano', $orden->inspeccion_recepcion['carga'] ?? null);
+        $this->assertStringStartsWith('data:image/png', (string) $orden->firma_recepcion_cliente);
+
+        $this->actingAs($user)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.conformidad', $orden), [
+                'conformidad_trabajo' => 'Se cambió el pin de carga.',
+                'firma_conformidad_cliente' => $firma,
+            ])
+            ->assertRedirect(route('servicio.ordenes.show', $orden));
+
+        $orden->refresh();
+        $this->assertSame('Se cambió el pin de carga.', $orden->conformidad_trabajo);
+        $this->assertNotNull($orden->conformidad_at);
+
+        $this->get(route('servicio.ordenes.conformidad_pdf', $orden))->assertOk();
+        $this->get(route('servicio.ordenes.recepcion_pdf', $orden))->assertOk();
+    }
+
+    public function test_envio_entre_sedes_aparece_en_por_recibir(): void
+    {
+        $gerente = User::create([
+            'name' => 'Gerente Envio',
+            'email' => 'ger-envio-'.uniqid().'@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_GERENTE,
+        ]);
+
+        $this->actingAs($gerente)
+            ->post(route('servicio.ordenes.store'), [
+                'tipo_gestion' => 'ST',
+                'sede' => 'DORAL',
+                'enviar_otra_sede' => '1',
+                'sede_destino_envio' => 'VIRTUDES',
+                'cliente_nombre' => 'Cliente Envio',
+                'prioridad' => 'normal',
+                'falla' => 'No carga',
+                'imei' => '358887776665554',
+                'marca' => 'Motorola',
+                'modelo' => 'Edge',
+            ])
+            ->assertRedirect();
+
+        $orden = StOrden::query()->where('cliente_nombre', 'Cliente Envio')->first();
+        $this->assertNotNull($orden);
+        $this->assertSame('VIRTUDES', $orden->sede);
+        $this->assertSame('DORAL', $orden->sede_origen_transfer);
+        $this->assertSame(StOrden::TRANSFER_PENDIENTE, $orden->transfer_estado);
+
+        $tecnicoDestino = User::create([
+            'name' => 'Técnico Virtudes',
+            'email' => 'tec-virt-'.uniqid().'@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_TECNICO,
+            'sede' => 'VIRTUDES',
+        ]);
+
+        $this->actingAs($tecnicoDestino)
+            ->withSession(['sede_local' => 'VIRTUDES'])
+            ->get(route('servicio.celulares.por_recibir'))
+            ->assertOk()
+            ->assertSee('Motorola Edge')
+            ->assertSee($orden->codigo());
+    }
+
+    private function makeTecnico(): User
+    {
+        return User::create([
+            'name' => 'Técnico Celulares',
+            'email' => 'tec-cel-'.uniqid().'@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_TECNICO,
+            'sede' => 'DORAL',
+        ]);
+    }
+
+    private function ensureTables(): void
+    {
+        if (! Schema::hasTable('st_ordenes')) {
+            Schema::create('st_ordenes', function (Blueprint $table) {
+                $table->id();
+                $table->string('sede', 32);
+                $table->unsignedInteger('numero');
+                $table->string('tipo_gestion', 16)->default('ST');
+                $table->unsignedBigInteger('equipo_id')->nullable();
+                $table->string('cliente_nombre');
+                $table->string('cliente_telefono', 40)->nullable();
+                $table->string('cliente_cedula', 40)->nullable();
+                $table->string('equipo')->nullable();
+                $table->string('imei', 32)->nullable();
+                $table->string('serial')->nullable();
+                $table->text('falla')->nullable();
+                $table->string('accesorios')->nullable();
+                $table->text('diagnostico')->nullable();
+                $table->string('estado', 32)->default('pendiente');
+                $table->string('prioridad', 16)->default('normal');
+                $table->date('fecha_ingreso');
+                $table->date('fecha_prometida')->nullable();
+                $table->text('observaciones')->nullable();
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->unsignedBigInteger('updated_by')->nullable();
+                $table->unsignedBigInteger('tecnico_id')->nullable();
+                $table->string('sede_origen_transfer', 32)->nullable();
+                $table->string('sede_destino_transfer', 32)->nullable();
+                $table->string('transfer_estado', 16)->nullable();
+                $table->timestamp('repuestos_descontados_at')->nullable();
+                $table->decimal('presupuesto', 12, 2)->nullable();
+                $table->decimal('costo_mano_obra', 12, 2)->nullable();
+                $table->decimal('costo_refacciones', 12, 2)->nullable();
+                $table->json('inspeccion_recepcion')->nullable();
+                $table->longText('firma_recepcion_cliente')->nullable();
+                $table->longText('firma_recepcion_empleado')->nullable();
+                $table->text('conformidad_trabajo')->nullable();
+                $table->longText('firma_conformidad_cliente')->nullable();
+                $table->longText('firma_conformidad_empleado')->nullable();
+                $table->timestamp('conformidad_at')->nullable();
+                $table->timestamps();
+                $table->unique(['sede', 'numero']);
+            });
+        } else {
+            Schema::table('st_ordenes', function (Blueprint $table) {
+                if (! Schema::hasColumn('st_ordenes', 'tipo_gestion')) {
+                    $table->string('tipo_gestion', 16)->default('ST');
+                }
+                if (! Schema::hasColumn('st_ordenes', 'equipo_id')) {
+                    $table->unsignedBigInteger('equipo_id')->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'imei')) {
+                    $table->string('imei', 32)->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'sede_destino_transfer')) {
+                    $table->string('sede_destino_transfer', 32)->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'inspeccion_recepcion')) {
+                    $table->json('inspeccion_recepcion')->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'firma_recepcion_cliente')) {
+                    $table->longText('firma_recepcion_cliente')->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'firma_recepcion_empleado')) {
+                    $table->longText('firma_recepcion_empleado')->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'conformidad_trabajo')) {
+                    $table->text('conformidad_trabajo')->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'firma_conformidad_cliente')) {
+                    $table->longText('firma_conformidad_cliente')->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'firma_conformidad_empleado')) {
+                    $table->longText('firma_conformidad_empleado')->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'conformidad_at')) {
+                    $table->timestamp('conformidad_at')->nullable();
+                }
+            });
+        }
+
+        if (! Schema::hasTable('st_orden_eventos')) {
+            Schema::create('st_orden_eventos', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('orden_id');
+                $table->unsignedBigInteger('user_id')->nullable();
+                $table->string('tipo', 32);
+                $table->text('descripcion');
+                $table->text('meta')->nullable();
+                $table->timestamp('created_at')->nullable();
+            });
+        }
+
+        if (! Schema::hasTable('st_equipos')) {
+            Schema::create('st_equipos', function (Blueprint $table) {
+                $table->id();
+                $table->string('imei', 32)->nullable()->unique();
+                $table->string('imei2', 32)->nullable();
+                $table->string('serial', 64)->nullable();
+                $table->string('marca', 64)->nullable();
+                $table->string('modelo', 128)->nullable();
+                $table->string('color', 64)->nullable();
+                $table->string('telefono_asociado', 40)->nullable();
+                $table->string('estado_actual', 32)->default('en_taller');
+                $table->string('sede_actual', 32)->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasTable('st_equipo_eventos')) {
+            Schema::create('st_equipo_eventos', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('equipo_id');
+                $table->unsignedBigInteger('orden_id')->nullable();
+                $table->unsignedBigInteger('backup_id')->nullable();
+                $table->unsignedBigInteger('user_id')->nullable();
+                $table->string('sede', 32)->nullable();
+                $table->string('tipo', 32);
+                $table->string('titulo')->nullable();
+                $table->text('descripcion')->nullable();
+                $table->text('payload')->nullable();
+                $table->timestamp('created_at')->nullable();
+            });
+        }
+
+        if (! Schema::hasTable('st_backups')) {
+            Schema::create('st_backups', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('orden_id');
+                $table->unsignedBigInteger('equipo_cliente_id')->nullable();
+                $table->string('marca', 64)->nullable();
+                $table->string('modelo', 128)->nullable();
+                $table->string('imei', 32)->nullable();
+                $table->string('serial', 64)->nullable();
+                $table->string('estado_fisico')->nullable();
+                $table->string('accesorios')->nullable();
+                $table->text('condiciones')->nullable();
+                $table->string('firma_cliente')->nullable();
+                $table->string('firma_empleado')->nullable();
+                $table->string('estado', 32)->default('entregado');
+                $table->timestamp('entregado_at')->nullable();
+                $table->timestamp('devuelto_at')->nullable();
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->timestamps();
+            });
+        }
+    }
+}

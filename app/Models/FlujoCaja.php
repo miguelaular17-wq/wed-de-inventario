@@ -14,8 +14,13 @@ class FlujoCaja extends Model
         'comision', 'motivo', 'categoria_egreso', 'tipo_gasto', 'nomina_empleado_id',
         'es_todoticket', 'detalle_todoticket',
         'sede', 'placa_vehiculo', 'oculto', 'comprobante_url',
-        'desglose', 'comprobantes'
+        'desglose', 'comprobantes', 'cuenta_por_pagar_id',
     ];
+
+    public function cuentaPorPagar()
+    {
+        return $this->belongsTo(CuentaPorPagar::class, 'cuenta_por_pagar_id');
+    }
 
     protected $casts = [
         'desglose' => 'array',
