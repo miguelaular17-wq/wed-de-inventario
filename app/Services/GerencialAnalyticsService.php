@@ -1184,4 +1184,95 @@ class GerencialAnalyticsService
 
         return array_values(array_unique($out));
     }
+
+    /**
+     * Ranking de clientes por sede: facturas, unidades y monto de compra.
+     *
+     * @param  array{inicio:Carbon,fin:Carbon}  $periodo
+     * @return array<string, mixed>
+     */
+    public function clientes(array $periodo, ?string $sede, ?string $vendedor, ?string $producto, string $ranking = 'monto'): array
+    {
+        $orden = in_array($ranking, ['facturas', 'unidades', 'monto'], true) ? $ranking : 'monto';
+        $vacio = [
+            'ranking' => $orden,
+            'kpis' => [
+                'clientes' => 0,
+                'facturas' => null,
+                'unidades' => null,
+                'monto' => null,
+            ],
+            'global' => collect(),
+            'por_sede' => collect(),
+        ];
+
+        if (! Schema::hasTable('ventas_detalle') || ! Schema::hasColumn('ventas_detalle', 'cliente')) {
+            return $vacio;
+        }
+
+        $sedes = $this->base->filtrarSedes($sede);
+        $base = $this->base->queryLineas($periodo['inicio'], $periodo['fin'], $sedes, null, $vendedor, $producto);
+        $importe = $this->base->sqlImporte('neto');
+        $unidades = $this->base->sqlUnidadesNetas();
+        $facturas = "COUNT(DISTINCT CASE WHEN UPPER(vd.tipo_documento)='FAC' THEN vd.numero_documento END)";
+        $clienteSql = "COALESCE(NULLIF(TRIM(vd.cliente), ''), 'Sin cliente')";
+
+        $filas = (clone $base)
+            ->selectRaw('UPPER(TRIM(vd.sede)) as sede')
+            ->selectRaw("{$clienteSql} as cliente")
+            ->selectRaw("{$facturas} as facturas")
+            ->selectRaw("{$unidades} as unidades")
+            ->selectRaw("{$importe} as monto")
+            ->groupBy(DB::raw('UPPER(TRIM(vd.sede))'), DB::raw($clienteSql))
+            ->get()
+            ->map(function ($row) {
+                return (object) [
+                    'sede' => (string) $row->sede,
+                    'cliente' => (string) $row->cliente,
+                    'facturas' => (int) $row->facturas,
+                    'unidades' => round((float) $row->unidades, 2),
+                    'monto' => round((float) $row->monto, 2),
+                ];
+            })
+            ->filter(fn ($row) => $row->facturas > 0 || abs($row->unidades) > 0.0001 || abs($row->monto) > 0.0001)
+            ->values();
+
+        $porSede = collect($sedes)->mapWithKeys(function (string $codigo) use ($filas, $orden) {
+            $grupo = $filas->where('sede', $codigo)->values();
+            if ($grupo->isEmpty()) {
+                return [];
+            }
+
+            return [$codigo => [
+                'filas' => $grupo->sortByDesc($orden)->take(25)->values(),
+                'ganadores' => [
+                    'facturas' => $grupo->sortByDesc('facturas')->first(),
+                    'unidades' => $grupo->sortByDesc('unidades')->first(),
+                    'monto' => $grupo->sortByDesc('monto')->first(),
+                ],
+            ]];
+        });
+
+        $global = $filas->groupBy('cliente')->map(function (Collection $grupo, $cliente) {
+            return (object) [
+                'cliente' => (string) $cliente,
+                'facturas' => (int) $grupo->sum('facturas'),
+                'unidades' => round((float) $grupo->sum('unidades'), 2),
+                'monto' => round((float) $grupo->sum('monto'), 2),
+                'sedes' => $grupo->pluck('sede')->unique()->values()->all(),
+            ];
+        })->sortByDesc($orden)->values();
+
+        return [
+            'ranking' => $orden,
+            'kpis' => [
+                'clientes' => $global->count(),
+                'facturas' => $global->sortByDesc('facturas')->first(),
+                'unidades' => $global->sortByDesc('unidades')->first(),
+                'monto' => $global->sortByDesc('monto')->first(),
+            ],
+            'global' => $global->take(40),
+            'por_sede' => $porSede,
+        ];
+    }
 }

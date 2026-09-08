@@ -71,6 +71,9 @@
     if ($u->canAccess('gerencial.rentabilidad')) {
         $gerencialItems[] = $link('Rentabilidad', route('gerencial.rentabilidad'), request()->routeIs('gerencial.rentabilidad'));
     }
+    if ($u->canAccess('gerencial.clientes')) {
+        $gerencialItems[] = $link('Clientes', route('gerencial.clientes'), request()->routeIs('gerencial.clientes'));
+    }
     if ($u->canAccess('gerencial.devoluciones')) {
         $gerencialItems[] = $link('Devoluciones', route('gerencial.devoluciones'), request()->routeIs('gerencial.devoluciones'));
     }

@@ -15,26 +15,19 @@ class PedidoSolicitadoController extends Controller
     public function __construct()
     {
         $this->middleware(function ($request, $next) {
-            $name = $request->route()?->getName();
-            if ($name === 'comprador.pedidos.diario_sede') {
-                return $next($request);
-            }
-
-            if (in_array($name, [
-                'comprador.pedidos.comprado',
-                'comprador.pedidos.fuera_mercado',
-                'comprador.pedidos.excel',
-                'comprador.pedidos.pdf',
-                'comprador.pedidos.diario',
-            ], true)) {
-                $user = $request->user();
-                if (! $user || ! $user->canAccessComprasTab('qpedir')) {
-                    abort(403, 'Acceso denegado. Permisos insuficientes.');
-                }
+            $user = $request->user();
+            if (! $user || ! $user->canAccessComprasTab('qpedir')) {
+                abort(403, 'Acceso denegado. Permisos insuficientes.');
             }
 
             return $next($request);
-        });
+        })->only([
+            'marcarComprado',
+            'marcarFueraMercado',
+            'reporteExcel',
+            'reportePdf',
+            'reporteDiarioPdf',
+        ]);
     }
 
     public function categorias(): JsonResponse
@@ -226,23 +219,26 @@ class PedidoSolicitadoController extends Controller
     public function reporteDiarioSedePdf(Request $request)
     {
         $user = $request->user();
-        if (!$user || !$user->sede) {
-            return redirect()->back()->with('error', 'No tienes una sede asignada para generar el reporte.');
+        $sede = strtoupper(trim((string) ($user?->sede ?: $request->session()->get('sede_local') ?: '')));
+        if (! $user || $sede === '') {
+            return redirect()->route('sede.select')
+                ->with('error', 'No tienes una sede asignada para generar el reporte.');
         }
 
         $pedidos = PedidoSolicitado::where('estado', 'pendiente')
             ->whereDate('created_at', now()->toDateString())
-            ->where('sede', $user->sede)
+            ->whereRaw('UPPER(TRIM(COALESCE(sede, \'\'))) = ?', [$sede])
             ->selectRaw('producto, MAX(codigo) as codigo, MAX(categoria) as categoria, COUNT(*) as frecuencia, MAX(created_at) as created_at')
             ->groupBy('producto')
             ->orderByDesc('frecuencia')
             ->get();
-            
+
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reporte_diario_sede', [
             'pedidos' => $pedidos,
-            'sede' => $user->sede
+            'sede' => $sede,
         ]);
-        return $pdf->download('reporte_diario_sede_'.$user->sede.'_'.date('Ymd').'.pdf');
+
+        return $pdf->download('reporte_diario_sede_'.$sede.'_'.date('Ymd').'.pdf');
     }
 
     public function reportePdf(Request $request)

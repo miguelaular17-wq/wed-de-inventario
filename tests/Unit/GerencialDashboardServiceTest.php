@@ -264,6 +264,11 @@ class GerencialDashboardServiceTest extends TestCase
             ->assertOk()
             ->assertSee('Rentabilidad')
             ->assertSee('Utilidad bruta');
+
+        $this->actingAs($gerente)
+            ->get(route('gerencial.clientes'))
+            ->assertOk()
+            ->assertSee('Clientes por sede');
     }
 
     public function test_supervisor_no_entra_a_valorizados_ni_ajustes(): void
@@ -279,6 +284,7 @@ class GerencialDashboardServiceTest extends TestCase
         $this->actingAs($supervisor)->get(route('gerencial.valorizados'))->assertRedirect();
         $this->actingAs($supervisor)->get(route('gerencial.ajustes'))->assertRedirect();
         $this->actingAs($supervisor)->get(route('gerencial.rentabilidad'))->assertRedirect();
+        $this->actingAs($supervisor)->get(route('gerencial.clientes'))->assertRedirect();
     }
 
     public function test_analytics_calcula_margen_y_porcentaje_de_devolucion(): void
@@ -324,6 +330,63 @@ class GerencialDashboardServiceTest extends TestCase
         $this->assertEquals(35.0, $rent['kpis']['costo']);
         $this->assertEquals(50.0, $rent['kpis']['utilidad']);
         $this->assertEquals(58.8, $rent['kpis']['margen_pct']);
+    }
+
+    public function test_clientes_por_sede_destacan_facturas_unidades_y_monto(): void
+    {
+        DB::table('ventas_detalle')->insert([
+            [
+                'sede' => 'DORAL', 'tipo_documento' => 'FAC', 'numero_documento' => 'C-1', 'item_numero' => 1,
+                'fecha' => '2026-08-10', 'codigo_producto' => 'P1', 'nombre_producto' => 'Aro',
+                'cantidad' => 2, 'precio_venta' => 10, 'precio_neto' => 10, 'costo_unitario' => 4,
+                'cliente' => 'Ana Pérez', 'vendedor' => 'Luis', 'anulado' => false,
+            ],
+            [
+                'sede' => 'DORAL', 'tipo_documento' => 'FAC', 'numero_documento' => 'C-2', 'item_numero' => 1,
+                'fecha' => '2026-08-11', 'codigo_producto' => 'P1', 'nombre_producto' => 'Aro',
+                'cantidad' => 1, 'precio_venta' => 10, 'precio_neto' => 10, 'costo_unitario' => 4,
+                'cliente' => 'Ana Pérez', 'vendedor' => 'Luis', 'anulado' => false,
+            ],
+            [
+                'sede' => 'DORAL', 'tipo_documento' => 'FAC', 'numero_documento' => 'C-3', 'item_numero' => 1,
+                'fecha' => '2026-08-12', 'codigo_producto' => 'P2', 'nombre_producto' => 'Funda',
+                'cantidad' => 20, 'precio_venta' => 5, 'precio_neto' => 5, 'costo_unitario' => 1,
+                'cliente' => 'Bruno Díaz', 'vendedor' => 'Luis', 'anulado' => false,
+            ],
+            [
+                'sede' => 'CENTRO', 'tipo_documento' => 'FAC', 'numero_documento' => 'C-4', 'item_numero' => 1,
+                'fecha' => '2026-08-12', 'codigo_producto' => 'P3', 'nombre_producto' => 'Collar',
+                'cantidad' => 1, 'precio_venta' => 200, 'precio_neto' => 200, 'costo_unitario' => 80,
+                'cliente' => 'Carla Ruiz', 'vendedor' => 'Luis', 'anulado' => false,
+            ],
+        ]);
+
+        $base = app(GerencialDashboardService::class);
+        $analytics = app(\App\Services\GerencialAnalyticsService::class);
+        $periodo = $base->resolverPeriodo('mes', null, null);
+        $data = $analytics->clientes($periodo, 'todas', null, null, 'monto');
+
+        $this->assertSame('Carla Ruiz', $data['kpis']['monto']->cliente);
+        $this->assertSame('Ana Pérez', $data['kpis']['facturas']->cliente);
+        $this->assertSame('Bruno Díaz', $data['kpis']['unidades']->cliente);
+        $this->assertSame(3, $data['kpis']['clientes']);
+        $this->assertSame('Ana Pérez', $data['por_sede']['DORAL']['ganadores']['facturas']->cliente);
+        $this->assertSame('Bruno Díaz', $data['por_sede']['DORAL']['ganadores']['unidades']->cliente);
+        $this->assertSame('Carla Ruiz', $data['por_sede']['CENTRO']['ganadores']['monto']->cliente);
+
+        $gerente = User::create([
+            'name' => 'Gerente Clientes',
+            'email' => 'gerente-clientes@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_GERENTE,
+        ]);
+        $this->actingAs($gerente)
+            ->get(route('gerencial.clientes', ['preset' => 'mes']))
+            ->assertOk()
+            ->assertSee('Ana Pérez')
+            ->assertSee('Bruno Díaz')
+            ->assertSee('Carla Ruiz')
+            ->assertSee('DORAL');
     }
 
     public function test_motivos_de_profit_traducen_codigos_y_placeholders(): void

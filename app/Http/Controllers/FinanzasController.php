@@ -588,7 +588,7 @@ class FinanzasController extends Controller
                     'es_todoticket'         => $esTodoticket,
                     'detalle_todoticket'    => $detalleTodoticket,
                     'motivo'                => $data['motivo'] ?? null,
-                    'sede'                  => $data['sede'] ?? null,
+                    'sede'                  => $this->sedeEgresoServicioTecnico($data, $empleadoServicioTecnico),
                     'placa_vehiculo'        => $data['placa_vehiculo'] ?? null,
                     'comprobante_url'       => $comprobante_url,
                     'comprobantes'          => !empty($comprobantes_arr) ? $comprobantes_arr : null,
@@ -754,6 +754,18 @@ class FinanzasController extends Controller
         return null;
     }
 
+    private function sedeEgresoServicioTecnico(array $data, ?NominaEmpleado $empleado): ?string
+    {
+        $sede = trim((string) ($data['sede'] ?? ''));
+        if ($sede !== '') {
+            return strtoupper($sede);
+        }
+
+        $sedeEmpleado = trim((string) ($empleado?->sede ?? ''));
+
+        return $sedeEmpleado !== '' ? strtoupper($sedeEmpleado) : null;
+    }
+
     public function updateEgreso(Request $request, $id)
     {
         try {
@@ -901,7 +913,7 @@ class FinanzasController extends Controller
             'tipo_gasto'            => $data['tipo_gasto'] ?? null,
             'nomina_empleado_id'     => $empleadoServicioTecnico?->id,
             'motivo'                => $data['motivo'] ?? null,
-            'sede'                  => $data['sede'] ?? null,
+            'sede'                  => $this->sedeEgresoServicioTecnico($data, $empleadoServicioTecnico),
             'placa_vehiculo'        => $data['placa_vehiculo'] ?? null,
             'comprobante_url'       => $comprobantes[0] ?? $egreso->comprobante_url,
             'comprobantes'          => empty($comprobantes) ? null : array_values($comprobantes),

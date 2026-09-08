@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Models\Cliente;
+use App\Models\Nomina\NominaEmpleado;
 use App\Models\StFactura;
 use App\Models\StReparacion;
 use App\Models\StRepuesto;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\Concerns\CreatesNominaSchema;
 use Tests\Concerns\CreatesServicioEquipoSchema;
@@ -171,6 +174,54 @@ class ServicioTecnicoFase3Test extends TestCase
             ->assertDontSee('Nueva factura');
     }
 
+    public function test_tecnico_ve_egresos_058_sin_sede_y_facturas_de_venta_st(): void
+    {
+        $this->ensureFlujoCajaSedeColumn();
+        $tecnico = $this->makeTecnico();
+        $empleado = $this->vincularTecnicoNomina($tecnico, 'JORGE TEST');
+        $hoy = now()->toDateString();
+
+        DB::table('flujo_cajas')->insert([
+            'fecha' => $hoy,
+            'tipo' => 'egreso',
+            'tipo_gasto' => '058 - SERVICIO TECNICO (GARANTIAS)',
+            'nomina_empleado_id' => $empleado->id,
+            'monto_usd' => 18.5,
+            'monto_bs' => 0,
+            'tasa_cambio' => 0,
+            'sede' => null,
+            'motivo' => 'Garantia pantalla',
+        ]);
+
+        DB::table('ventas_detalle')->insert([
+            'sede' => 'DORAL',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => 'ST-5511',
+            'item_numero' => 1,
+            'fecha' => $hoy,
+            'nombre_producto' => 'SERVICIO TECNICO PANTALLA',
+            'cantidad' => 1,
+            'precio_venta' => 90,
+            'precio_neto' => 90,
+            'cliente' => 'Cliente ST Jorge',
+            'vendedor' => 'JORGE TEST',
+            'anulado' => false,
+        ]);
+
+        $this->actingAs($tecnico)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->get(route('servicio.dashboard'))
+            ->assertOk()
+            ->assertSee('18.50')
+            ->assertSee('JORGE TEST')
+            ->assertSee('90.00');
+
+        $this->get(route('servicio.facturas.index'))
+            ->assertOk()
+            ->assertSee('ST-5511')
+            ->assertSee('Cliente ST Jorge');
+    }
+
     public function test_tecnico_no_puede_eliminar_factura(): void
     {
         $tecnico = $this->makeTecnico();
@@ -227,6 +278,41 @@ class ServicioTecnicoFase3Test extends TestCase
             'role' => User::ROLE_TECNICO,
             'sede' => 'DORAL',
         ]);
+    }
+
+    private function vincularTecnicoNomina(User $tecnico, string $codigoVendedor): NominaEmpleado
+    {
+        $cliente = Cliente::create([
+            'cedula' => 'V'.substr(uniqid(), -8),
+            'nombre' => 'JORGE TEST',
+        ]);
+
+        return NominaEmpleado::create([
+            'cliente_id' => $cliente->id,
+            'user_id' => $tecnico->id,
+            'sede' => 'DORAL',
+            'salario_base' => 0,
+            'tipo_salario' => 'SOLO_COMISION',
+            'estado' => 'ACTIVO',
+            'es_servicio_tecnico' => true,
+            'modo_comision' => NominaEmpleado::COMISION_SERVICIO_TECNICO,
+            'codigo_vendedor' => $codigoVendedor,
+        ]);
+    }
+
+    private function ensureFlujoCajaSedeColumn(): void
+    {
+        if (! Schema::hasTable('flujo_cajas')) {
+            return;
+        }
+
+        foreach (['sede' => 'string', 'motivo' => 'string', 'titular_receptor' => 'string'] as $column => $_) {
+            if (! Schema::hasColumn('flujo_cajas', $column)) {
+                Schema::table('flujo_cajas', function (Blueprint $table) use ($column) {
+                    $table->string($column, 64)->nullable();
+                });
+            }
+        }
     }
 
     private function ensureStTables(): void

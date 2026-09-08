@@ -51,7 +51,7 @@
                 </select>
             </div>
         @endif
-        @if(in_array($modo, ['completo', 'devoluciones', 'rentabilidad'], true))
+        @if(in_array($modo, ['completo', 'devoluciones', 'rentabilidad', 'clientes'], true))
             <div class="field">
                 <label>Vendedor</label>
                 <select name="vendedor">

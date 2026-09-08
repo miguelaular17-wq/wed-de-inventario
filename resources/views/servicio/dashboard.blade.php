@@ -106,7 +106,8 @@
             </table>
         </div>
         <div class="panel" style="padding:20px;">
-            <h3 style="margin:0 0 12px;">Facturas de taller · por técnico</h3>
+            <h3 style="margin:0 0 12px;">Facturas ST · ventas del técnico</h3>
+            <p class="muted" style="margin:0 0 10px;font-size:.82rem;">Facturas de servicio técnico facturadas a su código de vendedor (mismas que usa la comisión).</p>
             <table class="data-table">
                 <thead><tr><th>Técnico</th><th>Cant.</th><th>Total</th></tr></thead>
                 <tbody>

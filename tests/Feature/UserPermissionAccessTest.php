@@ -134,6 +134,41 @@ class UserPermissionAccessTest extends TestCase
         $this->assertTrue($supervisor->fresh()->canSeeCatalogoPrecios());
     }
 
+    public function test_supervisor_can_download_qpedir_daily_report_for_own_sede(): void
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('pedidos_solicitados')) {
+            \Illuminate\Support\Facades\Schema::create('pedidos_solicitados', function ($table) {
+                $table->id();
+                $table->unsignedBigInteger('producto_id')->nullable();
+                $table->string('codigo', 64);
+                $table->string('producto');
+                $table->string('categoria')->nullable();
+                $table->string('proveedor')->nullable();
+                $table->string('solicitante')->nullable();
+                $table->string('sede', 50)->nullable();
+                $table->text('notas')->nullable();
+                $table->string('estado', 32)->default('pendiente');
+                $table->timestamp('atendido_at')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        $supervisor = $this->makeUser(User::ROLE_SUPERVISOR);
+        $this->assertTrue($supervisor->canAccess('compras.reporte_sede'));
+        $this->assertFalse($supervisor->canAccessComprasTab('qpedir'));
+
+        $this->actingAs($supervisor)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->get(route('comprador.pedidos.diario_sede'))
+            ->assertOk()
+            ->assertHeader('content-disposition');
+
+        $vendedor = $this->makeUser(User::ROLE_VENDEDOR);
+        $this->actingAs($vendedor)
+            ->get(route('comprador.pedidos.diario_sede'))
+            ->assertRedirect('/');
+    }
+
     private function makeUser(string $role): User
     {
         return User::create([

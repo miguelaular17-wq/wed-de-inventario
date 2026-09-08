@@ -36,6 +36,7 @@ return [
         'gerencial.valorizados' => 'Valorizados de inventarios',
         'gerencial.ajustes' => 'Consolidados de ajustes de inventarios',
         'gerencial.rentabilidad' => 'Rentabilidad gerencial',
+        'gerencial.clientes' => 'Clientes por sede (facturas, unidades y montos)',
         'servicio' => 'Servicio técnico',
         'servicio.inventario' => 'Inventario de repuestos (servicio técnico)',
         'servicio.transferir' => 'Transferir celulares / órdenes entre sedes',
@@ -68,7 +69,7 @@ return [
         'Contratos' => ['contratos'],
         'Patrimonial' => ['patrimonial'],
         'Nómina' => ['nomina', 'nomina.equipo'],
-        'Gerencial' => ['gerencial', 'gerencial.devoluciones', 'gerencial.valorizados', 'gerencial.ajustes', 'gerencial.rentabilidad'],
+        'Gerencial' => ['gerencial', 'gerencial.devoluciones', 'gerencial.valorizados', 'gerencial.ajustes', 'gerencial.rentabilidad', 'gerencial.clientes'],
         'Servicio técnico' => ['servicio', 'servicio.inventario', 'servicio.transferir'],
     ],
 

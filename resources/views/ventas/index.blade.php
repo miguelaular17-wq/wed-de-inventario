@@ -14,7 +14,7 @@
             .
         </p>
     </div>
-    @if(auth()->user() && auth()->user()->isSupervisor())
+    @if(auth()->user()?->canAccess('compras.reporte_sede'))
     <div>
         <a href="{{ route('comprador.pedidos.diario_sede') }}" class="btn" style="background: #ef4444; color: white; display: inline-flex; align-items: center; gap: 8px;">
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">

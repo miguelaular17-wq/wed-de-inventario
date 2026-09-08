@@ -111,6 +111,25 @@ class GerencialController extends Controller
         return view('gerencial.rentabilidad', $ctx + $data);
     }
 
+    public function clientes(Request $request, GerencialDashboardService $gerencial, GerencialAnalyticsService $analytics): View
+    {
+        $ctx = $this->contexto($request, $gerencial);
+        $ranking = $request->query('ranking');
+        if (! in_array($ranking, ['facturas', 'unidades', 'monto'], true)) {
+            $ranking = 'monto';
+        }
+        $ctx['filtros']['ranking'] = $ranking;
+        $data = $analytics->clientes(
+            $ctx['periodo'],
+            $ctx['filtros']['sede'],
+            $ctx['filtros']['vendedor'],
+            $ctx['filtros']['producto'],
+            $ranking
+        );
+
+        return view('gerencial.clientes', $ctx + $data);
+    }
+
     /**
      * @return array{periodo:array,filtros:array,sedes:array,catalogos:array}
      */

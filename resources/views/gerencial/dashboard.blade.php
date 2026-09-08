@@ -32,6 +32,9 @@
         <div class="nomina-kpi">
             <span>Facturas</span>
             <strong>{{ number_format($total['facturas']) }}</strong>
+            @if(auth()->user()->canAccess('gerencial.clientes'))
+                <a href="{{ route('gerencial.clientes', request()->except(['page', 'ranking'])) }}" class="gerencial-kpi-link">Ver clientes</a>
+            @endif
         </div>
         <div class="nomina-kpi warn">
             <span>Devoluciones</span>

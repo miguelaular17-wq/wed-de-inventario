@@ -7,6 +7,9 @@
     if ($u->canAccess('gerencial.rentabilidad')) {
         $tabs[] = ['label' => 'Rentabilidad', 'route' => 'gerencial.rentabilidad'];
     }
+    if ($u->canAccess('gerencial.clientes')) {
+        $tabs[] = ['label' => 'Clientes', 'route' => 'gerencial.clientes'];
+    }
     if ($u->canAccess('gerencial.devoluciones')) {
         $tabs[] = ['label' => 'Devoluciones', 'route' => 'gerencial.devoluciones'];
     }

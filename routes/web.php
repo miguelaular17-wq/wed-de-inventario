@@ -140,6 +140,9 @@ Route::middleware(['auth'])->prefix('gerencial')->group(function () {
     Route::get('/rentabilidad', [GerencialController::class, 'rentabilidad'])
         ->middleware('permission:gerencial.rentabilidad')
         ->name('gerencial.rentabilidad');
+    Route::get('/clientes', [GerencialController::class, 'clientes'])
+        ->middleware('permission:gerencial.clientes')
+        ->name('gerencial.clientes');
 });
 
 Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')->group(function () {
@@ -231,16 +234,13 @@ Route::middleware(['auth', 'permission:compras,compras.distribucion,compras.nece
     Route::post('/pedidos/reporte-pdf', [PedidoSolicitadoController::class, 'reportePdf'])->name('comprador.pedidos.pdf');
     Route::get('/pedidos/reporte-diario', [PedidoSolicitadoController::class, 'reporteDiarioPdf'])->name('comprador.pedidos.diario');
 
-    // Route for supervisors to download daily report by sede
-    Route::get('/pedidos/reporte-diario-sede', [PedidoSolicitadoController::class, 'reporteDiarioSedePdf'])
-        ->withoutMiddleware('permission')
-        ->middleware('permission:compras.reporte_sede')
-        ->name('comprador.pedidos.diario_sede');
-
     // Existencias (antes edurar)
     Route::get('/existencias', [\App\Http\Controllers\ExistenciasController::class, 'index'])->name('comprador.existencias');
     Route::get('/existencias/subcategorias', [\App\Http\Controllers\ExistenciasController::class, 'getSubcategorias'])->name('comprador.existencias.subcategorias');
 });
+
+Route::middleware(['auth', 'permission:compras.reporte_sede'])->get('/compras/pedidos/reporte-diario-sede', [PedidoSolicitadoController::class, 'reporteDiarioSedePdf'])
+    ->name('comprador.pedidos.diario_sede');
 
 // Metas de quincena (marketing marca; supervisores ven y asignan responsable)
 Route::middleware(['auth'])->prefix('metas')->name('metas.')->group(function () {

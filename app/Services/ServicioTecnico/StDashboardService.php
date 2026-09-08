@@ -17,6 +17,7 @@ class StDashboardService
 
     public function __construct(
         private readonly MetaQuincenaService $quincenas,
+        private readonly StVentasFacturaService $ventasSt,
     ) {}
 
     /**
@@ -31,11 +32,11 @@ class StDashboardService
         $quincena = $this->quincenas->quincenaActual();
         $desdeQ = $desde ?: ($quincena['inicio'] ?? null);
         $hastaQ = $hasta ?: ($quincena['fin'] ?? null);
-        if ($desdeQ instanceof Carbon) {
-            $desdeQ = $desdeQ->toDateString();
+        if ($desdeQ) {
+            $desdeQ = Carbon::parse($desdeQ)->toDateString();
         }
-        if ($hastaQ instanceof Carbon) {
-            $hastaQ = $hastaQ->toDateString();
+        if ($hastaQ) {
+            $hastaQ = Carbon::parse($hastaQ)->toDateString();
         }
 
         $ordenesQuery = StOrden::query()->visiblePara($user);
@@ -90,20 +91,29 @@ class StDashboardService
         }
         $porRecibir = $porRecibirQuery->orderByDesc('updated_at')->limit(10)->get();
 
-        $facturasPorTrabajador = $facturas
-            ->groupBy(fn (StFactura $f) => $f->tecnico_id ?: 0)
-            ->map(function ($group) {
-                /** @var \Illuminate\Support\Collection<int, StFactura> $group */
-                $first = $group->first();
+        $facturasPorTrabajador = $this->ventasSt->resumenPorTrabajador(
+            $user,
+            $desdeQ,
+            $hastaQ,
+            $user->scopesServicioToOwnSede() ? null : $sedeFiltro,
+        );
+        if ($facturasPorTrabajador === []) {
+            $facturasPorTrabajador = $facturas
+                ->groupBy(fn (StFactura $f) => $f->tecnico_id ?: 0)
+                ->map(function ($group) {
+                    /** @var \Illuminate\Support\Collection<int, StFactura> $group */
+                    $first = $group->first();
 
-                return [
-                    'nombre' => $first?->tecnico?->name ?: 'Sin técnico',
-                    'cantidad' => $group->count(),
-                    'total' => round((float) $group->sum('total'), 2),
-                ];
-            })
-            ->sortByDesc('total')
-            ->values();
+                    return [
+                        'nombre' => $first?->tecnico?->name ?: 'Sin técnico',
+                        'cantidad' => $group->count(),
+                        'total' => round((float) $group->sum('total'), 2),
+                    ];
+                })
+                ->sortByDesc('total')
+                ->values()
+                ->all();
+        }
 
         $actividad = collect()
             ->merge($ordenes->map(fn (StOrden $o) => [
@@ -154,23 +164,23 @@ class StDashboardService
             return [];
         }
 
+        $nombreExpr = Schema::hasColumn('flujo_cajas', 'descripcion')
+            ? "COALESCE(c.nombre, fc.descripcion, 'Sin asignar')"
+            : "COALESCE(c.nombre, fc.motivo, fc.titular_receptor, 'Sin asignar')";
+
         $query = DB::table('flujo_cajas as fc')
             ->leftJoin('nomina_empleados as ne', 'ne.id', '=', 'fc.nomina_empleado_id')
             ->leftJoin('clientes as c', 'c.id', '=', 'ne.cliente_id')
             ->where('fc.tipo_gasto', self::GASTO_058)
             ->whereBetween('fc.fecha', [$desde, $hasta])
-            ->selectRaw("COALESCE(c.nombre, fc.descripcion, 'Sin asignar') as nombre")
+            ->selectRaw($nombreExpr.' as nombre')
             ->selectRaw('COUNT(*) as cantidad')
             ->selectRaw('COALESCE(SUM(CASE
                 WHEN fc.monto_usd IS NOT NULL AND fc.monto_usd <> 0 THEN ABS(fc.monto_usd)
                 WHEN fc.tasa_cambio IS NOT NULL AND fc.tasa_cambio > 0 THEN ABS(fc.monto_bs) / fc.tasa_cambio
                 ELSE 0 END), 0) as monto')
-            ->groupBy(DB::raw("COALESCE(c.nombre, fc.descripcion, 'Sin asignar')"))
+            ->groupBy(DB::raw($nombreExpr))
             ->orderByDesc('monto');
-
-        if ($sede && Schema::hasColumn('flujo_cajas', 'sede')) {
-            $query->whereRaw('UPPER(TRIM(fc.sede)) = ?', [strtoupper($sede)]);
-        }
 
         if ($user->veSoloSusFacturasTaller()) {
             $empleado = $user->empleadoServicioTecnico();
@@ -179,17 +189,25 @@ class StDashboardService
             } else {
                 return [];
             }
+        } elseif ($sede && Schema::hasColumn('flujo_cajas', 'sede')) {
+            $sedeNorm = strtoupper($sede);
+            $query->where(function ($inner) use ($sedeNorm) {
+                $inner->whereRaw('UPPER(TRIM(fc.sede)) = ?', [$sedeNorm]);
+                if (Schema::hasColumn('nomina_empleados', 'sede')) {
+                    $inner->orWhere(function ($blank) use ($sedeNorm) {
+                        $blank->where(function ($sedeVacia) {
+                            $sedeVacia->whereNull('fc.sede')->orWhereRaw("TRIM(fc.sede) = ''");
+                        })->whereRaw('UPPER(TRIM(ne.sede)) = ?', [$sedeNorm]);
+                    });
+                }
+            });
         }
 
-        try {
-            return $query->get()->map(fn ($row) => [
-                'nombre' => (string) $row->nombre,
-                'monto' => round((float) $row->monto, 2),
-                'cantidad' => (int) $row->cantidad,
-            ])->all();
-        } catch (\Throwable) {
-            return [];
-        }
+        return $query->get()->map(fn ($row) => [
+            'nombre' => (string) $row->nombre,
+            'monto' => round((float) $row->monto, 2),
+            'cantidad' => (int) $row->cantidad,
+        ])->all();
     }
 
     private function aplicarRango($query, ?string $desde, ?string $hasta, string $column = 'created_at'): void

@@ -6,14 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\StFactura;
 use App\Models\User;
 use App\Services\Nomina\SalaryAdvanceService;
+use App\Services\ServicioTecnico\StVentasFacturaService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class FacturaController extends Controller
 {
-    public function __construct(private SalaryAdvanceService $quincenas)
-    {
+    public function __construct(
+        private SalaryAdvanceService $quincenas,
+        private StVentasFacturaService $ventasSt,
+    ) {
     }
 
     public function index(Request $request): View
@@ -54,8 +57,13 @@ class FacturaController extends Controller
             });
         }
 
+        $sedeVentas = $user->scopesServicioToOwnSede()
+            ? null
+            : ($request->filled('sede') ? strtoupper((string) $request->query('sede')) : null);
+
         return view('servicio.facturas.index', array_merge($this->formData($user), [
             'facturas' => $query->paginate(30)->withQueryString(),
+            'ventasSt' => $this->ventasSt->documentos($user, $desde, $hasta, $sedeVentas, $request->query('q')),
             'filtroSede' => $user->scopesServicioToOwnSede() ? strtoupper((string) $user->sede) : $request->query('sede'),
             'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
             'soloSusFacturas' => $soloSus,
