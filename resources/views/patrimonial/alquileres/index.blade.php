@@ -110,6 +110,9 @@
                     <td style="padding:10px 14px; border-bottom:1px solid #f1f5f9; font-weight:600; color:#059669;">
                         ${{ number_format($alq->canonActual(), 2) }}
                         <div style="font-size:0.75rem; color:#94a3b8;">{{ $alq->tipo_canon }}</div>
+                        @if($alq->getComision() > 0)
+                            <div style="font-size:0.75rem; color:#d97706; font-weight:600;">Comisión ${{ number_format($alq->getComision(), 2) }} · Neto ${{ number_format($alq->getNeto(), 2) }}</div>
+                        @endif
                     </td>
                     <td style="padding:10px 14px; border-bottom:1px solid #f1f5f9; color:#64748b; font-size:0.85rem;">
                         <div style="font-weight:600;">{{ optional($alq->fecha_inicio)->format('d/m/Y') }}</div>

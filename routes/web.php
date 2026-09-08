@@ -596,6 +596,7 @@ Route::middleware(['auth', 'permission:patrimonial'])->prefix('patrimonial')->na
 
     // Reservas extra
     Route::post('/reservas/bloquear', [\App\Http\Controllers\Patrimonial\ReservaController::class, 'bloquear'])->name('reservas.bloquear');
+    Route::post('/reservas/{reserva}/comision', [\App\Http\Controllers\Patrimonial\ReservaController::class, 'actualizarComision'])->name('reservas.comision');
     Route::post('/reservas/{reserva}/pago', [\App\Http\Controllers\Patrimonial\ReservaController::class, 'registrarPago'])->name('reservas.pago');
 });
 

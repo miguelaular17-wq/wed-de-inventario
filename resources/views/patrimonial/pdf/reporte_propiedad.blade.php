@@ -58,7 +58,7 @@
         <div class="header-titles">
             <h1>Reporte de Propiedad</h1>
             <h2>{{ $propiedad->nombre }}</h2>
-            <h3>Historial {{ $anioInicio }} – {{ $anioFin }}</h3>
+            <h3>{{ \Carbon\Carbon::create($anio, $mes)->translatedFormat('F Y') }} · resumen del mes · historial {{ $anioInicio }} – {{ $anioFin }}</h3>
         </div>
         <div class="header-right">
             <strong>{{ $propiedad->codigo }}</strong><br>
@@ -110,6 +110,77 @@
         @endif
     </table>
 
+    @php $mesResumen = $mesResumen ?? ['ingresos' => 0, 'gastos' => 0, 'comisiones' => 0, 'balance' => 0, 'ingresosPorCategoria' => [], 'gastosPorCategoria' => [], 'comisionesPorCategoria' => []]; @endphp
+
+    <div class="section-title">{{ \Carbon\Carbon::create($anio, $mes)->translatedFormat('F Y') }} — Resumen del mes</div>
+    <div class="kpi-bar" style="margin-bottom:10px;">
+        <div class="kpi-cell">
+            <div class="kpi-label">Ingresos brutos</div>
+            <div class="kpi-value green">${{ number_format($mesResumen['ingresos'], 2) }}</div>
+        </div>
+        <div class="kpi-cell">
+            <div class="kpi-label">Gastos</div>
+            <div class="kpi-value red">${{ number_format($mesResumen['gastos'], 2) }}</div>
+        </div>
+        <div class="kpi-cell">
+            <div class="kpi-label">Comisiones</div>
+            <div class="kpi-value orange">${{ number_format($mesResumen['comisiones'], 2) }}</div>
+        </div>
+        <div class="kpi-cell">
+            <div class="kpi-label">Neto del mes</div>
+            <div class="kpi-value {{ $mesResumen['balance'] >= 0 ? 'green' : 'red' }}">${{ number_format($mesResumen['balance'], 2) }}</div>
+        </div>
+    </div>
+    <p style="margin:0 0 14px; font-size:10px; color:#475569;">
+        ${{ number_format($mesResumen['ingresos'], 2) }} recibido
+        − ${{ number_format($mesResumen['gastos'], 2) }} gastos
+        − ${{ number_format($mesResumen['comisiones'], 2) }} comisiones
+        = <strong>${{ number_format($mesResumen['balance'], 2) }} neto</strong>
+    </p>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Concepto del mes</th>
+                <th class="text-right">Monto</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($mesResumen['ingresosPorCategoria'] ?? [] as $c)
+                <tr>
+                    <td>Ingreso · {{ $c['categoria'] }}</td>
+                    <td class="text-right green">${{ number_format($c['monto'], 2) }}</td>
+                </tr>
+            @empty
+            @endforelse
+            @foreach($mesResumen['gastosPorCategoria'] ?? [] as $c)
+                <tr>
+                    <td>Gasto · {{ $c['categoria'] }}</td>
+                    <td class="text-right red">−${{ number_format($c['monto'], 2) }}</td>
+                </tr>
+            @endforeach
+            @foreach($mesResumen['comisionesPorCategoria'] ?? [] as $c)
+                <tr>
+                    <td>Comisión · {{ $c['categoria'] }}</td>
+                    <td class="text-right orange">−${{ number_format($c['monto'], 2) }}</td>
+                </tr>
+            @endforeach
+            @if(
+                empty($mesResumen['ingresosPorCategoria'])
+                && empty($mesResumen['gastosPorCategoria'])
+                && empty($mesResumen['comisionesPorCategoria'])
+            )
+                <tr><td colspan="2" class="text-center" style="color:#94a3b8;">Sin movimientos en este mes. Solo se listan conceptos registrados.</td></tr>
+            @endif
+        </tbody>
+        <tfoot>
+            <tr>
+                <td>Neto del mes</td>
+                <td class="text-right">${{ number_format($mesResumen['balance'], 2) }}</td>
+            </tr>
+        </tfoot>
+    </table>
+
     {{-- KPIs TOTALES --}}
     <div class="kpi-bar">
         <div class="kpi-cell">
@@ -117,19 +188,19 @@
             <div class="kpi-value blue">${{ number_format((float) ($propiedad->valor_inversion ?? 0), 2) }}</div>
         </div>
         <div class="kpi-cell">
-            <div class="kpi-label">Ingresos Totales</div>
+            <div class="kpi-label">Acumulado {{ $anioInicio }}–{{ $anioFin }} · Ingresos</div>
             <div class="kpi-value green">${{ number_format($totales['ingresos'], 2) }}</div>
         </div>
         <div class="kpi-cell">
-            <div class="kpi-label">Gastos Totales</div>
+            <div class="kpi-label">Acumulado · Gastos</div>
             <div class="kpi-value red">${{ number_format($totales['gastos'], 2) }}</div>
         </div>
         <div class="kpi-cell">
-            <div class="kpi-label">Comisiones</div>
+            <div class="kpi-label">Acumulado · Comisiones</div>
             <div class="kpi-value orange">${{ number_format($totales['comisiones'], 2) }}</div>
         </div>
         <div class="kpi-cell">
-            <div class="kpi-label">Balance Neto Total</div>
+            <div class="kpi-label">Acumulado · Neto</div>
             <div class="kpi-value {{ $totales['balance'] >= 0 ? 'green' : 'red' }}">${{ number_format($totales['balance'], 2) }}</div>
         </div>
         <div class="kpi-cell">
@@ -144,10 +215,10 @@
         <thead>
             <tr>
                 <th>Período</th>
-                <th class="text-right">Ingresos</th>
+                <th class="text-right">Ingreso bruto</th>
                 <th class="text-right">Gastos</th>
-                <th class="text-right">Comisiones</th>
-                <th class="text-right">Balance</th>
+                <th class="text-right">Comisión</th>
+                <th class="text-right">Neto</th>
             </tr>
         </thead>
         <tbody>

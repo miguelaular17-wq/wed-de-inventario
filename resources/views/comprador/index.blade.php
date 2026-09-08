@@ -881,7 +881,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             @if($puedeVerEquipoPublicidad)
                 <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; font-weight: 600; color: var(--muted);">
                     Filtrar por usuario
-                    <select id="filtro-pub-user" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); min-width: 220px; font-weight: 500; color: var(--text);">
+                    <select id="filtro-pub-user" onchange="filtrarPublicidad()" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); min-width: 220px; font-weight: 500; color: var(--text);">
                         <option value="todos">Todos los usuarios</option>
                         @foreach($publicidadUsuarios as $pubUser)
                             <option value="{{ $pubUser->id }}">{{ $pubUser->name }}</option>
@@ -889,6 +889,29 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                     </select>
                 </label>
             @endif
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 14px;">
+            <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; font-weight: 600; color: var(--muted); flex: 1; min-width: 220px;">
+                Buscar por nombre o SKU
+                <input type="search" id="filtro-pub-q" placeholder="Producto o código…" oninput="filtrarPublicidad()"
+                    style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-weight: 500; color: var(--text);">
+            </label>
+            <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; font-weight: 600; color: var(--muted);">
+                Estado de ventas
+                <select id="filtro-pub-vendido" onchange="filtrarPublicidad()" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); min-width: 160px; font-weight: 500; color: var(--text);">
+                    <option value="todos">Todos</option>
+                    <option value="vendidos">Vendidos</option>
+                    <option value="no_vendidos">No vendidos</option>
+                </select>
+            </label>
+            <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; font-weight: 600; color: var(--muted);">
+                Publicidad desde
+                <input type="date" id="filtro-pub-desde" onchange="filtrarPublicidad()" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-weight: 500; color: var(--text);">
+            </label>
+            <label style="display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; font-weight: 600; color: var(--muted);">
+                Publicidad hasta
+                <input type="date" id="filtro-pub-hasta" onchange="filtrarPublicidad()" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-weight: 500; color: var(--text);">
+            </label>
         </div>
         
         <div class="table-wrap">
@@ -911,7 +934,11 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                 </thead>
                 <tbody>
                     @forelse($publicitadosData as $p)
-                        <tr data-user-id="{{ $p['user_id'] ?? '' }}">
+                        <tr data-user-id="{{ $p['user_id'] ?? '' }}"
+                            data-codigo="{{ strtolower($p['codigo'] ?? '') }}"
+                            data-producto="{{ strtolower($p['producto'] ?? '') }}"
+                            data-vendido="{{ !empty($p['tuvo_ventas']) ? '1' : '0' }}"
+                            data-fecha-pub="{{ $p['fecha_publicidad_iso'] ?? '' }}">
                             <td style="font-family: monospace; font-size: 0.85rem; color: var(--blue);">{{ $p['codigo'] }}</td>
                             <td style="font-weight: 500;">
                                 {{ $p['producto'] }}
@@ -967,6 +994,11 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                             </td>
                         </tr>
                     @endforelse
+                    <tr id="pub-no-matches" style="display: none;">
+                        <td colspan="{{ $puedeVerEquipoPublicidad ? 10 : 9 }}" style="text-align: center; color: var(--muted); padding: 32px;">
+                            Ningún producto coincide con la búsqueda o los filtros.
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -1361,18 +1393,39 @@ document.addEventListener('click', function (e) {
 });
 @endif
 
-// Restore active tab on page load
 document.addEventListener('DOMContentLoaded', () => {
-    const filtroPub = document.getElementById('filtro-pub-user');
-    if (filtroPub) {
-        filtroPub.addEventListener('change', function () {
-            const value = this.value;
-            document.querySelectorAll('#publicidad-tab tbody tr[data-user-id]').forEach(function (row) {
-                row.style.display = (value === 'todos' || row.dataset.userId === value) ? '' : 'none';
-            });
-        });
-    }
+    filtrarPublicidad();
 });
+
+function filtrarPublicidad() {
+    const q = (document.getElementById('filtro-pub-q')?.value || '').toLowerCase().trim();
+    const vendido = document.getElementById('filtro-pub-vendido')?.value || 'todos';
+    const desde = document.getElementById('filtro-pub-desde')?.value || '';
+    const hasta = document.getElementById('filtro-pub-hasta')?.value || '';
+    const user = document.getElementById('filtro-pub-user')?.value || 'todos';
+    const rows = document.querySelectorAll('#publicidad-tab tbody tr[data-codigo]');
+    let visibles = 0;
+
+    rows.forEach(function (row) {
+        const texto = ((row.dataset.codigo || '') + ' ' + (row.dataset.producto || ''));
+        const fecha = row.dataset.fechaPub || '';
+        const matchQ = !q || texto.includes(q);
+        const matchUser = user === 'todos' || row.dataset.userId === user;
+        const matchVendido = vendido === 'todos'
+            || (vendido === 'vendidos' && row.dataset.vendido === '1')
+            || (vendido === 'no_vendidos' && row.dataset.vendido === '0');
+        const matchDesde = !desde || fecha >= desde;
+        const matchHasta = !hasta || fecha <= hasta;
+        const ok = matchQ && matchUser && matchVendido && matchDesde && matchHasta;
+        row.style.display = ok ? '' : 'none';
+        if (ok) visibles += 1;
+    });
+
+    const empty = document.getElementById('pub-no-matches');
+    if (empty) {
+        empty.style.display = rows.length > 0 && visibles === 0 ? '' : 'none';
+    }
+}
 
 function filterQPedir(value) {
     const needle = (value || '').toLowerCase().trim();

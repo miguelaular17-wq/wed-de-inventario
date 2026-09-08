@@ -10,7 +10,7 @@ class Alquiler extends Model
     protected $fillable = [
         'propiedad_id', 'inquilino_nombre', 'inquilino_contacto',
         'contrato_nro', 'fecha_inicio', 'fecha_fin', 'tipo_canon',
-        'canon_mensual', 'canon_quincenal', 'dia_pago', 'forma_pago',
+        'canon_mensual', 'canon_quincenal', 'comision', 'dia_pago', 'forma_pago',
         'estado', 'observaciones',
     ];
 
@@ -19,6 +19,7 @@ class Alquiler extends Model
         'fecha_fin'        => 'date',
         'canon_mensual'    => 'decimal:2',
         'canon_quincenal'  => 'decimal:2',
+        'comision'         => 'decimal:2',
     ];
 
     public function propiedad()
@@ -36,6 +37,16 @@ class Alquiler extends Model
         return $this->tipo_canon === 'quincenal'
             ? (float)($this->canon_quincenal ?? 0)
             : (float)($this->canon_mensual ?? 0);
+    }
+
+    public function getComision(): float
+    {
+        return round((float) ($this->comision ?? 0), 2);
+    }
+
+    public function getNeto(): float
+    {
+        return round($this->canonActual() - $this->getComision(), 2);
     }
 
     public function actualizarVencimientos()

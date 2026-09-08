@@ -20,7 +20,7 @@ class CuentasBancariasSeeder extends Seeder
                 ['banco' => 'BANESCO', 'titular' => 'EURONISSI', 'color_tc' => '#ff0000', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'BANESCO', 'titular' => 'GRUPO JENU', 'color_tc' => '#0070c0', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JENU', 'color_tc' => '#0070c0', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
-                ['banco' => 'MERCANTIL', 'titular' => 'JRZ', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
+                ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'BNC', 'titular' => 'GRUPO JRZ', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'BNC', 'titular' => 'LNACEH', 'color_tc' => '#f4b183', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
                 ['banco' => 'BNC', 'titular' => 'L.S. CASHEA', 'color_tc' => '#ffff00', 'cat' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'principal' => true],
@@ -61,7 +61,7 @@ class CuentasBancariasSeeder extends Seeder
                 ['banco' => 'BNC', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
                 ['banco' => 'BANCARIBE', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
                 ['banco' => 'BANCARIBE', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
-                ['banco' => 'TESORO', 'titular' => 'JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
+                ['banco' => 'TESORO', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
                 ['banco' => 'TESORO', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
                 ['banco' => 'TESORO', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
                 ['banco' => 'BANCAMIGA', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
@@ -73,6 +73,7 @@ class CuentasBancariasSeeder extends Seeder
                 ['banco' => 'BANESCO', 'titular' => 'GRUPO JENU', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
                 ['banco' => 'BANESCO', 'titular' => 'EURONISSI', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
                 ['banco' => 'BANESCO', 'titular' => 'NUNES', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
+                ['banco' => 'BANCARIBE', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
                 ['banco' => 'BNC', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
                 ['banco' => 'BNC', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
                 ['banco' => 'BNC', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
@@ -103,8 +104,8 @@ class CuentasBancariasSeeder extends Seeder
                 // =========================================================
                 // BANCA INTERNACIONAL / BILLETERAS (Mostrar en principal: false)
                 // =========================================================
-                ['banco' => 'MER. PAN.', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
-                ['banco' => 'BINANCE', 'titular' => 'GRUPO JENU', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
+                ['banco' => 'MER. PANAMA', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
+                ['banco' => 'BINANCE', 'titular' => 'MARIA NUÑEZ', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
                 ['banco' => 'WELLS FARGO', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
                 ['banco' => 'AMERANT', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
 
@@ -120,7 +121,7 @@ class CuentasBancariasSeeder extends Seeder
                 ['banco' => 'REGIONS', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS', 'principal' => false],
                 ['banco' => 'FIRST HORIZON', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS', 'principal' => false],
                 ['banco' => 'CITIZENS CH', 'titular' => 'NUNES STORE', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS', 'principal' => false],
-                ['banco' => 'CITIZNES SV', 'titular' => 'NUNES STORE', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS', 'principal' => false],
+                ['banco' => 'CITIZENS SV', 'titular' => 'NUNES STORE', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS', 'principal' => false],
 
                 // =========================================================
                 // TARJETAS INTERNACIONALES DE TERCEROS (Mostrar en principal: false)

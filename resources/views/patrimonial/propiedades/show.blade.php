@@ -80,7 +80,7 @@
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <a href="{{ route('patrimonial.propiedades.edit', $propiedad) }}" class="pat-btn" style="background:rgba(255,255,255,0.15); color:#fff; border:1px solid rgba(255,255,255,0.3);">✏️ Editar</a>
             <a href="{{ route('patrimonial.alquileres.create') }}?propiedad_id={{ $propiedad->id }}" class="pat-btn" style="background:#fff; color:#2563eb;">+ Alquiler</a>
-            <a href="{{ route('patrimonial.reportes.propiedad.pdf', $propiedad) }}" target="_blank" class="pat-btn" style="background:#dc2626; color:#fff; border:none;">📄 Reporte PDF</a>
+            <a href="{{ route('patrimonial.reportes.propiedad.pdf', ['propiedad' => $propiedad, 'mes' => now()->month, 'anio' => now()->year]) }}" target="_blank" class="pat-btn" style="background:#dc2626; color:#fff; border:none;">📄 Reporte PDF</a>
         </div>
     </div>
 
@@ -95,9 +95,13 @@
             <div class="bal-val" style="color:#dc2626;">${{ number_format($balanceMes['gastos'], 2) }}</div>
             <div class="bal-label">Gastos este mes</div>
         </div>
+        <div class="balance-item" style="border-color:#fde68a;">
+            <div class="bal-val" style="color:#d97706;">${{ number_format($balanceMes['comisiones'] ?? 0, 2) }}</div>
+            <div class="bal-label">Comisiones este mes</div>
+        </div>
         <div class="balance-item" style="border-color:{{ $balanceMes['balance'] >= 0 ? '#a7f3d0' : '#fca5a5' }};">
             <div class="bal-val" style="color:{{ $balanceMes['balance'] >= 0 ? '#059669' : '#dc2626' }};">${{ number_format($balanceMes['balance'], 2) }}</div>
-            <div class="bal-label">Balance Neto</div>
+            <div class="bal-label">Neto del mes</div>
         </div>
     </div>
 

@@ -152,7 +152,7 @@
                                 <label style="font-size:0.8rem; font-weight:600; color:#64748b; display:block; margin-bottom:4px;">Precio / Noche *</label>
                                 <input type="number" name="precio_noche" id="res_precio" step="0.01" min="0" required
                                     style="width:100%; padding:8px 12px; border:1px solid #e2e8f0; border-radius:7px; font-size:0.88rem; font-family:inherit; box-sizing:border-box;"
-                                    onchange="calcularNoches()">
+                                    oninput="calcularNoches()">
                             </div>
                             <div>
                                 <label style="font-size:0.8rem; font-weight:600; color:#64748b; display:block; margin-bottom:4px;">Moneda</label>
@@ -161,6 +161,13 @@
                                     <option value="bs">Bs</option>
                                 </select>
                             </div>
+                        </div>
+                        <div>
+                            <label style="font-size:0.8rem; font-weight:600; color:#64748b; display:block; margin-bottom:4px;">Comisión</label>
+                            <input type="number" name="comision" id="res_comision" step="0.01" min="0" value="0" placeholder="0.00"
+                                style="width:100%; padding:8px 12px; border:1px solid #e2e8f0; border-radius:7px; font-size:0.88rem; font-family:inherit; box-sizing:border-box;"
+                                oninput="calcularNoches()">
+                            <p style="margin:4px 0 0; font-size:0.75rem; color:#94a3b8;">El cliente paga el total de la reserva. Esta comisión se descuenta aparte en Transacciones (recibido − comisión = neto).</p>
                         </div>
                         <div id="res_preview" style="display:none; background:#f0fdf4; border:1px solid #a7f3d0; border-radius:8px; padding:10px; text-align:center; font-weight:700; color:#065f46;"></div>
                         <input type="hidden" name="estado" value="confirmada">
@@ -190,6 +197,10 @@
                             📅 {{ optional($res->fecha_entrada)->format('d/m/Y') }} → {{ optional($res->fecha_salida)->format('d/m/Y') }}
                             · <strong>{{ $res->getNoches() }} noches</strong>
                             · ${{ number_format($res->getTotal(), 2) }} {{ strtoupper($res->moneda) }}
+                            @if($res->getComision() > 0)
+                                · Comisión ${{ number_format($res->getComision(), 2) }}
+                                · Neto ${{ number_format($res->getNeto(), 2) }}
+                            @endif
                         </div>
                     </div>
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
@@ -262,17 +273,16 @@
         <form id="formPago" method="POST" action="">
             @csrf
             
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
-                <div>
-                    <label style="font-size:0.8rem; font-weight:600; color:#475569;">Monto Pagado *</label>
-                    <input type="number" name="monto_pagado" id="monto_pagado" step="0.01" min="0" required
-                           style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
-                </div>
-                <div>
-                    <label style="font-size:0.8rem; font-weight:600; color:#475569;">Fecha Pago *</label>
-                    <input type="date" name="fecha_pago" required value="{{ date('Y-m-d') }}"
-                           style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
-                </div>
+            <div style="margin-bottom:12px;">
+                <label style="font-size:0.8rem; font-weight:600; color:#475569;">Monto Pagado *</label>
+                <input type="number" name="monto_pagado" id="monto_pagado" step="0.01" min="0" required
+                       style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                <p style="margin:4px 0 0; font-size:0.75rem; color:#94a3b8;">Monto completo que paga el cliente. La comisión no se descuenta aquí.</p>
+            </div>
+            <div style="margin-bottom:12px;">
+                <label style="font-size:0.8rem; font-weight:600; color:#475569;">Fecha Pago *</label>
+                <input type="date" name="fecha_pago" required value="{{ date('Y-m-d') }}"
+                       style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
             </div>
             
             <div style="margin-bottom:12px;">
@@ -331,15 +341,18 @@ function calcularNoches() {
     const entrada = document.getElementById('res_entrada').value;
     const salida  = document.getElementById('res_salida').value;
     const precio  = parseFloat(document.getElementById('res_precio').value) || 0;
+    const comision = parseFloat(document.getElementById('res_comision')?.value) || 0;
     const preview = document.getElementById('res_preview');
 
     if (entrada && salida) {
         const d1 = new Date(entrada), d2 = new Date(salida);
         const noches = Math.max(0, Math.round((d2 - d1) / 86400000));
         const total = noches * precio;
+        const neto = total - comision;
         if (noches > 0) {
             preview.style.display = 'block';
-            preview.textContent = noches + ' noches · Total: $' + total.toFixed(2);
+            preview.textContent = noches + ' noches · Recibido: $' + total.toFixed(2)
+                + (comision > 0 ? ' − Comisión: $' + comision.toFixed(2) + ' = Neto: $' + neto.toFixed(2) : '');
         } else {
             preview.style.display = 'none';
         }

@@ -869,6 +869,7 @@ class CompradorController extends Controller
                     'proveedor' => $row->proveedor,
                     'total_stock' => (int)$row->total_stock,
                     'fecha_publicidad' => \Carbon\Carbon::parse($row->fecha_publicidad)->format('d/m/Y H:i'),
+                    'fecha_publicidad_iso' => \Carbon\Carbon::parse($row->fecha_publicidad)->toDateString(),
                     'ultima_venta_original' => $row->ultima_venta_original ? \Carbon\Carbon::parse($row->ultima_venta_original)->format('d/m/Y') : 'Sin datos',
                     'ultima_venta_actual' => $row->ultima_venta_actual ? \Carbon\Carbon::parse($row->ultima_venta_actual)->format('d/m/Y') : 'Sin datos',
                     'tuvo_ventas' => $tuvoVentas,

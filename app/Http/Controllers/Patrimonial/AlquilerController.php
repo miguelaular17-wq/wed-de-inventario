@@ -4,12 +4,18 @@ namespace App\Http\Controllers\Patrimonial;
 use App\Http\Controllers\Controller;
 use App\Models\Patrimonial\Alquiler;
 use App\Models\Patrimonial\AlquilerPago;
+use App\Models\Patrimonial\PatTransaccion;
 use App\Models\Patrimonial\Propiedad;
+use App\Services\Patrimonial\AlquilerComisionSync;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class AlquilerController extends Controller
 {
+    public function __construct(
+        private readonly AlquilerComisionSync $comisionSync,
+    ) {}
     public function index(Request $request)
     {
         // Update all rentals before displaying to show accurate badges
@@ -65,8 +71,13 @@ class AlquilerController extends Controller
             'canon_quincenal'   => 'nullable|numeric|min:0',
             'dia_pago'          => 'nullable|integer|min:1|max:31',
             'forma_pago'        => 'nullable|string|max:64',
+            'comision'          => 'nullable|numeric|min:0',
             'observaciones'     => 'nullable|string',
         ]);
+        $data['comision'] = round((float) ($data['comision'] ?? 0), 2);
+        if (! Schema::hasColumn('pat_alquileres', 'comision')) {
+            unset($data['comision']);
+        }
 
         $alquiler = Alquiler::create($data);
 
@@ -107,9 +118,22 @@ class AlquilerController extends Controller
             'dia_pago'          => 'nullable|integer|min:1|max:31',
             'forma_pago'        => 'nullable|string|max:64',
             'estado'            => 'required|in:activo,vencido,terminado',
+            'comision'          => 'nullable|numeric|min:0',
             'observaciones'     => 'nullable|string',
         ]);
+        $data['comision'] = round((float) ($data['comision'] ?? 0), 2);
+        if (! Schema::hasColumn('pat_alquileres', 'comision')) {
+            unset($data['comision']);
+        }
         $alquiler->update($data);
+
+        foreach ($alquiler->pagos as $pago) {
+            $this->comisionSync->syncPago(
+                $alquiler->fresh(),
+                $pago,
+                $pago->fecha_pago?->toDateString()
+            );
+        }
 
         return redirect()->route('patrimonial.alquileres.show', $alquiler)
             ->with('status', '✅ Alquiler actualizado.');
@@ -117,6 +141,7 @@ class AlquilerController extends Controller
 
     public function destroy(Alquiler $alquiler)
     {
+        $this->comisionSync->deleteDeAlquiler($alquiler);
         $alquiler->delete();
         return redirect()->route('patrimonial.alquileres.index')->with('status', '🗑️ Alquiler eliminado.');
     }
@@ -136,18 +161,26 @@ class AlquilerController extends Controller
         $pago = AlquilerPago::create($data);
 
         if ($data['estado'] === 'pagado' && !empty($data['fecha_pago'])) {
-            \App\Models\Patrimonial\PatTransaccion::create([
+            $ingreso = [
                 'propiedad_id'  => $alquiler->propiedad_id,
                 'tipo'          => 'ingreso',
                 'categoria'     => 'Alquiler',
                 'descripcion'   => "Pago de alquiler {$data['periodo']} - {$alquiler->inquilino_nombre}",
                 'monto'         => $data['monto'],
-                'moneda'        => 'usd', // Asumiendo USD como principal para alquileres
+                'moneda'        => 'usd',
                 'fecha'         => $data['fecha_pago'],
-                'mes'           => \Carbon\Carbon::parse($data['fecha_pago'])->month,
-                'anio'          => \Carbon\Carbon::parse($data['fecha_pago'])->year,
+                'mes'           => Carbon::parse($data['fecha_pago'])->month,
+                'anio'          => Carbon::parse($data['fecha_pago'])->year,
                 'observaciones' => $data['observaciones'] ?? null,
-            ]);
+            ];
+            if (Schema::hasColumn('pat_transacciones', 'alquiler_id')) {
+                $ingreso['alquiler_id'] = $alquiler->id;
+            }
+            if (Schema::hasColumn('pat_transacciones', 'alquiler_pago_id')) {
+                $ingreso['alquiler_pago_id'] = $pago->id;
+            }
+            PatTransaccion::create($ingreso);
+            $this->comisionSync->syncPago($alquiler, $pago->fresh(), $data['fecha_pago']);
         }
 
         return back()->with('status', '✅ Pago registrado y actualizado en el balance.');
@@ -187,7 +220,7 @@ class AlquilerController extends Controller
 
         if ($montoAbonado > 0 && !empty($data['fecha_pago'])) {
             $alquiler = $pago->alquiler;
-            \App\Models\Patrimonial\PatTransaccion::create([
+            $ingreso = [
                 'propiedad_id'  => $alquiler->propiedad_id,
                 'tipo'          => 'ingreso',
                 'categoria'     => 'Alquiler',
@@ -195,10 +228,18 @@ class AlquilerController extends Controller
                 'monto'         => $montoAbonado,
                 'moneda'        => 'usd',
                 'fecha'         => $data['fecha_pago'],
-                'mes'           => \Carbon\Carbon::parse($data['fecha_pago'])->month,
-                'anio'          => \Carbon\Carbon::parse($data['fecha_pago'])->year,
+                'mes'           => Carbon::parse($data['fecha_pago'])->month,
+                'anio'          => Carbon::parse($data['fecha_pago'])->year,
                 'observaciones' => $data['comentario'] ?? null,
-            ]);
+            ];
+            if (Schema::hasColumn('pat_transacciones', 'alquiler_id')) {
+                $ingreso['alquiler_id'] = $alquiler->id;
+            }
+            if (Schema::hasColumn('pat_transacciones', 'alquiler_pago_id')) {
+                $ingreso['alquiler_pago_id'] = $pago->id;
+            }
+            PatTransaccion::create($ingreso);
+            $this->comisionSync->syncPago($alquiler, $pago->fresh(), $data['fecha_pago']);
         }
 
         return back()->with('status', '✅ Pago registrado y actualizado en el balance.');

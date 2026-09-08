@@ -9,7 +9,7 @@ class Reserva extends Model
 
     protected $fillable = [
         'propiedad_id', 'cliente_nombre', 'cliente_contacto',
-        'fecha_entrada', 'fecha_salida', 'precio_noche',
+        'fecha_entrada', 'fecha_salida', 'precio_noche', 'comision',
         'estado', 'moneda', 'observaciones',
     ];
 
@@ -17,6 +17,7 @@ class Reserva extends Model
         'fecha_entrada' => 'date',
         'fecha_salida'  => 'date',
         'precio_noche'  => 'decimal:2',
+        'comision'      => 'decimal:2',
     ];
 
     public function propiedad()
@@ -32,7 +33,17 @@ class Reserva extends Model
 
     public function getTotal(): float
     {
-        return $this->getNoches() * (float)($this->precio_noche ?? 0);
+        return $this->getNoches() * (float) ($this->precio_noche ?? 0);
+    }
+
+    public function getComision(): float
+    {
+        return round((float) ($this->comision ?? 0), 2);
+    }
+
+    public function getNeto(): float
+    {
+        return round($this->getTotal() - $this->getComision(), 2);
     }
 
     public function pagos()

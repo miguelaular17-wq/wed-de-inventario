@@ -8,7 +8,8 @@ class PatTransaccion extends Model
     protected $table = 'pat_transacciones';
 
     protected $fillable = [
-        'propiedad_id', 'tipo', 'categoria', 'descripcion',
+        'propiedad_id', 'reserva_id', 'alquiler_id', 'alquiler_pago_id',
+        'tipo', 'categoria', 'descripcion',
         'monto', 'moneda', 'mes', 'anio', 'fecha', 'observaciones',
     ];
 

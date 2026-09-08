@@ -182,326 +182,242 @@
         </div>
     </div>
     
-    <div class="report-grid-master" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; align-items: start;">
-        
-        <!-- LEFT GROUP (Col 1 & 2 + Planificacion + Disp BS/USD) -->
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-            
-            <div>
-                <table class="report-table" id="table-nacional">
-                    <thead>
-                        <tr><th colspan="4">BANCA NACIONAL</th></tr>
-                        <tr><th>BANCO</th><th>TITULAR</th><th>BS</th><th>USD</th></tr>
-                    </thead>
-                    <tbody>
-                        @php
-                            $alto = isset($cuentas['BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO']) ? $cuentas['BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO'] : collect();
-                            $bajo = isset($cuentas['BANCA NACIONAL - BAJO MOVIMIENTO']) ? $cuentas['BANCA NACIONAL - BAJO MOVIMIENTO'] : collect();
-                            $nacional = collect($alto)->concat($bajo)->sortBy('orden')->values();
-                        @endphp
-                        @foreach($nacional as $c)
-                        <tr>
-                            <td>{{ $c->banco }}</td>
-                            <td>{{ $c->titular }}</td>
-                            <td><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-nac-bs currency-input" data-id="{{ $c->id }}" data-field="reporte_bs" value="{{ $c->reporte_bs }}"></div></td>
-                            <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-nac-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="2" class="text-center bg-dark-blue" style="font-weight: bold;">TOTALES</td>
-                            <td class="text-right bg-green"><div class="currency-wrap"><span class="currency-symbol">Bs.</span><span id="tot_nac_bs_sum">0.00</span></div></td>
-                            <td class="text-right bg-green"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_nac_usd_sum">0.00</span></div></td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
+    @php
+        $alto = isset($cuentas['BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO']) ? $cuentas['BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO'] : collect();
+        $bajo = isset($cuentas['BANCA NACIONAL - BAJO MOVIMIENTO']) ? $cuentas['BANCA NACIONAL - BAJO MOVIMIENTO'] : collect();
+        $nacional = collect($alto)->concat($bajo)->sortBy('orden')->values();
+        $billeteras = collect($cuentas['BANCA INTERNACIONAL / BILLETERAS'] ?? []);
+        $opNac = collect($cuentas['BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS'] ?? []);
+        $operativos = $billeteras->concat($opNac)->sortBy('orden')->values();
+        $noOpIntl = collect($cuentas['BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS'] ?? []);
+        $noOpNac = collect($cuentas['BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS'] ?? []);
+        $noOperativos = $noOpIntl->concat($noOpNac)->sortBy('orden')->values();
+    @endphp
 
-            <!-- PLANIFICACION -->
-            <div>
-                <table class="report-table" id="table-planificacion">
-                    <thead>
-                        <tr><th colspan="6">PLANIFICACION DE PAGOS A EJECUTAR EN EL DIA</th></tr>
-                        <tr class="bg-dark-blue">
-                            <th>RAZON SOCIAL</th><th>TOTAL BS</th><th>TASA</th><th>TOTAL $</th><th>FACTURA</th><th>CONCEPTO</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($planificacion as $p)
-                        <tr>
-                            <td><input type="text" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="razon_social" value="{{ $p->razon_social }}" style="text-align: left !important;"></td>
-                            <td class="bg-light-blue"><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="text" inputmode="decimal" class="report-input save-plan calc-plan-bs currency-input" data-id="{{ $p->id }}" data-field="total_bs" value="{{ $p->total_bs }}"></div></td>
-                            <td class="text-center"><input type="text" inputmode="decimal" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="tasa" value="{{ $p->tasa }}"></td>
-                            <td class="bg-light-blue"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-plan calc-plan-usd currency-input" data-id="{{ $p->id }}" data-field="total_usd" value="{{ $p->total_usd }}"></div></td>
-                            <td><input type="text" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="factura" value="{{ $p->factura }}"></td>
-                            <td><input type="text" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="concepto" value="{{ $p->concepto }}" style="text-align: left !important;"></td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                    <tfoot>
-                        <tr class="bg-light-blue">
-                            <td class="text-center" style="font-weight: bold; font-size: 11px;">TOTALES</td>
-                            <td style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">Bs.</span><span id="tot_plan_bs">-</span></div></td>
-                            <td class="text-center">-</td>
-                            <td class="bg-green" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_plan_usd">-</span></div></td>
-                            <td colspan="2"></td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
+    <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; align-items: start;">
+        <table class="report-table" id="table-nacional">
+            <thead>
+                <tr><th colspan="4">BANCA NACIONAL</th></tr>
+                <tr><th>BANCO</th><th>TITULAR</th><th>BS</th><th>USD</th></tr>
+            </thead>
+            <tbody>
+                @foreach($nacional as $c)
+                <tr>
+                    <td>{{ $c->banco }}</td>
+                    <td>{{ $c->titular }}</td>
+                    <td><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-nac-bs currency-input" data-id="{{ $c->id }}" data-field="reporte_bs" value="{{ $c->reporte_bs }}"></div></td>
+                    <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-nac-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
+                </tr>
+                @endforeach
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="2" class="text-center bg-dark-blue" style="font-weight: bold;">TOTALES</td>
+                    <td class="text-right bg-green"><div class="currency-wrap"><span class="currency-symbol">Bs.</span><span id="tot_nac_bs_sum">0.00</span></div></td>
+                    <td class="text-right bg-green"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_nac_usd_sum">0.00</span></div></td>
+                </tr>
+            </tfoot>
+        </table>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <!-- DISPONIBILIDAD BOLIVARES -->
-                <table class="report-table">
-                    <thead>
-                        <tr><th colspan="2">DISPONIBILIDAD BOLIVARES</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>BANCA NACIONAL</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_bs_nac">0.00</span></div></td>
-                        </tr>
-                        <tr class="bg-light-blue">
-                            <td style="font-weight: bold;">TOTAL DISPONIBILIDAD (TASA BCV)</td>
-                            <td class="text-right" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_bs_tot_bcv">0.00</span></div></td>
-                        </tr>
-                        <tr class="bg-light-blue">
-                            <td style="font-weight: bold;">TOTAL DISPONIBILIDAD<br>(TASA PARALELO)</td>
-                            <td class="text-right" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_bs_tot_par">0.00</span></div></td>
-                        </tr>
-                        <tr>
-                            <td>BLOQUEADO PARA COMPRA DE DIVISAS</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="bloqueado_compra_divisas" value="{{ $resumen->bloqueado_compra_divisas }}"></div></td>
-                        </tr>
-                        <tr>
-                            <td>FONDOS NO DISPONIBLES<br>(PROBLEMAS CON LA CUENTA BANCARIA Y/O PAGO CUOTA PRESTAMO)</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="fondos_no_disponibles" value="{{ $resumen->fondos_no_disponibles }}"></div></td>
-                        </tr>
-                        <tr>
-                            <td>SOLICITUDES DE TITULOS DE COBERTURA<br>(EN ESPERA DE APROBACION)</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="solicitudes_cobertura" value="{{ $resumen->solicitudes_cobertura }}"></div></td>
-                        </tr>
-                        <tr>
-                            <td>TITULOS DE COBERTURA / PLAZO FIJO<br>(APROBADOS)</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="titulos_cobertura_aprobados" value="{{ $resumen->titulos_cobertura_aprobados }}"></div></td>
-                        </tr>
-                        <tr>
-                            <td>RETENIDO PARA PAGOS PLANIFICADOS</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="retenido_pagos" value="{{ $resumen->retenido_pagos }}"></div></td>
-                        </tr>
-                        <tr class="bg-light-blue">
-                            <td style="font-weight: bold;">DISPONIBLE PARA USO (TASA BCV)</td>
-                            <td class="text-right" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_uso_bcv">0.00</span></div></td>
-                        </tr>
-                        <tr class="bg-light-blue">
-                            <td style="font-weight: bold;">DISPONIBLE PARA USO<br>(TASA PARALELO)</td>
-                            <td class="text-right" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_uso_par">0.00</span></div></td>
-                        </tr>
-                        <tr class="bg-pink">
-                            <td style="font-weight: bold;">PÉRDIDA POR DIFERENCIAL CAMBIARIO</td>
-                            <td class="text-right" style="color: red; font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="perdida_dif">-0.00</span></div></td>
-                        </tr>
-                        <tr>
-                            <td style="font-weight: bold;">DIFERENCIAL CAMBIARIO (%)</td>
-                            <td class="text-center" style="color: red; font-weight: bold;"><span id="dif_porc">-0%</span></td>
-                        </tr>
-                        <tr>
-                            <td style="font-weight: bold;">BRECHA CAMBIARIA</td>
-                            <td class="text-center" style="color: red; font-weight: bold;"><span id="brecha_porc">0.00%</span></td>
-                        </tr>
-                    </tbody>
-                </table>
-                
-                <!-- DISPONIBILIDAD USD -->
-                <table class="report-table" style="height: fit-content;">
-                    <thead>
-                        <tr><th colspan="2">DISPONIBILIDAD USD</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>FONDOS OPERATIVOS</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_op">0.00</span></div></td>
-                        </tr>
-                        <tr>
-                            <td>FONDOS NO OPERATIVOS</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_noop_nac">0.00</span></div></td>
-                        </tr>
-                        <tr>
-                            <td>BANCA INTERNACIONAL / BILLETERAS</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_inter">0.00</span></div></td>
-                        </tr>
-                        <tr>
-                            <td>CUENTAS CERRADAS (FONDOS POR LIBERAR)</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_cerr">0.00</span></div></td>
-                        </tr>
-                        <tr>
-                            <td>CUENTAS NO OPERATIVAS</td>
-                            <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_noop">0.00</span></div></td>
-                        </tr>
-                        <tr class="bg-dark-blue">
-                            <td style="font-weight: bold;">TOTAL DISPONIBILIDAD USD</td>
-                            <td class="text-right" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_tot">0.00</span></div></td>
-                        </tr>
-                        <tr>
-                            <td style="font-weight: bold;">DISPONIBLE USD PARA USO</td>
-                            <td class="text-right bg-lime" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_uso">0.00</span></div></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        <table class="report-table" id="table-operativos">
+            <thead>
+                <tr><th colspan="3">BANCA Y BILLETERAS MONEDA EXTRANJERA<br>(FONDOS OPERATIVOS)</th></tr>
+                <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
+            </thead>
+            <tbody>
+                @foreach($operativos as $c)
+                @php $esBilletera = (string) $c->categoria_reporte === 'BANCA INTERNACIONAL / BILLETERAS'; @endphp
+                <tr>
+                    <td>{{ $c->banco }}</td>
+                    <td>{{ $c->titular }}</td>
+                    <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-op-usd {{ $esBilletera ? 'calc-billeteras-usd' : 'calc-op-nac-usd' }} currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
+                </tr>
+                @endforeach
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="2" class="text-center bg-light-blue" style="font-weight: bold;">TOTALES</td>
+                    <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_op_usd_sum">0.00</span></div></td>
+                </tr>
+            </tfoot>
+        </table>
 
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-            <table class="report-table" id="table-operativos">
-                <thead>
-                    <tr><th colspan="3">BANCA NACIONAL MONEDA EXTRANJERA<br>(FONDOS OPERATIVOS)</th></tr>
-                    <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
-                </thead>
-                <tbody>
-                    @php $operativos = isset($cuentas['BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS']) ? $cuentas['BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS'] : []; @endphp
-                    @foreach($operativos as $c)
-                    <tr>
-                        <td>{{ $c->banco }}</td>
-                        <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-op-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
-                    </tr>
-                    @endforeach
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="2" class="text-center bg-light-blue" style="font-weight: bold;">TOTALES</td>
-                        <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_op_usd_sum">0.00</span></div></td>
-                    </tr>
-                </tfoot>
-            </table>
+        <table class="report-table" id="table-no-operativos">
+            <thead>
+                <tr><th colspan="3">BANCA MONEDA EXTRANJERA<br>(FONDOS NO OPERATIVOS)</th></tr>
+                <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
+            </thead>
+            <tbody>
+                @foreach($noOperativos as $c)
+                @php $esIntl = (string) $c->categoria_reporte === 'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS'; @endphp
+                <tr>
+                    <td>{{ $c->banco }}</td>
+                    <td>{{ $c->titular }}</td>
+                    <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-fxnoop-usd {{ $esIntl ? 'calc-noop-usd' : 'calc-fxnoop-nac-usd' }} currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
+                </tr>
+                @endforeach
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="2" class="text-center bg-light-blue" style="font-weight: bold;">TOTALES</td>
+                    <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_fxnoop_usd_sum">0.00</span></div></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
 
-            <table class="report-table" id="table-no-op-nac">
-                <thead>
-                    <tr><th colspan="3">BANCA NACIONAL MONEDA EXTRANJERA<br>(FONDOS NO OPERATIVOS)</th></tr>
-                    <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
-                </thead>
-                <tbody>
-                    @php $fx_noop = isset($cuentas['BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS']) ? $cuentas['BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS'] : []; @endphp
-                    @foreach($fx_noop as $c)
-                    <tr>
-                        <td>{{ $c->banco }}</td>
-                        <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-fxnoop-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
-                    </tr>
-                    @endforeach
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="2" class="text-center bg-light-blue" style="font-weight: bold;">TOTALES</td>
-                        <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_fxnoop_usd_sum">0.00</span></div></td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
+    <div style="margin-top: 8px;">
+        <table class="report-table" id="table-planificacion">
+            <thead>
+                <tr><th colspan="6">PLANIFICACION DE PAGOS A EJECUTAR EN EL DIA</th></tr>
+                <tr class="bg-dark-blue">
+                    <th>RAZON SOCIAL</th><th>TOTAL BS</th><th>TASA</th><th>TOTAL $</th><th>FACTURA</th><th>CONCEPTO</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($planificacion as $p)
+                <tr>
+                    <td><input type="text" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="razon_social" value="{{ $p->razon_social }}" style="text-align: left !important;"></td>
+                    <td class="bg-light-blue"><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="text" inputmode="decimal" class="report-input save-plan calc-plan-bs currency-input" data-id="{{ $p->id }}" data-field="total_bs" value="{{ $p->total_bs }}"></div></td>
+                    <td class="text-center"><input type="text" inputmode="decimal" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="tasa" value="{{ $p->tasa }}"></td>
+                    <td class="bg-light-blue"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-plan calc-plan-usd currency-input" data-id="{{ $p->id }}" data-field="total_usd" value="{{ $p->total_usd }}"></div></td>
+                    <td><input type="text" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="factura" value="{{ $p->factura }}"></td>
+                    <td><input type="text" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="concepto" value="{{ $p->concepto }}" style="text-align: left !important;"></td>
+                </tr>
+                @endforeach
+            </tbody>
+            <tfoot>
+                <tr class="bg-light-blue">
+                    <td class="text-center" style="font-weight: bold; font-size: 11px;">TOTALES</td>
+                    <td style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">Bs.</span><span id="tot_plan_bs">-</span></div></td>
+                    <td class="text-center">-</td>
+                    <td class="bg-green" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_plan_usd">-</span></div></td>
+                    <td colspan="2"></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
 
-        <!-- RIGHT GROUP (Col 4: Billeteras, No Operativas, Terceros, Proyeccion) -->
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-            <!-- BILLETERAS -->
-            <table class="report-table" id="table-billeteras">
-                <thead>
-                    <tr><th colspan="3">BANCA INTERNACIONAL /<br>BILLETERAS</th></tr>
-                    <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
-                </thead>
-                <tbody>
-                    @php $billeteras = isset($cuentas['BANCA INTERNACIONAL / BILLETERAS']) ? $cuentas['BANCA INTERNACIONAL / BILLETERAS'] : []; @endphp
-                    @foreach($billeteras as $c)
-                    <tr>
-                        <td>{{ $c->banco }}</td>
-                        <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-billeteras-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
-                    </tr>
-                    @endforeach
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="2" class="bg-light-blue"></td>
-                        <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_billeteras_usd_sum">0.00</span></div></td>
-                    </tr>
-                </tfoot>
-            </table>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 8px; margin-top: 8px; align-items: start;">
+        <table class="report-table">
+            <thead>
+                <tr><th colspan="2">DISPONIBILIDAD BOLIVARES</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>BANCA NACIONAL</td>
+                    <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_bs_nac">0.00</span></div></td>
+                </tr>
+                <tr class="bg-light-blue">
+                    <td style="font-weight: bold;">TOTAL DISPONIBILIDAD (TASA BCV)</td>
+                    <td class="text-right" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_bs_tot_bcv">0.00</span></div></td>
+                </tr>
+                <tr class="bg-light-blue">
+                    <td style="font-weight: bold;">TOTAL DISPONIBILIDAD<br>(TASA PARALELO)</td>
+                    <td class="text-right" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_bs_tot_par">0.00</span></div></td>
+                </tr>
+                <tr>
+                    <td>BLOQUEADO PARA COMPRA DE DIVISAS</td>
+                    <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="bloqueado_compra_divisas" value="{{ $resumen->bloqueado_compra_divisas }}"></div></td>
+                </tr>
+                <tr>
+                    <td>FONDOS NO DISPONIBLES<br>(PROBLEMAS CON LA CUENTA BANCARIA Y/O PAGO CUOTA PRESTAMO)</td>
+                    <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="fondos_no_disponibles" value="{{ $resumen->fondos_no_disponibles }}"></div></td>
+                </tr>
+                <tr>
+                    <td>SOLICITUDES DE TITULOS DE COBERTURA<br>(EN ESPERA DE APROBACION)</td>
+                    <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="solicitudes_cobertura" value="{{ $resumen->solicitudes_cobertura }}"></div></td>
+                </tr>
+                <tr>
+                    <td>TITULOS DE COBERTURA / PLAZO FIJO<br>(APROBADOS)</td>
+                    <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="titulos_cobertura_aprobados" value="{{ $resumen->titulos_cobertura_aprobados }}"></div></td>
+                </tr>
+                <tr>
+                    <td>RETENIDO PARA PAGOS PLANIFICADOS</td>
+                    <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-resumen currency-input" data-field="retenido_pagos" value="{{ $resumen->retenido_pagos }}"></div></td>
+                </tr>
+                <tr class="bg-light-blue">
+                    <td style="font-weight: bold;">DISPONIBLE PARA USO (TASA BCV)</td>
+                    <td class="text-right" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_uso_bcv">0.00</span></div></td>
+                </tr>
+                <tr class="bg-light-blue">
+                    <td style="font-weight: bold;">DISPONIBLE PARA USO<br>(TASA PARALELO)</td>
+                    <td class="text-right" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_uso_par">0.00</span></div></td>
+                </tr>
+                <tr class="bg-pink">
+                    <td style="font-weight: bold;">PÉRDIDA POR DIFERENCIAL CAMBIARIO</td>
+                    <td class="text-right" style="color: red; font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="perdida_dif">-0.00</span></div></td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold;">DIFERENCIAL CAMBIARIO (%)</td>
+                    <td class="text-center" style="color: red; font-weight: bold;"><span id="dif_porc">-0%</span></td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold;">BRECHA CAMBIARIA</td>
+                    <td class="text-center" style="color: red; font-weight: bold;"><span id="brecha_porc">0.00%</span></td>
+                </tr>
+            </tbody>
+        </table>
 
-            <table class="report-table" id="table-cerradas">
-                <thead>
-                    <tr><th colspan="3">CUENTAS INTERNACIONALES CERRADAS<br>(FONDOS POR LIBERAR)</th></tr>
-                    <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
-                </thead>
-                <tbody>
-                    @php $cerradas = isset($cuentas['CUENTAS INTERNACIONALES CERRADAS (FONDOS POR LIBERAR)']) ? $cuentas['CUENTAS INTERNACIONALES CERRADAS (FONDOS POR LIBERAR)'] : []; @endphp
-                    @foreach($cerradas as $c)
-                    <tr>
-                        <td>{{ $c->banco }}</td>
-                        <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-cerr-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
-                    </tr>
-                    @endforeach
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="2" class="bg-light-blue"></td>
-                        <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_cerr_usd_sum">0.00</span></div></td>
-                    </tr>
-                </tfoot>
-            </table>
+        <table class="report-table" style="height: fit-content;">
+            <thead>
+                <tr><th colspan="2">DISPONIBILIDAD USD</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>BANCA NACIONAL (FONDOS OPERATIVOS)</td>
+                    <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_op_nac">0.00</span></div></td>
+                </tr>
+                <tr>
+                    <td>BANCA NACIONAL (FONDOS NO OPERATIVOS)</td>
+                    <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_noop_nac">0.00</span></div></td>
+                </tr>
+                <tr>
+                    <td>BANCA INTERNACIONAL / BILLETERAS</td>
+                    <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_inter">0.00</span></div></td>
+                </tr>
+                <tr>
+                    <td>BANCA INTERNACIONAL (NO OPERATIVAS)</td>
+                    <td class="text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_noop">0.00</span></div></td>
+                </tr>
+                <tr class="bg-dark-blue">
+                    <td style="font-weight: bold;">TOTAL DISPONIBILIDAD USD</td>
+                    <td class="text-right" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_tot">0.00</span></div></td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold;">DISPONIBLE USD PARA USO</td>
+                    <td class="text-right bg-lime" style="font-weight: bold;"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="disp_usd_uso">0.00</span></div></td>
+                </tr>
+            </tbody>
+        </table>
 
-            <!-- NO OPERATIVAS -->
-            <table class="report-table" id="table-no-operativas">
-                <thead>
-                    <tr><th colspan="3">BANCA INTERNACIONAL<br>CUENTAS NO OPERATIVAS</th></tr>
-                    <tr><th style="width: 30%">BANCO</th><th style="width: 50%">TITULAR</th><th style="width: 20%">USD</th></tr>
-                </thead>
-                <tbody>
-                    @php $no_op = isset($cuentas['BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS']) ? $cuentas['BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS'] : []; @endphp
-                    @foreach($no_op as $c)
-                    <tr>
-                        <td>{{ $c->banco }}</td>
-                        <td>{{ $c->titular }}</td>
-                        <td><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-cuenta calc-noop-usd currency-input" data-id="{{ $c->id }}" data-field="reporte_usd" value="{{ $c->reporte_usd }}"></div></td>
-                    </tr>
-                    @endforeach
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="2" class="bg-light-blue"></td>
-                        <td class="bg-green text-right"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="tot_noop_usd_sum">0.00</span></div></td>
-                    </tr>
-                </tfoot>
-            </table>
-            
-            <!-- PROYECCION -->
-            <table class="report-table">
-                <thead>
-                    <tr><th colspan="6">PROYECCION DISPONIBILIDAD VS CUENTAS POR PAGAR</th></tr>
-                    <tr class="bg-light-blue">
-                        <th style="width: 15%"></th><th style="width: 20%">FONDOS PARA USO</th><th style="width: 20%">COMPROMISOS DE PAGO</th><th style="width: 15%">LIQUIDEZ</th><th style="width: 15%">% CUBIERTO</th><th style="width: 15%">% POR CUBRIR</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td style="font-weight: bold;">BOLIVARES</td>
-                        <td class="bg-green"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="proy_bs_fondos">0.00</span></div></td>
-                        <td class="text-center">PROV. BS &nbsp;&nbsp;&nbsp; $ <span id="proy_bs_comp">0.00</span></td>
-                        <td class="bg-green"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="proy_bs_liq">0.00</span></div></td>
-                        <td class="text-center">100%</td>
-                        <td class="text-center">0%</td>
-                    </tr>
-                    <tr>
-                        <td style="font-weight: bold;">DOLARES</td>
-                        <td class="bg-green"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="proy_usd_fondos">0.00</span></div></td>
-                        <td class="text-center">PROV. USD &nbsp;&nbsp;&nbsp; $ <span id="proy_usd_comp">0.00</span></td>
-                        <td class="bg-green"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="proy_usd_liq">0.00</span></div></td>
-                        <td class="text-center">100%</td>
-                        <td class="text-center">0%</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div></div>
+        <table class="report-table">
+            <thead>
+                <tr><th colspan="6">PROYECCION DISPONIBILIDAD VS CUENTAS POR PAGAR</th></tr>
+                <tr class="bg-light-blue">
+                    <th style="width: 15%"></th><th style="width: 20%">FONDOS PARA USO</th><th style="width: 20%">COMPROMISOS DE PAGO</th><th style="width: 15%">LIQUIDEZ</th><th style="width: 15%">% CUBIERTO</th><th style="width: 15%">% POR CUBRIR</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="font-weight: bold;">BOLIVARES</td>
+                    <td class="bg-green"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="proy_bs_fondos">0.00</span></div></td>
+                    <td class="text-center">PROV. BS &nbsp;&nbsp;&nbsp; $ <span id="proy_bs_comp">0.00</span></td>
+                    <td class="bg-green"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="proy_bs_liq">0.00</span></div></td>
+                    <td class="text-center">100%</td>
+                    <td class="text-center">0%</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold;">DOLARES</td>
+                    <td class="bg-green"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="proy_usd_fondos">0.00</span></div></td>
+                    <td class="text-center">PROV. USD &nbsp;&nbsp;&nbsp; $ <span id="proy_usd_comp">0.00</span></td>
+                    <td class="bg-green"><div class="currency-wrap"><span class="currency-symbol">$</span><span id="proy_usd_liq">0.00</span></div></td>
+                    <td class="text-center">100%</td>
+                    <td class="text-center">0%</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <script>
@@ -559,36 +475,31 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('tot_nac_bs_sum').innerText = fmt(sum_nac_bs);
         document.getElementById('tot_nac_usd_sum').innerText = fmt(sum_nac_usd);
 
-        let sum_op_usd = 0;
-        document.querySelectorAll('.calc-op-usd').forEach(el => sum_op_usd += window.parseLocalNumber(el.value) || 0);
+        let sumClass = (sel) => {
+            let s = 0;
+            document.querySelectorAll(sel).forEach(el => s += window.parseLocalNumber(el.value) || 0);
+            return s;
+        };
+
+        let sum_op_usd = sumClass('.calc-op-usd');
         document.getElementById('tot_op_usd_sum').innerText = fmt(sum_op_usd);
 
-        let sum_fxnoop_usd = 0;
-        document.querySelectorAll('.calc-fxnoop-usd').forEach(el => sum_fxnoop_usd += window.parseLocalNumber(el.value) || 0);
+        let sum_fxnoop_usd = sumClass('.calc-fxnoop-usd');
         document.getElementById('tot_fxnoop_usd_sum').innerText = fmt(sum_fxnoop_usd);
 
-        let sum_bill_usd = 0;
-        document.querySelectorAll('.calc-billeteras-usd').forEach(el => sum_bill_usd += window.parseLocalNumber(el.value) || 0);
-        document.getElementById('tot_billeteras_usd_sum').innerText = fmt(sum_bill_usd);
-
-        let sum_cerr_usd = 0;
-        document.querySelectorAll('.calc-cerr-usd').forEach(el => sum_cerr_usd += window.parseLocalNumber(el.value) || 0);
-        document.getElementById('tot_cerr_usd_sum').innerText = fmt(sum_cerr_usd);
-
-        let sum_noop_usd = 0;
-        document.querySelectorAll('.calc-noop-usd').forEach(el => sum_noop_usd += window.parseLocalNumber(el.value) || 0);
-        document.getElementById('tot_noop_usd_sum').innerText = fmt(sum_noop_usd);
+        let sum_op_nac_usd = sumClass('.calc-op-nac-usd');
+        let sum_fxnoop_nac_usd = sumClass('.calc-fxnoop-nac-usd');
+        let sum_bill_usd = sumClass('.calc-billeteras-usd');
+        let sum_noop_usd = sumClass('.calc-noop-usd');
 
         document.getElementById('disp_bs_nac').innerText = fmt(sum_nac_usd);
-        document.getElementById('disp_usd_op').innerText = fmt(sum_op_usd);
-        document.getElementById('disp_usd_noop_nac').innerText = fmt(sum_fxnoop_usd);
+        document.getElementById('disp_usd_op_nac').innerText = fmt(sum_op_nac_usd);
+        document.getElementById('disp_usd_noop_nac').innerText = fmt(sum_fxnoop_nac_usd);
         document.getElementById('disp_usd_inter').innerText = fmt(sum_bill_usd);
-        document.getElementById('disp_usd_cerr').innerText = fmt(sum_cerr_usd);
         document.getElementById('disp_usd_noop').innerText = fmt(sum_noop_usd);
 
-        let disp_usd_tot = sum_op_usd + sum_fxnoop_usd + sum_bill_usd + sum_cerr_usd + sum_noop_usd;
-        document.getElementById('disp_usd_tot').innerText = fmt(disp_usd_tot);
-        document.getElementById('disp_usd_uso').innerText = fmt(sum_op_usd + sum_bill_usd);
+        document.getElementById('disp_usd_tot').innerText = fmt(sum_op_usd + sum_fxnoop_usd);
+        document.getElementById('disp_usd_uso').innerText = fmt(sum_op_usd);
 
         let sum_plan_bs = 0, sum_plan_usd = 0;
         document.querySelectorAll('.calc-plan-bs').forEach(el => sum_plan_bs += window.parseLocalNumber(el.value) || 0);
@@ -635,11 +546,11 @@ document.addEventListener('DOMContentLoaded', function() {
         let elProyBs = document.getElementById('proy_bs_fondos');
         if (elProyBs) elProyBs.innerText = fmt(disp_uso_bcv);
         let elProyUsd = document.getElementById('proy_usd_fondos');
-        if (elProyUsd) elProyUsd.innerText = fmt(sum_op_usd + sum_bill_usd);
+        if (elProyUsd) elProyUsd.innerText = fmt(sum_op_usd);
         let elProyBsLiq = document.getElementById('proy_bs_liq');
         if (elProyBsLiq) elProyBsLiq.innerText = fmt(disp_uso_bcv);
         let elProyUsdLiq = document.getElementById('proy_usd_liq');
-        if (elProyUsdLiq) elProyUsdLiq.innerText = fmt(sum_op_usd + sum_bill_usd);
+        if (elProyUsdLiq) elProyUsdLiq.innerText = fmt(sum_op_usd);
     }
 
     document.querySelectorAll('.report-input').forEach(input => {

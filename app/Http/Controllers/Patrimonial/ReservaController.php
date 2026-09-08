@@ -2,13 +2,21 @@
 namespace App\Http\Controllers\Patrimonial;
 
 use App\Http\Controllers\Controller;
-use App\Models\Patrimonial\Reserva;
+use App\Models\Patrimonial\PatTransaccion;
 use App\Models\Patrimonial\Propiedad;
-use Illuminate\Http\Request;
+use App\Models\Patrimonial\Reserva;
+use App\Services\Patrimonial\ReservaComisionSync;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ReservaController extends Controller
 {
+    public function __construct(
+        private readonly ReservaComisionSync $comisionSync,
+    ) {}
+
     public function index(Request $request)
     {
         // 1. Actualización automática de estados
@@ -70,14 +78,26 @@ class ReservaController extends Controller
             'fecha_entrada'    => 'required|date',
             'fecha_salida'     => 'required|date|after:fecha_entrada',
             'precio_noche'     => 'required|numeric|min:0',
+            'comision'         => 'nullable|numeric|min:0',
             'moneda'           => 'required|in:usd,bs',
             'estado'           => 'required|in:confirmada,cancelada,completada,en_curso',
             'observaciones'    => 'nullable|string',
         ]);
+        $data['comision'] = (float) ($data['comision'] ?? 0);
+        $comisionMonto = $data['comision'];
+        if (! Schema::hasColumn('pat_reservas', 'comision')) {
+            unset($data['comision']);
+        }
 
-        Reserva::create($data);
+        $reserva = DB::transaction(function () use ($data, $comisionMonto) {
+            $reserva = Reserva::create($data);
+            $reserva->comision = $comisionMonto;
+            $this->comisionSync->sync($reserva, $reserva->fecha_entrada?->toDateString());
 
-        $this->sincronizarEstadoPropiedad($data['propiedad_id']);
+            return $reserva;
+        });
+
+        $this->sincronizarEstadoPropiedad($reserva->propiedad_id);
 
         return back()->with('status', '✅ Reserva registrada.');
     }
@@ -90,11 +110,16 @@ class ReservaController extends Controller
             'fecha_entrada'    => 'required|date',
             'fecha_salida'     => 'required|date|after:fecha_entrada',
             'precio_noche'     => 'required|numeric|min:0',
+            'comision'         => 'nullable|numeric|min:0',
             'moneda'           => 'required|in:usd,bs',
             'estado'           => 'required|in:confirmada,cancelada,completada,en_curso',
             'observaciones'    => 'nullable|string',
         ]);
-        $reserva->update($data);
+        $data['comision'] = (float) ($data['comision'] ?? 0);
+        DB::transaction(function () use ($reserva, $data) {
+            $reserva->update($data);
+            $this->comisionSync->sync($reserva->fresh());
+        });
         $this->sincronizarEstadoPropiedad($reserva->propiedad_id);
         return back()->with('status', '✅ Reserva actualizada.');
     }
@@ -102,7 +127,10 @@ class ReservaController extends Controller
     public function destroy(Reserva $reserva)
     {
         $propiedadId = $reserva->propiedad_id;
-        $reserva->delete();
+        DB::transaction(function () use ($reserva) {
+            $this->comisionSync->delete($reserva);
+            $reserva->delete();
+        });
         $this->sincronizarEstadoPropiedad($propiedadId);
         return back()->with('status', '🗑️ Reserva eliminada.');
     }
@@ -139,11 +167,10 @@ class ReservaController extends Controller
         ]);
 
         $data['user_id'] = auth()->id();
-        
         $reserva->pagos()->create($data);
 
         // Registrar ingreso en el balance (PatTransaccion)
-        \App\Models\Patrimonial\PatTransaccion::create([
+        $pagoTx = [
             'propiedad_id'  => $reserva->propiedad_id,
             'tipo'          => 'ingreso',
             'categoria'     => 'Reserva temporal',
@@ -151,12 +178,38 @@ class ReservaController extends Controller
             'monto'         => $data['monto_pagado'],
             'moneda'        => $reserva->moneda,
             'fecha'         => $data['fecha_pago'],
-            'mes'           => \Carbon\Carbon::parse($data['fecha_pago'])->month,
-            'anio'          => \Carbon\Carbon::parse($data['fecha_pago'])->year,
+            'mes'           => Carbon::parse($data['fecha_pago'])->month,
+            'anio'          => Carbon::parse($data['fecha_pago'])->year,
             'observaciones' => $data['comentario'] ?? null,
-        ]);
+        ];
+        if (Schema::hasColumn('pat_transacciones', 'reserva_id')) {
+            $pagoTx['reserva_id'] = $reserva->id;
+        }
+        PatTransaccion::create($pagoTx);
+        $this->comisionSync->sync($reserva->fresh(), $data['fecha_pago']);
 
         return back()->with('status', '💰 Pago registrado exitosamente y añadido al balance.');
+    }
+
+    public function actualizarComision(Request $request, Reserva $reserva)
+    {
+        $data = $request->validate([
+            'comision' => 'required|numeric|min:0',
+        ]);
+        $monto = round((float) $data['comision'], 2);
+
+        if (Schema::hasColumn('pat_reservas', 'comision')) {
+            $reserva->update(['comision' => $monto]);
+        }
+        $reserva->comision = $monto;
+
+        $fechaPago = $reserva->pagos()->orderBy('fecha_pago')->first()?->fecha_pago;
+        $this->comisionSync->sync(
+            $reserva,
+            $fechaPago ? \Carbon\Carbon::parse($fechaPago)->toDateString() : $reserva->fecha_entrada?->toDateString()
+        );
+
+        return back()->with('status', '✅ Comisión de la reserva actualizada y reflejada en transacciones.');
     }
 
     private function sincronizarEstadoPropiedad($propiedadId)

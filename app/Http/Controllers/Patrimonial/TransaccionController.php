@@ -4,11 +4,16 @@ namespace App\Http\Controllers\Patrimonial;
 use App\Http\Controllers\Controller;
 use App\Models\Patrimonial\PatTransaccion;
 use App\Models\Patrimonial\Propiedad;
+use App\Services\Patrimonial\PatrimonioReporteService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class TransaccionController extends Controller
 {
+    public function __construct(
+        private readonly PatrimonioReporteService $reportes,
+    ) {}
+
     public function index(Request $request)
     {
         $mes         = (int)$request->get('mes', now()->month);
@@ -74,90 +79,64 @@ class TransaccionController extends Controller
 
     public function reporteMensual(Request $request)
     {
-        $mes  = (int)$request->get('mes', now()->month);
-        $anio = (int)$request->get('anio', now()->year);
+        $mes  = (int) $request->get('mes', now()->month);
+        $anio = (int) $request->get('anio', now()->year);
+        $data = $this->reportes->mensual($mes, $anio);
 
-        $propiedades = Propiedad::orderBy('nombre')->get();
-        $reporte = $propiedades->map(function ($p) use ($mes, $anio) {
-            return array_merge(
-                ['propiedad' => $p->nombre, 'tipo' => $p->tipo, 'codigo' => $p->codigo],
-                $p->balanceMes($mes, $anio)
-            );
-        });
-
-        $totales = [
-            'ingresos'   => $reporte->sum('ingresos'),
-            'gastos'     => $reporte->sum('gastos'),
-            'comisiones' => $reporte->sum('comisiones'),
-            'balance'    => $reporte->sum('balance'),
-        ];
-
-        return view('patrimonial.transacciones.reporte_mensual', compact('reporte', 'totales', 'mes', 'anio'));
+        return view('patrimonial.transacciones.reporte_mensual', [
+            'reporte' => $data['filas'],
+            'totales' => $data['totales'],
+            'ingresosPorPropiedad' => $data['ingresosPorPropiedad'],
+            'gastosPorCategoria' => $data['gastosPorCategoria'],
+            'comisionesPorCategoria' => $data['comisionesPorCategoria'],
+            'mes' => $mes,
+            'anio' => $anio,
+        ]);
     }
 
     public function reporteMensualPdf(Request $request)
     {
-        $mes  = (int)$request->get('mes', now()->month);
-        $anio = (int)$request->get('anio', now()->year);
+        $mes  = (int) $request->get('mes', now()->month);
+        $anio = (int) $request->get('anio', now()->year);
+        $data = $this->reportes->mensual($mes, $anio, true);
 
-        $propiedades = Propiedad::orderBy('nombre')->get();
-        $reporte = $propiedades->map(function ($p) use ($mes, $anio) {
-            $balance = $p->balanceMes($mes, $anio);
-            // Incluir transacciones detalladas
-            $txs = $p->transacciones()->where('mes', $mes)->where('anio', $anio)->orderBy('fecha')->get();
-            return array_merge(
-                [
-                    'propiedad' => $p->nombre,
-                    'tipo' => $p->tipo,
-                    'codigo' => $p->codigo,
-                    'valor_inversion' => $p->valor_inversion,
-                    'transacciones' => $txs,
-                ],
-                $balance
-            );
-        });
-
-        $totales = [
-            'ingresos'   => $reporte->sum('ingresos'),
-            'gastos'     => $reporte->sum('gastos'),
-            'comisiones' => $reporte->sum('comisiones'),
-            'balance'    => $reporte->sum('balance'),
-        ];
-
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('patrimonial.pdf.reporte_mensual', compact('reporte', 'totales', 'mes', 'anio'));
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('patrimonial.pdf.reporte_mensual', [
+            'reporte' => $data['filas'],
+            'totales' => $data['totales'],
+            'ingresosPorPropiedad' => $data['ingresosPorPropiedad'],
+            'gastosPorCategoria' => $data['gastosPorCategoria'],
+            'comisionesPorCategoria' => $data['comisionesPorCategoria'],
+            'mes' => $mes,
+            'anio' => $anio,
+        ]);
         $pdf->setPaper('a4', 'portrait');
-        $nombreMes = \Carbon\Carbon::create($anio, $mes)->translatedFormat('F_Y');
+        $nombreMes = Carbon::create($anio, $mes)->translatedFormat('F_Y');
+
         return $pdf->stream("reporte_patrimonial_{$nombreMes}.pdf");
     }
 
     public function reportePropiedadPdf(Request $request, Propiedad $propiedad)
     {
-        $anioInicio = (int)$request->get('anio_inicio', now()->year - 1);
-        $anioFin    = (int)$request->get('anio_fin', now()->year);
+        $mes        = (int) $request->get('mes', now()->month);
+        $anio       = (int) $request->get('anio', now()->year);
+        $anioInicio = (int) $request->get('anio_inicio', now()->year - 1);
+        $anioFin    = (int) $request->get('anio_fin', now()->year);
 
-        // Historial mensual de todos los meses en el rango
-        $historial = collect();
-        for ($anio = $anioInicio; $anio <= $anioFin; $anio++) {
-            for ($mes = 1; $mes <= 12; $mes++) {
-                if ($anio == now()->year && $mes > now()->month) break;
-                $balance = $propiedad->balanceMes($mes, $anio);
-                if ($balance['ingresos'] > 0 || $balance['gastos'] > 0 || $balance['comisiones'] > 0) {
-                    $historial->push(array_merge(['mes' => $mes, 'anio' => $anio], $balance));
-                }
-            }
-        }
+        $data = $this->reportes->propiedad($propiedad, $mes, $anio, $anioInicio, $anioFin);
 
-        $alquilerActivo = $propiedad->alquilerActivo();
-        $totales = [
-            'ingresos'   => $historial->sum('ingresos'),
-            'gastos'     => $historial->sum('gastos'),
-            'comisiones' => $historial->sum('comisiones'),
-            'balance'    => $historial->sum('balance'),
-        ];
-
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('patrimonial.pdf.reporte_propiedad',
-            compact('propiedad', 'historial', 'totales', 'alquilerActivo', 'anioInicio', 'anioFin'));
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('patrimonial.pdf.reporte_propiedad', [
+            'propiedad' => $propiedad,
+            'mesResumen' => $data['mesResumen'],
+            'historial' => $data['historial'],
+            'totales' => $data['totales'],
+            'alquilerActivo' => $data['alquilerActivo'],
+            'anioInicio' => $anioInicio,
+            'anioFin' => $anioFin,
+            'mes' => $mes,
+            'anio' => $anio,
+        ]);
         $pdf->setPaper('a4', 'portrait');
+
         return $pdf->stream("reporte_propiedad_{$propiedad->codigo}.pdf");
     }
 }

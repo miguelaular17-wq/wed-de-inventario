@@ -64,7 +64,7 @@
         <div class="header-logo"><img src="{{ public_path('logo.png') }}" alt="Logo"></div>
         <div class="header-titles">
             <h1>Reporte Mensual Patrimonial</h1>
-            <h2>Balance de propiedades — {{ $nombreMes }}</h2>
+            <h2>Recibido → gastos / comisión → neto — {{ $nombreMes }}</h2>
         </div>
         <div class="header-right">Generado:<br>{{ now()->format('d/m/Y H:i') }}</div>
     </div>
@@ -72,7 +72,7 @@
     {{-- KPIs --}}
     <div class="kpi-bar">
         <div class="kpi-cell">
-            <div class="kpi-label">Ingresos</div>
+            <div class="kpi-label">Total recibido</div>
             <div class="kpi-value green">${{ number_format($totales['ingresos'], 2) }}</div>
         </div>
         <div class="kpi-cell">
@@ -84,7 +84,7 @@
             <div class="kpi-value orange">${{ number_format($totales['comisiones'], 2) }}</div>
         </div>
         <div class="kpi-cell">
-            <div class="kpi-label">Balance Neto</div>
+            <div class="kpi-label">Neto</div>
             <div class="kpi-value {{ $totales['balance'] >= 0 ? 'green' : 'red' }}">${{ number_format($totales['balance'], 2) }}</div>
         </div>
         <div class="kpi-cell">
@@ -93,24 +93,96 @@
         </div>
     </div>
 
+    <p style="margin:-12px 0 18px; font-size:10px; color:#475569;">
+        ${{ number_format($totales['ingresos'], 2) }} recibido
+        − ${{ number_format($totales['gastos'], 2) }} gastos
+        − ${{ number_format($totales['comisiones'], 2) }} comisiones
+        = <strong>${{ number_format($totales['balance'], 2) }} neto</strong>
+    </p>
+
+    @php
+        $ingresosPorPropiedad = $ingresosPorPropiedad ?? [];
+        $gastosPorCategoria = $gastosPorCategoria ?? [];
+        $comisionesPorCategoria = $comisionesPorCategoria ?? [];
+    @endphp
+
+    <div class="section-title">Ingresos por alquileres</div>
+    <table class="data-table">
+        <thead><tr><th>Propiedad</th><th class="text-right">Ingreso bruto</th></tr></thead>
+        <tbody>
+            @forelse($ingresosPorPropiedad as $linea)
+                <tr>
+                    <td>{{ $linea['nombre'] }} <span style="color:#94a3b8; font-size:9px;">{{ $linea['codigo'] }}</span></td>
+                    <td class="text-right {{ $linea['monto'] > 0 ? 'green' : '' }}">${{ number_format($linea['monto'], 2) }}</td>
+                </tr>
+            @empty
+                <tr><td colspan="2" class="text-center" style="color:#94a3b8;">Sin ingresos en este mes.</td></tr>
+            @endforelse
+        </tbody>
+        <tfoot>
+            <tr><td>Total recibido</td><td class="text-right">${{ number_format($totales['ingresos'], 2) }}</td></tr>
+        </tfoot>
+    </table>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Gastos por concepto</th>
+                <th class="text-right">Monto</th>
+                <th>Comisiones</th>
+                <th class="text-right">Monto</th>
+            </tr>
+        </thead>
+        <tbody>
+            @php
+                $maxRows = max(count($gastosPorCategoria), count($comisionesPorCategoria), 1);
+            @endphp
+            @for($i = 0; $i < $maxRows; $i++)
+                <tr>
+                    <td>{{ $gastosPorCategoria[$i]['categoria'] ?? ($i === 0 && empty($gastosPorCategoria) ? 'Sin gastos registrados' : '') }}</td>
+                    <td class="text-right red">{{ isset($gastosPorCategoria[$i]) ? '$'.number_format($gastosPorCategoria[$i]['monto'], 2) : '' }}</td>
+                    <td>{{ $comisionesPorCategoria[$i]['categoria'] ?? ($i === 0 && empty($comisionesPorCategoria) ? 'Sin comisiones registradas' : '') }}</td>
+                    <td class="text-right orange">{{ isset($comisionesPorCategoria[$i]) ? '$'.number_format($comisionesPorCategoria[$i]['monto'], 2) : '' }}</td>
+                </tr>
+            @endfor
+        </tbody>
+        <tfoot>
+            <tr>
+                <td>Total gastos</td>
+                <td class="text-right">${{ number_format($totales['gastos'], 2) }}</td>
+                <td>Total comisiones</td>
+                <td class="text-right">${{ number_format($totales['comisiones'], 2) }}</td>
+            </tr>
+        </tfoot>
+    </table>
+
     {{-- RESUMEN POR PROPIEDAD --}}
-    <div class="section-title">&#127970; Resumen por Propiedad</div>
+    <div class="section-title">Cierre por propiedad</div>
     <table class="data-table">
         <thead>
             <tr>
                 <th>Propiedad</th>
                 <th>Tipo</th>
-                <th class="text-right">Ingresos</th>
+                <th class="text-right">Ingreso bruto</th>
                 <th class="text-right">Gastos</th>
-                <th class="text-right">Comisiones</th>
-                <th class="text-right">Balance</th>
+                <th class="text-right">Comisión</th>
+                <th class="text-right">Neto</th>
             </tr>
         </thead>
         <tbody>
             @foreach($reporte as $row)
                 @if($row['ingresos'] > 0 || $row['gastos'] > 0 || $row['comisiones'] > 0)
                 <tr>
-                    <td><strong>{{ $row['propiedad'] }}</strong><br><span style="font-size:9px; color:#94a3b8;">{{ $row['codigo'] }}</span></td>
+                    <td>
+                        <strong>{{ $row['propiedad'] }}</strong><br>
+                        <span style="font-size:9px; color:#94a3b8;">{{ $row['codigo'] }}</span>
+                        @foreach($row['gastosPorCategoria'] ?? [] as $c)
+                            <div style="font-size:8.5px; color:#64748b;">{{ $c['categoria'] }} −${{ number_format($c['monto'], 2) }}</div>
+                        @endforeach
+                        @foreach($row['comisionesPorCategoria'] ?? [] as $c)
+                            <div style="font-size:8.5px; color:#64748b;">{{ $c['categoria'] }} −${{ number_format($c['monto'], 2) }}</div>
+                        @endforeach
+                    </td>
                     <td class="text-center" style="color:#64748b;">{{ ucfirst($row['tipo']) }}</td>
                     <td class="text-right {{ $row['ingresos'] > 0 ? 'green' : '' }}">${{ number_format($row['ingresos'], 2) }}</td>
                     <td class="text-right {{ $row['gastos'] > 0 ? 'red' : '' }}">${{ number_format($row['gastos'], 2) }}</td>
@@ -122,7 +194,7 @@
         </tbody>
         <tfoot>
             <tr>
-                <td colspan="2">TOTALES GENERALES</td>
+                <td colspan="2">NETO DEL MES</td>
                 <td class="text-right">${{ number_format($totales['ingresos'], 2) }}</td>
                 <td class="text-right">${{ number_format($totales['gastos'], 2) }}</td>
                 <td class="text-right">${{ number_format($totales['comisiones'], 2) }}</td>
@@ -155,6 +227,7 @@
                         <th>Categoría</th>
                         <th>Descripción</th>
                         <th style="text-align:right;">Monto</th>
+                        <th style="text-align:right;">Neto reserva</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -164,10 +237,36 @@
                             <td class="tx-{{ $tx->tipo }}">{{ ucfirst($tx->tipo) }}</td>
                             <td>{{ $tx->categoria }}</td>
                             <td style="color:#64748b;">{{ $tx->descripcion ?: '—' }}</td>
-                            <td class="tx-{{ $tx->tipo }}" style="text-align:right;">${{ number_format($tx->monto, 2) }}</td>
+                            <td class="tx-{{ $tx->tipo }}" style="text-align:right;">
+                                {{ $tx->tipo === 'ingreso' ? '+' : '-' }}${{ number_format($tx->monto, 2) }}
+                            </td>
+                            <td style="text-align:right; font-weight:600; color:#059669;">
+                                @if($tx->tipo === 'ingreso')
+                                    ${{ number_format((float) ($tx->neto_reserva ?? $tx->monto), 2) }}
+                                @else
+                                    —
+                                @endif
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
+                <tfoot>
+                    @php $t = $row['totalesTx'] ?? $row; @endphp
+                    <tr>
+                        <td colspan="4" style="background:#dbeafe; font-weight:bold; color:#1e3a8a;">
+                            TOTALES
+                            <span style="font-weight:600; font-size:9px; color:#475569;">
+                                (gastos ${{ number_format($t['gastos'] ?? 0, 2) }} · comisiones ${{ number_format($t['comisiones'] ?? 0, 2) }})
+                            </span>
+                        </td>
+                        <td style="background:#dbeafe; text-align:right; font-weight:bold; color:#059669;">
+                            ${{ number_format($t['ingresos'] ?? 0, 2) }}
+                        </td>
+                        <td style="background:#dbeafe; text-align:right; font-weight:bold; color:{{ ($t['balance'] ?? 0) >= 0 ? '#059669' : '#dc2626' }};">
+                            ${{ number_format($t['balance'] ?? 0, 2) }}
+                        </td>
+                    </tr>
+                </tfoot>
             </table>
         @endif
     @endforeach

@@ -16,6 +16,9 @@
                 <h1 style="margin:0; font-size:1.3rem; font-weight:700;">{{ $alquiler->inquilino_nombre }}</h1>
                 <div style="margin-top:8px; display:flex; gap:16px; flex-wrap:wrap; font-size:0.85rem; opacity:0.85;">
                     <span>💰 ${{ number_format($alquiler->canonActual(), 2) }} / {{ $alquiler->tipo_canon }}</span>
+                    @if($alquiler->getComision() > 0)
+                        <span>🤝 Comisión ${{ number_format($alquiler->getComision(), 2) }} · Neto ${{ number_format($alquiler->getNeto(), 2) }}</span>
+                    @endif
                     <span>📅 Desde {{ optional($alquiler->fecha_inicio)->format('d/m/Y') }} hasta {{ $alquiler->fecha_fin ? \Carbon\Carbon::parse($alquiler->fecha_fin)->format('d/m/Y') : 'Indefinido' }}</span>
                     <span>🗓️ Día {{ $alquiler->dia_pago ?? 'N/A' }}</span>
                     @if($alquiler->inquilino_contacto) <span>📞 {{ $alquiler->inquilino_contacto }}</span> @endif
@@ -103,6 +106,7 @@
                     <label style="font-size:0.8rem; font-weight:600; color:#475569;">Monto Pagado *</label>
                     <input type="number" name="monto" id="monto_pagado" step="0.01" min="0" required
                            style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                    <p style="margin:4px 0 0; font-size:0.75rem; color:#94a3b8;">Canon completo. La comisión no se descuenta aquí.</p>
                 </div>
                 <div>
                     <label style="font-size:0.8rem; font-weight:600; color:#475569;">Fecha Pago *</label>
