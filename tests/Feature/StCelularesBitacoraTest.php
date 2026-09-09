@@ -66,9 +66,12 @@ class StCelularesBitacoraTest extends TestCase
                 'cliente_nombre' => 'Cliente Bitacora',
                 'prioridad' => 'normal',
                 'tipo_gestion' => 'ST',
+                'tipo_dispositivo' => 'celular',
                 'imei' => '359998887776665',
                 'marca' => 'Samsung',
                 'modelo' => 'S23',
+                'color' => 'Negro',
+                'almacenamiento' => '256 GB',
                 'falla' => 'No enciende',
             ])
             ->assertRedirect();
@@ -103,7 +106,7 @@ class StCelularesBitacoraTest extends TestCase
             ->get(route('servicio.celulares.hub'))
             ->assertOk()
             ->assertSee('Consultar bitácora')
-            ->assertSee('Registrar celular');
+            ->assertSee('Registrar equipo');
     }
 
     public function test_wizard_local_con_backup_genera_documento(): void
@@ -114,12 +117,18 @@ class StCelularesBitacoraTest extends TestCase
             ->withSession(['sede_local' => 'DORAL'])
             ->post(route('servicio.ordenes.store'), [
                 'tipo_gestion' => 'GARANTIA',
+                'rango_garantia' => 'fuera',
+                'tipo_dispositivo' => 'celular',
                 'cliente_nombre' => 'Cliente Backup',
+                'cliente_telefono' => '04141234567',
+                'cliente_cedula' => 'V12345678',
                 'prioridad' => 'normal',
                 'falla' => 'Pantalla rota',
                 'imei' => '351112223334445',
                 'marca' => 'Apple',
                 'modelo' => 'iPhone 12',
+                'color' => 'Blanco',
+                'almacenamiento' => '64 GB',
                 'entrega_backup' => '1',
                 'backup_marca' => 'Xiaomi',
                 'backup_modelo' => 'Redmi Note',
@@ -142,6 +151,13 @@ class StCelularesBitacoraTest extends TestCase
         $recepcion = $this->get(route('servicio.ordenes.recepcion_pdf', $orden));
         $recepcion->assertOk();
         $this->assertStringContainsString('application/pdf', (string) $recepcion->headers->get('content-type'));
+
+        $html = view('servicio.ordenes.pdf-recepcion', [
+            'orden' => $orden->load(['equipoCelular', 'creador', 'backups']),
+            'backup' => $backup,
+            'logo' => public_path('logo.png'),
+        ])->render();
+        $this->assertStringContainsString('La garantía es con la marca del equipo (Apple)', $html);
     }
 
     public function test_checklist_y_conformidad_quedan_en_la_orden(): void
@@ -155,9 +171,12 @@ class StCelularesBitacoraTest extends TestCase
                 'cliente_nombre' => 'Cliente Check',
                 'prioridad' => 'normal',
                 'tipo_gestion' => 'ST',
+                'tipo_dispositivo' => 'celular',
                 'imei' => '350011122233344',
                 'marca' => 'Samsung',
                 'modelo' => 'A15',
+                'color' => 'Azul',
+                'almacenamiento' => '128 GB',
                 'falla' => 'No carga',
                 'inspeccion' => [
                     'pantalla' => ['estado' => 'ok'],
@@ -202,6 +221,7 @@ class StCelularesBitacoraTest extends TestCase
         $this->actingAs($gerente)
             ->post(route('servicio.ordenes.store'), [
                 'tipo_gestion' => 'ST',
+                'tipo_dispositivo' => 'celular',
                 'sede' => 'DORAL',
                 'enviar_otra_sede' => '1',
                 'sede_destino_envio' => 'VIRTUDES',
@@ -211,6 +231,8 @@ class StCelularesBitacoraTest extends TestCase
                 'imei' => '358887776665554',
                 'marca' => 'Motorola',
                 'modelo' => 'Edge',
+                'color' => 'Gris',
+                'almacenamiento' => '256 GB',
             ])
             ->assertRedirect();
 
@@ -236,6 +258,128 @@ class StCelularesBitacoraTest extends TestCase
             ->assertSee($orden->codigo());
     }
 
+    public function test_servicio_tecnico_no_crea_backup_aunque_lo_envien(): void
+    {
+        $user = $this->makeTecnico();
+
+        $this->actingAs($user)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.store'), [
+                'tipo_gestion' => 'ST',
+                'tipo_dispositivo' => 'celular',
+                'cliente_nombre' => 'Sin Backup',
+                'prioridad' => 'normal',
+                'falla' => 'No enciende',
+                'imei' => '353334445556667',
+                'marca' => 'Xiaomi',
+                'modelo' => 'Redmi',
+                'color' => 'Negro',
+                'almacenamiento' => '64 GB',
+                'entrega_backup' => '1',
+                'backup_marca' => 'Xiaomi',
+                'backup_modelo' => 'Backup',
+            ])
+            ->assertRedirect();
+
+        $orden = StOrden::query()->where('cliente_nombre', 'Sin Backup')->first();
+        $this->assertNotNull($orden);
+        $this->assertSame(0, \App\Models\StBackup::query()->where('orden_id', $orden->id)->count());
+    }
+
+    public function test_impresora_guarda_serial_tipo_y_checklist_propio(): void
+    {
+        $user = $this->makeTecnico();
+
+        $this->actingAs($user)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.store'), [
+                'tipo_gestion' => 'ST',
+                'tipo_dispositivo' => 'impresora',
+                'cliente_nombre' => 'Cliente Impresora',
+                'prioridad' => 'normal',
+                'falla' => 'Atasco de papel',
+                'serial' => 'HP-XYZ-99',
+                'marca' => 'HP',
+                'modelo' => 'LaserJet',
+                'tipo_impresora' => 'laser',
+                'accesorios_sel' => ['poder', 'usb'],
+                'inspeccion' => [
+                    'imp_encendido' => ['estado' => 'ok'],
+                    'imp_wifi' => ['estado' => 'dano'],
+                    'pantalla' => ['estado' => 'ok'],
+                ],
+            ])
+            ->assertRedirect();
+
+        $orden = StOrden::query()->where('cliente_nombre', 'Cliente Impresora')->first();
+        $this->assertNotNull($orden);
+        $this->assertSame('impresora', $orden->tipo_dispositivo);
+        $this->assertSame('HP-XYZ-99', $orden->serial);
+        $this->assertNull($orden->imei);
+        $this->assertSame('laser', $orden->atributo('tipo_impresora'));
+        $this->assertStringContainsString('Cable de poder', (string) $orden->accesorios);
+        $this->assertSame('ok', $orden->inspeccion_recepcion['imp_encendido'] ?? null);
+        $this->assertSame('dano', $orden->inspeccion_recepcion['imp_wifi'] ?? null);
+        $this->assertArrayNotHasKey('pantalla', $orden->inspeccion_recepcion ?? []);
+
+        $claves = array_column($orden->itemsInspeccionRecepcion(), 'clave');
+        $this->assertContains('imp_encendido', $claves);
+        $this->assertNotContains('imei_coincide', $claves);
+    }
+
+    public function test_garantia_dentro_de_rango_no_exige_cliente(): void
+    {
+        $user = $this->makeTecnico();
+
+        $this->actingAs($user)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.store'), [
+                'tipo_gestion' => 'GARANTIA',
+                'rango_garantia' => 'dentro',
+                'tipo_dispositivo' => 'celular',
+                'prioridad' => 'normal',
+                'falla' => 'Pantalla rota',
+                'imei' => '354445556667778',
+                'marca' => 'Apple',
+                'modelo' => 'iPhone 14',
+                'color' => 'Negro',
+                'almacenamiento' => '128 GB',
+                'cliente_nombre' => 'No debe guardarse',
+                'cliente_telefono' => '04140000000',
+                'cliente_cedula' => 'V1',
+                'fecha_prometida' => '2026-10-01',
+            ])
+            ->assertRedirect();
+
+        $orden = StOrden::query()->where('imei', '354445556667778')->first();
+        $this->assertNotNull($orden);
+        $this->assertSame('dentro', $orden->rango_garantia);
+        $this->assertSame('Cambio en rango (empresa)', $orden->cliente_nombre);
+        $this->assertNull($orden->cliente_telefono);
+        $this->assertNull($orden->fecha_prometida);
+    }
+
+    public function test_garantia_fuera_de_rango_exige_datos_del_cliente(): void
+    {
+        $user = $this->makeTecnico();
+
+        $this->actingAs($user)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.store'), [
+                'tipo_gestion' => 'GARANTIA',
+                'rango_garantia' => 'fuera',
+                'tipo_dispositivo' => 'celular',
+                'prioridad' => 'normal',
+                'falla' => 'No carga',
+                'imei' => '355556667778889',
+                'marca' => 'Samsung',
+                'modelo' => 'S24',
+                'color' => 'Gris',
+                'almacenamiento' => '256 GB',
+            ])
+            ->assertSessionHasErrors(['cliente_nombre', 'cliente_telefono', 'cliente_cedula']);
+    }
+
     private function makeTecnico(): User
     {
         return User::create([
@@ -255,6 +399,9 @@ class StCelularesBitacoraTest extends TestCase
                 $table->string('sede', 32);
                 $table->unsignedInteger('numero');
                 $table->string('tipo_gestion', 16)->default('ST');
+                $table->string('tipo_dispositivo', 32)->default('celular');
+                $table->json('atributos')->nullable();
+                $table->string('rango_garantia', 16)->nullable();
                 $table->unsignedBigInteger('equipo_id')->nullable();
                 $table->string('cliente_nombre');
                 $table->string('cliente_telefono', 40)->nullable();
@@ -325,6 +472,15 @@ class StCelularesBitacoraTest extends TestCase
                 if (! Schema::hasColumn('st_ordenes', 'conformidad_at')) {
                     $table->timestamp('conformidad_at')->nullable();
                 }
+                if (! Schema::hasColumn('st_ordenes', 'tipo_dispositivo')) {
+                    $table->string('tipo_dispositivo', 32)->default('celular');
+                }
+                if (! Schema::hasColumn('st_ordenes', 'atributos')) {
+                    $table->json('atributos')->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'rango_garantia')) {
+                    $table->string('rango_garantia', 16)->nullable();
+                }
             });
         }
 
@@ -352,7 +508,18 @@ class StCelularesBitacoraTest extends TestCase
                 $table->string('telefono_asociado', 40)->nullable();
                 $table->string('estado_actual', 32)->default('en_taller');
                 $table->string('sede_actual', 32)->nullable();
+                $table->string('tipo_dispositivo', 32)->default('celular');
+                $table->json('atributos')->nullable();
                 $table->timestamps();
+            });
+        } elseif (Schema::hasTable('st_equipos')) {
+            Schema::table('st_equipos', function (Blueprint $table) {
+                if (! Schema::hasColumn('st_equipos', 'tipo_dispositivo')) {
+                    $table->string('tipo_dispositivo', 32)->default('celular');
+                }
+                if (! Schema::hasColumn('st_equipos', 'atributos')) {
+                    $table->json('atributos')->nullable();
+                }
             });
         }
 

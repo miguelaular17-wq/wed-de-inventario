@@ -49,10 +49,12 @@
             <thead>
                 <tr>
                     <th>Orden</th>
+                    <th>Gestión</th>
                     <th>Cliente</th>
                     <th>Equipo</th>
                     <th>Estado</th>
                     <th>Prioridad</th>
+                    <th>Creada por</th>
                     <th>Ingreso</th>
                     <th></th>
                 </tr>
@@ -64,6 +66,12 @@
                             <a href="{{ route('servicio.ordenes.show', $orden) }}"><strong>{{ $orden->codigo() }}</strong></a>
                             @if($puedeFiltrarSede)
                                 <div class="muted" style="font-size:.75rem;">{{ $orden->sede }}</div>
+                            @endif
+                        </td>
+                        <td>
+                            <strong>{{ $orden->etiquetaTipoGestion() }}</strong>
+                            @if($orden->etiquetaRangoGarantia())
+                                <div class="muted" style="font-size:.75rem;">{{ $orden->etiquetaRangoGarantia() }}</div>
                             @endif
                         </td>
                         <td>
@@ -83,11 +91,12 @@
                             @if($orden->transferenciaPendiente()) <span class="muted" style="font-size:.75rem;">· transferencia</span> @endif
                         </td>
                         <td>{{ $orden->etiquetaPrioridad() }}</td>
+                        <td>{{ $orden->creador?->name ?: '—' }}</td>
                         <td>{{ $orden->fecha_ingreso?->format('d/m/Y') }}</td>
                         <td><a class="btn secondary" href="{{ route('servicio.ordenes.edit', $orden) }}">Editar</a></td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="muted">No hay órdenes con esos filtros.</td></tr>
+                    <tr><td colspan="9" class="muted">No hay órdenes con esos filtros.</td></tr>
                 @endforelse
             </tbody>
         </table>

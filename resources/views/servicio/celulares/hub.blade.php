@@ -31,7 +31,7 @@
         </a>
         <a href="{{ $registroUrl }}" class="panel" style="padding:28px;text-decoration:none;color:inherit;border:1px solid #e2e8f0;">
             <div style="font-size:1.6rem;margin-bottom:8px;">➕</div>
-            <h2 style="margin:0 0 6px;font-size:1.15rem;">Registrar celular</h2>
+            <h2 style="margin:0 0 6px;font-size:1.15rem;">Registrar equipo</h2>
             <p class="muted" style="margin:0;font-size:.9rem;">
                 @if($puedeOperar)
                     Crea una orden de Servicio técnico o Garantía y deja rastro en la bitácora del equipo.

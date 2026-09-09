@@ -34,26 +34,45 @@
             </td>
             <td>
                 <h1>Recepción de equipo</h1>
-                <div class="muted">Palacio de los Detalles · cómo se recibió el celular</div>
-                <div>Orden <strong>{{ $orden->codigo() }}</strong> · {{ $orden->etiquetaTipoGestion() }} · {{ $orden->sede }}</div>
+                <div class="muted">Palacio de los Detalles · cómo se recibió el equipo</div>
+                <div>Orden <strong>{{ $orden->codigo() }}</strong> · {{ $orden->etiquetaTipoDispositivo() }} · {{ $orden->etiquetaTipoGestion() }}{{ $orden->etiquetaRangoGarantia() ? ' · '.$orden->etiquetaRangoGarantia() : '' }} · {{ $orden->sede }}</div>
             </td>
             <td style="text-align:right;width:140px;">{{ $orden->fecha_ingreso?->format('d/m/Y') ?: now()->format('d/m/Y') }}</td>
         </tr>
     </table>
 
+    @if($orden->esCambioEnRango())
+    <div class="box">
+        <strong>Garantía en rango de cambio</strong>
+        <div style="margin-top:4px;">Equipo de la empresa. Se cambia al cliente y se envía a garantía a nombre de Palacio de los Detalles.</div>
+    </div>
+    @else
     <div class="box">
         <strong>Cliente</strong>
         <table class="grid" style="margin-top:4px;">
             <tr><td class="label">Nombre / cédula</td><td>{{ $orden->cliente_nombre }} · {{ $orden->cliente_cedula ?: '—' }}</td></tr>
             <tr><td class="label">Teléfono</td><td>{{ $orden->cliente_telefono ?: '—' }}</td></tr>
+            @if($orden->esGarantia())
+                <tr><td class="label">Garantía</td><td>La garantía es con la marca del equipo ({{ $orden->marcaEquipo() }}). Palacio de los Detalles actúa como intermediario; el equipo pertenece al cliente.</td></tr>
+            @endif
         </table>
     </div>
+    @endif
 
     <div class="box">
         <strong>Equipo recibido</strong>
         <table class="grid" style="margin-top:4px;">
             <tr><td class="label">Equipo</td><td>{{ $orden->equipoCelular?->etiqueta() ?: ($orden->equipo ?: '—') }}</td></tr>
             <tr><td class="label">IMEI / serial</td><td>{{ $orden->imei ?: '—' }} / {{ $orden->serial ?: '—' }}</td></tr>
+            @if($orden->atributo('almacenamiento'))
+                <tr><td class="label">Almacenamiento</td><td>{{ $orden->atributo('almacenamiento') }}</td></tr>
+            @endif
+            @if($orden->atributo('tipo_impresora'))
+                <tr><td class="label">Tipo de impresora</td><td>{{ config('servicio_tecnico.tipos_impresora.'.$orden->atributo('tipo_impresora'), $orden->atributo('tipo_impresora')) }}</td></tr>
+            @endif
+            @if($orden->atributo('serial_lente'))
+                <tr><td class="label">Serial del lente</td><td>{{ $orden->atributo('serial_lente') }}</td></tr>
+            @endif
             <tr><td class="label">Accesorios</td><td>{{ $orden->accesorios ?: 'Ninguno declarado' }}</td></tr>
             <tr><td class="label">Falla reportada</td><td>{{ $orden->falla ?: '—' }}</td></tr>
         </table>

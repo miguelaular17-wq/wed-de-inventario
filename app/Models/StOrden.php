@@ -12,6 +12,7 @@ class StOrden extends Model
 {
     public const ESTADO_PENDIENTE = 'pendiente';
     public const ESTADO_EN_PROCESO = 'en_proceso';
+    public const ESTADO_UBICANDO_REPUESTO = 'ubicando_repuesto';
     public const ESTADO_LISTO = 'listo';
     public const ESTADO_ENTREGADO = 'entregado';
     public const ESTADO_CANCELADO = 'cancelado';
@@ -22,6 +23,14 @@ class StOrden extends Model
     public const TIPO_ST = 'ST';
     public const TIPO_GARANTIA = 'GARANTIA';
 
+    public const RANGO_DENTRO = 'dentro';
+    public const RANGO_FUERA = 'fuera';
+
+    public const RANGOS_GARANTIA = [
+        self::RANGO_DENTRO => 'Dentro del rango de cambio',
+        self::RANGO_FUERA => 'Fuera del rango de cambio',
+    ];
+
     public const TIPOS_GESTION = [
         self::TIPO_ST => 'Servicio técnico',
         self::TIPO_GARANTIA => 'Garantía',
@@ -30,6 +39,7 @@ class StOrden extends Model
     public const ESTADOS = [
         self::ESTADO_PENDIENTE => 'Pendiente',
         self::ESTADO_EN_PROCESO => 'En proceso',
+        self::ESTADO_UBICANDO_REPUESTO => 'Ubicando repuesto',
         self::ESTADO_LISTO => 'Listo',
         self::ESTADO_ENTREGADO => 'Entregado',
         self::ESTADO_CANCELADO => 'Cancelado',
@@ -48,6 +58,8 @@ class StOrden extends Model
         'sede',
         'numero',
         'tipo_gestion',
+        'tipo_dispositivo',
+        'rango_garantia',
         'equipo_id',
         'cliente_nombre',
         'cliente_telefono',
@@ -80,6 +92,7 @@ class StOrden extends Model
         'sede_destino_transfer',
         'transfer_estado',
         'repuestos_descontados_at',
+        'atributos',
     ];
 
     protected function casts(): array
@@ -92,6 +105,7 @@ class StOrden extends Model
             'costo_refacciones' => 'decimal:2',
             'repuestos_descontados_at' => 'datetime',
             'inspeccion_recepcion' => 'array',
+            'atributos' => 'array',
             'conformidad_at' => 'datetime',
         ];
     }
@@ -103,7 +117,7 @@ class StOrden extends Model
     {
         $guardado = is_array($this->inspeccion_recepcion) ? $this->inspeccion_recepcion : [];
         $items = [];
-        foreach (config('servicio_tecnico.checklist_recepcion', []) as $clave => $etiqueta) {
+        foreach (self::checklistPara($this->tipo_dispositivo) as $clave => $etiqueta) {
             $estado = $guardado[$clave] ?? '';
             if (is_array($estado)) {
                 $estado = (string) ($estado['estado'] ?? '');
@@ -172,6 +186,61 @@ class StOrden extends Model
     public function esGarantia(): bool
     {
         return ($this->tipo_gestion ?? self::TIPO_ST) === self::TIPO_GARANTIA;
+    }
+
+    public function esCambioEnRango(): bool
+    {
+        return $this->esGarantia() && $this->rango_garantia === self::RANGO_DENTRO;
+    }
+
+    public function etiquetaRangoGarantia(): ?string
+    {
+        if (! $this->esGarantia() || ! $this->rango_garantia) {
+            return null;
+        }
+
+        return self::RANGOS_GARANTIA[$this->rango_garantia] ?? $this->rango_garantia;
+    }
+
+    public function marcaEquipo(): string
+    {
+        $marca = trim((string) ($this->equipoCelular?->marca ?? ''));
+        if ($marca !== '') {
+            return $marca;
+        }
+        $equipo = trim((string) ($this->equipo ?? ''));
+        if ($equipo === '') {
+            return 'la marca del equipo';
+        }
+        $partes = preg_split('/\s+/', $equipo) ?: [];
+
+        return $partes[0] !== '' ? $partes[0] : 'la marca del equipo';
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function checklistPara(?string $tipo): array
+    {
+        $tipo = $tipo ?: 'celular';
+        $map = config('servicio_tecnico.checklist_recepcion_por_tipo', []);
+
+        return $map[$tipo] ?? $map['celular'] ?? config('servicio_tecnico.checklist_recepcion', []);
+    }
+
+    public function etiquetaTipoDispositivo(): string
+    {
+        $tipo = $this->tipo_dispositivo ?: 'celular';
+        $map = config('servicio_tecnico.tipos_dispositivo', []);
+
+        return $map[$tipo] ?? $tipo;
+    }
+
+    public function atributo(string $clave, mixed $default = null): mixed
+    {
+        $attrs = is_array($this->atributos) ? $this->atributos : [];
+
+        return $attrs[$clave] ?? $default;
     }
 
     public function repuestosLineas(): HasMany

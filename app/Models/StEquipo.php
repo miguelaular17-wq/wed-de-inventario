@@ -34,7 +34,16 @@ class StEquipo extends Model
         'telefono_asociado',
         'estado_actual',
         'sede_actual',
+        'tipo_dispositivo',
+        'atributos',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'atributos' => 'array',
+        ];
+    }
 
     public function eventos(): HasMany
     {

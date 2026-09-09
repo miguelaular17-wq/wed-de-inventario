@@ -16,6 +16,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -63,7 +64,7 @@ class OrdenController extends Controller
         }
 
         return view('servicio.ordenes.index', [
-            'ordenes' => $query->with('equipoCelular')->paginate(30)->withQueryString(),
+            'ordenes' => $query->with(['equipoCelular', 'creador'])->paginate(30)->withQueryString(),
             'estados' => StOrden::ESTADOS,
             'sedes' => config('inventario.sedes_locales'),
             'filtroSede' => $user->scopesServicioToOwnSede() ? strtoupper((string) $user->sede) : $request->query('sede'),
@@ -109,10 +110,17 @@ class OrdenController extends Controller
         $imei = $this->equipoService->normalizarImei($data['imei'] ?? null);
         $serial = $this->equipoService->normalizarSerial($data['serial'] ?? null);
         $usarExistente = $request->boolean('usar_equipo_existente') || $request->filled('equipo_id');
+        $tipoDispositivo = $data['tipo_dispositivo'] ?? 'celular';
 
-        if (! $imei && ! $serial && ! $request->filled('equipo_id')) {
+        if ($tipoDispositivo === 'celular') {
+            if (! $imei && ! $request->filled('equipo_id')) {
+                throw ValidationException::withMessages([
+                    'imei' => 'El IMEI es obligatorio para celulares.',
+                ]);
+            }
+        } elseif (! $serial && ! $request->filled('equipo_id')) {
             throw ValidationException::withMessages([
-                'imei' => 'Indica el IMEI del celular, o el serial si el equipo no tiene IMEI.',
+                'serial' => 'El serial (o código de lote) es obligatorio para este tipo de dispositivo.',
             ]);
         }
 
@@ -127,6 +135,8 @@ class OrdenController extends Controller
                     'telefono_asociado' => $data['cliente_telefono'] ?? $equipo->telefono_asociado,
                     'sede_actual' => $data['sede'],
                     'estado_actual' => $enviar ? StEquipo::ESTADO_EN_TRANSITO : StEquipo::ESTADO_EN_TALLER,
+                    'tipo_dispositivo' => $tipoDispositivo,
+                    'atributos' => $data['atributos'] ?? $equipo->atributos,
                 ], fn ($v) => $v !== null && $v !== ''));
                 if ($imei && ! $equipo->imei) {
                     $equipo->imei = $imei;
@@ -143,6 +153,8 @@ class OrdenController extends Controller
                     'telefono_asociado' => $data['cliente_telefono'] ?? null,
                     'sede_actual' => $data['sede'],
                     'estado_actual' => $enviar ? StEquipo::ESTADO_EN_TRANSITO : StEquipo::ESTADO_EN_TALLER,
+                    'tipo_dispositivo' => $tipoDispositivo,
+                    'atributos' => $data['atributos'] ?? null,
                 ], $usarExistente);
             }
 
@@ -157,8 +169,17 @@ class OrdenController extends Controller
         if (! isset($data['equipo_id'])) {
             unset($data['equipo_id']);
         }
+        if (! Schema::hasColumn('st_ordenes', 'tipo_dispositivo')) {
+            unset($data['tipo_dispositivo']);
+        }
+        if (! Schema::hasColumn('st_ordenes', 'rango_garantia')) {
+            unset($data['rango_garantia']);
+        }
+        if (! Schema::hasColumn('st_ordenes', 'atributos')) {
+            unset($data['atributos']);
+        }
 
-        $data['inspeccion_recepcion'] = $this->parseInspeccion($request);
+        $data['inspeccion_recepcion'] = $this->parseInspeccion($request, $tipoDispositivo);
         $data['firma_recepcion_cliente'] = $this->parseFirma($request->input('firma_recepcion_cliente'));
         $data['firma_recepcion_empleado'] = $this->parseFirma($request->input('firma_recepcion_empleado'));
 
@@ -170,7 +191,8 @@ class OrdenController extends Controller
         }
 
         $backup = null;
-        if ($request->boolean('entrega_backup')) {
+        $esGarantia = ($data['tipo_gestion'] ?? StOrden::TIPO_ST) === StOrden::TIPO_GARANTIA;
+        if ($esGarantia && $request->boolean('entrega_backup')) {
             $request->validate([
                 'backup_marca' => ['required', 'string', 'max:64'],
                 'backup_modelo' => ['required', 'string', 'max:128'],
@@ -364,7 +386,12 @@ class OrdenController extends Controller
             'prioridades' => StOrden::PRIORIDADES,
             'tiposGestion' => StOrden::TIPOS_GESTION,
             'sedes' => config('inventario.sedes_locales'),
+            'tiposDispositivo' => config('servicio_tecnico.tipos_dispositivo'),
+            'rangosGarantia' => StOrden::RANGOS_GARANTIA,
+            'tiposImpresora' => config('servicio_tecnico.tipos_impresora'),
+            'accesoriosPorTipo' => config('servicio_tecnico.accesorios_por_tipo'),
             'checklistRecepcion' => config('servicio_tecnico.checklist_recepcion'),
+            'checklistRecepcionPorTipo' => config('servicio_tecnico.checklist_recepcion_por_tipo'),
         ];
     }
 
@@ -384,14 +411,14 @@ class OrdenController extends Controller
     /**
      * @return array<string, string>
      */
-    private function parseInspeccion(Request $request): array
+    private function parseInspeccion(Request $request, ?string $tipo = null): array
     {
         $raw = $request->input('inspeccion', []);
         $out = [];
         if (! is_array($raw)) {
             return $out;
         }
-        foreach (config('servicio_tecnico.checklist_recepcion', []) as $clave => $_etiqueta) {
+        foreach (StOrden::checklistPara($tipo) as $clave => $_etiqueta) {
             $estado = $raw[$clave]['estado'] ?? $raw[$clave] ?? '';
             if (is_array($estado)) {
                 $estado = $estado['estado'] ?? '';
@@ -459,13 +486,19 @@ class OrdenController extends Controller
             'sede' => ['nullable', 'string', 'in:'.implode(',', config('inventario.sedes_locales'))],
             'sede_local' => ['nullable', 'string', 'in:'.implode(',', config('inventario.sedes_locales'))],
             'tipo_gestion' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::TIPOS_GESTION))],
-            'cliente_nombre' => ['required', 'string', 'max:255'],
+            'tipo_dispositivo' => ['nullable', 'string', 'in:'.implode(',', array_keys(config('servicio_tecnico.tipos_dispositivo', ['celular' => 'Celular'])))],
+            'rango_garantia' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::RANGOS_GARANTIA))],
+            'cliente_nombre' => ['nullable', 'string', 'max:255'],
             'cliente_telefono' => ['nullable', 'string', 'max:40'],
             'cliente_cedula' => ['nullable', 'string', 'max:40'],
             'equipo' => ['nullable', 'string', 'max:255'],
             'marca' => ['nullable', 'string', 'max:64'],
             'modelo' => ['nullable', 'string', 'max:128'],
             'color' => ['nullable', 'string', 'max:64'],
+            'almacenamiento' => ['nullable', 'string', 'max:32'],
+            'tipo_impresora' => ['nullable', 'string', 'in:'.implode(',', array_keys(config('servicio_tecnico.tipos_impresora', [])))],
+            'serial_lente' => ['nullable', 'string', 'max:64'],
+            'codigo_lote' => ['nullable', 'string', 'max:64'],
             'imei' => ['nullable', 'string', 'max:32'],
             'serial' => ['nullable', 'string', 'max:255'],
             'equipo_id' => ['nullable', 'integer'],
@@ -504,6 +537,9 @@ class OrdenController extends Controller
             $data['fecha_ingreso'] = now()->toDateString();
             $data['estado'] = $data['estado'] ?? StOrden::ESTADO_PENDIENTE;
             $data['tipo_gestion'] = strtoupper((string) ($data['tipo_gestion'] ?? StOrden::TIPO_ST));
+            $data['tipo_dispositivo'] = (string) ($data['tipo_dispositivo'] ?? 'celular');
+            $this->aplicarReglasGarantia($data);
+            $this->aplicarReglasDispositivo($request, $data);
         } else {
             $data['estado'] = $data['estado'] ?? $orden->estado;
         }
@@ -534,5 +570,147 @@ class OrdenController extends Controller
         }
 
         abort(403, 'No tienes permiso para ver esta orden.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function aplicarReglasGarantia(array &$data): void
+    {
+        $esGarantia = ($data['tipo_gestion'] ?? StOrden::TIPO_ST) === StOrden::TIPO_GARANTIA;
+
+        if (! $esGarantia) {
+            $data['rango_garantia'] = null;
+            if (trim((string) ($data['cliente_nombre'] ?? '')) === '') {
+                throw ValidationException::withMessages([
+                    'cliente_nombre' => 'El nombre del cliente es obligatorio.',
+                ]);
+            }
+
+            return;
+        }
+
+        $rango = (string) ($data['rango_garantia'] ?? '');
+        if (! array_key_exists($rango, StOrden::RANGOS_GARANTIA)) {
+            throw ValidationException::withMessages([
+                'rango_garantia' => 'Indica si la garantía está dentro o fuera del rango de cambio.',
+            ]);
+        }
+
+        if ($rango === StOrden::RANGO_DENTRO) {
+            $data['cliente_nombre'] = 'Cambio en rango (empresa)';
+            $data['cliente_telefono'] = null;
+            $data['cliente_cedula'] = null;
+            $data['fecha_prometida'] = null;
+
+            return;
+        }
+
+        $errors = [];
+        if (trim((string) ($data['cliente_nombre'] ?? '')) === '') {
+            $errors['cliente_nombre'] = 'Fuera de rango el equipo es del cliente: el nombre es obligatorio.';
+        }
+        if (trim((string) ($data['cliente_telefono'] ?? '')) === '') {
+            $errors['cliente_telefono'] = 'Fuera de rango el teléfono del cliente es obligatorio.';
+        }
+        if (trim((string) ($data['cliente_cedula'] ?? '')) === '') {
+            $errors['cliente_cedula'] = 'Fuera de rango la cédula del cliente es obligatoria.';
+        }
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function aplicarReglasDispositivo(Request $request, array &$data): void
+    {
+        $tipo = (string) ($data['tipo_dispositivo'] ?? 'celular');
+        $errors = [];
+        $atributos = [];
+
+        $data['accesorios'] = $this->composeAccesorios($request, $tipo, $data['accesorios'] ?? null);
+
+        if ($tipo === 'celular') {
+            foreach (['marca' => 'La marca es obligatoria.', 'modelo' => 'El modelo es obligatorio.', 'color' => 'El color es obligatorio.'] as $campo => $msg) {
+                if (trim((string) ($data[$campo] ?? '')) === '') {
+                    $errors[$campo] = $msg;
+                }
+            }
+            $almacenamiento = trim((string) $request->input('almacenamiento', ''));
+            if ($almacenamiento === '') {
+                $errors['almacenamiento'] = 'El almacenamiento es obligatorio para celulares.';
+            } else {
+                $atributos['almacenamiento'] = $almacenamiento;
+            }
+        } elseif ($tipo === 'impresora') {
+            foreach (['marca' => 'La marca es obligatoria.', 'modelo' => 'El modelo es obligatorio.'] as $campo => $msg) {
+                if (trim((string) ($data[$campo] ?? '')) === '') {
+                    $errors[$campo] = $msg;
+                }
+            }
+            $tipoImp = (string) $request->input('tipo_impresora', '');
+            if ($tipoImp === '' || ! array_key_exists($tipoImp, config('servicio_tecnico.tipos_impresora', []))) {
+                $errors['tipo_impresora'] = 'Indica el tipo de impresora.';
+            } else {
+                $atributos['tipo_impresora'] = $tipoImp;
+            }
+        } elseif ($tipo === 'camara') {
+            foreach (['marca' => 'La marca es obligatoria.', 'modelo' => 'El modelo es obligatorio.'] as $campo => $msg) {
+                if (trim((string) ($data[$campo] ?? '')) === '') {
+                    $errors[$campo] = $msg;
+                }
+            }
+            $sel = array_map('strval', (array) $request->input('accesorios_sel', []));
+            $serialLente = trim((string) $request->input('serial_lente', ''));
+            if (in_array('lente', $sel, true) && $serialLente === '') {
+                $errors['serial_lente'] = 'Indica el serial del lente.';
+            } elseif ($serialLente !== '') {
+                $atributos['serial_lente'] = $serialLente;
+            }
+        } else {
+            foreach (['marca' => 'La marca es obligatoria.', 'modelo' => 'El modelo es obligatorio.'] as $campo => $msg) {
+                if (trim((string) ($data[$campo] ?? '')) === '') {
+                    $errors[$campo] = $msg;
+                }
+            }
+            $lote = trim((string) $request->input('codigo_lote', ''));
+            if ($lote !== '') {
+                $atributos['codigo_lote'] = $lote;
+                if (trim((string) ($data['serial'] ?? '')) === '') {
+                    $data['serial'] = $lote;
+                }
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        $data['atributos'] = $atributos !== [] ? $atributos : null;
+        unset($data['almacenamiento'], $data['tipo_impresora'], $data['serial_lente'], $data['codigo_lote']);
+    }
+
+    private function composeAccesorios(Request $request, string $tipo, ?string $legacy): ?string
+    {
+        $catalogo = config('servicio_tecnico.accesorios_por_tipo.'.$tipo, []);
+        $sel = array_map('strval', (array) $request->input('accesorios_sel', []));
+        $nombres = [];
+        foreach ($catalogo as $key => $label) {
+            if (in_array((string) $key, $sel, true)) {
+                $nombres[] = $label;
+            }
+        }
+        $otros = trim((string) $request->input('accesorios_otros', ''));
+        if ($otros !== '') {
+            $nombres[] = $otros;
+        }
+        if ($nombres !== []) {
+            return implode(', ', $nombres);
+        }
+        $legacy = trim((string) $legacy);
+
+        return $legacy !== '' ? $legacy : null;
     }
 }

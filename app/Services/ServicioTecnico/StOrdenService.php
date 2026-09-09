@@ -312,8 +312,9 @@ class StOrdenService
     private function validarTransicion(StOrden $orden, string $de, string $a): void
     {
         $permitidas = [
-            StOrden::ESTADO_PENDIENTE => [StOrden::ESTADO_EN_PROCESO, StOrden::ESTADO_CANCELADO],
-            StOrden::ESTADO_EN_PROCESO => [StOrden::ESTADO_PENDIENTE, StOrden::ESTADO_LISTO, StOrden::ESTADO_CANCELADO],
+            StOrden::ESTADO_PENDIENTE => [StOrden::ESTADO_EN_PROCESO, StOrden::ESTADO_UBICANDO_REPUESTO, StOrden::ESTADO_CANCELADO],
+            StOrden::ESTADO_EN_PROCESO => [StOrden::ESTADO_PENDIENTE, StOrden::ESTADO_UBICANDO_REPUESTO, StOrden::ESTADO_LISTO, StOrden::ESTADO_CANCELADO],
+            StOrden::ESTADO_UBICANDO_REPUESTO => [StOrden::ESTADO_PENDIENTE, StOrden::ESTADO_EN_PROCESO, StOrden::ESTADO_CANCELADO],
             StOrden::ESTADO_LISTO => [StOrden::ESTADO_EN_PROCESO, StOrden::ESTADO_ENTREGADO],
             StOrden::ESTADO_ENTREGADO => [],
             StOrden::ESTADO_CANCELADO => [],

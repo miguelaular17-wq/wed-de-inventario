@@ -21,6 +21,8 @@ trait CreatesServicioEquipoSchema
                 $table->string('telefono_asociado', 40)->nullable();
                 $table->string('estado_actual', 32)->default('en_taller');
                 $table->string('sede_actual', 32)->nullable();
+                $table->string('tipo_dispositivo', 32)->default('celular');
+                $table->json('atributos')->nullable();
                 $table->timestamps();
             });
         }
@@ -97,6 +99,26 @@ trait CreatesServicioEquipoSchema
                 }
                 if (! Schema::hasColumn('st_ordenes', 'conformidad_at')) {
                     $table->timestamp('conformidad_at')->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'tipo_dispositivo')) {
+                    $table->string('tipo_dispositivo', 32)->default('celular');
+                }
+                if (! Schema::hasColumn('st_ordenes', 'atributos')) {
+                    $table->json('atributos')->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'rango_garantia')) {
+                    $table->string('rango_garantia', 16)->nullable();
+                }
+            });
+        }
+
+        if (Schema::hasTable('st_equipos')) {
+            Schema::table('st_equipos', function (Blueprint $table) {
+                if (! Schema::hasColumn('st_equipos', 'tipo_dispositivo')) {
+                    $table->string('tipo_dispositivo', 32)->default('celular');
+                }
+                if (! Schema::hasColumn('st_equipos', 'atributos')) {
+                    $table->json('atributos')->nullable();
                 }
             });
         }

@@ -39,7 +39,10 @@
     <div class="box">
         <strong>Cliente y equipo</strong>
         <table class="grid" style="margin-top:4px;">
-            <tr><td class="label">Cliente</td><td>{{ $orden->cliente_nombre }} · {{ $orden->cliente_cedula ?: '—' }}</td></tr>
+            <tr><td class="label">Cliente</td><td>{{ $orden->esCambioEnRango() ? 'Equipo de la empresa (cambio en rango)' : ($orden->cliente_nombre.' · '.($orden->cliente_cedula ?: '—')) }}</td></tr>
+            @if($orden->esGarantia() && ! $orden->esCambioEnRango())
+            <tr><td class="label">Garantía</td><td>La garantía es con la marca del equipo ({{ $orden->marcaEquipo() }}). Palacio actúa como intermediario.</td></tr>
+            @endif
             <tr><td class="label">Equipo</td><td>{{ $orden->equipoCelular?->etiqueta() ?: ($orden->equipo ?: '—') }}</td></tr>
             <tr><td class="label">IMEI / serial</td><td>{{ $orden->imei ?: '—' }} / {{ $orden->serial ?: '—' }}</td></tr>
             <tr><td class="label">Falla original</td><td>{{ $orden->falla ?: '—' }}</td></tr>

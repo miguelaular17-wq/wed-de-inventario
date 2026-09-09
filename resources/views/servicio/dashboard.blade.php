@@ -14,7 +14,7 @@
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <a class="btn" href="{{ route('servicio.celulares.hub') }}">Celulares / bitácora</a>
-            <a class="btn primary" href="{{ route('servicio.ordenes.create') }}">Registrar celular</a>
+            <a class="btn primary" href="{{ route('servicio.ordenes.create') }}">Registrar equipo</a>
         </div>
     </div>
 

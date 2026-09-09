@@ -8,6 +8,7 @@ use App\Models\StOrden;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class StEquipoService
@@ -59,7 +60,7 @@ class StEquipoService
 
         if (! $imei && ! $serial) {
             throw ValidationException::withMessages([
-                'imei' => 'Indica el IMEI del celular, o el serial si el equipo no tiene IMEI.',
+                'serial' => 'Indica el identificador del equipo (IMEI, serial o código de lote).',
             ]);
         }
 
@@ -82,13 +83,15 @@ class StEquipoService
                 'telefono_asociado' => $datos['telefono_asociado'] ?? $existente->telefono_asociado,
                 'sede_actual' => isset($datos['sede_actual']) ? strtoupper((string) $datos['sede_actual']) : $existente->sede_actual,
                 'estado_actual' => $datos['estado_actual'] ?? $existente->estado_actual,
+                'tipo_dispositivo' => $datos['tipo_dispositivo'] ?? $existente->tipo_dispositivo,
+                'atributos' => $datos['atributos'] ?? $existente->atributos,
             ], fn ($v) => $v !== null && $v !== ''));
             $existente->save();
 
             return ['equipo' => $existente->fresh(), 'creado' => false, 'existia' => true];
         }
 
-        $equipo = StEquipo::create([
+        $payload = [
             'imei' => $imei,
             'imei2' => $this->normalizarImei($datos['imei2'] ?? null),
             'serial' => $serial,
@@ -98,7 +101,14 @@ class StEquipoService
             'telefono_asociado' => $datos['telefono_asociado'] ?? null,
             'estado_actual' => $datos['estado_actual'] ?? StEquipo::ESTADO_EN_TALLER,
             'sede_actual' => isset($datos['sede_actual']) ? strtoupper((string) $datos['sede_actual']) : null,
-        ]);
+        ];
+        if (Schema::hasColumn('st_equipos', 'tipo_dispositivo')) {
+            $payload['tipo_dispositivo'] = $datos['tipo_dispositivo'] ?? 'celular';
+        }
+        if (Schema::hasColumn('st_equipos', 'atributos') && isset($datos['atributos'])) {
+            $payload['atributos'] = $datos['atributos'];
+        }
+        $equipo = StEquipo::create($payload);
 
         return ['equipo' => $equipo, 'creado' => true, 'existia' => false];
     }

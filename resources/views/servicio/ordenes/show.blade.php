@@ -7,14 +7,20 @@
     <a href="{{ route('servicio.ordenes.index') }}" style="color:#64748b;text-decoration:none;font-size:0.85rem;">← Órdenes</a>
     <div class="panel-header-flex" style="margin:10px 0 16px;">
         <div>
-            <h2 style="font-weight:700;margin:0;">
+            <h2 style="font-weight:700;margin:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                 {{ $orden->codigo() }}
+                <span style="display:inline-block;padding:4px 10px;border-radius:999px;font-size:.78rem;font-weight:700;
+                    background:{{ $orden->esGarantia() ? '#fef3c7' : '#dbeafe' }};
+                    color:{{ $orden->esGarantia() ? '#92400e' : '#1e40af' }};">
+                    {{ $orden->etiquetaTipoGestion() }}
+                </span>
                 @if($orden->excedePresupuesto())
                     <span title="Costos superan el presupuesto">⚠️</span>
                 @endif
             </h2>
             <p class="muted" style="margin:4px 0 0;">
                 {{ $orden->sede }} · {{ $orden->etiquetaEstado() }} · {{ $orden->etiquetaPrioridad() }}
+                · Creada por {{ $orden->creador?->name ?: '—' }}
                 @if($orden->transferenciaPendiente())
                     · <span style="color:#b45309;">Transferencia pendiente desde {{ $orden->sede_origen_transfer }}</span>
                 @elseif($orden->sede_origen_transfer)
@@ -43,12 +49,35 @@
 
     <div class="panel" style="padding:24px;margin-bottom:16px;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 24px;">
+            <div>
+                <span class="muted">Gestión</span>
+                <div><strong>{{ $orden->etiquetaTipoGestion() }}</strong>{{ $orden->etiquetaRangoGarantia() ? ' · '.$orden->etiquetaRangoGarantia() : '' }}</div>
+            </div>
+            <div><span class="muted">Creada por</span><div>{{ $orden->creador?->name ?: '—' }}</div></div>
+            @unless($orden->esCambioEnRango())
             <div><span class="muted">Cliente</span><div><strong>{{ $orden->cliente_nombre }}</strong></div></div>
             <div><span class="muted">Teléfono</span><div>{{ $orden->cliente_telefono ?: '—' }}</div></div>
+            @endunless
+            @if($orden->esGarantia() && ! $orden->esCambioEnRango())
+                <div style="grid-column:1/-1;"><span class="muted">Garantía</span><div>La garantía es con la marca del equipo ({{ $orden->marcaEquipo() }}). La empresa es intermediaria; el equipo pertenece al cliente.</div></div>
+            @endif
             <div><span class="muted">Equipo</span><div>{{ $orden->equipo ?: '—' }}</div></div>
+            <div><span class="muted">Tipo de dispositivo</span><div>{{ $orden->etiquetaTipoDispositivo() }}</div></div>
             <div><span class="muted">IMEI</span><div>{{ $orden->imei ?: '—' }}</div></div>
             <div><span class="muted">Serial</span><div>{{ $orden->serial ?: '—' }}</div></div>
-            <div><span class="muted">Tipo</span><div>{{ $orden->etiquetaTipoGestion() }}</div></div>
+            @if($orden->atributo('almacenamiento'))
+                <div><span class="muted">Almacenamiento</span><div>{{ $orden->atributo('almacenamiento') }}</div></div>
+            @endif
+            @if($orden->atributo('tipo_impresora'))
+                <div><span class="muted">Tipo de impresora</span><div>{{ config('servicio_tecnico.tipos_impresora.'.$orden->atributo('tipo_impresora'), $orden->atributo('tipo_impresora')) }}</div></div>
+            @endif
+            @if($orden->atributo('serial_lente'))
+                <div><span class="muted">Serial del lente</span><div>{{ $orden->atributo('serial_lente') }}</div></div>
+            @endif
+            @if($orden->atributo('codigo_lote'))
+                <div><span class="muted">Código de lote</span><div>{{ $orden->atributo('codigo_lote') }}</div></div>
+            @endif
+            <div><span class="muted">Accesorios</span><div>{{ $orden->accesorios ?: '—' }}</div></div>
             @if($orden->equipo_id)
                 <div>
                     <span class="muted">Bitácora</span>
@@ -56,7 +85,9 @@
                 </div>
             @endif
             <div><span class="muted">Ingreso</span><div>{{ $orden->fecha_ingreso?->format('d/m/Y') }}</div></div>
+            @unless($orden->esCambioEnRango())
             <div><span class="muted">Prometida</span><div>{{ $orden->fecha_prometida?->format('d/m/Y') ?: '—' }}</div></div>
+            @endunless
             <div><span class="muted">Técnico</span><div>{{ $orden->tecnico?->name ?: '—' }}</div></div>
             <div><span class="muted">Repuestos descontados</span><div>{{ $orden->repuestos_descontados_at ? $orden->repuestos_descontados_at->format('d/m/Y H:i') : 'No' }}</div></div>
         </div>
