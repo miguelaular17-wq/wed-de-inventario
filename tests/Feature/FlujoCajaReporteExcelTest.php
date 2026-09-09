@@ -20,7 +20,7 @@ class FlujoCajaReporteExcelTest extends TestCase
         $this->ensureFlujoCajaColumns();
     }
 
-    public function test_auditor_puede_descargar_excel_del_reporte(): void
+    public function test_auditor_puede_descargar_pdf_del_reporte_con_desglose(): void
     {
         $auditor = User::create([
             'name' => 'Auditor',
@@ -40,6 +40,15 @@ class FlujoCajaReporteExcelTest extends TestCase
             'monto_usd' => 10,
             'monto_bs' => 1000,
             'oculto' => false,
+            'desglose' => [
+                [
+                    'cedula' => 'V-12345678',
+                    'sede' => 'DORAL',
+                    'tipo_gasto' => 'Compras',
+                    'monto' => 1000,
+                    'monto_usd' => 10,
+                ],
+            ],
         ]);
 
         $response = $this->actingAs($auditor)->get(route('finanzas.flujo_caja.reporte', [
@@ -49,11 +58,9 @@ class FlujoCajaReporteExcelTest extends TestCase
         ]));
 
         $response->assertOk();
-        $this->assertStringContainsString(
-            'spreadsheetml.sheet',
-            (string) $response->headers->get('Content-Type')
-        );
-        $this->assertSame('PK', substr($response->getContent(), 0, 2));
+        $this->assertStringContainsString('pdf', strtolower((string) $response->headers->get('Content-Type')));
+        $this->assertStringContainsString('%PDF', $response->getContent());
+        $this->assertStringContainsString('Reporte_Flujo_Caja_2026-08-27_al_2026-08-27.pdf', (string) $response->headers->get('Content-Disposition'));
     }
 
     private function ensureFlujoCajaColumns(): void
@@ -68,6 +75,7 @@ class FlujoCajaReporteExcelTest extends TestCase
             'diferencial_cambiario' => fn (Blueprint $table) => $table->decimal('diferencial_cambiario', 14, 2)->nullable(),
             'comision' => fn (Blueprint $table) => $table->decimal('comision', 14, 2)->nullable(),
             'oculto' => fn (Blueprint $table) => $table->boolean('oculto')->default(false),
+            'desglose' => fn (Blueprint $table) => $table->json('desglose')->nullable(),
         ];
 
         foreach ($columns as $name => $define) {

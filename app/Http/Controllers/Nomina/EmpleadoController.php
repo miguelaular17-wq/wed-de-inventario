@@ -8,7 +8,6 @@ use App\Models\Nomina\NominaAuditLog;
 use App\Models\Nomina\NominaCargo;
 use App\Models\Nomina\NominaComisionAbono;
 use App\Models\Nomina\NominaComisionDescuento;
-use App\Models\Nomina\NominaComisionRegistro;
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaEmpresa;
 use App\Models\Nomina\NominaLiquidacionComision;
@@ -180,15 +179,6 @@ class EmpleadoController extends Controller
                 ->limit(24)
                 ->get()
             : collect();
-        $comisiones = $tab === 'comisiones'
-            ? NominaComisionRegistro::query()
-                ->where('empleado_id', $empleado->id)
-                ->with(['periodo', 'regla'])
-                ->orderByDesc('fecha')
-                ->orderByDesc('id')
-                ->limit(300)
-                ->get()
-            : collect();
         $abonosComision = $tab === 'comisiones'
             ? NominaComisionAbono::query()->where('empleado_id', $empleado->id)->orderByDesc('fecha')->limit(50)->get()
             : collect();
@@ -255,7 +245,6 @@ class EmpleadoController extends Controller
             'ventasFacturas' => $ventasFacturas,
             'comisionQuincena' => $comisionQuincena,
             'liquidaciones' => $liquidaciones,
-            'comisiones' => $comisiones,
             'abonosComision' => $abonosComision,
             'descuentosComision' => $descuentosComision,
             'ventaDetalle' => $ventaDetalle,

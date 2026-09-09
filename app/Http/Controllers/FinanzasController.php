@@ -15,7 +15,6 @@ use App\Services\Profiler;
 use App\Services\BcvRateService;
 use App\Services\GastoFijoPendienteService;
 use App\Services\TodoTicketPago;
-use App\Support\SimpleXlsxWriter;
 
 class FinanzasController extends Controller
 {
@@ -2200,54 +2199,6 @@ class FinanzasController extends Controller
         return view('finanzas.reporte_consolidado', compact('cuentas', 'resumen', 'planificacion'));
     }
 
-    public function reporteDiarioCaja(\Illuminate\Http\Request $request)
-    {
-        Profiler::start('FinanzasController::reporteDiarioCaja');
-
-        $fecha = $request->query('fecha', date('Y-m-d'));
-
-        $movimientos = \App\Models\FlujoCaja::where('fecha', $fecha)->where('oculto', false)->orderBy('fecha', 'desc')->get();
-        $egresos_realizados = $movimientos->where('categoria_egreso', 'egreso_realizado');
-        $otros_egresos = $movimientos->where('categoria_egreso', 'otros_egresos');
-        $egresos_divisas = $movimientos->where('categoria_egreso', 'egreso_divisas');
-        
-        $cuentasBancarias = \App\Models\CuentaBancaria::where('mostrar_en_principal', true)->orderBy('orden')->get();
-        $resumen = \App\Models\FinanzasResumen::firstOrCreate(
-            ['fecha' => $fecha],
-            [
-                'tasa_bcv_usd' => $this->getTasaBcvDelDia(),
-                'saldo_inicial' => 0,
-                'queda_dia_anterior' => 0,
-                'porcentaje_total_diferencial' => 0
-            ]
-        );
-
-        $total_salidas_bs = $egresos_realizados->sum('monto_bs') 
-                          + $egresos_realizados->sum('comision') 
-                          + $otros_egresos->sum('monto_bs') 
-                          + $otros_egresos->sum('comision');
-        
-        $total_diferencial_cambiario = $egresos_realizados->sum('diferencial_cambiario') 
-                                     + $otros_egresos->sum('diferencial_cambiario');
-
-        Profiler::start('FinanzasController::reporteDiarioCaja Blade render');
-        $result = view('finanzas.reporte_diario_caja', compact(
-            'movimientos', 
-            'egresos_realizados', 
-            'otros_egresos',
-            'egresos_divisas',
-            'cuentasBancarias',
-            'resumen',
-            'total_salidas_bs',
-            'total_diferencial_cambiario'
-        ));
-        Profiler::stop('FinanzasController::reporteDiarioCaja Blade render');
-
-        Profiler::stop('FinanzasController::reporteDiarioCaja');
-        return $result;
-    }
-
-
     public function updatePlanificacion(Request $request, $id)
     {
         $plan = \App\Models\PlanificacionPago::findOrFail($id);
@@ -2828,88 +2779,11 @@ class FinanzasController extends Controller
             'tot_divisas_usd' => $divisas->sum('monto_usd'),
         ];
 
-        $xlsx = SimpleXlsxWriter::toString($this->hojasReporteFlujoCaja($data));
-        $nombre = 'Reporte_Flujo_Caja_'.$fecha_desde.'_al_'.$fecha_hasta.'.xlsx';
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('finanzas.pdf.reporte_flujo_busqueda', ['data' => $data]);
+        $pdf->setPaper('a4', 'landscape');
+        $nombre = 'Reporte_Flujo_Caja_'.$fecha_desde.'_al_'.$fecha_hasta.'.pdf';
 
-        return response($xlsx, 200, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => 'attachment; filename="'.$nombre.'"',
-        ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     * @return array<string, list<list<string|int|float|null>>>
-     */
-    private function hojasReporteFlujoCaja(array $data): array
-    {
-        $hojas = [];
-        $secciones = [
-            'egreso_realizado' => ['Egresos Realizados', $data['egresos'], true, true],
-            'otros_egresos' => ['Otros Egresos', $data['otros'], true, true],
-            'traslados' => ['Traslados', $data['traslados'], true, true],
-            'egreso_divisas' => ['Egresos Divisas', $data['divisas'], false, false],
-        ];
-
-        foreach ($secciones as $cat => [$titulo, $rows, $conBs, $conDif]) {
-            if (! in_array($cat, $data['selected_cats'], true)) {
-                continue;
-            }
-            $hojas[$titulo] = $this->filasReporteFlujo($rows, $conBs, $conDif);
-        }
-
-        if ($hojas === []) {
-            $hojas['Reporte'] = [['No se encontraron registros para los filtros seleccionados.']];
-        }
-
-        return $hojas;
-    }
-
-    /**
-     * @param  \Illuminate\Support\Collection<int, mixed>  $movimientos
-     * @return list<list<string|int|float|null>>
-     */
-    private function filasReporteFlujo($movimientos, bool $conBs, bool $conDif): array
-    {
-        $filas = [[
-            'Fecha', 'Banco origen', 'Titular origen', 'Banco destino', 'Titular destino',
-            'Tipo gasto', 'Motivo', 'USD', 'Dif. Camb.', 'BS', 'Comisión',
-        ]];
-
-        foreach ($movimientos as $mov) {
-            $filas[] = [
-                $mov->fecha ? date('d/m/Y', strtotime((string) $mov->fecha)) : '',
-                $mov->banco ?: '',
-                $mov->titular ?: '',
-                $mov->banco_receptor ?: '',
-                $mov->titular_receptor ?: '',
-                $mov->tipo_gasto ?: '',
-                $mov->motivo ?: '',
-                $this->numeroExcel($mov->monto_usd),
-                $conDif ? $this->numeroExcel($mov->diferencial_cambiario) : '',
-                $conBs ? $this->numeroExcel($mov->monto_bs) : '',
-                $conBs ? $this->numeroExcel($mov->comision) : '',
-            ];
-        }
-
-        $filas[] = [
-            '', '', '', '', '', '', 'TOTALES',
-            $this->numeroExcel($movimientos->sum('monto_usd')),
-            $conDif ? $this->numeroExcel($movimientos->sum('diferencial_cambiario')) : '',
-            $conBs ? $this->numeroExcel($movimientos->sum('monto_bs')) : '',
-            $conBs ? $this->numeroExcel($movimientos->sum('comision')) : '',
-        ];
-
-        return $filas;
-    }
-
-    private function numeroExcel($valor): float|string
-    {
-        if ($valor === null || $valor === '') {
-            return '';
-        }
-
-        return round((float) $valor, 2);
+        return $pdf->download($nombre);
     }
 
     public function parseArchivoDesglose(Request $request)

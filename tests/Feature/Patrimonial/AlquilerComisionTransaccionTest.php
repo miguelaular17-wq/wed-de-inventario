@@ -127,6 +127,66 @@ class AlquilerComisionTransaccionTest extends TestCase
 
         $this->assertSame(1, PatTransaccion::query()->where('tipo', 'ingreso')->count());
         $this->assertSame(0, PatTransaccion::query()->where('tipo', 'comision')->count());
+        $this->assertEquals(0.0, (float) $pago->fresh()->comision_pagada);
+    }
+
+    public function test_abono_parcial_con_comision_y_resto_al_completar(): void
+    {
+        $prop = $this->propiedad();
+        $alquiler = Alquiler::create([
+            'propiedad_id' => $prop->id,
+            'inquilino_nombre' => 'Luis Pérez',
+            'fecha_inicio' => '2026-09-01',
+            'tipo_canon' => 'mensual',
+            'canon_mensual' => 300,
+            'comision' => 30,
+            'estado' => 'activo',
+        ]);
+        $pago = AlquilerPago::create([
+            'alquiler_id' => $alquiler->id,
+            'periodo' => '2026-09',
+            'fecha_vencimiento' => '2026-09-01',
+            'monto' => 300,
+            'monto_pagado' => 0,
+            'estado' => 'pendiente',
+        ]);
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->put(route('patrimonial.alquileres.actualizar_pago', $pago), [
+                'monto' => 250,
+                'fecha_pago' => '2026-09-08',
+                'forma_pago' => 'Zelle',
+                'pago_parte_comision' => '1',
+                'comision_abono' => 20,
+            ])
+            ->assertRedirect();
+
+        $this->assertEquals(250.0, (float) $pago->fresh()->monto_pagado);
+        $this->assertNotSame('pagado', $pago->fresh()->estado);
+        $this->assertEquals(20.0, (float) $pago->fresh()->comision_pagada);
+        $this->assertEquals(20.0, (float) PatTransaccion::query()->where('tipo', 'comision')->sum('monto'));
+
+        $this->actingAs($admin)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->put(route('patrimonial.alquileres.actualizar_pago', $pago), [
+                'monto' => 50,
+                'fecha_pago' => '2026-09-15',
+                'forma_pago' => 'Zelle',
+            ])
+            ->assertRedirect();
+
+        $pago = $pago->fresh();
+        $this->assertSame('pagado', $pago->estado);
+        $this->assertEquals(30.0, (float) $pago->comision_pagada);
+
+        $comisiones = PatTransaccion::query()->where('tipo', 'comision')->orderBy('id')->get();
+        $this->assertCount(2, $comisiones);
+        $this->assertEquals(20.0, (float) $comisiones[0]->monto);
+        $this->assertEquals(10.0, (float) $comisiones[1]->monto);
+        $this->assertSame('2026-09-15', $comisiones[1]->fecha->toDateString());
+        $this->assertEquals(300.0, (float) PatTransaccion::query()->where('tipo', 'ingreso')->sum('monto'));
     }
 
     private function propiedad(): Propiedad

@@ -215,10 +215,6 @@
                     Limpiar Día
                 </button>
             </form>
-            <a href="{{ route('finanzas.reporte_diario_caja', ['fecha' => $fecha_filtro]) }}" class="btn btn-secondary" style="background-color: #f1f5f9; color: #334155; padding: 10px 20px; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 500; display: flex; align-items: center; gap: 8px; text-decoration: none; transition: all 0.2s;" onmouseover="this.style.background='#e2e8f0';" onmouseout="this.style.background='#f1f5f9';">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                Reporte Diario
-            </a>
             <a href="{{ route('finanzas.reporte_consolidado') }}" class="btn btn-secondary" style="background-color: #f1f5f9; color: #334155; padding: 10px 20px; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 500; display: flex; align-items: center; gap: 8px; text-decoration: none; transition: all 0.2s;" onmouseover="this.style.background='#e2e8f0';" onmouseout="this.style.background='#f1f5f9';">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                 Generar Reporte Consolidado
@@ -1500,7 +1496,7 @@
 function descargarReporteBusqueda() {
     Swal.fire({
         title: 'Selecciona las tablas',
-        text: 'El reporte se descargará en Excel.',
+        text: 'El reporte se descargará en PDF.',
         html: `
             <div style="text-align: left; margin: 15px auto; width: fit-content; display: flex; flex-direction: column; gap: 10px;">
                 <label style="cursor: pointer;"><input type="checkbox" id="rep_egresos" value="egreso_realizado" checked style="margin-right: 8px;"> Egresos Realizados</label>
@@ -1510,7 +1506,7 @@ function descargarReporteBusqueda() {
             </div>
         `,
         showCancelButton: true,
-        confirmButtonText: 'Descargar Excel',
+        confirmButtonText: 'Descargar PDF',
         cancelButtonText: 'Cancelar',
         preConfirm: () => {
             let selected = [];

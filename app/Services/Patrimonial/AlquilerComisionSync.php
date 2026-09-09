@@ -10,43 +10,34 @@ use Illuminate\Support\Facades\Schema;
 
 class AlquilerComisionSync
 {
-    public function syncPago(Alquiler $alquiler, AlquilerPago $pago, ?string $fecha = null): void
+    public function syncPago(Alquiler $alquiler, AlquilerPago $pago, ?string $fecha = null, float $comisionEsteAbono = 0): void
     {
-        $monto = round((float) ($alquiler->comision ?? 0), 2);
-        $existente = $this->existente($pago);
-        $cuotaPagada = $pago->estado === 'pagado' || (float) $pago->monto_pagado >= (float) $pago->monto;
-
-        if ($monto <= 0 || ! $cuotaPagada) {
-            $existente?->delete();
-
+        $contrato = round((float) ($alquiler->comision ?? 0), 2);
+        if ($contrato <= 0) {
             return;
         }
 
-        $fechaC = Carbon::parse($fecha ?: ($pago->fecha_pago?->toDateString() ?: now()->toDateString()));
-
-        $payload = [
-            'propiedad_id' => $alquiler->propiedad_id,
-            'tipo' => 'comision',
-            'categoria' => 'Comisión plataforma',
-            'descripcion' => 'Comisión alquiler '.$pago->periodo.' — '.$alquiler->inquilino_nombre,
-            'monto' => $monto,
-            'moneda' => 'usd',
-            'fecha' => $fechaC->toDateString(),
-            'mes' => $fechaC->month,
-            'anio' => $fechaC->year,
-            'observaciones' => 'Comisión del canon (el inquilino paga el total)',
-        ];
-        if (Schema::hasColumn('pat_transacciones', 'alquiler_id')) {
-            $payload['alquiler_id'] = $alquiler->id;
-        }
-        if (Schema::hasColumn('pat_transacciones', 'alquiler_pago_id')) {
-            $payload['alquiler_pago_id'] = $pago->id;
+        $ya = round((float) ($pago->comision_pagada ?? 0), 2);
+        $restante = round(max(0, $contrato - $ya), 2);
+        if ($restante <= 0) {
+            return;
         }
 
-        if ($existente) {
-            $existente->update($payload);
-        } else {
-            PatTransaccion::create($payload);
+        $cuotaPagada = $pago->estado === 'pagado' || (float) $pago->monto_pagado >= (float) $pago->monto;
+        $pedido = round(max(0, $comisionEsteAbono), 2);
+
+        $aRegistrar = $cuotaPagada
+            ? $restante
+            : min($pedido, $restante);
+
+        if ($aRegistrar <= 0) {
+            return;
+        }
+
+        $this->crearTransaccion($alquiler, $pago, $aRegistrar, $fecha);
+        $pago->comision_pagada = round($ya + $aRegistrar, 2);
+        if (Schema::hasColumn('pat_alquiler_pagos', 'comision_pagada')) {
+            $pago->save();
         }
     }
 
@@ -68,19 +59,29 @@ class AlquilerComisionSync
             ->delete();
     }
 
-    private function existente(AlquilerPago $pago): ?PatTransaccion
+    private function crearTransaccion(Alquiler $alquiler, AlquilerPago $pago, float $monto, ?string $fecha): void
     {
+        $fechaC = Carbon::parse($fecha ?: ($pago->fecha_pago?->toDateString() ?: now()->toDateString()));
+
+        $payload = [
+            'propiedad_id' => $alquiler->propiedad_id,
+            'tipo' => 'comision',
+            'categoria' => 'Comisión plataforma',
+            'descripcion' => 'Comisión alquiler '.$pago->periodo.' — '.$alquiler->inquilino_nombre,
+            'monto' => $monto,
+            'moneda' => 'usd',
+            'fecha' => $fechaC->toDateString(),
+            'mes' => $fechaC->month,
+            'anio' => $fechaC->year,
+            'observaciones' => 'Comisión del canon (el inquilino paga el total)',
+        ];
+        if (Schema::hasColumn('pat_transacciones', 'alquiler_id')) {
+            $payload['alquiler_id'] = $alquiler->id;
+        }
         if (Schema::hasColumn('pat_transacciones', 'alquiler_pago_id')) {
-            return PatTransaccion::query()
-                ->where('alquiler_pago_id', $pago->id)
-                ->where('tipo', 'comision')
-                ->first();
+            $payload['alquiler_pago_id'] = $pago->id;
         }
 
-        return PatTransaccion::query()
-            ->where('propiedad_id', $pago->alquiler?->propiedad_id)
-            ->where('tipo', 'comision')
-            ->where('descripcion', 'Comisión alquiler '.$pago->periodo.' — '.($pago->alquiler?->inquilino_nombre ?? ''))
-            ->first();
+        PatTransaccion::create($payload);
     }
 }

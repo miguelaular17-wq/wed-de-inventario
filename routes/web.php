@@ -387,7 +387,6 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
     Route::get('/flujo-caja', [FinanzasController::class, 'flujoCaja'])->name('finanzas.flujo_caja');
     Route::post('/flujo-caja/parse-desglose', [FinanzasController::class, 'parseArchivoDesglose'])->name('finanzas.parse_desglose');
     Route::get('/flujo-caja/reporte', [FinanzasController::class, 'reporteFlujoCajaBusqueda'])->name('finanzas.flujo_caja.reporte');
-    Route::get('/flujo-caja/reporte-diario', [FinanzasController::class, 'reporteDiarioCaja'])->name('finanzas.reporte_diario_caja');
     Route::get('/flujo-caja/api/bcv', [FinanzasController::class, 'fetchBcvApi'])->name('finanzas.api_bcv');
     Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
     Route::get('/gastos-fijos/pendientes', [FinanzasController::class, 'getGastosFijosParaVincular'])->name('finanzas.gastos_fijos.pendientes');

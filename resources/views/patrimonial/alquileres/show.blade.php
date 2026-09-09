@@ -57,8 +57,11 @@
                         @if($pago->monto_pagado > 0 && $pago->estado !== 'pagado')
                             <div style="font-size:0.75rem; color:#059669; font-weight:600; margin-bottom: 2px;">Abonado: ${{ number_format($pago->monto_pagado, 2) }}</div>
                         @endif
+                        @if($alquiler->getComision() > 0)
+                            <div style="font-size:0.72rem; color:#7c3aed; font-weight:600;">Comisión ${{ number_format((float) ($pago->comision_pagada ?? 0), 2) }} de ${{ number_format($alquiler->getComision(), 2) }}</div>
+                        @endif
                         @if($pago->estado !== 'pagado')
-                            <button onclick="abrirModalPagos({{ $pago->id }}, '{{ $pago->periodo }}', {{ $pago->getSaldo() }})"
+                            <button onclick="abrirModalPagos({{ $pago->id }}, '{{ $pago->periodo }}', {{ $pago->getSaldo() }}, {{ $alquiler->getComision() }}, {{ (float) ($pago->comision_pagada ?? 0) }})"
                                     style="margin-top:4px; padding:4px 10px; font-size:0.8rem; border-radius:6px; border:1px solid #10b981; background:#10b981; color:#fff; cursor:pointer; font-weight:600;">
                                 💰 Pagar
                             </button>
@@ -105,8 +108,9 @@
                 <div>
                     <label style="font-size:0.8rem; font-weight:600; color:#475569;">Monto Pagado *</label>
                     <input type="number" name="monto" id="monto_pagado" step="0.01" min="0" required
+                           oninput="actualizarBloqueComision()"
                            style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
-                    <p style="margin:4px 0 0; font-size:0.75rem; color:#94a3b8;">Canon completo. La comisión no se descuenta aquí.</p>
+                    <p style="margin:4px 0 0; font-size:0.75rem; color:#94a3b8;">Monto del canon (o abono). La comisión se registra aparte.</p>
                 </div>
                 <div>
                     <label style="font-size:0.8rem; font-weight:600; color:#475569;">Fecha Pago *</label>
@@ -156,6 +160,20 @@
                 <label style="font-size:0.8rem; font-weight:600; color:#475569;">Comentario</label>
                 <textarea name="comentario" rows="2" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;"></textarea>
             </div>
+
+            <div id="bloque_comision_parcial" style="display:none; margin-bottom:16px; padding:12px; background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px;">
+                <label style="display:flex; align-items:flex-start; gap:8px; font-size:0.85rem; color:#4c1d95; font-weight:600; cursor:pointer;">
+                    <input type="checkbox" name="pago_parte_comision" id="pago_parte_comision" value="1" onchange="toggleComisionAbono()">
+                    <span>¿Ya pagaron parte de la comisión en este abono?</span>
+                </label>
+                <div id="div_comision_abono" style="display:none; margin-top:10px;">
+                    <label style="font-size:0.8rem; font-weight:600; color:#5b21b6;">Monto de comisión *</label>
+                    <input type="number" name="comision_abono" id="comision_abono" step="0.01" min="0" value="0"
+                           style="width:100%; padding:8px; border:1px solid #c4b5fd; border-radius:6px; box-sizing:border-box;">
+                    <p id="hint_comision_restante" style="margin:4px 0 0; font-size:0.75rem; color:#6d28d9;"></p>
+                </div>
+            </div>
+            <p id="nota_comision_completa" style="display:none; margin:-4px 0 16px; font-size:0.8rem; color:#6d28d9;"></p>
             
             <div style="display:flex; justify-content:flex-end; gap:8px;">
                 <button type="button" onclick="cerrarModalPagos()" style="padding:8px 16px; background:#f1f5f9; color:#475569; border:none; border-radius:6px; cursor:pointer;">Cancelar</button>
@@ -167,17 +185,73 @@
 
 @push('scripts')
 <script>
-function abrirModalPagos(idPago, periodo, saldoP) {
+let saldoCuota = 0;
+let comisionContrato = 0;
+let comisionYaPagada = 0;
+
+function abrirModalPagos(idPago, periodo, saldoP, comision, comisionPagada) {
+    saldoCuota = Number(saldoP) || 0;
+    comisionContrato = Number(comision) || 0;
+    comisionYaPagada = Number(comisionPagada) || 0;
     document.getElementById('modalPagoTitle').innerText = 'Pagar Cuota - ' + periodo;
-    document.getElementById('monto_pagado').value = saldoP.toFixed(2);
+    document.getElementById('monto_pagado').value = saldoCuota.toFixed(2);
     document.getElementById('formPago').action = '/patrimonial/alquileres/pago/' + idPago;
+    document.getElementById('pago_parte_comision').checked = false;
+    document.getElementById('comision_abono').value = '0';
     document.getElementById('modalPagos').style.display = 'flex';
     toggleCamposPago();
+    actualizarBloqueComision();
+}
+
+function restanteComision() {
+    return Math.max(0, Math.round((comisionContrato - comisionYaPagada) * 100) / 100);
+}
+
+function actualizarBloqueComision() {
+    const monto = parseFloat(document.getElementById('monto_pagado').value) || 0;
+    const rest = restanteComision();
+    const parcial = monto + 0.005 < saldoCuota;
+    const bloqueParcial = document.getElementById('bloque_comision_parcial');
+    const notaCompleta = document.getElementById('nota_comision_completa');
+    const hint = document.getElementById('hint_comision_restante');
+    const inputCom = document.getElementById('comision_abono');
+
+    if (comisionContrato <= 0 || rest <= 0) {
+        bloqueParcial.style.display = 'none';
+        notaCompleta.style.display = 'none';
+        document.getElementById('pago_parte_comision').checked = false;
+        toggleComisionAbono();
+        return;
+    }
+
+    inputCom.max = rest.toFixed(2);
+    hint.textContent = 'Pendiente de comisión en esta cuota: $' + rest.toFixed(2);
+
+    if (parcial) {
+        bloqueParcial.style.display = 'block';
+        notaCompleta.style.display = 'none';
+    } else {
+        bloqueParcial.style.display = 'none';
+        document.getElementById('pago_parte_comision').checked = false;
+        toggleComisionAbono();
+        notaCompleta.style.display = 'block';
+        notaCompleta.textContent = 'Al completar la cuota se registrará el resto de la comisión ($' + rest.toFixed(2) + ').';
+    }
+}
+
+function toggleComisionAbono() {
+    const on = document.getElementById('pago_parte_comision').checked;
+    document.getElementById('div_comision_abono').style.display = on ? 'block' : 'none';
+    document.getElementById('comision_abono').required = on;
 }
 
 function cerrarModalPagos() {
     document.getElementById('modalPagos').style.display = 'none';
     document.getElementById('formPago').reset();
+    document.getElementById('pago_parte_comision').checked = false;
+    toggleComisionAbono();
+    document.getElementById('bloque_comision_parcial').style.display = 'none';
+    document.getElementById('nota_comision_completa').style.display = 'none';
 }
 
 function toggleCamposPago() {

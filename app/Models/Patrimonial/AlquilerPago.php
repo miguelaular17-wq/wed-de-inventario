@@ -11,7 +11,7 @@ class AlquilerPago extends Model
         'alquiler_id', 'periodo', 'fecha_vencimiento',
         'fecha_pago', 'monto', 'monto_pagado', 'estado', 'observaciones',
         'forma_pago', 'tasa_cambio', 'banco_origen', 
-        'banco_destino', 'referencia', 'comentario', 'user_id'
+        'banco_destino', 'referencia', 'comentario', 'user_id', 'comision_pagada',
     ];
 
     protected $casts = [
@@ -19,6 +19,7 @@ class AlquilerPago extends Model
         'fecha_pago'        => 'date',
         'monto'             => 'decimal:2',
         'monto_pagado'      => 'decimal:2',
+        'comision_pagada'   => 'decimal:2',
     ];
 
     public function alquiler()

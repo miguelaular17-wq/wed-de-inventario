@@ -115,7 +115,12 @@ trait CreatesPatrimonialSchema
                 $table->string('forma_pago', 64)->nullable();
                 $table->text('comentario')->nullable();
                 $table->unsignedBigInteger('user_id')->nullable();
+                $table->decimal('comision_pagada', 18, 2)->default(0);
                 $table->timestamps();
+            });
+        } elseif (! Schema::hasColumn('pat_alquiler_pagos', 'comision_pagada')) {
+            Schema::table('pat_alquiler_pagos', function (Blueprint $table) {
+                $table->decimal('comision_pagada', 18, 2)->default(0);
             });
         }
 

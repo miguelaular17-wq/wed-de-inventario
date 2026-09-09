@@ -268,26 +268,6 @@
         </p>
 
         <div class="nomina-card" style="margin-top:16px;">
-            <h3>Detalle de líneas</h3>
-            <table class="data-table">
-                <thead><tr><th>Período</th><th>Fecha</th><th>Grupo</th><th>Base</th><th>%</th><th>Comisión</th></tr></thead>
-                <tbody>
-                    @forelse($comisiones as $comision)
-                        <tr>
-                            <td>{{ $comision->periodo?->etiqueta ?: '—' }}</td>
-                            <td>{{ $comision->fecha?->format('d/m/Y') }}</td>
-                            <td>{{ $comision->regla_snapshot['grupo'] ?? $comision->regla_snapshot['modo'] ?? $comision->origen }}</td>
-                            <td>${{ number_format($comision->base_monto, 2) }}</td>
-                            <td>{{ number_format($comision->porcentaje, 4) }}%</td>
-                            <td><strong>${{ number_format($comision->monto_comision, 2) }}</strong></td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="6" class="muted">Todavía no hay líneas calculadas para este empleado.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-        <div class="nomina-card" style="margin-top:16px;">
             <h3>Comisiones de marca</h3>
             <p class="muted">Las paga la marca directamente al empleado y no se incluyen en el total a pagar por la tienda.</p>
         </div>

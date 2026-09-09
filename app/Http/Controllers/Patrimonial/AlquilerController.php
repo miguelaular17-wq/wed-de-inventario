@@ -126,12 +126,14 @@ class AlquilerController extends Controller
             unset($data['comision']);
         }
         $alquiler->update($data);
+        $alquiler->load('pagos');
 
         foreach ($alquiler->pagos as $pago) {
             $this->comisionSync->syncPago(
-                $alquiler->fresh(),
+                $alquiler,
                 $pago,
-                $pago->fecha_pago?->toDateString()
+                $pago->fecha_pago?->toDateString(),
+                0
             );
         }
 
@@ -180,7 +182,7 @@ class AlquilerController extends Controller
                 $ingreso['alquiler_pago_id'] = $pago->id;
             }
             PatTransaccion::create($ingreso);
-            $this->comisionSync->syncPago($alquiler, $pago->fresh(), $data['fecha_pago']);
+            $this->comisionSync->syncPago($alquiler, $pago->fresh(), $data['fecha_pago'], 0);
         }
 
         return back()->with('status', '✅ Pago registrado y actualizado en el balance.');
@@ -198,10 +200,17 @@ class AlquilerController extends Controller
             'banco_destino' => 'nullable|string',
             'referencia'    => 'nullable|string',
             'comentario'    => 'nullable|string',
+            'pago_parte_comision' => 'nullable',
+            'comision_abono' => 'nullable|numeric|min:0',
         ]);
+
+        $restanteComision = round(max(0, (float) ($pago->alquiler?->getComision() ?? 0) - (float) ($pago->comision_pagada ?? 0)), 2);
+        $comisionAbono = $request->boolean('pago_parte_comision')
+            ? min($restanteComision, round((float) $request->input('comision_abono', 0), 2))
+            : 0;
         
         $montoAbonado = $data['monto'] ?? 0;
-        unset($data['monto']);
+        unset($data['monto'], $data['pago_parte_comision'], $data['comision_abono']);
         
         if ($montoAbonado > 0) {
             $pago->monto_pagado += $montoAbonado;
@@ -239,7 +248,7 @@ class AlquilerController extends Controller
                 $ingreso['alquiler_pago_id'] = $pago->id;
             }
             PatTransaccion::create($ingreso);
-            $this->comisionSync->syncPago($alquiler, $pago->fresh(), $data['fecha_pago']);
+            $this->comisionSync->syncPago($alquiler, $pago->fresh(), $data['fecha_pago'], $comisionAbono);
         }
 
         return back()->with('status', '✅ Pago registrado y actualizado en el balance.');
