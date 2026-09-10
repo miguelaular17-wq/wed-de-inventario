@@ -6,10 +6,11 @@
 
 <style>
     .gf-page {
-        padding: 24px;
+        padding: 0;
         font-family: 'Inter', sans-serif;
-        background: #f1f5f9;
-        min-height: 100vh;
+        background: transparent;
+        max-width: 100%;
+        min-width: 0;
     }
 
     /* ── Header ── */
@@ -96,12 +97,14 @@
     }
     .gf-notif-body {
         max-height: 600px;
-        overflow: hidden;
+        overflow-x: auto;
+        overflow-y: auto;
         transition: max-height 0.35s cubic-bezier(.4,0,.2,1), opacity 0.25s ease;
     }
     .gf-notif-panel.collapsed .gf-notif-body {
         max-height: 0;
         opacity: 0;
+        overflow: hidden;
     }
     .gf-notif-table {
         width: 100%;
@@ -837,11 +840,6 @@
                                 ✓ Pagar
                             </button>
                         </td>
-                        </td>
-                        <td class="notif-servicio">{{ $notif['servicio'] }}</td>
-                        <td class="notif-empresa">{{ $notif['empresa'] }}</td>
-                        <td class="notif-grupo">{{ $notif['tabla'] }}</td>
-                        <td class="notif-monto">$ {{ number_format($notif['costo'], 2) }}</td>
                     </tr>
                     @endforeach
                 </tbody>

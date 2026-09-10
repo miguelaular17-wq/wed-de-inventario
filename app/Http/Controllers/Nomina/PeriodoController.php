@@ -10,6 +10,7 @@ use App\Services\BcvRateService;
 use App\Services\Nomina\LoanDiscountPlanService;
 use App\Services\Nomina\PayrollBankFileService;
 use App\Services\Nomina\PayrollPeriodService;
+use App\Services\Nomina\PayrollSedeAreaTotals;
 use App\Support\SimpleXlsxWriter;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -24,6 +25,7 @@ class PeriodoController extends Controller
         private PayrollBankFileService $bankFile,
         private BcvRateService $bcv,
         private LoanDiscountPlanService $loanPlans,
+        private PayrollSedeAreaTotals $sedeAreaTotals,
     ) {
     }
 
@@ -67,6 +69,7 @@ class PeriodoController extends Controller
             'pagadoPor',
             'cerradoPor',
         ]);
+        $periodo->registros->each(fn ($registro) => $registro->setRelation('periodo', $periodo));
 
         $historial = NominaAuditLog::query()
             ->where('entidad', 'periodo')
@@ -75,11 +78,14 @@ class PeriodoController extends Controller
             ->orderBy('created_at')
             ->get();
 
+        $tasaBcv = $this->bcv->getRateForToday();
+
         return view('nomina.periodos.show', [
             'periodo' => $periodo,
             'historial' => $historial,
             'bancoPorEmpresa' => $this->bankFile->resumenPorEmpresa($periodo),
-            'tasaBcv' => $this->bcv->getRateForToday(),
+            'tasaBcv' => $tasaBcv,
+            'totalesPorGrupo' => $this->sedeAreaTotals->deRegistros($periodo->registros, $tasaBcv),
         ]);
     }
 

@@ -115,6 +115,36 @@ class TransaccionController extends Controller
         return $pdf->stream("reporte_patrimonial_{$nombreMes}.pdf");
     }
 
+    public function reporteIncrementoValor(Request $request)
+    {
+        $mes = (int) $request->get('mes', now()->month);
+        $anio = (int) $request->get('anio', now()->year);
+        $data = $this->reportes->incrementoValor($mes, $anio);
+
+        return view('patrimonial.transacciones.reporte_incremento_valor', [
+            ...$data,
+            'mes' => $mes,
+            'anio' => $anio,
+        ]);
+    }
+
+    public function reporteIncrementoValorPdf(Request $request)
+    {
+        $mes = (int) $request->get('mes', now()->month);
+        $anio = (int) $request->get('anio', now()->year);
+        $data = $this->reportes->incrementoValor($mes, $anio);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('patrimonial.pdf.reporte_incremento_valor', [
+            ...$data,
+            'mes' => $mes,
+            'anio' => $anio,
+        ]);
+        $pdf->setPaper('a4', 'portrait');
+        $nombreMes = Carbon::create($anio, $mes)->translatedFormat('F_Y');
+
+        return $pdf->stream("incremento_valor_propiedades_{$nombreMes}.pdf");
+    }
+
     public function reportePropiedadPdf(Request $request, Propiedad $propiedad)
     {
         $mes        = (int) $request->get('mes', now()->month);

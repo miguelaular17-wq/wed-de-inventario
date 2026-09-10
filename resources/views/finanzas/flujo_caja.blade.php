@@ -433,7 +433,8 @@
             <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Hasta:</label>
             <input type="date" id="fecha_hasta_input" name="fecha_hasta" value="{{ $fecha_hasta }}" style="padding: 6px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff;" onchange="this.form.submit()">
             
-            <button type="button" onclick="descargarReporteBusqueda()" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 6px; padding: 6px 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">📥 Reporte</button>
+            <button type="button" onclick="descargarReporteBusqueda('pdf')" style="background: #7c3aed; color: #fff; border: 1px solid #6d28d9; border-radius: 6px; padding: 6px 12px; font-weight: 600; cursor: pointer;">PDF</button>
+            <button type="button" onclick="descargarReporteBusqueda('xlsx')" style="background: #059669; color: #fff; border: 1px solid #047857; border-radius: 6px; padding: 6px 12px; font-weight: 600; cursor: pointer;">Excel</button>
         </form>
     </div>
 
@@ -1493,47 +1494,56 @@
 @endphp
 
 <script>
-function descargarReporteBusqueda() {
-    Swal.fire({
-        title: 'Selecciona las tablas',
-        text: 'El reporte se descargará en PDF.',
-        html: `
-            <div style="text-align: left; margin: 15px auto; width: fit-content; display: flex; flex-direction: column; gap: 10px;">
+function selectedTablasReporte() {
+    let selected = [];
+    if(document.getElementById('rep_egresos')?.checked) selected.push('egreso_realizado');
+    if(document.getElementById('rep_otros')?.checked) selected.push('otros_egresos');
+    if(document.getElementById('rep_traslados')?.checked) selected.push('traslados');
+    if(document.getElementById('rep_divisas')?.checked) selected.push('egreso_divisas');
+    return selected;
+}
+function descargarReporteBusqueda(formato) {
+    const esPdf = formato === 'pdf';
+    const html = esPdf
+        ? `<div style="text-align: left; margin: 15px auto; width: fit-content; display: flex; flex-direction: column; gap: 10px;">
                 <label style="cursor: pointer;"><input type="checkbox" id="rep_egresos" value="egreso_realizado" checked style="margin-right: 8px;"> Egresos Realizados</label>
                 <label style="cursor: pointer;"><input type="checkbox" id="rep_otros" value="otros_egresos" checked style="margin-right: 8px;"> Otros Egresos (Avances y Cambios)</label>
+           </div>`
+        : `<div style="text-align: left; margin: 15px auto; width: fit-content; display: flex; flex-direction: column; gap: 10px;">
                 <label style="cursor: pointer;"><input type="checkbox" id="rep_traslados" value="traslados" checked style="margin-right: 8px;"> Traslados</label>
                 <label style="cursor: pointer;"><input type="checkbox" id="rep_divisas" value="egreso_divisas" checked style="margin-right: 8px;"> Egresos Divisas</label>
-            </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: 'Descargar PDF',
-        cancelButtonText: 'Cancelar',
-        preConfirm: () => {
-            let selected = [];
-            if(document.getElementById('rep_egresos').checked) selected.push('egreso_realizado');
-            if(document.getElementById('rep_otros').checked) selected.push('otros_egresos');
-            if(document.getElementById('rep_traslados').checked) selected.push('traslados');
-            if(document.getElementById('rep_divisas').checked) selected.push('egreso_divisas');
-            return selected;
-        }
-    }).then((result) => {
-        if (result.isConfirmed) {
-            const fDesde = document.getElementById('fecha_desde_input')?.value || '';
-            const fHasta = document.getElementById('fecha_hasta_input')?.value || '';
-            const txt = document.getElementById('filtro-texto')?.value || '';
-            
-            let selectedCats = result.value;
-            if (selectedCats.length === 0) {
-                Swal.fire('Atención', 'Debes seleccionar al menos una tabla', 'warning');
-                return;
-            }
+           </div>`;
 
-            let url = '{{ route("finanzas.flujo_caja.reporte") }}?desde=' + encodeURIComponent(fDesde) + '&hasta=' + encodeURIComponent(fHasta);
-            if(txt) url += '&q=' + encodeURIComponent(txt);
-            url += '&cats=' + encodeURIComponent(selectedCats.join(','));
-            
-            window.open(url, '_blank');
+    Swal.fire({
+        title: esPdf ? 'Descargar PDF' : 'Descargar Excel',
+        html: html,
+        showCancelButton: true,
+        confirmButtonText: esPdf ? 'Descargar PDF' : 'Descargar Excel',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: esPdf ? '#7c3aed' : '#059669',
+        preConfirm: () => {
+            const cats = selectedTablasReporte();
+            if (!cats.length) {
+                Swal.showValidationMessage(esPdf
+                    ? 'Marca al menos una tabla de egresos.'
+                    : 'Marca Traslados o Egresos divisas.');
+                return false;
+            }
+            return cats;
+        },
+    }).then((result) => {
+        if (!result.isConfirmed) {
+            return;
         }
+        const fDesde = document.getElementById('fecha_desde_input')?.value || '';
+        const fHasta = document.getElementById('fecha_hasta_input')?.value || '';
+        const txt = document.getElementById('filtro-texto')?.value || '';
+        const cats = result.value || [];
+        let url = '{{ route("finanzas.flujo_caja.reporte") }}?desde=' + encodeURIComponent(fDesde) + '&hasta=' + encodeURIComponent(fHasta);
+        if (txt) url += '&q=' + encodeURIComponent(txt);
+        url += '&cats=' + encodeURIComponent(cats.join(','));
+        url += '&formato=' + encodeURIComponent(formato);
+        window.open(url, '_blank');
     });
 }
 function calcTraslado() {

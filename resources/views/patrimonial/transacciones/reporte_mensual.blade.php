@@ -22,8 +22,13 @@
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <a href="?mes={{ $mesPrev->month }}&anio={{ $mesPrev->year }}" style="padding:8px 14px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; text-decoration:none; color:#334155; font-size:0.85rem; font-weight:600;">← Anterior</a>
             <a href="?mes={{ $mesSig->month }}&anio={{ $mesSig->year }}" style="padding:8px 14px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; text-decoration:none; color:#334155; font-size:0.85rem; font-weight:600;">Siguiente →</a>
+            <a href="{{ route('patrimonial.reportes.incremento_valor', ['mes' => $mes, 'anio' => $anio]) }}" style="padding:8px 16px; background:#d97706; color:#fff; border-radius:8px; font-weight:600; font-size:0.85rem; text-decoration:none;">Incremento de Valor</a>
             <a href="{{ route('patrimonial.reportes.mensual.pdf', ['mes' => $mes, 'anio' => $anio]) }}" target="_blank" style="padding:8px 16px; background:#dc2626; color:#fff; border-radius:8px; font-weight:600; font-size:0.85rem; text-decoration:none;">Descargar PDF</a>
         </div>
+    </div>
+
+    <div style="padding:10px 14px; margin-bottom:18px; border-radius:9px; background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; font-size:0.84rem;">
+        Las remodelaciones no forman parte de este cierre mensual; se muestran exclusivamente en el reporte de Incremento de Valor.
     </div>
 
     {{-- RESULTADO --}}

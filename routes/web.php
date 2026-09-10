@@ -590,6 +590,8 @@ Route::middleware(['auth', 'permission:patrimonial'])->prefix('patrimonial')->na
     Route::delete('/transacciones/{transaccion}', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'destroy'])->name('transacciones.destroy');
     Route::get('/reportes/mensual', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'reporteMensual'])->name('reportes.mensual');
     Route::get('/reportes/mensual/pdf', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'reporteMensualPdf'])->name('reportes.mensual.pdf');
+    Route::get('/reportes/incremento-valor', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'reporteIncrementoValor'])->name('reportes.incremento_valor');
+    Route::get('/reportes/incremento-valor/pdf', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'reporteIncrementoValorPdf'])->name('reportes.incremento_valor.pdf');
     Route::get('/reportes/propiedad/{propiedad}/pdf', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'reportePropiedadPdf'])->name('reportes.propiedad.pdf');
 
 

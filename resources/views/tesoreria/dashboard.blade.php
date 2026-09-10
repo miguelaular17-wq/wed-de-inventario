@@ -1,50 +1,175 @@
 @extends('layouts.app')
 
+@section('title', 'Tesorería')
+
+@push('head')
+<style>
+.tesoreria-page { max-width: 100%; min-width: 0; }
+.tesoreria-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.tesoreria-head h1 { font-size: 1.5rem; font-weight: 700; color: #1e293b; margin: 0; }
+.tesoreria-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.tesoreria-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+}
+.tesoreria-filter label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+.tesoreria-filter select,
+.tesoreria-filter input[type="date"] {
+    min-width: 180px;
+    padding: 8px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-weight: 600;
+    color: #1e293b;
+    background: #fff;
+}
+.tesoreria-filter button {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 8px;
+    background: #1a4480;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+}
+.tesoreria-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+}
+.tesoreria-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px 18px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,.05);
+    border: 1px solid #e2e8f0;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+.tesoreria-card h2 { font-size: 1.05rem; font-weight: 600; color: #334155; margin: 0 0 12px; }
+.tesoreria-table-wrap {
+    overflow-x: auto;
+    max-width: 100%;
+    max-height: min(520px, 70vh);
+}
+.tesoreria-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 0.85rem;
+}
+.tesoreria-table th {
+    padding: 8px 10px;
+    color: #64748b;
+    font-weight: 600;
+    text-align: left;
+    border-bottom: 2px solid #e2e8f0;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    background: #fff;
+}
+.tesoreria-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tesoreria-table .col-date { width: 92px; }
+.tesoreria-table .col-monto { width: 120px; color: #059669; font-weight: 600; white-space: nowrap; }
+.tesoreria-table .col-lote { width: 90px; }
+.tesoreria-table .col-acc { width: 76px; text-align: right; white-space: nowrap; overflow: visible; }
+.tesoreria-table .col-acc form { display: inline; }
+.tesoreria-empty { text-align: center; color: #94a3b8; padding: 16px !important; white-space: normal; }
+</style>
+@endpush
+
 @section('content')
-<div class="container-fluid" style="padding: 24px; max-width: 1200px; margin: 0 auto;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-        <h1 style="font-size: 1.5rem; font-weight: 700; color: #1e293b; margin: 0;">Panel de Tesorería</h1>
-        <div style="display: flex; gap: 12px;">
-            <button onclick="document.getElementById('modalBanco').style.display='flex'" class="btn-primary" style="padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; background: #3b82f6; color: white; box-shadow: 0 4px 6px -1px rgba(59,130,246,0.5);">
+<div class="tesoreria-page">
+    <div class="tesoreria-head">
+        <h1>Panel de Tesorería</h1>
+        <div class="tesoreria-actions">
+            <button type="button" onclick="document.getElementById('modalBanco').style.display='flex'" style="padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; background: #3b82f6; color: white;">
                 + Registrar Ingreso Banco
             </button>
-            <button onclick="document.getElementById('modalPos').style.display='flex'" class="btn-primary" style="padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; background: #10b981; color: white; box-shadow: 0 4px 6px -1px rgba(16,185,129,0.5);">
+            <button type="button" onclick="document.getElementById('modalPos').style.display='flex'" style="padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; background: #10b981; color: white;">
                 + Registrar Lote POS
             </button>
         </div>
     </div>
 
     @if(session('success'))
-    <div style="padding: 16px; background: #d1fae5; color: #065f46; border-radius: 8px; margin-bottom: 24px; font-weight: 500;">
+    <div style="padding: 16px; background: #d1fae5; color: #065f46; border-radius: 8px; margin-bottom: 16px; font-weight: 500;">
         {{ session('success') }}
     </div>
     @endif
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px;">
-        <!-- Lista de Bancos -->
-        <div style="background: white; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
-            <h2 style="font-size: 1.25rem; font-weight: 600; color: #334155; margin: 0 0 16px;">Últimos Ingresos (Bancos)</h2>
-            <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+    <form method="GET" action="{{ route('tesoreria.dashboard') }}" class="tesoreria-filter">
+        <label>
+            Desde
+            <input type="date" name="desde" value="{{ $desde ?? '' }}">
+        </label>
+        <label>
+            Hasta
+            <input type="date" name="hasta" value="{{ $hasta ?? '' }}">
+        </label>
+        <button type="submit">Filtrar</button>
+        @if(($desde ?? '') || ($hasta ?? ''))
+            <a href="{{ route('tesoreria.dashboard') }}" style="font-size: 0.85rem; font-weight: 600; color: #2563eb; text-decoration: none; padding-bottom: 8px;">Quitar filtro</a>
+        @endif
+    </form>
+
+    <div class="tesoreria-grid">
+        <div class="tesoreria-card">
+            <h2>Últimos Ingresos (Bancos)</h2>
+            <div class="tesoreria-table-wrap">
+                <table class="tesoreria-table">
                     <thead>
-                        <tr style="border-bottom: 2px solid #e2e8f0;">
-                            <th style="padding: 12px 8px; color: #64748b; font-weight: 600;">Fecha</th>
-                            <th style="padding: 12px 8px; color: #64748b; font-weight: 600;">Banco</th>
-                            <th style="padding: 12px 8px; color: #64748b; font-weight: 600;">Monto</th>
-                            <th style="padding: 12px 8px; color: #64748b; font-weight: 600;">Referencia</th>
+                        <tr>
+                            <th class="col-date">Fecha</th>
+                            <th>Banco</th>
+                            <th class="col-monto">Monto</th>
+                            <th>Referencia</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($ingresosBancos as $ingreso)
-                        <tr style="border-bottom: 1px solid #f1f5f9;">
-                            <td style="padding: 12px 8px; color: #334155;">{{ \Carbon\Carbon::parse($ingreso->fecha)->format('d/m/Y') }}</td>
-                            <td style="padding: 12px 8px; font-weight: 500; color: #1e293b;">{{ $ingreso->banco }}</td>
-                            <td style="padding: 12px 8px; color: #059669; font-weight: 600;">${{ number_format($ingreso->monto, 2) }}</td>
-                            <td style="padding: 12px 8px; color: #475569; font-size: 0.9rem;">{{ $ingreso->lote_referencia ?? '-' }}</td>
+                        <tr>
+                            <td class="col-date">{{ \Carbon\Carbon::parse($ingreso->fecha)->format('d/m/Y') }}</td>
+                            <td>{{ $ingreso->banco }}</td>
+                            <td class="col-monto">${{ number_format($ingreso->monto, 2) }}</td>
+                            <td title="{{ $ingreso->lote_referencia }}">{{ $ingreso->lote_referencia ?? '-' }}</td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="4" style="padding: 16px; text-align: center; color: #94a3b8;">No hay ingresos registrados</td>
+                            <td colspan="4" class="tesoreria-empty">No hay ingresos registrados</td>
                         </tr>
                         @endforelse
                     </tbody>
@@ -52,34 +177,41 @@
             </div>
         </div>
 
-        <!-- Lista Lotes POS -->
-        <div style="background: white; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
-            <h2 style="font-size: 1.25rem; font-weight: 600; color: #334155; margin: 0 0 16px;">Últimos Lotes POS</h2>
-            <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+        <div class="tesoreria-card">
+            <h2>Últimos Lotes POS</h2>
+            <div class="tesoreria-table-wrap">
+                <table class="tesoreria-table">
+                    <colgroup>
+                        <col style="width: 92px">
+                        <col>
+                        <col style="width: 90px">
+                        <col style="width: 130px">
+                        <col>
+                        <col style="width: 76px">
+                    </colgroup>
                     <thead>
-                        <tr style="border-bottom: 2px solid #e2e8f0;">
-                            <th style="padding: 10px 4px; color: #64748b; font-weight: 600;">Fecha</th>
-                            <th style="padding: 10px 4px; color: #64748b; font-weight: 600;">Banco / Titular</th>
-                            <th style="padding: 10px 4px; color: #64748b; font-weight: 600;">Lote/Ref</th>
-                            <th style="padding: 10px 4px; color: #64748b; font-weight: 600;">Monto</th>
-                            <th style="padding: 10px 4px; color: #64748b; font-weight: 600;">Descripción</th>
-                            <th style="padding: 10px 4px; color: #64748b; font-weight: 600; text-align: right;">Acciones</th>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Banco / Titular</th>
+                            <th>Lote/Ref</th>
+                            <th>Monto</th>
+                            <th>Descripción</th>
+                            <th class="col-acc">Acción</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($lotesPuntos as $lote)
-                        <tr style="border-bottom: 1px solid #f1f5f9;">
-                            <td style="padding: 10px 4px; color: #334155;">{{ \Carbon\Carbon::parse($lote->fecha)->format('d/m/Y') }}</td>
-                            <td style="padding: 10px 4px; color: #475569; font-weight: 500;">{{ $lote->banco }}{{ $lote->titular ? ' / '.$lote->titular : '' }}</td>
-                            <td style="padding: 10px 4px; font-weight: 500; color: #1e293b;">{{ $lote->lote_referencia }}</td>
-                            <td style="padding: 10px 4px; color: #059669; font-weight: 600;">Bs. {{ number_format($lote->monto, 2, ',', '.') }}</td>
-                            <td style="padding: 10px 4px; color: #64748b; font-size: 0.9rem;">{{ Str::limit($lote->descripcion ?: '-', 20) }}</td>
-                            <td style="padding: 10px 4px; text-align: right;">
-                                <button type="button" onclick="editLotePos({{ $lote->id }}, '{{ $lote->banco }}', '{{ $lote->titular }}', '{{ \Carbon\Carbon::parse($lote->fecha)->format('Y-m-d') }}', '{{ $lote->lote_referencia }}', {{ $lote->monto }}, '{{ addslashes($lote->descripcion) }}')" style="background: none; border: none; color: #3b82f6; cursor: pointer; padding: 4px;" title="Editar">
+                        <tr>
+                            <td>{{ \Carbon\Carbon::parse($lote->fecha)->format('d/m/Y') }}</td>
+                            <td title="{{ $lote->banco }}{{ $lote->titular ? ' / '.$lote->titular : '' }}">{{ $lote->banco }}{{ $lote->titular ? ' / '.$lote->titular : '' }}</td>
+                            <td>{{ $lote->lote_referencia }}</td>
+                            <td class="col-monto">Bs. {{ number_format($lote->monto, 2, ',', '.') }}</td>
+                            <td title="{{ $lote->descripcion }}">{{ $lote->descripcion ?: '—' }}</td>
+                            <td class="col-acc">
+                                <button type="button" onclick="editLotePos({{ $lote->id }}, @js($lote->banco), @js($lote->titular), '{{ \Carbon\Carbon::parse($lote->fecha)->format('Y-m-d') }}', @js($lote->lote_referencia), {{ $lote->monto }}, @js($lote->descripcion))" style="background: none; border: none; color: #3b82f6; cursor: pointer; padding: 4px;" title="Editar">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                                 </button>
-                                <form action="{{ route('tesoreria.lote_pos.destroy', $lote->id) }}" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar este lote POS?');" style="display: inline-block;">
+                                <form action="{{ route('tesoreria.lote_pos.destroy', $lote->id) }}" method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar este lote POS?');">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 4px;" title="Eliminar">
@@ -90,7 +222,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="4" style="padding: 16px; text-align: center; color: #94a3b8;">No hay lotes POS registrados</td>
+                            <td colspan="6" class="tesoreria-empty">{{ ($desde ?? '') || ($hasta ?? '') ? 'No hay lotes POS en el rango de fechas' : 'No hay lotes POS registrados' }}</td>
                         </tr>
                         @endforelse
                     </tbody>

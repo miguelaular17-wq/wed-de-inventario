@@ -421,7 +421,7 @@ class InventarioController extends Controller
                             $userEmail
                         );
                     } else {
-                        $this->reqPersonalizada->eliminar($sede, $data['codigo'], $origen);
+                        $this->reqPersonalizada->eliminar($sede, $data['codigo'], $origen, $this->scopedUsuario());
                     }
                 }
             });
@@ -450,6 +450,7 @@ class InventarioController extends Controller
             $sede,
             $data['codigo'],
             $data['sede_origen'],
+            $this->scopedUsuario(),
         );
 
         if (! $deleted) {

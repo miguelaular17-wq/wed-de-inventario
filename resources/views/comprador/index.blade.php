@@ -58,8 +58,14 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 .compras-page .tab-btn {
     white-space: nowrap;
 }
+.compras-page {
+    max-width: 100%;
+    min-width: 0;
+}
 .compras-page .table-wrap {
     max-height: calc(100vh - 280px);
+    overflow-x: auto;
+    max-width: 100%;
 }
 .compras-page table.data-table {
     font-size: 0.8rem;
@@ -92,7 +98,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
     </div>
 </div>
 
-@if(!auth()->user()->isMarketing())
+@if(!auth()->user()->isMarketing() && ($activeTab ?? 'productos') !== 'publicidad')
 <div class="panel" style="margin-bottom: 20px; padding: 18px 20px; border: 1px solid #bfdbfe; background: #eff6ff;">
     <form method="GET" action="{{ route('comprador.quiebre.export') }}" style="display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;">
         <div style="flex: 1 1 280px;">

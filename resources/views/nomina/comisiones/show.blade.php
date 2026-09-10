@@ -52,6 +52,7 @@
             $liq->empleado->nombreSede(),
             $liq->empleado->nombreCargo(),
         ]))));
+        $sedeArea = app(\App\Services\Nomina\PayrollSedeAreaTotals::class);
     @endphp
 
     <div class="nomina-kpis">
@@ -61,6 +62,12 @@
         <div class="nomina-kpi warn"><span>Descuentos</span><strong>${{ number_format($totalDescuentos, 2) }}</strong></div>
         <div class="nomina-kpi"><span>A pagar</span><strong>${{ number_format($totalPagar, 2) }}</strong></div>
     </div>
+
+    @include('nomina.partials.totales-sede-area', [
+        'totalesPorGrupo' => $totalesPorGrupo ?? collect(),
+        'tasaBcv' => $tasaBcv ?? 0,
+        'filtroTargets' => ['tabla-comisiones-ventas', 'tabla-comisiones-st'],
+    ])
 
     <h3 style="margin:20px 0 0;">Supervisores y vendedores</h3>
     @include('nomina.partials.empleado-tabla-buscador', ['target' => 'tabla-comisiones-ventas'])
@@ -94,7 +101,7 @@
                             ? round($comisionMostrada + $abonosMostrados - $retencionMostrada, 2)
                             : (float) $liq->total_pagar;
                     @endphp
-                    <tr data-empleado-buscar="{{ $buscarAttrs($liq) }}">
+                    <tr data-grupo-clave="{{ $sedeArea->grupoDeEmpleado($liq->empleado)['clave'] }}" data-empleado-buscar="{{ $buscarAttrs($liq) }}">
                         <td>
                             <a href="{{ route('nomina.empleados.show', ['empleado' => $liq->empleado, 'tab' => 'comisiones']) }}">
                                 {{ $liq->empleado->nombre() }}
@@ -135,7 +142,13 @@
                         <td>${{ number_format($comisionMostrada, 2) }}</td>
                         <td>${{ number_format($abonosMostrados, 2) }}</td>
                         <td>${{ number_format($retencionMostrada, 2) }}</td>
-                        <td>${{ number_format($descuentosMostrados, 2) }}</td>
+                        <td>
+                            @include('nomina.partials.descuento-comentarios', [
+                                'monto' => $descuentosMostrados,
+                                'lineas' => $liq->lineasDescuento(),
+                                'titulo' => 'Desc. / préstamos',
+                            ])
+                        </td>
                         <td>
                             <strong>${{ number_format($pagarMostrado, 2) }}</strong>
                             @if($esSt)
@@ -174,7 +187,7 @@
                         $descuentosSt = (float) $liq->descuentos + (float) $liq->prestamos;
                         $pagarSt = round($comisionSt - $descuentosSt, 2);
                     @endphp
-                    <tr data-empleado-buscar="{{ $buscarAttrs($liq) }}">
+                    <tr data-grupo-clave="{{ $sedeArea->grupoDeEmpleado($liq->empleado)['clave'] }}" data-empleado-buscar="{{ $buscarAttrs($liq) }}">
                         <td>
                             <a href="{{ route('nomina.empleados.show', ['empleado' => $liq->empleado, 'tab' => 'comisiones']) }}">
                                 {{ $liq->empleado->nombre() }}
@@ -204,7 +217,13 @@
                             $0.00
                             <div class="muted" style="font-size:.72rem;">Sin retención</div>
                         </td>
-                        <td>${{ number_format($descuentosSt, 2) }}</td>
+                        <td>
+                            @include('nomina.partials.descuento-comentarios', [
+                                'monto' => $descuentosSt,
+                                'lineas' => $liq->lineasDescuento(),
+                                'titulo' => 'Desc. / préstamos',
+                            ])
+                        </td>
                         <td><strong>${{ number_format($pagarSt, 2) }}</strong></td>
                     </tr>
                 @empty

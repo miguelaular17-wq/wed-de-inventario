@@ -9,12 +9,36 @@ use Illuminate\Support\Facades\Storage;
 
 class TesoreriaController extends Controller
 {
-    public function dashboard()
+    public function dashboard(Request $request)
     {
-        $ingresosBancos = TesoreriaIngreso::where('tipo', 'banco')->latest()->take(20)->get();
-        $lotesPuntos = TesoreriaIngreso::where('tipo', 'punto_venta')->latest()->get();
+        $desde = $this->fechaFiltro($request->query('desde'));
+        $hasta = $this->fechaFiltro($request->query('hasta'));
 
-        return view('tesoreria.dashboard', compact('ingresosBancos', 'lotesPuntos'));
+        $ingresosBancos = TesoreriaIngreso::where('tipo', 'banco')
+            ->when($desde, fn ($q) => $q->whereDate('fecha', '>=', $desde))
+            ->when($hasta, fn ($q) => $q->whereDate('fecha', '<=', $hasta))
+            ->latest('fecha')
+            ->latest('id')
+            ->get();
+
+        $lotesPuntos = TesoreriaIngreso::where('tipo', 'punto_venta')
+            ->when($desde, fn ($q) => $q->whereDate('fecha', '>=', $desde))
+            ->when($hasta, fn ($q) => $q->whereDate('fecha', '<=', $hasta))
+            ->latest('fecha')
+            ->latest('id')
+            ->get();
+
+        return view('tesoreria.dashboard', compact('ingresosBancos', 'lotesPuntos', 'desde', 'hasta'));
+    }
+
+    private function fechaFiltro(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '' || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return null;
+        }
+
+        return $value;
     }
 
     public function storeIngresoBanco(Request $request)

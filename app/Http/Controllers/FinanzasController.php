@@ -2720,6 +2720,51 @@ class FinanzasController extends Controller
     }
 
     public function reporteFlujoCajaBusqueda(Request $request) {
+        $data = $this->datosReporteFlujoCajaBusqueda($request);
+        $formato = strtolower((string) $request->query('formato', 'pdf'));
+        $base = 'Reporte_Flujo_Caja_'.$data['fecha_desde'].'_al_'.$data['fecha_hasta'];
+
+        if ($formato === 'xlsx') {
+            $xlsx = $this->xlsxReporteFlujoCaja($data);
+
+            return response($xlsx, 200, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition' => 'attachment; filename="'.$base.'.xlsx"',
+            ]);
+        }
+
+        if ($formato === 'zip') {
+            $archivos = [];
+            $grupoEgresos = array_values(array_intersect($data['selected_cats'], ['egreso_realizado', 'otros_egresos']));
+            $grupoMovimientos = array_values(array_intersect($data['selected_cats'], ['traslados', 'egreso_divisas']));
+
+            if ($grupoEgresos !== []) {
+                $archivos[$base.'_egresos.pdf'] = $this->pdfReporteFlujoCaja($data, $grupoEgresos, 'Egresos')->output();
+            }
+            if ($grupoMovimientos !== []) {
+                $dataExcel = $data;
+                $dataExcel['selected_cats'] = $grupoMovimientos;
+                $archivos[$base.'_traslados_divisas.xlsx'] = $this->xlsxReporteFlujoCaja($dataExcel);
+            }
+
+            $zip = \App\Support\SimpleXlsxWriter::zipFiles($archivos);
+
+            return response($zip, 200, [
+                'Content-Type' => 'application/zip',
+                'Content-Disposition' => 'attachment; filename="'.$base.'_pdf_y_excel.zip"',
+            ]);
+        }
+
+        $pdf = $this->pdfReporteFlujoCaja($data, $data['selected_cats']);
+
+        return $pdf->download($base.'.pdf');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function datosReporteFlujoCajaBusqueda(Request $request): array
+    {
         $fecha_desde = $request->query('desde', date('Y-m-d'));
         $fecha_hasta = $request->query('hasta', date('Y-m-d'));
         $q = strtolower(trim($request->query('q', '')));
@@ -2756,7 +2801,7 @@ class FinanzasController extends Controller
         $traslados = $movimientos->where('categoria_egreso', 'traslados');
         $divisas = $movimientos->where('categoria_egreso', 'egreso_divisas');
 
-        $data = [
+        return [
             'fecha_desde' => $fecha_desde,
             'fecha_hasta' => $fecha_hasta,
             'q' => $q,
@@ -2778,12 +2823,71 @@ class FinanzasController extends Controller
             'tot_traslados_com' => $traslados->sum('comision'),
             'tot_divisas_usd' => $divisas->sum('monto_usd'),
         ];
+    }
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('finanzas.pdf.reporte_flujo_busqueda', ['data' => $data]);
-        $pdf->setPaper('a4', 'landscape');
-        $nombre = 'Reporte_Flujo_Caja_'.$fecha_desde.'_al_'.$fecha_hasta.'.pdf';
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  list<string>  $cats
+     */
+    private function pdfReporteFlujoCaja(array $data, array $cats, string $tituloExtra = '')
+    {
+        $payload = $data;
+        $payload['selected_cats'] = $cats;
+        $payload['titulo_extra'] = $tituloExtra;
 
-        return $pdf->download($nombre);
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('finanzas.pdf.reporte_flujo_busqueda', ['data' => $payload])
+            ->setPaper('a4', 'landscape');
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function xlsxReporteFlujoCaja(array $data): string
+    {
+        $secciones = [
+            'egreso_realizado' => ['Egresos Realizados', $data['egresos'], true, true],
+            'otros_egresos' => ['Otros Egresos', $data['otros'], true, true],
+            'traslados' => ['Traslados', $data['traslados'], true, false],
+            'egreso_divisas' => ['Egresos Divisas', $data['divisas'], false, false],
+        ];
+        $hojas = [];
+        foreach ($secciones as $cat => [$titulo, $rows, $conBs, $conDif]) {
+            if (! in_array($cat, $data['selected_cats'], true)) {
+                continue;
+            }
+            $encabezado = ['Fecha', 'Origen', 'Titular', 'Destino', 'Titular destino', 'Tipo gasto', 'Motivo', 'USD'];
+            if ($conDif) {
+                $encabezado[] = 'Dif. camb.';
+            }
+            if ($conBs) {
+                $encabezado[] = 'Bs';
+                $encabezado[] = 'Comisión';
+            }
+            $cuerpo = [$encabezado];
+            foreach ($rows as $mov) {
+                $fila = [
+                    $mov->fecha ? date('d/m/Y', strtotime((string) $mov->fecha)) : '',
+                    $mov->banco ?: '',
+                    $mov->titular ?: '',
+                    $mov->banco_receptor ?: '',
+                    $mov->titular_receptor ?: '',
+                    $mov->tipo_gasto ?: '',
+                    $mov->motivo ?: '',
+                    round((float) $mov->monto_usd, 2),
+                ];
+                if ($conDif) {
+                    $fila[] = round((float) $mov->diferencial_cambiario, 2);
+                }
+                if ($conBs) {
+                    $fila[] = round((float) $mov->monto_bs, 2);
+                    $fila[] = round((float) $mov->comision, 2);
+                }
+                $cuerpo[] = $fila;
+            }
+            $hojas[$titulo] = $cuerpo === [$encabezado] ? [$encabezado, ['Sin registros']] : $cuerpo;
+        }
+
+        return \App\Support\SimpleXlsxWriter::toString($hojas);
     }
 
     public function parseArchivoDesglose(Request $request)

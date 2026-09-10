@@ -13,8 +13,10 @@ use Illuminate\Support\Facades\Schema;
 
 class CommissionSettlementService
 {
-    public function __construct(private AjusteService $ajustes)
-    {
+    public function __construct(
+        private AjusteService $ajustes,
+        private NominaDescuentoComentarios $descuentoComentarios,
+    ) {
     }
 
     public function limpiarPeriodo(NominaPeriodo $periodo): void
@@ -64,6 +66,8 @@ class CommissionSettlementService
         $totalPagar = round($bruto - $retencion - $descuentos - $prestamos, 2);
         $fechaPago = $periodo->fecha_pago_comision
             ?? $periodo->fecha_fin?->copy()->addDays(3);
+
+        $calculo['descuentos_lineas'] = $this->descuentoComentarios->lineasComisionDesdePeriodo($periodo, $empleado);
 
         return NominaLiquidacionComision::create([
             'periodo_id' => $periodo->id,

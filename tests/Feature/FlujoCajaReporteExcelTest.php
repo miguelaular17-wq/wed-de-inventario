@@ -63,6 +63,70 @@ class FlujoCajaReporteExcelTest extends TestCase
         $this->assertStringContainsString('Reporte_Flujo_Caja_2026-08-27_al_2026-08-27.pdf', (string) $response->headers->get('Content-Disposition'));
     }
 
+    public function test_auditor_puede_descargar_excel_y_paquete_con_dos_pdf(): void
+    {
+        $auditor = User::create([
+            'name' => 'Auditor Excel',
+            'email' => 'auditor-excel@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_AUDITOR,
+        ]);
+
+        FlujoCaja::query()->create([
+            'fecha' => '2026-08-27',
+            'tipo' => 'egreso',
+            'categoria_egreso' => 'egreso_realizado',
+            'banco' => 'Banesco',
+            'titular' => 'Grupo JRZ',
+            'motivo' => 'Pago proveedor',
+            'tipo_gasto' => 'Compras',
+            'monto_usd' => 10,
+            'monto_bs' => 1000,
+            'oculto' => false,
+        ]);
+        FlujoCaja::query()->create([
+            'fecha' => '2026-08-27',
+            'tipo' => 'egreso',
+            'categoria_egreso' => 'egreso_divisas',
+            'banco' => 'Zelle',
+            'titular' => 'JRZ',
+            'motivo' => 'Pago divisas',
+            'monto_usd' => 25,
+            'oculto' => false,
+        ]);
+
+        $params = [
+            'desde' => '2026-08-27',
+            'hasta' => '2026-08-27',
+            'cats' => 'egreso_realizado,otros_egresos,traslados,egreso_divisas',
+        ];
+
+        $xlsx = $this->actingAs($auditor)->get(route('finanzas.flujo_caja.reporte', $params + ['formato' => 'xlsx']));
+        $xlsx->assertOk();
+        $this->assertStringContainsString('spreadsheet', strtolower((string) $xlsx->headers->get('Content-Type')));
+        $this->assertStringStartsWith('PK', $xlsx->getContent());
+
+        $zipRes = $this->actingAs($auditor)->get(route('finanzas.flujo_caja.reporte', $params + ['formato' => 'zip']));
+        $zipRes->assertOk();
+        $this->assertStringContainsString('zip', strtolower((string) $zipRes->headers->get('Content-Type')));
+        $this->assertStringContainsString('_pdf_y_excel.zip', (string) $zipRes->headers->get('Content-Disposition'));
+
+        $tmp = tempnam(sys_get_temp_dir(), 'repzip');
+        file_put_contents($tmp, $zipRes->getContent());
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($tmp) === true);
+        $nombres = [];
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $nombres[] = $zip->getNameIndex($i);
+        }
+        $zip->close();
+        @unlink($tmp);
+
+        $this->assertTrue(collect($nombres)->contains(fn ($n) => str_ends_with((string) $n, '_egresos.pdf')));
+        $this->assertTrue(collect($nombres)->contains(fn ($n) => str_ends_with((string) $n, '_traslados_divisas.xlsx')));
+        $this->assertFalse(collect($nombres)->contains(fn ($n) => str_ends_with((string) $n, '_traslados_divisas.pdf')));
+    }
+
     private function ensureFlujoCajaColumns(): void
     {
         $columns = [

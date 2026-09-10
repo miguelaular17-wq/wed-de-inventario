@@ -159,13 +159,17 @@ class RequisicionPersonalizadaService
             throw new \InvalidArgumentException('Sede origen inválida.');
         }
 
-        // Unique key is now (sede_local, codigo, sede_origen)
+        $key = [
+            'sede_local'  => $sedeLocal,
+            'codigo'      => $codigo,
+            'sede_origen' => $sedeOrigen,
+        ];
+        if ($usuario !== null && $usuario !== '') {
+            $key['usuario'] = $usuario;
+        }
+
         RequisicionManual::query()->updateOrCreate(
-            [
-                'sede_local'  => $sedeLocal,
-                'codigo'      => $codigo,
-                'sede_origen' => $sedeOrigen,
-            ],
+            $key,
             [
                 'producto'    => $producto,
                 'cantidad'    => $cantidad,
@@ -183,13 +187,19 @@ class RequisicionPersonalizadaService
         string $sedeLocal,
         string $codigo,
         string $sedeOrigen,
+        ?string $usuario = null,
     ): bool {
-        $deleted = RequisicionManual::query()
+        $query = RequisicionManual::query()
             ->where('sede_local', strtoupper($sedeLocal))
             ->where('codigo', $codigo)
             ->where('sede_origen', strtoupper($sedeOrigen))
-            ->whereNull('aplicada_at')
-            ->delete();
+            ->whereNull('aplicada_at');
+
+        if ($usuario !== null && $usuario !== '') {
+            $query->where('usuario', $usuario);
+        }
+
+        $deleted = $query->delete();
 
         return $deleted > 0;
     }

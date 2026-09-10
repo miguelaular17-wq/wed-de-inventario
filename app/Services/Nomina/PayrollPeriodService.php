@@ -29,6 +29,7 @@ class PayrollPeriodService
         private CommissionSettlementService $settlements,
         private LoanDiscountPlanService $loanPlans,
         private AjusteService $ajustes,
+        private NominaDescuentoComentarios $descuentoComentarios,
     ) {
     }
 
@@ -626,6 +627,7 @@ class PayrollPeriodService
                 NominaEmpleadoAjuste::TIPO_BONIFICACION
             ),
             'prestamos' => round((float) $prestamos, 2),
+            'descuentos_lineas' => $this->descuentoComentarios->lineasNominaDesdePeriodo($periodo, $empleado),
         ];
     }
 

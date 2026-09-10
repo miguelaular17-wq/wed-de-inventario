@@ -4,11 +4,11 @@
     $nav = [];
 
     $link = function (string $label, string $url, bool $active, ?string $tour = null, bool $emphasis = false) {
-        return compact('label', 'url', 'active', 'tour', 'emphasis') + ['type' => 'link'];
+        return compact('label', 'url', 'active', 'tour', 'emphasis') + ['type' => 'link', 'icon' => $label];
     };
     $drop = function (string $label, array $items) {
         $active = collect($items)->contains(fn ($item) => $item['active']);
-        return ['type' => 'drop', 'label' => $label, 'active' => $active, 'items' => $items];
+        return ['type' => 'drop', 'label' => $label, 'active' => $active, 'items' => $items, 'icon' => $label];
     };
     $comprasNavItems = function () use ($u, $link) {
         $items = [];
@@ -233,73 +233,86 @@
     $latestNotifications = $u->notifications()->with('sender')->latest()->take(5)->get();
 @endphp
 
-<header class="app-header">
-    <div class="app-header-inner">
-        <div class="app-brand">
-            <a href="{{ url('/') }}" class="app-brand-link">
-                <img src="{{ asset('logo.png') }}" alt="" class="app-logo" width="32" height="32">
-                <strong>Nexo <span class="app-brand-pd">PD</span></strong>
-            </a>
-            @if(session('sede_local') && ($u->hasAccessToSedeViews() || $u->isTecnico()))
-                <span class="badge app-sede-badge" data-tour="sede-badge">{{ session('sede_local') }}</span>
-            @endif
-            @if($u->isGerente())
-                <span class="badge app-role-gerente">Gerente</span>
-            @elseif($u->role === 'admin')
-                <span class="badge">Admin</span>
-                <span class="badge app-clock" id="server-clock" title="Hora del servidor (Caracas)">
-                    {{ \Carbon\Carbon::now()->format('d/m/Y h:i:s A') }}
-                </span>
-                <script>
-                    document.addEventListener("DOMContentLoaded", function() {
-                        let serverTime = new Date("{{ \Carbon\Carbon::now()->format('Y/m/d H:i:s') }}");
-                        const clock = document.getElementById('server-clock');
-                        if (!clock) return;
-                        setInterval(() => {
-                            serverTime.setSeconds(serverTime.getSeconds() + 1);
-                            const d = String(serverTime.getDate()).padStart(2, '0');
-                            const m = String(serverTime.getMonth() + 1).padStart(2, '0');
-                            const y = serverTime.getFullYear();
-                            let hr = serverTime.getHours();
-                            const min = String(serverTime.getMinutes()).padStart(2, '0');
-                            const sec = String(serverTime.getSeconds()).padStart(2, '0');
-                            const ampm = hr >= 12 ? 'PM' : 'AM';
-                            hr = hr % 12 || 12;
-                            clock.innerText = `${d}/${m}/${y} ${String(hr).padStart(2, '0')}:${min}:${sec} ${ampm}`;
-                        }, 1000);
-                    });
-                </script>
-            @endif
-        </div>
+<button type="button" class="app-sidebar-backdrop" data-nav-backdrop aria-label="Cerrar menú"></button>
+<aside class="app-sidebar" data-app-nav>
+    <div class="app-brand">
+        <a href="{{ url('/') }}" class="app-brand-link">
+            <img src="{{ asset('logo.png') }}" alt="" class="app-logo" width="32" height="32">
+            <strong>Nexo <span class="app-brand-pd">PD</span></strong>
+        </a>
+        @if(session('sede_local') && ($u->hasAccessToSedeViews() || $u->isTecnico()))
+            <span class="badge app-sede-badge" data-tour="sede-badge">{{ session('sede_local') }}</span>
+        @endif
+        @if($u->isGerente())
+            <span class="badge app-role-gerente">Gerente</span>
+        @elseif($u->role === 'admin')
+            <span class="badge">Admin</span>
+            <span class="badge app-clock" id="server-clock" title="Hora del servidor (Caracas)">
+                {{ \Carbon\Carbon::now()->format('d/m/Y h:i:s A') }}
+            </span>
+            <script>
+                document.addEventListener("DOMContentLoaded", function() {
+                    let serverTime = new Date("{{ \Carbon\Carbon::now()->format('Y/m/d H:i:s') }}");
+                    const clock = document.getElementById('server-clock');
+                    if (!clock) return;
+                    setInterval(() => {
+                        serverTime.setSeconds(serverTime.getSeconds() + 1);
+                        const d = String(serverTime.getDate()).padStart(2, '0');
+                        const m = String(serverTime.getMonth() + 1).padStart(2, '0');
+                        const y = serverTime.getFullYear();
+                        let hr = serverTime.getHours();
+                        const min = String(serverTime.getMinutes()).padStart(2, '0');
+                        const sec = String(serverTime.getSeconds()).padStart(2, '0');
+                        const ampm = hr >= 12 ? 'PM' : 'AM';
+                        hr = hr % 12 || 12;
+                        clock.innerText = `${d}/${m}/${y} ${String(hr).padStart(2, '0')}:${min}:${sec} ${ampm}`;
+                    }, 1000);
+                });
+            </script>
+        @endif
+    </div>
 
-        <nav class="app-nav" data-tour="nav-main" data-app-nav>
-            @foreach($nav as $item)
-                @if($item['type'] === 'link')
-                    <a
-                        href="{{ $item['url'] }}"
-                        class="nav-link {{ $item['active'] ? 'active' : '' }} {{ !empty($item['emphasis']) ? 'nav-link-emphasis' : '' }}"
-                        @if(!empty($item['tour'])) data-tour="{{ $item['tour'] }}" @endif
-                    >{{ $item['label'] }}</a>
-                @else
-                    <div class="nav-drop {{ $item['active'] ? 'is-current' : '' }}" data-nav-drop>
-                        <button type="button" class="nav-link nav-drop-btn {{ $item['active'] ? 'active' : '' }}" aria-expanded="false">
-                            {{ $item['label'] }}
-                            <svg class="nav-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 7.5 10 12l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </button>
-                        <div class="nav-drop-menu">
-                            @foreach($item['items'] as $sub)
-                                <a
-                                    href="{{ $sub['url'] }}"
-                                    class="{{ $sub['active'] ? 'active' : '' }}"
-                                    @if(!empty($sub['tour'])) data-tour="{{ $sub['tour'] }}" @endif
-                                >{{ $sub['label'] }}</a>
-                            @endforeach
-                        </div>
+    <nav class="app-nav" data-tour="nav-main">
+        @foreach($nav as $item)
+            @if($item['type'] === 'link')
+                <a
+                    href="{{ $item['url'] }}"
+                    class="nav-link {{ $item['active'] ? 'active' : '' }} {{ !empty($item['emphasis']) ? 'nav-link-emphasis' : '' }}"
+                    @if(!empty($item['tour'])) data-tour="{{ $item['tour'] }}" @endif
+                >
+                    @include('partials.nav-icon', ['icon' => $item['icon'] ?? $item['label'], 'label' => $item['label']])
+                    <span>{{ $item['label'] }}</span>
+                </a>
+            @else
+                <div class="nav-drop {{ $item['active'] ? 'is-current' : '' }}" data-nav-drop>
+                    <button type="button" class="nav-link nav-drop-btn {{ $item['active'] ? 'active' : '' }}" aria-expanded="{{ $item['active'] ? 'true' : 'false' }}">
+                        @include('partials.nav-icon', ['icon' => $item['icon'] ?? $item['label'], 'label' => $item['label']])
+                        <span>{{ $item['label'] }}</span>
+                        <svg class="nav-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 7.5 10 12l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <div class="nav-drop-menu">
+                        @foreach($item['items'] as $sub)
+                            <a
+                                href="{{ $sub['url'] }}"
+                                class="{{ $sub['active'] ? 'active' : '' }}"
+                                @if(!empty($sub['tour'])) data-tour="{{ $sub['tour'] }}" @endif
+                            >
+                                @include('partials.nav-icon', ['icon' => $sub['icon'] ?? $sub['label'], 'label' => $sub['label']])
+                                <span>{{ $sub['label'] }}</span>
+                            </a>
+                        @endforeach
                     </div>
-                @endif
-            @endforeach
-        </nav>
+                </div>
+            @endif
+        @endforeach
+    </nav>
+</aside>
 
+<header class="app-topbar">
+    <div class="app-topbar-inner">
+        <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-label="Abrir menú">
+            <span></span><span></span><span></span>
+        </button>
         <div class="app-header-actions">
             @if($u->isComprador())
                 @if(session('sede_local'))
@@ -386,10 +399,6 @@
                     </form>
                 </div>
             </div>
-
-            <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-label="Abrir menú">
-                <span></span><span></span><span></span>
-            </button>
         </div>
     </div>
 </header>

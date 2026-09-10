@@ -64,7 +64,7 @@
         <div class="header-logo"><img src="{{ public_path('logo.png') }}" alt="Logo"></div>
         <div class="header-titles">
             <h1>Reporte Mensual Patrimonial</h1>
-            <h2>Recibido → gastos / comisión → neto — {{ $nombreMes }}</h2>
+            <h2>Recibido → gastos / comisión → neto — {{ $nombreMes }} · Excluye remodelaciones</h2>
         </div>
         <div class="header-right">Generado:<br>{{ now()->format('d/m/Y H:i') }}</div>
     </div>

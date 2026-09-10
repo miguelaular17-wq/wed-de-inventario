@@ -6,9 +6,9 @@
 <style>
 /* ===== EDURAR EXISTENCIAS ===== */
 .edurar-wrap {
-    max-width: 1600px;
+    max-width: 100%;
     margin: 0 auto;
-    padding: 20px 16px;
+    padding: 0;
     font-family: 'Outfit', sans-serif;
 }
 
@@ -111,6 +111,7 @@
 
 .edurar-table {
     width: 100%;
+    min-width: 1100px;
     border-collapse: collapse;
     font-size: 0.82rem;
     background: #fff;

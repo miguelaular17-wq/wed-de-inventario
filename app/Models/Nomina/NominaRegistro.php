@@ -63,6 +63,16 @@ class NominaRegistro extends Model
         return round((float) ($desglose['bonificaciones_nomina'] ?? $this->total_bonificaciones ?? 0), 2);
     }
 
+    public function lineasDescuentoColumna(): array
+    {
+        return app(\App\Services\Nomina\NominaDescuentoComentarios::class)->lineasNominaColumnaDeducciones($this);
+    }
+
+    public function lineasDescuentoTotal(): array
+    {
+        return app(\App\Services\Nomina\NominaDescuentoComentarios::class)->lineasNomina($this);
+    }
+
     public function montoDeduccionesAjuste(): float
     {
         $desglose = $this->desglose();

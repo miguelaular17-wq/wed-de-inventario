@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     const nav = document.querySelector('[data-app-nav]');
     const toggle = document.querySelector('[data-nav-toggle]');
+    const backdrop = document.querySelector('[data-nav-backdrop]');
 
     function closeDrops(except) {
         document.querySelectorAll('[data-nav-drop]').forEach(function (drop) {
@@ -12,14 +13,27 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    function setSidebarOpen(open) {
+        if (!nav) return;
+        nav.classList.toggle('is-open', open);
+        document.body.classList.toggle('sidebar-open', open);
+        if (toggle) {
+            toggle.classList.toggle('is-open', open);
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        if (!open) closeDrops();
+    }
+
     if (toggle && nav) {
         toggle.addEventListener('click', function (e) {
             e.stopPropagation();
-            const open = !nav.classList.contains('is-open');
-            nav.classList.toggle('is-open', open);
-            toggle.classList.toggle('is-open', open);
-            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-            if (!open) closeDrops();
+            setSidebarOpen(!nav.classList.contains('is-open'));
+        });
+    }
+
+    if (backdrop) {
+        backdrop.addEventListener('click', function () {
+            setSidebarOpen(false);
         });
     }
 
@@ -45,21 +59,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!e.target.closest('[data-nav-drop]')) {
             closeDrops();
         }
-        if (nav && toggle && !e.target.closest('.app-header')) {
-            nav.classList.remove('is-open');
-            toggle.classList.remove('is-open');
-            toggle.setAttribute('aria-expanded', 'false');
+        if (nav && toggle && window.innerWidth <= 980 && !e.target.closest('.app-sidebar') && !e.target.closest('[data-nav-toggle]')) {
+            setSidebarOpen(false);
         }
     });
 
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             closeDrops();
-            if (nav && toggle) {
-                nav.classList.remove('is-open');
-                toggle.classList.remove('is-open');
-                toggle.setAttribute('aria-expanded', 'false');
-            }
+            setSidebarOpen(false);
         }
     });
 });

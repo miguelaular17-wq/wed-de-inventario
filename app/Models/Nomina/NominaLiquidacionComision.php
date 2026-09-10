@@ -122,6 +122,14 @@ class NominaLiquidacionComision extends Model
     }
 
     /**
+     * @return list<array{tipo: string, comentario: string, monto: float, grupo: string}>
+     */
+    public function lineasDescuento(): array
+    {
+        return app(\App\Services\Nomina\NominaDescuentoComentarios::class)->lineasComision($this);
+    }
+
+    /**
      * Retención aplicable a la fila de Supervisores (Otros productos + abonos).
      * En ST la comisión de servicio técnico no retiene.
      */

@@ -35,7 +35,7 @@
             @endif
         </td>
         <td>
-            <h2>Palacio de los Detalles — Reporte de Flujo de Caja</h2>
+            <h2>Palacio de los Detalles — Reporte de Flujo de Caja{{ !empty($data['titulo_extra']) ? ' · '.$data['titulo_extra'] : '' }}</h2>
             <p>Desde {{ date('d/m/Y', strtotime($data['fecha_desde'])) }} hasta {{ date('d/m/Y', strtotime($data['fecha_hasta'])) }}</p>
             @if(!empty($data['q']))
                 <p>Filtro: "{{ $data['q'] }}"</p>

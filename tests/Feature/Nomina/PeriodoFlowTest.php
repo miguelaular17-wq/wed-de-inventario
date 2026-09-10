@@ -252,6 +252,14 @@ class PeriodoFlowTest extends TestCase
             'estado' => 'DESCONTADO',
             'nomina_periodo_id' => $periodo->id,
         ]);
+        $desglose = json_decode((string) $registro->observaciones, true);
+        $this->assertSame('Celular', $desglose['descuentos_lineas'][0]['comentario'] ?? null);
+        $this->assertEquals(40, $desglose['descuentos_lineas'][0]['monto'] ?? null);
+
+        $this->get(route('nomina.periodos.show', $periodo))
+            ->assertOk()
+            ->assertSee('Celular')
+            ->assertSee('nomina-desc-link');
     }
 
     public function test_se_puede_deshacer_un_calculo_accidental(): void
@@ -498,6 +506,15 @@ class PeriodoFlowTest extends TestCase
         $this->assertContains('Sede_Doral.pdf', $nombres);
         $this->assertContains('Area_Marketing.pdf', $nombres);
         $this->assertStringStartsWith('%PDF', $pdfSede);
+
+        $this->get(route('nomina.periodos.show', $periodo))
+            ->assertOk()
+            ->assertSee('Totales por sede y área')
+            ->assertSee('Doral')
+            ->assertSee('Marketing')
+            ->assertSee('Asignaciones')
+            ->assertSee('Total pagado USD')
+            ->assertSee('Total pagado Bs');
     }
 
     public function test_zip_de_relacion_comisiones_separa_sede_y_area(): void
@@ -574,6 +591,14 @@ class PeriodoFlowTest extends TestCase
         $this->assertContains('Sede_Doral.pdf', $nombres);
         $this->assertContains('Area_Marketing.pdf', $nombres);
         $this->assertStringStartsWith('%PDF', $pdfSede);
+
+        $this->get(route('nomina.comisiones.show', $periodo))
+            ->assertOk()
+            ->assertSee('Totales por sede y área')
+            ->assertSee('Doral')
+            ->assertSee('Marketing')
+            ->assertSee('$9.00')
+            ->assertSee('$135.00');
     }
 
     public function test_recalcula_solo_comisiones_sin_tocar_nomina(): void

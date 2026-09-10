@@ -24,7 +24,7 @@
         .page-item:not(.active):not(.disabled) .page-link:hover { background-color: #f1f5f9; }
     </style>
 </head>
-<body>
+<body class="{{ auth()->check() ? 'has-sidebar' : '' }}">
 @auth
     @include('partials.header')
 @endauth

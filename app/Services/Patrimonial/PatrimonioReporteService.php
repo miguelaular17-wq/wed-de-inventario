@@ -4,7 +4,9 @@ namespace App\Services\Patrimonial;
 
 use App\Models\Patrimonial\PatTransaccion;
 use App\Models\Patrimonial\Propiedad;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class PatrimonioReporteService
 {
@@ -32,7 +34,9 @@ class PatrimonioReporteService
             ->orderBy('nombre')
             ->get();
         $filas = $propiedades->map(function (Propiedad $p) use ($conTransacciones) {
-            $txs = $p->transacciones;
+            $txs = $p->transacciones
+                ->reject(fn (PatTransaccion $tx) => $this->esRemodelacion($tx))
+                ->values();
             $desglose = $this->desgloseDe($txs);
 
             $fila = array_merge([
@@ -64,6 +68,61 @@ class PatrimonioReporteService
                 ->all(),
             'gastosPorCategoria' => $this->sumarCategorias($conMovimiento, 'gastosPorCategoria'),
             'comisionesPorCategoria' => $this->sumarCategorias($conMovimiento, 'comisionesPorCategoria'),
+        ];
+    }
+
+    /**
+     * Reporte acumulado hasta el cierre del mes indicado.
+     *
+     * @return array{
+     *     filas: Collection<int, array{
+     *         propiedad:Propiedad,valor_anterior:float,inversion_remodelaciones:float,
+     *         valor_aproximado:float,remodelaciones:Collection<int,PatTransaccion>
+     *     }>,
+     *     totales: array{valor_anterior:float,inversion_remodelaciones:float,valor_aproximado:float},
+     *     fecha_corte: Carbon
+     * }
+     */
+    public function incrementoValor(int $mes, int $anio): array
+    {
+        $fechaCorte = Carbon::create($anio, $mes, 1)->endOfMonth();
+
+        $filas = Propiedad::query()
+            ->with(['transacciones' => function ($query) use ($fechaCorte) {
+                $query
+                    ->where('tipo', 'gasto')
+                    ->whereDate('fecha', '<=', $fechaCorte->toDateString())
+                    ->orderBy('fecha')
+                    ->orderBy('id');
+            }])
+            ->orderBy('nombre')
+            ->get()
+            ->map(function (Propiedad $propiedad) {
+                $remodelaciones = $propiedad->transacciones
+                    ->filter(fn (PatTransaccion $tx) => $this->esRemodelacion($tx))
+                    ->values();
+                $valorAnterior = round((float) ($propiedad->valor_inversion ?? 0), 2);
+                $invertido = round((float) $remodelaciones->sum('monto'), 2);
+
+                return [
+                    'propiedad' => $propiedad,
+                    'valor_anterior' => $valorAnterior,
+                    'inversion_remodelaciones' => $invertido,
+                    'valor_aproximado' => round($valorAnterior + $invertido, 2),
+                    'remodelaciones' => $remodelaciones,
+                ];
+            })
+            ->filter(fn (array $fila) => $fila['remodelaciones']->isNotEmpty())
+            ->values();
+
+        return [
+            'filas' => $filas,
+            'totales' => [
+                'valor_anterior' => round((float) $filas->sum('valor_anterior'), 2),
+                'inversion_remodelaciones' => round((float) $filas->sum('inversion_remodelaciones'), 2),
+                'valor_aproximado' => round((float) $filas->sum('valor_aproximado'), 2),
+            ],
+            'fecha_corte' => $fechaCorte,
         ];
     }
 
@@ -233,5 +292,10 @@ class PatrimonioReporteService
             ->map(fn ($monto, $categoria) => ['categoria' => (string) $categoria, 'monto' => (float) $monto])
             ->values()
             ->all();
+    }
+
+    private function esRemodelacion(PatTransaccion $transaccion): bool
+    {
+        return Str::lower(Str::ascii(trim((string) $transaccion->categoria))) === 'remodelacion';
     }
 }

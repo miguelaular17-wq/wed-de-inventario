@@ -10,6 +10,7 @@ use App\Models\Nomina\NominaPeriodo;
 use App\Services\BcvRateService;
 use App\Services\Nomina\PayrollBankFileService;
 use App\Services\Nomina\PayrollPeriodService;
+use App\Services\Nomina\PayrollSedeAreaTotals;
 use App\Support\SimpleXlsxWriter;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -23,6 +24,7 @@ class ComisionController extends Controller
         private PayrollBankFileService $bankFile,
         private BcvRateService $bcv,
         private PayrollPeriodService $periods,
+        private PayrollSedeAreaTotals $sedeAreaTotals,
     ) {
     }
 
@@ -46,17 +48,20 @@ class ComisionController extends Controller
         $liquidaciones = NominaLiquidacionComision::query()
             ->where('periodo_id', $periodo->id)
             ->visibles()
-            ->with(['empleado.cliente', 'empleado.empresa', 'empleado.sedeCatalogo'])
+            ->with(['empleado.cliente', 'empleado.empresa', 'empleado.sedeCatalogo', 'periodo'])
             ->orderBy('id')
             ->get();
 
         $periodo->setRelation('liquidacionesComision', $liquidaciones);
 
+        $tasaBcv = $this->bcv->getRateForToday();
+
         return view('nomina.comisiones.show', [
             'periodo' => $periodo,
             'liquidaciones' => $liquidaciones,
             'bancoPorEmpresa' => $this->bankFile->resumenComisionesPorEmpresa($periodo),
-            'tasaBcv' => $this->bcv->getRateForToday(),
+            'tasaBcv' => $tasaBcv,
+            'totalesPorGrupo' => $this->sedeAreaTotals->deLiquidaciones($liquidaciones, $tasaBcv),
         ]);
     }
 
