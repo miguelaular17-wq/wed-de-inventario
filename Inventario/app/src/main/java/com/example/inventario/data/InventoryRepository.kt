@@ -14,6 +14,7 @@ interface InventoryRepository {
     suspend fun serviceOptions(): ServiceOptionsDto
     suspend fun serviceOrders(page: Int, query: String, status: String, site: String): ServiceOrdersResponse
     suspend fun serviceOrder(id: Long): ServiceOrderDto
+    suspend fun serviceOrderReceptionPdf(id: Long): ByteArray
     suspend fun createServiceOrder(request: CreateServiceOrderRequest): ServiceOrderDto
     suspend fun changeServiceOrderStatus(id: Long, status: String, comment: String): ServiceOrderDto
     suspend fun sites(): SitesResponse
@@ -64,6 +65,13 @@ class NetworkInventoryRepository(
 
     override suspend fun serviceOrder(id: Long): ServiceOrderDto =
         apiCall { api.serviceOrder(id).data }
+
+    override suspend fun serviceOrderReceptionPdf(id: Long): ByteArray =
+        apiCall {
+            val response = api.serviceOrderReceptionPdf(id)
+            if (!response.isSuccessful) throw HttpException(response)
+            response.body()?.bytes() ?: throw IllegalStateException("El PDF está vacío")
+        }
 
     override suspend fun createServiceOrder(request: CreateServiceOrderRequest): ServiceOrderDto =
         apiCall { api.createServiceOrder(request).data }

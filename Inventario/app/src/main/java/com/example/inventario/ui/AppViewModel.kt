@@ -36,6 +36,8 @@ data class AppUiState(
     val serviceStatus: String = "",
     val serviceSite: String = "",
     val selectedServiceOrder: ServiceOrderDto? = null,
+    val receptionPdf: ByteArray? = null,
+    val receptionPdfLoading: Boolean = false,
     val sites: List<SedeDto> = emptyList(),
     val activeSite: SedeDto? = null,
     val siteLocked: Boolean = false,
@@ -226,6 +228,23 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
 
     fun closeServiceOrder() {
         _state.update { it.copy(selectedServiceOrder = null) }
+    }
+
+    fun openReceptionPdf(order: ServiceOrderDto) = viewModelScope.launch {
+        _state.update { it.copy(receptionPdfLoading = true) }
+        try {
+            val pdf = repository.serviceOrderReceptionPdf(order.id)
+            _state.update { it.copy(receptionPdf = pdf, receptionPdfLoading = false) }
+        } catch (error: Exception) {
+            if (error is SessionExpiredException) expireSession()
+            else _state.update {
+                it.copy(receptionPdfLoading = false, message = error.userMessage())
+            }
+        }
+    }
+
+    fun closeReceptionPdf() {
+        _state.update { it.copy(receptionPdf = null) }
     }
 
     fun createServiceOrder(request: CreateServiceOrderRequest, onSuccess: () -> Unit) =

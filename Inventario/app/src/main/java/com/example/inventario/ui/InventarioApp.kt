@@ -30,15 +30,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -187,14 +185,16 @@ private fun LoginScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeScreen(state: AppUiState, viewModel: AppViewModel) {
-    var tab by remember { mutableIntStateOf(0) }
-    val canUseInventory = state.user?.permissions?.contains("operacion") == true
     Scaffold(
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                ),
                 title = {
                     Column {
-                        Text("Gestión de celulares", fontWeight = FontWeight.Bold)
+                        Text("Nexo PD", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         Text(
                             state.user?.displayName.orEmpty(),
                             style = MaterialTheme.typography.labelMedium,
@@ -208,45 +208,7 @@ private fun HomeScreen(state: AppUiState, viewModel: AppViewModel) {
         },
     ) { padding ->
         Column(Modifier.padding(padding)) {
-            if (canUseInventory) {
-                TabRow(selectedTabIndex = tab) {
-                    Tab(
-                        selected = tab == 0,
-                        onClick = { tab = 0 },
-                        text = { Text("Celulares") },
-                    )
-                    Tab(
-                        selected = tab == 1,
-                        onClick = { tab = 1 },
-                        text = { Text("Inventario") },
-                    )
-                    Tab(
-                        selected = tab == 2,
-                        onClick = {
-                            tab = 2
-                            viewModel.loadRequisitions()
-                        },
-                        text = { Text("Requisiciones") },
-                    )
-                }
-            }
-            if (canUseInventory && tab != 0) {
-                SiteSelector(
-                    sites = state.sites,
-                    selected = state.activeSite,
-                    onSelected = viewModel::setActiveSite,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    label = "Sede activa",
-                    enabled = !state.siteLocked,
-                )
-            }
-            when (tab) {
-                0 -> ServiceOrdersScreen(state, viewModel)
-                1 -> if (canUseInventory) InventoryScreen(state, viewModel)
-                else ServiceOrdersScreen(state, viewModel)
-                else -> if (canUseInventory) RequisitionsScreen(state, viewModel)
-                else ServiceOrdersScreen(state, viewModel)
-            }
+            ServiceOrdersScreen(state, viewModel)
         }
     }
 }

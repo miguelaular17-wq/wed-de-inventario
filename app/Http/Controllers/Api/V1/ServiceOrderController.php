@@ -8,8 +8,10 @@ use App\Models\StOrden;
 use App\Models\User;
 use App\Services\ServicioTecnico\StEquipoService;
 use App\Services\ServicioTecnico\StOrdenService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -115,6 +117,7 @@ class ServiceOrderController extends Controller
             'observaciones' => ['nullable', 'string', 'max:4000'],
             'inspeccion' => ['nullable', 'array'],
             'inspeccion.*' => ['nullable', 'string', Rule::in(['ok', 'dano', 'na'])],
+            'firma_recepcion_cliente' => ['nullable', 'string', 'max:400000'],
             'usar_equipo_existente' => ['nullable', 'boolean'],
         ]);
 
@@ -179,6 +182,9 @@ class ServiceOrderController extends Controller
             'fecha_prometida' => $data['fecha_prometida'] ?? null,
             'observaciones' => $data['observaciones'] ?? null,
             'inspeccion_recepcion' => $inspection,
+            'firma_recepcion_cliente' => $tipoGestion === StOrden::TIPO_REPARACION_INTERNA
+                ? null
+                : $this->parseSignature($data['firma_recepcion_cliente'] ?? null),
             'atributos' => ['almacenamiento' => trim($data['almacenamiento'])],
         ];
         foreach ([
@@ -187,6 +193,7 @@ class ServiceOrderController extends Controller
             'estado_garantia_externa',
             'valor_dispositivo',
             'atributos',
+            'firma_recepcion_cliente',
         ] as $column) {
             if (! Schema::hasColumn('st_ordenes', $column)) {
                 unset($orderData[$column]);
@@ -199,6 +206,18 @@ class ServiceOrderController extends Controller
             'message' => 'Orden '.$order->codigo().' registrada.',
             'data' => $this->orderPayload($order->load(['equipoCelular', 'creador', 'eventos.usuario'])),
         ], 201);
+    }
+
+    public function receptionPdf(Request $request, StOrden $orden): Response
+    {
+        $this->authorizeOrder($request->user(), $orden);
+        $orden->load(['equipoCelular', 'backups', 'creador']);
+
+        return Pdf::loadView('servicio.ordenes.pdf-recepcion', [
+            'orden' => $orden,
+            'backup' => $orden->backupVigente(),
+            'logo' => public_path('logo.png'),
+        ])->setPaper('letter')->stream('recepcion-'.$orden->codigo().'.pdf');
     }
 
     public function show(Request $request, StOrden $orden): JsonResponse
@@ -338,7 +357,7 @@ class ServiceOrderController extends Controller
             'fecha_ingreso' => $order->fecha_ingreso?->format('Y-m-d'),
             'fecha_prometida' => $order->fecha_prometida?->format('Y-m-d'),
             'observaciones' => $order->observaciones,
-            'inspeccion' => $order->inspeccion_recepcion ?: [],
+            'inspeccion' => (object) ($order->inspeccion_recepcion ?: []),
             'creado_por' => $order->creador?->name,
             'eventos' => $order->relationLoaded('eventos')
                 ? $order->eventos->map(fn ($event) => [
@@ -358,5 +377,20 @@ class ServiceOrderController extends Controller
             ->map(fn ($label, $value) => ['value' => (string) $value, 'label' => (string) $label])
             ->values()
             ->all();
+    }
+
+    private function parseSignature(mixed $value): ?string
+    {
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+        if (! str_starts_with($value, 'data:image/png;base64,')
+            && ! str_starts_with($value, 'data:image/jpeg;base64,')) {
+            throw ValidationException::withMessages([
+                'firma_recepcion_cliente' => 'La firma del cliente no tiene un formato válido.',
+            ]);
+        }
+
+        return $value;
     }
 }

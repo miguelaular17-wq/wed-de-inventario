@@ -2,6 +2,7 @@ package com.example.inventario.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class LoginRequest(
@@ -207,7 +208,7 @@ data class ServiceOrderDto(
     @SerialName("fecha_ingreso") val receivedDate: String? = null,
     @SerialName("fecha_prometida") val promisedDate: String? = null,
     val observaciones: String? = null,
-    val inspeccion: Map<String, String> = emptyMap(),
+    val inspeccion: JsonElement? = null,
     @SerialName("creado_por") val createdBy: String? = null,
     val eventos: List<ServiceEventDto> = emptyList(),
 )
@@ -244,6 +245,7 @@ data class CreateServiceOrderRequest(
     @SerialName("fecha_prometida") val promisedDate: String? = null,
     val observaciones: String? = null,
     val inspeccion: Map<String, String> = emptyMap(),
+    @SerialName("firma_recepcion_cliente") val clientSignature: String? = null,
     @SerialName("usar_equipo_existente") val useExistingDevice: Boolean = false,
 )
 

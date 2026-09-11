@@ -1,7 +1,18 @@
 package com.example.inventario.ui
 
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.Paint as AndroidPaint
+import android.graphics.Path as AndroidPath
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
+import android.util.Base64
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,8 +32,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -33,16 +42,31 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.inventario.data.ChoiceDto
 import com.example.inventario.data.CreateServiceOrderRequest
 import com.example.inventario.data.ServiceOrderDto
@@ -50,6 +74,10 @@ import com.example.inventario.ui.theme.NexoDanger
 import com.example.inventario.ui.theme.NexoMuted
 import com.example.inventario.ui.theme.NexoSuccess
 import com.example.inventario.ui.theme.NexoWarning
+import java.io.ByteArrayOutputStream
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ServiceOrdersScreen(state: AppUiState, viewModel: AppViewModel) {
@@ -194,11 +222,17 @@ fun ServiceOrdersScreen(state: AppUiState, viewModel: AppViewModel) {
         ServiceOrderDetailDialog(
             order = order,
             submitting = state.submitting,
+            pdfLoading = state.receptionPdfLoading,
             onStatus = { status, comment ->
                 viewModel.changeServiceOrderStatus(order, status, comment)
             },
+            onPdf = { viewModel.openReceptionPdf(order) },
             onDismiss = viewModel::closeServiceOrder,
         )
+    }
+
+    state.receptionPdf?.let { pdf ->
+        ReceptionPdfDialog(pdf, viewModel::closeReceptionPdf)
     }
 }
 
@@ -271,7 +305,33 @@ private fun CreatePhoneOrderDialog(
     onDismiss: () -> Unit,
     onSubmit: (CreateServiceOrderRequest) -> Unit,
 ) {
-    var site by remember { mutableStateOf(state.serviceSite) }
+    val siteChoices = state.serviceOptions.sedes.ifEmpty {
+        listOf("DORAL", "CENTRO", "ZAMORA", "SAMBIL", "VIRTUDES")
+    }
+    val managementChoices = state.serviceOptions.managementTypes.ifEmpty {
+        listOf(
+            ChoiceDto("ST", "Servicio técnico"),
+            ChoiceDto("GARANTIA", "Garantía"),
+            ChoiceDto("REPARACION_INTERNA", "Reparación interna"),
+        )
+    }
+    val warrantyChoices = state.serviceOptions.warrantyRanges.ifEmpty {
+        listOf(
+            ChoiceDto("dentro", "Dentro del rango"),
+            ChoiceDto("fuera", "Fuera del rango"),
+        )
+    }
+    val priorityChoices = state.serviceOptions.priorities.ifEmpty {
+        listOf(
+            ChoiceDto("baja", "Baja"),
+            ChoiceDto("normal", "Normal"),
+            ChoiceDto("alta", "Alta"),
+            ChoiceDto("urgente", "Urgente"),
+        )
+    }
+    var site by remember(siteChoices, state.serviceSite) {
+        mutableStateOf(state.serviceSite.ifBlank { siteChoices.first() })
+    }
     var managementType by remember { mutableStateOf("ST") }
     var warrantyRange by remember { mutableStateOf("") }
     var clientName by remember { mutableStateOf("") }
@@ -290,11 +350,24 @@ private fun CreatePhoneOrderDialog(
     var notes by remember { mutableStateOf("") }
     var useExisting by remember { mutableStateOf(false) }
     val inspection = remember { mutableStateMapOf<String, String>() }
+    val signatureStrokes = remember { mutableStateListOf<List<Offset>>() }
+    var signatureSize by remember { mutableStateOf(IntSize.Zero) }
     val needsClient = managementType == "ST" || (managementType == "GARANTIA" && warrantyRange == "fuera")
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Registrar celular") },
+        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Column {
+                Text("Registrar celular", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Completa la recepción del equipo",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NexoMuted,
+                )
+            }
+        },
         text = {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 620.dp),
@@ -304,7 +377,7 @@ private fun CreatePhoneOrderDialog(
                     ChoiceSelector(
                         "Tipo de gestión",
                         managementType,
-                        state.serviceOptions.managementTypes,
+                        managementChoices,
                     ) { managementType = it }
                 }
                 if (managementType == "GARANTIA") {
@@ -312,13 +385,13 @@ private fun CreatePhoneOrderDialog(
                         ChoiceSelector(
                             "Rango de garantía",
                             warrantyRange,
-                            state.serviceOptions.warrantyRanges,
+                            warrantyChoices,
                         ) { warrantyRange = it }
                     }
                 }
                 if (!state.serviceOptions.siteLocked) {
                     item {
-                        StringSelector("Sede", site, state.serviceOptions.sedes, { site = it })
+                        StringSelector("Sede", site, siteChoices, { site = it })
                     }
                 }
                 if (needsClient) {
@@ -349,7 +422,7 @@ private fun CreatePhoneOrderDialog(
                 item { PhoneField(failure, { failure = it }, "Falla o motivo *", singleLine = false) }
                 item { PhoneField(accessories, { accessories = it }, "Accesorios recibidos") }
                 item {
-                    ChoiceSelector("Prioridad", priority, state.serviceOptions.priorities) {
+                    ChoiceSelector("Prioridad", priority, priorityChoices) {
                         priority = it
                     }
                 }
@@ -372,6 +445,15 @@ private fun CreatePhoneOrderDialog(
                                 )
                             }
                         }
+                    }
+                }
+                if (needsClient) {
+                    item {
+                        SignaturePad(
+                            strokes = signatureStrokes,
+                            onSizeChanged = { signatureSize = it },
+                            onClear = { signatureStrokes.clear() },
+                        )
                     }
                 }
                 item {
@@ -406,6 +488,7 @@ private fun CreatePhoneOrderDialog(
                             promisedDate = promisedDate.ifBlank { null },
                             observaciones = notes.ifBlank { null },
                             inspeccion = inspection.toMap(),
+                            clientSignature = signatureToDataUrl(signatureStrokes, signatureSize),
                             useExistingDevice = useExisting,
                         ),
                     )
@@ -424,7 +507,9 @@ private fun CreatePhoneOrderDialog(
 private fun ServiceOrderDetailDialog(
     order: ServiceOrderDto,
     submitting: Boolean,
+    pdfLoading: Boolean,
     onStatus: (String, String) -> Unit,
+    onPdf: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var status by remember(order.id, order.estado) { mutableStateOf("") }
@@ -432,6 +517,8 @@ private fun ServiceOrderDetailDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
         title = { Text("${order.codigo} · ${order.statusLabel}") },
         text = {
             LazyColumn(
@@ -449,6 +536,22 @@ private fun ServiceOrderDetailDialog(
                     if (order.clientName.isNotBlank()) Text("Cliente: ${order.clientName}")
                     Text("Falla: ${order.falla}")
                     order.diagnostico?.takeIf(String::isNotBlank)?.let { Text("Diagnóstico: $it") }
+                }
+                item {
+                    OutlinedButton(
+                        onClick = onPdf,
+                        enabled = !pdfLoading,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (pdfLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.height(18.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Text("Ver PDF de recepción")
+                        }
+                    }
                 }
                 if (order.allowedStatuses.isNotEmpty()) {
                     item { HorizontalDivider() }
@@ -522,21 +625,14 @@ private fun ChoiceSelector(
     choices: List<ChoiceDto>,
     onSelected: (String) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedLabel = choices.firstOrNull { it.value == selected }?.label ?: "Seleccione…"
     Column {
         Text(label, style = MaterialTheme.typography.labelMedium)
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(selectedLabel)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            choices.forEach { choice ->
-                DropdownMenuItem(
-                    text = { Text(choice.label) },
-                    onClick = {
-                        onSelected(choice.value)
-                        expanded = false
-                    },
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            items(choices, key = { it.value }) { choice ->
+                FilterChip(
+                    selected = selected == choice.value,
+                    onClick = { onSelected(choice.value) },
+                    label = { Text(choice.label) },
                 )
             }
         }
@@ -551,21 +647,197 @@ private fun StringSelector(
     onSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var expanded by remember { mutableStateOf(false) }
     Column(modifier) {
         Text(label, style = MaterialTheme.typography.labelMedium)
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(selected.ifBlank { "Seleccione…" })
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            values.forEach { value ->
-                DropdownMenuItem(
-                    text = { Text(value) },
-                    onClick = {
-                        onSelected(value)
-                        expanded = false
-                    },
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            items(values, key = { it }) { value ->
+                FilterChip(
+                    selected = selected == value,
+                    onClick = { onSelected(value) },
+                    label = { Text(value) },
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SignaturePad(
+    strokes: MutableList<List<Offset>>,
+    onSizeChanged: (IntSize) -> Unit,
+    onClear: () -> Unit,
+) {
+    val currentStroke = remember { mutableStateListOf<Offset>() }
+    val inkColor = MaterialTheme.colorScheme.onSurface
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column {
+                Text("Firma del cliente", fontWeight = FontWeight.SemiBold)
+                Text("Firma dentro del recuadro", style = MaterialTheme.typography.bodySmall, color = NexoMuted)
+            }
+            TextButton(
+                onClick = {
+                    currentStroke.clear()
+                    onClear()
+                },
+            ) { Text("Limpiar") }
+        }
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(170.dp)
+                .background(Color.White, RoundedCornerShape(10.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(10.dp))
+                .onSizeChanged(onSizeChanged)
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { point ->
+                            currentStroke.clear()
+                            currentStroke.add(point)
+                        },
+                        onDragEnd = {
+                            if (currentStroke.isNotEmpty()) {
+                                strokes.add(currentStroke.toList())
+                                currentStroke.clear()
+                            }
+                        },
+                        onDragCancel = { currentStroke.clear() },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            currentStroke.add(change.position)
+                        },
+                    )
+                },
+        ) {
+            (strokes + listOf(currentStroke.toList())).forEach { points ->
+                if (points.isEmpty()) return@forEach
+                val path = Path().apply {
+                    moveTo(points.first().x, points.first().y)
+                    points.drop(1).forEach { lineTo(it.x, it.y) }
+                }
+                drawPath(
+                    path = path,
+                    color = inkColor,
+                    style = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round),
+                )
+            }
+        }
+    }
+}
+
+private fun signatureToDataUrl(strokes: List<List<Offset>>, sourceSize: IntSize): String? {
+    if (strokes.isEmpty() || sourceSize.width <= 0 || sourceSize.height <= 0) return null
+
+    val width = 1000
+    val height = 350
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = AndroidCanvas(bitmap)
+    canvas.drawColor(android.graphics.Color.WHITE)
+    val paint = AndroidPaint().apply {
+        color = android.graphics.Color.rgb(11, 31, 58)
+        style = AndroidPaint.Style.STROKE
+        strokeWidth = 6f
+        strokeCap = AndroidPaint.Cap.ROUND
+        strokeJoin = AndroidPaint.Join.ROUND
+        isAntiAlias = true
+    }
+    val scaleX = width.toFloat() / sourceSize.width
+    val scaleY = height.toFloat() / sourceSize.height
+    strokes.forEach { points ->
+        if (points.isEmpty()) return@forEach
+        val path = AndroidPath().apply {
+            moveTo(points.first().x * scaleX, points.first().y * scaleY)
+            points.drop(1).forEach { lineTo(it.x * scaleX, it.y * scaleY) }
+        }
+        canvas.drawPath(path, paint)
+    }
+
+    val output = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+    bitmap.recycle()
+
+    return "data:image/png;base64," + Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+}
+
+@Composable
+private fun ReceptionPdfDialog(pdf: ByteArray, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val pages by produceState<List<Bitmap>?>(initialValue = null, pdf) {
+        value = withContext(Dispatchers.IO) {
+            val file = File.createTempFile("recepcion-", ".pdf", context.cacheDir)
+            try {
+                file.writeBytes(pdf)
+                ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+                    PdfRenderer(descriptor).use { renderer ->
+                        List(renderer.pageCount) { index ->
+                            renderer.openPage(index).use { page ->
+                                val bitmap = Bitmap.createBitmap(
+                                    page.width * 2,
+                                    page.height * 2,
+                                    Bitmap.Config.ARGB_8888,
+                                )
+                                bitmap.eraseColor(android.graphics.Color.WHITE)
+                                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                bitmap
+                            }
+                        }
+                    }
+                }
+            } finally {
+                file.delete()
+            }
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize().padding(10.dp),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.background,
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(Color.White).padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("PDF de recepción", style = MaterialTheme.typography.titleMedium)
+                    TextButton(onClick = onDismiss) { Text("Cerrar") }
+                }
+                if (pages == null) {
+                    androidx.compose.foundation.layout.Box(
+                        Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) { CircularProgressIndicator() }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        items(pages.orEmpty()) { page ->
+                            Surface(
+                                color = Color.White,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                shadowElevation = 2.dp,
+                            ) {
+                                Image(
+                                    bitmap = page.asImageBitmap(),
+                                    contentDescription = "Página del PDF",
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentScale = ContentScale.FillWidth,
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -582,4 +854,12 @@ private fun ServiceError(message: String, retry: () -> Unit) {
         Spacer(Modifier.height(12.dp))
         Button(onClick = retry) { Text("Reintentar") }
     }
+}
+
+private fun serviceStatusColors(status: String): Pair<Color, Color> = when (status.lowercase()) {
+    "listo", "entregado" -> NexoSuccess to Color(0xFFE8F8F2)
+    "en_proceso" -> Color(0xFF1768C4) to Color(0xFFE8F2FF)
+    "ubicando_repuesto" -> NexoWarning to Color(0xFFFFF5DC)
+    "cancelado" -> NexoDanger to Color(0xFFFFE9EC)
+    else -> NexoMuted to Color(0xFFEEF2F7)
 }

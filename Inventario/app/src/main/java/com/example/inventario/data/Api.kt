@@ -5,6 +5,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.ResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.Response
@@ -15,6 +16,7 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Streaming
 
 interface InventarioApi {
     @POST("api/v1/auth/login")
@@ -42,6 +44,10 @@ interface InventarioApi {
 
     @GET("api/v1/servicio/celulares/ordenes/{id}")
     suspend fun serviceOrder(@Path("id") id: Long): ServiceOrderResponse
+
+    @Streaming
+    @GET("api/v1/servicio/celulares/ordenes/{id}/pdf/recepcion")
+    suspend fun serviceOrderReceptionPdf(@Path("id") id: Long): Response<ResponseBody>
 
     @POST("api/v1/servicio/celulares/ordenes/{id}/estado")
     suspend fun changeServiceOrderStatus(

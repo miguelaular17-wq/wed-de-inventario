@@ -521,12 +521,21 @@ class StCelularesBitacoraTest extends TestCase
             'falla' => 'No carga',
             'prioridad' => 'alta',
             'inspeccion' => ['pantalla' => 'ok'],
+            'firma_recepcion_cliente' => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ',
         ])->assertCreated()
             ->assertJsonPath('data.cliente_nombre', 'Cliente Android')
             ->assertJsonPath('data.imei', '350099988877766')
             ->assertJsonPath('data.estado', 'pendiente');
 
         $orderId = $created->json('data.id');
+        $this->assertDatabaseHas('st_ordenes', [
+            'id' => $orderId,
+            'firma_recepcion_cliente' => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ',
+        ]);
+
+        $this->get("/api/v1/servicio/celulares/ordenes/{$orderId}/pdf/recepcion")
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
 
         $this->getJson('/api/v1/servicio/celulares/ordenes?q=350099988877766')
             ->assertOk()
