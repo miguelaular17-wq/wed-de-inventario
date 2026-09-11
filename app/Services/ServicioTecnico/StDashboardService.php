@@ -84,6 +84,9 @@ class StDashboardService
             ->visiblePara($user)
             ->where('transfer_estado', StOrden::TRANSFER_PENDIENTE)
             ->with('equipoCelular');
+        if ($user->veSoloSusFacturasTaller()) {
+            $porRecibirQuery->where('tecnico_id', $user->id);
+        }
         if ($user->scopesServicioToOwnSede()) {
             $porRecibirQuery->where('sede', strtoupper((string) $user->sede));
         } elseif ($sedeFiltro) {

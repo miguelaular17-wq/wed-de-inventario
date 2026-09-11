@@ -73,6 +73,9 @@
                             @if($orden->etiquetaRangoGarantia())
                                 <div class="muted" style="font-size:.75rem;">{{ $orden->etiquetaRangoGarantia() }}</div>
                             @endif
+                            @if($orden->esGarantia())
+                                <div style="font-size:.75rem;color:#92400e;">{{ $orden->etiquetaEstadoGarantiaExterna() }}</div>
+                            @endif
                         </td>
                         <td>
                             {{ $orden->cliente_nombre }}
@@ -89,11 +92,68 @@
                         <td>{{ $orden->etiquetaEstado() }}
                             @if($orden->excedePresupuesto()) <span title="Excede presupuesto">⚠️</span> @endif
                             @if($orden->transferenciaPendiente()) <span class="muted" style="font-size:.75rem;">· transferencia</span> @endif
+                            @if(!$orden->esGarantia() && $orden->estadosPermitidos() !== [])
+                                <details style="margin-top:5px;min-width:210px;">
+                                    <summary style="cursor:pointer;color:#2563eb;font-size:.78rem;">Cambiar estado</summary>
+                                    <form method="POST" action="{{ route('servicio.ordenes.cambiar_estado', $orden) }}" style="margin-top:7px;display:grid;gap:6px;">
+                                        @csrf
+                                        <select name="estado" required style="padding:6px;border:1px solid #cbd5e1;border-radius:5px;background:white;">
+                                            <option value="">Nuevo estado…</option>
+                                            @foreach($orden->estadosPermitidos() as $key => $label)
+                                                @if($key !== \App\Models\StOrden::ESTADO_ENTREGADO || !$orden->excedePresupuesto())
+                                                    <option value="{{ $key }}">{{ $label }}</option>
+                                                @endif
+                                            @endforeach
+                                        </select>
+                                        <textarea name="comentario_estado" required minlength="3" maxlength="1000" rows="2" placeholder="¿Por qué cambia el estado?" style="padding:6px;border:1px solid #cbd5e1;border-radius:5px;"></textarea>
+                                        <button type="submit" class="btn secondary" style="padding:5px 8px;">Guardar estado</button>
+                                    </form>
+                                </details>
+                            @endif
+                            @if($orden->esGarantia() && $orden->estadoGarantiaExternaActual() !== \App\Models\StOrden::GARANTIA_RECIBIDO)
+                                @php $estadoGarantia = $orden->estadoGarantiaExternaActual(); @endphp
+                                <details style="margin-top:5px;min-width:230px;">
+                                    <summary style="cursor:pointer;color:#92400e;font-size:.78rem;">Gestionar envío de garantía</summary>
+                                    <form method="POST" action="{{ route('servicio.ordenes.garantia.estado', $orden) }}" style="margin-top:7px;display:grid;gap:6px;">
+                                        @csrf
+                                        <select name="estado_garantia" required style="padding:6px;border:1px solid #cbd5e1;border-radius:5px;background:white;">
+                                            <option value="">Nuevo estado de envío…</option>
+                                            @if($estadoGarantia === \App\Models\StOrden::GARANTIA_PENDIENTE_ENVIO)
+                                                <option value="{{ \App\Models\StOrden::GARANTIA_ENVIADO }}">Enviado</option>
+                                            @elseif($estadoGarantia === \App\Models\StOrden::GARANTIA_ENVIADO)
+                                                <option value="{{ \App\Models\StOrden::GARANTIA_EN_PROCESO }}">En proceso</option>
+                                                <option value="{{ \App\Models\StOrden::GARANTIA_RECIBIDO }}">Recibido</option>
+                                            @elseif($estadoGarantia === \App\Models\StOrden::GARANTIA_EN_PROCESO)
+                                                <option value="{{ \App\Models\StOrden::GARANTIA_RECIBIDO }}">Recibido</option>
+                                            @endif
+                                        </select>
+                                        @if($estadoGarantia === \App\Models\StOrden::GARANTIA_PENDIENTE_ENVIO)
+                                            <select name="empresa" required style="padding:6px;border:1px solid #cbd5e1;border-radius:5px;background:white;">
+                                                <option value="">Empresa destino…</option>
+                                                @foreach(\App\Models\StOrden::EMPRESAS_ENVIO_GARANTIA as $empresa)
+                                                    <option value="{{ $empresa }}">{{ $empresa }}</option>
+                                                @endforeach
+                                            </select>
+                                            <input name="motivo" required maxlength="255" placeholder="Motivo del envío, ej: Reparación" style="padding:6px;border:1px solid #cbd5e1;border-radius:5px;">
+                                        @endif
+                                        <textarea name="comentario_garantia" required minlength="3" maxlength="2000" rows="2"
+                                            placeholder="{{ $estadoGarantia === \App\Models\StOrden::GARANTIA_PENDIENTE_ENVIO ? 'Observación inicial de la garantía' : 'Motivo o actualización de la garantía' }}"
+                                            style="padding:6px;border:1px solid #cbd5e1;border-radius:5px;"></textarea>
+                                        <button type="submit" class="btn secondary" style="padding:5px 8px;">Guardar estado de garantía</button>
+                                    </form>
+                                </details>
+                            @endif
                         </td>
                         <td>{{ $orden->etiquetaPrioridad() }}</td>
                         <td>{{ $orden->creador?->name ?: '—' }}</td>
                         <td>{{ $orden->fecha_ingreso?->format('d/m/Y') }}</td>
-                        <td><a class="btn secondary" href="{{ route('servicio.ordenes.edit', $orden) }}">Editar</a></td>
+                        <td>
+                            @unless($orden->garantiaExternaBloqueada())
+                                <a class="btn secondary" href="{{ route('servicio.ordenes.edit', $orden) }}">Editar</a>
+                            @else
+                                <a class="btn secondary" href="{{ route('servicio.ordenes.show', $orden) }}">Ver flujo</a>
+                            @endunless
+                        </td>
                     </tr>
                 @empty
                     <tr><td colspan="9" class="muted">No hay órdenes con esos filtros.</td></tr>

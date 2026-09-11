@@ -196,7 +196,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             <canvas id="hiddenPieChart" width="400" height="400"></canvas>
             <canvas id="hiddenBarChart" width="600" height="400"></canvas>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap" id="qpedir-table-wrap">
             <table class="data-table qpedir-table">
                 <thead>
                     <tr>
@@ -205,7 +205,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                         <th style="width: 140px;">Categoría</th>
                         <th class="col-number" style="width: 80px;">Pedidos</th>
                         <th style="width: 140px;">Última solicitud</th>
-                        <th style="width: 220px;">Acción</th>
+                        <th style="width: 330px;">Acción</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -219,14 +219,19 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                         </td>
                         <td style="color: #64748b; font-size: 0.78rem;">{{ \Carbon\Carbon::parse($pedido->created_at)->diffForHumans() }}</td>
                         <td>
-                            <div class="pedido-actions" style="display: flex; gap: 6px; align-items: center;">
+                            <div class="pedido-actions" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
                                 @if($pedido->estado === 'pendiente' || !$pedido->estado)
-                                    <form method="POST" action="{{ route('comprador.pedidos.comprado') }}">
+                                    <form method="POST" action="{{ route('comprador.pedidos.comprado') }}" class="qpedir-action-form">
                                         @csrf
                                         <input type="hidden" name="producto" value="{{ $pedido->producto }}">
                                         <button type="submit" class="btn-atender" style="padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: 1px solid #10b981; background: #10b981; color: white;">Comprado</button>
                                     </form>
-                                    <form method="POST" action="{{ route('comprador.pedidos.fuera_mercado') }}" onsubmit="return confirm('¿Marcar como fuera de mercado (no se puede comprar)?')">
+                                    <form method="POST" action="{{ route('comprador.pedidos.tiene_existencia') }}" class="qpedir-action-form" onsubmit="return confirm('¿Notificar a la sede que este producto tiene existencia y debe realizar una requisición?')">
+                                        @csrf
+                                        <input type="hidden" name="producto" value="{{ $pedido->producto }}">
+                                        <button type="submit" style="padding:4px 10px;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer;border:1px solid #2563eb;background:#2563eb;color:white;">Tiene existencia</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('comprador.pedidos.fuera_mercado') }}" class="qpedir-action-form" onsubmit="return confirm('¿Marcar como fuera de mercado (no se puede comprar)?')">
                                         @csrf
                                         <input type="hidden" name="producto" value="{{ $pedido->producto }}">
                                         <button type="submit" class="btn-eliminar" style="padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: 1px solid #fecaca; background: #fff; color: #ef4444;">Fuera de mercado</button>
@@ -1439,6 +1444,38 @@ function filterQPedir(value) {
         row.style.display = !needle || (row.dataset.filter || '').includes(needle) ? '' : 'none';
     });
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    const tableWrap = document.getElementById('qpedir-table-wrap');
+    const filter = document.getElementById('qpedir-filter');
+    const scrollKey = 'qpedir-table-scroll';
+    const filterKey = 'qpedir-table-filter';
+
+    if (filter) {
+        const savedFilter = sessionStorage.getItem(filterKey);
+        if (savedFilter !== null) {
+            filter.value = savedFilter;
+            filterQPedir(savedFilter);
+            sessionStorage.removeItem(filterKey);
+        }
+    }
+    if (tableWrap) {
+        const savedScroll = sessionStorage.getItem(scrollKey);
+        if (savedScroll !== null) {
+            requestAnimationFrame(() => {
+                tableWrap.scrollTop = Number(savedScroll) || 0;
+                sessionStorage.removeItem(scrollKey);
+            });
+        }
+    }
+
+    document.querySelectorAll('.qpedir-action-form').forEach(function (form) {
+        form.addEventListener('submit', function () {
+            if (tableWrap) sessionStorage.setItem(scrollKey, String(tableWrap.scrollTop));
+            if (filter) sessionStorage.setItem(filterKey, filter.value);
+        });
+    });
+});
 
 function openDistributionModal(code, name, stocks, demands) {
     document.getElementById('modal-product-title').innerText = name;

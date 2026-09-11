@@ -230,6 +230,7 @@ Route::middleware(['auth', 'permission:compras,compras.distribucion,compras.nece
     // Pedidos solicitados (Q pedir)
     Route::post('/pedidos/comprado', [PedidoSolicitadoController::class, 'marcarComprado'])->name('comprador.pedidos.comprado');
     Route::post('/pedidos/fuera-mercado', [PedidoSolicitadoController::class, 'marcarFueraMercado'])->name('comprador.pedidos.fuera_mercado');
+    Route::post('/pedidos/tiene-existencia', [PedidoSolicitadoController::class, 'marcarTieneExistencia'])->name('comprador.pedidos.tiene_existencia');
     Route::get('/pedidos/reporte-excel', [PedidoSolicitadoController::class, 'reporteExcel'])->name('comprador.pedidos.excel');
     Route::post('/pedidos/reporte-pdf', [PedidoSolicitadoController::class, 'reportePdf'])->name('comprador.pedidos.pdf');
     Route::get('/pedidos/reporte-diario', [PedidoSolicitadoController::class, 'reporteDiarioPdf'])->name('comprador.pedidos.diario');
@@ -530,6 +531,12 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'permission:servicio'])
             Route::post('/{orden}/conformidad', [OrdenController::class, 'guardarConformidad'])->whereNumber('orden')->name('conformidad');
             Route::get('/{orden}/editar', [OrdenController::class, 'edit'])->whereNumber('orden')->name('edit');
             Route::put('/{orden}', [OrdenController::class, 'update'])->whereNumber('orden')->name('update');
+            Route::post('/{orden}/estado', [OrdenController::class, 'cambiarEstado'])->whereNumber('orden')->name('cambiar_estado');
+            Route::post('/{orden}/garantia/enviar', [OrdenController::class, 'enviarGarantiaExterna'])->whereNumber('orden')->name('garantia.enviar');
+            Route::post('/{orden}/garantia/actualizacion', [OrdenController::class, 'actualizarGarantiaExterna'])->whereNumber('orden')->name('garantia.actualizacion');
+            Route::post('/{orden}/garantia/estado', [OrdenController::class, 'gestionarEstadoGarantiaExterna'])->whereNumber('orden')->name('garantia.estado');
+            Route::post('/{orden}/garantia/en-proceso', [OrdenController::class, 'iniciarProcesoGarantiaExterna'])->whereNumber('orden')->name('garantia.en_proceso');
+            Route::post('/{orden}/garantia/recibir', [OrdenController::class, 'recibirGarantiaExterna'])->whereNumber('orden')->name('garantia.recibir');
             Route::post('/{orden}/confirmar-recepcion', [OrdenController::class, 'confirmarRecepcion'])->whereNumber('orden')->name('confirmar_recepcion');
             Route::delete('/{orden}', [OrdenController::class, 'destroy'])->whereNumber('orden')->name('destroy');
         });

@@ -373,6 +373,10 @@ class User extends Authenticatable
             return true;
         }
 
+        if ($permission === 'servicio' && $this->empleadoServicioTecnico() !== null) {
+            return true;
+        }
+
         $owned = array_merge($this->rolePermissionKeys(), $this->extraPermissionKeys());
 
         if ($permission === 'finanzas.ver' && in_array('finanzas.editar', $owned, true)) {

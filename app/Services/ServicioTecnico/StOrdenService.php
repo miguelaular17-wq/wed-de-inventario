@@ -16,9 +16,9 @@ class StOrdenService
     /**
      * @param  list<array{repuesto_id:int,cantidad:int}>  $lineasRepuesto
      */
-    public function actualizarOrden(StOrden $orden, array $datos, User $user, array $lineasRepuesto = []): StOrden
+    public function actualizarOrden(StOrden $orden, array $datos, User $user, array $lineasRepuesto = [], ?string $comentarioEstado = null): StOrden
     {
-        return DB::transaction(function () use ($orden, $datos, $user, $lineasRepuesto) {
+        return DB::transaction(function () use ($orden, $datos, $user, $lineasRepuesto, $comentarioEstado) {
             $estadoAnterior = $orden->estado;
 
             if (isset($datos['sede']) && strtoupper((string) $datos['sede']) !== strtoupper((string) $orden->sede)) {
@@ -48,19 +48,20 @@ class StOrdenService
 
             if ($nuevoEstado !== $estadoAnterior) {
                 $this->registrarEvento($orden, $user, StOrdenEvento::TIPO_ESTADO, sprintf(
-                    'Estado: %s → %s',
+                    'Estado: %s → %s. Motivo: %s',
                     StOrden::ESTADOS[$estadoAnterior] ?? $estadoAnterior,
-                    StOrden::ESTADOS[$nuevoEstado] ?? $nuevoEstado
-                ), ['de' => $estadoAnterior, 'a' => $nuevoEstado]);
+                    StOrden::ESTADOS[$nuevoEstado] ?? $nuevoEstado,
+                    trim((string) $comentarioEstado)
+                ), ['de' => $estadoAnterior, 'a' => $nuevoEstado, 'comentario' => trim((string) $comentarioEstado)]);
             }
 
             return $orden->fresh(['repuestosLineas.repuesto', 'eventos.usuario', 'tecnico']);
         });
     }
 
-    public function transferir(StOrden $orden, string $sedeDestino, User $user): void
+    public function transferir(StOrden $orden, string $sedeDestino, User $user, ?User $tecnicoDestino = null): void
     {
-        if (! $user->puedeTransferirServicio()) {
+        if (! $tecnicoDestino && ! $user->puedeTransferirServicio()) {
             throw ValidationException::withMessages([
                 'sede' => 'No tienes permiso para transferir órdenes entre sedes.',
             ]);
@@ -73,7 +74,7 @@ class StOrdenService
             throw ValidationException::withMessages(['sede' => 'Sede de destino inválida.']);
         }
 
-        if ($sedeDestino === strtoupper((string) $orden->sede)) {
+        if ($sedeDestino === strtoupper((string) $orden->sede) && ! $tecnicoDestino) {
             return;
         }
 
@@ -86,22 +87,29 @@ class StOrdenService
         $sedeOrigen = strtoupper((string) $orden->sede);
         $codigoAnterior = $orden->codigo();
 
-        // (sede, numero) es único: al cambiar de sede hay que tomar el siguiente número allí.
         $orden->sede_origen_transfer = $sedeOrigen;
         $orden->sede_destino_transfer = $sedeDestino;
         $orden->transfer_estado = StOrden::TRANSFER_PENDIENTE;
-        $orden->sede = $sedeDestino;
-        $orden->numero = StOrden::siguienteNumero($sedeDestino);
+        if ($tecnicoDestino) {
+            $orden->tecnico_id = $tecnicoDestino->id;
+        }
+        if ($sedeDestino !== $sedeOrigen) {
+            // (sede, numero) es único: al cambiar de sede hay que tomar el siguiente número allí.
+            $orden->sede = $sedeDestino;
+            $orden->numero = StOrden::siguienteNumero($sedeDestino);
+        }
 
         $this->registrarEvento($orden, $user, StOrdenEvento::TIPO_TRANSFERENCIA, sprintf(
-            'Transferencia pendiente: %s → %s (%s → %s)',
+            'Transferencia pendiente: %s → %s%s (%s → %s)',
             $sedeOrigen,
             $sedeDestino,
+            $tecnicoDestino ? ' · Para '.$tecnicoDestino->name : '',
             $codigoAnterior,
             $orden->codigo()
         ), [
             'origen' => $sedeOrigen,
             'destino' => $sedeDestino,
+            'tecnico_destino_id' => $tecnicoDestino?->id,
             'codigo_anterior' => $codigoAnterior,
             'codigo_nuevo' => $orden->codigo(),
         ]);
@@ -138,9 +146,11 @@ class StOrdenService
             ]);
         }
 
-        if (strtoupper((string) $orden->sede) !== strtoupper((string) $user->sede)) {
+        if ($orden->tecnico_id
+            ? (int) $orden->tecnico_id !== (int) $user->id
+            : strtoupper((string) $orden->sede) !== strtoupper((string) $user->sede)) {
             throw ValidationException::withMessages([
-                'transfer' => 'Solo el técnico de la sede destino puede confirmar la recepción.',
+                'transfer' => 'Solo la persona destinataria puede confirmar la recepción.',
             ]);
         }
 
@@ -297,6 +307,158 @@ class StOrdenService
             ->sum(fn (StOrdenRepuesto $l) => (float) $l->costo_unitario * (int) $l->cantidad);
     }
 
+    /**
+     * @param  array{empresa:string,motivo:string,observacion:string}  $data
+     */
+    public function enviarGarantiaExterna(StOrden $orden, array $data, User $user): StOrden
+    {
+        $this->validarGarantiaExterna($orden, [StOrden::GARANTIA_PENDIENTE_ENVIO]);
+
+        return DB::transaction(function () use ($orden, $data, $user) {
+            $orden->update([
+                'empresa_envio_garantia' => $data['empresa'],
+                'motivo_envio_garantia' => $data['motivo'],
+                'observacion_envio_garantia' => $data['observacion'],
+                'estado_garantia_externa' => StOrden::GARANTIA_ENVIADO,
+                'garantia_enviado_at' => now(),
+                'garantia_enviado_por' => $user->id,
+                'updated_by' => $user->id,
+            ]);
+
+            $this->registrarEvento(
+                $orden,
+                $user,
+                StOrdenEvento::TIPO_GARANTIA_EXTERNA,
+                'Equipo enviado a '.$data['empresa'].'. Motivo: '.$data['motivo'].'. Observación: '.$data['observacion'],
+                ['estado' => StOrden::GARANTIA_ENVIADO, 'empresa' => $data['empresa']]
+            );
+            if ($orden->equipo_id && ($equipo = $orden->equipoCelular ?: \App\Models\StEquipo::query()->find($orden->equipo_id))) {
+                $equipo->update(['estado_actual' => \App\Models\StEquipo::ESTADO_EN_TRANSITO]);
+                app(StEquipoService::class)->registrarEvento(
+                    $equipo,
+                    $user,
+                    \App\Models\StEquipoEvento::TIPO_ENVIO,
+                    'Enviado a garantía: '.$data['empresa'],
+                    'Motivo: '.$data['motivo'].'. Observación: '.$data['observacion'],
+                    $orden,
+                    (string) $orden->sede,
+                    ['empresa' => $data['empresa'], 'estado_garantia' => StOrden::GARANTIA_ENVIADO]
+                );
+            }
+
+            return $orden->fresh();
+        });
+    }
+
+    public function actualizarGarantiaExterna(StOrden $orden, string $comentario, string $tipo, User $user): void
+    {
+        $this->validarGarantiaExterna($orden, [StOrden::GARANTIA_ENVIADO, StOrden::GARANTIA_EN_PROCESO]);
+        $prefijo = $tipo === 'avance' ? 'Avance' : 'Comentario';
+
+        $this->registrarEvento(
+            $orden,
+            $user,
+            StOrdenEvento::TIPO_GARANTIA_EXTERNA,
+            $prefijo.' de garantía externa: '.$comentario,
+            ['estado' => $orden->estadoGarantiaExternaActual(), 'tipo' => $tipo]
+        );
+        if ($orden->equipo_id && ($equipo = $orden->equipoCelular ?: \App\Models\StEquipo::query()->find($orden->equipo_id))) {
+            app(StEquipoService::class)->registrarEvento(
+                $equipo,
+                $user,
+                \App\Models\StEquipoEvento::TIPO_NOTA,
+                $prefijo.' de garantía externa',
+                $comentario,
+                $orden,
+                (string) $orden->sede,
+                ['estado_garantia' => $orden->estadoGarantiaExternaActual()]
+            );
+        }
+    }
+
+    public function iniciarProcesoGarantiaExterna(StOrden $orden, string $comentario, User $user): StOrden
+    {
+        $this->validarGarantiaExterna($orden, [StOrden::GARANTIA_ENVIADO]);
+        $orden->update([
+            'estado_garantia_externa' => StOrden::GARANTIA_EN_PROCESO,
+            'updated_by' => $user->id,
+        ]);
+        $this->registrarEvento(
+            $orden,
+            $user,
+            StOrdenEvento::TIPO_GARANTIA_EXTERNA,
+            'Garantía externa en proceso. '.$comentario,
+            ['estado' => StOrden::GARANTIA_EN_PROCESO]
+        );
+        if ($orden->equipo_id && ($equipo = $orden->equipoCelular ?: \App\Models\StEquipo::query()->find($orden->equipo_id))) {
+            app(StEquipoService::class)->registrarEvento(
+                $equipo,
+                $user,
+                \App\Models\StEquipoEvento::TIPO_REPARACION,
+                'Garantía externa en proceso',
+                $comentario,
+                $orden,
+                (string) $orden->sede,
+                ['estado_garantia' => StOrden::GARANTIA_EN_PROCESO]
+            );
+        }
+
+        return $orden->fresh();
+    }
+
+    public function recibirGarantiaExterna(StOrden $orden, ?string $comentario, User $user): StOrden
+    {
+        $this->validarGarantiaExterna($orden, [StOrden::GARANTIA_ENVIADO, StOrden::GARANTIA_EN_PROCESO]);
+        $orden->update([
+            'estado_garantia_externa' => StOrden::GARANTIA_RECIBIDO,
+            'garantia_recibido_at' => now(),
+            'garantia_recibido_por' => $user->id,
+            'updated_by' => $user->id,
+        ]);
+        $descripcion = 'Equipo recibido nuevamente en sede '.strtoupper((string) $orden->sede).'.';
+        if ($comentario) {
+            $descripcion .= ' Observación: '.$comentario;
+        }
+        $this->registrarEvento(
+            $orden,
+            $user,
+            StOrdenEvento::TIPO_GARANTIA_EXTERNA,
+            $descripcion,
+            ['estado' => StOrden::GARANTIA_RECIBIDO, 'sede' => $orden->sede]
+        );
+        if ($orden->equipo_id && ($equipo = $orden->equipoCelular ?: \App\Models\StEquipo::query()->find($orden->equipo_id))) {
+            $equipo->update([
+                'estado_actual' => \App\Models\StEquipo::ESTADO_EN_TALLER,
+                'sede_actual' => strtoupper((string) $orden->sede),
+            ]);
+            app(StEquipoService::class)->registrarEvento(
+                $equipo,
+                $user,
+                \App\Models\StEquipoEvento::TIPO_RECEPCION,
+                'Recibido de garantía externa',
+                $descripcion,
+                $orden,
+                (string) $orden->sede,
+                ['estado_garantia' => StOrden::GARANTIA_RECIBIDO]
+            );
+        }
+
+        return $orden->fresh();
+    }
+
+    /**
+     * @param  list<string>  $estadosPermitidos
+     */
+    private function validarGarantiaExterna(StOrden $orden, array $estadosPermitidos): void
+    {
+        if (! $orden->esGarantia()) {
+            throw ValidationException::withMessages(['garantia' => 'Este flujo solo está disponible para garantías.']);
+        }
+        if (! in_array($orden->estadoGarantiaExternaActual(), $estadosPermitidos, true)) {
+            throw ValidationException::withMessages(['garantia' => 'La acción no corresponde al estado actual de la garantía.']);
+        }
+    }
+
     public function registrarEvento(StOrden $orden, ?User $user, string $tipo, string $descripcion, ?array $meta = null): void
     {
         StOrdenEvento::create([
@@ -311,16 +473,7 @@ class StOrdenService
 
     private function validarTransicion(StOrden $orden, string $de, string $a): void
     {
-        $permitidas = [
-            StOrden::ESTADO_PENDIENTE => [StOrden::ESTADO_EN_PROCESO, StOrden::ESTADO_UBICANDO_REPUESTO, StOrden::ESTADO_CANCELADO],
-            StOrden::ESTADO_EN_PROCESO => [StOrden::ESTADO_PENDIENTE, StOrden::ESTADO_UBICANDO_REPUESTO, StOrden::ESTADO_LISTO, StOrden::ESTADO_CANCELADO],
-            StOrden::ESTADO_UBICANDO_REPUESTO => [StOrden::ESTADO_PENDIENTE, StOrden::ESTADO_EN_PROCESO, StOrden::ESTADO_CANCELADO],
-            StOrden::ESTADO_LISTO => [StOrden::ESTADO_EN_PROCESO, StOrden::ESTADO_ENTREGADO],
-            StOrden::ESTADO_ENTREGADO => [],
-            StOrden::ESTADO_CANCELADO => [],
-        ];
-
-        if (! in_array($a, $permitidas[$de] ?? [], true)) {
+        if (! array_key_exists($a, $orden->estadosPermitidos())) {
             throw ValidationException::withMessages([
                 'estado' => 'No se puede cambiar de «'.(StOrden::ESTADOS[$de] ?? $de).'» a «'.(StOrden::ESTADOS[$a] ?? $a).'».',
             ]);

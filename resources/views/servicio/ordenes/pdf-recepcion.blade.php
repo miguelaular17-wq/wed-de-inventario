@@ -46,7 +46,7 @@
         <strong>Garantía en rango de cambio</strong>
         <div style="margin-top:4px;">Equipo de la empresa. Se cambia al cliente y se envía a garantía a nombre de Palacio de los Detalles.</div>
     </div>
-    @else
+    @elseif(! $orden->esReparacionInterna())
     <div class="box">
         <strong>Cliente</strong>
         <table class="grid" style="margin-top:4px;">
@@ -64,6 +64,7 @@
         <table class="grid" style="margin-top:4px;">
             <tr><td class="label">Equipo</td><td>{{ $orden->equipoCelular?->etiqueta() ?: ($orden->equipo ?: '—') }}</td></tr>
             <tr><td class="label">IMEI / serial</td><td>{{ $orden->imei ?: '—' }} / {{ $orden->serial ?: '—' }}</td></tr>
+            <tr><td class="label">Valor del dispositivo</td><td>{{ $orden->valor_dispositivo !== null ? '$'.number_format((float) $orden->valor_dispositivo, 2) : '—' }}</td></tr>
             @if($orden->atributo('almacenamiento'))
                 <tr><td class="label">Almacenamiento</td><td>{{ $orden->atributo('almacenamiento') }}</td></tr>
             @endif
@@ -114,18 +115,20 @@
             @endif
         </div>
     @else
-        <div class="box muted">No se entregó celular de backup. Este documento solo deja constancia de cómo se recibió el equipo del cliente.</div>
+        <div class="box muted">No se entregó celular de backup. Este documento deja constancia de cómo se recibió el equipo.</div>
     @endif
 
     <table class="firmas">
         <tr>
+            @unless($orden->esReparacionInterna())
             <td>
                 @if($orden->firma_recepcion_cliente && str_starts_with($orden->firma_recepcion_cliente, 'data:image'))
                     <img class="firma-img" src="{{ $orden->firma_recepcion_cliente }}" alt="Firma cliente">
                 @endif
                 <div class="linea">{{ $orden->cliente_nombre }}<br><span class="muted">Firma del cliente</span></div>
             </td>
-            <td>
+            @endunless
+            <td @if($orden->esReparacionInterna()) colspan="2" @endif>
                 @if($orden->firma_recepcion_empleado && str_starts_with($orden->firma_recepcion_empleado, 'data:image'))
                     <img class="firma-img" src="{{ $orden->firma_recepcion_empleado }}" alt="Firma empleado">
                 @endif

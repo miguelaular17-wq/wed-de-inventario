@@ -40,6 +40,33 @@ body {
     color: #fff;
     box-shadow: 8px 0 24px rgba(15, 23, 42, .12);
     overflow: hidden;
+    transition: width .2s ease;
+}
+
+.sidebar-collapse-toggle {
+    width: 26px;
+    height: 26px;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    border: 1px solid rgba(255,255,255,.24);
+    border-radius: 7px;
+    background: rgba(255,255,255,.12);
+    color: #fff;
+    cursor: pointer;
+    padding: 0;
+}
+
+.sidebar-collapse-toggle:hover {
+    background: rgba(255,255,255,.22);
+}
+
+.sidebar-collapse-arrow {
+    font-size: 1.25rem;
+    line-height: 1;
+    transform: translateY(-1px);
 }
 
 .app-sidebar .app-brand {
@@ -548,9 +575,60 @@ body {
     .has-sidebar {
         padding-left: 248px;
         overflow-x: hidden;
+        transition: padding-left .2s ease;
     }
     .has-sidebar .nav-toggle {
         display: none;
+    }
+
+    .has-sidebar.sidebar-collapsed {
+        padding-left: 72px;
+    }
+
+    .sidebar-collapsed .app-sidebar {
+        width: 72px;
+    }
+
+    .sidebar-collapsed .app-sidebar .app-brand {
+        padding: 16px 10px 12px;
+        justify-content: center;
+        gap: 6px;
+    }
+
+    .sidebar-collapsed .app-sidebar .app-brand-link strong,
+    .sidebar-collapsed .app-sidebar .app-brand > .badge {
+        display: none;
+    }
+
+    .sidebar-collapsed .app-sidebar .sidebar-collapse-toggle {
+        margin-left: 0;
+    }
+
+    .sidebar-collapsed .app-sidebar .sidebar-collapse-arrow {
+        transform: translateY(-1px) rotate(180deg);
+    }
+
+    .sidebar-collapsed .app-sidebar .app-nav {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .sidebar-collapsed .app-sidebar .nav-link {
+        justify-content: center;
+        padding-left: 8px;
+        padding-right: 8px;
+        gap: 0;
+    }
+
+    .sidebar-collapsed .app-sidebar .nav-link > span,
+    .sidebar-collapsed .app-sidebar .nav-chevron,
+    .sidebar-collapsed .app-sidebar .nav-drop-menu {
+        display: none !important;
+    }
+
+    .sidebar-collapsed .app-sidebar .nav-item-icon {
+        width: 20px;
+        height: 20px;
     }
 }
 
@@ -562,6 +640,10 @@ body {
 }
 
 @media (max-width: 980px) {
+    .sidebar-collapse-toggle {
+        display: none;
+    }
+
     .nav-toggle {
         display: flex;
     }

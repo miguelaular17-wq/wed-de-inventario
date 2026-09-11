@@ -21,7 +21,7 @@
 <div style="padding:20px;max-width:920px;margin:0 auto;">
     <a href="{{ route('servicio.celulares.hub') }}" style="color:#64748b;text-decoration:none;font-size:0.85rem;">← Gestión de equipos</a>
     <h2 style="font-weight:700;margin:10px 0 8px;">Registrar equipo</h2>
-    <p class="muted" style="margin:0 0 20px;">Servicio técnico o garantía · campos y checklist según el tipo de dispositivo.</p>
+    <p class="muted" style="margin:0 0 20px;">Servicio técnico, garantía o reparación interna · campos y checklist según el tipo de dispositivo.</p>
 
     @if($errors->any())
         <div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px 14px;border-radius:8px;margin-bottom:16px;">
@@ -60,7 +60,7 @@
 
         <div class="panel" style="padding:20px;margin-bottom:16px;">
             <h3 style="margin:0 0 14px;">2. Tipo de gestión</h3>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;">
                 @foreach($tiposGestion as $key => $label)
                     <label style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;cursor:pointer;display:block;">
                         <input type="radio" name="tipo_gestion" value="{{ $key }}" required class="st-tipo-gestion"
@@ -105,13 +105,18 @@
                         </select>
                     </div>
                     <div>
-                        <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Sede de destino *</label>
-                        <select name="sede_destino_envio" id="sede-destino" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">
-                            <option value="">Seleccione…</option>
-                            @foreach($sedes as $sede)
-                                <option value="{{ $sede }}" @selected(old('sede_destino_envio') === $sede)>{{ $sede }}</option>
+                        <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Enviar a *</label>
+                        <select name="tecnico_destino_id" id="tecnico-destino" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">
+                            <option value="">Seleccione la persona…</option>
+                            @foreach($tecnicosServicio as $tecnico)
+                                <option value="{{ $tecnico['id'] }}" @selected((int) old('tecnico_destino_id') === $tecnico['id'])>
+                                    {{ $tecnico['nombre'] }} · {{ $tecnico['sede'] }}
+                                </option>
                             @endforeach
                         </select>
+                        @if($tecnicosServicio->isEmpty())
+                            <div class="muted" style="font-size:.78rem;margin-top:4px;">No hay otra persona activa registrada en Servicio técnico.</div>
+                        @endif
                     </div>
                 </div>
                 <div id="bloque-sede-local" style="{{ old('enviar_otra_sede') == '1' ? 'display:none;' : '' }}">
@@ -185,6 +190,10 @@
                     <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Modelo *</label>
                     <input type="text" name="modelo" value="{{ old('modelo', $equipoPrefill->modelo ?? '') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
                 </div>
+                <div>
+                    <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Valor del dispositivo</label>
+                    <input type="number" name="valor_dispositivo" value="{{ old('valor_dispositivo') }}" min="0" step="0.01" placeholder="Ej: 450.00" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+                </div>
                 <div class="st-campo" data-tipos="celular">
                     <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Color *</label>
                     <input type="text" name="color" value="{{ old('color', $equipoPrefill->color ?? '') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
@@ -222,7 +231,7 @@
 
             @foreach($accesoriosPorTipo as $tipoAcc => $items)
                 <div class="st-campo" data-tipos="{{ $tipoAcc }}" style="margin-top:14px;">
-                    <label style="display:block;font-weight:500;margin-bottom:8px;font-size:.9rem;">Accesorios del cliente</label>
+                    <label style="display:block;font-weight:500;margin-bottom:8px;font-size:.9rem;">Accesorios recibidos con el equipo</label>
                     <div style="display:flex;flex-wrap:wrap;gap:10px 16px;font-size:.85rem;">
                         @foreach($items as $accKey => $accLabel)
                             <label>
@@ -259,7 +268,9 @@
                 <textarea name="observaciones" rows="2" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">{{ old('observaciones') }}</textarea>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
-                @include('servicio.ordenes._firma_pad', ['padId' => 'firma-cliente', 'inputName' => 'firma_recepcion_cliente', 'label' => 'Firma digital del cliente'])
+                <div class="st-datos-cliente">
+                    @include('servicio.ordenes._firma_pad', ['padId' => 'firma-cliente', 'inputName' => 'firma_recepcion_cliente', 'label' => 'Firma digital del cliente'])
+                </div>
                 @include('servicio.ordenes._firma_pad', ['padId' => 'firma-empleado', 'inputName' => 'firma_recepcion_empleado', 'label' => 'Firma digital del empleado'])
             </div>
         </div>
@@ -315,11 +326,16 @@
     const enviarNo = document.getElementById('enviar-no');
     const bloqueEnvio = document.getElementById('bloque-envio');
     const bloqueLocal = document.getElementById('bloque-sede-local');
+    const tecnicoDestino = document.getElementById('tecnico-destino');
     function syncEnvio() {
         if (!bloqueEnvio) return;
         const on = enviarSi && enviarSi.checked;
         bloqueEnvio.style.display = on ? 'grid' : 'none';
         if (bloqueLocal) bloqueLocal.style.display = on ? 'none' : '';
+        if (tecnicoDestino) {
+            tecnicoDestino.required = on;
+            tecnicoDestino.disabled = !on;
+        }
     }
     enviarSi?.addEventListener('change', syncEnvio);
     enviarNo?.addEventListener('change', syncEnvio);
@@ -367,8 +383,10 @@
     }
     function syncClienteDatos() {
         const garantia = tipoGestion() === 'GARANTIA';
+        const interna = tipoGestion() === 'REPARACION_INTERNA';
         const dentro = garantia && rangoGarantia() === 'dentro';
         const fuera = garantia && rangoGarantia() === 'fuera';
+        const ocultarCliente = dentro || interna;
         const nombre = document.getElementById('st-cliente-nombre');
         const tel = document.getElementById('st-cliente-telefono');
         const ced = document.getElementById('st-cliente-cedula');
@@ -376,10 +394,10 @@
         const labelT = document.getElementById('st-label-telefono');
         const labelC = document.getElementById('st-label-cedula');
         document.querySelectorAll('.st-datos-cliente').forEach((el) => {
-            el.style.display = dentro ? 'none' : '';
-            el.querySelectorAll('input').forEach((input) => { input.disabled = dentro; });
+            el.style.display = ocultarCliente ? 'none' : '';
+            el.querySelectorAll('input, select, textarea').forEach((input) => { input.disabled = ocultarCliente; });
         });
-        if (nombre) nombre.required = !dentro;
+        if (nombre) nombre.required = !ocultarCliente;
         if (tel) tel.required = fuera;
         if (ced) ced.required = fuera;
         if (fecha) fecha.required = false;

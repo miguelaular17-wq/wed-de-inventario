@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\ServicioTecnico;
 
 use App\Http\Controllers\Controller;
+use App\Models\Nomina\NominaEmpleado;
 use App\Models\StBackup;
 use App\Models\StEquipo;
 use App\Models\StOrden;
@@ -43,6 +44,9 @@ class OrdenController extends Controller
 
         if ($request->query('transfer') === 'pendiente') {
             $query->where('transfer_estado', StOrden::TRANSFER_PENDIENTE);
+            if ($user->veSoloSusFacturasTaller()) {
+                $query->where('tecnico_id', $user->id);
+            }
             if ($user->scopesServicioToOwnSede()) {
                 $query->where('sede', strtoupper((string) $user->sede));
             }
@@ -84,7 +88,7 @@ class OrdenController extends Controller
         return view('servicio.ordenes.create', array_merge($this->formData(), [
             'equipoPrefill' => $equipoPrefill,
             'usarExistente' => (bool) $equipoPrefill,
-            'puedeTransferir' => $user->puedeTransferirServicio(),
+            'puedeTransferir' => true,
         ]));
     }
 
@@ -93,15 +97,12 @@ class OrdenController extends Controller
         $user = $request->user();
         $data = $this->validated($request, $user);
 
-        $enviar = $user->puedeTransferirServicio() && $request->boolean('enviar_otra_sede');
+        $enviar = $request->boolean('enviar_otra_sede');
+        $tecnicoDestino = null;
         if ($enviar) {
             $origen = strtoupper((string) ($request->input('sede') ?: $data['sede']));
-            $destino = strtoupper((string) $request->input('sede_destino_envio', ''));
-            if ($destino === '' || $destino === $origen) {
-                throw ValidationException::withMessages([
-                    'sede_destino_envio' => 'Indica una sede de destino distinta a la de origen.',
-                ]);
-            }
+            $tecnicoDestino = $this->resolverTecnicoDestino((int) $request->input('tecnico_destino_id'), $user);
+            $destino = $tecnicoDestino['sede'];
             $data['sede'] = $origen;
         } elseif ($request->filled('sede_local') && ! $user->scopesServicioToOwnSede()) {
             $data['sede'] = strtoupper((string) $request->input('sede_local'));
@@ -175,18 +176,30 @@ class OrdenController extends Controller
         if (! Schema::hasColumn('st_ordenes', 'rango_garantia')) {
             unset($data['rango_garantia']);
         }
+        if (! Schema::hasColumn('st_ordenes', 'valor_dispositivo')) {
+            unset($data['valor_dispositivo']);
+        }
+        if (! Schema::hasColumn('st_ordenes', 'empresa_envio_garantia')) {
+            unset($data['empresa_envio_garantia']);
+        }
         if (! Schema::hasColumn('st_ordenes', 'atributos')) {
             unset($data['atributos']);
         }
 
         $data['inspeccion_recepcion'] = $this->parseInspeccion($request, $tipoDispositivo);
-        $data['firma_recepcion_cliente'] = $this->parseFirma($request->input('firma_recepcion_cliente'));
+        $data['firma_recepcion_cliente'] = ($data['tipo_gestion'] ?? null) === StOrden::TIPO_REPARACION_INTERNA
+            ? null
+            : $this->parseFirma($request->input('firma_recepcion_cliente'));
         $data['firma_recepcion_empleado'] = $this->parseFirma($request->input('firma_recepcion_empleado'));
+        if (($data['tipo_gestion'] ?? null) === StOrden::TIPO_GARANTIA
+            && Schema::hasColumn('st_ordenes', 'estado_garantia_externa')) {
+            $data['estado_garantia_externa'] = StOrden::GARANTIA_PENDIENTE_ENVIO;
+        }
 
         $orden = StOrden::crearEnSede($data, $user);
 
         if ($enviar) {
-            $this->ordenService->transferir($orden, strtoupper((string) $request->input('sede_destino_envio')), $user);
+            $this->ordenService->transferir($orden, $tecnicoDestino['sede'], $user, $tecnicoDestino['user']);
             $orden = $orden->fresh();
         }
 
@@ -232,7 +245,7 @@ class OrdenController extends Controller
         $this->authorizeOrden($request->user(), $orden);
 
         return view('servicio.ordenes.show', [
-            'orden' => $orden->load(['creador', 'editor', 'tecnico', 'repuestosLineas.repuesto', 'eventos.usuario', 'equipoCelular', 'backups']),
+            'orden' => $orden->load(['creador', 'editor', 'tecnico', 'enviadoPorGarantia', 'recibidoPorGarantia', 'repuestosLineas.repuesto', 'eventos.usuario', 'equipoCelular', 'backups']),
             'estados' => StOrden::ESTADOS,
         ]);
     }
@@ -270,6 +283,7 @@ class OrdenController extends Controller
     {
         $user = $request->user();
         $this->authorizeOrden($user, $orden);
+        $this->asegurarGarantiaEditable($orden);
 
         $data = $request->validate([
             'conformidad_trabajo' => ['required', 'string'],
@@ -303,6 +317,7 @@ class OrdenController extends Controller
     {
         $user = $request->user();
         $this->authorizeOrden($user, $orden);
+        $this->asegurarGarantiaEditable($orden);
 
         $repuestosDisponibles = StRepuesto::query()
             ->visiblePara($user)
@@ -314,7 +329,7 @@ class OrdenController extends Controller
         return view('servicio.ordenes.edit', array_merge($this->formData(), [
             'orden' => $orden->load('repuestosLineas.repuesto'),
             'repuestosDisponibles' => $repuestosDisponibles,
-            'puedeTransferir' => $user->puedeTransferirServicio(),
+            'puedeTransferir' => true,
         ]));
     }
 
@@ -322,7 +337,18 @@ class OrdenController extends Controller
     {
         $user = $request->user();
         $this->authorizeOrden($user, $orden);
+        $this->asegurarGarantiaEditable($orden);
         $data = $this->validated($request, $user, $orden);
+        $comentarioEstado = null;
+        if (($data['estado'] ?? $orden->estado) !== $orden->estado) {
+            $comentarioEstado = $request->validate([
+                'comentario_estado' => ['required', 'string', 'min:3', 'max:1000'],
+            ])['comentario_estado'];
+        }
+        $tecnicoDestino = $request->filled('tecnico_destino_id')
+            ? $this->resolverTecnicoDestino((int) $request->input('tecnico_destino_id'), $user)
+            : null;
+        unset($data['tecnico_destino_id']);
 
         $nuevoEstado = $data['estado'] ?? $orden->estado;
         $proyeccion = $orden->replicate();
@@ -334,17 +360,123 @@ class OrdenController extends Controller
         }
 
         unset($data['sede']);
-        if ($request->filled('sede_destino') && $user->puedeTransferirServicio()) {
-            $data['sede'] = strtoupper((string) $request->input('sede_destino'));
-        }
 
         $lineas = $this->parseRepuestosInput($request);
 
-        $this->ordenService->actualizarOrden($orden, $data, $user, $lineas);
+        $this->ordenService->actualizarOrden($orden, $data, $user, $lineas, $comentarioEstado);
+        if ($tecnicoDestino) {
+            $this->ordenService->transferir($orden->fresh(), $tecnicoDestino['sede'], $user, $tecnicoDestino['user']);
+        }
 
         return redirect()
             ->route('servicio.ordenes.show', $orden)
             ->with('status', 'Orden '.$orden->fresh()->codigo().' actualizada.');
+    }
+
+    public function cambiarEstado(Request $request, StOrden $orden): RedirectResponse
+    {
+        $this->authorizeOrden($request->user(), $orden);
+        $this->asegurarGarantiaEditable($orden);
+        $data = $request->validate([
+            'estado' => ['required', 'string', 'in:'.implode(',', array_keys($orden->estadosPermitidos()))],
+            'comentario_estado' => ['required', 'string', 'min:3', 'max:1000'],
+        ]);
+
+        if ($data['estado'] === StOrden::ESTADO_ENTREGADO && $orden->excedePresupuesto()) {
+            throw ValidationException::withMessages([
+                'estado' => 'Los costos superan el presupuesto. Realiza la entrega desde Editar para confirmar el monto adicional.',
+            ]);
+        }
+
+        $this->ordenService->actualizarOrden(
+            $orden,
+            ['estado' => $data['estado']],
+            $request->user(),
+            [],
+            $data['comentario_estado']
+        );
+
+        return back()->with('status', 'Estado de '.$orden->codigo().' actualizado.');
+    }
+
+    public function enviarGarantiaExterna(Request $request, StOrden $orden): RedirectResponse
+    {
+        $this->authorizeOrden($request->user(), $orden);
+        $data = $request->validate([
+            'empresa' => ['required', 'string', 'in:'.implode(',', array_keys(StOrden::EMPRESAS_ENVIO_GARANTIA))],
+            'motivo' => ['required', 'string', 'max:255'],
+            'observacion' => ['required', 'string', 'min:3', 'max:2000'],
+        ]);
+        $this->ordenService->enviarGarantiaExterna($orden, $data, $request->user());
+
+        return back()->with('status', 'Equipo enviado a '.$data['empresa'].'.');
+    }
+
+    public function actualizarGarantiaExterna(Request $request, StOrden $orden): RedirectResponse
+    {
+        $this->authorizeOrden($request->user(), $orden);
+        $data = $request->validate([
+            'tipo' => ['required', 'string', 'in:comentario,avance'],
+            'comentario' => ['required', 'string', 'min:3', 'max:2000'],
+        ]);
+        $this->ordenService->actualizarGarantiaExterna($orden, $data['comentario'], $data['tipo'], $request->user());
+
+        return back()->with('status', 'Actualización agregada a la bitácora.');
+    }
+
+    public function gestionarEstadoGarantiaExterna(Request $request, StOrden $orden): RedirectResponse
+    {
+        $this->authorizeOrden($request->user(), $orden);
+        $data = $request->validate([
+            'estado_garantia' => ['required', 'string', 'in:'.implode(',', [
+                StOrden::GARANTIA_ENVIADO,
+                StOrden::GARANTIA_EN_PROCESO,
+                StOrden::GARANTIA_RECIBIDO,
+            ])],
+            'comentario_garantia' => ['required', 'string', 'min:3', 'max:2000'],
+            'empresa' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::EMPRESAS_ENVIO_GARANTIA))],
+            'motivo' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if ($data['estado_garantia'] === StOrden::GARANTIA_ENVIADO) {
+            $envio = $request->validate([
+                'empresa' => ['required', 'string', 'in:'.implode(',', array_keys(StOrden::EMPRESAS_ENVIO_GARANTIA))],
+                'motivo' => ['required', 'string', 'max:255'],
+            ]);
+            $this->ordenService->enviarGarantiaExterna($orden, [
+                'empresa' => $envio['empresa'],
+                'motivo' => $envio['motivo'],
+                'observacion' => $data['comentario_garantia'],
+            ], $request->user());
+        } elseif ($data['estado_garantia'] === StOrden::GARANTIA_EN_PROCESO) {
+            $this->ordenService->iniciarProcesoGarantiaExterna($orden, $data['comentario_garantia'], $request->user());
+        } else {
+            $this->ordenService->recibirGarantiaExterna($orden, $data['comentario_garantia'], $request->user());
+        }
+
+        return back()->with('status', 'Estado de garantía actualizado.');
+    }
+
+    public function iniciarProcesoGarantiaExterna(Request $request, StOrden $orden): RedirectResponse
+    {
+        $this->authorizeOrden($request->user(), $orden);
+        $data = $request->validate([
+            'comentario' => ['required', 'string', 'min:3', 'max:1000'],
+        ]);
+        $this->ordenService->iniciarProcesoGarantiaExterna($orden, $data['comentario'], $request->user());
+
+        return back()->with('status', 'Garantía marcada en proceso.');
+    }
+
+    public function recibirGarantiaExterna(Request $request, StOrden $orden): RedirectResponse
+    {
+        $this->authorizeOrden($request->user(), $orden);
+        $data = $request->validate([
+            'comentario' => ['nullable', 'string', 'max:2000'],
+        ]);
+        $this->ordenService->recibirGarantiaExterna($orden, $data['comentario'] ?? null, $request->user());
+
+        return back()->with('status', 'Equipo recibido nuevamente en '.$orden->sede.'.');
     }
 
     public function confirmarRecepcion(Request $request, StOrden $orden): RedirectResponse
@@ -366,6 +498,7 @@ class OrdenController extends Controller
     public function destroy(Request $request, StOrden $orden): RedirectResponse
     {
         $this->authorizeOrden($request->user(), $orden);
+        $this->asegurarGarantiaEditable($orden);
 
         if ($orden->repuestos_descontados_at) {
             return back()->withErrors(['error' => 'No se puede eliminar una orden con repuestos ya descontados.']);
@@ -386,6 +519,7 @@ class OrdenController extends Controller
             'prioridades' => StOrden::PRIORIDADES,
             'tiposGestion' => StOrden::TIPOS_GESTION,
             'sedes' => config('inventario.sedes_locales'),
+            'tecnicosServicio' => $this->tecnicosServicio(),
             'tiposDispositivo' => config('servicio_tecnico.tipos_dispositivo'),
             'rangosGarantia' => StOrden::RANGOS_GARANTIA,
             'tiposImpresora' => config('servicio_tecnico.tipos_impresora'),
@@ -393,6 +527,72 @@ class OrdenController extends Controller
             'checklistRecepcion' => config('servicio_tecnico.checklist_recepcion'),
             'checklistRecepcionPorTipo' => config('servicio_tecnico.checklist_recepcion_por_tipo'),
         ];
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, array{user:User,id:int,nombre:string,sede:string}>
+     */
+    private function tecnicosServicio()
+    {
+        $empleadosPorUsuario = collect();
+        if (Schema::hasTable('nomina_empleados')) {
+            $empleadosPorUsuario = NominaEmpleado::query()
+                ->with(['user', 'sedeCatalogo'])
+                ->where('es_servicio_tecnico', true)
+                ->where('estado', 'ACTIVO')
+                ->whereNotNull('user_id')
+                ->get()
+                ->keyBy('user_id');
+        }
+
+        $ids = $empleadosPorUsuario->keys()->map(fn ($id) => (int) $id)->all();
+
+        return User::query()
+            ->where(function ($query) use ($ids) {
+                $query->where('role', User::ROLE_TECNICO);
+                if ($ids !== []) {
+                    $query->orWhereIn('id', $ids);
+                }
+            })
+            ->orderBy('name')
+            ->get()
+            ->reject(fn (User $tecnico) => (int) $tecnico->id === (int) auth()->id())
+            ->map(function (User $tecnico) use ($empleadosPorUsuario) {
+                $empleado = $empleadosPorUsuario->get($tecnico->id);
+                $sede = strtoupper(trim((string) (
+                    $tecnico->sede
+                    ?: $empleado?->sedeCatalogo?->codigo
+                    ?: $empleado?->sedeCatalogo?->nombre
+                )));
+
+                if (! in_array($sede, config('inventario.sedes_locales', []), true)) {
+                    return null;
+                }
+
+                return [
+                    'user' => $tecnico,
+                    'id' => (int) $tecnico->id,
+                    'nombre' => $tecnico->name,
+                    'sede' => $sede,
+                ];
+            })
+            ->filter()
+            ->values();
+    }
+
+    /**
+     * @return array{user:User,id:int,nombre:string,sede:string}
+     */
+    private function resolverTecnicoDestino(int $id, User $remitente): array
+    {
+        $tecnico = $this->tecnicosServicio()->firstWhere('id', $id);
+        if (! $tecnico || $id === (int) $remitente->id) {
+            throw ValidationException::withMessages([
+                'tecnico_destino_id' => 'Selecciona una persona registrada en Servicio técnico.',
+            ]);
+        }
+
+        return $tecnico;
     }
 
     private function streamRecepcion(StOrden $orden, ?StBackup $backup): Response
@@ -488,6 +688,8 @@ class OrdenController extends Controller
             'tipo_gestion' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::TIPOS_GESTION))],
             'tipo_dispositivo' => ['nullable', 'string', 'in:'.implode(',', array_keys(config('servicio_tecnico.tipos_dispositivo', ['celular' => 'Celular'])))],
             'rango_garantia' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::RANGOS_GARANTIA))],
+            'empresa_envio_garantia' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::EMPRESAS_ENVIO_GARANTIA))],
+            'valor_dispositivo' => ['nullable', 'numeric', 'min:0', 'max:999999999999.99'],
             'cliente_nombre' => ['nullable', 'string', 'max:255'],
             'cliente_telefono' => ['nullable', 'string', 'max:40'],
             'cliente_cedula' => ['nullable', 'string', 'max:40'],
@@ -514,6 +716,8 @@ class OrdenController extends Controller
             'costo_mano_obra' => ['nullable', 'numeric', 'min:0'],
             'costo_refacciones' => ['nullable', 'numeric', 'min:0'],
             'sede_destino' => ['nullable', 'string', 'in:'.implode(',', config('inventario.sedes_locales'))],
+            'tecnico_destino_id' => ['nullable', 'integer', 'exists:users,id'],
+            'comentario_estado' => ['nullable', 'string', 'max:1000'],
         ]);
 
         if ($user->scopesServicioToOwnSede()) {
@@ -572,15 +776,36 @@ class OrdenController extends Controller
         abort(403, 'No tienes permiso para ver esta orden.');
     }
 
+    private function asegurarGarantiaEditable(StOrden $orden): void
+    {
+        if ($orden->garantiaExternaBloqueada()) {
+            throw ValidationException::withMessages([
+                'garantia' => 'El equipo está fuera por garantía. Solo se permiten avances, comentarios y cambios del flujo externo.',
+            ]);
+        }
+    }
+
     /**
      * @param  array<string, mixed>  $data
      */
     private function aplicarReglasGarantia(array &$data): void
     {
+        $esInterna = ($data['tipo_gestion'] ?? StOrden::TIPO_ST) === StOrden::TIPO_REPARACION_INTERNA;
+        if ($esInterna) {
+            $data['rango_garantia'] = null;
+            $data['cliente_nombre'] = 'Reparación interna';
+            $data['cliente_telefono'] = null;
+            $data['cliente_cedula'] = null;
+            $data['fecha_prometida'] = null;
+
+            return;
+        }
+
         $esGarantia = ($data['tipo_gestion'] ?? StOrden::TIPO_ST) === StOrden::TIPO_GARANTIA;
 
         if (! $esGarantia) {
             $data['rango_garantia'] = null;
+            $data['empresa_envio_garantia'] = null;
             if (trim((string) ($data['cliente_nombre'] ?? '')) === '') {
                 throw ValidationException::withMessages([
                     'cliente_nombre' => 'El nombre del cliente es obligatorio.',

@@ -136,6 +136,54 @@ class UserPermissionAccessTest extends TestCase
 
     public function test_supervisor_can_download_qpedir_daily_report_for_own_sede(): void
     {
+        $this->ensurePedidosSolicitadosTable();
+
+        $supervisor = $this->makeUser(User::ROLE_SUPERVISOR);
+        $this->assertTrue($supervisor->canAccess('compras.reporte_sede'));
+        $this->assertFalse($supervisor->canAccessComprasTab('qpedir'));
+
+        $this->actingAs($supervisor)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->get(route('comprador.pedidos.diario_sede'))
+            ->assertOk()
+            ->assertHeader('content-disposition');
+
+        $vendedor = $this->makeUser(User::ROLE_VENDEDOR);
+        $this->actingAs($vendedor)
+            ->get(route('comprador.pedidos.diario_sede'))
+            ->assertRedirect('/');
+    }
+
+    public function test_compras_notifica_a_sede_cuando_el_producto_tiene_existencia(): void
+    {
+        $this->ensurePedidosSolicitadosTable();
+        $comprador = $this->makeUser(User::ROLE_COMPRADOR);
+        $receptor = $this->makeUser(User::ROLE_SUPERVISOR);
+        \App\Models\PedidoSolicitado::create([
+            'codigo' => 'TEST-EXISTENCIA',
+            'producto' => 'Producto con existencia',
+            'sede' => 'DORAL',
+            'estado' => 'pendiente',
+        ]);
+
+        $this->actingAs($comprador)
+            ->post(route('comprador.pedidos.tiene_existencia'), [
+                'producto' => 'Producto con existencia',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('pedidos_solicitados', [
+            'producto' => 'Producto con existencia',
+            'estado' => 'tiene_existencia',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'receiver_id' => $receptor->id,
+            'message' => 'El producto "Producto con existencia" tiene existencia. No es necesario comprarlo; la sede DORAL solo debe realizar una requisición.',
+        ]);
+    }
+
+    private function ensurePedidosSolicitadosTable(): void
+    {
         if (! \Illuminate\Support\Facades\Schema::hasTable('pedidos_solicitados')) {
             \Illuminate\Support\Facades\Schema::create('pedidos_solicitados', function ($table) {
                 $table->id();
@@ -152,21 +200,6 @@ class UserPermissionAccessTest extends TestCase
                 $table->timestamps();
             });
         }
-
-        $supervisor = $this->makeUser(User::ROLE_SUPERVISOR);
-        $this->assertTrue($supervisor->canAccess('compras.reporte_sede'));
-        $this->assertFalse($supervisor->canAccessComprasTab('qpedir'));
-
-        $this->actingAs($supervisor)
-            ->withSession(['sede_local' => 'DORAL'])
-            ->get(route('comprador.pedidos.diario_sede'))
-            ->assertOk()
-            ->assertHeader('content-disposition');
-
-        $vendedor = $this->makeUser(User::ROLE_VENDEDOR);
-        $this->actingAs($vendedor)
-            ->get(route('comprador.pedidos.diario_sede'))
-            ->assertRedirect('/');
     }
 
     private function makeUser(string $role): User

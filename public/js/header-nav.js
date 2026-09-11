@@ -2,6 +2,22 @@ document.addEventListener('DOMContentLoaded', function () {
     const nav = document.querySelector('[data-app-nav]');
     const toggle = document.querySelector('[data-nav-toggle]');
     const backdrop = document.querySelector('[data-nav-backdrop]');
+    const collapseToggle = document.querySelector('[data-sidebar-collapse]');
+    const collapseStorageKey = 'nexo-sidebar-collapsed';
+
+    function setSidebarCollapsed(collapsed, persist) {
+        if (window.innerWidth <= 980) return;
+        document.body.classList.toggle('sidebar-collapsed', collapsed);
+        if (collapseToggle) {
+            collapseToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            collapseToggle.setAttribute('aria-label', collapsed ? 'Mostrar menú completo' : 'Ocultar textos del menú');
+            collapseToggle.title = collapsed ? 'Mostrar menú completo' : 'Mostrar solo iconos';
+        }
+        if (persist !== false) {
+            localStorage.setItem(collapseStorageKey, collapsed ? '1' : '0');
+        }
+        if (collapsed) closeDrops();
+    }
 
     function closeDrops(except) {
         document.querySelectorAll('[data-nav-drop]').forEach(function (drop) {
@@ -31,6 +47,13 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    if (collapseToggle && nav) {
+        setSidebarCollapsed(localStorage.getItem(collapseStorageKey) === '1', false);
+        collapseToggle.addEventListener('click', function () {
+            setSidebarCollapsed(!document.body.classList.contains('sidebar-collapsed'));
+        });
+    }
+
     if (backdrop) {
         backdrop.addEventListener('click', function () {
             setSidebarOpen(false);
@@ -46,6 +69,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 e.preventDefault();
             }
             e.stopPropagation();
+            if (window.innerWidth > 980 && document.body.classList.contains('sidebar-collapsed') && trigger.classList.contains('nav-drop-btn')) {
+                setSidebarCollapsed(false);
+            }
             const willOpen = !drop.classList.contains('is-open');
             closeDrops(drop);
             drop.classList.toggle('is-open', willOpen);

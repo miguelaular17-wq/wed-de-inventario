@@ -37,14 +37,17 @@
     </table>
 
     <div class="box">
-        <strong>Cliente y equipo</strong>
+        <strong>{{ $orden->esReparacionInterna() ? 'Equipo interno' : 'Cliente y equipo' }}</strong>
         <table class="grid" style="margin-top:4px;">
+            @unless($orden->esReparacionInterna())
             <tr><td class="label">Cliente</td><td>{{ $orden->esCambioEnRango() ? 'Equipo de la empresa (cambio en rango)' : ($orden->cliente_nombre.' · '.($orden->cliente_cedula ?: '—')) }}</td></tr>
+            @endunless
             @if($orden->esGarantia() && ! $orden->esCambioEnRango())
             <tr><td class="label">Garantía</td><td>La garantía es con la marca del equipo ({{ $orden->marcaEquipo() }}). Palacio actúa como intermediario.</td></tr>
             @endif
             <tr><td class="label">Equipo</td><td>{{ $orden->equipoCelular?->etiqueta() ?: ($orden->equipo ?: '—') }}</td></tr>
             <tr><td class="label">IMEI / serial</td><td>{{ $orden->imei ?: '—' }} / {{ $orden->serial ?: '—' }}</td></tr>
+            <tr><td class="label">Valor del dispositivo</td><td>{{ $orden->valor_dispositivo !== null ? '$'.number_format((float) $orden->valor_dispositivo, 2) : '—' }}</td></tr>
             <tr><td class="label">Falla original</td><td>{{ $orden->falla ?: '—' }}</td></tr>
         </table>
     </div>
@@ -54,20 +57,24 @@
         <div style="margin-top:6px;">{{ $orden->conformidad_trabajo ?: ($orden->diagnostico ?: 'Equipo reparado y listo para entrega.') }}</div>
     </div>
 
+    @unless($orden->esReparacionInterna())
     <div class="box">
         El cliente declara que recibió el equipo en funcionamiento, que se le explicó el trabajo realizado
         y que está conforme con el servicio. Cualquier garantía aplica según las políticas de Palacio de los Detalles.
     </div>
+    @endunless
 
     <table class="firmas">
         <tr>
+            @unless($orden->esReparacionInterna())
             <td>
                 @if($orden->firma_conformidad_cliente && str_starts_with($orden->firma_conformidad_cliente, 'data:image'))
                     <img class="firma-img" src="{{ $orden->firma_conformidad_cliente }}" alt="Firma cliente">
                 @endif
                 <div class="linea">{{ $orden->cliente_nombre }}<br><span class="muted">Firma de conformidad del cliente</span></div>
             </td>
-            <td>
+            @endunless
+            <td @if($orden->esReparacionInterna()) colspan="2" @endif>
                 @if($orden->firma_conformidad_empleado && str_starts_with($orden->firma_conformidad_empleado, 'data:image'))
                     <img class="firma-img" src="{{ $orden->firma_conformidad_empleado }}" alt="Firma empleado">
                 @endif

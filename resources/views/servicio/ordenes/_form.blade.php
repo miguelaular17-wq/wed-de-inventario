@@ -33,6 +33,7 @@
             </select>
         </div>
     @endif
+    @unless(isset($orden) && $orden->esReparacionInterna())
     <div>
         <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">Cliente *</label>
         <input type="text" name="cliente_nombre" required value="{{ old('cliente_nombre', $orden->cliente_nombre ?? '') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
@@ -45,6 +46,7 @@
         <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">Cédula</label>
         <input type="text" name="cliente_cedula" value="{{ old('cliente_cedula', $orden->cliente_cedula ?? '') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
     </div>
+    @endunless
     <div>
         <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">IMEI</label>
         <input type="text" name="imei" id="st-imei" value="{{ old('imei', $orden->imei ?? ($equipoPrefill->imei ?? '')) }}" placeholder="Obligatorio si el equipo tiene IMEI" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;" @disabled(isset($orden))>
@@ -80,6 +82,10 @@
         <input type="text" name="equipo" value="{{ old('equipo', $orden->equipo ?? ($equipoPrefill?->etiqueta() ?? '')) }}" placeholder="Marca y modelo" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
     </div>
     <div>
+        <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">Valor del dispositivo</label>
+        <input type="number" name="valor_dispositivo" value="{{ old('valor_dispositivo', $orden->valor_dispositivo ?? '') }}" min="0" step="0.01" placeholder="Ej: 450.00" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+    </div>
+    <div>
         <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">Prioridad *</label>
         <select name="prioridad" required style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">
             @foreach($prioridades as $key => $label)
@@ -87,25 +93,44 @@
             @endforeach
         </select>
     </div>
-    @if(isset($orden))
+    @if(isset($orden) && !$orden->esGarantia())
         <div>
             <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">Estado</label>
-            <select name="estado" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">
+            <select name="estado" id="st-estado-edicion" data-estado-actual="{{ $orden->estado }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">
                 @foreach($estados as $key => $label)
                     <option value="{{ $key }}" @selected(old('estado', $orden->estado) === $key)>{{ $label }}</option>
                 @endforeach
             </select>
         </div>
+        <div>
+            <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">Motivo del cambio de estado</label>
+            <textarea name="comentario_estado" id="st-comentario-estado" rows="2" maxlength="1000" placeholder="Obligatorio si cambia el estado" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">{{ old('comentario_estado') }}</textarea>
+        </div>
     @endif
+    @unless(isset($orden) && $orden->esReparacionInterna())
     <div>
         <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">Fecha prometida</label>
         <input type="date" name="fecha_prometida" value="{{ old('fecha_prometida', isset($orden) && $orden->fecha_prometida ? $orden->fecha_prometida->format('Y-m-d') : '') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
     </div>
+    @endunless
     <div>
         <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">Accesorios</label>
         <input type="text" name="accesorios" value="{{ old('accesorios', $orden->accesorios ?? '') }}" placeholder="Cargador, funda…" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
     </div>
 </div>
+@if(isset($orden) && !$orden->esGarantia())
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const estado = document.getElementById('st-estado-edicion');
+    const comentario = document.getElementById('st-comentario-estado');
+    const syncComentario = () => {
+        if (estado && comentario) comentario.required = estado.value !== estado.dataset.estadoActual;
+    };
+    estado?.addEventListener('change', syncComentario);
+    syncComentario();
+});
+</script>
+@endif
 <div style="margin-bottom:16px;">
     <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">Falla reportada</label>
     <textarea name="falla" rows="3" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">{{ old('falla', $orden->falla ?? '') }}</textarea>

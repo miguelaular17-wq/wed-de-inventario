@@ -34,7 +34,7 @@
             <h2 style="margin:0 0 6px;font-size:1.15rem;">Registrar equipo</h2>
             <p class="muted" style="margin:0;font-size:.9rem;">
                 @if($puedeOperar)
-                    Crea una orden de Servicio técnico o Garantía y deja rastro en la bitácora del equipo.
+                    Crea una orden de Servicio técnico, Garantía o Reparación interna y deja rastro en la bitácora del equipo.
                 @else
                     Para registrar necesitas iniciar sesión. La consulta de bitácora sí es libre.
                 @endif

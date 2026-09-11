@@ -1508,6 +1508,8 @@ function descargarReporteBusqueda(formato) {
         ? `<div style="text-align: left; margin: 15px auto; width: fit-content; display: flex; flex-direction: column; gap: 10px;">
                 <label style="cursor: pointer;"><input type="checkbox" id="rep_egresos" value="egreso_realizado" checked style="margin-right: 8px;"> Egresos Realizados</label>
                 <label style="cursor: pointer;"><input type="checkbox" id="rep_otros" value="otros_egresos" checked style="margin-right: 8px;"> Otros Egresos (Avances y Cambios)</label>
+                <label style="cursor: pointer;"><input type="checkbox" id="rep_divisas" value="egreso_divisas" checked style="margin-right: 8px;"> Egresos en Divisas</label>
+                <label style="cursor: pointer;"><input type="checkbox" id="rep_traslados" value="traslados" checked style="margin-right: 8px;"> Traslados Bancarios</label>
            </div>`
         : `<div style="text-align: left; margin: 15px auto; width: fit-content; display: flex; flex-direction: column; gap: 10px;">
                 <label style="cursor: pointer;"><input type="checkbox" id="rep_traslados" value="traslados" checked style="margin-right: 8px;"> Traslados</label>

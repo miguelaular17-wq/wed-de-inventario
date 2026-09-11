@@ -118,6 +118,7 @@ class StCelularesBitacoraTest extends TestCase
             ->post(route('servicio.ordenes.store'), [
                 'tipo_gestion' => 'GARANTIA',
                 'rango_garantia' => 'fuera',
+                'empresa_envio_garantia' => 'GLOBAL FIT',
                 'tipo_dispositivo' => 'celular',
                 'cliente_nombre' => 'Cliente Backup',
                 'cliente_telefono' => '04141234567',
@@ -211,20 +212,28 @@ class StCelularesBitacoraTest extends TestCase
 
     public function test_envio_entre_sedes_aparece_en_por_recibir(): void
     {
-        $gerente = User::create([
-            'name' => 'Gerente Envio',
-            'email' => 'ger-envio-'.uniqid().'@test.local',
+        $remitente = User::create([
+            'name' => 'Usuario Envio',
+            'email' => 'usuario-envio-'.uniqid().'@test.local',
             'password' => 'password123',
-            'role' => User::ROLE_GERENTE,
+            'role' => User::ROLE_VENDEDOR,
+            'sede' => 'DORAL',
+        ]);
+        $tecnicoDestino = User::create([
+            'name' => 'Técnico Virtudes',
+            'email' => 'tec-virt-'.uniqid().'@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_TECNICO,
+            'sede' => 'VIRTUDES',
         ]);
 
-        $this->actingAs($gerente)
+        $this->actingAs($remitente)
             ->post(route('servicio.ordenes.store'), [
                 'tipo_gestion' => 'ST',
                 'tipo_dispositivo' => 'celular',
                 'sede' => 'DORAL',
                 'enviar_otra_sede' => '1',
-                'sede_destino_envio' => 'VIRTUDES',
+                'tecnico_destino_id' => $tecnicoDestino->id,
                 'cliente_nombre' => 'Cliente Envio',
                 'prioridad' => 'normal',
                 'falla' => 'No carga',
@@ -241,14 +250,20 @@ class StCelularesBitacoraTest extends TestCase
         $this->assertSame('VIRTUDES', $orden->sede);
         $this->assertSame('DORAL', $orden->sede_origen_transfer);
         $this->assertSame(StOrden::TRANSFER_PENDIENTE, $orden->transfer_estado);
+        $this->assertSame($tecnicoDestino->id, $orden->tecnico_id);
 
-        $tecnicoDestino = User::create([
-            'name' => 'Técnico Virtudes',
-            'email' => 'tec-virt-'.uniqid().'@test.local',
+        $otroTecnico = User::create([
+            'name' => 'Otro Técnico Virtudes',
+            'email' => 'otro-tec-virt-'.uniqid().'@test.local',
             'password' => 'password123',
             'role' => User::ROLE_TECNICO,
             'sede' => 'VIRTUDES',
         ]);
+        $this->actingAs($otroTecnico)
+            ->withSession(['sede_local' => 'VIRTUDES'])
+            ->get(route('servicio.celulares.por_recibir'))
+            ->assertOk()
+            ->assertDontSee('Motorola Edge');
 
         $this->actingAs($tecnicoDestino)
             ->withSession(['sede_local' => 'VIRTUDES'])
@@ -256,6 +271,68 @@ class StCelularesBitacoraTest extends TestCase
             ->assertOk()
             ->assertSee('Motorola Edge')
             ->assertSee($orden->codigo());
+
+        $this->actingAs($otroTecnico)
+            ->withSession(['sede_local' => 'VIRTUDES'])
+            ->post(route('servicio.ordenes.confirmar_recepcion', $orden))
+            ->assertSessionHasErrors('transfer');
+
+        $this->actingAs($tecnicoDestino)
+            ->withSession(['sede_local' => 'VIRTUDES'])
+            ->post(route('servicio.ordenes.confirmar_recepcion', $orden))
+            ->assertRedirect();
+        $this->assertSame(StOrden::TRANSFER_ACEPTADA, $orden->fresh()->transfer_estado);
+    }
+
+    public function test_selector_y_validacion_de_envio_solo_admiten_usuarios_de_servicio_tecnico(): void
+    {
+        $remitente = User::create([
+            'name' => 'Remitente General',
+            'email' => 'remitente-general-'.uniqid().'@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_VENDEDOR,
+            'sede' => 'DORAL',
+        ]);
+        $tecnico = User::create([
+            'name' => 'Técnico Disponible',
+            'email' => 'tecnico-disponible-'.uniqid().'@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_TECNICO,
+            'sede' => 'VIRTUDES',
+        ]);
+        $noTecnico = User::create([
+            'name' => 'Usuario No Técnico',
+            'email' => 'no-tecnico-'.uniqid().'@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_VENDEDOR,
+            'sede' => 'VIRTUDES',
+        ]);
+
+        $this->actingAs($remitente)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->get(route('servicio.ordenes.create'))
+            ->assertOk()
+            ->assertSee($tecnico->name)
+            ->assertDontSee($noTecnico->name);
+
+        $this->actingAs($remitente)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.store'), [
+                'tipo_gestion' => 'ST',
+                'tipo_dispositivo' => 'celular',
+                'sede' => 'DORAL',
+                'enviar_otra_sede' => '1',
+                'tecnico_destino_id' => $noTecnico->id,
+                'cliente_nombre' => 'Destino inválido',
+                'prioridad' => 'normal',
+                'falla' => 'No enciende',
+                'imei' => '358887776665553',
+                'marca' => 'Samsung',
+                'modelo' => 'A54',
+                'color' => 'Negro',
+                'almacenamiento' => '128 GB',
+            ])
+            ->assertSessionHasErrors('tecnico_destino_id');
     }
 
     public function test_servicio_tecnico_no_crea_backup_aunque_lo_envien(): void
@@ -336,6 +413,7 @@ class StCelularesBitacoraTest extends TestCase
             ->post(route('servicio.ordenes.store'), [
                 'tipo_gestion' => 'GARANTIA',
                 'rango_garantia' => 'dentro',
+                'empresa_envio_garantia' => 'TECNOTROPOLIS',
                 'tipo_dispositivo' => 'celular',
                 'prioridad' => 'normal',
                 'falla' => 'Pantalla rota',
@@ -354,6 +432,7 @@ class StCelularesBitacoraTest extends TestCase
         $orden = StOrden::query()->where('imei', '354445556667778')->first();
         $this->assertNotNull($orden);
         $this->assertSame('dentro', $orden->rango_garantia);
+        $this->assertSame('TECNOTROPOLIS', $orden->empresa_envio_garantia);
         $this->assertSame('Cambio en rango (empresa)', $orden->cliente_nombre);
         $this->assertNull($orden->cliente_telefono);
         $this->assertNull($orden->fecha_prometida);
@@ -368,6 +447,7 @@ class StCelularesBitacoraTest extends TestCase
             ->post(route('servicio.ordenes.store'), [
                 'tipo_gestion' => 'GARANTIA',
                 'rango_garantia' => 'fuera',
+                'empresa_envio_garantia' => 'TOTALINK',
                 'tipo_dispositivo' => 'celular',
                 'prioridad' => 'normal',
                 'falla' => 'No carga',
@@ -378,6 +458,42 @@ class StCelularesBitacoraTest extends TestCase
                 'almacenamiento' => '256 GB',
             ])
             ->assertSessionHasErrors(['cliente_nombre', 'cliente_telefono', 'cliente_cedula']);
+    }
+
+    public function test_reparacion_interna_no_exige_cliente_y_guarda_valor_del_dispositivo(): void
+    {
+        $user = $this->makeTecnico();
+
+        $this->actingAs($user)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->get(route('servicio.ordenes.create'))
+            ->assertOk()
+            ->assertSee('Reparación interna')
+            ->assertSee('Valor del dispositivo');
+
+        $this->post(route('servicio.ordenes.store'), [
+            'tipo_gestion' => StOrden::TIPO_REPARACION_INTERNA,
+            'tipo_dispositivo' => 'celular',
+            'prioridad' => 'normal',
+            'falla' => 'Equipo de exhibición no enciende',
+            'imei' => '356667778889990',
+            'marca' => 'Samsung',
+            'modelo' => 'A55',
+            'color' => 'Azul',
+            'almacenamiento' => '256 GB',
+            'valor_dispositivo' => 650.50,
+            'cliente_nombre' => 'No debe guardarse',
+            'cliente_telefono' => '04140000000',
+            'cliente_cedula' => 'V1',
+        ])->assertRedirect();
+
+        $orden = StOrden::query()->where('imei', '356667778889990')->firstOrFail();
+        $this->assertSame(StOrden::TIPO_REPARACION_INTERNA, $orden->tipo_gestion);
+        $this->assertTrue($orden->esReparacionInterna());
+        $this->assertSame('Reparación interna', $orden->cliente_nombre);
+        $this->assertNull($orden->cliente_telefono);
+        $this->assertNull($orden->cliente_cedula);
+        $this->assertSame('650.50', $orden->valor_dispositivo);
     }
 
     private function makeTecnico(): User
@@ -402,6 +518,8 @@ class StCelularesBitacoraTest extends TestCase
                 $table->string('tipo_dispositivo', 32)->default('celular');
                 $table->json('atributos')->nullable();
                 $table->string('rango_garantia', 16)->nullable();
+                $table->string('empresa_envio_garantia', 40)->nullable();
+                $table->decimal('valor_dispositivo', 14, 2)->nullable();
                 $table->unsignedBigInteger('equipo_id')->nullable();
                 $table->string('cliente_nombre');
                 $table->string('cliente_telefono', 40)->nullable();
@@ -480,6 +598,12 @@ class StCelularesBitacoraTest extends TestCase
                 }
                 if (! Schema::hasColumn('st_ordenes', 'rango_garantia')) {
                     $table->string('rango_garantia', 16)->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'valor_dispositivo')) {
+                    $table->decimal('valor_dispositivo', 14, 2)->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'empresa_envio_garantia')) {
+                    $table->string('empresa_envio_garantia', 40)->nullable();
                 }
             });
         }

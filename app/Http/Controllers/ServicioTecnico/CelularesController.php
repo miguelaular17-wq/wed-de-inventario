@@ -26,6 +26,7 @@ class CelularesController extends Controller
             $porRecibir = StOrden::query()
                 ->visiblePara($user)
                 ->where('transfer_estado', StOrden::TRANSFER_PENDIENTE)
+                ->when($user->veSoloSusFacturasTaller(), fn ($q) => $q->where('tecnico_id', $user->id))
                 ->when($user->scopesServicioToOwnSede(), fn ($q) => $q->where('sede', strtoupper((string) $user->sede)))
                 ->count();
         }
@@ -56,6 +57,9 @@ class CelularesController extends Controller
             ->where('transfer_estado', StOrden::TRANSFER_PENDIENTE)
             ->orderByDesc('updated_at');
 
+        if ($user->veSoloSusFacturasTaller()) {
+            $query->where('tecnico_id', $user->id);
+        }
         if ($user->scopesServicioToOwnSede()) {
             $query->where('sede', strtoupper((string) $user->sede));
         } elseif ($request->filled('sede')) {

@@ -270,6 +270,9 @@
                 });
             </script>
         @endif
+        <button type="button" class="sidebar-collapse-toggle" data-sidebar-collapse aria-expanded="true" aria-label="Ocultar textos del menú" title="Mostrar solo iconos">
+            <span class="sidebar-collapse-arrow" aria-hidden="true">‹</span>
+        </button>
     </div>
 
     <nav class="app-nav" data-tour="nav-main">
@@ -278,6 +281,7 @@
                 <a
                     href="{{ $item['url'] }}"
                     class="nav-link {{ $item['active'] ? 'active' : '' }} {{ !empty($item['emphasis']) ? 'nav-link-emphasis' : '' }}"
+                    title="{{ $item['label'] }}"
                     @if(!empty($item['tour'])) data-tour="{{ $item['tour'] }}" @endif
                 >
                     @include('partials.nav-icon', ['icon' => $item['icon'] ?? $item['label'], 'label' => $item['label']])
@@ -285,7 +289,7 @@
                 </a>
             @else
                 <div class="nav-drop {{ $item['active'] ? 'is-current' : '' }}" data-nav-drop>
-                    <button type="button" class="nav-link nav-drop-btn {{ $item['active'] ? 'active' : '' }}" aria-expanded="{{ $item['active'] ? 'true' : 'false' }}">
+                    <button type="button" class="nav-link nav-drop-btn {{ $item['active'] ? 'active' : '' }}" aria-expanded="{{ $item['active'] ? 'true' : 'false' }}" title="{{ $item['label'] }}">
                         @include('partials.nav-icon', ['icon' => $item['icon'] ?? $item['label'], 'label' => $item['label']])
                         <span>{{ $item['label'] }}</span>
                         <svg class="nav-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 7.5 10 12l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>

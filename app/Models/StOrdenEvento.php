@@ -12,6 +12,7 @@ class StOrdenEvento extends Model
     public const TIPO_TRANSFERENCIA = 'transferencia';
     public const TIPO_REPUESTO = 'repuesto';
     public const TIPO_NOTA = 'nota';
+    public const TIPO_GARANTIA_EXTERNA = 'garantia_externa';
 
     public $timestamps = false;
 

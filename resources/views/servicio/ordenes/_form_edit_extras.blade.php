@@ -29,13 +29,13 @@
 
     @if(!empty($puedeTransferir))
         <div style="margin-bottom:16px;">
-            <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">Transferir a sede</label>
-            <select name="sede_destino" style="width:100%;max-width:280px;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">
-                <option value="">— Sin cambio —</option>
-                @foreach($sedes as $sede)
-                    @if($sede !== $orden->sede)
-                        <option value="{{ $sede }}" @selected(old('sede_destino') === $sede)>{{ $sede }}</option>
-                    @endif
+            <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">Enviar a Servicio técnico</label>
+            <select name="tecnico_destino_id" style="width:100%;max-width:360px;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">
+                <option value="">— Sin envío —</option>
+                @foreach($tecnicosServicio as $tecnico)
+                    <option value="{{ $tecnico['id'] }}" @selected((int) old('tecnico_destino_id') === $tecnico['id'])>
+                        {{ $tecnico['nombre'] }} · {{ $tecnico['sede'] }}
+                    </option>
                 @endforeach
             </select>
             @if($orden->repuestos_descontados_at)

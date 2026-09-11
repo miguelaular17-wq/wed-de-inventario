@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\PedidoSolicitado;
 use App\Models\Product;
+use App\Models\Notification;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,6 +26,7 @@ class PedidoSolicitadoController extends Controller
         })->only([
             'marcarComprado',
             'marcarFueraMercado',
+            'marcarTieneExistencia',
             'reporteExcel',
             'reportePdf',
             'reporteDiarioPdf',
@@ -175,6 +178,56 @@ class PedidoSolicitadoController extends Controller
             ]);
 
         return back()->with('success', 'Pedidos marcados como fuera de mercado.');
+    }
+
+    public function marcarTieneExistencia(Request $request): RedirectResponse
+    {
+        $producto = (string) $request->validate([
+            'producto' => ['required', 'string', 'max:255'],
+        ])['producto'];
+
+        $pedidos = PedidoSolicitado::query()
+            ->where('producto', $producto)
+            ->where('estado', 'pendiente')
+            ->get();
+
+        $sedes = $pedidos->pluck('sede')
+            ->filter()
+            ->map(fn ($sede) => strtoupper(trim((string) $sede)))
+            ->unique()
+            ->values();
+
+        if ($sedes->isEmpty()) {
+            return back()->withErrors(['pedido' => 'Las solicitudes no tienen una sede de origen para notificar.']);
+        }
+
+        $receptores = User::query()->whereIn('sede', $sedes)->get();
+        if ($receptores->isEmpty()) {
+            return back()->withErrors(['pedido' => 'No se encontraron usuarios asignados a las sedes solicitantes.']);
+        }
+
+        DB::transaction(function () use ($receptores, $request, $producto, $pedidos) {
+            foreach ($receptores as $receptor) {
+                Notification::create([
+                    'sender_id' => $request->user()->id,
+                    'receiver_id' => $receptor->id,
+                    'message' => sprintf(
+                        'El producto "%s" tiene existencia. No es necesario comprarlo; la sede %s solo debe realizar una requisición.',
+                        $producto,
+                        strtoupper((string) $receptor->sede)
+                    ),
+                ]);
+            }
+
+            PedidoSolicitado::query()
+                ->whereIn('id', $pedidos->pluck('id'))
+                ->update([
+                    'estado' => 'tiene_existencia',
+                    'atendido_at' => now(),
+                ]);
+        });
+
+        return back()->with('success', 'Se notificó a '.count($receptores).' usuario(s) de las sedes solicitantes para que realicen una requisición.');
     }
 
     public function reporteExcel()
