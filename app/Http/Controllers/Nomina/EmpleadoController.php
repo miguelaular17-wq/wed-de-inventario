@@ -23,8 +23,10 @@ use App\Services\Nomina\MerchandiseDeductionService;
 use App\Services\Nomina\OtherDeductionService;
 use App\Services\Nomina\OrganizationService;
 use App\Services\Nomina\SalaryAdvanceService;
+use App\Support\SimpleXlsxWriter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
@@ -87,6 +89,62 @@ class EmpleadoController extends Controller
             'kpisAdelantos' => $this->advances->kpis(),
             'filters' => $request->only(['q', 'sede_id', 'empresa_id', 'cargo_id', 'supervisor_id', 'estado']),
             'importados' => $importados,
+        ]);
+    }
+
+    public function reporte(Request $request): Response
+    {
+        $this->employees->syncFromClientes();
+
+        $query = NominaEmpleado::query()
+            ->with(['cliente', 'sedeCatalogo', 'cargoCatalogo'])
+            ->join('clientes', 'clientes.id', '=', 'nomina_empleados.cliente_id')
+            ->select('nomina_empleados.*')
+            ->orderBy('clientes.nombre');
+
+        if ($search = trim((string) $request->query('q', ''))) {
+            $query->buscar($search);
+        }
+        if ($request->filled('sede_id')) {
+            $query->where('sede_id', $request->query('sede_id'));
+        }
+        if ($request->filled('empresa_id')) {
+            $query->where('empresa_id', $request->query('empresa_id'));
+        }
+        if ($request->filled('cargo_id')) {
+            $query->where('cargo_id', $request->query('cargo_id'));
+        }
+        if ($request->filled('supervisor_id')) {
+            $query->where('supervisor_id', $request->query('supervisor_id'));
+        }
+        if ($request->filled('estado')) {
+            $query->where('estado', $request->query('estado'));
+        }
+
+        $rows = [[
+            'Nombre del empleado',
+            'Cédula',
+            'Sede o área',
+            'Cargo',
+            'Salario mensual',
+        ]];
+
+        foreach ($query->get() as $empleado) {
+            $rows[] = [
+                $empleado->nombre(),
+                $empleado->cedula(),
+                $empleado->nombreSede(),
+                $empleado->nombreCargo(),
+                round((float) $empleado->salario_base, 2),
+            ];
+        }
+
+        $xlsx = SimpleXlsxWriter::toString(['Empleados' => $rows]);
+        $filename = 'reporte_empleados_'.now()->format('Y-m-d').'.xlsx';
+
+        return response($xlsx, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 

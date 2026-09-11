@@ -165,6 +165,16 @@
                                                                 >
                                                                 <span>{{ $permLabel }}</span>
                                                             </label>
+                                                            @if($permKey === 'cobranza')
+                                                                <div class="cobranza-scope" data-cobranza-scope {{ ($isChecked || $user->role === 'cobranza') ? '' : 'hidden' }}>
+                                                                    <label style="display:block; font-size:0.78rem; color:var(--muted); margin:4px 0 2px;">Clientes que verá en cobranza</label>
+                                                                    <select name="cobranza_clientes" data-cobranza-clientes style="width:100%; padding:6px 8px; border-radius:6px; border:1px solid var(--border); font-size:0.85rem;">
+                                                                        @foreach(\App\Models\User::COBRANZA_CLIENTES_OPCIONES as $valor => $etiqueta)
+                                                                            <option value="{{ $valor }}" @selected(($user->cobranza_clientes ?: 'todos') === $valor)>{{ $etiqueta }}</option>
+                                                                        @endforeach
+                                                                    </select>
+                                                                </div>
+                                                            @endif
                                                         @endforeach
                                                     </div>
                                                 </section>
@@ -302,10 +312,57 @@ document.addEventListener('DOMContentLoaded', function() {
             permissionControl.querySelectorAll('[data-perm-count]').forEach(counter => {
                 counter.textContent = extraCount;
             });
+
+            syncCobranzaScope(role, inherited);
+        };
+
+        const syncCobranzaScope = (role, inherited) => {
+            const scopeBox = form.querySelector('[data-cobranza-scope]');
+            const scopeSelect = form.querySelector('[data-cobranza-clientes]');
+            if (!scopeBox || !scopeSelect) return;
+
+            const hasCobranza = role === 'cobranza'
+                || inherited.includes('cobranza')
+                || selectedExtras.has('cobranza');
+            scopeBox.hidden = !hasCobranza;
+            scopeSelect.disabled = !hasCobranza;
+            if (!hasCobranza) {
+                scopeSelect.value = 'todos';
+            }
+        };
+
+        const askCobranzaScope = () => {
+            const scopeSelect = form.querySelector('[data-cobranza-clientes]');
+            if (!scopeSelect) return;
+            const current = scopeSelect.value || 'todos';
+            const choice = window.prompt(
+                '¿Qué clientes verá en Cobranza?\n1 = Todos\n2 = Solo Regulares\n3 = Solo Personales',
+                current === 'regulares' ? '2' : (current === 'personales' ? '3' : '1')
+            );
+            if (choice === null) {
+                return false;
+            }
+            const normalized = String(choice).trim().toLowerCase();
+            if (normalized === '2' || normalized === 'regulares' || normalized === 'solo regulares') {
+                scopeSelect.value = 'regulares';
+            } else if (normalized === '3' || normalized === 'personales' || normalized === 'solo personales') {
+                scopeSelect.value = 'personales';
+            } else {
+                scopeSelect.value = 'todos';
+            }
+            return true;
         };
 
         permissionInputs.forEach(input => {
             input.addEventListener('change', () => {
+                if (input.value === 'cobranza' && input.checked) {
+                    if (!askCobranzaScope()) {
+                        input.checked = false;
+                        selectedExtras.delete(input.value);
+                        updateSedeState();
+                        return;
+                    }
+                }
                 if (input.checked) {
                     selectedExtras.add(input.value);
                 } else {
@@ -313,6 +370,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 updateSedeState();
             });
+        });
+
+        roleSelect.addEventListener('change', () => {
+            if (roleSelect.value === 'cobranza') {
+                askCobranzaScope();
+            }
+            updateSedeState();
         });
 
         form.querySelector('[data-perm-open]')?.addEventListener('click', () => {
@@ -325,7 +389,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (event.target === permissionDialog) permissionDialog.close();
         });
         
-        roleSelect.addEventListener('change', updateSedeState);
         updateSedeState();
     });
 });

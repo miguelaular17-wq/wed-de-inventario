@@ -33,8 +33,9 @@ class CobranzaController extends Controller
         // 1. Obtener la última fecha registrada en historial_cobranzas
         $ultimaFecha = \App\Models\HistorialCobranza::max('fecha_registro');
         
-        // Filtro de tipo de cliente
-        $mostrar_clientes = request('mostrar_clientes', 'todos');
+        // Filtro de tipo de cliente (según alcance del usuario)
+        $mostrar_clientes = $this->resolverMostrarClientes($request);
+        $puede_cambiar_tipo_cliente = auth()->user()?->puedeCambiarTipoClienteCobranza() ?? true;
         $personalCodes = \App\Models\ClientePersonal::pluck('codigo_cliente')->toArray();
         
         $historialActual = collect();
@@ -186,7 +187,23 @@ class CobranzaController extends Controller
         }
 
         $t = microtime(true);
-        $view = view('cobranza.index', compact('porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'sedes', 'clientes_lista', 'filtro_sede', 'buscar_cliente', 'fecha_desde', 'fecha_hasta', 'fechas_semanal', 'semanal_list', 'mostrar_clientes', 'filtro_estatus'));
+        $view = view('cobranza.index', compact(
+            'porSede',
+            'porEstatus',
+            'gran_total_saldo',
+            'gran_total_clientes',
+            'sedes',
+            'clientes_lista',
+            'filtro_sede',
+            'buscar_cliente',
+            'fecha_desde',
+            'fecha_hasta',
+            'fechas_semanal',
+            'semanal_list',
+            'mostrar_clientes',
+            'filtro_estatus',
+            'puede_cambiar_tipo_cliente'
+        ));
         $html = $view->render();
         \Log::info(sprintf('Render Blade => %.2f ms', (microtime(true)-$t)*1000));
         
@@ -422,7 +439,7 @@ class CobranzaController extends Controller
     public function descargarReportePdf(Request $request, CobranzaHeaderHydrator $encabezados) {
         $ultimaFecha = \App\Models\HistorialCobranza::max('fecha_registro');
         
-        $mostrar_clientes = request('mostrar_clientes', 'todos');
+        $mostrar_clientes = $this->resolverMostrarClientes($request);
         $personalCodes = \App\Models\ClientePersonal::pluck('codigo_cliente')->toArray();
         
         $historialActual = collect();
@@ -1012,6 +1029,23 @@ class CobranzaController extends Controller
         sort($fechas);
 
         return $fechas;
+    }
+
+    private function resolverMostrarClientes(Request $request): string
+    {
+        $user = auth()->user();
+        $permitido = $user?->alcanceCobranzaClientes() ?? \App\Models\User::COBRANZA_CLIENTES_TODOS;
+        $solicitado = strtolower(trim((string) $request->input('mostrar_clientes', $permitido)));
+
+        if (! array_key_exists($solicitado, \App\Models\User::COBRANZA_CLIENTES_OPCIONES)) {
+            $solicitado = $permitido;
+        }
+
+        if ($permitido !== \App\Models\User::COBRANZA_CLIENTES_TODOS) {
+            return $permitido;
+        }
+
+        return $solicitado;
     }
 
     private function snapshotCobranza(

@@ -43,8 +43,13 @@ trait CreatesNominaSchema
                 $table->string('role', 32)->default('sede');
                 $table->string('sede')->nullable();
                 $table->boolean('ver_publicidad_equipo')->default(false);
+                $table->string('cobranza_clientes', 16)->default('todos');
                 $table->rememberToken();
                 $table->timestamps();
+            });
+        } elseif (! Schema::hasColumn('users', 'cobranza_clientes')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->string('cobranza_clientes', 16)->default('todos');
             });
         }
 

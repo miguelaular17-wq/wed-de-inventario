@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Tests\Concerns\CreatesNominaSchema;
 use Tests\TestCase;
+use ZipArchive;
 
 class EmpleadoCrudTest extends TestCase
 {
@@ -461,5 +462,46 @@ class EmpleadoCrudTest extends TestCase
             ->assertSee('25.50')
             ->assertSee('Audifonos')
             ->assertSee('PENDIENTE');
+    }
+
+    public function test_descarga_reporte_de_empleados_con_datos_laborales(): void
+    {
+        $sede = NominaSede::create(['nombre' => 'Doral', 'codigo' => 'DORAL', 'estado' => 'ACTIVO']);
+        $cargo = NominaCargo::create(['nombre' => 'Asesor de ventas', 'estado' => 'ACTIVO']);
+        $this->actingAs($this->rrhh);
+
+        $this->post(route('nomina.empleados.store'), [
+            'cedula' => '28123456',
+            'nombre' => 'María Reporte',
+            'salario_base' => 725.50,
+            'tipo_salario' => 'MENSUAL',
+            'estado' => 'ACTIVO',
+            'sede_id' => $sede->id,
+            'cargo_id' => $cargo->id,
+        ])->assertRedirect();
+
+        $this->get(route('nomina.empleados.index'))
+            ->assertOk()
+            ->assertSee('Descargar reporte');
+
+        $response = $this->get(route('nomina.empleados.reporte', ['estado' => 'ACTIVO']))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        $temporary = tempnam(sys_get_temp_dir(), 'empleados_test_');
+        file_put_contents($temporary, $response->getContent());
+        $zip = new ZipArchive;
+        $this->assertTrue($zip->open($temporary) === true);
+        $sheet = $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        @unlink($temporary);
+
+        $this->assertIsString($sheet);
+        $this->assertStringContainsString('Nombre del empleado', $sheet);
+        $this->assertStringContainsString('María Reporte', $sheet);
+        $this->assertStringContainsString('28123456', $sheet);
+        $this->assertStringContainsString('Doral', $sheet);
+        $this->assertStringContainsString('Asesor de ventas', $sheet);
+        $this->assertStringContainsString('<v>725.5</v>', $sheet);
     }
 }

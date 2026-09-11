@@ -364,11 +364,18 @@
 
             <div style="display: flex; align-items: center; gap: 5px;">
                 <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Tipo Cliente:</label>
-                <select name="mostrar_clientes" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff; min-width: 150px;">
-                    <option value="todos" {{ ($mostrar_clientes ?? 'todos') === 'todos' ? 'selected' : '' }}>Todos</option>
-                    <option value="regulares" {{ ($mostrar_clientes ?? 'todos') === 'regulares' ? 'selected' : '' }}>Solo Regulares</option>
-                    <option value="personales" {{ ($mostrar_clientes ?? 'todos') === 'personales' ? 'selected' : '' }}>Solo Personales</option>
-                </select>
+                @if($puede_cambiar_tipo_cliente ?? true)
+                    <select name="mostrar_clientes" style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; background: #fff; min-width: 150px;">
+                        <option value="todos" {{ ($mostrar_clientes ?? 'todos') === 'todos' ? 'selected' : '' }}>Todos</option>
+                        <option value="regulares" {{ ($mostrar_clientes ?? 'todos') === 'regulares' ? 'selected' : '' }}>Solo Regulares</option>
+                        <option value="personales" {{ ($mostrar_clientes ?? 'todos') === 'personales' ? 'selected' : '' }}>Solo Personales</option>
+                    </select>
+                @else
+                    <input type="hidden" name="mostrar_clientes" value="{{ $mostrar_clientes }}">
+                    <span style="padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; background: #f8fafc; min-width: 150px; display:inline-block; font-weight:600; color:#334155;">
+                        {{ \App\Models\User::COBRANZA_CLIENTES_OPCIONES[$mostrar_clientes] ?? 'Todos' }}
+                    </span>
+                @endif
             </div>
             
             <button type="submit" class="btn primary" style="background-color: var(--blue); border: none; padding: 8px 16px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px;">

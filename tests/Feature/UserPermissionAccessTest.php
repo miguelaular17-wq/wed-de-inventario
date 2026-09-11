@@ -61,6 +61,27 @@ class UserPermissionAccessTest extends TestCase
         $this->assertFalse($user->canAccess('conciliaciones'));
     }
 
+    public function test_asignar_cobranza_guarda_tipo_de_clientes(): void
+    {
+        $admin = $this->makeUser(User::ROLE_ADMIN);
+        $user = $this->makeUser(User::ROLE_VENDEDOR);
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.update', $user), [
+                'role' => User::ROLE_VENDEDOR,
+                'sede' => 'DORAL',
+                'extra_permissions' => ['cobranza'],
+                'cobranza_clientes' => 'personales',
+            ])
+            ->assertRedirect();
+
+        $user->refresh();
+        $this->assertTrue($user->canAccess('cobranza'));
+        $this->assertEquals('personales', $user->cobranza_clientes);
+        $this->assertEquals('personales', $user->alcanceCobranzaClientes());
+        $this->assertFalse($user->puedeCambiarTipoClienteCobranza());
+    }
+
     public function test_auditor_does_not_need_sede_and_skips_selection(): void
     {
         $auditor = $this->makeUser(User::ROLE_AUDITOR);

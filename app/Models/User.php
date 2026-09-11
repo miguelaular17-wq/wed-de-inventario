@@ -28,6 +28,16 @@ class User extends Authenticatable
     public const ROLE_RRHH = 'rrhh';
     public const ROLE_TECNICO = 'tecnico';
 
+    public const COBRANZA_CLIENTES_TODOS = 'todos';
+    public const COBRANZA_CLIENTES_REGULARES = 'regulares';
+    public const COBRANZA_CLIENTES_PERSONALES = 'personales';
+
+    public const COBRANZA_CLIENTES_OPCIONES = [
+        self::COBRANZA_CLIENTES_TODOS => 'Todos',
+        self::COBRANZA_CLIENTES_REGULARES => 'Solo Regulares',
+        self::COBRANZA_CLIENTES_PERSONALES => 'Solo Personales',
+    ];
+
     /** Roles de oficina que no eligen ni usan sede de operación. */
     public const ROLES_WITHOUT_SEDE = [
         self::ROLE_COMPRADOR,
@@ -60,6 +70,7 @@ class User extends Authenticatable
         'sede',
         'tutorial_step',
         'ver_publicidad_equipo',
+        'cobranza_clientes',
     ];
 
     protected $hidden = [
@@ -73,6 +84,33 @@ class User extends Authenticatable
             'password' => 'hashed',
             'ver_publicidad_equipo' => 'boolean',
         ];
+    }
+
+    public function alcanceCobranzaClientes(): string
+    {
+        if ($this->isAdmin()) {
+            return self::COBRANZA_CLIENTES_TODOS;
+        }
+
+        $valor = strtolower(trim((string) ($this->cobranza_clientes ?: self::COBRANZA_CLIENTES_TODOS)));
+
+        return array_key_exists($valor, self::COBRANZA_CLIENTES_OPCIONES)
+            ? $valor
+            : self::COBRANZA_CLIENTES_TODOS;
+    }
+
+    public function puedeCambiarTipoClienteCobranza(): bool
+    {
+        return $this->isAdmin() || $this->alcanceCobranzaClientes() === self::COBRANZA_CLIENTES_TODOS;
+    }
+
+    public static function normalizarCobranzaClientes(?string $valor): string
+    {
+        $valor = strtolower(trim((string) $valor));
+
+        return array_key_exists($valor, self::COBRANZA_CLIENTES_OPCIONES)
+            ? $valor
+            : self::COBRANZA_CLIENTES_TODOS;
     }
 
     public function isAdmin(): bool

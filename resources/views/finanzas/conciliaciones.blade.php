@@ -187,30 +187,44 @@
             {{-- New row for manual reconciliation calculation --}}
             <div style="margin-top: 10px; padding: 6px 12px; background: rgba(255,255,255,0.05); border-radius: 6px; display: inline-flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                 <div style="display:flex; flex-direction:column; gap: 2px;">
-                    <label style="font-size: 0.65rem; color: rgba(255,255,255,0.6); text-transform: uppercase; margin: 0;">Saldo Banco (Manual)</label>
-                    <input type="number" step="0.01" class="saldo-banco-input" data-idx="{{ $loop->index }}" 
-                           data-consolidados="{{ $d['total_conciliados'] }}"
-                           data-transito="{{ $d['total_transito'] }}"
-                           data-movbanco="{{ $d['total_sin_registrar'] }}"
-                           data-comisiones="{{ $d['total_comisiones'] }}"
+                    <label style="font-size: 0.65rem; color: rgba(255,255,255,0.6); text-transform: uppercase; margin: 0;">Saldo Inicial (Manual)</label>
+                    <input type="number" step="0.01" class="saldo-inicial-input" data-idx="{{ $loop->index }}"
+                           data-movimiento-neto="{{ $d['movimiento_neto_sistema'] }}"
                            placeholder="0.00"
                            onkeyup="calcularDiferencia({{ $loop->index }})"
                            onchange="calcularDiferencia({{ $loop->index }})"
                            style="background: white; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; font-weight: bold; width: 120px; font-size: 0.85rem; color: #334155; margin: 0; height: auto;">
                 </div>
-                
+
+                <div style="font-size: 1.1rem; color: rgba(255,255,255,0.3);"> + </div>
+
+                <div style="display:flex; flex-direction:column; gap: 2px;">
+                    <label style="font-size: 0.65rem; color: rgba(255,255,255,0.6); text-transform: uppercase; margin: 0;">Movimiento Neto Sistema</label>
+                    <span style="font-size: 0.9rem; font-weight: bold; color: white;">Bs. {{ number_format($d['movimiento_neto_sistema'], 2) }}</span>
+                    <small style="font-size: 0.6rem; color: rgba(255,255,255,0.55);">Abonos {{ number_format($d['total_abonos_sistema'], 2) }} − cargos {{ number_format($d['total_cargos_sistema'], 2) }}</small>
+                </div>
+
                 <div style="font-size: 1.1rem; color: rgba(255,255,255,0.3);"> = </div>
-                
+
                 <div style="display:flex; flex-direction:column; gap: 2px;">
                     <label style="font-size: 0.65rem; color: rgba(255,255,255,0.6); text-transform: uppercase; margin: 0;">Saldo Sistema (Calc)</label>
-                    <span id="saldo_sis_{{ $loop->index }}" style="font-size: 0.9rem; font-weight: bold; color: white;">Bs. {{ number_format($d['total_conciliados'], 2) }}</span>
+                    <span id="saldo_sis_{{ $loop->index }}" style="font-size: 0.9rem; font-weight: bold; color: white;">Bs. {{ number_format($d['movimiento_neto_sistema'], 2) }}</span>
                 </div>
 
                 <div style="font-size: 1.1rem; color: rgba(255,255,255,0.3);"> | </div>
 
                 <div style="display:flex; flex-direction:column; gap: 2px;">
+                    <label style="font-size: 0.65rem; color: rgba(255,255,255,0.6); text-transform: uppercase; margin: 0;">Saldo Banco Final (Manual)</label>
+                    <input type="number" step="0.01" class="saldo-banco-input" data-idx="{{ $loop->index }}"
+                           placeholder="0.00"
+                           onkeyup="calcularDiferencia({{ $loop->index }})"
+                           onchange="calcularDiferencia({{ $loop->index }})"
+                           style="background: white; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; font-weight: bold; width: 120px; font-size: 0.85rem; color: #334155; margin: 0; height: auto;">
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap: 2px;">
                     <label style="font-size: 0.65rem; color: rgba(255,255,255,0.6); text-transform: uppercase; margin: 0;">Diferencia</label>
-                    <span id="dif_{{ $loop->index }}" style="font-size: 0.9rem; font-weight: bold; color: white;">Bs. -{{ number_format($d['total_conciliados'], 2) }}</span>
+                    <span id="dif_{{ $loop->index }}" style="font-size: 0.9rem; font-weight: bold; color: white;">Bs. 0.00</span>
                 </div>
                 
                 <div id="status_{{ $loop->index }}" style="margin-left: 5px; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; font-weight: bold; display: none;"></div>
@@ -474,31 +488,33 @@ function filtrarTitulares(banco) {
 }
 
 function calcularDiferencia(idx) {
-    const input = document.querySelector(`.saldo-banco-input[data-idx="${idx}"]`);
+    const inputInicial = document.querySelector(`.saldo-inicial-input[data-idx="${idx}"]`);
+    const inputBanco = document.querySelector(`.saldo-banco-input[data-idx="${idx}"]`);
+    const saldoSistemaSpan = document.getElementById(`saldo_sis_${idx}`);
     const difSpan = document.getElementById(`dif_${idx}`);
     const statusDiv = document.getElementById(`status_${idx}`);
     
-    if (!input || !difSpan) return;
+    if (!inputInicial || !inputBanco || !saldoSistemaSpan || !difSpan) return;
 
-    const saldoManual = parseFloat(input.value) || 0;
-    // El sistema dice que tenemos "consolidados" registrados con certeza.
-    const consolidados = parseFloat(input.getAttribute('data-consolidados')) || 0;
-    
-    const saldoSistema = consolidados;
-    const diferencia = saldoManual - saldoSistema;
+    const saldoInicial = parseFloat(inputInicial.value) || 0;
+    const saldoBanco = parseFloat(inputBanco.value) || 0;
+    const movimientoNeto = parseFloat(inputInicial.getAttribute('data-movimiento-neto')) || 0;
+    const saldoSistema = saldoInicial + movimientoNeto;
+    const diferencia = saldoBanco - saldoSistema;
 
-    // Formatear diferencia
     const formater = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    saldoSistemaSpan.textContent = 'Bs. ' + formater.format(saldoSistema);
     difSpan.textContent = 'Bs. ' + formater.format(diferencia);
 
     // Colores
-    if (diferencia === 0 && saldoManual !== 0) {
+    const datosCompletos = inputInicial.value !== '' && inputBanco.value !== '';
+    if (Math.abs(diferencia) < 0.01 && datosCompletos) {
         difSpan.style.color = '#6ee7b7'; // Verde si cuadra exacto
         statusDiv.textContent = '¡CUADRA!';
         statusDiv.style.background = '#065f46';
         statusDiv.style.color = '#a7f3d0';
         statusDiv.style.display = 'inline-block';
-    } else if (diferencia !== 0 && saldoManual !== 0) {
+    } else if (datosCompletos) {
         difSpan.style.color = '#fca5a5'; // Rojo si hay diferencia
         statusDiv.textContent = 'DIFERENCIA';
         statusDiv.style.background = '#7f1d1d';

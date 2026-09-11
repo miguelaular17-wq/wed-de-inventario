@@ -64,6 +64,7 @@ class UserController extends Controller
             'sede' => ['nullable', 'string'],
             'password_plain' => ['nullable', 'string', 'min:6'],
             'ver_publicidad_equipo' => ['nullable', 'boolean'],
+            'cobranza_clientes' => ['nullable', 'string', 'in:todos,regulares,personales'],
             'extra_permissions' => ['nullable', 'array'],
             'extra_permissions.*' => ['string'],
         ]);
@@ -89,6 +90,13 @@ class UserController extends Controller
 
         $user->save();
         $user->syncExtraPermissions($extras);
+
+        $tieneCobranza = $data['role'] === User::ROLE_COBRANZA
+            || $user->canAccess('cobranza');
+        $user->cobranza_clientes = $tieneCobranza
+            ? User::normalizarCobranzaClientes($data['cobranza_clientes'] ?? User::COBRANZA_CLIENTES_TODOS)
+            : User::COBRANZA_CLIENTES_TODOS;
+        $user->save();
 
         return back()->with('status', 'Usuario actualizado con éxito.');
     }
@@ -136,7 +144,7 @@ class UserController extends Controller
     public function export()
     {
         $users = User::with('extraPermissions')->get([
-            'id', 'name', 'email', 'password', 'password_plain', 'role', 'sede', 'tutorial_step', 'ver_publicidad_equipo',
+            'id', 'name', 'email', 'password', 'password_plain', 'role', 'sede', 'tutorial_step', 'ver_publicidad_equipo', 'cobranza_clientes',
         ]);
 
         $payload = $users->map(function (User $user) {
@@ -149,6 +157,7 @@ class UserController extends Controller
                 'sede' => $user->sede,
                 'tutorial_step' => $user->tutorial_step,
                 'ver_publicidad_equipo' => $user->ver_publicidad_equipo,
+                'cobranza_clientes' => $user->alcanceCobranzaClientes(),
                 'extra_permissions' => $user->extraPermissionKeys(),
             ];
         });
@@ -200,6 +209,9 @@ class UserController extends Controller
                 $user->sede = $userData['sede'] ?? $user->sede;
                 $user->tutorial_step = $userData['tutorial_step'] ?? $user->tutorial_step;
                 $user->ver_publicidad_equipo = (bool) ($userData['ver_publicidad_equipo'] ?? $user->ver_publicidad_equipo);
+                $user->cobranza_clientes = User::normalizarCobranzaClientes(
+                    $userData['cobranza_clientes'] ?? $user->cobranza_clientes
+                );
                 
                 // Only change password if it's different in the backup to avoid double hashing
                 if (isset($userData['password']) && $user->password !== $userData['password']) {
@@ -225,6 +237,7 @@ class UserController extends Controller
                     'sede' => $userData['sede'] ?? null,
                     'tutorial_step' => $userData['tutorial_step'] ?? 0,
                     'ver_publicidad_equipo' => (bool) ($userData['ver_publicidad_equipo'] ?? false),
+                    'cobranza_clientes' => User::normalizarCobranzaClientes($userData['cobranza_clientes'] ?? 'todos'),
                 ]);
                 
                 if (!empty($userData['password_plain'])) {

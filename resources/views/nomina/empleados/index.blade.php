@@ -8,7 +8,12 @@
         <div>
             <h1 style="margin:0;">Empleados</h1>
         </div>
-        <a href="{{ route('nomina.empleados.create') }}" class="btn primary">Nuevo empleado</a>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <a href="{{ route('nomina.empleados.reporte', array_filter($filters ?? [], fn ($value) => $value !== null && $value !== '')) }}" class="btn secondary">
+                Descargar reporte
+            </a>
+            <a href="{{ route('nomina.empleados.create') }}" class="btn primary">Nuevo empleado</a>
+        </div>
     </div>
 
     @if(($importados ?? 0) > 0)

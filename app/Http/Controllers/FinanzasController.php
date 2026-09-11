@@ -1256,7 +1256,7 @@ class FinanzasController extends Controller
             'cobro de comision', 'tarifa por',
         ];
         $comision_keywords_por_banco = [
-            'BANCAMIGA' => ['recarga digitel', 'envio de sms', 'emision estado de cuenta'],
+            'BANCAMIGA' => ['envio de sms', 'emision estado de cuenta'],
         ];
 
         // 5. Egresos del sistema (en tránsito)
@@ -1278,6 +1278,24 @@ class FinanzasController extends Controller
             $egresos_query->whereRaw('LOWER(banco) = ?', [strtolower(trim($banco_filtro))]);
         }
         $egresos_ayer = $egresos_query->orderBy('id')->get();
+
+        // Movimientos registrados en el sistema durante el período del extracto.
+        // El archivo bancario solo se usa para conciliar.
+        $periodo_desde = $fecha_desde ?: optional($lineas->sortBy('fecha')->first())->fecha;
+        $periodo_hasta = $fecha_hasta ?: optional($lineas->sortByDesc('fecha')->first())->fecha;
+        $movimientos_sistema_query = \App\Models\FlujoCaja::where('oculto', false);
+        $ingresos_sistema_query = \App\Models\TesoreriaIngreso::query();
+        if ($periodo_desde) {
+            $movimientos_sistema_query->where('fecha', '>=', $periodo_desde);
+            $ingresos_sistema_query->where('fecha', '>=', $periodo_desde);
+        }
+        if ($periodo_hasta) {
+            $movimientos_sistema_query->where('fecha', '<=', $periodo_hasta);
+            $ingresos_sistema_query->where('fecha', '<=', $periodo_hasta);
+        }
+        $movimientos_sistema = $movimientos_sistema_query->get();
+        $ingresos_sistema = $ingresos_sistema_query->get();
+        $matcher = app(\App\Services\BankReconciliationMatcher::class);
 
         // 6. Construir estructura por banco+titular
         // Clave compuesta: "BANESCO|GRUPO JRZ"
@@ -1406,9 +1424,39 @@ class FinanzasController extends Controller
             $total_sin_registrar = $sin_registrar->sum('monto');
             $total_comisiones    = $comisiones->sum('monto');
 
+            $mis_movimientos = $movimientos_sistema->filter(function($movimiento) use ($matcher, $bk, $tit) {
+                [$banco, $titular] = $matcher->partesCuenta($movimiento->banco, $movimiento->titular);
+                return $banco === $bk && $titular === $tit;
+            });
+            $mis_traslados_recibidos = $movimientos_sistema->filter(function($movimiento) use ($matcher, $bk, $tit) {
+                if (($movimiento->categoria_egreso ?? '') !== 'traslados') {
+                    return false;
+                }
+                [$banco, $titular] = $matcher->partesCuenta(
+                    $movimiento->banco_receptor,
+                    $movimiento->titular_receptor
+                );
+                return $banco === $bk && $titular === $tit;
+            });
+            $mis_ingresos_tesoreria = $ingresos_sistema->filter(function($ingreso) use ($matcher, $bk, $tit) {
+                [$banco, $titular] = $matcher->partesCuenta($ingreso->banco, $ingreso->titular);
+                return $banco === $bk && $titular === $tit;
+            });
+
+            $total_cargos_sistema = $mis_movimientos
+                ->where('tipo', 'egreso')
+                ->sum(fn($movimiento) => (float) $movimiento->monto_bs + (float) $movimiento->comision);
+            $total_abonos_sistema = $mis_movimientos
+                ->where('tipo', 'ingreso')
+                ->sum('monto_bs')
+                + $mis_traslados_recibidos->sum('monto_bs')
+                + $mis_ingresos_tesoreria->sum('monto');
+            $movimiento_neto_sistema = round($total_abonos_sistema - $total_cargos_sistema, 2);
+
             $data_por_banco[$bk_key] = array_merge(
                 compact('conciliados', 'en_transito', 'sin_registrar', 'comisiones',
-                        'total_conciliados', 'total_transito', 'total_sin_registrar', 'total_comisiones'),
+                        'total_conciliados', 'total_transito', 'total_sin_registrar', 'total_comisiones',
+                        'total_cargos_sistema', 'total_abonos_sistema', 'movimiento_neto_sistema'),
                 ['banco' => $bk, 'titular' => $tit]
             );
         }
