@@ -11,6 +11,11 @@ interface InventoryRepository {
     suspend fun login(email: String, password: String): UserDto
     suspend fun currentUser(): UserDto
     suspend fun logout()
+    suspend fun serviceOptions(): ServiceOptionsDto
+    suspend fun serviceOrders(page: Int, query: String, status: String, site: String): ServiceOrdersResponse
+    suspend fun serviceOrder(id: Long): ServiceOrderDto
+    suspend fun createServiceOrder(request: CreateServiceOrderRequest): ServiceOrderDto
+    suspend fun changeServiceOrderStatus(id: Long, status: String, comment: String): ServiceOrderDto
     suspend fun sites(): SitesResponse
     suspend fun inventory(page: Int, query: String, category: String, site: String): InventoryPage
     suspend fun requisitions(status: String, site: String): List<RequisitionDto>
@@ -39,6 +44,34 @@ class NetworkInventoryRepository(
         }
 
     override suspend fun currentUser(): UserDto = apiCall { api.me().user }
+
+    override suspend fun serviceOptions(): ServiceOptionsDto =
+        apiCall { api.serviceOptions().data }
+
+    override suspend fun serviceOrders(
+        page: Int,
+        query: String,
+        status: String,
+        site: String,
+    ): ServiceOrdersResponse = apiCall {
+        api.serviceOrders(
+            page = page,
+            query = query.ifBlank { null },
+            status = status.ifBlank { null },
+            site = site.ifBlank { null },
+        )
+    }
+
+    override suspend fun serviceOrder(id: Long): ServiceOrderDto =
+        apiCall { api.serviceOrder(id).data }
+
+    override suspend fun createServiceOrder(request: CreateServiceOrderRequest): ServiceOrderDto =
+        apiCall { api.createServiceOrder(request).data }
+
+    override suspend fun changeServiceOrderStatus(id: Long, status: String, comment: String): ServiceOrderDto =
+        apiCall {
+            api.changeServiceOrderStatus(id, ChangeServiceOrderStatusRequest(status, comment)).data
+        }
 
     override suspend fun logout() {
         try {

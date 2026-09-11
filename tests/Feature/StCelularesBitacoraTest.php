@@ -10,6 +10,7 @@ use App\Services\ServicioTecnico\StEquipoService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\Sanctum;
 use Tests\Concerns\CreatesNominaSchema;
 use Tests\TestCase;
 
@@ -496,6 +497,53 @@ class StCelularesBitacoraTest extends TestCase
         $this->assertSame('650.50', $orden->valor_dispositivo);
     }
 
+    public function test_api_android_registra_lista_y_cambia_estado_de_celular(): void
+    {
+        $user = $this->makeTecnico();
+        Sanctum::actingAs($user, ['mobile']);
+
+        $this->getJson('/api/v1/servicio/celulares/opciones')
+            ->assertOk()
+            ->assertJsonPath('data.sede_activa', 'DORAL')
+            ->assertJsonPath('data.sede_bloqueada', true);
+
+        $created = $this->postJson('/api/v1/servicio/celulares/ordenes', [
+            'sede' => 'DORAL',
+            'tipo_gestion' => 'ST',
+            'valor_dispositivo' => 325.50,
+            'cliente_nombre' => 'Cliente Android',
+            'cliente_telefono' => '04141234567',
+            'imei' => '350099988877766',
+            'marca' => 'Samsung',
+            'modelo' => 'A55',
+            'color' => 'Azul',
+            'almacenamiento' => '256 GB',
+            'falla' => 'No carga',
+            'prioridad' => 'alta',
+            'inspeccion' => ['pantalla' => 'ok'],
+        ])->assertCreated()
+            ->assertJsonPath('data.cliente_nombre', 'Cliente Android')
+            ->assertJsonPath('data.imei', '350099988877766')
+            ->assertJsonPath('data.estado', 'pendiente');
+
+        $orderId = $created->json('data.id');
+
+        $this->getJson('/api/v1/servicio/celulares/ordenes?q=350099988877766')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $orderId);
+
+        $this->postJson("/api/v1/servicio/celulares/ordenes/{$orderId}/estado", [
+            'estado' => 'en_proceso',
+            'comentario' => 'Se inició el diagnóstico desde Android.',
+        ])->assertOk()
+            ->assertJsonPath('data.estado', 'en_proceso');
+
+        $this->getJson("/api/v1/servicio/celulares/ordenes/{$orderId}")
+            ->assertOk()
+            ->assertJsonFragment(['tipo' => 'estado']);
+    }
+
     private function makeTecnico(): User
     {
         return User::create([
@@ -617,6 +665,19 @@ class StCelularesBitacoraTest extends TestCase
                 $table->text('descripcion');
                 $table->text('meta')->nullable();
                 $table->timestamp('created_at')->nullable();
+            });
+        }
+
+        if (! Schema::hasTable('st_orden_repuestos')) {
+            Schema::create('st_orden_repuestos', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('orden_id');
+                $table->unsignedBigInteger('repuesto_id');
+                $table->unsignedInteger('cantidad')->default(1);
+                $table->decimal('precio_unitario', 12, 2)->default(0);
+                $table->decimal('costo_unitario', 12, 2)->default(0);
+                $table->boolean('descontado')->default(false);
+                $table->timestamps();
             });
         }
 

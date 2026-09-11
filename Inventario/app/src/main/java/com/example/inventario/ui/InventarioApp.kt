@@ -139,12 +139,12 @@ private fun LoginScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
-                    text = "Inventario",
+                    text = "Nexo Celulares",
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
                 )
-                Text("Requisiciones entre sedes", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Registro y seguimiento de equipos", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
@@ -188,12 +188,13 @@ private fun LoginScreen(
 @Composable
 private fun HomeScreen(state: AppUiState, viewModel: AppViewModel) {
     var tab by remember { mutableIntStateOf(0) }
+    val canUseInventory = state.user?.permissions?.contains("operacion") == true
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text("Inventario", fontWeight = FontWeight.Bold)
+                        Text("Gestión de celulares", fontWeight = FontWeight.Bold)
                         Text(
                             state.user?.displayName.orEmpty(),
                             style = MaterialTheme.typography.labelMedium,
@@ -207,31 +208,45 @@ private fun HomeScreen(state: AppUiState, viewModel: AppViewModel) {
         },
     ) { padding ->
         Column(Modifier.padding(padding)) {
-            SiteSelector(
-                sites = state.sites,
-                selected = state.activeSite,
-                onSelected = viewModel::setActiveSite,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                label = "Sede activa",
-                enabled = !state.siteLocked,
-            )
-            TabRow(selectedTabIndex = tab) {
-                Tab(
-                    selected = tab == 0,
-                    onClick = { tab = 0 },
-                    text = { Text("Inventario") },
-                )
-                Tab(
-                    selected = tab == 1,
-                    onClick = {
-                        tab = 1
-                        viewModel.loadRequisitions()
-                    },
-                    text = { Text("Requisiciones") },
+            if (canUseInventory) {
+                TabRow(selectedTabIndex = tab) {
+                    Tab(
+                        selected = tab == 0,
+                        onClick = { tab = 0 },
+                        text = { Text("Celulares") },
+                    )
+                    Tab(
+                        selected = tab == 1,
+                        onClick = { tab = 1 },
+                        text = { Text("Inventario") },
+                    )
+                    Tab(
+                        selected = tab == 2,
+                        onClick = {
+                            tab = 2
+                            viewModel.loadRequisitions()
+                        },
+                        text = { Text("Requisiciones") },
+                    )
+                }
+            }
+            if (canUseInventory && tab != 0) {
+                SiteSelector(
+                    sites = state.sites,
+                    selected = state.activeSite,
+                    onSelected = viewModel::setActiveSite,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    label = "Sede activa",
+                    enabled = !state.siteLocked,
                 )
             }
-            if (tab == 0) InventoryScreen(state, viewModel)
-            else RequisitionsScreen(state, viewModel)
+            when (tab) {
+                0 -> ServiceOrdersScreen(state, viewModel)
+                1 -> if (canUseInventory) InventoryScreen(state, viewModel)
+                else ServiceOrdersScreen(state, viewModel)
+                else -> if (canUseInventory) RequisitionsScreen(state, viewModel)
+                else ServiceOrdersScreen(state, viewModel)
+            }
         }
     }
 }

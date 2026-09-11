@@ -97,6 +97,19 @@ class InventoryApiTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 
+    public function test_any_registered_user_can_login_to_mobile_app(): void
+    {
+        $user = $this->user('vendedor-mobile@test.local', 'vendedor', 'DORAL');
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $user->email,
+            'password' => 'password123',
+            'device_name' => 'Celulares Android',
+        ])->assertOk()
+            ->assertJsonPath('user.id', $user->id)
+            ->assertJsonPath('user.role', 'vendedor');
+    }
+
     public function test_fixed_sede_user_cannot_change_sede(): void
     {
         $user = $this->user('supervisor@test.local', 'supervisor', 'DORAL');

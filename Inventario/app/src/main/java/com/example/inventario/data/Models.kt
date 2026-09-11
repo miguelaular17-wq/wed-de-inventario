@@ -149,6 +149,110 @@ data class RequisitionResponse(
     val message: String = "",
 )
 
+@Serializable
+data class ChoiceDto(
+    val value: String = "",
+    val label: String = "",
+)
+
+@Serializable
+data class ServiceOptionsDto(
+    val sedes: List<String> = emptyList(),
+    @SerialName("sede_activa") val activeSite: String? = null,
+    @SerialName("sede_bloqueada") val siteLocked: Boolean = false,
+    @SerialName("tipos_gestion") val managementTypes: List<ChoiceDto> = emptyList(),
+    @SerialName("rangos_garantia") val warrantyRanges: List<ChoiceDto> = emptyList(),
+    @SerialName("prioridades") val priorities: List<ChoiceDto> = emptyList(),
+    val estados: List<ChoiceDto> = emptyList(),
+    val checklist: List<ChoiceDto> = emptyList(),
+)
+
+@Serializable
+data class ServiceOptionsResponse(val data: ServiceOptionsDto = ServiceOptionsDto())
+
+@Serializable
+data class ServiceEventDto(
+    val id: Long = 0,
+    val tipo: String = "",
+    val descripcion: String = "",
+    val usuario: String? = null,
+    val fecha: String? = null,
+)
+
+@Serializable
+data class ServiceOrderDto(
+    val id: Long = 0,
+    val codigo: String = "",
+    val sede: String = "",
+    @SerialName("tipo_gestion") val managementType: String = "ST",
+    @SerialName("tipo_gestion_label") val managementTypeLabel: String = "",
+    @SerialName("rango_garantia") val warrantyRange: String? = null,
+    @SerialName("valor_dispositivo") val deviceValue: Double? = null,
+    @SerialName("cliente_nombre") val clientName: String = "",
+    @SerialName("cliente_telefono") val clientPhone: String? = null,
+    @SerialName("cliente_cedula") val clientId: String? = null,
+    val imei: String = "",
+    val marca: String? = null,
+    val modelo: String? = null,
+    val color: String? = null,
+    val almacenamiento: String? = null,
+    val falla: String = "",
+    val accesorios: String? = null,
+    val diagnostico: String? = null,
+    val estado: String = "",
+    @SerialName("estado_label") val statusLabel: String = "",
+    @SerialName("estados_permitidos") val allowedStatuses: List<ChoiceDto> = emptyList(),
+    val prioridad: String = "",
+    @SerialName("prioridad_label") val priorityLabel: String = "",
+    @SerialName("fecha_ingreso") val receivedDate: String? = null,
+    @SerialName("fecha_prometida") val promisedDate: String? = null,
+    val observaciones: String? = null,
+    val inspeccion: Map<String, String> = emptyMap(),
+    @SerialName("creado_por") val createdBy: String? = null,
+    val eventos: List<ServiceEventDto> = emptyList(),
+)
+
+@Serializable
+data class ServiceOrdersResponse(
+    val data: List<ServiceOrderDto> = emptyList(),
+    val meta: PageMetaDto = PageMetaDto(),
+)
+
+@Serializable
+data class ServiceOrderResponse(
+    val data: ServiceOrderDto = ServiceOrderDto(),
+    val message: String = "",
+)
+
+@Serializable
+data class CreateServiceOrderRequest(
+    val sede: String,
+    @SerialName("tipo_gestion") val managementType: String,
+    @SerialName("rango_garantia") val warrantyRange: String? = null,
+    @SerialName("valor_dispositivo") val deviceValue: Double? = null,
+    @SerialName("cliente_nombre") val clientName: String? = null,
+    @SerialName("cliente_telefono") val clientPhone: String? = null,
+    @SerialName("cliente_cedula") val clientId: String? = null,
+    val imei: String,
+    val marca: String,
+    val modelo: String,
+    val color: String,
+    val almacenamiento: String,
+    val falla: String,
+    val accesorios: String? = null,
+    val prioridad: String,
+    @SerialName("fecha_prometida") val promisedDate: String? = null,
+    val observaciones: String? = null,
+    val inspeccion: Map<String, String> = emptyMap(),
+    @SerialName("usar_equipo_existente") val useExistingDevice: Boolean = false,
+)
+
+@Serializable
+data class ChangeServiceOrderStatusRequest(
+    val estado: String,
+    val comentario: String,
+)
+
 data class InventoryPage(
     val items: List<InventarioItemDto>,
     val currentPage: Int,

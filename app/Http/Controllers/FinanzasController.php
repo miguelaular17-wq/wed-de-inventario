@@ -1134,8 +1134,12 @@ class FinanzasController extends Controller
         if ($lineas_pendientes->count() > 0) {
             $fecha_minima    = now()->subDays(90)->format('Y-m-d');
             
-            // Flujos de caja pendientes (egresos)
-            $flujos_posibles = \App\Models\FlujoCaja::where('es_conciliado', false)
+            // Los traslados permanecen disponibles hasta conciliar sus dos lados:
+            // cargo en el banco emisor y abono en el banco receptor.
+            $flujos_posibles = \App\Models\FlujoCaja::where(function ($query) {
+                    $query->where('es_conciliado', false)
+                        ->orWhere('categoria_egreso', 'traslados');
+                })
                 ->where('tipo', 'egreso')
                 ->where('fecha', '>=', $fecha_minima)
                 ->get();
@@ -1146,18 +1150,52 @@ class FinanzasController extends Controller
                 ->get();
 
             $matcher = app(\App\Services\BankReconciliationMatcher::class);
+            $traslados = $flujos_posibles->filter(fn ($flujo) => $matcher->esTraslado($flujo));
+            $ladosTrasladosVinculados = [];
+            if ($traslados->isNotEmpty()) {
+                $lineasYaVinculadas = \App\Models\ConciliacionLinea::query()
+                    ->whereIn('flujo_caja_id', $traslados->pluck('id'))
+                    ->where('estado', 'conciliado')
+                    ->get();
+
+                foreach ($lineasYaVinculadas as $lineaVinculada) {
+                    $traslado = $traslados->firstWhere('id', $lineaVinculada->flujo_caja_id);
+                    if (! $traslado) {
+                        continue;
+                    }
+                    $lado = $matcher->ladoTraslado($lineaVinculada, $traslado);
+                    if ($lado !== null) {
+                        $ladosTrasladosVinculados[$traslado->id][$lado] = true;
+                    }
+                }
+            }
+
             $cambios = false;
             foreach ($lineas_pendientes as $linea) {
                 $match         = null;
                 $isTesoreriaMatch = false;
+                $flujosDisponibles = $flujos_posibles->filter(function ($flujo) use ($linea, $matcher, $ladosTrasladosVinculados) {
+                    if (! $matcher->esTraslado($flujo)) {
+                        return true;
+                    }
+
+                    $lado = $matcher->ladoTraslado($linea, $flujo);
+
+                    return $lado !== null && empty($ladosTrasladosVinculados[$flujo->id][$lado]);
+                });
 
                 if ($linea->esAbono()) {
-                    $match = $matcher->mejorIngresoTesoreria($linea, $tesoreria_posibles);
-                    if ($match) {
-                        $isTesoreriaMatch = true;
+                    $trasladosDisponibles = $flujosDisponibles->filter(fn ($flujo) => $matcher->esTraslado($flujo));
+                    $match = $matcher->mejorEgreso($linea, $trasladosDisponibles);
+
+                    if (! $match) {
+                        $match = $matcher->mejorIngresoTesoreria($linea, $tesoreria_posibles);
+                        if ($match) {
+                            $isTesoreriaMatch = true;
+                        }
                     }
                 } else {
-                    $match = $matcher->mejorEgreso($linea, $flujos_posibles);
+                    $match = $matcher->mejorEgreso($linea, $flujosDisponibles);
                 }
 
                 if ($match) {
@@ -1169,10 +1207,23 @@ class FinanzasController extends Controller
                         }
                     } else {
                         $linea->flujo_caja_id = $match->id;
-                        $flujos_posibles = $flujos_posibles->reject(fn($f) => $f->id == $match->id);
                     }
                     $linea->save();
-                    $match->es_conciliado = true;
+
+                    if (! $isTesoreriaMatch && $matcher->esTraslado($match)) {
+                        $lado = $matcher->ladoTraslado($linea, $match);
+                        if ($lado !== null) {
+                            $ladosTrasladosVinculados[$match->id][$lado] = true;
+                        }
+                        $match->es_conciliado =
+                            ! empty($ladosTrasladosVinculados[$match->id]['salida'])
+                            && ! empty($ladosTrasladosVinculados[$match->id]['entrada']);
+                    } else {
+                        $match->es_conciliado = true;
+                        if (! $isTesoreriaMatch) {
+                            $flujos_posibles = $flujos_posibles->reject(fn($f) => $f->id == $match->id);
+                        }
+                    }
                     $match->save();
                     $cambios = true;
                 }
@@ -1203,6 +1254,9 @@ class FinanzasController extends Controller
             'serv mtto','com. banesco pago movil','contraprestacion pago proveedores',
             // BANCARIBE/BANCAMIGA
             'cobro de comision', 'tarifa por',
+        ];
+        $comision_keywords_por_banco = [
+            'BANCAMIGA' => ['recarga digitel', 'envio de sms', 'emision estado de cuenta'],
         ];
 
         // 5. Egresos del sistema (en tránsito)
@@ -1263,9 +1317,10 @@ class FinanzasController extends Controller
             });
 
             // Separar comisiones vs. transacciones normales
-            $lineas_comisiones = $lineas_banco->filter(function($l) use ($comision_keywords) {
+            $lineas_comisiones = $lineas_banco->filter(function($l) use ($comision_keywords, $comision_keywords_por_banco, $bk) {
                 $desc = strtolower($l->descripcion ?? '');
-                foreach ($comision_keywords as $kw) {
+                $keywords = array_merge($comision_keywords, $comision_keywords_por_banco[$bk] ?? []);
+                foreach ($keywords as $kw) {
                     if (strpos($desc, $kw) !== false) return true;
                 }
                 return false;
@@ -1932,15 +1987,22 @@ class FinanzasController extends Controller
             'serv mtto',
             'cobro de comision', 'tarifa por',
         ];
+        $comision_keywords_por_banco = [
+            'BANCAMIGA' => [ 'envio de sms', 'emision estado de cuenta'],
+        ];
 
         $lineas_banco = $lineas->filter(function($l) use ($tit_req) {
             $ltit = strtolower(trim($l->titular ?? ''));
             return $tit_req === '' || $ltit === $tit_req;
         });
 
-        $lineas_comisiones = $lineas_banco->filter(function($l) use ($comision_keywords) {
+        $lineas_comisiones = $lineas_banco->filter(function($l) use ($comision_keywords, $comision_keywords_por_banco, $bk_req) {
             $desc = strtolower($l->descripcion ?? '');
-            foreach ($comision_keywords as $kw) {
+            $keywords = array_merge(
+                $comision_keywords,
+                $comision_keywords_por_banco[strtoupper(trim($bk_req))] ?? []
+            );
+            foreach ($keywords as $kw) {
                 if (strpos($desc, $kw) !== false) return true;
             }
             return false;

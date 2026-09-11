@@ -138,6 +138,83 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertTrue($this->matcher->coincideEgreso($linea, $flujo));
     }
 
+    public function test_concilia_los_dos_lados_de_un_traslado_bancario(): void
+    {
+        $traslado = (object) [
+            'categoria_egreso' => 'traslados',
+            'banco' => 'BANESCO',
+            'titular' => 'DORAL',
+            'banco_receptor' => 'MERCANTIL',
+            'titular_receptor' => 'JRZ',
+            'fecha' => '2026-09-08',
+            'monto_bs' => 12500.75,
+            'referencia' => '5003998765',
+        ];
+        $salida = new ConciliacionLinea([
+            'banco' => 'BANESCO',
+            'titular' => 'DORAL',
+            'fecha' => '2026-09-08',
+            'referencia' => '5003998765',
+            'monto' => -12500.75,
+            'tipo' => 'cargo',
+        ]);
+        $entrada = new ConciliacionLinea([
+            'banco' => 'MERCANTIL',
+            'titular' => 'JRZ',
+            'fecha' => '2026-09-08',
+            'referencia' => '8765',
+            'monto' => 12500.75,
+            'tipo' => 'abono',
+        ]);
+
+        $this->assertSame('salida', $this->matcher->ladoTraslado($salida, $traslado));
+        $this->assertSame('entrada', $this->matcher->ladoTraslado($entrada, $traslado));
+        $this->assertTrue($this->matcher->coincideTraslado($salida, $traslado));
+        $this->assertTrue($this->matcher->coincideTraslado($entrada, $traslado));
+    }
+
+    public function test_traslado_exige_monto_y_ultimos_cuatro_digitos_correctos(): void
+    {
+        $traslado = (object) [
+            'categoria_egreso' => 'traslados',
+            'banco' => 'BANESCO',
+            'titular' => 'DORAL',
+            'banco_receptor' => 'MERCANTIL',
+            'titular_receptor' => 'JRZ',
+            'fecha' => '2026-09-08',
+            'monto_bs' => 12500.75,
+            'referencia' => '5003998765',
+        ];
+        $montoIncorrecto = new ConciliacionLinea([
+            'banco' => 'MERCANTIL',
+            'titular' => 'JRZ',
+            'fecha' => '2026-09-08',
+            'referencia' => '8765',
+            'monto' => 12500.76,
+            'tipo' => 'abono',
+        ]);
+        $referenciaIncorrecta = new ConciliacionLinea([
+            'banco' => 'MERCANTIL',
+            'titular' => 'JRZ',
+            'fecha' => '2026-09-08',
+            'referencia' => '8764',
+            'monto' => 12500.75,
+            'tipo' => 'abono',
+        ]);
+        $salidaIncompleta = new ConciliacionLinea([
+            'banco' => 'BANESCO',
+            'titular' => 'DORAL',
+            'fecha' => '2026-09-08',
+            'referencia' => '8765',
+            'monto' => -12500.75,
+            'tipo' => 'cargo',
+        ]);
+
+        $this->assertFalse($this->matcher->coincideTraslado($montoIncorrecto, $traslado));
+        $this->assertFalse($this->matcher->coincideTraslado($referenciaIncorrecta, $traslado));
+        $this->assertFalse($this->matcher->coincideTraslado($salidaIncompleta, $traslado));
+    }
+
     public function test_parte_cuenta_separa_banco_y_titular(): void
     {
         [$banco, $titular] = $this->matcher->partesCuenta('BANESCO DORAL', null);

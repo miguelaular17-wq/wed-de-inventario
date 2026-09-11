@@ -4,11 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.inventario.data.CreateRequisitionRequest
+import com.example.inventario.data.CreateServiceOrderRequest
 import com.example.inventario.data.InventarioItemDto
 import com.example.inventario.data.InventoryRepository
 import com.example.inventario.data.MetricasDto
 import com.example.inventario.data.RequisitionDto
 import com.example.inventario.data.SedeDto
+import com.example.inventario.data.ServiceOptionsDto
+import com.example.inventario.data.ServiceOrderDto
 import com.example.inventario.data.SessionExpiredException
 import com.example.inventario.data.UserDto
 import kotlinx.coroutines.async
@@ -23,6 +26,16 @@ data class AppUiState(
     val user: UserDto? = null,
     val loginLoading: Boolean = false,
     val loginError: String? = null,
+    val serviceOptions: ServiceOptionsDto = ServiceOptionsDto(),
+    val serviceOrders: List<ServiceOrderDto> = emptyList(),
+    val serviceOrdersPage: Int = 0,
+    val serviceOrdersLastPage: Int = 1,
+    val serviceOrdersLoading: Boolean = false,
+    val serviceOrdersError: String? = null,
+    val serviceSearch: String = "",
+    val serviceStatus: String = "",
+    val serviceSite: String = "",
+    val selectedServiceOrder: ServiceOrderDto? = null,
     val sites: List<SedeDto> = emptyList(),
     val activeSite: SedeDto? = null,
     val siteLocked: Boolean = false,
@@ -90,9 +103,35 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
 
     private suspend fun loadInitialData() {
         _state.update {
-            it.copy(inventoryLoading = true, requisitionsLoading = true)
+            it.copy(serviceOrdersLoading = true)
         }
         try {
+            val serviceOptions = repository.serviceOptions()
+            val serviceSite = serviceOptions.activeSite ?: serviceOptions.sedes.firstOrNull().orEmpty()
+            _state.update {
+                it.copy(serviceOptions = serviceOptions, serviceSite = serviceSite)
+            }
+            val orders = repository.serviceOrders(1, "", "", serviceSite)
+            _state.update {
+                it.copy(
+                    serviceOrders = orders.data,
+                    serviceOrdersPage = orders.meta.currentPage,
+                    serviceOrdersLastPage = orders.meta.lastPage,
+                    serviceOrdersLoading = false,
+                )
+            }
+
+            val canUseInventory = _state.value.user?.permissions?.contains("operacion") == true
+            if (!canUseInventory) {
+                _state.update {
+                    it.copy(inventoryLoading = false, requisitionsLoading = false)
+                }
+                return
+            }
+
+            _state.update {
+                it.copy(inventoryLoading = true, requisitionsLoading = true)
+            }
             val sitesResponse = repository.sites()
             val sites = sitesResponse.data
             val requestedSite = sitesResponse.active ?: _state.value.user?.sede
@@ -121,6 +160,117 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
             handleDataError(error)
         }
     }
+
+    fun setServiceSearch(value: String) {
+        _state.update { it.copy(serviceSearch = value) }
+    }
+
+    fun setServiceStatus(value: String) {
+        _state.update { it.copy(serviceStatus = value) }
+        loadServiceOrders(reset = true)
+    }
+
+    fun setServiceSite(value: String) {
+        if (_state.value.serviceOptions.siteLocked) return
+        _state.update { it.copy(serviceSite = value) }
+        loadServiceOrders(reset = true)
+    }
+
+    fun searchServiceOrders() = loadServiceOrders(reset = true)
+
+    fun loadMoreServiceOrders() {
+        if (_state.value.serviceOrdersPage < _state.value.serviceOrdersLastPage) {
+            loadServiceOrders(reset = false)
+        }
+    }
+
+    fun loadServiceOrders(reset: Boolean = true) = viewModelScope.launch {
+        val snapshot = _state.value
+        if (snapshot.serviceOrdersLoading) return@launch
+        val page = if (reset) 1 else snapshot.serviceOrdersPage + 1
+        _state.update { it.copy(serviceOrdersLoading = true, serviceOrdersError = null) }
+        try {
+            val response = repository.serviceOrders(
+                page,
+                snapshot.serviceSearch,
+                snapshot.serviceStatus,
+                snapshot.serviceSite,
+            )
+            _state.update {
+                it.copy(
+                    serviceOrders = if (reset) response.data
+                    else (it.serviceOrders + response.data).distinctBy(ServiceOrderDto::id),
+                    serviceOrdersPage = response.meta.currentPage,
+                    serviceOrdersLastPage = response.meta.lastPage,
+                    serviceOrdersLoading = false,
+                )
+            }
+        } catch (error: Exception) {
+            if (error is SessionExpiredException) expireSession()
+            else _state.update {
+                it.copy(serviceOrdersLoading = false, serviceOrdersError = error.userMessage())
+            }
+        }
+    }
+
+    fun openServiceOrder(order: ServiceOrderDto) = viewModelScope.launch {
+        _state.update { it.copy(selectedServiceOrder = order) }
+        try {
+            val detail = repository.serviceOrder(order.id)
+            _state.update { it.copy(selectedServiceOrder = detail) }
+        } catch (error: Exception) {
+            if (error is SessionExpiredException) expireSession()
+            else _state.update { it.copy(message = error.userMessage()) }
+        }
+    }
+
+    fun closeServiceOrder() {
+        _state.update { it.copy(selectedServiceOrder = null) }
+    }
+
+    fun createServiceOrder(request: CreateServiceOrderRequest, onSuccess: () -> Unit) =
+        viewModelScope.launch {
+            _state.update { it.copy(submitting = true) }
+            try {
+                val order = repository.createServiceOrder(request)
+                _state.update {
+                    it.copy(
+                        submitting = false,
+                        message = "Orden ${order.codigo} registrada",
+                        selectedServiceOrder = order,
+                    )
+                }
+                onSuccess()
+                loadServiceOrders(reset = true)
+            } catch (error: Exception) {
+                if (error is SessionExpiredException) expireSession()
+                else _state.update { it.copy(submitting = false, message = error.userMessage()) }
+            }
+        }
+
+    fun changeServiceOrderStatus(order: ServiceOrderDto, status: String, comment: String) =
+        viewModelScope.launch {
+            if (comment.trim().length < 3) {
+                _state.update { it.copy(message = "Escribe el motivo del cambio de estado") }
+                return@launch
+            }
+            _state.update { it.copy(submitting = true) }
+            try {
+                val updated = repository.changeServiceOrderStatus(order.id, status, comment.trim())
+                _state.update {
+                    it.copy(
+                        submitting = false,
+                        selectedServiceOrder = updated,
+                        message = "Estado actualizado",
+                    )
+                }
+                loadServiceOrders(reset = true)
+                openServiceOrder(updated)
+            } catch (error: Exception) {
+                if (error is SessionExpiredException) expireSession()
+                else _state.update { it.copy(submitting = false, message = error.userMessage()) }
+            }
+        }
 
     fun setActiveSite(site: SedeDto) {
         if (_state.value.siteLocked || _state.value.activeSite?.apiValue == site.apiValue) return
@@ -330,6 +480,8 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
             it.copy(
                 inventoryLoading = false,
                 requisitionsLoading = false,
+                serviceOrdersLoading = false,
+                serviceOrdersError = error.userMessage(),
                 inventoryError = error.userMessage(),
                 requisitionsError = error.userMessage(),
             )

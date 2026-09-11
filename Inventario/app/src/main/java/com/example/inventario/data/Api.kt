@@ -26,6 +26,29 @@ interface InventarioApi {
     @POST("api/v1/auth/logout")
     suspend fun logout(): Response<Unit>
 
+    @GET("api/v1/servicio/celulares/opciones")
+    suspend fun serviceOptions(): ServiceOptionsResponse
+
+    @GET("api/v1/servicio/celulares/ordenes")
+    suspend fun serviceOrders(
+        @Query("page") page: Int = 1,
+        @Query("q") query: String? = null,
+        @Query("estado") status: String? = null,
+        @Query("sede") site: String? = null,
+    ): ServiceOrdersResponse
+
+    @POST("api/v1/servicio/celulares/ordenes")
+    suspend fun createServiceOrder(@Body request: CreateServiceOrderRequest): ServiceOrderResponse
+
+    @GET("api/v1/servicio/celulares/ordenes/{id}")
+    suspend fun serviceOrder(@Path("id") id: Long): ServiceOrderResponse
+
+    @POST("api/v1/servicio/celulares/ordenes/{id}/estado")
+    suspend fun changeServiceOrderStatus(
+        @Path("id") id: Long,
+        @Body request: ChangeServiceOrderStatusRequest,
+    ): ServiceOrderResponse
+
     @GET("api/v1/sedes")
     suspend fun sedes(): SitesResponse
 

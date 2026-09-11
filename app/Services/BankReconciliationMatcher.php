@@ -221,7 +221,14 @@ class BankReconciliationMatcher
     private function puntajeEgreso(ConciliacionLinea $linea, object $flujo): int
     {
         $puntos = 0;
-        if ($this->referenciasCruzan($linea->referencia, $flujo->referencia ?? null)) {
+        if ($this->esTraslado($flujo)) {
+            $lado = $this->ladoTraslado($linea, $flujo);
+            if ($lado === 'salida' && $this->referenciaTrasladoCompletaCoincide($linea->referencia, $flujo->referencia ?? null)) {
+                $puntos += 50;
+            } elseif ($lado === 'entrada' && $this->referenciaTrasladoUltimosCuatroCoincide($linea->referencia, $flujo->referencia ?? null)) {
+                $puntos += 40;
+            }
+        } elseif ($this->referenciasCruzan($linea->referencia, $flujo->referencia ?? null)) {
             $puntos += 30;
         }
         if ($this->fechaCercana($linea->fecha, $flujo->fecha, 0)) {
@@ -251,6 +258,10 @@ class BankReconciliationMatcher
 
     public function coincideEgreso(ConciliacionLinea $linea, object $flujo): bool
     {
+        if ($this->esTraslado($flujo)) {
+            return $this->coincideTraslado($linea, $flujo);
+        }
+
         if (! $this->mismoBanco($linea->banco, $flujo->banco ?? null)) {
             return false;
         }
@@ -282,6 +293,88 @@ class BankReconciliationMatcher
         return $this->fechaCercana($linea->fecha, $flujo->fecha);
     }
 
+    public function esTraslado(object $flujo): bool
+    {
+        return strtolower(trim((string) ($flujo->categoria_egreso ?? ''))) === 'traslados';
+    }
+
+    public function ladoTraslado(ConciliacionLinea $linea, object $flujo): ?string
+    {
+        if (! $this->esTraslado($flujo)) {
+            return null;
+        }
+
+        if (
+            $linea->esCargo()
+            && $this->mismoBanco($linea->banco, $flujo->banco ?? null)
+            && $this->mismoTitular($linea->titular, $flujo->titular ?? null, $linea->banco, $flujo->banco ?? null)
+        ) {
+            return 'salida';
+        }
+
+        if (
+            $linea->esAbono()
+            && $this->mismoBanco($linea->banco, $flujo->banco_receptor ?? null)
+            && $this->mismoTitular(
+                $linea->titular,
+                $flujo->titular_receptor ?? null,
+                $linea->banco,
+                $flujo->banco_receptor ?? null
+            )
+        ) {
+            return 'entrada';
+        }
+
+        return null;
+    }
+
+    public function coincideTraslado(ConciliacionLinea $linea, object $flujo): bool
+    {
+        $lado = $this->ladoTraslado($linea, $flujo);
+        if ($lado === null || ! $this->montoCoincideConFlujo($linea, $flujo)) {
+            return false;
+        }
+        if (! $this->fechaCercana($linea->fecha, $flujo->fecha)) {
+            return false;
+        }
+
+        if ($lado === 'salida') {
+            return $this->referenciaTrasladoCompletaCoincide($linea->referencia, $flujo->referencia ?? null);
+        }
+
+        return $this->referenciaTrasladoUltimosCuatroCoincide($linea->referencia, $flujo->referencia ?? null);
+    }
+
+    public function referenciaTrasladoCompletaCoincide(?string $referenciaBanco, ?string $referenciaTraslado): bool
+    {
+        $banco = $this->normalizarReferencia($referenciaBanco);
+        $traslado = $this->normalizarReferencia($referenciaTraslado);
+
+        return $banco !== '' && $traslado !== '' && $banco === $traslado;
+    }
+
+    public function referenciaTrasladoUltimosCuatroCoincide(?string $referenciaBanco, ?string $referenciaTraslado): bool
+    {
+        $banco = $this->soloDigitos((string) $referenciaBanco);
+        $traslado = $this->soloDigitos((string) $referenciaTraslado);
+        if (strlen($banco) < 4 || strlen($traslado) < 4) {
+            return false;
+        }
+
+        return substr($banco, -4) === substr($traslado, -4);
+    }
+
+    private function montoCoincideConFlujo(ConciliacionLinea $linea, object $flujo): bool
+    {
+        foreach ([$flujo->monto_bs ?? null, $flujo->monto ?? null] as $monto) {
+            if ($monto !== null && $this->mismosMontos($linea->monto, $monto)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function aCentavos(float|int|string|null $valor): float
     {
         if ($valor === null || $valor === '') {
@@ -305,6 +398,11 @@ class BankReconciliationMatcher
         $digits = preg_replace('/\D+/', '', $valor) ?? '';
 
         return ltrim($digits, '0');
+    }
+
+    private function normalizarReferencia(?string $valor): string
+    {
+        return strtoupper(preg_replace('/[^A-Z0-9]+/i', '', trim((string) $valor)) ?? '');
     }
 
     private function normalizarBanco(?string $banco): string

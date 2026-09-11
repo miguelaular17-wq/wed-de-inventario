@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\InventoryController;
 use App\Http\Controllers\Api\V1\RequisitionController;
+use App\Http\Controllers\Api\V1\ServiceOrderController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -11,6 +12,14 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
+
+        Route::prefix('servicio/celulares')->group(function () {
+            Route::get('/opciones', [ServiceOrderController::class, 'options']);
+            Route::get('/ordenes', [ServiceOrderController::class, 'index']);
+            Route::post('/ordenes', [ServiceOrderController::class, 'store']);
+            Route::get('/ordenes/{orden}', [ServiceOrderController::class, 'show'])->whereNumber('orden');
+            Route::post('/ordenes/{orden}/estado', [ServiceOrderController::class, 'changeStatus'])->whereNumber('orden');
+        });
 
         Route::middleware('permission:operacion')->group(function () {
             Route::get('/sedes', [InventoryController::class, 'sedes']);

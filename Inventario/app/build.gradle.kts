@@ -5,7 +5,7 @@ plugins {
 }
 
 val configuredBaseUrl = providers.gradleProperty("INVENTARIO_BASE_URL")
-    .orElse("https://example.com/")
+    .orElse("https://wed-de-inventario.onrender.com/")
     .map { if (it.endsWith("/")) it else "$it/" }
 
 android {

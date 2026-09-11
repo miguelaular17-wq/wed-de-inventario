@@ -34,14 +34,8 @@ class AuthController extends Controller
             ]);
         }
 
-        if (! $user->canAccess('operacion')) {
-            return response()->json([
-                'message' => 'Esta cuenta no tiene permiso para usar inventario y requisiciones.',
-            ], 403);
-        }
-
         $deviceName = trim((string) ($data['device_name'] ?? 'Android'));
-        $token = $user->createToken($deviceName !== '' ? $deviceName : 'Android', ['operacion']);
+        $token = $user->createToken($deviceName !== '' ? $deviceName : 'Android', ['mobile']);
 
         if (Schema::hasTable('login_logs')) {
             LoginLog::create([
