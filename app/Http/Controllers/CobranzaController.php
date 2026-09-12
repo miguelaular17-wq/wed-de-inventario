@@ -436,12 +436,12 @@ class CobranzaController extends Controller
         }
     }
 
-    public function descargarReportePdf(Request $request, CobranzaHeaderHydrator $encabezados) {
+    public function descargarReportePdf(Request $request, CobranzaHeaderHydrator $encabezados, CobranzaIndicatorService $indicadores) {
         $ultimaFecha = \App\Models\HistorialCobranza::max('fecha_registro');
-        
+
         $mostrar_clientes = $this->resolverMostrarClientes($request);
         $personalCodes = \App\Models\ClientePersonal::pluck('codigo_cliente')->toArray();
-        
+
         $historialActual = collect();
         if ($ultimaFecha) {
             $query = \App\Models\HistorialCobranza::cuentasOperativas()->where('fecha_registro', $ultimaFecha);
@@ -454,62 +454,22 @@ class CobranzaController extends Controller
             $historialActual = $encabezados->anexar($query->get(), $ultimaFecha);
         }
 
-        $gran_total_saldo = 0;
-        $gran_total_clientes = 0;
-        
-        $estatus_totales = [
-            'CRITICO' => ['clientes' => 0, 'saldo' => 0],
-            'MOROSO' => ['clientes' => 0, 'saldo' => 0],
-            'RECIENTE' => ['clientes' => 0, 'saldo' => 0],
-            'APARTADO' => ['clientes' => 0, 'saldo' => 0],
-        ];
+        $resumenIndicadores = $indicadores->calcular($historialActual, $personalCodes);
+        $porSede = $resumenIndicadores['por_sede'];
+        $porEstatus = $resumenIndicadores['por_estatus'];
+        $gran_total_saldo = $resumenIndicadores['total_saldo'];
+        $gran_total_clientes = $resumenIndicadores['total_clientes'];
 
-        $agrupadoPorSede = $historialActual->groupBy('sede_nombre');
-        $porSede = [];
-
-        foreach ($agrupadoPorSede as $sede => $registrosSede) {
-            $saldoSede = $registrosSede->sum('saldo');
-            $clientesSede = $registrosSede->count();
-
-            $porSede[] = (object) [
-                'sede_nombre' => $sede,
-                'total_clientes' => $clientesSede,
-                'total_saldo' => $saldoSede
-            ];
-            
-            $gran_total_saldo += $saldoSede;
-            $gran_total_clientes += $clientesSede;
-
-            foreach ($registrosSede as $r) {
-                $est = strtoupper($r->estatus) ?: 'RECIENTE';
-                if (!isset($estatus_totales[$est])) {
-                    $est = 'RECIENTE';
-                }
-                $estatus_totales[$est]['clientes'] += 1;
-                $estatus_totales[$est]['saldo'] += $r->saldo;
-            }
-        }
-
-        $porEstatus = [];
-        foreach($estatus_totales as $k => $v) {
-            $porEstatus[] = (object) [
-                'estatus' => $k,
-                'total_clientes' => $v['clientes'],
-                'total_saldo' => $v['saldo']
-            ];
-        }
-
-        usort($porSede, function($a, $b) {
-            return strcmp($a->sede_nombre, $b->sede_nombre);
-        });
-
-        // 2. Clientes por sede (con notas)
+        // Detalle de clientes por sede (con notas), mismo alcance de tipo de cliente.
         $clientesPorSede = [];
-
-        // Re-fetch historial with notes joined, so we have nota_anclada and es_personal
         $historialConNotas = \App\Models\HistorialCobranza::cuentasOperativas()->where('fecha_registro', $ultimaFecha);
         $this->excludePagadasManualmente($historialConNotas);
         $this->joinNotas($historialConNotas);
+        if ($mostrar_clientes === 'regulares') {
+            $historialConNotas->whereNotIn('historial_cobranzas.codigo_cliente', $personalCodes);
+        } elseif ($mostrar_clientes === 'personales') {
+            $historialConNotas->whereIn('historial_cobranzas.codigo_cliente', $personalCodes);
+        }
         $historialConNotas = $historialConNotas
             ->select([
                 'historial_cobranzas.*',
@@ -521,31 +481,30 @@ class CobranzaController extends Controller
             ->filter(fn ($r) => (float) $r->monto_neto > 0 || (float) $r->saldo > 0)
             ->values();
 
-        if ($mostrar_clientes === 'regulares') {
-            $historialConNotas = $historialConNotas->filter(fn($r) => !in_array($r->codigo_cliente, $personalCodes));
-        } elseif ($mostrar_clientes === 'personales') {
-            $historialConNotas = $historialConNotas->filter(fn($r) => in_array($r->codigo_cliente, $personalCodes));
-        }
-
         $agrupadoConNotas = $historialConNotas->groupBy('sede_nombre');
         foreach ($agrupadoConNotas as $sede => $clientesSede) {
             $clientesPorSede[$sede] = $clientesSede->sortBy('nombre_cliente')->values();
         }
-        
-        // sort array keys logically
         ksort($clientesPorSede);
 
-        // 3. Clientes Global Ordenados de Mayor a Menor Saldo
         $clientesGlobalDesc = $historialConNotas->sortByDesc('saldo')->values();
+        $alcanceLabel = \App\Models\User::COBRANZA_CLIENTES_OPCIONES[$mostrar_clientes] ?? 'Todos';
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('cobranza.pdf', compact(
-            'porSede', 'porEstatus', 'gran_total_saldo', 'gran_total_clientes', 'ultimaFecha', 'clientesPorSede', 'clientesGlobalDesc'
+            'porSede',
+            'porEstatus',
+            'gran_total_saldo',
+            'gran_total_clientes',
+            'ultimaFecha',
+            'clientesPorSede',
+            'clientesGlobalDesc',
+            'mostrar_clientes',
+            'alcanceLabel'
         ));
 
-        // Use landscape or portrait depending on layout, we will use portrait for the lists
         $pdf->setPaper('A4', 'portrait');
 
-        return $pdf->download('Reporte_Cobranza_' . date('Y_m_d') . '.pdf');
+        return $pdf->download('Reporte_Cobranza_'.$mostrar_clientes.'_'.date('Y_m_d').'.pdf');
     }
 
     public function marcarPersonal(Request $request) {

@@ -8,7 +8,7 @@
         <h2 style="color: var(--blue); font-weight: 600; margin: 0;">Dashboard Global de Cobranza</h2>
         
         <div style="display: flex; gap: 10px;">
-            <a href="{{ route('cobranza.pdf', ['mostrar_clientes' => request('mostrar_clientes', 'todos')]) }}" target="_blank" class="btn" style="background-color: #dc3545; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px; text-decoration: none;">
+            <a href="{{ route('cobranza.pdf', ['mostrar_clientes' => $mostrar_clientes ?? 'todos']) }}" target="_blank" class="btn" style="background-color: #dc3545; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px; text-decoration: none;">
                 📄 Descargar PDF
             </a>
             <form action="{{ route('cobranza.guardar_resumen') }}" method="POST">

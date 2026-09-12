@@ -34,6 +34,9 @@
         @if (session('status'))
             <div class="success">{{ session('status') }}</div>
         @endif
+        @if (session('error'))
+            <div class="errors">{{ session('error') }}</div>
+        @endif
         @if ($errors->any())
             <div class="errors">
                 @foreach ($errors->all() as $error)

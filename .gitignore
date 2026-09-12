@@ -45,3 +45,6 @@ dump_*.php
 /productos*.json
 /gastos_dump.json
 /output.txt
+
+# PHP portable usado solo para exportar precios
+/scripts/tools/

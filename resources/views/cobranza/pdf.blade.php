@@ -187,7 +187,7 @@
         </div>
         <div class="header-titles">
             <h1>Reporte Global de Cobranza</h1>
-            <h2>Resumen ejecutivo al {{ date('d/m/Y') }}</h2>
+            <h2>Resumen ejecutivo al {{ date('d/m/Y') }} · {{ $alcanceLabel ?? 'Todos' }}</h2>
         </div>
         <div class="header-right">
             Generado:<br>{{ date('d/m/Y H:i') }}

@@ -16,13 +16,13 @@ class GerencialAnalyticsService
         private GerencialAbcService $abc,
     ) {}
 
-    public function devoluciones(array $periodo, ?string $sede, ?string $vendedor, ?string $producto, bool $conDetalle = false): array
+    public function devoluciones(array $periodo, ?string $sede, ?string $categoria, ?string $vendedor, ?string $producto, bool $conDetalle = false): array
     {
         $sedes = $this->base->filtrarSedes($sede);
         $precio = $this->campoPrecio();
         $costo = Schema::hasColumn('ventas_detalle', 'costo_unitario') ? 'COALESCE(vd.costo_unitario, 0)' : '0';
-        $usaLineas = (bool) ($vendedor || $producto);
-        $ventas = $this->base->kpisPorSede($periodo['inicio'], $periodo['fin'], $sedes, $usaLineas, null, $vendedor, $producto);
+        $usaLineas = (bool) ($categoria || $vendedor || $producto);
+        $ventas = $this->base->kpisPorSede($periodo['inicio'], $periodo['fin'], $sedes, $usaLineas, $categoria, $vendedor, $producto);
         $ventasUsd = collect($ventas)->sum('ventas_usd');
 
         $kpis = [
@@ -44,7 +44,7 @@ class GerencialAnalyticsService
             return compact('kpis', 'porMotivo', 'porSede', 'porProducto', 'motivoTop', 'detalle');
         }
 
-        $dev = $this->base->queryLineas($periodo['inicio'], $periodo['fin'], $sedes, null, $vendedor, $producto)
+        $dev = $this->base->queryLineas($periodo['inicio'], $periodo['fin'], $sedes, $categoria, $vendedor, $producto)
             ->whereRaw("UPPER(TRIM(vd.tipo_documento)) = 'DEV'");
 
         $agg = (clone $dev)
@@ -93,7 +93,7 @@ class GerencialAnalyticsService
         $kpis['ventas_usd'] = round($porSede->sum('ventas_usd'), 2);
         $kpis['pct_ventas'] = $kpis['ventas_usd'] > 0 ? round($kpis['usd'] / $kpis['ventas_usd'] * 100, 1) : 0.0;
 
-        $mix = $this->base->queryLineas($periodo['inicio'], $periodo['fin'], $sedes, null, $vendedor, $producto)
+        $mix = $this->base->queryLineas($periodo['inicio'], $periodo['fin'], $sedes, $categoria, $vendedor, $producto)
             ->selectRaw('COALESCE(vd.nombre_producto, vd.codigo_producto, \'Sin nombre\') as nombre')
             ->selectRaw('COALESCE(vd.codigo_producto, \'\') as codigo')
             ->selectRaw("SUM(CASE WHEN UPPER(vd.tipo_documento)='FAC' THEN ABS(vd.cantidad) ELSE 0 END) as vendidas")

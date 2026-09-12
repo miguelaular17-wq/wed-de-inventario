@@ -370,6 +370,9 @@ Route::get('/catalogo/cliente/{token}', [\App\Http\Controllers\CatalogoControlle
 Route::middleware('auth')->group(function () {
     // Catálogo Gráfico (solo acciones protegidas)
     Route::get('/catalogo/pdf', [\App\Http\Controllers\CatalogoController::class, 'exportPdf'])->name('catalogo.pdf');
+    Route::get('/catalogo/precios.xlsx', [\App\Http\Controllers\CatalogoController::class, 'exportarPrecios'])
+        ->middleware('permission:catalogo.exportar_precios')
+        ->name('catalogo.precios.export');
     Route::get('/catalogo/ir-clientes', [\App\Http\Controllers\CatalogoController::class, 'irClientes'])->name('catalogo.ir_clientes');
     Route::post('/catalogo/upload-image', [\App\Http\Controllers\CatalogoController::class, 'uploadImageByUrl'])->name('catalogo.upload_image');
 

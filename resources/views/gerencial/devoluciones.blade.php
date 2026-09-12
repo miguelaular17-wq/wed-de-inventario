@@ -105,7 +105,27 @@
     </div>
 
     <div class="nomina-card" style="margin-top:16px;">
-        <h3>Productos más devueltos</h3>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px;">
+            <h3 style="margin:0;">Productos más devueltos</h3>
+            <form method="GET" action="{{ route('gerencial.devoluciones') }}" style="display:flex; align-items:center; gap:8px;">
+                @foreach(request()->except(['categoria', 'page']) as $key => $value)
+                    @if(is_array($value))
+                        @foreach($value as $v)
+                            <input type="hidden" name="{{ $key }}[]" value="{{ $v }}">
+                        @endforeach
+                    @else
+                        <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                    @endif
+                @endforeach
+                <label for="filtro-categoria-productos" class="muted" style="font-size:.85rem; white-space:nowrap;">Categoría</label>
+                <select id="filtro-categoria-productos" name="categoria" onchange="this.form.submit()" style="min-width:180px;">
+                    <option value="">Todas</option>
+                    @foreach($catalogos['categorias'] as $cat)
+                        <option value="{{ $cat }}" @selected(($filtros['categoria'] ?? '') === $cat)>{{ $cat }}</option>
+                    @endforeach
+                </select>
+            </form>
+        </div>
         <div class="table-wrap">
             <table class="data-table">
                 <thead>

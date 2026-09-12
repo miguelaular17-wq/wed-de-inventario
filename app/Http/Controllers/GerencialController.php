@@ -38,6 +38,7 @@ class GerencialController extends Controller
         $data = $analytics->devoluciones(
             $ctx['periodo'],
             $ctx['filtros']['sede'],
+            $ctx['filtros']['categoria'],
             $ctx['filtros']['vendedor'],
             $ctx['filtros']['producto'],
             $conDetalle

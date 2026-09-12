@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\V2\Producto;
 use App\Models\V2\StockActual;
+use App\Services\ExportarPreciosDescuentoService;
 use Illuminate\Support\Facades\Cache;
 use Barryvdh\DomPDF\Facade\Pdf;
 
@@ -32,6 +33,27 @@ class CatalogoController extends Controller
         abort_unless(auth()->user()?->role === User::ROLE_ADMIN, 403);
 
         return redirect()->route('catalogo.cliente', $this->clienteToken());
+    }
+
+    public function exportarPrecios(Request $request, ExportarPreciosDescuentoService $exportador)
+    {
+        $descuento = (float) $request->query('descuento', 25);
+        if ($descuento < 0 || $descuento > 100) {
+            $descuento = 25;
+        }
+
+        try {
+            [$xlsx, $filename] = $exportador->generarXlsx($descuento);
+        } catch (\Throwable $e) {
+            return redirect()
+                ->route('catalogo.index')
+                ->with('error', $e->getMessage());
+        }
+
+        return response($xlsx, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
     }
 
     private function renderCatalogo(Request $request, bool $modoCliente, ?string $token = null)

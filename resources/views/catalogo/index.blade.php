@@ -497,7 +497,14 @@
                 @endif
             </div>
         </div>
-        <div class="catalogo-badge">{{ $productos->total() }} productos</div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            @if(!$modoCliente && auth()->check() && auth()->user()->canAccess('catalogo.exportar_precios'))
+                <a href="{{ route('catalogo.precios.export') }}" class="btn-custom btn-primary-custom">
+                    Excel precios (−25%)
+                </a>
+            @endif
+            <div class="catalogo-badge">{{ $productos->total() }} productos</div>
+        </div>
     </div>
 
     @if(!$modoCliente && auth()->user()?->role === 'admin' && !empty($enlaceCliente))

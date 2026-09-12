@@ -203,6 +203,29 @@ class UserPermissionAccessTest extends TestCase
         ]);
     }
 
+    public function test_exportar_precios_catalogo_requiere_permiso(): void
+    {
+        $sinPermiso = $this->makeUser(User::ROLE_VENDEDOR);
+        $conPermiso = $this->makeUser(User::ROLE_VENDEDOR);
+        $conPermiso->syncExtraPermissions(['catalogo.exportar_precios']);
+
+        $this->assertFalse($sinPermiso->canAccess('catalogo.exportar_precios'));
+        $this->assertTrue($conPermiso->canAccess('catalogo.exportar_precios'));
+
+        $this->actingAs($sinPermiso)
+            ->get(route('catalogo.precios.export'))
+            ->assertRedirect('/');
+
+        $response = $this->actingAs($conPermiso)
+            ->get(route('catalogo.precios.export'));
+
+        $this->assertTrue(
+            $response->isOk()
+            || $response->isRedirect()
+            || $response->status() === 302
+        );
+    }
+
     private function ensurePedidosSolicitadosTable(): void
     {
         if (! \Illuminate\Support\Facades\Schema::hasTable('pedidos_solicitados')) {

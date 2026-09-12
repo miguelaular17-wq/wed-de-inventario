@@ -18,6 +18,7 @@ return [
         'compras.reporte_sede' => 'Reporte diario de pedidos por sede',
         'catalogo.existencias' => 'Catálogo: tabla de stock (existencias por sede)',
         'catalogo.precios' => 'Catálogo: ver precios y Cashea',
+        'catalogo.exportar_precios' => 'Catálogo: descargar Excel de precios con descuento',
         'finanzas.ver' => 'Flujo de caja y gastos fijos (ver)',
         'finanzas.editar' => 'Flujo de caja y gastos fijos (editar)',
         'finanzas.eliminar' => 'Eliminar egresos, traslados, divisas y avances',
@@ -47,7 +48,7 @@ return [
      * Las claves deben existir en "assignable".
      */
     'groups' => [
-        'Operaciones' => ['operacion', 'catalogo.existencias', 'catalogo.precios'],
+        'Operaciones' => ['operacion', 'catalogo.existencias', 'catalogo.precios', 'catalogo.exportar_precios'],
         'Compras y Marketing' => [
             'compras',
             'compras.distribucion',

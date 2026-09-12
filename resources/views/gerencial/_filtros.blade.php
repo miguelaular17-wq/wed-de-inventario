@@ -40,7 +40,7 @@
                 @endforeach
             </select>
         </div>
-        @if(in_array($modo, ['completo', 'valorizados', 'rentabilidad'], true))
+        @if(in_array($modo, ['completo', 'valorizados', 'rentabilidad', 'devoluciones'], true))
             <div class="field">
                 <label>Categoría</label>
                 <select name="categoria">
