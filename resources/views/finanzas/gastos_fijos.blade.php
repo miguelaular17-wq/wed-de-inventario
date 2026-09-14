@@ -1646,7 +1646,7 @@ function saveNewRow(btn) {
 }
 
 // ── Lógica de Eliminar Fila ──
-function deleteRow(tIdx, fIdx, customId, btn) {
+function deleteRow(gastoId, btn) {
     if (!confirm("¿Seguro que deseas eliminar este gasto de la lista?")) return;
 
     btn.disabled = true;
@@ -1656,19 +1656,20 @@ function deleteRow(tIdx, fIdx, customId, btn) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
         body: JSON.stringify({
-            tabla_idx: tIdx,
-            fila_idx: fIdx,
-            custom_id: customId
+            gasto_fijo_id: gastoId
         })
     }).then(async res => {
         if (!res.ok) throw new Error(await res.text());
         return res.json();
     }).then(data => {
         if (data.ok) {
-            // Ocultar la fila visualmente o recargar
-            btn.closest('tr').remove();
-            // Lo más seguro es recargar para que los totales cuadren
-            // window.location.reload(); 
+            const row = btn.closest('tr');
+            const table = row?.closest('table');
+            row?.remove();
+            // Recalcular totales de la tabla si quedan filas de datos
+            if (table) {
+                window.location.reload();
+            }
         } else {
             alert("Error al eliminar el gasto.");
             btn.disabled = false;
@@ -1676,7 +1677,7 @@ function deleteRow(tIdx, fIdx, customId, btn) {
         }
     }).catch(err => {
         console.error(err);
-        alert("Error de conexión.");
+        alert("Error al eliminar el gasto.");
         btn.disabled = false;
         btn.style.opacity = '1';
     });

@@ -639,6 +639,12 @@ class FinanzasController extends Controller
 
             $this->syncTotalesSalidas($data['fecha']);
 
+            if ((int) ($data['cuenta_por_pagar_id'] ?? 0) > 0) {
+                return redirect()
+                    ->route('finanzas.cuentas_por_pagar')
+                    ->with('success', 'Pago de cuenta por pagar registrado correctamente.');
+            }
+
             return redirect()->back()->with('success', 'Egreso registrado correctamente.');
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Error registrando egreso: ' . $e->getMessage());

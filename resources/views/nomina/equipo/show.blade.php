@@ -46,6 +46,7 @@
                 @forelse($registros as $registro)
                     @php
                         $desglose = $registro->desglose();
+                        $lineasDesc = $registro->lineasDescuentoTotal();
                     @endphp
                     <tr>
                         <td>
@@ -53,12 +54,42 @@
                             <div class="muted" style="font-size:.75rem;">{{ $registro->empleado?->nombreSede() }} · {{ $registro->empleado?->nombreCargo() }}</div>
                         </td>
                         <td>${{ number_format($desglose['horas_extras'] ?? 0, 2) }}</td>
-                        <td>${{ number_format($desglose['inasistencias'] ?? 0, 2) }}</td>
-                        <td>${{ number_format($desglose['abonos_sueldo'] ?? 0, 2) }}</td>
+                        <td>
+                            @include('nomina.partials.descuento-comentarios', [
+                                'monto' => $desglose['inasistencias'] ?? 0,
+                                'lineas' => collect($lineasDesc)->where('grupo', 'inasistencia')->values()->all(),
+                                'titulo' => 'Inasistencias',
+                            ])
+                        </td>
+                        <td>
+                            @include('nomina.partials.descuento-comentarios', [
+                                'monto' => $desglose['abonos_sueldo'] ?? 0,
+                                'lineas' => collect($lineasDesc)->where('grupo', 'adelanto')->values()->all(),
+                                'titulo' => 'Adelantos',
+                            ])
+                        </td>
                         <td>${{ number_format($registro->montoBonificaciones(), 2) }}</td>
-                        <td>${{ number_format($registro->montoDeduccionesAjuste(), 2) }}</td>
-                        <td>${{ number_format($desglose['prestamos'] ?? 0, 2) }}</td>
-                        <td>${{ number_format($registro->total_deducciones, 2) }}</td>
+                        <td>
+                            @include('nomina.partials.descuento-comentarios', [
+                                'monto' => $registro->montoDeduccionesAjuste(),
+                                'lineas' => collect($lineasDesc)->whereIn('grupo', ['deduccion', 'mercancia'])->values()->all(),
+                                'titulo' => 'Deducciones',
+                            ])
+                        </td>
+                        <td>
+                            @include('nomina.partials.descuento-comentarios', [
+                                'monto' => $desglose['prestamos'] ?? 0,
+                                'lineas' => collect($lineasDesc)->where('grupo', 'prestamo')->values()->all(),
+                                'titulo' => 'Préstamos',
+                            ])
+                        </td>
+                        <td>
+                            @include('nomina.partials.descuento-comentarios', [
+                                'monto' => $registro->total_deducciones,
+                                'lineas' => $lineasDesc,
+                                'titulo' => 'Total deducciones',
+                            ])
+                        </td>
                         <td><strong>${{ number_format($registro->total_pagar, 2) }}</strong></td>
                     </tr>
                 @empty

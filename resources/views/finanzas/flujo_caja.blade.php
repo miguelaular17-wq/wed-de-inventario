@@ -715,65 +715,6 @@
     </div>
 </div>
 
-    <!-- CUENTAS POR PAGAR -->
-    <div class="dashboard-container" style="margin-top: 10px;">
-        <h3 style="margin-bottom: 15px; color: #9a3412; display: flex; align-items: center; gap: 8px;">
-            CUENTAS POR PAGAR
-        </h3>
-        <div class="panel" style="padding: 0; overflow: hidden; margin-bottom: 30px; border: 1.5px solid #fed7aa;">
-            <div class="table-wrap">
-                <table class="data-table" style="width: 100%;">
-                    <thead>
-                        <tr style="background: #fff7ed;">
-                            <th style="width: 100px;">Fecha</th>
-                            <th>Beneficiario</th>
-                            <th>Tipo Gasto</th>
-                            <th>Motivo</th>
-                            <th class="col-number" style="text-align: right;">Monto total</th>
-                            <th class="col-number" style="text-align: right;">Pagado</th>
-                            <th class="col-number" style="text-align: right;">Saldo</th>
-                            <th>Estado</th>
-                            <th style="text-align: center; width: 160px;">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($cuentas_por_pagar as $cuentaPp)
-                            @php
-                                $simbolo = strtoupper((string) $cuentaPp->moneda) === 'BS' ? 'Bs. ' : '$';
-                            @endphp
-                            <tr style="cursor: pointer;" onclick="openHistorialCuentaPorPagar({{ (int) $cuentaPp->id }})">
-                                <td>{{ optional($cuentaPp->fecha)->format('Y-m-d') ?? $cuentaPp->fecha }}</td>
-                                <td>{{ $cuentaPp->beneficiario ?: '-' }}</td>
-                                <td>{{ $cuentaPp->tipo_gasto ?: '-' }}</td>
-                                <td>{{ $cuentaPp->motivo ?: '-' }}</td>
-                                <td class="col-number" style="text-align: right; font-weight: 500;">{{ $simbolo }}{{ number_format((float) $cuentaPp->monto_total, 2) }}</td>
-                                <td class="col-number" style="text-align: right;">{{ $simbolo }}{{ number_format((float) $cuentaPp->monto_pagado, 2) }}</td>
-                                <td class="col-number" style="text-align: right; font-weight: 600; color: {{ $cuentaPp->estaAbierta() ? '#c2410c' : '#166534' }};">{{ $simbolo }}{{ number_format((float) $cuentaPp->saldo, 2) }}</td>
-                                <td>
-                                    @if($cuentaPp->estaAbierta())
-                                        <span style="background:#ffedd5;color:#9a3412;font-size:0.75rem;padding:2px 8px;border-radius:999px;">Abierta</span>
-                                    @else
-                                        <span style="background:#dcfce7;color:#166534;font-size:0.75rem;padding:2px 8px;border-radius:999px;">Pagada</span>
-                                    @endif
-                                </td>
-                                <td style="text-align: center; white-space: nowrap;" onclick="event.stopPropagation();">
-                                    <button type="button" onclick="openHistorialCuentaPorPagar({{ (int) $cuentaPp->id }})" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 3px 8px; font-size: 0.8rem; cursor: pointer; margin-right: 4px;">Historial</button>
-                                    @if($cuentaPp->estaAbierta() && !auth()->user()->isAuditor())
-                                        <button type="button" onclick="openPagoCuentaPorPagar({{ (int) $cuentaPp->id }})" style="background: #1a4273; color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 0.8rem; cursor: pointer;">Pagar</button>
-                                    @endif
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="9" style="text-align: center; color: #64748b; padding: 16px;">No hay cuentas por pagar. Márcalas al registrar un egreso con el monto total del gasto.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
     <!-- EGRESOS EN DIVISAS -->
     <div class="dashboard-container" style="margin-top: 10px;">
         <h3 style="margin-bottom: 15px; color: #166534; display: flex; align-items: center; gap: 8px;">
@@ -1978,6 +1919,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (submitBtn) submitBtn.innerText = 'Registrar pago';
         document.getElementById('nuevoEgresoModal').style.display = 'flex';
     };
+
+    (function autoAbrirPagoCuenta() {
+        const id = new URLSearchParams(window.location.search).get('pagar_cuenta');
+        if (!id) return;
+        setTimeout(function () {
+            if (typeof window.openPagoCuentaPorPagar === 'function') {
+                window.openPagoCuentaPorPagar(id);
+            }
+        }, 200);
+    })();
 
     // ===== MULTI-COMPROBANTE (máx 6) =====
     const MAX_COMP = 6;

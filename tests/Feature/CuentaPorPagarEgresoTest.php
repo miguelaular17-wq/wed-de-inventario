@@ -60,7 +60,7 @@ class CuentaPorPagarEgresoTest extends TestCase
             'cuenta_por_pagar_id' => $cuenta->id,
             'monto_usd' => 300,
             'motivo' => 'Segunda cuota',
-        ]))->assertRedirect();
+        ]))->assertRedirect(route('finanzas.cuentas_por_pagar'));
 
         $cuenta->refresh();
         $this->assertEquals(500, (float) $cuenta->monto_pagado);

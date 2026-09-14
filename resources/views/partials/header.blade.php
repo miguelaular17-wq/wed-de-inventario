@@ -144,6 +144,7 @@
             : $drop('Compras', $comprasItems);
         $nav[] = $drop('Finanzas', [
             $link('Flujo de Caja', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*')),
+            $link('Cuentas por Pagar', route('finanzas.cuentas_por_pagar'), request()->routeIs('finanzas.cuentas_por_pagar')),
             $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*')),
             $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones', 'finanzas.conciliaciones.*')),
             $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*')),
@@ -164,6 +165,7 @@
         }
         if ($u->canAccess('finanzas.ver')) {
             $nav[] = $link('Flujo de Caja', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*'));
+            $nav[] = $link('Cuentas por Pagar', route('finanzas.cuentas_por_pagar'), request()->routeIs('finanzas.cuentas_por_pagar'));
             $nav[] = $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*'));
         }
         if ($u->canAccess('conciliaciones')) {

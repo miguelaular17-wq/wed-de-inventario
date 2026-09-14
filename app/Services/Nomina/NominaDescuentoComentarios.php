@@ -24,14 +24,26 @@ class NominaDescuentoComentarios
     public function lineasNomina(NominaRegistro $registro): array
     {
         $desglose = $registro->desglose();
-        if (! empty($desglose['descuentos_lineas']) && is_array($desglose['descuentos_lineas'])) {
-            return $this->normalizar($desglose['descuentos_lineas']);
-        }
-
         $periodo = $registro->periodo;
         $empleado = $registro->empleado;
         if (! $periodo || ! $empleado) {
             return [];
+        }
+
+        if (! empty($desglose['descuentos_lineas']) && is_array($desglose['descuentos_lineas'])) {
+            $lineas = $this->normalizar($desglose['descuentos_lineas']);
+            $tieneAdelanto = collect($lineas)->contains(fn (array $l) => $l['grupo'] === 'adelanto');
+            $montoAdelanto = (float) ($desglose['abonos_sueldo'] ?? 0);
+            // Snapshot viejo o incompleto: reconstruir adelantos desde la tabla real.
+            if ($montoAdelanto > 0.009 && ! $tieneAdelanto) {
+                $vivos = array_values(array_filter(
+                    $this->lineasNominaDesdePeriodo($periodo, $empleado),
+                    fn (array $l) => $l['grupo'] === 'adelanto'
+                ));
+                $lineas = array_values(array_merge($lineas, $vivos));
+            }
+
+            return $lineas;
         }
 
         return $this->lineasNominaDesdePeriodo($periodo, $empleado);

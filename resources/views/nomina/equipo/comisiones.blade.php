@@ -89,7 +89,13 @@
                         <td>${{ number_format($abonos, 2) }}</td>
                         <td>${{ number_format($comision + $abonos, 2) }}</td>
                         <td>${{ number_format($retencion, 2) }}</td>
-                        <td>${{ number_format($descuentos, 2) }}</td>
+                        <td>
+                            @include('nomina.partials.descuento-comentarios', [
+                                'monto' => $descuentos,
+                                'lineas' => $liq->lineasDescuento(),
+                                'titulo' => 'Desc. / préstamos',
+                            ])
+                        </td>
                         <td><strong>${{ number_format($pagar, 2) }}</strong></td>
                     </tr>
                 @empty
@@ -129,7 +135,13 @@
                             <td>${{ number_format($liq->egresos058(), 2) }}</td>
                             <td>${{ number_format($comisionSt, 2) }}</td>
                             <td>$0.00</td>
-                            <td>${{ number_format($descuentosSt, 2) }}</td>
+                            <td>
+                                @include('nomina.partials.descuento-comentarios', [
+                                    'monto' => $descuentosSt,
+                                    'lineas' => $liq->lineasDescuento(),
+                                    'titulo' => 'Desc. / préstamos',
+                                ])
+                            </td>
                             <td><strong>${{ number_format($pagarSt, 2) }}</strong></td>
                         </tr>
                     @endforeach

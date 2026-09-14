@@ -1,16 +1,18 @@
 @php
     $monto = (float) ($monto ?? 0);
-    $lineas = $lineas ?? [];
+    $lineas = array_values($lineas ?? []);
     $titulo = $titulo ?? 'Descuentos';
+    // Si hay monto pero no llegaron líneas (snapshot viejo / filtro), no ocultar el click.
+    $mostrarDetalle = $monto != 0.0;
 @endphp
-@if($monto == 0.0 || $lineas === [])
+@if(! $mostrarDetalle)
     ${{ number_format($monto, 2) }}
 @else
     <button
         type="button"
         class="nomina-desc-link"
         data-titulo="{{ $titulo }}"
-        data-lineas="{{ e(json_encode($lineas, JSON_UNESCAPED_UNICODE)) }}"
+        data-payload="{{ base64_encode(json_encode($lineas, JSON_UNESCAPED_UNICODE)) }}"
     >${{ number_format($monto, 2) }}</button>
 @endif
 
@@ -69,18 +71,31 @@
         function cerrar() { wrap.classList.remove('is-open'); }
         wrap.addEventListener('click', function (e) { if (e.target === wrap) cerrar(); });
         wrap.querySelector('.cerrar').addEventListener('click', cerrar);
+
+        function leerLineas(btn) {
+            const raw = btn.getAttribute('data-payload') || '';
+            if (!raw) return [];
+            try {
+                const json = atob(raw);
+                const parsed = JSON.parse(json);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (err) {
+                console.error('No se pudieron leer comentarios de descuento', err);
+                return [];
+            }
+        }
+
         document.addEventListener('click', function (e) {
             const btn = e.target.closest('.nomina-desc-link');
             if (!btn) return;
-            let lineas = [];
-            try { lineas = JSON.parse(btn.getAttribute('data-lineas') || '[]'); } catch (err) { lineas = []; }
+            const lineas = leerLineas(btn);
             titulo.textContent = btn.getAttribute('data-titulo') || 'Descuentos';
             if (!lineas.length) {
-                body.innerHTML = '<p class="muted">No hay comentarios guardados para este descuento.</p>';
+                body.innerHTML = '<p class="muted">No se encontró el detalle de este descuento. Si es un adelanto, revisa el motivo en la pantalla de Adelantos.</p>';
             } else {
                 body.innerHTML = '<table>' + lineas.map(function (l) {
-                    const comentario = (l.comentario || 'Sin comentario').replace(/</g, '&lt;');
-                    const tipo = (l.tipo || 'Descuento').replace(/</g, '&lt;');
+                    const comentario = String(l.comentario || 'Sin comentario').replace(/</g, '&lt;');
+                    const tipo = String(l.tipo || 'Descuento').replace(/</g, '&lt;');
                     const monto = Number(l.monto || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     return '<tr><td><div class="tipo">' + tipo + '</div>' + comentario + '</td><td class="monto">$' + monto + '</td></tr>';
                 }).join('') + '</table>';
