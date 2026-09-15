@@ -2,7 +2,7 @@
 
 @section('title', $empleado->nombre())
 
-@php
+    @php
     $tabs = [
         'personal' => 'Información personal',
         'laboral' => 'Información laboral',
@@ -10,8 +10,6 @@
     ];
     if ($empleado->generaComision()) {
         $tabs['comisiones'] = 'Comisiones';
-    } else {
-        $tabs['mercancia'] = 'Mercancía';
     }
     $tabs += [
         'nomina' => 'Nómina',
@@ -42,8 +40,6 @@
         <div class="nomina-kpi"><span>Ventas del período</span><strong>${{ number_format($ventasResumen['total'] ?? 0, 2) }}</strong></div>
         @if($empleado->generaComision())
             <div class="nomina-kpi"><span>Comisiones tienda</span><strong>${{ number_format($comisionQuincena, 2) }}</strong></div>
-        @else
-            <div class="nomina-kpi"><span>Mercancía pendiente</span><strong>${{ number_format($resumenMercancia['pendiente'] ?? 0, 2) }}</strong></div>
         @endif
         <div class="nomina-kpi"><span>Préstamos activos</span><strong>{{ $resumenPrestamos['cantidad'] }}</strong></div>
         <div class="nomina-kpi"><span>Saldo préstamos</span><strong>${{ number_format($resumenPrestamos['saldo'], 2) }}</strong></div>
@@ -195,46 +191,6 @@
         </table>
     @endif
 
-    @if($tab === 'mercancia')
-        <div class="nomina-card" style="margin-top:16px;">
-            <h3>Descuentos de mercancía</h3>
-            <p class="muted">Registra lo que el empleado se lleva de la tienda. El monto se descuenta del sueldo al calcular esa quincena. Puedes cargar varios movimientos o un parcial.</p>
-            <form method="POST" action="{{ route('nomina.mercancia.store', $empleado) }}" class="nomina-form-grid">
-                @csrf
-                <div class="field"><label>Fecha</label><input type="date" name="fecha" value="{{ now()->format('Y-m-d') }}" required></div>
-                <div class="field"><label>Monto a descontar (USD)</label><input type="number" name="monto" step="0.01" min="0.01" required></div>
-                <div class="field field-wide"><label>Detalle</label><input name="motivo" placeholder="Ej. celular, accesorios, abono parcial"></div>
-                <div class="field" style="display:flex;align-items:flex-end;"><button class="btn primary" type="submit">Registrar descuento</button></div>
-            </form>
-        </div>
-        <table class="data-table" style="margin-top:12px;">
-            <thead><tr><th>Fecha</th><th>Quincena</th><th>Monto</th><th>Estado</th><th>Usuario</th><th>Detalle</th><th></th></tr></thead>
-            <tbody>
-                @forelse($empleado->descuentosMercancia as $item)
-                    <tr>
-                        <td>{{ $item->fecha->format('d/m/Y') }}</td>
-                        <td>{{ $item->etiqueta }}</td>
-                        <td>${{ number_format($item->monto, 2) }}</td>
-                        <td>{{ $item->estado }}{{ $item->nomina_periodo_id ? ' · nómina #'.$item->nomina_periodo_id : '' }}</td>
-                        <td>{{ $item->creador?->name ?: '—' }}</td>
-                        <td>{{ $item->motivo ?: '—' }}</td>
-                        <td>
-                            @if($item->isPendiente())
-                                <form method="POST" action="{{ route('nomina.mercancia.cancelar', $item) }}" onsubmit="return confirm('¿Cancelar este descuento de mercancía?')">
-                                    @csrf
-                                    <button class="btn secondary" type="submit">Cancelar</button>
-                                </form>
-                            @endif
-                        </td>
-                    </tr>
-                @empty
-                    <tr><td colspan="7" class="muted">Sin descuentos de mercancía.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
-        <p class="muted" style="margin-top:8px;">Pendiente esta quincena: <strong>${{ number_format($mercanciaPendiente, 2) }}</strong>. Al calcular la nómina se aplica una sola vez.</p>
-    @endif
-
     @if($tab === 'comisiones')
         <div class="nomina-card" style="margin-top:16px;">
             <h3>Liquidaciones</h3>
@@ -300,10 +256,9 @@
                         <li>Adelantos de quincena pendientes: ${{ number_format($abonosPendientes, 2) }}</li>
                         <li>Préstamos (cuota): se aplicará al cerrar la quincena</li>
                         <li>Ausencias: {{ $ausenciasTxt }}</li>
-                        @if($empleado->generaComision())
-                            <li>Otras deducciones: ${{ number_format(($deduccionesPendientes ?? 0) + ($resumenAjustes['pendiente_nomina'] ?? 0), 2) }}</li>
-                        @else
-                            <li>Mercancía pendiente: ${{ number_format($mercanciaPendiente, 2) }}</li>
+                        <li>Otras deducciones: ${{ number_format(($deduccionesPendientes ?? 0) + ($resumenAjustes['pendiente_nomina'] ?? 0), 2) }}</li>
+                        @if(($faltanteCajaPendiente ?? 0) > 0)
+                            <li>Faltante de caja pendiente: ${{ number_format($faltanteCajaPendiente, 2) }}</li>
                         @endif
                     </ul>
                 </div>

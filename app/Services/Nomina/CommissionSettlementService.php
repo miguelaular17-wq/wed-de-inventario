@@ -30,6 +30,19 @@ class CommissionSettlementService
                 ->where('periodo_id', $periodo->id)
                 ->where('tipo', 'PRESTAMO')
                 ->delete();
+
+            NominaComisionDescuento::query()
+                ->where('periodo_id', $periodo->id)
+                ->where('tipo', '!=', 'PRESTAMO')
+                ->where('estado', 'APLICADO')
+                ->whereHas('empleado', function ($q) {
+                    $q->where('modo_comision', '!=', NominaEmpleado::COMISION_NINGUNA)
+                        ->whereNotNull('modo_comision');
+                })
+                ->update([
+                    'estado' => 'PENDIENTE',
+                    'periodo_id' => null,
+                ]);
         }
     }
 

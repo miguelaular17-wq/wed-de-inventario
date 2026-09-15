@@ -338,6 +338,8 @@ private fun CreatePhoneOrderDialog(
     var clientPhone by remember { mutableStateOf("") }
     var clientId by remember { mutableStateOf("") }
     var imei by remember { mutableStateOf("") }
+    var imeiNotApplicable by remember { mutableStateOf(false) }
+    var serial by remember { mutableStateOf("") }
     var brand by remember { mutableStateOf("") }
     var model by remember { mutableStateOf("") }
     var color by remember { mutableStateOf("") }
@@ -400,12 +402,28 @@ private fun CreatePhoneOrderDialog(
                     item { PhoneField(clientId, { clientId = it }, "Cédula") }
                 }
                 item {
-                    PhoneField(
-                        imei,
-                        { imei = it.filter(Char::isDigit).take(32) },
-                        "IMEI *",
-                        KeyboardType.Number,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = imeiNotApplicable,
+                            onCheckedChange = {
+                                imeiNotApplicable = it
+                                if (it) imei = ""
+                            },
+                        )
+                        Text("IMEI no aplica")
+                    }
+                }
+                if (!imeiNotApplicable) {
+                    item {
+                        PhoneField(
+                            imei,
+                            { imei = it.filter(Char::isDigit).take(32) },
+                            "IMEI *",
+                            KeyboardType.Number,
+                        )
+                    }
+                } else {
+                    item { PhoneField(serial, { serial = it }, "Serial *") }
                 }
                 item { PhoneField(brand, { brand = it }, "Marca *") }
                 item { PhoneField(model, { model = it }, "Modelo *") }
@@ -456,10 +474,12 @@ private fun CreatePhoneOrderDialog(
                         )
                     }
                 }
-                item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = useExisting, onCheckedChange = { useExisting = it })
-                        Text("Usar este IMEI si ya está registrado")
+                if (!imeiNotApplicable) {
+                    item {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = useExisting, onCheckedChange = { useExisting = it })
+                            Text("Usar este IMEI si ya está registrado")
+                        }
                     }
                 }
             }
@@ -477,7 +497,9 @@ private fun CreatePhoneOrderDialog(
                             clientName = clientName.ifBlank { null },
                             clientPhone = clientPhone.ifBlank { null },
                             clientId = clientId.ifBlank { null },
-                            imei = imei,
+                            imei = imei.ifBlank { null },
+                            imeiNotApplicable = imeiNotApplicable,
+                            serial = serial.ifBlank { null },
                             marca = brand,
                             modelo = model,
                             color = color,

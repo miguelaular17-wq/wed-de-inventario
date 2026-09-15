@@ -2,6 +2,7 @@
 
 namespace App\Services\Nomina;
 
+use App\Models\Nomina\NominaPeriodo;
 use App\Models\Nomina\NominaPrestamo;
 use App\Models\Nomina\NominaPrestamoAbono;
 use App\Models\Nomina\NominaPrestamoCuota;
@@ -17,6 +18,7 @@ class PayrollDeductionService
         private MerchandiseDeductionService $mercancia,
         private OtherDeductionService $otrasDeducciones,
         private AjusteService $ajustes,
+        private FaltanteCajaService $faltanteCaja,
     ) {
     }
 
@@ -27,6 +29,14 @@ class PayrollDeductionService
         $this->mercancia->aplicarAPeriodo($periodoId, $inicio, $fin);
         $this->otrasDeducciones->aplicarAPeriodo($periodoId, $inicio, $fin);
         $this->ajustes->aplicarNominaAPeriodo($periodoId, $inicio, $fin);
+    }
+
+    public function aplicarFaltantesCajaSinComision(int $periodoId): void
+    {
+        $periodo = NominaPeriodo::query()->find($periodoId);
+        if ($periodo) {
+            $this->faltanteCaja->aplicarANominaSinComision($periodo);
+        }
     }
 
     /**
@@ -140,6 +150,7 @@ class PayrollDeductionService
         $this->mercancia->deshacerPeriodo($periodoId);
         $this->otrasDeducciones->deshacerPeriodo($periodoId);
         $this->ajustes->deshacerPeriodo($periodoId);
+        $this->faltanteCaja->deshacerPeriodoNomina($periodoId);
     }
 
     public function revertirPrestamosComisionDelPeriodo(int $periodoId): void

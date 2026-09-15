@@ -229,14 +229,27 @@ class PeriodoFlowTest extends TestCase
         $this->assertCount(0, $prestamoUno->cuotas);
     }
 
-    public function test_descuenta_mercancia_del_sueldo_al_calcular(): void
+    public function test_descuenta_faltante_caja_del_sueldo_si_no_tiene_comision(): void
     {
         $this->actingAs($this->rrhh);
 
-        $this->post(route('nomina.mercancia.store', $this->empleado), [
+        $cargoId = DB::table('nomina_cargos')->insertGetId([
+            'nombre' => 'Cajero',
+            'descripcion' => 'Caja',
+            'estado' => 'ACTIVO',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->empleado->update([
+            'cargo_id' => $cargoId,
+            'modo_comision' => NominaEmpleado::COMISION_NINGUNA,
+        ]);
+
+        $this->post(route('nomina.faltante_caja.store'), [
+            'empleado_id' => $this->empleado->id,
             'fecha' => '2026-08-20',
             'monto' => 40,
-            'motivo' => 'Celular',
+            'motivo' => 'Cierre corto',
         ])->assertRedirect();
 
         $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
@@ -246,20 +259,46 @@ class PeriodoFlowTest extends TestCase
         $registro = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
         $this->assertEquals(40.0, (float) $registro->total_deducciones);
         $this->assertEquals(760.0, (float) $registro->total_pagar);
-        $this->assertDatabaseHas('nomina_descuentos_mercancia', [
+        $this->assertDatabaseHas('nomina_comision_descuentos', [
             'empleado_id' => $this->empleado->id,
+            'tipo' => 'FALTANTE',
             'monto' => 40,
-            'estado' => 'DESCONTADO',
-            'nomina_periodo_id' => $periodo->id,
+            'estado' => 'APLICADO',
+            'periodo_id' => $periodo->id,
         ]);
         $desglose = json_decode((string) $registro->observaciones, true);
-        $this->assertSame('Celular', $desglose['descuentos_lineas'][0]['comentario'] ?? null);
-        $this->assertEquals(40, $desglose['descuentos_lineas'][0]['monto'] ?? null);
+        $this->assertEquals(40, $desglose['faltante_caja'] ?? null);
 
         $this->get(route('nomina.periodos.show', $periodo))
             ->assertOk()
-            ->assertSee('Celular')
+            ->assertSee('Faltante de caja')
             ->assertSee('nomina-desc-link');
+    }
+
+    public function test_deduccion_por_ajuste_no_se_duplica_en_columna_ni_total(): void
+    {
+        $this->actingAs($this->rrhh);
+
+        $this->post(route('nomina.ajustes.store', $this->empleado), [
+            'fecha' => '2026-08-20',
+            'tipo' => 'DEDUCCION',
+            'destino' => 'NOMINA',
+            'monto' => 6.66,
+            'motivo' => 'Inasistencia',
+        ])->assertRedirect();
+
+        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
+        $periodo = NominaPeriodo::query()->firstOrFail();
+        $this->post(route('nomina.periodos.calcular', $periodo))->assertRedirect();
+
+        $registro = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
+        $desglose = json_decode((string) $registro->observaciones, true);
+
+        $this->assertEquals(6.66, (float) ($desglose['deducciones_ajuste_nomina'] ?? 0));
+        $this->assertEquals(0.0, (float) ($desglose['otras_deducciones'] ?? 0));
+        $this->assertEquals(6.66, (float) $registro->total_deducciones);
+        $this->assertEquals(6.66, $registro->montoDeduccionesAjuste());
+        $this->assertEquals(793.34, (float) $registro->total_pagar);
     }
 
     public function test_se_puede_deshacer_un_calculo_accidental(): void

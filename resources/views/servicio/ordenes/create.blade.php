@@ -167,8 +167,12 @@
                     <input type="text" name="cliente_cedula" id="st-cliente-cedula" value="{{ old('cliente_cedula') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
                 </div>
                 <div class="st-campo" data-tipos="celular">
-                    <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">IMEI *</label>
-                    <input type="text" name="imei" id="st-imei" value="{{ old('imei', $equipoPrefill->imei ?? '') }}" placeholder="Obligatorio en celulares" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+                    <label id="st-imei-label" style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">IMEI *</label>
+                    <input type="text" name="imei" id="st-imei" value="{{ old('imei', $equipoPrefill->imei ?? '') }}" placeholder="Obligatorio en celulares" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;" @disabled(old('imei_no_aplica'))>
+                    <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:.85rem;cursor:pointer;">
+                        <input type="checkbox" name="imei_no_aplica" value="1" id="st-imei-na" @checked(old('imei_no_aplica'))>
+                        IMEI no aplica
+                    </label>
                     <div id="st-imei-hint" class="muted" style="font-size:.78rem;margin-top:4px;"></div>
                     <label id="st-usar-existente-wrap" style="display:none;margin-top:6px;font-size:.85rem;">
                         <input type="checkbox" name="usar_equipo_existente" value="1" id="st-usar-existente" @checked($usarExistente || old('usar_equipo_existente'))>
@@ -178,9 +182,10 @@
                         <input type="hidden" name="equipo_id" id="st-equipo-id" value="{{ old('equipo_id') }}">
                     @endunless
                 </div>
-                <div class="st-campo" data-tipos="impresora,camara,audifonos,corneta">
+                <div class="st-campo" id="st-serial-wrap" data-tipos="impresora,camara,audifonos,corneta">
                     <label id="st-serial-label" style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Serial *</label>
                     <input type="text" name="serial" id="st-serial" value="{{ old('serial', $equipoPrefill->serial ?? '') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+                    <div id="st-serial-hint" class="muted" style="font-size:.78rem;margin-top:4px;display:none;">Obligatorio si el IMEI no aplica.</div>
                 </div>
                 <div>
                     <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Marca *</label>
@@ -419,6 +424,43 @@
             el.disabled = disabled;
         });
     }
+    function syncImeiNoAplica() {
+        const tipo = tipoDispositivo();
+        const na = document.getElementById('st-imei-na');
+        const imei = document.getElementById('st-imei');
+        const imeiLabel = document.getElementById('st-imei-label');
+        const serialWrap = document.getElementById('st-serial-wrap');
+        const serial = document.getElementById('st-serial');
+        const serialHint = document.getElementById('st-serial-hint');
+        const serialLabel = document.getElementById('st-serial-label');
+        const usarWrap = document.getElementById('st-usar-existente-wrap');
+        const usarCheck = document.getElementById('st-usar-existente');
+        const equipoId = document.getElementById('st-equipo-id');
+        const hint = document.getElementById('st-imei-hint');
+        const checked = !!(na && na.checked && tipo === 'celular');
+
+        if (imeiLabel) imeiLabel.textContent = checked ? 'IMEI' : 'IMEI *';
+        if (imei) {
+            imei.disabled = checked || tipo !== 'celular';
+            imei.required = false;
+            imei.placeholder = checked ? 'No aplica' : 'Obligatorio en celulares';
+            if (checked) {
+                imei.value = '';
+                if (hint) hint.textContent = '';
+                if (usarWrap) usarWrap.style.display = 'none';
+                if (usarCheck) usarCheck.checked = false;
+                if (equipoId) equipoId.value = '';
+            }
+        }
+        if (serialWrap && tipo === 'celular') {
+            serialWrap.style.display = checked ? '' : 'none';
+            if (serial) serial.disabled = !checked;
+            if (serialHint) serialHint.style.display = checked ? '' : 'none';
+            if (serialLabel) serialLabel.textContent = 'Serial *';
+        } else if (serialHint) {
+            serialHint.style.display = 'none';
+        }
+    }
     function syncTipoDispositivo() {
         const tipo = tipoDispositivo();
         document.querySelectorAll('.st-campo').forEach((el) => {
@@ -434,9 +476,11 @@
         });
         const serialLabel = document.getElementById('st-serial-label');
         if (serialLabel) serialLabel.textContent = serialLabels[tipo] || 'Serial *';
+        syncImeiNoAplica();
         syncLente();
     }
     document.querySelectorAll('.st-tipo-dispositivo').forEach((el) => el.addEventListener('change', syncTipoDispositivo));
+    document.getElementById('st-imei-na')?.addEventListener('change', syncImeiNoAplica);
 
     function syncLente() {
         const wrap = document.getElementById('st-serial-lente-wrap');

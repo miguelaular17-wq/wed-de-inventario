@@ -108,13 +108,20 @@ class OrdenController extends Controller
             $data['sede'] = strtoupper((string) $request->input('sede_local'));
         }
 
-        $imei = $this->equipoService->normalizarImei($data['imei'] ?? null);
+        $imeiNoAplica = $request->boolean('imei_no_aplica');
+        $imei = $imeiNoAplica ? null : $this->equipoService->normalizarImei($data['imei'] ?? null);
         $serial = $this->equipoService->normalizarSerial($data['serial'] ?? null);
         $usarExistente = $request->boolean('usar_equipo_existente') || $request->filled('equipo_id');
         $tipoDispositivo = $data['tipo_dispositivo'] ?? 'celular';
 
         if ($tipoDispositivo === 'celular') {
-            if (! $imei && ! $request->filled('equipo_id')) {
+            if ($imeiNoAplica) {
+                if (! $serial && ! $request->filled('equipo_id')) {
+                    throw ValidationException::withMessages([
+                        'serial' => 'El serial es obligatorio cuando el IMEI no aplica.',
+                    ]);
+                }
+            } elseif (! $imei && ! $request->filled('equipo_id')) {
                 throw ValidationException::withMessages([
                     'imei' => 'El IMEI es obligatorio para celulares.',
                 ]);
@@ -166,7 +173,7 @@ class OrdenController extends Controller
             $data['equipo'] = trim(($data['marca'] ?? '').' '.($data['modelo'] ?? '')) ?: (($data['equipo'] ?? null) ?: $equipo->etiqueta());
         }
 
-        unset($data['marca'], $data['modelo'], $data['color'], $data['usar_equipo_existente']);
+        unset($data['marca'], $data['modelo'], $data['color'], $data['usar_equipo_existente'], $data['imei_no_aplica']);
         if (! isset($data['equipo_id'])) {
             unset($data['equipo_id']);
         }
@@ -702,6 +709,7 @@ class OrdenController extends Controller
             'serial_lente' => ['nullable', 'string', 'max:64'],
             'codigo_lote' => ['nullable', 'string', 'max:64'],
             'imei' => ['nullable', 'string', 'max:32'],
+            'imei_no_aplica' => ['nullable', 'boolean'],
             'serial' => ['nullable', 'string', 'max:255'],
             'equipo_id' => ['nullable', 'integer'],
             'usar_equipo_existente' => ['nullable', 'boolean'],

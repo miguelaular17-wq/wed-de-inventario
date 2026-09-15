@@ -56,7 +56,7 @@ class NominaDescuentoComentarios
     {
         return array_values(array_filter(
             $this->lineasNomina($registro),
-            fn (array $l) => in_array($l['grupo'], ['deduccion', 'mercancia'], true)
+            fn (array $l) => in_array($l['grupo'], ['deduccion', 'mercancia', 'faltante_caja'], true)
         ));
     }
 
@@ -95,6 +95,15 @@ class NominaDescuentoComentarios
         foreach ($this->filas(NominaDescuentoMercancia::class, $empleado->id, $periodo->id, 'nomina_periodo_id') as $row) {
             $lineas[] = $this->linea('Mercancía', $row->motivo ?? null, (float) $row->monto, 'mercancia');
         }
+        if (Schema::hasTable('nomina_comision_descuentos') && ! $empleado->generaComision()) {
+            foreach (NominaComisionDescuento::query()
+                ->where('empleado_id', $empleado->id)
+                ->where('periodo_id', $periodo->id)
+                ->where('tipo', 'FALTANTE')
+                ->get() as $row) {
+                $lineas[] = $this->linea('Faltante de caja', $row->motivo ?? null, (float) $row->monto, 'faltante_caja');
+            }
+        }
         if (Schema::hasTable('nomina_deducciones')) {
             foreach ($this->filas(NominaDeduccion::class, $empleado->id, $periodo->id, 'nomina_periodo_id') as $row) {
                 $lineas[] = $this->linea('Deducción', $row->motivo ?? null, (float) $row->monto, 'deduccion');
@@ -129,8 +138,13 @@ class NominaDescuentoComentarios
                 ->where('empleado_id', $empleado->id)
                 ->where('periodo_id', $periodo->id)
                 ->get() as $row) {
-                $tipo = strtoupper((string) $row->tipo) === 'PRESTAMO' ? 'Préstamo' : 'Descuento';
-                $grupo = strtoupper((string) $row->tipo) === 'PRESTAMO' ? 'prestamo' : 'descuento';
+                $tipoRaw = strtoupper((string) $row->tipo);
+                $tipo = match ($tipoRaw) {
+                    'PRESTAMO' => 'Préstamo',
+                    'FALTANTE' => 'Faltante de caja',
+                    default => 'Descuento',
+                };
+                $grupo = $tipoRaw === 'PRESTAMO' ? 'prestamo' : 'descuento';
                 $lineas[] = $this->linea($tipo, $row->motivo ?? null, (float) $row->monto, $grupo);
             }
         }

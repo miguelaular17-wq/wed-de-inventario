@@ -105,7 +105,9 @@ class ServiceOrderController extends Controller
             'cliente_nombre' => ['nullable', 'string', 'max:255'],
             'cliente_telefono' => ['nullable', 'string', 'max:40'],
             'cliente_cedula' => ['nullable', 'string', 'max:40'],
-            'imei' => ['required', 'string', 'max:32'],
+            'imei' => ['nullable', 'string', 'max:32'],
+            'imei_no_aplica' => ['nullable', 'boolean'],
+            'serial' => ['nullable', 'string', 'max:255'],
             'marca' => ['required', 'string', 'max:64'],
             'modelo' => ['required', 'string', 'max:128'],
             'color' => ['required', 'string', 'max:64'],
@@ -132,13 +134,20 @@ class ServiceOrderController extends Controller
 
         $tipoGestion = strtoupper($data['tipo_gestion']);
         $this->applyClientRules($data, $tipoGestion);
-        $imei = $this->equipoService->normalizarImei($data['imei']);
-        if (! $imei) {
+        $imeiNoAplica = (bool) ($data['imei_no_aplica'] ?? false);
+        $imei = $imeiNoAplica ? null : $this->equipoService->normalizarImei($data['imei'] ?? null);
+        $serial = $this->equipoService->normalizarSerial($data['serial'] ?? null);
+        if ($imeiNoAplica) {
+            if (! $serial) {
+                throw ValidationException::withMessages(['serial' => 'El serial es obligatorio cuando el IMEI no aplica.']);
+            }
+        } elseif (! $imei) {
             throw ValidationException::withMessages(['imei' => 'El IMEI es obligatorio.']);
         }
 
         $result = $this->equipoService->resolverOCrear([
             'imei' => $imei,
+            'serial' => $serial,
             'marca' => $data['marca'],
             'modelo' => $data['modelo'],
             'color' => $data['color'],
@@ -174,6 +183,7 @@ class ServiceOrderController extends Controller
             'cliente_cedula' => $data['cliente_cedula'] ?? null,
             'equipo' => trim($data['marca'].' '.$data['modelo']),
             'imei' => $equipo->imei,
+            'serial' => $equipo->serial,
             'falla' => $data['falla'],
             'accesorios' => $data['accesorios'] ?? null,
             'estado' => StOrden::ESTADO_PENDIENTE,

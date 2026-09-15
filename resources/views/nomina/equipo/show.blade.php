@@ -72,7 +72,7 @@
                         <td>
                             @include('nomina.partials.descuento-comentarios', [
                                 'monto' => $registro->montoDeduccionesAjuste(),
-                                'lineas' => collect($lineasDesc)->whereIn('grupo', ['deduccion', 'mercancia'])->values()->all(),
+                                'lineas' => collect($lineasDesc)->whereIn('grupo', ['deduccion', 'mercancia', 'faltante_caja'])->values()->all(),
                                 'titulo' => 'Deducciones',
                             ])
                         </td>

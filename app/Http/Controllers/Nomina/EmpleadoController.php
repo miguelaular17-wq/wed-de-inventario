@@ -17,9 +17,9 @@ use App\Services\Nomina\AjusteService;
 use App\Services\Nomina\AttendanceService;
 use App\Services\Nomina\EmployeeSalesService;
 use App\Services\Nomina\EmployeeService;
+use App\Services\Nomina\FaltanteCajaService;
 use App\Services\Nomina\LoanDiscountPlanService;
 use App\Services\Nomina\LoanService;
-use App\Services\Nomina\MerchandiseDeductionService;
 use App\Services\Nomina\OtherDeductionService;
 use App\Services\Nomina\OrganizationService;
 use App\Services\Nomina\SalaryAdvanceService;
@@ -40,7 +40,7 @@ class EmpleadoController extends Controller
         private SalaryAdvanceService $advances,
         private AttendanceService $attendance,
         private EmployeeSalesService $sales,
-        private MerchandiseDeductionService $mercancia,
+        private FaltanteCajaService $faltanteCaja,
         private OtherDeductionService $otrasDeducciones,
         private AjusteService $ajustes,
     ) {
@@ -191,7 +191,6 @@ class EmpleadoController extends Controller
             'abonosSueldo.creador',
             'inasistencias.creador',
             'horasExtras.creador',
-            'descuentosMercancia.creador',
         ];
         if (Schema::hasTable('nomina_deducciones')) {
             $relaciones[] = 'deducciones.creador';
@@ -211,11 +210,11 @@ class EmpleadoController extends Controller
         if ($tab === 'deducciones') {
             return redirect()->route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'ajustes']);
         }
-        if ($tab === 'comisiones' && ! $empleado->generaComision()) {
-            return redirect()->route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'mercancia']);
+        if ($tab === 'mercancia') {
+            return redirect()->route('nomina.faltante_caja.index');
         }
-        if ($tab === 'mercancia' && $empleado->generaComision()) {
-            return redirect()->route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'comisiones']);
+        if ($tab === 'comisiones' && ! $empleado->generaComision()) {
+            return redirect()->route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'personal']);
         }
         $resumenPrestamos = $this->loans->resumenEmpleado($empleado);
         $quincenaActual = $this->advances->quincenaDe(now());
@@ -270,8 +269,12 @@ class EmpleadoController extends Controller
                     $q->where('entidad', 'hora_extra')
                         ->whereIn('entidad_id', $empleado->horasExtras->pluck('id')->all() ?: [0]);
                 })->orWhere(function ($q) use ($empleado) {
-                    $q->where('entidad', 'mercancia')
-                        ->whereIn('entidad_id', $empleado->descuentosMercancia->pluck('id')->all() ?: [0]);
+                    $q->where('entidad', 'faltante_caja')
+                        ->whereIn('entidad_id', NominaComisionDescuento::query()
+                            ->where('empleado_id', $empleado->id)
+                            ->where('tipo', 'FALTANTE')
+                            ->pluck('id')
+                            ->all() ?: [0]);
                 })->orWhere(function ($q) use ($empleado) {
                     $q->where('entidad', 'deduccion')
                         ->whereIn('entidad_id', $empleado->deducciones->pluck('id')->all() ?: [0]);
@@ -292,8 +295,7 @@ class EmpleadoController extends Controller
             'planesPrestamo' => $this->loanPlans->planesDeEmpleado($empleado, $quincenaActual),
             'abonosPendientes' => $this->advances->pendientesDe($empleado),
             'resumenAdelantos' => $this->advances->resumenEmpleado($empleado),
-            'resumenMercancia' => $this->mercancia->resumenEmpleado($empleado),
-            'mercanciaPendiente' => $this->mercancia->pendientesDe($empleado),
+            'faltanteCajaPendiente' => $this->faltanteCaja->pendienteDe($empleado),
             'resumenDeducciones' => $this->otrasDeducciones->resumenEmpleado($empleado),
             'deduccionesPendientes' => $this->otrasDeducciones->pendientesDe($empleado),
             'resumenAjustes' => $this->ajustes->resumenEmpleado($empleado, $quincenaActual),

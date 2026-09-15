@@ -80,7 +80,8 @@ class NominaRegistro extends Model
         return round(
             (float) ($desglose['deducciones_ajuste_nomina'] ?? 0)
             + (float) ($desglose['otras_deducciones'] ?? 0)
-            + (float) ($desglose['mercancia'] ?? 0),
+            + (float) ($desglose['mercancia'] ?? 0)
+            + (float) ($desglose['faltante_caja'] ?? 0),
             2
         );
     }

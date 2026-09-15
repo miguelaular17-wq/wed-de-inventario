@@ -422,7 +422,7 @@ class EmpleadoCrudTest extends TestCase
         ])->assertSessionHasErrors('supervisor_id');
     }
 
-    public function test_sin_comision_muestra_mercancia_y_no_comisiones(): void
+    public function test_sin_comision_no_muestra_mercancia_ni_comisiones(): void
     {
         $this->actingAs($this->rrhh);
 
@@ -439,29 +439,15 @@ class EmpleadoCrudTest extends TestCase
 
         $this->get(route('nomina.empleados.show', $empleado))
             ->assertOk()
-            ->assertSee('Mercancía')
-            ->assertSee('Mercancía pendiente')
-            ->assertDontSee('Comisiones tienda');
+            ->assertDontSee('Mercancía')
+            ->assertDontSee('Mercancía pendiente')
+            ->assertDontSee('>Comisiones</a>', false);
 
         $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'comisiones']))
-            ->assertRedirect(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'mercancia']));
+            ->assertRedirect(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'personal']));
 
         $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'mercancia']))
-            ->assertOk()
-            ->assertSee('Descuentos de mercancía')
-            ->assertDontSee('Comisiones de marca');
-
-        $this->post(route('nomina.mercancia.store', $empleado), [
-            'fecha' => '2026-08-20',
-            'monto' => 25.5,
-            'motivo' => 'Audifonos',
-        ])->assertRedirect(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'mercancia']));
-
-        $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'mercancia']))
-            ->assertOk()
-            ->assertSee('25.50')
-            ->assertSee('Audifonos')
-            ->assertSee('PENDIENTE');
+            ->assertRedirect(route('nomina.faltante_caja.index'));
     }
 
     public function test_descarga_reporte_de_empleados_con_datos_laborales(): void
