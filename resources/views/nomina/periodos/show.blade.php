@@ -74,6 +74,7 @@
     @include('nomina.partials.totales-sede-area', [
         'totalesPorGrupo' => $totalesPorGrupo ?? collect(),
         'tasaBcv' => $tasaBcv ?? 0,
+        'tasaBcvEtiqueta' => 'Tasa BCV del cierre ('.($periodo->fecha_fin?->format('d/m/Y') ?: '—').')',
         'filtroTargets' => ['tabla-nomina-periodo'],
     ])
 
@@ -131,7 +132,18 @@
                                 {{ $registro->empleado->nombre() }}
                             </a>
                         </td>
-                        <td>${{ number_format($registro->salario_base, 2) }}</td>
+                        <td>
+                            ${{ number_format($registro->salario_base, 2) }}
+                            @if(!empty($desglose['salario_prorrateado']))
+                                <div class="muted" style="font-size:.72rem;">
+                                    {{ (int) ($desglose['dias_trabajados'] ?? 0) }} día(s)
+                                    · ${{ number_format($desglose['valor_dia'] ?? 0, 2) }}/día
+                                    @if(!empty($desglose['salario_desde']))
+                                        · desde {{ \Carbon\Carbon::parse($desglose['salario_desde'])->format('d/m/Y') }}
+                                    @endif
+                                </div>
+                            @endif
+                        </td>
                         <td>
                             <strong>${{ number_format($desglose['liquidacion']['total_pagar'] ?? $registro->total_comisiones, 2) }}</strong>
                             @if(!empty($desglose['comision']['modo']))
@@ -209,39 +221,49 @@
     @if($periodo->estado !== 'ABIERTO')
     <div class="nomina-card" style="margin-top:16px;">
         <h3>Archivo para el banco</h3>
-        <p class="muted">Tasa BCV hoy: <strong>{{ number_format($tasaBcv, 2) }}</strong>.</p>
+        <p class="muted">
+            Tasa BCV del cierre ({{ $periodo->fecha_fin?->format('d/m/Y') }}):
+            <strong>{{ number_format($tasaBcv, 2) }}</strong>.
+        </p>
         <table class="data-table">
             <thead><tr><th>Empresa</th><th>Empleados</th><th>Nómina USD</th><th>Nómina Bs</th><th></th></tr></thead>
             <tbody>
                 @forelse($bancoPorEmpresa as $fila)
-                    <tr>
-                        <td>
-                            @if($fila->empresa)
+                    @if($fila->empresa)
+                        <tr>
+                            <td>
                                 <strong>{{ $fila->empresa->codigo }}</strong>
                                 <div class="muted" style="font-size:.78rem;">{{ $fila->empresa->nombre }}</div>
-                            @else
-                                <span class="muted">Sin empresa asignada</span>
-                                @foreach(($fila->personas ?? collect()) as $persona)
-                                    <div style="font-size:.78rem;margin-top:4px;">
-                                        <a href="{{ route('nomina.empleados.show', ['empleado' => $persona->id, 'tab' => 'nomina']) }}">
-                                            {{ $persona->nombre }}
-                                        </a>
-                                        <span class="muted">· {{ $persona->cedula !== '' ? $persona->cedula : 'Sin cédula' }}</span>
-                                    </div>
-                                @endforeach
-                            @endif
-                        </td>
-                        <td>{{ $fila->empleados }}</td>
-                        <td>${{ number_format($fila->usd, 2) }}</td>
-                        <td>Bs {{ number_format($fila->usd * $tasaBcv, 2) }}</td>
-                        <td style="text-align:right;">
-                            @if($fila->empresa)
+                            </td>
+                            <td>{{ $fila->empleados }}</td>
+                            <td>${{ number_format($fila->usd, 2) }}</td>
+                            <td>Bs {{ number_format($fila->usd * $tasaBcv, 2) }}</td>
+                            <td style="text-align:right;">
                                 <a class="btn primary" href="{{ route('nomina.periodos.banco', [$periodo, $fila->empresa]) }}">Descargar TXT</a>
-                            @else
-                                <span class="muted">Asigna empresa en la ficha</span>
-                            @endif
-                        </td>
-                    </tr>
+                            </td>
+                        </tr>
+                    @else
+                        <tr>
+                            <td colspan="5">
+                                <span class="muted">Sin empresa asignada</span>
+                                <span class="muted" style="margin-left:8px;">· {{ $fila->empleados }} persona(s) · total ${{ number_format($fila->usd, 2) }} / Bs {{ number_format($fila->usd * $tasaBcv, 2) }}</span>
+                            </td>
+                        </tr>
+                        @foreach(($fila->personas ?? collect()) as $persona)
+                            <tr>
+                                <td style="padding-left:24px;">
+                                    <a href="{{ route('nomina.empleados.show', ['empleado' => $persona->id, 'tab' => 'nomina']) }}">
+                                        {{ $persona->nombre }}
+                                    </a>
+                                    <span class="muted">· {{ $persona->cedula !== '' ? $persona->cedula : 'Sin cédula' }}</span>
+                                </td>
+                                <td>1</td>
+                                <td>${{ number_format($persona->usd ?? 0, 2) }}</td>
+                                <td>Bs {{ number_format(($persona->usd ?? 0) * $tasaBcv, 2) }}</td>
+                                <td style="text-align:right;"><span class="muted">Asigna empresa en la ficha</span></td>
+                            </tr>
+                        @endforeach
+                    @endif
                 @empty
                     <tr><td colspan="5" class="muted">No hay recibos calculados.</td></tr>
                 @endforelse

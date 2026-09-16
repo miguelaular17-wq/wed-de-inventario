@@ -1,6 +1,7 @@
 @php
     $totalesPorGrupo = $totalesPorGrupo ?? collect();
     $tasaBcv = $tasaBcv ?? 0;
+    $tasaBcvEtiqueta = $tasaBcvEtiqueta ?? 'Tasa BCV';
     $filtroTargets = $filtroTargets ?? [];
 @endphp
 @if($totalesPorGrupo->isNotEmpty())
@@ -10,7 +11,7 @@
             <h3 style="margin:0;">Totales por sede y área</h3>
             <p class="muted" style="margin:4px 0 0;">
                 Asignaciones, deducciones y total pagado en divisas (USD) y bolívares.
-                Tasa BCV: <strong>{{ number_format($tasaBcv, 2) }}</strong>.
+                {{ $tasaBcvEtiqueta }}: <strong>{{ number_format($tasaBcv, 2) }}</strong>.
             </p>
         </div>
         <label class="field" style="margin:0;min-width:220px;">

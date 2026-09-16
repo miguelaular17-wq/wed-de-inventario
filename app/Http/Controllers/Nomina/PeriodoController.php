@@ -78,7 +78,7 @@ class PeriodoController extends Controller
             ->orderBy('created_at')
             ->get();
 
-        $tasaBcv = $this->bcv->getRateForToday();
+        $tasaBcv = $this->bcv->tasaParaPeriodo($periodo);
 
         return view('nomina.periodos.show', [
             'periodo' => $periodo,
@@ -179,7 +179,7 @@ class PeriodoController extends Controller
         }
 
         $periodo->load(['registros.empleado.cliente', 'registros.empleado.empresa']);
-        $tasa = $this->bcv->getRateForToday();
+        $tasa = $this->bcv->tasaParaPeriodo($periodo);
         $contenido = $this->bankFile->generar($periodo, $empresa, $tasa);
         $nombre = $this->bankFile->nombreArchivo($periodo, $empresa);
 
@@ -204,7 +204,7 @@ class PeriodoController extends Controller
             'registros.empleado.sedeCatalogo',
             'registros.empleado.cargoCatalogo',
         ]);
-        $tasaBcv = $this->bcv->getRateForToday();
+        $tasaBcv = $this->bcv->tasaParaPeriodo($periodo);
         [$filas, $totales] = $this->filasRelacionNomina($periodo, $tasaBcv);
         $nombreBase = 'relacion_nomina_'.$periodo->id.'_'.$periodo->fecha_inicio?->format('Ymd');
 

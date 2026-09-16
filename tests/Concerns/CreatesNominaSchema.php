@@ -385,6 +385,12 @@ trait CreatesNominaSchema
             });
         }
 
+        if (! Schema::hasColumn('nomina_periodos', 'tasa_bcv')) {
+            Schema::table('nomina_periodos', function (Blueprint $table) {
+                $table->decimal('tasa_bcv', 12, 4)->nullable();
+            });
+        }
+
         if (! Schema::hasTable('nomina_registros')) {
             Schema::create('nomina_registros', function (Blueprint $table) {
                 $table->id();

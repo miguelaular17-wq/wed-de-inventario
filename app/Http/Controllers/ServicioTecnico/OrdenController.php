@@ -42,6 +42,33 @@ class OrdenController extends Controller
             $query->where('estado', $request->query('estado'));
         }
 
+        if ($request->filled('empresa_envio') && Schema::hasColumn('st_ordenes', 'empresa_envio_garantia')) {
+            $empresa = strtoupper(trim((string) $request->query('empresa_envio')));
+            if (array_key_exists($empresa, StOrden::EMPRESAS_ENVIO_GARANTIA)) {
+                $query->where('empresa_envio_garantia', $empresa);
+            }
+        }
+
+        if ($request->filled('tecnico_id')) {
+            $tecnicoId = (int) $request->query('tecnico_id');
+            if ($tecnicoId > 0) {
+                $query->where('tecnico_id', $tecnicoId);
+            }
+        }
+
+        $soloInternas = $request->routeIs('servicio.ordenes.internas')
+            || $request->query('tipo_gestion') === StOrden::TIPO_REPARACION_INTERNA;
+        if (Schema::hasColumn('st_ordenes', 'tipo_gestion')) {
+            if ($soloInternas) {
+                $query->where('tipo_gestion', StOrden::TIPO_REPARACION_INTERNA);
+            } else {
+                $query->where(function ($inner) {
+                    $inner->whereNull('tipo_gestion')
+                        ->orWhere('tipo_gestion', '!=', StOrden::TIPO_REPARACION_INTERNA);
+                });
+            }
+        }
+
         if ($request->query('transfer') === 'pendiente') {
             $query->where('transfer_estado', StOrden::TRANSFER_PENDIENTE);
             if ($user->veSoloSusFacturasTaller()) {
@@ -68,13 +95,23 @@ class OrdenController extends Controller
         }
 
         return view('servicio.ordenes.index', [
-            'ordenes' => $query->with(['equipoCelular', 'creador'])->paginate(30)->withQueryString(),
+            'ordenes' => $query->with(['equipoCelular', 'creador', 'tecnico'])->paginate(30)->withQueryString(),
             'estados' => StOrden::ESTADOS,
+            'empresasEnvio' => StOrden::EMPRESAS_ENVIO_GARANTIA,
+            'filtroEmpresaEnvio' => $request->query('empresa_envio'),
+            'tecnicos' => $this->tecnicosParaFiltro(),
+            'filtroTecnicoId' => $request->query('tecnico_id'),
             'sedes' => config('inventario.sedes_locales'),
             'filtroSede' => $user->scopesServicioToOwnSede() ? strtoupper((string) $user->sede) : $request->query('sede'),
             'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
             'filtroTransfer' => $request->query('transfer'),
+            'soloInternas' => $soloInternas,
         ]);
+    }
+
+    public function internas(Request $request): View
+    {
+        return $this->index($request);
     }
 
     public function create(Request $request): View
@@ -534,6 +571,40 @@ class OrdenController extends Controller
             'checklistRecepcion' => config('servicio_tecnico.checklist_recepcion'),
             'checklistRecepcionPorTipo' => config('servicio_tecnico.checklist_recepcion_por_tipo'),
         ];
+    }
+
+    /**
+     * Técnicos disponibles para el filtro del listado (incluye al usuario actual).
+     *
+     * @return \Illuminate\Support\Collection<int, object{id:int,nombre:string}>
+     */
+    private function tecnicosParaFiltro()
+    {
+        $ids = [];
+        if (Schema::hasTable('nomina_empleados')) {
+            $ids = NominaEmpleado::query()
+                ->where('es_servicio_tecnico', true)
+                ->where('estado', 'ACTIVO')
+                ->whereNotNull('user_id')
+                ->pluck('user_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+
+        return User::query()
+            ->where(function ($query) use ($ids) {
+                $query->where('role', User::ROLE_TECNICO);
+                if ($ids !== []) {
+                    $query->orWhereIn('id', $ids);
+                }
+            })
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (User $u) => (object) [
+                'id' => (int) $u->id,
+                'nombre' => $u->name,
+            ])
+            ->values();
     }
 
     /**

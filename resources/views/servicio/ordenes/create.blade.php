@@ -64,12 +64,12 @@
                 @foreach($tiposGestion as $key => $label)
                     <label style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;cursor:pointer;display:block;">
                         <input type="radio" name="tipo_gestion" value="{{ $key }}" required class="st-tipo-gestion"
-                            @checked(old('tipo_gestion', \App\Models\StOrden::TIPO_ST) === $key)>
+                            @checked(old('tipo_gestion', request('tipo_gestion', \App\Models\StOrden::TIPO_ST)) === $key)>
                         <strong style="margin-left:6px;">{{ $label }}</strong>
                     </label>
                 @endforeach
             </div>
-            <div id="panel-rango-garantia" style="margin-top:14px;{{ old('tipo_gestion') === 'GARANTIA' ? '' : 'display:none;' }}">
+            <div id="panel-rango-garantia" style="margin-top:14px;{{ old('tipo_gestion', request('tipo_gestion')) === 'GARANTIA' ? '' : 'display:none;' }}">
                 <p style="margin:0 0 10px;font-size:.88rem;font-weight:600;">Rango de cambio *</p>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                     <label style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;cursor:pointer;display:block;">
@@ -280,7 +280,7 @@
             </div>
         </div>
 
-        <div class="panel" id="panel-backup" style="padding:20px;margin-bottom:16px;{{ old('tipo_gestion') === 'GARANTIA' ? '' : 'display:none;' }}">
+        <div class="panel" id="panel-backup" style="padding:20px;margin-bottom:16px;{{ old('tipo_gestion', request('tipo_gestion')) === 'GARANTIA' ? '' : 'display:none;' }}">
             <h3 style="margin:0 0 14px;">5. ¿Se entregará celular de backup?</h3>
             <div style="display:flex;gap:16px;margin-bottom:14px;">
                 <label><input type="radio" name="entrega_backup" value="0" id="backup-no" @checked(! old('entrega_backup'))> No</label>

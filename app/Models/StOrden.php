@@ -39,10 +39,11 @@ class StOrden extends Model
     ];
 
     public const EMPRESAS_ENVIO_GARANTIA = [
-        'GLOBAL FIT' => 'GLOBAL FIT',
-        'TECNOTROPOLIS' => 'TECNOTROPOLIS',
-        'TOTALINK' => 'TOTALINK',
-        'HONOR' => 'HONOR',
+        'GLOBAL FIT' => 'Global Fit',
+        'ORANGE STORE' => 'Orange Store',
+        'TECNOTROPOLIS' => 'Tecnotropolis',
+        'HONOR' => 'Honor',
+        'ZTE' => 'ZTE',
     ];
 
     public const GARANTIA_PENDIENTE_ENVIO = 'pendiente_envio';
@@ -245,6 +246,16 @@ class StOrden extends Model
         $estado = $this->estadoGarantiaExternaActual();
 
         return $estado ? (self::ESTADOS_GARANTIA_EXTERNA[$estado] ?? $estado) : null;
+    }
+
+    public function etiquetaEmpresaEnvioGarantia(): ?string
+    {
+        $empresa = trim((string) ($this->empresa_envio_garantia ?? ''));
+        if ($empresa === '') {
+            return null;
+        }
+
+        return self::EMPRESAS_ENVIO_GARANTIA[$empresa] ?? $empresa;
     }
 
     public function garantiaExternaBloqueada(): bool

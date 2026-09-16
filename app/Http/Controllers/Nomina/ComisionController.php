@@ -54,7 +54,7 @@ class ComisionController extends Controller
 
         $periodo->setRelation('liquidacionesComision', $liquidaciones);
 
-        $tasaBcv = $this->bcv->getRateForToday();
+        $tasaBcv = $this->bcv->tasaParaPeriodo($periodo);
 
         return view('nomina.comisiones.show', [
             'periodo' => $periodo,
@@ -86,7 +86,7 @@ class ComisionController extends Controller
                 ->withErrors(['periodo' => 'No hay comisiones calculadas para este período.']);
         }
 
-        $tasaBcv = $this->bcv->getRateForToday();
+        $tasaBcv = $this->bcv->tasaParaPeriodo($periodo);
         [$filasVentas, $filasSt, $totalesVentas, $totalesSt] = $this->filasRelacionComisiones($liquidaciones, $tasaBcv);
         $nombreBase = 'relacion_comisiones_'.$periodo->id.'_'.$periodo->fecha_inicio?->format('Ymd');
 
@@ -143,7 +143,7 @@ class ComisionController extends Controller
                 ->withErrors(['periodo' => 'Calcula la nómina antes de generar el archivo del banco.']);
         }
 
-        $tasa = $this->bcv->getRateForToday();
+        $tasa = $this->bcv->tasaParaPeriodo($periodo);
         $contenido = $this->bankFile->generarComisiones($periodo, $empresa, $tasa);
         $nombre = $this->bankFile->nombreArchivoComisiones($periodo, $empresa);
 

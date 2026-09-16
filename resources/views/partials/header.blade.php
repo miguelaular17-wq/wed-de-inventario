@@ -122,9 +122,10 @@
 
     if ($u->canAccess('servicio') && $u->role !== 'admin') {
         $servicioItems = [
-            $link('Celulares', route('servicio.celulares.hub'), request()->routeIs('servicio.celulares.*')),
+            $link('Celulares', route('servicio.celulares.hub'), request()->routeIs('servicio.celulares.*') && ! request()->routeIs('servicio.celulares.por_recibir')),
             $link('Dashboard', route('servicio.dashboard'), request()->routeIs('servicio.dashboard')),
-            $link('Órdenes', route('servicio.ordenes.index'), request()->routeIs('servicio.ordenes.*')),
+            $link('Órdenes', route('servicio.ordenes.index'), request()->routeIs('servicio.ordenes.*') && ! request()->routeIs('servicio.ordenes.internas')),
+            $link('Reparaciones internas', route('servicio.ordenes.internas'), request()->routeIs('servicio.ordenes.internas')),
             $link('Por recibir', route('servicio.celulares.por_recibir'), request()->routeIs('servicio.celulares.por_recibir')),
             $link('Facturas', route('servicio.facturas.index'), request()->routeIs('servicio.facturas.*')),
         ];

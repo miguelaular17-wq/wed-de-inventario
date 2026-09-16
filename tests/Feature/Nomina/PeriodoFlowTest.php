@@ -301,6 +301,68 @@ class PeriodoFlowTest extends TestCase
         $this->assertEquals(793.34, (float) $registro->total_pagar);
     }
 
+    public function test_excel_no_duplica_deducciones_aunque_el_snapshot_este_duplicado(): void
+    {
+        $this->actingAs($this->rrhh);
+
+        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
+        $periodo = NominaPeriodo::query()->firstOrFail();
+        $this->post(route('nomina.periodos.calcular', $periodo))->assertRedirect();
+
+        $registro = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
+        // Snapshot legado: el mismo ajuste aparece en otras y en deducciones_ajuste_nomina.
+        $desglose = json_decode((string) $registro->observaciones, true) ?: [];
+        $desglose['inasistencias'] = 10.0;
+        $desglose['abonos_sueldo'] = 20.0;
+        $desglose['prestamos'] = 5.0;
+        $desglose['deducciones_ajuste_nomina'] = 6.66;
+        $desglose['otras_deducciones'] = 6.66;
+        $desglose['mercancia'] = 0;
+        $desglose['faltante_caja'] = 0;
+        $registro->update([
+            'observaciones' => json_encode($desglose, JSON_UNESCAPED_UNICODE),
+            'total_deducciones' => 41.66, // 10+20+5+6.66 (una sola vez)
+        ]);
+        $registro->refresh();
+
+        $this->assertEquals(6.66, $registro->montoDeduccionesAjuste());
+        $this->assertEquals(
+            41.66,
+            round(
+                (float) ($registro->desglose()['inasistencias'] ?? 0)
+                + (float) ($registro->desglose()['abonos_sueldo'] ?? 0)
+                + $registro->montoDeduccionesAjuste()
+                + (float) ($registro->desglose()['prestamos'] ?? 0),
+                2
+            )
+        );
+    }
+
+    public function test_empleado_que_entra_a_mitad_de_quincena_cobra_solo_dias_trabajados(): void
+    {
+        $this->actingAs($this->rrhh);
+
+        $this->empleado->update([
+            'salario_base' => 170,
+            'tipo_salario' => 'MENSUAL',
+            'fecha_ingreso' => '2026-08-20',
+        ]);
+
+        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
+        $periodo = NominaPeriodo::query()->firstOrFail();
+        $this->post(route('nomina.periodos.calcular', $periodo))->assertRedirect();
+
+        // Valor día = 170/30 = 5.67; días 20..31 agosto = 12 → 68.04
+        $registro = NominaRegistro::query()->where('empleado_id', $this->empleado->id)->firstOrFail();
+        $desglose = json_decode((string) $registro->observaciones, true);
+
+        $this->assertTrue((bool) ($desglose['salario_prorrateado'] ?? false));
+        $this->assertSame(12, (int) ($desglose['dias_trabajados'] ?? 0));
+        $this->assertEquals(5.67, (float) ($desglose['valor_dia'] ?? 0));
+        $this->assertEquals(68.04, (float) $registro->salario_base);
+        $this->assertEquals(68.04, (float) $registro->total_pagar);
+    }
+
     public function test_se_puede_deshacer_un_calculo_accidental(): void
     {
         $this->actingAs($this->rrhh);

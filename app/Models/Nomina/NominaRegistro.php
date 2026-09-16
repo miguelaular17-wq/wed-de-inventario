@@ -77,12 +77,14 @@ class NominaRegistro extends Model
     {
         $desglose = $this->desglose();
 
-        return round(
-            (float) ($desglose['deducciones_ajuste_nomina'] ?? 0)
-            + (float) ($desglose['otras_deducciones'] ?? 0)
-            + (float) ($desglose['mercancia'] ?? 0)
-            + (float) ($desglose['faltante_caja'] ?? 0),
-            2
-        );
+        // Columna "Deducciones" del Excel/PDF = total − ausencias − adelantos − préstamos.
+        // Así no se duplican ajustes aunque un snapshot viejo haya guardado
+        // el mismo monto en otras_deducciones y deducciones_ajuste_nomina.
+        $resto = (float) $this->total_deducciones
+            - (float) ($desglose['inasistencias'] ?? 0)
+            - (float) ($desglose['abonos_sueldo'] ?? 0)
+            - (float) ($desglose['prestamos'] ?? 0);
+
+        return round(max(0, $resto), 2);
     }
 }

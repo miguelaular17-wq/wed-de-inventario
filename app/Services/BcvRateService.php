@@ -36,21 +36,60 @@ class BcvRateService
      */
     public function getRateForToday(): float
     {
-        Profiler::start('BcvRateService::getRateForToday');
+        return $this->getRateForDate(date('Y-m-d'));
+    }
 
-        $fromFlujoHoy = $this->fetchFromDatabase(date('Y-m-d'));
-        if ($fromFlujoHoy !== null) {
-            Profiler::stop('BcvRateService::getRateForToday');
-            return $fromFlujoHoy;
+    /**
+     * Tasa BCV de una fecha concreta (p. ej. cierre de quincena).
+     * Orden: flujo de caja de esa fecha → última tasa ≤ esa fecha → API/caché si es hoy → 1.
+     */
+    public function getRateForDate(\DateTimeInterface|string $fecha): float
+    {
+        $dia = \Carbon\Carbon::parse($fecha)->toDateString();
+        Profiler::start('BcvRateService::getRateForDate');
+
+        $fromFlujo = $this->fetchFromDatabase($dia);
+        if ($fromFlujo !== null) {
+            Profiler::stop('BcvRateService::getRateForDate');
+
+            return $fromFlujo;
         }
 
-        $cacheKey = 'tasa_bcv_' . date('Y-m-d');
+        $anterior = $this->fetchNearestOnOrBefore($dia);
+        if ($anterior !== null) {
+            Profiler::stop('BcvRateService::getRateForDate');
 
-        $result = Cache::remember($cacheKey, self::TTL_SECONDS, function () {
-            return $this->fetchFromApi() ?? $this->fetchFromDatabase() ?? 1.0;
-        });
-        Profiler::stop('BcvRateService::getRateForToday');
-        return (float) $result;
+            return $anterior;
+        }
+
+        if ($dia === date('Y-m-d')) {
+            $cacheKey = 'tasa_bcv_'.$dia;
+            $result = Cache::remember($cacheKey, self::TTL_SECONDS, function () {
+                return $this->fetchFromApi() ?? $this->fetchFromDatabase() ?? 1.0;
+            });
+            Profiler::stop('BcvRateService::getRateForDate');
+
+            return (float) $result;
+        }
+
+        Profiler::stop('BcvRateService::getRateForDate');
+
+        return (float) ($this->fetchFromDatabase() ?? 1.0);
+    }
+
+    /**
+     * Tasa congelada del período (cierre de quincena). Si aún no está guardada, resuelve por fecha_fin.
+     */
+    public function tasaParaPeriodo(\App\Models\Nomina\NominaPeriodo $periodo): float
+    {
+        $guardada = (float) ($periodo->tasa_bcv ?? 0);
+        if ($guardada > 0) {
+            return round($guardada, 4);
+        }
+
+        $fecha = $periodo->fecha_fin ?? now();
+
+        return $this->getRateForDate($fecha);
     }
 
     public function forgetTodayCache(): void
@@ -103,5 +142,20 @@ class BcvRateService
         Profiler::stop('BcvRateService::fetchFromDatabase');
 
         return $result;
+    }
+
+    private function fetchNearestOnOrBefore(string $fecha): ?float
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('finanzas_resumen')) {
+            return null;
+        }
+
+        $row = FinanzasResumen::query()
+            ->where('tasa_bcv_usd', '>', 0)
+            ->whereDate('fecha', '<=', $fecha)
+            ->orderByDesc('fecha')
+            ->first();
+
+        return $row ? (float) $row->tasa_bcv_usd : null;
     }
 }

@@ -1,17 +1,23 @@
 @extends('layouts.app')
 
-@section('title', 'Órdenes de servicio')
+@section('title', !empty($soloInternas) ? 'Reparaciones internas' : 'Órdenes de servicio')
 
 @section('content')
 <div class="panel nomina-page">
     <div class="panel-header-flex">
         <div>
-            <h1 style="margin:0;">Servicio técnico</h1>
+            <h1 style="margin:0;">{{ !empty($soloInternas) ? 'Reparaciones internas' : 'Servicio técnico' }}</h1>
             <p class="muted" style="margin:4px 0 0;">
-                Órdenes de taller{{ $filtroSede ? ' · '.$filtroSede : '' }}. El inventario de tienda no se toca desde aquí.
+                @if(!empty($soloInternas))
+                    Órdenes de reparación interna{{ $filtroSede ? ' · '.$filtroSede : '' }}.
+                @else
+                    Órdenes de taller{{ $filtroSede ? ' · '.$filtroSede : '' }}. El inventario de tienda no se toca desde aquí.
+                @endif
             </p>
         </div>
-        <a class="btn primary" href="{{ route('servicio.ordenes.create') }}">Nueva orden</a>
+        <a class="btn primary" href="{{ route('servicio.ordenes.create', !empty($soloInternas) ? ['tipo_gestion' => \App\Models\StOrden::TIPO_REPARACION_INTERNA] : []) }}">
+            {{ !empty($soloInternas) ? 'Nueva reparación interna' : 'Nueva orden' }}
+        </a>
     </div>
 
     <form method="GET" class="filter-bar" style="margin-top:16px;">
@@ -32,6 +38,26 @@
                 <option value="">Todos</option>
                 @foreach($estados as $key => $label)
                     <option value="{{ $key }}" @selected(request('estado') === $key)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+        @if(empty($soloInternas))
+        <div class="field">
+            <label>Empresa de envío</label>
+            <select name="empresa_envio">
+                <option value="">Todas</option>
+                @foreach($empresasEnvio as $codigo => $nombre)
+                    <option value="{{ $codigo }}" @selected(($filtroEmpresaEnvio ?? '') === $codigo)>{{ $nombre }}</option>
+                @endforeach
+            </select>
+        </div>
+        @endif
+        <div class="field">
+            <label>Técnico</label>
+            <select name="tecnico_id">
+                <option value="">Todos</option>
+                @foreach($tecnicos as $tecnico)
+                    <option value="{{ $tecnico->id }}" @selected((string) ($filtroTecnicoId ?? '') === (string) $tecnico->id)>{{ $tecnico->nombre }}</option>
                 @endforeach
             </select>
         </div>
@@ -130,8 +156,8 @@
                                         @if($estadoGarantia === \App\Models\StOrden::GARANTIA_PENDIENTE_ENVIO)
                                             <select name="empresa" required style="padding:6px;border:1px solid #cbd5e1;border-radius:5px;background:white;">
                                                 <option value="">Empresa destino…</option>
-                                                @foreach(\App\Models\StOrden::EMPRESAS_ENVIO_GARANTIA as $empresa)
-                                                    <option value="{{ $empresa }}">{{ $empresa }}</option>
+                                                @foreach(\App\Models\StOrden::EMPRESAS_ENVIO_GARANTIA as $codigo => $nombre)
+                                                    <option value="{{ $codigo }}">{{ $nombre }}</option>
                                                 @endforeach
                                             </select>
                                             <input name="motivo" required maxlength="255" placeholder="Motivo del envío, ej: Reparación" style="padding:6px;border:1px solid #cbd5e1;border-radius:5px;">

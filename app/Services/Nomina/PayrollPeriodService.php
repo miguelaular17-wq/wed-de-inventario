@@ -15,6 +15,7 @@ use App\Models\Nomina\NominaPeriodo;
 use App\Models\Nomina\NominaPrestamoCuota;
 use App\Models\Nomina\NominaPrestamoPlan;
 use App\Models\Nomina\NominaRegistro;
+use App\Services\BcvRateService;
 use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +32,8 @@ class PayrollPeriodService
         private AjusteService $ajustes,
         private NominaDescuentoComentarios $descuentoComentarios,
         private FaltanteCajaService $faltanteCaja,
+        private AttendanceService $attendance,
+        private BcvRateService $bcv,
     ) {
     }
 
@@ -188,7 +191,14 @@ class PayrollPeriodService
                 $desglose['prestamos'] = $prestamosNomina;
                 $desglose['prestamos_comision'] = $prestamosComision;
 
-                $salario = $this->salarioDelPeriodo($empleado);
+                $salarioInfo = $this->salarioDelPeriodo($empleado, $periodo);
+                $salario = $salarioInfo['salario'];
+                $desglose['valor_dia'] = $salarioInfo['valor_dia'];
+                $desglose['dias_trabajados'] = $salarioInfo['dias_trabajados'];
+                $desglose['salario_prorrateado'] = $salarioInfo['salario_prorrateado'];
+                if ($salarioInfo['desde'] ?? null) {
+                    $desglose['salario_desde'] = $salarioInfo['desde'];
+                }
                 $bonificacionesNomina = $desglose['bonificaciones_nomina'];
                 $otrosIngresos = $desglose['horas_extras'] + $bonificacionesNomina;
                 $totalDeducciones = $desglose['abonos_sueldo']
@@ -214,11 +224,16 @@ class PayrollPeriodService
                 ]);
             }
 
-            $periodo->update([
+            $payload = [
                 'estado' => NominaPeriodo::CALCULADO,
                 'calculado_at' => now(),
                 'calculado_por' => $usuarioId,
-            ]);
+            ];
+            if (Schema::hasColumn('nomina_periodos', 'tasa_bcv')) {
+                // Congela la tasa del día de cierre de la quincena (no la de hoy al recalcular).
+                $payload['tasa_bcv'] = $this->bcv->getRateForDate($periodo->fecha_fin);
+            }
+            $periodo->update($payload);
 
             $this->auditarTransicion($periodo, NominaPeriodo::ABIERTO, NominaPeriodo::CALCULADO);
 
@@ -648,15 +663,52 @@ class PayrollPeriodService
             ->sum('monto'), 2);
     }
 
-    private function salarioDelPeriodo(NominaEmpleado $empleado): float
+    /**
+     * Si el empleado entró después de iniciar la quincena, se pagan solo los días
+     * trabajados × valor día (salario mensual / 30).
+     *
+     * @return array{salario:float,valor_dia:float,dias_trabajados:?int,salario_prorrateado:bool,desde?:string}
+     */
+    private function salarioDelPeriodo(NominaEmpleado $empleado, NominaPeriodo $periodo): array
     {
-        $salario = (float) $empleado->salario_base;
+        $valorDia = $this->attendance->valorDia($empleado);
 
-        return match ($empleado->tipo_salario) {
-            'MENSUAL' => round($salario / 2, 2),
-            'SOLO_COMISION' => 0.0,
-            default => round($salario, 2),
+        if ($empleado->tipo_salario === 'SOLO_COMISION') {
+            return [
+                'salario' => 0.0,
+                'valor_dia' => $valorDia,
+                'dias_trabajados' => null,
+                'salario_prorrateado' => false,
+            ];
+        }
+
+        $inicioPeriodo = $periodo->fecha_inicio->copy()->startOfDay();
+        $finPeriodo = $periodo->fecha_fin->copy()->startOfDay();
+        $ingreso = $empleado->fecha_ingreso?->copy()->startOfDay();
+
+        if ($ingreso && $ingreso->greaterThan($inicioPeriodo) && $ingreso->lessThanOrEqualTo($finPeriodo)) {
+            $dias = $ingreso->diffInDays($finPeriodo) + 1;
+
+            return [
+                'salario' => round($valorDia * $dias, 2),
+                'valor_dia' => $valorDia,
+                'dias_trabajados' => $dias,
+                'salario_prorrateado' => true,
+                'desde' => $ingreso->toDateString(),
+            ];
+        }
+
+        $salario = match ($empleado->tipo_salario) {
+            'MENSUAL' => round((float) $empleado->salario_base / 2, 2),
+            default => round((float) $empleado->salario_base, 2),
         };
+
+        return [
+            'salario' => $salario,
+            'valor_dia' => $valorDia,
+            'dias_trabajados' => null,
+            'salario_prorrateado' => false,
+        ];
     }
 
     private function transicionar(

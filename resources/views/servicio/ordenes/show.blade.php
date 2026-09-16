@@ -60,7 +60,7 @@
             <h3 style="margin:0 0 6px;">Flujo externo de garantía</h3>
             <p style="margin:0 0 16px;">
                 Estado: <strong>{{ $orden->etiquetaEstadoGarantiaExterna() }}</strong>
-                @if($orden->empresa_envio_garantia) · {{ $orden->empresa_envio_garantia }} @endif
+                @if($orden->empresa_envio_garantia) · {{ $orden->etiquetaEmpresaEnvioGarantia() }} @endif
             </p>
             @if($orden->garantia_enviado_at)
                 <p class="muted" style="margin:-10px 0 14px;font-size:.82rem;">
@@ -77,8 +77,8 @@
                             <label style="display:block;font-weight:500;margin-bottom:4px;">Empresa destino *</label>
                             <select name="empresa" required style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">
                                 <option value="">Seleccione…</option>
-                                @foreach(\App\Models\StOrden::EMPRESAS_ENVIO_GARANTIA as $empresa)
-                                    <option value="{{ $empresa }}" @selected(old('empresa') === $empresa)>{{ $empresa }}</option>
+                                @foreach(\App\Models\StOrden::EMPRESAS_ENVIO_GARANTIA as $codigo => $nombre)
+                                    <option value="{{ $codigo }}" @selected(old('empresa') === $codigo)>{{ $nombre }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -173,7 +173,7 @@
             @endunless
             <div><span class="muted">Técnico</span><div>{{ $orden->tecnico?->name ?: '—' }}</div></div>
             @if($orden->esGarantia())
-                <div><span class="muted">Empresa responsable del envío</span><div>{{ $orden->empresa_envio_garantia ?: '—' }}</div></div>
+                <div><span class="muted">Empresa responsable del envío</span><div>{{ $orden->etiquetaEmpresaEnvioGarantia() ?: '—' }}</div></div>
             @endif
             <div><span class="muted">Repuestos descontados</span><div>{{ $orden->repuestos_descontados_at ? $orden->repuestos_descontados_at->format('d/m/Y H:i') : 'No' }}</div></div>
         </div>
