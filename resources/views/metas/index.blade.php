@@ -23,10 +23,43 @@
                 @endif
             </p>
         </div>
-        @if($puedeMarcar && auth()->user()->canAccess('compras'))
-            <a class="btn secondary" href="{{ route('comprador.dashboard', ['tab' => 'sobrestock']) }}">Ir a Sobre Stock</a>
-        @endif
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+            <form method="get" action="{{ route('metas.index') }}" style="display:flex;gap:8px;align-items:center;margin:0;">
+                <label for="meta-quincena" class="muted" style="font-size:.8rem;font-weight:600;">Quincena</label>
+                <select
+                    id="meta-quincena"
+                    name="inicio"
+                    onchange="this.form.submit()"
+                    style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:.85rem;"
+                >
+                    @foreach($quincenas as $opc)
+                        <option
+                            value="{{ $opc['inicio'] }}"
+                            @selected($opc['inicio'] === $quincena['inicio']->toDateString())
+                        >
+                            {{ $opc['etiqueta'] }}
+                            @if($opc['es_actual']) (actual) @endif
+                            · {{ $opc['total'] }}
+                        </option>
+                    @endforeach
+                </select>
+            </form>
+            @if($puedeMarcar && auth()->user()->canAccess('compras'))
+                <a class="btn secondary" href="{{ route('comprador.dashboard', ['tab' => 'sobrestock']) }}">Ir a Sobre Stock</a>
+            @endif
+        </div>
     </div>
+
+    @if(!empty($quincena['auto_anterior']))
+        <div style="margin-top:14px;padding:12px 14px;border-radius:10px;border:1px solid #fde68a;background:#fffbeb;color:#92400e;font-size:.9rem;">
+            La quincena actual no tiene metas marcadas. Se muestran las de
+            <strong>{{ $quincena['etiqueta'] }}</strong>
+            ({{ $filas->count() }} productos). Usa el selector para cambiar de período.
+            @if($puedeMarcar)
+                Para la quincena nueva, vuelve a marcar productos en Sobre Stock.
+            @endif
+        </div>
+    @endif
 
     <div class="nomina-kpis" style="margin-top:16px;">
         <div class="nomina-kpi"><span>Productos meta</span><strong>{{ $filas->count() }}</strong></div>

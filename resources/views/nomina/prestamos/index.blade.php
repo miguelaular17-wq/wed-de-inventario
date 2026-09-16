@@ -37,6 +37,9 @@
             <a class="btn" href="{{ route('nomina.prestamos.txt', ['fecha' => $fecha]) }}">Descargar TXT por empresa</a>
         </div>
     </form>
+    <div style="margin-top:10px;">
+        @include('nomina.partials.excel-quincena', ['excelRoute' => route('nomina.prestamos.excel'), 'fecha' => $fecha])
+    </div>
     <p class="muted" style="margin-top:8px;">
         Tasa flujo de caja (BCV) hoy: <strong>{{ number_format($tasaBcv, 2) }}</strong>.
         El banco pide un TXT por empresa (si hay varias, baja un ZIP).

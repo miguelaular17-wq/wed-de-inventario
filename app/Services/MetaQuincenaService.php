@@ -40,6 +40,93 @@ class MetaQuincenaService
         return $this->quincenas->quincenaDe($fecha ?? Carbon::now('America/Caracas'));
     }
 
+    /**
+     * Quincenas con metas guardadas + la quincena actual (aunque esté vacía).
+     *
+     * @return Collection<int, array{inicio:string,fin:string,etiqueta:string,total:int,es_actual:bool}>
+     */
+    public function quincenasParaSelector(?Carbon $fecha = null): Collection
+    {
+        $actual = $this->quincenaActual($fecha);
+        $inicioActual = $actual['inicio']->toDateString();
+        $items = collect();
+
+        if (Schema::hasTable('meta_quincena_productos')) {
+            $items = MetaQuincenaProducto::query()
+                ->selectRaw('quincena_inicio, quincena_fin, COUNT(*) as total')
+                ->groupBy('quincena_inicio', 'quincena_fin')
+                ->orderByDesc('quincena_inicio')
+                ->get()
+                ->map(function ($row) use ($inicioActual) {
+                    $inicio = Carbon::parse($row->quincena_inicio)->toDateString();
+                    $fin = Carbon::parse($row->quincena_fin)->toDateString();
+
+                    return [
+                        'inicio' => $inicio,
+                        'fin' => $fin,
+                        'etiqueta' => Carbon::parse($inicio)->format('d/m/Y').' al '.Carbon::parse($fin)->format('d/m/Y'),
+                        'total' => (int) $row->total,
+                        'es_actual' => $inicio === $inicioActual,
+                    ];
+                });
+        }
+
+        if (! $items->contains(fn (array $q) => $q['inicio'] === $inicioActual)) {
+            $items->prepend([
+                'inicio' => $inicioActual,
+                'fin' => $actual['fin']->toDateString(),
+                'etiqueta' => $actual['etiqueta'],
+                'total' => 0,
+                'es_actual' => true,
+            ]);
+        }
+
+        return $items->sortByDesc('inicio')->values();
+    }
+
+    /**
+     * Resuelve la quincena a mostrar. Si no hay parámetro y la actual está vacía,
+     * usa la más reciente que tenga metas.
+     *
+     * @return array{inicio:Carbon,fin:Carbon,etiqueta:string,auto_anterior:bool}
+     */
+    public function resolverQuincenaListado(?string $inicioParam, ?Carbon $hoy = null): array
+    {
+        $actual = $this->quincenaActual($hoy);
+        $opciones = $this->quincenasParaSelector($hoy);
+
+        if ($inicioParam) {
+            $q = $this->quincenaActual(Carbon::parse($inicioParam, 'America/Caracas')->startOfDay());
+
+            return [
+                'inicio' => $q['inicio'],
+                'fin' => $q['fin'],
+                'etiqueta' => $q['etiqueta'],
+                'auto_anterior' => false,
+            ];
+        }
+
+        $totalActual = (int) ($opciones->firstWhere('inicio', $actual['inicio']->toDateString())['total'] ?? 0);
+        if ($totalActual === 0) {
+            $conDatos = $opciones->first(fn (array $q) => $q['total'] > 0 && ! $q['es_actual']);
+            if ($conDatos) {
+                return [
+                    'inicio' => Carbon::parse($conDatos['inicio'])->startOfDay(),
+                    'fin' => Carbon::parse($conDatos['fin'])->startOfDay(),
+                    'etiqueta' => $conDatos['etiqueta'],
+                    'auto_anterior' => true,
+                ];
+            }
+        }
+
+        return [
+            'inicio' => $actual['inicio'],
+            'fin' => $actual['fin'],
+            'etiqueta' => $actual['etiqueta'],
+            'auto_anterior' => false,
+        ];
+    }
+
     public function marcar(int $productoId, string $sede, ?User $user = null): MetaQuincenaProducto
     {
         $sede = mb_strtoupper(trim($sede), 'UTF-8');

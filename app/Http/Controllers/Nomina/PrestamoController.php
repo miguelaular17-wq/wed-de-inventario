@@ -11,10 +11,12 @@ use App\Services\BcvRateService;
 use App\Services\Nomina\LoanDiscountPlanService;
 use App\Services\Nomina\LoanPaymentService;
 use App\Services\Nomina\LoanService;
+use App\Services\Nomina\QuincenaMovimientosExcelService;
 use App\Services\Nomina\SalaryAdvanceService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use ZipArchive;
@@ -27,6 +29,7 @@ class PrestamoController extends Controller
         private LoanDiscountPlanService $planes,
         private SalaryAdvanceService $quincenas,
         private BcvRateService $bcv,
+        private QuincenaMovimientosExcelService $excelQuincena,
     ) {
     }
 
@@ -84,6 +87,16 @@ class PrestamoController extends Controller
             'delDia' => $delDia,
             'txtPorEmpresa' => $txtPorEmpresa,
         ]);
+    }
+
+    public function exportarExcel(Request $request): Response
+    {
+        $quincena = $this->excelQuincena->resolverDesdeRequest(
+            $request->query('inicio'),
+            $request->query('fecha')
+        );
+
+        return $this->excelQuincena->descargar('prestamos', $quincena);
     }
 
     public function storeEscritorio(Request $request): RedirectResponse

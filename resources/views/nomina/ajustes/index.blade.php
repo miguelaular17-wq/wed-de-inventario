@@ -34,6 +34,9 @@
             <button class="btn primary" type="submit">Buscar</button>
         </div>
     </form>
+    <div style="margin-top:10px;">
+        @include('nomina.partials.excel-quincena', ['excelRoute' => route('nomina.ajustes.excel'), 'fecha' => $fecha])
+    </div>
 
     <div class="nomina-card" style="margin-top:16px;">
         <h3>Cargar ajuste</h3>

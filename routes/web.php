@@ -308,6 +308,7 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::get('/prestamos', [PrestamoController::class, 'index'])->name('prestamos.index');
     Route::post('/prestamos', [PrestamoController::class, 'storeEscritorio'])->name('prestamos.escritorio');
     Route::get('/prestamos/txt', [PrestamoController::class, 'exportarTxt'])->name('prestamos.txt');
+    Route::get('/prestamos/excel', [PrestamoController::class, 'exportarExcel'])->name('prestamos.excel');
     Route::post('/prestamos/programar', [PrestamoController::class, 'programar'])->name('prestamos.programar');
     Route::post('/prestamos/empleado/{empleado}/cobrar', [PrestamoController::class, 'cobrar'])->name('prestamos.cobrar');
     Route::post('/empleados/{empleado}/prestamos', [PrestamoController::class, 'store'])->name('prestamos.store');
@@ -316,15 +317,18 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::get('/adelantos', [AbonoSueldoController::class, 'index'])->name('adelantos.index');
     Route::post('/adelantos', [AbonoSueldoController::class, 'storeEscritorio'])->name('adelantos.store');
     Route::get('/adelantos/txt', [AbonoSueldoController::class, 'exportarTxt'])->name('adelantos.txt');
+    Route::get('/adelantos/excel', [AbonoSueldoController::class, 'exportarExcel'])->name('adelantos.excel');
     Route::post('/empleados/{empleado}/abonos-sueldo', [AbonoSueldoController::class, 'store'])->name('abonos_sueldo.store');
     Route::post('/abonos-sueldo/{abono}/cancelar', [AbonoSueldoController::class, 'cancelar'])->name('abonos_sueldo.cancelar');
     Route::post('/empleados/{empleado}/deducciones', [DeduccionController::class, 'store'])->name('deducciones.store');
     Route::post('/deducciones/{deduccion}/cancelar', [DeduccionController::class, 'cancelar'])->name('deducciones.cancelar');
     Route::get('/ajustes', [AjusteController::class, 'index'])->name('ajustes.index');
+    Route::get('/ajustes/excel', [AjusteController::class, 'exportarExcel'])->name('ajustes.excel');
     Route::post('/ajustes', [AjusteController::class, 'storeEscritorio'])->name('ajustes.escritorio');
     Route::post('/empleados/{empleado}/ajustes', [AjusteController::class, 'store'])->name('ajustes.store');
     Route::post('/ajustes/{ajuste}/cancelar', [AjusteController::class, 'cancelar'])->name('ajustes.cancelar');
     Route::get('/faltante-caja', [FaltanteCajaController::class, 'index'])->name('faltante_caja.index');
+    Route::get('/faltante-caja/excel', [FaltanteCajaController::class, 'exportarExcel'])->name('faltante_caja.excel');
     Route::post('/faltante-caja', [FaltanteCajaController::class, 'store'])->name('faltante_caja.store');
     Route::post('/faltante-caja/{descuento}/cancelar', [FaltanteCajaController::class, 'cancelar'])->name('faltante_caja.cancelar');
     Route::post('/empleados/{empleado}/comision-abonos', [ComisionAjusteController::class, 'storeAbono'])->name('comision_abonos.store');
@@ -333,6 +337,7 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::post('/empleados/{empleado}/inasistencias/hoy', [AttendanceController::class, 'marcarFaltoHoy'])->name('inasistencias.hoy');
     Route::post('/inasistencias/{inasistencia}/cancelar', [AttendanceController::class, 'cancelarInasistencia'])->name('inasistencias.cancelar');
     Route::get('/horas-extras', [AttendanceController::class, 'indexHorasExtras'])->name('horas_extras.index');
+    Route::get('/horas-extras/excel', [AttendanceController::class, 'exportarExcelHorasExtras'])->name('horas_extras.excel');
     Route::post('/horas-extras', [AttendanceController::class, 'storeHorasExtrasMasivas'])->name('horas_extras.masivas');
     Route::post('/empleados/{empleado}/horas-extras', [AttendanceController::class, 'storeHorasExtras'])->name('horas_extras.store');
     Route::post('/horas-extras/{horaExtra}/cancelar', [AttendanceController::class, 'cancelarHorasExtras'])->name('horas_extras.cancelar');

@@ -15,8 +15,9 @@ class MetaQuincenaController extends Controller
         $user = $request->user();
         abort_unless($metas->puedeVerMetas($user), 403);
 
-        $quincena = $metas->quincenaActual();
-        $filas = $metas->listarParaUsuario($user);
+        $quincenas = $metas->quincenasParaSelector();
+        $quincena = $metas->resolverQuincenaListado($request->query('inicio'));
+        $filas = $metas->listarParaUsuario($user, $quincena['inicio']);
         $puedeMarcar = $user->canAccess('meta');
         $equiposPorSede = [];
 
@@ -33,6 +34,7 @@ class MetaQuincenaController extends Controller
 
         return view('metas.index', [
             'quincena' => $quincena,
+            'quincenas' => $quincenas,
             'filas' => $filas,
             'puedeMarcar' => $puedeMarcar,
             'equiposPorSede' => $equiposPorSede,

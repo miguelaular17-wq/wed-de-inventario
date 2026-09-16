@@ -37,6 +37,9 @@
             <button class="btn primary" type="submit">Ver personal</button>
         </div>
     </form>
+    <div style="margin-top:10px;">
+        @include('nomina.partials.excel-quincena', ['excelRoute' => route('nomina.horas_extras.excel'), 'fecha' => $fecha])
+    </div>
 
     <div class="nomina-card" style="margin-top:16px;">
         <h3>Aplicar extras</h3>

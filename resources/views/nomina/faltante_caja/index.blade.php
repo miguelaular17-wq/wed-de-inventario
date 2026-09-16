@@ -33,6 +33,9 @@
             <button class="btn primary" type="submit">Filtrar</button>
         </div>
     </form>
+    <div style="margin-top:10px;">
+        @include('nomina.partials.excel-quincena', ['excelRoute' => route('nomina.faltante_caja.excel'), 'fecha' => $fecha])
+    </div>
 
     <div class="nomina-card" style="margin-top:16px;">
         <h3>Cajeras</h3>

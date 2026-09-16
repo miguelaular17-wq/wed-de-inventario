@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Nomina\NominaAbonoSueldo;
 use App\Models\Nomina\NominaEmpleado;
 use App\Services\BcvRateService;
+use App\Services\Nomina\QuincenaMovimientosExcelService;
 use App\Services\Nomina\SalaryAdvanceService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use ZipArchive;
@@ -19,6 +21,7 @@ class AbonoSueldoController extends Controller
     public function __construct(
         private SalaryAdvanceService $advances,
         private BcvRateService $bcv,
+        private QuincenaMovimientosExcelService $excelQuincena,
     ) {
     }
 
@@ -129,27 +132,30 @@ class AbonoSueldoController extends Controller
             ]);
         }
 
-        $tmp = tempnam(sys_get_temp_dir(), 'adelantos_zip_');
+        $tmp = tempnam(sys_get_temp_dir(), 'adel');
         $zip = new ZipArchive;
-        if ($zip->open($tmp, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-            @unlink($tmp);
-
-            return redirect()
-                ->route('nomina.adelantos.index', ['fecha' => $fecha->toDateString()])
-                ->withErrors(['fecha' => 'No se pudo armar el ZIP de adelantos.']);
-        }
+        $zip->open($tmp, ZipArchive::CREATE | ZipArchive::OVERWRITE);
         foreach ($archivos as $archivo) {
             $zip->addFromString($archivo->archivo, $archivo->contenido);
         }
         $zip->close();
-        $binario = file_get_contents($tmp);
-        @unlink($tmp);
 
-        return response()->streamDownload(function () use ($binario) {
-            echo $binario;
+        return response()->streamDownload(function () use ($tmp) {
+            echo file_get_contents($tmp);
+            @unlink($tmp);
         }, $this->advances->nombreZipDelDia($fecha), [
             'Content-Type' => 'application/zip',
         ]);
+    }
+
+    public function exportarExcel(Request $request): Response
+    {
+        $quincena = $this->excelQuincena->resolverDesdeRequest(
+            $request->query('inicio'),
+            $request->query('fecha', $this->fechaConsulta($request)->toDateString())
+        );
+
+        return $this->excelQuincena->descargar('adelantos', $quincena);
     }
 
     public function store(Request $request, NominaEmpleado $empleado): RedirectResponse

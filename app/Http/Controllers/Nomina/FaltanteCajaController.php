@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Nomina\NominaComisionDescuento;
 use App\Models\Nomina\NominaEmpleado;
 use App\Services\Nomina\FaltanteCajaService;
+use App\Services\Nomina\QuincenaMovimientosExcelService;
 use App\Services\Nomina\SalaryAdvanceService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 class FaltanteCajaController extends Controller
@@ -17,6 +19,7 @@ class FaltanteCajaController extends Controller
     public function __construct(
         private FaltanteCajaService $faltantes,
         private SalaryAdvanceService $quincenas,
+        private QuincenaMovimientosExcelService $excelQuincena,
     ) {
     }
 
@@ -39,6 +42,16 @@ class FaltanteCajaController extends Controller
             'quincena' => $this->quincenas->quincenaDe($fecha),
             'kpis' => $this->faltantes->kpis($fecha),
         ]);
+    }
+
+    public function exportarExcel(Request $request): Response
+    {
+        $quincena = $this->excelQuincena->resolverDesdeRequest(
+            $request->query('inicio'),
+            $request->query('fecha', $this->fechaConsulta($request)->toDateString())
+        );
+
+        return $this->excelQuincena->descargar('faltante_caja', $quincena);
     }
 
     public function store(Request $request): RedirectResponse

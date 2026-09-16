@@ -8,15 +8,19 @@ use App\Models\Nomina\NominaHoraExtra;
 use App\Models\Nomina\NominaInasistencia;
 use App\Models\Nomina\NominaSede;
 use App\Services\Nomina\AttendanceService;
+use App\Services\Nomina\QuincenaMovimientosExcelService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 class AttendanceController extends Controller
 {
-    public function __construct(private AttendanceService $attendance)
-    {
+    public function __construct(
+        private AttendanceService $attendance,
+        private QuincenaMovimientosExcelService $excelQuincena,
+    ) {
     }
 
     public function storeInasistencia(Request $request, NominaEmpleado $empleado): RedirectResponse
@@ -78,7 +82,18 @@ class AttendanceController extends Controller
             'valorHoraTrabajador' => $this->attendance->valorHoraTrabajador(),
             'valorHoraSupervisor' => $this->attendance->valorHoraSupervisor(),
             'delDia' => $this->attendance->extrasDelDia($fecha, $sedeId),
+            'quincena' => $this->excelQuincena->quincenaDe($fecha),
         ]);
+    }
+
+    public function exportarExcelHorasExtras(Request $request): Response
+    {
+        $quincena = $this->excelQuincena->resolverDesdeRequest(
+            $request->query('inicio'),
+            $request->query('fecha', $this->fechaConsulta($request)->toDateString())
+        );
+
+        return $this->excelQuincena->descargar('horas_extras', $quincena);
     }
 
     public function storeHorasExtrasMasivas(Request $request): RedirectResponse

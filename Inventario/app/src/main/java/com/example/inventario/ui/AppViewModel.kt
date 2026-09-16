@@ -256,7 +256,7 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
                     it.copy(
                         submitting = false,
                         message = "Orden ${order.codigo} registrada",
-                        selectedServiceOrder = order,
+                        selectedServiceOrder = null,
                     )
                 }
                 onSuccess()

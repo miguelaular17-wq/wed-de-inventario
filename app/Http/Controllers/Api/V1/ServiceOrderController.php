@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Nomina\NominaEmpleado;
 use App\Models\StEquipo;
 use App\Models\StOrden;
 use App\Models\User;
@@ -30,6 +31,10 @@ class ServiceOrderController extends Controller
         $sedes = $user->scopesServicioToOwnSede()
             ? [strtoupper((string) $user->sede)]
             : config('inventario.sedes_locales', []);
+        $tiposDispositivo = config('servicio_tecnico.tipos_dispositivo', ['celular' => 'Celular']);
+        $checklists = collect($tiposDispositivo)
+            ->mapWithKeys(fn ($label, $tipo) => [$tipo => $this->choices(StOrden::checklistPara($tipo))])
+            ->all();
 
         return response()->json([
             'data' => [
@@ -37,10 +42,19 @@ class ServiceOrderController extends Controller
                 'sede_activa' => $user->sede ? strtoupper((string) $user->sede) : ($sedes[0] ?? null),
                 'sede_bloqueada' => $user->scopesServicioToOwnSede(),
                 'tipos_gestion' => $this->choices(StOrden::TIPOS_GESTION),
+                'tipos_dispositivo' => $this->choices($tiposDispositivo),
                 'rangos_garantia' => $this->choices(StOrden::RANGOS_GARANTIA),
                 'prioridades' => $this->choices(StOrden::PRIORIDADES),
                 'estados' => $this->choices(StOrden::ESTADOS),
                 'checklist' => $this->choices(StOrden::checklistPara('celular')),
+                'checklists' => $checklists,
+                'puede_transferir' => true,
+                'tecnicos' => $this->tecnicosServicio($user)->map(fn (array $t) => [
+                    'id' => $t['id'],
+                    'nombre' => $t['nombre'],
+                    'sede' => $t['sede'],
+                    'label' => $t['nombre'].' · '.$t['sede'],
+                ])->values()->all(),
             ],
         ]);
     }
@@ -55,9 +69,6 @@ class ServiceOrderController extends Controller
         ]);
         $user = $request->user();
         $query = StOrden::query()
-            ->where(function ($inner) {
-                $inner->where('tipo_dispositivo', 'celular')->orWhereNull('tipo_dispositivo');
-            })
             ->with(['equipoCelular', 'creador'])
             ->orderByDesc('fecha_ingreso')
             ->orderByDesc('id');
@@ -97,9 +108,13 @@ class ServiceOrderController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $tiposDispositivo = array_keys(config('servicio_tecnico.tipos_dispositivo', ['celular' => 'Celular']));
         $data = $request->validate([
             'sede' => ['nullable', 'string', Rule::in(config('inventario.sedes_locales', []))],
             'tipo_gestion' => ['required', 'string', Rule::in(array_keys(StOrden::TIPOS_GESTION))],
+            'tipo_dispositivo' => ['nullable', 'string', Rule::in($tiposDispositivo)],
+            'enviar_otra_sede' => ['nullable', 'boolean'],
+            'tecnico_destino_id' => ['nullable', 'integer', 'exists:users,id'],
             'rango_garantia' => ['nullable', 'string', Rule::in(array_keys(StOrden::RANGOS_GARANTIA))],
             'valor_dispositivo' => ['nullable', 'numeric', 'min:0', 'max:999999999999.99'],
             'cliente_nombre' => ['nullable', 'string', 'max:255'],
@@ -110,8 +125,8 @@ class ServiceOrderController extends Controller
             'serial' => ['nullable', 'string', 'max:255'],
             'marca' => ['required', 'string', 'max:64'],
             'modelo' => ['required', 'string', 'max:128'],
-            'color' => ['required', 'string', 'max:64'],
-            'almacenamiento' => ['required', 'string', 'max:32'],
+            'color' => ['nullable', 'string', 'max:64'],
+            'almacenamiento' => ['nullable', 'string', 'max:32'],
             'falla' => ['required', 'string', 'max:4000'],
             'accesorios' => ['nullable', 'string', 'max:255'],
             'prioridad' => ['required', 'string', Rule::in(array_keys(StOrden::PRIORIDADES))],
@@ -125,41 +140,57 @@ class ServiceOrderController extends Controller
 
         /** @var User $user */
         $user = $request->user();
+        $enviar = (bool) ($data['enviar_otra_sede'] ?? false);
+        $tecnicoDestino = null;
         $sede = $user->scopesServicioToOwnSede()
             ? strtoupper((string) $user->sede)
             : strtoupper((string) ($data['sede'] ?? $user->sede ?? ''));
         if ($sede === '' || ! in_array($sede, config('inventario.sedes_locales', []), true)) {
             throw ValidationException::withMessages(['sede' => 'Selecciona una sede válida.']);
         }
+        if ($enviar) {
+            $tecnicoDestino = $this->resolverTecnicoDestino((int) ($data['tecnico_destino_id'] ?? 0), $user);
+        }
 
         $tipoGestion = strtoupper($data['tipo_gestion']);
+        $tipoDispositivo = (string) ($data['tipo_dispositivo'] ?? 'celular');
         $this->applyClientRules($data, $tipoGestion);
-        $imeiNoAplica = (bool) ($data['imei_no_aplica'] ?? false);
-        $imei = $imeiNoAplica ? null : $this->equipoService->normalizarImei($data['imei'] ?? null);
+        $imeiNoAplica = (bool) ($data['imei_no_aplica'] ?? false) || $tipoDispositivo !== 'celular';
+        $imei = ($tipoDispositivo === 'celular' && ! $imeiNoAplica)
+            ? $this->equipoService->normalizarImei($data['imei'] ?? null)
+            : null;
         $serial = $this->equipoService->normalizarSerial($data['serial'] ?? null);
-        if ($imeiNoAplica) {
-            if (! $serial) {
-                throw ValidationException::withMessages(['serial' => 'El serial es obligatorio cuando el IMEI no aplica.']);
+        if ($tipoDispositivo === 'celular') {
+            if ($imeiNoAplica) {
+                if (! $serial) {
+                    throw ValidationException::withMessages(['serial' => 'El serial es obligatorio cuando el IMEI no aplica.']);
+                }
+            } elseif (! $imei) {
+                throw ValidationException::withMessages(['imei' => 'El IMEI es obligatorio.']);
             }
-        } elseif (! $imei) {
-            throw ValidationException::withMessages(['imei' => 'El IMEI es obligatorio.']);
+        } elseif (! $serial) {
+            throw ValidationException::withMessages(['serial' => 'El serial es obligatorio para este tipo de dispositivo.']);
         }
+
+        $atributos = array_filter([
+            'almacenamiento' => trim((string) ($data['almacenamiento'] ?? '')),
+        ], fn ($v) => $v !== '');
 
         $result = $this->equipoService->resolverOCrear([
             'imei' => $imei,
             'serial' => $serial,
             'marca' => $data['marca'],
             'modelo' => $data['modelo'],
-            'color' => $data['color'],
+            'color' => $data['color'] ?? null,
             'telefono_asociado' => $data['cliente_telefono'] ?? null,
             'sede_actual' => $sede,
-            'estado_actual' => StEquipo::ESTADO_EN_TALLER,
-            'tipo_dispositivo' => 'celular',
-            'atributos' => ['almacenamiento' => trim($data['almacenamiento'])],
+            'estado_actual' => $enviar ? StEquipo::ESTADO_EN_TRANSITO : StEquipo::ESTADO_EN_TALLER,
+            'tipo_dispositivo' => $tipoDispositivo,
+            'atributos' => $atributos ?: null,
         ], (bool) ($data['usar_equipo_existente'] ?? false));
 
         $equipo = $result['equipo'];
-        $inspection = collect(StOrden::checklistPara('celular'))
+        $inspection = collect(StOrden::checklistPara($tipoDispositivo))
             ->keys()
             ->mapWithKeys(function ($key) use ($data) {
                 $value = $data['inspeccion'][$key] ?? null;
@@ -171,7 +202,7 @@ class ServiceOrderController extends Controller
         $orderData = [
             'sede' => $sede,
             'tipo_gestion' => $tipoGestion,
-            'tipo_dispositivo' => 'celular',
+            'tipo_dispositivo' => $tipoDispositivo,
             'rango_garantia' => $data['rango_garantia'] ?? null,
             'estado_garantia_externa' => $tipoGestion === StOrden::TIPO_GARANTIA
                 ? StOrden::GARANTIA_PENDIENTE_ENVIO
@@ -195,7 +226,7 @@ class ServiceOrderController extends Controller
             'firma_recepcion_cliente' => $tipoGestion === StOrden::TIPO_REPARACION_INTERNA
                 ? null
                 : $this->parseSignature($data['firma_recepcion_cliente'] ?? null),
-            'atributos' => ['almacenamiento' => trim($data['almacenamiento'])],
+            'atributos' => $atributos ?: null,
         ];
         foreach ([
             'tipo_dispositivo',
@@ -212,9 +243,16 @@ class ServiceOrderController extends Controller
 
         $order = StOrden::crearEnSede($orderData, $user);
 
+        if ($enviar && $tecnicoDestino) {
+            $this->ordenService->transferir($order, $tecnicoDestino['sede'], $user, $tecnicoDestino['user']);
+            $order = $order->fresh(['equipoCelular', 'creador', 'eventos.usuario']);
+        } else {
+            $order->load(['equipoCelular', 'creador', 'eventos.usuario']);
+        }
+
         return response()->json([
             'message' => 'Orden '.$order->codigo().' registrada.',
-            'data' => $this->orderPayload($order->load(['equipoCelular', 'creador', 'eventos.usuario'])),
+            'data' => $this->orderPayload($order),
         ], 201);
     }
 
@@ -343,12 +381,15 @@ class ServiceOrderController extends Controller
             'sede' => $order->sede,
             'tipo_gestion' => $order->tipo_gestion,
             'tipo_gestion_label' => $order->etiquetaTipoGestion(),
+            'tipo_dispositivo' => $order->tipo_dispositivo ?: 'celular',
+            'tipo_dispositivo_label' => $order->etiquetaTipoDispositivo(),
             'rango_garantia' => $order->rango_garantia,
             'valor_dispositivo' => $order->valor_dispositivo !== null ? (float) $order->valor_dispositivo : null,
             'cliente_nombre' => $order->cliente_nombre,
             'cliente_telefono' => $order->cliente_telefono,
             'cliente_cedula' => $order->cliente_cedula,
             'imei' => $order->imei,
+            'serial' => $order->serial,
             'marca' => $order->equipoCelular?->marca,
             'modelo' => $order->equipoCelular?->modelo,
             'color' => $order->equipoCelular?->color,
@@ -379,6 +420,72 @@ class ServiceOrderController extends Controller
                 ])->values()
                 : [],
         ];
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, array{user:User,id:int,nombre:string,sede:string}>
+     */
+    private function tecnicosServicio(User $remitente)
+    {
+        $empleadosPorUsuario = collect();
+        if (Schema::hasTable('nomina_empleados')) {
+            $empleadosPorUsuario = NominaEmpleado::query()
+                ->with(['user', 'sedeCatalogo'])
+                ->where('es_servicio_tecnico', true)
+                ->where('estado', 'ACTIVO')
+                ->whereNotNull('user_id')
+                ->get()
+                ->keyBy('user_id');
+        }
+
+        $ids = $empleadosPorUsuario->keys()->map(fn ($id) => (int) $id)->all();
+
+        return User::query()
+            ->where(function ($query) use ($ids) {
+                $query->where('role', User::ROLE_TECNICO);
+                if ($ids !== []) {
+                    $query->orWhereIn('id', $ids);
+                }
+            })
+            ->orderBy('name')
+            ->get()
+            ->reject(fn (User $tecnico) => (int) $tecnico->id === (int) $remitente->id)
+            ->map(function (User $tecnico) use ($empleadosPorUsuario) {
+                $empleado = $empleadosPorUsuario->get($tecnico->id);
+                $sede = strtoupper(trim((string) (
+                    $tecnico->sede
+                    ?: $empleado?->sedeCatalogo?->codigo
+                    ?: $empleado?->sedeCatalogo?->nombre
+                )));
+
+                if (! in_array($sede, config('inventario.sedes_locales', []), true)) {
+                    return null;
+                }
+
+                return [
+                    'user' => $tecnico,
+                    'id' => (int) $tecnico->id,
+                    'nombre' => $tecnico->name,
+                    'sede' => $sede,
+                ];
+            })
+            ->filter()
+            ->values();
+    }
+
+    /**
+     * @return array{user:User,id:int,nombre:string,sede:string}
+     */
+    private function resolverTecnicoDestino(int $id, User $remitente): array
+    {
+        $tecnico = $this->tecnicosServicio($remitente)->firstWhere('id', $id);
+        if (! $tecnico || $id === (int) $remitente->id) {
+            throw ValidationException::withMessages([
+                'tecnico_destino_id' => 'Selecciona una persona registrada en Servicio técnico.',
+            ]);
+        }
+
+        return $tecnico;
     }
 
     private function choices(array $values): array

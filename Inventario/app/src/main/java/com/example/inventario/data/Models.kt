@@ -162,10 +162,22 @@ data class ServiceOptionsDto(
     @SerialName("sede_activa") val activeSite: String? = null,
     @SerialName("sede_bloqueada") val siteLocked: Boolean = false,
     @SerialName("tipos_gestion") val managementTypes: List<ChoiceDto> = emptyList(),
+    @SerialName("tipos_dispositivo") val deviceTypes: List<ChoiceDto> = emptyList(),
     @SerialName("rangos_garantia") val warrantyRanges: List<ChoiceDto> = emptyList(),
     @SerialName("prioridades") val priorities: List<ChoiceDto> = emptyList(),
     val estados: List<ChoiceDto> = emptyList(),
     val checklist: List<ChoiceDto> = emptyList(),
+    val checklists: Map<String, List<ChoiceDto>> = emptyMap(),
+    @SerialName("puede_transferir") val canTransfer: Boolean = false,
+    val tecnicos: List<TechnicianDto> = emptyList(),
+)
+
+@Serializable
+data class TechnicianDto(
+    val id: Long = 0,
+    val nombre: String = "",
+    val sede: String = "",
+    val label: String = "",
 )
 
 @Serializable
@@ -187,12 +199,15 @@ data class ServiceOrderDto(
     val sede: String = "",
     @SerialName("tipo_gestion") val managementType: String = "ST",
     @SerialName("tipo_gestion_label") val managementTypeLabel: String = "",
+    @SerialName("tipo_dispositivo") val deviceType: String = "celular",
+    @SerialName("tipo_dispositivo_label") val deviceTypeLabel: String = "",
     @SerialName("rango_garantia") val warrantyRange: String? = null,
     @SerialName("valor_dispositivo") val deviceValue: Double? = null,
     @SerialName("cliente_nombre") val clientName: String = "",
     @SerialName("cliente_telefono") val clientPhone: String? = null,
     @SerialName("cliente_cedula") val clientId: String? = null,
     val imei: String = "",
+    val serial: String? = null,
     val marca: String? = null,
     val modelo: String? = null,
     val color: String? = null,
@@ -229,6 +244,9 @@ data class ServiceOrderResponse(
 data class CreateServiceOrderRequest(
     val sede: String,
     @SerialName("tipo_gestion") val managementType: String,
+    @SerialName("tipo_dispositivo") val deviceType: String = "celular",
+    @SerialName("enviar_otra_sede") val sendToOtherSite: Boolean = false,
+    @SerialName("tecnico_destino_id") val destinationTechnicianId: Long? = null,
     @SerialName("rango_garantia") val warrantyRange: String? = null,
     @SerialName("valor_dispositivo") val deviceValue: Double? = null,
     @SerialName("cliente_nombre") val clientName: String? = null,

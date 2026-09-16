@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Nomina\NominaEmpleadoAjuste;
 use App\Models\Nomina\NominaEmpleado;
 use App\Services\Nomina\AjusteService;
+use App\Services\Nomina\QuincenaMovimientosExcelService;
 use App\Services\Nomina\SalaryAdvanceService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 class AjusteController extends Controller
@@ -17,6 +19,7 @@ class AjusteController extends Controller
     public function __construct(
         private AjusteService $ajustes,
         private SalaryAdvanceService $quincenas,
+        private QuincenaMovimientosExcelService $excelQuincena,
     ) {
     }
 
@@ -49,6 +52,16 @@ class AjusteController extends Controller
             'quincena' => $this->quincenas->quincenaDe($fecha),
             'kpis' => $this->ajustes->kpis($fecha),
         ]);
+    }
+
+    public function exportarExcel(Request $request): Response
+    {
+        $quincena = $this->excelQuincena->resolverDesdeRequest(
+            $request->query('inicio'),
+            $request->query('fecha', $this->fechaConsulta($request)->toDateString())
+        );
+
+        return $this->excelQuincena->descargar('ajustes', $quincena);
     }
 
     public function storeEscritorio(Request $request): RedirectResponse
