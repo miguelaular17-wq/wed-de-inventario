@@ -30,6 +30,7 @@ class PayrollPeriodService
         private CommissionSettlementService $settlements,
         private LoanDiscountPlanService $loanPlans,
         private AjusteService $ajustes,
+        private MerchandiseDeductionService $mercancia,
         private NominaDescuentoComentarios $descuentoComentarios,
         private FaltanteCajaService $faltanteCaja,
         private AttendanceService $attendance,
@@ -261,6 +262,7 @@ class PayrollPeriodService
             $this->deductions->revertirPrestamosComisionDelPeriodo($periodo->id);
             $this->loanPlans->deshacerComisionPeriodo($periodo->id);
             $this->ajustes->deshacerComisionPeriodo($periodo->id);
+            $this->mercancia->deshacerComisionPeriodo($periodo->id);
             $this->commissions->limpiarPeriodo($periodo);
             $this->settlements->limpiarPeriodo($periodo);
 
@@ -631,6 +633,10 @@ class PayrollPeriodService
             'mercancia' => round((float) NominaDescuentoMercancia::query()
                 ->where('empleado_id', $empleado->id)
                 ->where('nomina_periodo_id', $periodo->id)
+                ->where(function ($q) {
+                    $q->where('destino', NominaDescuentoMercancia::DESTINO_NOMINA)
+                        ->orWhereNull('destino');
+                })
                 ->sum('monto'), 2),
             'faltante_caja' => $this->faltanteCaja->totalAplicadoNomina($periodo, $empleado),
             'otras_deducciones' => $this->otrasDeduccionesNomina($periodo, $empleado),

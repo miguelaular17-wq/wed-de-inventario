@@ -235,6 +235,35 @@ class PeriodoController extends Controller
         return $pdf->download($nombreBase.'.pdf');
     }
 
+    public function reporteSedesPdf(NominaPeriodo $periodo)
+    {
+        if ($periodo->estado === NominaPeriodo::ABIERTO) {
+            return redirect()
+                ->route('nomina.periodos.show', $periodo)
+                ->withErrors(['periodo' => 'Calcula la nómina antes de descargar este reporte.']);
+        }
+
+        $periodo->load([
+            'registros.empleado.cliente',
+            'registros.empleado.sedeCatalogo',
+        ]);
+        $tasaBcv = $this->bcv->tasaParaPeriodo($periodo);
+        $filas = $this->sedeAreaTotals->conVentasNetas(
+            $this->sedeAreaTotals->deRegistros($periodo->registros, $tasaBcv),
+            $periodo
+        );
+
+        $pdf = Pdf::loadView('nomina.periodos.pdf-totales-sede', [
+            'periodo' => $periodo,
+            'filas' => $filas,
+            'tasaBcv' => $tasaBcv,
+            'logoPath' => $this->logoNominaPdf(),
+            'titulo' => 'Totales de nómina por sede',
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('totales_sedes_nomina_'.$periodo->id.'_'.$periodo->fecha_inicio?->format('Ymd').'.pdf');
+    }
+
     /**
      * @return array{0: list<array<string, mixed>>, 1: array<string, float>}
      */

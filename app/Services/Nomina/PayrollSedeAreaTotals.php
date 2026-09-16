@@ -4,8 +4,11 @@ namespace App\Services\Nomina;
 
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaLiquidacionComision;
+use App\Models\Nomina\NominaPeriodo;
 use App\Models\Nomina\NominaRegistro;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class PayrollSedeAreaTotals
 {
@@ -68,6 +71,103 @@ class PayrollSedeAreaTotals
         }
 
         return $this->ordenar($grupos);
+    }
+
+    /**
+     * Totales con venta neta de la quincena. Omite grupos con venta neta <= 0.
+     *
+     * @param  Collection<int, array<string, mixed>>  $grupos
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function conVentasNetas(Collection $grupos, NominaPeriodo $periodo): Collection
+    {
+        $ventas = $this->ventasNetasPorCodigo($periodo);
+
+        return $grupos
+            ->map(function (array $grupo) use ($ventas) {
+                $codigo = $this->codigoDeClave((string) $grupo['clave']);
+                $ventaNeta = (float) ($ventas[$codigo] ?? 0);
+                $pagarUsd = (float) ($grupo['pagar_usd'] ?? 0);
+                $grupo['venta_neta'] = round($ventaNeta, 2);
+                $grupo['pct_nomina_sobre_venta'] = $ventaNeta > 0
+                    ? round(($pagarUsd / $ventaNeta) * 100, 2)
+                    : null;
+
+                return $grupo;
+            })
+            ->filter(fn (array $grupo) => (float) ($grupo['venta_neta'] ?? 0) > 0)
+            ->values();
+    }
+
+    /**
+     * @return array<string, float> codigo sede => venta neta USD
+     */
+    public function ventasNetasPorCodigo(NominaPeriodo $periodo): array
+    {
+        $inicio = $periodo->fecha_inicio?->toDateString();
+        $fin = $periodo->fecha_fin?->toDateString();
+        if (! $inicio || ! $fin) {
+            return [];
+        }
+
+        if (Schema::hasTable('ventas_documentos')) {
+            $rows = DB::table('ventas_documentos')
+                ->whereBetween('fecha', [$inicio, $fin])
+                ->whereRaw("LOWER(TRIM(COALESCE(estado, ''))) = 'registrado'")
+                ->selectRaw('UPPER(TRIM(sede)) as sede')
+                ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN -ABS(total_neto_usd) ELSE ABS(total_neto_usd) END) as venta_neta")
+                ->groupBy(DB::raw('UPPER(TRIM(sede))'))
+                ->get();
+
+            $out = [];
+            foreach ($rows as $row) {
+                $sede = mb_strtoupper(trim((string) $row->sede), 'UTF-8');
+                if ($sede === '') {
+                    continue;
+                }
+                $out[$sede] = round((float) $row->venta_neta, 2);
+            }
+
+            return $out;
+        }
+
+        if (! Schema::hasTable('ventas_detalle')) {
+            return [];
+        }
+
+        $hasNeto = Schema::hasColumn('ventas_detalle', 'total_neto_usd');
+        $hasImporte = Schema::hasColumn('ventas_detalle', 'importe_usd');
+        $campo = $hasNeto ? 'vd.total_neto_usd' : ($hasImporte ? 'vd.importe_usd' : '0');
+
+        $rows = DB::table('ventas_detalle as vd')
+            ->whereBetween('vd.fecha', [$inicio, $fin])
+            ->when(Schema::hasColumn('ventas_detalle', 'anulado'), function ($q) {
+                $q->where(function ($inner) {
+                    $inner->whereNull('vd.anulado')->orWhere('vd.anulado', false);
+                });
+            })
+            ->selectRaw('UPPER(TRIM(vd.sede)) as sede')
+            ->selectRaw("SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(COALESCE({$campo}, 0)) ELSE ABS(COALESCE({$campo}, 0)) END) as venta_neta")
+            ->groupBy(DB::raw('UPPER(TRIM(vd.sede))'))
+            ->get();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $sede = mb_strtoupper(trim((string) $row->sede), 'UTF-8');
+            if ($sede === '') {
+                continue;
+            }
+            $out[$sede] = round((float) $row->venta_neta, 2);
+        }
+
+        return $out;
+    }
+
+    private function codigoDeClave(string $clave): string
+    {
+        $partes = explode('|', $clave, 2);
+
+        return mb_strtoupper(trim((string) ($partes[1] ?? $clave)), 'UTF-8');
     }
 
     /**

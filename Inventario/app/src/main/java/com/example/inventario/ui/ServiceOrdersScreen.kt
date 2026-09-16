@@ -44,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -85,8 +86,6 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun ServiceOrdersScreen(state: AppUiState, viewModel: AppViewModel) {
-    var creating by remember { mutableStateOf(false) }
-
     Column(
         Modifier
             .fillMaxSize()
@@ -94,12 +93,12 @@ fun ServiceOrdersScreen(state: AppUiState, viewModel: AppViewModel) {
     ) {
         Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 10.dp)) {
             Text(
-                "Gestión de celulares",
+                "Consultar equipos",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Text(
-                "Consulta el seguimiento técnico de los equipos.",
+                "Busca por orden, cliente o IMEI y revisa el seguimiento.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -162,18 +161,6 @@ fun ServiceOrdersScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         }
 
-        Button(
-            onClick = { creating = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(48.dp),
-            shape = RoundedCornerShape(12.dp),
-        ) {
-            Text("+  Registrar equipo", fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(10.dp))
-
         when {
             state.serviceOrdersLoading && state.serviceOrders.isEmpty() ->
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -208,29 +195,17 @@ fun ServiceOrdersScreen(state: AppUiState, viewModel: AppViewModel) {
         }
     }
 
-    if (creating) {
-        CreatePhoneOrderScreen(
-            state = state,
-            onDismiss = { if (!state.submitting) creating = false },
-            onSubmit = { request ->
-                viewModel.createServiceOrder(request) { creating = false }
-            },
-        )
-    }
-
     state.selectedServiceOrder?.let { order ->
-        if (!creating) {
-            ServiceOrderDetailScreen(
-                order = order,
-                submitting = state.submitting,
-                pdfLoading = state.receptionPdfLoading,
-                onStatus = { status, comment ->
-                    viewModel.changeServiceOrderStatus(order, status, comment)
-                },
-                onPdf = { viewModel.openReceptionPdf(order) },
-                onDismiss = viewModel::closeServiceOrder,
-            )
-        }
+        ServiceOrderDetailScreen(
+            order = order,
+            submitting = state.submitting,
+            pdfLoading = state.receptionPdfLoading,
+            onStatus = { status, comment ->
+                viewModel.changeServiceOrderStatus(order, status, comment)
+            },
+            onPdf = { viewModel.openReceptionPdf(order) },
+            onDismiss = viewModel::closeServiceOrder,
+        )
     }
 
     state.receptionPdf?.let { pdf ->
@@ -319,9 +294,26 @@ private fun InfoPill(text: String) {
 }
 
 @Composable
-private fun CreatePhoneOrderScreen(
+fun RegisterServiceOrderScreen(
     state: AppUiState,
-    onDismiss: () -> Unit,
+    viewModel: AppViewModel,
+) {
+    var formKey by remember { mutableStateOf(0) }
+    key(formKey) {
+        CreatePhoneOrderForm(
+            state = state,
+            onSubmit = { request ->
+                viewModel.createServiceOrder(request) {
+                    formKey += 1
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun CreatePhoneOrderForm(
+    state: AppUiState,
     onSubmit: (CreateServiceOrderRequest) -> Unit,
 ) {
     val siteChoices = state.serviceOptions.sedes.ifEmpty {
@@ -391,288 +383,269 @@ private fun CreatePhoneOrderScreen(
         ?: state.serviceOptions.checklist
     val technicians = state.serviceOptions.tecnicos
 
-    Dialog(
-        onDismissRequest = { if (!state.submitting) onDismiss() },
-        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(horizontal = 18.dp, vertical = 14.dp),
         ) {
-            Column(Modifier.fillMaxSize()) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Registrar equipo", style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            "Completa la recepción",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = NexoMuted,
+            Text("Registrar equipo", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Completa la recepción del equipo",
+                style = MaterialTheme.typography.bodySmall,
+                color = NexoMuted,
+            )
+        }
+        HorizontalDivider()
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item {
+                SectionCard("Tipo de gestión") {
+                    ChoiceSelector("", managementType, managementChoices) {
+                        managementType = it
+                    }
+                }
+            }
+            item {
+                SectionCard("Tipo de dispositivo") {
+                    ChoiceSelector("", deviceType, deviceChoices) {
+                        deviceType = it
+                        inspection.clear()
+                        if (it != "celular") {
+                            imeiNotApplicable = true
+                            imei = ""
+                        }
+                    }
+                }
+            }
+            if (managementType == "GARANTIA") {
+                item {
+                    SectionCard("Rango de garantía") {
+                        ChoiceSelector("", warrantyRange, warrantyChoices) {
+                            warrantyRange = it
+                        }
+                    }
+                }
+            }
+            if (state.serviceOptions.canTransfer) {
+                item {
+                    SectionCard("¿Se envía a otra sede?") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = !sendToOtherSite,
+                                onClick = {
+                                    sendToOtherSite = false
+                                    destinationTechnicianId = null
+                                },
+                                label = { Text("No · trabajo local") },
+                            )
+                            FilterChip(
+                                selected = sendToOtherSite,
+                                onClick = { sendToOtherSite = true },
+                                label = { Text("Sí · envío") },
+                            )
+                        }
+                        if (sendToOtherSite) {
+                            Spacer(Modifier.height(10.dp))
+                            if (!state.serviceOptions.siteLocked) {
+                                StringSelector("Sede de origen", site, siteChoices) {
+                                    site = it
+                                }
+                                Spacer(Modifier.height(8.dp))
+                            }
+                            TechnicianSelector(
+                                selectedId = destinationTechnicianId,
+                                technicians = technicians,
+                                onSelected = { destinationTechnicianId = it },
+                            )
+                        } else if (!state.serviceOptions.siteLocked) {
+                            Spacer(Modifier.height(10.dp))
+                            StringSelector("Sede", site, siteChoices) { site = it }
+                        }
+                    }
+                }
+            } else if (!state.serviceOptions.siteLocked) {
+                item {
+                    SectionCard("Sede") {
+                        StringSelector("", site, siteChoices) { site = it }
+                    }
+                }
+            }
+            if (needsClient) {
+                item {
+                    SectionCard("Cliente") {
+                        PhoneField(clientName, { clientName = it }, "Cliente *")
+                        Spacer(Modifier.height(8.dp))
+                        PhoneField(clientPhone, { clientPhone = it }, "Teléfono")
+                        Spacer(Modifier.height(8.dp))
+                        PhoneField(clientId, { clientId = it }, "Cédula")
+                    }
+                }
+            }
+            item {
+                SectionCard("Equipo") {
+                    if (isPhone) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = imeiNotApplicable,
+                                onCheckedChange = {
+                                    imeiNotApplicable = it
+                                    if (it) imei = ""
+                                },
+                            )
+                            Text("IMEI no aplica")
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        if (!imeiNotApplicable) {
+                            PhoneField(
+                                imei,
+                                { imei = it.filter(Char::isDigit).take(32) },
+                                "IMEI *",
+                                KeyboardType.Number,
+                            )
+                        } else {
+                            PhoneField(serial, { serial = it }, "Serial *")
+                        }
+                    } else {
+                        PhoneField(serial, { serial = it }, "Serial *")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    PhoneField(brand, { brand = it }, "Marca *")
+                    Spacer(Modifier.height(8.dp))
+                    PhoneField(model, { model = it }, "Modelo *")
+                    Spacer(Modifier.height(8.dp))
+                    PhoneField(color, { color = it }, if (isPhone) "Color *" else "Color")
+                    if (isPhone) {
+                        Spacer(Modifier.height(8.dp))
+                        PhoneField(storage, { storage = it }, "Almacenamiento * (ej. 128 GB)")
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    PhoneField(
+                        deviceValue,
+                        { deviceValue = it },
+                        "Valor del dispositivo",
+                        KeyboardType.Decimal,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    PhoneField(failure, { failure = it }, "Falla o motivo *", singleLine = false)
+                    Spacer(Modifier.height(8.dp))
+                    PhoneField(accessories, { accessories = it }, "Accesorios recibidos")
+                }
+            }
+            item {
+                SectionCard("Prioridad y notas") {
+                    ChoiceSelector("Prioridad", priority, priorityChoices) {
+                        priority = it
+                    }
+                    if (needsClient) {
+                        Spacer(Modifier.height(8.dp))
+                        PhoneField(
+                            promisedDate,
+                            { promisedDate = it },
+                            "Fecha prometida (AAAA-MM-DD)",
                         )
                     }
-                    TextButton(onClick = onDismiss, enabled = !state.submitting) { Text("Cerrar") }
+                    Spacer(Modifier.height(8.dp))
+                    PhoneField(notes, { notes = it }, "Observaciones", singleLine = false)
                 }
-                HorizontalDivider()
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    item {
-                        SectionCard("Tipo de gestión") {
-                            ChoiceSelector("", managementType, managementChoices) {
-                                managementType = it
-                            }
-                        }
-                    }
-                    item {
-                        SectionCard("Tipo de dispositivo") {
-                            ChoiceSelector("", deviceType, deviceChoices) {
-                                deviceType = it
-                                inspection.clear()
-                                if (it != "celular") {
-                                    imeiNotApplicable = true
-                                    imei = ""
-                                }
-                            }
-                        }
-                    }
-                    if (managementType == "GARANTIA") {
-                        item {
-                            SectionCard("Rango de garantía") {
-                                ChoiceSelector("", warrantyRange, warrantyChoices) {
-                                    warrantyRange = it
-                                }
-                            }
-                        }
-                    }
-                    if (state.serviceOptions.canTransfer) {
-                        item {
-                            SectionCard("¿Se envía a otra sede?") {
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    FilterChip(
-                                        selected = !sendToOtherSite,
-                                        onClick = {
-                                            sendToOtherSite = false
-                                            destinationTechnicianId = null
-                                        },
-                                        label = { Text("No · trabajo local") },
-                                    )
-                                    FilterChip(
-                                        selected = sendToOtherSite,
-                                        onClick = { sendToOtherSite = true },
-                                        label = { Text("Sí · envío") },
-                                    )
-                                }
-                                if (sendToOtherSite) {
-                                    Spacer(Modifier.height(10.dp))
-                                    if (!state.serviceOptions.siteLocked) {
-                                        StringSelector("Sede de origen", site, siteChoices) {
-                                            site = it
-                                        }
-                                        Spacer(Modifier.height(8.dp))
-                                    }
-                                    TechnicianSelector(
-                                        selectedId = destinationTechnicianId,
-                                        technicians = technicians,
-                                        onSelected = { destinationTechnicianId = it },
-                                    )
-                                } else if (!state.serviceOptions.siteLocked) {
-                                    Spacer(Modifier.height(10.dp))
-                                    StringSelector("Sede", site, siteChoices) { site = it }
-                                }
-                            }
-                        }
-                    } else if (!state.serviceOptions.siteLocked) {
-                        item {
-                            SectionCard("Sede") {
-                                StringSelector("", site, siteChoices) { site = it }
-                            }
-                        }
-                    }
-                    if (needsClient) {
-                        item {
-                            SectionCard("Cliente") {
-                                PhoneField(clientName, { clientName = it }, "Cliente *")
-                                Spacer(Modifier.height(8.dp))
-                                PhoneField(clientPhone, { clientPhone = it }, "Teléfono")
-                                Spacer(Modifier.height(8.dp))
-                                PhoneField(clientId, { clientId = it }, "Cédula")
-                            }
-                        }
-                    }
-                    item {
-                        SectionCard("Equipo") {
-                            if (isPhone) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(
-                                        checked = imeiNotApplicable,
-                                        onCheckedChange = {
-                                            imeiNotApplicable = it
-                                            if (it) imei = ""
-                                        },
-                                    )
-                                    Text("IMEI no aplica")
-                                }
-                                Spacer(Modifier.height(6.dp))
-                                if (!imeiNotApplicable) {
-                                    PhoneField(
-                                        imei,
-                                        { imei = it.filter(Char::isDigit).take(32) },
-                                        "IMEI *",
-                                        KeyboardType.Number,
-                                    )
-                                } else {
-                                    PhoneField(serial, { serial = it }, "Serial *")
-                                }
-                            } else {
-                                PhoneField(serial, { serial = it }, "Serial *")
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            PhoneField(brand, { brand = it }, "Marca *")
-                            Spacer(Modifier.height(8.dp))
-                            PhoneField(model, { model = it }, "Modelo *")
-                            Spacer(Modifier.height(8.dp))
-                            PhoneField(color, { color = it }, if (isPhone) "Color *" else "Color")
-                            if (isPhone) {
-                                Spacer(Modifier.height(8.dp))
-                                PhoneField(storage, { storage = it }, "Almacenamiento * (ej. 128 GB)")
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            PhoneField(
-                                deviceValue,
-                                { deviceValue = it },
-                                "Valor del dispositivo",
-                                KeyboardType.Decimal,
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            PhoneField(failure, { failure = it }, "Falla o motivo *", singleLine = false)
-                            Spacer(Modifier.height(8.dp))
-                            PhoneField(accessories, { accessories = it }, "Accesorios recibidos")
-                        }
-                    }
-                    item {
-                        SectionCard("Prioridad y notas") {
-                            ChoiceSelector("Prioridad", priority, priorityChoices) {
-                                priority = it
-                            }
-                            if (needsClient) {
-                                Spacer(Modifier.height(8.dp))
-                                PhoneField(
-                                    promisedDate,
-                                    { promisedDate = it },
-                                    "Fecha prometida (AAAA-MM-DD)",
-                                )
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            PhoneField(notes, { notes = it }, "Observaciones", singleLine = false)
-                        }
-                    }
-                    item {
-                        SectionCard("Inspección de recepción") {
-                            checklist.forEach { check ->
-                                Column(
-                                    Modifier.padding(bottom = 8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    Text(check.label, style = MaterialTheme.typography.bodySmall)
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        items(listOf("ok" to "OK", "dano" to "Daño", "na" to "N/A")) { (value, label) ->
-                                            FilterChip(
-                                                selected = inspection[check.value] == value,
-                                                onClick = { inspection[check.value] = value },
-                                                label = { Text(label) },
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if (needsClient) {
-                        item {
-                            SectionCard("Firma") {
-                                SignaturePad(
-                                    strokes = signatureStrokes,
-                                    onSizeChanged = { signatureSize = it },
-                                    onClear = { signatureStrokes.clear() },
-                                )
-                            }
-                        }
-                    }
-                    if (isPhone && !imeiNotApplicable) {
-                        item {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(checked = useExisting, onCheckedChange = { useExisting = it })
-                                Text("Usar este IMEI si ya está registrado")
-                            }
-                        }
-                    }
-                }
-                Surface(
-                    tonalElevation = 2.dp,
-                    shadowElevation = 6.dp,
-                ) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        OutlinedButton(
-                            onClick = onDismiss,
-                            enabled = !state.submitting,
-                            modifier = Modifier.weight(1f),
-                        ) { Text("Cancelar") }
-                        Button(
-                            enabled = !state.submitting &&
-                                (!sendToOtherSite || destinationTechnicianId != null),
-                            onClick = {
-                                onSubmit(
-                                    CreateServiceOrderRequest(
-                                        sede = site,
-                                        managementType = managementType,
-                                        deviceType = deviceType,
-                                        sendToOtherSite = sendToOtherSite,
-                                        destinationTechnicianId = destinationTechnicianId,
-                                        warrantyRange = warrantyRange.ifBlank { null },
-                                        deviceValue = deviceValue.replace(',', '.').toDoubleOrNull(),
-                                        clientName = clientName.ifBlank { null },
-                                        clientPhone = clientPhone.ifBlank { null },
-                                        clientId = clientId.ifBlank { null },
-                                        imei = imei.ifBlank { null },
-                                        imeiNotApplicable = imeiNotApplicable || !isPhone,
-                                        serial = serial.ifBlank { null },
-                                        marca = brand,
-                                        modelo = model,
-                                        color = color,
-                                        almacenamiento = storage,
-                                        falla = failure,
-                                        accesorios = accessories.ifBlank { null },
-                                        prioridad = priority,
-                                        promisedDate = promisedDate.ifBlank { null },
-                                        observaciones = notes.ifBlank { null },
-                                        inspeccion = inspection.toMap(),
-                                        clientSignature = signatureToDataUrl(
-                                            signatureStrokes,
-                                            signatureSize,
-                                        ),
-                                        useExistingDevice = useExisting,
-                                    ),
-                                )
-                            },
-                            modifier = Modifier.weight(1f),
+            }
+            item {
+                SectionCard("Inspección de recepción") {
+                    checklist.forEach { check ->
+                        Column(
+                            Modifier.padding(bottom = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            Text(if (state.submitting) "Guardando…" else "Registrar")
+                            Text(check.label, style = MaterialTheme.typography.bodySmall)
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(listOf("ok" to "OK", "dano" to "Daño", "na" to "N/A")) { (value, label) ->
+                                    FilterChip(
+                                        selected = inspection[check.value] == value,
+                                        onClick = { inspection[check.value] = value },
+                                        label = { Text(label) },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
+            }
+            if (needsClient) {
+                item {
+                    SectionCard("Firma") {
+                        SignaturePad(
+                            strokes = signatureStrokes,
+                            onSizeChanged = { signatureSize = it },
+                            onClear = { signatureStrokes.clear() },
+                        )
+                    }
+                }
+            }
+            if (isPhone && !imeiNotApplicable) {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = useExisting, onCheckedChange = { useExisting = it })
+                        Text("Usar este IMEI si ya está registrado")
+                    }
+                }
+            }
+        }
+        Surface(
+            tonalElevation = 2.dp,
+            shadowElevation = 6.dp,
+        ) {
+            Button(
+                enabled = !state.submitting &&
+                    (!sendToOtherSite || destinationTechnicianId != null),
+                onClick = {
+                    onSubmit(
+                        CreateServiceOrderRequest(
+                            sede = site,
+                            managementType = managementType,
+                            deviceType = deviceType,
+                            sendToOtherSite = sendToOtherSite,
+                            destinationTechnicianId = destinationTechnicianId,
+                            warrantyRange = warrantyRange.ifBlank { null },
+                            deviceValue = deviceValue.replace(',', '.').toDoubleOrNull(),
+                            clientName = clientName.ifBlank { null },
+                            clientPhone = clientPhone.ifBlank { null },
+                            clientId = clientId.ifBlank { null },
+                            imei = imei.ifBlank { null },
+                            imeiNotApplicable = imeiNotApplicable || !isPhone,
+                            serial = serial.ifBlank { null },
+                            marca = brand,
+                            modelo = model,
+                            color = color,
+                            almacenamiento = storage,
+                            falla = failure,
+                            accesorios = accessories.ifBlank { null },
+                            prioridad = priority,
+                            promisedDate = promisedDate.ifBlank { null },
+                            observaciones = notes.ifBlank { null },
+                            inspeccion = inspection.toMap(),
+                            clientSignature = signatureToDataUrl(
+                                signatureStrokes,
+                                signatureSize,
+                            ),
+                            useExistingDevice = useExisting,
+                        ),
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text(if (state.submitting) "Guardando…" else "Registrar equipo")
             }
         }
     }

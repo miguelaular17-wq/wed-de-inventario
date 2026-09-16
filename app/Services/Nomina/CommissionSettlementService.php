@@ -15,6 +15,7 @@ class CommissionSettlementService
 {
     public function __construct(
         private AjusteService $ajustes,
+        private MerchandiseDeductionService $mercancia,
         private NominaDescuentoComentarios $descuentoComentarios,
     ) {
     }
@@ -58,7 +59,8 @@ class CommissionSettlementService
         $abonos = $this->aplicarAbonos($periodo, $empleado)
             + $this->ajustes->aplicarComision($periodo, $empleado, NominaEmpleadoAjuste::TIPO_BONIFICACION);
         $descuentos = $this->aplicarDescuentos($periodo, $empleado)
-            + $this->ajustes->aplicarComision($periodo, $empleado, NominaEmpleadoAjuste::TIPO_DEDUCCION);
+            + $this->ajustes->aplicarComision($periodo, $empleado, NominaEmpleadoAjuste::TIPO_DEDUCCION)
+            + $this->mercancia->aplicarComision($periodo, $empleado);
         $comisionTotal = round((float) ($calculo['total'] ?? 0), 2);
         $bruto = round($comisionTotal + $abonos, 2);
         $modo = (string) ($calculo['modo'] ?? $empleado->modo_comision);

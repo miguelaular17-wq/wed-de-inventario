@@ -17,6 +17,8 @@ use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureSedeSelected;
 use App\Http\Controllers\CompradorController;
 use App\Http\Controllers\MetaQuincenaController;
+use App\Http\Controllers\NfcAccesoController;
+use App\Http\Controllers\Nfc\NfcTarjetaController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PedidoSolicitadoController;
 use App\Http\Controllers\ServicioTecnico\CelularesController;
@@ -37,6 +39,7 @@ use App\Http\Controllers\Nomina\EmpleadoController;
 use App\Http\Controllers\Nomina\EquipoNominaController;
 use App\Http\Controllers\Nomina\FaltanteCajaController;
 use App\Http\Controllers\Nomina\EmpresaNominaController;
+use App\Http\Controllers\Nomina\MercanciaController;
 use App\Http\Controllers\Nomina\OrganizacionController;
 use App\Http\Controllers\Nomina\PeriodoController;
 use App\Http\Controllers\Nomina\PrestamoController;
@@ -90,6 +93,29 @@ Route::get('/', function () {
 Route::get('/ir/servicio-tecnico', function () {
     return redirect()->route('servicio.celulares.hub');
 })->name('goto.servicio');
+
+/** Entrada del chip NFC: exige login; luego muestra la ficha del cliente. */
+Route::middleware(['auth', 'permission:nfc'])->group(function () {
+    Route::get('/nfc/{token}', [NfcAccesoController::class, 'show'])
+        ->where('token', '[A-Za-z0-9]+')
+        ->name('nfc.acceso');
+    Route::put('/nfc/{token}', [NfcAccesoController::class, 'update'])
+        ->where('token', '[A-Za-z0-9]+')
+        ->name('nfc.acceso.update');
+});
+
+/** Módulo aparte: gestión de tarjetas NFC ↔ clientes. */
+Route::middleware(['auth', 'permission:nfc'])
+    ->prefix('tarjetas-nfc')
+    ->name('nfc.')
+    ->group(function () {
+        Route::get('/', [NfcTarjetaController::class, 'index'])->name('index');
+        Route::post('/', [NfcTarjetaController::class, 'store'])->name('store');
+        Route::get('/{tarjeta}', [NfcTarjetaController::class, 'show'])->whereNumber('tarjeta')->name('show');
+        Route::put('/{tarjeta}', [NfcTarjetaController::class, 'update'])->whereNumber('tarjeta')->name('update');
+        Route::post('/{tarjeta}/desactivar', [NfcTarjetaController::class, 'desactivar'])->whereNumber('tarjeta')->name('desactivar');
+        Route::post('/{tarjeta}/reactivar', [NfcTarjetaController::class, 'reactivar'])->whereNumber('tarjeta')->name('reactivar');
+    });
 
 Route::prefix('servicio-tecnico/celulares')->name('servicio.celulares.')->group(function () {
     Route::get('/', [CelularesController::class, 'hub'])->name('hub');
@@ -290,10 +316,12 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::post('/periodos/{periodo}/cerrar', [PeriodoController::class, 'cerrar'])->name('periodos.cerrar');
     Route::get('/periodos/{periodo}/banco/{empresa}', [PeriodoController::class, 'exportarBanco'])->name('periodos.banco');
     Route::get('/periodos/{periodo}/relacion', [PeriodoController::class, 'relacion'])->name('periodos.relacion');
+    Route::get('/periodos/{periodo}/reporte-sedes.pdf', [PeriodoController::class, 'reporteSedesPdf'])->name('periodos.reporte_sedes');
 
     Route::get('/comisiones', [ComisionController::class, 'index'])->name('comisiones.index');
     Route::get('/comisiones/{periodo}', [ComisionController::class, 'show'])->name('comisiones.show');
     Route::get('/comisiones/{periodo}/relacion', [ComisionController::class, 'relacion'])->name('comisiones.relacion');
+    Route::get('/comisiones/{periodo}/reporte-sedes.pdf', [ComisionController::class, 'reporteSedesPdf'])->name('comisiones.reporte_sedes');
     Route::post('/comisiones/{periodo}/recalcular', [ComisionController::class, 'recalcular'])->name('comisiones.recalcular');
     Route::get('/comisiones/{periodo}/banco/{empresa}', [ComisionController::class, 'exportarBanco'])->name('comisiones.banco');
 
@@ -327,6 +355,11 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::post('/ajustes', [AjusteController::class, 'storeEscritorio'])->name('ajustes.escritorio');
     Route::post('/empleados/{empleado}/ajustes', [AjusteController::class, 'store'])->name('ajustes.store');
     Route::post('/ajustes/{ajuste}/cancelar', [AjusteController::class, 'cancelar'])->name('ajustes.cancelar');
+    Route::get('/mercancia', [MercanciaController::class, 'index'])->name('mercancia.index');
+    Route::get('/mercancia/excel', [MercanciaController::class, 'exportarExcel'])->name('mercancia.excel');
+    Route::post('/mercancia', [MercanciaController::class, 'storeEscritorio'])->name('mercancia.escritorio');
+    Route::post('/empleados/{empleado}/mercancia', [MercanciaController::class, 'store'])->name('mercancia.store');
+    Route::post('/mercancia/{descuento}/cancelar', [MercanciaController::class, 'cancelar'])->name('mercancia.cancelar');
     Route::get('/faltante-caja', [FaltanteCajaController::class, 'index'])->name('faltante_caja.index');
     Route::get('/faltante-caja/excel', [FaltanteCajaController::class, 'exportarExcel'])->name('faltante_caja.excel');
     Route::post('/faltante-caja', [FaltanteCajaController::class, 'store'])->name('faltante_caja.store');

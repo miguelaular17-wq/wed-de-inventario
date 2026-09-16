@@ -76,6 +76,9 @@
         'tasaBcv' => $tasaBcv ?? 0,
         'tasaBcvEtiqueta' => 'Tasa BCV del cierre ('.($periodo->fecha_fin?->format('d/m/Y') ?: '—').')',
         'filtroTargets' => ['tabla-nomina-periodo'],
+        'pdfRoute' => $periodo->estado !== 'ABIERTO'
+            ? route('nomina.periodos.reporte_sedes', $periodo)
+            : null,
     ])
 
     <div class="nomina-card" style="margin-top:16px;">

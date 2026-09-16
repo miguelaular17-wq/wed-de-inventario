@@ -89,6 +89,7 @@
             $nav[] = count($gerencialItems) === 1 ? $gerencialItems[0] : $drop('Gerencial', $gerencialItems);
         }
         $nav[] = $link('Dashboard', route('admin.dashboard'), request()->routeIs('admin.dashboard'), 'admin-dashboard');
+        $nav[] = $link('Tarjetas NFC', route('nfc.index'), request()->routeIs('nfc.*'));
         $nav[] = $drop('Sistema', [
             $link('Movimientos', route('admin.movimientos.index'), request()->routeIs('admin.movimientos.*'), 'admin-movimientos'),
             $link('Productos', route('admin.productos.index'), request()->routeIs('admin.productos.*')),
@@ -186,6 +187,10 @@
         }
     }
 
+    if ($u->role !== 'admin' && $u->canAccess('nfc')) {
+        $nav[] = $link('Tarjetas NFC', route('nfc.index'), request()->routeIs('nfc.*'));
+    }
+
     if ($u->role !== 'admin' && ! $u->canAccess('nomina') && $u->canAccess('nomina.equipo')) {
         $nav[] = $link('Nómina del equipo', route('nomina.equipo.index'), request()->routeIs('nomina.equipo.*'));
     }
@@ -200,6 +205,7 @@
             $link('Comisiones', route('nomina.comisiones.index'), request()->routeIs('nomina.comisiones.*')),
             $link('Adelantos', route('nomina.adelantos.index'), request()->routeIs('nomina.adelantos.*')),
             $link('Faltante de caja', route('nomina.faltante_caja.index'), request()->routeIs('nomina.faltante_caja.*')),
+            $link('Descuento mercancía', route('nomina.mercancia.index'), request()->routeIs('nomina.mercancia.*')),
             $link('Deducciones y bonos', route('nomina.ajustes.index'), request()->routeIs('nomina.ajustes.index', 'nomina.ajustes.escritorio')),
             $link('Horas extras', route('nomina.horas_extras.index'), request()->routeIs('nomina.horas_extras.index', 'nomina.horas_extras.masivas')),
             $link('Préstamos', route('nomina.prestamos.index'), request()->routeIs('nomina.prestamos.*')),

@@ -68,6 +68,9 @@
         'tasaBcv' => $tasaBcv ?? 0,
         'tasaBcvEtiqueta' => 'Tasa BCV del cierre ('.($periodo->fecha_fin?->format('d/m/Y') ?: '—').')',
         'filtroTargets' => ['tabla-comisiones-ventas', 'tabla-comisiones-st'],
+        'pdfRoute' => $periodo->estado !== 'ABIERTO'
+            ? route('nomina.comisiones.reporte_sedes', $periodo)
+            : null,
     ])
 
     <h3 style="margin:20px 0 0;">Supervisores y vendedores</h3>

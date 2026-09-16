@@ -211,7 +211,7 @@ class EmpleadoController extends Controller
             return redirect()->route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'ajustes']);
         }
         if ($tab === 'mercancia') {
-            return redirect()->route('nomina.faltante_caja.index');
+            return redirect()->route('nomina.mercancia.index');
         }
         if ($tab === 'comisiones' && ! $empleado->generaComision()) {
             return redirect()->route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'personal']);

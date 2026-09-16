@@ -8,12 +8,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class NominaDescuentoMercancia extends Model
 {
+    public const DESTINO_NOMINA = 'NOMINA';
+
+    public const DESTINO_COMISION = 'COMISION';
+
     protected $table = 'nomina_descuentos_mercancia';
 
     protected $fillable = [
         'empleado_id',
         'fecha',
         'monto',
+        'destino',
         'quincena_inicio',
         'quincena_fin',
         'etiqueta',
@@ -43,5 +48,10 @@ class NominaDescuentoMercancia extends Model
     public function isPendiente(): bool
     {
         return $this->estado === 'PENDIENTE';
+    }
+
+    public function etiquetaDestino(): string
+    {
+        return $this->destino === self::DESTINO_COMISION ? 'Comisión' : 'Nómina';
     }
 }

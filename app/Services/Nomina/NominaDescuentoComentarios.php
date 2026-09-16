@@ -92,8 +92,18 @@ class NominaDescuentoComentarios
         foreach ($this->filas(NominaInasistencia::class, $empleado->id, $periodo->id, 'nomina_periodo_id') as $row) {
             $lineas[] = $this->linea('Inasistencia', $row->motivo ?? null, (float) $row->monto, 'inasistencia');
         }
-        foreach ($this->filas(NominaDescuentoMercancia::class, $empleado->id, $periodo->id, 'nomina_periodo_id') as $row) {
-            $lineas[] = $this->linea('Mercancía', $row->motivo ?? null, (float) $row->monto, 'mercancia');
+        if (Schema::hasTable('nomina_descuentos_mercancia')) {
+            foreach (NominaDescuentoMercancia::query()
+                ->where('empleado_id', $empleado->id)
+                ->where('nomina_periodo_id', $periodo->id)
+                ->where(function ($q) {
+                    $q->where('destino', NominaDescuentoMercancia::DESTINO_NOMINA)
+                        ->orWhereNull('destino');
+                })
+                ->orderBy('id')
+                ->get() as $row) {
+                $lineas[] = $this->linea('Mercancía', $row->motivo ?? null, (float) $row->monto, 'mercancia');
+            }
         }
         if (Schema::hasTable('nomina_comision_descuentos') && ! $empleado->generaComision()) {
             foreach (NominaComisionDescuento::query()
@@ -157,6 +167,17 @@ class NominaDescuentoComentarios
                 ->where('tipo', NominaEmpleadoAjuste::TIPO_DEDUCCION)
                 ->get() as $row) {
                 $lineas[] = $this->linea('Deducción', $row->motivo ?? null, (float) $row->monto, 'descuento');
+            }
+        }
+
+        if (Schema::hasTable('nomina_descuentos_mercancia')) {
+            foreach (NominaDescuentoMercancia::query()
+                ->where('empleado_id', $empleado->id)
+                ->where('nomina_periodo_id', $periodo->id)
+                ->where('destino', NominaDescuentoMercancia::DESTINO_COMISION)
+                ->orderBy('id')
+                ->get() as $row) {
+                $lineas[] = $this->linea('Mercancía', $row->motivo ?? null, (float) $row->monto, 'descuento');
             }
         }
 

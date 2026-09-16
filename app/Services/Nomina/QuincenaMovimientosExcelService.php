@@ -4,6 +4,7 @@ namespace App\Services\Nomina;
 
 use App\Models\Nomina\NominaAbonoSueldo;
 use App\Models\Nomina\NominaComisionDescuento;
+use App\Models\Nomina\NominaDescuentoMercancia;
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaEmpleadoAjuste;
 use App\Models\Nomina\NominaHoraExtra;
@@ -82,6 +83,7 @@ class QuincenaMovimientosExcelService
         $sheets = match ($modulo) {
             'adelantos' => ['Adelantos' => $this->filasAdelantos($quincena)],
             'faltante_caja' => ['Faltante caja' => $this->filasFaltante($quincena)],
+            'mercancia' => ['Descuento mercancia' => $this->filasMercancia($quincena)],
             'ajustes' => ['Deducciones y bonos' => $this->filasAjustes($quincena)],
             'horas_extras' => ['Horas extras' => $this->filasHorasExtras($quincena)],
             'prestamos' => [
@@ -160,6 +162,41 @@ class QuincenaMovimientosExcelService
         foreach ($rows as $row) {
             $out[] = array_merge($this->colsEmpleado($row->empleado), [
                 $row->fecha?->toDateString(),
+                round((float) $row->monto, 2),
+                $row->estado,
+                $row->motivo ?? '',
+                $quincena['etiqueta'],
+            ]);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array{inicio:Carbon,fin:Carbon,etiqueta:string}  $quincena
+     * @return list<list<string|float|int|null>>
+     */
+    public function filasMercancia(array $quincena): array
+    {
+        $header = $this->headerEmpleado(['Fecha', 'Destino', 'Monto USD', 'Estado', 'Motivo', 'Quincena']);
+        if (! Schema::hasTable('nomina_descuentos_mercancia')) {
+            return [$header];
+        }
+
+        $rows = NominaDescuentoMercancia::query()
+            ->with(['empleado.cliente', 'empleado.sedeCatalogo', 'empleado.empresa'])
+            ->whereDate('quincena_inicio', $quincena['inicio']->toDateString())
+            ->whereDate('quincena_fin', $quincena['fin']->toDateString())
+            ->where('estado', '!=', 'CANCELADO')
+            ->orderBy('fecha')
+            ->orderBy('id')
+            ->get();
+
+        $out = [$header];
+        foreach ($rows as $row) {
+            $out[] = array_merge($this->colsEmpleado($row->empleado), [
+                $row->fecha?->toDateString(),
+                $row->destino ?: NominaDescuentoMercancia::DESTINO_NOMINA,
                 round((float) $row->monto, 2),
                 $row->estado,
                 $row->motivo ?? '',

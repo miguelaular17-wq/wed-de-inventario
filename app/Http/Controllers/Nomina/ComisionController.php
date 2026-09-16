@@ -126,6 +126,38 @@ class ComisionController extends Controller
         return $pdf->download($nombreBase.'.pdf');
     }
 
+    public function reporteSedesPdf(NominaPeriodo $periodo)
+    {
+        if ($periodo->estado === NominaPeriodo::ABIERTO) {
+            return redirect()
+                ->route('nomina.comisiones.show', $periodo)
+                ->withErrors(['periodo' => 'Calcula la nómina antes de descargar este reporte.']);
+        }
+
+        $liquidaciones = NominaLiquidacionComision::query()
+            ->where('periodo_id', $periodo->id)
+            ->visibles()
+            ->with(['empleado.cliente', 'empleado.sedeCatalogo'])
+            ->orderBy('id')
+            ->get();
+
+        $tasaBcv = $this->bcv->tasaParaPeriodo($periodo);
+        $filas = $this->sedeAreaTotals->conVentasNetas(
+            $this->sedeAreaTotals->deLiquidaciones($liquidaciones, $tasaBcv),
+            $periodo
+        );
+
+        $pdf = Pdf::loadView('nomina.periodos.pdf-totales-sede', [
+            'periodo' => $periodo,
+            'filas' => $filas,
+            'tasaBcv' => $tasaBcv,
+            'logoPath' => $this->logoNominaPdf(),
+            'titulo' => 'Totales de comisiones por sede',
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('totales_sedes_comisiones_'.$periodo->id.'_'.$periodo->fecha_inicio?->format('Ymd').'.pdf');
+    }
+
     public function recalcular(NominaPeriodo $periodo): RedirectResponse
     {
         $this->periods->recalcularComisiones($periodo, auth()->id());

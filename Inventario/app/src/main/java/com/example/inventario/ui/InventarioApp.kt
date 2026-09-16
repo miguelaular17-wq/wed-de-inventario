@@ -24,6 +24,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -37,6 +39,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -185,6 +188,9 @@ private fun LoginScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeScreen(state: AppUiState, viewModel: AppViewModel) {
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Consultar", "Registrar")
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -206,9 +212,35 @@ private fun HomeScreen(state: AppUiState, viewModel: AppViewModel) {
                 },
             )
         },
+        bottomBar = {
+            NavigationBar {
+                tabs.forEachIndexed { index, label ->
+                    NavigationBarItem(
+                        selected = selectedTab == index,
+                        onClick = {
+                            selectedTab = index
+                            if (index == 1) {
+                                viewModel.closeServiceOrder()
+                                viewModel.closeReceptionPdf()
+                            }
+                        },
+                        icon = {
+                            Text(
+                                if (index == 0) "⌕" else "+",
+                                fontWeight = FontWeight.Bold,
+                            )
+                        },
+                        label = { Text(label) },
+                    )
+                }
+            }
+        },
     ) { padding ->
-        Column(Modifier.padding(padding)) {
-            ServiceOrdersScreen(state, viewModel)
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            when (selectedTab) {
+                0 -> ServiceOrdersScreen(state, viewModel)
+                else -> RegisterServiceOrderScreen(state, viewModel)
+            }
         }
     }
 }

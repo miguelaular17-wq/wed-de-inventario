@@ -41,6 +41,7 @@ return [
         'servicio' => 'Servicio técnico',
         'servicio.inventario' => 'Inventario de repuestos (servicio técnico)',
         'servicio.transferir' => 'Transferir celulares / órdenes entre sedes',
+        'nfc' => 'Tarjetas NFC (asignar y fichas de cliente)',
     ],
 
     /*
@@ -72,6 +73,7 @@ return [
         'Nómina' => ['nomina', 'nomina.equipo'],
         'Gerencial' => ['gerencial', 'gerencial.devoluciones', 'gerencial.valorizados', 'gerencial.ajustes', 'gerencial.rentabilidad', 'gerencial.clientes'],
         'Servicio técnico' => ['servicio', 'servicio.inventario', 'servicio.transferir'],
+        'Tarjetas NFC' => ['nfc'],
     ],
 
     'roles' => [
