@@ -32,7 +32,7 @@ class FaltanteCajaService
     }
 
     /**
-     * Cajeras/cajeros activos (cargo "Cajero"/"Cajera" o texto legacy con "cajer").
+     * Cajeras/cajeros y supervisores activos (cargo o texto legacy).
      */
     public function cajeras(?string $q = null): Collection
     {
@@ -42,9 +42,13 @@ class FaltanteCajaService
             ->where(function ($builder) {
                 $builder
                     ->whereHas('cargoCatalogo', function ($cargo) {
-                        $cargo->whereRaw('LOWER(nombre) LIKE ?', ['%cajer%']);
+                        $cargo->where(function ($nombre) {
+                            $nombre->whereRaw('LOWER(nombre) LIKE ?', ['%cajer%'])
+                                ->orWhereRaw('LOWER(nombre) LIKE ?', ['%supervisor%']);
+                        });
                     })
-                    ->orWhereRaw('LOWER(COALESCE(cargo, \'\')) LIKE ?', ['%cajer%']);
+                    ->orWhereRaw('LOWER(COALESCE(cargo, \'\')) LIKE ?', ['%cajer%'])
+                    ->orWhereRaw('LOWER(COALESCE(cargo, \'\')) LIKE ?', ['%supervisor%']);
             })
             ->join('clientes', 'clientes.id', '=', 'nomina_empleados.cliente_id')
             ->select('nomina_empleados.*')
@@ -65,9 +69,9 @@ class FaltanteCajaService
             ]);
         }
 
-        if (! $this->esCajera($empleado)) {
+        if (! $this->puedeRegistrarFaltante($empleado)) {
             throw ValidationException::withMessages([
-                'empleado_id' => 'Solo se puede cargar faltante de caja a cajeros/cajeras.',
+                'empleado_id' => 'Solo se puede cargar faltante de caja a cajeros/cajeras o supervisores.',
             ]);
         }
 
@@ -684,5 +688,18 @@ class FaltanteCajaService
         $nombre = mb_strtolower((string) ($empleado->cargoCatalogo?->nombre ?: $empleado->cargo ?: ''));
 
         return str_contains($nombre, 'cajer');
+    }
+
+    public function esSupervisor(NominaEmpleado $empleado): bool
+    {
+        $empleado->loadMissing('cargoCatalogo');
+        $nombre = mb_strtolower((string) ($empleado->cargoCatalogo?->nombre ?: $empleado->cargo ?: ''));
+
+        return str_contains($nombre, 'supervisor');
+    }
+
+    public function puedeRegistrarFaltante(NominaEmpleado $empleado): bool
+    {
+        return $this->esCajera($empleado) || $this->esSupervisor($empleado);
     }
 }

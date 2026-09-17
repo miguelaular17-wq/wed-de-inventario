@@ -14,7 +14,7 @@
     </div>
 
     <div class="nomina-kpis">
-        <div class="nomina-kpi"><span>Cajeras activas</span><strong>{{ $kpis['cajeras'] }}</strong></div>
+        <div class="nomina-kpi"><span>Cajeras / supervisores</span><strong>{{ $kpis['cajeras'] }}</strong></div>
         <div class="nomina-kpi"><span>En cuentas</span><strong>${{ number_format($kpis['por_decidir'] ?? 0, 2) }}</strong></div>
         <div class="nomina-kpi"><span>A descontar</span><strong>${{ number_format($kpis['pendiente'], 2) }}</strong></div>
         <div class="nomina-kpi"><span>Del día</span><strong>${{ number_format($kpis['del_dia'], 2) }}</strong></div>
@@ -27,7 +27,7 @@
             <input type="date" name="fecha" value="{{ $fecha }}">
         </div>
         <div class="field field-wide">
-            <label>Buscar cajera</label>
+            <label>Buscar cajera / supervisor</label>
             <input type="text" name="q" value="{{ $q }}" placeholder="Nombre o cédula">
         </div>
         <div class="field" style="display:flex;align-items:flex-end;gap:8px;">
@@ -39,7 +39,7 @@
     </div>
 
     <div class="nomina-card" style="margin-top:16px;">
-        <h3>Cuentas por cajera</h3>
+        <h3>Cuentas por cajera / supervisor</h3>
         <table class="data-table">
             <thead>
                 <tr>
@@ -90,9 +90,9 @@
                     <tr>
                         <td colspan="6" class="muted">
                             @if($q !== '')
-                                Ninguna cajera coincide con “{{ $q }}”.
+                                Nadie coincide con “{{ $q }}”.
                             @else
-                                No hay empleados activos con cargo de cajero/cajera.
+                                No hay empleados activos con cargo de cajero/cajera o supervisor.
                             @endif
                         </td>
                     </tr>
