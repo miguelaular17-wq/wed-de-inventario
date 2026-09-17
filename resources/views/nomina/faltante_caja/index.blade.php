@@ -14,7 +14,7 @@
     </div>
 
     <div class="nomina-kpis">
-        <div class="nomina-kpi"><span>Cajeras / supervisores</span><strong>{{ $kpis['cajeras'] }}</strong></div>
+        <div class="nomina-kpi"><span>Cajeras / supervisores / call</span><strong>{{ $kpis['cajeras'] }}</strong></div>
         <div class="nomina-kpi"><span>En cuentas</span><strong>${{ number_format($kpis['por_decidir'] ?? 0, 2) }}</strong></div>
         <div class="nomina-kpi"><span>A descontar</span><strong>${{ number_format($kpis['pendiente'], 2) }}</strong></div>
         <div class="nomina-kpi"><span>Del día</span><strong>${{ number_format($kpis['del_dia'], 2) }}</strong></div>
@@ -27,7 +27,7 @@
             <input type="date" name="fecha" value="{{ $fecha }}">
         </div>
         <div class="field field-wide">
-            <label>Buscar cajera / supervisor</label>
+            <label>Buscar persona</label>
             <input type="text" name="q" value="{{ $q }}" placeholder="Nombre o cédula">
         </div>
         <div class="field" style="display:flex;align-items:flex-end;gap:8px;">
@@ -39,13 +39,14 @@
     </div>
 
     <div class="nomina-card" style="margin-top:16px;">
-        <h3>Cuentas por cajera / supervisor</h3>
+        <h3>Cuentas por cajera / supervisor / call center</h3>
         <table class="data-table">
             <thead>
                 <tr>
                     <th>Empleado</th>
                     <th>Cédula</th>
                     <th>Sede</th>
+                    <th>Salto registrado</th>
                     <th>Cuenta</th>
                     <th>A descontar</th>
                     <th>Registrar (suma a cuenta)</th>
@@ -54,7 +55,7 @@
             <tbody>
                 @forelse($cajeras as $empleado)
                     @php
-                        $cuenta = $cuentasPorEmpleado[$empleado->id] ?? ['cuenta' => 0, 'a_descontar' => 0];
+                        $cuenta = $cuentasPorEmpleado[$empleado->id] ?? ['cuenta' => 0, 'a_descontar' => 0, 'salto' => 0];
                     @endphp
                     <tr>
                         <td>
@@ -72,7 +73,8 @@
                         </td>
                         <td>{{ $empleado->cedula() ?: '—' }}</td>
                         <td>{{ $empleado->nombreSede() }}</td>
-                        <td><strong>${{ number_format($cuenta['cuenta'], 2) }}</strong></td>
+                        <td><strong>${{ number_format($cuenta['salto'] ?? 0, 2) }}</strong></td>
+                        <td>${{ number_format($cuenta['cuenta'], 2) }}</td>
                         <td>${{ number_format($cuenta['a_descontar'], 2) }}</td>
                         <td>
                             <form method="POST" action="{{ route('nomina.faltante_caja.store') }}" class="nomina-inline-form" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
@@ -88,11 +90,11 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="muted">
+                        <td colspan="7" class="muted">
                             @if($q !== '')
                                 Nadie coincide con “{{ $q }}”.
                             @else
-                                No hay empleados activos con cargo de cajero/cajera o supervisor.
+                                No hay empleados activos con cargo de cajero/cajera, supervisor o call center.
                             @endif
                         </td>
                     </tr>

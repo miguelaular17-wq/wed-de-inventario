@@ -32,7 +32,7 @@ class FaltanteCajaService
     }
 
     /**
-     * Cajeras/cajeros y supervisores activos (cargo o texto legacy).
+     * Cajeras, supervisores y call center activos (cargo o texto legacy).
      */
     public function cajeras(?string $q = null): Collection
     {
@@ -44,11 +44,15 @@ class FaltanteCajaService
                     ->whereHas('cargoCatalogo', function ($cargo) {
                         $cargo->where(function ($nombre) {
                             $nombre->whereRaw('LOWER(nombre) LIKE ?', ['%cajer%'])
-                                ->orWhereRaw('LOWER(nombre) LIKE ?', ['%supervisor%']);
+                                ->orWhereRaw('LOWER(nombre) LIKE ?', ['%supervisor%'])
+                                ->orWhereRaw('LOWER(nombre) LIKE ?', ['%call center%'])
+                                ->orWhereRaw('LOWER(nombre) LIKE ?', ['%callcenter%']);
                         });
                     })
                     ->orWhereRaw('LOWER(COALESCE(cargo, \'\')) LIKE ?', ['%cajer%'])
-                    ->orWhereRaw('LOWER(COALESCE(cargo, \'\')) LIKE ?', ['%supervisor%']);
+                    ->orWhereRaw('LOWER(COALESCE(cargo, \'\')) LIKE ?', ['%supervisor%'])
+                    ->orWhereRaw('LOWER(COALESCE(cargo, \'\')) LIKE ?', ['%call center%'])
+                    ->orWhereRaw('LOWER(COALESCE(cargo, \'\')) LIKE ?', ['%callcenter%']);
             })
             ->join('clientes', 'clientes.id', '=', 'nomina_empleados.cliente_id')
             ->select('nomina_empleados.*')
@@ -71,7 +75,7 @@ class FaltanteCajaService
 
         if (! $this->puedeRegistrarFaltante($empleado)) {
             throw ValidationException::withMessages([
-                'empleado_id' => 'Solo se puede cargar faltante de caja a cajeros/cajeras o supervisores.',
+                'empleado_id' => 'Solo se puede cargar faltante de caja a cajeros/cajeras, supervisores o call center.',
             ]);
         }
 
@@ -195,13 +199,30 @@ class FaltanteCajaService
     }
 
     /**
-     * @return array{cuenta:float,a_descontar:float}
+     * Total registrado (salto) que no se reduce al decidir: cuenta + a descontar + no descontar.
+     */
+    public function saltoRegistrado(NominaEmpleado $empleado): float
+    {
+        if (! $this->disponible()) {
+            return 0.0;
+        }
+
+        return round((float) NominaComisionDescuento::query()
+            ->where('empleado_id', $empleado->id)
+            ->where('tipo', 'FALTANTE')
+            ->where('estado', 'PENDIENTE')
+            ->sum('monto'), 2);
+    }
+
+    /**
+     * @return array{cuenta:float,a_descontar:float,salto:float}
      */
     public function resumenCuenta(NominaEmpleado $empleado): array
     {
         return [
             'cuenta' => $this->saldoCuenta($empleado),
             'a_descontar' => $this->pendienteDe($empleado),
+            'salto' => $this->saltoRegistrado($empleado),
         ];
     }
 
@@ -698,8 +719,18 @@ class FaltanteCajaService
         return str_contains($nombre, 'supervisor');
     }
 
+    public function esCallCenter(NominaEmpleado $empleado): bool
+    {
+        $empleado->loadMissing('cargoCatalogo');
+        $nombre = mb_strtolower((string) ($empleado->cargoCatalogo?->nombre ?: $empleado->cargo ?: ''));
+
+        return str_contains($nombre, 'call center') || str_contains(str_replace(' ', '', $nombre), 'callcenter');
+    }
+
     public function puedeRegistrarFaltante(NominaEmpleado $empleado): bool
     {
-        return $this->esCajera($empleado) || $this->esSupervisor($empleado);
+        return $this->esCajera($empleado)
+            || $this->esSupervisor($empleado)
+            || $this->esCallCenter($empleado);
     }
 }
