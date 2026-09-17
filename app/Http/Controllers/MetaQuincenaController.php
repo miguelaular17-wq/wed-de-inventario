@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\MetaQuincenaProducto;
 use App\Services\MetaQuincenaService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 class MetaQuincenaController extends Controller
@@ -149,5 +151,80 @@ class MetaQuincenaController extends Controller
             'sedes_marcables' => $metas->sedesMarcables(),
             'sede_central' => mb_strtoupper(trim((string) config('inventario.sede_central', 'JRZ')), 'UTF-8'),
         ]);
+    }
+
+    public function reporteAvances(Request $request, MetaQuincenaService $metas): Response
+    {
+        $user = $request->user();
+        abort_unless($metas->puedeVerMetas($user), 403);
+
+        $quincena = $metas->resolverQuincenaListado($request->query('inicio'));
+        $filas = $metas->listarParaUsuario($user, $quincena['inicio']);
+
+        $sedeFiltro = mb_strtoupper(trim((string) $request->query('sede', '')), 'UTF-8');
+        if ($sedeFiltro !== '') {
+            if (! $user->canAccess('meta') && ! $user->isAdmin() && ! $user->isGerente()) {
+                $permitidas = $metas->sedesDelSupervisor($user);
+                abort_unless(in_array($sedeFiltro, $permitidas, true), 403);
+            }
+            $filas = $filas->where('sede', $sedeFiltro)->values();
+        }
+
+        $porSede = $filas
+            ->groupBy('sede')
+            ->sortKeys()
+            ->map(function ($grupo, $sede) {
+                $inicial = (float) $grupo->sum('cantidad_inicial');
+                $vendido = (float) $grupo->sum('vendido');
+
+                return [
+                    'sede' => $sede,
+                    'productos' => $grupo->sortBy('producto')->values(),
+                    'totales' => [
+                        'productos' => $grupo->count(),
+                        'cantidad_inicial' => $inicial,
+                        'cantidad_actual' => (float) $grupo->sum('cantidad_actual'),
+                        'vendido' => $vendido,
+                        'avance_pct' => $inicial > 0
+                            ? round(min(100, ($vendido / $inicial) * 100), 1)
+                            : ($vendido > 0 ? 100.0 : 0.0),
+                    ],
+                ];
+            })
+            ->values();
+
+        $titulo = $sedeFiltro !== ''
+            ? 'Avance productos meta · '.$sedeFiltro
+            : 'Avance productos meta por sede';
+
+        $pdf = Pdf::loadView('metas.pdf.avances', [
+            'titulo' => $titulo,
+            'quincena' => $quincena,
+            'porSede' => $porSede,
+            'sedeFiltro' => $sedeFiltro !== '' ? $sedeFiltro : null,
+            'logoPath' => $this->logoMetasPdf(),
+            'generadoPor' => $user->name,
+        ])->setPaper('a4', 'portrait');
+
+        $slugSede = $sedeFiltro !== ''
+            ? preg_replace('/[^A-Za-z0-9]+/', '_', $sedeFiltro)
+            : 'todas';
+        $nombre = 'metas_avances_'.$slugSede.'_'.$quincena['inicio']->format('Ymd').'.pdf';
+
+        return $pdf->download($nombre);
+    }
+
+    private function logoMetasPdf(): ?string
+    {
+        $path = public_path('logo.png');
+        if (! is_file($path)) {
+            return null;
+        }
+        $raw = @file_get_contents($path);
+        if ($raw === false || $raw === '') {
+            return null;
+        }
+
+        return 'data:image/png;base64,'.base64_encode($raw);
     }
 }

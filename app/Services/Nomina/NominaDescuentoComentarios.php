@@ -105,12 +105,24 @@ class NominaDescuentoComentarios
                 $lineas[] = $this->linea('Mercancía', $row->motivo ?? null, (float) $row->monto, 'mercancia');
             }
         }
-        if (Schema::hasTable('nomina_comision_descuentos') && ! $empleado->generaComision()) {
-            foreach (NominaComisionDescuento::query()
+        if (Schema::hasTable('nomina_comision_descuentos')) {
+            $faltantesNomina = NominaComisionDescuento::query()
                 ->where('empleado_id', $empleado->id)
                 ->where('periodo_id', $periodo->id)
                 ->where('tipo', 'FALTANTE')
-                ->get() as $row) {
+                ->where(function ($q) use ($empleado) {
+                    if (Schema::hasColumn('nomina_comision_descuentos', 'destino')) {
+                        $q->where('destino', NominaComisionDescuento::DESTINO_NOMINA);
+                        if (! $empleado->generaComision()) {
+                            $q->orWhereNull('destino');
+                        }
+                    } else {
+                        $q->whereRaw('1 = ?', [$empleado->generaComision() ? 0 : 1]);
+                    }
+                })
+                ->orderBy('id')
+                ->get();
+            foreach ($faltantesNomina as $row) {
                 $lineas[] = $this->linea('Faltante de caja', $row->motivo ?? null, (float) $row->monto, 'faltante_caja');
             }
         }
@@ -147,6 +159,18 @@ class NominaDescuentoComentarios
             foreach (NominaComisionDescuento::query()
                 ->where('empleado_id', $empleado->id)
                 ->where('periodo_id', $periodo->id)
+                ->where(function ($q) {
+                    $q->where('tipo', '!=', 'FALTANTE')
+                        ->orWhere(function ($f) {
+                            $f->where('tipo', 'FALTANTE');
+                            if (Schema::hasColumn('nomina_comision_descuentos', 'destino')) {
+                                $f->where(function ($d) {
+                                    $d->where('destino', NominaComisionDescuento::DESTINO_COMISION)
+                                        ->orWhereNull('destino');
+                                });
+                            }
+                        });
+                })
                 ->get() as $row) {
                 $tipoRaw = strtoupper((string) $row->tipo);
                 $tipo = match ($tipoRaw) {

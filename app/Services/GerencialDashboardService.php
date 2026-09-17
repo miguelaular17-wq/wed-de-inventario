@@ -125,16 +125,254 @@ class GerencialDashboardService
                 ->pluck('categoria');
         }
         if (Schema::hasTable('ventas_detalle')) {
-            $vendedores = DB::table('ventas_detalle')
-                ->whereNotNull('vendedor')
-                ->where('vendedor', '!=', '')
-                ->distinct()
-                ->orderBy('vendedor')
-                ->limit(400)
-                ->pluck('vendedor');
+            $vendedores = $this->catalogoVendedoresUnicos();
         }
 
         return compact('categorias', 'vendedores');
+    }
+
+    /**
+     * Lista de vendedores sin duplicados por acentos, mayúsculas o typos cercanos
+     * (p. ej. ANDRÉS/ANDRES, VELASCO/VELAZCO). El valor mostrado es el más usado.
+     *
+     * @return \Illuminate\Support\Collection<int, string>
+     */
+    public function catalogoVendedoresUnicos()
+    {
+        $rows = DB::table('ventas_detalle')
+            ->whereNotNull('vendedor')
+            ->where('vendedor', '!=', '')
+            ->selectRaw('TRIM(vendedor) as nombre')
+            ->selectRaw('COUNT(*) as usos')
+            ->groupBy(DB::raw('TRIM(vendedor)'))
+            ->orderByDesc('usos')
+            ->limit(2500)
+            ->get();
+
+        $clusters = $this->agruparVendedores($rows);
+
+        return collect($clusters)
+            ->map(fn (array $c) => $c['nombre'])
+            ->sort(SORT_STRING)
+            ->values();
+    }
+
+    /**
+     * Todas las grafías en ventas_detalle que corresponden al vendedor elegido en el filtro.
+     *
+     * @return list<string>
+     */
+    public function variantesVendedor(string $vendedor): array
+    {
+        $vendedor = trim($vendedor);
+        if ($vendedor === '' || ! Schema::hasTable('ventas_detalle')) {
+            return $vendedor !== '' ? [$vendedor] : [];
+        }
+
+        $rows = DB::table('ventas_detalle')
+            ->whereNotNull('vendedor')
+            ->where('vendedor', '!=', '')
+            ->selectRaw('TRIM(vendedor) as nombre')
+            ->selectRaw('COUNT(*) as usos')
+            ->groupBy(DB::raw('TRIM(vendedor)'))
+            ->get();
+
+        foreach ($this->agruparVendedores($rows) as $cluster) {
+            if (
+                $cluster['nombre'] === $vendedor
+                || in_array($vendedor, $cluster['variantes'], true)
+                || $this->claveVendedor($cluster['nombre']) === $this->claveVendedor($vendedor)
+            ) {
+                return $cluster['variantes'];
+            }
+            foreach ($cluster['variantes'] as $variante) {
+                if ($this->vendedoresEquivalentes($variante, $vendedor)) {
+                    return $cluster['variantes'];
+                }
+            }
+        }
+
+        return [$vendedor];
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, object{nombre:string,usos:int|string}>  $rows
+     * @return list<array{nombre:string,usos:int,variantes:list<string>}>
+     */
+    private function agruparVendedores($rows): array
+    {
+        /** @var array<string, array{nombre:string,usos:int,variantes:list<string>,clave:string}> $porClave */
+        $porClave = [];
+        foreach ($rows as $row) {
+            $nombre = trim((string) $row->nombre);
+            if ($nombre === '') {
+                continue;
+            }
+            $clave = $this->claveVendedor($nombre);
+            if ($clave === '') {
+                continue;
+            }
+            if (! isset($porClave[$clave])) {
+                $porClave[$clave] = [
+                    'nombre' => $nombre,
+                    'usos' => (int) $row->usos,
+                    'variantes' => [$nombre],
+                    'clave' => $clave,
+                ];
+                continue;
+            }
+            if (! in_array($nombre, $porClave[$clave]['variantes'], true)) {
+                $porClave[$clave]['variantes'][] = $nombre;
+            }
+            if ((int) $row->usos > $porClave[$clave]['usos']) {
+                $porClave[$clave]['nombre'] = $nombre;
+                $porClave[$clave]['usos'] = (int) $row->usos;
+            }
+        }
+
+        $items = array_values($porClave);
+        $n = count($items);
+        $parent = range(0, max(0, $n - 1));
+        $find = function (int $i) use (&$parent, &$find): int {
+            if ($parent[$i] !== $i) {
+                $parent[$i] = $find($parent[$i]);
+            }
+
+            return $parent[$i];
+        };
+        $union = function (int $a, int $b) use (&$parent, $find): void {
+            $ra = $find($a);
+            $rb = $find($b);
+            if ($ra !== $rb) {
+                $parent[$rb] = $ra;
+            }
+        };
+
+        for ($i = 0; $i < $n; $i++) {
+            for ($j = $i + 1; $j < $n; $j++) {
+                if ($this->vendedoresEquivalentes(
+                    $items[$i]['nombre'],
+                    $items[$j]['nombre'],
+                    $items[$i]['clave'],
+                    $items[$j]['clave']
+                )) {
+                    $union($i, $j);
+                }
+            }
+        }
+
+        // JOSEMAR + JOSEMAR MAVAREZ: nombre corto = prefijo único del completo.
+        for ($i = 0; $i < $n; $i++) {
+            $corto = $items[$i]['clave'];
+            if (mb_strlen($corto) < 6) {
+                continue;
+            }
+            $matches = [];
+            for ($j = 0; $j < $n; $j++) {
+                if ($i === $j) {
+                    continue;
+                }
+                if (str_starts_with($items[$j]['clave'], $corto.' ')) {
+                    $matches[] = $j;
+                }
+            }
+            if (count($matches) === 1) {
+                $union($i, $matches[0]);
+            }
+        }
+
+        $grupos = [];
+        for ($i = 0; $i < $n; $i++) {
+            $root = $find($i);
+            if (! isset($grupos[$root])) {
+                $grupos[$root] = [
+                    'nombre' => $items[$i]['nombre'],
+                    'usos' => $items[$i]['usos'],
+                    'variantes' => $items[$i]['variantes'],
+                ];
+                continue;
+            }
+            $grupos[$root]['variantes'] = array_values(array_unique(array_merge(
+                $grupos[$root]['variantes'],
+                $items[$i]['variantes']
+            )));
+            if ($items[$i]['usos'] > $grupos[$root]['usos']) {
+                $grupos[$root]['nombre'] = $items[$i]['nombre'];
+                $grupos[$root]['usos'] = $items[$i]['usos'];
+            }
+        }
+
+        return array_values($grupos);
+    }
+    public function claveVendedor(?string $valor): string
+    {
+        $valor = trim(preg_replace('/\s+/u', ' ', (string) $valor) ?? '');
+        if ($valor === '') {
+            return '';
+        }
+
+        $valor = mb_strtoupper($valor, 'UTF-8');
+        $valor = strtr($valor, [
+            'Á' => 'A', 'À' => 'A', 'Ä' => 'A', 'Â' => 'A',
+            'É' => 'E', 'È' => 'E', 'Ë' => 'E', 'Ê' => 'E',
+            'Í' => 'I', 'Ì' => 'I', 'Ï' => 'I', 'Î' => 'I',
+            'Ó' => 'O', 'Ò' => 'O', 'Ö' => 'O', 'Ô' => 'O',
+            'Ú' => 'U', 'Ù' => 'U', 'Ü' => 'U', 'Û' => 'U',
+            'Ñ' => 'N',
+        ]);
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $valor);
+        if (is_string($ascii) && $ascii !== '') {
+            $valor = strtoupper($ascii);
+        }
+
+        return preg_replace('/[^A-Z0-9 ]+/', '', $valor) ?? '';
+    }
+
+    private function vendedoresEquivalentes(
+        string $a,
+        string $b,
+        ?string $claveA = null,
+        ?string $claveB = null
+    ): bool {
+        $claveA ??= $this->claveVendedor($a);
+        $claveB ??= $this->claveVendedor($b);
+        if ($claveA === '' || $claveB === '') {
+            return false;
+        }
+        if ($claveA === $claveB) {
+            return true;
+        }
+
+        $dist = levenshtein($claveA, $claveB);
+        if ($dist <= 1) {
+            return true;
+        }
+
+        // Nombre corto vs completo (JOSEMAR / JOSEMAR MAVAREZ), sin unir "JUAN" genéricos.
+        if (
+            (mb_strlen($claveA) >= 6 && str_starts_with($claveB, $claveA.' '))
+            || (mb_strlen($claveB) >= 6 && str_starts_with($claveA, $claveB.' '))
+        ) {
+            return true;
+        }
+
+        $pa = explode(' ', $claveA, 2);
+        $pb = explode(' ', $claveB, 2);
+        $nombreA = $pa[0] ?? '';
+        $nombreB = $pb[0] ?? '';
+        $apellidoA = $pa[1] ?? '';
+        $apellidoB = $pb[1] ?? '';
+
+        if ($nombreA !== '' && $nombreA === $nombreB && $apellidoA !== '' && $apellidoB !== '') {
+            return levenshtein($apellidoA, $apellidoB) <= 1;
+        }
+
+        // Mismo apellido + nombre con typo leve (ANDRUELYS / AUDRELYS HURTADO).
+        if ($apellidoA !== '' && $apellidoA === $apellidoB && $nombreA !== '' && $nombreB !== '') {
+            return levenshtein($nombreA, $nombreB) <= 2;
+        }
+
+        return false;
     }
 
     /**
@@ -274,7 +512,11 @@ class GerencialDashboardService
             $query->where('vd.anulado', false);
         }
         if ($vendedor) {
-            $query->whereRaw('UPPER(TRIM(vd.vendedor)) = ?', [mb_strtoupper(trim($vendedor), 'UTF-8')]);
+            $variantes = $this->variantesVendedor($vendedor);
+            $query->where(function ($q) use ($variantes, $vendedor) {
+                $q->whereIn(DB::raw('TRIM(vd.vendedor)'), $variantes)
+                    ->orWhereRaw('UPPER(TRIM(vd.vendedor)) = ?', [mb_strtoupper(trim($vendedor), 'UTF-8')]);
+            });
         }
         if ($producto) {
             $like = '%'.$producto.'%';
@@ -452,7 +694,7 @@ class GerencialDashboardService
             ->map($mapTop)
             ->all();
 
-        $vendedores = (clone $base)
+        $vendedoresRaw = (clone $base)
             ->selectRaw("COALESCE(NULLIF(TRIM(vd.vendedor), ''), 'Sin vendedor') as nombre")
             ->selectRaw($unidadesSql.' as unidades')
             ->selectRaw($importe.' as ventas_usd')
@@ -460,9 +702,57 @@ class GerencialDashboardService
             ->selectRaw($utilidadSql.' as utilidad')
             ->groupBy(DB::raw("COALESCE(NULLIF(TRIM(vd.vendedor), ''), 'Sin vendedor')"))
             ->orderByDesc($orden)
-            ->limit(8)
-            ->get()
-            ->map($mapTop)
+            ->limit(40)
+            ->get();
+
+        $vendedoresMerged = [];
+        foreach ($vendedoresRaw as $row) {
+            $nombre = (string) $row->nombre;
+            $idx = null;
+            foreach ($vendedoresMerged as $i => $existente) {
+                if ($nombre === 'Sin vendedor' || $existente['nombre'] === 'Sin vendedor') {
+                    if ($nombre === $existente['nombre']) {
+                        $idx = $i;
+                        break;
+                    }
+                    continue;
+                }
+                if ($this->vendedoresEquivalentes($existente['nombre'], $nombre)) {
+                    $idx = $i;
+                    break;
+                }
+            }
+            if ($idx === null) {
+                $vendedoresMerged[] = [
+                    'nombre' => $nombre,
+                    'unidades' => (float) $row->unidades,
+                    'ventas_usd' => (float) $row->ventas_usd,
+                    'clientes' => (int) $row->clientes,
+                    'utilidad' => (float) $row->utilidad,
+                ];
+                continue;
+            }
+            $vendedoresMerged[$idx]['unidades'] += (float) $row->unidades;
+            $vendedoresMerged[$idx]['ventas_usd'] += (float) $row->ventas_usd;
+            $vendedoresMerged[$idx]['clientes'] += (int) $row->clientes;
+            $vendedoresMerged[$idx]['utilidad'] += (float) $row->utilidad;
+        }
+
+        usort($vendedoresMerged, function ($a, $b) use ($ranking) {
+            $ka = $ranking === 'unidades' ? $a['unidades'] : ($ranking === 'utilidad' ? $a['utilidad'] : $a['ventas_usd']);
+            $kb = $ranking === 'unidades' ? $b['unidades'] : ($ranking === 'utilidad' ? $b['utilidad'] : $b['ventas_usd']);
+
+            return $kb <=> $ka;
+        });
+
+        $vendedores = collect(array_slice($vendedoresMerged, 0, 8))
+            ->map(fn (array $row) => [
+                'nombre' => $row['nombre'],
+                'unidades' => round($row['unidades'], 2),
+                'ventas_usd' => round($row['ventas_usd'], 2),
+                'clientes' => $row['clientes'],
+                'utilidad' => round($row['utilidad'], 2),
+            ])
             ->all();
 
         $categorias = [];

@@ -272,6 +272,7 @@ Route::middleware(['auth', 'permission:compras.reporte_sede'])->get('/compras/pe
 // Metas de quincena (marketing marca; supervisores ven y asignan responsable)
 Route::middleware(['auth'])->prefix('metas')->name('metas.')->group(function () {
     Route::get('/', [MetaQuincenaController::class, 'index'])->name('index');
+    Route::get('/reporte-avances', [MetaQuincenaController::class, 'reporteAvances'])->name('reporte_avances');
     Route::post('/', [MetaQuincenaController::class, 'store'])
         ->middleware('permission:meta')
         ->name('store');
@@ -363,6 +364,8 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::get('/faltante-caja', [FaltanteCajaController::class, 'index'])->name('faltante_caja.index');
     Route::get('/faltante-caja/excel', [FaltanteCajaController::class, 'exportarExcel'])->name('faltante_caja.excel');
     Route::post('/faltante-caja', [FaltanteCajaController::class, 'store'])->name('faltante_caja.store');
+    Route::post('/faltante-caja/cuenta', [FaltanteCajaController::class, 'descontarCuenta'])->name('faltante_caja.cuenta');
+    Route::post('/faltante-caja/{descuento}/decidir', [FaltanteCajaController::class, 'decidir'])->name('faltante_caja.decidir');
     Route::post('/faltante-caja/{descuento}/cancelar', [FaltanteCajaController::class, 'cancelar'])->name('faltante_caja.cancelar');
     Route::post('/empleados/{empleado}/comision-abonos', [ComisionAjusteController::class, 'storeAbono'])->name('comision_abonos.store');
     Route::post('/empleados/{empleado}/comision-descuentos', [ComisionAjusteController::class, 'storeDescuento'])->name('comision_descuentos.store');

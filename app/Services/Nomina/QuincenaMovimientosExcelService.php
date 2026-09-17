@@ -143,7 +143,7 @@ class QuincenaMovimientosExcelService
      */
     public function filasFaltante(array $quincena): array
     {
-        $header = $this->headerEmpleado(['Fecha', 'Monto USD', 'Estado', 'Motivo', 'Quincena']);
+        $header = $this->headerEmpleado(['Fecha', 'Monto USD', 'Estado', 'Decisión', 'Motivo', 'Quincena']);
         if (! Schema::hasTable('nomina_comision_descuentos')) {
             return [$header];
         }
@@ -164,6 +164,7 @@ class QuincenaMovimientosExcelService
                 $row->fecha?->toDateString(),
                 round((float) $row->monto, 2),
                 $row->estado,
+                method_exists($row, 'etiquetaDecision') ? $row->etiquetaDecision() : ($row->decision ?? ''),
                 $row->motivo ?? '',
                 $quincena['etiqueta'],
             ]);

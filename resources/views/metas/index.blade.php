@@ -44,6 +44,10 @@
                     @endforeach
                 </select>
             </form>
+            <a
+                class="btn primary"
+                href="{{ route('metas.reporte_avances', ['inicio' => $quincena['inicio']->toDateString()]) }}"
+            >PDF avances</a>
             @if($puedeMarcar && auth()->user()->canAccess('compras'))
                 <a class="btn secondary" href="{{ route('comprador.dashboard', ['tab' => 'sobrestock']) }}">Ir a Sobre Stock</a>
             @endif
@@ -68,18 +72,20 @@
         <div class="nomina-kpi"><span>Vendido (facturas)</span><strong>{{ $fmt($filas->sum('vendido')) }} u.</strong></div>
     </div>
 
-    @if($puedeMarcar && $sedesMarcador->isNotEmpty())
+    @if($sedesMarcador->isNotEmpty())
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center;">
             <span class="muted" style="font-size:.78rem;font-weight:600;margin-right:4px;">Por sede</span>
             @foreach($sedesMarcador as $sede)
                 @php $n = (int) ($conteoPorSede[$sede] ?? 0); @endphp
-                <span
-                    title="{{ $n }} producto{{ $n === 1 ? '' : 's' }} meta en {{ $sede }}"
-                    style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;border:1px solid {{ $n > 0 ? '#bfdbfe' : 'var(--border)' }};background:{{ $n > 0 ? '#eff6ff' : '#f8fafc' }};font-size:.78rem;font-weight:600;color:{{ $n > 0 ? '#1a4480' : 'var(--muted)' }};"
+                <a
+                    href="{{ route('metas.reporte_avances', ['inicio' => $quincena['inicio']->toDateString(), 'sede' => $sede]) }}"
+                    title="Descargar PDF de avances · {{ $sede }}"
+                    style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;border:1px solid {{ $n > 0 ? '#bfdbfe' : 'var(--border)' }};background:{{ $n > 0 ? '#eff6ff' : '#f8fafc' }};font-size:.78rem;font-weight:600;color:{{ $n > 0 ? '#1a4480' : 'var(--muted)' }};text-decoration:none;"
                 >
                     {{ $sede }}
                     <span style="min-width:1.35rem;height:1.35rem;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:{{ $n > 0 ? '#1a4480' : '#cbd5e1' }};color:#fff;font-size:.72rem;line-height:1;">{{ $n }}</span>
-                </span>
+                    <span style="font-size:.68rem;opacity:.85;">PDF</span>
+                </a>
             @endforeach
         </div>
     @endif

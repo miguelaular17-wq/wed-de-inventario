@@ -154,6 +154,22 @@ class CommissionSettlementService
                             ->whereDate('fecha', '<=', $hasta);
                     });
             })
+            ->where(function ($q) {
+                // Faltante de caja: solo si ya se decidió descontar en comisión.
+                $q->where('tipo', '!=', 'FALTANTE')
+                    ->orWhere(function ($f) {
+                        $f->where('tipo', 'FALTANTE');
+                        if (Schema::hasColumn('nomina_comision_descuentos', 'decision')) {
+                            $f->where('decision', NominaComisionDescuento::DECISION_DESCONTAR);
+                        }
+                        if (Schema::hasColumn('nomina_comision_descuentos', 'destino')) {
+                            $f->where(function ($d) {
+                                $d->where('destino', NominaComisionDescuento::DESTINO_COMISION)
+                                    ->orWhereNull('destino');
+                            });
+                        }
+                    });
+            })
             ->get();
 
         foreach ($items as $item) {
