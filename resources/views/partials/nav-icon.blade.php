@@ -20,6 +20,7 @@
         'finanzas' => '<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
         'flujo de caja' => '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
         'cuentas por pagar' => '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h6M7 14h10M16 5v3"/>',
+        'my delivery' => '<path d="M3 7h11v10H3z"/><path d="M14 10h5l2 3v4h-7"/><circle cx="7" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/>',
         'gastos fijos' => '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6"/>',
         'conciliaciones' => '<path d="M9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
         'tesorería' => '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M12 12v.01"/>',

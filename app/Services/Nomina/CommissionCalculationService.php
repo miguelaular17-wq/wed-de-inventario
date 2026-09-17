@@ -85,14 +85,18 @@ class CommissionCalculationService
         }
 
         $lineas = $this->lineasVentas($periodo, $claves)->get();
+        $todasLasLineas = $lineas;
         if ($excluirFacturasSt) {
             $lineas = $this->excluirFacturasServicioTecnico($lineas);
         }
 
         $propias = $this->aplicarVentasPropias($periodo, $empleado, $lineas);
         if ($this->flag('ventas_documentos') && $this->flag('ventas_documentos_vendedor')) {
+            $lineasSt = $excluirFacturasSt
+                ? $todasLasLineas->filter(fn ($linea) => $this->esLineaServicioTecnico($linea))->values()
+                : collect();
             $netoDocumentos = $excluirFacturasSt
-                ? $this->ventaNetaDocumentosDeLineas($periodo, $lineas)
+                ? $this->ventaNetaDocumentosDeLineas($periodo, $lineas, $lineasSt)
                 : $this->ventaNetaVendedor($periodo, $claves);
             if ($netoDocumentos > 0) {
                 $propias = $this->ajustarBasesAVentaDocumento($propias, $netoDocumentos);
@@ -299,30 +303,69 @@ class CommissionCalculationService
     }
 
     /**
-     * Excluye facturas donde todas las líneas son servicio técnico (modo Movistar).
+     * Excluye facturas que incluyen servicio técnico (modo Movistar),
+     * incluidas las mixtas con refacciones/pantalla en la misma factura.
      *
      * @param  \Illuminate\Support\Collection<int, object>  $lineas
      * @return \Illuminate\Support\Collection<int, object>
      */
     private function excluirFacturasServicioTecnico(Collection $lineas): Collection
     {
+        $docsConSt = $lineas
+            ->filter(fn ($linea) => $this->esLineaServicioTecnico($linea))
+            ->map(fn ($linea) => $this->claveDocumento($linea))
+            ->unique()
+            ->all();
+
         return $lineas
-            ->groupBy(fn ($linea) => $this->claveDocumento($linea))
-            ->reject(fn ($grupo) => $grupo->every(fn ($linea) => $this->esLineaServicioTecnico($linea)))
-            ->flatten(1)
+            ->reject(fn ($linea) => in_array($this->claveDocumento($linea), $docsConSt, true))
             ->values();
     }
 
     /**
-     * Venta neta por cabecera solo de los documentos presentes en las líneas filtradas.
+     * Toda la factura con SERVICIO TECNICO cuenta como ST (mano de obra + refacciones).
      *
      * @param  \Illuminate\Support\Collection<int, object>  $lineas
+     * @return array{0:\Illuminate\Support\Collection<int, object>,1:\Illuminate\Support\Collection<int, object>}
      */
-    private function ventaNetaDocumentosDeLineas(NominaPeriodo $periodo, Collection $lineas): float
+    private function separarLineasServicioTecnico(Collection $lineas): array
     {
+        $docsConSt = $lineas
+            ->filter(fn ($linea) => $this->esLineaServicioTecnico($linea))
+            ->map(fn ($linea) => $this->claveDocumento($linea))
+            ->unique()
+            ->values();
+
+        $lineasSt = $lineas
+            ->filter(fn ($linea) => $docsConSt->contains($this->claveDocumento($linea)))
+            ->values();
+        $lineasVenta = $lineas
+            ->reject(fn ($linea) => $docsConSt->contains($this->claveDocumento($linea)))
+            ->values();
+
+        return [$lineasSt, $lineasVenta];
+    }
+
+    /**
+     * Venta neta por cabecera solo de los documentos presentes en las líneas filtradas.
+     * Si se pasan $lineasExcluidasDelNeto (p. ej. SERVICIO TECNICO), se restan de la
+     * cabecera para no inflar venta neta en facturas mixtas ST + producto.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $lineas
+     * @param  \Illuminate\Support\Collection<int, object>|null  $lineasExcluidasDelNeto
+     */
+    private function ventaNetaDocumentosDeLineas(
+        NominaPeriodo $periodo,
+        Collection $lineas,
+        ?Collection $lineasExcluidasDelNeto = null
+    ): float {
         if ($lineas->isEmpty() || ! $this->flag('ventas_documentos')) {
             return round($lineas->sum(fn ($linea) => $this->baseVentaNeta($linea)), 2);
         }
+
+        $excluidasPorDoc = ($lineasExcluidasDelNeto ?? collect())
+            ->groupBy(fn ($linea) => $this->claveDocumento($linea))
+            ->map(fn (Collection $grupo) => round($grupo->sum(fn ($linea) => $this->baseVentaNeta($linea)), 2));
 
         $total = 0.0;
         $docs = $lineas
@@ -330,8 +373,9 @@ class CommissionCalculationService
                 'sede' => mb_strtoupper(trim((string) ($linea->sede ?? '')), 'UTF-8'),
                 'tipo' => mb_strtoupper(trim((string) ($linea->tipo_documento ?? 'FAC')), 'UTF-8'),
                 'numero' => trim((string) ($linea->numero_documento ?? '')),
+                'clave' => $this->claveDocumento($linea),
             ])
-            ->unique(fn ($doc) => $doc['sede'].'|'.$doc['tipo'].'|'.$doc['numero'])
+            ->unique(fn ($doc) => $doc['clave'])
             ->values();
 
         foreach ($docs as $doc) {
@@ -352,7 +396,9 @@ class CommissionCalculationService
             }
 
             $signo = $doc['tipo'] === 'DEV' ? -1 : 1;
-            $total += $signo * abs((float) ($row->total_neto_usd ?? 0));
+            $netoDoc = $signo * abs((float) ($row->total_neto_usd ?? 0));
+            $netoExcluido = (float) ($excluidasPorDoc[$doc['clave']] ?? 0);
+            $total += $netoDoc - $netoExcluido;
         }
 
         return round($total, 2);
@@ -451,10 +497,7 @@ class CommissionCalculationService
             ? collect()
             : $this->lineasVentas($periodo, $claves)->get();
 
-        $lineasSt = $lineas
-            ->filter(fn ($linea) => $this->esLineaServicioTecnico($linea))
-            ->values();
-        $lineasVenta = $lineas->reject(fn ($linea) => $this->esLineaServicioTecnico($linea))->values();
+        [$lineasSt, $lineasVenta] = $this->separarLineasServicioTecnico($lineas);
 
         $ventasSt = round($lineasSt->sum(fn ($linea) => $this->baseLinea($linea, 'NETO')), 2);
         $gastos = $this->gastosServicioTecnico($periodo, $empleado);
@@ -473,7 +516,7 @@ class CommissionCalculationService
 
         $propias = $this->aplicarVentasPropias($periodo, $empleado, $lineasVenta);
         if ($this->flag('ventas_documentos') && $this->flag('ventas_documentos_vendedor') && $lineasVenta->isNotEmpty()) {
-            $netoDocumentos = $this->ventaNetaDocumentosDeLineas($periodo, $lineasVenta);
+            $netoDocumentos = $this->ventaNetaDocumentosDeLineas($periodo, $lineasVenta, $lineasSt);
             if ($netoDocumentos > 0) {
                 $propias = $this->ajustarBasesAVentaDocumento($propias, $netoDocumentos);
             }

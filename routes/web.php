@@ -436,6 +436,7 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
     Route::get('/flujo-caja/reporte', [FinanzasController::class, 'reporteFlujoCajaBusqueda'])->name('finanzas.flujo_caja.reporte');
     Route::get('/flujo-caja/api/bcv', [FinanzasController::class, 'fetchBcvApi'])->name('finanzas.api_bcv');
     Route::get('/cuentas-por-pagar', [\App\Http\Controllers\CuentaPorPagarController::class, 'index'])->name('finanzas.cuentas_por_pagar');
+    Route::get('/my-delivery', [\App\Http\Controllers\MyDeliveryController::class, 'index'])->name('finanzas.my_delivery');
     Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
     Route::get('/gastos-fijos/pendientes', [FinanzasController::class, 'getGastosFijosParaVincular'])->name('finanzas.gastos_fijos.pendientes');
 

@@ -401,6 +401,95 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(100.0, (float) $liq->total_pagar);
     }
 
+    public function test_servicio_tecnico_no_infla_venta_neta_con_factura_mixta_st_y_producto(): void
+    {
+        NominaConfig::put('descuento_venta_pct', 0);
+        $empleado = $this->empleado(NominaEmpleado::COMISION_SERVICIO_TECNICO, 'TEC-MIX-DOC', false, true);
+        $periodo = $this->periodo();
+        $otrosId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-PANT',
+            'nombre' => 'Pantalla',
+            'categoria' => 'PERFUMERIA',
+            'subcategoria' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $telId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-TEL',
+            'nombre' => 'Linea',
+            'categoria' => 'TELEFONIA',
+            'subcategoria' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Misma factura: ST 22 + pantalla 23.33 = toda la factura es ST.
+        $this->venta('TEC-MIX-DOC', 22, [
+            'nombre_producto' => 'SERVICIO TECNICO',
+            'numero_documento' => '1913',
+            'sede' => 'MOVISTAR',
+            'precio_neto' => 22,
+        ]);
+        $this->venta('TEC-MIX-DOC', 23.33, [
+            'producto_id' => $otrosId,
+            'nombre_producto' => 'PANTALLA COMPLETA',
+            'numero_documento' => '1913',
+            'sede' => 'MOVISTAR',
+            'precio_neto' => 23.33,
+        ]);
+        $this->documento('MOVISTAR', 45.33, 'FAC', 'TEC-MIX-DOC', '1913');
+
+        $this->venta('TEC-MIX-DOC', 50.12, [
+            'producto_id' => $telId,
+            'nombre_producto' => 'LINEA MOVISTAR',
+            'numero_documento' => '1907',
+            'sede' => 'MOVISTAR',
+            'precio_neto' => 50.12,
+        ]);
+        $this->documento('MOVISTAR', 50.12, 'FAC', 'TEC-MIX-DOC', '1907');
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertEqualsWithDelta(45.33, $resultado['ventas_st'], 0.02);
+        $this->assertEqualsWithDelta(50.12, $resultado['base_telefonia'] + $resultado['base_otros'], 0.02);
+        $this->assertSame(0.0, $resultado['base_otros']);
+    }
+
+    public function test_movistar_excluye_factura_mixta_con_servicio_tecnico(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_MOVISTAR, 'MOV-MIX');
+        $periodo = $this->periodo();
+        $otrosId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-PANT-M',
+            'nombre' => 'Pantalla',
+            'categoria' => 'PERFUMERIA',
+            'subcategoria' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->venta('MOV-MIX', 22, [
+            'nombre_producto' => 'SERVICIO TECNICO',
+            'numero_documento' => 'MIX-1',
+            'sede' => 'MOVISTAR',
+        ]);
+        $this->venta('MOV-MIX', 23.33, [
+            'producto_id' => $otrosId,
+            'nombre_producto' => 'PANTALLA',
+            'numero_documento' => 'MIX-1',
+            'sede' => 'MOVISTAR',
+        ]);
+        $this->venta('MOV-MIX', 100, [
+            'producto_id' => $otrosId,
+            'nombre_producto' => 'ACCESORIO',
+            'numero_documento' => 'VEN-2',
+            'sede' => 'MOVISTAR',
+        ]);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(100.0, $resultado['base']);
+    }
+
     public function test_servicio_tecnico_retiene_solo_sobre_otros_productos(): void
     {
         NominaConfig::put('descuento_venta_pct', 0);
