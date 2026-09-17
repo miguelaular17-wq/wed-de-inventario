@@ -182,6 +182,10 @@
                     <span class="bank-stat-label">🏛️ Comisiones</span>
                     <span class="bank-stat-value orange">Bs. {{ number_format($d['total_comisiones'], 2) }}</span>
                 </div>
+                <div class="bank-stat">
+                    <span class="bank-stat-label">💱 Compra divisas</span>
+                    <span class="bank-stat-value" style="color:#38bdf8;">Bs. {{ number_format($d['total_compras_divisas'] ?? 0, 2) }}</span>
+                </div>
             </div>
 
             {{-- New row for manual reconciliation calculation --}}
@@ -396,6 +400,43 @@
                 </table>
                 @if($d['comisiones']->count() > 0)
                 <div class="section-footer">Total: Bs. {{ number_format($d['total_comisiones'], 2) }}</div>
+                @endif
+            </div>
+
+            {{-- 5. COMPRAS DE DIVISAS (extracto, pendientes de registrar/conciliar) --}}
+            <div class="section-block">
+                <div class="section-header">
+                    <span class="section-badge" style="background:#0ea5e9;"></span>
+                    <span class="section-title">Compra de Divisas</span>
+                    <span class="section-count">{{ ($d['compras_divisas_banco'] ?? collect())->count() }}</span>
+                </div>
+                <table class="mini-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Referencia</th>
+                            <th>Descripción</th>
+                            <th style="text-align:right">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse(($d['compras_divisas_banco'] ?? collect()) as $row)
+                        <tr>
+                            <td>{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
+                            <td><span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span></td>
+                            <td style="max-width:200px;font-size:0.82rem;">
+                                {{ Str::limit($row['descripcion'], 55) }}
+                                <br><span class="tipo-chip chip-cargo">Compra de divisas</span>
+                            </td>
+                            <td class="monto-cell" style="color:#0284c7;">Bs. {{ number_format(abs($row['monto']), 2) }}</td>
+                        </tr>
+                        @empty
+                        <tr class="empty-row"><td colspan="4">Sin compras de divisas en el extracto</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+                @if(($d['compras_divisas_banco'] ?? collect())->count() > 0)
+                <div class="section-footer">Total: Bs. {{ number_format(abs($d['total_compras_divisas'] ?? 0), 2) }} · Regístralas en Flujo de caja → Compra de divisas</div>
                 @endif
             </div>
 

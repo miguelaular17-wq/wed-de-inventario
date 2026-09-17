@@ -59,9 +59,11 @@ class StEquipoService
         $serial = $this->normalizarSerial($datos['serial'] ?? null);
 
         if (! $imei && ! $serial) {
-            throw ValidationException::withMessages([
-                'serial' => 'Indica el identificador del equipo (IMEI, serial o código de lote).',
-            ]);
+            if (! ($datos['permitir_sin_identidad'] ?? false)) {
+                throw ValidationException::withMessages([
+                    'serial' => 'Indica el identificador del equipo (IMEI, serial o código de lote).',
+                ]);
+            }
         }
 
         $existente = $imei ? $this->encontrarPorImei($imei) : null;

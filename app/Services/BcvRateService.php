@@ -78,7 +78,8 @@ class BcvRateService
     }
 
     /**
-     * Tasa congelada del período (cierre de quincena). Si aún no está guardada, resuelve por fecha_fin.
+     * Tasa congelada del período. Viene del cálculo de nómina (cierre) o del
+     * último recálculo de comisiones (tasa del día). Si aún no está guardada, resuelve por fecha_fin.
      */
     public function tasaParaPeriodo(\App\Models\Nomina\NominaPeriodo $periodo): float
     {

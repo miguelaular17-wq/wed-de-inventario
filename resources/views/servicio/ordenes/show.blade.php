@@ -146,8 +146,11 @@
             <div><span class="muted">Equipo</span><div>{{ $orden->equipo ?: '—' }}</div></div>
             <div><span class="muted">Tipo de dispositivo</span><div>{{ $orden->etiquetaTipoDispositivo() }}</div></div>
             <div><span class="muted">Valor del dispositivo</span><div><strong>{{ $orden->valor_dispositivo !== null ? '$'.number_format((float) $orden->valor_dispositivo, 2) : '—' }}</strong></div></div>
-            <div><span class="muted">IMEI</span><div>{{ $orden->imei ?: '—' }}</div></div>
-            <div><span class="muted">Serial</span><div>{{ $orden->serial ?: '—' }}</div></div>
+            <div><span class="muted">IMEI</span><div>{{ $orden->imei ?: ($orden->atributo('identidad_inaccesible') ? 'No accesible' : '—') }}</div></div>
+            <div><span class="muted">Serial</span><div>{{ $orden->serial ?: ($orden->atributo('identidad_inaccesible') ? 'No accesible' : '—') }}</div></div>
+            @if($orden->atributo('identidad_inaccesible'))
+                <div style="grid-column:1/-1;"><span class="muted">Identidad</span><div>IMEI/serial no disponibles al ingreso (no se pudo acceder a la información del equipo).</div></div>
+            @endif
             @if($orden->atributo('almacenamiento'))
                 <div><span class="muted">Almacenamiento</span><div>{{ $orden->atributo('almacenamiento') }}</div></div>
             @endif

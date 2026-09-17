@@ -146,30 +146,44 @@ class OrdenController extends Controller
         }
 
         $imeiNoAplica = $request->boolean('imei_no_aplica');
+        $serialNoAplica = $request->boolean('serial_no_aplica');
         $imei = $imeiNoAplica ? null : $this->equipoService->normalizarImei($data['imei'] ?? null);
-        $serial = $this->equipoService->normalizarSerial($data['serial'] ?? null);
+        $serial = $serialNoAplica ? null : $this->equipoService->normalizarSerial($data['serial'] ?? null);
         $usarExistente = $request->boolean('usar_equipo_existente') || $request->filled('equipo_id');
         $tipoDispositivo = $data['tipo_dispositivo'] ?? 'celular';
+        $sinIdentidad = false;
 
         if ($tipoDispositivo === 'celular') {
             if ($imeiNoAplica) {
-                if (! $serial && ! $request->filled('equipo_id')) {
+                if (! $serial && ! $serialNoAplica && ! $request->filled('equipo_id')) {
                     throw ValidationException::withMessages([
-                        'serial' => 'El serial es obligatorio cuando el IMEI no aplica.',
+                        'serial' => 'Indica el serial, o marca que tampoco aplica si no se puede acceder.',
                     ]);
+                }
+                if ($serialNoAplica) {
+                    $sinIdentidad = true;
                 }
             } elseif (! $imei && ! $request->filled('equipo_id')) {
                 throw ValidationException::withMessages([
-                    'imei' => 'El IMEI es obligatorio para celulares.',
+                    'imei' => 'El IMEI es obligatorio para celulares (o marca que no aplica).',
                 ]);
             }
-        } elseif (! $serial && ! $request->filled('equipo_id')) {
+        } elseif (! $serial && ! $serialNoAplica && ! $request->filled('equipo_id')) {
             throw ValidationException::withMessages([
-                'serial' => 'El serial (o código de lote) es obligatorio para este tipo de dispositivo.',
+                'serial' => 'El serial (o código de lote) es obligatorio, o marca que no se puede acceder.',
             ]);
+        } elseif ($serialNoAplica) {
+            $sinIdentidad = true;
         }
 
-        if ($imei || $serial || $request->filled('equipo_id')) {
+        if ($sinIdentidad) {
+            $atributos = is_array($data['atributos'] ?? null) ? $data['atributos'] : [];
+            $atributos['identidad_inaccesible'] = true;
+            $atributos['identidad_nota'] = 'IMEI/serial no disponibles al ingreso (no se pudo acceder a la información).';
+            $data['atributos'] = $atributos;
+        }
+
+        if ($imei || $serial || $sinIdentidad || $request->filled('equipo_id')) {
             if ($request->filled('equipo_id') && $usarExistente) {
                 $equipo = StEquipo::query()->findOrFail((int) $request->input('equipo_id'));
                 $equipo->fill(array_filter([
@@ -200,6 +214,7 @@ class OrdenController extends Controller
                     'estado_actual' => $enviar ? StEquipo::ESTADO_EN_TRANSITO : StEquipo::ESTADO_EN_TALLER,
                     'tipo_dispositivo' => $tipoDispositivo,
                     'atributos' => $data['atributos'] ?? null,
+                    'permitir_sin_identidad' => $sinIdentidad,
                 ], $usarExistente);
             }
 
@@ -210,7 +225,7 @@ class OrdenController extends Controller
             $data['equipo'] = trim(($data['marca'] ?? '').' '.($data['modelo'] ?? '')) ?: (($data['equipo'] ?? null) ?: $equipo->etiqueta());
         }
 
-        unset($data['marca'], $data['modelo'], $data['color'], $data['usar_equipo_existente'], $data['imei_no_aplica']);
+        unset($data['marca'], $data['modelo'], $data['color'], $data['usar_equipo_existente'], $data['imei_no_aplica'], $data['serial_no_aplica']);
         if (! isset($data['equipo_id'])) {
             unset($data['equipo_id']);
         }
@@ -782,6 +797,7 @@ class OrdenController extends Controller
             'imei' => ['nullable', 'string', 'max:32'],
             'imei_no_aplica' => ['nullable', 'boolean'],
             'serial' => ['nullable', 'string', 'max:255'],
+            'serial_no_aplica' => ['nullable', 'boolean'],
             'equipo_id' => ['nullable', 'integer'],
             'usar_equipo_existente' => ['nullable', 'boolean'],
             'falla' => [$orden ? 'nullable' : 'required', 'string'],

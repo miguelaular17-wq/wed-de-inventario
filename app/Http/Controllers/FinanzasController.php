@@ -187,6 +187,9 @@ class FinanzasController extends Controller
         $otros_egresos = $movimientos->where('categoria_egreso', 'otros_egresos');
         $traslados = $movimientos->where('categoria_egreso', 'traslados');
         $egresos_divisas = $movimientos->where('categoria_egreso', 'egreso_divisas');
+        $compras_divisas = \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')
+            ? \App\Models\CompraDivisa::whereBetween('fecha', [$fecha_desde, $fecha_hasta])->orderByDesc('fecha')->get()
+            : collect();
         
         $cuentas = $this->getCuentas(); // Mantenemos para el dropdown si es necesario o usamos las nuevas
         Profiler::start('FinanzasController::flujoCaja cuentas');
@@ -249,6 +252,7 @@ class FinanzasController extends Controller
             'otros_egresos',
             'traslados',
             'egresos_divisas',
+            'compras_divisas',
             'cuentas',
             'cuentasBancarias',
             'resumen',
@@ -357,7 +361,7 @@ class FinanzasController extends Controller
             }
 
             $data = $request->validate([
-                'categoria_egreso' => 'required|in:egreso_realizado,otros_egresos,traslados,egreso_divisas',
+                'categoria_egreso' => 'required|in:egreso_realizado,otros_egresos,traslados,egreso_divisas,compra_divisas',
                 'banco_titular' => 'required|string',
                 'banco_titular_receptor' => 'nullable|string',
                 'referencia' => 'nullable|string|max:255',
@@ -426,10 +430,43 @@ class FinanzasController extends Controller
                 }
             }
 
+            if ($data['categoria_egreso'] === 'compra_divisas') {
+                if (empty($data['monto_bs']) || $data['monto_bs'] <= 0) {
+                    return back()->withInput()->with('error', 'El Monto BS de la compra de divisas debe ser mayor a cero.');
+                }
+            }
+
             $cuentaInfo = explode('|', $data['banco_titular']);
             $banco = $cuentaInfo[0] ?? null;
             $titular = $cuentaInfo[1] ?? null;
             $categoria_cuenta = $cuentaInfo[2] ?? null;
+
+            if ($data['categoria_egreso'] === 'compra_divisas') {
+                $comprobanteUrl = null;
+                if ($request->hasFile('comprobante')) {
+                    $comprobanteUrl = $this->uploadComprobante($request->file('comprobante'), $data['referencia'] ?? null);
+                }
+
+                \App\Models\CompraDivisa::create([
+                    'fecha' => $data['fecha'],
+                    'banco' => $banco,
+                    'titular' => $titular,
+                    'categoria_cuenta' => $categoria_cuenta,
+                    'referencia' => $data['referencia'] ?? null,
+                    'concepto' => $data['motivo'] ?? 'COMPRA DE DIVISAS',
+                    'motivo' => $data['motivo'] ?? 'COMPRA INTERVENCION ELECTRONIC',
+                    'monto_bs' => $data['monto_bs'],
+                    'monto_usd' => $data['monto_usd'] ?? null,
+                    'tasa_cambio' => $data['tasa_cambio'] ?? null,
+                    'es_conciliado' => false,
+                    'comprobante_url' => $comprobanteUrl,
+                    'comprobantes' => $comprobanteUrl ? [$comprobanteUrl] : null,
+                ]);
+
+                return redirect()
+                    ->route('finanzas.flujo_caja', ['fecha_desde' => $data['fecha'], 'fecha_hasta' => $data['fecha']])
+                    ->with('success', 'Compra de divisas registrada.');
+            }
 
             $banco_receptor = null;
             $titular_receptor = null;
@@ -978,6 +1015,25 @@ class FinanzasController extends Controller
         return redirect()->back()->with('success', 'Movimiento eliminado correctamente.');
     }
 
+    public function destroyCompraDivisa($id)
+    {
+        $compra = \App\Models\CompraDivisa::findOrFail($id);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($compra) {
+            if (\Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'compra_divisa_id')) {
+                \App\Models\ConciliacionLinea::query()
+                    ->where('compra_divisa_id', $compra->id)
+                    ->update([
+                        'compra_divisa_id' => null,
+                        'estado' => 'pendiente',
+                    ]);
+            }
+            $compra->delete();
+        });
+
+        return redirect()->back()->with('success', 'Compra de divisas eliminada.');
+    }
+
     public function storeEgresosBulk(Request $request)
     {
         if ($request->has('egresos') && is_array($request->input('egresos'))) {
@@ -1136,12 +1192,17 @@ class FinanzasController extends Controller
         $lineas = $lineas_query->get();
 
         // 3. Motor de emparejamiento automático
-        $lineas_pendientes = $lineas->where('estado', 'pendiente')->whereNull('flujo_caja_id')->whereNull('tesoreria_ingreso_id');
+        $lineas_pendientes = $lineas->where('estado', 'pendiente')
+            ->whereNull('flujo_caja_id')
+            ->whereNull('tesoreria_ingreso_id');
+        if (\Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'compra_divisa_id')) {
+            $lineas_pendientes = $lineas_pendientes->whereNull('compra_divisa_id');
+        }
         if ($lineas_pendientes->count() > 0) {
             $fecha_minima    = now()->subDays(90)->format('Y-m-d');
             
-            // Los traslados permanecen disponibles hasta conciliar sus dos lados:
-            // cargo en el banco emisor y abono en el banco receptor.
+            // Los traslados siguen disponibles tras marcar salida (para poder
+            // emparejar también el abono en el banco receptor).
             $flujos_posibles = \App\Models\FlujoCaja::where(function ($query) {
                     $query->where('es_conciliado', false)
                         ->orWhere('categoria_egreso', 'traslados');
@@ -1155,7 +1216,14 @@ class FinanzasController extends Controller
                 ->where('fecha', '>=', $fecha_minima)
                 ->get();
 
+            $comprasDivisasPosibles = \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')
+                ? \App\Models\CompraDivisa::where('es_conciliado', false)
+                    ->where('fecha', '>=', $fecha_minima)
+                    ->get()
+                : collect();
+
             $matcher = app(\App\Services\BankReconciliationMatcher::class);
+            $classifier = app(\App\Services\BankMovementClassifier::class);
             $traslados = $flujos_posibles->filter(fn ($flujo) => $matcher->esTraslado($flujo));
             $ladosTrasladosVinculados = [];
             if ($traslados->isNotEmpty()) {
@@ -1180,6 +1248,7 @@ class FinanzasController extends Controller
             foreach ($lineas_pendientes as $linea) {
                 $match         = null;
                 $isTesoreriaMatch = false;
+                $isCompraDivisaMatch = false;
                 $flujosDisponibles = $flujos_posibles->filter(function ($flujo) use ($linea, $matcher, $ladosTrasladosVinculados) {
                     if (! $matcher->esTraslado($flujo)) {
                         return true;
@@ -1201,7 +1270,15 @@ class FinanzasController extends Controller
                         }
                     }
                 } else {
-                    $match = $matcher->mejorEgreso($linea, $flujosDisponibles);
+                    if ($classifier->esCompraDivisas($linea->descripcion)) {
+                        $match = $matcher->mejorCompraDivisa($linea, $comprasDivisasPosibles);
+                        if ($match) {
+                            $isCompraDivisaMatch = true;
+                        }
+                    }
+                    if (! $match) {
+                        $match = $matcher->mejorEgreso($linea, $flujosDisponibles);
+                    }
                 }
 
                 if ($match) {
@@ -1211,22 +1288,28 @@ class FinanzasController extends Controller
                         if (($match->tipo ?? '') !== 'punto_venta') {
                             $tesoreria_posibles = $tesoreria_posibles->reject(fn($t) => $t->id == $match->id);
                         }
+                    } elseif ($isCompraDivisaMatch) {
+                        $linea->compra_divisa_id = $match->id;
+                        $comprasDivisasPosibles = $comprasDivisasPosibles->reject(fn ($c) => $c->id == $match->id);
                     } else {
                         $linea->flujo_caja_id = $match->id;
                     }
                     $linea->save();
 
-                    if (! $isTesoreriaMatch && $matcher->esTraslado($match)) {
+                    if ($isCompraDivisaMatch) {
+                        $match->es_conciliado = true;
+                    } elseif (! $isTesoreriaMatch && $matcher->esTraslado($match)) {
                         $lado = $matcher->ladoTraslado($linea, $match);
                         if ($lado !== null) {
                             $ladosTrasladosVinculados[$match->id][$lado] = true;
                         }
-                        $match->es_conciliado =
-                            ! empty($ladosTrasladosVinculados[$match->id]['salida'])
-                            && ! empty($ladosTrasladosVinculados[$match->id]['entrada']);
+                        // Sale de "En tránsito" al conciliar la salida (banco emisor).
+                        // La entrada en el banco receptor puede seguir emparejándose
+                        // porque los traslados permanecen en flujos_posibles.
+                        $match->es_conciliado = ! empty($ladosTrasladosVinculados[$match->id]['salida']);
                     } else {
                         $match->es_conciliado = true;
-                        if (! $isTesoreriaMatch) {
+                        if (! $isTesoreriaMatch && ! $isCompraDivisaMatch) {
                             $flujos_posibles = $flujos_posibles->reject(fn($f) => $f->id == $match->id);
                         }
                     }
@@ -1240,30 +1323,14 @@ class FinanzasController extends Controller
             }
         }
 
-        // 4. Palabras clave para detectar comisiones bancarias
-        // Basadas en el análisis real de los archivos de cada banco
-        $comision_keywords = [
-            // Genéricas
-            'comision', 'comisión', 'commission', 'mantenimiento', 'maintenance',
-            'cargo mensual', 'servicio', 'below minimum', 'administracion', 'administración',
-            // BBVA: "COM.REF.BANC.", "COM MTTO POS", "COMIS. CR.I OB"
-            'com.ref.banc', 'com mtto pos', 'comis. cr.i',
-            // BNC: "COMISION TRANS", "Comisión del", "SERVICIO USO PUNTO DE VENTA", "Comisión Credito Inmediato"
-            'servicio uso punto', 'comision intervencion', 'comision credito inmediato',
-            // MERCANTIL: "COMISION POR TRANSFERENCIA", "TARIFA MANTENIMIENTO", "DESCUENTO TARJETA", "EMISION EDO"
-            'comision por transferencia', 'tarifa mantenimiento', 'descuento tarjeta', 'emision edo',
-            // VENEZUELA: "COM MANTENIMIENTO", "COBRO COMISION", "COM PAGO OTR BCOS", "COMISION COBRO CENTRALIZADO"
-            'com mantenimiento', 'cobro comision', 'com pago otr', 'comision cobro centralizado',
-            // TESORO: "COMIS USO CANAL", "BELOW MINIMUM BALANCE", "STAMENT SERVICE"
-            'comis uso canal', 'stament service',
-            // BANESCO: "SERV MTTO. POS"
-            'serv mtto','com. banesco pago movil','contraprestacion pago proveedores',
-            // BANCARIBE/BANCAMIGA
-            'cobro de comision', 'tarifa por',
-        ];
-        $comision_keywords_por_banco = [
-            'BANCAMIGA' => ['envio de sms', 'emision estado de cuenta'],
-        ];
+        // Repara traslados ya vinculados por salida que quedaron en tránsito
+        // (antes se exigían los dos lados para marcar es_conciliado).
+        $this->marcarTrasladosConSalidaConciliados(
+            app(\App\Services\BankReconciliationMatcher::class)
+        );
+
+        // 4. Clasificar comisiones bancarias y compras de divisas del extracto
+        $classifier = app(\App\Services\BankMovementClassifier::class);
 
         // 5. Egresos del sistema (en tránsito)
         $egresos_query = \App\Models\FlujoCaja::where('tipo', 'egreso')
@@ -1340,20 +1407,18 @@ class FinanzasController extends Controller
                 return $lbanco === $bk_lower && ($tit_lower === '' || $ltit === $tit_lower);
             });
 
-            // Separar comisiones vs. transacciones normales
-            $lineas_comisiones = $lineas_banco->filter(function($l) use ($comision_keywords, $comision_keywords_por_banco, $bk) {
-                $desc = strtolower($l->descripcion ?? '');
-                $keywords = array_merge($comision_keywords, $comision_keywords_por_banco[$bk] ?? []);
-                foreach ($keywords as $kw) {
-                    if (strpos($desc, $kw) !== false) return true;
-                }
-                return false;
-            });
-            $lineas_normales = $lineas_banco->diff($lineas_comisiones);
+            // Separar comisiones, compras de divisas y transacciones normales
+            $lineas_comisiones = $lineas_banco->filter(
+                fn ($l) => $classifier->esComision($l->descripcion, $bk)
+            );
+            $lineas_compra_divisas = $lineas_banco
+                ->diff($lineas_comisiones)
+                ->filter(fn ($l) => $classifier->esCompraDivisas($l->descripcion));
+            $lineas_normales = $lineas_banco->diff($lineas_comisiones)->diff($lineas_compra_divisas);
 
             // Conciliados
             $conciliados = $lineas_normales->where('estado', 'conciliado')
-                ->map(function($l) {
+                ->map(function ($l) {
                     $motivo = '-';
                     $tipo_gasto = '-';
                     if ($l->flujo_caja_id) {
@@ -1361,6 +1426,12 @@ class FinanzasController extends Controller
                         if ($flujo) {
                             $motivo = $flujo->motivo ?: $flujo->concepto;
                             $tipo_gasto = $flujo->tipo_gasto ?: $flujo->categoria_egreso;
+                        }
+                    } elseif ($l->compra_divisa_id) {
+                        $compra = \App\Models\CompraDivisa::find($l->compra_divisa_id);
+                        if ($compra) {
+                            $motivo = $compra->motivo ?: ($compra->concepto ?: 'Compra de divisas');
+                            $tipo_gasto = 'Compra de divisas';
                         }
                     } elseif ($l->tesoreria_ingreso_id) {
                         $tesoreria = \App\Models\TesoreriaIngreso::find($l->tesoreria_ingreso_id);
@@ -1381,9 +1452,30 @@ class FinanzasController extends Controller
                     ];
                 })->values();
 
-            // Sin registrar
+            $conciliados = $conciliados->concat(
+                $lineas_compra_divisas->where('estado', 'conciliado')->map(function ($l) {
+                    $motivo = 'Compra de divisas';
+                    if ($l->compra_divisa_id) {
+                        $compra = \App\Models\CompraDivisa::find($l->compra_divisa_id);
+                        if ($compra) {
+                            $motivo = $compra->motivo ?: ($compra->concepto ?: $motivo);
+                        }
+                    }
+
+                    return [
+                        'fecha'       => $l->fecha,
+                        'referencia'  => $l->referencia,
+                        'descripcion' => $l->descripcion,
+                        'motivo'      => $motivo,
+                        'tipo_gasto'  => 'Compra de divisas',
+                        'monto'       => $l->monto,
+                        'tipo'        => $l->tipo,
+                    ];
+                })
+            )->values();
+
             $sin_registrar = $lineas_normales->where('estado', 'pendiente')
-                ->map(fn($l) => [
+                ->map(fn ($l) => [
                     'id'          => $l->id,
                     'fecha'       => $l->fecha,
                     'referencia'  => $l->referencia,
@@ -1393,16 +1485,25 @@ class FinanzasController extends Controller
                     'linea_id'    => $l->id,
                 ])->values();
 
-            // En tránsito = egresos del sistema del día anterior sin conciliar (mismo banco+titular)
+            $compras_divisas_banco = $lineas_compra_divisas->where('estado', 'pendiente')
+                ->map(fn ($l) => [
+                    'id'          => $l->id,
+                    'fecha'       => $l->fecha,
+                    'referencia'  => $l->referencia,
+                    'descripcion' => $l->descripcion,
+                    'monto'       => $l->monto,
+                    'tipo'        => $l->tipo,
+                    'linea_id'    => $l->id,
+                ])->values();
+
             $en_transito = $egresos_ayer
-                ->filter(function($e) use ($bk_lower, $tit_lower) {
+                ->filter(function ($e) use ($bk_lower, $tit_lower) {
                     $ebanco = strtolower(trim($e->banco ?? ''));
-                    $etit   = strtolower(trim($e->titular ?? ''));
-                    // Si el titular de la clave está vacío (ej: filtro solo por banco), mostrar todos los del banco
-                    // Si está definido, debe coincidir exactamente
+                    $etit = strtolower(trim($e->titular ?? ''));
+
                     return $ebanco === $bk_lower && ($tit_lower === '' || $etit === $tit_lower);
                 })
-                ->map(fn($e) => [
+                ->map(fn ($e) => [
                     'fecha'      => $e->fecha,
                     'referencia' => $e->referencia,
                     'concepto'   => $e->concepto,
@@ -1414,27 +1515,54 @@ class FinanzasController extends Controller
                     'flujo_id'   => $e->id,
                 ])->values();
 
-            // Comisiones agrupadas por descripción
-            $comisiones = $lineas_comisiones->groupBy('descripcion')->map(function($group) {
+            $compras_transito = \App\Models\CompraDivisa::query()
+                ->where('es_conciliado', false)
+                ->when($fecha_desde, fn ($q) => $q->where('fecha', '>=', $fecha_desde))
+                ->when(! $fecha_desde, fn ($q) => $q->where('fecha', '>=', now()->subDay()->format('Y-m-d')))
+                ->when($fecha_hasta, fn ($q) => $q->where('fecha', '<=', $fecha_hasta))
+                ->get()
+                ->filter(function ($c) use ($bk_lower, $tit_lower) {
+                    $ebanco = strtolower(trim($c->banco ?? ''));
+                    $etit = strtolower(trim($c->titular ?? ''));
+
+                    return $ebanco === $bk_lower && ($tit_lower === '' || $etit === $tit_lower);
+                })
+                ->map(fn ($c) => [
+                    'fecha'      => $c->fecha,
+                    'referencia' => $c->referencia,
+                    'concepto'   => $c->concepto ?: $c->motivo,
+                    'motivo'     => $c->motivo,
+                    'titular'    => strtoupper(trim($c->titular ?? '')),
+                    'tipo_gasto' => 'Compra de divisas',
+                    'monto_bs'   => $c->monto_bs,
+                    'monto_usd'  => $c->monto_usd,
+                    'flujo_id'   => null,
+                ])->values();
+            $en_transito = $en_transito->concat($compras_transito)->values();
+
+            $comisiones = $lineas_comisiones->groupBy('descripcion')->map(function ($group) {
                 $first = $group->first();
+
                 return [
                     'fecha'       => $first->fecha,
                     'descripcion' => $first->descripcion,
-                    'referencia'  => $group->count() > 1 ? 'VARIAS (' . $group->count() . ')' : $first->referencia,
+                    'referencia'  => $group->count() > 1 ? 'VARIAS ('.$group->count().')' : $first->referencia,
                     'monto'       => $group->sum('monto'),
                 ];
             })->values();
 
-            $total_conciliados   = $conciliados->sum('monto');
-            $total_transito      = $en_transito->sum('monto_bs');
+            $total_conciliados = $conciliados->sum('monto');
+            $total_transito = $en_transito->sum('monto_bs');
             $total_sin_registrar = $sin_registrar->sum('monto');
-            $total_comisiones    = $comisiones->sum('monto');
+            $total_comisiones = $comisiones->sum('monto');
+            $total_compras_divisas = $compras_divisas_banco->sum('monto');
 
-            $mis_movimientos = $movimientos_sistema->filter(function($movimiento) use ($matcher, $bk, $tit) {
+            $mis_movimientos = $movimientos_sistema->filter(function ($movimiento) use ($matcher, $bk, $tit) {
                 [$banco, $titular] = $matcher->partesCuenta($movimiento->banco, $movimiento->titular);
+
                 return $banco === $bk && $titular === $tit;
             });
-            $mis_traslados_recibidos = $movimientos_sistema->filter(function($movimiento) use ($matcher, $bk, $tit) {
+            $mis_traslados_recibidos = $movimientos_sistema->filter(function ($movimiento) use ($matcher, $bk, $tit) {
                 if (($movimiento->categoria_egreso ?? '') !== 'traslados') {
                     return false;
                 }
@@ -1442,16 +1570,18 @@ class FinanzasController extends Controller
                     $movimiento->banco_receptor,
                     $movimiento->titular_receptor
                 );
+
                 return $banco === $bk && $titular === $tit;
             });
-            $mis_ingresos_tesoreria = $ingresos_sistema->filter(function($ingreso) use ($matcher, $bk, $tit) {
+            $mis_ingresos_tesoreria = $ingresos_sistema->filter(function ($ingreso) use ($matcher, $bk, $tit) {
                 [$banco, $titular] = $matcher->partesCuenta($ingreso->banco, $ingreso->titular);
+
                 return $banco === $bk && $titular === $tit;
             });
 
             $total_cargos_sistema = $mis_movimientos
                 ->where('tipo', 'egreso')
-                ->sum(fn($movimiento) => (float) $movimiento->monto_bs + (float) $movimiento->comision);
+                ->sum(fn ($movimiento) => (float) $movimiento->monto_bs + (float) $movimiento->comision);
             $total_abonos_sistema = $mis_movimientos
                 ->where('tipo', 'ingreso')
                 ->sum('monto_bs')
@@ -1460,9 +1590,21 @@ class FinanzasController extends Controller
             $movimiento_neto_sistema = round($total_abonos_sistema - $total_cargos_sistema, 2);
 
             $data_por_banco[$bk_key] = array_merge(
-                compact('conciliados', 'en_transito', 'sin_registrar', 'comisiones',
-                        'total_conciliados', 'total_transito', 'total_sin_registrar', 'total_comisiones',
-                        'total_cargos_sistema', 'total_abonos_sistema', 'movimiento_neto_sistema'),
+                compact(
+                    'conciliados',
+                    'en_transito',
+                    'sin_registrar',
+                    'comisiones',
+                    'compras_divisas_banco',
+                    'total_conciliados',
+                    'total_transito',
+                    'total_sin_registrar',
+                    'total_comisiones',
+                    'total_compras_divisas',
+                    'total_cargos_sistema',
+                    'total_abonos_sistema',
+                    'movimiento_neto_sistema'
+                ),
                 ['banco' => $bk, 'titular' => $tit]
             );
         }
@@ -2030,38 +2172,20 @@ class FinanzasController extends Controller
         }
         $egresos_ayer = $egresos_query->orderBy('id')->get();
 
-        $comision_keywords = [
-            'comision', 'comisión', 'commission', 'mantenimiento', 'maintenance',
-            'cargo mensual', 'servicio', 'below minimum', 'administracion', 'administración',
-            'com.ref.banc', 'com mtto pos', 'comis. cr.i',
-            'servicio uso punto', 'comision intervencion', 'comision credito inmediato',
-            'comision por transferencia', 'tarifa mantenimiento', 'descuento tarjeta', 'emision edo',
-            'com mantenimiento', 'cobro comision', 'com pago otr', 'comision cobro centralizado',
-            'comis uso canal', 'stament service',
-            'serv mtto',
-            'cobro de comision', 'tarifa por',
-        ];
-        $comision_keywords_por_banco = [
-            'BANCAMIGA' => [ 'envio de sms', 'emision estado de cuenta'],
-        ];
+        $classifier = app(\App\Services\BankMovementClassifier::class);
 
         $lineas_banco = $lineas->filter(function($l) use ($tit_req) {
             $ltit = strtolower(trim($l->titular ?? ''));
             return $tit_req === '' || $ltit === $tit_req;
         });
 
-        $lineas_comisiones = $lineas_banco->filter(function($l) use ($comision_keywords, $comision_keywords_por_banco, $bk_req) {
-            $desc = strtolower($l->descripcion ?? '');
-            $keywords = array_merge(
-                $comision_keywords,
-                $comision_keywords_por_banco[strtoupper(trim($bk_req))] ?? []
-            );
-            foreach ($keywords as $kw) {
-                if (strpos($desc, $kw) !== false) return true;
-            }
-            return false;
-        });
-        $lineas_normales = $lineas_banco->diff($lineas_comisiones);
+        $lineas_comisiones = $lineas_banco->filter(
+            fn ($l) => $classifier->esComision($l->descripcion, $bk_req)
+        );
+        $lineas_compra_divisas = $lineas_banco
+            ->diff($lineas_comisiones)
+            ->filter(fn ($l) => $classifier->esCompraDivisas($l->descripcion));
+        $lineas_normales = $lineas_banco->diff($lineas_comisiones)->diff($lineas_compra_divisas);
 
         $conciliados = $lineas_normales->where('estado', 'conciliado')
             ->map(function($l) {
@@ -2156,6 +2280,44 @@ class FinanzasController extends Controller
         $fecha_desde = now()->subDays(1)->startOfDay();
         \App\Models\ConciliacionLinea::where('created_at', '>=', $fecha_desde)->delete();
         return redirect()->route('finanzas.conciliaciones')->with('success', 'Se han borrado los movimientos bancarios cargados.');
+    }
+
+    /**
+     * Si el cargo del banco emisor ya está vinculado al traslado, sácalo de "En tránsito".
+     * La entrada en el receptor puede conciliarse después; los traslados siguen disponibles
+     * en el motor de emparejamiento.
+     */
+    private function marcarTrasladosConSalidaConciliados(\App\Services\BankReconciliationMatcher $matcher): void
+    {
+        $traslados = \App\Models\FlujoCaja::query()
+            ->where('tipo', 'egreso')
+            ->where('categoria_egreso', 'traslados')
+            ->where('es_conciliado', false)
+            ->get();
+
+        if ($traslados->isEmpty()) {
+            return;
+        }
+
+        $lineas = \App\Models\ConciliacionLinea::query()
+            ->whereIn('flujo_caja_id', $traslados->pluck('id'))
+            ->where('estado', 'conciliado')
+            ->get()
+            ->groupBy('flujo_caja_id');
+
+        foreach ($traslados as $traslado) {
+            $tieneSalida = false;
+            foreach ($lineas->get($traslado->id, collect()) as $linea) {
+                if ($matcher->ladoTraslado($linea, $traslado) === 'salida') {
+                    $tieneSalida = true;
+                    break;
+                }
+            }
+            if ($tieneSalida) {
+                $traslado->es_conciliado = true;
+                $traslado->save();
+            }
+        }
     }
 
     public function updateCuenta(Request $request, $id) {

@@ -184,8 +184,12 @@
                 </div>
                 <div class="st-campo" id="st-serial-wrap" data-tipos="impresora,camara,audifonos,corneta">
                     <label id="st-serial-label" style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Serial *</label>
-                    <input type="text" name="serial" id="st-serial" value="{{ old('serial', $equipoPrefill->serial ?? '') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
-                    <div id="st-serial-hint" class="muted" style="font-size:.78rem;margin-top:4px;display:none;">Obligatorio si el IMEI no aplica.</div>
+                    <input type="text" name="serial" id="st-serial" value="{{ old('serial', $equipoPrefill->serial ?? '') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;" @disabled(old('serial_no_aplica'))>
+                    <label id="st-serial-na-wrap" style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:.85rem;cursor:pointer;">
+                        <input type="checkbox" name="serial_no_aplica" value="1" id="st-serial-na" @checked(old('serial_no_aplica'))>
+                        Serial no aplica / no se puede acceder
+                    </label>
+                    <div id="st-serial-hint" class="muted" style="font-size:.78rem;margin-top:4px;display:none;">Si el IMEI no aplica, indica serial o marca que tampoco se puede acceder.</div>
                 </div>
                 <div>
                     <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Marca *</label>
@@ -433,11 +437,14 @@
         const serial = document.getElementById('st-serial');
         const serialHint = document.getElementById('st-serial-hint');
         const serialLabel = document.getElementById('st-serial-label');
+        const serialNa = document.getElementById('st-serial-na');
+        const serialNaWrap = document.getElementById('st-serial-na-wrap');
         const usarWrap = document.getElementById('st-usar-existente-wrap');
         const usarCheck = document.getElementById('st-usar-existente');
         const equipoId = document.getElementById('st-equipo-id');
         const hint = document.getElementById('st-imei-hint');
         const checked = !!(na && na.checked && tipo === 'celular');
+        const serialNaChecked = !!(serialNa && serialNa.checked);
 
         if (imeiLabel) imeiLabel.textContent = checked ? 'IMEI' : 'IMEI *';
         if (imei) {
@@ -454,12 +461,28 @@
         }
         if (serialWrap && tipo === 'celular') {
             serialWrap.style.display = checked ? '' : 'none';
-            if (serial) serial.disabled = !checked;
+            if (serial) {
+                serial.disabled = !checked || serialNaChecked;
+                if (serialNaChecked) serial.value = '';
+                serial.placeholder = serialNaChecked ? 'No se pudo acceder' : 'Serial del equipo';
+            }
             if (serialHint) serialHint.style.display = checked ? '' : 'none';
-            if (serialLabel) serialLabel.textContent = 'Serial *';
+            if (serialLabel) serialLabel.textContent = serialNaChecked ? 'Serial' : 'Serial *';
+            if (serialNaWrap) serialNaWrap.style.display = checked ? 'flex' : 'none';
+        } else if (tipo !== 'celular') {
+            if (serialNaWrap) serialNaWrap.style.display = 'flex';
+            if (serial) {
+                serial.disabled = serialNaChecked;
+                if (serialNaChecked) serial.value = '';
+            }
+            if (serialLabel) serialLabel.textContent = serialNaChecked ? (serialLabels[tipo] || 'Serial').replace(' *', '') : (serialLabels[tipo] || 'Serial *');
+            if (serialHint) serialHint.style.display = 'none';
         } else if (serialHint) {
             serialHint.style.display = 'none';
         }
+    }
+    function syncSerialNoAplica() {
+        syncImeiNoAplica();
     }
     function syncTipoDispositivo() {
         const tipo = tipoDispositivo();
@@ -481,6 +504,7 @@
     }
     document.querySelectorAll('.st-tipo-dispositivo').forEach((el) => el.addEventListener('change', syncTipoDispositivo));
     document.getElementById('st-imei-na')?.addEventListener('change', syncImeiNoAplica);
+    document.getElementById('st-serial-na')?.addEventListener('change', syncSerialNoAplica);
 
     function syncLente() {
         const wrap = document.getElementById('st-serial-lente-wrap');

@@ -164,7 +164,7 @@ class ComisionController extends Controller
 
         return redirect()
             ->route('nomina.comisiones.show', $periodo)
-            ->with('status', 'Comisiones recalculadas con los datos actuales de ventas.');
+            ->with('status', 'Comisiones recalculadas con los datos actuales de ventas y la tasa BCV del día.');
     }
 
     public function exportarBanco(NominaPeriodo $periodo, NominaEmpresa $empresa): StreamedResponse|RedirectResponse

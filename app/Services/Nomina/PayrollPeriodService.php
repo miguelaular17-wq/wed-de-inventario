@@ -231,7 +231,8 @@ class PayrollPeriodService
                 'calculado_por' => $usuarioId,
             ];
             if (Schema::hasColumn('nomina_periodos', 'tasa_bcv')) {
-                // Congela la tasa del día de cierre de la quincena (no la de hoy al recalcular).
+                // Nómina: congela la tasa del día de cierre de la quincena.
+                // Recalcular comisiones después actualiza esta tasa al día del recálculo.
                 $payload['tasa_bcv'] = $this->bcv->getRateForDate($periodo->fecha_fin);
             }
             $periodo->update($payload);
@@ -327,9 +328,19 @@ class PayrollPeriodService
                 }
             }
 
+            $payload = [];
+            if (Schema::hasColumn('nomina_periodos', 'tasa_bcv')) {
+                // Al recalcular comisiones se congela la tasa BCV del día del recálculo.
+                $payload['tasa_bcv'] = $this->bcv->getRateForToday();
+            }
+            if ($payload !== []) {
+                $periodo->update($payload);
+            }
+
             NominaAuditLog::registrar('COMISION_RECALCULAR', 'periodo', $periodo->id, null, [
                 'etiqueta' => $periodo->etiqueta,
                 'estado' => $periodo->estado,
+                'tasa_bcv' => $payload['tasa_bcv'] ?? $periodo->tasa_bcv,
                 'usuario_id' => $usuarioId,
             ]);
 

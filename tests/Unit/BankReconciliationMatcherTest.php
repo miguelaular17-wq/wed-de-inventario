@@ -37,8 +37,36 @@ class BankReconciliationMatcherTest extends TestCase
         ];
 
         $this->assertTrue($this->matcher->coincideLotePunto($linea, $lote));
-        $this->assertTrue($this->matcher->haystackTieneLote($this->matcher->textoBanco($linea), 'L.57'));
+        $this->assertTrue($this->matcher->haystackTieneLote($this->matcher->textoBanco($linea), '95'));
         $this->assertTrue($this->matcher->haystackTieneLote('TMD L.58 EMBUTIDOS', '58'));
+    }
+
+    public function test_bnc_lote_en_referencia_con_pos_en_descripcion(): void
+    {
+        $linea = new ConciliacionLinea([
+            'banco' => 'BNC',
+            'titular' => 'GRUPO JRZ',
+            'fecha' => '2026-08-23',
+            'referencia' => '487',
+            'descripcion' => 'POS: 860963370 GRUPO JRZ TECH ELECTRONIC FECHA:23/08/2026',
+            'monto' => 12554.56,
+            'tipo' => 'abono',
+        ]);
+        $lote = (object) [
+            'tipo' => 'punto_venta',
+            'banco' => 'BNC',
+            'titular' => 'JRZ',
+            'fecha' => '2026-08-23',
+            'monto' => 12554.56,
+            'lote_referencia' => '0487',
+        ];
+
+        $this->assertTrue($this->matcher->mismoTitular('GRUPO JRZ', 'JRZ', 'BNC', 'BNC'));
+        $this->assertTrue($this->matcher->loteIgualReferencia('487', '0487'));
+        $this->assertTrue($this->matcher->haystackTieneLote($this->matcher->textoBanco($linea), '0487'));
+        $this->assertTrue($this->matcher->coincideLotePunto($linea, $lote));
+        // El terminal POS no es el lote
+        $this->assertFalse($this->matcher->loteIgualReferencia('487', '860963370'));
     }
 
     public function test_lote_tesoreria_banesco_doral_sin_monto_exacto(): void

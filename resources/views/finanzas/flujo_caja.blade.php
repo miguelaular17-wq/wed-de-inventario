@@ -801,6 +801,76 @@
         </div>
     </div>
 
+    <!-- COMPRA DE DIVISAS -->
+    <div class="dashboard-container" style="margin-top: 10px;">
+        <h3 style="margin-bottom: 15px; color: #0369a1; display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            COMPRA DE DIVISAS
+        </h3>
+        <div class="panel" style="padding: 0; overflow: hidden; margin-bottom: 30px; border: 1.5px solid #bae6fd;">
+            <div class="table-wrap">
+                <table class="data-table" style="width: 100%;">
+                    <thead>
+                        <tr style="background: #f0f9ff;">
+                            <th style="width: 100px;">Fecha</th>
+                            <th>Banco y Titular</th>
+                            <th>Referencia</th>
+                            <th>Motivo</th>
+                            <th class="col-number" style="text-align: right;">Monto BS</th>
+                            <th class="col-number" style="text-align: right;">Monto USD</th>
+                            <th style="text-align: center; width: 90px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse(($compras_divisas ?? collect()) as $mov)
+                            <tr>
+                                <td>{{ \Carbon\Carbon::parse($mov->fecha)->format('Y-m-d') }}</td>
+                                <td>
+                                    <strong style="color: #0369a1;">{{ $mov->banco }}</strong><br>
+                                    <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular }}</span>
+                                </td>
+                                <td>{{ $mov->referencia ?: '—' }}</td>
+                                <td>{{ $mov->motivo ?: ($mov->concepto ?: '—') }}</td>
+                                <td class="col-number" style="text-align: right; font-weight: 500;">
+                                    Bs. {{ number_format((float) $mov->monto_bs, 2) }}
+                                </td>
+                                <td class="col-number" style="text-align: right;">
+                                    {{ $mov->monto_usd ? '$'.number_format((float) $mov->monto_usd, 2) : '—' }}
+                                </td>
+                                <td style="text-align: center; white-space: nowrap;">
+                                    @if(auth()->user()->canAccess('finanzas.eliminar'))
+                                    <form method="POST" action="{{ route('finanzas.destroy_compra_divisa', $mov->id) }}" style="display:inline;" onsubmit="return confirm('¿Eliminar esta compra de divisas?');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" title="Eliminar"
+                                            style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:4px;padding:3px 7px;font-size:0.8rem;cursor:pointer;">🗑️</button>
+                                    </form>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: 30px; color: var(--muted);">No hay compras de divisas en este período.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                    <tfoot>
+                        @php
+                            $tot_compra_bs = ($compras_divisas ?? collect())->sum('monto_bs');
+                            $tot_compra_usd = ($compras_divisas ?? collect())->sum('monto_usd');
+                        @endphp
+                        <tr style="background-color: #f0f9ff; border-top: 2px solid #bae6fd; font-weight: bold;">
+                            <td colspan="4" style="text-align: right; color: #0369a1;">TOTAL COMPRA DE DIVISAS</td>
+                            <td class="col-number" style="text-align: right; color: #0369a1;">Bs. {{ number_format((float) $tot_compra_bs, 2) }}</td>
+                            <td class="col-number" style="text-align: right; color: #0369a1;">$ {{ number_format((float) $tot_compra_usd, 2) }}</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
 <!-- TRASLADOS (no aparece en reportes) -->
 <div class="dashboard-container" style="margin-top: 10px;">
     <h3 style="margin-bottom: 15px; color: #7c3aed; display: flex; align-items: center; gap: 8px;">
@@ -954,6 +1024,7 @@
                     <select name="categoria_egreso" id="categoria_egreso" onchange="toggleTraslados()" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                         <option value="egreso_realizado">EGRESOS REALIZADOS</option>
                         <option value="egreso_divisas">EGRESOS EN DIVISAS</option>
+                        <option value="compra_divisas">COMPRA DE DIVISAS</option>
                         <option value="otros_egresos">OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
                         <option value="traslados">TRASLADOS</option>
                     </select>
@@ -1506,6 +1577,7 @@ function toggleTraslados() {
     const val = document.getElementById('categoria_egreso').value;
     const isTraslado = val === 'traslados';
     const isDivisas = val === 'egreso_divisas';
+    const isCompraDivisas = val === 'compra_divisas';
     
     document.getElementById('row_receptor').style.display = isTraslado ? 'flex' : 'none';
     document.getElementById('banco_titular_receptor').required = isTraslado;
@@ -1517,8 +1589,8 @@ function toggleTraslados() {
     document.getElementById('col_tasa_cambio').style.display = (isTraslado || isDivisas) ? 'none' : 'block';
     document.getElementById('col_monto_bs').style.display = isDivisas ? 'none' : 'block';
     
-    document.getElementById('row_diferencial').style.display = (isTraslado || isDivisas) ? 'none' : 'flex';
-    document.getElementById('row_tipo_gasto').style.display = isTraslado ? 'none' : 'block';
+    document.getElementById('row_diferencial').style.display = (isTraslado || isDivisas || isCompraDivisas) ? 'none' : 'flex';
+    document.getElementById('row_tipo_gasto').style.display = (isTraslado || isCompraDivisas) ? 'none' : 'block';
     document.getElementById('row_traslado_extra').style.display = isTraslado ? 'flex' : 'none';
     
     // Disable fields that would create duplicate POST keys
@@ -1526,7 +1598,7 @@ function toggleTraslados() {
     const comisionTraslado = document.getElementById('comision_traslado');
     const usdNormal = document.getElementById('monto_usd');
     const usdTraslado = document.getElementById('monto_usd_traslado');
-    if (comisionNormal) comisionNormal.disabled = (isTraslado || isDivisas);
+    if (comisionNormal) comisionNormal.disabled = (isTraslado || isDivisas || isCompraDivisas);
     if (comisionTraslado) comisionTraslado.disabled = !isTraslado;
     if (usdNormal) usdNormal.disabled = isTraslado;
     if (usdTraslado) usdTraslado.disabled = !isTraslado;
@@ -1537,7 +1609,7 @@ function toggleTraslados() {
     // When switching to traslado mode, auto-calc USD if monto_bs already has value
     if (isTraslado) calcTraslado();
     
-    document.getElementById('tipo_gasto').required = !isTraslado && !document.getElementById('chk_todoticket')?.checked;
+    document.getElementById('tipo_gasto').required = !isTraslado && !isCompraDivisas && !document.getElementById('chk_todoticket')?.checked;
 }
 
 function formatBsVe(n) {

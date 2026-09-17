@@ -66,7 +66,7 @@
     @include('nomina.partials.totales-sede-area', [
         'totalesPorGrupo' => $totalesPorGrupo ?? collect(),
         'tasaBcv' => $tasaBcv ?? 0,
-        'tasaBcvEtiqueta' => 'Tasa BCV del cierre ('.($periodo->fecha_fin?->format('d/m/Y') ?: '—').')',
+        'tasaBcvEtiqueta' => 'Tasa BCV aplicada',
         'filtroTargets' => ['tabla-comisiones-ventas', 'tabla-comisiones-st'],
         'pdfRoute' => $periodo->estado !== 'ABIERTO'
             ? route('nomina.comisiones.reporte_sedes', $periodo)
@@ -242,7 +242,7 @@
         <h3>Archivo para el banco</h3>
         <p class="muted">
             Un TXT por empresa, igual que en nómina.
-            Tasa BCV del cierre ({{ $periodo->fecha_fin?->format('d/m/Y') }}):
+            Tasa BCV aplicada (se actualiza al recalcular comisiones):
             <strong>{{ number_format($tasaBcv, 2) }}</strong>.
         </p>
         <table class="data-table">

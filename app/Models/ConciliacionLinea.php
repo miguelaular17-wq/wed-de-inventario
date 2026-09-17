@@ -10,7 +10,8 @@ class ConciliacionLinea extends Model
         'banco', 'titular',
         'fecha', 'descripcion', 'referencia', 'monto', 'estado', 'flujo_caja_id',
         'session_id', 'tipo',
-        'tesoreria_ingreso_id'
+        'tesoreria_ingreso_id',
+        'compra_divisa_id',
     ];
 
     public function flujoCaja()
@@ -21,6 +22,11 @@ class ConciliacionLinea extends Model
     public function tesoreriaIngreso()
     {
         return $this->belongsTo(TesoreriaIngreso::class, 'tesoreria_ingreso_id');
+    }
+
+    public function compraDivisa()
+    {
+        return $this->belongsTo(CompraDivisa::class, 'compra_divisa_id');
     }
 
     public function esCargo(): bool

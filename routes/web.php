@@ -462,6 +462,9 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
     Route::delete('/flujo-caja/egreso/{id}', [FinanzasController::class, 'destroyEgreso'])
         ->middleware('permission:finanzas.eliminar')
         ->name('finanzas.destroy_egreso');
+    Route::delete('/flujo-caja/compra-divisa/{id}', [FinanzasController::class, 'destroyCompraDivisa'])
+        ->middleware('permission:finanzas.eliminar')
+        ->name('finanzas.destroy_compra_divisa');
 });
 
 // Conciliaciones routes - solo admin y contabilidad
