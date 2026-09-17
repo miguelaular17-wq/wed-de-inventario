@@ -146,11 +146,9 @@
                 <label for="q-pedir-sede">Sede</label>
                 <select id="q-pedir-sede" style="width: 100%; padding: 11px 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.92rem;">
                     <option value="">-- Seleccione una sede --</option>
-                    <option value="DORAL">DORAL</option>
-                    <option value="CENTRO">CENTRO</option>
-                    <option value="ZAMORA">ZAMORA</option>
-                    <option value="SAMBIL">SAMBIL</option>
-                    <option value="VIRTUDES">VIRTUDES</option>
+                    @foreach (config('inventario.sedes_locales', []) as $sedeQ)
+                        <option value="{{ $sedeQ }}">{{ config('inventario.display.'.$sedeQ, $sedeQ) }}</option>
+                    @endforeach
                 </select>
             </div>
             <div class="auth-field">

@@ -5,7 +5,7 @@ return [
     | Sedes con interfaz Ventas + Inventario (sin JRZ local ni pestaña Compra).
     | JRZ sigue en BD como almacén origen de requisiciones.
     */
-    'sedes_locales' => ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL'],
+    'sedes_locales' => ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES'],
 
     'sedes_stock' => ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES'],
 

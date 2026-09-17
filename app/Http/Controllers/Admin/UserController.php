@@ -59,9 +59,10 @@ class UserController extends Controller
 
     public function update(Request $request, User $user)
     {
+        $sedesPermitidas = config('inventario.sedes_locales', []);
         $data = $request->validate([
             'role' => ['required', 'string', 'in:admin,supervisor,telefonia,tecnico,comprador,sede,vendedor,marketing,finanzas,cobranza,contabilidad,auditor,tesoreria,gerente,rrhh'],
-            'sede' => ['nullable', 'string'],
+            'sede' => ['nullable', 'string', 'in:'.implode(',', $sedesPermitidas)],
             'password_plain' => ['nullable', 'string', 'min:6'],
             'ver_publicidad_equipo' => ['nullable', 'boolean'],
             'cobranza_clientes' => ['nullable', 'string', 'in:todos,regulares,personales'],
