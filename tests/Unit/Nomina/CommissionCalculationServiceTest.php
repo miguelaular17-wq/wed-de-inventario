@@ -175,6 +175,28 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(2.0, $resultado['total']);
     }
 
+    public function test_colaborador_cobra_cero_punto_veinticinco_sobre_cinco_tiendas(): void
+    {
+        NominaConfig::put('comision_colaborador_pct', 0.25);
+        $empleado = $this->empleado(NominaEmpleado::COMISION_COLABORADOR, 'COLAB-001');
+        $periodo = $this->periodo();
+
+        // Incluidas: Sambil, Doral, Zamora, Centro, Virtudes
+        $this->documento('SAMBIL', 1000);
+        $this->documento('DORAL', 2000);
+        $this->documento('ZAMORA', 500);
+        $this->documento('CENTRO', 1500);
+        $this->documento('VIRTUDES', 1000);
+        // Excluidas del cálculo
+        $this->documento('NUNES', 9000);
+        $this->documento('JRZ', 8000);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(6000.0, $resultado['base']);
+        $this->assertSame(15.0, $resultado['total']); // 6000 * 0.25%
+    }
+
     public function test_ventas_propias_usan_precio_neto_cuando_existe(): void
     {
         NominaConfig::put('descuento_venta_pct', 20);
@@ -423,7 +445,7 @@ class CommissionCalculationServiceTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        // Misma factura: ST 22 + pantalla 23.33 = toda la factura es ST.
+        // Misma factura: ST 22 + pantalla 23.33 → ST solo 22; pantalla a otros.
         $this->venta('TEC-MIX-DOC', 22, [
             'nombre_producto' => 'SERVICIO TECNICO',
             'numero_documento' => '1913',
@@ -450,12 +472,12 @@ class CommissionCalculationServiceTest extends TestCase
 
         $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
 
-        $this->assertEqualsWithDelta(45.33, $resultado['ventas_st'], 0.02);
-        $this->assertEqualsWithDelta(50.12, $resultado['base_telefonia'] + $resultado['base_otros'], 0.02);
-        $this->assertSame(0.0, $resultado['base_otros']);
+        $this->assertEqualsWithDelta(22.0, $resultado['ventas_st'], 0.02);
+        $this->assertEqualsWithDelta(23.33, $resultado['base_otros'], 0.02);
+        $this->assertEqualsWithDelta(50.12, $resultado['base_telefonia'], 0.02);
     }
 
-    public function test_movistar_excluye_factura_mixta_con_servicio_tecnico(): void
+    public function test_movistar_excluye_solo_lineas_de_servicio_tecnico(): void
     {
         $empleado = $this->empleado(NominaEmpleado::COMISION_MOVISTAR, 'MOV-MIX');
         $periodo = $this->periodo();
@@ -487,7 +509,7 @@ class CommissionCalculationServiceTest extends TestCase
 
         $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
 
-        $this->assertSame(100.0, $resultado['base']);
+        $this->assertEqualsWithDelta(123.33, $resultado['base'], 0.02);
     }
 
     public function test_servicio_tecnico_retiene_solo_sobre_otros_productos(): void

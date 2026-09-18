@@ -53,6 +53,10 @@
                 <input type="number" step="0.0001" min="0" max="100" name="comision_sambil_pct" value="{{ number_format($comisionSambilPct, 4, '.', '') }}" required>
             </div>
             <div class="field">
+                <label>Comisión colaborador — Sambil+Doral+Zamora+Centro+Virtudes (%)</label>
+                <input type="number" step="0.0001" min="0" max="100" name="comision_colaborador_pct" value="{{ number_format($comisionColaboradorPct, 4, '.', '') }}" required>
+            </div>
+            <div class="field">
                 <label>Telefonía (%)</label>
                 <input type="number" step="0.0001" min="0" max="100" name="comision_telefonia_pct" value="{{ number_format($comisionTelefoniaPct, 4, '.', '') }}" required>
             </div>

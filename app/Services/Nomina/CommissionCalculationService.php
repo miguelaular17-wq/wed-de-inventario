@@ -55,7 +55,12 @@ class CommissionCalculationService
             return $vacio;
         }
 
-        if ($this->sedeExcluida($empleado) && $empleado->modo_comision !== NominaEmpleado::COMISION_NUNES) {
+        if ($this->sedeExcluida($empleado)
+            && ! in_array($empleado->modo_comision, [
+                NominaEmpleado::COMISION_NUNES,
+                NominaEmpleado::COMISION_COLABORADOR,
+            ], true)
+        ) {
             return $vacio;
         }
 
@@ -68,6 +73,7 @@ class CommissionCalculationService
                 NominaEmpleado::COMISION_DIGITAL => $this->comisionDigital($periodo, $empleado),
                 NominaEmpleado::COMISION_PCP => $this->comisionPcp($periodo, $empleado),
                 NominaEmpleado::COMISION_SAMBIL => $this->comisionSambil($periodo, $empleado),
+                NominaEmpleado::COMISION_COLABORADOR => $this->comisionColaborador($periodo, $empleado),
                 NominaEmpleado::COMISION_SERVICIO_TECNICO => $this->servicioTecnico($periodo, $empleado),
                 NominaEmpleado::COMISION_NUNES => $this->comisionNunes($periodo, $empleado),
                 default => $vacio,
@@ -181,6 +187,53 @@ class CommissionCalculationService
             'SAMBIL',
             'venta_neta_tienda * porcentaje_sambil'
         );
+    }
+
+    /**
+     * 0,25% de la venta neta sumada de Sambil, Doral, Zamora, Centro y Virtudes.
+     */
+    private function comisionColaborador(NominaPeriodo $periodo, NominaEmpleado $empleado): array
+    {
+        $sedes = array_values(array_filter(
+            NominaEmpleado::sedesComisionColaborador(),
+            fn (string $sede) => ! $this->codigoSedeExcluido($sede)
+        ));
+        if ($sedes === []) {
+            return $this->resultado($empleado, 0, 0, 0, 0);
+        }
+
+        $lineas = $this->lineasVentas($periodo)
+            ->whereRaw(
+                'UPPER(TRIM(vd.sede)) IN ('.implode(',', array_fill(0, count($sedes), '?')).')',
+                $sedes
+            )
+            ->get();
+
+        $base = 0.0;
+        $detalleSedes = [];
+        foreach ($sedes as $sede) {
+            $lineasSede = $lineas->filter(
+                fn ($linea) => mb_strtoupper(trim((string) ($linea->sede ?? '')), 'UTF-8') === $sede
+            );
+            $netoSede = $this->ventaNetaSede($periodo, $sede, $lineasSede);
+            $detalleSedes[$sede] = $netoSede;
+            $base += $netoSede;
+        }
+        $base = round($base, 2);
+
+        $porcentaje = NominaConfig::getDecimal('comision_colaborador_pct', 0.25);
+        $total = round($base * $porcentaje / 100, 2);
+
+        if ($base > 0 || $lineas->isNotEmpty()) {
+            $this->registrarAgregado($periodo, $empleado, 'COLABORADOR', 'MULTI', $base, $porcentaje, $total, [
+                'lineas_venta' => $lineas->count(),
+                'sedes' => $detalleSedes,
+                'formula' => 'suma_venta_neta(sambil+doral+zamora+centro+virtudes) * porcentaje_colaborador',
+                'fuente' => $this->flag('ventas_documentos') ? 'ventas_documentos' : 'ventas_detalle',
+            ]);
+        }
+
+        return $this->resultado($empleado, $total, $base, 0, $lineas->count());
     }
 
     private function comisionSobreSedeEmpleado(
@@ -303,44 +356,33 @@ class CommissionCalculationService
     }
 
     /**
-     * Excluye facturas que incluyen servicio técnico (modo Movistar),
-     * incluidas las mixtas con refacciones/pantalla en la misma factura.
+     * Quita solo las líneas de SERVICIO TECNICO (modo Movistar).
+     * Pantallas/refacciones de la misma factura siguen como venta normal.
      *
      * @param  \Illuminate\Support\Collection<int, object>  $lineas
      * @return \Illuminate\Support\Collection<int, object>
      */
     private function excluirFacturasServicioTecnico(Collection $lineas): Collection
     {
-        $docsConSt = $lineas
-            ->filter(fn ($linea) => $this->esLineaServicioTecnico($linea))
-            ->map(fn ($linea) => $this->claveDocumento($linea))
-            ->unique()
-            ->all();
-
         return $lineas
-            ->reject(fn ($linea) => in_array($this->claveDocumento($linea), $docsConSt, true))
+            ->reject(fn ($linea) => $this->esLineaServicioTecnico($linea))
             ->values();
     }
 
     /**
-     * Toda la factura con SERVICIO TECNICO cuenta como ST (mano de obra + refacciones).
+     * Solo las líneas marcadas como SERVICIO TECNICO van a ST.
+     * El resto de la misma factura (pantalla, refacción, etc.) va a venta normal.
      *
      * @param  \Illuminate\Support\Collection<int, object>  $lineas
      * @return array{0:\Illuminate\Support\Collection<int, object>,1:\Illuminate\Support\Collection<int, object>}
      */
     private function separarLineasServicioTecnico(Collection $lineas): array
     {
-        $docsConSt = $lineas
-            ->filter(fn ($linea) => $this->esLineaServicioTecnico($linea))
-            ->map(fn ($linea) => $this->claveDocumento($linea))
-            ->unique()
-            ->values();
-
         $lineasSt = $lineas
-            ->filter(fn ($linea) => $docsConSt->contains($this->claveDocumento($linea)))
+            ->filter(fn ($linea) => $this->esLineaServicioTecnico($linea))
             ->values();
         $lineasVenta = $lineas
-            ->reject(fn ($linea) => $docsConSt->contains($this->claveDocumento($linea)))
+            ->reject(fn ($linea) => $this->esLineaServicioTecnico($linea))
             ->values();
 
         return [$lineasSt, $lineasVenta];

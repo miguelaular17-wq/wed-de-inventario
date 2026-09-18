@@ -3,7 +3,7 @@
 namespace App\Services;
 
 /**
- * Clasifica líneas de extracto bancario: comisiones vs compra de divisas.
+ * Clasifica líneas de extracto bancario: comisiones, compra de divisas, pago de crédito.
  */
 class BankMovementClassifier
 {
@@ -44,6 +44,32 @@ class BankMovementClassifier
         'intervención electrónic',
     ];
 
+    /** @var list<string> */
+    private array $pagoCreditoKeywords = [
+        'credito digital',
+        'crédito digital',
+        'pago credito digital',
+        'pago crédito digital',
+        'pago de credito',
+        'pago de crédito',
+    ];
+
+    public function esPagoCredito(?string $descripcion): bool
+    {
+        $desc = mb_strtolower(trim((string) $descripcion), 'UTF-8');
+        if ($desc === '') {
+            return false;
+        }
+
+        foreach ($this->pagoCreditoKeywords as $kw) {
+            if (str_contains($desc, $kw)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function esCompraDivisas(?string $descripcion): bool
     {
         $desc = mb_strtolower(trim((string) $descripcion), 'UTF-8');
@@ -72,7 +98,7 @@ class BankMovementClassifier
 
     public function esComision(?string $descripcion, ?string $banco = null): bool
     {
-        if ($this->esCompraDivisas($descripcion)) {
+        if ($this->esCompraDivisas($descripcion) || $this->esPagoCredito($descripcion)) {
             return false;
         }
 

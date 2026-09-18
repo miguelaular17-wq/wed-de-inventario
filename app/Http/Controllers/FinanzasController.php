@@ -1285,9 +1285,7 @@ class FinanzasController extends Controller
                     $linea->estado = 'conciliado';
                     if ($isTesoreriaMatch) {
                         $linea->tesoreria_ingreso_id = $match->id;
-                        if (($match->tipo ?? '') !== 'punto_venta') {
-                            $tesoreria_posibles = $tesoreria_posibles->reject(fn($t) => $t->id == $match->id);
-                        }
+                        $tesoreria_posibles = $tesoreria_posibles->reject(fn ($t) => $t->id == $match->id);
                     } elseif ($isCompraDivisaMatch) {
                         $linea->compra_divisa_id = $match->id;
                         $comprasDivisasPosibles = $comprasDivisasPosibles->reject(fn ($c) => $c->id == $match->id);
@@ -1407,14 +1405,21 @@ class FinanzasController extends Controller
                 return $lbanco === $bk_lower && ($tit_lower === '' || $ltit === $tit_lower);
             });
 
-            // Separar comisiones, compras de divisas y transacciones normales
+            // Separar comisiones, compras de divisas, pago de crédito y normales
             $lineas_comisiones = $lineas_banco->filter(
                 fn ($l) => $classifier->esComision($l->descripcion, $bk)
             );
             $lineas_compra_divisas = $lineas_banco
                 ->diff($lineas_comisiones)
                 ->filter(fn ($l) => $classifier->esCompraDivisas($l->descripcion));
-            $lineas_normales = $lineas_banco->diff($lineas_comisiones)->diff($lineas_compra_divisas);
+            $lineas_pago_credito = $lineas_banco
+                ->diff($lineas_comisiones)
+                ->diff($lineas_compra_divisas)
+                ->filter(fn ($l) => $classifier->esPagoCredito($l->descripcion));
+            $lineas_normales = $lineas_banco
+                ->diff($lineas_comisiones)
+                ->diff($lineas_compra_divisas)
+                ->diff($lineas_pago_credito);
 
             // Conciliados
             $conciliados = $lineas_normales->where('estado', 'conciliado')
@@ -1496,6 +1501,18 @@ class FinanzasController extends Controller
                     'linea_id'    => $l->id,
                 ])->values();
 
+            $pagos_credito = $lineas_pago_credito
+                ->map(fn ($l) => [
+                    'id'          => $l->id,
+                    'fecha'       => $l->fecha,
+                    'referencia'  => $l->referencia,
+                    'descripcion' => $l->descripcion,
+                    'monto'       => $l->monto,
+                    'tipo'        => $l->tipo,
+                    'estado'      => $l->estado,
+                    'linea_id'    => $l->id,
+                ])->values();
+
             $en_transito = $egresos_ayer
                 ->filter(function ($e) use ($bk_lower, $tit_lower) {
                     $ebanco = strtolower(trim($e->banco ?? ''));
@@ -1556,6 +1573,7 @@ class FinanzasController extends Controller
             $total_sin_registrar = $sin_registrar->sum('monto');
             $total_comisiones = $comisiones->sum('monto');
             $total_compras_divisas = $compras_divisas_banco->sum('monto');
+            $total_pagos_credito = $pagos_credito->sum('monto');
 
             $mis_movimientos = $movimientos_sistema->filter(function ($movimiento) use ($matcher, $bk, $tit) {
                 [$banco, $titular] = $matcher->partesCuenta($movimiento->banco, $movimiento->titular);
@@ -1596,11 +1614,13 @@ class FinanzasController extends Controller
                     'sin_registrar',
                     'comisiones',
                     'compras_divisas_banco',
+                    'pagos_credito',
                     'total_conciliados',
                     'total_transito',
                     'total_sin_registrar',
                     'total_comisiones',
                     'total_compras_divisas',
+                    'total_pagos_credito',
                     'total_cargos_sistema',
                     'total_abonos_sistema',
                     'movimiento_neto_sistema'
@@ -2185,7 +2205,14 @@ class FinanzasController extends Controller
         $lineas_compra_divisas = $lineas_banco
             ->diff($lineas_comisiones)
             ->filter(fn ($l) => $classifier->esCompraDivisas($l->descripcion));
-        $lineas_normales = $lineas_banco->diff($lineas_comisiones)->diff($lineas_compra_divisas);
+        $lineas_pago_credito = $lineas_banco
+            ->diff($lineas_comisiones)
+            ->diff($lineas_compra_divisas)
+            ->filter(fn ($l) => $classifier->esPagoCredito($l->descripcion));
+        $lineas_normales = $lineas_banco
+            ->diff($lineas_comisiones)
+            ->diff($lineas_compra_divisas)
+            ->diff($lineas_pago_credito);
 
         $conciliados = $lineas_normales->where('estado', 'conciliado')
             ->map(function($l) {
@@ -2254,6 +2281,15 @@ class FinanzasController extends Controller
             ];
         })->values();
 
+        $pagos_credito = $lineas_pago_credito
+            ->map(fn ($l) => [
+                'fecha'       => $l->fecha,
+                'referencia'  => $l->referencia,
+                'descripcion' => $l->descripcion,
+                'monto'       => $l->monto,
+                'tipo'        => $l->tipo,
+            ])->values();
+
         $data = [
             'banco' => strtoupper($bk_req),
             'titular' => strtoupper($tit_req),
@@ -2261,10 +2297,12 @@ class FinanzasController extends Controller
             'en_transito' => $en_transito,
             'sin_registrar' => $sin_registrar,
             'comisiones' => $comisiones,
+            'pagos_credito' => $pagos_credito,
             'total_conciliados' => $conciliados->sum('monto'),
             'total_transito' => $en_transito->sum('monto_bs'),
             'total_sin_registrar' => $sin_registrar->sum('monto'),
             'total_comisiones' => $comisiones->sum('monto'),
+            'total_pagos_credito' => $pagos_credito->sum('monto'),
             'fecha_desde' => $fecha_desde_filtro,
             'fecha_hasta' => $fecha_hasta_filtro,
         ];

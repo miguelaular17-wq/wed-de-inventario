@@ -47,7 +47,13 @@ class BankReconciliationMatcher
             }
         }
 
-        return strlen($lote) >= 3 && stripos($haystack, $lote) !== false;
+        // Códigos alfanuméricos (no usar stripos en lotes solo-dígitos:
+        // "116" pegaba dentro de refs de PagoMóvil tipo V019647116).
+        if ($lote !== $digits && strlen($lote) >= 3 && stripos($haystack, $lote) !== false) {
+            return true;
+        }
+
+        return false;
     }
 
     public function referenciasCruzan(?string $a, ?string $b): bool
@@ -166,15 +172,82 @@ class BankReconciliationMatcher
         $lote = (string) ($ingreso->lote_referencia ?? '');
         $loteEnTexto = $this->haystackTieneLote($texto, $lote);
         $loteEnReferencia = $this->loteIgualReferencia($linea->referencia, $lote);
-        if (! $loteEnTexto && ! $loteEnReferencia) {
+        $montoExacto = $this->mismosMontos($linea->monto, $ingreso->monto ?? 0);
+        $montoNetoBdv = $this->esLiquidacionPuntoVenta($linea->descripcion)
+            && $this->montoLoteNetoBdv($linea->monto, $ingreso->monto ?? 0);
+
+        if ($loteEnTexto || $loteEnReferencia) {
+            if ($montoExacto) {
+                return true;
+            }
+
+            // Sin monto exacto solo si el lote aparece en el texto/ref (Banesco L.xxx / BNC ref).
+            return $this->fechaCercana($linea->fecha, $ingreso->fecha, 5);
+        }
+
+        // Banco de Venezuela: liquidaciones POS sin nº de lote en el extracto
+        // (ej. "LIQ.TARJETA DEBITO MAESTRO BDV"). Cruza por monto bruto o neto (~2%).
+        if ($this->esLiquidacionPuntoVenta($linea->descripcion) && ($montoExacto || $montoNetoBdv)) {
+            return $this->fechaCercana($linea->fecha, $ingreso->fecha, 3);
+        }
+
+        return false;
+    }
+
+    /**
+     * BDV suele abonar el lote menos comisión POS (típicamente 2%, a veces 1.5%).
+     */
+    public function montoLoteNetoBdv(float|int|string|null $montoBanco, float|int|string|null $montoLote): bool
+    {
+        $banco = round(abs((float) $montoBanco), 2);
+        $lote = round(abs((float) $montoLote), 2);
+        if ($lote < 0.01 || $banco < 0.01) {
             return false;
         }
 
-        if ($this->mismosMontos($linea->monto, $ingreso->monto ?? 0)) {
-            return true;
+        foreach ([0.02, 0.015] as $fee) {
+            $neto = round($lote * (1 - $fee), 2);
+            if (abs($neto - $banco) < 0.05) {
+                return true;
+            }
         }
 
-        return $this->fechaCercana($linea->fecha, $ingreso->fecha, 5);
+        return false;
+    }
+
+    /**
+     * Liquidaciones de punto de venta en extractos BDV / similares:
+     * no traen el número de lote, solo el concepto de liquidación.
+     */
+    public function esLiquidacionPuntoVenta(?string $descripcion): bool
+    {
+        $desc = mb_strtolower(trim((string) $descripcion), 'UTF-8');
+        if ($desc === '') {
+            return false;
+        }
+
+        $needles = [
+            'liq.tarjeta',
+            'liq tarjeta',
+            'liquidacion t/',
+            'liquidación t/',
+            'liquidacion t.',
+            'debito maestro bdv',
+            'débito maestro bdv',
+            'debito electron bd',
+            'débito electron bd',
+            't/credito vs/mc',
+            't/crédito vs/mc',
+            'pos:',
+        ];
+
+        foreach ($needles as $needle) {
+            if (str_contains($desc, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -328,11 +401,21 @@ class BankReconciliationMatcher
         if ($this->haystackTieneLote($this->textoBanco($linea), $ingreso->lote_referencia ?? null)) {
             $puntos += 30;
         }
+        if ($this->loteIgualReferencia($linea->referencia, $ingreso->lote_referencia ?? null)) {
+            $puntos += 25;
+        }
         if ($this->referenciasCruzan($linea->referencia, $ingreso->lote_referencia ?? null)) {
             $puntos += 15;
         }
+        if ($this->mismosMontos($linea->monto, $ingreso->monto ?? 0)) {
+            $puntos += 40;
+        } elseif ($this->montoLoteNetoBdv($linea->monto, $ingreso->monto ?? 0)) {
+            $puntos += 35;
+        }
         if ($this->fechaCercana($linea->fecha, $ingreso->fecha, 0)) {
             $puntos += 10;
+        } elseif ($this->fechaCercana($linea->fecha, $ingreso->fecha, 1)) {
+            $puntos += 6;
         }
 
         return $puntos;

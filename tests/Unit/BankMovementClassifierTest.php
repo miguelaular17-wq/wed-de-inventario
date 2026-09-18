@@ -31,4 +31,12 @@ class BankMovementClassifierTest extends TestCase
         $this->assertTrue($this->classifier->esCompraDivisas($desc));
         $this->assertFalse($this->classifier->esComision($desc));
     }
+
+    public function test_credito_digital_es_pago_credito_no_comision(): void
+    {
+        $desc = 'CREDITO DIGITAL';
+        $this->assertTrue($this->classifier->esPagoCredito($desc));
+        $this->assertFalse($this->classifier->esComision($desc));
+        $this->assertFalse($this->classifier->esCompraDivisas($desc));
+    }
 }

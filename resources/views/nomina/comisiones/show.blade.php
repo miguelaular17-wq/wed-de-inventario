@@ -122,6 +122,8 @@
                                 <div class="muted" style="font-size:.72rem;">PCP · venta neta tienda</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_SAMBIL)
                                 <div class="muted" style="font-size:.72rem;">Sambil · venta neta tienda</div>
+                            @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_COLABORADOR)
+                                <div class="muted" style="font-size:.72rem;">Colaborador · 5 tiendas (0,25%)</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_NUNES)
                                 <div class="muted" style="font-size:.72rem;">Venta neta sede Nunes</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_MOVISTAR)

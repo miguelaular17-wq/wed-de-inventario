@@ -97,6 +97,7 @@
                 <td style="color: #f59e0b;"><span>EN TRÁNSITO</span> Bs. {{ number_format($data['total_transito'], 2) }}</td>
                 <td style="color: #ef4444;"><span>MOVIMIENTOS BANCO</span> Bs. {{ number_format($data['total_sin_registrar'], 2) }}</td>
                 <td style="color: #8b5cf6;"><span>COMISIONES</span> Bs. {{ number_format($data['total_comisiones'], 2) }}</td>
+                <td style="color: #f43f5e;"><span>PAGO CRÉDITO</span> Bs. {{ number_format(abs($data['total_pagos_credito'] ?? 0), 2) }}</td>
             </tr>
         </table>
     </div>
@@ -228,6 +229,39 @@
             <tr class="total-row">
                 <td colspan="3" class="text-right">Total:</td>
                 <td class="text-right">Bs. {{ number_format($data['total_comisiones'], 2) }}</td>
+            </tr>
+            @endif
+        </tbody>
+    </table>
+
+    <!-- PAGO DE CRÉDITO -->
+    <div class="section-title">PAGO DE CRÉDITO ({{ ($data['pagos_credito'] ?? collect())->count() }})</div>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>FECHA</th>
+                <th>DESCRIPCIÓN</th>
+                <th>REFERENCIA</th>
+                <th class="text-right">MONTO BS.</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse(($data['pagos_credito'] ?? collect()) as $row)
+            <tr>
+                <td class="text-center">{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
+                <td>{{ $row['descripcion'] }}</td>
+                <td>{{ $row['referencia'] }}</td>
+                <td class="text-right">Bs. {{ number_format(abs($row['monto']), 2) }}</td>
+            </tr>
+            @empty
+            <tr>
+                <td colspan="4" class="empty-row">Sin pagos de crédito detectados</td>
+            </tr>
+            @endforelse
+            @if(($data['pagos_credito'] ?? collect())->count() > 0)
+            <tr class="total-row">
+                <td colspan="3" class="text-right">Total:</td>
+                <td class="text-right">Bs. {{ number_format(abs($data['total_pagos_credito'] ?? 0), 2) }}</td>
             </tr>
             @endif
         </tbody>

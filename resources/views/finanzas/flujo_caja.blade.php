@@ -1783,7 +1783,8 @@ const tecnicosBeneficiario = @json($empleadosServicioTecnico->map(fn ($empleado)
 ])->values());
 
 function actualizarBeneficiariosPorTipoGasto() {
-    const esServicioTecnico = document.getElementById('tipo_gasto')?.value === '058 - SERVICIO TECNICO (GARANTIAS)';
+    const tipoActual = window.tsTipoGasto?.getValue?.() || document.getElementById('tipo_gasto')?.value || '';
+    const esServicioTecnico = tipoActual === '058 - SERVICIO TECNICO (GARANTIAS)';
     const opciones = esServicioTecnico ? tecnicosBeneficiario : proveedoresBeneficiario;
     const select = document.getElementById('beneficiario');
     const label = document.getElementById('beneficiario_label');
@@ -1792,7 +1793,8 @@ function actualizarBeneficiariosPorTipoGasto() {
 
     if (!select) return;
     select.required = esServicioTecnico;
-    document.getElementById('nomina_empleado_id').value = '';
+    const nominaId = document.getElementById('nomina_empleado_id');
+    if (nominaId) nominaId.value = '';
     if (label) label.textContent = esServicioTecnico ? 'Empleado de Servicio Técnico' : 'Beneficiario';
     if (ayuda) ayuda.style.display = esServicioTecnico ? 'block' : 'none';
     if (ayudaLibre) ayudaLibre.style.display = esServicioTecnico ? 'none' : 'block';
@@ -1845,7 +1847,11 @@ document.addEventListener('DOMContentLoaded', function() {
         placeholder: '-- Seleccione un tipo de gasto --',
         maxOptions: null
     };
-    if (srcTG) window.tsTipoGasto = new TomSelect("#tipo_gasto", tsSettings);
+    if (srcTG) {
+        window.tsTipoGasto = new TomSelect("#tipo_gasto", Object.assign({}, tsSettings, {
+            onChange: function () { actualizarBeneficiariosPorTipoGasto(); },
+        }));
+    }
     if (dstTG) window.tsEditTipoGasto = new TomSelect("#edit_tipo_gasto", tsSettings);
     dstTG?.addEventListener('change', () => actualizarTecnicoEdit());
 
@@ -1872,9 +1878,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    srcTG?.addEventListener('change', actualizarBeneficiariosPorTipoGasto);
     document.getElementById('beneficiario')?.addEventListener('change', function () {
-        const esServicioTecnico = srcTG?.value === '058 - SERVICIO TECNICO (GARANTIAS)';
+        const esServicioTecnico = (window.tsTipoGasto?.getValue?.() || srcTG?.value) === '058 - SERVICIO TECNICO (GARANTIAS)';
         document.getElementById('nomina_empleado_id').value = esServicioTecnico ? this.value : '';
     });
     actualizarBeneficiariosPorTipoGasto();
@@ -1903,6 +1908,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (totalInput) totalInput.value = '';
         const submitBtn = document.querySelector('#nuevoEgresoModal button[type="submit"]');
         if (submitBtn) submitBtn.innerText = 'Guardar Egreso';
+        // No dejar pegado el tipo 058 (modo Servicio Técnico) de un egreso anterior.
+        if (window.tsTipoGasto) {
+            window.tsTipoGasto.clear(true);
+        } else {
+            const tg = document.getElementById('tipo_gasto');
+            if (tg) tg.value = '';
+        }
+        if (typeof actualizarBeneficiariosPorTipoGasto === 'function') {
+            actualizarBeneficiariosPorTipoGasto();
+        }
     };
 
     window.openNuevoEgresoModal = function() {
@@ -1981,6 +1996,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (window.tsTipoGasto && cuenta.tipo_gasto) {
             window.tsTipoGasto.setValue(cuenta.tipo_gasto);
         }
+        actualizarBeneficiariosPorTipoGasto();
         if (window.tsBeneficiario && cuenta.beneficiario) {
             try {
                 window.tsBeneficiario.addOption({ value: cuenta.beneficiario, text: cuenta.beneficiario });

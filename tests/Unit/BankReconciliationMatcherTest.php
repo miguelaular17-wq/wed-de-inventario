@@ -253,4 +253,77 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertSame('PROVINCIAL', $banco2);
         $this->assertSame('JRZ', $titular2);
     }
+
+    public function test_bdv_liq_tarjeta_por_monto_neto_comision_2_porciento(): void
+    {
+        // Extracto BDV: sin nº de lote; abona lote 45320.13 − 2% = 44413.73 (T+1).
+        $linea = new ConciliacionLinea([
+            'banco' => 'VENEZUELA',
+            'titular' => 'GRUPO JRZ',
+            'fecha' => '2026-08-08',
+            'referencia' => '1742502407086',
+            'descripcion' => 'LIQ.TARJETA DEBITO MAESTRO BDV',
+            'monto' => 44413.73,
+            'tipo' => 'abono',
+        ]);
+        $lote = (object) [
+            'tipo' => 'punto_venta',
+            'banco' => 'VENEZUELA',
+            'titular' => 'JRZ',
+            'fecha' => '2026-08-07',
+            'monto' => 45320.13,
+            'lote_referencia' => '121',
+        ];
+
+        $this->assertTrue($this->matcher->esLiquidacionPuntoVenta($linea->descripcion));
+        $this->assertTrue($this->matcher->montoLoteNetoBdv(44413.73, 45320.13));
+        $this->assertTrue($this->matcher->coincideLotePunto($linea, $lote));
+    }
+
+    public function test_bdv_no_cruza_pagomovil_con_lote_corto_por_substring(): void
+    {
+        $linea = new ConciliacionLinea([
+            'banco' => 'VENEZUELA',
+            'titular' => 'GRUPO JRZ',
+            'fecha' => '2026-08-10',
+            'referencia' => '0677288021694',
+            'descripcion' => 'PAGOMOVIL BDV V019647116 MAURICIO   PUENTE',
+            'monto' => 4868.00,
+            'tipo' => 'abono',
+        ]);
+        $lote = (object) [
+            'tipo' => 'punto_venta',
+            'banco' => 'VENEZUELA',
+            'titular' => 'JRZ',
+            'fecha' => '2026-08-06',
+            'monto' => 30615.98,
+            'lote_referencia' => '116',
+        ];
+
+        $this->assertFalse($this->matcher->haystackTieneLote($this->matcher->textoBanco($linea), '116'));
+        $this->assertFalse($this->matcher->coincideLotePunto($linea, $lote));
+    }
+
+    public function test_bdv_liq_tarjeta_monto_exacto_sin_lote_en_texto(): void
+    {
+        $linea = new ConciliacionLinea([
+            'banco' => 'VENEZUELA',
+            'titular' => 'GRUPO JRZ',
+            'fecha' => '2026-08-08',
+            'referencia' => '1742502407086',
+            'descripcion' => 'LIQ.TARJETA DEBITO MAESTRO BDV',
+            'monto' => 85186.98,
+            'tipo' => 'abono',
+        ]);
+        $lote = (object) [
+            'tipo' => 'punto_venta',
+            'banco' => 'VENEZUELA',
+            'titular' => 'JRZ',
+            'fecha' => '2026-08-08',
+            'monto' => 85186.98,
+            'lote_referencia' => '999',
+        ];
+
+        $this->assertTrue($this->matcher->coincideLotePunto($linea, $lote));
+    }
 }
