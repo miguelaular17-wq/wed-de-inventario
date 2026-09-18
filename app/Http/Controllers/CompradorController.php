@@ -903,10 +903,29 @@ class CompradorController extends Controller
                 $query->whereDate('created_at', $qPedirDate);
             }
             $pedidosSolicitados = $query
-                ->selectRaw('producto, MAX(estado) as estado, MAX(codigo) as codigo, MAX(categoria) as categoria, COUNT(*) as frecuencia, MAX(created_at) as created_at')
+                ->selectRaw('producto, MAX(estado) as estado, MAX(codigo) as codigo, MAX(categoria) as categoria, MAX(producto_id) as producto_id, COUNT(*) as frecuencia, MAX(created_at) as created_at')
                 ->groupBy('producto')
                 ->orderByDesc('frecuencia')
                 ->get();
+
+            $stockByCodigo = $this->stockGlobalPorCodigos(
+                $pedidosSolicitados->pluck('codigo')->filter()->unique()->values()->all()
+            );
+            $pedidosSolicitados = $pedidosSolicitados->map(function ($pedido) use ($stockByCodigo) {
+                $codigo = strtoupper(trim((string) $pedido->codigo));
+                $pedido->stock_global = (int) ($stockByCodigo[$codigo] ?? 0);
+                $pedido->tiene_existencia = $pedido->stock_global > 0;
+
+                return $pedido;
+            });
+
+            $stockFilter = $request->query('q_pedir_stock', 'todos');
+            if ($stockFilter === 'con') {
+                $pedidosSolicitados = $pedidosSolicitados->filter(fn ($p) => $p->tiene_existencia)->values();
+            } elseif ($stockFilter === 'sin') {
+                $pedidosSolicitados = $pedidosSolicitados->filter(fn ($p) => ! $p->tiene_existencia)->values();
+            }
+
             $qPedirCount = $pedidosSolicitados->count();
 
             $qPedirStats['global'] = PedidoSolicitado::selectRaw('estado, COUNT(*) as count')->groupBy('estado')->pluck('count', 'estado')->toArray();
@@ -960,6 +979,7 @@ class CompradorController extends Controller
             'pedidosSolicitados' => $pedidosSolicitados,
             'qPedirStats' => $qPedirStats,
             'qPedirCount' => $qPedirCount,
+            'qPedirStockFilter' => $request->query('q_pedir_stock', 'todos'),
             'activeTab' => $activeTab,
         ]);
         Profiler::stop('CompradorController::index Blade render');
@@ -975,6 +995,56 @@ class CompradorController extends Controller
         }
 
         return trim((string) $request->query('q', ''));
+    }
+
+    /**
+     * Stock global (suma de sedes) indexado por código de producto en mayúsculas.
+     *
+     * @param  list<string>  $codigos
+     * @return array<string, int>
+     */
+    private function stockGlobalPorCodigos(array $codigos): array
+    {
+        $codigos = array_values(array_unique(array_filter(array_map(
+            static fn ($c) => strtoupper(trim((string) $c)),
+            $codigos
+        ), static fn ($c) => $c !== '')));
+
+        if ($codigos === []) {
+            return [];
+        }
+
+        try {
+            if (config('database.default') === 'pgsql') {
+                $rows = DB::connection('pgsql')
+                    ->table('inventario_v2.productos as p')
+                    ->leftJoin('inventario_v2.stock_actual as sa', 'p.id', '=', 'sa.producto_id')
+                    ->whereIn(DB::raw('UPPER(TRIM(p.codigo))'), $codigos)
+                    ->groupBy(DB::raw('UPPER(TRIM(p.codigo))'))
+                    ->selectRaw('UPPER(TRIM(p.codigo)) as codigo')
+                    ->selectRaw('COALESCE(SUM(sa.existencia), 0) as stock')
+                    ->get();
+            } elseif (Schema::hasTable('stock_actual') && Schema::hasTable('productos')) {
+                $rows = DB::table('productos as p')
+                    ->leftJoin('stock_actual as sa', 'p.id', '=', 'sa.producto_id')
+                    ->whereIn(DB::raw('UPPER(TRIM(p.codigo))'), $codigos)
+                    ->groupBy(DB::raw('UPPER(TRIM(p.codigo))'))
+                    ->selectRaw('UPPER(TRIM(p.codigo)) as codigo')
+                    ->selectRaw('COALESCE(SUM(sa.existencia), 0) as stock')
+                    ->get();
+            } else {
+                return [];
+            }
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(string) $row->codigo] = (int) $row->stock;
+        }
+
+        return $out;
     }
 
     private function comprasTabKey(string $activeTab, Request $request): string

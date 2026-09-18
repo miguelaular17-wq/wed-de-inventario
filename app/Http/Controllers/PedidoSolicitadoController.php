@@ -4,8 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\PedidoSolicitado;
 use App\Models\Product;
-use App\Models\Notification;
-use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,7 +24,6 @@ class PedidoSolicitadoController extends Controller
         })->only([
             'marcarComprado',
             'marcarFueraMercado',
-            'marcarTieneExistencia',
             'reporteExcel',
             'reportePdf',
             'reporteDiarioPdf',
@@ -156,78 +153,60 @@ class PedidoSolicitadoController extends Controller
 
     public function marcarComprado(Request $request): RedirectResponse
     {
-        $producto = $request->input('producto');
-        PedidoSolicitado::where('producto', $producto)
+        $data = $request->validate([
+            'producto' => ['required', 'string', 'max:255'],
+            'compra_proveedor' => ['required', 'string', 'max:255'],
+            'fecha_compra' => ['required', 'date'],
+            'fecha_despacho_estimada' => ['required', 'date', 'after_or_equal:fecha_compra'],
+        ], [
+            'compra_proveedor.required' => 'Indica el proveedor al que se le compró.',
+            'fecha_compra.required' => 'Indica la fecha de compra.',
+            'fecha_despacho_estimada.required' => 'Indica la fecha estimada de despacho.',
+            'fecha_despacho_estimada.after_or_equal' => 'La fecha de despacho no puede ser anterior a la compra.',
+        ]);
+
+        $updated = PedidoSolicitado::where('producto', $data['producto'])
             ->where('estado', 'pendiente')
             ->update([
                 'estado' => 'comprado',
+                'compra_proveedor' => trim($data['compra_proveedor']),
+                'fecha_compra' => $data['fecha_compra'],
+                'fecha_despacho_estimada' => $data['fecha_despacho_estimada'],
                 'atendido_at' => now(),
+                'atendido_por' => $request->user()->id,
             ]);
+
+        if ($updated === 0) {
+            return back()->withErrors(['pedido' => 'No hay solicitudes pendientes de ese producto.']);
+        }
 
         return back()->with('success', 'Pedidos marcados como comprados.');
     }
 
     public function marcarFueraMercado(Request $request): RedirectResponse
     {
-        $producto = $request->input('producto');
-        PedidoSolicitado::where('producto', $producto)
+        $data = $request->validate([
+            'producto' => ['required', 'string', 'max:255'],
+            'motivo_fuera_mercado' => ['required', 'string', 'min:3', 'max:1000'],
+        ], [
+            'motivo_fuera_mercado.required' => 'Indica por qué está fuera de mercado.',
+            'motivo_fuera_mercado.min' => 'El motivo debe tener al menos 3 caracteres.',
+        ]);
+
+        $updated = PedidoSolicitado::where('producto', $data['producto'])
             ->where('estado', 'pendiente')
             ->update([
                 'estado' => 'fuera_de_mercado',
+                'motivo_fuera_mercado' => trim($data['motivo_fuera_mercado']),
                 'atendido_at' => now(),
+                'atendido_por' => $request->user()->id,
             ]);
 
+        if ($updated === 0) {
+            return back()->withErrors(['pedido' => 'No hay solicitudes pendientes de ese producto.']);
+        }
+
         return back()->with('success', 'Pedidos marcados como fuera de mercado.');
-    }
-
-    public function marcarTieneExistencia(Request $request): RedirectResponse
-    {
-        $producto = (string) $request->validate([
-            'producto' => ['required', 'string', 'max:255'],
-        ])['producto'];
-
-        $pedidos = PedidoSolicitado::query()
-            ->where('producto', $producto)
-            ->where('estado', 'pendiente')
-            ->get();
-
-        $sedes = $pedidos->pluck('sede')
-            ->filter()
-            ->map(fn ($sede) => strtoupper(trim((string) $sede)))
-            ->unique()
-            ->values();
-
-        if ($sedes->isEmpty()) {
-            return back()->withErrors(['pedido' => 'Las solicitudes no tienen una sede de origen para notificar.']);
-        }
-
-        $receptores = User::query()->whereIn('sede', $sedes)->get();
-        if ($receptores->isEmpty()) {
-            return back()->withErrors(['pedido' => 'No se encontraron usuarios asignados a las sedes solicitantes.']);
-        }
-
-        DB::transaction(function () use ($receptores, $request, $producto, $pedidos) {
-            foreach ($receptores as $receptor) {
-                Notification::create([
-                    'sender_id' => $request->user()->id,
-                    'receiver_id' => $receptor->id,
-                    'message' => sprintf(
-                        'El producto "%s" tiene existencia. No es necesario comprarlo; la sede %s solo debe realizar una requisición.',
-                        $producto,
-                        strtoupper((string) $receptor->sede)
-                    ),
-                ]);
-            }
-
-            PedidoSolicitado::query()
-                ->whereIn('id', $pedidos->pluck('id'))
-                ->update([
-                    'estado' => 'tiene_existencia',
-                    'atendido_at' => now(),
-                ]);
-        });
-
-        return back()->with('success', 'Se notificó a '.count($receptores).' usuario(s) de las sedes solicitantes para que realicen una requisición.');
     }
 
     public function reporteExcel()

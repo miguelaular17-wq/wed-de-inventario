@@ -22,7 +22,7 @@
             <a href="{{ route('nomina.equipo.index') }}" class="muted" style="font-size:.82rem;">← Nómina del equipo</a>
             <h1 style="margin:4px 0 0;">Comisiones {{ $periodo->etiqueta }}</h1>
             <p class="muted" style="margin:4px 0 0;">
-                Personal a tu cargo · Pago {{ $periodo->fecha_pago_comision?->format('d/m/Y') ?: $periodo->fecha_fin?->copy()->addDays(3)->format('d/m/Y') }}
+                Tú y personal a tu cargo · Pago {{ $periodo->fecha_pago_comision?->format('d/m/Y') ?: $periodo->fecha_fin?->copy()->addDays(3)->format('d/m/Y') }}
             </p>
         </div>
         <div>

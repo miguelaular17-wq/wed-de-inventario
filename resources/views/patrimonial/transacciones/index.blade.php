@@ -25,12 +25,46 @@
     @php
         $mesPrev = \Carbon\Carbon::create($anio, $mes)->subMonth();
         $mesSig  = \Carbon\Carbon::create($anio, $mes)->addMonth();
+        $qsBase = array_filter([
+            'propiedad_id' => $propiedadId ?: null,
+            'desde' => $desde ?: null,
+            'hasta' => $hasta ?: null,
+        ], fn ($v) => $v !== null && $v !== '');
     @endphp
-    <div style="display:flex; gap:10px; align-items:center; margin-bottom:18px; flex-wrap:wrap;">
-        <a href="?mes={{ $mesPrev->month }}&anio={{ $mesPrev->year }}" style="padding:7px 14px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; text-decoration:none; color:#334155; font-size:0.85rem; font-weight:600;">← Anterior</a>
+    <div style="display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap;">
+        <a href="{{ route('patrimonial.transacciones.index', array_merge($qsBase, ['mes' => $mesPrev->month, 'anio' => $mesPrev->year])) }}" style="padding:7px 14px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; text-decoration:none; color:#334155; font-size:0.85rem; font-weight:600;">← Anterior</a>
         <span style="font-weight:700; font-size:1rem; color:#1e293b;">{{ \Carbon\Carbon::create($anio, $mes)->translatedFormat('F Y') }}</span>
-        <a href="?mes={{ $mesSig->month }}&anio={{ $mesSig->year }}" style="padding:7px 14px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; text-decoration:none; color:#334155; font-size:0.85rem; font-weight:600;">Siguiente →</a>
+        <a href="{{ route('patrimonial.transacciones.index', array_merge($qsBase, ['mes' => $mesSig->month, 'anio' => $mesSig->year])) }}" style="padding:7px 14px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; text-decoration:none; color:#334155; font-size:0.85rem; font-weight:600;">Siguiente →</a>
     </div>
+
+    {{-- FILTROS --}}
+    <form method="GET" action="{{ route('patrimonial.transacciones.index') }}" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:18px; padding:14px 16px; background:#fff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+        <input type="hidden" name="mes" value="{{ $mes }}">
+        <input type="hidden" name="anio" value="{{ $anio }}">
+        <div style="min-width:200px; flex:1.2;">
+            <label style="font-size:0.75rem; font-weight:600; color:#64748b; display:block; margin-bottom:4px;">Propiedad</label>
+            <select name="propiedad_id" style="width:100%; padding:8px 12px; border:1px solid #e2e8f0; border-radius:7px; font-size:0.88rem; font-family:inherit; background:#fff;">
+                <option value="">Todas las propiedades</option>
+                @foreach($propiedades as $prop)
+                    <option value="{{ $prop->id }}" @selected((int) $propiedadId === (int) $prop->id)>{{ $prop->nombre }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div style="min-width:150px;">
+            <label style="font-size:0.75rem; font-weight:600; color:#64748b; display:block; margin-bottom:4px;">Desde</label>
+            <input type="date" name="desde" value="{{ $desde }}"
+                style="width:100%; padding:8px 12px; border:1px solid #e2e8f0; border-radius:7px; font-size:0.88rem; font-family:inherit; box-sizing:border-box;">
+        </div>
+        <div style="min-width:150px;">
+            <label style="font-size:0.75rem; font-weight:600; color:#64748b; display:block; margin-bottom:4px;">Hasta</label>
+            <input type="date" name="hasta" value="{{ $hasta }}"
+                style="width:100%; padding:8px 12px; border:1px solid #e2e8f0; border-radius:7px; font-size:0.88rem; font-family:inherit; box-sizing:border-box;">
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="submit" style="padding:8px 16px; background:#2563eb; color:#fff; border:none; border-radius:8px; font-weight:600; font-size:0.88rem; cursor:pointer;">Filtrar</button>
+            <a href="{{ route('patrimonial.transacciones.index', ['mes' => $mes, 'anio' => $anio]) }}" style="padding:8px 14px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; text-decoration:none; color:#64748b; font-size:0.85rem; font-weight:600;">Limpiar</a>
+        </div>
+    </form>
 
     {{-- TOTALES --}}
     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:14px; margin-bottom:24px;">
@@ -63,7 +97,7 @@
                             <select name="propiedad_id" required style="width:100%; padding:8px 12px; border:1px solid #e2e8f0; border-radius:7px; font-size:0.88rem; font-family:inherit;">
                                 <option value="">Seleccionar...</option>
                                 @foreach($propiedades as $prop)
-                                    <option value="{{ $prop->id }}" {{ $propiedadId == $prop->id ? 'selected' : '' }}>{{ $prop->nombre }}</option>
+                                    <option value="{{ $prop->id }}">{{ $prop->nombre }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -139,7 +173,18 @@
             {{-- TRANSACCIONES --}}
             <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
                 <div style="padding:12px 16px; border-bottom:1px solid #f1f5f9; background:#f8fafc; font-size:0.9rem; font-weight:700; color:#334155;">
-                    📋 Transacciones del Mes
+                    📋 Transacciones
+                    @if($propiedadId || $desde || $hasta)
+                        <span style="font-weight:500; color:#64748b; font-size:0.8rem;">
+                            · filtradas
+                            @if($desde || $hasta)
+                                ({{ $desde ? \Carbon\Carbon::parse($desde)->format('d/m/Y') : '…' }}
+                                → {{ $hasta ? \Carbon\Carbon::parse($hasta)->format('d/m/Y') : '…' }})
+                            @endif
+                        </span>
+                    @else
+                        <span style="font-weight:500; color:#64748b; font-size:0.8rem;">del mes</span>
+                    @endif
                 </div>
                 @forelse($transacciones as $tx)
                 <div style="padding:11px 16px; border-bottom:1px solid #f8fafc; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">

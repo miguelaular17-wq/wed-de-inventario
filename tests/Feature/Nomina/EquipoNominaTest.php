@@ -46,6 +46,7 @@ class EquipoNominaTest extends TestCase
             'tipo_salario' => 'QUINCENAL',
             'estado' => 'ACTIVO',
             'es_supervisor' => true,
+            'modo_comision' => NominaEmpleado::COMISION_SUPERVISOR_EQUIPO,
         ]);
 
         $this->aCargo = NominaEmpleado::create([
@@ -97,6 +98,14 @@ class EquipoNominaTest extends TestCase
 
         NominaRegistro::create([
             'periodo_id' => $this->calculado->id,
+            'empleado_id' => $fichaSupervisor->id,
+            'salario_base' => 500,
+            'total_pagar' => 480,
+            'observaciones' => json_encode(['horas_extras' => 0]),
+        ]);
+
+        NominaRegistro::create([
+            'periodo_id' => $this->calculado->id,
             'empleado_id' => $this->ajeno->id,
             'salario_base' => 400,
             'total_comisiones' => 80,
@@ -117,6 +126,17 @@ class EquipoNominaTest extends TestCase
             'descuentos' => 0,
             'prestamos' => 0,
             'total_pagar' => 40.95,
+        ]);
+
+        NominaLiquidacionComision::create([
+            'periodo_id' => $this->calculado->id,
+            'empleado_id' => $fichaSupervisor->id,
+            'modo' => NominaEmpleado::COMISION_SUPERVISOR_EQUIPO,
+            'base_total' => 1000,
+            'base_telefonia' => 700,
+            'base_otros' => 300,
+            'comision_total' => 10,
+            'total_pagar' => 9,
         ]);
 
         NominaLiquidacionComision::create([
@@ -147,13 +167,15 @@ class EquipoNominaTest extends TestCase
             ->assertOk()
             ->assertSee('16/08/2026 al 31/08/2026')
             ->assertDontSee('01/08/2026 al 15/08/2026')
-            ->assertSee('294.00')
+            ->assertSee('774.00')
             ->assertSee('Ver comisiones');
 
         $this->get(route('nomina.equipo.show', $this->calculado))
             ->assertOk()
             ->assertSee('Ana Equipo')
+            ->assertSee('Jefe Doral')
             ->assertSee('294.00')
+            ->assertSee('480.00')
             ->assertDontSee('Luis Ajeno')
             ->assertDontSee('>Salario<')
             ->assertDontSee('Mercancía')
@@ -174,8 +196,10 @@ class EquipoNominaTest extends TestCase
             ->get(route('nomina.equipo.comisiones', $this->calculado))
             ->assertOk()
             ->assertSee('Ana Equipo')
+            ->assertSee('Jefe Doral')
             ->assertSee('45.50')
             ->assertSee('40.95')
+            ->assertSee('10.00')
             ->assertDontSee('Luis Ajeno')
             ->assertDontSee('72.00');
 
@@ -264,16 +288,27 @@ class EquipoNominaTest extends TestCase
             'observaciones' => json_encode(['horas_extras' => 2]),
         ]);
 
+        $carlos = NominaEmpleado::query()->where('user_id', $user->id)->firstOrFail();
+        NominaRegistro::create([
+            'periodo_id' => $this->calculado->id,
+            'empleado_id' => $carlos->id,
+            'salario_base' => 500,
+            'total_pagar' => 450,
+            'observaciones' => json_encode(['horas_extras' => 0]),
+        ]);
+
         $this->actingAs($user)
             ->get(route('nomina.equipo.index'))
             ->assertOk()
-            ->assertSee('180.00')
+            ->assertSee('630.00')
             ->assertSee('CARLOS JAVIER GOMEZ JIMENEZ');
 
         $this->get(route('nomina.equipo.show', $this->calculado))
             ->assertOk()
             ->assertSee('GEOVANNI JESUS GUTIERREZ MARTINEZ')
+            ->assertSee('CARLOS JAVIER GOMEZ JIMENEZ')
             ->assertSee('180.00')
+            ->assertSee('450.00')
             ->assertDontSee('Luis Ajeno')
             ->assertDontSee('>Salario<');
     }

@@ -140,9 +140,10 @@ class BankReconciliationMatcher
         $banco = strtoupper(trim((string) $banco));
         $titular = strtoupper(trim((string) $titular));
         $known = ['BANCAMIGA', 'BANCARIBE', 'BANESCO', 'MERCANTIL', 'VENEZUELA', 'TESORO', 'BBVA', 'BNC', 'PROVINCIAL'];
+
         foreach ($known as $nombre) {
-            if ($banco === $nombre || str_starts_with($banco, $nombre.' ') || str_contains($banco, $nombre)) {
-                $resto = trim(str_replace($nombre, '', $banco));
+            if ($banco === $nombre || str_starts_with($banco, $nombre.' ')) {
+                $resto = trim(substr($banco, strlen($nombre)));
                 if ($titular === '' && $resto !== '') {
                     $titular = $resto;
                 }
@@ -151,7 +152,38 @@ class BankReconciliationMatcher
             }
         }
 
-        return [$this->normalizarBanco($banco), $titular];
+        // "BANCO DE VENEZUELA" → VENEZUELA (sin usar "BANCO DE" como titular)
+        $norm = $this->normalizarBanco($banco);
+        foreach ($known as $nombre) {
+            if ($norm === $nombre || str_starts_with($norm, $nombre.' ')) {
+                $resto = trim(substr($norm, strlen($nombre)));
+                if ($titular === '' && $resto !== '') {
+                    $titular = $resto;
+                }
+
+                return [$nombre, $titular];
+            }
+        }
+
+        return [$norm, $titular];
+    }
+
+    /**
+     * Variantes de nombre de banco para filtros SQL (VENEZUELA ↔ BANCO DE VENEZUELA).
+     *
+     * @return list<string>
+     */
+    public function variantesBanco(?string $banco): array
+    {
+        [$canon] = $this->partesCuenta($banco, '');
+        $raw = strtoupper(trim((string) $banco));
+
+        return array_values(array_unique(array_filter([
+            $canon,
+            $raw,
+            'BANCO '.$canon,
+            'BANCO DE '.$canon,
+        ], fn ($v) => $v !== '')));
     }
 
     public function textoBanco(ConciliacionLinea $linea): string
@@ -570,10 +602,12 @@ class BankReconciliationMatcher
         return strtoupper(preg_replace('/[^A-Z0-9]+/i', '', trim((string) $valor)) ?? '');
     }
 
-    private function normalizarBanco(?string $banco): string
+    public function normalizarBanco(?string $banco): string
     {
         $banco = strtoupper(trim((string) $banco));
-        $banco = str_replace(['BANCO DE ', 'BANCO ', ' DE VENEZUELA'], ['', '', ' VENEZUELA'], $banco);
+        $banco = preg_replace('/\s+/', ' ', $banco) ?? $banco;
+        // "BANCO DE VENEZUELA" / "BANCO VENEZUELA" → "VENEZUELA"
+        $banco = preg_replace('/^BANCO\s+(DE\s+)?/', '', $banco) ?? $banco;
 
         return trim($banco);
     }

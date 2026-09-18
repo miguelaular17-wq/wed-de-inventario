@@ -179,7 +179,7 @@ class MetaQuincenaController extends Controller
 
                 return [
                     'sede' => $sede,
-                    'productos' => $grupo->sortBy('producto')->values(),
+                    'productos' => $grupo->sortBy('producto')->values()->map(fn ($f) => (array) $f)->all(),
                     'totales' => [
                         'productos' => $grupo->count(),
                         'cantidad_inicial' => $inicial,
@@ -191,7 +191,8 @@ class MetaQuincenaController extends Controller
                     ],
                 ];
             })
-            ->values();
+            ->values()
+            ->all();
 
         $titulo = $sedeFiltro !== ''
             ? 'Avance productos meta · '.$sedeFiltro

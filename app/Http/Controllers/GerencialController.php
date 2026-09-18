@@ -25,6 +25,7 @@ class GerencialController extends Controller
         return view('gerencial.dashboard', $ctx + [
             'total' => $data['total'],
             'porSede' => $data['por_sede'],
+            'porArea' => $data['por_area'] ?? [],
             'tops' => $data['tops'],
             'diario' => $data['diario'],
             'usaLineas' => $data['usa_lineas'],
@@ -142,12 +143,32 @@ class GerencialController extends Controller
             $request->query('hasta')
         );
 
+        $vendedorRaw = $request->query('vendedor');
+        if ($vendedorRaw === null) {
+            $vendedorRaw = $request->input('vendedor');
+        }
+        $vendedores = [];
+        if (is_array($vendedorRaw)) {
+            $vendedores = array_values(array_unique(array_filter(array_map(
+                static fn ($v) => trim((string) $v),
+                $vendedorRaw
+            ), static fn ($v) => $v !== '' && mb_strtolower($v, 'UTF-8') !== 'todos')));
+        } elseif (is_string($vendedorRaw) && trim($vendedorRaw) !== '') {
+            $parts = preg_split('/\s*,\s*/', trim($vendedorRaw)) ?: [trim($vendedorRaw)];
+            $vendedores = array_values(array_unique(array_filter($parts)));
+        }
+
+        // Nombres canónicos del catálogo para que los checkboxes coincidan tras Aplicar
+        if ($vendedores !== []) {
+            $vendedores = $gerencial->resolverSeleccionVendedores($vendedores);
+        }
+
         return [
             'periodo' => $periodo,
             'filtros' => [
                 'sede' => $request->query('sede', 'todas'),
                 'categoria' => $request->query('categoria'),
-                'vendedor' => $request->query('vendedor'),
+                'vendedor' => $vendedores,
                 'producto' => $request->query('producto'),
                 'preset' => $periodo['preset'],
                 'desde' => $periodo['inicio']->toDateString(),

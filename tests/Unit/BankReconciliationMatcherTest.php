@@ -254,6 +254,20 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertSame('JRZ', $titular2);
     }
 
+    public function test_banco_de_venezuela_se_canoniza_a_venezuela(): void
+    {
+        [$banco, $titular] = $this->matcher->partesCuenta('BANCO DE VENEZUELA', 'GRUPO JRZ');
+        $this->assertSame('VENEZUELA', $banco);
+        $this->assertSame('GRUPO JRZ', $titular);
+
+        [$banco2, $titular2] = $this->matcher->partesCuenta('Banco de Venezuela', '');
+        $this->assertSame('VENEZUELA', $banco2);
+        $this->assertSame('', $titular2);
+
+        $this->assertContains('BANCO DE VENEZUELA', $this->matcher->variantesBanco('VENEZUELA'));
+        $this->assertTrue($this->matcher->mismoBanco('VENEZUELA', 'BANCO DE VENEZUELA'));
+    }
+
     public function test_bdv_liq_tarjeta_por_monto_neto_comision_2_porciento(): void
     {
         // Extracto BDV: sin nº de lote; abona lote 45320.13 − 2% = 44413.73 (T+1).

@@ -51,6 +51,45 @@ class OrganizationTreeTest extends TestCase
         $this->assertFalse($nodo['supervisores']->contains(fn ($e) => $e->id === $auri->id));
     }
 
+    public function test_reporte_equipo_incluye_ambos_supervisores_de_la_sede(): void
+    {
+        $gerencia = NominaSede::create(['nombre' => 'Gerencia', 'codigo' => 'GERENCIA', 'tipo' => 'AREA', 'estado' => 'ACTIVO']);
+        $centro = NominaSede::create(['nombre' => 'Centro', 'codigo' => 'CENTRO', 'tipo' => 'SEDE', 'estado' => 'ACTIVO']);
+        $cargoGerente = NominaCargo::create(['nombre' => 'Gerente', 'estado' => 'ACTIVO']);
+        $cargoSup = NominaCargo::create(['nombre' => 'Supervisor de sede', 'estado' => 'ACTIVO']);
+        $cargoVen = NominaCargo::create(['nombre' => 'Asesor de venta', 'estado' => 'ACTIVO']);
+
+        $auri = $this->empleado('AURILES', 'AURILES LUGO', $gerencia, $cargoGerente, true);
+        $carlos = $this->empleado('19648944', 'CARLOS GOMEZ', $centro, $cargoSup, true);
+        $keisy = $this->empleado('25848623', 'KEISY DA SILVA', $centro, $cargoSup, true);
+        $asesor = $this->empleado('28501943', 'GEOVANNI GUTIERREZ', $centro, $cargoVen, false);
+
+        $userCarlos = \App\Models\User::create([
+            'name' => 'Carlos',
+            'email' => 'carlos-org@test.local',
+            'password' => 'password123',
+            'role' => \App\Models\User::ROLE_SUPERVISOR,
+            'sede' => 'CENTRO',
+        ]);
+        $carlos->user_id = $userCarlos->id;
+        $carlos->save();
+
+        $this->org->syncJefes($carlos, [$auri->id]);
+        $this->org->syncJefes($keisy, [$auri->id]);
+        $this->org->syncJefes($asesor, [$carlos->id]);
+
+        $idsReporte = $this->org->idsPersonalACargo($userCarlos, true);
+        $idsSoloCargo = $this->org->idsPersonalACargo($userCarlos, false);
+
+        $this->assertContains((int) $carlos->id, $idsReporte);
+        $this->assertContains((int) $keisy->id, $idsReporte);
+        $this->assertContains((int) $asesor->id, $idsReporte);
+
+        $this->assertNotContains((int) $carlos->id, $idsSoloCargo);
+        $this->assertNotContains((int) $keisy->id, $idsSoloCargo);
+        $this->assertContains((int) $asesor->id, $idsSoloCargo);
+    }
+
     private function empleado(string $cedula, string $nombre, NominaSede $sede, NominaCargo $cargo, bool $esSupervisor): NominaEmpleado
     {
         $cliente = Cliente::create(['cedula' => $cedula, 'nombre' => $nombre]);

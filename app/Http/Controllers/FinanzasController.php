@@ -48,10 +48,10 @@ class FinanzasController extends Controller
             ['banco' => 'Tesoro', 'titular' => 'LNACEH', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
             ['banco' => 'Tesoro', 'titular' => 'Grupo JRZ', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
             ['banco' => 'Tesoro', 'titular' => 'José Jerez', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
-            ['banco' => 'Banco de Venezuela', 'titular' => 'Grupo JRZ', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
-            ['banco' => 'Banco de Venezuela', 'titular' => 'Doral', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
-            ['banco' => 'Banco de Venezuela', 'titular' => 'LNACEH', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
-            ['banco' => 'Banco de Venezuela', 'titular' => 'José Jerez', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
+            ['banco' => 'Venezuela', 'titular' => 'Grupo JRZ', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
+            ['banco' => 'Venezuela', 'titular' => 'Doral', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
+            ['banco' => 'Venezuela', 'titular' => 'LNACEH', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
+            ['banco' => 'Venezuela', 'titular' => 'José Jerez', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
             ['banco' => 'Bancaribe', 'titular' => 'Doral', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
             ['banco' => 'Bancaribe', 'titular' => 'Euronissi', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
             ['banco' => 'Bancamiga', 'titular' => 'José Jerez', 'categoria' => 'BANCA NACIONAL - BAJO MOVIMIENTO'],
@@ -89,8 +89,8 @@ class FinanzasController extends Controller
             ['banco' => 'Tesoro', 'titular' => 'Grupo JRZ', 'categoria' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA'],
             ['banco' => 'Tesoro', 'titular' => 'Doral', 'categoria' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA'],
             ['banco' => 'Tesoro', 'titular' => 'Tarjeta José Jerez', 'categoria' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA'],
-            ['banco' => 'Banco de Venezuela', 'titular' => 'José Jerez', 'categoria' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA'],
-            ['banco' => 'Banco de Venezuela', 'titular' => 'LNACEH', 'categoria' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA'],
+            ['banco' => 'Venezuela', 'titular' => 'José Jerez', 'categoria' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA'],
+            ['banco' => 'Venezuela', 'titular' => 'LNACEH', 'categoria' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA'],
             ['banco' => 'Bancamiga', 'titular' => 'Doral', 'categoria' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA'],
             ['banco' => 'Bancamiga', 'titular' => 'José Jerez', 'categoria' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA'],
             ['banco' => 'Facebank', 'titular' => 'José Jerez', 'categoria' => 'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA'],
@@ -104,16 +104,47 @@ class FinanzasController extends Controller
             ['banco' => 'First Horizon Investment', 'titular' => 'Doral', 'categoria' => 'BANCA INTERNACIONAL / BILLETERAS'],
             ['banco' => 'Citizens Checking', 'titular' => 'Nunes Store', 'categoria' => 'BANCA INTERNACIONAL / BILLETERAS'],
             ['banco' => 'Citizens Savings', 'titular' => 'Nunes Store', 'categoria' => 'BANCA INTERNACIONAL / BILLETERAS'],
-            ['banco' => 'Banco de Venezuela', 'titular' => 'Edward Mavo', 'categoria' => 'TARJETAS INTERNACIONALES DE TERCEROS'],
-            ['banco' => 'Banco de Venezuela', 'titular' => 'María Núñez', 'categoria' => 'TARJETAS INTERNACIONALES DE TERCEROS'],
-            ['banco' => 'Banco de Venezuela', 'titular' => 'Dayana López', 'categoria' => 'TARJETAS INTERNACIONALES DE TERCEROS'],
-            ['banco' => 'Banco de Venezuela', 'titular' => 'José Semeco', 'categoria' => 'TARJETAS INTERNACIONALES DE TERCEROS'],
+            ['banco' => 'Venezuela', 'titular' => 'Edward Mavo', 'categoria' => 'TARJETAS INTERNACIONALES DE TERCEROS'],
+            ['banco' => 'Venezuela', 'titular' => 'María Núñez', 'categoria' => 'TARJETAS INTERNACIONALES DE TERCEROS'],
+            ['banco' => 'Venezuela', 'titular' => 'Dayana López', 'categoria' => 'TARJETAS INTERNACIONALES DE TERCEROS'],
+            ['banco' => 'Venezuela', 'titular' => 'José Semeco', 'categoria' => 'TARJETAS INTERNACIONALES DE TERCEROS'],
         ];
     }
 
     private function getTasaBcvDelDia(): float
     {
         return $this->bcvRate->getRateForToday();
+    }
+
+    /** Canoniza nombre de banco (p.ej. BANCO DE VENEZUELA → VENEZUELA). */
+    private function canonizarBanco(?string $banco): string
+    {
+        return app(\App\Services\BankReconciliationMatcher::class)
+            ->partesCuenta($banco, '')[0];
+    }
+
+    /**
+     * Filtra por banco aceptando alias (VENEZUELA = BANCO DE VENEZUELA).
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder
+     */
+    private function filtrarPorBanco($query, ?string $bancoFiltro, string $columna = 'banco')
+    {
+        if (! $bancoFiltro) {
+            return $query;
+        }
+
+        $variantes = array_map(
+            'strtolower',
+            app(\App\Services\BankReconciliationMatcher::class)->variantesBanco($bancoFiltro)
+        );
+
+        return $query->where(function ($q) use ($variantes, $columna) {
+            foreach ($variantes as $v) {
+                $q->orWhereRaw("LOWER(TRIM({$columna})) = ?", [$v]);
+            }
+        });
     }
 
     private function syncSaldoInicialDisponibilidad($resumen)
@@ -1142,19 +1173,20 @@ class FinanzasController extends Controller
         $banco_filtro = $filtrosConciliacion['banco_filtro'] ?? null;
 
         // 1. Obtener cuentas bancarias y lista de bancos permitidos
+        // Canoniza "BANCO DE VENEZUELA" → VENEZUELA para que aparezca en el filtro/upload
         $cuentasBancarias  = \App\Models\CuentaBancaria::all();
         $bancosPermitidos  = ['BANCAMIGA','BANCARIBE','BANESCO','BBVA','BNC','MERCANTIL','TESORO','VENEZUELA'];
         $bancos = $cuentasBancarias->pluck('banco')
-            ->map(fn($b) => strtoupper(trim($b)))
-            ->filter(fn($b) => in_array($b, $bancosPermitidos))
+            ->map(fn ($b) => $this->canonizarBanco($b))
+            ->filter(fn ($b) => in_array($b, $bancosPermitidos, true))
             ->unique()->sort()->values();
 
         // Mapa banco → titulares para el modal JS
         $titularesPorBanco = [];
         foreach ($cuentasBancarias as $cuenta) {
-            $b = strtoupper(trim($cuenta->banco));
+            $b = $this->canonizarBanco($cuenta->banco);
             $t = strtoupper(trim($cuenta->titular));
-            if (in_array($b, $bancosPermitidos) && $t) {
+            if (in_array($b, $bancosPermitidos, true) && $t) {
                 $titularesPorBanco[$b][] = $t;
             }
         }
@@ -1186,9 +1218,7 @@ class FinanzasController extends Controller
             $lineas_query->where('fecha', '<=', $fecha_hasta);
         }
 
-        if ($banco_filtro) {
-            $lineas_query->whereRaw('LOWER(banco) = ?', [strtolower(trim($banco_filtro))]);
-        }
+        $this->filtrarPorBanco($lineas_query, $banco_filtro);
         $lineas = $lineas_query->get();
 
         // 3. Motor de emparejamiento automático
@@ -1345,9 +1375,7 @@ class FinanzasController extends Controller
             $egresos_query->where('fecha', '<=', $fecha_hasta);
         }
 
-        if ($banco_filtro) {
-            $egresos_query->whereRaw('LOWER(banco) = ?', [strtolower(trim($banco_filtro))]);
-        }
+        $this->filtrarPorBanco($egresos_query, $banco_filtro);
         $egresos_ayer = $egresos_query->orderBy('id')->get();
 
         // Movimientos registrados en el sistema durante el período del extracto.
@@ -1639,16 +1667,21 @@ class FinanzasController extends Controller
 
     public function uploadConciliacion(Request $request) {
         $request->validate([
-            'file.*' => 'required|mimes:csv,txt,xlsx,xls,png,jpg,jpeg',
-            'file' => 'required|array',
+            'file' => 'required|array|min:1',
+            // extensions: más fiable que mimes (xlsx a veces llega como zip; csv como octet-stream)
+            'file.*' => ['required', 'file', 'max:15360', 'extensions:csv,txt,xlsx,xls,png,jpg,jpeg'],
             'banco_seleccionado' => 'required|string',
             'titular_seleccionado' => 'required|string',
+        ], [
+            'file.required' => 'Selecciona al menos un archivo del banco.',
+            'file.*.extensions' => 'El archivo debe ser CSV, TXT, Excel (.xlsx/.xls) o imagen (.png/.jpg/.jpeg).',
+            'file.*.max' => 'Cada archivo no puede superar 15 MB.',
         ]);
 
         $files = $request->file('file');
         $success_count = 0;
         $session_id = session()->getId();
-        $banco_nombre  = strtoupper(trim($request->banco_seleccionado));
+        $banco_nombre  = $this->canonizarBanco($request->banco_seleccionado);
         $titular_nombre = strtoupper(trim($request->titular_seleccionado));
 
         // ── Mapeo fijo de columnas por banco ─────────────────────────────────
@@ -2069,7 +2102,8 @@ class FinanzasController extends Controller
         $categoria_cuenta = null;
 
         if ($linea->banco) {
-            $cuenta = \App\Models\CuentaBancaria::whereRaw('LOWER(banco) = ?', [strtolower(trim($linea->banco))])->first();
+            $cuentaQuery = \App\Models\CuentaBancaria::query();
+            $cuenta = $this->filtrarPorBanco($cuentaQuery, $linea->banco)->first();
             if ($cuenta) {
                 $banco = $cuenta->banco;
                 $titular = $cuenta->titular;
@@ -2119,9 +2153,7 @@ class FinanzasController extends Controller
         
         $query = \App\Models\ConciliacionLinea::where('estado', 'conciliado')->orderBy('fecha', 'desc');
         
-        if ($banco_filtro) {
-            $query->whereRaw('LOWER(banco) = ?', [strtolower(trim($banco_filtro))]);
-        }
+        $this->filtrarPorBanco($query, $banco_filtro);
         
         $conciliados = $query->get();
         
@@ -2167,8 +2199,8 @@ class FinanzasController extends Controller
             return redirect()->back()->with('error', 'Banco no especificado.');
         }
 
-        $lineas_query = \App\Models\ConciliacionLinea::query()
-            ->whereRaw('LOWER(banco) = ?', [$bk_req]);
+        $lineas_query = \App\Models\ConciliacionLinea::query();
+        $this->filtrarPorBanco($lineas_query, $bk_req);
         if ($fecha_desde_filtro) {
             $lineas_query->whereDate('fecha', '>=', $fecha_desde_filtro);
         } else {
@@ -2180,8 +2212,8 @@ class FinanzasController extends Controller
         $lineas = $lineas_query->get();
 
         $egresos_query = \App\Models\FlujoCaja::where('tipo', 'egreso')
-            ->where('es_conciliado', false)
-            ->whereRaw('LOWER(banco) = ?', [$bk_req]);
+            ->where('es_conciliado', false);
+        $this->filtrarPorBanco($egresos_query, $bk_req);
         if ($fecha_desde_filtro) {
             $egresos_query->whereDate('fecha', '>=', $fecha_desde_filtro);
         } else {

@@ -33,7 +33,7 @@
                 · {{ $periodo->fecha_inicio?->format('d/m/Y') }} al {{ $periodo->fecha_fin?->format('d/m/Y') }}
                 · Tasa BCV {{ number_format($tasaBcv, 2) }}
             </div>
-            <div class="sub">Incluye venta neta y % que representa el pago sobre esa venta. Sin sedes/áreas con venta neta en 0.</div>
+            <div class="sub">Áreas: Call Center y Digital Manage aparte; el resto de áreas en Administración. Venta de áreas = por vendedor. Sin sedes con venta neta en 0.</div>
         </div>
     </div>
 
@@ -62,7 +62,13 @@
                     <td class="num"><strong>{{ number_format($fila['pagar_usd'], 2) }}</strong></td>
                     <td class="num">{{ number_format($fila['pagar_bs'], 2) }}</td>
                     <td class="num">{{ number_format($fila['venta_neta'], 2) }}</td>
-                    <td class="num"><strong>{{ number_format($fila['pct_nomina_sobre_venta'], 2) }}%</strong></td>
+                    <td class="num">
+                        @if($fila['pct_nomina_sobre_venta'] !== null)
+                            <strong>{{ number_format($fila['pct_nomina_sobre_venta'], 2) }}%</strong>
+                        @else
+                            —
+                        @endif
+                    </td>
                 </tr>
             @empty
                 <tr>
@@ -84,7 +90,11 @@
                     <td class="num">{{ number_format($filas->sum('venta_neta'), 2) }}</td>
                     <td class="num">
                         @php
-                            $ventaTotal = (float) $filas->sum('venta_neta');
+                            // Venta de áreas (por vendedor) puede solaparse con sedes: el % global usa solo sedes.
+                            $ventaTotal = (float) $filas->where('tipo', 'SEDE')->sum('venta_neta');
+                            if ($ventaTotal <= 0) {
+                                $ventaTotal = (float) $filas->sum('venta_neta');
+                            }
                             $pagarTotal = (float) $filas->sum('pagar_usd');
                         @endphp
                         {{ $ventaTotal > 0 ? number_format(($pagarTotal / $ventaTotal) * 100, 2).'%' : '—' }}
@@ -96,7 +106,8 @@
 
     <div class="note">
         Generado {{ now()->format('d/m/Y H:i') }}.
-        Venta neta = facturas − devoluciones (USD) del mismo período.
+        Venta neta sedes = facturas − devoluciones (USD) del período.
+        Venta neta Call Center / Digital Manage = ventas de sus vendedores.
         % = total pagado USD ÷ venta neta × 100.
     </div>
 </body>

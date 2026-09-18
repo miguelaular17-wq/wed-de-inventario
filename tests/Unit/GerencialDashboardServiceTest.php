@@ -52,6 +52,103 @@ class GerencialDashboardServiceTest extends TestCase
         $this->assertContains('MOVISTAR', array_column($resumen['por_sede'], 'sede'));
     }
 
+    public function test_ventas_por_area_call_center_y_digital_manage(): void
+    {
+        DB::table('clientes')->insert([
+            ['id' => 9001, 'nombre' => 'Vend Call', 'cedula' => 'V-9001', 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 9002, 'nombre' => 'Vend Digital', 'cedula' => 'V-9002', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        DB::table('nomina_empleados')->insert([
+            [
+                'cliente_id' => 9001,
+                'sede' => 'Call Center',
+                'codigo_vendedor' => 'CALL VEND',
+                'estado' => 'ACTIVO',
+                'salario_base' => 100,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'cliente_id' => 9002,
+                'sede' => 'Digital Manage',
+                'codigo_vendedor' => 'DIGI VEND',
+                'estado' => 'ACTIVO',
+                'salario_base' => 100,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+        DB::table('ventas_detalle')->insert([
+            [
+                'sede' => 'DORAL',
+                'tipo_documento' => 'FAC',
+                'numero_documento' => 'C1',
+                'fecha' => '2026-08-10',
+                'cantidad' => 1,
+                'precio_venta' => 100,
+                'precio_neto' => 100,
+                'costo_unitario' => 40,
+                'vendedor' => 'CALL VEND',
+                'anulado' => false,
+            ],
+            [
+                'sede' => 'DORAL',
+                'tipo_documento' => 'DEV',
+                'numero_documento' => 'C2',
+                'fecha' => '2026-08-11',
+                'cantidad' => 1,
+                'precio_venta' => 10,
+                'precio_neto' => 10,
+                'costo_unitario' => 4,
+                'vendedor' => 'CALL VEND',
+                'anulado' => false,
+            ],
+            [
+                'sede' => 'CENTRO',
+                'tipo_documento' => 'FAC',
+                'numero_documento' => 'D1',
+                'fecha' => '2026-08-12',
+                'cantidad' => 2,
+                'precio_venta' => 50,
+                'precio_neto' => 50,
+                'costo_unitario' => 20,
+                'vendedor' => 'DIGI VEND',
+                'anulado' => false,
+            ],
+            [
+                'sede' => 'DORAL',
+                'tipo_documento' => 'FAC',
+                'numero_documento' => 'X1',
+                'fecha' => '2026-08-10',
+                'cantidad' => 1,
+                'precio_venta' => 999,
+                'precio_neto' => 999,
+                'costo_unitario' => 1,
+                'vendedor' => 'OTRO VEND',
+                'anulado' => false,
+            ],
+        ]);
+
+        $service = app(GerencialDashboardService::class);
+        $periodo = $service->resolverPeriodo('mes', null, null);
+        $resumen = $service->resumen($periodo, 'todas', null, null, null);
+
+        $call = collect($resumen['por_area'])->firstWhere('area', 'Call Center');
+        $digital = collect($resumen['por_area'])->firstWhere('area', 'Digital Manage');
+
+        $this->assertNotNull($call);
+        $this->assertSame(100.0, $call['ventas_brutas']);
+        $this->assertSame(10.0, $call['devoluciones_usd']);
+        $this->assertSame(90.0, $call['venta_neta']);
+        $this->assertSame(1, $call['facturas']);
+        $this->assertSame(1, $call['devoluciones']);
+
+        $this->assertNotNull($digital);
+        $this->assertSame(100.0, $digital['ventas_brutas']);
+        $this->assertSame(100.0, $digital['venta_neta']);
+        $this->assertSame(1, $digital['facturas']);
+    }
+
     public function test_gerente_ve_el_dashboard_y_supervisor_no(): void
     {
         $gerente = User::create([
@@ -64,6 +161,8 @@ class GerencialDashboardServiceTest extends TestCase
             ->get(route('gerencial.dashboard'))
             ->assertOk()
             ->assertSee('Dashboard gerencial')
+            ->assertSee('Por sede')
+            ->assertSee('Por área')
             ->assertSee('DORAL');
 
         $supervisor = User::create([

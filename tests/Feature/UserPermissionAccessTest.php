@@ -175,31 +175,57 @@ class UserPermissionAccessTest extends TestCase
             ->assertRedirect('/');
     }
 
-    public function test_compras_notifica_a_sede_cuando_el_producto_tiene_existencia(): void
+    public function test_compras_marca_comprado_con_proveedor_fechas_y_usuario(): void
     {
         $this->ensurePedidosSolicitadosTable();
         $comprador = $this->makeUser(User::ROLE_COMPRADOR);
-        $receptor = $this->makeUser(User::ROLE_SUPERVISOR);
         \App\Models\PedidoSolicitado::create([
-            'codigo' => 'TEST-EXISTENCIA',
-            'producto' => 'Producto con existencia',
+            'codigo' => 'TEST-COMPRA',
+            'producto' => 'Producto comprado test',
             'sede' => 'DORAL',
             'estado' => 'pendiente',
         ]);
 
         $this->actingAs($comprador)
-            ->post(route('comprador.pedidos.tiene_existencia'), [
-                'producto' => 'Producto con existencia',
+            ->post(route('comprador.pedidos.comprado'), [
+                'producto' => 'Producto comprado test',
+                'compra_proveedor' => 'Proveedor XYZ',
+                'fecha_compra' => '2026-09-18',
+                'fecha_despacho_estimada' => '2026-09-25',
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('pedidos_solicitados', [
-            'producto' => 'Producto con existencia',
-            'estado' => 'tiene_existencia',
+            'producto' => 'Producto comprado test',
+            'estado' => 'comprado',
+            'compra_proveedor' => 'Proveedor XYZ',
+            'atendido_por' => $comprador->id,
         ]);
-        $this->assertDatabaseHas('notifications', [
-            'receiver_id' => $receptor->id,
-            'message' => 'El producto "Producto con existencia" tiene existencia. No es necesario comprarlo; la sede DORAL solo debe realizar una requisición.',
+    }
+
+    public function test_compras_marca_fuera_de_mercado_con_motivo_y_usuario(): void
+    {
+        $this->ensurePedidosSolicitadosTable();
+        $comprador = $this->makeUser(User::ROLE_COMPRADOR);
+        \App\Models\PedidoSolicitado::create([
+            'codigo' => 'TEST-FUERA',
+            'producto' => 'Producto fuera test',
+            'sede' => 'DORAL',
+            'estado' => 'pendiente',
+        ]);
+
+        $this->actingAs($comprador)
+            ->post(route('comprador.pedidos.fuera_mercado'), [
+                'producto' => 'Producto fuera test',
+                'motivo_fuera_mercado' => 'Descontinuado por el fabricante',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('pedidos_solicitados', [
+            'producto' => 'Producto fuera test',
+            'estado' => 'fuera_de_mercado',
+            'motivo_fuera_mercado' => 'Descontinuado por el fabricante',
+            'atendido_por' => $comprador->id,
         ]);
     }
 
@@ -236,14 +262,35 @@ class UserPermissionAccessTest extends TestCase
                 $table->string('producto');
                 $table->string('categoria')->nullable();
                 $table->string('proveedor')->nullable();
+                $table->string('compra_proveedor')->nullable();
+                $table->date('fecha_compra')->nullable();
+                $table->date('fecha_despacho_estimada')->nullable();
+                $table->text('motivo_fuera_mercado')->nullable();
                 $table->string('solicitante')->nullable();
                 $table->string('sede', 50)->nullable();
                 $table->text('notas')->nullable();
                 $table->string('estado', 32)->default('pendiente');
                 $table->timestamp('atendido_at')->nullable();
+                $table->unsignedBigInteger('atendido_por')->nullable();
                 $table->timestamps();
             });
+
+            return;
         }
+
+        \Illuminate\Support\Facades\Schema::table('pedidos_solicitados', function ($table) {
+            foreach ([
+                'compra_proveedor' => fn ($t) => $t->string('compra_proveedor')->nullable(),
+                'fecha_compra' => fn ($t) => $t->date('fecha_compra')->nullable(),
+                'fecha_despacho_estimada' => fn ($t) => $t->date('fecha_despacho_estimada')->nullable(),
+                'motivo_fuera_mercado' => fn ($t) => $t->text('motivo_fuera_mercado')->nullable(),
+                'atendido_por' => fn ($t) => $t->unsignedBigInteger('atendido_por')->nullable(),
+            ] as $col => $adder) {
+                if (! \Illuminate\Support\Facades\Schema::hasColumn('pedidos_solicitados', $col)) {
+                    $adder($table);
+                }
+            }
+        });
     }
 
     private function makeUser(string $role): User

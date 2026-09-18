@@ -11,6 +11,12 @@ return [
 
     'sedes_gerencial' => ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'JRZ', 'MOVISTAR'],
 
+    /** Áreas de nómina cuyas ventas se muestran en el dashboard gerencial (por vendedor). */
+    'areas_gerencial' => [
+        ['codigo' => 'Call Center', 'nombre' => 'Call Center'],
+        ['codigo' => 'Digital Manage', 'nombre' => 'Digital Manage'],
+    ],
+
     'sede_central' => 'JRZ',
 
     'display' => [

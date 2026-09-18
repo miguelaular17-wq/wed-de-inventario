@@ -208,9 +208,12 @@ class OrganizationService
     }
 
     /**
+     * IDs del personal a cargo del usuario.
+     * Con $incluirse=true también incluye la propia ficha (reporte de nómina del equipo).
+     *
      * @return list<int>
      */
-    public function idsPersonalACargo(User $user): array
+    public function idsPersonalACargo(User $user, bool $incluirse = false): array
     {
         $yo = $this->empleadoDelUsuario($user);
         if (! $yo) {
@@ -244,14 +247,24 @@ class OrganizationService
                 } else {
                     $ids = $ids->merge($nodo['equipo']->pluck('id'));
                 }
+
+                // En el reporte del equipo, si la sede/área tiene varios supervisores, deben verse todos.
+                if ($incluirse) {
+                    $ids = $ids->merge($nodo['supervisores']->pluck('id'));
+                }
             }
         }
 
-        return $ids
+        $ids = $ids
             ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->reject(fn (int $id) => $id === (int) $yo->id)
-            ->values()
-            ->all();
+            ->unique();
+
+        if ($incluirse) {
+            $ids = $ids->push((int) $yo->id)->unique();
+        } else {
+            $ids = $ids->reject(fn (int $id) => $id === (int) $yo->id);
+        }
+
+        return $ids->values()->all();
     }
 }

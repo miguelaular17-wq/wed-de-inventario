@@ -165,12 +165,17 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                 <span style="background:#fef3c7;color:#b45309;padding:4px 10px;border-radius:6px;font-size:0.85rem;">Q Pedir</span>
                 Solicitudes pendientes ({{ collect($pedidosSolicitados)->count() }})
             </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <form method="GET" action="{{ route('comprador.dashboard') }}" style="display:flex; gap: 4px; align-items: center;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                <form method="GET" action="{{ route('comprador.dashboard') }}" style="display:flex; gap: 4px; align-items: center; flex-wrap: wrap;">
                     <input type="hidden" name="tab" value="qpedir">
                     <input type="date" name="q_pedir_date" value="{{ request('q_pedir_date') }}" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; font-size: 0.8rem;" onchange="this.form.submit()">
-                    @if(request('q_pedir_date'))
-                        <a href="{{ route('comprador.dashboard') }}" style="text-decoration: none; color: #ef4444; font-size: 0.8rem; margin-right: 8px;">&times; Quitar</a>
+                    <select name="q_pedir_stock" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; font-size: 0.8rem;" onchange="this.form.submit()" title="Filtrar por existencia en sistema">
+                        <option value="todos" @selected(($qPedirStockFilter ?? 'todos') === 'todos')>Existencia: todas</option>
+                        <option value="con" @selected(($qPedirStockFilter ?? '') === 'con')>Con existencia</option>
+                        <option value="sin" @selected(($qPedirStockFilter ?? '') === 'sin')>Sin existencia</option>
+                    </select>
+                    @if(request('q_pedir_date') || request('q_pedir_stock', 'todos') !== 'todos')
+                        <a href="{{ route('comprador.dashboard', ['tab' => 'qpedir']) }}" style="text-decoration: none; color: #ef4444; font-size: 0.8rem; margin-right: 8px;">&times; Quitar filtros</a>
                     @endif
                 </form>
                 <a href="{{ route('comprador.pedidos.excel') }}" class="btn-reporte" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #047857; background: #059669; color: white; text-decoration: none;">Excel Detallado</a>
@@ -179,7 +184,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             </div>
         </h2>
         <p style="margin:0 0 12px;color:#64748b;font-size:0.88rem;">
-            Productos solicitados desde el login. Revisa y marca como atendido cuando los proceses.
+            Productos solicitados desde el login. Filas en verde ya tienen stock global en sistema. Al marcar comprado o fuera de mercado se registra tu usuario.
         </p>
         <div style="margin-bottom: 10px;">
             <input type="search" id="qpedir-filter" class="qpedir-search" placeholder="Filtrar producto, código o categoría…" oninput="filterQPedir(this.value)" style="background: #fff url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2214%22 height=%2214%22 fill=%22%2364748b%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M10 4a6 6 0 104.47 10.03l4.75 4.75 1.41-1.41-4.75-4.75A6 6 0 0010 4zm0 2a4 4 0 110 8 4 4 0 010-8z%22/%3E%3C/svg%3E') no-repeat 10px center;">
@@ -203,17 +208,27 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                         <th style="width: 110px;">Código</th>
                         <th>Producto</th>
                         <th style="width: 140px;">Categoría</th>
+                        <th class="col-number" style="width: 90px;">Stock global</th>
                         <th class="col-number" style="width: 80px;">Pedidos</th>
                         <th style="width: 140px;">Última solicitud</th>
-                        <th style="width: 330px;">Acción</th>
+                        <th style="width: 220px;">Acción</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($pedidosSolicitados as $pedido)
-                    <tr class="qpedir-row" data-filter="{{ strtolower($pedido->producto.' '.$pedido->codigo.' '.$pedido->categoria) }}">
+                    @php $conStock = (int) ($pedido->stock_global ?? 0) > 0; @endphp
+                    <tr class="qpedir-row" data-filter="{{ strtolower($pedido->producto.' '.$pedido->codigo.' '.$pedido->categoria) }}" data-stock="{{ $conStock ? 'con' : 'sin' }}"
+                        style="{{ $conStock ? 'background:#ecfdf5;' : '' }}">
                         <td class="col-code">{{ $pedido->codigo }}</td>
                         <td style="font-weight: 600;">{{ $pedido->producto }}</td>
                         <td style="color: var(--muted);">{{ $pedido->categoria ?: '—' }}</td>
+                        <td class="col-number">
+                            @if($conStock)
+                                <span style="background:#10b981;color:#fff;padding:2px 8px;border-radius:12px;font-size:0.75rem;font-weight:700;">{{ number_format((int) $pedido->stock_global) }}</span>
+                            @else
+                                <span style="color:#94a3b8;font-size:0.8rem;">0</span>
+                            @endif
+                        </td>
                         <td class="col-number">
                             <span style="background: {{ $pedido->frecuencia > 5 ? '#10b981' : '#e2e8f0' }}; color: {{ $pedido->frecuencia > 5 ? '#fff' : '#475569' }}; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">{{ $pedido->frecuencia }}</span>
                         </td>
@@ -221,21 +236,12 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                         <td>
                             <div class="pedido-actions" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
                                 @if($pedido->estado === 'pendiente' || !$pedido->estado)
-                                    <form method="POST" action="{{ route('comprador.pedidos.comprado') }}" class="qpedir-action-form">
-                                        @csrf
-                                        <input type="hidden" name="producto" value="{{ $pedido->producto }}">
-                                        <button type="submit" class="btn-atender" style="padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: 1px solid #10b981; background: #10b981; color: white;">Comprado</button>
-                                    </form>
-                                    <form method="POST" action="{{ route('comprador.pedidos.tiene_existencia') }}" class="qpedir-action-form" onsubmit="return confirm('¿Notificar a la sede que este producto tiene existencia y debe realizar una requisición?')">
-                                        @csrf
-                                        <input type="hidden" name="producto" value="{{ $pedido->producto }}">
-                                        <button type="submit" style="padding:4px 10px;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer;border:1px solid #2563eb;background:#2563eb;color:white;">Tiene existencia</button>
-                                    </form>
-                                    <form method="POST" action="{{ route('comprador.pedidos.fuera_mercado') }}" class="qpedir-action-form" onsubmit="return confirm('¿Marcar como fuera de mercado (no se puede comprar)?')">
-                                        @csrf
-                                        <input type="hidden" name="producto" value="{{ $pedido->producto }}">
-                                        <button type="submit" class="btn-eliminar" style="padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: 1px solid #fecaca; background: #fff; color: #ef4444;">Fuera de mercado</button>
-                                    </form>
+                                    <button type="button" class="btn-atender js-pedido-comprado"
+                                        data-producto="{{ $pedido->producto }}"
+                                        style="padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: 1px solid #10b981; background: #10b981; color: white;">Comprado</button>
+                                    <button type="button" class="btn-eliminar js-pedido-fuera"
+                                        data-producto="{{ $pedido->producto }}"
+                                        style="padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; border: 1px solid #fecaca; background: #fff; color: #ef4444;">Fuera de mercado</button>
                                 @elseif($pedido->estado === 'comprado')
                                     <span style="color: #10b981; font-weight: 600; font-size: 0.8rem;">✓ Comprado</span>
                                 @elseif($pedido->estado === 'fuera_de_mercado')
@@ -249,6 +255,148 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             </table>
         </div>
     </div>
+
+    {{-- Modal Comprado --}}
+    <div id="modalComprado" class="pedido-modal" hidden
+         style="position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:10000;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:12px;max-width:440px;width:100%;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,.15);" onclick="event.stopPropagation()">
+            <h3 style="margin:0 0 8px;font-size:1.05rem;">Marcar como comprado</h3>
+            <p id="modalCompradoProducto" class="muted" style="margin:0 0 14px;font-size:.85rem;"></p>
+            <form method="POST" action="{{ route('comprador.pedidos.comprado') }}" id="formComprado">
+                @csrf
+                <input type="hidden" name="producto" id="comprado_producto">
+                <input type="hidden" name="tab" value="qpedir">
+                <div style="margin-bottom:10px;">
+                    <label style="display:block;font-size:.75rem;font-weight:700;color:#64748b;margin-bottom:4px;">Proveedor al que se compró</label>
+                    <input list="listaProveedoresCompra" name="compra_proveedor" id="comprado_proveedor" required maxlength="255"
+                           style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;" placeholder="Nombre del proveedor">
+                    <datalist id="listaProveedoresCompra">
+                        @foreach(($proveedores ?? []) as $prov)
+                            @if($prov && $prov !== 'Ninguno')
+                                <option value="{{ $prov }}"></option>
+                            @endif
+                        @endforeach
+                    </datalist>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+                    <div>
+                        <label style="display:block;font-size:.75rem;font-weight:700;color:#64748b;margin-bottom:4px;">Fecha de compra</label>
+                        <input type="date" name="fecha_compra" id="comprado_fecha" required value="{{ now()->toDateString() }}"
+                               style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;">
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:.75rem;font-weight:700;color:#64748b;margin-bottom:4px;">Despacho estimado</label>
+                        <input type="date" name="fecha_despacho_estimada" id="comprado_despacho" required
+                               style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;">
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                    <button type="button" class="js-cerrar-modal-comprado" style="padding:8px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;">Cancelar</button>
+                    <button type="submit" style="padding:8px 14px;border-radius:8px;border:none;background:#059669;color:#fff;font-weight:600;cursor:pointer;">Guardar compra</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- Modal Fuera de mercado --}}
+    <div id="modalFueraMercado" class="pedido-modal" hidden
+         style="position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:10000;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:12px;max-width:440px;width:100%;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,.15);" onclick="event.stopPropagation()">
+            <h3 style="margin:0 0 8px;font-size:1.05rem;">Fuera de mercado</h3>
+            <p id="modalFueraProducto" class="muted" style="margin:0 0 14px;font-size:.85rem;"></p>
+            <form method="POST" action="{{ route('comprador.pedidos.fuera_mercado') }}" id="formFueraMercado">
+                @csrf
+                <input type="hidden" name="producto" id="fuera_producto">
+                <input type="hidden" name="tab" value="qpedir">
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;font-size:.75rem;font-weight:700;color:#64748b;margin-bottom:4px;">¿Por qué está fuera de mercado?</label>
+                    <textarea name="motivo_fuera_mercado" id="fuera_motivo" required minlength="3" maxlength="1000" rows="3"
+                              style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;resize:vertical;"
+                              placeholder="Ej.: Descontinuado por el fabricante, sin stock en proveedores…"></textarea>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                    <button type="button" class="js-cerrar-modal-fuera" style="padding:8px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;">Cancelar</button>
+                    <button type="submit" style="padding:8px 14px;border-radius:8px;border:none;background:#dc2626;color:#fff;font-weight:600;cursor:pointer;">Confirmar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        function showModal(el) {
+            if (!el) return;
+            el.hidden = false;
+            el.style.display = 'flex';
+        }
+        function hideModal(el) {
+            if (!el) return;
+            el.hidden = true;
+            el.style.display = 'none';
+        }
+
+        function abrirModalComprado(producto) {
+            var modal = document.getElementById('modalComprado');
+            document.getElementById('comprado_producto').value = producto || '';
+            document.getElementById('modalCompradoProducto').textContent = producto || '';
+            document.getElementById('comprado_proveedor').value = '';
+            var hoy = new Date();
+            var yyyy = hoy.getFullYear();
+            var mm = String(hoy.getMonth() + 1).padStart(2, '0');
+            var dd = String(hoy.getDate()).padStart(2, '0');
+            document.getElementById('comprado_fecha').value = yyyy + '-' + mm + '-' + dd;
+            document.getElementById('comprado_despacho').value = '';
+            showModal(modal);
+            setTimeout(function () { document.getElementById('comprado_proveedor').focus(); }, 50);
+        }
+
+        function abrirModalFueraMercado(producto) {
+            var modal = document.getElementById('modalFueraMercado');
+            document.getElementById('fuera_producto').value = producto || '';
+            document.getElementById('modalFueraProducto').textContent = producto || '';
+            document.getElementById('fuera_motivo').value = '';
+            showModal(modal);
+            setTimeout(function () { document.getElementById('fuera_motivo').focus(); }, 50);
+        }
+
+        document.addEventListener('click', function (e) {
+            var btnComprado = e.target.closest('.js-pedido-comprado');
+            if (btnComprado) {
+                e.preventDefault();
+                abrirModalComprado(btnComprado.getAttribute('data-producto'));
+                return;
+            }
+            var btnFuera = e.target.closest('.js-pedido-fuera');
+            if (btnFuera) {
+                e.preventDefault();
+                abrirModalFueraMercado(btnFuera.getAttribute('data-producto'));
+                return;
+            }
+            if (e.target.closest('.js-cerrar-modal-comprado')) {
+                hideModal(document.getElementById('modalComprado'));
+                return;
+            }
+            if (e.target.closest('.js-cerrar-modal-fuera')) {
+                hideModal(document.getElementById('modalFueraMercado'));
+                return;
+            }
+            if (e.target.id === 'modalComprado') hideModal(e.target);
+            if (e.target.id === 'modalFueraMercado') hideModal(e.target);
+        });
+
+        // Si hubo error de validación, reabrir el modal correspondiente
+        @if($errors->has('compra_proveedor') || $errors->has('fecha_compra') || $errors->has('fecha_despacho_estimada'))
+            abrirModalComprado(@json(old('producto', '')));
+            document.getElementById('comprado_proveedor').value = @json(old('compra_proveedor', ''));
+            document.getElementById('comprado_fecha').value = @json(old('fecha_compra', now()->toDateString()));
+            document.getElementById('comprado_despacho').value = @json(old('fecha_despacho_estimada', ''));
+        @endif
+        @if($errors->has('motivo_fuera_mercado'))
+            abrirModalFueraMercado(@json(old('producto', '')));
+            document.getElementById('fuera_motivo').value = @json(old('motivo_fuera_mercado', ''));
+        @endif
+    })();
+    </script>
     @else
     <div class="panel" style="padding: 40px; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 12px; background: #f8fafc;">
         <p style="font-size: 1.1rem; font-weight: 500;">No hay solicitudes pendientes en este momento.</p>

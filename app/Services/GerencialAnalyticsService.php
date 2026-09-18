@@ -16,12 +16,12 @@ class GerencialAnalyticsService
         private GerencialAbcService $abc,
     ) {}
 
-    public function devoluciones(array $periodo, ?string $sede, ?string $categoria, ?string $vendedor, ?string $producto, bool $conDetalle = false): array
+    public function devoluciones(array $periodo, ?string $sede, ?string $categoria, string|array|null $vendedor, ?string $producto, bool $conDetalle = false): array
     {
         $sedes = $this->base->filtrarSedes($sede);
         $precio = $this->campoPrecio();
         $costo = Schema::hasColumn('ventas_detalle', 'costo_unitario') ? 'COALESCE(vd.costo_unitario, 0)' : '0';
-        $usaLineas = (bool) ($categoria || $vendedor || $producto);
+        $usaLineas = (bool) ($categoria || $this->base->hayFiltroVendedor($vendedor) || $producto);
         $ventas = $this->base->kpisPorSede($periodo['inicio'], $periodo['fin'], $sedes, $usaLineas, $categoria, $vendedor, $producto);
         $ventasUsd = collect($ventas)->sum('ventas_usd');
 
@@ -484,7 +484,7 @@ class GerencialAnalyticsService
             ->all();
     }
 
-    public function rentabilidad(array $periodo, ?string $sede, ?string $categoria, ?string $vendedor, ?string $producto): array
+    public function rentabilidad(array $periodo, ?string $sede, ?string $categoria, string|array|null $vendedor, ?string $producto): array
     {
         $sedes = $this->base->filtrarSedes($sede);
         $precio = $this->campoPrecio();
@@ -1191,7 +1191,7 @@ class GerencialAnalyticsService
      * @param  array{inicio:Carbon,fin:Carbon}  $periodo
      * @return array<string, mixed>
      */
-    public function clientes(array $periodo, ?string $sede, ?string $vendedor, ?string $producto, string $ranking = 'monto'): array
+    public function clientes(array $periodo, ?string $sede, string|array|null $vendedor, ?string $producto, string $ranking = 'monto'): array
     {
         $orden = in_array($ranking, ['facturas', 'unidades', 'monto'], true) ? $ranking : 'monto';
         $vacio = [

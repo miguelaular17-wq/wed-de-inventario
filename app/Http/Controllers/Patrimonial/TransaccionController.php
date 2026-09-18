@@ -16,25 +16,78 @@ class TransaccionController extends Controller
 
     public function index(Request $request)
     {
-        $mes         = (int)$request->get('mes', now()->month);
-        $anio        = (int)$request->get('anio', now()->year);
+        $mes         = (int) $request->get('mes', now()->month);
+        $anio        = (int) $request->get('anio', now()->year);
         $propiedadId = $request->get('propiedad_id');
+        $propiedadId = $propiedadId !== null && $propiedadId !== '' ? (int) $propiedadId : null;
+        $desde       = trim((string) $request->get('desde', ''));
+        $hasta       = trim((string) $request->get('hasta', ''));
 
-        $query = PatTransaccion::with('propiedad')->where('mes', $mes)->where('anio', $anio);
-        if ($propiedadId) $query->where('propiedad_id', $propiedadId);
+        if ($desde !== '' && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) {
+            $desde = '';
+        }
+        if ($hasta !== '' && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) {
+            $hasta = '';
+        }
+        if ($desde !== '' && $hasta !== '' && $desde > $hasta) {
+            [$desde, $hasta] = [$hasta, $desde];
+        }
+
+        $query = PatTransaccion::with('propiedad')
+            ->where('mes', $mes)
+            ->where('anio', $anio);
+
+        if ($propiedadId) {
+            $query->where('propiedad_id', $propiedadId);
+        }
+        if ($desde !== '') {
+            $query->whereDate('fecha', '>=', $desde);
+        }
+        if ($hasta !== '') {
+            $query->whereDate('fecha', '<=', $hasta);
+        }
 
         $transacciones = $query->orderByDesc('fecha')->paginate(25)->withQueryString();
         $propiedades   = Propiedad::orderBy('nombre')->get(['id', 'nombre']);
         $categorias    = PatTransaccion::categorias();
 
-        // Resumen del mes por propiedad
-        $resumenProps = Propiedad::withCount([])
-            ->get(['id', 'nombre', 'tipo'])
-            ->map(function ($p) use ($mes, $anio) {
-                return array_merge(['id' => $p->id, 'nombre' => $p->nombre, 'tipo' => $p->tipo],
-                    $p->balanceMes($mes, $anio));
+        $resumenQuery = PatTransaccion::query()
+            ->where('mes', $mes)
+            ->where('anio', $anio);
+        if ($propiedadId) {
+            $resumenQuery->where('propiedad_id', $propiedadId);
+        }
+        if ($desde !== '') {
+            $resumenQuery->whereDate('fecha', '>=', $desde);
+        }
+        if ($hasta !== '') {
+            $resumenQuery->whereDate('fecha', '<=', $hasta);
+        }
+
+        $txsResumen = $resumenQuery->get(['propiedad_id', 'tipo', 'monto']);
+        $porPropiedad = $txsResumen->groupBy('propiedad_id');
+
+        $nombres = Propiedad::query()
+            ->whereIn('id', $porPropiedad->keys()->filter()->all() ?: [0])
+            ->pluck('nombre', 'id');
+
+        $resumenProps = $porPropiedad
+            ->map(function ($txs, $propId) use ($nombres) {
+                $ingresos = (float) $txs->where('tipo', 'ingreso')->sum('monto');
+                $gastos = (float) $txs->where('tipo', 'gasto')->sum('monto');
+                $comisiones = (float) $txs->where('tipo', 'comision')->sum('monto');
+
+                return [
+                    'id' => (int) $propId,
+                    'nombre' => $nombres[$propId] ?? 'Propiedad #'.$propId,
+                    'ingresos' => $ingresos,
+                    'gastos' => $gastos,
+                    'comisiones' => $comisiones,
+                    'balance' => $ingresos - $gastos - $comisiones,
+                ];
             })
-            ->filter(fn($b) => $b['ingresos'] > 0 || $b['gastos'] > 0 || $b['comisiones'] > 0)
+            ->filter(fn ($b) => $b['ingresos'] > 0 || $b['gastos'] > 0 || $b['comisiones'] > 0)
+            ->sortBy('nombre')
             ->values();
 
         $totales = [
@@ -46,7 +99,8 @@ class TransaccionController extends Controller
 
         return view('patrimonial.transacciones.index', compact(
             'transacciones', 'propiedades', 'categorias',
-            'mes', 'anio', 'propiedadId', 'resumenProps', 'totales'
+            'mes', 'anio', 'propiedadId', 'desde', 'hasta',
+            'resumenProps', 'totales'
         ));
     }
 

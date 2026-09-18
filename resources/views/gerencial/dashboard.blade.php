@@ -107,6 +107,42 @@
         </table>
     </div>
 
+    <h3 style="margin:20px 0 8px;">Por área</h3>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Área</th>
+                    <th>Ventas</th>
+                    <th>DEV</th>
+                    <th>Venta neta</th>
+                    <th>FAC</th>
+                    <th>Nº DEV</th>
+                    <th>Productos</th>
+                    <th>Utilidad</th>
+                    <th>% de utilidad</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($porArea as $fila)
+                    <tr>
+                        <td><strong>{{ $fila['area'] ?? $fila['sede'] }}</strong></td>
+                        <td>${{ $fmt($fila['ventas_brutas'] ?? ($fila['venta_neta'] + $fila['devoluciones_usd'])) }}</td>
+                        <td>${{ $fmt($fila['devoluciones_usd']) }}</td>
+                        <td>${{ $fmt($fila['venta_neta'] ?? $fila['ventas_usd']) }}</td>
+                        <td>{{ number_format($fila['facturas']) }}</td>
+                        <td>{{ number_format($fila['devoluciones']) }}</td>
+                        <td>{{ number_format($fila['productos'] ?? 0) }}</td>
+                        <td>${{ $fmt($fila['utilidad'] ?? $fila['margen_usd']) }}</td>
+                        <td>{{ $fmt($fila['margen_pct'] ?? 0, 1) }}%</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="9" class="muted">Sin áreas configuradas.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
     @php
         $ranking = $filtros['ranking'] ?? 'usd';
         $rankingUrl = function (string $modo) use ($filtros) {
@@ -116,10 +152,10 @@
                 'hasta' => ($filtros['preset'] ?? '') === 'personalizado' ? ($filtros['hasta'] ?? null) : null,
                 'sede' => ($filtros['sede'] ?? 'todas') !== 'todas' ? $filtros['sede'] : null,
                 'categoria' => $filtros['categoria'] ?: null,
-                'vendedor' => $filtros['vendedor'] ?: null,
+                'vendedor' => ! empty($filtros['vendedor']) ? $filtros['vendedor'] : null,
                 'producto' => $filtros['producto'] ?: null,
                 'ranking' => $modo,
-            ], fn ($v) => $v !== null && $v !== ''));
+            ], fn ($v) => $v !== null && $v !== '' && $v !== []));
         };
         $rankingMeta = match ($ranking) {
             'unidades' => ['header' => 'Unds', 'celda' => fn ($item) => $fmt($item['unidades'] ?? 0, 0)],

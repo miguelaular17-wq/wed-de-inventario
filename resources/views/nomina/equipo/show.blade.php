@@ -13,7 +13,7 @@
         <div>
             <a href="{{ route('nomina.equipo.index') }}" class="muted" style="font-size:.82rem;">← Nómina del equipo</a>
             <h1 style="margin:4px 0 0;">Quincena {{ $periodo->etiqueta }}</h1>
-            <p class="muted" style="margin:4px 0 0;">Personal a tu cargo · Estado: <strong>{{ $periodo->estado }}</strong></p>
+            <p class="muted" style="margin:4px 0 0;">Tú y personal a tu cargo · Estado: <strong>{{ $periodo->estado }}</strong></p>
         </div>
         <div>
             <a class="btn primary" href="{{ route('nomina.equipo.comisiones', $periodo) }}">Ver comisiones</a>

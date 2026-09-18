@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Nfc;
 
 use App\Http\Controllers\Controller;
+use App\Models\NfcRecompensa;
 use App\Models\NfcTarjeta;
 use App\Services\Nfc\NfcTarjetaService;
 use Illuminate\Http\RedirectResponse;
@@ -69,11 +70,109 @@ class NfcTarjetaController extends Controller
     public function show(NfcTarjeta $tarjeta): View
     {
         $tarjeta->load('asignador');
+        $movimientos = $tarjeta->movimientos()
+            ->with(['registrador', 'recompensa'])
+            ->limit(40)
+            ->get();
+
+        $recompensas = NfcRecompensa::query()->activas()->get();
 
         return view('nfc.show', [
             'tarjeta' => $tarjeta,
             'urlNfc' => $tarjeta->urlPublica(),
+            'movimientos' => $movimientos,
+            'recompensas' => $recompensas,
         ]);
+    }
+
+    public function recargar(Request $request, NfcTarjeta $tarjeta): RedirectResponse
+    {
+        $data = $request->validate([
+            'monto' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
+            'concepto' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $this->nfc->recargarSaldo(
+            $tarjeta,
+            (float) $data['monto'],
+            $data['concepto'] ?? null,
+            auth()->id()
+        );
+
+        return redirect()
+            ->route('nfc.show', $tarjeta)
+            ->with('status', 'Recarga aplicada. Nuevo saldo: $'.number_format((float) $tarjeta->fresh()->saldo, 2));
+    }
+
+    public function restarSaldo(Request $request, NfcTarjeta $tarjeta): RedirectResponse
+    {
+        $data = $request->validate([
+            'monto' => ['required', 'numeric', 'min:0.01', 'max:999999.99'],
+            'concepto' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $this->nfc->restarSaldo(
+            $tarjeta,
+            (float) $data['monto'],
+            $data['concepto'] ?? null,
+            auth()->id()
+        );
+
+        return redirect()
+            ->route('nfc.show', $tarjeta)
+            ->with('status', 'Saldo descontado. Nuevo saldo: $'.number_format((float) $tarjeta->fresh()->saldo, 2));
+    }
+
+    public function puntos(Request $request, NfcTarjeta $tarjeta): RedirectResponse
+    {
+        $data = $request->validate([
+            'puntos' => ['required', 'integer', 'min:1', 'max:1000000'],
+            'concepto' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $this->nfc->sumarPuntos(
+            $tarjeta,
+            (int) $data['puntos'],
+            $data['concepto'] ?? null,
+            auth()->id()
+        );
+
+        return redirect()
+            ->route('nfc.show', $tarjeta)
+            ->with('status', 'Puntos sumados. Total: '.number_format((int) $tarjeta->fresh()->puntos));
+    }
+
+    public function restarPuntos(Request $request, NfcTarjeta $tarjeta): RedirectResponse
+    {
+        $data = $request->validate([
+            'puntos' => ['required', 'integer', 'min:1', 'max:1000000'],
+            'concepto' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $this->nfc->restarPuntos(
+            $tarjeta,
+            (int) $data['puntos'],
+            $data['concepto'] ?? null,
+            auth()->id()
+        );
+
+        return redirect()
+            ->route('nfc.show', $tarjeta)
+            ->with('status', 'Puntos restados. Total: '.number_format((int) $tarjeta->fresh()->puntos));
+    }
+
+    public function canjear(Request $request, NfcTarjeta $tarjeta): RedirectResponse
+    {
+        $data = $request->validate([
+            'recompensa_id' => ['required', 'integer', 'exists:nfc_recompensas,id'],
+        ]);
+
+        $recompensa = NfcRecompensa::query()->findOrFail((int) $data['recompensa_id']);
+        $this->nfc->canjearRecompensa($tarjeta, $recompensa, auth()->id());
+
+        return redirect()
+            ->route('nfc.show', $tarjeta)
+            ->with('status', 'Canjeado: '.$recompensa->nombre.'. Puntos restantes: '.number_format((int) $tarjeta->fresh()->puntos));
     }
 
     public function update(Request $request, NfcTarjeta $tarjeta): RedirectResponse

@@ -8,7 +8,7 @@
         <div>
             <h1 style="margin:0;">Nómina del equipo</h1>
             <p class="muted" style="margin:4px 0 0;">
-                Solo ves a tu personal a cargo, después de que RRHH calcule la quincena (nómina y comisiones).
+                Solo ves tu nómina y la de tu personal a cargo, después de que RRHH calcule la quincena.
                 Tu ficha debe tener seleccionado este usuario.
             </p>
         </div>

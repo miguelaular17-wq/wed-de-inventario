@@ -16,13 +16,14 @@
         .kpi { display: table-cell; width: 25%; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 6px; padding: 8px 10px; }
         .kpi span { display: block; font-size: 7px; text-transform: uppercase; color: #7c3aed; font-weight: 700; }
         .kpi strong { display: block; margin-top: 3px; font-size: 13px; color: #1e293b; }
-        .sede-block { margin-top: 16px; page-break-inside: avoid; }
+        .sede-block { margin-top: 16px; }
         .sede-title {
             background: #5b21b6; color: #fff; padding: 7px 10px; font-size: 11px; font-weight: 700;
-            border-radius: 4px 4px 0 0;
         }
         .sede-summary { background: #faf5ff; border: 1px solid #e9d5ff; border-top: 0; padding: 6px 10px; color: #6b21a8; font-size: 9px; }
-        table { width: 100%; border-collapse: collapse; }
+        table { width: 100%; border-collapse: collapse; margin-top: 0; }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
         th { background: #ede9fe; color: #5b21b6; font-size: 8px; text-transform: uppercase; padding: 6px 5px; border: 1px solid #ddd6fe; text-align: left; }
         td { padding: 5px; border: 1px solid #e2e8f0; font-size: 9px; vertical-align: top; }
         .num { text-align: right; white-space: nowrap; }
@@ -33,6 +34,7 @@
         .bar-wrap { background: #e2e8f0; height: 7px; border-radius: 4px; overflow: hidden; margin-top: 3px; }
         .bar { height: 7px; background: #7c3aed; }
         .empty { text-align: center; padding: 24px; color: #64748b; }
+        .avance-pct { font-weight: bold; }
     </style>
 </head>
 <body>
@@ -100,27 +102,35 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($bloque['productos'] as $fila)
+                    @forelse($bloque['productos'] as $fila)
+                        @php
+                            $avance = (float) ($fila['avance_pct'] ?? 0);
+                            $ancho = max(0, min(100, $avance));
+                        @endphp
                         <tr>
                             <td>
-                                <div class="codigo">{{ $fila['codigo'] }}</div>
-                                <strong>{{ $fila['producto'] }}</strong>
+                                <div class="codigo">{{ $fila['codigo'] ?? '' }}</div>
+                                <strong>{{ $fila['producto'] ?? '—' }}</strong>
                                 @if(!empty($fila['categoria']))
                                     <div class="muted">{{ $fila['categoria'] }}</div>
                                 @endif
                             </td>
-                            <td class="num">{{ number_format((float) $fila['cantidad_inicial'], 0) }} u.</td>
-                            <td class="num">{{ number_format((float) $fila['cantidad_actual'], 0) }} u.</td>
-                            <td class="num">{{ number_format((float) $fila['vendido'], 0) }} u.</td>
+                            <td class="num">{{ number_format((float) ($fila['cantidad_inicial'] ?? 0), 0) }} u.</td>
+                            <td class="num">{{ number_format((float) ($fila['cantidad_actual'] ?? 0), 0) }} u.</td>
+                            <td class="num">{{ number_format((float) ($fila['vendido'] ?? 0), 0) }} u.</td>
                             <td>
-                                <strong>{{ number_format((float) $fila['avance_pct'], 1) }}%</strong>
+                                <div class="avance-pct">{{ number_format($avance, 1) }}%</div>
                                 <div class="bar-wrap">
-                                    <div class="bar" style="width: {{ min(100, (float) $fila['avance_pct']) }}%;"></div>
+                                    <div class="bar" style="width: {{ $ancho }}%;">&nbsp;</div>
                                 </div>
                             </td>
-                            <td>{{ $fila['responsable_nombre'] ?: 'Sin asignar' }}</td>
+                            <td>{{ !empty($fila['responsable_nombre']) ? $fila['responsable_nombre'] : 'Sin asignar' }}</td>
                         </tr>
-                    @endforeach
+                    @empty
+                        <tr>
+                            <td colspan="6" class="empty">Sin productos en esta sede.</td>
+                        </tr>
+                    @endforelse
                     <tr class="tot">
                         <td>Total {{ $bloque['sede'] }}</td>
                         <td class="num">{{ number_format($bloque['totales']['cantidad_inicial'], 0) }} u.</td>

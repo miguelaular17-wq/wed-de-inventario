@@ -520,14 +520,14 @@
                 <div class="file-wrap">
                     <label class="file-label">
                         Elegir Archivo
-                        <input type="file" name="file[]" multiple accept=".csv,.xls,.xlsx,image/jpeg,image/png" required
+                        <input type="file" name="file[]" multiple accept=".csv,.txt,.xls,.xlsx,image/jpeg,image/png,.jpg,.jpeg,.png" required
                                id="csvUploadInput"
                                onchange="document.getElementById('csvFileName').value = this.files.length > 1 ? this.files.length + ' archivos' : (this.files[0] ? this.files[0].name : '');"
                                style="display:none;">
                     </label>
                     <input type="text" id="csvFileName" placeholder="Ningún archivo seleccionado" readonly class="file-name">
                 </div>
-                <p class="file-hint">El sistema detectará automáticamente el formato según el banco seleccionado.</p>
+                <p class="file-hint">Formatos: CSV, TXT, Excel (.xlsx / .xls) o imagen (PNG / JPG). El sistema detecta el formato según el banco.</p>
             </div>
             <div class="modal-foot">
                 <button type="button" class="btn-cancel" onclick="document.getElementById('uploadModal').style.display='none'">Cancelar</button>

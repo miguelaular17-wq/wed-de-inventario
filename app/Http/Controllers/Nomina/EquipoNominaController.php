@@ -15,8 +15,9 @@ class EquipoNominaController extends Controller
 
     public function index(): View
     {
-        $ids = $this->organization->idsPersonalACargo(auth()->user());
+        $ids = $this->organization->idsPersonalACargo(auth()->user(), true);
         $filtro = $ids === [] ? [0] : $ids;
+        $aCargoCount = count($this->organization->idsPersonalACargo(auth()->user()));
 
         $periodos = NominaPeriodo::query()
             ->whereIn('estado', [
@@ -37,7 +38,7 @@ class EquipoNominaController extends Controller
             'ficha' => $ficha,
             'tieneFicha' => (bool) $ficha,
             'esSupervisor' => (bool) ($ficha?->es_supervisor || ($ficha && $this->organization->esGerente($ficha))),
-            'equipoCount' => count($ids),
+            'equipoCount' => $aCargoCount,
         ]);
     }
 
@@ -50,7 +51,7 @@ class EquipoNominaController extends Controller
             NominaPeriodo::CERRADO,
         ], true), 404);
 
-        $ids = $this->organization->idsPersonalACargo(auth()->user());
+        $ids = $this->organization->idsPersonalACargo(auth()->user(), true);
         $filtro = $ids === [] ? [0] : $ids;
 
         $registros = $periodo->registros()
@@ -73,7 +74,7 @@ class EquipoNominaController extends Controller
             NominaPeriodo::CERRADO,
         ], true), 404);
 
-        $ids = $this->organization->idsPersonalACargo(auth()->user());
+        $ids = $this->organization->idsPersonalACargo(auth()->user(), true);
         $filtro = $ids === [] ? [0] : $ids;
 
         $liquidaciones = $periodo->liquidacionesComision()

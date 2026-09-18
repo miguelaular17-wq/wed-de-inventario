@@ -11,6 +11,9 @@
                 Asigna una tarjeta a un cliente y graba en el chip la URL de su ficha. Al acercarla, pedirá iniciar sesión para ver o editar.
             </p>
         </div>
+        <div>
+            <a class="btn secondary" href="{{ route('nfc.recompensas.index') }}">Recompensas</a>
+        </div>
     </div>
 
     <div class="nomina-kpis">
@@ -71,6 +74,8 @@
                     <th>Cédula</th>
                     <th>Teléfono</th>
                     <th>UID</th>
+                    <th class="num">Saldo</th>
+                    <th class="num">Puntos</th>
                     <th>Estado</th>
                     <th>Asignada</th>
                     <th></th>
@@ -86,12 +91,14 @@
                         <td>{{ $t->cliente_cedula ?: '—' }}</td>
                         <td>{{ $t->cliente_telefono ?: '—' }}</td>
                         <td style="font-family:monospace;font-size:.85rem;">{{ $t->uid ?: '—' }}</td>
+                        <td class="num">${{ number_format((float) ($t->saldo ?? 0), 2) }}</td>
+                        <td class="num">{{ number_format((int) ($t->puntos ?? 0)) }}</td>
                         <td>{{ $t->etiquetaEstado() }}</td>
                         <td>{{ $t->asignada_at?->format('d/m/Y H:i') ?: '—' }}</td>
                         <td><a class="btn secondary" href="{{ route('nfc.show', $t) }}">Abrir</a></td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="muted">Aún no hay tarjetas asignadas.</td></tr>
+                    <tr><td colspan="9" class="muted">Aún no hay tarjetas asignadas.</td></tr>
                 @endforelse
             </tbody>
         </table>

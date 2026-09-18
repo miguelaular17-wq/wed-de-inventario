@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Nomina\NominaEmpleado;
+use App\Services\Nomina\EmployeeSalesService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -16,6 +18,30 @@ class GerencialDashboardService
         return array_values(config('inventario.sedes_gerencial', [
             'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'JRZ', 'MOVISTAR',
         ]));
+    }
+
+    /**
+     * Áreas (nómina) a mostrar en el dashboard: ventas por vendedores del área.
+     *
+     * @return list<array{codigo:string,nombre:string}>
+     */
+    public function areasVentas(): array
+    {
+        $areas = config('inventario.areas_gerencial', [
+            ['codigo' => 'Call Center', 'nombre' => 'Call Center'],
+            ['codigo' => 'Digital Manage', 'nombre' => 'Digital Manage'],
+        ]);
+
+        return array_values(array_map(function ($area) {
+            if (is_string($area)) {
+                return ['codigo' => $area, 'nombre' => $area];
+            }
+
+            return [
+                'codigo' => (string) ($area['codigo'] ?? $area['nombre'] ?? ''),
+                'nombre' => (string) ($area['nombre'] ?? $area['codigo'] ?? ''),
+            ];
+        }, $areas));
     }
 
     /**
@@ -63,7 +89,7 @@ class GerencialDashboardService
      * @param  array{inicio:Carbon,fin:Carbon,anterior_inicio:Carbon,anterior_fin:Carbon}  $periodo
      * @return array<string, mixed>
      */
-    public function resumen(array $periodo, ?string $sede, ?string $categoria, ?string $vendedor, ?string $producto, string $ranking = 'usd'): array
+    public function resumen(array $periodo, ?string $sede, ?string $categoria, string|array|null $vendedor, ?string $producto, string $ranking = 'usd'): array
     {
         $sedes = $this->sedesVentas();
         if ($sede && $sede !== 'todas') {
@@ -71,7 +97,7 @@ class GerencialDashboardService
             $sedes = in_array($sede, $sedes, true) ? [$sede] : $sedes;
         }
 
-        $usaLineas = filled($categoria) || filled($vendedor) || filled($producto);
+        $usaLineas = filled($categoria) || $this->hayFiltroVendedor($vendedor) || filled($producto);
         $actual = $this->kpisPorSede($periodo['inicio'], $periodo['fin'], $sedes, $usaLineas, $categoria, $vendedor, $producto);
         $anterior = $this->kpisPorSede($periodo['anterior_inicio'], $periodo['anterior_fin'], $sedes, $usaLineas, $categoria, $vendedor, $producto);
         $inventario = $this->inventarioPorSede($sedes);
@@ -101,8 +127,18 @@ class GerencialDashboardService
             ];
         }
 
+        $porArea = $this->kpisPorArea(
+            $periodo['inicio'],
+            $periodo['fin'],
+            $sedes,
+            $categoria,
+            $vendedor,
+            $producto
+        );
+
         return [
             'por_sede' => $filas,
+            'por_area' => $porArea,
             'total' => $this->sumarFilas($filas),
             'usa_lineas' => $usaLineas,
             'tops' => $usaLineas || Schema::hasTable('ventas_detalle')
@@ -159,6 +195,7 @@ class GerencialDashboardService
 
     /**
      * Todas las grafías en ventas_detalle que corresponden al vendedor elegido en el filtro.
+     * Solo expande al cluster ya agrupado (sin fuzzy extra).
      *
      * @return list<string>
      */
@@ -169,6 +206,9 @@ class GerencialDashboardService
             return $vendedor !== '' ? [$vendedor] : [];
         }
 
+        $buscado = $this->claveVendedor($vendedor);
+        $buscadoUpper = mb_strtoupper($vendedor, 'UTF-8');
+
         $rows = DB::table('ventas_detalle')
             ->whereNotNull('vendedor')
             ->where('vendedor', '!=', '')
@@ -178,21 +218,106 @@ class GerencialDashboardService
             ->get();
 
         foreach ($this->agruparVendedores($rows) as $cluster) {
-            if (
-                $cluster['nombre'] === $vendedor
-                || in_array($vendedor, $cluster['variantes'], true)
-                || $this->claveVendedor($cluster['nombre']) === $this->claveVendedor($vendedor)
-            ) {
-                return $cluster['variantes'];
-            }
             foreach ($cluster['variantes'] as $variante) {
-                if ($this->vendedoresEquivalentes($variante, $vendedor)) {
-                    return $cluster['variantes'];
+                if (
+                    mb_strtoupper(trim((string) $variante), 'UTF-8') === $buscadoUpper
+                    || $this->claveVendedor($variante) === $buscado
+                ) {
+                    return array_values(array_unique($cluster['variantes']));
                 }
+            }
+            if (
+                mb_strtoupper(trim((string) $cluster['nombre']), 'UTF-8') === $buscadoUpper
+                || $this->claveVendedor($cluster['nombre']) === $buscado
+            ) {
+                return array_values(array_unique($cluster['variantes']));
             }
         }
 
         return [$vendedor];
+    }
+
+    /**
+     * Mapea la selección del filtro a los nombres canónicos del catálogo (para checkboxes).
+     *
+     * @param  list<string>  $seleccionados
+     * @return list<string>
+     */
+    public function resolverSeleccionVendedores(array $seleccionados): array
+    {
+        $seleccionados = $this->normalizarFiltroVendedores($seleccionados);
+        if ($seleccionados === []) {
+            return [];
+        }
+
+        $catalogo = $this->catalogoVendedoresUnicos();
+        $resueltos = [];
+
+        foreach ($seleccionados as $sel) {
+            $selUpper = mb_strtoupper($sel, 'UTF-8');
+            $selClave = $this->claveVendedor($sel);
+            $encontrado = null;
+
+            foreach ($catalogo as $nombreCat) {
+                $nombreCat = (string) $nombreCat;
+                if (mb_strtoupper($nombreCat, 'UTF-8') === $selUpper || $this->claveVendedor($nombreCat) === $selClave) {
+                    $encontrado = $nombreCat;
+                    break;
+                }
+                foreach ($this->variantesVendedor($nombreCat) as $variante) {
+                    if (
+                        mb_strtoupper(trim($variante), 'UTF-8') === $selUpper
+                        || $this->claveVendedor($variante) === $selClave
+                    ) {
+                        $encontrado = $nombreCat;
+                        break 2;
+                    }
+                }
+            }
+
+            $resueltos[] = $encontrado ?? $sel;
+        }
+
+        return array_values(array_unique($resueltos));
+    }
+
+    /**
+     * Normaliza filtro de uno o varios vendedores (string legacy o array del multi-select).
+     *
+     * @param  string|list<string>|null  $vendedor
+     * @return list<string>
+     */
+    public function normalizarFiltroVendedores(string|array|null $vendedor): array
+    {
+        if ($vendedor === null || $vendedor === '' || $vendedor === []) {
+            return [];
+        }
+
+        $lista = is_array($vendedor) ? $vendedor : [$vendedor];
+
+        return array_values(array_unique(array_filter(array_map(
+            static fn ($v) => trim((string) $v),
+            $lista
+        ), static fn ($v) => $v !== '')));
+    }
+
+    /**
+     * @param  string|list<string>|null  $vendedor
+     * @return list<string>
+     */
+    public function variantesVendedores(string|array|null $vendedor): array
+    {
+        $out = [];
+        foreach ($this->normalizarFiltroVendedores($vendedor) as $nombre) {
+            $out = array_merge($out, $this->variantesVendedor($nombre));
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    public function hayFiltroVendedor(string|array|null $vendedor): bool
+    {
+        return $this->normalizarFiltroVendedores($vendedor) !== [];
     }
 
     /**
@@ -385,7 +510,7 @@ class GerencialDashboardService
         array $sedes,
         bool $usaLineas,
         ?string $categoria,
-        ?string $vendedor,
+        string|array|null $vendedor,
         ?string $producto
     ): array {
         $base = [];
@@ -440,6 +565,129 @@ class GerencialDashboardService
     }
 
     /**
+     * KPIs por área de nómina (Call Center, Digital Manage, …) atribuidos por vendedor.
+     *
+     * @param  list<string>  $sedes
+     * @return list<array<string, mixed>>
+     */
+    public function kpisPorArea(
+        Carbon $inicio,
+        Carbon $fin,
+        array $sedes,
+        ?string $categoria,
+        string|array|null $vendedor,
+        ?string $producto
+    ): array {
+        $filas = [];
+        $filtrosVend = $this->normalizarFiltroVendedores($vendedor);
+        $filtrosVendUpper = array_map(fn ($v) => mb_strtoupper($v, 'UTF-8'), $filtrosVend);
+
+        foreach ($this->areasVentas() as $area) {
+            $codigo = $area['codigo'];
+            $nombre = $area['nombre'] !== '' ? $area['nombre'] : $codigo;
+            $claves = $this->clavesVendedoresArea($codigo);
+            if ($filtrosVendUpper !== []) {
+                $claves = array_values(array_filter(
+                    $claves,
+                    function (string $c) use ($filtrosVendUpper) {
+                        foreach ($filtrosVendUpper as $filtro) {
+                            if ($c === $filtro || str_contains($c, $filtro) || str_contains($filtro, $c)) {
+                                return true;
+                            }
+                        }
+
+                        return false;
+                    }
+                ));
+            }
+
+            $kpi = $this->kpiVacio($nombre);
+            $kpi['sede'] = $nombre;
+            $kpi['area'] = $nombre;
+
+            if ($claves !== [] && Schema::hasTable('ventas_detalle')) {
+                $query = $this->queryLineas($inicio, $fin, $sedes, $categoria, null, $producto);
+                $placeholders = implode(',', array_fill(0, count($claves), '?'));
+                $query->whereRaw('UPPER(TRIM(vd.vendedor)) IN ('.$placeholders.')', $claves);
+                $query->selectRaw("COUNT(DISTINCT CASE WHEN UPPER(vd.tipo_documento)='FAC' THEN vd.numero_documento END) as facturas")
+                    ->selectRaw("COUNT(DISTINCT CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN vd.numero_documento END) as devoluciones")
+                    ->selectRaw("SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad) ELSE ABS(vd.cantidad) END) as unidades")
+                    ->selectRaw($this->sqlImporteFac().' as ventas_brutas')
+                    ->selectRaw($this->sqlImporte('venta').' as ventas_usd')
+                    ->selectRaw($this->sqlImporte('neto').' as ventas_neto')
+                    ->selectRaw($this->sqlImporte('costo').' as costo')
+                    ->selectRaw($this->sqlImporteDev().' as devoluciones_usd')
+                    ->selectRaw($this->sqlProductosDistintos().' as productos');
+
+                $row = $query->first();
+                if ($row) {
+                    $ventas = round((float) ($row->ventas_neto ?: $row->ventas_usd), 2);
+                    $kpi['facturas'] = (int) $row->facturas;
+                    $kpi['devoluciones'] = (int) $row->devoluciones;
+                    $kpi['devoluciones_usd'] = round((float) $row->devoluciones_usd, 2);
+                    $kpi['ventas_brutas'] = round((float) ($row->ventas_brutas ?? ($ventas + (float) $row->devoluciones_usd)), 2);
+                    $kpi['ventas_usd'] = $ventas;
+                    $kpi['unidades'] = round((float) $row->unidades, 2);
+                    $kpi['margen_usd'] = round($ventas - (float) $row->costo, 2);
+                    $kpi['productos'] = (int) $row->productos;
+                }
+            }
+
+            $ventaNeta = (float) $kpi['ventas_usd'];
+            $ventasBrutas = (float) ($kpi['ventas_brutas'] ?? ($ventaNeta + (float) $kpi['devoluciones_usd']));
+            $utilidad = (float) $kpi['margen_usd'];
+            $filas[] = $kpi + [
+                'ventas_brutas' => round($ventasBrutas, 2),
+                'venta_neta' => round($ventaNeta, 2),
+                'utilidad' => round($utilidad, 2),
+                'margen_pct' => $ventaNeta > 0 ? round($utilidad / $ventaNeta * 100, 1) : 0.0,
+            ];
+        }
+
+        return $filas;
+    }
+
+    /**
+     * Códigos de vendedor Profit de empleados activos del área.
+     *
+     * @return list<string>
+     */
+    public function clavesVendedoresArea(string $areaCodigo): array
+    {
+        if (! Schema::hasTable('nomina_empleados')) {
+            return [];
+        }
+
+        $areaNorm = mb_strtoupper(trim($areaCodigo), 'UTF-8');
+        $empleados = NominaEmpleado::query()
+            ->with('vendedores')
+            ->where('estado', 'ACTIVO')
+            ->where(function ($q) use ($areaNorm, $areaCodigo) {
+                $q->whereRaw('UPPER(TRIM(sede)) = ?', [$areaNorm]);
+                if (Schema::hasColumn('nomina_empleados', 'sede_id') && Schema::hasTable('nomina_sedes')) {
+                    $q->orWhereIn('sede_id', function ($sub) use ($areaNorm, $areaCodigo) {
+                        $sub->select('id')
+                            ->from('nomina_sedes')
+                            ->where(function ($s) use ($areaNorm, $areaCodigo) {
+                                $s->whereRaw('UPPER(TRIM(codigo)) = ?', [$areaNorm])
+                                    ->orWhereRaw('UPPER(TRIM(nombre)) = ?', [$areaNorm])
+                                    ->orWhereRaw('UPPER(TRIM(codigo)) = ?', [mb_strtoupper(trim($areaCodigo), 'UTF-8')]);
+                            });
+                    });
+                }
+            })
+            ->get();
+
+        $sales = app(EmployeeSalesService::class);
+        $claves = [];
+        foreach ($empleados as $empleado) {
+            $claves = array_merge($claves, $sales->claves($empleado));
+        }
+
+        return array_values(array_unique(array_filter($claves)));
+    }
+
+    /**
      * @param  list<string>  $sedes
      * @param  array<string, array<string, float|int|string>>  $base
      * @return array<string, array<string, float|int|string>>
@@ -450,7 +698,7 @@ class GerencialDashboardService
         array $sedes,
         array $base,
         ?string $categoria,
-        ?string $vendedor,
+        string|array|null $vendedor,
         ?string $producto
     ): array {
         foreach ($sedes as $sede) {
@@ -501,7 +749,7 @@ class GerencialDashboardService
         Carbon $fin,
         array $sedes,
         ?string $categoria,
-        ?string $vendedor,
+        string|array|null $vendedor,
         ?string $producto
     ) {
         $query = DB::table('ventas_detalle as vd')
@@ -511,11 +759,15 @@ class GerencialDashboardService
         if (Schema::hasColumn('ventas_detalle', 'anulado')) {
             $query->where('vd.anulado', false);
         }
-        if ($vendedor) {
-            $variantes = $this->variantesVendedor($vendedor);
-            $query->where(function ($q) use ($variantes, $vendedor) {
+        $variantes = $this->variantesVendedores($vendedor);
+        if ($variantes !== []) {
+            $uppers = array_values(array_unique(array_map(
+                fn ($v) => mb_strtoupper(trim($v), 'UTF-8'),
+                $variantes
+            )));
+            $query->where(function ($q) use ($variantes, $uppers) {
                 $q->whereIn(DB::raw('TRIM(vd.vendedor)'), $variantes)
-                    ->orWhereRaw('UPPER(TRIM(vd.vendedor)) = ?', [mb_strtoupper(trim($vendedor), 'UTF-8')]);
+                    ->orWhereIn(DB::raw('UPPER(TRIM(vd.vendedor))'), $uppers);
             });
         }
         if ($producto) {
@@ -656,7 +908,7 @@ class GerencialDashboardService
      * @param  list<string>  $sedes
      * @return array{productos:list<array<string,mixed>>,vendedores:list<array<string,mixed>>,categorias:list<array<string,mixed>>}
      */
-    private function tops(Carbon $inicio, Carbon $fin, array $sedes, ?string $categoria, ?string $vendedor, ?string $producto, string $ranking = 'usd'): array
+    private function tops(Carbon $inicio, Carbon $fin, array $sedes, ?string $categoria, string|array|null $vendedor, ?string $producto, string $ranking = 'usd'): array
     {
         if (! Schema::hasTable('ventas_detalle')) {
             return ['productos' => [], 'vendedores' => [], 'categorias' => []];
@@ -788,7 +1040,7 @@ class GerencialDashboardService
         array $sedes,
         bool $usaLineas,
         ?string $categoria,
-        ?string $vendedor,
+        string|array|null $vendedor,
         ?string $producto
     ): array {
         if (! $usaLineas && Schema::hasTable('ventas_documentos')) {
@@ -881,7 +1133,7 @@ class GerencialDashboardService
      * @param  array{inicio:Carbon,fin:Carbon}  $periodo
      * @return array<string, mixed>
      */
-    public function devoluciones(array $periodo, ?string $sede, ?string $vendedor, ?string $producto): array
+    public function devoluciones(array $periodo, ?string $sede, string|array|null $vendedor, ?string $producto): array
     {
         $sedes = $this->filtrarSedes($sede);
         $kpis = [

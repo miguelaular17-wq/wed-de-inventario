@@ -18,6 +18,7 @@ use App\Http\Middleware\EnsureSedeSelected;
 use App\Http\Controllers\CompradorController;
 use App\Http\Controllers\MetaQuincenaController;
 use App\Http\Controllers\NfcAccesoController;
+use App\Http\Controllers\Nfc\NfcRecompensaController;
 use App\Http\Controllers\Nfc\NfcTarjetaController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PedidoSolicitadoController;
@@ -111,8 +112,19 @@ Route::middleware(['auth', 'permission:nfc'])
     ->group(function () {
         Route::get('/', [NfcTarjetaController::class, 'index'])->name('index');
         Route::post('/', [NfcTarjetaController::class, 'store'])->name('store');
+
+        Route::get('/recompensas', [NfcRecompensaController::class, 'index'])->name('recompensas.index');
+        Route::post('/recompensas', [NfcRecompensaController::class, 'store'])->name('recompensas.store');
+        Route::put('/recompensas/{recompensa}', [NfcRecompensaController::class, 'update'])->whereNumber('recompensa')->name('recompensas.update');
+        Route::delete('/recompensas/{recompensa}', [NfcRecompensaController::class, 'destroy'])->whereNumber('recompensa')->name('recompensas.destroy');
+
         Route::get('/{tarjeta}', [NfcTarjetaController::class, 'show'])->whereNumber('tarjeta')->name('show');
         Route::put('/{tarjeta}', [NfcTarjetaController::class, 'update'])->whereNumber('tarjeta')->name('update');
+        Route::post('/{tarjeta}/recargar', [NfcTarjetaController::class, 'recargar'])->whereNumber('tarjeta')->name('recargar');
+        Route::post('/{tarjeta}/restar-saldo', [NfcTarjetaController::class, 'restarSaldo'])->whereNumber('tarjeta')->name('restar_saldo');
+        Route::post('/{tarjeta}/puntos', [NfcTarjetaController::class, 'puntos'])->whereNumber('tarjeta')->name('puntos');
+        Route::post('/{tarjeta}/restar-puntos', [NfcTarjetaController::class, 'restarPuntos'])->whereNumber('tarjeta')->name('restar_puntos');
+        Route::post('/{tarjeta}/canjear', [NfcTarjetaController::class, 'canjear'])->whereNumber('tarjeta')->name('canjear');
         Route::post('/{tarjeta}/desactivar', [NfcTarjetaController::class, 'desactivar'])->whereNumber('tarjeta')->name('desactivar');
         Route::post('/{tarjeta}/reactivar', [NfcTarjetaController::class, 'reactivar'])->whereNumber('tarjeta')->name('reactivar');
     });
@@ -256,7 +268,7 @@ Route::middleware(['auth', 'permission:compras,compras.distribucion,compras.nece
     // Pedidos solicitados (Q pedir)
     Route::post('/pedidos/comprado', [PedidoSolicitadoController::class, 'marcarComprado'])->name('comprador.pedidos.comprado');
     Route::post('/pedidos/fuera-mercado', [PedidoSolicitadoController::class, 'marcarFueraMercado'])->name('comprador.pedidos.fuera_mercado');
-    Route::post('/pedidos/tiene-existencia', [PedidoSolicitadoController::class, 'marcarTieneExistencia'])->name('comprador.pedidos.tiene_existencia');
+    // Route::post('/pedidos/tiene-existencia', ...) eliminado: la existencia se muestra en la tabla
     Route::get('/pedidos/reporte-excel', [PedidoSolicitadoController::class, 'reporteExcel'])->name('comprador.pedidos.excel');
     Route::post('/pedidos/reporte-pdf', [PedidoSolicitadoController::class, 'reportePdf'])->name('comprador.pedidos.pdf');
     Route::get('/pedidos/reporte-diario', [PedidoSolicitadoController::class, 'reporteDiarioPdf'])->name('comprador.pedidos.diario');
