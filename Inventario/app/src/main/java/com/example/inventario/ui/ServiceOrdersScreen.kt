@@ -68,6 +68,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -92,6 +93,9 @@ import com.example.inventario.data.CreateServiceOrderRequest
 import com.example.inventario.data.ServiceOrderDto
 import com.example.inventario.data.TechnicianDto
 import com.example.inventario.ui.theme.NexoDanger
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.inventario.ui.theme.NexoBorder
 import com.example.inventario.ui.theme.NexoMuted
 import com.example.inventario.ui.theme.NexoSuccess
 import com.example.inventario.ui.theme.NexoWarning
@@ -219,6 +223,7 @@ fun ServiceOrdersScreen(state: AppUiState, viewModel: AppViewModel) {
     }
 
     state.selectedServiceOrder?.let { order ->
+        val context = LocalContext.current
         ServiceOrderDetailScreen(
             order = order,
             submitting = state.submitting,
@@ -227,6 +232,15 @@ fun ServiceOrdersScreen(state: AppUiState, viewModel: AppViewModel) {
                 viewModel.changeServiceOrderStatus(order, status, comment)
             },
             onPdf = { viewModel.openReceptionPdf(order) },
+            onUploadEvidence = { images, video, replace ->
+                viewModel.uploadServiceOrderEvidence(
+                    order = order,
+                    imageUris = images,
+                    videoUri = video,
+                    contentResolver = context.contentResolver,
+                    replaceImages = replace,
+                )
+            },
             onDismiss = viewModel::closeServiceOrder,
         )
     }
@@ -753,12 +767,29 @@ private fun ServiceOrderDetailScreen(
     pdfLoading: Boolean,
     onStatus: (String, String) -> Unit,
     onPdf: () -> Unit,
+    onUploadEvidence: (images: List<Uri>, video: Uri?, replaceImages: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var status by remember(order.id, order.estado) { mutableStateOf("") }
     var comment by remember(order.id, order.estado) { mutableStateOf("") }
     val statusChoices = remember(order.id, order.estado, order.allowedStatuses) {
         statusChoicesForOrder(order)
+    }
+    val context = LocalContext.current
+    val pendingImages = remember(order.id) { mutableStateListOf<Uri>() }
+    var pendingVideo by remember(order.id) { mutableStateOf<Uri?>(null) }
+    var replaceImages by remember(order.id) { mutableStateOf(false) }
+    val pickImages = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(3),
+    ) { uris ->
+        pendingImages.clear()
+        pendingImages.addAll(uris.take(3))
+        if (uris.isNotEmpty()) replaceImages = order.evidencias.imagenes.isNotEmpty()
+    }
+    val pickVideo = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        pendingVideo = uri
     }
 
     Dialog(
@@ -824,14 +855,116 @@ private fun ServiceOrderDetailScreen(
                             order.observaciones?.takeIf(String::isNotBlank)?.let {
                                 DetailLine("Observaciones", it)
                             }
-                            if (order.evidencias.imagenes.isNotEmpty() || !order.evidencias.video.isNullOrBlank()) {
-                                Spacer(Modifier.height(8.dp))
-                                Text("Evidencias", fontWeight = FontWeight.SemiBold)
-                                order.evidencias.imagenes.forEachIndexed { i, url ->
-                                    DetailLine("Foto ${i + 1}", url)
+                        }
+                    }
+                    item {
+                        SectionCard("Evidencias") {
+                            val imgs = order.evidencias.imagenes
+                            val videoUrl = order.evidencias.video
+                            if (imgs.isEmpty() && videoUrl.isNullOrBlank()) {
+                                Text("Sin fotos ni video todavía", color = NexoMuted)
+                            } else {
+                                if (imgs.isNotEmpty()) {
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        items(imgs.size) { index ->
+                                            val url = imgs[index]
+                                            AsyncImage(
+                                                model = ImageRequest.Builder(context)
+                                                    .data(url)
+                                                    .crossfade(true)
+                                                    .build(),
+                                                contentDescription = "Foto ${index + 1}",
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier
+                                                    .size(112.dp)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .border(1.dp, NexoBorder, RoundedCornerShape(10.dp))
+                                                    .clickable {
+                                                        runCatching {
+                                                            context.startActivity(
+                                                                Intent(Intent.ACTION_VIEW, Uri.parse(url)),
+                                                            )
+                                                        }
+                                                    },
+                                            )
+                                        }
+                                    }
                                 }
-                                order.evidencias.video?.takeIf(String::isNotBlank)?.let {
-                                    DetailLine("Video", it)
+                                videoUrl?.takeIf(String::isNotBlank)?.let { url ->
+                                    Spacer(Modifier.height(10.dp))
+                                    OutlinedButton(
+                                        onClick = {
+                                            runCatching {
+                                                context.startActivity(
+                                                    Intent(Intent.ACTION_VIEW, Uri.parse(url)),
+                                                )
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        Text("Ver video")
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                "Agregar o reemplazar (máx. 3 fotos + 1 video)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NexoMuted,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                CompactOutlinedButton(onClick = {
+                                    pickImages.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                    )
+                                }) {
+                                    Text(
+                                        "Fotos (${pendingImages.size}/3)",
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
+                                CompactOutlinedButton(onClick = {
+                                    pickVideo.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly),
+                                    )
+                                }) {
+                                    Text(
+                                        if (pendingVideo != null) "Video listo" else "Video",
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
+                            }
+                            if (pendingImages.isNotEmpty() && order.evidencias.imagenes.isNotEmpty()) {
+                                Spacer(Modifier.height(6.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = replaceImages,
+                                        onCheckedChange = { replaceImages = it },
+                                    )
+                                    Text(
+                                        "Reemplazar fotos actuales",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                            }
+                            if (pendingImages.isNotEmpty() || pendingVideo != null) {
+                                Spacer(Modifier.height(8.dp))
+                                Button(
+                                    onClick = {
+                                        onUploadEvidence(
+                                            pendingImages.toList(),
+                                            pendingVideo,
+                                            replaceImages,
+                                        )
+                                        pendingImages.clear()
+                                        pendingVideo = null
+                                        replaceImages = false
+                                    },
+                                    enabled = !submitting,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(if (submitting) "Subiendo…" else "Guardar evidencias")
                                 }
                             }
                         }

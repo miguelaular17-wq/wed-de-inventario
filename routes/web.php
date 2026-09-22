@@ -502,6 +502,7 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
 Route::middleware(['auth', 'permission:cobranza'])->prefix('cobranza')->group(function () {
     Route::get('/', [CobranzaController::class, 'index'])->name('cobranza.index');
     Route::get('/pdf', [CobranzaController::class, 'descargarReportePdf'])->name('cobranza.pdf');
+    Route::get('/pdf-deudores-unicos', [CobranzaController::class, 'descargarDeudoresUnicosPdf'])->name('cobranza.pdf_deudores_unicos');
     Route::post('/importar', [CobranzaController::class, 'importarExcel'])->name('cobranza.importar');
     Route::post('/limpiar', [CobranzaController::class, 'limpiarClientes'])->name('cobranza.limpiar');
     Route::post('/guardar-resumen', [CobranzaController::class, 'guardarResumen'])->name('cobranza.guardar_resumen');
@@ -545,6 +546,14 @@ Route::middleware(['auth', EnsureSedeSelected::class])
             Route::get('/crear', [OrdenController::class, 'create'])->name('create');
             Route::post('/', [OrdenController::class, 'store'])->name('store');
             Route::get('/{orden}', [OrdenController::class, 'show'])->whereNumber('orden')->name('show');
+            Route::get('/{orden}/editar', [OrdenController::class, 'edit'])->whereNumber('orden')->name('edit');
+            Route::put('/{orden}', [OrdenController::class, 'update'])->whereNumber('orden')->name('update');
+            Route::post('/{orden}/evidencias', [OrdenController::class, 'actualizarEvidencias'])->whereNumber('orden')->name('evidencias');
+            Route::get('/{orden}/evidencia/{tipo}/{index?}', [OrdenController::class, 'servirEvidencia'])
+                ->whereNumber('orden')
+                ->where('tipo', 'img|video')
+                ->whereNumber('index')
+                ->name('evidencia');
             Route::get('/{orden}/pdf/recepcion', [OrdenController::class, 'pdfRecepcion'])->whereNumber('orden')->name('recepcion_pdf');
             Route::get('/{orden}/backup/{backup}/pdf', [OrdenController::class, 'pdfBackup'])->whereNumber(['orden', 'backup'])->name('backup_pdf');
         });
@@ -599,8 +608,6 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'permission:servicio'])
             Route::get('/reparaciones-internas', [OrdenController::class, 'internas'])->name('internas');
             Route::get('/{orden}/pdf/conformidad', [OrdenController::class, 'pdfConformidad'])->whereNumber('orden')->name('conformidad_pdf');
             Route::post('/{orden}/conformidad', [OrdenController::class, 'guardarConformidad'])->whereNumber('orden')->name('conformidad');
-            Route::get('/{orden}/editar', [OrdenController::class, 'edit'])->whereNumber('orden')->name('edit');
-            Route::put('/{orden}', [OrdenController::class, 'update'])->whereNumber('orden')->name('update');
             Route::post('/{orden}/estado', [OrdenController::class, 'cambiarEstado'])->whereNumber('orden')->name('cambiar_estado');
             Route::post('/{orden}/garantia/enviar', [OrdenController::class, 'enviarGarantiaExterna'])->whereNumber('orden')->name('garantia.enviar');
             Route::post('/{orden}/garantia/actualizacion', [OrdenController::class, 'actualizarGarantiaExterna'])->whereNumber('orden')->name('garantia.actualizacion');

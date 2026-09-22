@@ -284,6 +284,10 @@ class ServiceOrderController extends Controller
 
         $actual = is_array($orden->evidencias) ? $orden->evidencias : [];
         $prevImgs = array_values(array_filter($actual['imagenes'] ?? []));
+        $reemplazar = $request->boolean('reemplazar');
+        if ($reemplazar && $imagenes !== []) {
+            $prevImgs = [];
+        }
         $cupo = max(0, 3 - count($prevImgs));
         $imagenes = array_slice($imagenes, 0, $cupo);
 
@@ -460,10 +464,13 @@ class ServiceOrderController extends Controller
             'inspeccion' => (object) ($order->inspeccion_recepcion ?: []),
             'evidencias' => (function () use ($order) {
                 $ev = is_array($order->evidencias) ? $order->evidencias : [];
+                $imgs = array_values(array_filter($ev['imagenes'] ?? []));
+                $video = $ev['video'] ?? null;
 
+                // URLs públicas directas (Supabase) o absolutas tal cual están guardadas.
                 return [
-                    'imagenes' => array_values(array_filter($ev['imagenes'] ?? [])),
-                    'video' => $ev['video'] ?? null,
+                    'imagenes' => $imgs,
+                    'video' => $video,
                 ];
             })(),
             'creado_por' => $order->creador?->name,

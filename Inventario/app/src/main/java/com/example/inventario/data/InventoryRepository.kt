@@ -20,6 +20,7 @@ interface InventoryRepository {
         orderId: Long,
         imageParts: List<okhttp3.MultipartBody.Part>,
         videoPart: okhttp3.MultipartBody.Part?,
+        replace: Boolean = false,
     ): ServiceOrderDto
     suspend fun changeServiceOrderStatus(id: Long, status: String, comment: String): ServiceOrderDto
     suspend fun sites(): SitesResponse
@@ -85,8 +86,9 @@ class NetworkInventoryRepository(
         orderId: Long,
         imageParts: List<okhttp3.MultipartBody.Part>,
         videoPart: okhttp3.MultipartBody.Part?,
+        replace: Boolean,
     ): ServiceOrderDto = apiCall {
-        api.uploadServiceEvidence(orderId, imageParts, videoPart).data
+        api.uploadServiceEvidence(orderId, imageParts, videoPart, replace).data
     }
 
     override suspend fun changeServiceOrderStatus(id: Long, status: String, comment: String): ServiceOrderDto =

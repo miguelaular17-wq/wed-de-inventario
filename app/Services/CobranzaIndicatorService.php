@@ -82,7 +82,95 @@ class CobranzaIndicatorService
         ];
     }
 
-    private function estatusMasCritico(Collection $registros): string
+    /**
+     * Un deudor por código (global), con saldo total y peores indicadores.
+     *
+     * @param  list<string>  $codigosPersonales
+     * @return array{
+     *   deudores: list<object>,
+     *   total_deudores: int,
+     *   total_saldo: float,
+     *   personales: int,
+     *   por_estatus: array<string, array{clientes:int,saldo:float}>
+     * }
+     */
+    public function deudoresUnicos(Collection $registros, array $codigosPersonales = []): array
+    {
+        $personales = collect($codigosPersonales)
+            ->map(fn ($codigo) => $this->normalizar($codigo))
+            ->filter()
+            ->flip();
+
+        $porEstatus = [
+            'CRITICO' => ['clientes' => 0, 'saldo' => 0.0],
+            'MOROSO' => ['clientes' => 0, 'saldo' => 0.0],
+            'RECIENTE' => ['clientes' => 0, 'saldo' => 0.0],
+            'APARTADO' => ['clientes' => 0, 'saldo' => 0.0],
+        ];
+
+        $docs = $registros->filter(
+            fn ($r) => (float) ($r->monto_neto ?? 0) > 0 || (float) ($r->saldo ?? 0) > 0
+        );
+
+        $deudores = $docs
+            ->groupBy(function ($registro) {
+                $codigo = $this->normalizar($registro->codigo_cliente ?? null);
+
+                return $codigo !== ''
+                    ? $codigo
+                    : 'SIN-CODIGO:'.($registro->id_documento ?? $registro->id);
+            })
+            ->map(function (Collection $rows) use ($personales) {
+                $primero = $rows->first();
+                $codigo = $this->normalizar($primero->codigo_cliente ?? null);
+                $saldo = round((float) $rows->sum('saldo'), 2);
+                $estatus = $this->estatusMasCritico($rows);
+                $esPersonal = $codigo !== '' && (
+                    $personales->has($codigo)
+                    || (bool) ($primero->es_personal ?? false)
+                );
+                $sedes = $rows->pluck('sede_nombre')
+                    ->map(fn ($s) => trim((string) $s))
+                    ->filter()
+                    ->unique()
+                    ->sort()
+                    ->values();
+
+                return (object) [
+                    'codigo' => $codigo !== '' ? $codigo : (string) ($primero->codigo_cliente ?? '—'),
+                    'cliente' => (string) ($primero->nombre_cliente ?? '—'),
+                    'saldo' => $saldo,
+                    'monto_neto' => round((float) $rows->sum('monto_neto'), 2),
+                    'estatus' => $estatus,
+                    'es_personal' => $esPersonal,
+                    'sedes' => $sedes->implode(', '),
+                    'documentos' => $rows->count(),
+                    'nota' => $rows->pluck('nota_anclada')->filter()->unique()->implode(' | '),
+                ];
+            })
+            ->filter(fn ($d) => (float) $d->saldo > 0.009)
+            ->sortByDesc('saldo')
+            ->values();
+
+        foreach ($deudores as $deudor) {
+            $estatus = $deudor->estatus;
+            if (! isset($porEstatus[$estatus])) {
+                $estatus = 'RECIENTE';
+            }
+            $porEstatus[$estatus]['clientes']++;
+            $porEstatus[$estatus]['saldo'] += (float) $deudor->saldo;
+        }
+
+        return [
+            'deudores' => $deudores->all(),
+            'total_deudores' => $deudores->count(),
+            'total_saldo' => round((float) $deudores->sum('saldo'), 2),
+            'personales' => $deudores->where('es_personal', true)->count(),
+            'por_estatus' => $porEstatus,
+        ];
+    }
+
+    public function estatusMasCritico(Collection $registros): string
     {
         $prioridad = ['APARTADO' => 1, 'RECIENTE' => 2, 'MOROSO' => 3, 'CRITICO' => 4];
 

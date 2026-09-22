@@ -438,6 +438,58 @@ class OrdenController extends Controller
             ->with('status', 'Orden '.$orden->fresh()->codigo().' actualizada.');
     }
 
+    public function actualizarEvidencias(Request $request, StOrden $orden): RedirectResponse
+    {
+        $this->authorizeOrden($request->user(), $orden);
+        $this->asegurarGarantiaEditable($orden);
+        $this->guardarEvidencias($request, $orden, fusionar: true);
+
+        return redirect()
+            ->route('servicio.ordenes.show', $orden)
+            ->with('status', 'Evidencias actualizadas en '.$orden->codigo().'.');
+    }
+
+    public function servirEvidencia(Request $request, StOrden $orden, string $tipo, ?int $index = 0)
+    {
+        $this->authorizeOrden($request->user(), $orden);
+        $ev = is_array($orden->evidencias) ? $orden->evidencias : [];
+        $url = null;
+        if ($tipo === 'video') {
+            $url = $ev['video'] ?? null;
+        } else {
+            $imgs = array_values(array_filter($ev['imagenes'] ?? []));
+            $url = $imgs[$index] ?? null;
+        }
+        abort_unless(is_string($url) && $url !== '', 404);
+
+        // Archivo local de storage público
+        $publicPrefix = rtrim((string) config('app.url'), '/').'/storage/';
+        if (str_starts_with($url, '/storage/')) {
+            $path = public_path(ltrim($url, '/'));
+            abort_unless(is_file($path), 404);
+
+            return response()->file($path);
+        }
+        if (str_starts_with($url, $publicPrefix)) {
+            $relative = substr($url, strlen($publicPrefix));
+            $path = storage_path('app/public/'.$relative);
+            abort_unless(is_file($path), 404);
+
+            return response()->file($path);
+        }
+
+        $response = \Illuminate\Support\Facades\Http::withoutVerifying()
+            ->timeout(45)
+            ->withHeaders(['Referer' => ''])
+            ->get($url);
+        abort_unless($response->successful(), 404, 'No se pudo cargar la evidencia.');
+
+        return response($response->body(), 200, [
+            'Content-Type' => $response->header('Content-Type') ?: ($tipo === 'video' ? 'video/mp4' : 'image/jpeg'),
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
     public function cambiarEstado(Request $request, StOrden $orden): RedirectResponse
     {
         $this->authorizeOrden($request->user(), $orden);

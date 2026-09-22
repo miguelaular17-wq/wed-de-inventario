@@ -11,6 +11,9 @@
             <a href="{{ route('cobranza.pdf', ['mostrar_clientes' => $mostrar_clientes ?? 'todos']) }}" target="_blank" class="btn" style="background-color: #dc3545; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px; text-decoration: none;">
                 📄 Descargar PDF
             </a>
+            <a href="{{ route('cobranza.pdf_deudores_unicos', ['mostrar_clientes' => $mostrar_clientes ?? 'todos']) }}" target="_blank" class="btn" style="background-color: #1e3a8a; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px; text-decoration: none;">
+                👥 Deudores únicos
+            </a>
             <form action="{{ route('cobranza.guardar_resumen') }}" method="POST">
                 @csrf
                 <button type="submit" class="btn" style="background-color: #198754; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px;">

@@ -324,6 +324,49 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
             }
         }
 
+    fun uploadServiceOrderEvidence(
+        order: ServiceOrderDto,
+        imageUris: List<Uri>,
+        videoUri: Uri?,
+        contentResolver: ContentResolver,
+        replaceImages: Boolean = false,
+    ) = viewModelScope.launch {
+        if (imageUris.isEmpty() && videoUri == null) {
+            _state.update { it.copy(message = "Elige al menos una foto o un video") }
+            return@launch
+        }
+        _state.update { it.copy(submitting = true) }
+        try {
+            val imageParts = imageUris.take(3).mapNotNull { uri ->
+                uri.toMultipart(contentResolver, "imagenes[]")
+            }
+            val videoPart = videoUri?.let { it.toMultipart(contentResolver, "video") }
+            if (imageParts.isEmpty() && videoPart == null) {
+                _state.update {
+                    it.copy(submitting = false, message = "No se pudieron leer los archivos")
+                }
+                return@launch
+            }
+            val updated = repository.uploadServiceEvidence(
+                order.id,
+                imageParts,
+                videoPart,
+                replace = replaceImages && imageParts.isNotEmpty(),
+            )
+            _state.update {
+                it.copy(
+                    submitting = false,
+                    selectedServiceOrder = updated,
+                    message = "Evidencias actualizadas",
+                )
+            }
+            loadServiceOrders(reset = true)
+        } catch (error: Exception) {
+            if (error is SessionExpiredException) expireSession()
+            else _state.update { it.copy(submitting = false, message = error.userMessage()) }
+        }
+    }
+
     fun setActiveSite(site: SedeDto) {
         if (_state.value.siteLocked || _state.value.activeSite?.apiValue == site.apiValue) return
         _state.update {

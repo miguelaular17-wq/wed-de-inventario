@@ -507,6 +507,50 @@ class CobranzaController extends Controller
         return $pdf->download('Reporte_Cobranza_'.$mostrar_clientes.'_'.date('Y_m_d').'.pdf');
     }
 
+    public function descargarDeudoresUnicosPdf(Request $request, CobranzaHeaderHydrator $encabezados, CobranzaIndicatorService $indicadores)
+    {
+        $ultimaFecha = \App\Models\HistorialCobranza::max('fecha_registro');
+        $mostrar_clientes = $this->resolverMostrarClientes($request);
+        $personalCodes = \App\Models\ClientePersonal::pluck('codigo_cliente')->toArray();
+
+        $historial = collect();
+        if ($ultimaFecha) {
+            $query = \App\Models\HistorialCobranza::cuentasOperativas()->where('fecha_registro', $ultimaFecha);
+            $this->excludePagadasManualmente($query);
+            $this->joinNotas($query);
+            if ($mostrar_clientes === 'regulares') {
+                $query->whereNotIn('historial_cobranzas.codigo_cliente', $personalCodes);
+            } elseif ($mostrar_clientes === 'personales') {
+                $query->whereIn('historial_cobranzas.codigo_cliente', $personalCodes);
+            }
+            $historial = $query
+                ->select([
+                    'historial_cobranzas.*',
+                    'cobranza_notas.nota as nota_anclada',
+                ])
+                ->selectRaw('EXISTS(SELECT 1 FROM cliente_personals WHERE cliente_personals.codigo_cliente = historial_cobranzas.codigo_cliente) as es_personal')
+                ->get();
+            $historial = $encabezados->anexar($historial, $ultimaFecha);
+        }
+
+        $resumen = $indicadores->deudoresUnicos($historial, $personalCodes);
+        $alcanceLabel = \App\Models\User::COBRANZA_CLIENTES_OPCIONES[$mostrar_clientes] ?? 'Todos';
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('cobranza.pdf_deudores_unicos', [
+            'deudores' => $resumen['deudores'],
+            'total_deudores' => $resumen['total_deudores'],
+            'total_saldo' => $resumen['total_saldo'],
+            'personales' => $resumen['personales'],
+            'por_estatus' => $resumen['por_estatus'],
+            'ultimaFecha' => $ultimaFecha,
+            'mostrar_clientes' => $mostrar_clientes,
+            'alcanceLabel' => $alcanceLabel,
+        ]);
+        $pdf->setPaper('A4', 'portrait');
+
+        return $pdf->download('Deudores_Unicos_'.$mostrar_clientes.'_'.date('Y_m_d').'.pdf');
+    }
+
     public function marcarPersonal(Request $request) {
         $request->validate([
             'codigo' => 'required|string',

@@ -51,6 +51,7 @@ interface InventarioApi {
         @Path("id") id: Long,
         @Part imagenes: List<MultipartBody.Part>,
         @Part video: MultipartBody.Part?,
+        @Query("reemplazar") replace: Boolean = false,
     ): ServiceOrderResponse
 
     @GET("api/v1/servicio/celulares/ordenes/{id}")

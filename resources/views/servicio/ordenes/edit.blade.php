@@ -29,7 +29,7 @@
             @include('servicio.ordenes._form')
             @include('servicio.ordenes._form_edit_extras')
 
-            <div style="margin:24px 0;padding-top:20px;border-top:1px solid #e2e8f0;">
+            <div id="st-evidencias-edit" style="margin:24px 0;padding-top:20px;border-top:1px solid #e2e8f0;">
                 <h3 style="margin:0 0 6px;">Evidencias del equipo</h3>
                 <p class="muted" style="margin:0 0 12px;font-size:.85rem;">
                     Hasta 3 fotos y 1 video. Si subes fotos nuevas, reemplazan las actuales. El video nuevo reemplaza el anterior.

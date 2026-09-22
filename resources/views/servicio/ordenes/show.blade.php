@@ -195,23 +195,71 @@
             $evImgs = array_values(array_filter($ev['imagenes'] ?? []));
             $evVideo = $ev['video'] ?? null;
         @endphp
-        @if($evImgs !== [] || $evVideo)
-            <div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0;">
-                <h3 style="margin:0 0 10px;font-size:1rem;">Evidencias</h3>
+        <div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                <h3 style="margin:0;font-size:1rem;">Evidencias</h3>
+                @unless($orden->garantiaExternaBloqueada())
+                    <a class="btn secondary" href="{{ route('servicio.ordenes.edit', $orden) }}#st-evidencias-edit" style="padding:6px 12px;font-size:.82rem;">Editar fotos / video</a>
+                @endunless
+            </div>
+            @if($evImgs !== [] || $evVideo)
                 <div style="display:flex;flex-wrap:wrap;gap:10px;">
-                    @foreach($evImgs as $url)
-                        <a href="{{ $url }}" target="_blank" rel="noopener" style="display:block;width:120px;height:120px;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">
-                            <img src="{{ $url }}" alt="Evidencia" style="width:100%;height:100%;object-fit:cover;">
+                    @foreach($evImgs as $i => $url)
+                        <a href="{{ route('servicio.ordenes.evidencia', ['orden' => $orden, 'tipo' => 'img', 'index' => $i]) }}" target="_blank" rel="noopener"
+                            style="display:block;width:160px;height:160px;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;background:#f8fafc;">
+                            <img
+                                src="{{ route('servicio.ordenes.evidencia', ['orden' => $orden, 'tipo' => 'img', 'index' => $i]) }}"
+                                alt="Evidencia {{ $i + 1 }}"
+                                referrerpolicy="no-referrer"
+                                style="width:100%;height:100%;object-fit:cover;"
+                                onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<span style=padding:8px;font-size:12px;color:#b91c1c;display:block>No se pudo cargar</span>');"
+                            >
                         </a>
                     @endforeach
                 </div>
                 @if($evVideo)
-                    <div style="margin-top:12px;max-width:420px;">
-                        <video src="{{ $evVideo }}" controls style="width:100%;border-radius:8px;background:#0f172a;"></video>
+                    <div style="margin-top:12px;max-width:480px;">
+                        <video
+                            src="{{ route('servicio.ordenes.evidencia', ['orden' => $orden, 'tipo' => 'video']) }}"
+                            controls
+                            referrerpolicy="no-referrer"
+                            style="width:100%;border-radius:8px;background:#0f172a;"
+                        ></video>
                     </div>
                 @endif
-            </div>
-        @endif
+            @else
+                <p class="muted" style="margin:0 0 10px;">Sin fotos ni video todavía.</p>
+            @endif
+
+            @unless($orden->garantiaExternaBloqueada())
+                <form method="POST" action="{{ route('servicio.ordenes.evidencias', $orden) }}" enctype="multipart/form-data" style="margin-top:14px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+                    @csrf
+                    <p style="margin:0 0 8px;font-size:.88rem;font-weight:600;">Agregar o reemplazar evidencias</p>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                        <div>
+                            <label style="display:block;font-size:.82rem;margin-bottom:4px;">Fotos (máx. 3)</label>
+                            <input type="file" name="evidencia_imagenes[]" accept="image/*" capture="environment" multiple style="width:100%;font-size:.82rem;">
+                        </div>
+                        <div>
+                            <label style="display:block;font-size:.82rem;margin-bottom:4px;">Video</label>
+                            <input type="file" name="evidencia_video" accept="video/*" capture="environment" style="width:100%;font-size:.82rem;">
+                        </div>
+                    </div>
+                    @if($evImgs !== [])
+                        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:.82rem;">
+                            <input type="checkbox" name="quitar_evidencia_imagenes" value="1"> Quitar fotos actuales
+                        </label>
+                    @endif
+                    @if($evVideo)
+                        <label style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:.82rem;">
+                            <input type="checkbox" name="quitar_evidencia_video" value="1"> Quitar video actual
+                        </label>
+                    @endif
+                    <p class="muted" style="margin:8px 0 0;font-size:.78rem;">Si subes fotos nuevas, reemplazan las actuales.</p>
+                    <button class="btn primary" type="submit" style="margin-top:10px;">Guardar evidencias</button>
+                </form>
+            @endunless
+        </div>
         <hr style="border:none;border-top:1px dashed #e2e8f0;margin:20px 0;">
         <p class="muted" style="margin:0 0 4px;">Falla</p>
         <p>{{ $orden->falla ?: '—' }}</p>
