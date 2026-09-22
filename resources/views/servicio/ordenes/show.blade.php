@@ -45,6 +45,16 @@
             @unless($orden->garantiaExternaBloqueada())
                 <a class="btn primary" href="{{ route('servicio.ordenes.edit', $orden) }}">Editar</a>
             @endunless
+            @unless($orden->garantiaExternaBloqueada() || $orden->repuestos_descontados_at)
+                <form method="POST" action="{{ route('servicio.ordenes.destroy', $orden) }}"
+                    onsubmit="return confirm('¿Eliminar {{ $orden->esGarantia() ? 'esta garantía' : 'este ST' }} {{ $orden->codigo() }}? Esta acción no se puede deshacer.');">
+                    @csrf
+                    @method('DELETE')
+                    <button class="btn secondary" type="submit" style="color:#b91c1c;border-color:#fecaca;">
+                        {{ $orden->esGarantia() ? 'Eliminar garantía' : 'Eliminar ST' }}
+                    </button>
+                </form>
+            @endunless
         </div>
     </div>
 

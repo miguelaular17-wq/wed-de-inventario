@@ -431,6 +431,8 @@ class OrdenController extends Controller
             $this->ordenService->transferir($orden->fresh(), $tecnicoDestino['sede'], $user, $tecnicoDestino['user']);
         }
 
+        $this->guardarEvidencias($request, $orden->fresh(), fusionar: true);
+
         return redirect()
             ->route('servicio.ordenes.show', $orden)
             ->with('status', 'Orden '.$orden->fresh()->codigo().' actualizada.');
@@ -568,11 +570,12 @@ class OrdenController extends Controller
         }
 
         $codigo = $orden->codigo();
+        $tipo = $orden->esGarantia() ? 'Garantía' : 'ST';
         $orden->delete();
 
         return redirect()
             ->route('servicio.ordenes.index')
-            ->with('status', 'Orden '.$codigo.' eliminada.');
+            ->with('status', $tipo.' '.$codigo.' eliminada.');
     }
 
     private function formData(): array
@@ -1038,7 +1041,7 @@ class OrdenController extends Controller
         return $legacy !== '' ? $legacy : null;
     }
 
-    private function guardarEvidencias(Request $request, StOrden $orden): void
+    private function guardarEvidencias(Request $request, StOrden $orden, bool $fusionar = false): void
     {
         if (! Schema::hasColumn('st_ordenes', 'evidencias')) {
             return;
@@ -1048,25 +1051,55 @@ class OrdenController extends Controller
             'evidencia_imagenes' => ['nullable', 'array', 'max:3'],
             'evidencia_imagenes.*' => ['nullable', 'image', 'max:5120'],
             'evidencia_video' => ['nullable', 'file', 'mimetypes:video/mp4,video/quicktime,video/webm,video/3gpp', 'max:20480'],
+            'quitar_evidencia_imagenes' => ['nullable', 'boolean'],
+            'quitar_evidencia_video' => ['nullable', 'boolean'],
         ]);
 
         $imagenes = array_values(array_filter((array) $request->file('evidencia_imagenes', [])));
         $video = $request->file('evidencia_video');
-        if ($imagenes === [] && ! $video) {
+        $quitarImagenes = $request->boolean('quitar_evidencia_imagenes');
+        $quitarVideo = $request->boolean('quitar_evidencia_video');
+
+        if ($imagenes === [] && ! $video && ! $quitarImagenes && ! $quitarVideo) {
             return;
         }
 
-        $subidas = $this->evidencias->subirDesdeRequest(
-            $imagenes,
-            $video instanceof \Illuminate\Http\UploadedFile ? $video : null,
-            'ordenes/'.$orden->id
-        );
+        $prev = is_array($orden->evidencias) ? $orden->evidencias : [];
+        $prevImgs = array_values(array_filter($prev['imagenes'] ?? []));
+        $prevVideo = $prev['video'] ?? null;
 
-        if ($subidas['imagenes'] === [] && empty($subidas['video'])) {
+        $subidas = ['imagenes' => [], 'video' => null];
+        if ($imagenes !== [] || $video) {
+            $subidas = $this->evidencias->subirDesdeRequest(
+                $imagenes,
+                $video instanceof \Illuminate\Http\UploadedFile ? $video : null,
+                'ordenes/'.$orden->id
+            );
+        }
+
+        if ($fusionar) {
+            $finalImgs = $subidas['imagenes'] !== []
+                ? $subidas['imagenes']
+                : ($quitarImagenes ? [] : $prevImgs);
+            $finalVideo = ! empty($subidas['video'])
+                ? $subidas['video']
+                : ($quitarVideo ? null : $prevVideo);
+        } else {
+            $finalImgs = $subidas['imagenes'];
+            $finalVideo = $subidas['video'] ?? null;
+        }
+
+        if ($finalImgs === [] && empty($finalVideo)) {
+            $orden->evidencias = null;
+            $orden->save();
+
             return;
         }
 
-        $orden->evidencias = $subidas;
+        $orden->evidencias = [
+            'imagenes' => $finalImgs,
+            'video' => $finalVideo,
+        ];
         $orden->save();
     }
 }
