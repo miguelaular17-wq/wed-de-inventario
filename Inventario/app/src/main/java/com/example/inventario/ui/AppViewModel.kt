@@ -1,5 +1,8 @@
 package com.example.inventario.ui
 
+import android.content.ContentResolver
+import android.net.Uri
+import android.webkit.MimeTypeMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -20,6 +23,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 
 data class AppUiState(
     val checkingSession: Boolean = true,
@@ -247,11 +253,26 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
         _state.update { it.copy(receptionPdf = null) }
     }
 
-    fun createServiceOrder(request: CreateServiceOrderRequest, onSuccess: () -> Unit) =
+    fun createServiceOrder(
+        request: CreateServiceOrderRequest,
+        imageUris: List<Uri> = emptyList(),
+        videoUri: Uri? = null,
+        contentResolver: ContentResolver? = null,
+        onSuccess: () -> Unit,
+    ) =
         viewModelScope.launch {
             _state.update { it.copy(submitting = true) }
             try {
-                val order = repository.createServiceOrder(request)
+                var order = repository.createServiceOrder(request)
+                if (contentResolver != null && (imageUris.isNotEmpty() || videoUri != null)) {
+                    val imageParts = imageUris.take(3).mapNotNull { uri ->
+                        uri.toMultipart(contentResolver, "imagenes[]")
+                    }
+                    val videoPart = videoUri?.let { it.toMultipart(contentResolver, "video") }
+                    if (imageParts.isNotEmpty() || videoPart != null) {
+                        order = repository.uploadServiceEvidence(order.id, imageParts, videoPart)
+                    }
+                }
                 _state.update {
                     it.copy(
                         submitting = false,
@@ -266,6 +287,18 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
                 else _state.update { it.copy(submitting = false, message = error.userMessage()) }
             }
         }
+
+    private fun Uri.toMultipart(resolver: ContentResolver, formName: String): MultipartBody.Part? {
+        val bytes = resolver.openInputStream(this)?.use { it.readBytes() } ?: return null
+        val mime = resolver.getType(this)
+            ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(
+                MimeTypeMap.getFileExtensionFromUrl(toString()),
+            )
+            ?: "application/octet-stream"
+        val fileName = lastPathSegment?.substringAfterLast('/') ?: "evidencia"
+        val body = bytes.toRequestBody(mime.toMediaTypeOrNull())
+        return MultipartBody.Part.createFormData(formName, fileName, body)
+    }
 
     fun changeServiceOrderStatus(order: ServiceOrderDto, status: String, comment: String) =
         viewModelScope.launch {

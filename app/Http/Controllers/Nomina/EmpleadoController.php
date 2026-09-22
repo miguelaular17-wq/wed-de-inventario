@@ -210,6 +210,9 @@ class EmpleadoController extends Controller
         if ($tab === 'deducciones') {
             return redirect()->route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'ajustes']);
         }
+        if ($tab === 'deudas') {
+            return redirect()->route('nomina.deudas.show', $empleado);
+        }
         if ($tab === 'mercancia') {
             return redirect()->route('nomina.mercancia.index');
         }

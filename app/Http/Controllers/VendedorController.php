@@ -5,11 +5,16 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\PaginatesCollections;
 use App\Services\ProductRepository;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class VendedorController extends Controller
 {
     use PaginatesCollections;
+
+    /** @var list<int> */
+    private const DIAS_VENTAS = [7, 15, 30, 60, 90];
 
     public function __construct(
         private ProductRepository $products,
@@ -17,16 +22,35 @@ class VendedorController extends Controller
 
     public function index(Request $request): View
     {
+        return $this->renderCatalogo($request, modoJrz: false);
+    }
+
+    /** Catálogo vendedor JRZ: bajo cada sede muestra ventas del período elegido. */
+    public function jrz(Request $request): View
+    {
+        return $this->renderCatalogo($request, modoJrz: true);
+    }
+
+    private function renderCatalogo(Request $request, bool $modoJrz): View
+    {
         ini_set('memory_limit', '512M');
         $q = trim((string) $request->query('q', ''));
         $sedeLocal = (string) $request->session()->get('sede_local');
+        $sedes = config('inventario.sedes_stock', []);
 
-        if (!$sedeLocal) {
-            $sedes = config('inventario.sedes_stock');
-            $sedeLocal = !empty($sedes) ? $sedes[0] : 'DORAL';
+        if (! $sedeLocal) {
+            $sedeLocal = ! empty($sedes) ? $sedes[0] : 'DORAL';
         }
 
-        // loadForSede returns all products with all sedes stock inside their 'stocks' field
+        if ($modoJrz) {
+            $sedeLocal = 'JRZ';
+        }
+
+        $dias = (int) $request->query('dias', 30);
+        if (! in_array($dias, self::DIAS_VENTAS, true)) {
+            $dias = 30;
+        }
+
         $products = $this->products->loadForSede($sedeLocal);
 
         if ($q !== '') {
@@ -37,13 +61,10 @@ class VendedorController extends Controller
             });
         }
 
-        // Map each product to sum the stock across all sedes to get the global stock
         $mappedProducts = $products->map(function ($row) {
-            $globalStock = 0;
-            if (isset($row['stocks']) && is_array($row['stocks'])) {
-                $globalStock = array_sum($row['stocks']);
-            }
-            $row['existencia_global'] = $globalStock;
+            $stocks = (isset($row['stocks']) && is_array($row['stocks'])) ? $row['stocks'] : [];
+            $row['existencia_global'] = array_sum($stocks);
+
             return $row;
         });
 
@@ -70,12 +91,66 @@ class VendedorController extends Controller
             }
         }
 
+        $ventasPorSede = $modoJrz ? $this->ventasUnidadesPorSede($dias, $sedes) : [];
+
         return view('vendedor.index', [
             'rows' => $rows,
             'q' => $q,
-            'sedes' => config('inventario.sedes_stock'),
+            'sedes' => $sedes,
             'stockUpdatedAt' => $this->products->lastStockUpdate(),
             'casheaLevels' => $casheaLevels,
+            'modoJrz' => $modoJrz,
+            'diasVentas' => $dias,
+            'diasOpciones' => self::DIAS_VENTAS,
+            'ventasPorSede' => $ventasPorSede,
         ]);
+    }
+
+    /**
+     * Unidades netas vendidas por código y sede (últimos N días).
+     *
+     * @param  list<string>  $sedes
+     * @return array<string, array<string, float>>  [CODIGO][SEDE] => unidades
+     */
+    private function ventasUnidadesPorSede(int $dias, array $sedes): array
+    {
+        if (! Schema::hasTable('ventas_detalle') || $dias < 1 || $sedes === []) {
+            return [];
+        }
+
+        $sedesUpper = array_values(array_unique(array_map(
+            fn ($s) => mb_strtoupper(trim((string) $s), 'UTF-8'),
+            $sedes
+        )));
+        $desde = now()->subDays($dias)->toDateString();
+
+        $query = DB::table('ventas_detalle')
+            ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedesUpper)
+            ->whereDate('fecha', '>=', $desde)
+            ->whereNotNull('codigo_producto')
+            ->where('codigo_producto', '!=', '');
+
+        if (Schema::hasColumn('ventas_detalle', 'anulado')) {
+            $query->where('anulado', false);
+        }
+
+        $rows = $query
+            ->selectRaw('UPPER(TRIM(codigo_producto)) as codigo')
+            ->selectRaw('UPPER(TRIM(sede)) as sede')
+            ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN -ABS(cantidad) ELSE ABS(cantidad) END) as unidades")
+            ->groupBy(DB::raw('UPPER(TRIM(codigo_producto))'), DB::raw('UPPER(TRIM(sede))'))
+            ->get();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $codigo = (string) ($row->codigo ?? '');
+            $sede = (string) ($row->sede ?? '');
+            if ($codigo === '' || $sede === '') {
+                continue;
+            }
+            $out[$codigo][$sede] = round((float) $row->unidades, 2);
+        }
+
+        return $out;
     }
 }

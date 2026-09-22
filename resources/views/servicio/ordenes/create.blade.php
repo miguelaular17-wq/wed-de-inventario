@@ -33,7 +33,7 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('servicio.ordenes.store') }}" id="form-registrar-celular">
+    <form method="POST" action="{{ route('servicio.ordenes.store') }}" id="form-registrar-celular" enctype="multipart/form-data">
         @csrf
 
         @if($equipoPrefill)
@@ -168,7 +168,10 @@
                 </div>
                 <div class="st-campo" data-tipos="celular">
                     <label id="st-imei-label" style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">IMEI *</label>
-                    <input type="text" name="imei" id="st-imei" value="{{ old('imei', $equipoPrefill->imei ?? '') }}" placeholder="Obligatorio en celulares" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;" @disabled(old('imei_no_aplica'))>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="text" name="imei" id="st-imei" value="{{ old('imei', $equipoPrefill->imei ?? '') }}" placeholder="Obligatorio en celulares" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:6px;" @disabled(old('imei_no_aplica'))>
+                        <button type="button" class="btn secondary st-scan-btn" data-scan-target="st-imei" style="white-space:nowrap;">Escanear</button>
+                    </div>
                     <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:.85rem;cursor:pointer;">
                         <input type="checkbox" name="imei_no_aplica" value="1" id="st-imei-na" @checked(old('imei_no_aplica'))>
                         IMEI no aplica
@@ -184,7 +187,10 @@
                 </div>
                 <div class="st-campo" id="st-serial-wrap" data-tipos="impresora,camara,audifonos,corneta">
                     <label id="st-serial-label" style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Serial *</label>
-                    <input type="text" name="serial" id="st-serial" value="{{ old('serial', $equipoPrefill->serial ?? '') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;" @disabled(old('serial_no_aplica'))>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="text" name="serial" id="st-serial" value="{{ old('serial', $equipoPrefill->serial ?? '') }}" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:6px;" @disabled(old('serial_no_aplica'))>
+                        <button type="button" class="btn secondary st-scan-btn" data-scan-target="st-serial" style="white-space:nowrap;">Escanear</button>
+                    </div>
                     <label id="st-serial-na-wrap" style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:.85rem;cursor:pointer;">
                         <input type="checkbox" name="serial_no_aplica" value="1" id="st-serial-na" @checked(old('serial_no_aplica'))>
                         Serial no aplica / no se puede acceder
@@ -321,6 +327,37 @@
                 <p class="muted" style="margin:12px 0 0;font-size:.8rem;">La firma de esta hoja es la del paso 4. En el PDF de recepción sale cómo llegó el equipo y los datos del backup, en una sola hoja.</p>
             </div>
         </div>
+
+        <div class="panel" style="padding:18px;margin-bottom:16px;">
+            <h3 style="margin:0 0 6px;">Evidencias del equipo</h3>
+            <p class="muted" style="margin:0 0 12px;font-size:.85rem;">Hasta 3 fotos y 1 video corto. Se guardan en el almacenamiento ST.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div style="grid-column:1/-1;">
+                    <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Fotos (máx. 3)</label>
+                    <input type="file" name="evidencia_imagenes[]" id="st-evidencia-imgs" accept="image/*" capture="environment" multiple
+                        style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;background:#fff;">
+                    <div class="muted" style="font-size:.78rem;margin-top:4px;">JPG/PNG · máx. 5 MB c/u</div>
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Video corto (opcional)</label>
+                    <input type="file" name="evidencia_video" id="st-evidencia-video" accept="video/*" capture="environment"
+                        style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;background:#fff;">
+                    <div class="muted" style="font-size:.78rem;margin-top:4px;">MP4/MOV/WebM · máx. 20 MB</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="st-scan-modal" hidden style="position:fixed;inset:0;z-index:80;background:rgba(15,23,42,.72);align-items:center;justify-content:center;padding:16px;">
+            <div style="background:#fff;border-radius:12px;padding:16px;max-width:420px;width:100%;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <strong>Escanear código</strong>
+                    <button type="button" class="btn secondary" id="st-scan-close">Cerrar</button>
+                </div>
+                <video id="st-scan-video" playsinline style="width:100%;border-radius:8px;background:#0f172a;min-height:220px;"></video>
+                <p id="st-scan-msg" class="muted" style="margin:8px 0 0;font-size:.82rem;">Apunta al IMEI o serial del equipo.</p>
+            </div>
+        </div>
+        <style>#st-scan-modal:not([hidden]){display:flex !important;}</style>
 
         <div style="position:sticky;bottom:12px;background:#fff;padding:12px 0;border-top:1px solid #e2e8f0;display:flex;gap:10px;justify-content:flex-end;z-index:5;">
             <a class="btn secondary" href="{{ route('servicio.celulares.hub') }}">Cancelar</a>
@@ -550,6 +587,81 @@
             } catch (e) { hint.textContent = ''; }
         }, 350);
     });
+})();
+</script>
+<script>
+(function () {
+    const imgs = document.getElementById('st-evidencia-imgs');
+    imgs?.addEventListener('change', function () {
+        if (this.files && this.files.length > 3) {
+            alert('Solo se permiten 3 imágenes.');
+            this.value = '';
+        }
+    });
+
+    const modal = document.getElementById('st-scan-modal');
+    const video = document.getElementById('st-scan-video');
+    const msg = document.getElementById('st-scan-msg');
+    const closeBtn = document.getElementById('st-scan-close');
+    let stream = null;
+    let detector = null;
+    let raf = null;
+    let targetId = null;
+
+    function stopScan() {
+        if (raf) cancelAnimationFrame(raf);
+        raf = null;
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        stream = null;
+        if (modal) modal.hidden = true;
+    }
+
+    async function tick() {
+        if (!detector || !video || video.readyState < 2) {
+            raf = requestAnimationFrame(tick);
+            return;
+        }
+        try {
+            const codes = await detector.detect(video);
+            if (codes && codes.length) {
+                const raw = String(codes[0].rawValue || '').trim();
+                const input = document.getElementById(targetId);
+                if (input && raw) {
+                    input.value = targetId === 'st-imei' ? raw.replace(/\D+/g, '').slice(0, 32) : raw.slice(0, 64);
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    if (msg) msg.textContent = 'Leído: ' + input.value;
+                }
+                stopScan();
+                return;
+            }
+        } catch (e) {}
+        raf = requestAnimationFrame(tick);
+    }
+
+    async function startScan(id) {
+        targetId = id;
+        if (!('BarcodeDetector' in window)) {
+            alert('Este navegador no soporta escaneo. Usa Chrome/Edge en Android o escribe el código.');
+            return;
+        }
+        try {
+            detector = new BarcodeDetector({ formats: ['qr_code', 'code_128', 'code_39', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'data_matrix', 'pdf417'] });
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+            video.srcObject = stream;
+            await video.play();
+            modal.hidden = false;
+            if (msg) msg.textContent = 'Apunta al IMEI o serial del equipo.';
+            raf = requestAnimationFrame(tick);
+        } catch (e) {
+            alert('No se pudo abrir la cámara: ' + (e.message || 'permiso denegado'));
+            stopScan();
+        }
+    }
+
+    document.querySelectorAll('.st-scan-btn').forEach(btn => {
+        btn.addEventListener('click', () => startScan(btn.getAttribute('data-scan-target')));
+    });
+    closeBtn?.addEventListener('click', stopScan);
 })();
 </script>
 @include('servicio.ordenes._firma_pad_script')

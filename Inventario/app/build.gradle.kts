@@ -4,8 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+val renderBaseUrl = "https://wed-de-inventario.onrender.com/"
 val configuredBaseUrl = providers.gradleProperty("INVENTARIO_BASE_URL")
-    .orElse("https://wed-de-inventario.onrender.com/")
     .map { if (it.endsWith("/")) it else "$it/" }
 
 android {
@@ -22,14 +22,24 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "BASE_URL", "\"${configuredBaseUrl.get()}\"")
+        buildConfigField("String", "BASE_URL", "\"$renderBaseUrl\"")
+        manifestPlaceholders["usesCleartextTraffic"] = "false"
     }
 
     buildTypes {
+        debug {
+            // Celular físico → Render. Local solo si misma Wi‑Fi: -PINVENTARIO_BASE_URL=http://IP_PC:8001/
+            val debugUrl = configuredBaseUrl.orElse(renderBaseUrl).get()
+            buildConfigField("String", "BASE_URL", "\"$debugUrl\"")
+            manifestPlaceholders["usesCleartextTraffic"] = debugUrl.startsWith("http://").toString()
+        }
         release {
             optimization {
                 enable = false
             }
+            val releaseUrl = configuredBaseUrl.orElse(renderBaseUrl).get()
+            buildConfigField("String", "BASE_URL", "\"$releaseUrl\"")
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
         }
     }
     compileOptions {
@@ -61,6 +71,7 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.retrofit)
     implementation(libs.retrofit.kotlinx.serialization)
+    implementation(libs.play.services.code.scanner)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))

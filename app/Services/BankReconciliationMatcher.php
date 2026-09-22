@@ -34,10 +34,19 @@ class BankReconciliationMatcher
             return true;
         }
 
+        // Códigos de banco (0134 Banesco, 0105 Mercantil…) en PagoMóvil / transferencias
+        // no son números de lote POS.
+        if ($this->esCodigoBancoVenezuela($digits)) {
+            return false;
+        }
+
         // BNC: lote en referencia ("487") o con ceros ("0487") frente a texto "487 POS:..."
-        $patronDigitos = '/(?:^|[^0-9])0*'.$digits.'(?![0-9])/';
-        if (preg_match($patronDigitos, $haystack) === 1) {
-            return true;
+        // Exigir ≥3 dígitos para no cruzar montos/refs cortos (p.ej. lote "5").
+        if (strlen($digits) >= 3) {
+            $patronDigitos = '/(?:^|[^0-9])0*'.$digits.'(?![0-9])/';
+            if (preg_match($patronDigitos, $haystack) === 1) {
+                return true;
+            }
         }
 
         if (strlen($digits) >= 4) {
@@ -51,6 +60,50 @@ class BankReconciliationMatcher
         // "116" pegaba dentro de refs de PagoMóvil tipo V019647116).
         if ($lote !== $digits && strlen($lote) >= 3 && stripos($haystack, $lote) !== false) {
             return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Códigos de compensación / banco en Venezuela (sin ceros a la izquierda).
+     * Aparecen en conceptos tipo "PAGOMOVIL OTROS BANCOS 0134 …".
+     */
+    public function esCodigoBancoVenezuela(string $digits): bool
+    {
+        $digits = ltrim(preg_replace('/\D+/', '', $digits) ?? '', '0');
+        if ($digits === '') {
+            return false;
+        }
+
+        static $codigos = [
+            '102', '104', '105', '108', '114', '115', '128', '134', '137', '138',
+            '146', '151', '156', '157', '163', '168', '169', '171', '172', '174',
+            '175', '177', '191',
+        ];
+
+        return in_array($digits, $codigos, true);
+    }
+
+    public function esPagoMovil(?string $descripcion): bool
+    {
+        $desc = mb_strtolower(trim((string) $descripcion), 'UTF-8');
+        if ($desc === '') {
+            return false;
+        }
+
+        $needles = [
+            'pagomovil',
+            'pago movil',
+            'pago móvil',
+            'pago-movil',
+            'p. movil',
+            'p.móvil',
+        ];
+        foreach ($needles as $needle) {
+            if (str_contains($desc, $needle)) {
+                return true;
+            }
         }
 
         return false;
@@ -193,6 +246,11 @@ class BankReconciliationMatcher
 
     public function coincideLotePunto(ConciliacionLinea $linea, object $ingreso): bool
     {
+        // PagoMóvil trae códigos de banco (0134…) que no son nº de lote POS.
+        if ($this->esPagoMovil($linea->descripcion)) {
+            return false;
+        }
+
         if (! $this->mismoBanco($linea->banco, $ingreso->banco ?? null)) {
             return false;
         }
@@ -228,6 +286,8 @@ class BankReconciliationMatcher
 
     /**
      * BDV suele abonar el lote menos comisión POS (típicamente 2%, a veces 1.5%).
+     * También aplica a cargos/egresos en Venezuela cuando el extracto ya viene neto
+     * y en flujo_cajas está el monto bruto (sin descuento).
      */
     public function montoLoteNetoBdv(float|int|string|null $montoBanco, float|int|string|null $montoLote): bool
     {
@@ -242,9 +302,21 @@ class BankReconciliationMatcher
             if (abs($neto - $banco) < 0.05) {
                 return true;
             }
+            // Variante: comisión redondeada aparte (bruto − round(bruto×fee, 2))
+            $netoAlt = round($lote - round($lote * $fee, 2), 2);
+            if (abs($netoAlt - $banco) < 0.05) {
+                return true;
+            }
         }
 
         return false;
+    }
+
+    public function esBancoVenezuela(?string $banco): bool
+    {
+        [$canon] = $this->partesCuenta($banco, null);
+
+        return $canon === 'VENEZUELA';
     }
 
     /**
@@ -414,9 +486,18 @@ class BankReconciliationMatcher
                 $puntos += 50;
             } elseif ($lado === 'entrada' && $this->referenciaTrasladoUltimosCuatroCoincide($linea->referencia, $flujo->referencia ?? null)) {
                 $puntos += 40;
+            } elseif ($lado !== null) {
+                // Monto + mismo día sin ref (p.ej. BNC)
+                $puntos += 15;
             }
         } elseif ($this->referenciasCruzan($linea->referencia, $flujo->referencia ?? null)) {
             $puntos += 30;
+        }
+        if ($this->mismosMontos($linea->monto, $flujo->monto_bs ?? $flujo->monto ?? null)) {
+            $puntos += 20;
+        } elseif ($this->esBancoVenezuela($linea->banco)
+            && $this->montoLoteNetoBdv($linea->monto, $flujo->monto_bs ?? $flujo->monto ?? null)) {
+            $puntos += 18;
         }
         if ($this->fechaCercana($linea->fecha, $flujo->fecha, 0)) {
             $puntos += 10;
@@ -478,7 +559,15 @@ class BankReconciliationMatcher
         ];
         $montoOk = false;
         foreach ($montosFlujo as $monto) {
-            if ($monto !== null && $this->mismosMontos($montoLinea, $monto)) {
+            if ($monto === null) {
+                continue;
+            }
+            if ($this->mismosMontos($montoLinea, $monto)) {
+                $montoOk = true;
+                break;
+            }
+            // Venezuela: extracto neto (−2%) vs monto bruto en BDD
+            if ($this->esBancoVenezuela($linea->banco) && $this->montoLoteNetoBdv($montoLinea, $monto)) {
                 $montoOk = true;
                 break;
             }
@@ -536,10 +625,19 @@ class BankReconciliationMatcher
         }
 
         if ($lado === 'salida') {
-            return $this->referenciaTrasladoCompletaCoincide($linea->referencia, $flujo->referencia ?? null);
+            if ($this->referenciaTrasladoCompletaCoincide($linea->referencia, $flujo->referencia ?? null)) {
+                return true;
+            }
+            // BNC / otros: a veces solo cuadra el monto (la ref del extracto no es la misma).
+            // Exige mismo día para no cruzar traslados de fechas distintas.
+            return $this->fechaCercana($linea->fecha, $flujo->fecha, 0);
         }
 
-        return $this->referenciaTrasladoUltimosCuatroCoincide($linea->referencia, $flujo->referencia ?? null);
+        if ($this->referenciaTrasladoUltimosCuatroCoincide($linea->referencia, $flujo->referencia ?? null)) {
+            return true;
+        }
+
+        return $this->fechaCercana($linea->fecha, $flujo->fecha, 0);
     }
 
     public function referenciaTrasladoCompletaCoincide(?string $referenciaBanco, ?string $referenciaTraslado): bool
@@ -564,7 +662,13 @@ class BankReconciliationMatcher
     private function montoCoincideConFlujo(ConciliacionLinea $linea, object $flujo): bool
     {
         foreach ([$flujo->monto_bs ?? null, $flujo->monto ?? null] as $monto) {
-            if ($monto !== null && $this->mismosMontos($linea->monto, $monto)) {
+            if ($monto === null) {
+                continue;
+            }
+            if ($this->mismosMontos($linea->monto, $monto)) {
+                return true;
+            }
+            if ($this->esBancoVenezuela($linea->banco) && $this->montoLoteNetoBdv($linea->monto, $monto)) {
                 return true;
             }
         }

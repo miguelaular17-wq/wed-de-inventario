@@ -201,46 +201,99 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertTrue($this->matcher->coincideTraslado($entrada, $traslado));
     }
 
-    public function test_traslado_exige_monto_y_ultimos_cuatro_digitos_correctos(): void
+    public function test_traslado_exige_monto_correcto_y_permite_sin_referencia_mismo_dia(): void
     {
         $traslado = (object) [
             'categoria_egreso' => 'traslados',
-            'banco' => 'BANESCO',
-            'titular' => 'DORAL',
+            'banco' => 'BNC',
+            'titular' => 'JRZ',
             'banco_receptor' => 'MERCANTIL',
-            'titular_receptor' => 'JRZ',
-            'fecha' => '2026-09-08',
-            'monto_bs' => 12500.75,
-            'referencia' => '5003998765',
+            'titular_receptor' => 'JENU',
+            'fecha' => '2026-08-07',
+            'monto_bs' => 3783550.00,
+            'referencia' => '96212757',
         ];
         $montoIncorrecto = new ConciliacionLinea([
-            'banco' => 'MERCANTIL',
+            'banco' => 'BNC',
             'titular' => 'JRZ',
-            'fecha' => '2026-09-08',
-            'referencia' => '8765',
-            'monto' => 12500.76,
-            'tipo' => 'abono',
+            'fecha' => '2026-08-07',
+            'referencia' => '999',
+            'monto' => -3783550.01,
+            'tipo' => 'cargo',
         ]);
-        $referenciaIncorrecta = new ConciliacionLinea([
-            'banco' => 'MERCANTIL',
+        // Extracto BNC: misma fecha/monto, referencia distinta → concilia por monto
+        $salidaSoloMonto = new ConciliacionLinea([
+            'banco' => 'BNC',
             'titular' => 'JRZ',
-            'fecha' => '2026-09-08',
-            'referencia' => '8764',
-            'monto' => 12500.75,
-            'tipo' => 'abono',
+            'fecha' => '2026-08-07',
+            'referencia' => '88445566',
+            'monto' => -3783550.00,
+            'tipo' => 'cargo',
         ]);
-        $salidaIncompleta = new ConciliacionLinea([
-            'banco' => 'BANESCO',
-            'titular' => 'DORAL',
-            'fecha' => '2026-09-08',
-            'referencia' => '8765',
-            'monto' => -12500.75,
+        $otraFecha = new ConciliacionLinea([
+            'banco' => 'BNC',
+            'titular' => 'JRZ',
+            'fecha' => '2026-08-09',
+            'referencia' => '88445566',
+            'monto' => -3783550.00,
             'tipo' => 'cargo',
         ]);
 
         $this->assertFalse($this->matcher->coincideTraslado($montoIncorrecto, $traslado));
-        $this->assertFalse($this->matcher->coincideTraslado($referenciaIncorrecta, $traslado));
-        $this->assertFalse($this->matcher->coincideTraslado($salidaIncompleta, $traslado));
+        $this->assertTrue($this->matcher->coincideTraslado($salidaSoloMonto, $traslado));
+        $this->assertFalse($this->matcher->coincideTraslado($otraFecha, $traslado));
+    }
+
+    public function test_venezuela_egreso_concilia_monto_neto_comision_2_porciento(): void
+    {
+        // BDD: bruto 100000; extracto BDV: 98000 (neto −2%)
+        $linea = new ConciliacionLinea([
+            'banco' => 'VENEZUELA',
+            'titular' => 'GRUPO JRZ',
+            'fecha' => '2026-08-14',
+            'referencia' => '0429716928121',
+            'descripcion' => 'PAGO A OTROS BANCOS 0134 V11767394',
+            'monto' => -98000.00,
+            'tipo' => 'cargo',
+        ]);
+        $flujo = (object) [
+            'banco' => 'Venezuela',
+            'titular' => 'Grupo JRZ',
+            'fecha' => '2026-08-14',
+            'monto_bs' => 100000.00,
+            'referencia' => 'otro-ref',
+            'motivo' => '049 - INSUMOS MANTENIMIENTO',
+            'categoria_egreso' => 'egreso_realizado',
+        ];
+
+        $this->assertTrue($this->matcher->esBancoVenezuela('BANCO DE VENEZUELA'));
+        $this->assertTrue($this->matcher->montoLoteNetoBdv(98000, 100000));
+        $this->assertTrue($this->matcher->coincideEgreso($linea, $flujo));
+    }
+
+    public function test_venezuela_traslado_entrada_neto_2_porciento(): void
+    {
+        $traslado = (object) [
+            'categoria_egreso' => 'traslados',
+            'banco' => 'BNC',
+            'titular' => 'JRZ',
+            'banco_receptor' => 'VENEZUELA',
+            'titular_receptor' => 'GRUPO JRZ',
+            'fecha' => '2026-08-27',
+            'monto_bs' => 4000000.00,
+            'referencia' => '97245073',
+        ];
+        // En Venezuela abona 3.920.000 (bruto − 2%)
+        $entrada = new ConciliacionLinea([
+            'banco' => 'VENEZUELA',
+            'titular' => 'GRUPO JRZ',
+            'fecha' => '2026-08-27',
+            'referencia' => '5073',
+            'monto' => 3920000.00,
+            'tipo' => 'abono',
+        ]);
+
+        $this->assertTrue($this->matcher->coincideTraslado($entrada, $traslado));
     }
 
     public function test_parte_cuenta_separa_banco_y_titular(): void
@@ -315,6 +368,33 @@ class BankReconciliationMatcherTest extends TestCase
         ];
 
         $this->assertFalse($this->matcher->haystackTieneLote($this->matcher->textoBanco($linea), '116'));
+        $this->assertFalse($this->matcher->coincideLotePunto($linea, $lote));
+    }
+
+    public function test_bdv_pagomovil_no_cruza_con_lote_igual_a_codigo_banco(): void
+    {
+        // Extracto real: "PAGOMOVIL OTROS BANCOS 0134 …" — 0134 es Banesco, no el lote.
+        $linea = new ConciliacionLinea([
+            'banco' => 'VENEZUELA',
+            'titular' => 'GRUPO JRZ',
+            'fecha' => '2026-08-27',
+            'referencia' => '0050993242654',
+            'descripcion' => 'PAGOMOVIL OTROS BANCOS 0134 04123382151',
+            'monto' => 5.00,
+            'tipo' => 'abono',
+        ]);
+        $lote = (object) [
+            'tipo' => 'punto_venta',
+            'banco' => 'VENEZUELA',
+            'titular' => 'JRZ',
+            'fecha' => '2026-08-27',
+            'monto' => 5.00,
+            'lote_referencia' => '0134',
+        ];
+
+        $this->assertTrue($this->matcher->esPagoMovil($linea->descripcion));
+        $this->assertTrue($this->matcher->esCodigoBancoVenezuela('0134'));
+        $this->assertFalse($this->matcher->haystackTieneLote($this->matcher->textoBanco($linea), '0134'));
         $this->assertFalse($this->matcher->coincideLotePunto($linea, $lote));
     }
 

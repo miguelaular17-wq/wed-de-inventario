@@ -106,7 +106,7 @@
                                     </select>
                                 </div>
                                 <div class="field" style="margin:0;">
-                                    <select name="sede" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; min-width: 100px; border: 1px solid var(--border);">
+                                    <select name="sede" data-sede-select style="padding:6px 12px; font-size:0.85rem; border-radius:6px; min-width: 100px; border: 1px solid var(--border);">
                                         <option value="">— Ninguna —</option>
                                         @foreach ($sedes as $s)
                                             <option value="{{ $s }}" @selected($user->sede === $s)>
@@ -151,17 +151,19 @@
                                                                 $permLabel = $assignablePermissions[$permKey];
                                                                 $isInherited = in_array($permKey, $inheritedPerms, true);
                                                                 $isExtra = in_array($permKey, $extraPerms, true)
-                                                                    || ($permKey === 'marketing.publicidad_equipo' && $user->ver_publicidad_equipo);
+                                                                    || ($permKey === 'marketing.publicidad_equipo' && $user->ver_publicidad_equipo)
+                                                                    || ($permKey === 'vendedor.jrz' && strtoupper((string) $user->sede) === 'JRZ');
                                                                 $isChecked = $isInherited || $isExtra;
+                                                                $isJrzTied = $permKey === 'vendedor.jrz' && strtoupper((string) $user->sede) === 'JRZ';
                                                             @endphp
-                                                            <label class="{{ $isInherited ? 'is-inherited' : '' }}" data-perm-key="{{ $permKey }}">
+                                                            <label class="{{ $isInherited || $isJrzTied ? 'is-inherited' : '' }}" data-perm-key="{{ $permKey }}">
                                                                 <input
                                                                     type="checkbox"
                                                                     name="extra_permissions[]"
                                                                     value="{{ $permKey }}"
                                                                     data-is-extra="{{ $isExtra ? '1' : '0' }}"
                                                                     @checked($isChecked)
-                                                                    @disabled($isInherited)
+                                                                    @disabled($isInherited || $isJrzTied)
                                                                 >
                                                                 <span>{{ $permLabel }}</span>
                                                             </label>
@@ -288,6 +290,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 sedeSelect.style.cursor = 'default';
             }
 
+            const sedeIsJrz = String(sedeSelect.value || '').toUpperCase() === 'JRZ';
+            if (sedeIsJrz) {
+                selectedExtras.add('vendedor.jrz');
+            } else {
+                selectedExtras.delete('vendedor.jrz');
+            }
+
             if (!permissionControl) return;
             const hideExtras = role === 'admin' || role === 'gerente';
             permissionControl.hidden = hideExtras;
@@ -300,14 +309,15 @@ document.addEventListener('DOMContentLoaded', function() {
             permissionControl.querySelectorAll('[data-perm-key]').forEach(label => {
                 const key = label.getAttribute('data-perm-key');
                 const box = label.querySelector('input[type="checkbox"]');
-                const isInherited = inherited.includes(key);
+                const isJrzTied = key === 'vendedor.jrz' && sedeIsJrz;
+                const isInherited = inherited.includes(key) || isJrzTied;
                 label.classList.toggle('is-inherited', isInherited);
                 box.disabled = isInherited;
                 box.checked = isInherited || selectedExtras.has(key);
             });
 
             const extraCount = Array.from(selectedExtras)
-                .filter(key => !inherited.includes(key))
+                .filter(key => !inherited.includes(key) && !(key === 'vendedor.jrz' && sedeIsJrz))
                 .length;
             permissionControl.querySelectorAll('[data-perm-count]').forEach(counter => {
                 counter.textContent = extraCount;
@@ -377,6 +387,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 askCobranzaScope();
             }
             updateSedeState();
+        });
+
+        sedeSelect.addEventListener('change', () => {
+            updateSedeState();
+            if (String(sedeSelect.value || '').toUpperCase() === 'JRZ' && permissionDialog && !permissionDialog.open) {
+                permissionDialog.showModal();
+                const jrzLabel = form.querySelector('[data-perm-key="vendedor.jrz"]');
+                jrzLabel?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
         });
 
         form.querySelector('[data-perm-open]')?.addEventListener('click', () => {

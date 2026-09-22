@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Catálogo de Productos')
+@section('title', !empty($modoJrz) ? 'Catálogo JRZ — Stock y ventas' : 'Catálogo de Productos')
 
 @section('content')
 @php
@@ -10,24 +10,36 @@
     $netoFactor = VentaDescuento::factorNeto();
     $descEtiqueta = VentaDescuento::etiqueta();
     $verPrecios = auth()->user()?->canSeeCatalogoPrecios() ?? true;
+    $modoJrz = !empty($modoJrz);
+    $diasVentas = (int) ($diasVentas ?? 30);
+    $diasOpciones = $diasOpciones ?? [7, 15, 30, 60, 90];
+    $ventasPorSede = $ventasPorSede ?? [];
+    $formAction = $modoJrz ? route('vendedor.jrz') : route('vendedor.dashboard');
 @endphp
 <div class="cat-page">
 <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
     <div>
-        <h1 style="margin:0;">Catálogo de Productos</h1>
+        <h1 style="margin:0;">{{ $modoJrz ? 'Catálogo vendedor JRZ' : 'Catálogo de Productos' }}</h1>
         <p class="lead" style="margin:4px 0 0;">
-            {{ $rows->total() }} productos · Pulsa <strong>Cashea</strong> para ver niveles de pago
+            @if($modoJrz)
+                {{ $rows->total() }} productos · Stock y <strong>ventas</strong> de todas las sedes (últimos días elegidos)
+            @else
+                {{ $rows->total() }} productos · Pulsa <strong>Cashea</strong> para ver niveles de pago
+            @endif
         </p>
     </div>
-    <div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        @if(! $modoJrz && auth()->user()?->canAccess('vendedor.jrz'))
+            <a href="{{ route('vendedor.jrz', ['dias' => 30]) }}" class="btn secondary" style="padding:10px 14px; border-radius:8px; text-decoration:none;">Vista JRZ + ventas</a>
+        @endif
         <a href="{{ route('catalogo.index') }}" class="btn btn-primary" style="background-color: var(--blue); color: white; padding: 10px 16px; border-radius: 8px; text-decoration: none; font-weight: 500; display: flex; align-items: center; gap: 8px;">
             <i class="fas fa-images"></i> Ver Catálogo Gráfico / PDF
         </a>
     </div>
 </div>
 
-{{-- Barra de búsqueda --}}
-<form method="GET" action="{{ route('vendedor.dashboard') }}" class="cat-search">
+{{-- Barra de búsqueda (+ días solo JRZ) --}}
+<form method="GET" action="{{ $formAction }}" class="cat-search">
     <div class="cat-search-field">
         <span>🔍</span>
         <input
@@ -39,8 +51,18 @@
             autocomplete="off"
         >
     </div>
+    @if($modoJrz)
+        <label class="cat-dias-label" for="dias">
+            Ventas por sede
+            <select name="dias" id="dias" onchange="this.form.submit()">
+                @foreach($diasOpciones as $d)
+                    <option value="{{ $d }}" @selected($diasVentas === (int) $d)>{{ $d }} días</option>
+                @endforeach
+            </select>
+        </label>
+    @endif
     @if($q)
-        <a href="{{ route('vendedor.dashboard') }}">✕ Limpiar</a>
+        <a href="{{ $modoJrz ? route('vendedor.jrz', ['dias' => $diasVentas]) : route('vendedor.dashboard') }}">✕ Limpiar</a>
     @endif
 </form>
 
@@ -87,10 +109,26 @@
                                 </div>
                                 <div class="cat-stock-sedes">
                                     @foreach ($sedes as $sedeCol)
-                                        @php $stock = (int) ($row['stocks'][$sedeCol] ?? 0); @endphp
-                                        <span class="cat-sede {{ $stock > 0 ? 'has-stock' : 'no-stock' }}">
-                                            {{ config('inventario.display.'.$sedeCol, $sedeCol) }}
-                                            <b>{{ $stock }}</b>
+                                        @php
+                                            $stock = (int) ($row['stocks'][$sedeCol] ?? 0);
+                                            $sedeKey = strtoupper(trim((string) $sedeCol));
+                                            $esJrz = $sedeKey === 'JRZ';
+                                            $codigoKey = strtoupper(trim((string) ($row['cod_centro'] ?? '')));
+                                            $vendidas = $modoJrz
+                                                ? (float) ($ventasPorSede[$codigoKey][$sedeKey] ?? 0)
+                                                : null;
+                                        @endphp
+                                        <span class="cat-sede {{ $stock > 0 ? 'has-stock' : 'no-stock' }} {{ $modoJrz && $esJrz ? 'cat-sede-jrz' : '' }} {{ $modoJrz ? 'cat-sede-con-ventas' : '' }}">
+                                            <span class="cat-sede-top">
+                                                {{ config('inventario.display.'.$sedeCol, $sedeCol) }}
+                                                <b>{{ $stock }}</b>
+                                            </span>
+                                            @if($modoJrz)
+                                                <span class="cat-sede-ventas" title="Unidades netas vendidas en {{ $sedeKey }} (últimos {{ $diasVentas }} días)">
+                                                    {{ number_format($vendidas, $vendidas == floor($vendidas) ? 0 : 1) }} vend.
+                                                    <em>{{ $diasVentas }}d</em>
+                                                </span>
+                                            @endif
                                         </span>
                                     @endforeach
                                 </div>
@@ -338,9 +376,9 @@ main:has(.cat-page) {
 }
 .cat-sede {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
     padding: 8px 10px;
     border-radius: 10px;
     font-size: 0.78rem;
@@ -349,6 +387,13 @@ main:has(.cat-page) {
     background: #f8fafc;
     color: #64748b;
 }
+.cat-sede-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+}
 .cat-sede b { font-size: 0.95rem; }
 .cat-sede.has-stock {
     background: #f0fdf4;
@@ -356,6 +401,61 @@ main:has(.cat-page) {
     color: #166534;
 }
 .cat-sede.no-stock b { color: #94a3b8; font-weight: 500; }
+.cat-sede-jrz {
+    border-color: #93c5fd;
+    background: #eff6ff;
+    color: #1e3a8a;
+}
+.cat-sede-con-ventas {
+    min-height: 52px;
+}
+.cat-sede-ventas {
+    display: block;
+    width: 100%;
+    margin-top: 1px;
+    padding-top: 4px;
+    border-top: 1px dashed #cbd5e1;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #334155;
+    line-height: 1.25;
+}
+.cat-sede-jrz .cat-sede-ventas {
+    border-top-color: #bfdbfe;
+    color: #1d4ed8;
+}
+.cat-sede.has-stock .cat-sede-ventas {
+    color: #166534;
+}
+.cat-sede-jrz.has-stock .cat-sede-ventas {
+    color: #1d4ed8;
+}
+.cat-sede-ventas em {
+    font-style: normal;
+    font-weight: 500;
+    color: #64748b;
+    margin-left: 2px;
+}
+.cat-dias-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    color: #475569;
+    white-space: nowrap;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    padding: 8px 12px;
+}
+.cat-dias-label select {
+    border: 1px solid #93c5fd;
+    border-radius: 8px;
+    padding: 6px 8px;
+    background: #fff;
+    font-weight: 600;
+    color: #1e3a8a;
+}
 
 .cat-prices {
     display: grid;

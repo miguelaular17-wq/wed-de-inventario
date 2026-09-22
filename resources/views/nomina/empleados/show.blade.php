@@ -16,6 +16,7 @@
         'prestamos' => 'Préstamos',
         'abonos' => 'Adelantos',
         'ajustes' => 'Deducciones y bonos',
+        'deudas' => 'Deudas',
     ];
 @endphp
 
@@ -32,6 +33,7 @@
         <div class="nomina-ficha-meta">
             <div><span>Salario mensual</span><strong>${{ number_format($empleado->salario_base, 2) }}</strong></div>
             <div><span>Estado</span><strong>{{ $empleado->estado }}</strong></div>
+            <a href="{{ route('nomina.deudas.show', $empleado) }}" class="btn secondary">Ver deudas</a>
             <a href="{{ route('nomina.empleados.edit', $empleado) }}" class="btn secondary">Editar</a>
         </div>
     </div>

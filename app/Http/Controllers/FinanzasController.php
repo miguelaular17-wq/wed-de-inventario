@@ -1353,9 +1353,9 @@ class FinanzasController extends Controller
 
         // Repara traslados ya vinculados por salida que quedaron en tránsito
         // (antes se exigían los dos lados para marcar es_conciliado).
-        $this->marcarTrasladosConSalidaConciliados(
-            app(\App\Services\BankReconciliationMatcher::class)
-        );
+        $matcherRepair = app(\App\Services\BankReconciliationMatcher::class);
+        $this->desvincularPagomovilMalEmparejadoConLote($matcherRepair);
+        $this->marcarTrasladosConSalidaConciliados($matcherRepair);
 
         // 4. Clasificar comisiones bancarias y compras de divisas del extracto
         $classifier = app(\App\Services\BankMovementClassifier::class);
@@ -2350,6 +2350,49 @@ class FinanzasController extends Controller
         $fecha_desde = now()->subDays(1)->startOfDay();
         \App\Models\ConciliacionLinea::where('created_at', '>=', $fecha_desde)->delete();
         return redirect()->route('finanzas.conciliaciones')->with('success', 'Se han borrado los movimientos bancarios cargados.');
+    }
+
+    /**
+     * PagoMóvil mal cruzado con lote POS (el "0134" del concepto es código de banco).
+     */
+    private function desvincularPagomovilMalEmparejadoConLote(\App\Services\BankReconciliationMatcher $matcher): void
+    {
+        $lineas = \App\Models\ConciliacionLinea::query()
+            ->whereNotNull('tesoreria_ingreso_id')
+            ->where('estado', 'conciliado')
+            ->get();
+
+        if ($lineas->isEmpty()) {
+            return;
+        }
+
+        $ingresos = \App\Models\TesoreriaIngreso::query()
+            ->whereIn('id', $lineas->pluck('tesoreria_ingreso_id')->unique()->filter())
+            ->get()
+            ->keyBy('id');
+
+        foreach ($lineas as $linea) {
+            if (! $matcher->esPagoMovil($linea->descripcion)) {
+                continue;
+            }
+            $ingreso = $ingresos->get($linea->tesoreria_ingreso_id);
+            if (! $ingreso || ($ingreso->tipo ?? '') !== 'punto_venta') {
+                continue;
+            }
+
+            $linea->tesoreria_ingreso_id = null;
+            $linea->estado = 'pendiente';
+            $linea->save();
+
+            $sigueVinculado = \App\Models\ConciliacionLinea::query()
+                ->where('tesoreria_ingreso_id', $ingreso->id)
+                ->where('estado', 'conciliado')
+                ->exists();
+            if (! $sigueVinculado) {
+                $ingreso->es_conciliado = false;
+                $ingreso->save();
+            }
+        }
     }
 
     /**

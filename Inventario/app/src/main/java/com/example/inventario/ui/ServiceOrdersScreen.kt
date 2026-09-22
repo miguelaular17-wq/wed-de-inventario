@@ -6,42 +6,57 @@ import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Paint as AndroidPaint
 import android.graphics.Path as AndroidPath
 import android.graphics.pdf.PdfRenderer
+import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -71,6 +86,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
+import android.widget.Toast
 import com.example.inventario.data.ChoiceDto
 import com.example.inventario.data.CreateServiceOrderRequest
 import com.example.inventario.data.ServiceOrderDto
@@ -79,7 +95,14 @@ import com.example.inventario.ui.theme.NexoDanger
 import com.example.inventario.ui.theme.NexoMuted
 import com.example.inventario.ui.theme.NexoSuccess
 import com.example.inventario.ui.theme.NexoWarning
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
 import java.io.ByteArrayOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -298,12 +321,18 @@ fun RegisterServiceOrderScreen(
     state: AppUiState,
     viewModel: AppViewModel,
 ) {
+    val context = LocalContext.current
     var formKey by remember { mutableStateOf(0) }
     key(formKey) {
         CreatePhoneOrderForm(
             state = state,
-            onSubmit = { request ->
-                viewModel.createServiceOrder(request) {
+            onSubmit = { request, images, video ->
+                viewModel.createServiceOrder(
+                    request = request,
+                    imageUris = images,
+                    videoUri = video,
+                    contentResolver = context.contentResolver,
+                ) {
                     formKey += 1
                 }
             },
@@ -314,8 +343,9 @@ fun RegisterServiceOrderScreen(
 @Composable
 private fun CreatePhoneOrderForm(
     state: AppUiState,
-    onSubmit: (CreateServiceOrderRequest) -> Unit,
+    onSubmit: (CreateServiceOrderRequest, List<Uri>, Uri?) -> Unit,
 ) {
+    val context = LocalContext.current
     val siteChoices = state.serviceOptions.sedes.ifEmpty {
         listOf("DORAL", "CENTRO", "ZAMORA", "SAMBIL", "VIRTUDES")
     }
@@ -377,6 +407,46 @@ private fun CreatePhoneOrderForm(
     val inspection = remember { mutableStateMapOf<String, String>() }
     val signatureStrokes = remember { mutableStateListOf<List<Offset>>() }
     var signatureSize by remember { mutableStateOf(IntSize.Zero) }
+    val evidenceImages = remember { mutableStateListOf<Uri>() }
+    var evidenceVideo by remember { mutableStateOf<Uri?>(null) }
+    val pickImages = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(3),
+    ) { uris ->
+        evidenceImages.clear()
+        evidenceImages.addAll(uris.take(3))
+    }
+    val pickVideo = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri -> evidenceVideo = uri }
+    fun scanInto(onResult: (String) -> Unit) {
+        val options = GmsBarcodeScannerOptions.Builder()
+            .setBarcodeFormats(
+                Barcode.FORMAT_QR_CODE,
+                Barcode.FORMAT_CODE_128,
+                Barcode.FORMAT_CODE_39,
+                Barcode.FORMAT_EAN_13,
+                Barcode.FORMAT_EAN_8,
+                Barcode.FORMAT_UPC_A,
+                Barcode.FORMAT_DATA_MATRIX,
+                Barcode.FORMAT_PDF417,
+            )
+            .enableAutoZoom()
+            .build()
+        GmsBarcodeScanning.getClient(context, options)
+            .startScan()
+            .addOnSuccessListener { barcode ->
+                val value = barcode.rawValue?.trim().orEmpty()
+                if (value.isNotBlank()) onResult(value)
+            }
+            .addOnFailureListener {
+                Toast.makeText(
+                    context,
+                    "No se pudo abrir el escáner. Escribe el código a mano.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+            .addOnCanceledListener { /* usuario canceló */ }
+    }
     val needsClient = managementType == "ST" || (managementType == "GARANTIA" && warrantyRange == "fuera")
     val isPhone = deviceType == "celular"
     val checklist = state.serviceOptions.checklists[deviceType]
@@ -392,215 +462,234 @@ private fun CreatePhoneOrderForm(
             Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = 18.dp, vertical = 14.dp),
+                .padding(horizontal = 14.dp, vertical = 8.dp),
         ) {
-            Text("Registrar equipo", style = MaterialTheme.typography.titleLarge)
-            Text(
-                "Completa la recepción del equipo",
-                style = MaterialTheme.typography.bodySmall,
-                color = NexoMuted,
-            )
+            Text("Registrar equipo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         }
         HorizontalDivider()
-        LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item {
-                SectionCard("Tipo de gestión") {
-                    ChoiceSelector("", managementType, managementChoices) {
-                        managementType = it
-                    }
+
+            SectionCard("Tipo de gestión") {
+                ChoiceSelector("", managementType, managementChoices) {
+                    managementType = it
                 }
             }
-            item {
-                SectionCard("Tipo de dispositivo") {
-                    ChoiceSelector("", deviceType, deviceChoices) {
-                        deviceType = it
-                        inspection.clear()
-                        if (it != "celular") {
-                            imeiNotApplicable = true
-                            imei = ""
-                        }
+            SectionCard("Tipo de dispositivo") {
+                ChoiceSelector("", deviceType, deviceChoices) {
+                    deviceType = it
+                    inspection.clear()
+                    if (it != "celular") {
+                        imeiNotApplicable = true
+                        imei = ""
                     }
                 }
             }
             if (managementType == "GARANTIA") {
-                item {
-                    SectionCard("Rango de garantía") {
-                        ChoiceSelector("", warrantyRange, warrantyChoices) {
-                            warrantyRange = it
-                        }
+                SectionCard("Rango de garantía") {
+                    ChoiceSelector("", warrantyRange, warrantyChoices) {
+                        warrantyRange = it
                     }
                 }
             }
             if (state.serviceOptions.canTransfer) {
-                item {
-                    SectionCard("¿Se envía a otra sede?") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = !sendToOtherSite,
-                                onClick = {
-                                    sendToOtherSite = false
-                                    destinationTechnicianId = null
-                                },
-                                label = { Text("No · trabajo local") },
-                            )
-                            FilterChip(
-                                selected = sendToOtherSite,
-                                onClick = { sendToOtherSite = true },
-                                label = { Text("Sí · envío") },
-                            )
-                        }
-                        if (sendToOtherSite) {
-                            Spacer(Modifier.height(10.dp))
-                            if (!state.serviceOptions.siteLocked) {
-                                StringSelector("Sede de origen", site, siteChoices) {
-                                    site = it
-                                }
-                                Spacer(Modifier.height(8.dp))
+                SectionCard("¿Se envía a otra sede?") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = !sendToOtherSite,
+                            onClick = {
+                                sendToOtherSite = false
+                                destinationTechnicianId = null
+                            },
+                            label = { Text("No · trabajo local") },
+                        )
+                        FilterChip(
+                            selected = sendToOtherSite,
+                            onClick = { sendToOtherSite = true },
+                            label = { Text("Sí · envío") },
+                        )
+                    }
+                    if (sendToOtherSite) {
+                        Spacer(Modifier.height(10.dp))
+                        if (!state.serviceOptions.siteLocked) {
+                            StringSelector("Sede de origen", site, siteChoices) {
+                                site = it
                             }
-                            TechnicianSelector(
-                                selectedId = destinationTechnicianId,
-                                technicians = technicians,
-                                onSelected = { destinationTechnicianId = it },
-                            )
-                        } else if (!state.serviceOptions.siteLocked) {
-                            Spacer(Modifier.height(10.dp))
-                            StringSelector("Sede", site, siteChoices) { site = it }
+                            Spacer(Modifier.height(8.dp))
                         }
+                        TechnicianSelector(
+                            selectedId = destinationTechnicianId,
+                            technicians = technicians,
+                            onSelected = { destinationTechnicianId = it },
+                        )
+                    } else if (!state.serviceOptions.siteLocked) {
+                        Spacer(Modifier.height(10.dp))
+                        StringSelector("Sede", site, siteChoices) { site = it }
                     }
                 }
             } else if (!state.serviceOptions.siteLocked) {
-                item {
-                    SectionCard("Sede") {
-                        StringSelector("", site, siteChoices) { site = it }
-                    }
+                SectionCard("Sede") {
+                    StringSelector("", site, siteChoices) { site = it }
                 }
             }
             if (needsClient) {
-                item {
-                    SectionCard("Cliente") {
-                        PhoneField(clientName, { clientName = it }, "Cliente *")
-                        Spacer(Modifier.height(8.dp))
-                        PhoneField(clientPhone, { clientPhone = it }, "Teléfono")
-                        Spacer(Modifier.height(8.dp))
-                        PhoneField(clientId, { clientId = it }, "Cédula")
-                    }
+                SectionCard("Cliente") {
+                    PhoneField(clientName, { clientName = it }, "Cliente *")
+                    Spacer(Modifier.height(8.dp))
+                    PhoneField(clientPhone, { clientPhone = it }, "Teléfono")
+                    Spacer(Modifier.height(8.dp))
+                    PhoneField(clientId, { clientId = it }, "Cédula")
                 }
             }
-            item {
-                SectionCard("Equipo") {
-                    if (isPhone) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(
-                                checked = imeiNotApplicable,
-                                onCheckedChange = {
-                                    imeiNotApplicable = it
-                                    if (it) imei = ""
-                                },
-                            )
-                            Text("IMEI no aplica")
-                        }
+            SectionCard("Equipo") {
+                if (isPhone) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = imeiNotApplicable,
+                            onCheckedChange = {
+                                imeiNotApplicable = it
+                                if (it) imei = ""
+                            },
+                        )
+                        Text("IMEI no aplica")
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    if (!imeiNotApplicable) {
+                        PhoneField(
+                            imei,
+                            { imei = it.filter(Char::isDigit).take(32) },
+                            "IMEI *",
+                            KeyboardType.Number,
+                        )
                         Spacer(Modifier.height(6.dp))
-                        if (!imeiNotApplicable) {
-                            PhoneField(
-                                imei,
-                                { imei = it.filter(Char::isDigit).take(32) },
-                                "IMEI *",
-                                KeyboardType.Number,
-                            )
-                        } else {
-                            PhoneField(serial, { serial = it }, "Serial *")
-                        }
+                        CompactOutlinedButton(onClick = {
+                            scanInto { imei = it.filter(Char::isDigit).take(32) }
+                        }) { Text("Escanear IMEI", style = MaterialTheme.typography.labelMedium) }
                     } else {
                         PhoneField(serial, { serial = it }, "Serial *")
+                        Spacer(Modifier.height(6.dp))
+                        CompactOutlinedButton(onClick = { scanInto { serial = it.take(64) } }) {
+                            Text("Escanear serial", style = MaterialTheme.typography.labelMedium)
+                        }
                     }
-                    Spacer(Modifier.height(8.dp))
-                    PhoneField(brand, { brand = it }, "Marca *")
-                    Spacer(Modifier.height(8.dp))
-                    PhoneField(model, { model = it }, "Modelo *")
-                    Spacer(Modifier.height(8.dp))
-                    PhoneField(color, { color = it }, if (isPhone) "Color *" else "Color")
-                    if (isPhone) {
-                        Spacer(Modifier.height(8.dp))
-                        PhoneField(storage, { storage = it }, "Almacenamiento * (ej. 128 GB)")
+                } else {
+                    PhoneField(serial, { serial = it }, "Serial *")
+                    Spacer(Modifier.height(6.dp))
+                    CompactOutlinedButton(onClick = { scanInto { serial = it.take(64) } }) {
+                        Text("Escanear serial", style = MaterialTheme.typography.labelMedium)
                     }
-                    Spacer(Modifier.height(8.dp))
-                    PhoneField(
-                        deviceValue,
-                        { deviceValue = it },
-                        "Valor del dispositivo",
-                        KeyboardType.Decimal,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    PhoneField(failure, { failure = it }, "Falla o motivo *", singleLine = false)
-                    Spacer(Modifier.height(8.dp))
-                    PhoneField(accessories, { accessories = it }, "Accesorios recibidos")
                 }
+                Spacer(Modifier.height(8.dp))
+                PhoneField(brand, { brand = it }, "Marca *")
+                Spacer(Modifier.height(8.dp))
+                PhoneField(model, { model = it }, "Modelo *")
+                Spacer(Modifier.height(8.dp))
+                PhoneField(color, { color = it }, if (isPhone) "Color *" else "Color")
+                if (isPhone) {
+                    Spacer(Modifier.height(8.dp))
+                    PhoneField(storage, { storage = it }, "Almacenamiento * (ej. 128 GB)")
+                }
+                Spacer(Modifier.height(8.dp))
+                PhoneField(
+                    deviceValue,
+                    { deviceValue = it },
+                    "Valor del dispositivo",
+                    KeyboardType.Decimal,
+                )
+                Spacer(Modifier.height(8.dp))
+                PhoneField(failure, { failure = it }, "Falla o motivo *", singleLine = false)
+                Spacer(Modifier.height(8.dp))
+                PhoneField(accessories, { accessories = it }, "Accesorios recibidos")
             }
-            item {
-                SectionCard("Prioridad y notas") {
-                    ChoiceSelector("Prioridad", priority, priorityChoices) {
-                        priority = it
-                    }
-                    if (needsClient) {
-                        Spacer(Modifier.height(8.dp))
-                        PhoneField(
-                            promisedDate,
-                            { promisedDate = it },
-                            "Fecha prometida (AAAA-MM-DD)",
+            SectionCard("Evidencias") {
+                Text(
+                    "Hasta 3 fotos y 1 video corto",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NexoMuted,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CompactOutlinedButton(onClick = {
+                        pickImages.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                         )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    PhoneField(notes, { notes = it }, "Observaciones", singleLine = false)
+                    }) { Text("Fotos (${evidenceImages.size}/3)", style = MaterialTheme.typography.labelMedium) }
+                    CompactOutlinedButton(onClick = {
+                        pickVideo.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly),
+                        )
+                    }) { Text(if (evidenceVideo != null) "Video listo" else "Video", style = MaterialTheme.typography.labelMedium) }
+                }
+                if (evidenceImages.isNotEmpty() || evidenceVideo != null) {
+                    Spacer(Modifier.height(6.dp))
+                    TextButton(onClick = {
+                        evidenceImages.clear()
+                        evidenceVideo = null
+                    }) { Text("Quitar evidencias") }
                 }
             }
-            item {
-                SectionCard("Inspección de recepción") {
-                    checklist.forEach { check ->
-                        Column(
-                            Modifier.padding(bottom = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
+            SectionCard("Prioridad y notas") {
+                ChoiceSelector("Prioridad", priority, priorityChoices) {
+                    priority = it
+                }
+                if (needsClient) {
+                    Spacer(Modifier.height(8.dp))
+                    PromisedDateField(
+                        value = promisedDate,
+                        onValueChange = { promisedDate = it },
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                PhoneField(notes, { notes = it }, "Observaciones", singleLine = false)
+            }
+            SectionCard("Inspección de recepción") {
+                checklist.forEach { check ->
+                    Column(
+                        Modifier.padding(bottom = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(check.label, style = MaterialTheme.typography.bodySmall)
+                        Row(
+                            Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            Text(check.label, style = MaterialTheme.typography.bodySmall)
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                items(listOf("ok" to "OK", "dano" to "Daño", "na" to "N/A")) { (value, label) ->
-                                    FilterChip(
-                                        selected = inspection[check.value] == value,
-                                        onClick = { inspection[check.value] = value },
-                                        label = { Text(label) },
-                                    )
-                                }
+                            listOf("ok" to "OK", "dano" to "Daño", "na" to "N/A").forEach { (value, label) ->
+                                FilterChip(
+                                    selected = inspection[check.value] == value,
+                                    onClick = { inspection[check.value] = value },
+                                    label = { Text(label) },
+                                )
                             }
                         }
                     }
                 }
             }
             if (needsClient) {
-                item {
-                    SectionCard("Firma") {
-                        SignaturePad(
-                            strokes = signatureStrokes,
-                            onSizeChanged = { signatureSize = it },
-                            onClear = { signatureStrokes.clear() },
-                        )
-                    }
+                SectionCard("Firma") {
+                    SignaturePad(
+                        strokes = signatureStrokes,
+                        onSizeChanged = { signatureSize = it },
+                        onClear = { signatureStrokes.clear() },
+                    )
                 }
             }
             if (isPhone && !imeiNotApplicable) {
-                item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = useExisting, onCheckedChange = { useExisting = it })
-                        Text("Usar este IMEI si ya está registrado")
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = useExisting, onCheckedChange = { useExisting = it })
+                    Text("Usar este IMEI si ya está registrado")
                 }
             }
         }
         Surface(
             tonalElevation = 2.dp,
-            shadowElevation = 6.dp,
+            shadowElevation = 4.dp,
         ) {
             Button(
                 enabled = !state.submitting &&
@@ -637,15 +726,21 @@ private fun CreatePhoneOrderForm(
                             ),
                             useExistingDevice = useExisting,
                         ),
+                        evidenceImages.toList(),
+                        evidenceVideo,
                     )
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
-                    .height(48.dp),
-                shape = RoundedCornerShape(12.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .height(40.dp),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
             ) {
-                Text(if (state.submitting) "Guardando…" else "Registrar equipo")
+                Text(
+                    if (state.submitting) "Guardando…" else "Registrar equipo",
+                    style = MaterialTheme.typography.labelLarge,
+                )
             }
         }
     }
@@ -662,6 +757,9 @@ private fun ServiceOrderDetailScreen(
 ) {
     var status by remember(order.id, order.estado) { mutableStateOf("") }
     var comment by remember(order.id, order.estado) { mutableStateOf("") }
+    val statusChoices = remember(order.id, order.estado, order.allowedStatuses) {
+        statusChoicesForOrder(order)
+    }
 
     Dialog(
         onDismissRequest = { if (!submitting) onDismiss() },
@@ -726,6 +824,16 @@ private fun ServiceOrderDetailScreen(
                             order.observaciones?.takeIf(String::isNotBlank)?.let {
                                 DetailLine("Observaciones", it)
                             }
+                            if (order.evidencias.imagenes.isNotEmpty() || !order.evidencias.video.isNullOrBlank()) {
+                                Spacer(Modifier.height(8.dp))
+                                Text("Evidencias", fontWeight = FontWeight.SemiBold)
+                                order.evidencias.imagenes.forEachIndexed { i, url ->
+                                    DetailLine("Foto ${i + 1}", url)
+                                }
+                                order.evidencias.video?.takeIf(String::isNotBlank)?.let {
+                                    DetailLine("Video", it)
+                                }
+                            }
                         }
                     }
                     item {
@@ -748,10 +856,10 @@ private fun ServiceOrderDetailScreen(
                             }
                         }
                     }
-                    if (order.allowedStatuses.isNotEmpty()) {
+                    if (statusChoices.isNotEmpty()) {
                         item {
                             SectionCard("Cambiar estado") {
-                                ChoiceSelector("Nuevo estado", status, order.allowedStatuses) {
+                                ChoiceSelector("Nuevo estado", status, statusChoices) {
                                     status = it
                                 }
                                 Spacer(Modifier.height(8.dp))
@@ -802,16 +910,16 @@ private fun ServiceOrderDetailScreen(
 @Composable
 private fun SectionCard(title: String, content: @Composable () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(10.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)),
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(title, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(4.dp))
+            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(2.dp))
             content()
         }
     }
@@ -842,8 +950,11 @@ private fun TechnicianSelector(
                 color = NexoMuted,
             )
         } else {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                items(technicians, key = { it.id }) { tech ->
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                technicians.forEach { tech ->
                     FilterChip(
                         selected = selectedId == tech.id,
                         onClick = { onSelected(tech.id) },
@@ -853,6 +964,89 @@ private fun TechnicianSelector(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PromisedDateField(
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    val dateFormat = remember {
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+    }
+    val initialMillis = remember(value) {
+        runCatching { dateFormat.parse(value)?.time }.getOrNull()
+    }
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+
+    Box(Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            enabled = false,
+            label = { Text("Fecha prometida") },
+            placeholder = { Text("Elegir en el calendario") },
+            trailingIcon = {
+                Text("Cal.", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                disabledTrailingIconColor = MaterialTheme.colorScheme.primary,
+                disabledContainerColor = Color.Transparent,
+            ),
+        )
+        Box(
+            Modifier
+                .matchParentSize()
+                .clickable { showPicker = true },
+        )
+    }
+
+    if (showPicker) {
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            onValueChange(dateFormat.format(Date(millis)))
+                        }
+                        showPicker = false
+                    },
+                ) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text("Cancelar") }
+            },
+        ) {
+            DatePicker(state = datePickerState, showModeToggle = false)
+        }
+    }
+}
+
+@Composable
+private fun CompactOutlinedButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.height(34.dp),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+        shape = RoundedCornerShape(8.dp),
+        content = content,
+    )
 }
 
 @Composable
@@ -887,8 +1081,11 @@ private fun ChoiceSelector(
             Text(label, style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.height(4.dp))
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            items(choices, key = { it.value }) { choice ->
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            choices.forEach { choice ->
                 FilterChip(
                     selected = selected == choice.value,
                     onClick = { onSelected(choice.value) },
@@ -912,8 +1109,11 @@ private fun StringSelector(
             Text(label, style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.height(4.dp))
         }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            items(values, key = { it }) { value ->
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            values.forEach { value ->
                 FilterChip(
                     selected = selected == value,
                     onClick = { onSelected(value) },
@@ -1149,9 +1349,26 @@ private fun ServiceError(message: String, retry: () -> Unit) {
 }
 
 private fun serviceStatusColors(status: String): Pair<Color, Color> = when (status.lowercase()) {
-    "listo", "entregado" -> NexoSuccess to Color(0xFFE8F8F2)
+    "listo", "completado", "entregado" -> NexoSuccess to Color(0xFFE8F8F2)
     "en_proceso" -> Color(0xFF1768C4) to Color(0xFFE8F2FF)
     "ubicando_repuesto" -> NexoWarning to Color(0xFFFFF5DC)
     "cancelado" -> NexoDanger to Color(0xFFFFE9EC)
     else -> NexoMuted to Color(0xFFEEF2F7)
+}
+
+/** Asegura que "Completado" (listo) aparezca aunque el API aún no lo envíe. */
+private fun statusChoicesForOrder(order: ServiceOrderDto): List<ChoiceDto> {
+    val current = order.estado.lowercase()
+    val canComplete = current in setOf("pendiente", "en_proceso", "ubicando_repuesto")
+    val mapped = order.allowedStatuses.map { choice ->
+        if (choice.value.equals("listo", ignoreCase = true)) {
+            choice.copy(label = "Completado")
+        } else {
+            choice
+        }
+    }.toMutableList()
+    if (canComplete && mapped.none { it.value.equals("listo", ignoreCase = true) }) {
+        mapped.add(ChoiceDto(value = "listo", label = "Completado"))
+    }
+    return mapped
 }

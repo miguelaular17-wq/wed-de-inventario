@@ -16,6 +16,11 @@ interface InventoryRepository {
     suspend fun serviceOrder(id: Long): ServiceOrderDto
     suspend fun serviceOrderReceptionPdf(id: Long): ByteArray
     suspend fun createServiceOrder(request: CreateServiceOrderRequest): ServiceOrderDto
+    suspend fun uploadServiceEvidence(
+        orderId: Long,
+        imageParts: List<okhttp3.MultipartBody.Part>,
+        videoPart: okhttp3.MultipartBody.Part?,
+    ): ServiceOrderDto
     suspend fun changeServiceOrderStatus(id: Long, status: String, comment: String): ServiceOrderDto
     suspend fun sites(): SitesResponse
     suspend fun inventory(page: Int, query: String, category: String, site: String): InventoryPage
@@ -75,6 +80,14 @@ class NetworkInventoryRepository(
 
     override suspend fun createServiceOrder(request: CreateServiceOrderRequest): ServiceOrderDto =
         apiCall { api.createServiceOrder(request).data }
+
+    override suspend fun uploadServiceEvidence(
+        orderId: Long,
+        imageParts: List<okhttp3.MultipartBody.Part>,
+        videoPart: okhttp3.MultipartBody.Part?,
+    ): ServiceOrderDto = apiCall {
+        api.uploadServiceEvidence(orderId, imageParts, videoPart).data
+    }
 
     override suspend fun changeServiceOrderStatus(id: Long, status: String, comment: String): ServiceOrderDto =
         apiCall {

@@ -429,6 +429,10 @@ class User extends Authenticatable
             return true;
         }
 
+        if ($permission === 'vendedor.jrz' && strtoupper(trim((string) $this->sede)) === 'JRZ') {
+            return true;
+        }
+
         return in_array($permission, $owned, true);
     }
 

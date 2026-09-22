@@ -12,6 +12,7 @@ use App\Models\StRepuesto;
 use App\Models\User;
 use App\Services\ServicioTecnico\StBackupService;
 use App\Services\ServicioTecnico\StEquipoService;
+use App\Services\ServicioTecnico\StEvidenciaStorage;
 use App\Services\ServicioTecnico\StOrdenService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -27,6 +28,7 @@ class OrdenController extends Controller
         private readonly StOrdenService $ordenService,
         private readonly StEquipoService $equipoService,
         private readonly StBackupService $backupService,
+        private readonly StEvidenciaStorage $evidencias,
     ) {}
 
     public function index(Request $request): View
@@ -256,6 +258,8 @@ class OrdenController extends Controller
         }
 
         $orden = StOrden::crearEnSede($data, $user);
+
+        $this->guardarEvidencias($request, $orden);
 
         if ($enviar) {
             $this->ordenService->transferir($orden, $tecnicoDestino['sede'], $user, $tecnicoDestino['user']);
@@ -1032,5 +1036,37 @@ class OrdenController extends Controller
         $legacy = trim((string) $legacy);
 
         return $legacy !== '' ? $legacy : null;
+    }
+
+    private function guardarEvidencias(Request $request, StOrden $orden): void
+    {
+        if (! Schema::hasColumn('st_ordenes', 'evidencias')) {
+            return;
+        }
+
+        $request->validate([
+            'evidencia_imagenes' => ['nullable', 'array', 'max:3'],
+            'evidencia_imagenes.*' => ['nullable', 'image', 'max:5120'],
+            'evidencia_video' => ['nullable', 'file', 'mimetypes:video/mp4,video/quicktime,video/webm,video/3gpp', 'max:20480'],
+        ]);
+
+        $imagenes = array_values(array_filter((array) $request->file('evidencia_imagenes', [])));
+        $video = $request->file('evidencia_video');
+        if ($imagenes === [] && ! $video) {
+            return;
+        }
+
+        $subidas = $this->evidencias->subirDesdeRequest(
+            $imagenes,
+            $video instanceof \Illuminate\Http\UploadedFile ? $video : null,
+            'ordenes/'.$orden->id
+        );
+
+        if ($subidas['imagenes'] === [] && empty($subidas['video'])) {
+            return;
+        }
+
+        $orden->evidencias = $subidas;
+        $orden->save();
     }
 }

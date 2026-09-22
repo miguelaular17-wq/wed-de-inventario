@@ -224,8 +224,15 @@ data class ServiceOrderDto(
     @SerialName("fecha_prometida") val promisedDate: String? = null,
     val observaciones: String? = null,
     val inspeccion: JsonElement? = null,
+    val evidencias: ServiceEvidenceDto = ServiceEvidenceDto(),
     @SerialName("creado_por") val createdBy: String? = null,
     val eventos: List<ServiceEventDto> = emptyList(),
+)
+
+@Serializable
+data class ServiceEvidenceDto(
+    val imagenes: List<String> = emptyList(),
+    val video: String? = null,
 )
 
 @Serializable

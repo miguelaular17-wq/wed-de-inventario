@@ -62,7 +62,7 @@ class StOrden extends Model
         self::ESTADO_PENDIENTE => 'Pendiente',
         self::ESTADO_EN_PROCESO => 'En proceso',
         self::ESTADO_UBICANDO_REPUESTO => 'Ubicando repuesto',
-        self::ESTADO_LISTO => 'Listo',
+        self::ESTADO_LISTO => 'Completado',
         self::ESTADO_ENTREGADO => 'Entregado',
         self::ESTADO_CANCELADO => 'Cancelado',
     ];
@@ -124,6 +124,7 @@ class StOrden extends Model
         'transfer_estado',
         'repuestos_descontados_at',
         'atributos',
+        'evidencias',
     ];
 
     protected function casts(): array
@@ -140,6 +141,7 @@ class StOrden extends Model
             'repuestos_descontados_at' => 'datetime',
             'inspeccion_recepcion' => 'array',
             'atributos' => 'array',
+            'evidencias' => 'array',
             'conformidad_at' => 'datetime',
         ];
     }
@@ -291,10 +293,28 @@ class StOrden extends Model
     public function estadosPermitidos(): array
     {
         $permitidos = match ($this->estado) {
-            self::ESTADO_PENDIENTE => [self::ESTADO_EN_PROCESO, self::ESTADO_UBICANDO_REPUESTO, self::ESTADO_CANCELADO],
-            self::ESTADO_EN_PROCESO => [self::ESTADO_PENDIENTE, self::ESTADO_UBICANDO_REPUESTO, self::ESTADO_LISTO, self::ESTADO_CANCELADO],
-            self::ESTADO_UBICANDO_REPUESTO => [self::ESTADO_PENDIENTE, self::ESTADO_EN_PROCESO, self::ESTADO_CANCELADO],
-            self::ESTADO_LISTO => [self::ESTADO_EN_PROCESO, self::ESTADO_ENTREGADO],
+            self::ESTADO_PENDIENTE => [
+                self::ESTADO_EN_PROCESO,
+                self::ESTADO_UBICANDO_REPUESTO,
+                self::ESTADO_LISTO,
+                self::ESTADO_CANCELADO,
+            ],
+            self::ESTADO_EN_PROCESO => [
+                self::ESTADO_PENDIENTE,
+                self::ESTADO_UBICANDO_REPUESTO,
+                self::ESTADO_LISTO,
+                self::ESTADO_CANCELADO,
+            ],
+            self::ESTADO_UBICANDO_REPUESTO => [
+                self::ESTADO_PENDIENTE,
+                self::ESTADO_EN_PROCESO,
+                self::ESTADO_LISTO,
+                self::ESTADO_CANCELADO,
+            ],
+            self::ESTADO_LISTO => [
+                self::ESTADO_EN_PROCESO,
+                self::ESTADO_ENTREGADO,
+            ],
             default => [],
         };
 

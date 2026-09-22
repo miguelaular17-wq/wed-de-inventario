@@ -18,6 +18,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/ordenes', [ServiceOrderController::class, 'index']);
             Route::post('/ordenes', [ServiceOrderController::class, 'store']);
             Route::get('/ordenes/{orden}', [ServiceOrderController::class, 'show'])->whereNumber('orden');
+            Route::post('/ordenes/{orden}/evidencias', [ServiceOrderController::class, 'uploadEvidence'])->whereNumber('orden');
             Route::get('/ordenes/{orden}/pdf/recepcion', [ServiceOrderController::class, 'receptionPdf'])->whereNumber('orden');
             Route::post('/ordenes/{orden}/estado', [ServiceOrderController::class, 'changeStatus'])->whereNumber('orden');
         });

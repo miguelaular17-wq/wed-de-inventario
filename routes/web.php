@@ -36,6 +36,7 @@ use App\Http\Controllers\Nomina\ComisionAjusteController;
 use App\Http\Controllers\Nomina\ComisionController;
 use App\Http\Controllers\Nomina\ConfiguracionController;
 use App\Http\Controllers\Nomina\DeduccionController;
+use App\Http\Controllers\Nomina\DeudasPersonalController;
 use App\Http\Controllers\Nomina\EmpleadoController;
 use App\Http\Controllers\Nomina\EquipoNominaController;
 use App\Http\Controllers\Nomina\FaltanteCajaController;
@@ -301,9 +302,12 @@ Route::middleware(['auth'])->prefix('metas')->name('metas.')->group(function () 
         ->name('stock');
 });
 
-// Vendedor specific routes (Now public for inventory checking)
+// Vendedor: stock general público; vista JRZ + ventas requiere permiso
 Route::prefix('vendedor')->group(function () {
     Route::get('/', [\App\Http\Controllers\VendedorController::class, 'index'])->name('vendedor.dashboard');
+});
+Route::middleware(['auth', 'permission:vendedor.jrz'])->group(function () {
+    Route::get('/vendedor/jrz', [\App\Http\Controllers\VendedorController::class, 'jrz'])->name('vendedor.jrz');
 });
 
 // Tesoreria routes
@@ -347,6 +351,8 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::put('/empleados/{empleado}', [EmpleadoController::class, 'update'])->name('empleados.update');
 
     Route::get('/prestamos', [PrestamoController::class, 'index'])->name('prestamos.index');
+    Route::get('/deudas', [DeudasPersonalController::class, 'index'])->name('deudas.index');
+    Route::get('/deudas/{empleado}', [DeudasPersonalController::class, 'show'])->name('deudas.show');
     Route::post('/prestamos', [PrestamoController::class, 'storeEscritorio'])->name('prestamos.escritorio');
     Route::get('/prestamos/txt', [PrestamoController::class, 'exportarTxt'])->name('prestamos.txt');
     Route::get('/prestamos/excel', [PrestamoController::class, 'exportarExcel'])->name('prestamos.excel');

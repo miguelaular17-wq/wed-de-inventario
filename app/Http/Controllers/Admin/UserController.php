@@ -46,10 +46,13 @@ class UserController extends Controller
             }
         }
 
+        $sedesLocales = config('inventario.sedes_locales', []);
+        $sedesAdmin = array_values(array_unique(array_merge(['JRZ'], $sedesLocales)));
+
         return view('admin.users.index', [
             'users' => $users,
             'search' => $search,
-            'sedes' => config('inventario.sedes_locales'),
+            'sedes' => $sedesAdmin,
             'casheaLevels' => $casheaLevels,
             'assignablePermissions' => config('permissions.assignable'),
             'permissionGroups' => config('permissions.groups'),
@@ -59,7 +62,8 @@ class UserController extends Controller
 
     public function update(Request $request, User $user)
     {
-        $sedesPermitidas = config('inventario.sedes_locales', []);
+        $sedesLocales = config('inventario.sedes_locales', []);
+        $sedesPermitidas = array_values(array_unique(array_merge(['JRZ'], $sedesLocales)));
         $data = $request->validate([
             'role' => ['required', 'string', 'in:admin,supervisor,telefonia,tecnico,comprador,sede,vendedor,marketing,finanzas,cobranza,contabilidad,auditor,tesoreria,gerente,rrhh'],
             'sede' => ['nullable', 'string', 'in:'.implode(',', $sedesPermitidas)],
@@ -82,6 +86,11 @@ class UserController extends Controller
             $user->sede = null;
         } else {
             $user->sede = isset($data['sede']) && $data['sede'] ? strtoupper($data['sede']) : null;
+        }
+
+        // Sede JRZ ⇒ permiso de catálogo vendedor JRZ (stock + ventas por sede)
+        if ($user->sede === 'JRZ') {
+            $extras[] = 'vendedor.jrz';
         }
 
         if (isset($data['password_plain']) && $data['password_plain'] !== '') {

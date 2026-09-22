@@ -8,6 +8,7 @@ use App\Models\StEquipo;
 use App\Models\StOrden;
 use App\Models\User;
 use App\Services\ServicioTecnico\StEquipoService;
+use App\Services\ServicioTecnico\StEvidenciaStorage;
 use App\Services\ServicioTecnico\StOrdenService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +23,7 @@ class ServiceOrderController extends Controller
     public function __construct(
         private readonly StEquipoService $equipoService,
         private readonly StOrdenService $ordenService,
+        private readonly StEvidenciaStorage $evidencias,
     ) {
     }
 
@@ -256,6 +258,53 @@ class ServiceOrderController extends Controller
         ], 201);
     }
 
+    public function uploadEvidence(Request $request, StOrden $orden): JsonResponse
+    {
+        $this->authorizeOrder($request->user(), $orden);
+
+        if (! Schema::hasColumn('st_ordenes', 'evidencias')) {
+            throw ValidationException::withMessages([
+                'evidencias' => 'El módulo de evidencias no está disponible todavía.',
+            ]);
+        }
+
+        $request->validate([
+            'imagenes' => ['nullable', 'array', 'max:3'],
+            'imagenes.*' => ['nullable', 'image', 'max:5120'],
+            'video' => ['nullable', 'file', 'mimetypes:video/mp4,video/quicktime,video/webm,video/3gpp', 'max:20480'],
+        ]);
+
+        $imagenes = array_values(array_filter((array) $request->file('imagenes', [])));
+        $video = $request->file('video');
+        if ($imagenes === [] && ! $video) {
+            throw ValidationException::withMessages([
+                'evidencias' => 'Adjunta al menos una imagen o un video.',
+            ]);
+        }
+
+        $actual = is_array($orden->evidencias) ? $orden->evidencias : [];
+        $prevImgs = array_values(array_filter($actual['imagenes'] ?? []));
+        $cupo = max(0, 3 - count($prevImgs));
+        $imagenes = array_slice($imagenes, 0, $cupo);
+
+        $subidas = $this->evidencias->subirDesdeRequest(
+            $imagenes,
+            $video instanceof \Illuminate\Http\UploadedFile ? $video : null,
+            'ordenes/'.$orden->id
+        );
+
+        $orden->evidencias = [
+            'imagenes' => array_values(array_merge($prevImgs, $subidas['imagenes'])),
+            'video' => $subidas['video'] ?: ($actual['video'] ?? null),
+        ];
+        $orden->save();
+
+        return response()->json([
+            'message' => 'Evidencias guardadas.',
+            'data' => $this->orderPayload($orden->fresh(['equipoCelular', 'creador'])),
+        ]);
+    }
+
     public function receptionPdf(Request $request, StOrden $orden): Response
     {
         $this->authorizeOrder($request->user(), $orden);
@@ -409,6 +458,14 @@ class ServiceOrderController extends Controller
             'fecha_prometida' => $order->fecha_prometida?->format('Y-m-d'),
             'observaciones' => $order->observaciones,
             'inspeccion' => (object) ($order->inspeccion_recepcion ?: []),
+            'evidencias' => (function () use ($order) {
+                $ev = is_array($order->evidencias) ? $order->evidencias : [];
+
+                return [
+                    'imagenes' => array_values(array_filter($ev['imagenes'] ?? [])),
+                    'video' => $ev['video'] ?? null,
+                ];
+            })(),
             'creado_por' => $order->creador?->name,
             'eventos' => $order->relationLoaded('eventos')
                 ? $order->eventos->map(fn ($event) => [

@@ -13,10 +13,13 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Streaming
+import okhttp3.MultipartBody
 
 interface InventarioApi {
     @POST("api/v1/auth/login")
@@ -41,6 +44,14 @@ interface InventarioApi {
 
     @POST("api/v1/servicio/celulares/ordenes")
     suspend fun createServiceOrder(@Body request: CreateServiceOrderRequest): ServiceOrderResponse
+
+    @Multipart
+    @POST("api/v1/servicio/celulares/ordenes/{id}/evidencias")
+    suspend fun uploadServiceEvidence(
+        @Path("id") id: Long,
+        @Part imagenes: List<MultipartBody.Part>,
+        @Part video: MultipartBody.Part?,
+    ): ServiceOrderResponse
 
     @GET("api/v1/servicio/celulares/ordenes/{id}")
     suspend fun serviceOrder(@Path("id") id: Long): ServiceOrderResponse

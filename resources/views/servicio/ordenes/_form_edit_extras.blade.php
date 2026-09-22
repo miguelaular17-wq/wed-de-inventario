@@ -104,7 +104,7 @@
             });
             </script>
             @endpush
-            <p class="muted" style="font-size:.8rem;margin-top:8px;">Al marcar la orden como <strong>Listo</strong>, el stock se descuenta en el servidor.</p>
+            <p class="muted" style="font-size:.8rem;margin-top:8px;">Al marcar la orden como <strong>Completado</strong>, el stock se descuenta en el servidor.</p>
         @endif
     @endif
 @endif

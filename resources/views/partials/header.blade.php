@@ -55,7 +55,10 @@
         $sedeItems[] = $link('Mayor Demanda', route('ventas.mayor_demanda'), request()->routeIs('ventas.mayor_demanda'));
         $sedeItems[] = $link('Inventario', route('inventario.index'), request()->routeIs('inventario.*'), 'nav-inventario');
         if ($u->canSeeCatalogoExistencias() && ! $u->isVendedor()) {
-            $sedeItems[] = $link('Stock', route('vendedor.dashboard'), request()->routeIs('vendedor.dashboard'));
+            $sedeItems[] = $link('Stock', route('vendedor.dashboard'), request()->routeIs('vendedor.dashboard') && ! request()->routeIs('vendedor.jrz'));
+            if ($u->canAccess('vendedor.jrz')) {
+                $sedeItems[] = $link('Stock JRZ', route('vendedor.jrz'), request()->routeIs('vendedor.jrz'));
+            }
         }
         $sedeItems[] = $link('Exportar', route('requisicion.form'), request()->routeIs('requisicion.*'), 'nav-export');
         if (! in_array($u->role, ['supervisor', 'telefonia'], true)) {
@@ -108,7 +111,15 @@
     }
 
     if ($u->isVendedor()) {
-        $nav[] = $link('Stock', route('vendedor.dashboard'), request()->routeIs('vendedor.dashboard'));
+        $esVendedorJrz = strtoupper(trim((string) $u->sede)) === 'JRZ';
+        if ($esVendedorJrz && $u->canAccess('vendedor.jrz')) {
+            $nav[] = $link('Stock JRZ', route('vendedor.jrz'), request()->routeIs('vendedor.*'));
+        } else {
+            $nav[] = $link('Stock', route('vendedor.dashboard'), request()->routeIs('vendedor.dashboard') && ! request()->routeIs('vendedor.jrz'));
+            if ($u->canAccess('vendedor.jrz')) {
+                $nav[] = $link('Stock JRZ', route('vendedor.jrz'), request()->routeIs('vendedor.jrz'));
+            }
+        }
     }
 
     if ($sedeItems) {
@@ -211,6 +222,7 @@
             $link('Deducciones y bonos', route('nomina.ajustes.index'), request()->routeIs('nomina.ajustes.index', 'nomina.ajustes.escritorio')),
             $link('Horas extras', route('nomina.horas_extras.index'), request()->routeIs('nomina.horas_extras.index', 'nomina.horas_extras.masivas')),
             $link('Préstamos', route('nomina.prestamos.index'), request()->routeIs('nomina.prestamos.*')),
+            $link('Deudas del Personal', route('nomina.deudas.index'), request()->routeIs('nomina.deudas.*')),
             $link('Empleados', route('nomina.empleados.index'), request()->routeIs('nomina.empleados.*')),
             $link('Organigrama', route('nomina.organizacion'), request()->routeIs('nomina.organizacion')),
             $link('Sedes y áreas', route('nomina.sedes.index'), request()->routeIs('nomina.sedes.*')),

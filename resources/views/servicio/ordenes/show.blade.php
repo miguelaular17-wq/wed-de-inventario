@@ -180,6 +180,28 @@
             @endif
             <div><span class="muted">Repuestos descontados</span><div>{{ $orden->repuestos_descontados_at ? $orden->repuestos_descontados_at->format('d/m/Y H:i') : 'No' }}</div></div>
         </div>
+        @php
+            $ev = is_array($orden->evidencias) ? $orden->evidencias : [];
+            $evImgs = array_values(array_filter($ev['imagenes'] ?? []));
+            $evVideo = $ev['video'] ?? null;
+        @endphp
+        @if($evImgs !== [] || $evVideo)
+            <div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0;">
+                <h3 style="margin:0 0 10px;font-size:1rem;">Evidencias</h3>
+                <div style="display:flex;flex-wrap:wrap;gap:10px;">
+                    @foreach($evImgs as $url)
+                        <a href="{{ $url }}" target="_blank" rel="noopener" style="display:block;width:120px;height:120px;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">
+                            <img src="{{ $url }}" alt="Evidencia" style="width:100%;height:100%;object-fit:cover;">
+                        </a>
+                    @endforeach
+                </div>
+                @if($evVideo)
+                    <div style="margin-top:12px;max-width:420px;">
+                        <video src="{{ $evVideo }}" controls style="width:100%;border-radius:8px;background:#0f172a;"></video>
+                    </div>
+                @endif
+            </div>
+        @endif
         <hr style="border:none;border-top:1px dashed #e2e8f0;margin:20px 0;">
         <p class="muted" style="margin:0 0 4px;">Falla</p>
         <p>{{ $orden->falla ?: '—' }}</p>

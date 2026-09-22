@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -194,26 +195,44 @@ private fun HomeScreen(state: AppUiState, viewModel: AppViewModel) {
     Scaffold(
         topBar = {
             TopAppBar(
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                expandedHeight = 48.dp,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     titleContentColor = MaterialTheme.colorScheme.onSurface,
                 ),
                 title = {
-                    Column {
-                        Text("Nexo PD", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            "Nexo PD",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
                         Text(
                             state.user?.displayName.orEmpty(),
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 },
                 actions = {
-                    TextButton(onClick = viewModel::logout) { Text("Salir") }
+                    TextButton(
+                        onClick = viewModel::logout,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    ) { Text("Salir") }
                 },
             )
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                modifier = Modifier.height(56.dp),
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                tonalElevation = 2.dp,
+            ) {
                 tabs.forEachIndexed { index, label ->
                     NavigationBarItem(
                         selected = selectedTab == index,
@@ -227,10 +246,14 @@ private fun HomeScreen(state: AppUiState, viewModel: AppViewModel) {
                         icon = {
                             Text(
                                 if (index == 0) "⌕" else "+",
+                                style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                             )
                         },
-                        label = { Text(label) },
+                        label = {
+                            Text(label, style = MaterialTheme.typography.labelSmall)
+                        },
+                        alwaysShowLabel = true,
                     )
                 }
             }
