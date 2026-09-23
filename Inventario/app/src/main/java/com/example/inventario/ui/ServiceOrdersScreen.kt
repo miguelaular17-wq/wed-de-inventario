@@ -23,10 +23,12 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,6 +44,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -92,13 +95,15 @@ import com.example.inventario.data.ChoiceDto
 import com.example.inventario.data.CreateServiceOrderRequest
 import com.example.inventario.data.ServiceOrderDto
 import com.example.inventario.data.TechnicianDto
-import com.example.inventario.ui.theme.NexoDanger
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.example.inventario.ui.theme.NexoBlue
+import com.example.inventario.ui.theme.NexoBlueDark
 import com.example.inventario.ui.theme.NexoBorder
+import com.example.inventario.ui.theme.NexoDanger
 import com.example.inventario.ui.theme.NexoMuted
 import com.example.inventario.ui.theme.NexoSuccess
 import com.example.inventario.ui.theme.NexoWarning
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -118,29 +123,30 @@ fun ServiceOrdersScreen(state: AppUiState, viewModel: AppViewModel) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 10.dp)) {
+        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp)) {
             Text(
                 "Consultar equipos",
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = NexoBlueDark,
             )
+            Spacer(Modifier.height(4.dp))
             Text(
                 "Busca por orden, cliente o IMEI y revisa el seguimiento.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = NexoMuted,
             )
         }
 
         Surface(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            shape = RoundedCornerShape(18.dp),
+            color = Color.White,
+            border = BorderStroke(1.dp, NexoBorder.copy(alpha = 0.85f)),
             shadowElevation = 2.dp,
         ) {
             Column(
-                modifier = Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 OutlinedTextField(
                     value = state.serviceSearch,
@@ -148,13 +154,14 @@ fun ServiceOrdersScreen(state: AppUiState, viewModel: AppViewModel) {
                     label = { Text("Orden, cliente o IMEI") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                 )
                 Button(
                     onClick = viewModel::searchServiceOrders,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                ) { Text("Buscar registro") }
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NexoBlue),
+                ) { Text("Buscar registro", fontWeight = FontWeight.SemiBold) }
             }
         }
 
@@ -258,61 +265,76 @@ fun ServiceOrdersScreen(state: AppUiState, viewModel: AppViewModel) {
 private fun ServiceOrderRow(order: ServiceOrderDto, onOpen: () -> Unit) {
     val (statusColor, statusBackground) = serviceStatusColors(order.estado)
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+        shape = RoundedCornerShape(18.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, NexoBorder.copy(alpha = 0.75f)),
         shadowElevation = 1.dp,
         onClick = onOpen,
     ) {
-        Column(
-            Modifier.fillMaxWidth().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
         ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Box(
+                Modifier
+                    .width(4.dp)
+                    .fillMaxHeight()
+                    .background(statusColor.copy(alpha = 0.85f)),
+            )
+            Column(
+                Modifier
+                    .weight(1f)
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
             ) {
-                Text(
-                    order.codigo,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Surface(color = statusBackground, shape = RoundedCornerShape(20.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
-                        order.statusLabel.ifBlank { order.estado },
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = statusColor,
+                        order.codigo,
+                        fontWeight = FontWeight.Bold,
+                        color = NexoBlue,
+                        style = MaterialTheme.typography.titleMedium,
                     )
+                    Surface(color = statusBackground, shape = RoundedCornerShape(999.dp)) {
+                        Text(
+                            order.statusLabel.ifBlank { order.estado },
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = statusColor,
+                        )
+                    }
                 }
-            }
-            Text(
-                listOfNotNull(order.marca, order.modelo).joinToString(" ").ifBlank { "Equipo" },
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                if (order.imei.isNotBlank()) "IMEI  ${order.imei}"
-                else "Serial  ${order.serial.orEmpty().ifBlank { "—" }}",
-                style = MaterialTheme.typography.bodySmall,
-                color = NexoMuted,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                InfoPill(order.deviceTypeLabel.ifBlank { "Celular" })
-                InfoPill(order.managementTypeLabel)
-                InfoPill(order.sede)
-                InfoPill(order.priorityLabel)
-            }
-            if (order.clientName.isNotBlank()) {
                 Text(
-                    "Cliente: ${order.clientName}",
+                    listOfNotNull(order.marca, order.modelo).joinToString(" ").ifBlank { "Equipo" },
+                    fontWeight = FontWeight.SemiBold,
+                    color = NexoBlueDark,
+                )
+                Text(
+                    if (order.imei.isNotBlank()) "IMEI  ${order.imei}"
+                    else "Serial  ${order.serial.orEmpty().ifBlank { "—" }}",
                     style = MaterialTheme.typography.bodySmall,
                     color = NexoMuted,
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    InfoPill(order.deviceTypeLabel.ifBlank { "Celular" })
+                    InfoPill(order.managementTypeLabel)
+                    InfoPill(order.sede)
+                    InfoPill(order.priorityLabel)
+                }
+                if (order.clientName.isNotBlank()) {
+                    Text(
+                        "Cliente: ${order.clientName}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NexoMuted,
+                    )
+                }
+                Text(order.falla, maxLines = 2, style = MaterialTheme.typography.bodySmall, color = NexoMuted)
             }
-            Text(order.falla, maxLines = 2, style = MaterialTheme.typography.bodySmall, color = NexoMuted)
         }
     }
 }
@@ -320,12 +342,16 @@ private fun ServiceOrderRow(order: ServiceOrderDto, onOpen: () -> Unit) {
 @Composable
 private fun InfoPill(text: String) {
     if (text.isBlank()) return
-    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(6.dp)) {
+    Surface(
+        color = Color(0xFFEEF3F9),
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, NexoBorder.copy(alpha = 0.6f)),
+    ) {
         Text(
             text,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = NexoMuted,
         )
     }
 }
@@ -475,20 +501,29 @@ private fun CreatePhoneOrderForm(
         Column(
             Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+                .background(NexoBlueDark)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
         ) {
-            Text("Registrar equipo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Registrar equipo",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+            )
+            Text(
+                "Completa los datos de recepción",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.72f),
+            )
         }
-        HorizontalDivider()
         Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
 
             SectionCard("Tipo de gestión") {
@@ -804,22 +839,27 @@ private fun ServiceOrderDetailScreen(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .background(NexoBlueDark)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(order.codigo, style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            order.codigo,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White,
+                        )
                         Text(
                             order.statusLabel.ifBlank { order.estado },
                             style = MaterialTheme.typography.bodySmall,
-                            color = NexoMuted,
+                            color = Color.White.copy(alpha = 0.75f),
                         )
                     }
-                    TextButton(onClick = onDismiss, enabled = !submitting) { Text("Cerrar") }
+                    TextButton(onClick = onDismiss, enabled = !submitting) {
+                        Text("Cerrar", color = Color.White.copy(alpha = 0.92f))
+                    }
                 }
-                HorizontalDivider()
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentPadding = PaddingValues(16.dp),
@@ -1043,16 +1083,22 @@ private fun ServiceOrderDetailScreen(
 @Composable
 private fun SectionCard(title: String, content: @Composable () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)),
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, NexoBorder.copy(alpha = 0.8f)),
+        shadowElevation = 0.5.dp,
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(2.dp))
+            Text(
+                title,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = NexoBlueDark,
+            )
+            Spacer(Modifier.height(4.dp))
             content()
         }
     }

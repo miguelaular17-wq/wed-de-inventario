@@ -24,6 +24,11 @@ interface InventoryRepository {
     ): ServiceOrderDto
     suspend fun changeServiceOrderStatus(id: Long, status: String, comment: String): ServiceOrderDto
     suspend fun sites(): SitesResponse
+    suspend fun publicStockSites(): SitesResponse
+    suspend fun publicStock(page: Int, query: String, site: String): InventoryPage
+    suspend fun pedidoSearch(query: String): List<PedidoProductDto>
+    suspend fun pedidoCategorias(): List<String>
+    suspend fun createPedido(request: CreatePedidoRequest): CreatePedidoResponse
     suspend fun inventory(page: Int, query: String, category: String, site: String): InventoryPage
     suspend fun requisitions(status: String, site: String): List<RequisitionDto>
     suspend fun metrics(code: String, origin: String, quantity: Int, site: String): MetricasDto
@@ -108,6 +113,29 @@ class NetworkInventoryRepository(
     }
 
     override suspend fun sites(): SitesResponse = apiCall { api.sedes() }
+
+    override suspend fun publicStockSites(): SitesResponse = apiCall { api.publicStockSites() }
+
+    override suspend fun publicStock(page: Int, query: String, site: String): InventoryPage = apiCall {
+        val response = api.publicStock(page, query.ifBlank { null }, site)
+        InventoryPage(
+            items = response.data,
+            currentPage = response.meta.currentPage,
+            lastPage = response.meta.lastPage,
+            total = response.meta.total,
+            categories = response.filters.categories,
+            originSites = emptyList(),
+        )
+    }
+
+    override suspend fun pedidoSearch(query: String): List<PedidoProductDto> =
+        apiCall { api.pedidoSearch(query).productos }
+
+    override suspend fun pedidoCategorias(): List<String> =
+        apiCall { api.pedidoCategorias().categorias }
+
+    override suspend fun createPedido(request: CreatePedidoRequest): CreatePedidoResponse =
+        apiCall { api.createPedido(request) }
 
     override suspend fun inventory(
         page: Int,

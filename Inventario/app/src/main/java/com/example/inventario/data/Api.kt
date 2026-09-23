@@ -67,6 +67,25 @@ interface InventarioApi {
         @Body request: ChangeServiceOrderStatusRequest,
     ): ServiceOrderResponse
 
+    @GET("api/v1/existencias/sedes")
+    suspend fun publicStockSites(): SitesResponse
+
+    @GET("api/v1/existencias")
+    suspend fun publicStock(
+        @Query("page") page: Int,
+        @Query("q") query: String? = null,
+        @Query("sede") site: String,
+    ): InventoryPageDto
+
+    @GET("api/v1/pedidos/buscar")
+    suspend fun pedidoSearch(@Query("q") query: String): PedidoSearchResponse
+
+    @GET("api/v1/pedidos/categorias")
+    suspend fun pedidoCategorias(): PedidoCategoriasResponse
+
+    @POST("api/v1/pedidos")
+    suspend fun createPedido(@Body request: CreatePedidoRequest): CreatePedidoResponse
+
     @GET("api/v1/sedes")
     suspend fun sedes(): SitesResponse
 

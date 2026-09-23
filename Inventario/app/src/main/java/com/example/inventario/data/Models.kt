@@ -291,4 +291,42 @@ data class InventoryPage(
     val originSites: List<SedeDto>,
 )
 
+@Serializable
+data class PedidoProductDto(
+    val id: Long? = null,
+    val codigo: String = "",
+    val producto: String = "",
+    val categoria: String? = null,
+    val proveedor: String? = null,
+    val stock: Int = 0,
+)
+
+@Serializable
+data class PedidoSearchResponse(
+    val productos: List<PedidoProductDto> = emptyList(),
+)
+
+@Serializable
+data class PedidoCategoriasResponse(
+    val categorias: List<String> = emptyList(),
+)
+
+@Serializable
+data class CreatePedidoRequest(
+    @SerialName("producto_id") val productoId: Long? = null,
+    val codigo: String,
+    val producto: String,
+    val categoria: String? = null,
+    val proveedor: String? = null,
+    val solicitante: String? = null,
+    val sede: String? = null,
+    val notas: String? = null,
+)
+
+@Serializable
+data class CreatePedidoResponse(
+    val ok: Boolean = false,
+    val message: String = "",
+)
+
 class SessionExpiredException : Exception("La sesión expiró")

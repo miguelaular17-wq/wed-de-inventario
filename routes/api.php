@@ -4,10 +4,21 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\InventoryController;
 use App\Http\Controllers\Api\V1\RequisitionController;
 use App\Http\Controllers\Api\V1\ServiceOrderController;
+use App\Http\Controllers\PedidoSolicitadoController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+
+    // Existencias y Q Pedir públicos (como chips del login web)
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::get('/existencias/sedes', [InventoryController::class, 'publicSedes']);
+        Route::get('/existencias', [InventoryController::class, 'publicIndex']);
+
+        Route::get('/pedidos/buscar', [PedidoSolicitadoController::class, 'search']);
+        Route::get('/pedidos/categorias', [PedidoSolicitadoController::class, 'categorias']);
+        Route::post('/pedidos', [PedidoSolicitadoController::class, 'store'])->middleware('throttle:20,1');
+    });
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/auth/me', [AuthController::class, 'me']);

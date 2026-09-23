@@ -153,9 +153,10 @@ class GerencialController extends Controller
                 static fn ($v) => trim((string) $v),
                 $vendedorRaw
             ), static fn ($v) => $v !== '' && mb_strtolower($v, 'UTF-8') !== 'todos')));
+            // Un solo vendedor (como el select clásico)
+            $vendedores = array_slice($vendedores, 0, 1);
         } elseif (is_string($vendedorRaw) && trim($vendedorRaw) !== '') {
-            $parts = preg_split('/\s*,\s*/', trim($vendedorRaw)) ?: [trim($vendedorRaw)];
-            $vendedores = array_values(array_unique(array_filter($parts)));
+            $vendedores = [trim($vendedorRaw)];
         }
 
         // Nombres canónicos del catálogo para que los checkboxes coincidan tras Aplicar

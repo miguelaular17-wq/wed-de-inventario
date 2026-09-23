@@ -84,7 +84,7 @@
                     <th>Venta neta</th>
                     <th>FAC</th>
                     <th>Nº DEV</th>
-                    <th>Productos</th>
+                    <th>Cantidad</th>
                     <th>Utilidad</th>
                     <th>% de utilidad</th>
                 </tr>
@@ -118,7 +118,7 @@
                     <th>Venta neta</th>
                     <th>FAC</th>
                     <th>Nº DEV</th>
-                    <th>Productos</th>
+                    <th>Cantidad</th>
                     <th>Utilidad</th>
                     <th>% de utilidad</th>
                 </tr>

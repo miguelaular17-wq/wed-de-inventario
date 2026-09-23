@@ -617,7 +617,7 @@ class GerencialDashboardService
                     ->selectRaw($this->sqlImporte('neto').' as ventas_neto')
                     ->selectRaw($this->sqlImporte('costo').' as costo')
                     ->selectRaw($this->sqlImporteDev().' as devoluciones_usd')
-                    ->selectRaw($this->sqlProductosDistintos().' as productos');
+                    ->selectRaw($this->sqlCantidadFacturada().' as productos');
 
                 $row = $query->first();
                 if ($row) {
@@ -629,7 +629,7 @@ class GerencialDashboardService
                     $kpi['ventas_usd'] = $ventas;
                     $kpi['unidades'] = round((float) $row->unidades, 2);
                     $kpi['margen_usd'] = round($ventas - (float) $row->costo, 2);
-                    $kpi['productos'] = (int) $row->productos;
+                    $kpi['productos'] = (int) round((float) $row->productos);
                 }
             }
 
@@ -719,7 +719,7 @@ class GerencialDashboardService
             ->selectRaw($this->sqlImporte('neto').' as ventas_neto')
             ->selectRaw($this->sqlImporte('costo').' as costo')
             ->selectRaw($this->sqlImporteDev().' as devoluciones_usd')
-            ->selectRaw($this->sqlProductosDistintos().' as productos')
+            ->selectRaw($this->sqlCantidadFacturada().' as productos')
             ->groupBy(DB::raw('UPPER(TRIM(vd.sede))'));
 
         foreach ($query->get() as $row) {
@@ -735,7 +735,7 @@ class GerencialDashboardService
             $base[$sede]['ventas_usd'] = $ventas;
             $base[$sede]['unidades'] = round((float) $row->unidades, 2);
             $base[$sede]['margen_usd'] = round($ventas - (float) $row->costo, 2);
-            $base[$sede]['productos'] = (int) $row->productos;
+            $base[$sede]['productos'] = (int) round((float) $row->productos);
         }
 
         return $base;
@@ -826,9 +826,16 @@ class GerencialDashboardService
         return "SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN ABS(vd.cantidad * {$campo}) ELSE 0 END)";
     }
 
+    /** Suma de unidades en facturas (cantidad facturada). */
+    public function sqlCantidadFacturada(): string
+    {
+        return "SUM(CASE WHEN UPPER(vd.tipo_documento)='FAC' THEN ABS(vd.cantidad) ELSE 0 END)";
+    }
+
+    /** @deprecated Preferir sqlCantidadFacturada(); se mantiene por compatibilidad. */
     public function sqlProductosDistintos(): string
     {
-        return "COUNT(DISTINCT CASE WHEN UPPER(vd.tipo_documento)='FAC' THEN COALESCE(NULLIF(TRIM(vd.codigo_producto), ''), NULLIF(TRIM(vd.nombre_producto), ''), CAST(vd.producto_id AS TEXT)) END)";
+        return $this->sqlCantidadFacturada();
     }
 
     /**

@@ -6,18 +6,22 @@ import android.webkit.MimeTypeMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.inventario.data.CreatePedidoRequest
 import com.example.inventario.data.CreateRequisitionRequest
 import com.example.inventario.data.CreateServiceOrderRequest
 import com.example.inventario.data.InventarioItemDto
 import com.example.inventario.data.InventoryRepository
 import com.example.inventario.data.MetricasDto
+import com.example.inventario.data.PedidoProductDto
 import com.example.inventario.data.RequisitionDto
 import com.example.inventario.data.SedeDto
 import com.example.inventario.data.ServiceOptionsDto
 import com.example.inventario.data.ServiceOrderDto
 import com.example.inventario.data.SessionExpiredException
 import com.example.inventario.data.UserDto
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +36,29 @@ data class AppUiState(
     val user: UserDto? = null,
     val loginLoading: Boolean = false,
     val loginError: String? = null,
+    val guestStockOpen: Boolean = false,
+    val guestSites: List<SedeDto> = emptyList(),
+    val guestActiveSite: SedeDto? = null,
+    val guestInventory: List<InventarioItemDto> = emptyList(),
+    val guestInventoryPage: Int = 0,
+    val guestInventoryLastPage: Int = 1,
+    val guestInventoryLoading: Boolean = false,
+    val guestInventoryError: String? = null,
+    val guestSearch: String = "",
+    val guestPedidoOpen: Boolean = false,
+    val guestPedidoQuery: String = "",
+    val guestPedidoResults: List<PedidoProductDto> = emptyList(),
+    val guestPedidoSearching: Boolean = false,
+    val guestPedidoCategories: List<String> = emptyList(),
+    val guestPedidoSelected: PedidoProductDto? = null,
+    val guestPedidoManual: Boolean = false,
+    val guestPedidoCategory: String = "",
+    val guestPedidoSolicitante: String = "",
+    val guestPedidoSede: String = "",
+    val guestPedidoNotas: String = "",
+    val guestPedidoSubmitting: Boolean = false,
+    val guestPedidoMessage: String? = null,
+    val guestPedidoError: String? = null,
     val serviceOptions: ServiceOptionsDto = ServiceOptionsDto(),
     val serviceOrders: List<ServiceOrderDto> = emptyList(),
     val serviceOrdersPage: Int = 0,
@@ -69,6 +96,7 @@ data class AppUiState(
 class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
     private val _state = MutableStateFlow(AppUiState())
     val state: StateFlow<AppUiState> = _state.asStateFlow()
+    private var guestPedidoSearchJob: Job? = null
 
     init {
         restoreSession()
@@ -580,6 +608,289 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
                 inventoryError = error.userMessage(),
                 requisitionsError = error.userMessage(),
             )
+        }
+    }
+
+    fun openGuestStock() = viewModelScope.launch {
+        _state.update {
+            it.copy(
+                guestStockOpen = true,
+                guestInventoryError = null,
+                guestInventoryLoading = true,
+            )
+        }
+        try {
+            val sitesResponse = repository.publicStockSites()
+            val sites = sitesResponse.data
+            val active = sites.firstOrNull { it.apiValue.equals(sitesResponse.active, true) }
+                ?: sites.firstOrNull()
+            _state.update {
+                it.copy(
+                    guestSites = sites,
+                    guestActiveSite = active,
+                    guestSearch = "",
+                )
+            }
+            if (active != null) {
+                loadGuestInventory(page = 1, reset = true)
+            } else {
+                _state.update {
+                    it.copy(
+                        guestInventoryLoading = false,
+                        guestInventoryError = "No hay sedes disponibles",
+                    )
+                }
+            }
+        } catch (error: Exception) {
+            _state.update {
+                it.copy(
+                    guestInventoryLoading = false,
+                    guestInventoryError = error.userMessage(),
+                )
+            }
+        }
+    }
+
+    fun closeGuestStock() {
+        _state.update {
+            it.copy(
+                guestStockOpen = false,
+                guestInventory = emptyList(),
+                guestInventoryError = null,
+                guestSearch = "",
+            )
+        }
+    }
+
+    fun setGuestSearch(value: String) {
+        _state.update { it.copy(guestSearch = value) }
+    }
+
+    fun setGuestSite(site: SedeDto) {
+        _state.update { it.copy(guestActiveSite = site) }
+        loadGuestInventory(page = 1, reset = true)
+    }
+
+    fun searchGuestStock() = loadGuestInventory(page = 1, reset = true)
+
+    fun loadMoreGuestStock() {
+        val state = _state.value
+        if (state.guestInventoryLoading || state.guestInventoryPage >= state.guestInventoryLastPage) return
+        loadGuestInventory(page = state.guestInventoryPage + 1, reset = false)
+    }
+
+    private fun loadGuestInventory(page: Int, reset: Boolean) = viewModelScope.launch {
+        val site = _state.value.guestActiveSite?.apiValue ?: return@launch
+        _state.update { it.copy(guestInventoryLoading = true, guestInventoryError = null) }
+        try {
+            val result = repository.publicStock(page, _state.value.guestSearch, site)
+            _state.update {
+                it.copy(
+                    guestInventory = mergeInventoryPages(it.guestInventory, result.items, reset),
+                    guestInventoryPage = result.currentPage,
+                    guestInventoryLastPage = result.lastPage,
+                    guestInventoryLoading = false,
+                )
+            }
+        } catch (error: Exception) {
+            _state.update {
+                it.copy(
+                    guestInventoryLoading = false,
+                    guestInventoryError = error.userMessage(),
+                )
+            }
+        }
+    }
+
+    fun openGuestPedido() = viewModelScope.launch {
+        _state.update {
+            it.copy(
+                guestPedidoOpen = true,
+                guestPedidoQuery = "",
+                guestPedidoResults = emptyList(),
+                guestPedidoSelected = null,
+                guestPedidoManual = false,
+                guestPedidoCategory = "",
+                guestPedidoSolicitante = "",
+                guestPedidoSede = "",
+                guestPedidoNotas = "",
+                guestPedidoMessage = null,
+                guestPedidoError = null,
+            )
+        }
+        try {
+            val categorias = repository.pedidoCategorias()
+            _state.update { it.copy(guestPedidoCategories = categorias) }
+        } catch (error: Exception) {
+            _state.update { it.copy(guestPedidoError = error.userMessage()) }
+        }
+    }
+
+    fun closeGuestPedido() {
+        guestPedidoSearchJob?.cancel()
+        _state.update {
+            it.copy(
+                guestPedidoOpen = false,
+                guestPedidoResults = emptyList(),
+                guestPedidoSelected = null,
+                guestPedidoMessage = null,
+                guestPedidoError = null,
+            )
+        }
+    }
+
+    fun setGuestPedidoQuery(value: String) {
+        _state.update {
+            it.copy(
+                guestPedidoQuery = value,
+                guestPedidoMessage = null,
+                guestPedidoError = null,
+            )
+        }
+        guestPedidoSearchJob?.cancel()
+        val q = value.trim()
+        if (q.length < 2) {
+            _state.update { it.copy(guestPedidoResults = emptyList(), guestPedidoSearching = false) }
+            return
+        }
+        guestPedidoSearchJob = viewModelScope.launch {
+            delay(300)
+            _state.update { it.copy(guestPedidoSearching = true) }
+            try {
+                val productos = repository.pedidoSearch(q)
+                _state.update {
+                    it.copy(guestPedidoResults = productos, guestPedidoSearching = false)
+                }
+            } catch (error: Exception) {
+                _state.update {
+                    it.copy(
+                        guestPedidoSearching = false,
+                        guestPedidoError = error.userMessage(),
+                        guestPedidoResults = emptyList(),
+                    )
+                }
+            }
+        }
+    }
+
+    fun selectGuestPedidoProduct(product: PedidoProductDto) {
+        _state.update {
+            it.copy(
+                guestPedidoSelected = product,
+                guestPedidoManual = false,
+                guestPedidoCategory = product.categoria.orEmpty(),
+                guestPedidoQuery = product.producto,
+                guestPedidoResults = emptyList(),
+                guestPedidoError = null,
+                guestPedidoMessage = null,
+            )
+        }
+    }
+
+    fun selectGuestPedidoManual() {
+        val nombre = _state.value.guestPedidoQuery.trim().uppercase()
+        if (nombre.isBlank()) return
+        _state.update {
+            it.copy(
+                guestPedidoSelected = PedidoProductDto(
+                    id = null,
+                    codigo = "MANUAL",
+                    producto = nombre,
+                ),
+                guestPedidoManual = true,
+                guestPedidoCategory = "",
+                guestPedidoResults = emptyList(),
+                guestPedidoError = null,
+                guestPedidoMessage = null,
+            )
+        }
+    }
+
+    fun setGuestPedidoCategory(value: String) {
+        _state.update { it.copy(guestPedidoCategory = value) }
+    }
+
+    fun setGuestPedidoSolicitante(value: String) {
+        _state.update { it.copy(guestPedidoSolicitante = value) }
+    }
+
+    fun setGuestPedidoSede(value: String) {
+        _state.update { it.copy(guestPedidoSede = value) }
+    }
+
+    fun setGuestPedidoNotas(value: String) {
+        _state.update { it.copy(guestPedidoNotas = value) }
+    }
+
+    fun clearGuestPedidoSelection() {
+        _state.update {
+            it.copy(
+                guestPedidoSelected = null,
+                guestPedidoManual = false,
+                guestPedidoCategory = "",
+            )
+        }
+    }
+
+    fun submitGuestPedido() = viewModelScope.launch {
+        val snapshot = _state.value
+        val selected = snapshot.guestPedidoSelected
+        if (selected == null) {
+            _state.update { it.copy(guestPedidoError = "Selecciona o agrega un producto") }
+            return@launch
+        }
+        if (snapshot.guestPedidoManual && snapshot.guestPedidoCategory.isBlank()) {
+            _state.update { it.copy(guestPedidoError = "Selecciona una categoría") }
+            return@launch
+        }
+        _state.update {
+            it.copy(guestPedidoSubmitting = true, guestPedidoError = null, guestPedidoMessage = null)
+        }
+        try {
+            val response = repository.createPedido(
+                CreatePedidoRequest(
+                    productoId = selected.id,
+                    codigo = selected.codigo.ifBlank { "MANUAL" },
+                    producto = selected.producto,
+                    categoria = snapshot.guestPedidoCategory.ifBlank { selected.categoria },
+                    proveedor = selected.proveedor,
+                    solicitante = snapshot.guestPedidoSolicitante.trim().ifBlank { null },
+                    sede = snapshot.guestPedidoSede.ifBlank { null },
+                    notas = snapshot.guestPedidoNotas.trim().ifBlank { null },
+                ),
+            )
+            if (!response.ok) {
+                _state.update {
+                    it.copy(
+                        guestPedidoSubmitting = false,
+                        guestPedidoError = response.message.ifBlank { "No se pudo guardar la solicitud" },
+                    )
+                }
+                return@launch
+            }
+            _state.update {
+                it.copy(
+                    guestPedidoSubmitting = false,
+                    guestPedidoMessage = response.message.ifBlank {
+                        "Producto solicitado correctamente. El equipo de compras lo revisará."
+                    },
+                    guestPedidoSelected = null,
+                    guestPedidoManual = false,
+                    guestPedidoQuery = "",
+                    guestPedidoCategory = "",
+                    guestPedidoSolicitante = "",
+                    guestPedidoSede = "",
+                    guestPedidoNotas = "",
+                    guestPedidoResults = emptyList(),
+                )
+            }
+        } catch (error: Exception) {
+            _state.update {
+                it.copy(
+                    guestPedidoSubmitting = false,
+                    guestPedidoError = error.userMessage(),
+                )
+            }
         }
     }
 

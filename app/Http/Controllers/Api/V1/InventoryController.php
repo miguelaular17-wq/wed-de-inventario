@@ -103,6 +103,87 @@ class InventoryController extends Controller
         ]);
     }
 
+    public function publicSedes(): JsonResponse
+    {
+        $sedes = collect(config('inventario.sedes_stock', config('inventario.sedes_locales', [])))
+            ->map(fn (string $codigo) => [
+                'codigo' => $codigo,
+                'nombre' => config('inventario.display.'.$codigo, $codigo),
+            ])
+            ->values()
+            ->all();
+
+        return response()->json([
+            'data' => $sedes,
+            'active' => $sedes[0]['codigo'] ?? null,
+            'locked' => false,
+        ]);
+    }
+
+    /**
+     * Consulta de existencias sin autenticación (equivalente a /vendedor).
+     */
+    public function publicIndex(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'q' => ['nullable', 'string', 'max:200'],
+            'sede' => ['nullable', 'string', 'max:40'],
+        ]);
+
+        $permitidas = config('inventario.sedes_stock', config('inventario.sedes_locales', []));
+        $sede = strtoupper(trim((string) ($data['sede'] ?? '')));
+        if ($sede === '' || ! in_array($sede, $permitidas, true)) {
+            $sede = $permitidas[0] ?? 'DORAL';
+        }
+
+        $rows = $this->products->loadForSede($sede);
+        $q = mb_strtolower(trim((string) ($data['q'] ?? '')), 'UTF-8');
+        if ($q !== '') {
+            $rows = $rows->filter(function (array $row) use ($q) {
+                return str_contains(mb_strtolower((string) ($row['producto'] ?? ''), 'UTF-8'), $q)
+                    || str_contains(mb_strtolower((string) ($row['cod_centro'] ?? ''), 'UTF-8'), $q);
+            });
+        }
+
+        $rows = $rows->values();
+        $page = (int) ($data['page'] ?? 1);
+        $perPage = (int) ($data['per_page'] ?? 30);
+        $total = $rows->count();
+        $lastPage = max(1, (int) ceil($total / $perPage));
+
+        $items = $rows->forPage($page, $perPage)->values()->map(function (array $row) {
+            $stocks = collect($row['stocks'] ?? [])->map(fn ($qty) => (int) $qty)->all();
+
+            return [
+                'id' => $row['id'] ?? null,
+                'codigo' => (string) ($row['cod_centro'] ?? ''),
+                'producto' => $row['producto'] ?? '',
+                'categoria' => $row['categoria'] ?? null,
+                'subcategoria' => $row['subcategoria'] ?? null,
+                'existencia_local' => (int) ($row['existencia'] ?? 0),
+                'existencia_global' => (int) array_sum($stocks),
+                'stocks' => $stocks,
+                'imagen_url' => $row['url_imagen'] ?? $row['imagen_url'] ?? null,
+            ];
+        });
+
+        return response()->json([
+            'data' => $items,
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage,
+                'per_page' => $perPage,
+                'total' => $total,
+            ],
+            'filters' => [
+                'sede' => $sede,
+            ],
+            'updated_at' => $this->products->lastStockUpdate(),
+        ]);
+    }
+
     public function metrics(Request $request, string $codigo): JsonResponse
     {
         $data = $request->validate([
