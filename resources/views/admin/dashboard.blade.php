@@ -34,11 +34,15 @@
     </div>
     <!-- Graphics/Charts Section -->
     <div style="display:grid;grid-template-columns:1fr;gap:20px;margin:25px 0;background:#fff;border:1px solid var(--border);border-radius:12px;padding:24px;box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-        <h3 style="margin-top:0;margin-bottom:15px;color:#1e293b;font-size:1.1rem;font-weight:600;display:flex;align-items:center;gap:8px;">
-            <span>📊</span> Niveles de Existencia Total por Sede
-        </h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:15px;">
+            <h3 style="margin:0;color:#1e293b;font-size:1.1rem;font-weight:600;display:flex;align-items:center;gap:8px;">
+                <span>📊</span> Niveles de Existencia Total por Sede
+            </h3>
+            <a href="{{ route('vendedor.jrz', ['dias' => 30]) }}" class="btn primary" style="white-space:nowrap;">Ver stock JRZ</a>
+        </div>
+        <p class="muted" style="margin:0 0 12px;font-size:0.85rem;">Haz clic en una barra para abrir el catálogo con existencias y ventas por sede.</p>
         <div style="position:relative;height:280px;width:100%;">
-            <canvas id="stockSedesChart"></canvas>
+            <canvas id="stockSedesChart" style="cursor:pointer;"></canvas>
         </div>
         </div>
     </div>
@@ -104,7 +108,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const labels = Object.keys(chartData);
     const data = Object.values(chartData);
     
-    new Chart(ctx, {
+    const stockUrl = @json(route('vendedor.jrz', ['dias' => 30]));
+    const chart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
@@ -134,6 +139,10 @@ document.addEventListener('DOMContentLoaded', () => {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            onClick: (_evt, elements) => {
+                if (!elements.length) return;
+                window.location.href = stockUrl;
+            },
             plugins: {
                 legend: {
                     display: false
@@ -168,6 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+    void chart;
 });
 </script>
 @endpush

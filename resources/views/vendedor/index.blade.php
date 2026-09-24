@@ -9,12 +9,18 @@
     $descFactor = VentaDescuento::factorDescuento();
     $netoFactor = VentaDescuento::factorNeto();
     $descEtiqueta = VentaDescuento::etiqueta();
-    $verPrecios = auth()->user()?->canSeeCatalogoPrecios() ?? true;
     $modoJrz = !empty($modoJrz);
+    $verPrecios = ! $modoJrz && (auth()->user()?->canSeeCatalogoPrecios() ?? true);
     $diasVentas = (int) ($diasVentas ?? 30);
     $diasOpciones = $diasOpciones ?? [7, 15, 30, 60, 90];
     $ventasPorSede = $ventasPorSede ?? [];
+    $categoria = (string) ($categoria ?? '');
+    $subcategoria = (string) ($subcategoria ?? '');
+    $categoriasTree = $categoriasTree ?? [];
     $formAction = $modoJrz ? route('vendedor.jrz') : route('vendedor.dashboard');
+    $filtrosLimpiar = $modoJrz
+        ? array_filter(['dias' => $diasVentas])
+        : [];
 @endphp
 <div class="cat-page">
 <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
@@ -38,8 +44,8 @@
     </div>
 </div>
 
-{{-- Barra de búsqueda (+ días solo JRZ) --}}
-<form method="GET" action="{{ $formAction }}" class="cat-search">
+{{-- Barra de búsqueda (+ filtros JRZ) --}}
+<form method="GET" action="{{ $formAction }}" class="cat-search" id="vendedor-filtros">
     <div class="cat-search-field">
         <span>🔍</span>
         <input
@@ -52,6 +58,21 @@
         >
     </div>
     @if($modoJrz)
+        <label class="cat-dias-label" for="categoria">
+            Categoría
+            <select name="categoria" id="categoria" onchange="onCategoriaChange()">
+                <option value="">Todas</option>
+                @foreach(array_keys($categoriasTree) as $cat)
+                    <option value="{{ $cat }}" @selected($categoria === $cat)>{{ $cat }}</option>
+                @endforeach
+            </select>
+        </label>
+        <label class="cat-dias-label" for="subcategoria">
+            Subcategoría
+            <select name="subcategoria" id="subcategoria" onchange="this.form.submit()" @disabled($categoria === '')>
+                <option value="">Todas</option>
+            </select>
+        </label>
         <label class="cat-dias-label" for="dias">
             Ventas por sede
             <select name="dias" id="dias" onchange="this.form.submit()">
@@ -61,8 +82,8 @@
             </select>
         </label>
     @endif
-    @if($q)
-        <a href="{{ $modoJrz ? route('vendedor.jrz', ['dias' => $diasVentas]) : route('vendedor.dashboard') }}">✕ Limpiar</a>
+    @if($q !== '' || $categoria !== '' || $subcategoria !== '')
+        <a href="{{ $modoJrz ? route('vendedor.jrz', $filtrosLimpiar) : route('vendedor.dashboard') }}">✕ Limpiar</a>
     @endif
 </form>
 
@@ -98,6 +119,9 @@
                                 <div class="cat-name">{{ $row['producto'] }}</div>
                                 @if(!empty($row['categoria']))
                                     <span class="cat-tag">{{ $row['categoria'] }}</span>
+                                @endif
+                                @if($modoJrz && !empty($row['subcategoria']))
+                                    <span class="cat-tag" style="background:#eef2ff;color:#4338ca;">{{ $row['subcategoria'] }}</span>
                                 @endif
                             </div>
                         </td>
@@ -174,6 +198,7 @@
 @include('partials.pagination', ['paginator' => $rows])
 </div>
 
+@unless($modoJrz)
 {{-- ═══════════════════════════════════════════════
      MODAL — Niveles de Cashea
 ════════════════════════════════════════════════ --}}
@@ -236,6 +261,7 @@
         </div>
     </div>
 </div>
+@endunless
 @endsection
 
 @push('head')
@@ -244,7 +270,7 @@
     from { opacity:0; transform:translateY(24px); }
     to   { opacity:1; transform:translateY(0); }
 }
-.vendedor-row { cursor: pointer; }
+.vendedor-row { cursor: {{ $modoJrz ? 'default' : 'pointer' }}; }
 .vendedor-row:hover { background: #f8faff !important; }
 .nivel-btn {
     display:flex; align-items:center; justify-content:space-between;
@@ -267,6 +293,34 @@ main:has(.cat-page) {
     gap: 12px;
     align-items: center;
     margin: 0 0 18px;
+    flex-wrap: wrap;
+}
+.cat-dias-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+.cat-dias-label select {
+    min-width: 140px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border);
+    background: #fff;
+    color: var(--text);
+    font-size: 0.92rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+}
+.cat-dias-label select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 .cat-search-field {
     position: relative;
@@ -436,26 +490,6 @@ main:has(.cat-page) {
     color: #64748b;
     margin-left: 2px;
 }
-.cat-dias-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.88rem;
-    color: #475569;
-    white-space: nowrap;
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 10px;
-    padding: 8px 12px;
-}
-.cat-dias-label select {
-    border: 1px solid #93c5fd;
-    border-radius: 8px;
-    padding: 6px 8px;
-    background: #fff;
-    font-weight: 600;
-    color: #1e3a8a;
-}
 
 .cat-prices {
     display: grid;
@@ -512,6 +546,39 @@ main:has(.cat-page) {
 @endpush
 
 @push('scripts')
+@if($modoJrz)
+<script>
+(function () {
+    const tree = @json($categoriasTree);
+    const selectedSub = @json($subcategoria);
+    const selCat = document.getElementById('categoria');
+    const selSub = document.getElementById('subcategoria');
+
+    function fillSubcategorias(cat, keepSelected) {
+        if (!selSub) return;
+        const list = cat && tree[cat] ? tree[cat] : [];
+        selSub.innerHTML = '<option value="">Todas</option>';
+        list.forEach(function (sub) {
+            const opt = document.createElement('option');
+            opt.value = sub;
+            opt.textContent = sub;
+            if (keepSelected && sub === selectedSub) {
+                opt.selected = true;
+            }
+            selSub.appendChild(opt);
+        });
+        selSub.disabled = !cat;
+    }
+
+    window.onCategoriaChange = function () {
+        fillSubcategorias(selCat.value, false);
+        document.getElementById('vendedor-filtros').submit();
+    };
+
+    fillSubcategorias(selCat ? selCat.value : '', true);
+})();
+</script>
+@else
 <script>
 (function () {
     const NIVELES = [
@@ -534,7 +601,7 @@ main:has(.cat-page) {
         document.getElementById('cashea-nombre').textContent  = `${nombre} — ${codigo}`;
         document.getElementById('cashea-punit').textContent   = precioUnit  > 0 ? fmt(precioUnit)  : '—';
         document.getElementById('cashea-pmayor').textContent  = precioMayor > 0 ? fmt(precioMayor) : '—';
-        
+
         const netoEspecial = precioUnit * {{ $netoFactor }};
         document.getElementById('cashea-descuento').textContent = precioUnit > 0 ? fmt(netoEspecial) : '—';
 
@@ -577,9 +644,9 @@ main:has(.cat-page) {
     }
 
     function selectNivel(nivel, precio, inicial, restante, cuota) {
-        // Mark active button
         document.querySelectorAll('.nivel-btn').forEach(b => b.classList.remove('activo'));
-        document.getElementById(`nivel-btn-${nivel.id}`).classList.add('activo');
+        const active = document.getElementById(`nivel-btn-${nivel.id}`);
+        if (active) active.classList.add('activo');
 
         document.getElementById('res-nivel-label').textContent = nivel.label;
         document.getElementById('res-inicial').textContent     = fmt(inicial);
@@ -602,18 +669,16 @@ main:has(.cat-page) {
         if (row) openCashea(row);
     };
 
-    // Double-click on any row
     document.querySelectorAll('.vendedor-row').forEach(row => {
         row.addEventListener('dblclick', () => openCashea(row));
     });
 
-    // Close on overlay click
     document.getElementById('cashea-overlay').addEventListener('click', function (e) {
         if (e.target === this) closeCashea();
     });
 
-    // Close on Escape
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCashea(); });
 })();
 </script>
+@endif
 @endpush

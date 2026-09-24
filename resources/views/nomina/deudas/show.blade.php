@@ -28,13 +28,11 @@
     </div>
 
     <div class="nomina-kpis">
-        <div class="nomina-kpi"><span>Total adeudado</span><strong>${{ number_format($ficha['total_adeudado'] ?? 0, 2) }}</strong></div>
+        <div class="nomina-kpi"><span>Total adeudado</span><strong>${{ number_format($ficha['saldo_pendiente'] ?? 0, 2) }}</strong></div>
         <div class="nomina-kpi"><span>Faltante caja</span><strong>${{ number_format($ficha['faltante_caja'] ?? 0, 2) }}</strong></div>
         <div class="nomina-kpi"><span>Préstamos</span><strong>${{ number_format($ficha['prestamos'] ?? 0, 2) }}</strong></div>
         <div class="nomina-kpi"><span>Cobranza</span><strong>${{ number_format($ficha['cobranza'] ?? 0, 2) }}</strong></div>
         <div class="nomina-kpi"><span>Otros</span><strong>${{ number_format($ficha['otros'] ?? 0, 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Pagado</span><strong>${{ number_format($ficha['pagado'] ?? 0, 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Saldo pendiente</span><strong>${{ number_format($ficha['saldo_pendiente'] ?? 0, 2) }}</strong></div>
     </div>
 
     <form method="GET" class="filter-bar" style="margin-top:16px; display:flex; flex-wrap:wrap; gap:12px; align-items:end;">
@@ -78,7 +76,6 @@
                     <th>Concepto</th>
                     <th>Fecha</th>
                     <th class="text-right">Monto</th>
-                    <th class="text-right">Pagado</th>
                     <th class="text-right">Saldo</th>
                     <th>Estado</th>
                     <th></th>
@@ -96,7 +93,6 @@
                         <td>{{ $item['concepto'] }}</td>
                         <td>{{ $item['fecha'] ? \Carbon\Carbon::parse($item['fecha'])->format('d/m/Y') : '—' }}</td>
                         <td class="text-right">${{ number_format($item['monto'], 2) }}</td>
-                        <td class="text-right">${{ number_format($item['pagado'], 2) }}</td>
                         <td class="text-right"><strong>${{ number_format($item['saldo'], 2) }}</strong></td>
                         <td>{{ $estados[$item['estado']] ?? $item['estado'] }}</td>
                         <td>
@@ -107,7 +103,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8" class="muted">Este empleado no tiene deudas con esos filtros.</td>
+                        <td colspan="7" class="muted">Este empleado no tiene deudas con esos filtros.</td>
                     </tr>
                 @endforelse
             </tbody>

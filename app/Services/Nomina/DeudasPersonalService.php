@@ -32,7 +32,6 @@ class DeudasPersonalService
     public const ESTADOS = [
         'pendiente' => 'Pendiente',
         'parcial' => 'Parcial',
-        'pagado' => 'Pagado',
     ];
 
     public function __construct(
@@ -123,7 +122,7 @@ class DeudasPersonalService
         $filas = collect();
         foreach ($empleados as $empleado) {
             $detalle = $this->detalleEmpleado($empleado, $cobranzaMap[$empleado->id] ?? null, $filtros);
-            if ($detalle['items']->isEmpty() && ($detalle['saldo_pendiente'] ?? 0) <= 0 && ($detalle['pagado'] ?? 0) <= 0) {
+            if (($detalle['saldo_pendiente'] ?? 0) <= 0.009) {
                 continue;
             }
             if (! empty($filtros['tipo']) || ! empty($filtros['estado']) || ! empty($filtros['monto_min']) || ! empty($filtros['monto_max'])) {
@@ -140,12 +139,12 @@ class DeudasPersonalService
         }
 
         $resumen = [
-            'total_adeudado' => round((float) $filas->sum('total_adeudado'), 2),
+            'total_adeudado' => round((float) $filas->sum('saldo_pendiente'), 2),
             'faltantes_caja' => round((float) $filas->sum('faltante_caja'), 2),
             'prestamos' => round((float) $filas->sum('prestamos'), 2),
             'cobranza' => round((float) $filas->sum('cobranza'), 2),
             'otros' => round((float) $filas->sum('otros'), 2),
-            'pagado' => round((float) $filas->sum('pagado'), 2),
+            'pagado' => 0.0,
             'saldo_pendiente' => round((float) $filas->sum('saldo_pendiente'), 2),
             'personas' => $filas->count(),
             'personas_cobranza_personal' => $filas->where('cobranza_es_personal', true)->where('cobranza', '>', 0)->count(),
@@ -200,9 +199,7 @@ class DeudasPersonalService
         $prestamos = round((float) $items->where('tipo', self::TIPO_PRESTAMO)->sum('saldo'), 2);
         $cobranzaSaldo = round((float) $items->where('tipo', self::TIPO_COBRANZA)->sum('saldo'), 2);
         $otros = round((float) $items->where('tipo', self::TIPO_OTROS)->sum('saldo'), 2);
-        $pagado = round((float) $items->sum('pagado'), 2);
         $saldo = round($faltante + $prestamos + $cobranzaSaldo + $otros, 2);
-        $totalAdeudado = round($saldo + $pagado, 2);
 
         return [
             'empleado' => $empleado,
@@ -218,9 +215,9 @@ class DeudasPersonalService
             'cobranza_codigo' => $cobranza['codigo'],
             'cobranza_nombre' => $cobranza['nombre_personal'] ?? null,
             'otros' => $otros,
-            'pagado' => $pagado,
+            'pagado' => 0.0,
             'saldo_pendiente' => $saldo,
-            'total_adeudado' => $totalAdeudado,
+            'total_adeudado' => $saldo,
         ];
     }
 
@@ -233,11 +230,14 @@ class DeudasPersonalService
         $items = collect();
 
         foreach ($empleado->prestamos as $prestamo) {
-            if (! in_array($prestamo->estado, ['PENDIENTE', 'ACTIVO', 'PAGADO'], true)) {
+            if (! in_array($prestamo->estado, ['PENDIENTE', 'ACTIVO'], true)) {
                 continue;
             }
             $pagado = round((float) $prestamo->abonos->sum('monto'), 2);
             $saldo = round((float) $prestamo->saldo_pendiente, 2);
+            if ($saldo <= 0.009) {
+                continue;
+            }
             $items->push([
                 'tipo' => self::TIPO_PRESTAMO,
                 'tipo_label' => self::TIPOS[self::TIPO_PRESTAMO],
@@ -246,7 +246,7 @@ class DeudasPersonalService
                 'monto' => round((float) $prestamo->monto_original, 2),
                 'pagado' => $pagado,
                 'saldo' => $saldo,
-                'estado' => $this->estadoDeSaldos(round((float) $prestamo->monto_original, 2), $pagado, $saldo, $prestamo->estado === 'PAGADO'),
+                'estado' => $this->estadoDeSaldos(round((float) $prestamo->monto_original, 2), $pagado, $saldo, false),
                 'es_personal' => false,
                 'origen' => 'nomina',
                 'url' => route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'prestamos']),
@@ -269,10 +269,13 @@ class DeudasPersonalService
 
                 $monto = round((float) $faltante->monto, 2);
                 $pendiente = $faltante->estado === 'PENDIENTE';
-                $pagado = $pendiente ? 0.0 : $monto;
-                $saldo = $pendiente ? $monto : 0.0;
+                if (! $pendiente) {
+                    continue;
+                }
+                $pagado = 0.0;
+                $saldo = $monto;
                 $concepto = $faltante->motivo ?: ('Faltante de caja #'.$faltante->id);
-                if ($pendiente && $faltante->decision === NominaComisionDescuento::DECISION_PENDIENTE) {
+                if ($faltante->decision === NominaComisionDescuento::DECISION_PENDIENTE) {
                     $concepto .= ' (por decidir)';
                 }
 
@@ -284,7 +287,7 @@ class DeudasPersonalService
                     'monto' => $monto,
                     'pagado' => $pagado,
                     'saldo' => $saldo,
-                    'estado' => $pendiente ? 'pendiente' : 'pagado',
+                    'estado' => 'pendiente',
                     'es_personal' => false,
                     'origen' => 'nomina',
                     'url' => route('nomina.faltante_caja.index'),
@@ -292,36 +295,34 @@ class DeudasPersonalService
             }
         }
 
-        foreach ($empleado->abonosSueldo->whereIn('estado', ['PENDIENTE', 'DESCONTADO']) as $abono) {
+        foreach ($empleado->abonosSueldo->where('estado', 'PENDIENTE') as $abono) {
             $monto = round((float) $abono->monto, 2);
-            $pendiente = $abono->estado === 'PENDIENTE';
             $items->push([
                 'tipo' => self::TIPO_OTROS,
                 'tipo_label' => self::TIPOS[self::TIPO_OTROS],
                 'concepto' => 'Adelanto de sueldo'.($abono->motivo ? ' — '.$abono->motivo : ''),
                 'fecha' => optional($abono->fecha)->toDateString(),
                 'monto' => $monto,
-                'pagado' => $pendiente ? 0.0 : $monto,
-                'saldo' => $pendiente ? $monto : 0.0,
-                'estado' => $pendiente ? 'pendiente' : 'pagado',
+                'pagado' => 0.0,
+                'saldo' => $monto,
+                'estado' => 'pendiente',
                 'es_personal' => false,
                 'origen' => 'nomina',
                 'url' => route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'abonos']),
             ]);
         }
 
-        foreach ($empleado->deducciones->whereIn('estado', ['PENDIENTE', 'DESCONTADO']) as $ded) {
+        foreach ($empleado->deducciones->where('estado', 'PENDIENTE') as $ded) {
             $monto = round((float) $ded->monto, 2);
-            $pendiente = $ded->estado === 'PENDIENTE';
             $items->push([
                 'tipo' => self::TIPO_OTROS,
                 'tipo_label' => self::TIPOS[self::TIPO_OTROS],
                 'concepto' => $ded->motivo ?: 'Deducción #'.$ded->id,
                 'fecha' => optional($ded->fecha)->toDateString(),
                 'monto' => $monto,
-                'pagado' => $pendiente ? 0.0 : $monto,
-                'saldo' => $pendiente ? $monto : 0.0,
-                'estado' => $pendiente ? 'pendiente' : 'pagado',
+                'pagado' => 0.0,
+                'saldo' => $monto,
+                'estado' => 'pendiente',
                 'es_personal' => false,
                 'origen' => 'nomina',
                 'url' => route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'ajustes']),
@@ -329,18 +330,17 @@ class DeudasPersonalService
         }
 
         if ($this->mercancia->disponible()) {
-            foreach ($empleado->descuentosMercancia->whereIn('estado', ['PENDIENTE', 'DESCONTADO']) as $desc) {
+            foreach ($empleado->descuentosMercancia->where('estado', 'PENDIENTE') as $desc) {
                 $monto = round((float) $desc->monto, 2);
-                $pendiente = $desc->estado === 'PENDIENTE';
                 $items->push([
                     'tipo' => self::TIPO_OTROS,
                     'tipo_label' => self::TIPOS[self::TIPO_OTROS],
                     'concepto' => $desc->motivo ?: 'Descuento mercancía #'.$desc->id,
                     'fecha' => optional($desc->fecha)->toDateString(),
                     'monto' => $monto,
-                    'pagado' => $pendiente ? 0.0 : $monto,
-                    'saldo' => $pendiente ? $monto : 0.0,
-                    'estado' => $pendiente ? 'pendiente' : 'pagado',
+                    'pagado' => 0.0,
+                    'saldo' => $monto,
+                    'estado' => 'pendiente',
                     'es_personal' => false,
                     'origen' => 'nomina',
                     'url' => route('nomina.mercancia.index'),
@@ -351,18 +351,17 @@ class DeudasPersonalService
         if ($this->ajustes->disponible()) {
             foreach ($empleado->ajustes
                 ->where('tipo', NominaEmpleadoAjuste::TIPO_DEDUCCION)
-                ->whereIn('estado', [NominaEmpleadoAjuste::PENDIENTE, NominaEmpleadoAjuste::APLICADO]) as $ajuste) {
+                ->where('estado', NominaEmpleadoAjuste::PENDIENTE) as $ajuste) {
                 $monto = round((float) $ajuste->monto, 2);
-                $pendiente = $ajuste->estado === NominaEmpleadoAjuste::PENDIENTE;
                 $items->push([
                     'tipo' => self::TIPO_OTROS,
                     'tipo_label' => self::TIPOS[self::TIPO_OTROS],
                     'concepto' => $ajuste->motivo ?: 'Ajuste / deducción #'.$ajuste->id,
                     'fecha' => optional($ajuste->fecha)->toDateString(),
                     'monto' => $monto,
-                    'pagado' => $pendiente ? 0.0 : $monto,
-                    'saldo' => $pendiente ? $monto : 0.0,
-                    'estado' => $pendiente ? 'pendiente' : 'pagado',
+                    'pagado' => 0.0,
+                    'saldo' => $monto,
+                    'estado' => 'pendiente',
                     'es_personal' => false,
                     'origen' => 'nomina',
                     'url' => route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'ajustes']),
@@ -370,7 +369,7 @@ class DeudasPersonalService
             }
         }
 
-        if ($cobranza['marcado_personal'] && ((float) $cobranza['saldo'] > 0 || (int) ($cobranza['documentos'] ?? 0) > 0)) {
+        if ($cobranza['marcado_personal'] && (float) $cobranza['saldo'] > 0.009) {
             $saldo = round((float) $cobranza['saldo'], 2);
             $nombreCxC = trim((string) ($cobranza['nombre_personal'] ?? ''));
             $items->push([
@@ -384,7 +383,7 @@ class DeudasPersonalService
                 'monto' => $saldo,
                 'pagado' => 0.0,
                 'saldo' => $saldo,
-                'estado' => $saldo > 0 ? 'pendiente' : 'pagado',
+                'estado' => 'pendiente',
                 'es_personal' => true,
                 'origen' => 'cobranza',
                 'url' => $cobranza['codigo']
@@ -403,6 +402,9 @@ class DeudasPersonalService
      */
     private function filtrarItems(Collection $items, array $filtros): Collection
     {
+        // Solo deudas con saldo (no mostrar lo ya pagado).
+        $items = $items->filter(fn (array $i) => (float) ($i['saldo'] ?? 0) > 0.009);
+
         if (! empty($filtros['tipo']) && isset(self::TIPOS[$filtros['tipo']])) {
             $items = $items->where('tipo', $filtros['tipo']);
         }

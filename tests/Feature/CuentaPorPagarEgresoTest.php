@@ -43,6 +43,32 @@ class CuentaPorPagarEgresoTest extends TestCase
         $this->assertEquals($cuenta->id, FlujoCaja::query()->first()->cuenta_por_pagar_id);
     }
 
+    public function test_abrir_cuenta_sin_egreso_deja_saldo_completo(): void
+    {
+        $user = $this->finanzasUser();
+
+        $this->actingAs($user)->post(route('finanzas.cuentas_por_pagar.store'), [
+            'fecha' => '2026-09-24',
+            'beneficiario' => 'Proveedor Solo Gasto',
+            'tipo_gasto' => '087 - PAGO PROVEEDORES',
+            'motivo' => 'Factura pendiente',
+            'sede' => 'DORAL',
+            'moneda' => 'USD',
+            'monto_total' => 1500.50,
+        ])->assertRedirect(route('finanzas.cuentas_por_pagar'));
+
+        $this->assertDatabaseCount('cuentas_por_pagar', 1);
+        $this->assertDatabaseCount('flujo_cajas', 0);
+
+        $cuenta = CuentaPorPagar::query()->first();
+        $this->assertSame('Proveedor Solo Gasto', $cuenta->beneficiario);
+        $this->assertEquals(1500.50, (float) $cuenta->monto_total);
+        $this->assertEquals(0, (float) $cuenta->monto_pagado);
+        $this->assertEquals(1500.50, (float) $cuenta->saldo);
+        $this->assertSame('abierta', $cuenta->estado);
+        $this->assertTrue($cuenta->estaAbierta());
+    }
+
     public function test_pago_siguiente_reduce_saldo_y_cierra_cuenta(): void
     {
         $user = $this->finanzasUser();

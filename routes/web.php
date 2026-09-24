@@ -319,9 +319,7 @@ Route::middleware(['auth', 'permission:tesoreria'])->prefix('tesoreria')->name('
     Route::delete('/lote-punto-venta/{id}', [\App\Http\Controllers\TesoreriaController::class, 'destroyLotePuntoVenta'])->name('lote_pos.destroy');
 });
 
-Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina.')->group(function () {
-    Route::get('/', [EmpleadoController::class, 'index'])->name('index');
-
+Route::middleware(['auth', 'permission:nomina,nomina.periodos'])->prefix('nomina')->name('nomina.')->group(function () {
     Route::get('/periodos', [PeriodoController::class, 'index'])->name('periodos.index');
     Route::post('/periodos', [PeriodoController::class, 'store'])->name('periodos.store');
     Route::get('/periodos/{periodo}', [PeriodoController::class, 'show'])->name('periodos.show');
@@ -334,13 +332,19 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::get('/periodos/{periodo}/banco/{empresa}', [PeriodoController::class, 'exportarBanco'])->name('periodos.banco');
     Route::get('/periodos/{periodo}/relacion', [PeriodoController::class, 'relacion'])->name('periodos.relacion');
     Route::get('/periodos/{periodo}/reporte-sedes.pdf', [PeriodoController::class, 'reporteSedesPdf'])->name('periodos.reporte_sedes');
+});
 
+Route::middleware(['auth', 'permission:nomina,nomina.comisiones'])->prefix('nomina')->name('nomina.')->group(function () {
     Route::get('/comisiones', [ComisionController::class, 'index'])->name('comisiones.index');
     Route::get('/comisiones/{periodo}', [ComisionController::class, 'show'])->name('comisiones.show');
     Route::get('/comisiones/{periodo}/relacion', [ComisionController::class, 'relacion'])->name('comisiones.relacion');
     Route::get('/comisiones/{periodo}/reporte-sedes.pdf', [ComisionController::class, 'reporteSedesPdf'])->name('comisiones.reporte_sedes');
     Route::post('/comisiones/{periodo}/recalcular', [ComisionController::class, 'recalcular'])->name('comisiones.recalcular');
     Route::get('/comisiones/{periodo}/banco/{empresa}', [ComisionController::class, 'exportarBanco'])->name('comisiones.banco');
+});
+
+Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina.')->group(function () {
+    Route::get('/', [EmpleadoController::class, 'index'])->name('index');
 
     Route::get('/empleados', [EmpleadoController::class, 'index'])->name('empleados.index');
     Route::get('/empleados/reporte.xlsx', [EmpleadoController::class, 'reporte'])->name('empleados.reporte');
@@ -455,10 +459,13 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
     Route::get('/flujo-caja/api/bcv', [FinanzasController::class, 'fetchBcvApi'])->name('finanzas.api_bcv');
     Route::get('/cuentas-por-pagar', [\App\Http\Controllers\CuentaPorPagarController::class, 'index'])->name('finanzas.cuentas_por_pagar');
     Route::get('/my-delivery', [\App\Http\Controllers\MyDeliveryController::class, 'index'])->name('finanzas.my_delivery');
+    Route::get('/gasto-directivos', [\App\Http\Controllers\GastoDirectivosController::class, 'index'])->name('finanzas.gasto_directivos');
+    Route::get('/gasto-directivos/reporte', [\App\Http\Controllers\GastoDirectivosController::class, 'reporte'])->name('finanzas.gasto_directivos.reporte');
     Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
     Route::get('/gastos-fijos/pendientes', [FinanzasController::class, 'getGastosFijosParaVincular'])->name('finanzas.gastos_fijos.pendientes');
 
     Route::middleware(['permission:finanzas.editar'])->group(function () {
+        Route::post('/cuentas-por-pagar', [\App\Http\Controllers\CuentaPorPagarController::class, 'store'])->name('finanzas.cuentas_por_pagar.store');
         Route::post('/flujo-caja/reset', [FinanzasController::class, 'resetDaily'])->name('finanzas.reset_daily');
         Route::post('/flujo-caja/egreso', [FinanzasController::class, 'storeEgreso'])->name('finanzas.store_egreso');
         Route::post('/flujo-caja/egreso/{id}', [FinanzasController::class, 'updateEgreso'])->name('finanzas.update_egreso');

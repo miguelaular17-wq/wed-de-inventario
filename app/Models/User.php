@@ -421,6 +421,14 @@ class User extends Authenticatable
             return true;
         }
 
+        if ($permission === 'nomina.periodos' && in_array('nomina', $owned, true)) {
+            return true;
+        }
+
+        if ($permission === 'nomina.comisiones' && in_array('nomina', $owned, true)) {
+            return true;
+        }
+
         if ($permission === 'meta.ver' && in_array('meta', $owned, true)) {
             return true;
         }

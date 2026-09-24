@@ -14,12 +14,11 @@
     </div>
 
     <div class="nomina-kpis">
-        <div class="nomina-kpi"><span>Total adeudado</span><strong>${{ number_format($resumen['total_adeudado'], 2) }}</strong></div>
+        <div class="nomina-kpi"><span>Total adeudado</span><strong>${{ number_format($resumen['saldo_pendiente'], 2) }}</strong></div>
         <div class="nomina-kpi"><span>Faltantes de caja</span><strong>${{ number_format($resumen['faltantes_caja'], 2) }}</strong></div>
         <div class="nomina-kpi"><span>Préstamos</span><strong>${{ number_format($resumen['prestamos'], 2) }}</strong></div>
         <div class="nomina-kpi"><span>Cobranza</span><strong>${{ number_format($resumen['cobranza'], 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Pagado</span><strong>${{ number_format($resumen['pagado'], 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Saldo pendiente</span><strong>${{ number_format($resumen['saldo_pendiente'], 2) }}</strong></div>
+        <div class="nomina-kpi"><span>Otros</span><strong>${{ number_format($resumen['otros'] ?? 0, 2) }}</strong></div>
     </div>
     <p class="muted" style="margin-top:8px;">
         {{ $resumen['personas'] }} persona(s) con deudas
@@ -101,7 +100,6 @@
                     <th class="text-right">Préstamos</th>
                     <th class="text-right">Cobranza</th>
                     <th class="text-right">Otros</th>
-                    <th class="text-right">Pagado</th>
                     <th class="text-right">Saldo</th>
                     <th></th>
                 </tr>
@@ -126,7 +124,6 @@
                             @endif
                         </td>
                         <td class="text-right">${{ number_format($fila['otros'], 2) }}</td>
-                        <td class="text-right">${{ number_format($fila['pagado'], 2) }}</td>
                         <td class="text-right"><strong>${{ number_format($fila['saldo_pendiente'], 2) }}</strong></td>
                         <td>
                             <a class="btn secondary" href="{{ route('nomina.deudas.show', $fila['empleado_id']) }}">Ver</a>
@@ -134,7 +131,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="9" class="muted">No hay deudas con esos filtros.</td>
+                        <td colspan="8" class="muted">No hay deudas con esos filtros.</td>
                     </tr>
                 @endforelse
             </tbody>

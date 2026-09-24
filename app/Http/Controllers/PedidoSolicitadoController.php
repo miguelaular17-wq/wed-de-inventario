@@ -123,18 +123,24 @@ class PedidoSolicitadoController extends Controller
 
         $data = $request->validate([
             'producto_id' => ['nullable', 'integer'],
-            'codigo' => ['required', 'string', 'max:64'],
+            'codigo' => ['required', 'string', 'max:255'],
             'producto' => ['required', 'string', 'max:255'],
             'categoria' => ['nullable', 'string', 'max:255'],
             'proveedor' => ['nullable', 'string', 'max:255'],
             'solicitante' => ['nullable', 'string', 'max:120'],
             'sede' => ['nullable', 'string', 'max:50'],
             'notas' => ['nullable', 'string', 'max:500'],
+        ], [
+            'codigo.max' => 'El código del producto es demasiado largo.',
+            'codigo.required' => 'Falta el código del producto.',
+            'producto.required' => 'Falta el nombre del producto.',
         ]);
+
+        $codigo = $this->normalizarCodigoPedido((string) $data['codigo']);
 
         $pedido = PedidoSolicitado::create([
             'producto_id' => $data['producto_id'] ?? null,
-            'codigo' => $data['codigo'],
+            'codigo' => $codigo,
             'producto' => $data['producto'],
             'categoria' => $data['categoria'] ?? null,
             'proveedor' => $data['proveedor'] ?? null,
@@ -283,5 +289,25 @@ class PedidoSolicitadoController extends Controller
             'chartBar' => $chartBar,
         ]);
         return $pdf->download('reporte_graficos_qpedir_'.date('Ymd').'.pdf');
+    }
+
+    /**
+     * Algunos productos traen varios códigos unidos ("A / B / C").
+     * Guardamos el primero y limitamos longitud.
+     */
+    private function normalizarCodigoPedido(string $codigo): string
+    {
+        $codigo = trim($codigo);
+        if ($codigo === '') {
+            return 'MANUAL';
+        }
+
+        if (str_contains($codigo, ' / ')) {
+            $codigo = trim(explode(' / ', $codigo, 2)[0]);
+        } elseif (str_contains($codigo, '/')) {
+            $codigo = trim(explode('/', $codigo, 2)[0]);
+        }
+
+        return mb_substr($codigo, 0, 255);
     }
 }

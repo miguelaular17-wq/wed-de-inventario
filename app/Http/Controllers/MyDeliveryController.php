@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\VentaDescuento;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,11 +26,23 @@ class MyDeliveryController extends Controller
             'monto' => 0.0,
             'unidades' => 0.0,
         ];
+        $descuentoPct = VentaDescuento::porcentaje();
+        $factorNeto = VentaDescuento::factorNeto();
 
         if (Schema::hasTable('ventas_detalle')) {
             $anulado = Schema::hasColumn('ventas_detalle', 'anulado')
                 ? 'AND COALESCE(vd.anulado, false) = false'
                 : '';
+
+            // Si precio_neto viene vacío o igual al bruto, aplicar descuento estándar.
+            $precioLinea = Schema::hasColumn('ventas_detalle', 'precio_neto')
+                ? "CASE
+                        WHEN COALESCE(vd.precio_neto, 0) > 0
+                             AND COALESCE(vd.precio_neto, 0) < COALESCE(vd.precio_venta, 0)
+                        THEN vd.precio_neto
+                        ELSE vd.precio_venta * {$factorNeto}
+                   END"
+                : "vd.precio_venta * {$factorNeto}";
 
             $rows = DB::select("
                 SELECT
@@ -48,8 +61,8 @@ class MyDeliveryController extends Controller
                     ROUND(SUM(
                         CASE
                             WHEN UPPER(vd.tipo_documento) = 'DEV'
-                                THEN -ABS(vd.cantidad * COALESCE(vd.precio_neto, vd.precio_venta))
-                            ELSE ABS(vd.cantidad * COALESCE(vd.precio_neto, vd.precio_venta))
+                                THEN -ABS(vd.cantidad * ({$precioLinea}))
+                            ELSE ABS(vd.cantidad * ({$precioLinea}))
                         END
                     )::numeric, 2) AS monto
                 FROM ventas_detalle vd
@@ -82,6 +95,7 @@ class MyDeliveryController extends Controller
             'hasta' => $hasta,
             'porSede' => $porSede,
             'totales' => $totales,
+            'descuentoPct' => $descuentoPct,
         ]);
     }
 

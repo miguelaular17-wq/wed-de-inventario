@@ -73,7 +73,6 @@ class CuentasBancariasSeeder extends Seeder
                 ['banco' => 'BANESCO', 'titular' => 'GRUPO JENU', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
                 ['banco' => 'BANESCO', 'titular' => 'EURONISSI', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
                 ['banco' => 'BANESCO', 'titular' => 'NUNES', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
-                ['banco' => 'BANCARIBE', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
                 ['banco' => 'BNC', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
                 ['banco' => 'BNC', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
                 ['banco' => 'BNC', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS', 'principal' => false],
@@ -105,9 +104,11 @@ class CuentasBancariasSeeder extends Seeder
                 // BANCA INTERNACIONAL / BILLETERAS (Mostrar en principal: false)
                 // =========================================================
                 ['banco' => 'MER. PANAMA', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
+                ['banco' => 'BAN. PANAMA', 'titular' => 'FREYGLING SANCHEZ', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
                 ['banco' => 'BINANCE', 'titular' => 'MARIA NUÑEZ', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
                 ['banco' => 'WELLS FARGO', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
                 ['banco' => 'AMERANT', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
+                ['banco' => 'REGIONS BANK', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL / BILLETERAS', 'principal' => false],
 
                 ['banco' => 'CITIZENS MM', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'CUENTAS INTERNACIONALES CERRADAS (FONDOS POR LIBERAR)', 'principal' => false],
                 ['banco' => 'CITIZENS CH', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'CUENTAS INTERNACIONALES CERRADAS (FONDOS POR LIBERAR)', 'principal' => false],
@@ -117,8 +118,6 @@ class CuentasBancariasSeeder extends Seeder
                 // =========================================================
                 ['banco' => 'FACEBANK', 'titular' => 'JOSE JEREZ', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS', 'principal' => false],
                 ['banco' => 'BANCARIBE', 'titular' => 'CURAZAO', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS', 'principal' => false],
-                ['banco' => 'BANCARIBE', 'titular' => 'PUERTO RICO', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS', 'principal' => false],
-                ['banco' => 'REGIONS', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS', 'principal' => false],
                 ['banco' => 'FIRST HORIZON', 'titular' => 'INV. DORAL', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS', 'principal' => false],
                 ['banco' => 'CITIZENS CH', 'titular' => 'NUNES STORE', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS', 'principal' => false],
                 ['banco' => 'CITIZENS SV', 'titular' => 'NUNES STORE', 'color_tc' => null, 'cat' => 'BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS', 'principal' => false],

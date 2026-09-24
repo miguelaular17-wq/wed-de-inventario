@@ -7,10 +7,30 @@
         <div>
             <h1 style="margin:0 0 6px; color:#9a3412;">Cuentas por Pagar</h1>
         </div>
-        @if(!auth()->user()->isAuditor())
-            <a href="{{ route('finanzas.flujo_caja') }}" class="btn primary">Ir a Flujo de Caja</a>
-        @endif
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            @if(!empty($puedeEditar))
+                <button type="button" class="btn primary" onclick="openAbrirCuentaPorPagar()" style="background:#9a3412;">Abrir cuenta por pagar</button>
+            @endif
+            @if(!auth()->user()->isAuditor())
+                <a href="{{ route('finanzas.flujo_caja') }}" class="btn primary">Ir a Flujo de Caja</a>
+            @endif
+        </div>
     </div>
+    @if(session('success'))
+        <div style="margin-top:12px; padding:10px 14px; background:#ecfdf5; color:#166534; border:1px solid #a7f3d0; border-radius:8px;">{{ session('success') }}</div>
+    @endif
+    @if(session('error'))
+        <div style="margin-top:12px; padding:10px 14px; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:8px;">{{ session('error') }}</div>
+    @endif
+    @if($errors->any())
+        <div style="margin-top:12px; padding:10px 14px; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; border-radius:8px;">
+            <ul style="margin:0; padding-left:18px;">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 </div>
 
 <div class="dashboard-container">
@@ -60,7 +80,7 @@
                     @empty
                         <tr>
                             <td colspan="9" style="text-align: center; color: #64748b; padding: 16px;">
-                                No hay cuentas por pagar. Márcalas al registrar un egreso en Flujo de Caja con el monto total del gasto.
+                                No hay cuentas por pagar. Puedes abrir una aquí (sin egreso) o marcarla al registrar un egreso en Flujo de Caja.
                             </td>
                         </tr>
                     @endforelse
@@ -101,9 +121,86 @@
         </div>
     </div>
 </div>
+
+@if(!empty($puedeEditar))
+@php
+    $sedesAbrirCpp = array_merge(config('inventario.sedes_locales', []), ['Nunes', 'Movistar', 'Depósito', 'Admon', 'Bella vista', 'Jenus']);
+@endphp
+<div id="abrirCuentaModal" class="modal-overlay" style="display: none; z-index: 1210;">
+    <div class="panel modal-box" style="width: 95%; max-width: 560px; position: relative; padding: 18px 22px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
+        <button type="button" class="modal-close" onclick="closeAbrirCuentaPorPagar()" aria-label="Cerrar" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
+        <h3 style="margin: 0 0 6px; font-size: 1.15rem; color: #9a3412;">Abrir cuenta por pagar</h3>
+        <p style="margin: 0 0 14px; color: #64748b; font-size: 0.88rem;">Solo registra el gasto pendiente. No genera egreso ni mueve caja; el pago se hace después desde Flujo de Caja.</p>
+        <form method="POST" action="{{ route('finanzas.cuentas_por_pagar.store') }}">
+            @csrf
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div>
+                    <label style="display:block; margin-bottom:4px; font-weight:500; font-size:0.9rem;">Fecha</label>
+                    <input type="date" name="fecha" value="{{ old('fecha', now()->toDateString()) }}" required style="width:100%; padding:7px 10px; border:1px solid #cbd5e1; border-radius:6px;">
+                </div>
+                <div>
+                    <label style="display:block; margin-bottom:4px; font-weight:500; font-size:0.9rem;">Moneda</label>
+                    <select name="moneda" required style="width:100%; padding:7px 10px; border:1px solid #cbd5e1; border-radius:6px; background:white;">
+                        <option value="USD" @selected(old('moneda', 'USD') === 'USD')>USD</option>
+                        <option value="BS" @selected(old('moneda') === 'BS')>BS</option>
+                    </select>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                    <label style="display:block; margin-bottom:4px; font-weight:500; font-size:0.9rem;">Beneficiario</label>
+                    <select id="abrir_beneficiario" name="beneficiario" required style="width:100%; padding:7px 10px; border:1px solid #cbd5e1; border-radius:6px; background:white;">
+                        <option value="">Seleccione o escriba un beneficiario</option>
+                        @foreach(($beneficiarios ?? []) as $nombre)
+                            <option value="{{ $nombre }}" @selected(old('beneficiario') === $nombre)>{{ $nombre }}</option>
+                        @endforeach
+                        @if(old('beneficiario') && ! ($beneficiarios ?? collect())->contains(old('beneficiario')))
+                            <option value="{{ old('beneficiario') }}" selected>{{ old('beneficiario') }}</option>
+                        @endif
+                    </select>
+                    <small style="display:block; margin-top:4px; color:#64748b;">Puedes elegir de la lista o escribir uno nuevo.</small>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                    <label style="display:block; margin-bottom:4px; font-weight:500; font-size:0.9rem;">Tipo de gasto</label>
+                    <select name="tipo_gasto" required style="width:100%; padding:7px 10px; border:1px solid #cbd5e1; border-radius:6px; background:white;">
+                        <option value="">-- Seleccione --</option>
+                        @foreach(($tiposGasto ?? []) as $tipo)
+                            <option value="{{ $tipo }}" @selected(old('tipo_gasto') === $tipo)>{{ $tipo }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                    <label style="display:block; margin-bottom:4px; font-weight:500; font-size:0.9rem;">Motivo</label>
+                    <input type="text" name="motivo" value="{{ old('motivo') }}" maxlength="1000" placeholder="Descripción del gasto" style="width:100%; padding:7px 10px; border:1px solid #cbd5e1; border-radius:6px;">
+                </div>
+                <div>
+                    <label style="display:block; margin-bottom:4px; font-weight:500; font-size:0.9rem;">Sede</label>
+                    <select name="sede" style="width:100%; padding:7px 10px; border:1px solid #cbd5e1; border-radius:6px; background:white;">
+                        <option value="">-- Opcional --</option>
+                        @foreach($sedesAbrirCpp as $sedeLocal)
+                            <option value="{{ $sedeLocal }}" @selected(old('sede') === $sedeLocal)>{{ $sedeLocal }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label style="display:block; margin-bottom:4px; font-weight:500; font-size:0.9rem;">Monto total</label>
+                    <input type="number" name="monto_total" value="{{ old('monto_total') }}" required min="0.01" step="0.01" placeholder="0.00" style="width:100%; padding:7px 10px; border:1px solid #cbd5e1; border-radius:6px;">
+                </div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top: 16px;">
+                <button type="button" onclick="closeAbrirCuentaPorPagar()" style="padding: 8px 16px; background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer;">Cancelar</button>
+                <button type="submit" style="padding: 8px 16px; background-color: #9a3412; color: white; border: none; border-radius: 6px; cursor: pointer;">Abrir cuenta</button>
+            </div>
+        </form>
+    </div>
+</div>
+@endif
 @endsection
 
 @push('scripts')
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.css" rel="stylesheet">
+<style>
+    #abrirCuentaModal .ts-dropdown { z-index: 1300; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 @php
     $cuentasPorPagarJs = ($cuentas_por_pagar ?? collect())->map(function ($cuenta) {
         return [
@@ -194,6 +291,48 @@ window.closeHistorialCuentaPorPagar = function() {
 
 document.getElementById('historialCuentaModal')?.addEventListener('click', function (e) {
     if (e.target === this) closeHistorialCuentaPorPagar();
+});
+
+window.tsAbrirBeneficiario = null;
+
+function initAbrirBeneficiarioSelect() {
+    const el = document.getElementById('abrir_beneficiario');
+    if (!el || typeof TomSelect === 'undefined' || el.tomselect) return;
+    window.tsAbrirBeneficiario = new TomSelect(el, {
+        create: true,
+        createOnBlur: true,
+        persist: true,
+        sortField: { field: 'text', direction: 'asc' },
+        placeholder: 'Seleccione o escriba un beneficiario',
+        maxOptions: null,
+        render: {
+            option_create: function (data, escape) {
+                return '<div class="create">Usar «<strong>' + escape(data.input) + '</strong>»</div>';
+            }
+        }
+    });
+}
+
+window.openAbrirCuentaPorPagar = function () {
+    const modal = document.getElementById('abrirCuentaModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    initAbrirBeneficiarioSelect();
+};
+
+window.closeAbrirCuentaPorPagar = function () {
+    const modal = document.getElementById('abrirCuentaModal');
+    if (modal) modal.style.display = 'none';
+};
+
+document.getElementById('abrirCuentaModal')?.addEventListener('click', function (e) {
+    if (e.target === this) closeAbrirCuentaPorPagar();
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    @if($errors->any() && !empty($puedeEditar))
+    openAbrirCuentaPorPagar();
+    @endif
 });
 </script>
 @endpush

@@ -106,6 +106,11 @@
         if ($gerencialItems) {
             $nav[] = count($gerencialItems) === 1 ? $gerencialItems[0] : $drop('Indicadores', $gerencialItems);
         }
+        $nav[] = $link(
+            'Stock JRZ',
+            route('vendedor.jrz', ['dias' => 30]),
+            request()->routeIs('vendedor.jrz')
+        );
     } elseif ($u->role !== 'admin' && $gerencialItems) {
         $nav[] = count($gerencialItems) === 1 ? $gerencialItems[0] : $drop('Gerencial', $gerencialItems);
     }
@@ -159,6 +164,7 @@
             $link('Flujo de Caja', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*')),
             $link('Cuentas por Pagar', route('finanzas.cuentas_por_pagar'), request()->routeIs('finanzas.cuentas_por_pagar')),
             $link('My Delivery', route('finanzas.my_delivery'), request()->routeIs('finanzas.my_delivery')),
+            $link('Gasto Directivos', route('finanzas.gasto_directivos'), request()->routeIs('finanzas.gasto_directivos*')),
             $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*')),
             $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones', 'finanzas.conciliaciones.*')),
             $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*')),
@@ -181,6 +187,7 @@
             $nav[] = $link('Flujo de Caja', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*'));
             $nav[] = $link('Cuentas por Pagar', route('finanzas.cuentas_por_pagar'), request()->routeIs('finanzas.cuentas_por_pagar'));
             $nav[] = $link('My Delivery', route('finanzas.my_delivery'), request()->routeIs('finanzas.my_delivery'));
+            $nav[] = $link('Gasto Directivos', route('finanzas.gasto_directivos'), request()->routeIs('finanzas.gasto_directivos*'));
             $nav[] = $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*'));
         }
         if ($u->canAccess('conciliaciones')) {
@@ -212,24 +219,47 @@
         $nav[] = $link('Metas', route('metas.index'), request()->routeIs('metas.*'));
     }
 
-    if ($u->role !== 'admin' && $u->canAccess('nomina')) {
-        $nav[] = $drop('Nómina', [
-            $link('Períodos', route('nomina.periodos.index'), request()->routeIs('nomina.periodos.*')),
-            $link('Comisiones', route('nomina.comisiones.index'), request()->routeIs('nomina.comisiones.*')),
-            $link('Adelantos', route('nomina.adelantos.index'), request()->routeIs('nomina.adelantos.*')),
-            $link('Faltante de caja', route('nomina.faltante_caja.index'), request()->routeIs('nomina.faltante_caja.*')),
-            $link('Descuento mercancía', route('nomina.mercancia.index'), request()->routeIs('nomina.mercancia.*')),
-            $link('Deducciones y bonos', route('nomina.ajustes.index'), request()->routeIs('nomina.ajustes.index', 'nomina.ajustes.escritorio')),
-            $link('Horas extras', route('nomina.horas_extras.index'), request()->routeIs('nomina.horas_extras.index', 'nomina.horas_extras.masivas')),
-            $link('Préstamos', route('nomina.prestamos.index'), request()->routeIs('nomina.prestamos.*')),
-            $link('Deudas del Personal', route('nomina.deudas.index'), request()->routeIs('nomina.deudas.*')),
-            $link('Empleados', route('nomina.empleados.index'), request()->routeIs('nomina.empleados.*')),
-            $link('Organigrama', route('nomina.organizacion'), request()->routeIs('nomina.organizacion')),
-            $link('Sedes y áreas', route('nomina.sedes.index'), request()->routeIs('nomina.sedes.*')),
-            $link('Cargos', route('nomina.cargos.index'), request()->routeIs('nomina.cargos.*')),
-            $link('Empresas', route('nomina.empresas.index'), request()->routeIs('nomina.empresas.*')),
-            $link('Configuración', route('nomina.configuracion.index'), request()->routeIs('nomina.configuracion.*')),
-        ]);
+    if ($u->role !== 'admin') {
+        $nominaItems = [];
+        if ($u->canAccess('nomina.periodos')) {
+            $nominaItems[] = $link('Períodos', route('nomina.periodos.index'), request()->routeIs('nomina.periodos.*'));
+        }
+        if ($u->canAccess('nomina.comisiones')) {
+            $nominaItems[] = $link('Comisiones', route('nomina.comisiones.index'), request()->routeIs('nomina.comisiones.*'));
+        }
+        if ($u->canAccess('nomina')) {
+            $nominaItems = array_merge($nominaItems, [
+                $link('Adelantos', route('nomina.adelantos.index'), request()->routeIs('nomina.adelantos.*')),
+                $link('Faltante de caja', route('nomina.faltante_caja.index'), request()->routeIs('nomina.faltante_caja.*')),
+                $link('Descuento mercancía', route('nomina.mercancia.index'), request()->routeIs('nomina.mercancia.*')),
+                $link('Deducciones y bonos', route('nomina.ajustes.index'), request()->routeIs('nomina.ajustes.index', 'nomina.ajustes.escritorio')),
+                $link('Horas extras', route('nomina.horas_extras.index'), request()->routeIs('nomina.horas_extras.index', 'nomina.horas_extras.masivas')),
+                $link('Préstamos', route('nomina.prestamos.index'), request()->routeIs('nomina.prestamos.*')),
+                $link('Deudas del Personal', route('nomina.deudas.index'), request()->routeIs('nomina.deudas.*')),
+                $link('Empleados', route('nomina.empleados.index'), request()->routeIs('nomina.empleados.*')),
+                $link('Organigrama', route('nomina.organizacion'), request()->routeIs('nomina.organizacion')),
+                $link('Sedes y áreas', route('nomina.sedes.index'), request()->routeIs('nomina.sedes.*')),
+                $link('Cargos', route('nomina.cargos.index'), request()->routeIs('nomina.cargos.*')),
+                $link('Empresas', route('nomina.empresas.index'), request()->routeIs('nomina.empresas.*')),
+                $link('Configuración', route('nomina.configuracion.index'), request()->routeIs('nomina.configuracion.*')),
+            ]);
+        }
+        if ($nominaItems) {
+            // Evitar duplicados si tiene nómina completa (periodos/comisiones ya incluidos vía canAccess).
+            $seen = [];
+            $nominaItems = array_values(array_filter($nominaItems, function ($item) use (&$seen) {
+                $key = $item['url'] ?? $item['label'];
+                if (isset($seen[$key])) {
+                    return false;
+                }
+                $seen[$key] = true;
+
+                return true;
+            }));
+            $nav[] = count($nominaItems) === 1
+                ? $nominaItems[0]
+                : $drop('Nómina', $nominaItems);
+        }
     }
 
     $roleLabels = [

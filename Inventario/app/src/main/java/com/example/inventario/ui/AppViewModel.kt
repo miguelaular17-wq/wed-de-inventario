@@ -850,7 +850,7 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
             val response = repository.createPedido(
                 CreatePedidoRequest(
                     productoId = selected.id,
-                    codigo = selected.codigo.ifBlank { "MANUAL" },
+                    codigo = primaryPedidoCodigo(selected.codigo),
                     producto = selected.producto,
                     categoria = snapshot.guestPedidoCategory.ifBlank { selected.categoria },
                     proveedor = selected.proveedor,
@@ -908,5 +908,29 @@ fun mergeInventoryPages(
 ): List<InventarioItemDto> =
     if (reset) incoming else (current + incoming).distinctBy { it.codigo }
 
-private fun Throwable.userMessage(): String =
-    message?.takeIf { it.isNotBlank() } ?: "No fue posible conectar con el servidor"
+/** Productos con varios códigos ("A / B / C") → enviar solo el primero. */
+internal fun primaryPedidoCodigo(raw: String?): String {
+    val trimmed = raw?.trim().orEmpty()
+    if (trimmed.isBlank()) return "MANUAL"
+    val primary = trimmed.split(" / ", "/", limit = 2).first().trim()
+    return primary.ifBlank { "MANUAL" }.take(255)
+}
+
+private fun Throwable.userMessage(): String {
+    val chain = generateSequence(this) { it.cause }.mapNotNull { it.message }.joinToString(" ")
+    val lower = chain.lowercase()
+    return when {
+        lower.contains("unable to resolve host") ||
+            lower.contains("unknownhost") ||
+            lower.contains("no address associated") ->
+            "Sin conexión al servidor. Revisa el Wi‑Fi/datos o intenta más tarde."
+        lower.contains("failed to connect") ||
+            lower.contains("timeout") ||
+            lower.contains("timed out") ->
+            "El servidor no responde. Intenta de nuevo en unos segundos."
+        lower.contains("codigo") && lower.contains("greater than") ->
+            "El código del producto es demasiado largo. Elige el producto de nuevo."
+        message?.isNotBlank() == true -> message!!
+        else -> "No fue posible conectar con el servidor"
+    }
+}

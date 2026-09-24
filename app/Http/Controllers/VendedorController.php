@@ -35,6 +35,8 @@ class VendedorController extends Controller
     {
         ini_set('memory_limit', '512M');
         $q = trim((string) $request->query('q', ''));
+        $categoria = trim((string) $request->query('categoria', ''));
+        $subcategoria = trim((string) $request->query('subcategoria', ''));
         $sedeLocal = (string) $request->session()->get('sede_local');
         $sedes = config('inventario.sedes_stock', []);
 
@@ -53,12 +55,57 @@ class VendedorController extends Controller
 
         $products = $this->products->loadForSede($sedeLocal);
 
+        $categoriasTree = [];
+        if ($modoJrz) {
+            $categoriasTree = $products
+                ->map(fn ($row) => [
+                    'categoria' => trim((string) ($row['categoria'] ?? '')),
+                    'subcategoria' => trim((string) ($row['subcategoria'] ?? '')),
+                ])
+                ->filter(fn ($row) => $row['categoria'] !== '')
+                ->groupBy('categoria')
+                ->map(function ($items) {
+                    return $items->pluck('subcategoria')
+                        ->filter(fn ($sub) => $sub !== '')
+                        ->unique()
+                        ->sort()
+                        ->values()
+                        ->all();
+                })
+                ->sortKeys()
+                ->all();
+
+            if ($categoria !== '' && ! array_key_exists($categoria, $categoriasTree)) {
+                $categoria = '';
+                $subcategoria = '';
+            }
+            if ($categoria === '') {
+                $subcategoria = '';
+            } elseif ($subcategoria !== '' && ! in_array($subcategoria, $categoriasTree[$categoria] ?? [], true)) {
+                $subcategoria = '';
+            }
+        } else {
+            $categoria = '';
+            $subcategoria = '';
+        }
+
         if ($q !== '') {
             $qLower = mb_strtolower($q);
             $products = $products->filter(function ($row) use ($qLower) {
                 return str_contains(mb_strtolower((string) ($row['cod_centro'] ?? '')), $qLower)
                     || str_contains(mb_strtolower((string) ($row['producto'] ?? '')), $qLower);
             });
+        }
+
+        if ($modoJrz && $categoria !== '') {
+            $products = $products->filter(
+                fn ($row) => strcasecmp(trim((string) ($row['categoria'] ?? '')), $categoria) === 0
+            );
+            if ($subcategoria !== '') {
+                $products = $products->filter(
+                    fn ($row) => strcasecmp(trim((string) ($row['subcategoria'] ?? '')), $subcategoria) === 0
+                );
+            }
         }
 
         $mappedProducts = $products->map(function ($row) {
@@ -103,6 +150,9 @@ class VendedorController extends Controller
             'diasVentas' => $dias,
             'diasOpciones' => self::DIAS_VENTAS,
             'ventasPorSede' => $ventasPorSede,
+            'categoria' => $categoria,
+            'subcategoria' => $subcategoria,
+            'categoriasTree' => $categoriasTree,
         ]);
     }
 
