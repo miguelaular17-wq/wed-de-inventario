@@ -7,8 +7,8 @@
         <div>
             <h1 style="margin:0 0 6px;color:#0f766e;">My Delivery</h1>
             <p class="muted" style="margin:0;font-size:.9rem;">
-                Totales por sede de facturas con producto <strong>SERVICIO MY DELIVERY</strong>.
-                Monto en USD neto (con descuento {{ rtrim(rtrim(number_format($descuentoPct ?? 25, 2, '.', ''), '0'), '.') }}%).
+                Totales por sede de facturas con producto <strong>SERVICIO MY DELIVERY</strong> (D01).
+                Monto USD = misma base que Profit (cantidad × precio de venta).
             </p>
         </div>
     </div>
@@ -31,7 +31,7 @@
 <div class="nomina-kpis" style="margin-bottom:16px;">
     <div class="nomina-kpi"><span>Facturas</span><strong>{{ number_format($totales['facturas']) }}</strong></div>
     <div class="nomina-kpi"><span>Unidades</span><strong>{{ number_format($totales['unidades'], 2) }}</strong></div>
-    <div class="nomina-kpi"><span>Monto USD neto</span><strong>${{ number_format($totales['monto'], 2) }}</strong></div>
+    <div class="nomina-kpi"><span>Monto USD</span><strong>${{ number_format($totales['monto'], 2) }}</strong></div>
     <div class="nomina-kpi"><span>Sedes</span><strong>{{ $porSede->count() }}</strong></div>
 </div>
 
@@ -43,7 +43,7 @@
                     <th>Sede</th>
                     <th class="col-number" style="text-align:right;">Cantidad facturas</th>
                     <th class="col-number" style="text-align:right;">Unidades</th>
-                    <th class="col-number" style="text-align:right;">Monto USD neto</th>
+                    <th class="col-number" style="text-align:right;">Monto USD</th>
                 </tr>
             </thead>
             <tbody>

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\VentaDescuento;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,24 +25,14 @@ class MyDeliveryController extends Controller
             'monto' => 0.0,
             'unidades' => 0.0,
         ];
-        $descuentoPct = VentaDescuento::porcentaje();
-        $factorNeto = VentaDescuento::factorNeto();
 
         if (Schema::hasTable('ventas_detalle')) {
             $anulado = Schema::hasColumn('ventas_detalle', 'anulado')
                 ? 'AND COALESCE(vd.anulado, false) = false'
                 : '';
 
-            // Si precio_neto viene vacío o igual al bruto, aplicar descuento estándar.
-            $precioLinea = Schema::hasColumn('ventas_detalle', 'precio_neto')
-                ? "CASE
-                        WHEN COALESCE(vd.precio_neto, 0) > 0
-                             AND COALESCE(vd.precio_neto, 0) < COALESCE(vd.precio_venta, 0)
-                        THEN vd.precio_neto
-                        ELSE vd.precio_venta * {$factorNeto}
-                   END"
-                : "vd.precio_venta * {$factorNeto}";
-
+            // Misma base que el kardex de Profit (VEND / TOTAL NETO de líneas):
+            // cantidad × precio_venta. No forzar descuento 25% cuando precio_neto = bruto.
             $rows = DB::select("
                 SELECT
                     UPPER(TRIM(vd.sede)) AS sede,
@@ -61,14 +50,17 @@ class MyDeliveryController extends Controller
                     ROUND(SUM(
                         CASE
                             WHEN UPPER(vd.tipo_documento) = 'DEV'
-                                THEN -ABS(vd.cantidad * ({$precioLinea}))
-                            ELSE ABS(vd.cantidad * ({$precioLinea}))
+                                THEN -ABS(vd.cantidad * vd.precio_venta)
+                            ELSE ABS(vd.cantidad * vd.precio_venta)
                         END
                     )::numeric, 2) AS monto
                 FROM ventas_detalle vd
                 WHERE vd.fecha BETWEEN ? AND ?
                   AND UPPER(vd.tipo_documento) IN ('FAC', 'DEV')
-                  AND UPPER(COALESCE(vd.nombre_producto, '')) LIKE '%MY DELIVERY%'
+                  AND (
+                      UPPER(COALESCE(vd.codigo_producto, '')) = 'D01'
+                      OR UPPER(COALESCE(vd.nombre_producto, '')) LIKE '%MY DELIVERY%'
+                  )
                   {$anulado}
                 GROUP BY UPPER(TRIM(vd.sede))
                 ORDER BY monto DESC, sede
@@ -95,7 +87,6 @@ class MyDeliveryController extends Controller
             'hasta' => $hasta,
             'porSede' => $porSede,
             'totales' => $totales,
-            'descuentoPct' => $descuentoPct,
         ]);
     }
 
