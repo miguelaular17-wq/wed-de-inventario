@@ -135,6 +135,34 @@ class EmployeeService
 
     private function resolveCliente(array $data, ?NominaEmpleado $empleado = null): Cliente
     {
+        if ($empleado?->cliente_id) {
+            $cliente = $empleado->cliente ?? Cliente::query()->find($empleado->cliente_id);
+            if ($cliente) {
+                $cedula = trim((string) ($data['cedula'] ?? $cliente->cedula));
+                $nombre = trim((string) ($data['nombre'] ?? $cliente->nombre));
+                if ($cedula === '' || $nombre === '') {
+                    throw ValidationException::withMessages([
+                        'cedula' => 'Indica cédula y nombre.',
+                    ]);
+                }
+                $duplicado = Cliente::query()
+                    ->where('cedula', $cedula)
+                    ->where('id', '!=', $cliente->id)
+                    ->exists();
+                if ($duplicado) {
+                    throw ValidationException::withMessages([
+                        'cedula' => 'Esa cédula ya pertenece a otra persona.',
+                    ]);
+                }
+                $cliente->update([
+                    'cedula' => $cedula,
+                    'nombre' => $nombre,
+                ]);
+
+                return $cliente;
+            }
+        }
+
         if (! empty($data['cliente_id'])) {
             $cliente = Cliente::query()->find($data['cliente_id']);
             if (! $cliente) {

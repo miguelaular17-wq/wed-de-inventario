@@ -98,13 +98,49 @@ class FlujoCajaReporteExcelTest extends TestCase
         $params = [
             'desde' => '2026-08-27',
             'hasta' => '2026-08-27',
-            'cats' => 'egreso_realizado,otros_egresos,traslados,egreso_divisas',
+            'cats' => 'egreso_realizado,otros_egresos,traslados,egreso_divisas,compra_divisas',
         ];
+
+        FlujoCaja::query()->create([
+            'fecha' => '2026-08-27',
+            'tipo' => 'egreso',
+            'categoria_egreso' => 'traslados',
+            'banco' => 'BNC',
+            'titular' => 'LNACEH',
+            'banco_receptor' => 'TESORO',
+            'titular_receptor' => 'DORAL',
+            'motivo' => 'Traslado caja',
+            'referencia' => 'REF-99',
+            'monto_usd' => 40,
+            'monto_bs' => 4000,
+            'comision' => 5,
+            'oculto' => false,
+        ]);
 
         $xlsx = $this->actingAs($auditor)->get(route('finanzas.flujo_caja.reporte', $params + ['formato' => 'xlsx']));
         $xlsx->assertOk();
         $this->assertStringContainsString('spreadsheet', strtolower((string) $xlsx->headers->get('Content-Type')));
         $this->assertStringStartsWith('PK', $xlsx->getContent());
+
+        $tmpXlsx = tempnam(sys_get_temp_dir(), 'repxlsx');
+        file_put_contents($tmpXlsx, $xlsx->getContent());
+        $libro = new \ZipArchive;
+        $this->assertTrue($libro->open($tmpXlsx) === true);
+        $xml = '';
+        for ($i = 0; $i < $libro->numFiles; $i++) {
+            $nombre = (string) $libro->getNameIndex($i);
+            if (str_starts_with($nombre, 'xl/worksheets/sheet') || $nombre === 'xl/workbook.xml') {
+                $xml .= $libro->getFromIndex($i);
+            }
+        }
+        $libro->close();
+        @unlink($tmpXlsx);
+        $this->assertStringContainsString('Egresos Realizados', $xml);
+        $this->assertStringContainsString('Tasa cambio', $xml);
+        $this->assertStringContainsString('Dif. cambiario', $xml);
+        $this->assertStringContainsString('Banco emisor', $xml);
+        $this->assertStringContainsString('REF-99', $xml);
+        $this->assertStringContainsString('Compra Divisas', $xml);
 
         $zipRes = $this->actingAs($auditor)->get(route('finanzas.flujo_caja.reporte', $params + ['formato' => 'zip']));
         $zipRes->assertOk();
@@ -136,6 +172,9 @@ class FlujoCajaReporteExcelTest extends TestCase
             'banco_receptor' => fn (Blueprint $table) => $table->string('banco_receptor')->nullable(),
             'titular_receptor' => fn (Blueprint $table) => $table->string('titular_receptor')->nullable(),
             'motivo' => fn (Blueprint $table) => $table->text('motivo')->nullable(),
+            'referencia' => fn (Blueprint $table) => $table->string('referencia')->nullable(),
+            'sede' => fn (Blueprint $table) => $table->string('sede')->nullable(),
+            'placa_vehiculo' => fn (Blueprint $table) => $table->string('placa_vehiculo')->nullable(),
             'diferencial_cambiario' => fn (Blueprint $table) => $table->decimal('diferencial_cambiario', 14, 2)->nullable(),
             'comision' => fn (Blueprint $table) => $table->decimal('comision', 14, 2)->nullable(),
             'oculto' => fn (Blueprint $table) => $table->boolean('oculto')->default(false),

@@ -12,6 +12,10 @@
         <a href="{{ route('nomina.empleados.index') }}" class="btn secondary">Volver</a>
     </div>
 
+    @if($errors->any())
+        <div class="alert error" style="margin-top:12px;">{{ $errors->first() }}</div>
+    @endif
+
     <form method="POST" action="{{ $empleado ? route('nomina.empleados.update', $empleado) : route('nomina.empleados.store') }}" class="nomina-form">
         @csrf
         @if($empleado) @method('PUT') @endif
@@ -33,11 +37,11 @@
             @endif
             <div class="field">
                 <label>Cédula</label>
-                <input name="cedula" id="nomina-cedula" value="{{ old('cedula', $empleado?->cedula()) }}" {{ $empleado ? 'readonly' : '' }}>
+                <input name="cedula" id="nomina-cedula" value="{{ old('cedula', $empleado?->cedula()) }}" required>
             </div>
             <div class="field">
                 <label>Nombre completo</label>
-                <input name="nombre" id="nomina-nombre" value="{{ old('nombre', $empleado?->nombre()) }}" {{ $empleado ? 'readonly' : '' }}>
+                <input name="nombre" id="nomina-nombre" value="{{ old('nombre', $empleado?->nombre()) }}" required>
             </div>
             <div class="field">
                 <label>Email</label>

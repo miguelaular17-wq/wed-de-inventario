@@ -21,6 +21,7 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
             <span class="pill" style="background:#fef9c3;color:#854d0e;">Pendientes: {{ $pendientes }}</span>
             <span class="pill" style="background:#dcfce7;color:#166534;">Aprobados: {{ $aprobados }}</span>
+            <a class="btn" href="{{ route('nomina.dias_libres.pdf', array_filter(['desde' => $desde, 'hasta' => $hasta, 'sede_id' => $sedeId])) }}">Descargar PDF</a>
         </div>
     </div>
 
@@ -106,6 +107,9 @@
                         <tr data-empleado="{{ $emp->id }}">
                             <td style="position:sticky;left:0;background:#fff;z-index:1;">
                                 <strong>{{ $emp->nombre() }}</strong>
+                                @if($emp->es_supervisor)
+                                    <span class="pill" style="background:#dbeafe;color:#1d4ed8;margin-left:4px;">Supervisor</span>
+                                @endif
                                 <div class="muted" style="font-size:12px;">
                                     {{ $emp->nombreCargo() }}
                                     @if($emp->nombreSede()) · {{ $emp->nombreSede() }}@endif

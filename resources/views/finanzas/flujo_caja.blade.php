@@ -1239,7 +1239,7 @@
                     <select name="sede" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                         <option value="">-- Seleccione una sede --</option>
                         @php
-                            $sedesFinanzas = array_merge(config('inventario.sedes_locales', []), ['Nunes', 'Movistar', 'Depósito', 'Admon', 'Bella vista', 'Jenus']);
+                            $sedesFinanzas = array_merge(config('inventario.sedes_locales', []), ['Nunes', 'Movistar', 'Depósito', 'Admon', 'Bella vista', 'Jenus', 'TECNO HOUSE']);
                         @endphp
                         @foreach($sedesFinanzas as $sedeLocal)
                             <option value="{{ $sedeLocal }}">{{ $sedeLocal }}</option>
@@ -1510,22 +1510,19 @@ function selectedTablasReporte() {
     let selected = [];
     if(document.getElementById('rep_egresos')?.checked) selected.push('egreso_realizado');
     if(document.getElementById('rep_otros')?.checked) selected.push('otros_egresos');
-    if(document.getElementById('rep_traslados')?.checked) selected.push('traslados');
     if(document.getElementById('rep_divisas')?.checked) selected.push('egreso_divisas');
+    if(document.getElementById('rep_compra')?.checked) selected.push('compra_divisas');
+    if(document.getElementById('rep_traslados')?.checked) selected.push('traslados');
     return selected;
 }
 function descargarReporteBusqueda(formato) {
     const esPdf = formato === 'pdf';
-    const html = esPdf
-        ? `<div style="text-align: left; margin: 15px auto; width: fit-content; display: flex; flex-direction: column; gap: 10px;">
+    const html = `<div style="text-align: left; margin: 15px auto; width: fit-content; display: flex; flex-direction: column; gap: 10px;">
                 <label style="cursor: pointer;"><input type="checkbox" id="rep_egresos" value="egreso_realizado" checked style="margin-right: 8px;"> Egresos Realizados</label>
                 <label style="cursor: pointer;"><input type="checkbox" id="rep_otros" value="otros_egresos" checked style="margin-right: 8px;"> Otros Egresos (Avances y Cambios)</label>
                 <label style="cursor: pointer;"><input type="checkbox" id="rep_divisas" value="egreso_divisas" checked style="margin-right: 8px;"> Egresos en Divisas</label>
+                ${esPdf ? '' : '<label style="cursor: pointer;"><input type="checkbox" id="rep_compra" value="compra_divisas" checked style="margin-right: 8px;"> Compra de Divisas</label>'}
                 <label style="cursor: pointer;"><input type="checkbox" id="rep_traslados" value="traslados" checked style="margin-right: 8px;"> Traslados Bancarios</label>
-           </div>`
-        : `<div style="text-align: left; margin: 15px auto; width: fit-content; display: flex; flex-direction: column; gap: 10px;">
-                <label style="cursor: pointer;"><input type="checkbox" id="rep_traslados" value="traslados" checked style="margin-right: 8px;"> Traslados</label>
-                <label style="cursor: pointer;"><input type="checkbox" id="rep_divisas" value="egreso_divisas" checked style="margin-right: 8px;"> Egresos Divisas</label>
            </div>`;
 
     Swal.fire({
@@ -1538,9 +1535,7 @@ function descargarReporteBusqueda(formato) {
         preConfirm: () => {
             const cats = selectedTablasReporte();
             if (!cats.length) {
-                Swal.showValidationMessage(esPdf
-                    ? 'Marca al menos una tabla de egresos.'
-                    : 'Marca Traslados o Egresos divisas.');
+                Swal.showValidationMessage('Marca al menos una tabla.');
                 return false;
             }
             return cats;

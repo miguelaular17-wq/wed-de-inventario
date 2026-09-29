@@ -125,8 +125,9 @@
     </div>
 
     <div class="vd-actions">
+        <a class="btn primary" href="{{ route('ventas_diarias.pdf', $reporte) }}">Descargar PDF</a>
         @if($puedeEditar)
-            <a class="btn primary" href="{{ route('ventas_diarias.edit', $reporte) }}">Editar</a>
+            <a class="btn" href="{{ route('ventas_diarias.edit', $reporte) }}">Editar</a>
         @endif
         <a class="btn" href="{{ route('ventas_diarias.index', array_filter(['sede' => $verTodas ? $reporte->sede : null])) }}">Volver</a>
     </div>

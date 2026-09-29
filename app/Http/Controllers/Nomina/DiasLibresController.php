@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Nomina;
 use App\Http\Controllers\Controller;
 use App\Models\Nomina\NominaDiaLibre;
 use App\Services\Nomina\DiasLibresService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\Response;
 
 class DiasLibresController extends Controller
 {
@@ -48,6 +50,48 @@ class DiasLibresController extends Controller
             'pendientes' => $pendientes,
             'aprobados' => $aprobados,
         ]);
+    }
+
+    public function pdf(Request $request): Response
+    {
+        $user = $request->user();
+        $esRrhh = $this->diasLibres->esRrhh($user);
+        [$defaultDesde, $defaultHasta] = $this->diasLibres->quincenaActual();
+        $desde = Carbon::parse($request->query('desde', $defaultDesde->toDateString()))->startOfDay();
+        $hasta = Carbon::parse($request->query('hasta', $defaultHasta->toDateString()))->startOfDay();
+        $fechas = $this->diasLibres->fechasDelRango($desde, $hasta);
+        $sedeId = $esRrhh && $request->filled('sede_id') ? (int) $request->query('sede_id') : null;
+        $empleados = $this->diasLibres->empleadosVisibles($user, $sedeId);
+        $mapa = $this->diasLibres->mapaDias(
+            $empleados->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            $desde,
+            $hasta
+        );
+
+        $pdf = Pdf::loadView('nomina.dias_libres.pdf', [
+            'desde' => $desde,
+            'hasta' => $hasta,
+            'fechas' => $fechas,
+            'empleados' => $empleados,
+            'mapa' => $mapa,
+            'logoPath' => $this->logoPdf(),
+            'sedeNombre' => $sedeId
+                ? optional($this->diasLibres->sedes()->firstWhere('id', $sedeId))->nombre
+                : null,
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('dias-libres-'.$desde->format('Ymd').'-'.$hasta->format('Ymd').'.pdf');
+    }
+
+    private function logoPdf(): ?string
+    {
+        $path = public_path('logo.png');
+        if (! is_file($path)) {
+            return null;
+        }
+        $raw = @file_get_contents($path);
+
+        return ($raw === false || $raw === '') ? null : 'data:image/png;base64,'.base64_encode($raw);
     }
 
     public function toggle(Request $request): JsonResponse|RedirectResponse

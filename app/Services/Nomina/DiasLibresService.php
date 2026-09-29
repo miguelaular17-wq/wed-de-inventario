@@ -34,7 +34,7 @@ class DiasLibresService
             return $q->pluck('id')->map(fn ($id) => (int) $id)->all();
         }
 
-        return $this->organization->idsPersonalACargo($user, false);
+        return $this->organization->idsPersonalACargo($user, true);
     }
 
     /**
@@ -52,7 +52,10 @@ class DiasLibresService
             ->activos()
             ->whereIn('id', $ids)
             ->get()
-            ->sortBy(fn (NominaEmpleado $e) => mb_strtoupper($e->nombre(), 'UTF-8'))
+            ->sortBy([
+                fn (NominaEmpleado $e) => $e->es_supervisor ? 0 : 1,
+                fn (NominaEmpleado $e) => mb_strtoupper($e->nombre(), 'UTF-8'),
+            ])
             ->values();
     }
 

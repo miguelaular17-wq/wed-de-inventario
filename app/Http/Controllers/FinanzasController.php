@@ -3195,11 +3195,12 @@ class FinanzasController extends Controller
         $fecha_hasta = $request->query('hasta', date('Y-m-d'));
         $q = strtolower(trim($request->query('q', '')));
         $cats_str = $request->query('cats', '');
-        $selected_cats = $cats_str ? explode(',', $cats_str) : ['egreso_realizado', 'otros_egresos', 'traslados', 'egreso_divisas'];
+        $selected_cats = $cats_str ? explode(',', $cats_str) : ['egreso_realizado', 'otros_egresos', 'traslados', 'egreso_divisas', 'compra_divisas'];
+        $catsFlujo = array_values(array_intersect($selected_cats, ['egreso_realizado', 'otros_egresos', 'traslados', 'egreso_divisas']));
 
         $movimientos_query = \App\Models\FlujoCaja::whereBetween('fecha', [$fecha_desde, $fecha_hasta])
                                 ->where('oculto', false)
-                                ->whereIn('categoria_egreso', $selected_cats)
+                                ->when($catsFlujo !== [], fn ($q) => $q->whereIn('categoria_egreso', $catsFlujo), fn ($q) => $q->whereRaw('1 = 0'))
                                 ->orderBy('fecha', 'desc');
 
         $movimientos = $movimientos_query->get();
@@ -3212,13 +3213,19 @@ class FinanzasController extends Controller
                 $receptor_titular = strtolower($m->titular_receptor ?? '');
                 $motivo = strtolower($m->motivo ?? '');
                 $tipo = strtolower($m->tipo_gasto ?? '');
+                $referencia = strtolower($m->referencia ?? '');
+                $sede = strtolower($m->sede ?? '');
+                $placa = strtolower($m->placa_vehiculo ?? '');
 
                 return strpos($banco, $q) !== false ||
                        strpos($titular, $q) !== false ||
                        strpos($receptor_banco, $q) !== false ||
                        strpos($receptor_titular, $q) !== false ||
                        strpos($motivo, $q) !== false ||
-                       strpos($tipo, $q) !== false;
+                       strpos($tipo, $q) !== false ||
+                       strpos($referencia, $q) !== false ||
+                       strpos($sede, $q) !== false ||
+                       strpos($placa, $q) !== false;
             });
         }
 
@@ -3226,6 +3233,7 @@ class FinanzasController extends Controller
         $otros = $movimientos->where('categoria_egreso', 'otros_egresos');
         $traslados = $movimientos->where('categoria_egreso', 'traslados');
         $divisas = $movimientos->where('categoria_egreso', 'egreso_divisas');
+        $compras = $this->comprasDivisasReporte($fecha_desde, $fecha_hasta, $q, $selected_cats);
 
         return [
             'fecha_desde' => $fecha_desde,
@@ -3236,6 +3244,7 @@ class FinanzasController extends Controller
             'otros' => $otros,
             'traslados' => $traslados,
             'divisas' => $divisas,
+            'compras' => $compras,
             'tot_egresos_usd' => $egresos->sum('monto_usd'),
             'tot_egresos_bs' => $egresos->sum('monto_bs'),
             'tot_egresos_dif' => $egresos->sum('diferencial_cambiario'),
@@ -3270,50 +3279,213 @@ class FinanzasController extends Controller
      */
     private function xlsxReporteFlujoCaja(array $data): string
     {
-        $secciones = [
-            'egreso_realizado' => ['Egresos Realizados', $data['egresos'], true, true],
-            'otros_egresos' => ['Otros Egresos', $data['otros'], true, true],
-            'traslados' => ['Traslados', $data['traslados'], true, false],
-            'egreso_divisas' => ['Egresos Divisas', $data['divisas'], false, false],
-        ];
         $hojas = [];
-        foreach ($secciones as $cat => [$titulo, $rows, $conBs, $conDif]) {
+        $secciones = [
+            'egreso_realizado' => ['Egresos Realizados', $data['egresos'], 'egresos'],
+            'otros_egresos' => ['Otros Egresos', $data['otros'], 'egresos'],
+            'egreso_divisas' => ['Egresos Divisas', $data['divisas'], 'divisas'],
+            'compra_divisas' => ['Compra Divisas', $data['compras'] ?? collect(), 'compras'],
+            'traslados' => ['Traslados', $data['traslados'], 'traslados'],
+        ];
+
+        foreach ($secciones as $cat => [$titulo, $rows, $tipo]) {
             if (! in_array($cat, $data['selected_cats'], true)) {
                 continue;
             }
-            $encabezado = ['Fecha', 'Origen', 'Titular', 'Destino', 'Titular destino', 'Tipo gasto', 'Motivo', 'USD'];
-            if ($conDif) {
-                $encabezado[] = 'Dif. camb.';
-            }
-            if ($conBs) {
-                $encabezado[] = 'Bs';
-                $encabezado[] = 'Comisión';
-            }
-            $cuerpo = [$encabezado];
-            foreach ($rows as $mov) {
-                $fila = [
-                    $mov->fecha ? date('d/m/Y', strtotime((string) $mov->fecha)) : '',
-                    $mov->banco ?: '',
-                    $mov->titular ?: '',
-                    $mov->banco_receptor ?: '',
-                    $mov->titular_receptor ?: '',
-                    $mov->tipo_gasto ?: '',
-                    $mov->motivo ?: '',
-                    round((float) $mov->monto_usd, 2),
-                ];
-                if ($conDif) {
-                    $fila[] = round((float) $mov->diferencial_cambiario, 2);
-                }
-                if ($conBs) {
-                    $fila[] = round((float) $mov->monto_bs, 2);
-                    $fila[] = round((float) $mov->comision, 2);
-                }
-                $cuerpo[] = $fila;
-            }
-            $hojas[$titulo] = $cuerpo === [$encabezado] ? [$encabezado, ['Sin registros']] : $cuerpo;
+            $cuerpo = match ($tipo) {
+                'divisas' => $this->filasExcelDivisas($rows),
+                'compras' => $this->filasExcelCompras($rows),
+                'traslados' => $this->filasExcelTraslados($rows),
+                default => $this->filasExcelEgresos($rows),
+            };
+            $hojas[$titulo] = count($cuerpo) === 1 ? [$cuerpo[0], ['Sin registros']] : $cuerpo;
         }
 
         return \App\Support\SimpleXlsxWriter::toString($hojas);
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, \App\Models\CompraDivisa>
+     */
+    private function comprasDivisasReporte(string $desde, string $hasta, string $q, array $selectedCats)
+    {
+        if (! in_array('compra_divisas', $selectedCats, true) || ! \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')) {
+            return collect();
+        }
+
+        $compras = \App\Models\CompraDivisa::query()
+            ->whereBetween('fecha', [$desde, $hasta])
+            ->orderByDesc('fecha')
+            ->get();
+
+        if ($q === '') {
+            return $compras;
+        }
+
+        return $compras->filter(function ($m) use ($q) {
+            $texto = strtolower(implode(' ', [
+                $m->banco ?? '',
+                $m->titular ?? '',
+                $m->motivo ?? '',
+                $m->concepto ?? '',
+                $m->referencia ?? '',
+            ]));
+
+            return str_contains($texto, $q);
+        })->values();
+    }
+
+    /**
+     * @param  iterable<int, object>  $rows
+     * @return list<list<string|float>>
+     */
+    private function filasExcelEgresos(iterable $rows): array
+    {
+        $cuerpo = [[
+            'Fecha', 'Banco', 'Titular', 'Beneficiario', 'Tipo gasto', 'Motivo', 'Referencia',
+            'Sede', 'Placa', 'USD', 'Tasa cambio', 'Dif. cambiario', 'Bs', 'Comisión',
+            'TodoTicket recarga', 'TodoTicket comisión', 'TodoTicket IVA', 'TodoTicket total real',
+            'Línea', 'Cédula desglose', 'Sede desglose', 'Tipo gasto desglose', 'USD desglose', 'Bs desglose',
+        ]];
+
+        foreach ($rows as $mov) {
+            $tt = is_array($mov->detalle_todoticket ?? null) ? $mov->detalle_todoticket : [];
+            $cuerpo[] = [
+                $this->fechaExcel($mov->fecha ?? null),
+                $mov->banco ?: '',
+                $mov->titular ?: '',
+                $mov->titular_receptor ?: '',
+                $mov->tipo_gasto ?: '',
+                $mov->motivo ?: '',
+                $mov->referencia ?: '',
+                $mov->sede ?: '',
+                $mov->placa_vehiculo ?: '',
+                round((float) $mov->monto_usd, 2),
+                round((float) $mov->tasa_cambio, 2),
+                round((float) $mov->diferencial_cambiario, 2),
+                round((float) $mov->monto_bs, 2),
+                round((float) $mov->comision, 2),
+                round((float) ($tt['recarga'] ?? 0), 2),
+                round((float) ($tt['comision'] ?? 0), 2),
+                round((float) ($tt['iva'] ?? 0), 2),
+                round((float) ($tt['total_real'] ?? 0), 2),
+                'Movimiento',
+                '', '', '', '', '',
+            ];
+
+            foreach (is_array($mov->desglose ?? null) ? $mov->desglose : [] as $item) {
+                $cuerpo[] = [
+                    $this->fechaExcel($mov->fecha ?? null),
+                    $mov->banco ?: '',
+                    $mov->titular ?: '',
+                    $mov->titular_receptor ?: '',
+                    $mov->tipo_gasto ?: '',
+                    $mov->motivo ?: '',
+                    $mov->referencia ?: '',
+                    $mov->sede ?: '',
+                    $mov->placa_vehiculo ?: '',
+                    '', '', '', '', '', '', '', '', '',
+                    'Desglose',
+                    $item['cedula'] ?? '',
+                    $item['sede'] ?? '',
+                    $item['tipo_gasto'] ?? '',
+                    round((float) ($item['monto_usd'] ?? 0), 2),
+                    round((float) ($item['monto'] ?? 0), 2),
+                ];
+            }
+        }
+
+        return $cuerpo;
+    }
+
+    /**
+     * @param  iterable<int, object>  $rows
+     * @return list<list<string|float>>
+     */
+    private function filasExcelDivisas(iterable $rows): array
+    {
+        $cuerpo = [[
+            'Fecha', 'Banco', 'Titular', 'Tipo gasto', 'Motivo', 'Referencia', 'Sede', 'Placa', 'Monto USD',
+        ]];
+        foreach ($rows as $mov) {
+            $cuerpo[] = [
+                $this->fechaExcel($mov->fecha ?? null),
+                $mov->banco ?: '',
+                $mov->titular ?: '',
+                $mov->tipo_gasto ?: '',
+                $mov->motivo ?: '',
+                $mov->referencia ?: '',
+                $mov->sede ?: '',
+                $mov->placa_vehiculo ?: '',
+                round((float) $mov->monto_usd, 2),
+            ];
+        }
+
+        return $cuerpo;
+    }
+
+    /**
+     * @param  iterable<int, object>  $rows
+     * @return list<list<string|float>>
+     */
+    private function filasExcelTraslados(iterable $rows): array
+    {
+        $cuerpo = [[
+            'Fecha', 'Banco emisor', 'Titular emisor', 'Banco receptor', 'Titular receptor',
+            'Motivo', 'Referencia', 'Comisión', 'Monto USD', 'Monto BS',
+        ]];
+        foreach ($rows as $mov) {
+            $cuerpo[] = [
+                $this->fechaExcel($mov->fecha ?? null),
+                $mov->banco ?: '',
+                $mov->titular ?: '',
+                $mov->banco_receptor ?: '',
+                $mov->titular_receptor ?: '',
+                $mov->motivo ?: '',
+                $mov->referencia ?: '',
+                round((float) $mov->comision, 2),
+                round((float) $mov->monto_usd, 2),
+                round((float) $mov->monto_bs, 2),
+            ];
+        }
+
+        return $cuerpo;
+    }
+
+    /**
+     * @param  iterable<int, object>  $rows
+     * @return list<list<string|float>>
+     */
+    private function filasExcelCompras(iterable $rows): array
+    {
+        $cuerpo = [[
+            'Fecha', 'Banco', 'Titular', 'Referencia', 'Motivo', 'Tasa cambio', 'Monto BS', 'Monto USD',
+        ]];
+        foreach ($rows as $mov) {
+            $cuerpo[] = [
+                $this->fechaExcel($mov->fecha ?? null),
+                $mov->banco ?: '',
+                $mov->titular ?: '',
+                $mov->referencia ?: '',
+                ($mov->motivo ?: $mov->concepto) ?: '',
+                round((float) ($mov->tasa_cambio ?? 0), 2),
+                round((float) $mov->monto_bs, 2),
+                round((float) $mov->monto_usd, 2),
+            ];
+        }
+
+        return $cuerpo;
+    }
+
+    private function fechaExcel(mixed $fecha): string
+    {
+        if ($fecha === null || $fecha === '') {
+            return '';
+        }
+        $texto = $fecha instanceof \DateTimeInterface ? $fecha->format('Y-m-d') : (string) $fecha;
+        $ts = strtotime($texto);
+
+        return $ts ? date('d/m/Y', $ts) : $texto;
     }
 
     public function parseArchivoDesglose(Request $request)

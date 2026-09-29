@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\VentaDiariaReporte;
 use App\Services\VentasDiariasService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\Response;
 
 class VentasDiariasController extends Controller
 {
@@ -107,6 +109,41 @@ class VentasDiariasController extends Controller
         return view('ventas_diarias.show', compact(
             'reporte', 'metaCtx', 'totales', 'totalesCajas', 'puedeEditar', 'verTodas'
         ));
+    }
+
+    public function pdf(Request $request, VentaDiariaReporte $reporte): Response
+    {
+        $user = $request->user();
+        $verTodas = $this->service->puedeVerTodas($user);
+        if (! $verTodas && $this->service->sedeDelUsuario($user) !== $reporte->sede) {
+            abort(403);
+        }
+
+        $reporte->load('cajas');
+        $metaCtx = $this->service->metaPara($reporte->sede, $reporte->fecha);
+        $totales = $this->service->calcularTotales($reporte, $metaCtx);
+        $totalesCajas = $this->service->totalesCajas($reporte->cajas);
+
+        $pdf = Pdf::loadView('ventas_diarias.pdf', [
+            'reporte' => $reporte,
+            'metaCtx' => $metaCtx,
+            'totales' => $totales,
+            'totalesCajas' => $totalesCajas,
+            'logoPath' => $this->logoPdf(),
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->download('ventas-diarias-'.$reporte->sede.'-'.$reporte->fecha->format('Y-m-d').'.pdf');
+    }
+
+    private function logoPdf(): ?string
+    {
+        $path = public_path('logo.png');
+        if (! is_file($path)) {
+            return null;
+        }
+        $raw = @file_get_contents($path);
+
+        return ($raw === false || $raw === '') ? null : 'data:image/png;base64,'.base64_encode($raw);
     }
 
     public function store(Request $request): RedirectResponse

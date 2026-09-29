@@ -324,6 +324,7 @@ Route::middleware(['auth', 'permission:ventas.diarias,tesoreria'])->prefix('vent
     Route::get('/', [\App\Http\Controllers\VentasDiariasController::class, 'index'])->name('index');
     Route::get('/nuevo', [\App\Http\Controllers\VentasDiariasController::class, 'create'])->name('create');
     Route::post('/', [\App\Http\Controllers\VentasDiariasController::class, 'store'])->name('store');
+    Route::get('/{reporte}/pdf', [\App\Http\Controllers\VentasDiariasController::class, 'pdf'])->name('pdf');
     Route::get('/{reporte}', [\App\Http\Controllers\VentasDiariasController::class, 'show'])->name('show');
     Route::get('/{reporte}/editar', [\App\Http\Controllers\VentasDiariasController::class, 'edit'])->name('edit');
     Route::put('/{reporte}', [\App\Http\Controllers\VentasDiariasController::class, 'update'])->name('update');
@@ -441,6 +442,7 @@ Route::middleware(['auth', 'permission:nomina.equipo'])->prefix('nomina/equipo')
 
 Route::middleware(['auth', 'permission:nomina,nomina.dias_libres'])->prefix('nomina/dias-libres')->name('nomina.dias_libres.')->group(function () {
     Route::get('/', [DiasLibresController::class, 'index'])->name('index');
+    Route::get('/reporte.pdf', [DiasLibresController::class, 'pdf'])->name('pdf');
     Route::post('/toggle', [DiasLibresController::class, 'toggle'])->name('toggle');
     Route::post('/sync', [DiasLibresController::class, 'sync'])->name('sync');
     Route::post('/aprobar', [DiasLibresController::class, 'aprobar'])->name('aprobar');

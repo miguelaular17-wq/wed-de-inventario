@@ -64,6 +64,7 @@ class CuentasBancariasSeeder extends Seeder
                 ['banco' => 'TESORO', 'titular' => 'GRUPO JRZ', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
                 ['banco' => 'TESORO', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
                 ['banco' => 'TESORO', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
+                ['banco' => 'BBVA', 'titular' => 'LNACEH', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
                 ['banco' => 'BANCAMIGA', 'titular' => 'DORAL', 'color_tc' => null, 'cat' => 'BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS', 'principal' => false],
 
                 // =========================================================
