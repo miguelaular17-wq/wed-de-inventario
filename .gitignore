@@ -48,3 +48,7 @@ dump_*.php
 
 # PHP portable usado solo para exportar precios
 /scripts/tools/
+
+desktop/node_modules/
+desktop/dist/
+

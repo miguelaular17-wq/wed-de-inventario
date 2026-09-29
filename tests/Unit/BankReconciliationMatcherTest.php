@@ -321,9 +321,10 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertTrue($this->matcher->mismoBanco('VENEZUELA', 'BANCO DE VENEZUELA'));
     }
 
-    public function test_bdv_liq_tarjeta_por_monto_neto_comision_2_porciento(): void
+    public function test_bdv_liq_tarjeta_ya_no_cruza_por_comision_2_porciento_sin_medios(): void
     {
         // Extracto BDV: sin nº de lote; abona lote 45320.13 − 2% = 44413.73 (T+1).
+        // Ya no se concilia solo con el extracto: requiere Excel medios de pago (Monto Neto).
         $linea = new ConciliacionLinea([
             'banco' => 'VENEZUELA',
             'titular' => 'GRUPO JRZ',
@@ -344,7 +345,8 @@ class BankReconciliationMatcherTest extends TestCase
 
         $this->assertTrue($this->matcher->esLiquidacionPuntoVenta($linea->descripcion));
         $this->assertTrue($this->matcher->montoLoteNetoBdv(44413.73, 45320.13));
-        $this->assertTrue($this->matcher->coincideLotePunto($linea, $lote));
+        $this->assertFalse($this->matcher->coincideLotePunto($linea, $lote));
+        $this->assertFalse($this->matcher->coincideLiqMediosPago($linea, $lote));
     }
 
     public function test_bdv_no_cruza_pagomovil_con_lote_corto_por_substring(): void
@@ -398,6 +400,31 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertFalse($this->matcher->coincideLotePunto($linea, $lote));
     }
 
+    public function test_bdv_liq_medios_pago_por_monto_neto_exacto(): void
+    {
+        $linea = new ConciliacionLinea([
+            'banco' => 'VENEZUELA',
+            'titular' => 'GRUPO JRZ',
+            'fecha' => '2026-08-08',
+            'referencia' => '1742502407086',
+            'descripcion' => 'LIQ.TARJETA DEBITO MAESTRO BDV',
+            'monto' => 85186.98,
+            'tipo' => 'abono',
+        ]);
+        $lote = (object) [
+            'tipo' => 'punto_venta',
+            'banco' => 'VENEZUELA',
+            'titular' => 'JRZ',
+            'fecha' => '2026-08-07',
+            'monto' => 85186.98, // Monto Neto del Excel medios de pago
+            'lote_referencia' => '57997',
+        ];
+
+        $this->assertFalse($this->matcher->coincideLotePunto($linea, $lote));
+        $this->assertTrue($this->matcher->coincideLiqMediosPago($linea, $lote));
+        $this->assertSame($lote, $this->matcher->mejorIngresoTesoreria($linea, [$lote]));
+    }
+
     public function test_bdv_liq_tarjeta_monto_exacto_sin_lote_en_texto(): void
     {
         $linea = new ConciliacionLinea([
@@ -418,6 +445,7 @@ class BankReconciliationMatcherTest extends TestCase
             'lote_referencia' => '999',
         ];
 
-        $this->assertTrue($this->matcher->coincideLotePunto($linea, $lote));
+        $this->assertFalse($this->matcher->coincideLotePunto($linea, $lote));
+        $this->assertTrue($this->matcher->coincideLiqMediosPago($linea, $lote));
     }
 }

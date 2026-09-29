@@ -108,9 +108,24 @@ class VendedorController extends Controller
             }
         }
 
-        $mappedProducts = $products->map(function ($row) {
+        $ventasPorSede = $modoJrz ? $this->ventasUnidadesPorSede($dias, $sedes) : [];
+
+        $mappedProducts = $products->map(function ($row) use ($modoJrz, $ventasPorSede, $sedes) {
             $stocks = (isset($row['stocks']) && is_array($row['stocks'])) ? $row['stocks'] : [];
             $row['existencia_global'] = array_sum($stocks);
+
+            if ($modoJrz) {
+                $vendidas = [];
+                foreach ($sedes as $sedeCol) {
+                    $sedeKey = mb_strtoupper(trim((string) $sedeCol), 'UTF-8');
+                    $vendidas[$sedeKey] = $this->unidadesVendidasParaCodigo(
+                        $ventasPorSede,
+                        (string) ($row['cod_centro'] ?? ''),
+                        $sedeKey
+                    );
+                }
+                $row['vendidas_por_sede'] = $vendidas;
+            }
 
             return $row;
         });
@@ -137,8 +152,6 @@ class VendedorController extends Controller
                 }
             }
         }
-
-        $ventasPorSede = $modoJrz ? $this->ventasUnidadesPorSede($dias, $sedes) : [];
 
         return view('vendedor.index', [
             'rows' => $rows,
@@ -202,5 +215,32 @@ class VendedorController extends Controller
         }
 
         return $out;
+    }
+
+    /**
+     * Resuelve unidades vendidas para un código de catálogo.
+     * Códigos compuestos ("EAN / SKU / REF") se cruzan también con el EAN puro,
+     * que es como suelen quedar registradas las ventas en ventas_detalle.
+     *
+     * @param  array<string, array<string, float>>  $ventasPorSede
+     */
+    private function unidadesVendidasParaCodigo(array $ventasPorSede, string $codigoProducto, string $sede): float
+    {
+        $codigo = mb_strtoupper(trim($codigoProducto), 'UTF-8');
+        $sede = mb_strtoupper(trim($sede), 'UTF-8');
+        if ($codigo === '' || $sede === '') {
+            return 0.0;
+        }
+
+        $total = (float) ($ventasPorSede[$codigo][$sede] ?? 0);
+
+        if (str_contains($codigo, '/')) {
+            $primary = mb_strtoupper(trim(explode('/', $codigo, 2)[0]), 'UTF-8');
+            if ($primary !== '' && $primary !== $codigo) {
+                $total += (float) ($ventasPorSede[$primary][$sede] ?? 0);
+            }
+        }
+
+        return round($total, 2);
     }
 }

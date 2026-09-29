@@ -125,6 +125,11 @@ class NominaEmpleado extends Model
         return $this->hasMany(NominaHoraExtra::class, 'empleado_id')->orderByDesc('fecha')->orderByDesc('id');
     }
 
+    public function diasLibres(): HasMany
+    {
+        return $this->hasMany(NominaDiaLibre::class, 'empleado_id')->orderByDesc('fecha')->orderByDesc('id');
+    }
+
     public function nombre(): string
     {
         return $this->cliente?->nombre ?? 'Sin nombre';

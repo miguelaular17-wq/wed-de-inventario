@@ -263,8 +263,6 @@ class BankReconciliationMatcher
         $loteEnTexto = $this->haystackTieneLote($texto, $lote);
         $loteEnReferencia = $this->loteIgualReferencia($linea->referencia, $lote);
         $montoExacto = $this->mismosMontos($linea->monto, $ingreso->monto ?? 0);
-        $montoNetoBdv = $this->esLiquidacionPuntoVenta($linea->descripcion)
-            && $this->montoLoteNetoBdv($linea->monto, $ingreso->monto ?? 0);
 
         if ($loteEnTexto || $loteEnReferencia) {
             if ($montoExacto) {
@@ -275,13 +273,36 @@ class BankReconciliationMatcher
             return $this->fechaCercana($linea->fecha, $ingreso->fecha, 5);
         }
 
-        // Banco de Venezuela: liquidaciones POS sin nº de lote en el extracto
-        // (ej. "LIQ.TARJETA DEBITO MAESTRO BDV"). Cruza por monto bruto o neto (~2%).
-        if ($this->esLiquidacionPuntoVenta($linea->descripcion) && ($montoExacto || $montoNetoBdv)) {
-            return $this->fechaCercana($linea->fecha, $ingreso->fecha, 3);
+        // BDV LIQ.TARJETA / liquidaciones POS: NO cruzar aquí por bruto−2%.
+        // Esos abonos se concilian con el Excel "medios de pago" (Monto Neto).
+        return false;
+    }
+
+    /**
+     * Conciliación POS BDV vía "Conciliación medios de pago":
+     * el extracto trae LIQ.* con Monto Neto; el Excel trae N° Lote + Monto Neto.
+     */
+    public function coincideLiqMediosPago(ConciliacionLinea $linea, object $ingreso): bool
+    {
+        if (! $this->esLiquidacionPuntoVenta($linea->descripcion)) {
+            return false;
+        }
+        if ($this->esPagoMovil($linea->descripcion)) {
+            return false;
+        }
+        if (! $this->mismoBanco($linea->banco, $ingreso->banco ?? null)) {
+            return false;
+        }
+        if (! $this->mismoTitular($linea->titular, $ingreso->titular ?? null, $linea->banco, $ingreso->banco ?? null)) {
+            return false;
         }
 
-        return false;
+        // Monto del lote debe ser el Neto del Excel (igual al abono LIQ del banco).
+        if (! $this->mismosMontos($linea->monto, $ingreso->monto ?? 0)) {
+            return false;
+        }
+
+        return $this->fechaCercana($linea->fecha, $ingreso->fecha, 5);
     }
 
     /**
@@ -409,10 +430,21 @@ class BankReconciliationMatcher
     public function mejorIngresoTesoreria(ConciliacionLinea $linea, iterable $ingresos): ?object
     {
         $candidatos = [];
+        $esLiqPos = $this->esLiquidacionPuntoVenta($linea->descripcion);
         foreach ($ingresos as $ingreso) {
-            $ok = (($ingreso->tipo ?? '') === 'punto_venta')
-                ? $this->coincideLotePunto($linea, $ingreso)
-                : $this->coincideIngresoTesoreria($linea, $ingreso);
+            $tipo = (string) ($ingreso->tipo ?? '');
+            if ($tipo === 'punto_venta') {
+                // LIQ BDV solo contra lotes de medios de pago (Monto Neto exacto).
+                $ok = $esLiqPos
+                    ? $this->coincideLiqMediosPago($linea, $ingreso)
+                    : $this->coincideLotePunto($linea, $ingreso);
+            } else {
+                // PagoMóvil / depósitos: nunca un LIQ POS.
+                if ($esLiqPos) {
+                    continue;
+                }
+                $ok = $this->coincideIngresoTesoreria($linea, $ingreso);
+            }
             if ($ok) {
                 $candidatos[] = $ingreso;
             }

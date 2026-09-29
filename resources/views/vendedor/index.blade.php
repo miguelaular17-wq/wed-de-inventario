@@ -137,9 +137,8 @@
                                             $stock = (int) ($row['stocks'][$sedeCol] ?? 0);
                                             $sedeKey = strtoupper(trim((string) $sedeCol));
                                             $esJrz = $sedeKey === 'JRZ';
-                                            $codigoKey = strtoupper(trim((string) ($row['cod_centro'] ?? '')));
                                             $vendidas = $modoJrz
-                                                ? (float) ($ventasPorSede[$codigoKey][$sedeKey] ?? 0)
+                                                ? (float) ($row['vendidas_por_sede'][$sedeKey] ?? 0)
                                                 : null;
                                         @endphp
                                         <span class="cat-sede {{ $stock > 0 ? 'has-stock' : 'no-stock' }} {{ $modoJrz && $esJrz ? 'cat-sede-jrz' : '' }} {{ $modoJrz ? 'cat-sede-con-ventas' : '' }}">

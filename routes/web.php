@@ -38,6 +38,7 @@ use App\Http\Controllers\Nomina\ConfiguracionController;
 use App\Http\Controllers\Nomina\DeduccionController;
 use App\Http\Controllers\Nomina\DeudasPersonalController;
 use App\Http\Controllers\Nomina\EmpleadoController;
+use App\Http\Controllers\Nomina\DiasLibresController;
 use App\Http\Controllers\Nomina\EquipoNominaController;
 use App\Http\Controllers\Nomina\FaltanteCajaController;
 use App\Http\Controllers\Nomina\EmpresaNominaController;
@@ -319,6 +320,20 @@ Route::middleware(['auth', 'permission:tesoreria'])->prefix('tesoreria')->name('
     Route::delete('/lote-punto-venta/{id}', [\App\Http\Controllers\TesoreriaController::class, 'destroyLotePuntoVenta'])->name('lote_pos.destroy');
 });
 
+Route::middleware(['auth', 'permission:ventas.diarias,tesoreria'])->prefix('ventas-diarias')->name('ventas_diarias.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\VentasDiariasController::class, 'index'])->name('index');
+    Route::get('/nuevo', [\App\Http\Controllers\VentasDiariasController::class, 'create'])->name('create');
+    Route::post('/', [\App\Http\Controllers\VentasDiariasController::class, 'store'])->name('store');
+    Route::get('/{reporte}', [\App\Http\Controllers\VentasDiariasController::class, 'show'])->name('show');
+    Route::get('/{reporte}/editar', [\App\Http\Controllers\VentasDiariasController::class, 'edit'])->name('edit');
+    Route::put('/{reporte}', [\App\Http\Controllers\VentasDiariasController::class, 'update'])->name('update');
+});
+
+Route::middleware(['auth', 'permission:gerencial,ventas.diarias'])->prefix('metas-tienda')->name('metas_tienda.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\MetasTiendaController::class, 'index'])->name('index');
+    Route::put('/', [\App\Http\Controllers\MetasTiendaController::class, 'update'])->name('update');
+});
+
 Route::middleware(['auth', 'permission:nomina,nomina.periodos'])->prefix('nomina')->name('nomina.')->group(function () {
     Route::get('/periodos', [PeriodoController::class, 'index'])->name('periodos.index');
     Route::post('/periodos', [PeriodoController::class, 'store'])->name('periodos.store');
@@ -424,6 +439,13 @@ Route::middleware(['auth', 'permission:nomina.equipo'])->prefix('nomina/equipo')
     Route::get('/{periodo}', [EquipoNominaController::class, 'show'])->name('show');
 });
 
+Route::middleware(['auth', 'permission:nomina,nomina.dias_libres'])->prefix('nomina/dias-libres')->name('nomina.dias_libres.')->group(function () {
+    Route::get('/', [DiasLibresController::class, 'index'])->name('index');
+    Route::post('/toggle', [DiasLibresController::class, 'toggle'])->name('toggle');
+    Route::post('/sync', [DiasLibresController::class, 'sync'])->name('sync');
+    Route::post('/aprobar', [DiasLibresController::class, 'aprobar'])->name('aprobar');
+});
+
 // Notifications routes for all authenticated users
 // Catálogo público interno
 Route::get('/catalogo', [\App\Http\Controllers\CatalogoController::class, 'index'])->name('catalogo.index');
@@ -496,6 +518,7 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
 Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->group(function () {
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
     Route::post('/conciliaciones/upload', [FinanzasController::class, 'uploadConciliacion'])->name('finanzas.conciliaciones.upload');
+    Route::post('/conciliaciones/medios-pago', [FinanzasController::class, 'uploadMediosPago'])->name('finanzas.conciliaciones.medios_pago');
     Route::post('/conciliaciones/process', [FinanzasController::class, 'processConciliacion'])->name('finanzas.conciliaciones.process');
     Route::post('/conciliaciones/add-missing', [App\Http\Controllers\FinanzasController::class, 'addMissingConciliacion'])->name('finanzas.conciliaciones.add_missing');
     Route::post('/conciliaciones/ignore', [App\Http\Controllers\FinanzasController::class, 'ignoreConciliacion'])->name('finanzas.conciliaciones.ignore');

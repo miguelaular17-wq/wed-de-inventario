@@ -2141,6 +2141,41 @@ class FinanzasController extends Controller
         return redirect()->route('finanzas.conciliaciones')->with('success', 'Línea ignorada.');
     }
 
+    /**
+     * Sube "Conciliación medios de pago" (lotes POS BDV) y cruza Monto Neto con LIQ.* del extracto.
+     */
+    public function uploadMediosPago(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|max:15360|extensions:xlsx,xls,csv',
+            'titular_seleccionado' => 'nullable|string|max:120',
+        ], [
+            'file.required' => 'Selecciona el Excel de medios de pago.',
+            'file.extensions' => 'El archivo debe ser Excel (.xlsx / .xls) o CSV.',
+        ]);
+
+        $titular = $request->input('titular_seleccionado');
+        $servicio = app(\App\Services\BdvMediosPagoConciliacionService::class);
+        $resultado = $servicio->importarYConciliar(
+            $request->file('file'),
+            'VENEZUELA',
+            $titular ?: null
+        );
+
+        $msg = sprintf(
+            'Medios de pago BDV: %d lotes leídos, %d conciliados con LIQ, %d lotes creados/actualizados.',
+            $resultado['lotes'],
+            $resultado['conciliados'],
+            $resultado['creados']
+        );
+        if ($resultado['sin_match'] !== []) {
+            $msg .= ' Sin match en extracto: '.count($resultado['sin_match']).' lote(s).';
+        }
+
+        return redirect()->route('finanzas.conciliaciones', ['banco_filtro' => 'VENEZUELA'])
+            ->with('success', $msg);
+    }
+
     public function manualConciliacion(Request $request) {
         $linea = \App\Models\ConciliacionLinea::findOrFail($request->linea_id);
         $linea->estado = 'conciliado';

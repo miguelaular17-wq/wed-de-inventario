@@ -70,6 +70,7 @@
     $gerencialItems = [];
     if ($u->canAccess('gerencial')) {
         $gerencialItems[] = $link('Dashboard', route('gerencial.dashboard'), request()->routeIs('gerencial.dashboard'));
+        $gerencialItems[] = $link('Metas de tienda', route('metas_tienda.index'), request()->routeIs('metas_tienda.*'));
     }
     if ($u->canAccess('gerencial.rentabilidad')) {
         $gerencialItems[] = $link('Rentabilidad', route('gerencial.rentabilidad'), request()->routeIs('gerencial.rentabilidad'));
@@ -168,6 +169,7 @@
             $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*')),
             $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones', 'finanzas.conciliaciones.*')),
             $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*')),
+            $link('Ventas diarias', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*')),
         ]);
         $nav[] = $drop('Cobranza', [
             $link('Cobranza', route('cobranza.index'), request()->routeIs('cobranza.*')),
@@ -205,6 +207,12 @@
         if ($u->canAccess('tesoreria')) {
             $nav[] = $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*'));
         }
+        if ($u->canAccess('ventas.diarias') || $u->canAccess('tesoreria')) {
+            $nav[] = $link('Ventas diarias', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*'));
+        }
+        if ($u->canAccess('ventas.diarias') && ! $u->canAccess('gerencial')) {
+            $nav[] = $link('Metas de tienda', route('metas_tienda.index'), request()->routeIs('metas_tienda.*'));
+        }
     }
 
     if ($u->role !== 'admin' && $u->canAccess('nfc')) {
@@ -213,6 +221,10 @@
 
     if ($u->role !== 'admin' && ! $u->canAccess('nomina') && $u->canAccess('nomina.equipo')) {
         $nav[] = $link('Nómina del equipo', route('nomina.equipo.index'), request()->routeIs('nomina.equipo.*'));
+    }
+
+    if ($u->role !== 'admin' && ! $u->canAccess('nomina') && $u->canAccess('nomina.dias_libres')) {
+        $nav[] = $link('Días libres', route('nomina.dias_libres.index'), request()->routeIs('nomina.dias_libres.*'));
     }
 
     if ($u->role !== 'admin' && app(\App\Services\MetaQuincenaService::class)->puedeVerMetas($u)) {
@@ -234,6 +246,7 @@
                 $link('Descuento mercancía', route('nomina.mercancia.index'), request()->routeIs('nomina.mercancia.*')),
                 $link('Deducciones y bonos', route('nomina.ajustes.index'), request()->routeIs('nomina.ajustes.index', 'nomina.ajustes.escritorio')),
                 $link('Horas extras', route('nomina.horas_extras.index'), request()->routeIs('nomina.horas_extras.index', 'nomina.horas_extras.masivas')),
+                $link('Días libres', route('nomina.dias_libres.index'), request()->routeIs('nomina.dias_libres.*')),
                 $link('Préstamos', route('nomina.prestamos.index'), request()->routeIs('nomina.prestamos.*')),
                 $link('Deudas del Personal', route('nomina.deudas.index'), request()->routeIs('nomina.deudas.*')),
                 $link('Empleados', route('nomina.empleados.index'), request()->routeIs('nomina.empleados.*')),

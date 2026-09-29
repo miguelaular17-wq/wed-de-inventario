@@ -429,6 +429,14 @@ class User extends Authenticatable
             return true;
         }
 
+        if ($permission === 'nomina.dias_libres' && in_array('nomina', $owned, true)) {
+            return true;
+        }
+
+        if ($permission === 'ventas.diarias' && in_array('tesoreria', $owned, true)) {
+            return true;
+        }
+
         if ($permission === 'meta.ver' && in_array('meta', $owned, true)) {
             return true;
         }

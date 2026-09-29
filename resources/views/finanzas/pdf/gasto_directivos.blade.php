@@ -38,7 +38,7 @@
         <td>
             <h2>Palacio de los Detalles — Gasto Directivos</h2>
             <p>Desde {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }} hasta {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }}</p>
-            <p>José Leonardo Jerez (V24703210) · María Núñez (V24525502)</p>
+            <p>José Leonardo Jerez (V24703210) · María Isabel Núñez (V24525502)</p>
         </td>
         <td style="width: 130px; text-align: right; color: #64748b; font-size: 9px;">
             Generado<br>{{ $generado ?? now()->format('d/m/Y H:i') }}
@@ -50,19 +50,20 @@
     <tr>
         <td><span>Egresos USD</span><strong>${{ number_format($totales['egresos_usd'], 2) }}</strong></td>
         <td><span>Egresos Bs</span><strong>Bs {{ number_format($totales['egresos_bs'], 2) }}</strong></td>
-        <td><span>Movimientos</span><strong>{{ number_format($totales['egresos_count']) }}</strong></td>
+        <td><span>Facturas USD</span><strong>${{ number_format($totales['facturas_monto'] ?? 0, 2) }}</strong></td>
         <td><span>Saldo cobranza</span><strong>${{ number_format($totales['cobranza_saldo'], 2) }}</strong></td>
     </tr>
 </table>
 
-<div class="section-title">Cobranza — Directivos</div>
+<div class="section-title">Resumen — Directivos</div>
 <table class="mov">
     <thead>
         <tr>
-            <th style="width:18%">Código</th>
+            <th style="width:16%">Código</th>
             <th>Nombre</th>
-            <th style="width:14%" class="text-right">Documentos</th>
-            <th style="width:18%" class="text-right">Saldo USD</th>
+            <th style="width:12%" class="text-right">Facturas</th>
+            <th style="width:16%" class="text-right">Monto USD</th>
+            <th style="width:16%" class="text-right">Saldo cobranza</th>
         </tr>
     </thead>
     <tbody>
@@ -71,15 +72,67 @@
                 <td>{{ $p['codigo'] }}</td>
                 <td>{{ $p['nombre'] }}</td>
                 <td class="text-right">{{ $p['documentos'] }}</td>
+                <td class="text-right">${{ number_format($p['monto'] ?? 0, 2) }}</td>
                 <td class="text-right">${{ number_format($p['saldo'], 2) }}</td>
             </tr>
         @endforeach
         <tr class="total-row">
-            <td colspan="3">Total cobranza</td>
+            <td colspan="2">Total</td>
+            <td class="text-right">{{ number_format($totales['facturas'] ?? 0) }}</td>
+            <td class="text-right">${{ number_format($totales['facturas_monto'] ?? 0, 2) }}</td>
             <td class="text-right">${{ number_format($totales['cobranza_saldo'], 2) }}</td>
         </tr>
     </tbody>
 </table>
+
+@foreach($personas as $p)
+    <div class="section-title">Facturas — {{ $p['nombre'] }} ({{ $p['codigo'] }})</div>
+    @if($p['facturas']->isEmpty())
+        <p class="muted" style="padding:10px; border:1px solid #cbd5e1; margin:0 0 8px;">Sin facturas en el rango.</p>
+    @else
+        <table class="mov">
+            <thead>
+                <tr>
+                    <th style="width:12%">Fecha</th>
+                    <th style="width:16%">Doc</th>
+                    <th style="width:12%">Sede</th>
+                    <th>Detalle</th>
+                    <th style="width:14%" class="text-right">Monto</th>
+                    <th style="width:14%" class="text-right">Saldo pend.</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($p['facturas'] as $fac)
+                    <tr>
+                        <td>{{ $fac['fecha'] ? date('d/m/Y', strtotime($fac['fecha'])) : '—' }}</td>
+                        <td>{{ $fac['tipo'] }} {{ $fac['numero'] }}</td>
+                        <td>{{ $fac['sede'] }}</td>
+                        <td>
+                            @if(($fac['items'] ?? collect())->isNotEmpty())
+                                {{ $fac['items']->pluck('detalle')->implode(' · ') }}
+                            @else
+                                {{ $fac['nombre'] ?: '—' }}
+                            @endif
+                        </td>
+                        <td class="text-right">${{ number_format($fac['monto'], 2) }}</td>
+                        <td class="text-right">
+                            @if(($fac['saldo'] ?? null) !== null)
+                                ${{ number_format($fac['saldo'], 2) }}
+                            @else
+                                —
+                            @endif
+                        </td>
+                    </tr>
+                @endforeach
+                <tr class="total-row">
+                    <td colspan="4">Subtotal {{ $p['nombre'] }}</td>
+                    <td class="text-right">${{ number_format($p['monto'] ?? 0, 2) }}</td>
+                    <td class="text-right">${{ number_format($p['saldo'], 2) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    @endif
+@endforeach
 
 <div class="section-title">Egresos por concepto</div>
 <table class="mov">
