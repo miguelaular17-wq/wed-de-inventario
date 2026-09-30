@@ -162,7 +162,31 @@
                         'titular' => $tit,
                         'fecha_desde' => $filtrosConciliacion['fecha_desde'] ?? null,
                         'fecha_hasta' => $filtrosConciliacion['fecha_hasta'] ?? null,
-                    ]) }}" style="margin-left: 15px; font-size: 0.75rem; background-color: rgba(255,255,255,0.15); color: #fff; padding: 4px 10px; border-radius: 4px; text-decoration: none; font-weight: normal; vertical-align: middle;">📥 PDF</a>
+                    ]) }}" style="margin-left: 15px; font-size: 0.75rem; background-color: rgba(255,255,255,0.15); color: #fff; padding: 4px 10px; border-radius: 4px; text-decoration: none; font-weight: normal; vertical-align: middle;">PDF</a>
+                    @php
+                        $cierreMarcado = ($fecha_desde && $fecha_hasta && $tit)
+                            ? ($cierresMarcados[$bk.'|'.$tit] ?? null)
+                            : null;
+                    @endphp
+                    @if($fecha_desde && $fecha_hasta && $tit)
+                        @if($cierreMarcado)
+                            <form action="{{ route('finanzas.conciliaciones.periodos.destroy', ['cierre' => $cierreMarcado->id, 'origen' => 'conciliaciones']) }}" method="POST" style="display:inline; margin-left:8px;" onsubmit="return confirm('¿Quitar el cierre de {{ $bk }} · {{ $tit }}?');">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" style="font-size: 0.75rem; background-color: #dcfce7; color: #166534; border: none; padding: 4px 10px; border-radius: 4px; font-weight: 700; cursor: pointer;">Cierre marcado</button>
+                            </form>
+                        @else
+                            <form action="{{ route('finanzas.conciliaciones.periodos.store') }}" method="POST" style="display:inline; margin-left:8px;" onsubmit="return confirm('¿Marcar conciliado {{ $bk }} · {{ $tit }} del {{ \Carbon\Carbon::parse($fecha_desde)->format('d/m/Y') }} al {{ \Carbon\Carbon::parse($fecha_hasta)->format('d/m/Y') }}?');">
+                                @csrf
+                                <input type="hidden" name="origen" value="conciliaciones">
+                                <input type="hidden" name="banco" value="{{ $bk }}">
+                                <input type="hidden" name="titular" value="{{ $tit }}">
+                                <input type="hidden" name="fecha_desde" value="{{ $fecha_desde }}">
+                                <input type="hidden" name="fecha_hasta" value="{{ $fecha_hasta }}">
+                                <button type="submit" style="font-size: 0.75rem; background-color: rgba(255,255,255,0.15); color: #fff; border: none; padding: 4px 10px; border-radius: 4px; font-weight: 700; cursor: pointer;">Marcar cierre</button>
+                            </form>
+                        @endif
+                    @endif
                 </div>
                 @if($tit)
                     <div style="color:rgba(255,255,255,.65); font-size:0.82rem; font-weight:600; margin-top:4px; letter-spacing:.3px;">Titular: {{ $tit }}</div>
@@ -184,6 +208,7 @@
                 <div class="bank-stat">
                     <span class="bank-stat-label">🏛️ Comisiones</span>
                     <span class="bank-stat-value orange">Bs. {{ number_format($d['total_comisiones'], 2) }}</span>
+                    <span class="bank-stat-value" style="color:#bbf7d0; font-size:0.85rem;">${{ number_format($d['total_comisiones_usd'] ?? 0, 2) }}</span>
                 </div>
                 <div class="bank-stat">
                     <span class="bank-stat-label">💱 Compra divisas</span>
@@ -398,7 +423,12 @@
                             <td>{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
                             <td style="max-width:200px;font-size:0.82rem;">{{ Str::limit($row['descripcion'], 55) }}</td>
                             <td><span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span></td>
-                            <td class="monto-cell monto-purple">Bs. {{ number_format($row['monto'], 2) }}</td>
+                            <td class="monto-cell monto-purple">
+                                Bs. {{ number_format($row['monto'], 2) }}
+                                @if(($row['monto_usd'] ?? null) !== null)
+                                    <div style="color:#047857; font-size:0.78rem;">${{ number_format($row['monto_usd'], 2) }}</div>
+                                @endif
+                            </td>
                         </tr>
                         @empty
                         <tr class="empty-row"><td colspan="4">Sin comisiones detectadas</td></tr>
@@ -406,7 +436,10 @@
                     </tbody>
                 </table>
                 @if($d['comisiones']->count() > 0)
-                <div class="section-footer">Total: Bs. {{ number_format($d['total_comisiones'], 2) }}</div>
+                <div class="section-footer">
+                    Total: Bs. {{ number_format($d['total_comisiones'], 2) }}
+                    · ${{ number_format($d['total_comisiones_usd'] ?? 0, 2) }}
+                </div>
                 @endif
             </div>
 

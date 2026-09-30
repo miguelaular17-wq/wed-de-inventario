@@ -56,6 +56,8 @@
             <tr><td>Zelle y binance</td><td class="usd">${{ number_format((float) $reporte->zelle_binance, 2) }}</td><td></td></tr>
             <tr><td>Cashea financiado</td><td class="usd">${{ number_format((float) $reporte->cashea, 2) }}</td><td></td></tr>
             <tr><td>Abono apartado / Deuda</td><td class="usd">${{ number_format((float) $reporte->abonos, 2) }}</td><td></td></tr>
+            <tr><td>iPhone</td><td class="usd">${{ number_format((float) $reporte->iphone, 2) }}</td><td></td></tr>
+            <tr><td>Gift card</td><td class="usd">${{ number_format((float) $reporte->gift_card, 2) }}</td><td></td></tr>
             <tr class="tot"><td>Total cobros del día</td><td class="usd">${{ number_format($totales['total_cobros'], 2) }}</td><td></td></tr>
             <tr><td>Total créditos del día</td><td class="usd">${{ number_format($totales['total_creditos'], 2) }}</td><td></td></tr>
             <tr class="tot"><td>Total de ventas del día</td><td class="usd">${{ number_format($totales['total_ventas'], 2) }}</td><td class="{{ ($totales['pct_vs_meta_venta'] ?? 0) >= 0 ? 'pos' : 'neg' }}">{{ $pct($totales['pct_vs_meta_venta']) }}</td></tr>
@@ -83,6 +85,8 @@
                 <th>Cashea</th>
                 <th>Crédito</th>
                 <th>Abonos</th>
+                <th>iPhone</th>
+                <th>Gift card</th>
             </tr>
         </thead>
         <tbody>
@@ -97,9 +101,11 @@
                     <td class="num">{{ number_format((float) $c->cashea, 2) }}</td>
                     <td class="num">{{ number_format((float) $c->fact_credito, 2) }}</td>
                     <td class="num">{{ number_format((float) $c->abonos, 2) }}</td>
+                    <td class="num">{{ number_format((float) $c->iphone, 2) }}</td>
+                    <td class="num">{{ number_format((float) $c->gift_card, 2) }}</td>
                 </tr>
             @empty
-                <tr><td colspan="9">Sin cajas registradas.</td></tr>
+                <tr><td colspan="11">Sin cajas registradas.</td></tr>
             @endforelse
             @if($reporte->cajas->isNotEmpty())
                 <tr class="tot">
@@ -112,6 +118,8 @@
                     <td class="num">{{ number_format($totalesCajas['cashea'], 2) }}</td>
                     <td class="num">{{ number_format($totalesCajas['fact_credito'], 2) }}</td>
                     <td class="num">{{ number_format($totalesCajas['abonos'], 2) }}</td>
+                    <td class="num">{{ number_format($totalesCajas['iphone'], 2) }}</td>
+                    <td class="num">{{ number_format($totalesCajas['gift_card'], 2) }}</td>
                 </tr>
             @endif
         </tbody>

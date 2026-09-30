@@ -6,6 +6,7 @@ use App\Models\VentaDiariaReporte;
 use App\Services\VentasDiariasService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -146,7 +147,7 @@ class VentasDiariasController extends Controller
         return ($raw === false || $raw === '') ? null : 'data:image/png;base64,'.base64_encode($raw);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $data = $this->validated($request);
         $cajas = $request->input('cajas', []);
@@ -156,12 +157,19 @@ class VentasDiariasController extends Controller
 
         $reporte = $this->service->guardar($request->user(), $data, $cajas);
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'url' => route('ventas_diarias.show', $reporte),
+            ]);
+        }
+
         return redirect()
             ->route('ventas_diarias.show', $reporte)
             ->with('success', 'Reporte de ventas diarias guardado.');
     }
 
-    public function update(Request $request, VentaDiariaReporte $reporte): RedirectResponse
+    public function update(Request $request, VentaDiariaReporte $reporte): RedirectResponse|JsonResponse
     {
         $data = $this->validated($request);
         $data['sede'] = $reporte->sede;
@@ -173,6 +181,13 @@ class VentasDiariasController extends Controller
         }
 
         $reporte = $this->service->guardar($request->user(), $data, $cajas);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'url' => route('ventas_diarias.show', $reporte),
+            ]);
+        }
 
         return redirect()
             ->route('ventas_diarias.show', $reporte)
@@ -192,6 +207,8 @@ class VentasDiariasController extends Controller
             'zelle_binance' => ['nullable', 'numeric'],
             'cashea' => ['nullable', 'numeric'],
             'abonos' => ['nullable', 'numeric'],
+            'iphone' => ['nullable', 'numeric'],
+            'gift_card' => ['nullable', 'numeric'],
             'total_creditos' => ['nullable', 'numeric'],
             'z_fiscal_bs' => ['nullable', 'numeric'],
             'productos_vendidos' => ['nullable', 'numeric'],
@@ -207,6 +224,8 @@ class VentasDiariasController extends Controller
             'cajas.*.cashea' => ['nullable', 'numeric'],
             'cajas.*.fact_credito' => ['nullable', 'numeric'],
             'cajas.*.abonos' => ['nullable', 'numeric'],
+            'cajas.*.iphone' => ['nullable', 'numeric'],
+            'cajas.*.gift_card' => ['nullable', 'numeric'],
         ]);
     }
 
@@ -215,16 +234,16 @@ class VentasDiariasController extends Controller
         $fechaCarbon = Carbon::parse($fecha);
         $metaCtx = $this->service->metaPara($sede, $fechaCarbon);
         $cajas = $reporte?->cajas ?? collect([
-            (object) ['nombre' => '', 'efectivo_usd' => 0, 'efectivo_bs' => 0, 'punto_venta' => 0, 'transf_pm' => 0, 'zelle_binance' => 0, 'cashea' => 0, 'fact_credito' => 0, 'abonos' => 0],
-            (object) ['nombre' => '', 'efectivo_usd' => 0, 'efectivo_bs' => 0, 'punto_venta' => 0, 'transf_pm' => 0, 'zelle_binance' => 0, 'cashea' => 0, 'fact_credito' => 0, 'abonos' => 0],
-            (object) ['nombre' => '', 'efectivo_usd' => 0, 'efectivo_bs' => 0, 'punto_venta' => 0, 'transf_pm' => 0, 'zelle_binance' => 0, 'cashea' => 0, 'fact_credito' => 0, 'abonos' => 0],
+            (object) ['nombre' => '', 'efectivo_usd' => 0, 'efectivo_bs' => 0, 'punto_venta' => 0, 'transf_pm' => 0, 'zelle_binance' => 0, 'cashea' => 0, 'fact_credito' => 0, 'abonos' => 0, 'iphone' => 0, 'gift_card' => 0],
+            (object) ['nombre' => '', 'efectivo_usd' => 0, 'efectivo_bs' => 0, 'punto_venta' => 0, 'transf_pm' => 0, 'zelle_binance' => 0, 'cashea' => 0, 'fact_credito' => 0, 'abonos' => 0, 'iphone' => 0, 'gift_card' => 0],
+            (object) ['nombre' => '', 'efectivo_usd' => 0, 'efectivo_bs' => 0, 'punto_venta' => 0, 'transf_pm' => 0, 'zelle_binance' => 0, 'cashea' => 0, 'fact_credito' => 0, 'abonos' => 0, 'iphone' => 0, 'gift_card' => 0],
         ]);
 
         $totales = $reporte
             ? $this->service->calcularTotales($reporte, $metaCtx)
             : $this->service->calcularTotales(new VentaDiariaReporte([
                 'tasa' => 0, 'divisas_efectivo' => 0, 'efectivo_bs' => 0, 'punto_venta_bs' => 0,
-                'transf_pm_bs' => 0, 'zelle_binance' => 0, 'cashea' => 0, 'abonos' => 0,
+                'transf_pm_bs' => 0, 'zelle_binance' => 0, 'cashea' => 0, 'abonos' => 0, 'iphone' => 0, 'gift_card' => 0,
                 'total_creditos' => 0, 'z_fiscal_bs' => 0, 'productos_vendidos' => 0,
             ]), $metaCtx);
 

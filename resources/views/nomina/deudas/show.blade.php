@@ -22,9 +22,11 @@
                 @endif
             </p>
         </div>
+        @if(auth()->user()->canAccess('nomina'))
         <div class="nomina-ficha-meta">
             <a href="{{ route('nomina.empleados.show', $empleado) }}" class="btn secondary">Ficha empleado</a>
         </div>
+        @endif
     </div>
 
     <div class="nomina-kpis">

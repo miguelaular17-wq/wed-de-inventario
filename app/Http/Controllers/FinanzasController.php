@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use App\Models\FlujoCaja;
 use App\Models\CuentaPorPagar;
 use App\Models\ConciliacionBancaria;
+use App\Models\ConciliacionCierre;
 use App\Models\GastoFijoPago;
 use App\Models\GastoFijoConfig;
 use App\Models\GastoFijoOculto;
@@ -39,6 +40,7 @@ class FinanzasController extends Controller
             ['banco' => 'Mercantil', 'titular' => 'Grupo JENU', 'categoria' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO'],
             ['banco' => 'Mercantil', 'titular' => 'JRZ', 'categoria' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO'],
             ['banco' => 'BBVA', 'titular' => 'LNACEH', 'categoria' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO'],
+            ['banco' => 'BBVA', 'titular' => 'Grupo JRZ', 'categoria' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO'],
             ['banco' => 'Bancaribe', 'titular' => 'Grupo JRZ', 'categoria' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO'],
             ['banco' => 'Bancaribe', 'titular' => 'José Jerez', 'categoria' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO'],
             ['banco' => 'Bancamiga', 'titular' => 'Doral', 'categoria' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO'],
@@ -1172,30 +1174,7 @@ class FinanzasController extends Controller
 
         $banco_filtro = $filtrosConciliacion['banco_filtro'] ?? null;
 
-        // 1. Obtener cuentas bancarias y lista de bancos permitidos
-        // Canoniza "BANCO DE VENEZUELA" → VENEZUELA para que aparezca en el filtro/upload
-        $cuentasBancarias  = \App\Models\CuentaBancaria::all();
-        $bancosPermitidos  = ['BANCAMIGA','BANCARIBE','BANESCO','BBVA','BNC','MERCANTIL','TESORO','VENEZUELA'];
-        $bancos = $cuentasBancarias->pluck('banco')
-            ->map(fn ($b) => $this->canonizarBanco($b))
-            ->filter(fn ($b) => in_array($b, $bancosPermitidos, true))
-            ->unique()->sort()->values();
-
-        // Mapa banco → titulares para el modal JS
-        $titularesPorBanco = [];
-        foreach ($cuentasBancarias as $cuenta) {
-            $b = $this->canonizarBanco($cuenta->banco);
-            $t = strtoupper(trim($cuenta->titular));
-            if (in_array($b, $bancosPermitidos, true) && $t) {
-                $titularesPorBanco[$b][] = $t;
-            }
-        }
-        // Ordenar titulares dentro de cada banco
-        foreach ($titularesPorBanco as $b => &$tits) {
-            $tits = array_values(array_unique($tits));
-            sort($tits);
-        }
-        unset($tits);
+        [$cuentasBancarias, $bancos, $titularesPorBanco] = $this->cuentasConciliacion();
 
         // 2. Líneas bancarias cargadas
         $fecha_desde = ! empty($filtrosConciliacion['fecha_desde'])
@@ -1421,6 +1400,15 @@ class FinanzasController extends Controller
         $bancosActivos = $bancosActivos->filter()->unique()->sort()->values();
 
         $data_por_banco = [];
+        $tasasEgreso = app(\App\Services\ComisionBancariaUsd::class)->tasasPorDia(
+            \App\Models\FlujoCaja::query()
+                ->where('tipo', 'egreso')
+                ->where('oculto', false)
+                ->where('tasa_cambio', '>', 0)
+                ->when($periodo_desde, fn ($q) => $q->whereDate('fecha', '>=', $periodo_desde))
+                ->when($periodo_hasta, fn ($q) => $q->whereDate('fecha', '<=', $periodo_hasta))
+                ->get(['fecha', 'banco', 'titular', 'tasa_cambio'])
+        );
         foreach ($bancosActivos as $bk_key) {
             [$bk, $tit] = array_pad(explode('|', $bk_key, 2), 2, '');
             $bk_lower  = strtolower($bk);
@@ -1585,16 +1573,10 @@ class FinanzasController extends Controller
                 ])->values();
             $en_transito = $en_transito->concat($compras_transito)->values();
 
-            $comisiones = $lineas_comisiones->groupBy('descripcion')->map(function ($group) {
-                $first = $group->first();
-
-                return [
-                    'fecha'       => $first->fecha,
-                    'descripcion' => $first->descripcion,
-                    'referencia'  => $group->count() > 1 ? 'VARIAS ('.$group->count().')' : $first->referencia,
-                    'monto'       => $group->sum('monto'),
-                ];
-            })->values();
+            $comisionesUsd = app(\App\Services\ComisionBancariaUsd::class)
+                ->convertir($lineas_comisiones, $tasasEgreso, $bk, $tit);
+            $comisiones = $comisionesUsd['filas'];
+            $total_comisiones_usd = $comisionesUsd['total_usd'];
 
             $total_conciliados = $conciliados->sum('monto');
             $total_transito = $en_transito->sum('monto_bs');
@@ -1647,6 +1629,7 @@ class FinanzasController extends Controller
                     'total_transito',
                     'total_sin_registrar',
                     'total_comisiones',
+                    'total_comisiones_usd',
                     'total_compras_divisas',
                     'total_pagos_credito',
                     'total_cargos_sistema',
@@ -1657,11 +1640,128 @@ class FinanzasController extends Controller
             );
         }
 
+        $cierresMarcados = collect();
+        if ($fecha_desde && $fecha_hasta && \Illuminate\Support\Facades\Schema::hasTable('conciliacion_cierres')) {
+            $cierresMarcados = \App\Models\ConciliacionCierre::query()
+                ->whereDate('fecha_desde', $fecha_desde)
+                ->whereDate('fecha_hasta', $fecha_hasta)
+                ->get()
+                ->keyBy(fn ($cierre) => $cierre->banco.'|'.$cierre->titular);
+        }
+
         return view('finanzas.conciliaciones', compact(
             'lineas', 'bancos', 'cuentasBancarias', 'egresos_ayer',
             'bancosActivos', 'data_por_banco', 'titularesPorBanco',
-            'filtrosConciliacion'
+            'filtrosConciliacion', 'fecha_desde', 'fecha_hasta', 'cierresMarcados'
         ));
+    }
+
+    public function calendarioConciliaciones(Request $request)
+    {
+        [, $bancos, $titularesPorBanco] = $this->cuentasConciliacion();
+
+        $calMes = $request->input('cal_mes');
+        if (! is_string($calMes) || ! preg_match('/^\d{4}-\d{2}$/', $calMes)) {
+            $calMes = now()->format('Y-m');
+        }
+
+        $calendarioConciliacion = app(\App\Services\ConciliacionCalendarioService::class)
+            ->armar($calMes, $titularesPorBanco);
+
+        return view('finanzas.calendario_conciliaciones', compact(
+            'bancos',
+            'titularesPorBanco',
+            'calendarioConciliacion'
+        ));
+    }
+
+    /**
+     * @return array{0: \Illuminate\Support\Collection, 1: \Illuminate\Support\Collection, 2: array<string, list<string>>}
+     */
+    private function cuentasConciliacion(): array
+    {
+        $cuentasBancarias = \App\Models\CuentaBancaria::all();
+        $bancosPermitidos = ['BANCAMIGA', 'BANCARIBE', 'BANESCO', 'BBVA', 'BNC', 'MERCANTIL', 'TESORO', 'VENEZUELA'];
+        $bancos = $cuentasBancarias->pluck('banco')
+            ->map(fn ($b) => $this->canonizarBanco($b))
+            ->filter(fn ($b) => in_array($b, $bancosPermitidos, true))
+            ->unique()->sort()->values();
+
+        $titularesPorBanco = [];
+        foreach ($cuentasBancarias as $cuenta) {
+            $b = $this->canonizarBanco($cuenta->banco);
+            $t = strtoupper(trim($cuenta->titular));
+            if (in_array($b, $bancosPermitidos, true) && $t) {
+                $titularesPorBanco[$b][] = $t;
+            }
+        }
+        foreach ($titularesPorBanco as $b => &$tits) {
+            $tits = array_values(array_unique($tits));
+            sort($tits);
+        }
+        unset($tits);
+
+        return [$cuentasBancarias, $bancos, $titularesPorBanco];
+    }
+
+    public function marcarConciliacionPeriodo(Request $request)
+    {
+        $data = $request->validate([
+            'banco' => 'required|string|max:80',
+            'titular' => 'required|string|max:120',
+            'fecha_desde' => 'required|date',
+            'fecha_hasta' => 'required|date|after_or_equal:fecha_desde',
+        ]);
+
+        [$banco, $titular] = app(\App\Services\BankReconciliationMatcher::class)
+            ->partesCuenta($data['banco'], $data['titular']);
+
+        if ($banco === '' || $titular === '') {
+            return redirect()->route('finanzas.calendario_conciliaciones')
+                ->with('error', 'Elige el banco y el titular.');
+        }
+
+        $existe = ConciliacionCierre::query()
+            ->where('banco', $banco)
+            ->where('titular', $titular)
+            ->whereDate('fecha_desde', $data['fecha_desde'])
+            ->whereDate('fecha_hasta', $data['fecha_hasta'])
+            ->exists();
+
+        if (! $existe) {
+            ConciliacionCierre::create([
+                'banco' => $banco,
+                'titular' => $titular,
+                'fecha_desde' => $data['fecha_desde'],
+                'fecha_hasta' => $data['fecha_hasta'],
+                'user_id' => $request->user()?->id,
+            ]);
+        }
+
+        $mes = \Carbon\Carbon::parse($data['fecha_desde'])->format('Y-m');
+        $mensaje = $existe
+            ? 'Ese banco, titular y rango ya estaban marcados.'
+            : "{$banco} · {$titular} quedó marcado como conciliado.";
+
+        return $this->redirectTrasCierre($request, $mes)->with('success', $mensaje);
+    }
+
+    public function quitarConciliacionPeriodo(Request $request, ConciliacionCierre $cierre)
+    {
+        $mes = $cierre->fecha_desde->format('Y-m');
+        $cierre->delete();
+
+        return $this->redirectTrasCierre($request, $mes)
+            ->with('success', 'Se quitó la marca de conciliación.');
+    }
+
+    private function redirectTrasCierre(Request $request, string $mes)
+    {
+        if ($request->input('origen') === 'conciliaciones') {
+            return redirect()->route('finanzas.conciliaciones');
+        }
+
+        return redirect()->route('finanzas.calendario_conciliaciones', ['cal_mes' => $mes]);
     }
 
 
@@ -2338,15 +2438,20 @@ class FinanzasController extends Controller
                 'flujo_id'   => $e->id,
             ])->values();
 
-        $comisiones = $lineas_comisiones->groupBy('descripcion')->map(function($group) {
-            $first = $group->first();
-            return [
-                'fecha'       => $first->fecha,
-                'descripcion' => $first->descripcion,
-                'referencia'  => $group->count() > 1 ? 'VARIAS (' . $group->count() . ')' : $first->referencia,
-                'monto'       => $group->sum('monto'),
-            ];
-        })->values();
+        $tasasEgreso = app(\App\Services\ComisionBancariaUsd::class)->tasasPorDia(
+            \App\Models\FlujoCaja::query()
+                ->where('tipo', 'egreso')
+                ->where('oculto', false)
+                ->where('tasa_cambio', '>', 0)
+                ->when($fecha_desde_filtro, fn ($q) => $q->whereDate('fecha', '>=', $fecha_desde_filtro))
+                ->when($fecha_hasta_filtro, fn ($q) => $q->whereDate('fecha', '<=', $fecha_hasta_filtro))
+                ->get(['fecha', 'banco', 'titular', 'tasa_cambio'])
+        );
+        [$bancoCanon, $titularCanon] = app(\App\Services\BankReconciliationMatcher::class)
+            ->partesCuenta($bk_req, $tit_req);
+        $comisionesUsd = app(\App\Services\ComisionBancariaUsd::class)
+            ->convertir($lineas_comisiones, $tasasEgreso, $bancoCanon, $titularCanon);
+        $comisiones = $comisionesUsd['filas'];
 
         $pagos_credito = $lineas_pago_credito
             ->map(fn ($l) => [
@@ -2369,6 +2474,7 @@ class FinanzasController extends Controller
             'total_transito' => $en_transito->sum('monto_bs'),
             'total_sin_registrar' => $sin_registrar->sum('monto'),
             'total_comisiones' => $comisiones->sum('monto'),
+            'total_comisiones_usd' => $comisionesUsd['total_usd'],
             'total_pagos_credito' => $pagos_credito->sum('monto'),
             'fecha_desde' => $fecha_desde_filtro,
             'fecha_hasta' => $fecha_hasta_filtro,

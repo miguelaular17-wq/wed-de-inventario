@@ -96,7 +96,7 @@
                 <td style="color: #10b981;"><span>CONSOLIDADOS</span> Bs. {{ number_format($data['total_conciliados'], 2) }}</td>
                 <td style="color: #f59e0b;"><span>EN TRÁNSITO</span> Bs. {{ number_format($data['total_transito'], 2) }}</td>
                 <td style="color: #ef4444;"><span>MOVIMIENTOS BANCO</span> Bs. {{ number_format($data['total_sin_registrar'], 2) }}</td>
-                <td style="color: #8b5cf6;"><span>COMISIONES</span> Bs. {{ number_format($data['total_comisiones'], 2) }}</td>
+                <td style="color: #8b5cf6;"><span>COMISIONES</span> Bs. {{ number_format($data['total_comisiones'], 2) }} / ${{ number_format($data['total_comisiones_usd'] ?? 0, 2) }}</td>
                 <td style="color: #f43f5e;"><span>PAGO CRÉDITO</span> Bs. {{ number_format(abs($data['total_pagos_credito'] ?? 0), 2) }}</td>
             </tr>
         </table>
@@ -218,7 +218,12 @@
                 <td class="text-center">{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
                 <td>{{ $row['descripcion'] }}</td>
                 <td>{{ $row['referencia'] }}</td>
-                <td class="text-right">Bs. {{ number_format($row['monto'], 2) }}</td>
+                <td class="text-right">
+                    Bs. {{ number_format($row['monto'], 2) }}
+                    @if(($row['monto_usd'] ?? null) !== null)
+                        <br>${{ number_format($row['monto_usd'], 2) }}
+                    @endif
+                </td>
             </tr>
             @empty
             <tr>
@@ -228,7 +233,7 @@
             @if($data['comisiones']->count() > 0)
             <tr class="total-row">
                 <td colspan="3" class="text-right">Total:</td>
-                <td class="text-right">Bs. {{ number_format($data['total_comisiones'], 2) }}</td>
+                <td class="text-right">Bs. {{ number_format($data['total_comisiones'], 2) }} / ${{ number_format($data['total_comisiones_usd'] ?? 0, 2) }}</td>
             </tr>
             @endif
         </tbody>

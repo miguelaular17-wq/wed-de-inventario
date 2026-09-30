@@ -371,8 +371,6 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::put('/empleados/{empleado}', [EmpleadoController::class, 'update'])->name('empleados.update');
 
     Route::get('/prestamos', [PrestamoController::class, 'index'])->name('prestamos.index');
-    Route::get('/deudas', [DeudasPersonalController::class, 'index'])->name('deudas.index');
-    Route::get('/deudas/{empleado}', [DeudasPersonalController::class, 'show'])->name('deudas.show');
     Route::post('/prestamos', [PrestamoController::class, 'storeEscritorio'])->name('prestamos.escritorio');
     Route::get('/prestamos/txt', [PrestamoController::class, 'exportarTxt'])->name('prestamos.txt');
     Route::get('/prestamos/excel', [PrestamoController::class, 'exportarExcel'])->name('prestamos.excel');
@@ -438,6 +436,11 @@ Route::middleware(['auth', 'permission:nomina.equipo'])->prefix('nomina/equipo')
     Route::get('/', [EquipoNominaController::class, 'index'])->name('index');
     Route::get('/{periodo}/comisiones', [EquipoNominaController::class, 'comisiones'])->name('comisiones');
     Route::get('/{periodo}', [EquipoNominaController::class, 'show'])->name('show');
+});
+
+Route::middleware(['auth', 'permission:nomina,nomina.deudas'])->prefix('nomina')->name('nomina.')->group(function () {
+    Route::get('/deudas', [DeudasPersonalController::class, 'index'])->name('deudas.index');
+    Route::get('/deudas/{empleado}', [DeudasPersonalController::class, 'show'])->name('deudas.show');
 });
 
 Route::middleware(['auth', 'permission:nomina,nomina.dias_libres'])->prefix('nomina/dias-libres')->name('nomina.dias_libres.')->group(function () {
@@ -518,6 +521,7 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
 
 // Conciliaciones routes - solo admin y contabilidad
 Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->group(function () {
+    Route::get('/calendario-conciliaciones', [FinanzasController::class, 'calendarioConciliaciones'])->name('finanzas.calendario_conciliaciones');
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
     Route::post('/conciliaciones/upload', [FinanzasController::class, 'uploadConciliacion'])->name('finanzas.conciliaciones.upload');
     Route::post('/conciliaciones/medios-pago', [FinanzasController::class, 'uploadMediosPago'])->name('finanzas.conciliaciones.medios_pago');
@@ -528,6 +532,8 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::post('/conciliaciones/clear', [App\Http\Controllers\FinanzasController::class, 'clearConciliacion'])->name('finanzas.conciliaciones.clear');
     Route::get('/conciliaciones/reporte', [App\Http\Controllers\FinanzasController::class, 'reporteConciliacion'])->name('finanzas.conciliaciones.reporte');
     Route::get('/conciliaciones/reporte-banco', [App\Http\Controllers\FinanzasController::class, 'reporteBancoPdf'])->name('finanzas.conciliaciones.reporte-banco');
+    Route::post('/conciliaciones/periodos', [FinanzasController::class, 'marcarConciliacionPeriodo'])->name('finanzas.conciliaciones.periodos.store');
+    Route::delete('/conciliaciones/periodos/{cierre}', [FinanzasController::class, 'quitarConciliacionPeriodo'])->name('finanzas.conciliaciones.periodos.destroy');
 });
 
 // Cobranza routes

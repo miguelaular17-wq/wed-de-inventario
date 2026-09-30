@@ -21,6 +21,8 @@ class VentaDiariaCaja extends Model
         'cashea',
         'fact_credito',
         'abonos',
+        'iphone',
+        'gift_card',
     ];
 
     protected $casts = [
@@ -32,6 +34,8 @@ class VentaDiariaCaja extends Model
         'cashea' => 'decimal:2',
         'fact_credito' => 'decimal:2',
         'abonos' => 'decimal:2',
+        'iphone' => 'decimal:2',
+        'gift_card' => 'decimal:2',
     ];
 
     public function reporte(): BelongsTo

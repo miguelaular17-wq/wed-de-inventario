@@ -94,7 +94,9 @@ class VentasDiariasService
             + $transfUsd
             + (float) $r->zelle_binance
             + (float) $r->cashea
-            + (float) $r->abonos;
+            + (float) $r->abonos
+            + (float) $r->iphone
+            + (float) $r->gift_card;
 
         $totalCreditos = (float) $r->total_creditos;
         $totalVentas = $totalCobros + $totalCreditos;
@@ -126,7 +128,7 @@ class VentasDiariasService
 
     public function totalesCajas(Collection $cajas): array
     {
-        $keys = ['efectivo_usd', 'efectivo_bs', 'punto_venta', 'transf_pm', 'zelle_binance', 'cashea', 'fact_credito', 'abonos'];
+        $keys = ['efectivo_usd', 'efectivo_bs', 'punto_venta', 'transf_pm', 'zelle_binance', 'cashea', 'fact_credito', 'abonos', 'iphone', 'gift_card'];
         $tot = array_fill_keys($keys, 0.0);
         foreach ($cajas as $c) {
             foreach ($keys as $k) {
@@ -169,6 +171,8 @@ class VentasDiariasService
                 'cashea' => 0.0,
                 'fact_credito' => 0.0,
                 'abonos' => 0.0,
+                'iphone' => 0.0,
+                'gift_card' => 0.0,
             ];
             $cajasLimpias = [];
             foreach ($cajas as $caja) {
@@ -186,6 +190,8 @@ class VentasDiariasService
                     'cashea' => (float) ($caja['cashea'] ?? 0),
                     'fact_credito' => (float) ($caja['fact_credito'] ?? 0),
                     'abonos' => (float) ($caja['abonos'] ?? 0),
+                    'iphone' => (float) ($caja['iphone'] ?? 0),
+                    'gift_card' => (float) ($caja['gift_card'] ?? 0),
                 ];
                 foreach ($sum as $k => $_) {
                     $sum[$k] += $row[$k];
@@ -201,6 +207,8 @@ class VentasDiariasService
             $reporte->zelle_binance = round($sum['zelle_binance'], 2);
             $reporte->cashea = round($sum['cashea'], 2);
             $reporte->abonos = round($sum['abonos'], 2);
+            $reporte->iphone = round($sum['iphone'], 2);
+            $reporte->gift_card = round($sum['gift_card'], 2);
             $reporte->total_creditos = round($sum['fact_credito'], 2);
             $reporte->z_fiscal_bs = (float) ($data['z_fiscal_bs'] ?? 0);
             $reporte->productos_vendidos = (float) ($data['productos_vendidos'] ?? 0);
@@ -226,6 +234,8 @@ class VentasDiariasService
                     'cashea' => $row['cashea'],
                     'fact_credito' => $row['fact_credito'],
                     'abonos' => $row['abonos'],
+                    'iphone' => $row['iphone'],
+                    'gift_card' => $row['gift_card'],
                 ]);
             }
 

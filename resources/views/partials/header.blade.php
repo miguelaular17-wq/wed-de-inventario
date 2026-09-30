@@ -167,7 +167,8 @@
             $link('My Delivery', route('finanzas.my_delivery'), request()->routeIs('finanzas.my_delivery')),
             $link('Gasto Directivos', route('finanzas.gasto_directivos'), request()->routeIs('finanzas.gasto_directivos*')),
             $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*')),
-            $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones', 'finanzas.conciliaciones.*')),
+            $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones')),
+            $link('Calendario conciliaciones', route('finanzas.calendario_conciliaciones'), request()->routeIs('finanzas.calendario_conciliaciones')),
             $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*')),
             $link('Ventas diarias', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*')),
         ]);
@@ -193,7 +194,8 @@
             $nav[] = $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*'));
         }
         if ($u->canAccess('conciliaciones')) {
-            $nav[] = $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones', 'finanzas.conciliaciones.*'));
+            $nav[] = $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones'));
+            $nav[] = $link('Calendario conciliaciones', route('finanzas.calendario_conciliaciones'), request()->routeIs('finanzas.calendario_conciliaciones'));
         }
         if ($u->canAccess('cobranza')) {
             $nav[] = $link('Cobranza', route('cobranza.index'), request()->routeIs('cobranza.*'));
@@ -225,6 +227,10 @@
 
     if ($u->role !== 'admin' && ! $u->canAccess('nomina') && $u->canAccess('nomina.dias_libres')) {
         $nav[] = $link('Días libres', route('nomina.dias_libres.index'), request()->routeIs('nomina.dias_libres.*'));
+    }
+
+    if ($u->role !== 'admin' && ! $u->canAccess('nomina') && $u->canAccess('nomina.deudas')) {
+        $nav[] = $link('Deudas del Personal', route('nomina.deudas.index'), request()->routeIs('nomina.deudas.*'));
     }
 
     if ($u->role !== 'admin' && app(\App\Services\MetaQuincenaService::class)->puedeVerMetas($u)) {

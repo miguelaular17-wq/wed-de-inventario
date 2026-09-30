@@ -98,6 +98,11 @@ class DeudasPersonalService
             ])
             ->activos();
 
+        if (array_key_exists('empleado_ids', $filtros) && is_array($filtros['empleado_ids'])) {
+            $ids = array_values(array_filter(array_map('intval', $filtros['empleado_ids'])));
+            $query->whereIn('id', $ids !== [] ? $ids : [0]);
+        }
+
         if (! empty($filtros['empleado_id'])) {
             $query->where('id', (int) $filtros['empleado_id']);
         }
