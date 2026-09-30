@@ -34,6 +34,7 @@ use App\Http\Controllers\Nomina\AttendanceController;
 use App\Http\Controllers\Nomina\CargoController;
 use App\Http\Controllers\Nomina\ComisionAjusteController;
 use App\Http\Controllers\Nomina\ComisionController;
+use App\Http\Controllers\Nomina\ComisionMarcaController;
 use App\Http\Controllers\Nomina\ConfiguracionController;
 use App\Http\Controllers\Nomina\DeduccionController;
 use App\Http\Controllers\Nomina\DeudasPersonalController;
@@ -360,6 +361,12 @@ Route::middleware(['auth', 'permission:nomina,nomina.comisiones'])->prefix('nomi
 });
 
 Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina.')->group(function () {
+    Route::get('/comisiones-marca', [ComisionMarcaController::class, 'index'])->name('comisiones_marca.index');
+    Route::get('/comisiones-marca/reporte', [ComisionMarcaController::class, 'reporte'])->name('comisiones_marca.reporte');
+    Route::get('/comisiones-marca/tasa', [ComisionMarcaController::class, 'tasa'])->name('comisiones_marca.tasa');
+    Route::post('/comisiones-marca', [ComisionMarcaController::class, 'store'])->name('comisiones_marca.store');
+    Route::delete('/comisiones-marca/{comision}', [ComisionMarcaController::class, 'destroy'])->name('comisiones_marca.destroy');
+
     Route::get('/', [EmpleadoController::class, 'index'])->name('index');
 
     Route::get('/empleados', [EmpleadoController::class, 'index'])->name('empleados.index');

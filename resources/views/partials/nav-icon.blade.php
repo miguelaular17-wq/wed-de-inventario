@@ -47,6 +47,7 @@
         'efectividad publicidad' => '<path d="M3 11v2a4 4 0 0 0 4 4h1l6 4V3L8 7H7a4 4 0 0 0-4 4z"/>',
         'períodos' => '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
         'comisiones' => '<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+        'comisiones de marca' => '<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/><path d="M4 4h4M16 18h4"/>',
         'adelantos' => '<path d="M5 12h14M12 5l7 7-7 7"/>',
         'deducciones y bonos' => '<path d="M12 5v14M5 12h14"/>',
         'horas extras' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',

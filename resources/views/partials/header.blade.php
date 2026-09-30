@@ -247,6 +247,7 @@
         }
         if ($u->canAccess('nomina')) {
             $nominaItems = array_merge($nominaItems, [
+                $link('Comisiones de marca', route('nomina.comisiones_marca.index'), request()->routeIs('nomina.comisiones_marca.*')),
                 $link('Adelantos', route('nomina.adelantos.index'), request()->routeIs('nomina.adelantos.*')),
                 $link('Faltante de caja', route('nomina.faltante_caja.index'), request()->routeIs('nomina.faltante_caja.*')),
                 $link('Descuento mercancía', route('nomina.mercancia.index'), request()->routeIs('nomina.mercancia.*')),
