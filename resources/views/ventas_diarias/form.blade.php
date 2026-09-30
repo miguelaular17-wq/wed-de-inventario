@@ -75,7 +75,7 @@
             </div>
             <div class="field">
                 <label>Tasa</label>
-                <input type="number" step="0.0001" min="0.0001" name="tasa" id="vd-tasa"
+                <input type="number" step="any" min="0.0001" name="tasa" id="vd-tasa"
                        value="{{ old('tasa', $reporte->tasa ?? '') }}" required>
             </div>
             <div class="field">
@@ -98,16 +98,16 @@
 
         <div class="vd-card">
             <div hidden>
-                <input type="number" name="divisas_efectivo" class="vd-from-cajas" data-caja="efectivo_usd" value="0">
-                <input type="number" name="efectivo_bs" class="vd-from-cajas" data-caja="efectivo_bs" value="0">
-                <input type="number" name="punto_venta_bs" class="vd-from-cajas" data-caja="punto_venta" value="0">
-                <input type="number" name="transf_pm_bs" class="vd-from-cajas" data-caja="transf_pm" value="0">
-                <input type="number" name="zelle_binance" class="vd-from-cajas" data-caja="zelle_binance" value="0">
-                <input type="number" name="cashea" class="vd-from-cajas" data-caja="cashea" value="0">
-                <input type="number" name="abonos" class="vd-from-cajas" data-caja="abonos" value="0">
-                <input type="number" name="iphone" class="vd-from-cajas" data-caja="iphone" value="0">
-                <input type="number" name="gift_card" class="vd-from-cajas" data-caja="gift_card" value="0">
-                <input type="number" name="total_creditos" class="vd-from-cajas" data-caja="fact_credito" value="0">
+                <input type="hidden" name="divisas_efectivo" class="vd-from-cajas" data-caja="efectivo_usd" value="0">
+                <input type="hidden" name="efectivo_bs" class="vd-from-cajas" data-caja="efectivo_bs" value="0">
+                <input type="hidden" name="punto_venta_bs" class="vd-from-cajas" data-caja="punto_venta" value="0">
+                <input type="hidden" name="transf_pm_bs" class="vd-from-cajas" data-caja="transf_pm" value="0">
+                <input type="hidden" name="zelle_binance" class="vd-from-cajas" data-caja="zelle_binance" value="0">
+                <input type="hidden" name="cashea" class="vd-from-cajas" data-caja="cashea" value="0">
+                <input type="hidden" name="abonos" class="vd-from-cajas" data-caja="abonos" value="0">
+                <input type="hidden" name="iphone" class="vd-from-cajas" data-caja="iphone" value="0">
+                <input type="hidden" name="gift_card" class="vd-from-cajas" data-caja="gift_card" value="0">
+                <input type="hidden" name="total_creditos" class="vd-from-cajas" data-caja="fact_credito" value="0">
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
                 <h3 style="margin:0;">CAJAS</h3>
@@ -162,15 +162,15 @@
         <div class="vd-card vd-extra">
             <div class="field">
                 <label>Productos vendidos</label>
-                <input type="number" step="0.01" name="productos_vendidos" value="{{ old('productos_vendidos', $reporte->productos_vendidos ?? 0) }}">
+                <input type="number" step="any" name="productos_vendidos" value="{{ old('productos_vendidos', $reporte->productos_vendidos ?? 0) }}">
             </div>
             <div class="field">
                 <label>Z fiscal (Bs)</label>
-                <input type="number" step="0.01" name="z_fiscal_bs" value="{{ old('z_fiscal_bs', $reporte->z_fiscal_bs ?? 0) }}">
+                <input type="number" step="any" name="z_fiscal_bs" value="{{ old('z_fiscal_bs', $reporte->z_fiscal_bs ?? 0) }}">
             </div>
             <div class="field">
                 <label>Deliverys pendientes ($)</label>
-                <input type="number" step="0.01" name="deliverys_pendientes" value="{{ old('deliverys_pendientes', $reporte->deliverys_pendientes ?? 0) }}">
+                <input type="number" step="any" name="deliverys_pendientes" value="{{ old('deliverys_pendientes', $reporte->deliverys_pendientes ?? 0) }}">
             </div>
             <div class="field" style="flex-basis:100%;">
                 <label>Observaciones</label>
@@ -334,7 +334,11 @@
     const errBox = document.getElementById('vd-form-error');
     btn?.addEventListener('click', async () => {
         recalc();
-        if (!form.reportValidity()) return;
+        if (!form.reportValidity()) {
+            errBox.textContent = 'Revisa la tasa y los montos. Usa punto para los decimales.';
+            errBox.style.display = 'block';
+            return;
+        }
         errBox.style.display = 'none';
         btn.disabled = true;
         try {
