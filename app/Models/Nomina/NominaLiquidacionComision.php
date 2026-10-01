@@ -135,8 +135,17 @@ class NominaLiquidacionComision extends Model
      */
     public function retencionOtrosProductos(?float $pct = null): float
     {
+        if ($this->empleado?->exentoRetencionComision()) {
+            return 0.0;
+        }
+
         $porcentaje = $pct ?? (float) $this->retencion_pct;
         if ($porcentaje <= 0) {
+            // Solo cae al % global si la fila no guardó pct (legacy).
+            // Si retencion_pct es 0 a propósito (exento), ya retornamos arriba.
+            if ((float) $this->retencion_pct === 0.0 && (float) $this->retencion === 0.0) {
+                return 0.0;
+            }
             $porcentaje = NominaConfig::getDecimal('retencion_comision_pct', 10);
         }
 

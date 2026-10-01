@@ -352,11 +352,13 @@ class EmpleadoController extends Controller
             'estado' => ['required', 'in:ACTIVO,INACTIVO'],
             'es_supervisor' => ['nullable', 'boolean'],
             'es_servicio_tecnico' => ['nullable', 'boolean'],
+            'exento_retencion_comision' => ['nullable', 'boolean'],
             'modo_comision' => ['nullable', 'in:'.implode(',', array_keys(NominaEmpleado::modosComision()))],
             'codigo_vendedor' => ['nullable', 'string', 'max:255'],
         ]) + [
             'es_supervisor' => $request->boolean('es_supervisor'),
             'es_servicio_tecnico' => $request->boolean('es_servicio_tecnico'),
+            'exento_retencion_comision' => $request->boolean('exento_retencion_comision'),
         ];
     }
 

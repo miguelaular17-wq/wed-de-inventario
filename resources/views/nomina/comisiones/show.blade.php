@@ -87,6 +87,7 @@
                     <th>Comisión</th>
                     <th>Bonos</th>
                     <th>Retención</th>
+                    <th title="Sin retención 10%">Sin ret.</th>
                     <th>Desc. / préstamos</th>
                     <th>A pagar</th>
                 </tr>
@@ -104,12 +105,16 @@
                         $pagarMostrado = $esSt
                             ? round($comisionMostrada + $abonosMostrados - $retencionMostrada, 2)
                             : (float) $liq->total_pagar;
+                        $puedeMarcarExento = $periodo->estado !== 'ABIERTO' && $periodo->estado !== 'CERRADO';
                     @endphp
                     <tr data-grupo-clave="{{ $sedeArea->grupoDeEmpleado($liq->empleado)['clave'] }}" data-empleado-buscar="{{ $buscarAttrs($liq) }}">
                         <td>
                             <a href="{{ route('nomina.empleados.show', ['empleado' => $liq->empleado, 'tab' => 'comisiones']) }}">
                                 {{ $liq->empleado->nombre() }}
                             </a>
+                            @if($liq->empleado->exentoRetencionComision())
+                                <div class="muted" style="font-size:.72rem;color:#0f766e;">Sin retención</div>
+                            @endif
                             @if($esSt)
                                 <div class="muted" style="font-size:.72rem;">ST · Otros productos</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_SEDE)
@@ -148,6 +153,21 @@
                         <td>${{ number_format($comisionMostrada, 2) }}</td>
                         <td>${{ number_format($abonosMostrados, 2) }}</td>
                         <td>${{ number_format($retencionMostrada, 2) }}</td>
+                        <td style="text-align:center;">
+                            <form method="POST" action="{{ route('nomina.comisiones.exento_retencion', [$periodo, $liq->empleado]) }}" style="margin:0;">
+                                @csrf
+                                <input type="hidden" name="exento_retencion_comision" value="0">
+                                <input
+                                    type="checkbox"
+                                    name="exento_retencion_comision"
+                                    value="1"
+                                    @checked($liq->empleado->exentoRetencionComision())
+                                    @disabled(! $puedeMarcarExento)
+                                    title="Sin retención 10%"
+                                    onchange="this.form.submit()"
+                                >
+                            </form>
+                        </td>
                         <td>
                             @include('nomina.partials.descuento-comentarios', [
                                 'monto' => $descuentosMostrados,
@@ -163,7 +183,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="9" class="muted">Sin liquidaciones de supervisores o vendedores en esta quincena.</td></tr>
+                    <tr><td colspan="10" class="muted">Sin liquidaciones de supervisores o vendedores en esta quincena.</td></tr>
                 @endforelse
             </tbody>
         </table>

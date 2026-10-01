@@ -41,6 +41,7 @@ class NominaEmpleado extends Model
         'supervisor_id',
         'es_supervisor',
         'es_servicio_tecnico',
+        'exento_retencion_comision',
         'modo_comision',
         'codigo_vendedor',
         'empresa_id',
@@ -51,6 +52,7 @@ class NominaEmpleado extends Model
         'salario_base' => 'decimal:2',
         'es_supervisor' => 'boolean',
         'es_servicio_tecnico' => 'boolean',
+        'exento_retencion_comision' => 'boolean',
     ];
 
     public function cliente(): BelongsTo
@@ -178,6 +180,11 @@ class NominaEmpleado extends Model
         $modo = (string) ($this->modo_comision ?: self::COMISION_NINGUNA);
 
         return $modo !== self::COMISION_NINGUNA;
+    }
+
+    public function exentoRetencionComision(): bool
+    {
+        return (bool) $this->exento_retencion_comision;
     }
 
     public function scopeActivos($query)

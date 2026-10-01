@@ -360,6 +360,7 @@ Route::middleware(['auth', 'permission:nomina,nomina.comisiones'])->prefix('nomi
     Route::get('/comisiones/{periodo}/relacion', [ComisionController::class, 'relacion'])->name('comisiones.relacion');
     Route::get('/comisiones/{periodo}/reporte-sedes.pdf', [ComisionController::class, 'reporteSedesPdf'])->name('comisiones.reporte_sedes');
     Route::post('/comisiones/{periodo}/recalcular', [ComisionController::class, 'recalcular'])->name('comisiones.recalcular');
+    Route::post('/comisiones/{periodo}/empleados/{empleado}/exento-retencion', [ComisionController::class, 'toggleExentoRetencion'])->name('comisiones.exento_retencion');
     Route::get('/comisiones/{periodo}/banco/{empresa}', [ComisionController::class, 'exportarBanco'])->name('comisiones.banco');
 });
 
@@ -534,6 +535,7 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::get('/calendario-conciliaciones', [FinanzasController::class, 'calendarioConciliaciones'])->name('finanzas.calendario_conciliaciones');
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
     Route::get('/conciliaciones/lotes', [FinanzasController::class, 'lotesPuntoVenta'])->name('finanzas.conciliaciones.lotes');
+    Route::post('/conciliaciones/lotes/manual', [FinanzasController::class, 'conciliarLoteManual'])->name('finanzas.conciliaciones.lotes.manual');
     Route::post('/conciliaciones/upload', [FinanzasController::class, 'uploadConciliacion'])->name('finanzas.conciliaciones.upload');
     Route::post('/conciliaciones/medios-pago', [FinanzasController::class, 'uploadMediosPago'])->name('finanzas.conciliaciones.medios_pago');
     Route::post('/conciliaciones/process', [FinanzasController::class, 'processConciliacion'])->name('finanzas.conciliaciones.process');

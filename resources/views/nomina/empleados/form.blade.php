@@ -174,6 +174,12 @@
                     Pertenece a Servicio Técnico
                 </label>
             </div>
+            <div class="field" style="display:flex; align-items:flex-end;">
+                <label style="display:flex; gap:8px; align-items:center; text-transform:none; letter-spacing:0;">
+                    <input type="checkbox" name="exento_retencion_comision" value="1" @checked(old('exento_retencion_comision', $empleado?->exento_retencion_comision))>
+                    Sin retención de comisión (10%)
+                </label>
+            </div>
         </div>
 
         <div style="margin-top:20px;">

@@ -54,7 +54,11 @@ class BdvMediosPagoConciliacionService
                     continue;
                 }
 
-                $titularLote = $titularCanon ?: (trim((string) $linea->titular) !== '' ? (string) $linea->titular : 'JRZ');
+                $titularLote = $titularCanon
+                    ?: (trim((string) $linea->titular) !== '' ? (string) $linea->titular : 'GRUPO JRZ');
+                if ($this->matcher->titularClave($titularLote) === 'JRZ') {
+                    $titularLote = 'GRUPO JRZ';
+                }
                 $antes = TesoreriaIngreso::query()
                     ->where('tipo', 'punto_venta')
                     ->whereRaw('UPPER(TRIM(banco)) LIKE ?', ['%VENEZUELA%'])
@@ -247,16 +251,17 @@ class BdvMediosPagoConciliacionService
             }
         });
 
-        if ($titular) {
-            $q->where(function ($qq) use ($titular) {
-                $qq->whereRaw('UPPER(TRIM(titular)) = ?', [mb_strtoupper(trim($titular), 'UTF-8')])
-                    ->orWhereNull('titular')
-                    ->orWhere('titular', '');
-            });
-        }
-
         return $q->orderBy('fecha')->orderBy('id')->get()
-            ->filter(fn (ConciliacionLinea $l) => $this->matcher->esLiquidacionPuntoVenta($l->descripcion))
+            ->filter(function (ConciliacionLinea $l) use ($banco, $titular) {
+                if (! $this->matcher->esLiquidacionPuntoVenta($l->descripcion)) {
+                    return false;
+                }
+                if (! $titular) {
+                    return true;
+                }
+
+                return $this->matcher->mismoTitular($l->titular, $titular, $l->banco, $banco);
+            })
             ->values();
     }
 

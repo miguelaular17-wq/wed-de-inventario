@@ -408,6 +408,31 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(22.0, (float) $liq->total_pagar);
     }
 
+    public function test_empleado_exento_no_aplica_retencion(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_VENTAS_PROPIAS, 'VEND-EXENTO');
+        $empleado->exento_retencion_comision = true;
+        $empleado->save();
+        $periodo = $this->periodo();
+        $this->venta('VEND-EXENTO', 1000);
+        NominaComisionAbono::create([
+            'empleado_id' => $empleado->id,
+            'fecha' => '2026-08-10',
+            'monto' => 20,
+            'estado' => 'PENDIENTE',
+        ]);
+
+        $calculo = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+        $liq = app(CommissionSettlementService::class)->liquidar($periodo, $empleado, $calculo, 5);
+
+        $this->assertSame(10.0, (float) $liq->comision_total);
+        $this->assertSame(20.0, (float) $liq->abonos);
+        $this->assertSame(0.0, (float) $liq->retencion);
+        $this->assertSame(0.0, (float) $liq->retencion_pct);
+        $this->assertSame(5.0, (float) $liq->prestamos);
+        $this->assertSame(25.0, (float) $liq->total_pagar);
+    }
+
     public function test_servicio_tecnico_liquida_sin_retencion(): void
     {
         NominaConfig::put('descuento_venta_pct', 0);

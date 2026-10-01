@@ -199,6 +199,7 @@ trait CreatesNominaSchema
                 $table->unsignedBigInteger('supervisor_id')->nullable();
                 $table->boolean('es_supervisor')->default(false);
                 $table->boolean('es_servicio_tecnico')->default(false);
+                $table->boolean('exento_retencion_comision')->default(false);
                 $table->string('modo_comision', 32)->default('SIN_COMISION');
                 $table->string('codigo_vendedor', 255)->nullable();
                 $table->decimal('valor_dia', 12, 2)->nullable();

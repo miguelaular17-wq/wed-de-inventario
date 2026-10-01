@@ -65,7 +65,10 @@ class CommissionSettlementService
         $bruto = round($comisionTotal + $abonos, 2);
         $modo = (string) ($calculo['modo'] ?? $empleado->modo_comision);
         $retencionPct = NominaConfig::getDecimal('retencion_comision_pct', 10);
-        if ($modo === NominaEmpleado::COMISION_SERVICIO_TECNICO) {
+        if ($empleado->exentoRetencionComision()) {
+            $retencionPct = 0.0;
+            $retenible = 0.0;
+        } elseif ($modo === NominaEmpleado::COMISION_SERVICIO_TECNICO) {
             // Retención solo sobre la parte de Otros productos (+ abonos), no sobre ST.
             $retenible = round(
                 (float) ($calculo['comision_telefonia'] ?? 0)

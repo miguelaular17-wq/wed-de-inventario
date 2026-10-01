@@ -1254,7 +1254,7 @@ class FinanzasController extends Controller
 
             $cambios = false;
             foreach ($lineas_pendientes as $linea) {
-                if ($matcher->esLiquidacionPuntoVenta($linea->descripcion)) {
+                if ($matcher->esAbonoLotePuntoVenta($linea->descripcion, $linea->referencia)) {
                     continue;
                 }
 
@@ -1426,7 +1426,7 @@ class FinanzasController extends Controller
                 ->diff($lineas_compra_divisas)
                 ->filter(fn ($l) => $classifier->esPagoCredito($l->descripcion));
             $lineas_lotes = $lineas_banco->filter(
-                fn ($l) => $matcher->esLiquidacionPuntoVenta($l->descripcion)
+                fn ($l) => $matcher->esAbonoLotePuntoVenta($l->descripcion, $l->referencia)
             );
             $lineas_normales = $lineas_banco
                 ->diff($lineas_comisiones)
@@ -2313,7 +2313,8 @@ class FinanzasController extends Controller
         }
         $this->filtrarPorBanco($lineasQuery, $bancoFiltro);
         $liquidaciones = $lineasQuery->get()->filter(
-            fn ($linea) => $matcher->esLiquidacionPuntoVenta($linea->descripcion)
+            fn ($linea) => $matcher->esAbonoLotePuntoVenta($linea->descripcion, $linea->referencia)
+                && empty($linea->tesoreria_ingreso_id)
         )->values();
 
         $lotesQuery = \App\Models\TesoreriaIngreso::query()
@@ -2329,29 +2330,46 @@ class FinanzasController extends Controller
         $this->filtrarPorBanco($lotesQuery, $bancoFiltro);
         $lotes = $lotesQuery->get();
 
-        $claves = collect();
+        $grupos = [];
+        $registrar = function ($banco, $titular) use (&$grupos, $matcher) {
+            $clave = $matcher->claveCuenta($banco, $titular);
+            [$bancoCanon, $titularCanon] = $matcher->partesCuenta($banco, $titular);
+            if ($bancoCanon === '' || $clave === '|') {
+                return;
+            }
+            if (! isset($grupos[$clave])) {
+                $grupos[$clave] = [
+                    'banco' => $bancoCanon,
+                    'titular' => $titularCanon,
+                ];
+            } else {
+                $grupos[$clave]['titular'] = $matcher->titularPreferido(
+                    $grupos[$clave]['titular'],
+                    $titularCanon
+                );
+            }
+        };
         foreach ($liquidaciones as $linea) {
-            $claves->push(strtoupper(trim($linea->banco ?? '')).'|'.strtoupper(trim($linea->titular ?? '')));
+            $registrar($linea->banco, $linea->titular);
         }
         foreach ($lotes as $lote) {
-            $claves->push(strtoupper(trim($lote->banco ?? '')).'|'.strtoupper(trim($lote->titular ?? '')));
+            $registrar($lote->banco, $lote->titular);
         }
-        $claves = $claves->filter(fn ($clave) => $clave !== '|')->unique()->sort()->values();
+        ksort($grupos);
 
         $tarjetas = [];
-        foreach ($claves as $clave) {
-            [$banco, $titular] = array_pad(explode('|', $clave, 2), 2, '');
-            $bancoLower = strtolower($banco);
-            $titularLower = strtolower($titular);
-            $mismo = function ($item) use ($bancoLower, $titularLower) {
-                return strtolower(trim($item->banco ?? '')) === $bancoLower
-                    && ($titularLower === '' || strtolower(trim($item->titular ?? '')) === $titularLower);
+        foreach ($grupos as $meta) {
+            $bancoCard = $meta['banco'];
+            $titularCard = $meta['titular'];
+            $mismo = function ($item) use ($matcher, $bancoCard, $titularCard) {
+                return $matcher->mismoBanco($item->banco ?? null, $bancoCard)
+                    && $matcher->mismoTitular($item->titular ?? null, $titularCard, $item->banco ?? null, $bancoCard);
             };
             $liqBanco = $liquidaciones->filter($mismo)->values();
             $lotesBanco = $lotes->filter($mismo)->values();
             $tarjetas[] = [
-                'banco' => $banco,
-                'titular' => $titular,
+                'banco' => $bancoCard,
+                'titular' => $titularCard,
                 'conciliados' => $lotesBanco->where('es_conciliado', true)->values(),
                 'pendientes' => $lotesBanco->where('es_conciliado', false)->values(),
                 'liq_pendientes' => $liqBanco->where('estado', '!=', 'conciliado')->values(),
@@ -2378,6 +2396,80 @@ class FinanzasController extends Controller
         $linea->estado = 'conciliado';
         $linea->save();
         return redirect()->route('finanzas.conciliaciones')->with('success', 'Línea marcada como conciliada manualmente.');
+    }
+
+    /**
+     * Conciliación manual POS: 1 lote sin liquidar + N liquidaciones del extracto.
+     * La suma de las LIQ debe coincidir con el neto del lote (±0.05).
+     */
+    public function conciliarLoteManual(Request $request)
+    {
+        $data = $request->validate([
+            'tesoreria_ingreso_id' => 'required|integer',
+            'linea_ids' => 'required|array|min:1',
+            'linea_ids.*' => 'integer',
+        ]);
+
+        $lote = \App\Models\TesoreriaIngreso::query()
+            ->where('tipo', 'punto_venta')
+            ->whereKey($data['tesoreria_ingreso_id'])
+            ->firstOrFail();
+
+        if ($lote->es_conciliado) {
+            return back()->with('error', 'Ese lote ya está conciliado.');
+        }
+
+        $ids = array_values(array_unique(array_map('intval', $data['linea_ids'])));
+        $matcher = app(\App\Services\BankReconciliationMatcher::class);
+
+        $lineas = \App\Models\ConciliacionLinea::query()
+            ->whereIn('id', $ids)
+            ->where('estado', '!=', 'conciliado')
+            ->whereNull('tesoreria_ingreso_id')
+            ->get();
+
+        if ($lineas->count() !== count($ids)) {
+            return back()->with('error', 'Una o más liquidaciones ya no están disponibles.');
+        }
+
+        foreach ($lineas as $linea) {
+            if (! $matcher->esAbonoLotePuntoVenta($linea->descripcion, $linea->referencia)) {
+                return back()->with('error', 'Hay un movimiento que no es liquidación de punto de venta.');
+            }
+            if (! $matcher->mismoBanco($linea->banco, $lote->banco)) {
+                return back()->with('error', 'El banco del lote y de la liquidación no coinciden.');
+            }
+            if (! $matcher->mismoTitular($linea->titular, $lote->titular, $linea->banco, $lote->banco)) {
+                return back()->with('error', 'El titular del lote y de la liquidación no coinciden.');
+            }
+        }
+
+        $suma = round((float) $lineas->sum(fn ($l) => abs((float) $l->monto)), 2);
+        $netoLote = round(abs((float) $lote->monto), 2);
+        if (abs($suma - $netoLote) > 0.05) {
+            return back()->with(
+                'error',
+                'La suma de LIQ (Bs. '.number_format($suma, 2, ',', '.').') no coincide con el lote (Bs. '.number_format($netoLote, 2, ',', '.').').'
+            );
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($lote, $lineas) {
+            foreach ($lineas as $linea) {
+                $linea->estado = 'conciliado';
+                $linea->tesoreria_ingreso_id = $lote->id;
+                $linea->flujo_caja_id = null;
+                $linea->save();
+            }
+            $lote->es_conciliado = true;
+            $lote->save();
+        });
+
+        $ref = $lote->lote_referencia ?: ('#'.$lote->id);
+
+        return back()->with(
+            'success',
+            'Lote '.$ref.' conciliado manualmente con '.$lineas->count().' liquidación(es).'
+        );
     }
 
     public function reporteConciliacion(Request $request) {

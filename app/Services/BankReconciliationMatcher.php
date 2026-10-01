@@ -184,6 +184,52 @@ class BankReconciliationMatcher
     }
 
     /**
+     * Clave estable para agrupar tarjetas: VENEZUELA|JRZ unifica "JRZ" y "GRUPO JRZ".
+     */
+    public function claveCuenta(?string $banco, ?string $titular): string
+    {
+        [$b, $t] = $this->partesCuenta($banco, $titular);
+
+        return $b.'|'.$this->titularClave($t);
+    }
+
+    /**
+     * Forma canónica del titular para agrupar alias (sin prefijos GRUPO / L.S.).
+     */
+    public function titularClave(?string $titular): string
+    {
+        $t = strtoupper(trim((string) $titular));
+        if ($t === '') {
+            return '';
+        }
+
+        $t = preg_replace('/^GRUPO\s+/u', '', $t) ?? $t;
+        $t = preg_replace('/^L\.?\s*S\.?\s+/u', '', $t) ?? $t;
+
+        return trim($t);
+    }
+
+    /**
+     * Prefiere la etiqueta más completa al unificar tarjetas ("GRUPO JRZ" sobre "JRZ").
+     */
+    public function titularPreferido(?string $actual, ?string $candidato): string
+    {
+        $a = strtoupper(trim((string) $actual));
+        $c = strtoupper(trim((string) $candidato));
+        if ($c === '') {
+            return $a;
+        }
+        if ($a === '') {
+            return $c;
+        }
+        if (strlen($c) > strlen($a)) {
+            return $c;
+        }
+
+        return $a;
+    }
+
+    /**
      * Tesorería guarda a veces "BANESCO DORAL" en banco y titular vacío.
      *
      * @return array{0:string,1:string}
@@ -370,6 +416,36 @@ class BankReconciliationMatcher
             if (str_contains($desc, $needle)) {
                 return true;
             }
+        }
+
+        return false;
+    }
+
+    /**
+     * Abonos de lote POS visibles en "LIQ del banco sin lote":
+     * BDV LIQ.* / POS: y también Banesco tipo "TDB … L.000058".
+     */
+    public function esAbonoLotePuntoVenta(?string $descripcion, ?string $referencia = null): bool
+    {
+        if ($this->esPagoMovil($descripcion)) {
+            return false;
+        }
+
+        if ($this->esLiquidacionPuntoVenta($descripcion)) {
+            return true;
+        }
+
+        $texto = trim(($referencia ?? '').' '.($descripcion ?? ''));
+        if ($texto === '') {
+            return false;
+        }
+
+        // Banesco / similares: L.000058 o Lote 58 en la descripción.
+        if (preg_match('/(?:^|[^0-9A-Z])L\.?\s*0*\d{2,}(?![0-9])/i', $texto) === 1) {
+            return true;
+        }
+        if (preg_match('/(?:lote|lot)\s*\.?\s*0*\d{2,}(?![0-9])/i', $texto) === 1) {
+            return true;
         }
 
         return false;

@@ -29,6 +29,16 @@
     .mini-table td { padding: 9px 12px; border-top: 1px solid #f8fafc; vertical-align: top; }
     .empty-row td { text-align: center; color: #94a3b8; padding: 22px; }
     .section-footer { padding: 8px 12px; text-align: right; font-weight: 800; background: #f8fafc; }
+    .row-pick { cursor: pointer; }
+    .row-pick:hover { background: #f0fdfa; }
+    .row-pick.is-selected { background: #ccfbf1; }
+    .pick-cell { width: 28px; }
+    .manual-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 16px; background: #ecfdf5; border-top: 1px solid #a7f3d0; }
+    .manual-bar .hint { color: #115e59; font-size: 0.88rem; font-weight: 600; }
+    .manual-bar .diff-ok { color: #166534; font-weight: 800; }
+    .manual-bar .diff-bad { color: #991b1b; font-weight: 800; }
+    .btn-conciliar { background: #0f766e; color: white; border: none; padding: 10px 16px; border-radius: 9px; font-weight: 800; cursor: pointer; }
+    .btn-conciliar:disabled { opacity: .45; cursor: not-allowed; }
     .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1050; align-items: center; justify-content: center; padding: 20px; }
     .modal-box { background: white; border-radius: 14px; width: 100%; max-width: 520px; }
     .modal-head, .modal-foot { padding: 16px 22px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
@@ -46,7 +56,7 @@
     <div class="conc-topbar">
         <div>
             <h2 class="conc-title">Lotes de <span>punto de venta</span></h2>
-            <p style="margin:4px 0 0;color:#64748b;">Cruza el Excel de medios de pago con las liquidaciones LIQ del extracto. Los egresos se concilian aparte.</p>
+            <p style="margin:4px 0 0;color:#64748b;">Cruza el Excel de medios de pago con las liquidaciones LIQ del extracto. También puedes marcar un lote con varias LIQ del banco a mano.</p>
         </div>
         <div class="conc-toolbar">
             <a class="btn-link" href="{{ route('finanzas.conciliaciones') }}">Egresos</a>
@@ -71,6 +81,9 @@
     @if(session('error'))
         <div class="alert-success" style="background:#fef2f2;color:#991b1b;border-color:#fca5a5;">{{ session('error') }}</div>
     @endif
+    @if($errors->any())
+        <div class="alert-success" style="background:#fef2f2;color:#991b1b;border-color:#fca5a5;">{{ $errors->first() }}</div>
+    @endif
 
     <div class="kpis">
         <div class="kpi"><span>Lotes</span><strong>{{ number_format($totalLotes) }}</strong></div>
@@ -79,76 +92,104 @@
         <div class="kpi"><span>LIQ sin lote</span><strong>{{ number_format($totalLiq) }}</strong></div>
     </div>
 
-    @forelse($tarjetas as $tarjeta)
-        <div class="bank-card">
+    @forelse($tarjetas as $idx => $tarjeta)
+        <div class="bank-card" data-card="{{ $idx }}">
             <div class="bank-card-header">
                 <strong>{{ $tarjeta['banco'] }}</strong>
                 @if($tarjeta['titular'])
                     <div style="opacity:.8;font-size:.85rem;">Titular: {{ $tarjeta['titular'] }}</div>
                 @endif
             </div>
-            <div class="sections-grid">
-                <div class="section-block">
-                    <div class="section-header"><span class="section-title">Lotes conciliados</span><span class="section-count">{{ $tarjeta['conciliados']->count() }}</span></div>
-                    <table class="mini-table">
-                        <thead><tr><th>Fecha</th><th>Lote</th><th>Neto</th></tr></thead>
-                        <tbody>
-                            @forelse($tarjeta['conciliados'] as $lote)
-                                <tr>
-                                    <td>{{ \Carbon\Carbon::parse($lote->fecha)->format('d/m/Y') }}</td>
-                                    <td>{{ $lote->lote_referencia ?: '—' }}</td>
-                                    <td>Bs. {{ number_format((float) $lote->monto, 2) }}</td>
-                                </tr>
-                            @empty
-                                <tr class="empty-row"><td colspan="3">Sin lotes conciliados</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                    @if($tarjeta['conciliados']->count() > 0)
-                        <div class="section-footer">Bs. {{ number_format($tarjeta['total_conciliado'], 2) }}</div>
-                    @endif
+            <form action="{{ route('finanzas.conciliaciones.lotes.manual') }}" method="POST" class="manual-lote-form" data-card="{{ $idx }}">
+                @csrf
+                <div class="sections-grid">
+                    <div class="section-block">
+                        <div class="section-header"><span class="section-title">Lotes conciliados</span><span class="section-count">{{ $tarjeta['conciliados']->count() }}</span></div>
+                        <table class="mini-table">
+                            <thead><tr><th>Fecha</th><th>Lote</th><th>Neto</th></tr></thead>
+                            <tbody>
+                                @forelse($tarjeta['conciliados'] as $lote)
+                                    <tr>
+                                        <td>{{ \Carbon\Carbon::parse($lote->fecha)->format('d/m/Y') }}</td>
+                                        <td>{{ $lote->lote_referencia ?: '—' }}</td>
+                                        <td>Bs. {{ number_format((float) $lote->monto, 2) }}</td>
+                                    </tr>
+                                @empty
+                                    <tr class="empty-row"><td colspan="3">Sin lotes conciliados</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                        @if($tarjeta['conciliados']->count() > 0)
+                            <div class="section-footer">Bs. {{ number_format($tarjeta['total_conciliado'], 2) }}</div>
+                        @endif
+                    </div>
+                    <div class="section-block">
+                        <div class="section-header"><span class="section-title">Lotes sin liquidación</span><span class="section-count">{{ $tarjeta['pendientes']->count() }}</span></div>
+                        <table class="mini-table">
+                            <thead><tr><th class="pick-cell"></th><th>Fecha</th><th>Lote</th><th>Neto</th></tr></thead>
+                            <tbody>
+                                @forelse($tarjeta['pendientes'] as $lote)
+                                    <tr class="row-pick" data-role="lote" onclick="this.querySelector('input[type=radio]').checked = true; actualizarManualBar(this.closest('form'));">
+                                        <td class="pick-cell">
+                                            <input type="radio"
+                                                   name="tesoreria_ingreso_id"
+                                                   value="{{ $lote->id }}"
+                                                   data-monto="{{ round(abs((float) $lote->monto), 2) }}"
+                                                   data-lote="{{ $lote->lote_referencia ?: ('#'.$lote->id) }}"
+                                                   onclick="event.stopPropagation(); actualizarManualBar(this.closest('form'));">
+                                        </td>
+                                        <td>{{ \Carbon\Carbon::parse($lote->fecha)->format('d/m/Y') }}</td>
+                                        <td>{{ $lote->lote_referencia ?: '—' }}</td>
+                                        <td>Bs. {{ number_format((float) $lote->monto, 2) }}</td>
+                                    </tr>
+                                @empty
+                                    <tr class="empty-row"><td colspan="4">Todos los lotes tienen LIQ</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                        @if($tarjeta['pendientes']->count() > 0)
+                            <div class="section-footer">Bs. {{ number_format($tarjeta['total_pendiente'], 2) }}</div>
+                        @endif
+                    </div>
+                    <div class="section-block">
+                        <div class="section-header"><span class="section-title">LIQ del banco sin lote</span><span class="section-count">{{ $tarjeta['liq_pendientes']->count() }}</span></div>
+                        <table class="mini-table">
+                            <thead><tr><th class="pick-cell"></th><th>Fecha</th><th>Descripción</th><th>Monto</th></tr></thead>
+                            <tbody>
+                                @forelse($tarjeta['liq_pendientes'] as $linea)
+                                    <tr class="row-pick" data-role="liq" onclick="var c=this.querySelector('input[type=checkbox]'); c.checked=!c.checked; actualizarManualBar(this.closest('form'));">
+                                        <td class="pick-cell">
+                                            <input type="checkbox"
+                                                   name="linea_ids[]"
+                                                   value="{{ $linea->id }}"
+                                                   data-monto="{{ round(abs((float) $linea->monto), 2) }}"
+                                                   onclick="event.stopPropagation(); actualizarManualBar(this.closest('form'));">
+                                        </td>
+                                        <td>{{ \Carbon\Carbon::parse($linea->fecha)->format('d/m/Y') }}</td>
+                                        <td title="{{ $linea->descripcion }}">{{ \Illuminate\Support\Str::limit($linea->descripcion, 42) }}</td>
+                                        <td>Bs. {{ number_format((float) $linea->monto, 2) }}</td>
+                                    </tr>
+                                @empty
+                                    <tr class="empty-row"><td colspan="4">Sin liquidaciones pendientes</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                        @if($tarjeta['liq_pendientes']->count() > 0)
+                            <div class="section-footer">Bs. {{ number_format($tarjeta['total_liq'], 2) }}</div>
+                        @endif
+                    </div>
                 </div>
-                <div class="section-block">
-                    <div class="section-header"><span class="section-title">Lotes sin liquidación</span><span class="section-count">{{ $tarjeta['pendientes']->count() }}</span></div>
-                    <table class="mini-table">
-                        <thead><tr><th>Fecha</th><th>Lote</th><th>Neto</th></tr></thead>
-                        <tbody>
-                            @forelse($tarjeta['pendientes'] as $lote)
-                                <tr>
-                                    <td>{{ \Carbon\Carbon::parse($lote->fecha)->format('d/m/Y') }}</td>
-                                    <td>{{ $lote->lote_referencia ?: '—' }}</td>
-                                    <td>Bs. {{ number_format((float) $lote->monto, 2) }}</td>
-                                </tr>
-                            @empty
-                                <tr class="empty-row"><td colspan="3">Todos los lotes tienen LIQ</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                    @if($tarjeta['pendientes']->count() > 0)
-                        <div class="section-footer">Bs. {{ number_format($tarjeta['total_pendiente'], 2) }}</div>
-                    @endif
-                </div>
-                <div class="section-block">
-                    <div class="section-header"><span class="section-title">LIQ del banco sin lote</span><span class="section-count">{{ $tarjeta['liq_pendientes']->count() }}</span></div>
-                    <table class="mini-table">
-                        <thead><tr><th>Fecha</th><th>Descripción</th><th>Monto</th></tr></thead>
-                        <tbody>
-                            @forelse($tarjeta['liq_pendientes'] as $linea)
-                                <tr>
-                                    <td>{{ \Carbon\Carbon::parse($linea->fecha)->format('d/m/Y') }}</td>
-                                    <td>{{ \Illuminate\Support\Str::limit($linea->descripcion, 42) }}</td>
-                                    <td>Bs. {{ number_format((float) $linea->monto, 2) }}</td>
-                                </tr>
-                            @empty
-                                <tr class="empty-row"><td colspan="3">Sin liquidaciones pendientes</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                    @if($tarjeta['liq_pendientes']->count() > 0)
-                        <div class="section-footer">Bs. {{ number_format($tarjeta['total_liq'], 2) }}</div>
-                    @endif
-                </div>
-            </div>
+                @if($tarjeta['pendientes']->count() > 0 && $tarjeta['liq_pendientes']->count() > 0)
+                    <div class="manual-bar">
+                        <div class="hint">
+                            Marca <strong>1 lote</strong> y una o varias <strong>LIQ</strong>.
+                            <span class="manual-resumen">Lote: — · LIQ: Bs. 0,00</span>
+                            <span class="manual-diff"></span>
+                        </div>
+                        <button type="submit" class="btn-conciliar" disabled>Conciliar manualmente</button>
+                    </div>
+                @endif
+            </form>
         </div>
     @empty
         <div class="bank-card" style="padding:28px;color:#64748b;">No hay lotes ni liquidaciones en ese rango. Sube el Excel de medios de pago o carga primero el extracto en Conciliación de egresos.</div>
@@ -187,4 +228,47 @@
         </form>
     </div>
 </div>
+<script>
+function fmtBs(n) {
+    return 'Bs. ' + Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function actualizarManualBar(form) {
+    if (!form) return;
+    const radio = form.querySelector('input[name="tesoreria_ingreso_id"]:checked');
+    const checks = [...form.querySelectorAll('input[name="linea_ids[]"]:checked')];
+    const loteMonto = radio ? parseFloat(radio.dataset.monto || '0') : 0;
+    const loteRef = radio ? (radio.dataset.lote || '—') : '—';
+    const sumaLiq = checks.reduce((acc, el) => acc + parseFloat(el.dataset.monto || '0'), 0);
+    const ok = !!radio && checks.length > 0 && Math.abs(sumaLiq - loteMonto) <= 0.05;
+
+    form.querySelectorAll('tr[data-role="lote"]').forEach(tr => {
+        tr.classList.toggle('is-selected', !!(tr.querySelector('input[type=radio]')?.checked));
+    });
+    form.querySelectorAll('tr[data-role="liq"]').forEach(tr => {
+        tr.classList.toggle('is-selected', !!(tr.querySelector('input[type=checkbox]')?.checked));
+    });
+
+    const resumen = form.querySelector('.manual-resumen');
+    const diff = form.querySelector('.manual-diff');
+    const btn = form.querySelector('.btn-conciliar');
+    if (resumen) {
+        resumen.textContent = 'Lote ' + loteRef + ': ' + fmtBs(loteMonto) + ' · LIQ seleccionadas: ' + fmtBs(sumaLiq);
+    }
+    if (diff) {
+        if (!radio || checks.length === 0) {
+            diff.textContent = '';
+            diff.className = 'manual-diff';
+        } else if (ok) {
+            diff.textContent = ' · Coincide';
+            diff.className = 'manual-diff diff-ok';
+        } else {
+            const delta = Math.abs(sumaLiq - loteMonto);
+            diff.textContent = ' · Diferencia ' + fmtBs(delta);
+            diff.className = 'manual-diff diff-bad';
+        }
+    }
+    if (btn) btn.disabled = !ok;
+}
+document.querySelectorAll('form.manual-lote-form').forEach(actualizarManualBar);
+</script>
 @endsection

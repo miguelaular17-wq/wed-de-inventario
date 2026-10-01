@@ -448,4 +448,31 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertFalse($this->matcher->coincideLotePunto($linea, $lote));
         $this->assertTrue($this->matcher->coincideLiqMediosPago($linea, $lote));
     }
+
+    public function test_unifica_venezuela_grupo_jrz_y_jrz_en_misma_clave(): void
+    {
+        $this->assertSame(
+            $this->matcher->claveCuenta('VENEZUELA', 'GRUPO JRZ'),
+            $this->matcher->claveCuenta('VENEZUELA', 'JRZ')
+        );
+        $this->assertSame('VENEZUELA|JRZ', $this->matcher->claveCuenta('VENEZUELA', 'JRZ'));
+        $this->assertSame('GRUPO JRZ', $this->matcher->titularPreferido('JRZ', 'GRUPO JRZ'));
+        $this->assertTrue($this->matcher->mismoTitular('GRUPO JRZ', 'JRZ', 'VENEZUELA', 'VENEZUELA'));
+    }
+
+    public function test_detecta_abono_banesco_con_l_punto_como_lote_pos(): void
+    {
+        $this->assertTrue($this->matcher->esAbonoLotePuntoVenta(
+            'TDB CAPIT. 0052320997 L.000058 30687',
+            '58'
+        ));
+        $this->assertTrue($this->matcher->esAbonoLotePuntoVenta(
+            'LIQ.TARJETA DEBITO MAESTRO BDV',
+            null
+        ));
+        $this->assertFalse($this->matcher->esAbonoLotePuntoVenta(
+            'PAGOMOVIL OTROS BANCOS 0134 04141234567',
+            null
+        ));
+    }
 }

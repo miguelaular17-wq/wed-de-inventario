@@ -167,6 +167,29 @@ class ComisionController extends Controller
             ->with('status', 'Comisiones recalculadas con los datos actuales de ventas y la tasa BCV del día.');
     }
 
+    public function toggleExentoRetencion(Request $request, NominaPeriodo $periodo, NominaEmpleado $empleado): RedirectResponse
+    {
+        $exento = $request->boolean('exento_retencion_comision');
+
+        $empleado->exento_retencion_comision = $exento;
+        $empleado->save();
+
+        $msg = $exento
+            ? $empleado->nombre().': marcado sin retención de comisión.'
+            : $empleado->nombre().': se vuelve a aplicar retención de comisión.';
+
+        if ($periodo->estado !== NominaPeriodo::ABIERTO && $periodo->estado !== NominaPeriodo::CERRADO) {
+            $this->periods->recalcularComisiones($periodo, auth()->id());
+            $msg .= ' Comisiones recalculadas.';
+        } else {
+            $msg .= ' Usa Recalcular comisiones para actualizar montos.';
+        }
+
+        return redirect()
+            ->route('nomina.comisiones.show', $periodo)
+            ->with('status', $msg);
+    }
+
     public function exportarBanco(NominaPeriodo $periodo, NominaEmpresa $empresa): StreamedResponse|RedirectResponse
     {
         if ($periodo->estado === NominaPeriodo::ABIERTO) {

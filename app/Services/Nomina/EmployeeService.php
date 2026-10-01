@@ -127,6 +127,7 @@ class EmployeeService
             'supervisor_id' => $supervisorIds[0] ?? null,
             'es_supervisor' => (bool) ($data['es_supervisor'] ?? false),
             'es_servicio_tecnico' => (bool) ($data['es_servicio_tecnico'] ?? false),
+            'exento_retencion_comision' => (bool) ($data['exento_retencion_comision'] ?? false),
             'modo_comision' => $data['modo_comision'] ?? $empleado?->modo_comision ?? NominaEmpleado::COMISION_NINGUNA,
             'codigo_vendedor' => $codigoVendedor,
             'empresa_id' => ($data['empresa_id'] ?? null) ?: null,
