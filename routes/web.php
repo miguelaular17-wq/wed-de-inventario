@@ -184,6 +184,9 @@ Route::middleware(['auth'])->prefix('gerencial')->group(function () {
     Route::get('/clientes', [GerencialController::class, 'clientes'])
         ->middleware('permission:gerencial.clientes')
         ->name('gerencial.clientes');
+    Route::get('/stock', [GerencialController::class, 'stock'])
+        ->middleware('permission:gerencial.valorizados')
+        ->name('gerencial.stock');
 });
 
 Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')->group(function () {
@@ -530,6 +533,7 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
 Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->group(function () {
     Route::get('/calendario-conciliaciones', [FinanzasController::class, 'calendarioConciliaciones'])->name('finanzas.calendario_conciliaciones');
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
+    Route::get('/conciliaciones/lotes', [FinanzasController::class, 'lotesPuntoVenta'])->name('finanzas.conciliaciones.lotes');
     Route::post('/conciliaciones/upload', [FinanzasController::class, 'uploadConciliacion'])->name('finanzas.conciliaciones.upload');
     Route::post('/conciliaciones/medios-pago', [FinanzasController::class, 'uploadMediosPago'])->name('finanzas.conciliaciones.medios_pago');
     Route::post('/conciliaciones/process', [FinanzasController::class, 'processConciliacion'])->name('finanzas.conciliaciones.process');
@@ -721,6 +725,8 @@ Route::middleware(['auth', 'permission:patrimonial'])->prefix('patrimonial')->na
     Route::get('/reportes/mensual/pdf', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'reporteMensualPdf'])->name('reportes.mensual.pdf');
     Route::get('/reportes/incremento-valor', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'reporteIncrementoValor'])->name('reportes.incremento_valor');
     Route::get('/reportes/incremento-valor/pdf', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'reporteIncrementoValorPdf'])->name('reportes.incremento_valor.pdf');
+    Route::get('/reportes/inventario-valor', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'inventarioValor'])->name('reportes.inventario_valor');
+    Route::get('/reportes/inventario-valor/pdf', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'inventarioValorPdf'])->name('reportes.inventario_valor.pdf');
     Route::get('/reportes/propiedad/{propiedad}/pdf', [\App\Http\Controllers\Patrimonial\TransaccionController::class, 'reportePropiedadPdf'])->name('reportes.propiedad.pdf');
 
 

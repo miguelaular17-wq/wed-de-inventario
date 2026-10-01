@@ -96,15 +96,15 @@
 
     {{-- Top bar --}}
     <div class="conc-topbar">
-        <h2 class="conc-title">Conciliación <span>Bancaria</span></h2>
+        <h2 class="conc-title">Conciliación <span>de egresos</span></h2>
         <div class="conc-toolbar">
             <button type="button" class="btn-upload" onclick="document.getElementById('uploadModal').style.display='flex'">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 Añadir Movimientos
             </button>
-            <button type="button" class="btn-upload" style="background:linear-gradient(135deg,#0f766e,#0d9488);" onclick="document.getElementById('mediosPagoModal').style.display='flex'">
-                Medios de pago BDV
-            </button>
+            <a href="{{ route('finanzas.conciliaciones.lotes') }}" class="btn-upload" style="background:linear-gradient(135deg,#0f766e,#0d9488);text-decoration:none;">
+                Lotes punto de venta
+            </a>
 
             <form action="{{ route('finanzas.conciliaciones') }}" method="GET" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap;">
                 <input type="date" name="fecha_desde" class="select-banco" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}" title="Fecha Desde" style="min-width: 130px;">
@@ -564,7 +564,7 @@
                     <input type="text" id="csvFileName" placeholder="Ningún archivo seleccionado" readonly class="file-name">
                 </div>
                 <p class="file-hint">Formatos: CSV, TXT, Excel (.xlsx / .xls) o imagen (PNG / JPG). El sistema detecta el formato según el banco.</p>
-                <p class="file-hint" style="color:#0f766e;">En Banco de Venezuela, los conceptos LIQ.TARJETA / LIQUIDACION T/ no se concilian aquí: usa <strong>Medios de pago BDV</strong>.</p>
+                <p class="file-hint" style="color:#0f766e;">Los abonos LIQ.TARJETA / LIQUIDACION T/ no se concilian aquí. Van en <strong>Lotes punto de venta</strong>.</p>
             </div>
             <div class="modal-foot">
                 <button type="button" class="btn-cancel" onclick="document.getElementById('uploadModal').style.display='none'">Cancelar</button>
@@ -574,46 +574,7 @@
     </div>
 </div>
 
-{{-- MEDIOS DE PAGO BDV (lotes POS) --}}
-<div id="mediosPagoModal" class="modal-overlay">
-    <div class="modal-box">
-        <form action="{{ route('finanzas.conciliaciones.medios_pago') }}" method="POST" enctype="multipart/form-data">
-            @csrf
-            <div class="modal-head">
-                <h5 class="modal-title">Medios de pago — Banco de Venezuela</h5>
-                <button type="button" class="modal-close" onclick="document.getElementById('mediosPagoModal').style.display='none'">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p class="file-hint" style="margin-top:0;">
-                    Sube el Excel <strong>Conciliación medios de pago</strong> (Fecha, N° Lote, Monto Bruto, Comisión, <strong>Monto Neto</strong>).
-                    Se cruza el Monto Neto con los abonos <code>LIQ.TARJETA…</code> / <code>LIQUIDACION T/…</code> del extracto.
-                </p>
-                <label class="form-label">Titular (opcional):</label>
-                <select name="titular_seleccionado" class="form-control">
-                    <option value="">— Todos / el del extracto —</option>
-                    @foreach(($titularesPorBanco['VENEZUELA'] ?? []) as $tit)
-                        <option value="{{ $tit }}">{{ $tit }}</option>
-                    @endforeach
-                </select>
-                <label class="form-label">Archivo Excel:</label>
-                <div class="file-wrap">
-                    <label class="file-label">
-                        Elegir Archivo
-                        <input type="file" name="file" accept=".xls,.xlsx,.csv" required
-                               onchange="document.getElementById('mediosFileName').value = this.files[0] ? this.files[0].name : '';"
-                               style="display:none;">
-                    </label>
-                    <input type="text" id="mediosFileName" placeholder="Ningún archivo seleccionado" readonly class="file-name">
-                </div>
-            </div>
-            <div class="modal-foot">
-                <button type="button" class="btn-cancel" onclick="document.getElementById('mediosPagoModal').style.display='none'">Cancelar</button>
-                <button type="submit" class="btn-submit" style="background:linear-gradient(135deg,#0f766e,#0d9488);">Conciliar lotes</button>
-            </div>
-        </form>
-    </div>
-</div>
-
+{{-- MEDIOS DE PAGO BDV se carga en Lotes punto de venta --}}
 {{-- Mapa banco → titulares (generado desde PHP/BD) --}}
 <script>
 const titularesPorBanco = @json($titularesPorBanco);

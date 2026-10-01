@@ -1314,6 +1314,11 @@ class SyncApp:
             # If there's no state yet, default to today at 00:00:00
             if not last_time:
                 last_time = datetime.now().strftime("%Y-%m-%d 00:00:00.000")
+            elif last_time[:4].isdigit() and int(last_time[:4]) > datetime.now().year + 1:
+                last_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S.000")
+                state["last_processed_timestamp"] = last_time
+                self.save_state(state)
+                self.log(f"Marca de ventas en el futuro (fecha basura). Se reanuda desde {last_time}.")
             self.log(f"Consultando ventas locales registradas después de: {last_time}")
             
             # Connect to SQL Server
@@ -1342,7 +1347,7 @@ class SyncApp:
                 "INNER JOIN [dbo].[documentos_venta_items] i WITH (NOLOCK) ON h.tipo_documento = i.tipo_documento AND h.numero_documento = i.numero_documento "
                 "LEFT JOIN [dbo].[articulos_codigos] ac WITH (NOLOCK) ON i.articulo = ac.codigo "
                 "LEFT JOIN [dbo].[articulos] a WITH (NOLOCK) ON (ac.articulo IS NOT NULL AND a.id = ac.articulo) OR (ac.articulo IS NULL AND a.codigo = i.articulo) "
-                "WHERE h.tipo_documento = 'FAC' AND h.fecha_emision > ? ORDER BY h.fecha_emision ASC"
+                "WHERE h.tipo_documento = 'FAC' AND h.fecha_emision > ? AND h.fecha_emision < DATEADD(day, 2, CAST(GETDATE() AS DATE)) ORDER BY h.fecha_emision ASC"
             )
             query = billing.get("query", default_query)
             

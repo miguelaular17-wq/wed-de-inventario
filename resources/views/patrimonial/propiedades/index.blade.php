@@ -57,9 +57,14 @@
             </div>
             <h1>🏘️ Propiedades</h1>
         </div>
-        <a href="{{ route('patrimonial.propiedades.create') }}" class="pat-btn pat-btn-primary">
-            + Nueva Propiedad
-        </a>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <a href="{{ route('patrimonial.reportes.inventario_valor') }}" class="pat-btn pat-btn-outline">
+                Inventario de valor
+            </a>
+            <a href="{{ route('patrimonial.propiedades.create') }}" class="pat-btn pat-btn-primary">
+                + Nueva Propiedad
+            </a>
+        </div>
     </div>
 
     {{-- FILTROS --}}

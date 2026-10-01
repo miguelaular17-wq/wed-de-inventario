@@ -1825,6 +1825,26 @@ function actualizarTecnicoEdit(selected = null) {
     select.required = visible;
     if (selected !== null) select.value = String(selected || '');
     if (!visible) select.value = '';
+
+    const rowBeneficiario = document.getElementById('row_beneficiario_edit');
+    const esTraslado = document.getElementById('row_receptor_edit')?.style.display === 'flex';
+    if (rowBeneficiario) {
+        rowBeneficiario.style.display = (visible || esTraslado) ? 'none' : 'block';
+    }
+}
+
+function setBeneficiarioEdit(valor) {
+    const ts = window.tsBeneficiarioEdit;
+    const nombre = (valor || '').trim();
+    if (!ts) return;
+    if (!nombre) {
+        ts.clear(true);
+        return;
+    }
+    if (!ts.options[nombre]) {
+        ts.addOption({ value: nombre, text: nombre });
+    }
+    ts.setValue(nombre, true);
 }
 
 
@@ -1858,6 +1878,21 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     if (document.getElementById('banco_titular')) window.tsBancoTitular = new TomSelect("#banco_titular", tsBankSettings);
     if (document.getElementById('banco_titular_receptor')) window.tsBancoTitularReceptor = new TomSelect("#banco_titular_receptor", tsBankSettings);
+    if (document.getElementById('beneficiario_edit')) {
+        window.tsBeneficiarioEdit = new TomSelect("#beneficiario_edit", {
+            create: true,
+            createOnBlur: true,
+            persist: true,
+            sortField: { field: "text", direction: "asc" },
+            placeholder: 'Seleccione o escriba un beneficiario',
+            maxOptions: null,
+            render: {
+                option_create: function (data, escape) {
+                    return '<div class="create">Usar «<strong>' + escape(data.input) + '</strong>»</div>';
+                }
+            }
+        });
+    }
     if (document.getElementById('beneficiario')) {
         window.tsBeneficiario = new TomSelect("#beneficiario", {
             create: true,
@@ -2883,6 +2918,10 @@ function abrirEditarEgreso(mov) {
         document.getElementById('banco_titular_receptor_edit').value = '';
     }
 
+    actualizarTecnicoEdit(mov.nomina_empleado_id || '');
+    const esServicioTecnico = (mov.tipo_gasto || '') === '058 - SERVICIO TECNICO (GARANTIAS)';
+    setBeneficiarioEdit((!isTraslado && !esServicioTecnico) ? (mov.titular_receptor || '') : '');
+
     // Existing comprobantes gallery
     const compSection = document.getElementById('editComprobantesActuales');
     compSection.innerHTML = '';
@@ -3305,6 +3344,17 @@ function limpiarFiltros() {
                         <option value="{{ $tecnico->id }}">{{ $tecnico->nombre() }} · {{ $tecnico->cedula() }}</option>
                     @endforeach
                 </select>
+            </div>
+
+            <div id="row_beneficiario_edit" style="margin-bottom: 10px;">
+                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Beneficiario</label>
+                <select id="beneficiario_edit" name="beneficiario" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
+                    <option value="">-- Seleccione un beneficiario --</option>
+                    @foreach($proveedores as $prov)
+                        <option value="{{ $prov }}">{{ $prov }}</option>
+                    @endforeach
+                </select>
+                <small style="display:block; margin-top:4px; color:#64748b;">Puedes elegir de la lista o escribir un nombre y pulsar Enter.</small>
             </div>
 
             <!-- Motivo -->

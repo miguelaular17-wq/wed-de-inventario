@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\GerencialAnalyticsService;
 use App\Services\GerencialDashboardService;
+use App\Services\StockSedeDashboardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -130,6 +131,11 @@ class GerencialController extends Controller
         );
 
         return view('gerencial.clientes', $ctx + $data);
+    }
+
+    public function stock(StockSedeDashboardService $stock): View
+    {
+        return view('gerencial.stock', $stock->resumen());
     }
 
     /**

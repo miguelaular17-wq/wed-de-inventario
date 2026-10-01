@@ -79,6 +79,25 @@ class PatrimonioIncrementoValorTest extends TestCase
             ->assertHeader('content-type', 'application/pdf');
     }
 
+    public function test_inventario_suma_valor_y_remodelaciones(): void
+    {
+        $propiedad = $this->propiedad();
+        $propiedad->documento_digitalizado = 'C/V';
+        $propiedad->save();
+        $this->transaccion($propiedad, 'Remodelacion', 2500, 'Pisos', '2026-09-10');
+        $this->transaccion($propiedad, 'Mantenimiento', 80, 'Limpieza', '2026-09-11');
+
+        $data = app(PatrimonioReporteService::class)->inventarioValor();
+        $fila = $data['filas']->first();
+
+        $this->assertSame('C/V', $fila['documento_digitalizado']);
+        $this->assertSame(50000.0, $fila['valor']);
+        $this->assertSame(2500.0, $fila['total_remodelaciones']);
+        $this->assertSame(52500.0, $fila['total_valor']);
+        $this->assertSame(2500.0, $data['totales']['remodelaciones']);
+        $this->assertSame(52500.0, $data['totales']['total_valor']);
+    }
+
     private function propiedad(): Propiedad
     {
         return Propiedad::create([

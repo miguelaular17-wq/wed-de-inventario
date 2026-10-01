@@ -1336,16 +1336,11 @@ class GerencialDashboardService
             return $vacio;
         }
 
-        $tiposOk = $this->tiposAjustePermitidos();
         $docs = $this->sqlCountDocumentosAjuste();
         $query = DB::table('ajustes_inventario')
             ->whereBetween('fecha', [$periodo['inicio']->toDateString(), $periodo['fin']->toDateString()])
             ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes)
-            ->whereIn(DB::raw('UPPER(TRIM(tipo_movimiento))'), $tiposOk);
-        $tipoNorm = $tipo ? mb_strtoupper(trim($tipo), 'UTF-8') : '';
-        if ($tipoNorm !== '' && in_array($tipoNorm, $tiposOk, true)) {
-            $query->whereRaw('UPPER(TRIM(tipo_movimiento)) = ?', [$tipoNorm]);
-        }
+            ->whereIn(DB::raw('UPPER(TRIM(tipo_movimiento))'), $this->tiposMovimientoConsulta($tipo));
 
         $kpisRow = (clone $query)
             ->selectRaw("{$docs} as movimientos")
@@ -1397,6 +1392,26 @@ class GerencialDashboardService
     public function tiposAjustePermitidos(): array
     {
         return ['AJU', 'CAR', 'DES'];
+    }
+
+    /**
+     * Todos sigue en ajustes. TRA solo entra si se elige a propósito.
+     *
+     * @return list<string>
+     */
+    public function tiposMovimientoConsulta(?string $tipo): array
+    {
+        $pedido = mb_strtoupper(trim((string) $tipo), 'UTF-8');
+        if ($pedido === 'TRA') {
+            return ['TRA'];
+        }
+
+        $base = $this->tiposAjustePermitidos();
+        if ($pedido !== '' && in_array($pedido, $base, true)) {
+            return [$pedido];
+        }
+
+        return $base;
     }
 
     public function sqlCountDocumentosAjuste(): string

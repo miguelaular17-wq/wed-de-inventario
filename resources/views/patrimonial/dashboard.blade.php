@@ -258,6 +258,7 @@
                 ['📁', 'Documentos',   route('patrimonial.documentos.index')],
                 ['📄', 'Reporte Mensual', route('patrimonial.reportes.mensual')],
                 ['🔨', 'Incremento de Valor', route('patrimonial.reportes.incremento_valor')],
+                ['📊', 'Inventario de valor', route('patrimonial.reportes.inventario_valor')],
             ];
             @endphp
             @foreach($links as [$icon, $label, $href])

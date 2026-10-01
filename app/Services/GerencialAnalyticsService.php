@@ -143,10 +143,10 @@ class GerencialAnalyticsService
             if (Schema::hasColumn('ventas_detalle', 'motivo_devolucion')) {
                 $detalleQ->addSelect('vd.motivo_devolucion');
             }
-            if (Schema::hasColumn('ventas_detalle', 'usuario')) {
-                $detalleQ->addSelect('vd.usuario');
+            if (Schema::hasColumn('ventas_detalle', 'cajera')) {
+                $detalleQ->addSelect('vd.cajera');
             } else {
-                $detalleQ->selectRaw("NULL as usuario");
+                $detalleQ->selectRaw('NULL as cajera');
             }
             $detalle = $detalleQ
                 ->orderByDesc('vd.fecha')
@@ -319,13 +319,9 @@ class GerencialAnalyticsService
         $baseAjustes = DB::table('ajustes_inventario')
             ->whereBetween('fecha', [$periodo['inicio']->toDateString(), $periodo['fin']->toDateString()])
             ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes)
-            ->whereIn(DB::raw('UPPER(TRIM(tipo_movimiento))'), $tiposOk);
+            ->whereIn(DB::raw('UPPER(TRIM(tipo_movimiento))'), $this->base->tiposMovimientoConsulta($tipo));
         $tipos = collect($tiposOk);
         $query = clone $baseAjustes;
-        $tipoNorm = $tipo ? mb_strtoupper(trim($tipo), 'UTF-8') : '';
-        if ($tipoNorm !== '' && in_array($tipoNorm, $tiposOk, true)) {
-            $query->whereRaw('UPPER(TRIM(tipo_movimiento)) = ?', [$tipoNorm]);
-        }
 
         $kpisRow = (clone $query)
             ->selectRaw("{$docs} as movimientos")
@@ -426,16 +422,10 @@ class GerencialAnalyticsService
         }
 
         $sedes = $this->base->filtrarSedes($sede);
-        $tiposOk = $this->base->tiposAjustePermitidos();
         $query = DB::table('ajustes_inventario')
             ->whereBetween('fecha', [$periodo['inicio']->toDateString(), $periodo['fin']->toDateString()])
             ->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes)
-            ->whereIn(DB::raw('UPPER(TRIM(tipo_movimiento))'), $tiposOk);
-
-        $tipoNorm = $tipo ? mb_strtoupper(trim($tipo), 'UTF-8') : '';
-        if ($tipoNorm !== '' && in_array($tipoNorm, $tiposOk, true)) {
-            $query->whereRaw('UPPER(TRIM(tipo_movimiento)) = ?', [$tipoNorm]);
-        }
+            ->whereIn(DB::raw('UPPER(TRIM(tipo_movimiento))'), $this->base->tiposMovimientoConsulta($tipo));
 
         $query->where(function ($q) use ($codigos) {
             foreach ($codigos as $codigo) {

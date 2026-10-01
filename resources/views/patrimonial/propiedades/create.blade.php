@@ -125,6 +125,10 @@
                         <label>Costo de la propiedad ($)</label>
                         <input type="number" name="valor_inversion" value="{{ old('valor_inversion') }}" min="0" step="0.01" placeholder="0.00">
                     </div>
+                    <div class="form-group">
+                        <label>Documento digitalizado</label>
+                        <input type="text" name="documento_digitalizado" value="{{ old('documento_digitalizado') }}" placeholder="C/V, Sin documento">
+                    </div>
                 </div>
 
                 <div class="form-section-title">📸 Fotos y Notas</div>

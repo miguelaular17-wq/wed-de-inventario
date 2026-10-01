@@ -172,7 +172,7 @@
                             <th>Cantidad</th>
                             <th>Precio</th>
                             <th>Motivo</th>
-                            <th>Procesó</th>
+                            <th>Cajera</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -187,7 +187,7 @@
                                 <td>{{ $fmt($row->cantidad, 0) }}</td>
                                 <td>${{ $fmt($row->precio_neto ?? $row->precio_venta) }}</td>
                                 <td>{{ $row->motivo_devolucion ?: '—' }}</td>
-                                <td>{{ $row->usuario ?? '—' }}</td>
+                                <td>{{ $row->cajera ?: '—' }}</td>
                             </tr>
                         @empty
                             <tr><td colspan="10" class="muted">Sin líneas de devolución.</td></tr>

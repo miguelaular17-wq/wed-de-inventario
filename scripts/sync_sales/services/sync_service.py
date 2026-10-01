@@ -7,7 +7,7 @@ from config.config_manager import ConfigManager
 from config.state_manager import StateManager
 from utils.logger import AppLogger
 from utils.helpers import get_sql_query
-from utils.dates import sanitize_business_date
+from utils.dates import sanitize_business_date, clamp_sync_watermark
 from utils.product_matcher import buscar_producto_web
 from services.snapshot_service import SnapshotService
 from services.heartbeat_service import HeartbeatService
@@ -36,6 +36,19 @@ class SyncService:
                 logger.info("=" * 60)
                 logger.info(f"NUEVO DÍA DETECTADO ({today}). Iniciando carga de apertura...")
                 logger.info("=" * 60)
+
+                # Facturas primero: el delta vuelve a leer ~21 días, así no se quedan
+                # fuera las del cierre del día anterior si el timer de 3 h no corrió.
+                self._run_detalle_solo_primera_vez(
+                    logger, config,
+                    flag_key="inicio_dia_ventas_detalle",
+                    label="Ventas Detalladas",
+                )
+                self._run_detalle_solo_primera_vez(
+                    logger, config,
+                    flag_key="inicio_dia_ajustes",
+                    label="Ajustes Inventario",
+                )
 
                 # ── Módulo 1: Stock / Inventario ─────────────────────────
                 if config.get("sync_stock", True):
@@ -76,18 +89,6 @@ class SyncService:
                         logger.error(f"[Apertura] Error en ComprasService: {e}")
                 else:
                     logger.info("[Apertura] ⏭ Módulo Compras desactivado. Saltando.")
-
-                # ── Módulo 5 y 6: solo la PRIMERA vez. Luego el Timer 2 (periódico).
-                self._run_detalle_solo_primera_vez(
-                    logger, config,
-                    flag_key="inicio_dia_ventas_detalle",
-                    label="Ventas Detalladas",
-                )
-                self._run_detalle_solo_primera_vez(
-                    logger, config,
-                    flag_key="inicio_dia_ajustes",
-                    label="Ajustes Inventario",
-                )
 
                 if success:
                     last_snapshot_date = today
@@ -157,16 +158,17 @@ class SyncService:
 
     def _run_detalle_solo_primera_vez(self, logger, config, flag_key, label):
         """
-        Carga histórica de 1 mes solo si ESTA sede aún no tiene datos.
-        Otras sedes no cuentan. Después, el Timer 2 mantiene el delta de esta sede.
+        Al abrir el día actualiza ventas detalladas y ajustes (delta de 1 mes),
+        también si la sede ya tenía datos. Así entran las facturas del cierre anterior.
         """
         from services.ventas_detalle_service import VentasDetalleService
         from services.ajustes_service import AjustesService
 
         service_cls = VentasDetalleService if flag_key == "inicio_dia_ventas_detalle" else AjustesService
 
-        if not config.get(flag_key, False):
-            logger.info(f"[Apertura] ⏭ {label}: no está en el reporte de inicio. Lo cubre el sync periódico.")
+        enabled_key = "sync_ventas_detalle" if flag_key == "inicio_dia_ventas_detalle" else "sync_ajustes"
+        if not config.get(flag_key, False) and not config.get(enabled_key, False):
+            logger.info(f"[Apertura] ⏭ {label}: módulo apagado.")
             return
 
         sede = config.get("sede", "JRZ")
@@ -182,12 +184,11 @@ class SyncService:
 
         if watermark:
             logger.info(
-                f"[Apertura] ⏭ {label} [{sede}]: esta sede ya tiene datos hasta {watermark}. "
-                f"No se recarga en el inicio; lo actualiza el sync periódico de esta sede."
+                f"[Apertura] ▶ {label} [{sede}]: ya hay datos hasta {watermark}. "
+                f"Se actualiza el último mes para completar facturas del día anterior."
             )
-            return
-
-        logger.info(f"[Apertura] ▶ Primera carga de {label} para sede {sede} (último mes)...")
+        else:
+            logger.info(f"[Apertura] ▶ Primera carga de {label} para sede {sede} (último mes)...")
         try:
             ok = service_cls.execute()
         except Exception as e:
@@ -208,9 +209,10 @@ class SyncService:
         web_conn = None
         
         try:
-            last_time = state.get_last_processed_timestamp()
-            if not last_time:
-                last_time = datetime.now().strftime("%Y-%m-%d 00:00:00.000")
+            last_time = clamp_sync_watermark(state.get_last_processed_timestamp())
+            if last_time != (state.get_last_processed_timestamp() or ""):
+                logger.warning(f"Marca de ventas inválida. Se reanuda desde {last_time}.")
+                state.set_last_processed_timestamp(last_time)
             logger.info(f"Consultando ventas locales registradas después de: {last_time}")
             
             billing_conn = SQLServerConnection.get_connection()
@@ -353,7 +355,8 @@ class SyncService:
                         (prod_id, sede, anio_mes, int_cantidad)
                     )
                 
-                new_last_time = max(new_last_time, fecha_str)
+                if sanitize_business_date(fecha_venta):
+                    new_last_time = max(new_last_time, fecha_str)
                 
             meta_json = json.dumps({"timestamp": new_last_time})
             web_cursor.execute(

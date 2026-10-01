@@ -127,6 +127,59 @@ class PatrimonioReporteService
     }
 
     /**
+     * Inventario de propiedades con documento digitalizado, remodelaciones y valor total.
+     *
+     * @return array{
+     *     filas: Collection<int, array{
+     *         nro:int,propiedad:Propiedad,valor:?float,documento_digitalizado:string,
+     *         total_remodelaciones:float,total_valor:float
+     *     }>,
+     *     totales: array{valor:float,remodelaciones:float,total_valor:float}
+     * }
+     */
+    public function inventarioValor(): array
+    {
+        $filas = Propiedad::query()
+            ->with(['transacciones' => function ($query) {
+                $query->where('tipo', 'gasto');
+            }])
+            ->withCount('documentos')
+            ->orderBy('codigo')
+            ->get()
+            ->values()
+            ->map(function (Propiedad $propiedad, int $indice) {
+                $remodelaciones = $propiedad->transacciones
+                    ->filter(fn (PatTransaccion $tx) => $this->esRemodelacion($tx));
+                $valor = $propiedad->valor_inversion === null
+                    ? null
+                    : round((float) $propiedad->valor_inversion, 2);
+                $totalRemodelaciones = round((float) $remodelaciones->sum('monto'), 2);
+                $documento = trim((string) ($propiedad->documento_digitalizado ?? ''));
+                if ($documento === '' && (int) $propiedad->documentos_count > 0) {
+                    $documento = 'C/V';
+                }
+
+                return [
+                    'nro' => $indice + 1,
+                    'propiedad' => $propiedad,
+                    'valor' => $valor,
+                    'documento_digitalizado' => $documento,
+                    'total_remodelaciones' => $totalRemodelaciones,
+                    'total_valor' => round(($valor ?? 0) + $totalRemodelaciones, 2),
+                ];
+            });
+
+        return [
+            'filas' => $filas,
+            'totales' => [
+                'valor' => round((float) $filas->sum(fn (array $fila) => $fila['valor'] ?? 0), 2),
+                'remodelaciones' => round((float) $filas->sum('total_remodelaciones'), 2),
+                'total_valor' => round((float) $filas->sum('total_valor'), 2),
+            ],
+        ];
+    }
+
+    /**
      * @return array{
      *     mesResumen: array<string, mixed>,
      *     historial: Collection<int, array<string, mixed>>,

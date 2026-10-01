@@ -66,6 +66,7 @@ trait CreatesPatrimonialSchema
                 $table->string('responsable', 256)->nullable();
                 $table->date('fecha_adquisicion')->nullable();
                 $table->decimal('valor_inversion', 18, 2)->nullable();
+                $table->string('documento_digitalizado', 64)->nullable();
                 $table->text('observaciones')->nullable();
                 $table->timestamps();
             });
@@ -180,6 +181,19 @@ trait CreatesPatrimonialSchema
                     $table->unsignedBigInteger('alquiler_pago_id')->nullable();
                 });
             }
+        }
+
+        if (! Schema::hasTable('pat_documentos')) {
+            Schema::create('pat_documentos', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('propiedad_id');
+                $table->string('tipo', 64);
+                $table->string('nombre', 256);
+                $table->string('ruta_archivo', 512);
+                $table->bigInteger('tamano_bytes')->nullable();
+                $table->text('observaciones')->nullable();
+                $table->timestamps();
+            });
         }
     }
 }

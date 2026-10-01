@@ -51,6 +51,7 @@ class PropiedadController extends Controller
             'responsable'       => 'nullable|string|max:256',
             'fecha_adquisicion' => 'nullable|date',
             'valor_inversion'   => 'nullable|numeric|min:0',
+            'documento_digitalizado' => 'nullable|string|max:64',
             'observaciones'     => 'nullable|string',
             'fotos.*'           => 'nullable|image|max:5120',
         ]);
@@ -115,6 +116,7 @@ class PropiedadController extends Controller
             'responsable'       => 'nullable|string|max:256',
             'fecha_adquisicion' => 'nullable|date',
             'valor_inversion'   => 'nullable|numeric|min:0',
+            'documento_digitalizado' => 'nullable|string|max:64',
             'observaciones'     => 'nullable|string',
             'fotos.*'           => 'nullable|image|max:5120',
         ]);

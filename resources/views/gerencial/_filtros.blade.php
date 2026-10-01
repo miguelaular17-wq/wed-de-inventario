@@ -1,15 +1,16 @@
 @php
     $modo = $modo ?? 'completo';
     $action = $action ?? route('gerencial.dashboard');
-    $tiposMov = collect(['AJU', 'CAR', 'DES'])
+    $tiposMov = collect(['AJU', 'CAR', 'DES', 'TRA'])
         ->merge($tipos ?? [])
-        ->filter(fn ($t) => in_array((string) $t, ['AJU', 'CAR', 'DES'], true))
+        ->filter(fn ($t) => in_array((string) $t, ['AJU', 'CAR', 'DES', 'TRA'], true))
         ->unique()
         ->values();
     $tipoLabels = [
         'AJU' => 'Ajuste',
         'CAR' => 'Carga',
         'DES' => 'Descarga',
+        'TRA' => 'Traslado',
     ];
 @endphp
 <form method="GET" action="{{ $action }}" class="nomina-card gerencial-filtros">

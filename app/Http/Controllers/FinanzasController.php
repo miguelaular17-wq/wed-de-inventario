@@ -876,6 +876,7 @@ class FinanzasController extends Controller
             'tipo_gasto'             => 'nullable|string',
             'nomina_empleado_id'      => 'nullable|integer|exists:nomina_empleados,id',
             'motivo'                 => 'nullable|string',
+            'beneficiario'           => 'nullable|string|max:255',
             'sede'                   => 'nullable|string',
             'placa_vehiculo'         => 'nullable|string',
             'fecha'                  => 'required|date|before_or_equal:today',
@@ -910,6 +911,9 @@ class FinanzasController extends Controller
                 return back()->withInput()->with('error', 'Selecciona el empleado de Servicio Técnico al que corresponde este egreso.');
             }
             $titular_receptor = $empleadoServicioTecnico->nombre();
+        } elseif ($egreso->categoria_egreso !== 'traslados') {
+            $banco_receptor = null;
+            $titular_receptor = trim((string) ($data['beneficiario'] ?? '')) ?: null;
         }
 
         $resumen = \App\Models\FinanzasResumen::where('fecha', $data['fecha'])->first();
@@ -1220,11 +1224,6 @@ class FinanzasController extends Controller
                 ->where('fecha', '>=', $fecha_minima)
                 ->get();
 
-            // Ingresos de tesorería pendientes
-            $tesoreria_posibles = \App\Models\TesoreriaIngreso::where('es_conciliado', false)
-                ->where('fecha', '>=', $fecha_minima)
-                ->get();
-
             $comprasDivisasPosibles = \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')
                 ? \App\Models\CompraDivisa::where('es_conciliado', false)
                     ->where('fecha', '>=', $fecha_minima)
@@ -1255,6 +1254,10 @@ class FinanzasController extends Controller
 
             $cambios = false;
             foreach ($lineas_pendientes as $linea) {
+                if ($matcher->esLiquidacionPuntoVenta($linea->descripcion)) {
+                    continue;
+                }
+
                 $match         = null;
                 $isTesoreriaMatch = false;
                 $isCompraDivisaMatch = false;
@@ -1271,13 +1274,6 @@ class FinanzasController extends Controller
                 if ($linea->esAbono()) {
                     $trasladosDisponibles = $flujosDisponibles->filter(fn ($flujo) => $matcher->esTraslado($flujo));
                     $match = $matcher->mejorEgreso($linea, $trasladosDisponibles);
-
-                    if (! $match) {
-                        $match = $matcher->mejorIngresoTesoreria($linea, $tesoreria_posibles);
-                        if ($match) {
-                            $isTesoreriaMatch = true;
-                        }
-                    }
                 } else {
                     if ($classifier->esCompraDivisas($linea->descripcion)) {
                         $match = $matcher->mejorCompraDivisa($linea, $comprasDivisasPosibles);
@@ -1292,10 +1288,7 @@ class FinanzasController extends Controller
 
                 if ($match) {
                     $linea->estado = 'conciliado';
-                    if ($isTesoreriaMatch) {
-                        $linea->tesoreria_ingreso_id = $match->id;
-                        $tesoreria_posibles = $tesoreria_posibles->reject(fn ($t) => $t->id == $match->id);
-                    } elseif ($isCompraDivisaMatch) {
+                    if ($isCompraDivisaMatch) {
                         $linea->compra_divisa_id = $match->id;
                         $comprasDivisasPosibles = $comprasDivisasPosibles->reject(fn ($c) => $c->id == $match->id);
                     } else {
@@ -1432,10 +1425,14 @@ class FinanzasController extends Controller
                 ->diff($lineas_comisiones)
                 ->diff($lineas_compra_divisas)
                 ->filter(fn ($l) => $classifier->esPagoCredito($l->descripcion));
+            $lineas_lotes = $lineas_banco->filter(
+                fn ($l) => $matcher->esLiquidacionPuntoVenta($l->descripcion)
+            );
             $lineas_normales = $lineas_banco
                 ->diff($lineas_comisiones)
                 ->diff($lineas_compra_divisas)
-                ->diff($lineas_pago_credito);
+                ->diff($lineas_pago_credito)
+                ->diff($lineas_lotes);
 
             // Conciliados
             $conciliados = $lineas_normales->where('estado', 'conciliado')
@@ -1455,11 +1452,7 @@ class FinanzasController extends Controller
                             $tipo_gasto = 'Compra de divisas';
                         }
                     } elseif ($l->tesoreria_ingreso_id) {
-                        $tesoreria = \App\Models\TesoreriaIngreso::find($l->tesoreria_ingreso_id);
-                        if ($tesoreria) {
-                            $motivo = ($tesoreria->tipo === 'punto_venta' ? 'Lote Punto de Venta' : 'Ingreso Bancario Tesorería');
-                            $tipo_gasto = 'Ingreso de Tesorería';
-                        }
+                        return null;
                     }
 
                     return [
@@ -1471,7 +1464,7 @@ class FinanzasController extends Controller
                         'monto'       => $l->monto,
                         'tipo'        => $l->tipo,
                     ];
-                })->values();
+                })->filter()->values();
 
             $conciliados = $conciliados->concat(
                 $lineas_compra_divisas->where('estado', 'conciliado')->map(function ($l) {
@@ -2272,8 +2265,112 @@ class FinanzasController extends Controller
             $msg .= ' Sin match en extracto: '.count($resultado['sin_match']).' lote(s).';
         }
 
-        return redirect()->route('finanzas.conciliaciones', ['banco_filtro' => 'VENEZUELA'])
+        return redirect()->route('finanzas.conciliaciones.lotes', ['banco_filtro' => 'VENEZUELA'])
             ->with('success', $msg);
+    }
+
+    public function lotesPuntoVenta(Request $request)
+    {
+        $filterKeys = ['fecha_desde', 'fecha_hasta', 'banco_filtro'];
+        if ($request->hasAny($filterKeys)) {
+            $filtros = [
+                'fecha_desde' => $request->input('fecha_desde') ?: null,
+                'fecha_hasta' => $request->input('fecha_hasta') ?: null,
+                'banco_filtro' => $request->input('banco_filtro') ?: null,
+            ];
+            $request->session()->put('conciliaciones.lotes.filtros', $filtros);
+        } else {
+            $filtros = $request->session()->get('conciliaciones.lotes.filtros', [
+                'fecha_desde' => null,
+                'fecha_hasta' => null,
+                'banco_filtro' => null,
+            ]);
+        }
+
+        [, $bancos, $titularesPorBanco] = $this->cuentasConciliacion();
+        $bancoFiltro = $filtros['banco_filtro'] ?? null;
+        $fechaDesde = ! empty($filtros['fecha_desde'])
+            ? \Carbon\Carbon::parse($filtros['fecha_desde'])->format('Y-m-d')
+            : null;
+        $fechaHasta = ! empty($filtros['fecha_hasta'])
+            ? \Carbon\Carbon::parse($filtros['fecha_hasta'])->format('Y-m-d')
+            : null;
+        if (! $fechaDesde && ! $fechaHasta) {
+            $fechaDesde = now()->startOfMonth()->toDateString();
+            $fechaHasta = now()->toDateString();
+            $filtros['fecha_desde'] = $fechaDesde;
+            $filtros['fecha_hasta'] = $fechaHasta;
+        }
+
+        $matcher = app(\App\Services\BankReconciliationMatcher::class);
+
+        $lineasQuery = \App\Models\ConciliacionLinea::query()->orderBy('fecha');
+        if ($fechaDesde) {
+            $lineasQuery->where('fecha', '>=', $fechaDesde);
+        }
+        if ($fechaHasta) {
+            $lineasQuery->where('fecha', '<=', $fechaHasta);
+        }
+        $this->filtrarPorBanco($lineasQuery, $bancoFiltro);
+        $liquidaciones = $lineasQuery->get()->filter(
+            fn ($linea) => $matcher->esLiquidacionPuntoVenta($linea->descripcion)
+        )->values();
+
+        $lotesQuery = \App\Models\TesoreriaIngreso::query()
+            ->where('tipo', 'punto_venta')
+            ->orderBy('fecha')
+            ->orderBy('id');
+        if ($fechaDesde) {
+            $lotesQuery->where('fecha', '>=', $fechaDesde);
+        }
+        if ($fechaHasta) {
+            $lotesQuery->where('fecha', '<=', $fechaHasta);
+        }
+        $this->filtrarPorBanco($lotesQuery, $bancoFiltro);
+        $lotes = $lotesQuery->get();
+
+        $claves = collect();
+        foreach ($liquidaciones as $linea) {
+            $claves->push(strtoupper(trim($linea->banco ?? '')).'|'.strtoupper(trim($linea->titular ?? '')));
+        }
+        foreach ($lotes as $lote) {
+            $claves->push(strtoupper(trim($lote->banco ?? '')).'|'.strtoupper(trim($lote->titular ?? '')));
+        }
+        $claves = $claves->filter(fn ($clave) => $clave !== '|')->unique()->sort()->values();
+
+        $tarjetas = [];
+        foreach ($claves as $clave) {
+            [$banco, $titular] = array_pad(explode('|', $clave, 2), 2, '');
+            $bancoLower = strtolower($banco);
+            $titularLower = strtolower($titular);
+            $mismo = function ($item) use ($bancoLower, $titularLower) {
+                return strtolower(trim($item->banco ?? '')) === $bancoLower
+                    && ($titularLower === '' || strtolower(trim($item->titular ?? '')) === $titularLower);
+            };
+            $liqBanco = $liquidaciones->filter($mismo)->values();
+            $lotesBanco = $lotes->filter($mismo)->values();
+            $tarjetas[] = [
+                'banco' => $banco,
+                'titular' => $titular,
+                'conciliados' => $lotesBanco->where('es_conciliado', true)->values(),
+                'pendientes' => $lotesBanco->where('es_conciliado', false)->values(),
+                'liq_pendientes' => $liqBanco->where('estado', '!=', 'conciliado')->values(),
+                'total_conciliado' => round((float) $lotesBanco->where('es_conciliado', true)->sum('monto'), 2),
+                'total_pendiente' => round((float) $lotesBanco->where('es_conciliado', false)->sum('monto'), 2),
+                'total_liq' => round((float) $liqBanco->where('estado', '!=', 'conciliado')->sum('monto'), 2),
+            ];
+        }
+
+        return view('finanzas.conciliaciones_lotes', [
+            'filtros' => $filtros,
+            'bancos' => $bancos,
+            'titularesPorBanco' => $titularesPorBanco,
+            'tarjetas' => $tarjetas,
+            'totalLotes' => $lotes->count(),
+            'totalConciliados' => $lotes->where('es_conciliado', true)->count(),
+            'totalPendientes' => $lotes->where('es_conciliado', false)->count(),
+            'totalLiq' => $liquidaciones->where('estado', '!=', 'conciliado')->count(),
+        ]);
     }
 
     public function manualConciliacion(Request $request) {

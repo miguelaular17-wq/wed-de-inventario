@@ -83,6 +83,7 @@
     }
     if ($u->canAccess('gerencial.valorizados')) {
         $gerencialItems[] = $link('Inventario', route('gerencial.valorizados'), request()->routeIs('gerencial.valorizados'));
+        $gerencialItems[] = $link('Stock por sede', route('gerencial.stock'), request()->routeIs('gerencial.stock'));
     }
     if ($u->canAccess('gerencial.ajustes')) {
         $gerencialItems[] = $link('Ajustes', route('gerencial.ajustes'), request()->routeIs('gerencial.ajustes'));
@@ -168,6 +169,7 @@
             $link('Gasto Directivos', route('finanzas.gasto_directivos'), request()->routeIs('finanzas.gasto_directivos*')),
             $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*')),
             $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones')),
+            $link('Lotes punto de venta', route('finanzas.conciliaciones.lotes'), request()->routeIs('finanzas.conciliaciones.lotes')),
             $link('Calendario conciliaciones', route('finanzas.calendario_conciliaciones'), request()->routeIs('finanzas.calendario_conciliaciones')),
             $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*')),
             $link('Ventas diarias', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*')),
@@ -195,6 +197,7 @@
         }
         if ($u->canAccess('conciliaciones')) {
             $nav[] = $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones'));
+            $nav[] = $link('Lotes punto de venta', route('finanzas.conciliaciones.lotes'), request()->routeIs('finanzas.conciliaciones.lotes'));
             $nav[] = $link('Calendario conciliaciones', route('finanzas.calendario_conciliaciones'), request()->routeIs('finanzas.calendario_conciliaciones'));
         }
         if ($u->canAccess('cobranza')) {

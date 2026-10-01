@@ -15,6 +15,7 @@
     }
     if ($u->canAccess('gerencial.valorizados')) {
         $tabs[] = ['label' => 'Inventario', 'route' => 'gerencial.valorizados'];
+        $tabs[] = ['label' => 'Stock por sede', 'route' => 'gerencial.stock'];
     }
     if ($u->canAccess('gerencial.ajustes')) {
         $tabs[] = ['label' => 'Ajustes', 'route' => 'gerencial.ajustes'];

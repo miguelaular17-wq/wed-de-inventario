@@ -10,7 +10,7 @@ class Propiedad extends Model
     protected $fillable = [
         'codigo', 'nombre', 'tipo', 'direccion', 'ubicacion',
         'fotos', 'estado', 'propietario', 'responsable',
-        'fecha_adquisicion', 'valor_inversion', 'observaciones',
+        'fecha_adquisicion', 'valor_inversion', 'documento_digitalizado', 'observaciones',
     ];
 
     protected $casts = [

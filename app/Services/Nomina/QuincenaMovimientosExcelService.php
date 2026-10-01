@@ -80,27 +80,39 @@ class QuincenaMovimientosExcelService
         $inicioLabel = $quincena['inicio']->format('Ymd');
         $finLabel = $quincena['fin']->format('Ymd');
 
-        $sheets = match ($modulo) {
-            'adelantos' => ['Adelantos' => $this->filasAdelantos($quincena)],
-            'faltante_caja' => ['Faltante caja' => $this->filasFaltante($quincena)],
-            'mercancia' => ['Descuento mercancia' => $this->filasMercancia($quincena)],
-            'ajustes' => ['Deducciones y bonos' => $this->filasAjustes($quincena)],
-            'horas_extras' => ['Horas extras' => $this->filasHorasExtras($quincena)],
-            'prestamos' => [
-                'Descuentos quincena' => $this->filasPrestamoPlanes($quincena),
-                'Pagos' => $this->filasPrestamoPagos($quincena),
-                'Prestamos otorgados' => $this->filasPrestamosOtorgados($quincena),
-            ],
-            default => throw new \InvalidArgumentException('Módulo de exportación no válido.'),
-        };
+        if (! in_array($modulo, ['adelantos', 'faltante_caja', 'mercancia', 'ajustes', 'horas_extras', 'prestamos'], true)) {
+            throw new \InvalidArgumentException('Módulo de exportación no válido.');
+        }
+
+        $sheets = $this->hojasDeQuincena($quincena);
 
         $xlsx = SimpleXlsxWriter::toString($sheets);
-        $nombre = 'nomina-'.$modulo.'-'.$inicioLabel.'-'.$finLabel.'.xlsx';
+        $nombre = 'nomina-quincena-'.$inicioLabel.'-'.$finLabel.'.xlsx';
 
         return response($xlsx, 200, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Content-Disposition' => 'attachment; filename="'.$nombre.'"',
         ]);
+    }
+
+    /**
+     * Todas las hojas de la quincena, sin importar desde qué módulo se descargue.
+     *
+     * @param  array{inicio:Carbon,fin:Carbon,etiqueta:string}  $quincena
+     * @return array<string, list<list<string|float|int|null>>>
+     */
+    public function hojasDeQuincena(array $quincena): array
+    {
+        return [
+            'Adelantos' => $this->filasAdelantos($quincena),
+            'Faltante caja' => $this->filasFaltante($quincena),
+            'Descuento mercancia' => $this->filasMercancia($quincena),
+            'Deducciones y bonos' => $this->filasAjustes($quincena),
+            'Horas extras' => $this->filasHorasExtras($quincena),
+            'Prestamos descuentos' => $this->filasPrestamoPlanes($quincena),
+            'Prestamos pagos' => $this->filasPrestamoPagos($quincena),
+            'Prestamos otorgados' => $this->filasPrestamosOtorgados($quincena),
+        ];
     }
 
     /**

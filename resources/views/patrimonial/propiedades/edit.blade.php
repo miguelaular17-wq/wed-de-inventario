@@ -78,6 +78,11 @@
                         <input type="number" name="valor_inversion" value="{{ old('valor_inversion', $propiedad->valor_inversion) }}" step="0.01" min="0" placeholder="0.00"
                             style="padding:9px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:0.92rem; font-family:inherit; color:#1e293b;">
                     </div>
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <label style="font-size:0.82rem; font-weight:600; color:#475569; text-transform:uppercase; letter-spacing:0.5px;">Documento digitalizado</label>
+                        <input type="text" name="documento_digitalizado" value="{{ old('documento_digitalizado', $propiedad->documento_digitalizado) }}" placeholder="C/V, Sin documento"
+                            style="padding:9px 12px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:0.92rem; font-family:inherit; color:#1e293b;">
+                    </div>
                 </div>
 
                 <div style="margin-top:18px; display:flex; flex-direction:column; gap:6px;">

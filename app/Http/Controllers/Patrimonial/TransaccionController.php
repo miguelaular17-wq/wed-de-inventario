@@ -223,4 +223,31 @@ class TransaccionController extends Controller
 
         return $pdf->stream("reporte_propiedad_{$propiedad->codigo}.pdf");
     }
+
+    public function inventarioValor()
+    {
+        return view('patrimonial.propiedades.inventario_valor', $this->reportes->inventarioValor());
+    }
+
+    public function inventarioValorPdf()
+    {
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('patrimonial.pdf.inventario_valor', [
+            ...$this->reportes->inventarioValor(),
+            'logoPath' => $this->logoPdf(),
+        ]);
+        $pdf->setPaper('a4', 'landscape');
+
+        return $pdf->stream('inventario_valor_propiedades.pdf');
+    }
+
+    private function logoPdf(): ?string
+    {
+        $path = public_path('logo.png');
+        if (! is_file($path)) {
+            return null;
+        }
+        $raw = @file_get_contents($path);
+
+        return ($raw === false || $raw === '') ? null : 'data:image/png;base64,'.base64_encode($raw);
+    }
 }

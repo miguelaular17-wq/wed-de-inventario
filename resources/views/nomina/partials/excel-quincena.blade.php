@@ -11,7 +11,7 @@
     style="display:inline-flex;align-items:flex-end;gap:8px;flex-wrap:wrap;margin:0;"
 >
     <div class="field" style="margin:0;">
-        <label for="excel-quincena-{{ md5($excelRoute) }}" style="font-size:.75rem;">Quincena Excel</label>
+        <label for="excel-quincena-{{ md5($excelRoute) }}" style="font-size:.75rem;">Quincena Excel (todos los módulos)</label>
         <select
             id="excel-quincena-{{ md5($excelRoute) }}"
             name="inicio"
