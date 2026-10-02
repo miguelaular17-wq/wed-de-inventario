@@ -35,9 +35,12 @@
 .vd-modal table { width:100%; border-collapse:collapse; font-size:.92rem; }
 .vd-modal td { padding:7px 4px; border-bottom:1px solid #f1f5f9; }
 .vd-modal .lab { font-weight:650; }
-.vd-modal .usd { color:#059669; font-weight:700; text-align:right; }
-.vd-modal .bs { text-align:right; color:#334155; }
+.vd-modal .usd { color:#059669; font-weight:700; text-align:right; white-space:nowrap; }
+.vd-modal .bs { text-align:right; color:#334155; font-weight:600; white-space:nowrap; }
 .vd-modal .tot td { font-weight:800; background:#f8fafc; }
+.vd-modal tr.vd-venta td { background:#d1fae5; border-top:2px solid #059669; border-bottom:2px solid #059669; font-size:1.02rem; }
+.vd-modal tr.vd-venta .lab { color:#064e3b; }
+.vd-modal tr.vd-venta .usd { font-size:1.12rem; }
 .vd-pct.neg { color:#dc2626; }
 .vd-pct.pos { color:#16a34a; }
 </style>
@@ -191,22 +194,22 @@
         <h3>DESGLOSE</h3>
         <p class="sub" id="vd-modal-sub"></p>
         <table>
-            <tr><td class="lab">Divisas en efectivo</td><td class="usd" id="md-divisas"></td><td></td></tr>
+            <tr><td class="lab">Divisas en efectivo</td><td class="bs" id="md-divisas-bs"></td><td class="usd" id="md-divisas"></td></tr>
             <tr><td class="lab">Efectivo Bs</td><td class="bs" id="md-ebs"></td><td class="usd" id="md-ebs-usd"></td></tr>
             <tr><td class="lab">Punto de venta</td><td class="bs" id="md-punto"></td><td class="usd" id="md-punto-usd"></td></tr>
             <tr><td class="lab">Transf/P.M.</td><td class="bs" id="md-transf"></td><td class="usd" id="md-transf-usd"></td></tr>
-            <tr><td class="lab">Zelle y binance</td><td class="usd" id="md-zelle"></td><td></td></tr>
-            <tr><td class="lab">Cashea financiado</td><td class="usd" id="md-cashea"></td><td></td></tr>
-            <tr><td class="lab">Abono de apartado / Deuda</td><td class="usd" id="md-abonos"></td><td></td></tr>
-            <tr><td class="lab">iPhone</td><td class="usd" id="md-iphone"></td><td></td></tr>
-            <tr><td class="lab">Gift card</td><td class="usd" id="md-gift"></td><td></td></tr>
-            <tr class="tot"><td class="lab">Total cobros del día</td><td class="usd" id="md-cobros" colspan="2"></td></tr>
-            <tr><td class="lab">Total créditos del día</td><td class="usd" id="md-creditos"></td><td></td></tr>
-            <tr class="tot"><td class="lab">Total de ventas del día</td><td class="usd" id="md-ventas"></td><td id="md-pct-venta"></td></tr>
-            <tr><td class="lab">Productos vendidos</td><td class="bs" id="md-prod"></td><td id="md-pct-prod"></td></tr>
-            <tr><td class="lab">Z fiscal (Bs)</td><td class="bs" id="md-zfiscal"></td><td></td></tr>
-            <tr><td class="lab">Facturación fiscal</td><td class="usd" id="md-fiscal"></td><td id="md-pct-fiscal"></td></tr>
-            <tr><td class="lab">Deliverys pendientes</td><td class="usd" id="md-deliverys"></td><td></td></tr>
+            <tr><td class="lab">Zelle y binance</td><td class="bs" id="md-zelle-bs"></td><td class="usd" id="md-zelle"></td></tr>
+            <tr><td class="lab">Cashea financiado</td><td class="bs" id="md-cashea-bs"></td><td class="usd" id="md-cashea"></td></tr>
+            <tr><td class="lab">Abono de apartado / Deuda</td><td class="bs" id="md-abonos-bs"></td><td class="usd" id="md-abonos"></td></tr>
+            <tr><td class="lab">iPhone</td><td class="bs" id="md-iphone-bs"></td><td class="usd" id="md-iphone"></td></tr>
+            <tr><td class="lab">Gift card</td><td class="bs" id="md-gift-bs"></td><td class="usd" id="md-gift"></td></tr>
+            <tr class="tot"><td class="lab">Total cobros del día</td><td class="bs" id="md-cobros-bs"></td><td class="usd" id="md-cobros"></td></tr>
+            <tr><td class="lab">Total créditos del día</td><td class="bs" id="md-creditos-bs"></td><td class="usd" id="md-creditos"></td></tr>
+            <tr class="tot vd-venta"><td class="lab">Total de ventas del día</td><td class="bs" id="md-ventas-bs"></td><td class="usd" id="md-ventas"></td><td id="md-pct-venta"></td></tr>
+            <tr><td class="lab">Productos vendidos</td><td class="bs" id="md-prod"></td><td></td><td id="md-pct-prod"></td></tr>
+            <tr><td class="lab">Z fiscal (Bs)</td><td class="bs" id="md-zfiscal"></td><td class="usd" id="md-zfiscal-usd"></td></tr>
+            <tr><td class="lab">Facturación fiscal</td><td class="bs" id="md-fiscal-bs"></td><td class="usd" id="md-fiscal"></td><td id="md-pct-fiscal"></td></tr>
+            <tr><td class="lab">Deliverys pendientes</td><td class="bs" id="md-deliverys-bs"></td><td class="usd" id="md-deliverys"></td></tr>
         </table>
         <div class="vd-actions">
             <a class="btn primary" id="vd-modal-cerrar" href="#">Cerrar</a>
@@ -267,10 +270,12 @@
         const cobros = divisas + eUsd + pUsd + tUsd + zelle + cashea + abonos + iphone + giftCard;
         const ventas = cobros + creditos;
         const fiscal = zfiscal / tasa;
-        const bs = (n) => (Number(n) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const bs = (n) => 'Bs ' + (Number(n) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const enBs = (usd) => bs((Number(usd) || 0) * tasa);
         const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
         const setHtml = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
 
+        set('md-divisas-bs', enBs(divisas));
         set('md-divisas', money(divisas));
         set('md-ebs', bs(ebs));
         set('md-ebs-usd', money(eUsd));
@@ -278,20 +283,31 @@
         set('md-punto-usd', money(pUsd));
         set('md-transf', bs(tbs));
         set('md-transf-usd', money(tUsd));
+        set('md-zelle-bs', enBs(zelle));
         set('md-zelle', money(zelle));
+        set('md-cashea-bs', enBs(cashea));
         set('md-cashea', money(cashea));
+        set('md-abonos-bs', enBs(abonos));
         set('md-abonos', money(abonos));
+        set('md-iphone-bs', enBs(iphone));
         set('md-iphone', money(iphone));
+        set('md-gift-bs', enBs(giftCard));
         set('md-gift', money(giftCard));
+        set('md-cobros-bs', enBs(cobros));
         set('md-cobros', money(cobros));
+        set('md-creditos-bs', enBs(creditos));
         set('md-creditos', money(creditos));
+        set('md-ventas-bs', enBs(ventas));
         set('md-ventas', money(ventas));
         setHtml('md-pct-venta', pctHtml(metaVenta > 0 ? (ventas / metaVenta) - 1 : null));
         set('md-prod', bs(productos));
         setHtml('md-pct-prod', pctHtml(metaProd > 0 ? (productos / metaProd) - 1 : null));
         set('md-zfiscal', bs(zfiscal));
+        set('md-zfiscal-usd', money(fiscal));
+        set('md-fiscal-bs', bs(zfiscal));
         set('md-fiscal', money(fiscal));
         setHtml('md-pct-fiscal', pctHtml(ventas > 0 ? fiscal / ventas : null));
+        set('md-deliverys-bs', enBs(num('[name=deliverys_pendientes]')));
         set('md-deliverys', money(num('[name=deliverys_pendientes]')));
     }
 

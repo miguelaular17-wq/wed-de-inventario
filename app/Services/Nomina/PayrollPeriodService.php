@@ -574,6 +574,23 @@ class PayrollPeriodService
         });
     }
 
+    public function recalcular(NominaPeriodo $periodo, ?int $usuarioId = null): NominaPeriodo
+    {
+        return DB::transaction(function () use ($periodo, $usuarioId) {
+            $periodo = NominaPeriodo::query()->lockForUpdate()->findOrFail($periodo->id);
+
+            if (! in_array($periodo->estado, [NominaPeriodo::CALCULADO, NominaPeriodo::APROBADO], true)) {
+                throw ValidationException::withMessages([
+                    'estado' => 'Solo se puede recalcular un período en estado CALCULADO o APROBADO. Este período está '.$periodo->estado.'.',
+                ]);
+            }
+
+            $periodo = $this->revertirCalculo($periodo, $usuarioId);
+
+            return $this->calcular($periodo, $usuarioId);
+        });
+    }
+
     public function aprobar(NominaPeriodo $periodo, ?int $usuarioId = null): NominaPeriodo
     {
         if (! $periodo->registros()->exists()) {

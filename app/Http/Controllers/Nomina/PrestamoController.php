@@ -59,6 +59,15 @@ class PrestamoController extends Controller
                 ->get();
         }
 
+        $empleadoIds = $deudores->pluck('empleado.id')->filter()->all();
+        $historialPorEmpleado = NominaPrestamo::query()
+            ->with('abonos')
+            ->whereIn('empleado_id', $empleadoIds)
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->get()
+            ->groupBy('empleado_id');
+
         $delDia = $this->loans->delDia($fecha);
         $txtPorEmpresa = $delDia
             ->groupBy(fn ($prestamo) => (string) ($prestamo->empleado?->empresa_id ?: '0'))
@@ -81,11 +90,11 @@ class PrestamoController extends Controller
             'deudores' => $deudores,
             'planesPorEmpleado' => $planesPorEmpleado,
             'kpis' => $this->planes->kpis($quincena, $deudores),
-            'kpisGlobales' => $this->loans->kpis(),
             'tasaBcv' => $this->bcv->getRateForToday(),
             'resultadosAlta' => $resultadosAlta,
             'delDia' => $delDia,
             'txtPorEmpresa' => $txtPorEmpresa,
+            'historialPorEmpleado' => $historialPorEmpleado,
         ]);
     }
 

@@ -42,80 +42,111 @@
         </div>
     </form>
 
-    @foreach($arbol as $nodo)
-        <div class="nomina-org-sede">
-            <h2>{{ $nodo['sede']->etiquetaTipo() }}: {{ $nodo['sede']->nombre }} <span class="muted">{{ $nodo['sede']->codigo }}</span></h2>
-            @if($nodo['gerentes']->isNotEmpty())
-                <div class="nomina-org-gerente">
-                    <span class="muted">Gerente</span>
-                    <div class="nomina-org-people">
+    @forelse($arbol as $nodo)
+        @php
+            $esArea = $nodo['sede']->isArea();
+            $nSup = $esArea ? $nodo['grupos']->count() : $nodo['supervisores']->count();
+            $nPiso = $nodo['equipo']->count()
+                + $nodo['grupos']->sum(fn ($g) => $g['empleados']->count())
+                + $nodo['sin_supervisor']->count();
+            $porCargo = $nodo['equipo']
+                ->groupBy(fn ($e) => $e->nombreCargo() ?: 'Sin cargo')
+                ->sortByDesc(fn ($grupo) => $grupo->count());
+        @endphp
+        <section class="org-sede">
+            <header class="org-sede-head">
+                <div>
+                    <span class="org-kicker">{{ $nodo['sede']->etiquetaTipo() }}</span>
+                    <h2>{{ $nodo['sede']->nombre }} <span>{{ $nodo['sede']->codigo }}</span></h2>
+                </div>
+                <div class="org-counts">
+                    @if($nodo['gerentes']->isNotEmpty())
+                        <span>{{ $nodo['gerentes']->count() }} {{ $nodo['gerentes']->count() === 1 ? 'gerente' : 'gerentes' }}</span>
+                    @endif
+                    <span>{{ $nSup }} {{ $nSup === 1 ? 'supervisor' : 'supervisores' }}</span>
+                    <span>{{ $nPiso }} en piso</span>
+                </div>
+            </header>
+
+            <div class="org-chart">
+                @if($nodo['gerentes']->isNotEmpty())
+                    <div class="org-row">
                         @foreach($nodo['gerentes'] as $gerente)
-                            <a href="{{ route('nomina.empleados.show', $gerente) }}">{{ $gerente->nombre() }}</a>
+                            @include('nomina.organizacion._persona', ['empleado' => $gerente, 'tono' => 'gerente'])
                         @endforeach
                     </div>
-                    <p class="muted" style="margin:6px 0 0; font-size:.78rem;">Supervisa a los supervisores de esta sede.</p>
-                </div>
-            @endif
+                @endif
 
-            @if($nodo['sede']->isArea())
-                @forelse($nodo['grupos'] as $grupo)
-                    <div class="nomina-org-sup">
-                        <strong>Supervisor de área: <a href="{{ route('nomina.empleados.show', $grupo['supervisor']) }}">{{ $grupo['supervisor']->nombre() }}</a></strong>
-                        <span class="muted"> · {{ $grupo['supervisor']->nombreCargo() }}</span>
-                        <ul>
-                            @forelse($grupo['empleados'] as $emp)
-                                <li><a href="{{ route('nomina.empleados.show', $emp) }}">{{ $emp->nombre() }}</a> · {{ $emp->nombreCargo() }}</li>
-                            @empty
-                                <li class="muted">Sin personal asignado</li>
-                            @endforelse
-                        </ul>
-                    </div>
-                @empty
-                    @if($nodo['gerentes']->isEmpty())
-                        <p class="muted">No hay supervisores en esta área.</p>
+                @if($esArea)
+                    @if($nodo['grupos']->isNotEmpty())
+                        <div class="org-branch">
+                            <div class="org-cols">
+                                @foreach($nodo['grupos'] as $grupo)
+                                    <div class="org-col">
+                                        @include('nomina.organizacion._persona', ['empleado' => $grupo['supervisor'], 'tono' => 'sup'])
+                                        <div class="org-col-team">
+                                            @forelse($grupo['empleados'] as $emp)
+                                                @include('nomina.organizacion._persona', ['empleado' => $emp, 'tono' => 'piso', 'compacto' => true])
+                                            @empty
+                                                <p class="muted org-empty">Sin personal asignado</p>
+                                            @endforelse
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @elseif($nodo['gerentes']->isEmpty())
+                        <p class="muted org-empty">No hay supervisores en esta área.</p>
                     @endif
-                @endforelse
-            @else
-                <div class="nomina-org-sup">
-                    <strong>Supervisores de sede</strong>
+                @else
                     @if($nodo['supervisores']->isNotEmpty())
-                        <div class="nomina-org-people">
-                            @foreach($nodo['supervisores'] as $sup)
-                                <a href="{{ route('nomina.empleados.show', $sup) }}">{{ $sup->nombre() }}</a>
-                                <span class="muted">{{ $sup->nombreCargo() }}</span>
+                        <div class="org-branch">
+                            <div class="org-row">
+                                @foreach($nodo['supervisores'] as $sup)
+                                    @include('nomina.organizacion._persona', ['empleado' => $sup, 'tono' => 'sup'])
+                                @endforeach
+                            </div>
+                        </div>
+                    @else
+                        <p class="muted org-empty">No hay supervisores en esta sede.</p>
+                    @endif
+
+                    @if($porCargo->isNotEmpty())
+                        <div class="org-piso">
+                            <h3>Personal de piso</h3>
+                            @foreach($porCargo as $cargo => $personas)
+                                <div class="org-cargo">
+                                    <div class="org-cargo-head">
+                                        <strong>{{ $cargo }}</strong>
+                                        <span>{{ $personas->count() }}</span>
+                                    </div>
+                                    <div class="org-chips">
+                                        @foreach($personas as $emp)
+                                            @include('nomina.organizacion._persona', ['empleado' => $emp, 'tono' => 'piso', 'compacto' => true])
+                                        @endforeach
+                                    </div>
+                                </div>
                             @endforeach
                         </div>
-                        <ul>
-                            @forelse($nodo['equipo'] as $emp)
-                                <li><a href="{{ route('nomina.empleados.show', $emp) }}">{{ $emp->nombre() }}</a> · {{ $emp->nombreCargo() }}</li>
-                            @empty
-                                <li class="muted">Sin personal de piso</li>
-                            @endforelse
-                        </ul>
-                    @else
-                        <p class="muted" style="margin:8px 0 0;">No hay supervisores en esta sede.</p>
-                        @if($nodo['equipo']->isNotEmpty())
-                            <ul>
-                                @foreach($nodo['equipo'] as $emp)
-                                    <li><a href="{{ route('nomina.empleados.show', $emp) }}">{{ $emp->nombre() }}</a> · {{ $emp->nombreCargo() }}</li>
-                                @endforeach
-                            </ul>
-                        @endif
+                    @elseif($nodo['supervisores']->isNotEmpty())
+                        <p class="muted org-empty">Sin personal de piso</p>
                     @endif
-                </div>
-            @endif
+                @endif
 
-            @if($nodo['sin_supervisor']->isNotEmpty())
-                <div class="nomina-org-sup">
-                    <strong>Sin supervisor</strong>
-                    <ul>
-                        @foreach($nodo['sin_supervisor'] as $emp)
-                            <li><a href="{{ route('nomina.empleados.show', $emp) }}">{{ $emp->nombre() }}</a> · {{ $emp->nombreCargo() }}</li>
-                        @endforeach
-                    </ul>
-                </div>
-            @endif
-        </div>
-    @endforeach
+                @if($nodo['sin_supervisor']->isNotEmpty())
+                    <div class="org-piso">
+                        <h3>Sin supervisor</h3>
+                        <div class="org-chips">
+                            @foreach($nodo['sin_supervisor'] as $emp)
+                                @include('nomina.organizacion._persona', ['empleado' => $emp, 'tono' => 'piso', 'compacto' => true])
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+            </div>
+        </section>
+    @empty
+        <p class="muted" style="margin-top:18px;">No hay sedes para esos filtros.</p>
+    @endforelse
 </div>
 @endsection

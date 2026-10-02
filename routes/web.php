@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AsistenteController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\ImportController;
 use App\Http\Controllers\Admin\MovimientoController;
@@ -92,6 +93,9 @@ Route::get('/', function () {
 
     return redirect()->route('login');
 });
+
+Route::middleware('auth')->get('/asistente/mensajes', [AsistenteController::class, 'mensajes'])->name('asistente.mensajes');
+Route::middleware('auth')->post('/asistente', [AsistenteController::class, 'consultar'])->name('asistente.consultar');
 
 /** Acceso rápido ST: público, como Existencias (sin login). */
 Route::get('/ir/servicio-tecnico', function () {
@@ -346,6 +350,7 @@ Route::middleware(['auth', 'permission:nomina,nomina.periodos'])->prefix('nomina
     Route::get('/periodos/{periodo}/calcular', [PeriodoController::class, 'calcularForm'])->name('periodos.calcular.form');
     Route::post('/periodos/{periodo}/calcular', [PeriodoController::class, 'calcular'])->name('periodos.calcular');
     Route::post('/periodos/{periodo}/revertir', [PeriodoController::class, 'revertir'])->name('periodos.revertir');
+    Route::post('/periodos/{periodo}/recalcular', [PeriodoController::class, 'recalcular'])->name('periodos.recalcular');
     Route::post('/periodos/{periodo}/aprobar', [PeriodoController::class, 'aprobar'])->name('periodos.aprobar');
     Route::post('/periodos/{periodo}/pagar', [PeriodoController::class, 'pagar'])->name('periodos.pagar');
     Route::post('/periodos/{periodo}/cerrar', [PeriodoController::class, 'cerrar'])->name('periodos.cerrar');

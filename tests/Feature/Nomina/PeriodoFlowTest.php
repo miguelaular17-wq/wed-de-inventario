@@ -363,6 +363,31 @@ class PeriodoFlowTest extends TestCase
         $this->assertEquals(68.04, (float) $registro->total_pagar);
     }
 
+    public function test_recalcular_vuelve_a_calcular_y_deja_el_periodo_calculado(): void
+    {
+        $this->actingAs($this->rrhh);
+        $this->crearMovimientos();
+
+        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
+        $periodo = NominaPeriodo::query()->firstOrFail();
+        $this->post(route('nomina.periodos.calcular', $periodo))->assertRedirect();
+
+        $this->post(route('nomina.periodos.recalcular', $periodo))
+            ->assertRedirect(route('nomina.periodos.show', $periodo));
+
+        $periodo->refresh();
+        $registro = NominaRegistro::query()->firstOrFail();
+
+        $this->assertSame(NominaPeriodo::CALCULADO, $periodo->estado);
+        $this->assertEquals(760, (float) $registro->total_pagar);
+        $this->get(route('nomina.periodos.show', $periodo))
+            ->assertOk()
+            ->assertSee('Recalcular')
+            ->assertSee('Cerrar nómina')
+            ->assertDontSee('Deshacer cálculo')
+            ->assertDontSee('Aprobar nómina');
+    }
+
     public function test_se_puede_deshacer_un_calculo_accidental(): void
     {
         $this->actingAs($this->rrhh);

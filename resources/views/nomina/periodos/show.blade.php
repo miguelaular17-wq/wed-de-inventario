@@ -15,13 +15,13 @@
                 <a class="btn primary" href="{{ route('nomina.periodos.calcular.form', $periodo) }}">Calcular nómina</a>
             @elseif($periodo->estado === 'CALCULADO')
                 <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-                    <form method="POST" action="{{ route('nomina.periodos.revertir', $periodo) }}" onsubmit="return confirm('¿Deshacer este cálculo? Se borran los recibos y se revierten adelantos, faltas, horas extras y descuentos de préstamo. La quincena queda ABIERTA otra vez.')">
+                    <form method="POST" action="{{ route('nomina.periodos.recalcular', $periodo) }}" onsubmit="return confirm('¿Recalcular esta quincena con los datos actuales?')">
                         @csrf
-                        <button class="btn" type="submit">Deshacer cálculo</button>
+                        <button class="btn" type="submit">Recalcular</button>
                     </form>
-                    <form method="POST" action="{{ route('nomina.periodos.aprobar', $periodo) }}" onsubmit="return confirm('¿Aprobar estos importes? Después de aprobar ya no podrán modificarse.')">
+                    <form method="POST" action="{{ route('nomina.periodos.aprobar', $periodo) }}" onsubmit="return confirm('¿Cerrar esta nómina? Los importes quedan fijos.')">
                         @csrf
-                        <button class="btn primary" type="submit">Aprobar nómina</button>
+                        <button class="btn primary" type="submit">Cerrar nómina</button>
                     </form>
                 </div>
             @elseif($periodo->estado === 'APROBADO')

@@ -182,6 +182,69 @@ class EmployeeSalesService
     }
 
     /**
+     * Venta neta de la quincena en curso (desde el día 1 o 16 hasta hoy) por empleado.
+     *
+     * @param  iterable<int, NominaEmpleado>  $empleados
+     * @return array<int, float>
+     */
+    public function netosHastaHoy(iterable $empleados): array
+    {
+        $empleados = collect($empleados);
+        $out = [];
+        foreach ($empleados as $empleado) {
+            $out[(int) $empleado->id] = 0.0;
+        }
+
+        if ($empleados->isEmpty() || ! Schema::hasTable('ventas_detalle')) {
+            return $out;
+        }
+
+        $claveAEmpleado = [];
+        if (Schema::hasTable('nomina_empleado_vendedores')) {
+            $aliasRows = DB::table('nomina_empleado_vendedores')
+                ->whereIn('empleado_id', array_keys($out))
+                ->get(['empleado_id', 'nombre_normalizado', 'codigo_profit']);
+            foreach ($aliasRows as $alias) {
+                foreach ([$alias->codigo_profit, $alias->nombre_normalizado] as $valor) {
+                    if ($normalizado = NominaEmpleado::normalizarVendedor($valor)) {
+                        $claveAEmpleado[$normalizado] = (int) $alias->empleado_id;
+                    }
+                }
+            }
+        }
+
+        foreach ($empleados as $empleado) {
+            if ($codigo = $empleado->codigoVendedor()) {
+                $claveAEmpleado[$codigo] = (int) $empleado->id;
+            }
+        }
+        if ($claveAEmpleado === []) {
+            return $out;
+        }
+
+        $claves = array_keys($claveAEmpleado);
+        $pct = $this->porcentajeDescuento();
+        $quincena = app(SalaryAdvanceService::class)->quincenaDe(now());
+        $rows = $this->baseQuery($claves)
+            ->whereDate('fecha', '>=', $quincena['inicio']->toDateString())
+            ->whereDate('fecha', '<=', now()->toDateString())
+            ->selectRaw('UPPER(TRIM(vendedor)) as vendedor_clave')
+            ->selectRaw($this->sumNetoSql($pct).' as neto')
+            ->groupByRaw('UPPER(TRIM(vendedor))')
+            ->get();
+
+        foreach ($rows as $row) {
+            $id = $claveAEmpleado[$row->vendedor_clave] ?? null;
+            if ($id === null) {
+                continue;
+            }
+            $out[$id] = round($out[$id] + (float) $row->neto, 2);
+        }
+
+        return $out;
+    }
+
+    /**
      * @return array{total:float, descuento:float, neto:float, descuento_pct:float}
      */
     private function montosReales(float $bruto, float $neto, float $pctRespaldo): array

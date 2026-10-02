@@ -151,11 +151,18 @@ class PeriodoController extends Controller
         return $this->volver($periodo, 'Se deshizo el cálculo. La quincena volvió a ABIERTA: adelantos, faltas, horas extras y cuotas de préstamo quedaron como estaban.');
     }
 
+    public function recalcular(NominaPeriodo $periodo): RedirectResponse
+    {
+        $this->periods->recalcular($periodo, auth()->id());
+
+        return $this->volver($periodo, 'Nómina recalculada.');
+    }
+
     public function aprobar(NominaPeriodo $periodo): RedirectResponse
     {
         $this->periods->aprobar($periodo, auth()->id());
 
-        return $this->volver($periodo, 'Nómina aprobada.');
+        return $this->volver($periodo, 'Nómina cerrada.');
     }
 
     public function pagar(NominaPeriodo $periodo): RedirectResponse

@@ -79,14 +79,16 @@ class EmpleadoController extends Controller
             $query->where('estado', $request->query('estado'));
         }
 
+        $empleados = $query->paginate(24)->withQueryString();
+
         return view('nomina.empleados.index', [
-            'empleados' => $query->paginate(40)->withQueryString(),
+            'empleados' => $empleados,
+            'ventasHastaHoy' => $this->sales->netosHastaHoy($empleados->getCollection()),
+            'quincenaVentas' => $this->advances->quincenaDe(now()),
             'sedes' => NominaSede::query()->ordenCatalogo()->get(),
             'empresas' => NominaEmpresa::query()->orderBy('nombre')->get(),
             'cargos' => NominaCargo::query()->orderBy('nombre')->get(),
             'supervisores' => $this->organization->supervisoresDisponibles(),
-            'kpis' => $this->loans->kpis(),
-            'kpisAdelantos' => $this->advances->kpis(),
             'filters' => $request->only(['q', 'sede_id', 'empresa_id', 'cargo_id', 'supervisor_id', 'estado']),
             'importados' => $importados,
         ]);

@@ -18,7 +18,9 @@
         td { padding: 5px 6px; border: 1px solid #e2e8f0; }
         .num { text-align: right; white-space: nowrap; }
         .usd { color: #047857; font-weight: bold; text-align: right; }
+        .bs { text-align: right; }
         .tot td { font-weight: bold; background: #f1f5f9; }
+        .venta td { font-weight: bold; background: #d1fae5; border-top: 2px solid #047857; border-bottom: 2px solid #047857; }
         .neg { color: #dc2626; }
         .pos { color: #16a34a; }
     </style>
@@ -29,6 +31,10 @@
         if ($v === null) return '—';
         return ($v >= 0 ? '+' : '').number_format($v * 100, 1).'%';
     };
+    $tasa = (float) $reporte->tasa > 0 ? (float) $reporte->tasa : 1;
+    $bs = fn (float $usd) => 'Bs '.number_format($usd * $tasa, 2);
+    $bsN = fn (float $monto) => 'Bs '.number_format($monto, 2);
+    $usd = fn (float $monto) => '$'.number_format($monto, 2);
 @endphp
     <div class="header">
         @if(!empty($logoPath))
@@ -49,22 +55,22 @@
     <h2>Desglose</h2>
     <table>
         <tbody>
-            <tr><td>Divisas en efectivo</td><td class="usd">${{ number_format((float) $reporte->divisas_efectivo, 2) }}</td><td></td></tr>
-            <tr><td>Efectivo Bs</td><td class="num">{{ number_format((float) $reporte->efectivo_bs, 2) }}</td><td class="usd">${{ number_format($totales['efectivo_bs_usd'], 2) }}</td></tr>
-            <tr><td>Punto de venta</td><td class="num">{{ number_format((float) $reporte->punto_venta_bs, 2) }}</td><td class="usd">${{ number_format($totales['punto_venta_usd'], 2) }}</td></tr>
-            <tr><td>Transf/P.M.</td><td class="num">{{ number_format((float) $reporte->transf_pm_bs, 2) }}</td><td class="usd">${{ number_format($totales['transf_pm_usd'], 2) }}</td></tr>
-            <tr><td>Zelle y binance</td><td class="usd">${{ number_format((float) $reporte->zelle_binance, 2) }}</td><td></td></tr>
-            <tr><td>Cashea financiado</td><td class="usd">${{ number_format((float) $reporte->cashea, 2) }}</td><td></td></tr>
-            <tr><td>Abono apartado / Deuda</td><td class="usd">${{ number_format((float) $reporte->abonos, 2) }}</td><td></td></tr>
-            <tr><td>iPhone</td><td class="usd">${{ number_format((float) $reporte->iphone, 2) }}</td><td></td></tr>
-            <tr><td>Gift card</td><td class="usd">${{ number_format((float) $reporte->gift_card, 2) }}</td><td></td></tr>
-            <tr class="tot"><td>Total cobros del día</td><td class="usd">${{ number_format($totales['total_cobros'], 2) }}</td><td></td></tr>
-            <tr><td>Total créditos del día</td><td class="usd">${{ number_format($totales['total_creditos'], 2) }}</td><td></td></tr>
-            <tr class="tot"><td>Total de ventas del día</td><td class="usd">${{ number_format($totales['total_ventas'], 2) }}</td><td class="{{ ($totales['pct_vs_meta_venta'] ?? 0) >= 0 ? 'pos' : 'neg' }}">{{ $pct($totales['pct_vs_meta_venta']) }}</td></tr>
-            <tr><td>Total de productos vendidos</td><td class="num">{{ number_format((float) $reporte->productos_vendidos, 0) }}</td><td class="{{ ($totales['pct_vs_meta_prod'] ?? 0) >= 0 ? 'pos' : 'neg' }}">{{ $pct($totales['pct_vs_meta_prod']) }}</td></tr>
-            <tr><td>Z fiscal (Bs)</td><td class="num">{{ number_format((float) $reporte->z_fiscal_bs, 2) }}</td><td></td></tr>
-            <tr><td>Facturación fiscal</td><td class="usd">${{ number_format($totales['facturacion_fiscal_usd'], 2) }}</td><td>{{ $pct($totales['pct_fiscal']) }}</td></tr>
-            <tr><td>Deliverys pendientes</td><td class="usd">${{ number_format((float) $reporte->deliverys_pendientes, 2) }}</td><td></td></tr>
+            <tr><td>Divisas en efectivo</td><td class="bs">{{ $bs((float) $reporte->divisas_efectivo) }}</td><td class="usd">{{ $usd((float) $reporte->divisas_efectivo) }}</td></tr>
+            <tr><td>Efectivo Bs</td><td class="bs">{{ $bsN((float) $reporte->efectivo_bs) }}</td><td class="usd">{{ $usd($totales['efectivo_bs_usd']) }}</td></tr>
+            <tr><td>Punto de venta</td><td class="bs">{{ $bsN((float) $reporte->punto_venta_bs) }}</td><td class="usd">{{ $usd($totales['punto_venta_usd']) }}</td></tr>
+            <tr><td>Transf/P.M.</td><td class="bs">{{ $bsN((float) $reporte->transf_pm_bs) }}</td><td class="usd">{{ $usd($totales['transf_pm_usd']) }}</td></tr>
+            <tr><td>Zelle y binance</td><td class="bs">{{ $bs((float) $reporte->zelle_binance) }}</td><td class="usd">{{ $usd((float) $reporte->zelle_binance) }}</td></tr>
+            <tr><td>Cashea financiado</td><td class="bs">{{ $bs((float) $reporte->cashea) }}</td><td class="usd">{{ $usd((float) $reporte->cashea) }}</td></tr>
+            <tr><td>Abono apartado / Deuda</td><td class="bs">{{ $bs((float) $reporte->abonos) }}</td><td class="usd">{{ $usd((float) $reporte->abonos) }}</td></tr>
+            <tr><td>iPhone</td><td class="bs">{{ $bs((float) $reporte->iphone) }}</td><td class="usd">{{ $usd((float) $reporte->iphone) }}</td></tr>
+            <tr><td>Gift card</td><td class="bs">{{ $bs((float) $reporte->gift_card) }}</td><td class="usd">{{ $usd((float) $reporte->gift_card) }}</td></tr>
+            <tr class="tot"><td>Total cobros del día</td><td class="bs">{{ $bs($totales['total_cobros']) }}</td><td class="usd">{{ $usd($totales['total_cobros']) }}</td></tr>
+            <tr><td>Total créditos del día</td><td class="bs">{{ $bs($totales['total_creditos']) }}</td><td class="usd">{{ $usd($totales['total_creditos']) }}</td></tr>
+            <tr class="venta"><td>Total de ventas del día</td><td class="bs">{{ $bs($totales['total_ventas']) }}</td><td class="usd">{{ $usd($totales['total_ventas']) }}</td><td class="{{ ($totales['pct_vs_meta_venta'] ?? 0) >= 0 ? 'pos' : 'neg' }}">{{ $pct($totales['pct_vs_meta_venta']) }}</td></tr>
+            <tr><td>Total de productos vendidos</td><td class="num">{{ number_format((float) $reporte->productos_vendidos, 0) }}</td><td></td><td class="{{ ($totales['pct_vs_meta_prod'] ?? 0) >= 0 ? 'pos' : 'neg' }}">{{ $pct($totales['pct_vs_meta_prod']) }}</td></tr>
+            <tr><td>Z fiscal (Bs)</td><td class="bs">{{ $bsN((float) $reporte->z_fiscal_bs) }}</td><td class="usd">{{ $usd($totales['facturacion_fiscal_usd']) }}</td></tr>
+            <tr><td>Facturación fiscal</td><td class="bs">{{ $bsN((float) $reporte->z_fiscal_bs) }}</td><td class="usd">{{ $usd($totales['facturacion_fiscal_usd']) }}</td><td>{{ $pct($totales['pct_fiscal']) }}</td></tr>
+            <tr><td>Deliverys pendientes</td><td class="bs">{{ $bs((float) $reporte->deliverys_pendientes) }}</td><td class="usd">{{ $usd((float) $reporte->deliverys_pendientes) }}</td></tr>
         </tbody>
     </table>
 

@@ -73,6 +73,9 @@ window.__TOUR__ = {
 <script src="/js/onboarding-tour.js"></script>
 @endauth
 @endif
+@auth
+    @include('partials.asistente')
+@endauth
 @stack('scripts')
 
 <script>

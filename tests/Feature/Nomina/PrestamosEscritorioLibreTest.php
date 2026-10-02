@@ -59,7 +59,37 @@ class PrestamosEscritorioLibreTest extends TestCase
             ->assertOk()
             ->assertSee('Deudor Libre')
             ->assertSee('150.00')
-            ->assertSee('Cobrar / descontar');
+            ->assertSee('Cobrar / descontar')
+            ->assertSee('Historial');
+    }
+
+    public function test_escritorio_muestra_historial_de_pagos(): void
+    {
+        $loan = app(LoanService::class);
+        $prestamo = $loan->create($this->empleado, [
+            'fecha' => '2026-09-01',
+            'monto_original' => 100,
+            'motivo' => 'Adelanto caja',
+        ], $this->rrhh->id);
+
+        $this->actingAs($this->rrhh)
+            ->post(route('nomina.prestamos.cobrar', $this->empleado), [
+                'modo' => 'PAGO',
+                'fecha' => '2026-09-03',
+                'monto' => 25,
+                'tipo' => NominaPrestamoAbono::TIPO_TRANSFERENCIA,
+                'prestamo_id' => $prestamo->id,
+                'observacion' => 'Abono quincena',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($this->rrhh)
+            ->get(route('nomina.prestamos.index'))
+            ->assertOk()
+            ->assertSee('id="historial-'.$this->empleado->id.'"', false)
+            ->assertSee('Transferencia')
+            ->assertSee('Abono quincena')
+            ->assertSee('Adelanto caja');
     }
 
     public function test_modal_pago_y_programar_nomina(): void

@@ -14,15 +14,6 @@
         </div>
     </div>
 
-    <div class="nomina-kpis">
-        <div class="nomina-kpi"><span>Deudores</span><strong>{{ $kpis['deudores'] }}</strong></div>
-        <div class="nomina-kpi"><span>Total prestado</span><strong>${{ number_format($kpis['total_prestamo'] ?? 0, 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Total pagado</span><strong>${{ number_format($kpis['total_pagado'] ?? 0, 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Saldo vivo</span><strong>${{ number_format($kpis['saldo'], 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Esta quincena</span><strong>${{ number_format($kpis['programado'], 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Pendiente global</span><strong>${{ number_format($kpisGlobales['total_pendiente'], 2) }}</strong></div>
-    </div>
-
     <form method="GET" class="filter-bar" style="margin-top:16px;">
         <div class="field">
             <label>Fecha TXT</label>
@@ -169,7 +160,8 @@
                                         <span class="muted">—</span>
                                     @endif
                                 </td>
-                                <td>
+                                <td style="white-space:nowrap;">
+                                    <a class="btn secondary" style="padding:4px 10px;font-size:.8rem;" href="#historial-{{ $empleado->id }}">Historial</a>
                                     <a class="btn primary" style="padding:4px 10px;font-size:.8rem;" href="#cobrar-{{ $empleado->id }}">Cobrar / descontar</a>
                                 </td>
                             </tr>
@@ -227,9 +219,17 @@
     position: absolute;
     inset: 0;
 }
-.prestamo-modal form {
+.prestamo-modal form,
+.prestamo-modal-card {
     position: relative;
     z-index: 1;
+}
+.prestamo-modal-card {
+    max-width: 760px;
+    width: 100%;
+    max-height: 82vh;
+    overflow: auto;
+    margin: 0;
 }
 .prestamo-modal-pago { display: none; }
 .prestamo-modal:has(select[name="modo"] option[value="PAGO"]:checked) .prestamo-modal-pago { display: block; }
@@ -293,6 +293,101 @@
                 <button type="submit" class="btn primary">Confirmar</button>
             </div>
         </form>
+    </div>
+@endforeach
+
+@foreach($deudores as $fila)
+    @php
+        $empleado = $fila['empleado'];
+        $prestamosHist = ($historialPorEmpleado ?? collect())->get($empleado->id) ?? $fila['prestamos'];
+        $movimientos = [];
+        foreach ($prestamosHist as $prestamo) {
+            $movimientos[] = [
+                'fecha' => $prestamo->fecha,
+                'orden' => 0,
+                'id' => (int) $prestamo->id,
+                'prestamo' => $prestamo->id,
+                'tipo' => 'Préstamo',
+                'monto' => (float) $prestamo->monto_original,
+                'signo' => 1,
+                'obs' => $prestamo->motivo ?: '—',
+                'estado' => $prestamo->estado,
+            ];
+            foreach ($prestamo->abonos as $abono) {
+                $movimientos[] = [
+                    'fecha' => $abono->fecha,
+                    'orden' => 1,
+                    'id' => (int) $abono->id,
+                    'prestamo' => $prestamo->id,
+                    'tipo' => \App\Models\Nomina\NominaPrestamoAbono::tipos()[$abono->tipo] ?? $abono->tipo,
+                    'monto' => (float) $abono->monto,
+                    'signo' => -1,
+                    'obs' => $abono->observacion ?: '—',
+                    'estado' => null,
+                ];
+            }
+        }
+        usort($movimientos, function ($a, $b) {
+            $fa = $a['fecha']?->format('Y-m-d') ?? '';
+            $fb = $b['fecha']?->format('Y-m-d') ?? '';
+            if ($fa !== $fb) {
+                return $fb <=> $fa;
+            }
+            if ($a['orden'] !== $b['orden']) {
+                return $b['orden'] <=> $a['orden'];
+            }
+
+            return $b['id'] <=> $a['id'];
+        });
+    @endphp
+    <div id="historial-{{ $empleado->id }}" class="prestamo-modal">
+        <a class="prestamo-modal-backdrop" href="#lista-deudores" aria-label="Cerrar"></a>
+        <div class="nomina-card prestamo-modal-card">
+            <div class="panel-header-flex">
+                <div>
+                    <h3 style="margin:0;">Historial · {{ $empleado->nombre() }}</h3>
+                    <p class="muted" style="margin:4px 0 0;">
+                        Prestado ${{ number_format($fila['total_prestamo'], 2) }}
+                        · Pagado ${{ number_format($fila['total_pagado'], 2) }}
+                        · Saldo ${{ number_format($fila['saldo'], 2) }}
+                    </p>
+                </div>
+                <a class="btn secondary" href="#lista-deudores">Cerrar</a>
+            </div>
+            <div class="table-wrap" style="margin-top:12px;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Préstamo</th>
+                            <th>Movimiento</th>
+                            <th>Monto</th>
+                            <th>Observación</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($movimientos as $mov)
+                            <tr>
+                                <td>{{ $mov['fecha']?->format('d/m/Y') ?: '—' }}</td>
+                                <td>#{{ $mov['prestamo'] }}</td>
+                                <td>
+                                    {{ $mov['tipo'] }}
+                                    @if($mov['estado'])
+                                        <div class="muted" style="font-size:.72rem;">{{ $mov['estado'] }}</div>
+                                    @endif
+                                </td>
+                                <td style="{{ $mov['signo'] < 0 ? 'color:#166534;' : '' }}">
+                                    {{ $mov['signo'] < 0 ? '−' : '+' }}${{ number_format($mov['monto'], 2) }}
+                                </td>
+                                <td>{{ $mov['obs'] }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="5" class="muted">Sin movimientos.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 @endforeach
 @endsection

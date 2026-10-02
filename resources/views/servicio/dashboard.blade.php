@@ -43,21 +43,6 @@
         </div>
     </form>
 
-    <div class="nomina-kpis" style="margin-top:16px;">
-        <div class="nomina-kpi"><span>Órdenes</span><strong>{{ $metricas['total_ordenes'] }}</strong></div>
-        <div class="nomina-kpi"><span>Pendientes</span><strong>{{ $metricas['pendientes'] }}</strong></div>
-        <div class="nomina-kpi"><span>Por recibir</span><strong>{{ $metricas['por_recibir_count'] }}</strong></div>
-        <div class="nomina-kpi"><span>Cobrado</span><strong>${{ number_format($metricas['ingresos_cobrados'], 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Por cobrar</span><strong>${{ number_format($metricas['por_cobrar'], 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Repuestos bajo stock</span><strong>{{ $metricas['stock_bajo'] }}</strong></div>
-    </div>
-
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-        <a class="btn" href="{{ route('servicio.celulares.por_recibir') }}">📦 Celulares por recibir</a>
-        <a class="btn" href="{{ route('servicio.ordenes.index') }}">Ver órdenes</a>
-        <a class="btn" href="{{ route('servicio.facturas.index') }}">Ver facturas</a>
-    </div>
-
     @if(($metricas['por_recibir_count'] ?? 0) > 0)
         <div class="panel" style="padding:16px 20px;margin-top:16px;border-left:4px solid #0ea5e9;">
             <strong>📦 {{ $metricas['por_recibir_count'] }} por recibir</strong>

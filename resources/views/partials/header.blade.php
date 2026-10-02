@@ -7,8 +7,19 @@
         return compact('label', 'url', 'active', 'tour', 'emphasis') + ['type' => 'link', 'icon' => $label];
     };
     $drop = function (string $label, array $items) {
-        $active = collect($items)->contains(fn ($item) => $item['active']);
+        $active = collect($items)->contains(function ($item) {
+            if (($item['type'] ?? '') === 'group') {
+                return collect($item['items'] ?? [])->contains(fn ($child) => ! empty($child['active']));
+            }
+
+            return ! empty($item['active']);
+        });
         return ['type' => 'drop', 'label' => $label, 'active' => $active, 'items' => $items, 'icon' => $label];
+    };
+    $group = function (string $label, array $items) {
+        $active = collect($items)->contains(fn ($item) => ! empty($item['active']));
+
+        return ['type' => 'group', 'label' => $label, 'active' => $active, 'items' => $items, 'icon' => $label];
     };
     $comprasNavItems = function () use ($u, $link) {
         $items = [];
@@ -261,10 +272,12 @@
                 $link('Deudas del Personal', route('nomina.deudas.index'), request()->routeIs('nomina.deudas.*')),
                 $link('Empleados', route('nomina.empleados.index'), request()->routeIs('nomina.empleados.*')),
                 $link('Organigrama', route('nomina.organizacion'), request()->routeIs('nomina.organizacion')),
-                $link('Sedes y áreas', route('nomina.sedes.index'), request()->routeIs('nomina.sedes.*')),
-                $link('Cargos', route('nomina.cargos.index'), request()->routeIs('nomina.cargos.*')),
-                $link('Empresas', route('nomina.empresas.index'), request()->routeIs('nomina.empresas.*')),
-                $link('Configuración', route('nomina.configuracion.index'), request()->routeIs('nomina.configuracion.*')),
+                $group('Configuración', [
+                    $link('Ajustes', route('nomina.configuracion.index'), request()->routeIs('nomina.configuracion.*')),
+                    $link('Sedes y áreas', route('nomina.sedes.index'), request()->routeIs('nomina.sedes.*')),
+                    $link('Cargos', route('nomina.cargos.index'), request()->routeIs('nomina.cargos.*')),
+                    $link('Empresas', route('nomina.empresas.index'), request()->routeIs('nomina.empresas.*')),
+                ]),
             ]);
         }
         if ($nominaItems) {
@@ -373,6 +386,17 @@
                     </button>
                     <div class="nav-drop-menu">
                         @foreach($item['items'] as $sub)
+                            @if(($sub['type'] ?? '') === 'group')
+                                <div class="nav-subgroup {{ !empty($sub['active']) ? 'is-current' : '' }}">
+                                    <div class="nav-subgroup-label">{{ $sub['label'] }}</div>
+                                    @foreach($sub['items'] as $child)
+                                        <a href="{{ $child['url'] }}" class="{{ !empty($child['active']) ? 'active' : '' }}">
+                                            @include('partials.nav-icon', ['icon' => $child['icon'] ?? $child['label'], 'label' => $child['label']])
+                                            <span>{{ $child['label'] }}</span>
+                                        </a>
+                                    @endforeach
+                                </div>
+                            @else
                             <a
                                 href="{{ $sub['url'] }}"
                                 class="{{ $sub['active'] ? 'active' : '' }}"
@@ -381,6 +405,7 @@
                                 @include('partials.nav-icon', ['icon' => $sub['icon'] ?? $sub['label'], 'label' => $sub['label']])
                                 <span>{{ $sub['label'] }}</span>
                             </a>
+                            @endif
                         @endforeach
                     </div>
                 </div>
