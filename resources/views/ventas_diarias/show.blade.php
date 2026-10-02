@@ -77,6 +77,8 @@
                 <tr><td class="lab">Z FISCAL (Bs)</td><td class="vd-bs">{{ $bsN((float)$reporte->z_fiscal_bs) }}</td><td class="vd-usd">{{ $usd($totales['facturacion_fiscal_usd']) }}</td></tr>
                 <tr><td class="lab">Facturacion Fiscal</td><td class="vd-bs">{{ $bsN((float)$reporte->z_fiscal_bs) }}</td><td class="vd-usd">{{ $usd($totales['facturacion_fiscal_usd']) }}</td><td>{!! $pct($totales['pct_fiscal']) !!}</td></tr>
                 <tr><td class="lab">Deliverys pendientes</td><td class="vd-bs">{{ $bs((float)$reporte->deliverys_pendientes) }}</td><td class="vd-usd">{{ $usd((float)$reporte->deliverys_pendientes) }}</td></tr>
+                <tr><td class="lab">Fondo Bs</td><td class="vd-bs">{{ $bsN((float)$reporte->fondo_bs) }}</td><td class="vd-usd">{{ $usd((float)$reporte->fondo_bs / $tasa) }}</td></tr>
+                <tr><td class="lab">Fondo divisas</td><td class="vd-bs">{{ $bs((float)$reporte->fondo_divisas) }}</td><td class="vd-usd">{{ $usd((float)$reporte->fondo_divisas) }}</td></tr>
             </table>
             @if($reporte->observaciones)
                 <p style="margin:12px 0 0;"><strong>Observaciones:</strong><br>{{ $reporte->observaciones }}</p>

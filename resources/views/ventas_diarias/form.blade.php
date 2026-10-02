@@ -175,6 +175,14 @@
                 <label>Deliverys pendientes ($)</label>
                 <input type="number" step="any" name="deliverys_pendientes" value="{{ old('deliverys_pendientes', $reporte->deliverys_pendientes ?? 0) }}">
             </div>
+            <div class="field">
+                <label>Fondo Bs</label>
+                <input type="number" step="any" name="fondo_bs" value="{{ old('fondo_bs', $reporte->fondo_bs ?? 0) }}">
+            </div>
+            <div class="field">
+                <label>Fondo divisas ($)</label>
+                <input type="number" step="any" name="fondo_divisas" value="{{ old('fondo_divisas', $reporte->fondo_divisas ?? 0) }}">
+            </div>
             <div class="field" style="flex-basis:100%;">
                 <label>Observaciones</label>
                 <textarea name="observaciones" rows="2" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;">{{ old('observaciones', $reporte->observaciones ?? '') }}</textarea>
@@ -210,6 +218,8 @@
             <tr><td class="lab">Z fiscal (Bs)</td><td class="bs" id="md-zfiscal"></td><td class="usd" id="md-zfiscal-usd"></td></tr>
             <tr><td class="lab">Facturación fiscal</td><td class="bs" id="md-fiscal-bs"></td><td class="usd" id="md-fiscal"></td><td id="md-pct-fiscal"></td></tr>
             <tr><td class="lab">Deliverys pendientes</td><td class="bs" id="md-deliverys-bs"></td><td class="usd" id="md-deliverys"></td></tr>
+            <tr><td class="lab">Fondo Bs</td><td class="bs" id="md-fondo-bs"></td><td class="usd" id="md-fondo-bs-usd"></td></tr>
+            <tr><td class="lab">Fondo divisas</td><td class="bs" id="md-fondo-divisas-bs"></td><td class="usd" id="md-fondo-divisas"></td></tr>
         </table>
         <div class="vd-actions">
             <a class="btn primary" id="vd-modal-cerrar" href="#">Cerrar</a>
@@ -309,9 +319,15 @@
         setHtml('md-pct-fiscal', pctHtml(ventas > 0 ? fiscal / ventas : null));
         set('md-deliverys-bs', enBs(num('[name=deliverys_pendientes]')));
         set('md-deliverys', money(num('[name=deliverys_pendientes]')));
+        const fondoBs = num('[name=fondo_bs]');
+        const fondoDivisas = num('[name=fondo_divisas]');
+        set('md-fondo-bs', bs(fondoBs));
+        set('md-fondo-bs-usd', money(fondoBs / tasa));
+        set('md-fondo-divisas-bs', enBs(fondoDivisas));
+        set('md-fondo-divisas', money(fondoDivisas));
     }
 
-    document.querySelectorAll('#vd-tasa, [name=z_fiscal_bs], [name=productos_vendidos], [name=deliverys_pendientes]').forEach(
+    document.querySelectorAll('#vd-tasa, [name=z_fiscal_bs], [name=productos_vendidos], [name=deliverys_pendientes], [name=fondo_bs], [name=fondo_divisas]').forEach(
         (el) => el.addEventListener('input', recalc)
     );
     document.getElementById('vd-cajas-table')?.addEventListener('input', recalc);

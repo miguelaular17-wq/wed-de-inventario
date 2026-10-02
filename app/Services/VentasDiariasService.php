@@ -213,6 +213,8 @@ class VentasDiariasService
             $reporte->z_fiscal_bs = (float) ($data['z_fiscal_bs'] ?? 0);
             $reporte->productos_vendidos = (float) ($data['productos_vendidos'] ?? 0);
             $reporte->deliverys_pendientes = (float) ($data['deliverys_pendientes'] ?? 0);
+            $reporte->fondo_bs = (float) ($data['fondo_bs'] ?? 0);
+            $reporte->fondo_divisas = (float) ($data['fondo_divisas'] ?? 0);
             $reporte->observaciones = $data['observaciones'] ?? null;
             $reporte->updated_by = $user->id;
             if (! $reporte->exists) {

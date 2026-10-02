@@ -213,6 +213,8 @@ class VentasDiariasController extends Controller
             'z_fiscal_bs' => ['nullable', 'numeric'],
             'productos_vendidos' => ['nullable', 'numeric'],
             'deliverys_pendientes' => ['nullable', 'numeric'],
+            'fondo_bs' => ['nullable', 'numeric'],
+            'fondo_divisas' => ['nullable', 'numeric'],
             'observaciones' => ['nullable', 'string'],
             'cajas' => ['nullable', 'array'],
             'cajas.*.nombre' => ['nullable', 'string', 'max:120'],

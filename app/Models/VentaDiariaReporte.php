@@ -27,6 +27,8 @@ class VentaDiariaReporte extends Model
         'z_fiscal_bs',
         'productos_vendidos',
         'deliverys_pendientes',
+        'fondo_bs',
+        'fondo_divisas',
         'observaciones',
         'created_by',
         'updated_by',
@@ -48,6 +50,8 @@ class VentaDiariaReporte extends Model
         'z_fiscal_bs' => 'decimal:2',
         'productos_vendidos' => 'decimal:2',
         'deliverys_pendientes' => 'decimal:2',
+        'fondo_bs' => 'decimal:2',
+        'fondo_divisas' => 'decimal:2',
     ];
 
     public function cajas(): HasMany

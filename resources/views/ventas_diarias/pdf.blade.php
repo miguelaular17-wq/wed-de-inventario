@@ -71,6 +71,8 @@
             <tr><td>Z fiscal (Bs)</td><td class="bs">{{ $bsN((float) $reporte->z_fiscal_bs) }}</td><td class="usd">{{ $usd($totales['facturacion_fiscal_usd']) }}</td></tr>
             <tr><td>Facturación fiscal</td><td class="bs">{{ $bsN((float) $reporte->z_fiscal_bs) }}</td><td class="usd">{{ $usd($totales['facturacion_fiscal_usd']) }}</td><td>{{ $pct($totales['pct_fiscal']) }}</td></tr>
             <tr><td>Deliverys pendientes</td><td class="bs">{{ $bs((float) $reporte->deliverys_pendientes) }}</td><td class="usd">{{ $usd((float) $reporte->deliverys_pendientes) }}</td></tr>
+            <tr><td>Fondo Bs</td><td class="bs">{{ $bsN((float) $reporte->fondo_bs) }}</td><td class="usd">{{ $usd((float) $reporte->fondo_bs / $tasa) }}</td></tr>
+            <tr><td>Fondo divisas</td><td class="bs">{{ $bs((float) $reporte->fondo_divisas) }}</td><td class="usd">{{ $usd((float) $reporte->fondo_divisas) }}</td></tr>
         </tbody>
     </table>
 
