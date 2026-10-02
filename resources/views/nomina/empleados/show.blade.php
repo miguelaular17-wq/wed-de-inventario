@@ -585,6 +585,11 @@
                                     @csrf
                                     <button class="btn secondary" type="submit">Cancelar</button>
                                 </form>
+                            @elseif($item->puedeQuitarDeComision() && $item->nomina_periodo_id)
+                                <form method="POST" action="{{ route('nomina.comisiones.bonos.quitar', [$item->nomina_periodo_id, $item]) }}" onsubmit="return confirm('¿Quitar este bono de la quincena?')">
+                                    @csrf
+                                    <button class="btn secondary" type="submit">Quitar</button>
+                                </form>
                             @endif
                         </td>
                     </tr>

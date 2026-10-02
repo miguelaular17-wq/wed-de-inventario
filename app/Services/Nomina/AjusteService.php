@@ -114,6 +114,50 @@ class AjusteService
         return $ajuste;
     }
 
+    public function quitarBonoComision(NominaEmpleadoAjuste $ajuste, NominaPeriodo $periodo): NominaEmpleadoAjuste
+    {
+        if (! $ajuste->esBonificacion() || $ajuste->destino !== NominaEmpleadoAjuste::DESTINO_COMISION) {
+            throw ValidationException::withMessages([
+                'ajuste' => 'Solo se puede quitar un bono de comisión.',
+            ]);
+        }
+
+        if ($periodo->estado === NominaPeriodo::CERRADO) {
+            throw ValidationException::withMessages([
+                'estado' => 'La quincena está cerrada. Ya no se puede quitar el bono.',
+            ]);
+        }
+
+        $mismaQuincena = $ajuste->quincena_inicio?->toDateString() === $periodo->fecha_inicio?->toDateString()
+            && $ajuste->quincena_fin?->toDateString() === $periodo->fecha_fin?->toDateString();
+        $pertenece = (int) $ajuste->nomina_periodo_id === (int) $periodo->id
+            || ($ajuste->estado === NominaEmpleadoAjuste::PENDIENTE && $mismaQuincena);
+
+        if (! $pertenece) {
+            throw ValidationException::withMessages([
+                'ajuste' => 'Ese bono no está en esta quincena.',
+            ]);
+        }
+
+        if ($ajuste->estado === NominaEmpleadoAjuste::CANCELADO) {
+            return $ajuste;
+        }
+
+        $anterior = $ajuste->estado;
+        $ajuste->estado = NominaEmpleadoAjuste::CANCELADO;
+        $ajuste->nomina_periodo_id = null;
+        $ajuste->save();
+
+        NominaAuditLog::registrar('AJUSTE_CANCELAR', 'ajuste', $ajuste->id, [
+            'estado' => $anterior,
+            'periodo_id' => $periodo->id,
+        ], [
+            'estado' => NominaEmpleadoAjuste::CANCELADO,
+        ]);
+
+        return $ajuste;
+    }
+
     public function delDia(Carbon|string $fecha): Collection
     {
         if (! $this->disponible()) {
@@ -121,7 +165,7 @@ class AjusteService
         }
 
         return NominaEmpleadoAjuste::query()
-            ->with(['empleado.cliente', 'empleado.sedeCatalogo', 'creador'])
+            ->with(['empleado.cliente', 'empleado.sedeCatalogo', 'creador', 'periodo'])
             ->whereDate('fecha', Carbon::parse($fecha)->toDateString())
             ->orderByDesc('id')
             ->get();
@@ -263,6 +307,7 @@ class AjusteService
             ->where('nomina_periodo_id', $periodo->id)
             ->where('destino', $destino)
             ->where('tipo', $tipo)
+            ->where('estado', '!=', NominaEmpleadoAjuste::CANCELADO)
             ->sum('monto'), 2);
     }
 

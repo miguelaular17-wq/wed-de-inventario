@@ -8,6 +8,8 @@ use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaLiquidacionComision;
 use App\Models\Nomina\NominaPeriodo;
 use App\Services\BcvRateService;
+use App\Models\Nomina\NominaEmpleadoAjuste;
+use App\Services\Nomina\AjusteService;
 use App\Services\Nomina\PayrollBankFileService;
 use App\Services\Nomina\PayrollPeriodService;
 use App\Services\Nomina\PayrollSedeAreaTotals;
@@ -25,6 +27,7 @@ class ComisionController extends Controller
         private BcvRateService $bcv,
         private PayrollPeriodService $periods,
         private PayrollSedeAreaTotals $sedeAreaTotals,
+        private AjusteService $ajustes,
     ) {
     }
 
@@ -59,6 +62,7 @@ class ComisionController extends Controller
         return view('nomina.comisiones.show', [
             'periodo' => $periodo,
             'liquidaciones' => $liquidaciones,
+            'bonosComision' => $this->bonosDePeriodo($periodo),
             'bancoPorEmpresa' => $this->bankFile->resumenComisionesPorEmpresa($periodo),
             'tasaBcv' => $tasaBcv,
             'totalesPorGrupo' => $this->sedeAreaTotals->deLiquidaciones($liquidaciones, $tasaBcv),
@@ -158,6 +162,50 @@ class ComisionController extends Controller
         return $pdf->download('totales_sedes_comisiones_'.$periodo->id.'_'.$periodo->fecha_inicio?->format('Ymd').'.pdf');
     }
 
+    public function quitarBono(NominaPeriodo $periodo, NominaEmpleadoAjuste $ajuste): RedirectResponse
+    {
+        $this->ajustes->quitarBonoComision($ajuste, $periodo);
+
+        if ($periodo->estado !== NominaPeriodo::ABIERTO) {
+            $this->periods->recalcularComisiones($periodo, auth()->id());
+        }
+
+        return redirect()
+            ->route('nomina.comisiones.show', $periodo)
+            ->with('status', 'Bono quitado de la quincena.');
+    }
+
+    public function aplicarBonos(Request $request, NominaPeriodo $periodo): RedirectResponse
+    {
+        if ($periodo->estado === NominaPeriodo::CERRADO) {
+            return redirect()
+                ->route('nomina.comisiones.show', $periodo)
+                ->withErrors(['estado' => 'La quincena está cerrada. Ya no se pueden cambiar los bonos.']);
+        }
+
+        $marcados = array_map('intval', (array) $request->input('ajuste_ids', []));
+        $quitados = 0;
+        foreach ($this->bonosDePeriodo($periodo) as $bono) {
+            if (in_array((int) $bono->id, $marcados, true)) {
+                continue;
+            }
+            $this->ajustes->quitarBonoComision($bono, $periodo);
+            $quitados++;
+        }
+
+        if ($quitados > 0 && $periodo->estado !== NominaPeriodo::ABIERTO) {
+            $this->periods->recalcularComisiones($periodo, auth()->id());
+        }
+
+        $mensaje = $quitados > 0
+            ? 'Selección aplicada. Se quitaron '.$quitados.' bono(s) de la quincena.'
+            : 'Selección aplicada. Los bonos marcados siguen en la quincena.';
+
+        return redirect()
+            ->route('nomina.comisiones.show', $periodo)
+            ->with('status', $mensaje);
+    }
+
     public function recalcular(NominaPeriodo $periodo): RedirectResponse
     {
         $this->periods->recalcularComisiones($periodo, auth()->id());
@@ -207,6 +255,32 @@ class ComisionController extends Controller
         }, $nombre, [
             'Content-Type' => 'text/plain; charset=UTF-8',
         ]);
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, NominaEmpleadoAjuste>
+     */
+    private function bonosDePeriodo(NominaPeriodo $periodo)
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('nomina_empleado_ajustes')) {
+            return collect();
+        }
+
+        return NominaEmpleadoAjuste::query()
+            ->with(['empleado.cliente'])
+            ->where('tipo', NominaEmpleadoAjuste::TIPO_BONIFICACION)
+            ->where('destino', NominaEmpleadoAjuste::DESTINO_COMISION)
+            ->where('estado', '!=', NominaEmpleadoAjuste::CANCELADO)
+            ->where(function ($query) use ($periodo) {
+                $query->where('nomina_periodo_id', $periodo->id)
+                    ->orWhere(function ($pendiente) use ($periodo) {
+                        $pendiente->where('estado', NominaEmpleadoAjuste::PENDIENTE)
+                            ->whereDate('quincena_inicio', $periodo->fecha_inicio->toDateString())
+                            ->whereDate('quincena_fin', $periodo->fecha_fin->toDateString());
+                    });
+            })
+            ->orderBy('id')
+            ->get();
     }
 
     /**

@@ -199,6 +199,7 @@ class EmpleadoController extends Controller
         }
         if (Schema::hasTable('nomina_empleado_ajustes')) {
             $relaciones[] = 'ajustes.creador';
+            $relaciones[] = 'ajustes.periodo';
         }
         $empleado->load($relaciones);
         if (! Schema::hasTable('nomina_deducciones')) {

@@ -63,6 +63,49 @@
         <div class="nomina-kpi"><span>A pagar</span><strong>${{ number_format($totalPagar, 2) }}</strong></div>
     </div>
 
+    @if(($bonosComision ?? collect())->isNotEmpty())
+        <h3 style="margin:20px 0 0;">Bonos de la quincena</h3>
+        <p class="muted" style="margin:4px 0 0;">Marca los que se quedan y pulsa Aplicar. Los que desmarques salen de esta quincena.</p>
+        <form method="POST" action="{{ route('nomina.comisiones.bonos.aplicar', $periodo) }}" id="form-bonos-comision" onsubmit="return confirm('¿Aplicar esta selección? Los bonos sin marcar se quitan de la quincena.')">
+            @csrf
+            <div class="table-wrap" style="margin-top:8px;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            @if($periodo->estado !== 'CERRADO')
+                                <th style="width:36px;"><input type="checkbox" id="bonos-todos" checked title="Marcar todos"></th>
+                            @endif
+                            <th>Empleado</th>
+                            <th>Motivo</th>
+                            <th>Monto</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($bonosComision as $bono)
+                            <tr>
+                                @if($periodo->estado !== 'CERRADO')
+                                    <td>
+                                        <input type="checkbox" name="ajuste_ids[]" value="{{ $bono->id }}" class="bono-check" checked>
+                                    </td>
+                                @endif
+                                <td>{{ $bono->empleado?->nombre() ?? '—' }}</td>
+                                <td>{{ $bono->motivo ?: '—' }}</td>
+                                <td>${{ number_format((float) $bono->monto, 2) }}</td>
+                                <td>{{ $bono->estado }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @if($periodo->estado !== 'CERRADO')
+                <div style="margin-top:10px;">
+                    <button class="btn primary" type="submit">Aplicar selección</button>
+                </div>
+            @endif
+        </form>
+    @endif
+
     @include('nomina.partials.totales-sede-area', [
         'totalesPorGrupo' => $totalesPorGrupo ?? collect(),
         'tasaBcv' => $tasaBcv ?? 0,
@@ -315,3 +358,21 @@
     @endif
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const todos = document.getElementById('bonos-todos');
+    if (!todos) return;
+    const checks = function () { return document.querySelectorAll('.bono-check'); };
+    todos.addEventListener('change', function () {
+        checks().forEach(function (caja) { caja.checked = todos.checked; });
+    });
+    document.getElementById('form-bonos-comision')?.addEventListener('change', function (event) {
+        if (!event.target.classList.contains('bono-check')) return;
+        const lista = checks();
+        todos.checked = Array.from(lista).every(function (caja) { return caja.checked; });
+    });
+});
+</script>
+@endpush

@@ -47,6 +47,26 @@ class NominaEmpleadoAjuste extends Model
         return $this->belongsTo(NominaEmpleado::class, 'empleado_id');
     }
 
+    public function periodo(): BelongsTo
+    {
+        return $this->belongsTo(NominaPeriodo::class, 'nomina_periodo_id');
+    }
+
+    public function puedeQuitarDeComision(): bool
+    {
+        if (! $this->esBonificacion() || $this->destino !== self::DESTINO_COMISION) {
+            return false;
+        }
+        if ($this->estado === self::CANCELADO) {
+            return false;
+        }
+        if ($this->estado === self::APLICADO && $this->periodo?->estado === NominaPeriodo::CERRADO) {
+            return false;
+        }
+
+        return true;
+    }
+
     public function creador(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
