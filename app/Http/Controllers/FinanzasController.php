@@ -1328,6 +1328,7 @@ class FinanzasController extends Controller
         $matcherRepair = app(\App\Services\BankReconciliationMatcher::class);
         $this->desvincularPagomovilMalEmparejadoConLote($matcherRepair);
         $this->marcarTrasladosConSalidaConciliados($matcherRepair);
+        $this->reasignarGastosVaciosAlEgresoReal($matcherRepair);
 
         // 4. Clasificar comisiones bancarias y compras de divisas del extracto
         $classifier = app(\App\Services\BankMovementClassifier::class);
@@ -2722,6 +2723,59 @@ class FinanzasController extends Controller
                 $ingreso->es_conciliado = false;
                 $ingreso->save();
             }
+        }
+    }
+
+    /**
+     * Si la línea quedó atada a un egreso vacío (copia del extracto), pásala al
+     * gasto real del mismo día para que salga de "En tránsito".
+     */
+    private function reasignarGastosVaciosAlEgresoReal(\App\Services\BankReconciliationMatcher $matcher): void
+    {
+        $lineas = \App\Models\ConciliacionLinea::query()
+            ->where('estado', 'conciliado')
+            ->whereNotNull('flujo_caja_id')
+            ->get();
+
+        if ($lineas->isEmpty()) {
+            return;
+        }
+
+        $vinculados = \App\Models\FlujoCaja::query()
+            ->whereIn('id', $lineas->pluck('flujo_caja_id')->unique()->filter())
+            ->get()
+            ->keyBy('id');
+
+        $candidatos = \App\Models\FlujoCaja::query()
+            ->where('tipo', 'egreso')
+            ->where('es_conciliado', false)
+            ->get();
+
+        foreach ($lineas as $linea) {
+            $vinculado = $vinculados->get($linea->flujo_caja_id);
+            if (! $vinculado) {
+                continue;
+            }
+
+            $reemplazo = $matcher->reemplazoDeGastoVacio($linea, $vinculado, $candidatos);
+            if (! $reemplazo) {
+                continue;
+            }
+
+            $linea->flujo_caja_id = $reemplazo->id;
+            $linea->save();
+            $reemplazo->es_conciliado = true;
+            $reemplazo->save();
+
+            $sigueVinculado = \App\Models\ConciliacionLinea::query()
+                ->where('flujo_caja_id', $vinculado->id)
+                ->where('estado', 'conciliado')
+                ->exists();
+            if (! $sigueVinculado) {
+                $vinculado->delete();
+            }
+
+            $candidatos = $candidatos->reject(fn ($candidato) => (int) $candidato->id === (int) $reemplazo->id);
         }
     }
 

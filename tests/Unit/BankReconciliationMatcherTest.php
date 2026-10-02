@@ -460,6 +460,48 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertTrue($this->matcher->mismoTitular('GRUPO JRZ', 'JRZ', 'VENEZUELA', 'VENEZUELA'));
     }
 
+    public function test_un_gasto_vacio_copia_del_banco_cede_el_lugar_al_egreso_real_del_mismo_dia(): void
+    {
+        $linea = new ConciliacionLinea([
+            'banco' => 'BANCAMIGA',
+            'titular' => 'DORAL',
+            'fecha' => '2026-08-22',
+            'referencia' => "'584126937658",
+            'descripcion' => 'Recarga Digitel',
+            'monto' => 9000,
+            'tipo' => 'cargo',
+        ]);
+        $vacio = (object) [
+            'id' => 2471,
+            'banco' => 'Bancamiga',
+            'titular' => 'Doral',
+            'fecha' => '2026-08-22',
+            'referencia' => '584126937658',
+            'motivo' => null,
+            'comprobante_url' => null,
+            'monto_bs' => 9000,
+            'categoria_egreso' => 'egreso_realizado',
+            'es_conciliado' => true,
+        ];
+        $real = (object) [
+            'id' => 2470,
+            'banco' => 'Bancamiga',
+            'titular' => 'Doral',
+            'fecha' => '2026-08-22',
+            'referencia' => '584126937859',
+            'motivo' => 'RECARGA TELEFONICA',
+            'comprobante_url' => null,
+            'monto_bs' => 9000,
+            'categoria_egreso' => 'egreso_realizado',
+            'es_conciliado' => false,
+        ];
+
+        $reemplazo = $this->matcher->reemplazoDeGastoVacio($linea, $vacio, [$vacio, $real]);
+
+        $this->assertNotNull($reemplazo);
+        $this->assertSame(2470, $reemplazo->id);
+    }
+
     public function test_detecta_abono_banesco_con_l_punto_como_lote_pos(): void
     {
         $this->assertTrue($this->matcher->esAbonoLotePuntoVenta(

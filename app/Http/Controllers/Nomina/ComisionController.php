@@ -242,11 +242,7 @@ class ComisionController extends Controller
 
             if ($liq->esServicioTecnico()) {
                 $comisionSt = $liq->comisionSt();
-                $comisionOtros = $liq->comisionOtrosProductos();
-                $abonos = round((float) $liq->abonos, 2);
-                $retencion = $liq->retencionOtrosProductos();
                 $pagarSt = round($comisionSt - $descuentos, 2);
-                $pagarOtros = round($comisionOtros + $abonos - $retencion, 2);
 
                 $fila = [
                     'cedula' => $meta['cedula'],
@@ -266,31 +262,6 @@ class ComisionController extends Controller
                 $filasSt[] = $fila;
                 foreach (['facturas_st', 'egresos_058', 'comision', 'retencion', 'descuentos', 'pagar_usd', 'pagar_bs'] as $k) {
                     $totalesSt[$k] = round($totalesSt[$k] + (float) $fila[$k], 2);
-                }
-
-                // Supervisores/vendedores: Otros productos con retención.
-                $filaVentas = [
-                    'cedula' => $meta['cedula'],
-                    'nombre' => $meta['nombre'],
-                    'cargo' => $meta['cargo'],
-                    'sede' => $meta['sede'],
-                    'grupo_tipo' => $meta['grupo_tipo'],
-                    'grupo_clave' => $meta['grupo_clave'],
-                    'ventas' => $liq->ventasOtrosProductos(),
-                    'base_telefonia' => round((float) $liq->base_telefonia, 2),
-                    'base_otros' => round((float) $liq->base_otros, 2),
-                    'es_supervisor' => false,
-                    'comision' => $comisionOtros,
-                    'abonos' => $abonos,
-                    'total_comisiones' => round($comisionOtros + $abonos, 2),
-                    'retencion' => $retencion,
-                    'descuentos' => 0.0,
-                    'pagar_usd' => $pagarOtros,
-                    'pagar_bs' => round($pagarOtros * $tasaBcv, 2),
-                ];
-                $filasVentas[] = $filaVentas;
-                foreach (['ventas', 'base_telefonia', 'base_otros', 'comision', 'abonos', 'total_comisiones', 'retencion', 'descuentos', 'pagar_usd', 'pagar_bs'] as $k) {
-                    $totalesVentas[$k] = round($totalesVentas[$k] + (float) $filaVentas[$k], 2);
                 }
             } else {
                 $esSupervisor = in_array($liq->modo, array_merge(

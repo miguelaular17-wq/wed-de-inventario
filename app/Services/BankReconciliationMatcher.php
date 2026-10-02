@@ -687,6 +687,45 @@ class BankReconciliationMatcher
         return $this->fechaCercana($linea->fecha, $flujo->fecha);
     }
 
+    /**
+     * Un gasto recién copiado del extracto (sin motivo ni comprobante) no debe
+     * quedarse con la conciliación si ya existe el egreso real del mismo día.
+     */
+    public function reemplazoDeGastoVacio(object $linea, object $vinculado, iterable $candidatos): ?object
+    {
+        if ($this->esTraslado($vinculado)) {
+            return null;
+        }
+        if (trim((string) ($vinculado->motivo ?? '')) !== '') {
+            return null;
+        }
+        if (trim((string) ($vinculado->comprobante_url ?? '')) !== '') {
+            return null;
+        }
+
+        foreach ($candidatos as $candidato) {
+            if ((int) ($candidato->id ?? 0) === (int) ($vinculado->id ?? 0)) {
+                continue;
+            }
+            if ((bool) ($candidato->es_conciliado ?? false)) {
+                continue;
+            }
+            if (trim((string) ($candidato->motivo ?? '')) === '') {
+                continue;
+            }
+            if (! $this->fechaCercana($linea->fecha ?? null, $candidato->fecha ?? null, 0)) {
+                continue;
+            }
+            if (! $this->coincideEgreso($linea instanceof ConciliacionLinea ? $linea : new ConciliacionLinea((array) $linea), $candidato)) {
+                continue;
+            }
+
+            return $candidato;
+        }
+
+        return null;
+    }
+
     public function esTraslado(object $flujo): bool
     {
         return strtolower(trim((string) ($flujo->categoria_egreso ?? ''))) === 'traslados';

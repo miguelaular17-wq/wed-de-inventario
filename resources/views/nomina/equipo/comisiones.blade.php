@@ -5,7 +5,7 @@
 @section('content')
 @php
     $liquidacionesSt = $liquidaciones->filter(fn ($l) => $l->esServicioTecnico())->values();
-    $liquidacionesVentas = $liquidaciones->values();
+    $liquidacionesVentas = $liquidaciones->reject(fn ($l) => $l->esServicioTecnico())->values();
     $modosAgregados = array_merge(
         \App\Models\Nomina\NominaEmpleado::modosComisionAgregadosSede(),
         \App\Models\Nomina\NominaEmpleado::modosComisionAgregadosEquipo()
