@@ -107,8 +107,10 @@ class VentasDiariasController extends Controller
         $totalesCajas = $this->service->totalesCajas($reporte->cajas);
         $puedeEditar = $this->service->puedeEditar($user, $reporte->sede);
 
+        $columnasCaja = $this->service->columnasCaja();
+
         return view('ventas_diarias.show', compact(
-            'reporte', 'metaCtx', 'totales', 'totalesCajas', 'puedeEditar', 'verTodas'
+            'reporte', 'metaCtx', 'totales', 'totalesCajas', 'puedeEditar', 'verTodas', 'columnasCaja'
         ));
     }
 
@@ -130,8 +132,9 @@ class VentasDiariasController extends Controller
             'metaCtx' => $metaCtx,
             'totales' => $totales,
             'totalesCajas' => $totalesCajas,
+            'columnasCaja' => $this->service->columnasCaja(),
             'logoPath' => $this->logoPdf(),
-        ])->setPaper('a4', 'portrait');
+        ])->setPaper('a4', 'landscape');
 
         return $pdf->download('ventas-diarias-'.$reporte->sede.'-'.$reporte->fecha->format('Y-m-d').'.pdf');
     }
@@ -221,12 +224,20 @@ class VentasDiariasController extends Controller
             'cajas.*.efectivo_usd' => ['nullable', 'numeric'],
             'cajas.*.efectivo_bs' => ['nullable', 'numeric'],
             'cajas.*.punto_venta' => ['nullable', 'numeric'],
+            'cajas.*.pago_movil' => ['nullable', 'numeric'],
+            'cajas.*.transferencias' => ['nullable', 'numeric'],
             'cajas.*.transf_pm' => ['nullable', 'numeric'],
+            'cajas.*.zelle' => ['nullable', 'numeric'],
+            'cajas.*.binance' => ['nullable', 'numeric'],
+            'cajas.*.mercantil_panama' => ['nullable', 'numeric'],
             'cajas.*.zelle_binance' => ['nullable', 'numeric'],
             'cajas.*.cashea' => ['nullable', 'numeric'],
+            'cajas.*.flaexpay' => ['nullable', 'numeric'],
+            'cajas.*.krece' => ['nullable', 'numeric'],
             'cajas.*.fact_credito' => ['nullable', 'numeric'],
             'cajas.*.abonos' => ['nullable', 'numeric'],
             'cajas.*.iphone' => ['nullable', 'numeric'],
+            'cajas.*.preventa' => ['nullable', 'numeric'],
             'cajas.*.gift_card' => ['nullable', 'numeric'],
         ]);
     }
@@ -235,11 +246,14 @@ class VentasDiariasController extends Controller
     {
         $fechaCarbon = Carbon::parse($fecha);
         $metaCtx = $this->service->metaPara($sede, $fechaCarbon);
-        $cajas = $reporte?->cajas ?? collect([
-            (object) ['nombre' => '', 'efectivo_usd' => 0, 'efectivo_bs' => 0, 'punto_venta' => 0, 'transf_pm' => 0, 'zelle_binance' => 0, 'cashea' => 0, 'fact_credito' => 0, 'abonos' => 0, 'iphone' => 0, 'gift_card' => 0],
-            (object) ['nombre' => '', 'efectivo_usd' => 0, 'efectivo_bs' => 0, 'punto_venta' => 0, 'transf_pm' => 0, 'zelle_binance' => 0, 'cashea' => 0, 'fact_credito' => 0, 'abonos' => 0, 'iphone' => 0, 'gift_card' => 0],
-            (object) ['nombre' => '', 'efectivo_usd' => 0, 'efectivo_bs' => 0, 'punto_venta' => 0, 'transf_pm' => 0, 'zelle_binance' => 0, 'cashea' => 0, 'fact_credito' => 0, 'abonos' => 0, 'iphone' => 0, 'gift_card' => 0],
-        ]);
+        $cajas = $reporte
+            ? $reporte->cajas->map(function ($caja) {
+                $row = $this->service->leerCaja($caja);
+                $row['nombre'] = $caja->nombre;
+
+                return (object) $row;
+            })
+            : collect([$this->cajaVacia(), $this->cajaVacia(), $this->cajaVacia()]);
 
         $totales = $reporte
             ? $this->service->calcularTotales($reporte, $metaCtx)
@@ -259,6 +273,15 @@ class VentasDiariasController extends Controller
             'verTodas' => $verTodas,
             'sedes' => $this->service->sedesDisponibles(),
             'puedeEditar' => true,
+            'columnasCaja' => $this->service->columnasCaja(),
         ]);
+    }
+
+    private function cajaVacia(): object
+    {
+        return (object) array_merge(
+            ['nombre' => ''],
+            array_fill_keys($this->service->camposCaja(), 0)
+        );
     }
 }

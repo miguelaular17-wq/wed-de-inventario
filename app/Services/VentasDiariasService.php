@@ -60,45 +60,196 @@ class VentasDiariasService
             ->first();
 
         $esDomingo = (int) $fecha->dayOfWeek === Carbon::SUNDAY;
-        $venta = $meta
-            ? (float) ($esDomingo ? $meta->meta_venta_domingo : $meta->meta_venta_lv_sab)
-            : 0.0;
-        $prod = $meta
-            ? (float) ($esDomingo ? $meta->meta_prod_domingo : $meta->meta_prod_lv_sab)
-            : 0.0;
+        $cal = $this->calendarioDelPeriodo($meta?->periodo_label, $fecha);
+        $calc = $this->metaVentaDiaria((float) ($meta?->venta_meta_mes ?? 0), $cal['dias'], $cal['domingos']);
+        $calcProd = $this->metaVentaDiaria((float) ($meta?->productos_meta_mes ?? 0), $cal['dias'], $cal['domingos']);
+        $venta = $esDomingo ? $calc['domingo'] : $calc['diaria'];
+        $prod = $esDomingo ? $calcProd['domingo'] : $calcProd['diaria'];
 
         return [
             'meta' => $meta,
             'es_domingo' => $esDomingo,
             'meta_venta' => $venta,
             'meta_productos' => $prod,
-            'meta_venta_lv_sab' => (float) ($meta->meta_venta_lv_sab ?? 0),
-            'meta_venta_domingo' => (float) ($meta->meta_venta_domingo ?? 0),
-            'meta_prod_lv_sab' => (float) ($meta->meta_prod_lv_sab ?? 0),
-            'meta_prod_domingo' => (float) ($meta->meta_prod_domingo ?? 0),
+            'meta_venta_lv_sab' => $calc['diaria'],
+            'meta_venta_domingo' => $calc['domingo'],
+            'meta_prod_lv_sab' => $calcProd['diaria'],
+            'meta_prod_domingo' => $calcProd['domingo'],
         ];
+    }
+
+    /**
+     * @return array{dias: int, domingos: int}
+     */
+    public function calendarioDelPeriodo(?string $periodoLabel, ?Carbon $fallback = null): array
+    {
+        $label = mb_strtoupper(trim((string) $periodoLabel), 'UTF-8');
+        $meses = [
+            'ENERO' => 1, 'FEBRERO' => 2, 'MARZO' => 3, 'ABRIL' => 4,
+            'MAYO' => 5, 'JUNIO' => 6, 'JULIO' => 7, 'AGOSTO' => 8,
+            'SEPTIEMBRE' => 9, 'OCTUBRE' => 10, 'NOVIEMBRE' => 11, 'DICIEMBRE' => 12,
+        ];
+        $base = $fallback ?? now();
+        $anio = (int) $base->year;
+        $mes = (int) $base->month;
+        if (preg_match('/(20\d{2})/', $label, $coincidencias)) {
+            $anio = (int) $coincidencias[1];
+        }
+        foreach ($meses as $nombre => $numero) {
+            if (str_contains($label, $nombre)) {
+                $mes = $numero;
+                break;
+            }
+        }
+
+        $inicio = Carbon::create($anio, $mes, 1);
+        $domingos = 0;
+        $cursor = $inicio->copy();
+        while ((int) $cursor->month === $mes) {
+            if ($cursor->isSunday()) {
+                $domingos++;
+            }
+            $cursor->addDay();
+        }
+
+        return [
+            'dias' => $inicio->daysInMonth,
+            'domingos' => $domingos,
+        ];
+    }
+
+    public function diasDelPeriodo(?string $periodoLabel, ?Carbon $fallback = null): int
+    {
+        return $this->calendarioDelPeriodo($periodoLabel, $fallback)['dias'];
+    }
+
+    /**
+     * Reparte la meta del mes: los domingos salen a la mitad de un día parejo
+     * y el resto se divide entre los días que no son domingo. El domingo de la
+     * tabla es la mitad de esa meta diaria.
+     *
+     * @return array{diaria: float, domingo: float}
+     */
+    public function metaVentaDiaria(float $ventaMetaMes, int $dias, int $domingos = 0): array
+    {
+        $dias = max(0, $dias);
+        $domingos = max(0, min($domingos, max(0, $dias - 1)));
+        $habiles = $dias - $domingos;
+        if ($dias < 1 || $habiles < 1) {
+            return ['diaria' => 0.0, 'domingo' => 0.0];
+        }
+
+        $diaParejo = $ventaMetaMes / $dias;
+        $resto = $ventaMetaMes - ($domingos * ($diaParejo / 2));
+        $diaria = round($resto / $habiles, 4);
+
+        return [
+            'diaria' => $diaria,
+            'domingo' => round($diaria / 2, 4),
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function columnasCaja(): array
+    {
+        return [
+            'efectivo_usd' => 'Efectivo $',
+            'efectivo_bs' => 'Efectivo Bs',
+            'punto_venta' => 'Punto Bs',
+            'pago_movil' => 'Pago móvil Bs',
+            'transferencias' => 'Transferencias Bs',
+            'zelle' => 'Zelle $',
+            'binance' => 'Binance $',
+            'mercantil_panama' => 'Mercantil Panamá $',
+            'cashea' => 'Cashea $',
+            'flaexpay' => 'Flexpay $',
+            'krece' => 'Krece $',
+            'fact_credito' => 'Crédito $',
+            'abonos' => 'Abonos $',
+            'iphone' => 'iPhone $',
+            'preventa' => 'Preventa $',
+            'gift_card' => 'Gift card $',
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function camposCaja(): array
+    {
+        return array_keys($this->columnasCaja());
+    }
+
+    /**
+     * @param  object|array<string, mixed>  $caja
+     * @return array<string, float>
+     */
+    public function leerCaja(object|array $caja): array
+    {
+        $valor = function (string $key) use ($caja): float {
+            if (is_array($caja)) {
+                return (float) ($caja[$key] ?? 0);
+            }
+
+            return (float) ($caja->{$key} ?? 0);
+        };
+
+        $row = [];
+        foreach ($this->camposCaja() as $campo) {
+            $row[$campo] = $valor($campo);
+        }
+        if ($row['zelle'] == 0.0 && $row['binance'] == 0.0) {
+            $row['zelle'] = $valor('zelle_binance');
+        }
+        if ($row['pago_movil'] == 0.0 && $row['transferencias'] == 0.0) {
+            $row['pago_movil'] = $valor('transf_pm');
+        }
+
+        return $row;
     }
 
     public function calcularTotales(VentaDiariaReporte $r, ?array $metaCtx = null): array
     {
         $tasa = (float) $r->tasa;
         $div = $tasa > 0 ? $tasa : 1.0;
+        $montos = $this->montosReporte($r);
 
-        $efectivoBsUsd = (float) $r->efectivo_bs / $div;
-        $puntoUsd = (float) $r->punto_venta_bs / $div;
-        $transfUsd = (float) $r->transf_pm_bs / $div;
+        $bsUsd = function (float $bolivares) use ($div): float {
+            return $bolivares / $div;
+        };
 
-        $totalCobros = (float) $r->divisas_efectivo
-            + $efectivoBsUsd
-            + $puntoUsd
-            + $transfUsd
-            + (float) $r->zelle_binance
-            + (float) $r->cashea
-            + (float) $r->abonos
-            + (float) $r->iphone
-            + (float) $r->gift_card;
+        $lineas = [
+            $this->lineaUsd('Efectivo divisas', $montos['divisas_efectivo']),
+            $this->lineaUsd('Zelle', $montos['zelle']),
+            $this->lineaUsd('Binance', $montos['binance']),
+            $this->lineaUsd('Mercantil Panamá', $montos['mercantil_panama']),
+            $this->lineaUsd('iPhone', $montos['iphone']),
+            $this->lineaUsd('Preventa', $montos['preventa']),
+            $this->lineaUsd('Abono deuda/apartado', $montos['abonos']),
+            $this->lineaBs('Efectivo Bs', $montos['efectivo_bs'], $bsUsd($montos['efectivo_bs'])),
+            $this->lineaBs('Punto de venta', $montos['punto_venta_bs'], $bsUsd($montos['punto_venta_bs'])),
+            $this->lineaBs('Pago móvil', $montos['pago_movil_bs'], $bsUsd($montos['pago_movil_bs'])),
+            $this->lineaBs('Transferencias', $montos['transferencias_bs'], $bsUsd($montos['transferencias_bs'])),
+            $this->lineaEnBolivares('Cashea financiamiento', $montos['cashea'], $div),
+            $this->lineaEnBolivares('Flexpay financiamiento', $montos['flaexpay'], $div),
+            $this->lineaEnBolivares('Krece financiamiento', $montos['krece'], $div),
+            $this->lineaEnBolivares('Gift card', $montos['gift_card'], $div),
+            $this->lineaEnBolivares('Facturas a crédito', $montos['total_creditos'], $div, true),
+        ];
 
-        $totalCreditos = (float) $r->total_creditos;
+        $totalBs = 0.0;
+        $totalCobros = 0.0;
+        foreach ($lineas as $linea) {
+            if ($linea['bs'] !== null) {
+                $totalBs += $linea['bs'];
+            }
+            if (! $linea['rojo']) {
+                $totalCobros += $linea['usd'];
+            }
+        }
+        $totalCreditos = $montos['total_creditos'];
         $totalVentas = $totalCobros + $totalCreditos;
         $factFiscalUsd = (float) $r->z_fiscal_bs / $div;
         $productos = (float) $r->productos_vendidos;
@@ -106,21 +257,21 @@ class VentasDiariasService
         $metaVenta = (float) ($metaCtx['meta_venta'] ?? 0);
         $metaProd = (float) ($metaCtx['meta_productos'] ?? 0);
 
-        $pctVenta = $metaVenta > 0 ? ($totalVentas / $metaVenta) - 1 : null;
-        $pctProd = $metaProd > 0 ? ($productos / $metaProd) - 1 : null;
-        $pctFiscal = $totalVentas > 0 ? $factFiscalUsd / $totalVentas : null;
-
         return [
-            'efectivo_bs_usd' => round($efectivoBsUsd, 4),
-            'punto_venta_usd' => round($puntoUsd, 4),
-            'transf_pm_usd' => round($transfUsd, 4),
+            'lineas' => $lineas,
+            'efectivo_bs_usd' => round($bsUsd($montos['efectivo_bs']), 4),
+            'punto_venta_usd' => round($bsUsd($montos['punto_venta_bs']), 4),
+            'transf_pm_usd' => round($bsUsd($montos['pago_movil_bs'] + $montos['transferencias_bs']), 4),
+            'total_bs' => round($totalBs, 4),
             'total_cobros' => round($totalCobros, 4),
             'total_creditos' => round($totalCreditos, 4),
             'total_ventas' => round($totalVentas, 4),
             'facturacion_fiscal_usd' => round($factFiscalUsd, 4),
-            'pct_vs_meta_venta' => $pctVenta,
-            'pct_vs_meta_prod' => $pctProd,
-            'pct_fiscal' => $pctFiscal,
+            'pct_vs_meta_venta' => $metaVenta > 0 ? ($totalVentas / $metaVenta) - 1 : null,
+            'pct_vs_meta_prod' => $metaProd > 0 ? ($productos / $metaProd) - 1 : null,
+            'cumpl_venta' => $metaVenta > 0 ? $totalVentas / $metaVenta : null,
+            'cumpl_prod' => $metaProd > 0 ? $productos / $metaProd : null,
+            'pct_fiscal' => $totalVentas > 0 ? $factFiscalUsd / $totalVentas : null,
             'meta_venta' => $metaVenta,
             'meta_productos' => $metaProd,
         ];
@@ -128,11 +279,12 @@ class VentasDiariasService
 
     public function totalesCajas(Collection $cajas): array
     {
-        $keys = ['efectivo_usd', 'efectivo_bs', 'punto_venta', 'transf_pm', 'zelle_binance', 'cashea', 'fact_credito', 'abonos', 'iphone', 'gift_card'];
+        $keys = $this->camposCaja();
         $tot = array_fill_keys($keys, 0.0);
         foreach ($cajas as $c) {
+            $row = $this->leerCaja($c);
             foreach ($keys as $k) {
-                $tot[$k] += (float) $c->{$k};
+                $tot[$k] += $row[$k];
             }
         }
 
@@ -161,39 +313,17 @@ class VentasDiariasService
                 'fecha' => $fecha,
             ]);
 
-            // Desglose = suma de cajas (fuente de verdad)
-            $sum = [
-                'efectivo_usd' => 0.0,
-                'efectivo_bs' => 0.0,
-                'punto_venta' => 0.0,
-                'transf_pm' => 0.0,
-                'zelle_binance' => 0.0,
-                'cashea' => 0.0,
-                'fact_credito' => 0.0,
-                'abonos' => 0.0,
-                'iphone' => 0.0,
-                'gift_card' => 0.0,
-            ];
+            // Desglose = suma de cajas (fuente de verdad). Cada forma se cuenta una sola vez.
+            $sum = array_fill_keys($this->camposCaja(), 0.0);
             $cajasLimpias = [];
             foreach ($cajas as $caja) {
                 $nombre = trim((string) ($caja['nombre'] ?? ''));
                 if ($nombre === '') {
                     continue;
                 }
-                $row = [
-                    'nombre' => $nombre,
-                    'efectivo_usd' => (float) ($caja['efectivo_usd'] ?? 0),
-                    'efectivo_bs' => (float) ($caja['efectivo_bs'] ?? 0),
-                    'punto_venta' => (float) ($caja['punto_venta'] ?? 0),
-                    'transf_pm' => (float) ($caja['transf_pm'] ?? 0),
-                    'zelle_binance' => (float) ($caja['zelle_binance'] ?? 0),
-                    'cashea' => (float) ($caja['cashea'] ?? 0),
-                    'fact_credito' => (float) ($caja['fact_credito'] ?? 0),
-                    'abonos' => (float) ($caja['abonos'] ?? 0),
-                    'iphone' => (float) ($caja['iphone'] ?? 0),
-                    'gift_card' => (float) ($caja['gift_card'] ?? 0),
-                ];
-                foreach ($sum as $k => $_) {
+                $row = $this->leerCaja($caja);
+                $row['nombre'] = $nombre;
+                foreach ($this->camposCaja() as $k) {
                     $sum[$k] += $row[$k];
                 }
                 $cajasLimpias[] = $row;
@@ -203,11 +333,19 @@ class VentasDiariasService
             $reporte->divisas_efectivo = round($sum['efectivo_usd'], 2);
             $reporte->efectivo_bs = round($sum['efectivo_bs'], 2);
             $reporte->punto_venta_bs = round($sum['punto_venta'], 2);
-            $reporte->transf_pm_bs = round($sum['transf_pm'], 2);
-            $reporte->zelle_binance = round($sum['zelle_binance'], 2);
+            $reporte->pago_movil_bs = round($sum['pago_movil'], 2);
+            $reporte->transferencias_bs = round($sum['transferencias'], 2);
+            $reporte->transf_pm_bs = round($sum['pago_movil'] + $sum['transferencias'], 2);
+            $reporte->zelle = round($sum['zelle'], 2);
+            $reporte->binance = round($sum['binance'], 2);
+            $reporte->zelle_binance = round($sum['zelle'] + $sum['binance'], 2);
+            $reporte->mercantil_panama = round($sum['mercantil_panama'], 2);
             $reporte->cashea = round($sum['cashea'], 2);
+            $reporte->flaexpay = round($sum['flaexpay'], 2);
+            $reporte->krece = round($sum['krece'], 2);
             $reporte->abonos = round($sum['abonos'], 2);
             $reporte->iphone = round($sum['iphone'], 2);
+            $reporte->preventa = round($sum['preventa'], 2);
             $reporte->gift_card = round($sum['gift_card'], 2);
             $reporte->total_creditos = round($sum['fact_credito'], 2);
             $reporte->z_fiscal_bs = (float) ($data['z_fiscal_bs'] ?? 0);
@@ -231,12 +369,20 @@ class VentasDiariasService
                     'efectivo_usd' => $row['efectivo_usd'],
                     'efectivo_bs' => $row['efectivo_bs'],
                     'punto_venta' => $row['punto_venta'],
-                    'transf_pm' => $row['transf_pm'],
-                    'zelle_binance' => $row['zelle_binance'],
+                    'pago_movil' => $row['pago_movil'],
+                    'transferencias' => $row['transferencias'],
+                    'transf_pm' => $row['pago_movil'] + $row['transferencias'],
+                    'zelle' => $row['zelle'],
+                    'binance' => $row['binance'],
+                    'zelle_binance' => $row['zelle'] + $row['binance'],
+                    'mercantil_panama' => $row['mercantil_panama'],
                     'cashea' => $row['cashea'],
+                    'flaexpay' => $row['flaexpay'],
+                    'krece' => $row['krece'],
                     'fact_credito' => $row['fact_credito'],
                     'abonos' => $row['abonos'],
                     'iphone' => $row['iphone'],
+                    'preventa' => $row['preventa'],
                     'gift_card' => $row['gift_card'],
                 ]);
             }
@@ -255,5 +401,78 @@ class VentasDiariasService
             ->orderByDesc('fecha')
             ->orderBy('sede')
             ->get();
+    }
+
+    /**
+     * @return array<string, float>
+     */
+    private function montosReporte(VentaDiariaReporte $r): array
+    {
+        $n = fn (string $key): float => (float) ($r->{$key} ?? 0);
+        $zelle = $n('zelle');
+        $binance = $n('binance');
+        if ($zelle == 0.0 && $binance == 0.0) {
+            $zelle = $n('zelle_binance');
+        }
+        $pago = $n('pago_movil_bs');
+        $transf = $n('transferencias_bs');
+        if ($pago == 0.0 && $transf == 0.0) {
+            $pago = $n('transf_pm_bs');
+        }
+
+        return [
+            'divisas_efectivo' => $n('divisas_efectivo'),
+            'zelle' => $zelle,
+            'binance' => $binance,
+            'mercantil_panama' => $n('mercantil_panama'),
+            'iphone' => $n('iphone'),
+            'preventa' => $n('preventa'),
+            'abonos' => $n('abonos'),
+            'efectivo_bs' => $n('efectivo_bs'),
+            'punto_venta_bs' => $n('punto_venta_bs'),
+            'pago_movil_bs' => $pago,
+            'transferencias_bs' => $transf,
+            'cashea' => $n('cashea'),
+            'flaexpay' => $n('flaexpay'),
+            'krece' => $n('krece'),
+            'gift_card' => $n('gift_card'),
+            'total_creditos' => $n('total_creditos'),
+        ];
+    }
+
+    /**
+     * @return array{etiqueta: string, bs: ?float, usd: float, rojo: bool}
+     */
+    private function lineaUsd(string $etiqueta, float $usd, bool $rojo = false): array
+    {
+        return [
+            'etiqueta' => $etiqueta,
+            'bs' => null,
+            'usd' => round($usd, 4),
+            'rojo' => $rojo,
+        ];
+    }
+
+    /**
+     * @return array{etiqueta: string, bs: ?float, usd: float, rojo: bool}
+     */
+    private function lineaBs(string $etiqueta, float $bolivares, float $usd, bool $rojo = false): array
+    {
+        return [
+            'etiqueta' => $etiqueta,
+            'bs' => round($bolivares, 4),
+            'usd' => round($usd, 4),
+            'rojo' => $rojo,
+        ];
+    }
+
+    /**
+     * Monto guardado en dólares. En el desglose se muestra en bolívares y su equivalente.
+     *
+     * @return array{etiqueta: string, bs: ?float, usd: float, rojo: bool}
+     */
+    private function lineaEnBolivares(string $etiqueta, float $usd, float $tasa, bool $rojo = false): array
+    {
+        return $this->lineaBs($etiqueta, $usd * $tasa, $usd, $rojo);
     }
 }

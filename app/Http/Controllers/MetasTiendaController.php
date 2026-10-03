@@ -21,11 +21,15 @@ class MetasTiendaController extends Controller
             $metas = VentaDiariaMeta::query()->orderBy('sede')->get();
             $periodo = $metas->first()?->periodo_label ?: ('META MES '.mb_strtoupper(now()->locale('es')->translatedFormat('F Y'), 'UTF-8'));
 
+            $cal = $this->ventasDiarias->calendarioDelPeriodo($periodo);
+
             return view('metas_tienda.index', [
                 'metas' => $metas,
                 'periodo' => $periodo,
                 'editable' => true,
                 'sedeFiltro' => null,
+                'diasMes' => $cal['dias'],
+                'domingosMes' => $cal['domingos'],
             ]);
         }
 
@@ -37,11 +41,17 @@ class MetasTiendaController extends Controller
 
         $metas = VentaDiariaMeta::query()->where('sede', $sede)->get();
 
+        $periodo = $metas->first()?->periodo_label ?: '';
+
+        $cal = $this->ventasDiarias->calendarioDelPeriodo($periodo);
+
         return view('metas_tienda.index', [
             'metas' => $metas,
-            'periodo' => $metas->first()?->periodo_label ?: '',
+            'periodo' => $periodo,
             'editable' => false,
             'sedeFiltro' => $sede,
+            'diasMes' => $cal['dias'],
+            'domingosMes' => $cal['domingos'],
         ]);
     }
 
@@ -56,10 +66,6 @@ class MetasTiendaController extends Controller
             'periodo_label' => ['nullable', 'string', 'max:64'],
             'metas' => ['required', 'array'],
             'metas.*.id' => ['required', 'integer'],
-            'metas.*.meta_venta_lv_sab' => ['nullable', 'numeric'],
-            'metas.*.meta_venta_domingo' => ['nullable', 'numeric'],
-            'metas.*.meta_prod_lv_sab' => ['nullable', 'numeric'],
-            'metas.*.meta_prod_domingo' => ['nullable', 'numeric'],
             'metas.*.venta_historica' => ['nullable', 'numeric'],
             'metas.*.venta_meta_mes' => ['nullable', 'numeric'],
             'metas.*.productos_meta_mes' => ['nullable', 'numeric'],
@@ -67,17 +73,20 @@ class MetasTiendaController extends Controller
         ]);
 
         $periodo = trim((string) ($data['periodo_label'] ?? ''));
+        $cal = $this->ventasDiarias->calendarioDelPeriodo($periodo);
 
         foreach ($data['metas'] as $row) {
             $meta = VentaDiariaMeta::query()->find((int) $row['id']);
             if (! $meta) {
                 continue;
             }
+            $venta = $this->ventasDiarias->metaVentaDiaria((float) ($row['venta_meta_mes'] ?? 0), $cal['dias'], $cal['domingos']);
+            $productos = $this->ventasDiarias->metaVentaDiaria((float) ($row['productos_meta_mes'] ?? 0), $cal['dias'], $cal['domingos']);
             $meta->fill([
-                'meta_venta_lv_sab' => (float) ($row['meta_venta_lv_sab'] ?? 0),
-                'meta_venta_domingo' => (float) ($row['meta_venta_domingo'] ?? 0),
-                'meta_prod_lv_sab' => (float) ($row['meta_prod_lv_sab'] ?? 0),
-                'meta_prod_domingo' => (float) ($row['meta_prod_domingo'] ?? 0),
+                'meta_venta_lv_sab' => $venta['diaria'],
+                'meta_venta_domingo' => $venta['domingo'],
+                'meta_prod_lv_sab' => $productos['diaria'],
+                'meta_prod_domingo' => $productos['domingo'],
                 'venta_historica' => (float) ($row['venta_historica'] ?? 0),
                 'venta_meta_mes' => (float) ($row['venta_meta_mes'] ?? 0),
                 'productos_meta_mes' => (float) ($row['productos_meta_mes'] ?? 0),

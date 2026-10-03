@@ -347,6 +347,9 @@ Route::middleware(['auth', 'permission:nomina,nomina.periodos'])->prefix('nomina
     Route::get('/periodos', [PeriodoController::class, 'index'])->name('periodos.index');
     Route::post('/periodos', [PeriodoController::class, 'store'])->name('periodos.store');
     Route::get('/periodos/{periodo}', [PeriodoController::class, 'show'])->name('periodos.show');
+    Route::get('/periodos/{periodo}/empleados', [PeriodoController::class, 'buscarEmpleados'])->name('periodos.empleados');
+    Route::post('/periodos/{periodo}/movimientos', [PeriodoController::class, 'registrarMovimiento'])->name('periodos.movimientos.store');
+    Route::post('/periodos/{periodo}/movimientos/aplicar', [PeriodoController::class, 'aplicarMovimientos'])->name('periodos.movimientos.aplicar');
     Route::get('/periodos/{periodo}/calcular', [PeriodoController::class, 'calcularForm'])->name('periodos.calcular.form');
     Route::post('/periodos/{periodo}/calcular', [PeriodoController::class, 'calcular'])->name('periodos.calcular');
     Route::post('/periodos/{periodo}/revertir', [PeriodoController::class, 'revertir'])->name('periodos.revertir');
@@ -365,6 +368,8 @@ Route::middleware(['auth', 'permission:nomina,nomina.comisiones'])->prefix('nomi
     Route::get('/comisiones/{periodo}/relacion', [ComisionController::class, 'relacion'])->name('comisiones.relacion');
     Route::get('/comisiones/{periodo}/reporte-sedes.pdf', [ComisionController::class, 'reporteSedesPdf'])->name('comisiones.reporte_sedes');
     Route::post('/comisiones/{periodo}/recalcular', [ComisionController::class, 'recalcular'])->name('comisiones.recalcular');
+    Route::get('/comisiones/{periodo}/empleados', [ComisionController::class, 'buscarEmpleados'])->name('comisiones.empleados');
+    Route::post('/comisiones/{periodo}/ajustes', [ComisionController::class, 'registrarAjuste'])->name('comisiones.ajustes.store');
     Route::post('/comisiones/{periodo}/bonos/aplicar', [ComisionController::class, 'aplicarBonos'])->name('comisiones.bonos.aplicar');
     Route::post('/comisiones/{periodo}/bonos/{ajuste}', [ComisionController::class, 'quitarBono'])->name('comisiones.bonos.quitar');
     Route::post('/comisiones/{periodo}/empleados/{empleado}/exento-retencion', [ComisionController::class, 'toggleExentoRetencion'])->name('comisiones.exento_retencion');

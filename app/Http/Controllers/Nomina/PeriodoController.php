@@ -4,17 +4,34 @@ namespace App\Http\Controllers\Nomina;
 
 use App\Http\Controllers\Controller;
 use App\Models\Nomina\NominaAuditLog;
+use App\Models\Nomina\NominaComisionDescuento;
+use App\Models\Nomina\NominaDeduccion;
+use App\Models\Nomina\NominaDescuentoMercancia;
+use App\Models\Nomina\NominaEmpleado;
+use App\Models\Nomina\NominaEmpleadoAjuste;
 use App\Models\Nomina\NominaEmpresa;
+use App\Models\Nomina\NominaHoraExtra;
+use App\Models\Nomina\NominaInasistencia;
+use App\Models\Nomina\NominaAbonoSueldo;
 use App\Models\Nomina\NominaPeriodo;
 use App\Services\BcvRateService;
+use App\Services\Nomina\AjusteService;
+use App\Services\Nomina\AttendanceService;
+use App\Services\Nomina\FaltanteCajaService;
 use App\Services\Nomina\LoanDiscountPlanService;
+use App\Services\Nomina\MerchandiseDeductionService;
+use App\Services\Nomina\OtherDeductionService;
 use App\Services\Nomina\PayrollBankFileService;
 use App\Services\Nomina\PayrollPeriodService;
 use App\Services\Nomina\PayrollSedeAreaTotals;
+use App\Services\Nomina\SalaryAdvanceService;
 use App\Support\SimpleXlsxWriter;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -26,6 +43,12 @@ class PeriodoController extends Controller
         private BcvRateService $bcv,
         private LoanDiscountPlanService $loanPlans,
         private PayrollSedeAreaTotals $sedeAreaTotals,
+        private AttendanceService $attendance,
+        private SalaryAdvanceService $adelantos,
+        private AjusteService $ajustes,
+        private MerchandiseDeductionService $mercancia,
+        private FaltanteCajaService $faltantes,
+        private OtherDeductionService $otrasDeducciones,
     ) {
     }
 
@@ -86,6 +109,7 @@ class PeriodoController extends Controller
             'bancoPorEmpresa' => $this->bankFile->resumenPorEmpresa($periodo),
             'tasaBcv' => $tasaBcv,
             'totalesPorGrupo' => $this->sedeAreaTotals->deRegistros($periodo->registros, $tasaBcv),
+            'movimientos' => $this->movimientosPeriodo($periodo),
         ]);
     }
 
@@ -211,6 +235,21 @@ class PeriodoController extends Controller
             'registros.empleado.sedeCatalogo',
             'registros.empleado.cargoCatalogo',
         ]);
+        $grupo = trim((string) $request->query('grupo', ''));
+        $grupoTitulo = null;
+        if ($grupo !== '') {
+            $filtrados = $periodo->registros->filter(
+                fn ($registro) => $this->sedeAreaTotals->grupoDeEmpleado($registro->empleado)['clave'] === $grupo
+            )->values();
+            if ($filtrados->isEmpty()) {
+                return redirect()
+                    ->route('nomina.periodos.show', $periodo)
+                    ->withErrors(['periodo' => 'Esa sede o área no tiene nómina en esta quincena.']);
+            }
+            $meta = $this->sedeAreaTotals->grupoDeEmpleado($filtrados->first()->empleado);
+            $grupoTitulo = $meta['etiqueta'].': '.$meta['nombre'];
+            $periodo->setRelation('registros', $filtrados);
+        }
         $tasaBcv = $this->bcv->tasaParaPeriodo($periodo);
         [$filas, $totales] = $this->filasRelacionNomina($periodo, $tasaBcv);
         $nombreBase = 'relacion_nomina_'.$periodo->id.'_'.$periodo->fecha_inicio?->format('Ymd');
@@ -236,7 +275,7 @@ class PeriodoController extends Controller
             'totales' => $totales,
             'tasaBcv' => $tasaBcv,
             'logoPath' => $this->logoNominaPdf(),
-            'grupoTitulo' => null,
+            'grupoTitulo' => $grupoTitulo,
         ])->setPaper('a4', 'landscape');
 
         return $pdf->download($nombreBase.'.pdf');
@@ -269,6 +308,118 @@ class PeriodoController extends Controller
         ])->setPaper('a4', 'landscape');
 
         return $pdf->download('totales_sedes_nomina_'.$periodo->id.'_'.$periodo->fecha_inicio?->format('Ymd').'.pdf');
+    }
+
+    public function buscarEmpleados(Request $request, NominaPeriodo $periodo): JsonResponse
+    {
+        $q = trim((string) $request->query('q', ''));
+        if (mb_strlen($q) < 2) {
+            return response()->json([]);
+        }
+
+        $empleados = NominaEmpleado::query()
+            ->activos()
+            ->buscar($q)
+            ->with(['cliente', 'sedeCatalogo', 'cargoCatalogo'])
+            ->join('clientes', 'clientes.id', '=', 'nomina_empleados.cliente_id')
+            ->select('nomina_empleados.*')
+            ->orderBy('clientes.nombre')
+            ->limit(12)
+            ->get();
+
+        return response()->json($empleados->map(fn (NominaEmpleado $empleado) => [
+            'id' => $empleado->id,
+            'nombre' => $empleado->nombre(),
+            'cedula' => $empleado->cedula() ?: '',
+            'sede' => $empleado->nombreSede(),
+        ])->values());
+    }
+
+    public function registrarMovimiento(Request $request, NominaPeriodo $periodo): RedirectResponse
+    {
+        $tab = $this->tabDeMovimiento((string) $request->input('concepto', 'extras'));
+        $volver = fn () => redirect()->route('nomina.periodos.show', ['periodo' => $periodo, 'ajuste' => $tab]);
+
+        if (in_array($periodo->estado, [NominaPeriodo::PAGADO, NominaPeriodo::CERRADO], true)) {
+            return $volver()->withErrors(['estado' => 'Esta quincena ya no se puede modificar.']);
+        }
+
+        $rules = [
+            'concepto' => ['required', 'in:extras,ias,adelanto,bono,deduccion'],
+            'empleado_id' => ['required', 'integer', 'exists:nomina_empleados,id'],
+            'motivo' => ['nullable', 'string', 'max:500'],
+            'formato' => ['nullable', 'in:deduccion,mercancia,faltante,otra'],
+        ];
+        $concepto = (string) $request->input('concepto');
+        if ($concepto === 'extras') {
+            $rules['unidad'] = ['required', 'in:HORAS,DIAS'];
+            $rules['horas'] = ['required', 'numeric', 'min:0.25'];
+        } elseif ($concepto === 'ias') {
+            $rules['cantidad'] = ['required', 'numeric', 'min:0.5'];
+        } else {
+            $rules['monto'] = ['required', 'numeric', 'min:0.01'];
+        }
+
+        $validator = validator($request->all(), $rules);
+        if ($validator->fails()) {
+            return $volver()->withErrors($validator)->withInput();
+        }
+
+        $data = $validator->validated();
+        $empleado = NominaEmpleado::query()->with(['cliente', 'cargoCatalogo'])->findOrFail($data['empleado_id']);
+        $motivo = trim((string) ($data['motivo'] ?? ''));
+        $fecha = $periodo->fecha_fin->toDateString();
+
+        try {
+            $mensaje = match ($concepto) {
+                'extras' => $this->registrarExtrasPeriodo($empleado, $fecha, $data),
+                'ias' => $this->registrarIasPeriodo($empleado, $fecha, (float) $data['cantidad'], $motivo),
+                'adelanto' => $this->registrarAdelantoPeriodo($empleado, $fecha, (float) $data['monto'], $motivo),
+                'bono' => $this->registrarBonoPeriodo($empleado, $fecha, (float) $data['monto'], $motivo),
+                default => $this->registrarDeduccionPeriodo($empleado, $fecha, (float) $data['monto'], $motivo, (string) ($data['formato'] ?? 'deduccion')),
+            };
+        } catch (ValidationException $e) {
+            return $volver()->withErrors($e->errors())->withInput();
+        }
+
+        if (in_array($periodo->estado, [NominaPeriodo::CALCULADO, NominaPeriodo::APROBADO], true)) {
+            $this->periods->recalcular($periodo, auth()->id());
+            $mensaje .= ' Nómina recalculada.';
+        }
+
+        return $volver()->with('status', $mensaje);
+    }
+
+    public function aplicarMovimientos(Request $request, NominaPeriodo $periodo): RedirectResponse
+    {
+        if (in_array($periodo->estado, [NominaPeriodo::PAGADO, NominaPeriodo::CERRADO], true)) {
+            return redirect()
+                ->route('nomina.periodos.show', $periodo)
+                ->withErrors(['estado' => 'Esta quincena ya no se puede modificar.']);
+        }
+
+        $mov = $this->movimientosPeriodo($periodo);
+        $quitados = 0;
+        $quitados += $this->omitirNoMarcados($mov['extras'], $this->ids($request, 'extra_ids'), fn ($item) => $this->cancelarMovimiento($item));
+        $quitados += $this->omitirNoMarcados($mov['ias'], $this->ids($request, 'ias_ids'), fn ($item) => $this->cancelarMovimiento($item));
+        $quitados += $this->omitirNoMarcados($mov['adelantos'], $this->ids($request, 'adelanto_ids'), fn ($item) => $this->cancelarMovimiento($item));
+        $quitados += $this->omitirNoMarcados($mov['bonos'], $this->ids($request, 'bono_ids'), fn ($item) => $this->cancelarMovimiento($item));
+        $quitados += $this->omitirNoMarcados($mov['deducciones'], $this->ids($request, 'deduccion_ids'), fn ($item) => $this->cancelarMovimiento($item));
+        $quitados += $this->omitirNoMarcados($mov['mercancia'], $this->ids($request, 'mercancia_ids'), fn ($item) => $this->cancelarMovimiento($item));
+        $quitados += $this->omitirNoMarcados($mov['faltantes'], $this->ids($request, 'faltante_ids'), fn ($item) => $this->cancelarMovimiento($item, 'periodo_id'));
+        $quitados += $this->omitirNoMarcados($mov['otras'], $this->ids($request, 'otra_ids'), fn ($item) => $this->cancelarMovimiento($item));
+
+        if ($quitados > 0 && in_array($periodo->estado, [NominaPeriodo::CALCULADO, NominaPeriodo::APROBADO], true)) {
+            $this->periods->recalcular($periodo, auth()->id());
+        }
+
+        $mensaje = $quitados > 0
+            ? 'Selección aplicada. Se quitaron '.$quitados.' concepto(s) de la quincena.'
+            : 'Selección aplicada. Lo marcado sigue en la quincena.';
+
+        return redirect()
+            ->route('nomina.periodos.show', ['periodo' => $periodo, 'ajuste' => $request->input('tab', 'extras')])
+            ->with('status', $mensaje);
     }
 
     /**
@@ -421,6 +572,269 @@ class PeriodoController extends Controller
         }
 
         return $totales;
+    }
+
+    private function tabDeMovimiento(string $concepto): string
+    {
+        return match ($concepto) {
+            'ias' => 'ias',
+            'adelanto' => 'adelantos',
+            'bono' => 'bonos',
+            'deduccion' => 'deducciones',
+            default => 'extras',
+        };
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function ids(Request $request, string $campo): array
+    {
+        return array_map('intval', (array) $request->input($campo, []));
+    }
+
+    /**
+     * @param  iterable<int, mixed>  $items
+     * @param  list<int>  $marcados
+     */
+    private function omitirNoMarcados(iterable $items, array $marcados, callable $quitar): int
+    {
+        $quitados = 0;
+        foreach ($items as $item) {
+            if (in_array((int) $item->id, $marcados, true)) {
+                continue;
+            }
+            $quitar($item);
+            $quitados++;
+        }
+
+        return $quitados;
+    }
+
+    private function cancelarMovimiento(object $item, string $periodoFk = 'nomina_periodo_id'): void
+    {
+        $item->estado = 'CANCELADO';
+        $item->{$periodoFk} = null;
+        $item->save();
+    }
+
+    /**
+     * @return array{extras: \Illuminate\Support\Collection, ias: \Illuminate\Support\Collection, adelantos: \Illuminate\Support\Collection, bonos: \Illuminate\Support\Collection, deducciones: \Illuminate\Support\Collection, mercancia: \Illuminate\Support\Collection, faltantes: \Illuminate\Support\Collection, otras: \Illuminate\Support\Collection}
+     */
+    private function movimientosPeriodo(NominaPeriodo $periodo): array
+    {
+        $vacio = collect();
+
+        return [
+            'extras' => $this->deQuincena(NominaHoraExtra::class, $periodo),
+            'ias' => $this->deQuincena(NominaInasistencia::class, $periodo),
+            'adelantos' => $this->deQuincena(NominaAbonoSueldo::class, $periodo),
+            'bonos' => $this->ajustesNomina($periodo, NominaEmpleadoAjuste::TIPO_BONIFICACION),
+            'deducciones' => $this->ajustesNomina($periodo, NominaEmpleadoAjuste::TIPO_DEDUCCION),
+            'mercancia' => Schema::hasTable('nomina_descuentos_mercancia')
+                ? NominaDescuentoMercancia::query()
+                    ->with(['empleado.cliente'])
+                    ->where('estado', '!=', 'CANCELADO')
+                    ->where(function ($q) {
+                        $q->where('destino', NominaDescuentoMercancia::DESTINO_NOMINA)->orWhereNull('destino');
+                    })
+                    ->where(function ($q) use ($periodo) {
+                        $q->where('nomina_periodo_id', $periodo->id)
+                            ->orWhere(function ($pendiente) use ($periodo) {
+                                $pendiente->where('estado', 'PENDIENTE')
+                                    ->whereDate('quincena_inicio', $periodo->fecha_inicio->toDateString())
+                                    ->whereDate('quincena_fin', $periodo->fecha_fin->toDateString());
+                            });
+                    })
+                    ->orderBy('id')
+                    ->get()
+                : $vacio,
+            'faltantes' => $this->faltantesNomina($periodo),
+            'otras' => Schema::hasTable('nomina_deducciones')
+                ? $this->deQuincena(NominaDeduccion::class, $periodo)
+                : $vacio,
+        ];
+    }
+
+    private function deQuincena(string $modelo, NominaPeriodo $periodo)
+    {
+        $tabla = (new $modelo)->getTable();
+        if (! Schema::hasTable($tabla)) {
+            return collect();
+        }
+
+        return $modelo::query()
+            ->with(['empleado.cliente'])
+            ->where('estado', '!=', 'CANCELADO')
+            ->where(function ($query) use ($periodo) {
+                $query->where('nomina_periodo_id', $periodo->id)
+                    ->orWhere(function ($pendiente) use ($periodo) {
+                        $pendiente->where('estado', 'PENDIENTE')
+                            ->whereDate('quincena_inicio', $periodo->fecha_inicio->toDateString())
+                            ->whereDate('quincena_fin', $periodo->fecha_fin->toDateString());
+                    });
+            })
+            ->orderBy('id')
+            ->get();
+    }
+
+    private function ajustesNomina(NominaPeriodo $periodo, string $tipo)
+    {
+        if (! Schema::hasTable('nomina_empleado_ajustes')) {
+            return collect();
+        }
+
+        return NominaEmpleadoAjuste::query()
+            ->with(['empleado.cliente'])
+            ->where('tipo', $tipo)
+            ->where('destino', NominaEmpleadoAjuste::DESTINO_NOMINA)
+            ->where('estado', '!=', NominaEmpleadoAjuste::CANCELADO)
+            ->where(function ($query) use ($periodo) {
+                $query->where('nomina_periodo_id', $periodo->id)
+                    ->orWhere(function ($pendiente) use ($periodo) {
+                        $pendiente->where('estado', NominaEmpleadoAjuste::PENDIENTE)
+                            ->whereDate('quincena_inicio', $periodo->fecha_inicio->toDateString())
+                            ->whereDate('quincena_fin', $periodo->fecha_fin->toDateString());
+                    });
+            })
+            ->orderBy('id')
+            ->get();
+    }
+
+    private function faltantesNomina(NominaPeriodo $periodo)
+    {
+        if (! Schema::hasTable('nomina_comision_descuentos')) {
+            return collect();
+        }
+
+        $query = NominaComisionDescuento::query()
+            ->with(['empleado.cliente'])
+            ->where('tipo', 'FALTANTE')
+            ->where('estado', '!=', 'CANCELADO')
+            ->where(function ($q) use ($periodo) {
+                $q->where('periodo_id', $periodo->id)
+                    ->orWhere(function ($pendiente) use ($periodo) {
+                        $pendiente->where('estado', 'PENDIENTE')
+                            ->whereDate('fecha', '>=', $periodo->fecha_inicio->toDateString())
+                            ->whereDate('fecha', '<=', $periodo->fecha_fin->toDateString());
+                    });
+            });
+
+        if (Schema::hasColumn('nomina_comision_descuentos', 'destino')) {
+            $query->where(function ($q) {
+                $q->where('destino', NominaComisionDescuento::DESTINO_NOMINA)->orWhereNull('destino');
+            });
+        }
+
+        return $query->orderBy('id')->get();
+    }
+
+    private function registrarExtrasPeriodo(NominaEmpleado $empleado, string $fecha, array $data): string
+    {
+        $this->attendance->registrarHorasExtras($empleado, [
+            'fecha' => $fecha,
+            'unidad' => $data['unidad'],
+            'horas' => $data['horas'],
+            'motivo' => $data['motivo'] ?? null,
+        ], auth()->id());
+
+        $etiqueta = $data['unidad'] === 'DIAS' ? 'día(s)' : 'hora(s)';
+
+        return number_format((float) $data['horas'], 2).' '.$etiqueta.' extra(s) de '.$empleado->nombre().' quedaron en esta quincena.';
+    }
+
+    private function registrarIasPeriodo(NominaEmpleado $empleado, string $fecha, float $cantidad, string $motivo): string
+    {
+        $this->attendance->registrarInasistencia($empleado, [
+            'fecha' => $fecha,
+            'cantidad' => $cantidad,
+            'motivo' => $motivo !== '' ? $motivo : null,
+        ], auth()->id());
+
+        return number_format($cantidad, 2).' día(s) de inasistencia de '.$empleado->nombre().' quedaron en esta quincena.';
+    }
+
+    private function registrarAdelantoPeriodo(NominaEmpleado $empleado, string $fecha, float $monto, string $motivo): string
+    {
+        $this->adelantos->create($empleado, [
+            'fecha' => $fecha,
+            'monto' => $monto,
+            'motivo' => $motivo !== '' ? $motivo : null,
+        ], auth()->id());
+
+        return 'Adelanto de $'.number_format($monto, 2).' registrado a '.$empleado->nombre().'.';
+    }
+
+    private function registrarBonoPeriodo(NominaEmpleado $empleado, string $fecha, float $monto, string $motivo): string
+    {
+        if ($motivo === '') {
+            throw ValidationException::withMessages(['motivo' => 'Indica el motivo de la bonificación.']);
+        }
+
+        $this->ajustes->create($empleado, [
+            'fecha' => $fecha,
+            'tipo' => NominaEmpleadoAjuste::TIPO_BONIFICACION,
+            'destino' => NominaEmpleadoAjuste::DESTINO_NOMINA,
+            'monto' => $monto,
+            'motivo' => $motivo,
+        ], auth()->id());
+
+        return 'Bonificación de $'.number_format($monto, 2).' registrada a '.$empleado->nombre().'.';
+    }
+
+    private function registrarDeduccionPeriodo(NominaEmpleado $empleado, string $fecha, float $monto, string $motivo, string $formato): string
+    {
+        if (in_array($formato, ['deduccion', 'mercancia', 'otra', ''], true) && $motivo === '') {
+            throw ValidationException::withMessages(['motivo' => 'Indica el motivo del descuento.']);
+        }
+
+        if ($formato === 'mercancia') {
+            $this->mercancia->create($empleado, [
+                'fecha' => $fecha,
+                'destino' => NominaDescuentoMercancia::DESTINO_NOMINA,
+                'monto' => $monto,
+                'motivo' => $motivo,
+            ], auth()->id());
+
+            return 'Descuento de mercancía de $'.number_format($monto, 2).' registrado a '.$empleado->nombre().'.';
+        }
+
+        if ($formato === 'faltante') {
+            $row = $this->faltantes->create($empleado, [
+                'fecha' => $fecha,
+                'monto' => $monto,
+                'motivo' => $motivo !== '' ? $motivo : null,
+            ], auth()->id());
+            if (Schema::hasColumn('nomina_comision_descuentos', 'decision')) {
+                $row->decision = NominaComisionDescuento::DECISION_DESCONTAR;
+            }
+            if (Schema::hasColumn('nomina_comision_descuentos', 'destino')) {
+                $row->destino = NominaComisionDescuento::DESTINO_NOMINA;
+            }
+            $row->save();
+
+            return 'Faltante de caja de $'.number_format($monto, 2).' registrado a '.$empleado->nombre().'. Se descuenta del sueldo.';
+        }
+
+        if ($formato === 'otra') {
+            $this->otrasDeducciones->create($empleado, [
+                'fecha' => $fecha,
+                'monto' => $monto,
+                'motivo' => $motivo,
+            ], auth()->id());
+
+            return 'Descuento de $'.number_format($monto, 2).' registrado a '.$empleado->nombre().'.';
+        }
+
+        $this->ajustes->create($empleado, [
+            'fecha' => $fecha,
+            'tipo' => NominaEmpleadoAjuste::TIPO_DEDUCCION,
+            'destino' => NominaEmpleadoAjuste::DESTINO_NOMINA,
+            'monto' => $monto,
+            'motivo' => $motivo,
+        ], auth()->id());
+
+        return 'Deducción de $'.number_format($monto, 2).' registrada a '.$empleado->nombre().'.';
     }
 
     private function logoNominaPdf(): ?string

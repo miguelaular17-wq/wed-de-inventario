@@ -3,12 +3,15 @@
     $tasaBcv = $tasaBcv ?? 0;
     $tasaBcvEtiqueta = $tasaBcvEtiqueta ?? 'Tasa BCV';
     $filtroTargets = $filtroTargets ?? [];
+    $mostrarTitulo = $mostrarTitulo ?? true;
 @endphp
 @if($totalesPorGrupo->isNotEmpty())
 <div class="nomina-card" style="margin-top:16px;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
         <div>
-            <h3 style="margin:0;">Totales por sede y área</h3>
+            @if($mostrarTitulo)
+                <h3 style="margin:0;">Totales por sede y área</h3>
+            @endif
             <p class="muted" style="margin:4px 0 0;">
                 Asignaciones, deducciones y total pagado en divisas (USD) y bolívares.
                 {{ $tasaBcvEtiqueta }}: <strong>{{ number_format($tasaBcv, 2) }}</strong>.
@@ -40,6 +43,9 @@
                     <th>Deducciones</th>
                     <th>Total pagado USD</th>
                     <th>Total pagado Bs</th>
+                    @if(!empty($pdfPorGrupo))
+                        <th></th>
+                    @endif
                 </tr>
             </thead>
             <tbody>
@@ -52,6 +58,11 @@
                         <td>${{ number_format($grupo['deducciones'], 2) }}</td>
                         <td><strong>${{ number_format($grupo['pagar_usd'], 2) }}</strong></td>
                         <td>Bs {{ number_format($grupo['pagar_bs'], 2) }}</td>
+                        @if(!empty($pdfPorGrupo))
+                            <td style="text-align:right;">
+                                <a class="btn secondary" href="{{ $pdfPorGrupo }}{{ str_contains($pdfPorGrupo, '?') ? '&' : '?' }}grupo={{ urlencode($grupo['clave']) }}">PDF</a>
+                            </td>
+                        @endif
                     </tr>
                 @endforeach
             </tbody>
@@ -63,6 +74,9 @@
                     <td><strong>${{ number_format($totalesPorGrupo->sum('deducciones'), 2) }}</strong></td>
                     <td><strong>${{ number_format($totalesPorGrupo->sum('pagar_usd'), 2) }}</strong></td>
                     <td><strong>Bs {{ number_format($totalesPorGrupo->sum('pagar_bs'), 2) }}</strong></td>
+                    @if(!empty($pdfPorGrupo))
+                        <td></td>
+                    @endif
                 </tr>
             </tfoot>
         </table>

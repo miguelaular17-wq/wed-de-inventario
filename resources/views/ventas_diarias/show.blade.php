@@ -11,36 +11,27 @@
 @media (max-width: 960px) { .vd-grid { grid-template-columns: 1fr; } }
 .vd-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 16px; }
 .vd-card h3 { margin:0 0 10px; font-size:.95rem; color:#334155; }
+.vd-desglose-head { text-align:center; }
+.vd-desglose-head h3 { margin-bottom:2px; }
+.vd-desglose-head p { margin:0 0 10px; color:#64748b; font-size:.85rem; }
 .vd-table { width:100%; border-collapse:collapse; font-size:.85rem; }
 .vd-table th, .vd-table td { padding:6px 8px; border-bottom:1px solid #f1f5f9; }
-.vd-table .lab { font-weight:600; }
-.vd-bs, .vd-usd { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.vd-bs { color:#334155; font-weight:600; }
-.vd-usd { color:#059669; font-weight:700; }
-.vd-pct.neg { color:#dc2626; }
-.vd-pct.pos { color:#16a34a; }
+.vd-table .lab { font-weight:600; white-space:nowrap; }
+.vd-table .bs, .vd-table .usd, .vd-table .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.vd-table .bs { color:#334155; font-weight:600; }
+.vd-table .usd { color:#059669; font-weight:700; }
+.vd-credito .lab { color:#dc2626; }
 .vd-venta td { background:#d1fae5; border-top:2px solid #059669; border-bottom:2px solid #059669; }
 .vd-venta .lab { color:#064e3b; font-size:1rem; }
-.vd-venta .vd-usd { font-size:1.12rem; }
+.vd-venta .usd { font-size:1.12rem; }
+.vd-unidades .usd { text-align:center; color:#059669; font-weight:700; font-size:1.12rem; }
 .vd-cajas-wrap { overflow-x:auto; }
-.vd-check { color:#16a34a; }
 .vd-actions { margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; }
 .vd-totales td { font-weight:700; background:#f8fafc; }
 </style>
 @endpush
 
 @section('content')
-@php
-    $pct = function (?float $v) {
-        if ($v === null) return '—';
-        $cls = $v >= 0 ? 'pos' : 'neg';
-        return '<span class="vd-pct '.$cls.'">'.($v >= 0 ? '+' : '').number_format($v * 100, 1).'%</span>';
-    };
-    $tasa = (float) $reporte->tasa > 0 ? (float) $reporte->tasa : 1;
-    $bs = fn (float $usd) => 'Bs '.number_format($usd * $tasa, 2);
-    $bsN = fn (float $monto) => 'Bs '.number_format($monto, 2);
-    $usd = fn (float $monto) => '$'.number_format($monto, 2);
-@endphp
 <div class="vd-wrap">
     <div class="vd-title">
         Reporte cierre de venta diaria: {{ config('inventario.display.'.$reporte->sede, $reporte->sede) }}
@@ -59,27 +50,11 @@
 
     <div class="vd-grid">
         <div class="vd-card">
-            <h3>DESGLOSE</h3>
-            <table class="vd-table">
-                <tr><td class="lab"><span class="vd-check">✅</span> Divisas en efectivo</td><td class="vd-bs">{{ $bs((float)$reporte->divisas_efectivo) }}</td><td class="vd-usd">{{ $usd((float)$reporte->divisas_efectivo) }}</td></tr>
-                <tr><td class="lab"><span class="vd-check">✅</span> Efectivo Bs</td><td class="vd-bs">{{ $bsN((float)$reporte->efectivo_bs) }}</td><td class="vd-usd">{{ $usd($totales['efectivo_bs_usd']) }}</td></tr>
-                <tr><td class="lab"><span class="vd-check">✅</span> Punto de venta</td><td class="vd-bs">{{ $bsN((float)$reporte->punto_venta_bs) }}</td><td class="vd-usd">{{ $usd($totales['punto_venta_usd']) }}</td></tr>
-                <tr><td class="lab"><span class="vd-check">✅</span> Transf/P.M.</td><td class="vd-bs">{{ $bsN((float)$reporte->transf_pm_bs) }}</td><td class="vd-usd">{{ $usd($totales['transf_pm_usd']) }}</td></tr>
-                <tr><td class="lab"><span class="vd-check">✅</span> Zelle y binance</td><td class="vd-bs">{{ $bs((float)$reporte->zelle_binance) }}</td><td class="vd-usd">{{ $usd((float)$reporte->zelle_binance) }}</td></tr>
-                <tr><td class="lab"><span class="vd-check">✅</span> Cashea financiado</td><td class="vd-bs">{{ $bs((float)$reporte->cashea) }}</td><td class="vd-usd">{{ $usd((float)$reporte->cashea) }}</td></tr>
-                <tr><td class="lab"><span class="vd-check">✅</span> Abono apartado / Deuda</td><td class="vd-bs">{{ $bs((float)$reporte->abonos) }}</td><td class="vd-usd">{{ $usd((float)$reporte->abonos) }}</td></tr>
-                <tr><td class="lab"><span class="vd-check">✅</span> iPhone</td><td class="vd-bs">{{ $bs((float)$reporte->iphone) }}</td><td class="vd-usd">{{ $usd((float)$reporte->iphone) }}</td></tr>
-                <tr><td class="lab"><span class="vd-check">✅</span> Gift card</td><td class="vd-bs">{{ $bs((float)$reporte->gift_card) }}</td><td class="vd-usd">{{ $usd((float)$reporte->gift_card) }}</td></tr>
-                <tr><td class="lab">Total cobros del dia</td><td class="vd-bs">{{ $bs($totales['total_cobros']) }}</td><td class="vd-usd">{{ $usd($totales['total_cobros']) }}</td></tr>
-                <tr><td class="lab">Total creditos del dia</td><td class="vd-bs">{{ $bs($totales['total_creditos']) }}</td><td class="vd-usd">{{ $usd($totales['total_creditos']) }}</td></tr>
-                <tr class="vd-venta"><td class="lab">Total de ventas del dia</td><td class="vd-bs">{{ $bs($totales['total_ventas']) }}</td><td class="vd-usd">{{ $usd($totales['total_ventas']) }}</td><td>{!! $pct($totales['pct_vs_meta_venta']) !!}</td></tr>
-                <tr><td class="lab">Total de productos vendidos</td><td>{{ number_format((float)$reporte->productos_vendidos, 0) }}</td><td></td><td>{!! $pct($totales['pct_vs_meta_prod']) !!}</td></tr>
-                <tr><td class="lab">Z FISCAL (Bs)</td><td class="vd-bs">{{ $bsN((float)$reporte->z_fiscal_bs) }}</td><td class="vd-usd">{{ $usd($totales['facturacion_fiscal_usd']) }}</td></tr>
-                <tr><td class="lab">Facturacion Fiscal</td><td class="vd-bs">{{ $bsN((float)$reporte->z_fiscal_bs) }}</td><td class="vd-usd">{{ $usd($totales['facturacion_fiscal_usd']) }}</td><td>{!! $pct($totales['pct_fiscal']) !!}</td></tr>
-                <tr><td class="lab">Deliverys pendientes</td><td class="vd-bs">{{ $bs((float)$reporte->deliverys_pendientes) }}</td><td class="vd-usd">{{ $usd((float)$reporte->deliverys_pendientes) }}</td></tr>
-                <tr><td class="lab">Fondo Bs</td><td class="vd-bs">{{ $bsN((float)$reporte->fondo_bs) }}</td><td class="vd-usd">{{ $usd((float)$reporte->fondo_bs / $tasa) }}</td></tr>
-                <tr><td class="lab">Fondo divisas</td><td class="vd-bs">{{ $bs((float)$reporte->fondo_divisas) }}</td><td class="vd-usd">{{ $usd((float)$reporte->fondo_divisas) }}</td></tr>
-            </table>
+            <div class="vd-desglose-head">
+                <h3>DESGLOSE VENTAS DEL DIA</h3>
+                <p>{{ $reporte->fecha->format('d/m/Y') }} · Tasa {{ number_format((float) $reporte->tasa, 2) }}</p>
+            </div>
+            @include('ventas_diarias._desglose')
             @if($reporte->observaciones)
                 <p style="margin:12px 0 0;"><strong>Observaciones:</strong><br>{{ $reporte->observaciones }}</p>
             @endif
@@ -88,57 +63,7 @@
         <div class="vd-card">
             <h3>CAJAS</h3>
             <div class="vd-cajas-wrap">
-                <table class="vd-table">
-                    <thead>
-                        <tr>
-                            <th>CAJA</th>
-                            <th>EFECTIVO $</th>
-                            <th>EFECTIVO BS</th>
-                            <th>PUNTO</th>
-                            <th>TRANS/PM</th>
-                            <th>ZELLE</th>
-                            <th>CASHEA</th>
-                            <th>CREDITO</th>
-                            <th>ABONOS</th>
-                            <th>IPHONE</th>
-                            <th>GIFT CARD</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($reporte->cajas as $c)
-                            <tr>
-                                <td><strong>{{ $c->nombre }}</strong></td>
-                                <td>{{ number_format((float)$c->efectivo_usd, 2) }}</td>
-                                <td>{{ number_format((float)$c->efectivo_bs, 2) }}</td>
-                                <td>{{ number_format((float)$c->punto_venta, 2) }}</td>
-                                <td>{{ number_format((float)$c->transf_pm, 2) }}</td>
-                                <td>{{ number_format((float)$c->zelle_binance, 2) }}</td>
-                                <td>{{ number_format((float)$c->cashea, 2) }}</td>
-                                <td>{{ number_format((float)$c->fact_credito, 2) }}</td>
-                                <td>{{ number_format((float)$c->abonos, 2) }}</td>
-                                <td>{{ number_format((float)$c->iphone, 2) }}</td>
-                                <td>{{ number_format((float)$c->gift_card, 2) }}</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="11" class="muted">Sin cajas registradas.</td></tr>
-                        @endforelse
-                        @if($reporte->cajas->isNotEmpty())
-                            <tr class="vd-totales">
-                                <td>Totales</td>
-                                <td>{{ number_format($totalesCajas['efectivo_usd'], 2) }}</td>
-                                <td>{{ number_format($totalesCajas['efectivo_bs'], 2) }}</td>
-                                <td>{{ number_format($totalesCajas['punto_venta'], 2) }}</td>
-                                <td>{{ number_format($totalesCajas['transf_pm'], 2) }}</td>
-                                <td>{{ number_format($totalesCajas['zelle_binance'], 2) }}</td>
-                                <td>{{ number_format($totalesCajas['cashea'], 2) }}</td>
-                                <td>{{ number_format($totalesCajas['fact_credito'], 2) }}</td>
-                                <td>{{ number_format($totalesCajas['abonos'], 2) }}</td>
-                                <td>{{ number_format($totalesCajas['iphone'], 2) }}</td>
-                                <td>{{ number_format($totalesCajas['gift_card'], 2) }}</td>
-                            </tr>
-                        @endif
-                    </tbody>
-                </table>
+                @include('ventas_diarias._cajas')
             </div>
         </div>
     </div>

@@ -282,7 +282,7 @@
                         <div style="font-weight:600; font-size:0.9rem; color:#334155;">{{ $doc->getIcono() }} {{ $doc->nombre }}</div>
                         <div style="font-size:0.8rem; color:#64748b;">{{ ucfirst($doc->tipo) }} · {{ $doc->getTamanoLegible() }}</div>
                     </div>
-                    <a href="{{ asset('storage/' . $doc->ruta_archivo) }}" target="_blank" class="pat-btn pat-btn-outline pat-btn-sm">⬇ Descargar</a>
+                    <a href="{{ filter_var($doc->ruta_archivo, FILTER_VALIDATE_URL) ? $doc->ruta_archivo : asset('storage/' . $doc->ruta_archivo) }}" target="_blank" class="pat-btn pat-btn-outline pat-btn-sm">⬇ Descargar</a>
                 </div>
                 @empty
                     <p style="color:#94a3b8; text-align:center; padding:20px 0;">Sin documentos.</p>

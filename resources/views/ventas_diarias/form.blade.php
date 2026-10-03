@@ -27,22 +27,22 @@
 }
 .vd-modal-back.open { display:flex; }
 .vd-modal {
-    background:#fff; border-radius:16px; width:min(520px, 100%);
+    background:#fff; border-radius:16px; width:min(720px, 100%);
     padding:22px 24px 18px; box-shadow:0 24px 60px rgba(0,0,0,.35);
 }
-.vd-modal h3 { margin:0 0 4px; font-size:1.15rem; }
-.vd-modal .sub { margin:0 0 14px; color:#64748b; font-size:.85rem; }
+.vd-modal h3 { margin:0 0 4px; font-size:1.15rem; text-align:center; }
+.vd-modal .sub { margin:0 0 14px; color:#64748b; font-size:.85rem; text-align:center; }
 .vd-modal table { width:100%; border-collapse:collapse; font-size:.92rem; }
 .vd-modal td { padding:7px 4px; border-bottom:1px solid #f1f5f9; }
-.vd-modal .lab { font-weight:650; }
+.vd-modal .lab { font-weight:650; white-space:nowrap; }
 .vd-modal .usd { color:#059669; font-weight:700; text-align:right; white-space:nowrap; }
 .vd-modal .bs { text-align:right; color:#334155; font-weight:600; white-space:nowrap; }
 .vd-modal .tot td { font-weight:800; background:#f8fafc; }
 .vd-modal tr.vd-venta td { background:#d1fae5; border-top:2px solid #059669; border-bottom:2px solid #059669; font-size:1.02rem; }
 .vd-modal tr.vd-venta .lab { color:#064e3b; }
+.vd-modal tr.vd-unidades .usd { text-align:center; color:#059669; font-weight:700; font-size:1.12rem; }
 .vd-modal tr.vd-venta .usd { font-size:1.12rem; }
-.vd-pct.neg { color:#dc2626; }
-.vd-pct.pos { color:#16a34a; }
+.vd-modal tr.vd-credito .lab { color:#dc2626; }
 </style>
 @endpush
 
@@ -100,18 +100,6 @@
         @endif
 
         <div class="vd-card">
-            <div hidden>
-                <input type="hidden" name="divisas_efectivo" class="vd-from-cajas" data-caja="efectivo_usd" value="0">
-                <input type="hidden" name="efectivo_bs" class="vd-from-cajas" data-caja="efectivo_bs" value="0">
-                <input type="hidden" name="punto_venta_bs" class="vd-from-cajas" data-caja="punto_venta" value="0">
-                <input type="hidden" name="transf_pm_bs" class="vd-from-cajas" data-caja="transf_pm" value="0">
-                <input type="hidden" name="zelle_binance" class="vd-from-cajas" data-caja="zelle_binance" value="0">
-                <input type="hidden" name="cashea" class="vd-from-cajas" data-caja="cashea" value="0">
-                <input type="hidden" name="abonos" class="vd-from-cajas" data-caja="abonos" value="0">
-                <input type="hidden" name="iphone" class="vd-from-cajas" data-caja="iphone" value="0">
-                <input type="hidden" name="gift_card" class="vd-from-cajas" data-caja="gift_card" value="0">
-                <input type="hidden" name="total_creditos" class="vd-from-cajas" data-caja="fact_credito" value="0">
-            </div>
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
                 <h3 style="margin:0;">CAJAS</h3>
                 <button type="button" class="btn" id="vd-add-caja">+ Caja</button>
@@ -121,16 +109,9 @@
                         <thead>
                             <tr>
                                 <th>CAJA</th>
-                                <th>EFECTIVO $</th>
-                                <th>EFECTIVO BS</th>
-                                <th>PUNTO DE VENTA</th>
-                                <th>TRANS/PAGO MOVIL</th>
-                                <th>ZELLE / BINANCE</th>
-                                <th>CASHEA</th>
-                                <th>FACT A CREDITO</th>
-                                <th>ABONOS</th>
-                                <th>IPHONE</th>
-                                <th>GIFT CARD</th>
+                                @foreach($columnasCaja as $etiqueta)
+                                    <th>{{ $etiqueta }}</th>
+                                @endforeach
                                 <th></th>
                             </tr>
                         </thead>
@@ -138,16 +119,9 @@
                             @foreach($cajas as $i => $c)
                                 <tr>
                                     <td><input name="cajas[{{ $i }}][nombre]" value="{{ old('cajas.'.$i.'.nombre', $c->nombre ?? '') }}" placeholder="Nombre"></td>
-                                    <td><input type="number" step="0.01" name="cajas[{{ $i }}][efectivo_usd]" value="{{ old('cajas.'.$i.'.efectivo_usd', $c->efectivo_usd ?? 0) }}"></td>
-                                    <td><input type="number" step="0.01" name="cajas[{{ $i }}][efectivo_bs]" value="{{ old('cajas.'.$i.'.efectivo_bs', $c->efectivo_bs ?? 0) }}"></td>
-                                    <td><input type="number" step="0.01" name="cajas[{{ $i }}][punto_venta]" value="{{ old('cajas.'.$i.'.punto_venta', $c->punto_venta ?? 0) }}"></td>
-                                    <td><input type="number" step="0.01" name="cajas[{{ $i }}][transf_pm]" value="{{ old('cajas.'.$i.'.transf_pm', $c->transf_pm ?? 0) }}"></td>
-                                    <td><input type="number" step="0.01" name="cajas[{{ $i }}][zelle_binance]" value="{{ old('cajas.'.$i.'.zelle_binance', $c->zelle_binance ?? 0) }}"></td>
-                                    <td><input type="number" step="0.01" name="cajas[{{ $i }}][cashea]" value="{{ old('cajas.'.$i.'.cashea', $c->cashea ?? 0) }}"></td>
-                                    <td><input type="number" step="0.01" name="cajas[{{ $i }}][fact_credito]" value="{{ old('cajas.'.$i.'.fact_credito', $c->fact_credito ?? 0) }}"></td>
-                                    <td><input type="number" step="0.01" name="cajas[{{ $i }}][abonos]" value="{{ old('cajas.'.$i.'.abonos', $c->abonos ?? 0) }}"></td>
-                                    <td><input type="number" step="0.01" name="cajas[{{ $i }}][iphone]" value="{{ old('cajas.'.$i.'.iphone', $c->iphone ?? 0) }}"></td>
-                                    <td><input type="number" step="0.01" name="cajas[{{ $i }}][gift_card]" value="{{ old('cajas.'.$i.'.gift_card', $c->gift_card ?? 0) }}"></td>
+                                    @foreach($columnasCaja as $campo => $etiqueta)
+                                        <td><input type="number" step="0.01" name="cajas[{{ $i }}][{{ $campo }}]" value="{{ old('cajas.'.$i.'.'.$campo, $c->{$campo} ?? 0) }}"></td>
+                                    @endforeach
                                     <td><button type="button" class="btn vd-del-caja" title="Quitar">×</button></td>
                                 </tr>
                             @endforeach
@@ -168,7 +142,7 @@
                 <input type="number" step="any" name="productos_vendidos" value="{{ old('productos_vendidos', $reporte->productos_vendidos ?? 0) }}">
             </div>
             <div class="field">
-                <label>Z fiscal (Bs)</label>
+                <label>Facturación fiscal (Bs)</label>
                 <input type="number" step="any" name="z_fiscal_bs" value="{{ old('z_fiscal_bs', $reporte->z_fiscal_bs ?? 0) }}">
             </div>
             <div class="field">
@@ -176,11 +150,11 @@
                 <input type="number" step="any" name="deliverys_pendientes" value="{{ old('deliverys_pendientes', $reporte->deliverys_pendientes ?? 0) }}">
             </div>
             <div class="field">
-                <label>Fondo Bs</label>
+                <label>Disponible fondo Bs</label>
                 <input type="number" step="any" name="fondo_bs" value="{{ old('fondo_bs', $reporte->fondo_bs ?? 0) }}">
             </div>
             <div class="field">
-                <label>Fondo divisas ($)</label>
+                <label>Disponible fondo divisas ($)</label>
                 <input type="number" step="any" name="fondo_divisas" value="{{ old('fondo_divisas', $reporte->fondo_divisas ?? 0) }}">
             </div>
             <div class="field" style="flex-basis:100%;">
@@ -199,27 +173,31 @@
 
 <div class="vd-modal-back" id="vd-modal" role="dialog" aria-modal="true">
     <div class="vd-modal">
-        <h3>DESGLOSE</h3>
+        <h3>DESGLOSE VENTAS DEL DIA</h3>
         <p class="sub" id="vd-modal-sub"></p>
         <table>
-            <tr><td class="lab">Divisas en efectivo</td><td class="bs" id="md-divisas-bs"></td><td class="usd" id="md-divisas"></td></tr>
-            <tr><td class="lab">Efectivo Bs</td><td class="bs" id="md-ebs"></td><td class="usd" id="md-ebs-usd"></td></tr>
-            <tr><td class="lab">Punto de venta</td><td class="bs" id="md-punto"></td><td class="usd" id="md-punto-usd"></td></tr>
-            <tr><td class="lab">Transf/P.M.</td><td class="bs" id="md-transf"></td><td class="usd" id="md-transf-usd"></td></tr>
-            <tr><td class="lab">Zelle y binance</td><td class="bs" id="md-zelle-bs"></td><td class="usd" id="md-zelle"></td></tr>
-            <tr><td class="lab">Cashea financiado</td><td class="bs" id="md-cashea-bs"></td><td class="usd" id="md-cashea"></td></tr>
-            <tr><td class="lab">Abono de apartado / Deuda</td><td class="bs" id="md-abonos-bs"></td><td class="usd" id="md-abonos"></td></tr>
-            <tr><td class="lab">iPhone</td><td class="bs" id="md-iphone-bs"></td><td class="usd" id="md-iphone"></td></tr>
-            <tr><td class="lab">Gift card</td><td class="bs" id="md-gift-bs"></td><td class="usd" id="md-gift"></td></tr>
-            <tr class="tot"><td class="lab">Total cobros del día</td><td class="bs" id="md-cobros-bs"></td><td class="usd" id="md-cobros"></td></tr>
-            <tr><td class="lab">Total créditos del día</td><td class="bs" id="md-creditos-bs"></td><td class="usd" id="md-creditos"></td></tr>
+            <tr><th>Forma de pago</th><th class="bs">Bolívares</th><th class="usd">Divisas</th><th>% meta</th></tr>
+            <tr data-linea data-kind="usd" data-field="efectivo_usd"><td class="lab">Efectivo divisas</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="usd" data-field="zelle"><td class="lab">Zelle</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="usd" data-field="binance"><td class="lab">Binance</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="usd" data-field="mercantil_panama"><td class="lab">Mercantil Panamá</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="usd" data-field="iphone"><td class="lab">iPhone</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="usd" data-field="preventa"><td class="lab">Preventa</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="usd" data-field="abonos"><td class="lab">Abono deuda/apartado</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="bs" data-field="efectivo_bs"><td class="lab">Efectivo Bs</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="bs" data-field="punto_venta"><td class="lab">Punto de venta</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="bs" data-field="pago_movil"><td class="lab">Pago móvil</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="bs" data-field="transferencias"><td class="lab">Transferencias</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="usdbs" data-field="cashea"><td class="lab">Cashea financiamiento</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="usdbs" data-field="flaexpay"><td class="lab">Flexpay financiamiento</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="usdbs" data-field="krece"><td class="lab">Krece financiamiento</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="usdbs" data-field="gift_card"><td class="lab">Gift card</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
+            <tr data-linea data-kind="credito" data-field="fact_credito" class="vd-credito"><td class="lab">Facturas a crédito</td><td class="bs" data-col="bs"></td><td class="usd" data-col="usd"></td><td></td></tr>
             <tr class="tot vd-venta"><td class="lab">Total de ventas del día</td><td class="bs" id="md-ventas-bs"></td><td class="usd" id="md-ventas"></td><td id="md-pct-venta"></td></tr>
-            <tr><td class="lab">Productos vendidos</td><td class="bs" id="md-prod"></td><td></td><td id="md-pct-prod"></td></tr>
-            <tr><td class="lab">Z fiscal (Bs)</td><td class="bs" id="md-zfiscal"></td><td class="usd" id="md-zfiscal-usd"></td></tr>
+            <tr class="vd-venta vd-unidades"><td class="lab">Unidades vendidas</td><td class="usd" id="md-prod" colspan="2"></td><td id="md-pct-prod"></td></tr>
             <tr><td class="lab">Facturación fiscal</td><td class="bs" id="md-fiscal-bs"></td><td class="usd" id="md-fiscal"></td><td id="md-pct-fiscal"></td></tr>
-            <tr><td class="lab">Deliverys pendientes</td><td class="bs" id="md-deliverys-bs"></td><td class="usd" id="md-deliverys"></td></tr>
-            <tr><td class="lab">Fondo Bs</td><td class="bs" id="md-fondo-bs"></td><td class="usd" id="md-fondo-bs-usd"></td></tr>
-            <tr><td class="lab">Fondo divisas</td><td class="bs" id="md-fondo-divisas-bs"></td><td class="usd" id="md-fondo-divisas"></td></tr>
+            <tr><td class="lab">Disponible fondo Bs</td><td class="bs" id="md-fondo-bs"></td><td class="usd" id="md-fondo-bs-usd"></td><td></td></tr>
+            <tr><td class="lab">Disponible fondo divisas</td><td class="bs"></td><td class="usd" id="md-fondo-divisas"></td><td></td></tr>
         </table>
         <div class="vd-actions">
             <a class="btn primary" id="vd-modal-cerrar" href="#">Cerrar</a>
@@ -231,14 +209,11 @@
 (function () {
     const metaVenta = {{ json_encode((float) $metaCtx['meta_venta']) }};
     const metaProd = {{ json_encode((float) $metaCtx['meta_productos']) }};
+    const columnas = @json(array_keys($columnasCaja));
     const money = (n) => '$' + (Number(n) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    const pctHtml = (v) => {
-        if (v === null || Number.isNaN(v)) return '—';
-        const cls = v >= 0 ? 'pos' : 'neg';
-        const sign = v >= 0 ? '+' : '';
-        return '<span class="vd-pct ' + cls + '">' + sign + (v * 100).toFixed(1) + '%</span>';
-    };
+    const pctTxt = (v) => (v === null || Number.isNaN(v)) ? '—' : (v * 100).toFixed(1) + '%';
     const num = (sel) => parseFloat(document.querySelector(sel)?.value || '0') || 0;
+    const bs = (n) => 'Bs ' + (Number(n) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
     function sumCajas(field) {
         let total = 0;
@@ -249,82 +224,54 @@
         return Math.round(total * 100) / 100;
     }
 
-    function syncDesgloseFromCajas() {
-        document.querySelectorAll('.vd-from-cajas').forEach((el) => {
-            const field = el.dataset.caja;
-            if (!field) return;
-            el.value = sumCajas(field).toFixed(2);
-        });
-    }
-
     function recalc() {
-        syncDesgloseFromCajas();
-
         const tasa = num('#vd-tasa') || 1;
-        const divisas = num('[name=divisas_efectivo]');
-        const ebs = num('[name=efectivo_bs]');
-        const pbs = num('[name=punto_venta_bs]');
-        const tbs = num('[name=transf_pm_bs]');
-        const zelle = num('[name=zelle_binance]');
-        const cashea = num('[name=cashea]');
-        const abonos = num('[name=abonos]');
-        const iphone = num('[name=iphone]');
-        const giftCard = num('[name=gift_card]');
-        const creditos = num('[name=total_creditos]');
-        const zfiscal = num('[name=z_fiscal_bs]');
-        const productos = num('[name=productos_vendidos]');
+        let cobros = 0;
+        let totalBs = 0;
+        let creditos = 0;
+        document.querySelectorAll('#vd-modal [data-linea]').forEach((tr) => {
+            const monto = sumCajas(tr.dataset.field);
+            const kind = tr.dataset.kind;
+            let usd = monto;
+            let bolivares = null;
+            if (kind === 'bs') {
+                bolivares = monto;
+                usd = monto / tasa;
+                cobros += usd;
+                totalBs += bolivares;
+            } else if (kind === 'usdbs') {
+                bolivares = monto * tasa;
+                cobros += usd;
+                totalBs += bolivares;
+            } else if (kind === 'credito') {
+                bolivares = monto * tasa;
+                creditos += usd;
+                totalBs += bolivares;
+            } else {
+                cobros += usd;
+            }
+            tr.querySelector('[data-col="bs"]').textContent = bolivares === null ? '' : bs(bolivares);
+            tr.querySelector('[data-col="usd"]').textContent = money(usd);
+        });
 
-        const eUsd = ebs / tasa;
-        const pUsd = pbs / tasa;
-        const tUsd = tbs / tasa;
-        const cobros = divisas + eUsd + pUsd + tUsd + zelle + cashea + abonos + iphone + giftCard;
         const ventas = cobros + creditos;
+        const zfiscal = num('[name=z_fiscal_bs]');
         const fiscal = zfiscal / tasa;
-        const bs = (n) => 'Bs ' + (Number(n) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        const enBs = (usd) => bs((Number(usd) || 0) * tasa);
+        const productos = num('[name=productos_vendidos]');
+        const fondoBs = num('[name=fondo_bs]');
         const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
-        const setHtml = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
 
-        set('md-divisas-bs', enBs(divisas));
-        set('md-divisas', money(divisas));
-        set('md-ebs', bs(ebs));
-        set('md-ebs-usd', money(eUsd));
-        set('md-punto', bs(pbs));
-        set('md-punto-usd', money(pUsd));
-        set('md-transf', bs(tbs));
-        set('md-transf-usd', money(tUsd));
-        set('md-zelle-bs', enBs(zelle));
-        set('md-zelle', money(zelle));
-        set('md-cashea-bs', enBs(cashea));
-        set('md-cashea', money(cashea));
-        set('md-abonos-bs', enBs(abonos));
-        set('md-abonos', money(abonos));
-        set('md-iphone-bs', enBs(iphone));
-        set('md-iphone', money(iphone));
-        set('md-gift-bs', enBs(giftCard));
-        set('md-gift', money(giftCard));
-        set('md-cobros-bs', enBs(cobros));
-        set('md-cobros', money(cobros));
-        set('md-creditos-bs', enBs(creditos));
-        set('md-creditos', money(creditos));
-        set('md-ventas-bs', enBs(ventas));
+        set('md-ventas-bs', bs(totalBs));
         set('md-ventas', money(ventas));
-        setHtml('md-pct-venta', pctHtml(metaVenta > 0 ? (ventas / metaVenta) - 1 : null));
-        set('md-prod', bs(productos));
-        setHtml('md-pct-prod', pctHtml(metaProd > 0 ? (productos / metaProd) - 1 : null));
-        set('md-zfiscal', bs(zfiscal));
-        set('md-zfiscal-usd', money(fiscal));
+        set('md-pct-venta', pctTxt(metaVenta > 0 ? ventas / metaVenta : null));
+        set('md-prod', (Number(productos) || 0).toLocaleString('en-US', {maximumFractionDigits: 0}));
+        set('md-pct-prod', pctTxt(metaProd > 0 ? productos / metaProd : null));
         set('md-fiscal-bs', bs(zfiscal));
         set('md-fiscal', money(fiscal));
-        setHtml('md-pct-fiscal', pctHtml(ventas > 0 ? fiscal / ventas : null));
-        set('md-deliverys-bs', enBs(num('[name=deliverys_pendientes]')));
-        set('md-deliverys', money(num('[name=deliverys_pendientes]')));
-        const fondoBs = num('[name=fondo_bs]');
-        const fondoDivisas = num('[name=fondo_divisas]');
+        set('md-pct-fiscal', pctTxt(ventas > 0 ? fiscal / ventas : null));
         set('md-fondo-bs', bs(fondoBs));
         set('md-fondo-bs-usd', money(fondoBs / tasa));
-        set('md-fondo-divisas-bs', enBs(fondoDivisas));
-        set('md-fondo-divisas', money(fondoDivisas));
+        set('md-fondo-divisas', money(num('[name=fondo_divisas]')));
     }
 
     document.querySelectorAll('#vd-tasa, [name=z_fiscal_bs], [name=productos_vendidos], [name=deliverys_pendientes], [name=fondo_bs], [name=fondo_divisas]').forEach(
@@ -336,19 +283,10 @@
     document.getElementById('vd-add-caja')?.addEventListener('click', () => {
         const tb = document.querySelector('#vd-cajas-table tbody');
         const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><input name="cajas[${cajaIdx}][nombre]" placeholder="Nombre"></td>
-            <td><input type="number" step="0.01" name="cajas[${cajaIdx}][efectivo_usd]" value="0"></td>
-            <td><input type="number" step="0.01" name="cajas[${cajaIdx}][efectivo_bs]" value="0"></td>
-            <td><input type="number" step="0.01" name="cajas[${cajaIdx}][punto_venta]" value="0"></td>
-            <td><input type="number" step="0.01" name="cajas[${cajaIdx}][transf_pm]" value="0"></td>
-            <td><input type="number" step="0.01" name="cajas[${cajaIdx}][zelle_binance]" value="0"></td>
-            <td><input type="number" step="0.01" name="cajas[${cajaIdx}][cashea]" value="0"></td>
-            <td><input type="number" step="0.01" name="cajas[${cajaIdx}][fact_credito]" value="0"></td>
-            <td><input type="number" step="0.01" name="cajas[${cajaIdx}][abonos]" value="0"></td>
-            <td><input type="number" step="0.01" name="cajas[${cajaIdx}][iphone]" value="0"></td>
-            <td><input type="number" step="0.01" name="cajas[${cajaIdx}][gift_card]" value="0"></td>
-            <td><button type="button" class="btn vd-del-caja">×</button></td>`;
+        const celdas = columnas.map((campo) =>
+            `<td><input type="number" step="0.01" name="cajas[${cajaIdx}][${campo}]" value="0"></td>`
+        ).join('');
+        tr.innerHTML = `<td><input name="cajas[${cajaIdx}][nombre]" placeholder="Nombre"></td>${celdas}<td><button type="button" class="btn vd-del-caja">×</button></td>`;
         tb.appendChild(tr);
         cajaIdx++;
         recalc();
@@ -392,10 +330,11 @@
                 btn.disabled = false;
                 return;
             }
-            const sede = form.querySelector('[name=sede]');
-            const fecha = form.querySelector('[name=fecha]');
-            document.getElementById('vd-modal-sub').textContent =
-                (sede?.selectedOptions?.[0]?.textContent || sede?.value || '') + ' · ' + (fecha?.value || '');
+            const fecha = form.querySelector('[name=fecha]')?.value || '';
+            const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fecha);
+            const fechaTxt = partes ? partes[3] + '/' + partes[2] + '/' + partes[1] : fecha;
+            const tasaTxt = (num('#vd-tasa') || 0).toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('vd-modal-sub').textContent = fechaTxt + '  ·  Tasa ' + tasaTxt;
             document.getElementById('vd-modal-cerrar').href = data.url || '#';
             document.getElementById('vd-modal').classList.add('open');
         } catch (e) {

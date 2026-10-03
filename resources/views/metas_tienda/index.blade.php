@@ -41,7 +41,7 @@
             <h1>Metas de tienda</h1>
             <p class="muted" style="margin:4px 0 0;">
                 @if($editable)
-                    Gerencia: edita metas diarias, de domingo y metas mensuales por sede.
+                    Gerencia: la meta del mes se edita por sede. Este mes tiene {{ $diasMes }} días y {{ $domingosMes }} domingos. La diaria reparte lo que queda después de esos domingos, y el domingo es la mitad de esa diaria.
                 @else
                     Meta de tu sede <strong>{{ config('inventario.display.'.$sedeFiltro, $sedeFiltro) }}</strong>.
                 @endif
@@ -63,7 +63,7 @@
             @if($editable)
                 <div class="mt-period" style="margin-bottom:12px;">
                     <label class="muted" style="font-size:.75rem;font-weight:700;text-transform:uppercase;">Periodo / etiqueta meta mes</label><br>
-                    <input type="text" name="periodo_label" value="{{ old('periodo_label', $periodo) }}" placeholder="META MES SEPTIEMBRE">
+                    <input type="text" name="periodo_label" id="mt-periodo" value="{{ old('periodo_label', $periodo) }}" placeholder="META MES SEPTIEMBRE">
                 </div>
             @elseif($periodo)
                 <p style="margin:0 0 12px;"><strong>{{ $periodo }}</strong></p>
@@ -90,20 +90,12 @@
                                                 <input type="hidden" name="metas[{{ $i }}][id]" value="{{ $m->id }}">
                                             @endif
                                         </td>
-                                        <td>
-                                            @if($editable)
-                                                <input type="number" step="0.0001" name="metas[{{ $i }}][meta_venta_lv_sab]" value="{{ old('metas.'.$i.'.meta_venta_lv_sab', $m->meta_venta_lv_sab) }}">
-                                            @else
-                                                {{ $fmt($m->meta_venta_lv_sab) }}
-                                            @endif
-                                        </td>
-                                        <td>
-                                            @if($editable)
-                                                <input type="number" step="0.0001" name="metas[{{ $i }}][meta_venta_domingo]" value="{{ old('metas.'.$i.'.meta_venta_domingo', $m->meta_venta_domingo) }}">
-                                            @else
-                                                {{ $fmt($m->meta_venta_domingo) }}
-                                            @endif
-                                        </td>
+                                        @php
+                                            $ventaMes = (float) old('metas.'.$i.'.venta_meta_mes', $m->venta_meta_mes);
+                                            $calcVenta = app(\App\Services\VentasDiariasService::class)->metaVentaDiaria($ventaMes, (int) $diasMes, (int) $domingosMes);
+                                        @endphp
+                                        <td class="mt-diaria" data-i="{{ $i }}">{{ number_format($calcVenta['diaria'], 4) }}</td>
+                                        <td class="mt-domingo" data-i="{{ $i }}">{{ number_format($calcVenta['domingo'], 4) }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -124,20 +116,12 @@
                                 @foreach($metas as $i => $m)
                                     <tr>
                                         <td class="sede">{{ config('inventario.display.'.$m->sede, $m->sede) }}</td>
-                                        <td>
-                                            @if($editable)
-                                                <input type="number" step="0.0001" name="metas[{{ $i }}][meta_prod_lv_sab]" value="{{ old('metas.'.$i.'.meta_prod_lv_sab', $m->meta_prod_lv_sab) }}">
-                                            @else
-                                                {{ $fmt($m->meta_prod_lv_sab) }}
-                                            @endif
-                                        </td>
-                                        <td>
-                                            @if($editable)
-                                                <input type="number" step="0.0001" name="metas[{{ $i }}][meta_prod_domingo]" value="{{ old('metas.'.$i.'.meta_prod_domingo', $m->meta_prod_domingo) }}">
-                                            @else
-                                                {{ $fmt($m->meta_prod_domingo) }}
-                                            @endif
-                                        </td>
+                                        @php
+                                            $prodMes = (float) old('metas.'.$i.'.productos_meta_mes', $m->productos_meta_mes);
+                                            $calcProd = app(\App\Services\VentasDiariasService::class)->metaVentaDiaria($prodMes, (int) $diasMes, (int) $domingosMes);
+                                        @endphp
+                                        <td class="mt-prod-diaria" data-i="{{ $i }}">{{ number_format($calcProd['diaria'], 4) }}</td>
+                                        <td class="mt-prod-domingo" data-i="{{ $i }}">{{ number_format($calcProd['domingo'], 4) }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -170,14 +154,14 @@
                                     </td>
                                     <td>
                                         @if($editable)
-                                            <input type="number" step="0.01" name="metas[{{ $i }}][venta_meta_mes]" value="{{ old('metas.'.$i.'.venta_meta_mes', $m->venta_meta_mes) }}">
+                                            <input type="number" step="0.01" class="mt-venta-mes" data-i="{{ $i }}" name="metas[{{ $i }}][venta_meta_mes]" value="{{ old('metas.'.$i.'.venta_meta_mes', $m->venta_meta_mes) }}">
                                         @else
                                             {{ $fmt($m->venta_meta_mes) }}
                                         @endif
                                     </td>
                                     <td>
                                         @if($editable)
-                                            <input type="number" step="0.01" name="metas[{{ $i }}][productos_meta_mes]" value="{{ old('metas.'.$i.'.productos_meta_mes', $m->productos_meta_mes) }}">
+                                            <input type="number" step="0.01" class="mt-prod-mes" data-i="{{ $i }}" name="metas[{{ $i }}][productos_meta_mes]" value="{{ old('metas.'.$i.'.productos_meta_mes', $m->productos_meta_mes) }}">
                                         @else
                                             {{ $fmt($m->productos_meta_mes) }}
                                         @endif
@@ -211,4 +195,55 @@
         </form>
     @endif
 </div>
+@if($editable && $metas->isNotEmpty())
+<script>
+(function () {
+    const meses = {ENERO:1,FEBRERO:2,MARZO:3,ABRIL:4,MAYO:5,JUNIO:6,JULIO:7,AGOSTO:8,SEPTIEMBRE:9,OCTUBRE:10,NOVIEMBRE:11,DICIEMBRE:12};
+    let dias = {{ (int) $diasMes }};
+    let domingos = {{ (int) $domingosMes }};
+    const fmt = (n) => (Number(n) || 0).toLocaleString('en-US', {minimumFractionDigits: 4, maximumFractionDigits: 4});
+    function calendarioDe(label) {
+        const up = (label || '').toUpperCase();
+        const anio = (up.match(/20\d{2}/) || [])[0];
+        for (const [nombre, num] of Object.entries(meses)) {
+            if (!up.includes(nombre)) continue;
+            const y = anio ? Number(anio) : new Date().getFullYear();
+            const total = new Date(y, num, 0).getDate();
+            let sundays = 0;
+            for (let d = 1; d <= total; d++) {
+                if (new Date(y, num - 1, d).getDay() === 0) sundays++;
+            }
+            return {dias: total, domingos: sundays};
+        }
+        return {dias, domingos};
+    }
+    function reparto(meta) {
+        const habiles = Math.max(1, dias - domingos);
+        const dia = dias > 0 ? (Number(meta) || 0) / dias : 0;
+        const resto = (Number(meta) || 0) - domingos * (dia / 2);
+        const diaria = Math.round((resto / habiles) * 10000) / 10000;
+        return {diaria, domingo: Math.round((diaria / 2) * 10000) / 10000};
+    }
+    function pintarFila(input, diariaSel, domingoSel) {
+        const i = input.dataset.i;
+        const calc = reparto(parseFloat(input.value || '0') || 0);
+        const celda = document.querySelector(diariaSel + '[data-i="' + i + '"]');
+        const domingo = document.querySelector(domingoSel + '[data-i="' + i + '"]');
+        if (celda) celda.textContent = fmt(calc.diaria);
+        if (domingo) domingo.textContent = fmt(calc.domingo);
+    }
+    function pintar() {
+        document.querySelectorAll('.mt-venta-mes').forEach((input) => pintarFila(input, '.mt-diaria', '.mt-domingo'));
+        document.querySelectorAll('.mt-prod-mes').forEach((input) => pintarFila(input, '.mt-prod-diaria', '.mt-prod-domingo'));
+    }
+    document.getElementById('mt-periodo')?.addEventListener('input', (e) => {
+        const cal = calendarioDe(e.target.value);
+        dias = cal.dias;
+        domingos = cal.domingos;
+        pintar();
+    });
+    document.querySelectorAll('.mt-venta-mes, .mt-prod-mes').forEach((input) => input.addEventListener('input', pintar));
+})();
+</script>
+@endif
 @endsection
