@@ -15,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -892,7 +893,11 @@ class CompradorController extends Controller
         $pedidosSolicitados = collect();
         $qPedirStats = [];
         $qPedirCount = 0;
+        $qPedirCerrados = 0;
         if (Schema::hasTable('pedidos_solicitados')) {
+            if ($needsQPedir) {
+                $qPedirCerrados = $this->cerrarPedidosYaComprados($request->user()?->id);
+            }
             $pendientes = PedidoSolicitado::query()->where('estado', 'pendiente');
             $qPedirCount = (int) (clone $pendientes)
                 ->selectRaw('COUNT(DISTINCT producto) as aggregate')
@@ -979,6 +984,7 @@ class CompradorController extends Controller
             'pedidosSolicitados' => $pedidosSolicitados,
             'qPedirStats' => $qPedirStats,
             'qPedirCount' => $qPedirCount,
+            'qPedirCerrados' => $qPedirCerrados,
             'qPedirStockFilter' => $request->query('q_pedir_stock', 'todos'),
             'activeTab' => $activeTab,
         ]);
@@ -995,6 +1001,102 @@ class CompradorController extends Controller
         }
 
         return trim((string) $request->query('q', ''));
+    }
+
+    /**
+     * Si la última compra del producto es posterior a la última solicitud pendiente,
+     * la marca como comprada con el proveedor del catálogo y esa fecha.
+     */
+    private function cerrarPedidosYaComprados(?int $userId): int
+    {
+        if (config('database.default') !== 'pgsql') {
+            return 0;
+        }
+
+        $grupos = PedidoSolicitado::query()
+            ->where('estado', 'pendiente')
+            ->selectRaw('producto, MAX(codigo) as codigo, MAX(producto_id) as producto_id, MAX(created_at) as ultima_solicitud')
+            ->groupBy('producto')
+            ->get();
+
+        if ($grupos->isEmpty()) {
+            return 0;
+        }
+
+        $ids = $grupos->pluck('producto_id')->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $codigos = $grupos->pluck('codigo')->filter()->map(fn ($c) => strtoupper(trim((string) $c)))->filter(fn ($c) => $c !== '' && $c !== 'MANUAL')->unique()->values()->all();
+        if ($ids === [] && $codigos === []) {
+            return 0;
+        }
+
+        $compras = DB::connection('pgsql')
+            ->table('inventario_v2.productos as p')
+            ->leftJoin(DB::raw("(
+                SELECT producto_id,
+                    MAX(ultima_compra) FILTER (
+                        WHERE ultima_compra >= DATE '1990-01-01'
+                          AND ultima_compra <= CURRENT_DATE + 1
+                    ) AS ultima_compra
+                FROM inventario_v2.ventas_historicas
+                GROUP BY producto_id
+            ) as vh"), 'vh.producto_id', '=', 'p.id')
+            ->where(function ($query) use ($ids, $codigos) {
+                if ($ids !== []) {
+                    $query->whereIn('p.id', $ids);
+                }
+                if ($codigos !== []) {
+                    $method = $ids !== [] ? 'orWhereIn' : 'whereIn';
+                    $query->{$method}(DB::raw('UPPER(TRIM(p.codigo))'), $codigos);
+                }
+            })
+            ->get(['p.id', 'p.codigo', 'p.proveedor', 'vh.ultima_compra']);
+
+        $porId = [];
+        $porCodigo = [];
+        foreach ($compras as $row) {
+            if (! $row->ultima_compra) {
+                continue;
+            }
+            $porId[(int) $row->id] = $row;
+            $porCodigo[strtoupper(trim((string) $row->codigo))] = $row;
+        }
+
+        $cerrados = 0;
+        foreach ($grupos as $grupo) {
+            $codigo = strtoupper(trim((string) $grupo->codigo));
+            $info = $porId[(int) $grupo->producto_id] ?? $porCodigo[$codigo] ?? null;
+            if (! $info || ! $info->ultima_compra) {
+                continue;
+            }
+
+            $compraDia = substr((string) $info->ultima_compra, 0, 10);
+            $pedidoDia = \Carbon\Carbon::parse($grupo->ultima_solicitud)->toDateString();
+            if ($compraDia <= $pedidoDia) {
+                continue;
+            }
+
+            $proveedor = trim((string) ($info->proveedor ?? ''));
+            if ($proveedor === '') {
+                continue;
+            }
+
+            $updated = PedidoSolicitado::query()
+                ->where('producto', $grupo->producto)
+                ->where('estado', 'pendiente')
+                ->update([
+                    'estado' => 'comprado',
+                    'compra_proveedor' => mb_substr($proveedor, 0, 255),
+                    'fecha_compra' => $compraDia,
+                    'fecha_despacho_estimada' => null,
+                    'atendido_at' => now(),
+                    'atendido_por' => $userId,
+                ]);
+            if ($updated > 0) {
+                $cerrados++;
+            }
+        }
+
+        return $cerrados;
     }
 
     /**

@@ -96,6 +96,91 @@ class AsistentePaginaTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_recorta_el_texto_largo_de_la_pagina(): void
+    {
+        Env::getRepository()->set('GEMINI_API_KEY', 'test-key');
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => '{"respuesta":"Listo.","rellenar":[]}']]],
+                ]],
+            ]),
+        ]);
+
+        $this->actingAs($this->usuario());
+
+        $this->postJson(route('asistente.consultar'), [
+            'mensaje' => 'hola',
+            'pagina' => [
+                'titulo' => str_repeat('Título ', 40),
+                'texto' => str_repeat('á', 12000),
+            ],
+        ])->assertOk()
+            ->assertJsonPath('respuesta', 'Listo.');
+    }
+
+    public function test_para_migue_avisa_a_miguel_aular(): void
+    {
+        if (! Schema::hasTable('notifications')) {
+            Schema::create('notifications', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('sender_id')->nullable();
+                $table->unsignedBigInteger('receiver_id');
+                $table->text('message');
+                $table->timestamp('read_at')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        Env::getRepository()->set('GEMINI_API_KEY', 'test-key');
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => '{"respuesta":"De acuerdo.","rellenar":[],"guardar":false,"avisar":null,"accion":null}']]],
+                ]],
+            ]),
+        ]);
+
+        $miguel = User::create([
+            'name' => 'Miguel Aular',
+            'email' => 'miguelaular17@gmail.com',
+            'password' => 'password123',
+            'role' => User::ROLE_ADMIN,
+        ]);
+        $remitente = $this->usuario();
+
+        $this->actingAs($remitente)->postJson(route('asistente.consultar'), [
+            'mensaje' => 'esto es para migue: revisar la caja de Doral',
+            'pagina' => ['titulo' => 'Ventas', 'url' => '/ventas'],
+        ])->assertOk()
+            ->assertJsonPath('respuesta', fn ($texto) => str_contains($texto, 'Miguel Aular'));
+
+        $aviso = \App\Models\Notification::query()->first();
+        $this->assertNotNull($aviso);
+        $this->assertSame($miguel->id, $aviso->receiver_id);
+        $this->assertSame($remitente->id, $aviso->sender_id);
+        $this->assertStringContainsString('caja de Doral', $aviso->message);
+    }
+
+    public function test_guardar_cuando_piden_crear_en_la_pantalla(): void
+    {
+        Env::getRepository()->set('GEMINI_API_KEY', 'test-key');
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => ['parts' => [['text' => '{"respuesta":"Relleno el pedido.","rellenar":[],"guardar":false,"accion":null}']]],
+                ]],
+            ]),
+        ]);
+
+        $this->actingAs($this->usuario());
+
+        $this->postJson(route('asistente.consultar'), [
+            'mensaje' => 'crea el pedido',
+        ])->assertOk()
+            ->assertJsonPath('guardar', false);
+    }
+
     public function test_cada_usuario_ve_solo_su_conversacion(): void
     {
         Env::getRepository()->set('GEMINI_API_KEY', 'test-key');

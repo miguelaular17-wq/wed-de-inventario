@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\GerencialAnalyticsService;
 use App\Services\GerencialDashboardService;
+use App\Services\IndicadoresOperativosService;
 use App\Services\StockSedeDashboardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -133,6 +134,33 @@ class GerencialController extends Controller
         return view('gerencial.clientes', $ctx + $data);
     }
 
+    public function compras(Request $request, GerencialDashboardService $gerencial, IndicadoresOperativosService $indicadores): View
+    {
+        $ctx = $this->contexto($request, $gerencial);
+        $sede = $this->sedeFiltro($ctx['filtros']['sede']);
+        $data = $indicadores->compras($ctx['periodo']['inicio'], $ctx['periodo']['fin'], $sede);
+
+        return view('gerencial.compras', $ctx + $data);
+    }
+
+    public function cajas(Request $request, GerencialDashboardService $gerencial, IndicadoresOperativosService $indicadores): View
+    {
+        $ctx = $this->contexto($request, $gerencial);
+        $sede = $this->sedeFiltro($ctx['filtros']['sede']);
+        $data = $indicadores->cajas($ctx['periodo']['inicio'], $ctx['periodo']['fin'], $sede);
+
+        return view('gerencial.cajas', $ctx + $data);
+    }
+
+    public function traslados(Request $request, GerencialDashboardService $gerencial, IndicadoresOperativosService $indicadores): View
+    {
+        $ctx = $this->contexto($request, $gerencial);
+        $sede = $this->sedeFiltro($ctx['filtros']['sede']);
+        $data = $indicadores->traslados($ctx['periodo']['inicio'], $ctx['periodo']['fin'], $sede);
+
+        return view('gerencial.traslados', $ctx + $data);
+    }
+
     public function stock(StockSedeDashboardService $stock): View
     {
         return view('gerencial.stock', $stock->resumen());
@@ -187,5 +215,12 @@ class GerencialController extends Controller
             'sedes' => $gerencial->sedesVentas(),
             'catalogos' => $gerencial->catalogos(),
         ];
+    }
+
+    private function sedeFiltro(?string $sede): ?string
+    {
+        $sede = strtoupper(trim((string) $sede));
+
+        return $sede === '' || $sede === 'TODAS' ? null : $sede;
     }
 }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\ImportController;
 use App\Http\Controllers\Admin\MovimientoController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\SyncRemoteController;
+use App\Http\Controllers\SyncDesktopController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\InventarioController;
 use App\Http\Controllers\RequisicionController;
@@ -191,6 +192,15 @@ Route::middleware(['auth'])->prefix('gerencial')->group(function () {
     Route::get('/stock', [GerencialController::class, 'stock'])
         ->middleware('permission:gerencial.valorizados')
         ->name('gerencial.stock');
+    Route::get('/compras', [GerencialController::class, 'compras'])
+        ->middleware('permission:gerencial')
+        ->name('gerencial.compras');
+    Route::get('/cajas', [GerencialController::class, 'cajas'])
+        ->middleware('permission:gerencial')
+        ->name('gerencial.cajas');
+    Route::get('/traslados', [GerencialController::class, 'traslados'])
+        ->middleware('permission:gerencial.valorizados')
+        ->name('gerencial.traslados');
 });
 
 Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')->group(function () {
@@ -231,6 +241,14 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::get('/sincronizadores', [SyncRemoteController::class, 'index'])->name('sync.index');
     Route::post('/sincronizadores/comando', [SyncRemoteController::class, 'sendCommand'])->name('sync.command');
     Route::get('/sincronizadores/status', [SyncRemoteController::class, 'status'])->name('sync.status');
+    Route::post('/sincronizadores/version', [SyncDesktopController::class, 'publish'])->name('sync.publish');
+});
+
+// API del sincronizador de escritorio (token en header/query)
+Route::prefix('sync-desktop')->name('sync_desktop.')->group(function () {
+    Route::get('/bootstrap', [SyncDesktopController::class, 'bootstrap'])->name('bootstrap');
+    Route::get('/manifest', [SyncDesktopController::class, 'manifest'])->name('manifest');
+    Route::get('/download', [SyncDesktopController::class, 'download'])->name('download');
 });
 
 

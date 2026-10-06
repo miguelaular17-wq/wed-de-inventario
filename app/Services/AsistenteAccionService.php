@@ -33,6 +33,8 @@ class AsistenteAccionService
             return $resultado;
         }
 
+        $resultado['guardar_bloqueado'] = true;
+
         if (! $user->canAccessNomina()) {
             Cache::forget($this->clave($user->id));
             $resultado['respuesta'] = 'No tienes permiso para registrar anticipos de nómina.';
@@ -130,6 +132,9 @@ class AsistenteAccionService
         $empleado = '';
         if (preg_match('/(?:\ba\b|\bpara\b)\s+([A-Za-zÁÉÍÓÚáéíóúñÑ][A-Za-zÁÉÍÓÚáéíóúñÑ\s\.]{2,80})$/u', $mensaje, $nombre)) {
             $empleado = trim($nombre[1]);
+            if (preg_match('/^(?:el\s+|la\s+)?(?:migue|miguel(?:\s+aular)?)$/iu', $empleado)) {
+                $empleado = '';
+            }
         }
 
         return [

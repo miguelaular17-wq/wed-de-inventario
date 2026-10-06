@@ -64,9 +64,9 @@
     if ($u->hasAccessToSedeViews() && session('sede_local')) {
         $sedeItems[] = $link('Ventas', route('ventas.index'), request()->routeIs('ventas.index'), 'nav-ventas');
         $sedeItems[] = $link('Mayor Demanda', route('ventas.mayor_demanda'), request()->routeIs('ventas.mayor_demanda'));
-        $sedeItems[] = $link('Inventario', route('inventario.index'), request()->routeIs('inventario.*'), 'nav-inventario');
+        $sedeItems[] = $link('Inventario tienda', route('inventario.index'), request()->routeIs('inventario.*'), 'nav-inventario');
         if ($u->canSeeCatalogoExistencias() && ! $u->isVendedor()) {
-            $sedeItems[] = $link('Stock', route('vendedor.dashboard'), request()->routeIs('vendedor.dashboard') && ! request()->routeIs('vendedor.jrz'));
+            $sedeItems[] = $link('Stock tienda', route('vendedor.dashboard'), request()->routeIs('vendedor.dashboard') && ! request()->routeIs('vendedor.jrz'));
             if ($u->canAccess('vendedor.jrz')) {
                 $sedeItems[] = $link('Stock JRZ', route('vendedor.jrz'), request()->routeIs('vendedor.jrz'));
             }
@@ -82,6 +82,8 @@
     if ($u->canAccess('gerencial')) {
         $gerencialItems[] = $link('Dashboard', route('gerencial.dashboard'), request()->routeIs('gerencial.dashboard'));
         $gerencialItems[] = $link('Metas de tienda', route('metas_tienda.index'), request()->routeIs('metas_tienda.*'));
+        $gerencialItems[] = $link('Equipo de compra', route('gerencial.compras'), request()->routeIs('gerencial.compras'));
+        $gerencialItems[] = $link('Efectividad de caja', route('gerencial.cajas'), request()->routeIs('gerencial.cajas'));
     }
     if ($u->canAccess('gerencial.rentabilidad')) {
         $gerencialItems[] = $link('Rentabilidad', route('gerencial.rentabilidad'), request()->routeIs('gerencial.rentabilidad'));
@@ -93,12 +95,31 @@
         $gerencialItems[] = $link('Devoluciones', route('gerencial.devoluciones'), request()->routeIs('gerencial.devoluciones'));
     }
     if ($u->canAccess('gerencial.valorizados')) {
-        $gerencialItems[] = $link('Inventario', route('gerencial.valorizados'), request()->routeIs('gerencial.valorizados'));
+        $gerencialItems[] = $link('Inventario valorizado', route('gerencial.valorizados'), request()->routeIs('gerencial.valorizados'));
         $gerencialItems[] = $link('Stock por sede', route('gerencial.stock'), request()->routeIs('gerencial.stock'));
+        $gerencialItems[] = $link('Traslados', route('gerencial.traslados'), request()->routeIs('gerencial.traslados'));
     }
     if ($u->canAccess('gerencial.ajustes')) {
         $gerencialItems[] = $link('Ajustes', route('gerencial.ajustes'), request()->routeIs('gerencial.ajustes'));
     }
+
+    $finanzasItems = [
+        $link('Flujo de Caja', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*')),
+        $link('Cuentas por Pagar', route('finanzas.cuentas_por_pagar'), request()->routeIs('finanzas.cuentas_por_pagar')),
+        $link('My Delivery', route('finanzas.my_delivery'), request()->routeIs('finanzas.my_delivery')),
+        $link('Gasto Directivos', route('finanzas.gasto_directivos'), request()->routeIs('finanzas.gasto_directivos*')),
+        $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*')),
+        $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones')),
+        $link('Lotes punto de venta', route('finanzas.conciliaciones.lotes'), request()->routeIs('finanzas.conciliaciones.lotes')),
+        $link('Calendario conciliaciones', route('finanzas.calendario_conciliaciones'), request()->routeIs('finanzas.calendario_conciliaciones')),
+        $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*')),
+        $link('Ventas diarias', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*')),
+    ];
+    $cobranzaItems = [
+        $link('Cobranza', route('cobranza.index'), request()->routeIs('cobranza.*')),
+        $link('Contratos', route('contratos.index'), request()->routeIs('contratos.*')),
+        $link('Patrimonial', route('patrimonial.dashboard'), request()->routeIs('patrimonial.*')),
+    ];
 
     if ($u->role === 'admin') {
         if ($gerencialItems) {
@@ -110,8 +131,15 @@
             $link('Movimientos', route('admin.movimientos.index'), request()->routeIs('admin.movimientos.*'), 'admin-movimientos'),
             $link('Productos', route('admin.productos.index'), request()->routeIs('admin.productos.*')),
             $link('Sync Logs', route('admin.sync_logs.index'), request()->routeIs('admin.sync_logs.*')),
+            $link('Sincronizadores', route('admin.sync.index'), request()->routeIs('admin.sync.*')),
             $link('Usuarios', route('admin.users.index'), request()->routeIs('admin.users.*')),
         ]);
+        $comprasAdmin = $comprasNavItems();
+        if ($comprasAdmin) {
+            $nav[] = count($comprasAdmin) === 1 ? $comprasAdmin[0] : $drop('Compras', $comprasAdmin);
+        }
+        $nav[] = $drop('Finanzas', $finanzasItems);
+        $nav[] = $drop('Cobranza', $cobranzaItems);
     }
 
     if ($u->isGerente()) {
@@ -133,7 +161,7 @@
         if ($esVendedorJrz && $u->canAccess('vendedor.jrz')) {
             $nav[] = $link('Stock JRZ', route('vendedor.jrz'), request()->routeIs('vendedor.*'));
         } else {
-            $nav[] = $link('Stock', route('vendedor.dashboard'), request()->routeIs('vendedor.dashboard') && ! request()->routeIs('vendedor.jrz'));
+            $nav[] = $link('Stock tienda', route('vendedor.dashboard'), request()->routeIs('vendedor.dashboard') && ! request()->routeIs('vendedor.jrz'));
             if ($u->canAccess('vendedor.jrz')) {
                 $nav[] = $link('Stock JRZ', route('vendedor.jrz'), request()->routeIs('vendedor.jrz'));
             }
@@ -173,23 +201,8 @@
         $nav[] = count($comprasItems) === 1
             ? $comprasItems[0]
             : $drop('Compras', $comprasItems);
-        $nav[] = $drop('Finanzas', [
-            $link('Flujo de Caja', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*')),
-            $link('Cuentas por Pagar', route('finanzas.cuentas_por_pagar'), request()->routeIs('finanzas.cuentas_por_pagar')),
-            $link('My Delivery', route('finanzas.my_delivery'), request()->routeIs('finanzas.my_delivery')),
-            $link('Gasto Directivos', route('finanzas.gasto_directivos'), request()->routeIs('finanzas.gasto_directivos*')),
-            $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*')),
-            $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones')),
-            $link('Lotes punto de venta', route('finanzas.conciliaciones.lotes'), request()->routeIs('finanzas.conciliaciones.lotes')),
-            $link('Calendario conciliaciones', route('finanzas.calendario_conciliaciones'), request()->routeIs('finanzas.calendario_conciliaciones')),
-            $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*')),
-            $link('Ventas diarias', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*')),
-        ]);
-        $nav[] = $drop('Cobranza', [
-            $link('Cobranza', route('cobranza.index'), request()->routeIs('cobranza.*')),
-            $link('Contratos', route('contratos.index'), request()->routeIs('contratos.*')),
-            $link('Patrimonial', route('patrimonial.dashboard'), request()->routeIs('patrimonial.*')),
-        ]);
+        $nav[] = $drop('Finanzas', $finanzasItems);
+        $nav[] = $drop('Cobranza', $cobranzaItems);
     } elseif ($u->role !== 'admin') {
         if ($u->canEnterCompras()) {
             $comprasItems = $comprasNavItems();
@@ -251,7 +264,7 @@
         $nav[] = $link('Metas', route('metas.index'), request()->routeIs('metas.*'));
     }
 
-    if ($u->role !== 'admin') {
+    if ($u->canAccess('nomina.periodos') || $u->canAccess('nomina.comisiones') || $u->canAccess('nomina')) {
         $nominaItems = [];
         if ($u->canAccess('nomina.periodos')) {
             $nominaItems[] = $link('Períodos', route('nomina.periodos.index'), request()->routeIs('nomina.periodos.*'));
@@ -261,17 +274,21 @@
         }
         if ($u->canAccess('nomina')) {
             $nominaItems = array_merge($nominaItems, [
-                $link('Comisiones de marca', route('nomina.comisiones_marca.index'), request()->routeIs('nomina.comisiones_marca.*')),
-                $link('Adelantos', route('nomina.adelantos.index'), request()->routeIs('nomina.adelantos.*')),
-                $link('Faltante de caja', route('nomina.faltante_caja.index'), request()->routeIs('nomina.faltante_caja.*')),
-                $link('Descuento mercancía', route('nomina.mercancia.index'), request()->routeIs('nomina.mercancia.*')),
-                $link('Deducciones y bonos', route('nomina.ajustes.index'), request()->routeIs('nomina.ajustes.index', 'nomina.ajustes.escritorio')),
-                $link('Horas extras', route('nomina.horas_extras.index'), request()->routeIs('nomina.horas_extras.index', 'nomina.horas_extras.masivas')),
-                $link('Días libres', route('nomina.dias_libres.index'), request()->routeIs('nomina.dias_libres.*')),
-                $link('Préstamos', route('nomina.prestamos.index'), request()->routeIs('nomina.prestamos.*')),
-                $link('Deudas del Personal', route('nomina.deudas.index'), request()->routeIs('nomina.deudas.*')),
-                $link('Empleados', route('nomina.empleados.index'), request()->routeIs('nomina.empleados.*')),
-                $link('Organigrama', route('nomina.organizacion'), request()->routeIs('nomina.organizacion')),
+                $group('Del día', [
+                    $link('Comisiones de marca', route('nomina.comisiones_marca.index'), request()->routeIs('nomina.comisiones_marca.*')),
+                    $link('Adelantos', route('nomina.adelantos.index'), request()->routeIs('nomina.adelantos.*')),
+                    $link('Faltante de caja', route('nomina.faltante_caja.index'), request()->routeIs('nomina.faltante_caja.*')),
+                    $link('Descuento mercancía', route('nomina.mercancia.index'), request()->routeIs('nomina.mercancia.*')),
+                    $link('Deducciones y bonos', route('nomina.ajustes.index'), request()->routeIs('nomina.ajustes.index', 'nomina.ajustes.escritorio')),
+                    $link('Horas extras', route('nomina.horas_extras.index'), request()->routeIs('nomina.horas_extras.index', 'nomina.horas_extras.masivas')),
+                ]),
+                $group('Personal', [
+                    $link('Días libres', route('nomina.dias_libres.index'), request()->routeIs('nomina.dias_libres.*')),
+                    $link('Préstamos', route('nomina.prestamos.index'), request()->routeIs('nomina.prestamos.*')),
+                    $link('Deudas del Personal', route('nomina.deudas.index'), request()->routeIs('nomina.deudas.*')),
+                    $link('Empleados', route('nomina.empleados.index'), request()->routeIs('nomina.empleados.*')),
+                    $link('Organigrama', route('nomina.organizacion'), request()->routeIs('nomina.organizacion')),
+                ]),
                 $group('Configuración', [
                     $link('Ajustes', route('nomina.configuracion.index'), request()->routeIs('nomina.configuracion.*')),
                     $link('Sedes y áreas', route('nomina.sedes.index'), request()->routeIs('nomina.sedes.*')),

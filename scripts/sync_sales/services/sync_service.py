@@ -18,6 +18,7 @@ class SyncService:
         self.stop_event = None
         self.is_syncing = False
         self.last_detalle_run = None
+        self.last_detalle = {"ventas": None, "ajustes": None}
 
     def start(self, stop_event):
         self.stop_event = stop_event
@@ -102,12 +103,9 @@ class SyncService:
             POLL_INTERVAL = 60  # cada cuántos segundos verificar comandos
 
             while elapsed < current_interval and not self.stop_event.is_set():
-                # Dormir en bloques de 1 segundo para reaccionar rápido al stop
                 sleep_chunk = min(POLL_INTERVAL, current_interval - elapsed)
-                for _ in range(sleep_chunk):
-                    if self.stop_event.is_set():
-                        break
-                    time.sleep(1)
+                if self.stop_event.wait(sleep_chunk):
+                    break
                 elapsed += sleep_chunk
 
                 if self.stop_event.is_set():
@@ -124,33 +122,30 @@ class SyncService:
                 except Exception as poll_err:
                     logger.warning(f"[Loop] Error en heartbeat/poll: {poll_err}")
 
-                # Timer 2: Módulos detallados con intervalo independiente (solo registros nuevos)
+                # Cada módulo periódico usa su propio intervalo (horas).
                 try:
-                    interval_detalle = config.get("interval_detalle", 10800)
                     now_ts = time.time()
-                    if self.last_detalle_run is None or (now_ts - self.last_detalle_run) >= interval_detalle:
-                        run_detalle = False
-
-                        if config.get("sync_ventas_detalle", False):
-                            run_detalle = True
-                            logger.info("[Timer2] ▶ Ejecutando sincronización DELTA de Ventas Detalladas...")
-                            try:
-                                from services.ventas_detalle_service import VentasDetalleService
-                                VentasDetalleService.execute()
-                            except Exception as e:
-                                logger.error(f"[Timer2] Error en VentasDetalleService: {e}")
-
-                        if config.get("sync_ajustes", False):
-                            run_detalle = True
-                            logger.info("[Timer2] ▶ Ejecutando sincronización DELTA de Ajustes...")
-                            try:
-                                from services.ajustes_service import AjustesService
-                                AjustesService.execute()
-                            except Exception as e:
-                                logger.error(f"[Timer2] Error en AjustesService: {e}")
-
-                        if run_detalle:
-                            self.last_detalle_run = now_ts
+                    fallback_h = max(1, int(config.get("interval_detalle", 10800) / 3600))
+                    plan = (
+                        ("ventas", "sync_ventas_detalle", "interval_ventas_horas", "Ventas Detalladas", "services.ventas_detalle_service", "VentasDetalleService"),
+                        ("ajustes", "sync_ajustes", "interval_ajustes_horas", "Ajustes", "services.ajustes_service", "AjustesService"),
+                    )
+                    for clave, flag, horas_key, etiqueta, modulo, clase in plan:
+                        if not config.get(flag, False):
+                            continue
+                        horas = int(config.get(horas_key, fallback_h) or fallback_h)
+                        if horas < 1:
+                            horas = fallback_h
+                        ultimo = self.last_detalle.get(clave)
+                        if ultimo is not None and (now_ts - ultimo) < horas * 3600:
+                            continue
+                        logger.info(f"[Timer2] ▶ {etiqueta} (cada {horas} h)...")
+                        try:
+                            mod = __import__(modulo, fromlist=[clase])
+                            getattr(mod, clase).execute()
+                            self.last_detalle[clave] = now_ts
+                        except Exception as e:
+                            logger.error(f"[Timer2] Error en {etiqueta}: {e}")
                 except Exception as t2_err:
                     logger.warning(f"[Timer2] Error: {t2_err}")
 

@@ -86,6 +86,7 @@ class PeriodoController extends Controller
             'registros.empleado.cliente',
             'registros.empleado.empresa',
             'registros.empleado.sedeCatalogo',
+            'registros.empleado.cargoCatalogo',
             'liquidacionesComision.empleado.cliente',
             'calculadoPor',
             'aprobadoPor',

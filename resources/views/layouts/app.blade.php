@@ -6,9 +6,6 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
     <title>@yield('title', 'Nexo PD')</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/app.css?v={{ filemtime(public_path('css/app.css')) }}">
     @if(config('inventario.tutorial_enabled'))
     <link rel="stylesheet" href="/css/onboarding-tour.css">
@@ -241,7 +238,8 @@ document.addEventListener("DOMContentLoaded", function() {
 </script>
 @auth
     @php
-        $unreadNotifications = auth()->user()->notifications()->unread()->latest()->take(3)->get();
+        $unreadNotifications = auth()->user()->notifications()->unread()->with('sender')->latest()->take(3)->get();
+        $unreadTotal = auth()->user()->notifications()->unread()->count();
     @endphp
     @if($unreadNotifications->count() > 0)
         <div id="startup-notifications-toast" style="position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:12px; pointer-events:none;">
@@ -280,9 +278,9 @@ document.addEventListener("DOMContentLoaded", function() {
                     <button type="button" onclick="this.parentElement.style.display='none'" style="background:none; border:none; color:#94a3b8; cursor:pointer; font-size:1.25rem; line-height:1; padding:0 0 0 12px; margin:-4px 0 0 0;">&times;</button>
                 </div>
             @endforeach
-            @if(auth()->user()->notifications()->unread()->count() > 3)
+            @if($unreadTotal > 3)
                 <div class="toast-notification" style="justify-content:center; padding:12px; border-left-color:#64748b; cursor:pointer;" onclick="window.location.href='{{ route('notifications.index') }}'">
-                    <span style="font-size:0.85rem; color:#3b82f6; font-weight:600;">Ver {{ auth()->user()->notifications()->unread()->count() - 3 }} notificaciones más...</span>
+                    <span style="font-size:0.85rem; color:#3b82f6; font-weight:600;">Ver {{ $unreadTotal - 3 }} notificaciones más...</span>
                 </div>
             @endif
         </div>

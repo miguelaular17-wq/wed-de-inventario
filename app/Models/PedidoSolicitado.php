@@ -46,7 +46,7 @@ class PedidoSolicitado extends Model
     public function marcarComprado(
         string $proveedor,
         string $fechaCompra,
-        string $fechaDespacho,
+        ?string $fechaDespacho,
         int $userId
     ): void {
         $this->update([

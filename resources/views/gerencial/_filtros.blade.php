@@ -84,7 +84,7 @@
                 </select>
             </div>
         @endif
-        @if($modo !== 'ajustes')
+        @if(! in_array($modo, ['ajustes', 'operativo'], true))
             <div class="field">
                 <label>Producto</label>
                 <input name="producto" value="{{ $filtros['producto'] }}" placeholder="Código o nombre">

@@ -88,6 +88,10 @@ table.data-table tbody tr.row-mala-distribucion:hover {
     border-radius: 8px;
     border: 1.5px solid var(--border);
 }
+.qpedir-tab-btn[aria-selected="true"] {
+    color: #1d4ed8 !important;
+    border-bottom-color: #2563eb !important;
+}
 </style>
 @endpush
 <div class="compras-page">
@@ -98,7 +102,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
     </div>
 </div>
 
-@if(!auth()->user()->isMarketing() && ($activeTab ?? 'productos') !== 'publicidad')
+@if(!auth()->user()->isMarketing() && ($activeTab ?? '') === 'productos' && ($statusFilter ?? '') === 'Comprar')
 <div class="panel" style="margin-bottom: 20px; padding: 18px 20px; border: 1px solid #bfdbfe; background: #eff6ff;">
     <form method="GET" action="{{ route('comprador.quiebre.export') }}" style="display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;">
         <div style="flex: 1 1 280px;">
@@ -160,34 +164,34 @@ table.data-table tbody tr.row-mala-distribucion:hover {
 <div id="qpedir-tab" class="tab-content" style="display: {{ ($activeTab ?? '') === 'qpedir' ? 'block' : 'none' }};">
     @if(isset($pedidosSolicitados) && $pedidosSolicitados->isNotEmpty())
     <div class="panel pedidos-card" style="background: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0; padding: 20px; border-left: 4px solid #f59e0b; margin-bottom: 24px;">
-        <h2 style="margin: 0 0 16px; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+        @php
+            $gruposQPedir = [
+                ['key' => 'registrado', 'titulo' => 'Ya registrados', 'items' => $pedidosSolicitados->filter(fn ($p) => strtoupper(trim((string) $p->codigo)) !== 'MANUAL')->values()],
+                ['key' => 'manual', 'titulo' => 'Manual', 'items' => $pedidosSolicitados->filter(fn ($p) => strtoupper(trim((string) $p->codigo)) === 'MANUAL')->values()],
+            ];
+        @endphp
+        <h2 style="margin: 0 0 14px; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <span style="background:#fef3c7;color:#b45309;padding:4px 10px;border-radius:6px;font-size:0.85rem;">Q Pedir</span>
                 Solicitudes pendientes ({{ collect($pedidosSolicitados)->count() }})
             </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-                <form method="GET" action="{{ route('comprador.dashboard') }}" style="display:flex; gap: 4px; align-items: center; flex-wrap: wrap;">
-                    <input type="hidden" name="tab" value="qpedir">
-                    <input type="date" name="q_pedir_date" value="{{ request('q_pedir_date') }}" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; font-size: 0.8rem;" onchange="this.form.submit()">
-                    <select name="q_pedir_stock" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; font-size: 0.8rem;" onchange="this.form.submit()" title="Filtrar por existencia en sistema">
-                        <option value="todos" @selected(($qPedirStockFilter ?? 'todos') === 'todos')>Existencia: todas</option>
-                        <option value="con" @selected(($qPedirStockFilter ?? '') === 'con')>Con existencia</option>
-                        <option value="sin" @selected(($qPedirStockFilter ?? '') === 'sin')>Sin existencia</option>
-                    </select>
-                    @if(request('q_pedir_date') || request('q_pedir_stock', 'todos') !== 'todos')
-                        <a href="{{ route('comprador.dashboard', ['tab' => 'qpedir']) }}" style="text-decoration: none; color: #ef4444; font-size: 0.8rem; margin-right: 8px;">&times; Quitar filtros</a>
-                    @endif
-                </form>
-                <a href="{{ route('comprador.pedidos.excel') }}" class="btn-reporte" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #047857; background: #059669; color: white; text-decoration: none;">Excel Detallado</a>
-                <a href="{{ route('comprador.pedidos.diario') }}" class="btn-reporte" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #1e3a8a; background: #2563eb; color: white; text-decoration: none;">PDF Listado Diario</a>
-                <button type="button" onclick="generatePdfCharts()" class="btn-reporte" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #9333ea; background: #a855f7; color: white;">PDF Gráficos</button>
-            </div>
+            <button type="button" id="btn-qpedir-reportes" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #1e3a8a; background: #2563eb; color: white;">Reportes</button>
         </h2>
         <p style="margin:0 0 12px;color:#64748b;font-size:0.88rem;">
-            Productos solicitados desde el login. Filas en verde ya tienen stock global en sistema. Al marcar comprado o fuera de mercado se registra tu usuario.
+            Productos solicitados desde el login. Filas en verde ya tienen stock global en sistema. Si la última compra es posterior a la última solicitud, se marca comprado con el proveedor y esa fecha.
         </p>
-        <div style="margin-bottom: 10px;">
-            <input type="search" id="qpedir-filter" class="qpedir-search" placeholder="Filtrar producto, código o categoría…" oninput="filterQPedir(this.value)" style="background: #fff url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2214%22 height=%2214%22 fill=%22%2364748b%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M10 4a6 6 0 104.47 10.03l4.75 4.75 1.41-1.41-4.75-4.75A6 6 0 0010 4zm0 2a4 4 0 110 8 4 4 0 010-8z%22/%3E%3C/svg%3E') no-repeat 10px center;">
+        @if(($qPedirCerrados ?? 0) > 0)
+            <p style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:#ecfdf5;color:#047857;font-size:0.85rem;">
+                Se marcaron {{ $qPedirCerrados }} producto(s) como comprados: la última compra es posterior a la solicitud. Quedaron el proveedor y la fecha.
+            </p>
+        @endif
+        <div class="qpedir-tabs" style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid #e2e8f0;">
+            @foreach($gruposQPedir as $grupo)
+                <button type="button" class="qpedir-tab-btn" data-grupo="{{ $grupo['key'] }}" aria-selected="{{ $loop->first ? 'true' : 'false' }}"
+                    style="border:none;background:transparent;padding:8px 12px;font-size:0.85rem;font-weight:700;cursor:pointer;color:#64748b;border-bottom:2px solid transparent;margin-bottom:-1px;">
+                    {{ $grupo['titulo'] }} ({{ $grupo['items']->count() }})
+                </button>
+            @endforeach
         </div>
 
         <!-- Hidden form for PDF Charts -->
@@ -201,7 +205,19 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             <canvas id="hiddenPieChart" width="400" height="400"></canvas>
             <canvas id="hiddenBarChart" width="600" height="400"></canvas>
         </div>
-        <div class="table-wrap" id="qpedir-table-wrap">
+        <div id="qpedir-table-wrap">
+            @foreach($gruposQPedir as $grupo)
+                <section class="qpedir-lista" data-grupo="{{ $grupo['key'] }}" @if(! $loop->first) hidden @endif>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+                        <input type="search" class="qpedir-search qpedir-buscar" data-grupo="{{ $grupo['key'] }}" placeholder="Filtrar producto, código o categoría…" autocomplete="off" style="background: #fff url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2214%22 height=%2214%22 fill=%22%2364748b%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M10 4a6 6 0 104.47 10.03l4.75 4.75 1.41-1.41-4.75-4.75A6 6 0 0010 4zm0 2a4 4 0 110 8 4 4 0 010-8z%22/%3E%3C/svg%3E') no-repeat 10px center;">
+                        <select class="qpedir-stock" data-grupo="{{ $grupo['key'] }}" style="border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; font-size: 0.8rem;">
+                            <option value="todos">Existencia: todas</option>
+                            <option value="con">Con existencia</option>
+                            <option value="sin">Sin existencia</option>
+                        </select>
+                    </div>
+                    <p class="qpedir-vacio" hidden style="margin:0 0 8px;color:#64748b;font-size:0.85rem;">Ninguna solicitud coincide con el filtro.</p>
+                    <div class="table-wrap">
             <table class="data-table qpedir-table">
                 <thead>
                     <tr>
@@ -215,9 +231,9 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($pedidosSolicitados as $pedido)
+                    @foreach($grupo['items'] as $pedido)
                     @php $conStock = (int) ($pedido->stock_global ?? 0) > 0; @endphp
-                    <tr class="qpedir-row" data-filter="{{ strtolower($pedido->producto.' '.$pedido->codigo.' '.$pedido->categoria) }}" data-stock="{{ $conStock ? 'con' : 'sin' }}"
+                    <tr class="qpedir-row" data-grupo="{{ $grupo['key'] }}" data-filter="{{ strtolower($pedido->producto.' '.$pedido->codigo.' '.$pedido->categoria) }}" data-stock="{{ $conStock ? 'con' : 'sin' }}"
                         style="{{ $conStock ? 'background:#ecfdf5;' : '' }}">
                         <td class="col-code">{{ $pedido->codigo }}</td>
                         <td style="font-weight: 600;">{{ $pedido->producto }}</td>
@@ -253,6 +269,32 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                     @endforeach
                 </tbody>
             </table>
+                    </div>
+                </section>
+            @endforeach
+        </div>
+    </div>
+
+    <div id="modalQpedirReportes" hidden style="position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:10000;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:12px;max-width:420px;width:100%;padding:20px;box-shadow:0 20px 40px rgba(0,0,0,.15);" onclick="event.stopPropagation()">
+            <h3 style="margin:0 0 6px;font-size:1.05rem;">Reportes</h3>
+            <p class="muted" style="margin:0 0 14px;font-size:.85rem;">Descarga el listado o los gráficos de las solicitudes.</p>
+            <form method="GET" action="{{ route('comprador.dashboard') }}" style="margin-bottom:14px;">
+                <input type="hidden" name="tab" value="qpedir">
+                <label style="display:block;font-size:.75rem;font-weight:700;color:#64748b;margin-bottom:4px;">Fecha de solicitud</label>
+                <input type="date" name="q_pedir_date" value="{{ request('q_pedir_date') }}" style="width:100%;border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 10px; font-size: 0.85rem;" onchange="this.form.submit()">
+                @if(request('q_pedir_date'))
+                    <a href="{{ route('comprador.dashboard', ['tab' => 'qpedir']) }}" style="display:inline-block;margin-top:6px;color:#ef4444;font-size:0.8rem;text-decoration:none;">Quitar fecha</a>
+                @endif
+            </form>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <a href="{{ route('comprador.pedidos.excel') }}" style="padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; text-align:center; border: 1px solid #047857; background: #059669; color: white; text-decoration: none;">Excel detallado</a>
+                <a href="{{ route('comprador.pedidos.diario') }}" style="padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; text-align:center; border: 1px solid #1e3a8a; background: #2563eb; color: white; text-decoration: none;">PDF listado diario</a>
+                <button type="button" onclick="generatePdfCharts()" style="padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; border: 1px solid #9333ea; background: #a855f7; color: white;">PDF gráficos</button>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+                <button type="button" class="js-cerrar-reportes" style="padding:8px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;">Cerrar</button>
+            </div>
         </div>
     </div>
 
@@ -278,17 +320,10 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                         @endforeach
                     </datalist>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-                    <div>
-                        <label style="display:block;font-size:.75rem;font-weight:700;color:#64748b;margin-bottom:4px;">Fecha de compra</label>
-                        <input type="date" name="fecha_compra" id="comprado_fecha" required value="{{ now()->toDateString() }}"
-                               style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;">
-                    </div>
-                    <div>
-                        <label style="display:block;font-size:.75rem;font-weight:700;color:#64748b;margin-bottom:4px;">Despacho estimado</label>
-                        <input type="date" name="fecha_despacho_estimada" id="comprado_despacho" required
-                               style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;">
-                    </div>
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;font-size:.75rem;font-weight:700;color:#64748b;margin-bottom:4px;">Fecha de compra</label>
+                    <input type="date" name="fecha_compra" id="comprado_fecha" required value="{{ now()->toDateString() }}"
+                           style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;">
                 </div>
                 <div style="display:flex;gap:8px;justify-content:flex-end;">
                     <button type="button" class="js-cerrar-modal-comprado" style="padding:8px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;">Cancelar</button>
@@ -345,7 +380,6 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             var mm = String(hoy.getMonth() + 1).padStart(2, '0');
             var dd = String(hoy.getDate()).padStart(2, '0');
             document.getElementById('comprado_fecha').value = yyyy + '-' + mm + '-' + dd;
-            document.getElementById('comprado_despacho').value = '';
             showModal(modal);
             setTimeout(function () { document.getElementById('comprado_proveedor').focus(); }, 50);
         }
@@ -385,11 +419,10 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         });
 
         // Si hubo error de validación, reabrir el modal correspondiente
-        @if($errors->has('compra_proveedor') || $errors->has('fecha_compra') || $errors->has('fecha_despacho_estimada'))
+        @if($errors->has('compra_proveedor') || $errors->has('fecha_compra'))
             abrirModalComprado(@json(old('producto', '')));
             document.getElementById('comprado_proveedor').value = @json(old('compra_proveedor', ''));
             document.getElementById('comprado_fecha').value = @json(old('fecha_compra', now()->toDateString()));
-            document.getElementById('comprado_despacho').value = @json(old('fecha_despacho_estimada', ''));
         @endif
         @if($errors->has('motivo_fuera_mercado'))
             abrirModalFueraMercado(@json(old('producto', '')));
@@ -1586,26 +1619,73 @@ function filtrarPublicidad() {
     }
 }
 
-function filterQPedir(value) {
-    const needle = (value || '').toLowerCase().trim();
-    document.querySelectorAll('#qpedir-tab .qpedir-row').forEach((row) => {
-        row.style.display = !needle || (row.dataset.filter || '').includes(needle) ? '' : 'none';
+function filtrarListaQPedir(lista) {
+    if (!lista) return;
+    const needle = (lista.querySelector('.qpedir-buscar')?.value || '').toLowerCase().trim();
+    const stock = lista.querySelector('.qpedir-stock')?.value || 'todos';
+    let visibles = 0;
+    lista.querySelectorAll('.qpedir-row').forEach((row) => {
+        const textoOk = !needle || (row.dataset.filter || '').includes(needle);
+        const stockOk = stock === 'todos' || row.dataset.stock === stock;
+        const show = textoOk && stockOk;
+        row.style.display = show ? '' : 'none';
+        if (show) visibles++;
+    });
+    const vacio = lista.querySelector('.qpedir-vacio');
+    if (vacio) vacio.hidden = visibles > 0 || lista.querySelectorAll('.qpedir-row').length === 0;
+}
+
+function mostrarListaQPedir(key) {
+    document.querySelectorAll('#qpedir-tab .qpedir-lista').forEach((lista) => {
+        lista.hidden = lista.dataset.grupo !== key;
+    });
+    document.querySelectorAll('#qpedir-tab .qpedir-tab-btn').forEach((btn) => {
+        btn.setAttribute('aria-selected', btn.dataset.grupo === key ? 'true' : 'false');
     });
 }
 
 document.addEventListener('DOMContentLoaded', function () {
     const tableWrap = document.getElementById('qpedir-table-wrap');
-    const filter = document.getElementById('qpedir-filter');
     const scrollKey = 'qpedir-table-scroll';
     const filterKey = 'qpedir-table-filter';
 
-    if (filter) {
-        const savedFilter = sessionStorage.getItem(filterKey);
-        if (savedFilter !== null) {
-            filter.value = savedFilter;
-            filterQPedir(savedFilter);
-            sessionStorage.removeItem(filterKey);
+    document.querySelectorAll('#qpedir-tab .qpedir-tab-btn').forEach((btn) => {
+        btn.addEventListener('click', function () {
+            mostrarListaQPedir(btn.dataset.grupo);
+        });
+    });
+    document.querySelectorAll('#qpedir-tab .qpedir-lista').forEach((lista) => {
+        const buscar = lista.querySelector('.qpedir-buscar');
+        const stock = lista.querySelector('.qpedir-stock');
+        buscar?.addEventListener('input', function () { filtrarListaQPedir(lista); });
+        stock?.addEventListener('change', function () { filtrarListaQPedir(lista); });
+    });
+
+    const reportes = document.getElementById('modalQpedirReportes');
+    const abrirReportes = document.getElementById('btn-qpedir-reportes');
+    function showReportes() {
+        if (!reportes) return;
+        reportes.hidden = false;
+        reportes.style.display = 'flex';
+    }
+    function hideReportes() {
+        if (!reportes) return;
+        reportes.hidden = true;
+        reportes.style.display = 'none';
+    }
+    abrirReportes?.addEventListener('click', showReportes);
+    reportes?.addEventListener('click', function (e) {
+        if (e.target === reportes || e.target.closest('.js-cerrar-reportes')) hideReportes();
+    });
+
+    const savedFilter = sessionStorage.getItem(filterKey);
+    if (savedFilter !== null) {
+        const activo = document.querySelector('#qpedir-tab .qpedir-lista:not([hidden]) .qpedir-buscar');
+        if (activo) {
+            activo.value = savedFilter;
+            filtrarListaQPedir(activo.closest('.qpedir-lista'));
         }
+        sessionStorage.removeItem(filterKey);
     }
     if (tableWrap) {
         const savedScroll = sessionStorage.getItem(scrollKey);
@@ -1620,7 +1700,8 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.qpedir-action-form').forEach(function (form) {
         form.addEventListener('submit', function () {
             if (tableWrap) sessionStorage.setItem(scrollKey, String(tableWrap.scrollTop));
-            if (filter) sessionStorage.setItem(filterKey, filter.value);
+            const activo = document.querySelector('#qpedir-tab .qpedir-lista:not([hidden]) .qpedir-buscar');
+            if (activo) sessionStorage.setItem(filterKey, activo.value);
         });
     });
 });

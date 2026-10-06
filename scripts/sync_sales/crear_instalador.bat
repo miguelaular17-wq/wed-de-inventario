@@ -82,27 +82,13 @@ if exist "%BASE_DIR%README.md" (
     echo OK: README.md copiado.
 )
 
-echo Creando config.json plantilla...
-(
-echo {
-echo   "sede": "JRZ",
-echo   "interval_seconds": 1800,
-echo   "billing_db": {
-echo     "driver": "{SQL Server}",
-echo     "server": "localhost\\SQLEXPRESS",
-echo     "database": "suitedb_centro",
-echo     "trusted_connection": true,
-echo     "query": "SELECT h.fecha_emision, i.articulo, i.cantidad FROM [dbo].[documentos_venta] h WITH (NOLOCK) INNER JOIN [dbo].[documentos_venta_items] i WITH (NOLOCK) ON h.tipo_documento = i.tipo_documento AND h.numero_documento = i.numero_documento WHERE h.tipo_documento = 'FAC' AND h.fecha_emision ^> ? ORDER BY h.fecha_emision ASC"
-echo   },
-echo   "web_db": {
-echo     "host": "aws-1-us-west-2.pooler.supabase.com",
-echo     "port": 6543,
-echo     "database": "postgres",
-echo     "user": "postgres.vsgvjvamjvmtfptnixww",
-echo     "password": "W@mqkdhf#snW@68"
-echo   }
-echo }
-) > "%DIST_DIR%\config.json"
+echo Creando config.json plantilla (nube via bootstrap, sin password)...
+python -c "import json,os; from utils.constants import APP_VERSION, DEFAULT_UPDATE_URL, DEFAULT_SYNC_TOKEN; cfg={'sede':'JRZ','interval_seconds':1800,'update_url':DEFAULT_UPDATE_URL,'sync_token':DEFAULT_SYNC_TOKEN,'app_version':APP_VERSION,'sync_stock':True,'sync_precios':True,'sync_cobranzas':True,'sync_compras':True,'sync_ventas_detalle':True,'sync_ajustes':True,'inicio_dia_ventas_detalle':True,'inicio_dia_ajustes':True,'interval_detalle':10800,'billing_db':{'driver':'{SQL Server}','server':r'localhost\\SQLEXPRESS','database':'suitedb_centro','trusted_connection':True,'query':\"SELECT h.fecha_emision, i.articulo, i.cantidad FROM [dbo].[documentos_venta] h WITH (NOLOCK) INNER JOIN [dbo].[documentos_venta_items] i WITH (NOLOCK) ON h.tipo_documento = i.tipo_documento AND h.numero_documento = i.numero_documento WHERE h.tipo_documento = 'FAC' AND h.fecha_emision > ? ORDER BY h.fecha_emision ASC\"},'web_db':{'host':'','port':5432,'database':'postgres','user':'','password':''}}; open(os.path.join(r'%DIST_DIR%','config.json'),'w',encoding='utf-8').write(json.dumps(cfg,indent=2))"
+if %errorlevel% neq 0 (
+    echo [ERROR] No se pudo crear config.json
+    pause
+    exit /b 1
+)
 echo OK: config.json plantilla creado.
 
 echo Creando instalar.bat...
@@ -117,7 +103,7 @@ echo echo Creando acceso directo en el Escritorio...
 echo set "EXE_PATH=%%~dp0WinSyncService.exe"
 echo powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $desktop = [Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut($desktop + '\Sincronizador JRZ.lnk'); $s.TargetPath = '%%EXE_PATH%%'; $s.WorkingDirectory = '%%~dp0'; $s.Description = 'Sincronizador JRZ-TECH'; $s.Save()"
 echo echo OK: Acceso directo creado en el Escritorio.
-echo echo IMPORTANTE: Edita config.json con los datos de conexion de la sede.
+echo echo La nube se integra sola al abrir. Solo configura sede y SQL Server en la app.
 echo 
 ) > "%DIST_DIR%\instalar.bat"
 echo OK: instalar.bat creado.

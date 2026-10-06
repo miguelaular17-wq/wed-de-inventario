@@ -219,11 +219,48 @@ class FaltanteCajaService
      */
     public function resumenCuenta(NominaEmpleado $empleado): array
     {
-        return [
-            'cuenta' => $this->saldoCuenta($empleado),
-            'a_descontar' => $this->pendienteDe($empleado),
-            'salto' => $this->saltoRegistrado($empleado),
-        ];
+        return $this->resumenCuentas(collect([$empleado]))->get($empleado->id);
+    }
+
+    /**
+     * @param  Collection<int, NominaEmpleado>  $empleados
+     * @return Collection<int, array{cuenta:float,a_descontar:float,salto:float}>
+     */
+    public function resumenCuentas(Collection $empleados): Collection
+    {
+        $vacio = ['cuenta' => 0.0, 'a_descontar' => 0.0, 'salto' => 0.0];
+        $out = $empleados->mapWithKeys(fn (NominaEmpleado $empleado) => [$empleado->id => $vacio]);
+        if (! $this->disponible() || $empleados->isEmpty()) {
+            return $out;
+        }
+
+        $cuenta = $this->tieneDecision()
+            ? "SUM(CASE WHEN decision = '".NominaComisionDescuento::DECISION_PENDIENTE."' OR decision IS NULL THEN monto ELSE 0 END)"
+            : 'SUM(monto)';
+        $descontar = $this->tieneDecision()
+            ? "SUM(CASE WHEN decision = '".NominaComisionDescuento::DECISION_DESCONTAR."' THEN monto ELSE 0 END)"
+            : 'SUM(monto)';
+
+        $filas = NominaComisionDescuento::query()
+            ->whereIn('empleado_id', $empleados->pluck('id'))
+            ->where('tipo', 'FALTANTE')
+            ->where('estado', 'PENDIENTE')
+            ->selectRaw('empleado_id')
+            ->selectRaw($cuenta.' as cuenta')
+            ->selectRaw($descontar.' as a_descontar')
+            ->selectRaw('SUM(monto) as salto')
+            ->groupBy('empleado_id')
+            ->get();
+
+        foreach ($filas as $fila) {
+            $out[(int) $fila->empleado_id] = [
+                'cuenta' => round((float) $fila->cuenta, 2),
+                'a_descontar' => round((float) $fila->a_descontar, 2),
+                'salto' => round((float) $fila->salto, 2),
+            ];
+        }
+
+        return $out;
     }
 
     /**

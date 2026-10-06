@@ -18,6 +18,9 @@ use Illuminate\Support\Facades\Schema;
 
 class NominaDescuentoComentarios
 {
+    /** @var array<string, \Illuminate\Support\Collection<int|string, mixed>> */
+    private array $bolsas = [];
+
     /**
      * @return list<array{tipo: string, comentario: string, monto: float, grupo: string}>
      */
@@ -92,54 +95,19 @@ class NominaDescuentoComentarios
         foreach ($this->filas(NominaInasistencia::class, $empleado->id, $periodo->id, 'nomina_periodo_id') as $row) {
             $lineas[] = $this->linea('Inasistencia', $row->motivo ?? null, (float) $row->monto, 'inasistencia');
         }
-        if (Schema::hasTable('nomina_descuentos_mercancia')) {
-            foreach (NominaDescuentoMercancia::query()
-                ->where('empleado_id', $empleado->id)
-                ->where('nomina_periodo_id', $periodo->id)
-                ->where(function ($q) {
-                    $q->where('destino', NominaDescuentoMercancia::DESTINO_NOMINA)
-                        ->orWhereNull('destino');
-                })
-                ->orderBy('id')
-                ->get() as $row) {
-                $lineas[] = $this->linea('Mercancía', $row->motivo ?? null, (float) $row->monto, 'mercancia');
-            }
+        foreach ($this->mercanciaNomina($periodo)->get($empleado->id, []) as $row) {
+            $lineas[] = $this->linea('Mercancía', $row->motivo ?? null, (float) $row->monto, 'mercancia');
         }
-        if (Schema::hasTable('nomina_comision_descuentos')) {
-            $faltantesNomina = NominaComisionDescuento::query()
-                ->where('empleado_id', $empleado->id)
-                ->where('periodo_id', $periodo->id)
-                ->where('tipo', 'FALTANTE')
-                ->where(function ($q) use ($empleado) {
-                    if (Schema::hasColumn('nomina_comision_descuentos', 'destino')) {
-                        $q->where('destino', NominaComisionDescuento::DESTINO_NOMINA);
-                        if (! $empleado->generaComision()) {
-                            $q->orWhereNull('destino');
-                        }
-                    } else {
-                        $q->whereRaw('1 = ?', [$empleado->generaComision() ? 0 : 1]);
-                    }
-                })
-                ->orderBy('id')
-                ->get();
-            foreach ($faltantesNomina as $row) {
-                $lineas[] = $this->linea('Faltante de caja', $row->motivo ?? null, (float) $row->monto, 'faltante_caja');
-            }
+        foreach ($this->faltantesNomina($periodo, $empleado) as $row) {
+            $lineas[] = $this->linea('Faltante de caja', $row->motivo ?? null, (float) $row->monto, 'faltante_caja');
         }
         if (Schema::hasTable('nomina_deducciones')) {
             foreach ($this->filas(NominaDeduccion::class, $empleado->id, $periodo->id, 'nomina_periodo_id') as $row) {
                 $lineas[] = $this->linea('Deducción', $row->motivo ?? null, (float) $row->monto, 'deduccion');
             }
         }
-        if (Schema::hasTable('nomina_empleado_ajustes')) {
-            foreach (NominaEmpleadoAjuste::query()
-                ->where('empleado_id', $empleado->id)
-                ->where('nomina_periodo_id', $periodo->id)
-                ->where('destino', NominaEmpleadoAjuste::DESTINO_NOMINA)
-                ->where('tipo', NominaEmpleadoAjuste::TIPO_DEDUCCION)
-                ->get() as $row) {
-                $lineas[] = $this->linea('Deducción', $row->motivo ?? null, (float) $row->monto, 'deduccion');
-            }
+        foreach ($this->ajustesNomina($periodo)->get($empleado->id, []) as $row) {
+            $lineas[] = $this->linea('Deducción', $row->motivo ?? null, (float) $row->monto, 'deduccion');
         }
         foreach ($this->prestamosNomina($periodo, $empleado) as $linea) {
             $lineas[] = $linea;
@@ -155,23 +123,7 @@ class NominaDescuentoComentarios
     {
         $lineas = [];
 
-        if (Schema::hasTable('nomina_comision_descuentos')) {
-            foreach (NominaComisionDescuento::query()
-                ->where('empleado_id', $empleado->id)
-                ->where('periodo_id', $periodo->id)
-                ->where(function ($q) {
-                    $q->where('tipo', '!=', 'FALTANTE')
-                        ->orWhere(function ($f) {
-                            $f->where('tipo', 'FALTANTE');
-                            if (Schema::hasColumn('nomina_comision_descuentos', 'destino')) {
-                                $f->where(function ($d) {
-                                    $d->where('destino', NominaComisionDescuento::DESTINO_COMISION)
-                                        ->orWhereNull('destino');
-                                });
-                            }
-                        });
-                })
-                ->get() as $row) {
+        foreach ($this->descuentosComision($periodo)->get($empleado->id, []) as $row) {
                 $tipoRaw = strtoupper((string) $row->tipo);
                 $tipo = match ($tipoRaw) {
                     'PRESTAMO' => 'Préstamo',
@@ -180,29 +132,14 @@ class NominaDescuentoComentarios
                 };
                 $grupo = $tipoRaw === 'PRESTAMO' ? 'prestamo' : 'descuento';
                 $lineas[] = $this->linea($tipo, $row->motivo ?? null, (float) $row->monto, $grupo);
-            }
         }
 
-        if (Schema::hasTable('nomina_empleado_ajustes')) {
-            foreach (NominaEmpleadoAjuste::query()
-                ->where('empleado_id', $empleado->id)
-                ->where('nomina_periodo_id', $periodo->id)
-                ->where('destino', NominaEmpleadoAjuste::DESTINO_COMISION)
-                ->where('tipo', NominaEmpleadoAjuste::TIPO_DEDUCCION)
-                ->get() as $row) {
-                $lineas[] = $this->linea('Deducción', $row->motivo ?? null, (float) $row->monto, 'descuento');
-            }
+        foreach ($this->ajustesComision($periodo)->get($empleado->id, []) as $row) {
+            $lineas[] = $this->linea('Deducción', $row->motivo ?? null, (float) $row->monto, 'descuento');
         }
 
-        if (Schema::hasTable('nomina_descuentos_mercancia')) {
-            foreach (NominaDescuentoMercancia::query()
-                ->where('empleado_id', $empleado->id)
-                ->where('nomina_periodo_id', $periodo->id)
-                ->where('destino', NominaDescuentoMercancia::DESTINO_COMISION)
-                ->orderBy('id')
-                ->get() as $row) {
-                $lineas[] = $this->linea('Mercancía', $row->motivo ?? null, (float) $row->monto, 'descuento');
-            }
+        foreach ($this->mercanciaComision($periodo)->get($empleado->id, []) as $row) {
+            $lineas[] = $this->linea('Mercancía', $row->motivo ?? null, (float) $row->monto, 'descuento');
         }
 
         return $this->normalizar($lineas);
@@ -218,11 +155,15 @@ class NominaDescuentoComentarios
             return collect();
         }
 
-        return $modelo::query()
-            ->where('empleado_id', $empleadoId)
-            ->where($periodoCol, $periodoId)
-            ->orderBy('id')
-            ->get();
+        $bolsa = $this->bolsa($modelo.'|'.$periodoCol.'|'.$periodoId, function () use ($modelo, $periodoCol, $periodoId) {
+            return $modelo::query()
+                ->where($periodoCol, $periodoId)
+                ->orderBy('id')
+                ->get()
+                ->groupBy('empleado_id');
+        });
+
+        return $bolsa->get($empleadoId, collect());
     }
 
     /**
@@ -231,13 +172,7 @@ class NominaDescuentoComentarios
     private function prestamosNomina(NominaPeriodo $periodo, NominaEmpleado $empleado): array
     {
         $lineas = [];
-        if (Schema::hasTable('nomina_prestamo_cuotas')) {
-            $cuotas = NominaPrestamoCuota::query()
-                ->where('nomina_periodo_id', $periodo->id)
-                ->whereHas('prestamo', fn ($q) => $q->where('empleado_id', $empleado->id))
-                ->with(['prestamo', 'abono'])
-                ->get();
-            foreach ($cuotas as $cuota) {
+        foreach ($this->cuotasPeriodo($periodo)->get($empleado->id, []) as $cuota) {
                 $monto = (float) ($cuota->abono?->monto ?? $cuota->monto_pagado ?? 0);
                 if ($monto <= 0) {
                     continue;
@@ -246,18 +181,9 @@ class NominaDescuentoComentarios
                     ?: $cuota->prestamo?->motivo
                     ?: 'Cuota de préstamo';
                 $lineas[] = $this->linea('Préstamo', $comentario, $monto, 'prestamo');
-            }
         }
 
-        if (Schema::hasTable('nomina_prestamo_abonos')) {
-            $abonos = NominaPrestamoAbono::query()
-                ->where('tipo', NominaPrestamoAbono::TIPO_NOMINA)
-                ->whereDate('fecha', '>=', $periodo->fecha_inicio->toDateString())
-                ->whereDate('fecha', '<=', $periodo->fecha_fin->toDateString())
-                ->whereHas('prestamo', fn ($q) => $q->where('empleado_id', $empleado->id))
-                ->with('prestamo')
-                ->get();
-            foreach ($abonos as $abono) {
+        foreach ($this->abonosPeriodo($periodo)->get($empleado->id, []) as $abono) {
                 if ($abono->cuota_id) {
                     continue;
                 }
@@ -267,10 +193,179 @@ class NominaDescuentoComentarios
                     (float) $abono->monto,
                     'prestamo'
                 );
-            }
         }
 
         return $lineas;
+    }
+
+    /**
+     * @param  callable(): \Illuminate\Support\Collection  $cargar
+     */
+    private function bolsa(string $clave, callable $cargar): \Illuminate\Support\Collection
+    {
+        if (! array_key_exists($clave, $this->bolsas)) {
+            $this->bolsas[$clave] = $cargar();
+        }
+
+        return $this->bolsas[$clave];
+    }
+
+    private function mercanciaNomina(NominaPeriodo $periodo): \Illuminate\Support\Collection
+    {
+        return $this->bolsa('mercancia-nomina|'.$periodo->id, function () use ($periodo) {
+            if (! Schema::hasTable('nomina_descuentos_mercancia')) {
+                return collect();
+            }
+
+            return NominaDescuentoMercancia::query()
+                ->where('nomina_periodo_id', $periodo->id)
+                ->where(function ($q) {
+                    $q->where('destino', NominaDescuentoMercancia::DESTINO_NOMINA)->orWhereNull('destino');
+                })
+                ->orderBy('id')
+                ->get()
+                ->groupBy('empleado_id');
+        });
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, mixed>
+     */
+    private function faltantesNomina(NominaPeriodo $periodo, NominaEmpleado $empleado): \Illuminate\Support\Collection
+    {
+        $filas = $this->bolsa('faltantes|'.$periodo->id, function () use ($periodo) {
+            if (! Schema::hasTable('nomina_comision_descuentos')) {
+                return collect();
+            }
+
+            return NominaComisionDescuento::query()
+                ->where('periodo_id', $periodo->id)
+                ->where('tipo', 'FALTANTE')
+                ->orderBy('id')
+                ->get()
+                ->groupBy('empleado_id');
+        })->get($empleado->id, collect());
+
+        if (! Schema::hasColumn('nomina_comision_descuentos', 'destino')) {
+            return $empleado->generaComision() ? collect() : $filas;
+        }
+
+        return $filas->filter(function ($row) use ($empleado) {
+            if ($row->destino === NominaComisionDescuento::DESTINO_NOMINA) {
+                return true;
+            }
+
+            return $row->destino === null && ! $empleado->generaComision();
+        })->values();
+    }
+
+    private function ajustesNomina(NominaPeriodo $periodo): \Illuminate\Support\Collection
+    {
+        return $this->bolsa('ajustes-nomina|'.$periodo->id, function () use ($periodo) {
+            if (! Schema::hasTable('nomina_empleado_ajustes')) {
+                return collect();
+            }
+
+            return NominaEmpleadoAjuste::query()
+                ->where('nomina_periodo_id', $periodo->id)
+                ->where('destino', NominaEmpleadoAjuste::DESTINO_NOMINA)
+                ->where('tipo', NominaEmpleadoAjuste::TIPO_DEDUCCION)
+                ->orderBy('id')
+                ->get()
+                ->groupBy('empleado_id');
+        });
+    }
+
+    private function descuentosComision(NominaPeriodo $periodo): \Illuminate\Support\Collection
+    {
+        return $this->bolsa('descuentos-comision|'.$periodo->id, function () use ($periodo) {
+            if (! Schema::hasTable('nomina_comision_descuentos')) {
+                return collect();
+            }
+
+            return NominaComisionDescuento::query()
+                ->where('periodo_id', $periodo->id)
+                ->where(function ($q) {
+                    $q->where('tipo', '!=', 'FALTANTE')
+                        ->orWhere(function ($f) {
+                            $f->where('tipo', 'FALTANTE');
+                            if (Schema::hasColumn('nomina_comision_descuentos', 'destino')) {
+                                $f->where(function ($d) {
+                                    $d->where('destino', NominaComisionDescuento::DESTINO_COMISION)
+                                        ->orWhereNull('destino');
+                                });
+                            }
+                        });
+                })
+                ->orderBy('id')
+                ->get()
+                ->groupBy('empleado_id');
+        });
+    }
+
+    private function ajustesComision(NominaPeriodo $periodo): \Illuminate\Support\Collection
+    {
+        return $this->bolsa('ajustes-comision|'.$periodo->id, function () use ($periodo) {
+            if (! Schema::hasTable('nomina_empleado_ajustes')) {
+                return collect();
+            }
+
+            return NominaEmpleadoAjuste::query()
+                ->where('nomina_periodo_id', $periodo->id)
+                ->where('destino', NominaEmpleadoAjuste::DESTINO_COMISION)
+                ->where('tipo', NominaEmpleadoAjuste::TIPO_DEDUCCION)
+                ->orderBy('id')
+                ->get()
+                ->groupBy('empleado_id');
+        });
+    }
+
+    private function mercanciaComision(NominaPeriodo $periodo): \Illuminate\Support\Collection
+    {
+        return $this->bolsa('mercancia-comision|'.$periodo->id, function () use ($periodo) {
+            if (! Schema::hasTable('nomina_descuentos_mercancia')) {
+                return collect();
+            }
+
+            return NominaDescuentoMercancia::query()
+                ->where('nomina_periodo_id', $periodo->id)
+                ->where('destino', NominaDescuentoMercancia::DESTINO_COMISION)
+                ->orderBy('id')
+                ->get()
+                ->groupBy('empleado_id');
+        });
+    }
+
+    private function cuotasPeriodo(NominaPeriodo $periodo): \Illuminate\Support\Collection
+    {
+        return $this->bolsa('cuotas|'.$periodo->id, function () use ($periodo) {
+            if (! Schema::hasTable('nomina_prestamo_cuotas')) {
+                return collect();
+            }
+
+            return NominaPrestamoCuota::query()
+                ->where('nomina_periodo_id', $periodo->id)
+                ->with(['prestamo', 'abono'])
+                ->get()
+                ->groupBy(fn ($cuota) => (int) ($cuota->prestamo->empleado_id ?? 0));
+        });
+    }
+
+    private function abonosPeriodo(NominaPeriodo $periodo): \Illuminate\Support\Collection
+    {
+        return $this->bolsa('abonos|'.$periodo->id, function () use ($periodo) {
+            if (! Schema::hasTable('nomina_prestamo_abonos')) {
+                return collect();
+            }
+
+            return NominaPrestamoAbono::query()
+                ->where('tipo', NominaPrestamoAbono::TIPO_NOMINA)
+                ->whereDate('fecha', '>=', $periodo->fecha_inicio->toDateString())
+                ->whereDate('fecha', '<=', $periodo->fecha_fin->toDateString())
+                ->with('prestamo')
+                ->get()
+                ->groupBy(fn ($abono) => (int) ($abono->prestamo->empleado_id ?? 0));
+        });
     }
 
     /**

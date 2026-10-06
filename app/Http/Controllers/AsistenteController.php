@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AsistenteMensaje;
 use App\Services\AsistenteAccionService;
+use App\Services\AsistenteAvisoService;
 use App\Services\AsistentePaginaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,8 +19,12 @@ class AsistenteController extends Controller
         ]);
     }
 
-    public function consultar(Request $request, AsistentePaginaService $asistente, AsistenteAccionService $acciones): JsonResponse
+    public function consultar(Request $request, AsistentePaginaService $asistente, AsistenteAccionService $acciones, AsistenteAvisoService $avisos): JsonResponse
     {
+        $request->merge([
+            'pagina' => $this->pagina($request->input('pagina')),
+        ]);
+
         $data = $request->validate([
             'mensaje' => ['required', 'string', 'max:4000'],
             'pagina' => ['nullable', 'array'],
@@ -55,6 +60,9 @@ class AsistenteController extends Controller
         }
 
         $resultado = $acciones->completar($request->user(), $resultado, $data['mensaje']);
+        $resultado = $avisos->enviar($request->user(), $resultado, $data['mensaje'], $data['pagina'] ?? []);
+        $resultado['guardar'] = false;
+        unset($resultado['guardar_bloqueado'], $resultado['avisar']);
 
         AsistenteMensaje::query()->create([
             'user_id' => $userId,
@@ -69,6 +77,47 @@ class AsistenteController extends Controller
         $this->recortar($userId);
 
         return response()->json($resultado);
+    }
+
+    /**
+     * @return array{titulo:string,url:string,texto:string,campos:list<array{clave:string,etiqueta:string,tipo:string,valor:string,opciones:list<string>}>}
+     */
+    private function pagina(mixed $pagina): array
+    {
+        $pagina = is_array($pagina) ? $pagina : [];
+        $campos = [];
+        foreach (array_slice((array) ($pagina['campos'] ?? []), 0, 80) as $campo) {
+            if (! is_array($campo)) {
+                continue;
+            }
+            $opciones = [];
+            foreach (array_slice((array) ($campo['opciones'] ?? []), 0, 30) as $opcion) {
+                $opciones[] = $this->corte((string) $opcion, 80);
+            }
+            $campos[] = [
+                'clave' => $this->corte((string) ($campo['clave'] ?? ''), 80),
+                'etiqueta' => $this->corte((string) ($campo['etiqueta'] ?? ''), 80),
+                'tipo' => $this->corte((string) ($campo['tipo'] ?? ''), 20),
+                'valor' => $this->corte((string) ($campo['valor'] ?? ''), 120),
+                'opciones' => $opciones,
+            ];
+        }
+
+        return [
+            'titulo' => $this->corte((string) ($pagina['titulo'] ?? ''), 180),
+            'url' => $this->corte((string) ($pagina['url'] ?? ''), 200),
+            'texto' => $this->corte((string) ($pagina['texto'] ?? ''), 8000),
+            'campos' => $campos,
+        ];
+    }
+
+    private function corte(string $valor, int $max): string
+    {
+        if (mb_strlen($valor, 'UTF-8') <= $max) {
+            return $valor;
+        }
+
+        return mb_substr($valor, 0, $max, 'UTF-8');
     }
 
     /**

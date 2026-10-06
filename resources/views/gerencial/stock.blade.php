@@ -36,7 +36,6 @@
                     <th>Total SKU</th>
                     <th>Total unidades</th>
                     <th>Valorizado</th>
-                    <th>Total traslado</th>
                 </tr>
             </thead>
             <tbody>
@@ -46,7 +45,6 @@
                         <td>{{ number_format($fila['skus']) }}</td>
                         <td>{{ number_format($fila['unidades']) }}</td>
                         <td>${{ number_format($fila['valorizado'], 2) }}</td>
-                        <td>{{ number_format($fila['traslado']) }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -56,12 +54,11 @@
                     <td><strong>{{ number_format($totales['skus']) }}</strong></td>
                     <td><strong>{{ number_format($totales['unidades']) }}</strong></td>
                     <td><strong>${{ number_format($totales['valorizado'], 2) }}</strong></td>
-                    <td><strong>{{ number_format($totales['traslado']) }}</strong></td>
                 </tr>
             </tfoot>
         </table>
     </div>
-    <p class="muted" style="margin-top:8px;">Valorizado es existencia por costo. Total traslado son unidades pedidas y todavía no aplicadas hacia esa sede.</p>
+    <p class="muted" style="margin-top:8px;">Valorizado es existencia por costo. Los traslados, que vienen con signo, están en el indicador Traslados.</p>
 
     <div class="gerencial-grid-2" style="margin-top:16px;">
         <div class="nomina-card">

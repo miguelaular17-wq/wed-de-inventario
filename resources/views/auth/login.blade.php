@@ -125,6 +125,8 @@
 
         <div id="q-pedir-results" class="q-pedir-results"></div>
 
+        <div id="q-pedir-existencia" class="q-pedir-existencia" hidden></div>
+
         <div id="q-pedir-selected" class="q-pedir-selected" hidden>
             <div style="font-size:0.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;margin-bottom:8px;">Producto seleccionado</div>
             <div id="q-pedir-selected-info" style="font-weight:600;margin-bottom:12px;"></div>
@@ -186,12 +188,22 @@
         display: none;
         flex: 1.15;
         position: relative;
+        overflow: hidden;
+    }
+
+    .nexo-login-visual::before {
+        content: "";
+        position: absolute;
+        inset: -8%;
         background: url('{{ asset('login_bg.png') }}') center/cover no-repeat;
+        animation: nexo-drift 22s ease-in-out infinite alternate;
+        z-index: 0;
     }
 
     .nexo-login-overlay {
         position: absolute;
         inset: 0;
+        z-index: 1;
         background:
             linear-gradient(160deg, rgba(6, 182, 212, 0.45) 0%, rgba(192, 38, 211, 0.42) 55%, rgba(15, 23, 42, 0.55) 100%);
     }
@@ -211,6 +223,7 @@
         backdrop-filter: blur(18px);
         -webkit-backdrop-filter: blur(18px);
         box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+        animation: nexo-rise 0.7s ease both;
     }
 
     .nexo-login-kicker {
@@ -231,10 +244,12 @@
     }
 
     .nexo-login-brand h2 span {
-        background: linear-gradient(135deg, #f5c542, #f9a8d4 45%, #e879f9);
+        background: linear-gradient(135deg, #f5c542, #f9a8d4 45%, #e879f9, #f5c542);
+        background-size: 220% 100%;
         -webkit-background-clip: text;
         background-clip: text;
         -webkit-text-fill-color: transparent;
+        animation: nexo-shine 5s ease-in-out infinite alternate;
     }
 
     .nexo-login-tagline {
@@ -261,7 +276,17 @@
         color: #fff;
         background: rgba(255, 255, 255, 0.12);
         border: 1px solid rgba(255, 255, 255, 0.18);
+        animation: nexo-pop 0.45s ease both, nexo-sede 4.8s ease-in-out infinite;
     }
+
+    .nexo-login-sedes span:nth-child(1) { animation-delay: 0.35s, 0s; }
+    .nexo-login-sedes span:nth-child(2) { animation-delay: 0.43s, 0.6s; }
+    .nexo-login-sedes span:nth-child(3) { animation-delay: 0.51s, 1.2s; }
+    .nexo-login-sedes span:nth-child(4) { animation-delay: 0.59s, 1.8s; }
+    .nexo-login-sedes span:nth-child(5) { animation-delay: 0.67s, 2.4s; }
+    .nexo-login-sedes span:nth-child(6) { animation-delay: 0.75s, 3s; }
+    .nexo-login-sedes span:nth-child(7) { animation-delay: 0.83s, 3.6s; }
+    .nexo-login-sedes span:nth-child(8) { animation-delay: 0.91s, 4.2s; }
 
     .nexo-login-form {
         flex: 1;
@@ -287,6 +312,7 @@
         pointer-events: none;
         top: 18%;
         right: 12%;
+        animation: nexo-glow 7s ease-in-out infinite alternate;
     }
 
     .nexo-login-card {
@@ -300,6 +326,7 @@
         box-shadow:
             0 20px 50px rgba(15, 23, 42, 0.08),
             0 0 0 1px rgba(245, 197, 66, 0.08);
+        animation: nexo-card 0.65s ease both;
     }
 
     .nexo-login-mobile-brand {
@@ -490,6 +517,58 @@
 
     .nexo-login-footer a:hover {
         color: #a21caf;
+    }
+
+    @keyframes nexo-drift {
+        from { transform: scale(1) translate3d(0, 0, 0); }
+        to { transform: scale(1.08) translate3d(-2%, -1.5%, 0); }
+    }
+
+    @keyframes nexo-rise {
+        from { opacity: 0; transform: translateY(22px); }
+        to { opacity: 1; transform: none; }
+    }
+
+    @keyframes nexo-card {
+        from { opacity: 0; transform: translateY(18px); }
+        to { opacity: 1; transform: none; }
+    }
+
+    @keyframes nexo-pop {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: none; }
+    }
+
+    @keyframes nexo-sede {
+        0%, 72%, 100% {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.18);
+        }
+        82% {
+            background: rgba(245, 197, 66, 0.34);
+            border-color: rgba(245, 197, 66, 0.7);
+        }
+    }
+
+    @keyframes nexo-shine {
+        from { background-position: 0% 50%; }
+        to { background-position: 100% 50%; }
+    }
+
+    @keyframes nexo-glow {
+        from { transform: translate3d(0, 0, 0) scale(1); opacity: 0.7; }
+        to { transform: translate3d(-24px, 18px, 0) scale(1.15); opacity: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .nexo-login-visual::before,
+        .nexo-login-brand,
+        .nexo-login-brand h2 span,
+        .nexo-login-sedes span,
+        .nexo-login-card,
+        .nexo-login-glow {
+            animation: none;
+        }
     }
 
     @media (min-width: 900px) {
@@ -752,6 +831,23 @@
         padding-top: 16px;
         border-top: 1px solid var(--border);
     }
+    .q-pedir-existencia {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 8px;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+        font-size: 0.88rem;
+    }
+    .q-pedir-existencia strong {
+        display: block;
+        margin-bottom: 6px;
+    }
+    .q-pedir-existencia ul {
+        margin: 0;
+        padding-left: 18px;
+    }
     .q-pedir-message {
         margin-top: 16px;
         padding: 12px;
@@ -807,6 +903,7 @@
     const resultsEl = document.getElementById('q-pedir-results');
     const selectedPanel = document.getElementById('q-pedir-selected');
     const selectedInfo = document.getElementById('q-pedir-selected-info');
+    const existenciaEl = document.getElementById('q-pedir-existencia');
     const btnGuardar = document.getElementById('q-pedir-guardar');
     const messageEl = document.getElementById('q-pedir-message');
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
@@ -849,6 +946,8 @@
         searchInput.value = '';
         resultsEl.innerHTML = '';
         selectedPanel.hidden = true;
+        existenciaEl.hidden = true;
+        existenciaEl.innerHTML = '';
         messageEl.hidden = true;
         selectedProduct = null;
         document.getElementById('q-pedir-solicitante').value = '';
@@ -893,6 +992,8 @@
                             codigo: 'MANUAL',
                             isManual: true
                         };
+                        existenciaEl.hidden = true;
+                        existenciaEl.innerHTML = '';
                         selectedInfo.textContent = selectedProduct.producto + ' (MANUAL)';
                         selectedPanel.hidden = false;
                         document.getElementById('q-pedir-manual-fields').hidden = false;
@@ -902,15 +1003,35 @@
                 data.productos.forEach(function(p) {
                     const div = document.createElement('div');
                     div.className = 'q-pedir-result-item';
-                    const stock = p.stock !== undefined ? parseInt(p.stock, 10) : null;
-                    const stockBadge = stock !== null
-                        ? '<span class="q-pedir-stock ' + (stock === 0 ? 'zero' : 'ok') + '">Stock: ' + stock + '</span>'
-                        : '';
+                    const stock = p.stock !== undefined && p.stock !== null ? parseInt(p.stock, 10) : null;
+                    const stockBadge = p.manual
+                        ? '<span class="q-pedir-stock zero">Manual</span>'
+                        : (stock !== null
+                            ? '<span class="q-pedir-stock ' + (stock === 0 ? 'zero' : 'ok') + '">Stock: ' + stock + '</span>'
+                            : '');
                     div.innerHTML = '<strong>' + escapeHtml(p.producto) + stockBadge + '</strong><span>' + escapeHtml(p.codigo) + (p.categoria ? ' · ' + escapeHtml(p.categoria) : '') + '</span>';
                     div.addEventListener('click', function() {
+                        const existencias = Array.isArray(p.existencias) ? p.existencias : [];
+                        const tieneStock = existencias.length > 0 || (stock !== null && stock > 0);
+                        if (tieneStock) {
+                            selectedProduct = null;
+                            selectedPanel.hidden = true;
+                            messageEl.hidden = true;
+                            const items = existencias.length
+                                ? existencias.map(function (e) {
+                                    return '<li>' + escapeHtml(e.nombre || e.sede) + ': <b>' + escapeHtml(String(e.cantidad)) + '</b></li>';
+                                }).join('')
+                                : '<li>Total en sistema: <b>' + stock + '</b></li>';
+                            existenciaEl.innerHTML = '<strong>' + escapeHtml(p.producto) + ' ya tiene existencia. No se puede solicitar.</strong><ul>' + items + '</ul>';
+                            existenciaEl.hidden = false;
+                            return;
+                        }
+                        existenciaEl.hidden = true;
+                        existenciaEl.innerHTML = '';
                         selectedProduct = p;
-                        const stockTxt = stock !== null ? ' — Stock: ' + stock : '';
-                        selectedInfo.textContent = p.producto + ' (' + p.codigo + ')' + stockTxt;
+                        selectedInfo.textContent = p.manual
+                            ? p.producto + ' (MANUAL)'
+                            : p.producto + ' (' + p.codigo + ') — Sin existencia';
                         selectedPanel.hidden = false;
                         document.getElementById('q-pedir-manual-fields').hidden = true;
                         resultsEl.innerHTML = '';

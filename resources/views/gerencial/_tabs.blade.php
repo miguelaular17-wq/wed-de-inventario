@@ -3,6 +3,8 @@
     $tabs = [];
     if ($u->canAccess('gerencial')) {
         $tabs[] = ['label' => 'Gerencial', 'route' => 'gerencial.dashboard'];
+        $tabs[] = ['label' => 'Equipo de compra', 'route' => 'gerencial.compras'];
+        $tabs[] = ['label' => 'Efectividad de caja', 'route' => 'gerencial.cajas'];
     }
     if ($u->canAccess('gerencial.rentabilidad')) {
         $tabs[] = ['label' => 'Rentabilidad', 'route' => 'gerencial.rentabilidad'];
@@ -14,8 +16,9 @@
         $tabs[] = ['label' => 'Devoluciones', 'route' => 'gerencial.devoluciones'];
     }
     if ($u->canAccess('gerencial.valorizados')) {
-        $tabs[] = ['label' => 'Inventario', 'route' => 'gerencial.valorizados'];
+        $tabs[] = ['label' => 'Inventario valorizado', 'route' => 'gerencial.valorizados'];
         $tabs[] = ['label' => 'Stock por sede', 'route' => 'gerencial.stock'];
+        $tabs[] = ['label' => 'Traslados', 'route' => 'gerencial.traslados'];
     }
     if ($u->canAccess('gerencial.ajustes')) {
         $tabs[] = ['label' => 'Ajustes', 'route' => 'gerencial.ajustes'];

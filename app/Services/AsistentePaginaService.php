@@ -27,11 +27,18 @@ class AsistentePaginaService
             'systemInstruction' => [
                 'parts' => [[
                     'text' => 'Eres el asistente de Nexo PD. Respondes en español, corto y claro. '
-                        .'Solo usas el texto de la página, la imagen adjunta y la conversación. '
-                        .'Si piden rellenar un formulario, devuelve esos campos en rellenar usando la clave exacta del catálogo. Rellenar no guarda. '
-                        .'Si piden crear un anticipo o adelanto de nómina, no digas que ya quedó registrado. Devuelve accion crear_adelanto. '
-                        .'Si falta el empleado, deja empleado vacío y pregunta a quién. Si falta el monto, deja monto null y pregúntalo. '
-                        .'Responde solo JSON: {"respuesta":"texto","rellenar":[{"clave":"campo","valor":"texto"}],"accion":null} '
+                        .'Conoces los módulos: ventas, inventario, compras, Q Pedir, existencias, finanzas, nómina, cobranza, patrimonial, servicio técnico, celulares y gerencial. '
+                        .'Usas el texto de la página, la imagen, los datos del sistema y la conversación. '
+                        .'Si la respuesta está en la imagen o en el texto, la das. No inventes cifras, nombres ni teléfonos. '
+                        .'Si piden crear, registrar, editar o guardar, rellena los campos del catálogo con la clave exacta y pon guardar false. '
+                        .'No envíes el formulario ni cambies de página. Dile que revise y pulse guardar. '
+                        .'Si falta un dato obligatorio, pregunta solo ese dato. '
+                        .'Si no hay campos, deja rellenar vacío y di lo que lees de la imagen. '
+                        .'Migue, Miguel y Miguel Aular son el usuario Miguel Aular. Si algo es para él, pon avisar con destinatario "miguel aular" y un mensaje corto con lo que hay que decirle. '
+                        .'Si piden un anticipo o adelanto de nómina, no digas que ya quedó registrado. Devuelve accion crear_adelanto. '
+                        .'Si falta el empleado, deja empleado vacío. Si falta el monto, deja monto null. '
+                        .'Responde solo JSON: {"respuesta":"texto","rellenar":[{"clave":"campo","valor":"texto"}],"guardar":false,"avisar":null,"accion":null} '
+                        .'avisar, cuando aplique: {"destinatario":"miguel aular","mensaje":"texto"}. '
                         .'accion, cuando aplique: {"tipo":"crear_adelanto","monto":10,"empleado":"nombre o cedula","fecha":"YYYY-MM-DD","motivo":""}.',
                 ]],
             ],
@@ -95,6 +102,21 @@ class AsistentePaginaService
         return $catalogo;
     }
 
+    private function hechos(): string
+    {
+        try {
+            $tasa = app(BcvRateService::class)->getRateForToday();
+        } catch (\Throwable) {
+            return '';
+        }
+
+        if ($tasa <= 1) {
+            return '';
+        }
+
+        return 'Tasa BCV de hoy: '.number_format($tasa, 2, '.', '');
+    }
+
     /**
      * @param  array{titulo?:string,url?:string,texto?:string}  $pagina
      * @param  array<string, array{clave:string,etiqueta:string,tipo:string,valor:string,opciones:list<string>}>  $catalogo
@@ -127,8 +149,10 @@ class AsistentePaginaService
             $lineas[] = $linea;
         }
 
+        $hechos = $this->hechos();
         $prompt = "Página: ".Str::limit(trim((string) ($pagina['titulo'] ?? '')), 160, '')
             ."\nRuta: ".Str::limit(trim((string) ($pagina['url'] ?? '')), 180, '')
+            .($hechos !== '' ? "\n\nDatos del sistema:\n".$hechos : '')
             ."\n\nTexto visible:\n".Str::limit(trim((string) ($pagina['texto'] ?? '')), 8000, '')
             ."\n\nCampos que puedes rellenar (clave | etiqueta | tipo):\n".($lineas === [] ? '(ninguno)' : implode("\n", $lineas))
             ."\n\nPedido:\n".Str::limit(trim($mensaje), 4000, '');
@@ -170,6 +194,8 @@ class AsistentePaginaService
             return [
                 'respuesta' => Str::limit($limpio !== '' ? $limpio : 'No pude leer la respuesta.', 4000, ''),
                 'rellenar' => [],
+                'guardar' => false,
+                'avisar' => null,
                 'accion' => null,
             ];
         }
@@ -199,7 +225,30 @@ class AsistentePaginaService
         return [
             'respuesta' => Str::limit($respuesta, 4000, ''),
             'rellenar' => $rellenar,
+            'guardar' => filter_var($json['guardar'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'avisar' => $this->avisar($json['avisar'] ?? null),
             'accion' => $this->accion($json['accion'] ?? null),
+        ];
+    }
+
+    /**
+     * @return array{destinatario:string,mensaje:string}|null
+     */
+    private function avisar(mixed $avisar): ?array
+    {
+        if (! is_array($avisar)) {
+            return null;
+        }
+
+        $destinatario = Str::limit(trim((string) ($avisar['destinatario'] ?? '')), 80, '');
+        $mensaje = Str::limit(trim((string) ($avisar['mensaje'] ?? '')), 500, '');
+        if ($destinatario === '' && $mensaje === '') {
+            return null;
+        }
+
+        return [
+            'destinatario' => $destinatario,
+            'mensaje' => $mensaje,
         ];
     }
 

@@ -29,6 +29,9 @@ class AppServiceProvider extends ServiceProvider
         // En producción se omite para eliminar escrituras síncronas a disco por cada query
         if (config('app.debug')) {
             \Illuminate\Support\Facades\DB::listen(function ($query) {
+                if ($query->time < 100) {
+                    return;
+                }
                 \Illuminate\Support\Facades\Log::info(sprintf(
                     '[SQL] %.2f ms | %s',
                     $query->time,

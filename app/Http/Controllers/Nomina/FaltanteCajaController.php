@@ -28,9 +28,7 @@ class FaltanteCajaController extends Controller
         $fecha = $this->fechaConsulta($request);
         $q = trim((string) $request->query('q', ''));
         $cajeras = $this->faltantes->cajeras($q !== '' ? $q : null);
-        $cuentasPorEmpleado = $cajeras->mapWithKeys(
-            fn (NominaEmpleado $empleado) => [$empleado->id => $this->faltantes->resumenCuenta($empleado)]
-        );
+        $cuentasPorEmpleado = $this->faltantes->resumenCuentas($cajeras);
         $delDia = $this->faltantes->delDia($fecha);
         $historialDia = $this->faltantes->historialDelDiaAgrupado($fecha);
         $quincena = $this->quincenas->quincenaDe($fecha);

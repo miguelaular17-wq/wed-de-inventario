@@ -111,13 +111,13 @@
         }).then(function (result) {
             espera.remove();
             if (!result.ok) {
-                agregar('asistente', result.json.error || 'No pude responder.');
+                agregar('asistente', textoError(result.json));
                 return;
             }
             const rellenados = aplicar(result.json.rellenar || []);
             let respuesta = result.json.respuesta || 'Listo.';
             if (rellenados.length) {
-                respuesta += '\n\nRellené: ' + rellenados.join(', ') + '. Revisa y guarda.';
+                respuesta += '\n\nRellené: ' + rellenados.join(', ') + '. Revisa y guarda tú; no cambio la página.';
             }
             agregar('asistente', respuesta);
             file.value = '';
@@ -131,6 +131,16 @@
         });
     });
 
+    function textoError(json) {
+        if (json && json.error) return json.error;
+        if (json && json.message && json.message !== 'The given data was invalid.') return json.message;
+        if (json && json.errors) {
+            const primero = Object.values(json.errors).flat().find(Boolean);
+            if (primero) return primero;
+        }
+        return 'No pude responder.';
+    }
+
     function agregar(rol, texto) {
         mensajes.push({ rol: rol, texto: texto });
         mensajes = mensajes.slice(-40);
@@ -140,6 +150,7 @@
     function pintar(rol, texto) {
         const burbuja = document.createElement('div');
         burbuja.className = 'asistente-msg asistente-msg-' + (rol === 'usuario' ? 'usuario' : 'asistente');
+        if (texto === 'Pensando…') burbuja.classList.add('is-espera');
         burbuja.textContent = texto;
         log.appendChild(burbuja);
         log.scrollTop = log.scrollHeight;
@@ -152,11 +163,11 @@
         if (main) {
             const copia = main.cloneNode(true);
             copia.querySelectorAll('#asistente, script, style').forEach(function (nodo) { nodo.remove(); });
-            texto = (copia.innerText || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, 8000);
+            texto = (copia.innerText || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, 6000);
         }
         return {
-            titulo: document.title || '',
-            url: location.pathname + location.search,
+            titulo: (document.title || '').slice(0, 180),
+            url: (location.pathname + location.search).slice(0, 200),
             texto: texto,
             campos: campos(),
         };
@@ -221,11 +232,6 @@
                 el.value = valor;
             }
             el.classList.add('asistente-marcado');
-            const automatico = el.closest('form[data-auto-filter]');
-            if (!automatico) {
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-            }
             nombres.push(etiqueta(el) || item.clave);
         });
         const primero = document.querySelector('.asistente-marcado');

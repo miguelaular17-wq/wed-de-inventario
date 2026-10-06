@@ -141,6 +141,54 @@
         @endforelse
     </div>
 
+    {{-- ── Publicar versión del escritorio ─────────────────────────── --}}
+    @php
+        $manifestPath = storage_path('app/'.trim(config('sync_desktop.storage_dir'), '/').'/'.config('sync_desktop.manifest_name'));
+        $manifest = is_file($manifestPath) ? json_decode(@file_get_contents($manifestPath), true) : null;
+    @endphp
+    <div class="cmd-form-box" style="margin-bottom:20px;">
+        <h2>Publicar nueva versión del sincronizador</h2>
+        <p style="margin:0 0 14px;color:var(--sync-dim);font-size:.85rem;">
+            Sube el <code>WinSyncService.exe</code> (o un ZIP con el exe). Las sedes lo reciben con el botón «Actualizar» de la app.
+            @if($manifest)
+                · Actual: <strong style="color:var(--sync-text);">v{{ $manifest['version'] ?? '—' }}</strong>
+                @if(!empty($manifest['published_at']))
+                    ({{ \Carbon\Carbon::parse($manifest['published_at'])->format('d/m/Y H:i') }})
+                @endif
+            @else
+                · Aún no hay paquete publicado.
+            @endif
+        </p>
+        <form method="POST" action="{{ route('admin.sync.publish') }}" enctype="multipart/form-data">
+            @csrf
+            <div class="cmd-row">
+                <div class="cmd-field">
+                    <label>Versión</label>
+                    <input type="text" name="version" class="cmd-select" placeholder="2.2.0" required
+                           pattern="\d+\.\d+\.\d+" value="{{ old('version', $manifest['version'] ?? '2.2.0') }}"
+                           style="min-width:120px;">
+                </div>
+                <div class="cmd-field" style="flex:1;min-width:220px;">
+                    <label>Notas</label>
+                    <input type="text" name="notes" class="cmd-select" style="width:100%;"
+                           placeholder="Qué cambia en esta versión" value="{{ old('notes') }}">
+                </div>
+                <div class="cmd-field">
+                    <label>Paquete (.exe o .zip)</label>
+                    <input type="file" name="paquete" accept=".exe,.zip" required
+                           style="color:var(--sync-text);font-size:.82rem;max-width:240px;">
+                </div>
+                <button type="submit" class="cmd-btn">Publicar</button>
+            </div>
+            @error('paquete')
+                <p style="color:var(--sync-danger);font-size:.82rem;margin-top:8px;">{{ $message }}</p>
+            @enderror
+            @error('version')
+                <p style="color:var(--sync-danger);font-size:.82rem;margin-top:8px;">{{ $message }}</p>
+            @enderror
+        </form>
+    </div>
+
     {{-- ── Formulario de comando ───────────────────────────────────── --}}
     <div class="cmd-form-box">
         <h2>🎮 Enviar Comando Remoto</h2>
