@@ -23,6 +23,12 @@ class BankMovementClassifierTest extends TestCase
         $this->assertTrue($this->classifier->esComision('COMSER VMTTO CTA'));
         $this->assertTrue($this->classifier->esComision('EMISION DE ESTADO DE CUENTA'));
         $this->assertTrue($this->classifier->esComision('COMIS EMIS EDO DE CUENTAS ME'));
+        $this->assertTrue($this->classifier->esComision(
+            "TELF.:000000000000\nCED.:J502551352\nCTA.:010500583510584123"
+        ));
+        $this->assertFalse($this->classifier->esComision(
+            'TELF.:04141234567 CED.:V12345678 CTA.:010500583510584123'
+        ));
     }
 
     public function test_compra_intervencion_es_compra_divisas_no_comision(): void

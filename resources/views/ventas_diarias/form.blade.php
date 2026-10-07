@@ -34,7 +34,7 @@
 .vd-modal .sub { margin:0 0 14px; color:#64748b; font-size:.85rem; text-align:center; }
 .vd-modal table { width:100%; border-collapse:collapse; font-size:.92rem; }
 .vd-modal td { padding:7px 4px; border-bottom:1px solid #f1f5f9; }
-.vd-modal .lab { font-weight:650; white-space:nowrap; }
+.vd-modal th, .vd-modal .lab { font-weight:650; white-space:nowrap; text-transform:uppercase; }
 .vd-modal .usd { color:#059669; font-weight:700; text-align:right; white-space:nowrap; }
 .vd-modal .bs { text-align:right; color:#334155; font-weight:600; white-space:nowrap; }
 .vd-modal .tot td { font-weight:800; background:#f8fafc; }
@@ -210,10 +210,11 @@
     const metaVenta = {{ json_encode((float) $metaCtx['meta_venta']) }};
     const metaProd = {{ json_encode((float) $metaCtx['meta_productos']) }};
     const columnas = @json(array_keys($columnasCaja));
-    const money = (n) => '$' + (Number(n) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    const pctTxt = (v) => (v === null || Number.isNaN(v)) ? '—' : (v * 100).toFixed(1) + '%';
+    const grupo = (n, dec) => (Number(n) || 0).toLocaleString('es-VE', {minimumFractionDigits: dec, maximumFractionDigits: dec});
+    const money = (n) => '$' + grupo(n, 2);
+    const pctTxt = (v) => (v === null || Number.isNaN(v)) ? '—' : grupo(v * 100, 1) + '%';
     const num = (sel) => parseFloat(document.querySelector(sel)?.value || '0') || 0;
-    const bs = (n) => 'Bs ' + (Number(n) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    const bs = (n) => 'Bs ' + grupo(n, 2);
 
     function sumCajas(field) {
         let total = 0;
@@ -264,7 +265,7 @@
         set('md-ventas-bs', bs(totalBs));
         set('md-ventas', money(ventas));
         set('md-pct-venta', pctTxt(metaVenta > 0 ? ventas / metaVenta : null));
-        set('md-prod', (Number(productos) || 0).toLocaleString('en-US', {maximumFractionDigits: 0}));
+        set('md-prod', grupo(productos, 0));
         set('md-pct-prod', pctTxt(metaProd > 0 ? productos / metaProd : null));
         set('md-fiscal-bs', bs(zfiscal));
         set('md-fiscal', money(fiscal));

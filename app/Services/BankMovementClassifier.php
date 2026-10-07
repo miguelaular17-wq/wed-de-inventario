@@ -107,6 +107,16 @@ class BankMovementClassifier
             return false;
         }
 
+        // Banco de Venezuela: cargo TELF / CED / CTA con teléfono en ceros (comisión).
+        // Un pago móvil real trae un teléfono con dígitos y no entra aquí.
+        if (
+            preg_match('/telf\.?\s*:?\s*0{8,}/u', $desc) === 1
+            && str_contains($desc, 'ced')
+            && str_contains($desc, 'cta')
+        ) {
+            return true;
+        }
+
         $keywords = $this->comisionKeywords;
         $bancoKey = strtoupper(trim((string) $banco));
         if ($bancoKey !== '' && isset($this->comisionKeywordsPorBanco[$bancoKey])) {

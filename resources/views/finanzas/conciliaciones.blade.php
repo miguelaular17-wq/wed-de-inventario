@@ -377,7 +377,7 @@
                                 {{ Str::limit($row['descripcion'], 55) }}
                                 <br>
                                 <span class="tipo-chip {{ $row['tipo'] == 'cargo' ? 'chip-cargo' : 'chip-abono' }}">
-                                    {{ $row['tipo'] == 'cargo' ? 'Cargo' : 'Abono' }}
+                                    {{ $row['tipo'] == 'cargo' ? 'CARGO' : 'ABONO' }}
                                 </span>
                             </td>
                             <td class="monto-cell monto-red">Bs. {{ number_format($row['monto'], 2) }}</td>
