@@ -59,11 +59,11 @@
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Fecha</th>
-                    <th>Sede</th>
-                    <th>Tasa</th>
-                    <th>Total ventas $</th>
-                    <th>Productos</th>
+                    <th>FECHA</th>
+                    <th>SEDE</th>
+                    <th>TASA</th>
+                    <th>TOTAL VENTAS $</th>
+                    <th>PRODUCTOS</th>
                     <th></th>
                 </tr>
             </thead>
@@ -76,9 +76,9 @@
                     <tr>
                         <td>{{ $r->fecha->format('d/m/Y') }}</td>
                         <td><strong>{{ config('inventario.display.'.$r->sede, $r->sede) }}</strong></td>
-                        <td>{{ number_format((float) $r->tasa, 2) }}</td>
-                        <td>${{ number_format($tot['total_ventas'], 2) }}</td>
-                        <td>{{ number_format((float) $r->productos_vendidos, 0) }}</td>
+                        <td>{{ number_format((float) $r->tasa, 2, ',', '.') }}</td>
+                        <td>${{ number_format($tot['total_ventas'], 2, ',', '.') }}</td>
+                        <td>{{ number_format((float) $r->productos_vendidos, 0, ',', '.') }}</td>
                         <td style="text-align:right;white-space:nowrap;">
                             <a href="{{ route('ventas_diarias.show', $r) }}">Ver</a>
                             @if(app(\App\Services\VentasDiariasService::class)->puedeEditar(auth()->user(), $r->sede))

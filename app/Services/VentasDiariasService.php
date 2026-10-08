@@ -155,22 +155,22 @@ class VentasDiariasService
     public function columnasCaja(): array
     {
         return [
-            'efectivo_usd' => 'Efectivo $',
-            'efectivo_bs' => 'Efectivo Bs',
-            'punto_venta' => 'Punto Bs',
-            'pago_movil' => 'Pago móvil Bs',
-            'transferencias' => 'Transferencias Bs',
-            'zelle' => 'Zelle $',
-            'binance' => 'Binance $',
-            'mercantil_panama' => 'Mercantil Panamá $',
-            'cashea' => 'Cashea $',
-            'flaexpay' => 'Flexpay $',
-            'krece' => 'Krece $',
-            'fact_credito' => 'Crédito $',
-            'abonos' => 'Abonos $',
-            'iphone' => 'iPhone $',
-            'preventa' => 'Preventa $',
-            'gift_card' => 'Gift card $',
+            'efectivo_usd' => 'EFECTIVO $',
+            'efectivo_bs' => 'EFECTIVO BS',
+            'punto_venta' => 'PUNTO BS',
+            'pago_movil' => 'PAGO MÓVIL BS',
+            'transferencias' => 'TRANSFERENCIAS BS',
+            'zelle' => 'ZELLE $',
+            'binance' => 'BINANCE $',
+            'mercantil_panama' => 'MERCANTIL PANAMÁ $',
+            'cashea' => 'CASHEA $',
+            'flaexpay' => 'FLEXPAY $',
+            'krece' => 'KRECE $',
+            'fact_credito' => 'CRÉDITO $',
+            'abonos' => 'ABONOS $',
+            'iphone' => 'IPHONE $',
+            'preventa' => 'PREVENTA $',
+            'gift_card' => 'GIFT CARD $',
         ];
     }
 

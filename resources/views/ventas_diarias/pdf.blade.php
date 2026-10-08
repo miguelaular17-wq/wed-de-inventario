@@ -11,9 +11,9 @@
         .header-logo img { height: 52px; width: 52px; }
         .header-titles { display: table-cell; vertical-align: middle; }
         h1 { font-size: 15px; color: #1e3a8a; text-transform: uppercase; }
-        .sub { color: #64748b; margin-top: 3px; }
-        h2 { font-size: 12px; margin: 12px 0 2px; color: #334155; text-align: center; }
-        .desglose-sub { text-align: center; color: #64748b; margin: 0 0 8px; }
+        .sub { color: #64748b; margin-top: 3px; text-transform: uppercase; }
+        h2 { font-size: 12px; margin: 12px 0 2px; color: #334155; text-align: center; text-transform: uppercase; }
+        .desglose-sub { text-align: center; color: #64748b; margin: 0 0 8px; text-transform: uppercase; }
         table { width: 100%; border-collapse: collapse; }
         th { background: #dbeafe; color: #1e3a8a; font-size: 8px; text-transform: uppercase; padding: 5px 4px; border: 1px solid #bfdbfe; text-align: left; }
         td { padding: 5px 6px; border: 1px solid #e2e8f0; }
@@ -37,23 +37,23 @@
             <h1>Reporte cierre de venta diaria: {{ config('inventario.display.'.$reporte->sede, $reporte->sede) }}</h1>
             <div class="sub">
                 {{ $reporte->fecha->format('d/m/Y') }}
-                · Tasa {{ number_format((float) $reporte->tasa, 2) }}
-                · Meta venta ${{ number_format($metaCtx['meta_venta'], 2) }}
-                · Meta productos {{ number_format($metaCtx['meta_productos'], 2) }}
+                · Tasa {{ number_format((float) $reporte->tasa, 2, ',', '.') }}
+                · Meta venta ${{ number_format($metaCtx['meta_venta'], 2, ',', '.') }}
+                · Meta productos {{ number_format($metaCtx['meta_productos'], 2, ',', '.') }}
                 · {{ $metaCtx['es_domingo'] ? 'Domingo' : 'Lunes a sábado' }}
             </div>
         </div>
     </div>
 
     <h2>DESGLOSE VENTAS DEL DIA</h2>
-    <p class="desglose-sub">{{ $reporte->fecha->format('d/m/Y') }} · Tasa {{ number_format((float) $reporte->tasa, 2) }}</p>
+    <p class="desglose-sub">{{ $reporte->fecha->format('d/m/Y') }} · Tasa {{ number_format((float) $reporte->tasa, 2, ',', '.') }}</p>
     @include('ventas_diarias._desglose', ['tablaClass' => 'desglose'])
 
     @if($reporte->observaciones)
         <p style="margin-top:8px;"><strong>Observaciones:</strong> {{ $reporte->observaciones }}</p>
     @endif
 
-    <h2>Cajas</h2>
+    <h2>CAJAS</h2>
     @include('ventas_diarias._cajas', ['tablaClass' => 'cajas'])
 </body>
 </html>

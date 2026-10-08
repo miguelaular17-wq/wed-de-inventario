@@ -429,6 +429,10 @@ class User extends Authenticatable
             return true;
         }
 
+        if ($permission === 'nomina.faltante_caja' && in_array('nomina', $owned, true)) {
+            return true;
+        }
+
         if ($permission === 'nomina.dias_libres' && in_array('nomina', $owned, true)) {
             return true;
         }

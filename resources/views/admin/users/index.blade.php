@@ -121,6 +121,9 @@
                                 <button type="submit" class="btn" style="padding:6px 14px; font-size:0.8rem; border-radius:6px; background-color: var(--blue);">Guardar</button>
                                 @php
                                     $inheritedPerms = $user->rolePermissionKeys();
+                                    if (in_array('nomina', $inheritedPerms, true)) {
+                                        $inheritedPerms[] = 'nomina.faltante_caja';
+                                    }
                                     $extraPerms = $user->extraPermissionKeys();
                                     $extraCount = count($extraPerms);
                                 @endphp
@@ -273,6 +276,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const inherited = perms.slice();
             if (inherited.includes('finanzas.editar') && !inherited.includes('finanzas.ver')) {
                 inherited.push('finanzas.ver');
+            }
+            if (inherited.includes('nomina') && !inherited.includes('nomina.faltante_caja')) {
+                inherited.push('nomina.faltante_caja');
             }
             return inherited;
         };

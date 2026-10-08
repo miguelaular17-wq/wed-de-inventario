@@ -41,6 +41,38 @@ class UserPermissionAccessTest extends TestCase
             ->assertOk();
     }
 
+    public function test_permiso_faltante_caja_no_abre_el_resto_de_nomina(): void
+    {
+        $user = $this->makeUser(User::ROLE_VENDEDOR);
+        $user->syncExtraPermissions(['nomina.faltante_caja']);
+
+        $this->assertTrue($user->canAccess('nomina.faltante_caja'));
+        $this->assertFalse($user->canAccess('nomina'));
+        $this->assertFalse($user->canAccess('nomina.periodos'));
+        $this->assertFalse($user->canAccess('nomina.comisiones'));
+
+        $this->actingAs($user)
+            ->get(route('nomina.faltante_caja.index'))
+            ->assertOk()
+            ->assertSee('Faltante de caja')
+            ->assertDontSee('Adelantos')
+            ->assertDontSee('Comisiones de marca');
+
+        $this->actingAs($user)
+            ->get(route('nomina.adelantos.index'))
+            ->assertRedirect('/');
+
+        $this->actingAs($user)
+            ->get(route('nomina.empleados.index'))
+            ->assertRedirect('/');
+
+        $rrhh = $this->makeUser(User::ROLE_RRHH);
+        $this->assertTrue($rrhh->canAccess('nomina.faltante_caja'));
+        $this->actingAs($rrhh)
+            ->get(route('nomina.faltante_caja.index'))
+            ->assertOk();
+    }
+
     public function test_role_permissions_are_not_stored_as_extras(): void
     {
         $user = $this->makeUser(User::ROLE_COBRANZA);

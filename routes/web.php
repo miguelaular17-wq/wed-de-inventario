@@ -89,6 +89,10 @@ Route::get('/', function () {
             return redirect()->route('servicio.celulares.hub');
         }
 
+        if ($user->canAccess('nomina.faltante_caja') && ! $user->canAccess('operacion')) {
+            return redirect()->route('nomina.faltante_caja.index');
+        }
+
         return redirect()->route('ventas.index');
     }
 
@@ -438,12 +442,6 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::post('/mercancia', [MercanciaController::class, 'storeEscritorio'])->name('mercancia.escritorio');
     Route::post('/empleados/{empleado}/mercancia', [MercanciaController::class, 'store'])->name('mercancia.store');
     Route::post('/mercancia/{descuento}/cancelar', [MercanciaController::class, 'cancelar'])->name('mercancia.cancelar');
-    Route::get('/faltante-caja', [FaltanteCajaController::class, 'index'])->name('faltante_caja.index');
-    Route::get('/faltante-caja/excel', [FaltanteCajaController::class, 'exportarExcel'])->name('faltante_caja.excel');
-    Route::post('/faltante-caja', [FaltanteCajaController::class, 'store'])->name('faltante_caja.store');
-    Route::post('/faltante-caja/cuenta', [FaltanteCajaController::class, 'descontarCuenta'])->name('faltante_caja.cuenta');
-    Route::post('/faltante-caja/{descuento}/decidir', [FaltanteCajaController::class, 'decidir'])->name('faltante_caja.decidir');
-    Route::post('/faltante-caja/{descuento}/cancelar', [FaltanteCajaController::class, 'cancelar'])->name('faltante_caja.cancelar');
     Route::post('/empleados/{empleado}/comision-abonos', [ComisionAjusteController::class, 'storeAbono'])->name('comision_abonos.store');
     Route::post('/empleados/{empleado}/comision-descuentos', [ComisionAjusteController::class, 'storeDescuento'])->name('comision_descuentos.store');
     Route::post('/empleados/{empleado}/inasistencias', [AttendanceController::class, 'storeInasistencia'])->name('inasistencias.store');
@@ -471,6 +469,15 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
 
     Route::get('/configuracion', [ConfiguracionController::class, 'index'])->name('configuracion.index');
     Route::put('/configuracion', [ConfiguracionController::class, 'update'])->name('configuracion.update');
+});
+
+Route::middleware(['auth', 'permission:nomina,nomina.faltante_caja'])->prefix('nomina')->name('nomina.')->group(function () {
+    Route::get('/faltante-caja', [FaltanteCajaController::class, 'index'])->name('faltante_caja.index');
+    Route::get('/faltante-caja/excel', [FaltanteCajaController::class, 'exportarExcel'])->name('faltante_caja.excel');
+    Route::post('/faltante-caja', [FaltanteCajaController::class, 'store'])->name('faltante_caja.store');
+    Route::post('/faltante-caja/cuenta', [FaltanteCajaController::class, 'descontarCuenta'])->name('faltante_caja.cuenta');
+    Route::post('/faltante-caja/{descuento}/decidir', [FaltanteCajaController::class, 'decidir'])->name('faltante_caja.decidir');
+    Route::post('/faltante-caja/{descuento}/cancelar', [FaltanteCajaController::class, 'cancelar'])->name('faltante_caja.cancelar');
 });
 
 Route::middleware(['auth', 'permission:nomina.equipo'])->prefix('nomina/equipo')->name('nomina.equipo.')->group(function () {

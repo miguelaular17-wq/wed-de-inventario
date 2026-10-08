@@ -5,15 +5,16 @@
 @push('head')
 <style>
 .vd-wrap { max-width: 1200px; }
-.vd-title { font-size: 1.25rem; font-weight: 700; margin: 0 0 4px; }
-.vd-sub { color:#64748b; margin:0 0 14px; }
+.vd-title { font-size: 1.25rem; font-weight: 700; margin: 0 0 4px; text-transform: uppercase; }
+.vd-sub { color:#64748b; margin:0 0 14px; text-transform: uppercase; }
+.vd-table th { text-transform: uppercase; white-space: nowrap; }
 .vd-grid { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.4fr); gap: 16px; }
 @media (max-width: 960px) { .vd-grid { grid-template-columns: 1fr; } }
 .vd-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 16px; }
 .vd-card h3 { margin:0 0 10px; font-size:.95rem; color:#334155; }
 .vd-desglose-head { text-align:center; }
 .vd-desglose-head h3 { margin-bottom:2px; }
-.vd-desglose-head p { margin:0 0 10px; color:#64748b; font-size:.85rem; }
+.vd-desglose-head p { margin:0 0 10px; color:#64748b; font-size:.85rem; text-transform: uppercase; }
 .vd-table { width:100%; border-collapse:collapse; font-size:.85rem; }
 .vd-table th, .vd-table td { padding:6px 8px; border-bottom:1px solid #f1f5f9; }
 .vd-table .lab { font-weight:600; white-space:nowrap; }
@@ -38,9 +39,9 @@
     </div>
     <p class="vd-sub">
         {{ $reporte->fecha->format('d/m/Y') }}
-        · Tasa {{ number_format((float) $reporte->tasa, 2) }}
-        · Meta venta ${{ number_format($metaCtx['meta_venta'], 2) }}
-        · Meta productos {{ number_format($metaCtx['meta_productos'], 2) }}
+        · Tasa {{ number_format((float) $reporte->tasa, 2, ',', '.') }}
+        · Meta venta ${{ number_format($metaCtx['meta_venta'], 2, ',', '.') }}
+        · Meta productos {{ number_format($metaCtx['meta_productos'], 2, ',', '.') }}
         ({{ $metaCtx['es_domingo'] ? 'Domingo' : 'Lunes a sábado' }})
     </p>
 
@@ -52,7 +53,7 @@
         <div class="vd-card">
             <div class="vd-desglose-head">
                 <h3>DESGLOSE VENTAS DEL DIA</h3>
-                <p>{{ $reporte->fecha->format('d/m/Y') }} · Tasa {{ number_format((float) $reporte->tasa, 2) }}</p>
+                <p>{{ $reporte->fecha->format('d/m/Y') }} · Tasa {{ number_format((float) $reporte->tasa, 2, ',', '.') }}</p>
             </div>
             @include('ventas_diarias._desglose')
             @if($reporte->observaciones)

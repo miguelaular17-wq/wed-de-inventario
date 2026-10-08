@@ -5,7 +5,7 @@
 @push('head')
 <style>
 .vd-wrap { max-width: 1200px; }
-.vd-title { font-size: 1.25rem; font-weight: 700; margin: 0 0 12px; color: #1e293b; }
+.vd-title { font-size: 1.25rem; font-weight: 700; margin: 0 0 12px; color: #1e293b; text-transform: uppercase; }
 .vd-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 16px; }
 .vd-card h3 { margin:0 0 10px; font-size:.95rem; color:#334155; }
 .vd-meta-table, .vd-cajas { width:100%; border-collapse:collapse; font-size:.85rem; }
@@ -83,15 +83,15 @@
             </div>
             <div class="field">
                 <label>Meta venta (día)</label>
-                <input type="text" value="{{ number_format($metaCtx['meta_venta'], 2) }}" disabled>
+                <input type="text" value="{{ number_format($metaCtx['meta_venta'], 2, ',', '.') }}" disabled>
             </div>
             <div class="field">
                 <label>Meta productos</label>
-                <input type="text" value="{{ number_format($metaCtx['meta_productos'], 2) }}" disabled>
+                <input type="text" value="{{ number_format($metaCtx['meta_productos'], 2, ',', '.') }}" disabled>
             </div>
             <div class="field">
                 <label>Tipo día</label>
-                <input type="text" value="{{ $metaCtx['es_domingo'] ? 'Domingo' : 'Lunes a sábado' }}" disabled>
+                <input type="text" value="{{ $metaCtx['es_domingo'] ? 'DOMINGO' : 'LUNES A SÁBADO' }}" disabled>
             </div>
         </div>
 
@@ -129,10 +129,10 @@
                     </table>
                 </div>
                 <p class="muted" style="font-size:12px;margin:10px 0 0;">
-                    Metas L–Sáb venta {{ number_format($metaCtx['meta_venta_lv_sab'], 2) }} /
-                    Dom {{ number_format($metaCtx['meta_venta_domingo'], 2) }} ·
-                    Prod L–Sáb {{ number_format($metaCtx['meta_prod_lv_sab'], 2) }} /
-                    Dom {{ number_format($metaCtx['meta_prod_domingo'], 2) }}
+                    METAS L–SÁB VENTA {{ number_format($metaCtx['meta_venta_lv_sab'], 2, ',', '.') }} /
+                    DOM {{ number_format($metaCtx['meta_venta_domingo'], 2, ',', '.') }} ·
+                    PROD L–SÁB {{ number_format($metaCtx['meta_prod_lv_sab'], 2, ',', '.') }} /
+                    DOM {{ number_format($metaCtx['meta_prod_domingo'], 2, ',', '.') }}
                 </p>
         </div>
 

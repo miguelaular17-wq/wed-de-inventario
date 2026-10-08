@@ -264,13 +264,16 @@
         $nav[] = $link('Metas', route('metas.index'), request()->routeIs('metas.*'));
     }
 
-    if ($u->canAccess('nomina.periodos') || $u->canAccess('nomina.comisiones') || $u->canAccess('nomina')) {
+    if ($u->canAccess('nomina.periodos') || $u->canAccess('nomina.comisiones') || $u->canAccess('nomina') || $u->canAccess('nomina.faltante_caja')) {
         $nominaItems = [];
         if ($u->canAccess('nomina.periodos')) {
             $nominaItems[] = $link('Períodos', route('nomina.periodos.index'), request()->routeIs('nomina.periodos.*'));
         }
         if ($u->canAccess('nomina.comisiones')) {
             $nominaItems[] = $link('Comisiones', route('nomina.comisiones.index'), request()->routeIs('nomina.comisiones.*'));
+        }
+        if ($u->canAccess('nomina.faltante_caja') && ! $u->canAccess('nomina')) {
+            $nominaItems[] = $link('Faltante de caja', route('nomina.faltante_caja.index'), request()->routeIs('nomina.faltante_caja.*'));
         }
         if ($u->canAccess('nomina')) {
             $nominaItems = array_merge($nominaItems, [
