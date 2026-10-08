@@ -224,7 +224,7 @@
                                     <span style="color: #94a3b8; font-size: 0.85rem;">🔒 Bloqueado</span>
                                 @else
                                     @if(in_array($cuota->estatus, ['pendiente', 'vencido', 'parcial']))
-                                        <button type="button" onclick="abrirPago({{ $cuota->id }}, {{ $cuota->monto - $cuota->monto_pagado }}, {{ $cuota->numero_cuota }})"
+                                        <button type="button" onclick="abrirPago({{ $cuota->id }}, {{ $cuota->monto - $cuota->monto_pagado }}, {{ $cuota->numero_cuota }}, '{{ $cuota->fecha_vencimiento?->format('Y-m-d') }}')"
                                             style="padding: 4px 10px; background: #059669; color: white; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">💰 Pagar</button>
                                     @elseif(in_array($cuota->estatus, ['prestamo', 'acumulado']))
                                         <span style="color: #94a3b8; font-size: 0.85rem;">—</span>
@@ -706,10 +706,13 @@
 const reciboClienteNombre = '{{ addslashes($contrato->cliente) }}';
 const reciboNumContrato = '{{ $contrato->numero_contrato }}';
 
-function abrirPago(cuotaId, saldo, numCuota) {
+let reciboFechaCuota = '';
+
+function abrirPago(cuotaId, saldo, numCuota, fechaCuota) {
     document.getElementById('formPago').action = '/contratos/cuota/' + cuotaId + '/pagar';
     document.getElementById('pagoMonto').value = saldo;
     document.getElementById('pagoNumCuota').textContent = numCuota;
+    reciboFechaCuota = fechaCuota || '';
     document.getElementById('modalPago').style.display = 'flex';
 }
 
@@ -779,9 +782,13 @@ function previsualizarRecibo() {
     const now = new Date();
     const ctrl = 'NM-' + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0');
 
-    // Concepto
+    // El mes del concepto es el de la cuota, no el día en que se cobra.
     let concepto = 'PAGO CUOTA #' + numCuota + ' - CONTRATO ' + reciboNumContrato;
-    if (fechaVal) concepto += ' - MES DE ' + mesesNombres[parseInt(mes)-1] + ' ' + anio;
+    const fechaMesCuota = reciboFechaCuota || fechaVal;
+    if (fechaMesCuota) {
+        const fdCuota = new Date(fechaMesCuota + 'T00:00:00');
+        concepto += ' - MES DE ' + mesesNombres[fdCuota.getMonth()] + ' ' + fdCuota.getFullYear();
+    }
     if (comentario) concepto += ' (' + comentario.toUpperCase() + ')';
     if (abono > 0) concepto += ' + ABONO A CAPITAL $' + abono.toFixed(2);
 
