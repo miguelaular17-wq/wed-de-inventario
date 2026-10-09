@@ -1276,7 +1276,6 @@ private fun PhoneField(
     )
 }
 
-@Composable
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChoiceSelector(

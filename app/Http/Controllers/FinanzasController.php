@@ -1374,29 +1374,37 @@ class FinanzasController extends Controller
         $ingresos_sistema = $ingresos_sistema_query->get();
         $matcher = app(\App\Services\BankReconciliationMatcher::class);
 
-        // 6. Construir estructura por banco+titular
-        // Clave compuesta: "BANESCO|GRUPO JRZ"
-        $bancosActivos = collect([]);
+        // 6. Construir estructura por banco+titular.
+        // "JRZ" y "GRUPO JRZ" son la misma cuenta y salen en una sola tarjeta.
+        $cuentas = [];
+        $registrarCuenta = function ($banco, $titular) use (&$cuentas, $matcher) {
+            $clave = $matcher->claveCuenta($banco, $titular);
+            [$bancoCanon, $titularCanon] = $matcher->partesCuenta($banco, $titular);
+            if ($bancoCanon === '' || $clave === '|') {
+                return;
+            }
+            if (! isset($cuentas[$clave])) {
+                $cuentas[$clave] = [
+                    'banco' => $bancoCanon,
+                    'titular' => $titularCanon,
+                ];
+            } else {
+                $cuentas[$clave]['titular'] = $matcher->titularPreferido(
+                    $cuentas[$clave]['titular'],
+                    $titularCanon
+                );
+            }
+        };
 
-        // Líneas del banco cargadas (tienen banco + titular del archivo subido)
-        $lineas->each(function($l) use (&$bancosActivos) {
-            $bk  = strtoupper(trim($l->banco ?? ''));
-            $tit = strtoupper(trim($l->titular ?? ''));
-            if ($bk) $bancosActivos->push($bk . '|' . $tit);
+        $lineas->each(function ($l) use ($registrarCuenta) {
+            $registrarCuenta($l->banco, $l->titular);
+        });
+        $egresos_ayer->each(function ($e) use ($registrarCuenta) {
+            $registrarCuenta($e->banco, $e->titular);
         });
 
-        // Egresos en tránsito: también tienen banco Y titular guardados en flujo_cajas
-        $egresos_ayer->each(function($e) use (&$bancosActivos) {
-            $bk  = strtoupper(trim($e->banco ?? ''));
-            $tit = strtoupper(trim($e->titular ?? ''));
-            if ($bk) $bancosActivos->push($bk . '|' . $tit);
-        });
-
-        // Removed forced global bank view:
-        // if ($banco_filtro) {
-        //     $bancosActivos->push(strtoupper(trim($banco_filtro)) . '|');
-        // }
-        $bancosActivos = $bancosActivos->filter()->unique()->sort()->values();
+        ksort($cuentas);
+        $bancosActivos = collect(array_keys($cuentas));
 
         $comprasTransito = \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')
             ? \App\Models\CompraDivisa::query()
@@ -1418,16 +1426,14 @@ class FinanzasController extends Controller
                 ->get(['fecha', 'banco', 'titular', 'tasa_cambio'])
         );
         foreach ($bancosActivos as $bk_key) {
-            [$bk, $tit] = array_pad(explode('|', $bk_key, 2), 2, '');
-            $bk_lower  = strtolower($bk);
-            $tit_lower = strtolower($tit);
+            $bk = $cuentas[$bk_key]['banco'];
+            $tit = $cuentas[$bk_key]['titular'];
+            $mismaCuenta = function ($item) use ($matcher, $bk_key) {
+                return $matcher->claveCuenta($item->banco ?? null, $item->titular ?? null) === $bk_key;
+            };
 
             // Líneas del banco+titular cargadas
-            $lineas_banco = $lineas->filter(function($l) use ($bk_lower, $tit_lower) {
-                $lbanco = strtolower(trim($l->banco ?? ''));
-                $ltit   = strtolower(trim($l->titular ?? ''));
-                return $lbanco === $bk_lower && ($tit_lower === '' || $ltit === $tit_lower);
-            });
+            $lineas_banco = $lineas->filter($mismaCuenta);
 
             // Separar comisiones, compras de divisas, pago de crédito y normales
             $lineas_comisiones = $lineas_banco->filter(
@@ -1535,12 +1541,7 @@ class FinanzasController extends Controller
                 ])->values();
 
             $en_transito = $egresos_ayer
-                ->filter(function ($e) use ($bk_lower, $tit_lower) {
-                    $ebanco = strtolower(trim($e->banco ?? ''));
-                    $etit = strtolower(trim($e->titular ?? ''));
-
-                    return $ebanco === $bk_lower && ($tit_lower === '' || $etit === $tit_lower);
-                })
+                ->filter($mismaCuenta)
                 ->map(fn ($e) => [
                     'fecha'      => $e->fecha,
                     'referencia' => $e->referencia,
@@ -1554,12 +1555,7 @@ class FinanzasController extends Controller
                 ])->values();
 
             $compras_transito = $comprasTransito
-                ->filter(function ($c) use ($bk_lower, $tit_lower) {
-                    $ebanco = strtolower(trim($c->banco ?? ''));
-                    $etit = strtolower(trim($c->titular ?? ''));
-
-                    return $ebanco === $bk_lower && ($tit_lower === '' || $etit === $tit_lower);
-                })
+                ->filter($mismaCuenta)
                 ->map(fn ($c) => [
                     'fecha'      => $c->fecha,
                     'referencia' => $c->referencia,
@@ -1585,26 +1581,21 @@ class FinanzasController extends Controller
             $total_compras_divisas = $compras_divisas_banco->sum('monto');
             $total_pagos_credito = $pagos_credito->sum('monto');
 
-            $mis_movimientos = $movimientos_sistema->filter(function ($movimiento) use ($matcher, $bk, $tit) {
-                [$banco, $titular] = $matcher->partesCuenta($movimiento->banco, $movimiento->titular);
-
-                return $banco === $bk && $titular === $tit;
+            $mis_movimientos = $movimientos_sistema->filter(function ($movimiento) use ($matcher, $bk_key) {
+                return $matcher->claveCuenta($movimiento->banco, $movimiento->titular) === $bk_key;
             });
-            $mis_traslados_recibidos = $movimientos_sistema->filter(function ($movimiento) use ($matcher, $bk, $tit) {
+            $mis_traslados_recibidos = $movimientos_sistema->filter(function ($movimiento) use ($matcher, $bk_key) {
                 if (($movimiento->categoria_egreso ?? '') !== 'traslados') {
                     return false;
                 }
-                [$banco, $titular] = $matcher->partesCuenta(
+
+                return $matcher->claveCuenta(
                     $movimiento->banco_receptor,
                     $movimiento->titular_receptor
-                );
-
-                return $banco === $bk && $titular === $tit;
+                ) === $bk_key;
             });
-            $mis_ingresos_tesoreria = $ingresos_sistema->filter(function ($ingreso) use ($matcher, $bk, $tit) {
-                [$banco, $titular] = $matcher->partesCuenta($ingreso->banco, $ingreso->titular);
-
-                return $banco === $bk && $titular === $tit;
+            $mis_ingresos_tesoreria = $ingresos_sistema->filter(function ($ingreso) use ($matcher, $bk_key) {
+                return $matcher->claveCuenta($ingreso->banco, $ingreso->titular) === $bk_key;
             });
 
             $total_cargos_sistema = $mis_movimientos
@@ -1636,7 +1627,7 @@ class FinanzasController extends Controller
                     'total_abonos_sistema',
                     'movimiento_neto_sistema'
                 ),
-                ['banco' => $bk, 'titular' => $tit]
+                ['banco' => $bk, 'titular' => $tit, 'clave' => $bk_key]
             );
         }
 
@@ -1646,7 +1637,7 @@ class FinanzasController extends Controller
                 ->whereDate('fecha_desde', $fecha_desde)
                 ->whereDate('fecha_hasta', $fecha_hasta)
                 ->get()
-                ->keyBy(fn ($cierre) => $cierre->banco.'|'.$cierre->titular);
+                ->keyBy(fn ($cierre) => $matcher->claveCuenta($cierre->banco, $cierre->titular));
         }
 
         return view('finanzas.conciliaciones', compact(
@@ -2556,10 +2547,15 @@ class FinanzasController extends Controller
         $egresos_ayer = $egresos_query->orderBy('id')->get();
 
         $classifier = app(\App\Services\BankMovementClassifier::class);
+        $matcher = app(\App\Services\BankReconciliationMatcher::class);
+        $clavePdf = $tit_req !== '' ? $matcher->claveCuenta($bk_req, $tit_req) : '';
 
-        $lineas_banco = $lineas->filter(function($l) use ($tit_req) {
-            $ltit = strtolower(trim($l->titular ?? ''));
-            return $tit_req === '' || $ltit === $tit_req;
+        $lineas_banco = $lineas->filter(function ($l) use ($matcher, $clavePdf, $tit_req) {
+            if ($tit_req === '') {
+                return true;
+            }
+
+            return $matcher->claveCuenta($l->banco, $l->titular) === $clavePdf;
         });
 
         $lineas_comisiones = $lineas_banco->filter(
@@ -2618,9 +2614,12 @@ class FinanzasController extends Controller
             ])->values();
 
         $en_transito = $egresos_ayer
-            ->filter(function($e) use ($tit_req) {
-                $etit = strtolower(trim($e->titular ?? ''));
-                return $tit_req === '' || $etit === $tit_req;
+            ->filter(function ($e) use ($matcher, $clavePdf, $tit_req) {
+                if ($tit_req === '') {
+                    return true;
+                }
+
+                return $matcher->claveCuenta($e->banco, $e->titular) === $clavePdf;
             })
             ->map(fn($e) => [
                 'fecha'      => $e->fecha,

@@ -165,7 +165,7 @@
                     ]) }}" style="margin-left: 15px; font-size: 0.75rem; background-color: rgba(255,255,255,0.15); color: #fff; padding: 4px 10px; border-radius: 4px; text-decoration: none; font-weight: normal; vertical-align: middle;">PDF</a>
                     @php
                         $cierreMarcado = ($fecha_desde && $fecha_hasta && $tit)
-                            ? ($cierresMarcados[$bk.'|'.$tit] ?? null)
+                            ? ($cierresMarcados[$d['clave'] ?? ($bk.'|'.$tit)] ?? null)
                             : null;
                     @endphp
                     @if($fecha_desde && $fecha_hasta && $tit)

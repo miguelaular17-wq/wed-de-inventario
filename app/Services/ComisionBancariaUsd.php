@@ -43,7 +43,11 @@ class ComisionBancariaUsd
     {
         $detalle = $lineas->map(function ($linea) use ($tasas, $banco, $titular) {
             $fecha = \Carbon\Carbon::parse($linea->fecha)->toDateString();
-            $tasa = $tasas[$banco.'|'.$titular.'|'.$fecha] ?? $tasas['*|'.$fecha] ?? null;
+            $titularClave = app(BankReconciliationMatcher::class)->titularClave($titular);
+            $tasa = $tasas[$banco.'|'.$titular.'|'.$fecha]
+                ?? $tasas[$banco.'|'.$titularClave.'|'.$fecha]
+                ?? $tasas['*|'.$fecha]
+                ?? null;
             $monto = (float) $linea->monto;
 
             return [
