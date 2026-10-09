@@ -264,6 +264,7 @@ class RequisicionController extends Controller
 
     public function export(Request $request): \Symfony\Component\HttpFoundation\Response|RedirectResponse
     {
+        ini_set('memory_limit', '512M');
         $sede = (string) $request->session()->get('sede_local');
         $tp = (float) $request->session()->get('tiempo_pronostico', config('inventario.tiempo_pronostico_default'));
         $tipoReporte = $request->input('tipo_reporte', 'ventas');
@@ -273,8 +274,6 @@ class RequisicionController extends Controller
         $sedeOrigen = (string) $request->input('sede_origen');
         $categoria = (string) $request->input('categoria', 'Todas');
         $subcategoria = (string) $request->input('subcategoria', 'Todas');
-        $delimiter = $this->export->csvDelimiterForSede($sede);
-
         if ($tipoReporte === 'personalizada') {
             $sedeOrigenKey = ($sedeOrigen === 'Todas' || $sedeOrigen === '')
                 ? null
@@ -317,11 +316,9 @@ class RequisicionController extends Controller
                         continue;
                     }
                     $display = config('inventario.display.'.$origenKey, $origenKey);
-                    $zip->addFromString(
-                        'Requisicion_manual_'.$display.'.csv',
-                        $this->export->toCsv($grupo->values(), $delimiter)
-                    );
+                    $this->agregarParCsv($zip, 'Requisicion_manual_'.$display, $grupo->values());
                 }
+                $zip->addFromString('LEEME_separadores.txt', $this->export->notaSeparadores());
                 $zip->close();
 
                 return response()->download(
@@ -330,12 +327,9 @@ class RequisicionController extends Controller
                 )->deleteFileAfterSend(true);
             }
 
-            $filename = 'Requisicion_manual_'.config('inventario.display.'.$sedeOrigenKey, $sedeOrigenKey).'.csv';
+            $base = 'Requisicion_manual_'.config('inventario.display.'.$sedeOrigenKey, $sedeOrigenKey);
 
-            return response($this->export->toCsv($lines, $delimiter), 200, [
-                'Content-Type' => 'text/csv; charset=UTF-8',
-                'Content-Disposition' => 'attachment; filename="'.$filename.'"',
-            ]);
+            return $this->descargarParCsv($base, $lines);
         }
 
         $incluirParcial = $request->boolean('incluir_parcial');
@@ -395,18 +389,15 @@ class RequisicionController extends Controller
                 );
 
                 if ($lines->isNotEmpty()) {
-                    // Apply requisition stock movement
                     $this->stock->applyRequisition($lines, $origSede, $sede, null, $tipoReporte);
-                    
-                    // Generate CSV content
-                    $csvContent = $this->export->toCsv($lines, $delimiter);
-                    
-                    // Add to ZIP
-                    $zip->addFromString('Requisicion_'.$sede.'_desde_'.$origSede.'.csv', $csvContent);
+                    $this->agregarParCsv($zip, 'Requisicion_'.$sede.'_desde_'.$origSede, $lines);
                     $hasFiles = true;
                 }
             }
 
+            if ($hasFiles) {
+                $zip->addFromString('LEEME_separadores.txt', $this->export->notaSeparadores());
+            }
             $zip->close();
 
             if (! $hasFiles) {
@@ -464,11 +455,36 @@ class RequisicionController extends Controller
 
         $this->stock->applyRequisition($lines, $sedeOrigenKey, $sede, null, $tipoReporte);
 
-        $filename = 'Requisicion_'.$sede.'_desde_'.$sedeOrigenKey.'.csv';
+        $base = 'Requisicion_'.$sede.'_desde_'.$sedeOrigenKey;
 
-        return response($this->export->toCsv($lines, $delimiter), 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
-        ]);
+        return $this->descargarParCsv($base, $lines);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $lines
+     */
+    private function descargarParCsv(string $base, \Illuminate\Support\Collection $lines): \Symfony\Component\HttpFoundation\BinaryFileResponse|RedirectResponse
+    {
+        $zip = new \ZipArchive();
+        $zipFile = tempnam(sys_get_temp_dir(), 'zip');
+        if ($zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            return back()->withErrors(['export' => 'No se pudo crear el archivo ZIP.']);
+        }
+
+        $this->agregarParCsv($zip, $base, $lines);
+        $zip->addFromString('LEEME_separadores.txt', $this->export->notaSeparadores());
+        $zip->close();
+
+        return response()->download($zipFile, $base.'.zip')->deleteFileAfterSend(true);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $lines
+     */
+    private function agregarParCsv(\ZipArchive $zip, string $base, \Illuminate\Support\Collection $lines): void
+    {
+        $par = $this->export->csvPair($lines);
+        $zip->addFromString($base.'_separador_punto_y_coma.csv', $par['punto_y_coma']);
+        $zip->addFromString($base.'_separador_coma.csv', $par['coma']);
     }
 }

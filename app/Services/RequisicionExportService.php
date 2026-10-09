@@ -222,6 +222,30 @@ class RequisicionExportService
         return ';';
     }
 
+    /**
+     * Las dos versiones del mismo archivo: punto y coma y coma.
+     *
+     * @return array{punto_y_coma: string, coma: string}
+     */
+    public function csvPair(Collection $lines): array
+    {
+        return [
+            'punto_y_coma' => $this->toCsv($lines, ';'),
+            'coma' => $this->toCsv($lines, ','),
+        ];
+    }
+
+    public function notaSeparadores(): string
+    {
+        return implode("\n", [
+            'Este paquete trae dos versiones de cada requisición.',
+            '',
+            'Los archivos que terminan en _separador_punto_y_coma.csv separan las columnas con punto y coma (;).',
+            'Los archivos que terminan en _separador_coma.csv separan las columnas con coma (,).',
+            '',
+        ]);
+    }
+
     public function resolveSedeKey(string $displayOrKey): ?string
     {
         return $this->resolveSedeKeyInternal($displayOrKey);

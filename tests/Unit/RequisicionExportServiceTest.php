@@ -54,5 +54,11 @@ class RequisicionExportServiceTest extends TestCase
         $this->assertSame("codigo;unidad;cantidad\nABC123;UND;2\n", $service->toCsv($lines, $service->csvDelimiterForSede('CENTRO')));
         $this->assertSame(',', $service->csvDelimiterForSede('Virtude'));
         $this->assertSame(';', $service->csvDelimiterForSede('JRZ'));
+
+        $par = $service->csvPair($lines);
+        $this->assertSame("codigo;unidad;cantidad\nABC123;UND;2\n", $par['punto_y_coma']);
+        $this->assertSame("codigo,unidad,cantidad\nABC123,UND,2\n", $par['coma']);
+        $this->assertStringContainsString('_separador_punto_y_coma.csv', $service->notaSeparadores());
+        $this->assertStringContainsString('_separador_coma.csv', $service->notaSeparadores());
     }
 }
