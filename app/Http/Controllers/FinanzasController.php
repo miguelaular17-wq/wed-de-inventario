@@ -1188,7 +1188,9 @@ class FinanzasController extends Controller
             ? \Carbon\Carbon::parse($filtrosConciliacion['fecha_hasta'])->format('Y-m-d')
             : null;
 
-        $lineas_query = \App\Models\ConciliacionLinea::query()->orderBy('fecha');
+        $lineas_query = \App\Models\ConciliacionLinea::query()
+            ->with(['flujoCaja', 'compraDivisa'])
+            ->orderBy('fecha');
         
         if ($fecha_desde) {
             $lineas_query->where('fecha', '>=', $fecha_desde);
@@ -1253,6 +1255,7 @@ class FinanzasController extends Controller
             }
 
             $cambios = false;
+            $flujosNormales = $flujos_posibles->reject(fn ($flujo) => $matcher->esTraslado($flujo))->values();
             foreach ($lineas_pendientes as $linea) {
                 if ($matcher->esAbonoLotePuntoVenta($linea->descripcion, $linea->referencia)) {
                     continue;
@@ -1261,18 +1264,13 @@ class FinanzasController extends Controller
                 $match         = null;
                 $isTesoreriaMatch = false;
                 $isCompraDivisaMatch = false;
-                $flujosDisponibles = $flujos_posibles->filter(function ($flujo) use ($linea, $matcher, $ladosTrasladosVinculados) {
-                    if (! $matcher->esTraslado($flujo)) {
-                        return true;
-                    }
-
+                $trasladosDisponibles = $traslados->filter(function ($flujo) use ($linea, $matcher, $ladosTrasladosVinculados) {
                     $lado = $matcher->ladoTraslado($linea, $flujo);
 
                     return $lado !== null && empty($ladosTrasladosVinculados[$flujo->id][$lado]);
                 });
 
                 if ($linea->esAbono()) {
-                    $trasladosDisponibles = $flujosDisponibles->filter(fn ($flujo) => $matcher->esTraslado($flujo));
                     $match = $matcher->mejorEgreso($linea, $trasladosDisponibles);
                 } else {
                     if ($classifier->esCompraDivisas($linea->descripcion)) {
@@ -1282,7 +1280,9 @@ class FinanzasController extends Controller
                         }
                     }
                     if (! $match) {
-                        $match = $matcher->mejorEgreso($linea, $flujosDisponibles);
+                        $match = $trasladosDisponibles->isEmpty()
+                            ? $matcher->mejorEgreso($linea, $flujosNormales)
+                            : $matcher->mejorEgreso($linea, $flujosNormales->concat($trasladosDisponibles));
                     }
                 }
 
@@ -1310,7 +1310,8 @@ class FinanzasController extends Controller
                     } else {
                         $match->es_conciliado = true;
                         if (! $isTesoreriaMatch && ! $isCompraDivisaMatch) {
-                            $flujos_posibles = $flujos_posibles->reject(fn($f) => $f->id == $match->id);
+                            $flujos_posibles = $flujos_posibles->reject(fn ($f) => $f->id == $match->id);
+                            $flujosNormales = $flujosNormales->reject(fn ($f) => $f->id == $match->id);
                         }
                     }
                     $match->save();
@@ -1393,6 +1394,15 @@ class FinanzasController extends Controller
         // }
         $bancosActivos = $bancosActivos->filter()->unique()->sort()->values();
 
+        $comprasTransito = \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')
+            ? \App\Models\CompraDivisa::query()
+                ->where('es_conciliado', false)
+                ->when($fecha_desde, fn ($q) => $q->where('fecha', '>=', $fecha_desde))
+                ->when(! $fecha_desde, fn ($q) => $q->where('fecha', '>=', now()->subDay()->format('Y-m-d')))
+                ->when($fecha_hasta, fn ($q) => $q->where('fecha', '<=', $fecha_hasta))
+                ->get()
+            : collect();
+
         $data_por_banco = [];
         $tasasEgreso = app(\App\Services\ComisionBancariaUsd::class)->tasasPorDia(
             \App\Models\FlujoCaja::query()
@@ -1441,13 +1451,13 @@ class FinanzasController extends Controller
                     $motivo = '-';
                     $tipo_gasto = '-';
                     if ($l->flujo_caja_id) {
-                        $flujo = \App\Models\FlujoCaja::find($l->flujo_caja_id);
+                        $flujo = $l->flujoCaja;
                         if ($flujo) {
                             $motivo = $flujo->motivo ?: $flujo->concepto;
                             $tipo_gasto = $flujo->tipo_gasto ?: $flujo->categoria_egreso;
                         }
                     } elseif ($l->compra_divisa_id) {
-                        $compra = \App\Models\CompraDivisa::find($l->compra_divisa_id);
+                        $compra = $l->compraDivisa;
                         if ($compra) {
                             $motivo = $compra->motivo ?: ($compra->concepto ?: 'Compra de divisas');
                             $tipo_gasto = 'Compra de divisas';
@@ -1470,11 +1480,8 @@ class FinanzasController extends Controller
             $conciliados = $conciliados->concat(
                 $lineas_compra_divisas->where('estado', 'conciliado')->map(function ($l) {
                     $motivo = 'Compra de divisas';
-                    if ($l->compra_divisa_id) {
-                        $compra = \App\Models\CompraDivisa::find($l->compra_divisa_id);
-                        if ($compra) {
-                            $motivo = $compra->motivo ?: ($compra->concepto ?: $motivo);
-                        }
+                    if ($l->compra_divisa_id && $l->compraDivisa) {
+                        $motivo = $l->compraDivisa->motivo ?: ($l->compraDivisa->concepto ?: $motivo);
                     }
 
                     return [
@@ -1542,12 +1549,7 @@ class FinanzasController extends Controller
                     'flujo_id'   => $e->id,
                 ])->values();
 
-            $compras_transito = \App\Models\CompraDivisa::query()
-                ->where('es_conciliado', false)
-                ->when($fecha_desde, fn ($q) => $q->where('fecha', '>=', $fecha_desde))
-                ->when(! $fecha_desde, fn ($q) => $q->where('fecha', '>=', now()->subDay()->format('Y-m-d')))
-                ->when($fecha_hasta, fn ($q) => $q->where('fecha', '<=', $fecha_hasta))
-                ->get()
+            $compras_transito = $comprasTransito
                 ->filter(function ($c) use ($bk_lower, $tit_lower) {
                     $ebanco = strtolower(trim($c->banco ?? ''));
                     $etit = strtolower(trim($c->titular ?? ''));
@@ -2691,6 +2693,11 @@ class FinanzasController extends Controller
         $lineas = \App\Models\ConciliacionLinea::query()
             ->whereNotNull('tesoreria_ingreso_id')
             ->where('estado', 'conciliado')
+            ->where(function ($q) {
+                foreach (['%pagomovil%', '%pago movil%', '%pago móvil%', '%pago-movil%', '%p. movil%', '%p.móvil%'] as $needle) {
+                    $q->orWhereRaw('LOWER(descripcion) LIKE ?', [mb_strtolower($needle, 'UTF-8')]);
+                }
+            })
             ->get();
 
         if ($lineas->isEmpty()) {
@@ -2735,24 +2742,36 @@ class FinanzasController extends Controller
         $lineas = \App\Models\ConciliacionLinea::query()
             ->where('estado', 'conciliado')
             ->whereNotNull('flujo_caja_id')
+            ->whereHas('flujoCaja', function ($q) {
+                $q->where(function ($q) {
+                    $q->whereNull('motivo')->orWhere('motivo', '');
+                })->where(function ($q) {
+                    $q->whereNull('comprobante_url')->orWhere('comprobante_url', '');
+                })->where(function ($q) {
+                    $q->whereNull('categoria_egreso')
+                        ->orWhereRaw("LOWER(categoria_egreso) <> 'traslados'");
+                });
+            })
+            ->with('flujoCaja')
             ->get();
 
         if ($lineas->isEmpty()) {
             return;
         }
 
-        $vinculados = \App\Models\FlujoCaja::query()
-            ->whereIn('id', $lineas->pluck('flujo_caja_id')->unique()->filter())
-            ->get()
-            ->keyBy('id');
-
+        $desde = \Carbon\Carbon::parse($lineas->min('fecha'))->toDateString();
+        $hasta = \Carbon\Carbon::parse($lineas->max('fecha'))->toDateString();
         $candidatos = \App\Models\FlujoCaja::query()
             ->where('tipo', 'egreso')
             ->where('es_conciliado', false)
+            ->whereDate('fecha', '>=', $desde)
+            ->whereDate('fecha', '<=', $hasta)
+            ->whereNotNull('motivo')
+            ->where('motivo', '!=', '')
             ->get();
 
         foreach ($lineas as $linea) {
-            $vinculado = $vinculados->get($linea->flujo_caja_id);
+            $vinculado = $linea->flujoCaja;
             if (! $vinculado) {
                 continue;
             }
