@@ -185,7 +185,7 @@
                         <input type="hidden" name="equipo_id" id="st-equipo-id" value="{{ old('equipo_id') }}">
                     @endunless
                 </div>
-                <div class="st-campo" id="st-serial-wrap" data-tipos="impresora,camara,audifonos,corneta">
+                <div class="st-campo" id="st-serial-wrap" data-tipos="impresora,camara,audifonos,corneta,electronica">
                     <label id="st-serial-label" style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Serial *</label>
                     <div style="display:flex;gap:8px;align-items:center;">
                         <input type="text" name="serial" id="st-serial" value="{{ old('serial', $equipoPrefill->serial ?? '') }}" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:6px;" @disabled(old('serial_no_aplica'))>
@@ -209,8 +209,12 @@
                     <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Valor del dispositivo</label>
                     <input type="number" name="valor_dispositivo" value="{{ old('valor_dispositivo') }}" min="0" step="0.01" placeholder="Ej: 450.00" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
                 </div>
-                <div class="st-campo" data-tipos="celular">
-                    <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Color *</label>
+                <div class="st-campo" data-tipos="electronica">
+                    <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Qué equipo es *</label>
+                    <input type="text" name="descripcion_equipo" value="{{ old('descripcion_equipo') }}" placeholder="Tablet, router, TV, consola, reloj…" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+                </div>
+                <div class="st-campo" data-tipos="celular,electronica">
+                    <label id="st-color-label" style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Color *</label>
                     <input type="text" name="color" value="{{ old('color', $equipoPrefill->color ?? '') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
                 </div>
                 <div class="st-campo" data-tipos="celular">
@@ -226,7 +230,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="st-campo" data-tipos="audifonos,corneta">
+                <div class="st-campo" data-tipos="audifonos,corneta,electronica">
                     <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Código de lote</label>
                     <input type="text" name="codigo_lote" value="{{ old('codigo_lote') }}" placeholder="Si no hay serial, el lote es suficiente" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
                 </div>
@@ -458,6 +462,7 @@
         camara: 'Serial del cuerpo *',
         audifonos: 'Serial o código de lote *',
         corneta: 'Serial o código de lote *',
+        electronica: 'Serial',
     };
     function setDisabled(root, disabled) {
         root.querySelectorAll('input, select, textarea').forEach((el) => {
@@ -536,6 +541,8 @@
         });
         const serialLabel = document.getElementById('st-serial-label');
         if (serialLabel) serialLabel.textContent = serialLabels[tipo] || 'Serial *';
+        const colorLabel = document.getElementById('st-color-label');
+        if (colorLabel) colorLabel.textContent = tipo === 'celular' ? 'Color *' : 'Color';
         syncImeiNoAplica();
         syncLente();
     }

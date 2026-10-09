@@ -129,6 +129,7 @@ class ServiceOrderController extends Controller
             'modelo' => ['required', 'string', 'max:128'],
             'color' => ['nullable', 'string', 'max:64'],
             'almacenamiento' => ['nullable', 'string', 'max:32'],
+            'descripcion_equipo' => ['nullable', 'string', 'max:120'],
             'falla' => ['required', 'string', 'max:4000'],
             'accesorios' => ['nullable', 'string', 'max:255'],
             'prioridad' => ['required', 'string', Rule::in(array_keys(StOrden::PRIORIDADES))],
@@ -170,17 +171,21 @@ class ServiceOrderController extends Controller
             } elseif (! $imei) {
                 throw ValidationException::withMessages(['imei' => 'El IMEI es obligatorio.']);
             }
-        } elseif (! $serial) {
+        } elseif ($tipoDispositivo !== 'electronica' && ! $serial) {
             throw ValidationException::withMessages(['serial' => 'El serial es obligatorio para este tipo de dispositivo.']);
         }
 
+        $descripcionEquipo = trim((string) ($data['descripcion_equipo'] ?? ''));
+
         $atributos = array_filter([
             'almacenamiento' => trim((string) ($data['almacenamiento'] ?? '')),
+            'descripcion_equipo' => $descripcionEquipo,
         ], fn ($v) => $v !== '');
 
         $result = $this->equipoService->resolverOCrear([
             'imei' => $imei,
             'serial' => $serial,
+            'permitir_sin_identidad' => $tipoDispositivo === 'electronica' && ! $serial,
             'marca' => $data['marca'],
             'modelo' => $data['modelo'],
             'color' => $data['color'] ?? null,
@@ -214,7 +219,7 @@ class ServiceOrderController extends Controller
             'cliente_nombre' => $data['cliente_nombre'],
             'cliente_telefono' => $data['cliente_telefono'] ?? null,
             'cliente_cedula' => $data['cliente_cedula'] ?? null,
-            'equipo' => trim($data['marca'].' '.$data['modelo']),
+            'equipo' => trim(trim((string) ($atributos['descripcion_equipo'] ?? '')).' '.$data['marca'].' '.$data['modelo']),
             'imei' => $equipo->imei,
             'serial' => $equipo->serial,
             'falla' => $data['falla'],
@@ -449,6 +454,10 @@ class ServiceOrderController extends Controller
             'almacenamiento' => $order->atributo(
                 'almacenamiento',
                 data_get($order->equipoCelular?->atributos, 'almacenamiento')
+            ),
+            'descripcion_equipo' => $order->atributo(
+                'descripcion_equipo',
+                data_get($order->equipoCelular?->atributos, 'descripcion_equipo')
             ),
             'falla' => $order->falla,
             'accesorios' => $order->accesorios,

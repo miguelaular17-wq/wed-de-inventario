@@ -65,6 +65,9 @@
             <tr><td class="label">Equipo</td><td>{{ $orden->equipoCelular?->etiqueta() ?: ($orden->equipo ?: '—') }}</td></tr>
             <tr><td class="label">IMEI / serial</td><td>{{ $orden->imei ?: '—' }} / {{ $orden->serial ?: '—' }}</td></tr>
             <tr><td class="label">Valor del dispositivo</td><td>{{ $orden->valor_dispositivo !== null ? '$'.number_format((float) $orden->valor_dispositivo, 2) : '—' }}</td></tr>
+            @if($orden->atributo('descripcion_equipo'))
+                <tr><td class="label">Qué equipo es</td><td>{{ $orden->atributo('descripcion_equipo') }}</td></tr>
+            @endif
             @if($orden->atributo('almacenamiento'))
                 <tr><td class="label">Almacenamiento</td><td>{{ $orden->atributo('almacenamiento') }}</td></tr>
             @endif

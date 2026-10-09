@@ -23,6 +23,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -396,15 +398,31 @@ private fun CreatePhoneOrderForm(
             ChoiceDto("REPARACION_INTERNA", "Reparación interna"),
         )
     }
-    val deviceChoices = state.serviceOptions.deviceTypes.ifEmpty {
-        listOf(
-            ChoiceDto("celular", "Celular"),
-            ChoiceDto("audifonos", "Audífonos"),
-            ChoiceDto("impresora", "Impresora"),
-            ChoiceDto("camara", "Cámara"),
-            ChoiceDto("corneta", "Corneta / Altavoz"),
-        )
+    val deviceChoices = buildList {
+        val remote = state.serviceOptions.deviceTypes
+        if (remote.isEmpty()) {
+            add(ChoiceDto("celular", "Celular"))
+            add(ChoiceDto("audifonos", "Audífonos"))
+            add(ChoiceDto("impresora", "Impresora"))
+            add(ChoiceDto("camara", "Cámara"))
+            add(ChoiceDto("corneta", "Corneta / Altavoz"))
+        } else {
+            addAll(remote)
+        }
+        if (none { it.value == "electronica" }) {
+            add(ChoiceDto("electronica", "Electrónica"))
+        }
     }
+    val electronicsChecklist = listOf(
+        ChoiceDto("elec_encendido", "Enciende"),
+        ChoiceDto("elec_carcasa", "Carcasa y golpes"),
+        ChoiceDto("elec_pantalla", "Pantalla o indicadores (si tiene)"),
+        ChoiceDto("elec_puertos", "Puertos y conectores"),
+        ChoiceDto("elec_botones", "Botones y controles"),
+        ChoiceDto("elec_audio", "Audio (si aplica)"),
+        ChoiceDto("elec_alimentacion", "Carga o alimentación"),
+        ChoiceDto("elec_humedad", "Sin indicios de humedad"),
+    )
     val warrantyChoices = state.serviceOptions.warrantyRanges.ifEmpty {
         listOf(
             ChoiceDto("dentro", "Dentro del rango"),
@@ -433,6 +451,7 @@ private fun CreatePhoneOrderForm(
     var imei by remember { mutableStateOf("") }
     var imeiNotApplicable by remember { mutableStateOf(false) }
     var serial by remember { mutableStateOf("") }
+    var deviceDescription by remember { mutableStateOf("") }
     var brand by remember { mutableStateOf("") }
     var model by remember { mutableStateOf("") }
     var color by remember { mutableStateOf("") }
@@ -489,8 +508,9 @@ private fun CreatePhoneOrderForm(
     }
     val needsClient = managementType == "ST" || (managementType == "GARANTIA" && warrantyRange == "fuera")
     val isPhone = deviceType == "celular"
+    val isElectronics = deviceType == "electronica"
     val checklist = state.serviceOptions.checklists[deviceType]
-        ?: state.serviceOptions.checklist
+        ?: if (isElectronics) electronicsChecklist else state.serviceOptions.checklist
     val technicians = state.serviceOptions.tecnicos
 
     Column(
@@ -532,7 +552,7 @@ private fun CreatePhoneOrderForm(
                 }
             }
             SectionCard("Tipo de dispositivo") {
-                ChoiceSelector("", deviceType, deviceChoices) {
+                ChoiceSelector("", deviceType, deviceChoices, wrap = true) {
                     deviceType = it
                     inspection.clear()
                     if (it != "celular") {
@@ -629,11 +649,15 @@ private fun CreatePhoneOrderForm(
                         }
                     }
                 } else {
-                    PhoneField(serial, { serial = it }, "Serial *")
+                    PhoneField(serial, { serial = it }, if (isElectronics) "Serial" else "Serial *")
                     Spacer(Modifier.height(6.dp))
                     CompactOutlinedButton(onClick = { scanInto { serial = it.take(64) } }) {
                         Text("Escanear serial", style = MaterialTheme.typography.labelMedium)
                     }
+                }
+                if (isElectronics) {
+                    Spacer(Modifier.height(8.dp))
+                    PhoneField(deviceDescription, { deviceDescription = it }, "Qué equipo es *")
                 }
                 Spacer(Modifier.height(8.dp))
                 PhoneField(brand, { brand = it }, "Marca *")
@@ -763,6 +787,7 @@ private fun CreatePhoneOrderForm(
                             modelo = model,
                             color = color,
                             almacenamiento = storage,
+                            deviceDescription = deviceDescription.ifBlank { null },
                             falla = failure,
                             accesorios = accessories.ifBlank { null },
                             prioridad = priority,
@@ -874,6 +899,9 @@ private fun ServiceOrderDetailScreen(
                             )
                             Spacer(Modifier.height(6.dp))
                             DetailLine("Tipo", order.deviceTypeLabel.ifBlank { "Celular" })
+                            order.deviceDescription?.takeIf(String::isNotBlank)?.let {
+                                DetailLine("Equipo", it)
+                            }
                             DetailLine(
                                 if (order.imei.isNotBlank()) "IMEI" else "Serial",
                                 order.imei.ifBlank { order.serial.orEmpty().ifBlank { "—" } },
@@ -1249,10 +1277,13 @@ private fun PhoneField(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
 private fun ChoiceSelector(
     label: String,
     selected: String,
     choices: List<ChoiceDto>,
+    wrap: Boolean = false,
     onSelected: (String) -> Unit,
 ) {
     Column {
@@ -1260,16 +1291,31 @@ private fun ChoiceSelector(
             Text(label, style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.height(4.dp))
         }
-        Row(
-            Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
-        ) {
-            choices.forEach { choice ->
-                FilterChip(
-                    selected = selected == choice.value,
-                    onClick = { onSelected(choice.value) },
-                    label = { Text(choice.label) },
-                )
+        if (wrap) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                choices.forEach { choice ->
+                    FilterChip(
+                        selected = selected == choice.value,
+                        onClick = { onSelected(choice.value) },
+                        label = { Text(choice.label) },
+                    )
+                }
+            }
+        } else {
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                choices.forEach { choice ->
+                    FilterChip(
+                        selected = selected == choice.value,
+                        onClick = { onSelected(choice.value) },
+                        label = { Text(choice.label) },
+                    )
+                }
             }
         }
     }

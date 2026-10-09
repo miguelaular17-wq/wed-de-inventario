@@ -161,6 +161,9 @@
             @if($orden->atributo('identidad_inaccesible'))
                 <div style="grid-column:1/-1;"><span class="muted">Identidad</span><div>IMEI/serial no disponibles al ingreso (no se pudo acceder a la información del equipo).</div></div>
             @endif
+            @if($orden->atributo('descripcion_equipo'))
+                <div><span class="muted">Equipo</span><div>{{ $orden->atributo('descripcion_equipo') }}</div></div>
+            @endif
             @if($orden->atributo('almacenamiento'))
                 <div><span class="muted">Almacenamiento</span><div>{{ $orden->atributo('almacenamiento') }}</div></div>
             @endif

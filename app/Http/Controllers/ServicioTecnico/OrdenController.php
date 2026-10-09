@@ -170,6 +170,10 @@ class OrdenController extends Controller
                     'imei' => 'El IMEI es obligatorio para celulares (o marca que no aplica).',
                 ]);
             }
+        } elseif ($tipoDispositivo === 'electronica') {
+            if (! $serial) {
+                $sinIdentidad = true;
+            }
         } elseif (! $serial && ! $serialNoAplica && ! $request->filled('equipo_id')) {
             throw ValidationException::withMessages([
                 'serial' => 'El serial (o código de lote) es obligatorio, o marca que no se puede acceder.',
@@ -178,7 +182,7 @@ class OrdenController extends Controller
             $sinIdentidad = true;
         }
 
-        if ($sinIdentidad) {
+        if ($sinIdentidad && ($serialNoAplica || ($tipoDispositivo === 'celular' && $imeiNoAplica))) {
             $atributos = is_array($data['atributos'] ?? null) ? $data['atributos'] : [];
             $atributos['identidad_inaccesible'] = true;
             $atributos['identidad_nota'] = 'IMEI/serial no disponibles al ingreso (no se pudo acceder a la información).';
@@ -224,7 +228,8 @@ class OrdenController extends Controller
             $data['equipo_id'] = $equipo->id;
             $data['imei'] = $equipo->imei;
             $data['serial'] = $equipo->serial ?: ($data['serial'] ?? null);
-            $data['equipo'] = trim(($data['marca'] ?? '').' '.($data['modelo'] ?? '')) ?: (($data['equipo'] ?? null) ?: $equipo->etiqueta());
+            $queEs = is_array($data['atributos'] ?? null) ? trim((string) ($data['atributos']['descripcion_equipo'] ?? '')) : '';
+            $data['equipo'] = trim($queEs.' '.trim(($data['marca'] ?? '').' '.($data['modelo'] ?? ''))) ?: (($data['equipo'] ?? null) ?: $equipo->etiqueta());
         }
 
         unset($data['marca'], $data['modelo'], $data['color'], $data['usar_equipo_existente'], $data['imei_no_aplica'], $data['serial_no_aplica']);
@@ -853,6 +858,7 @@ class OrdenController extends Controller
             'tipo_impresora' => ['nullable', 'string', 'in:'.implode(',', array_keys(config('servicio_tecnico.tipos_impresora', [])))],
             'serial_lente' => ['nullable', 'string', 'max:64'],
             'codigo_lote' => ['nullable', 'string', 'max:64'],
+            'descripcion_equipo' => ['nullable', 'string', 'max:120'],
             'imei' => ['nullable', 'string', 'max:32'],
             'imei_no_aplica' => ['nullable', 'boolean'],
             'serial' => ['nullable', 'string', 'max:255'],
@@ -1048,6 +1054,25 @@ class OrdenController extends Controller
             } elseif ($serialLente !== '') {
                 $atributos['serial_lente'] = $serialLente;
             }
+        } elseif ($tipo === 'electronica') {
+            foreach (['marca' => 'La marca es obligatoria.', 'modelo' => 'El modelo es obligatorio.'] as $campo => $msg) {
+                if (trim((string) ($data[$campo] ?? '')) === '') {
+                    $errors[$campo] = $msg;
+                }
+            }
+            $queEs = trim((string) $request->input('descripcion_equipo', ''));
+            if ($queEs === '') {
+                $errors['descripcion_equipo'] = 'Indica qué equipo es (tablet, router, TV, consola…).';
+            } else {
+                $atributos['descripcion_equipo'] = $queEs;
+            }
+            $lote = trim((string) $request->input('codigo_lote', ''));
+            if ($lote !== '') {
+                $atributos['codigo_lote'] = $lote;
+                if (trim((string) ($data['serial'] ?? '')) === '') {
+                    $data['serial'] = $lote;
+                }
+            }
         } else {
             foreach (['marca' => 'La marca es obligatoria.', 'modelo' => 'El modelo es obligatorio.'] as $campo => $msg) {
                 if (trim((string) ($data[$campo] ?? '')) === '') {
@@ -1068,7 +1093,7 @@ class OrdenController extends Controller
         }
 
         $data['atributos'] = $atributos !== [] ? $atributos : null;
-        unset($data['almacenamiento'], $data['tipo_impresora'], $data['serial_lente'], $data['codigo_lote']);
+        unset($data['almacenamiento'], $data['tipo_impresora'], $data['serial_lente'], $data['codigo_lote'], $data['descripcion_equipo']);
     }
 
     private function composeAccesorios(Request $request, string $tipo, ?string $legacy): ?string

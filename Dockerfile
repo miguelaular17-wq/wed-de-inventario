@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     libpng-dev \
     libjpeg-dev \
     libfreetype6-dev \
+    libzip-dev \
     zip \
     unzip \
     git \
@@ -14,7 +15,7 @@ RUN apt-get update && apt-get install -y \
     python3-openpyxl \
     python-is-python3 \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install gd pdo pdo_pgsql pgsql
+    && docker-php-ext-install gd pdo pdo_pgsql pgsql zip
 
 # Configure custom PHP settings (upload limits, memory limit)
 RUN echo "upload_max_filesize = 128M" > /usr/local/etc/php/conf.d/uploads.ini \

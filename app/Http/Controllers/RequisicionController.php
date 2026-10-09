@@ -296,13 +296,6 @@ class RequisicionController extends Controller
                 return back()->withErrors(['export' => 'No hay requisiciones manuales pendientes para exportar.']);
             }
 
-            $this->reqPersonalizada->applyExport(
-                $lines,
-                $sede,
-                $this->stock,
-                auth()->user()?->email,
-            );
-
             if ($sedeOrigenKey === null) {
                 $porSede = $lines->groupBy(fn (array $line) => strtoupper((string) ($line['sede_origen'] ?? '')));
                 $zip = new \ZipArchive();
@@ -321,6 +314,18 @@ class RequisicionController extends Controller
                 $zip->addFromString('LEEME_separadores.txt', $this->export->notaSeparadores());
                 $zip->close();
 
+                try {
+                    $this->reqPersonalizada->applyExport(
+                        $lines,
+                        $sede,
+                        $this->stock,
+                        auth()->user()?->email,
+                    );
+                } catch (\Throwable $e) {
+                    @unlink($zipFile);
+                    throw $e;
+                }
+
                 return response()->download(
                     $zipFile,
                     'Requisicion_manual_'.$sede.'_por_sede.zip'
@@ -328,8 +333,24 @@ class RequisicionController extends Controller
             }
 
             $base = 'Requisicion_manual_'.config('inventario.display.'.$sedeOrigenKey, $sedeOrigenKey);
+            $zipFile = $this->crearZipParCsv($base, $lines);
+            if ($zipFile instanceof RedirectResponse) {
+                return $zipFile;
+            }
 
-            return $this->descargarParCsv($base, $lines);
+            try {
+                $this->reqPersonalizada->applyExport(
+                    $lines,
+                    $sede,
+                    $this->stock,
+                    auth()->user()?->email,
+                );
+            } catch (\Throwable $e) {
+                @unlink($zipFile);
+                throw $e;
+            }
+
+            return response()->download($zipFile, $base.'.zip')->deleteFileAfterSend(true);
         }
 
         $incluirParcial = $request->boolean('incluir_parcial');
@@ -453,21 +474,33 @@ class RequisicionController extends Controller
             return back()->withErrors(['export' => 'No hay filas exportables para esa sede origen.']);
         }
 
-        $this->stock->applyRequisition($lines, $sedeOrigenKey, $sede, null, $tipoReporte);
-
         $base = 'Requisicion_'.$sede.'_desde_'.$sedeOrigenKey;
+        $zipFile = $this->crearZipParCsv($base, $lines);
+        if ($zipFile instanceof RedirectResponse) {
+            return $zipFile;
+        }
 
-        return $this->descargarParCsv($base, $lines);
+        try {
+            $this->stock->applyRequisition($lines, $sedeOrigenKey, $sede, null, $tipoReporte);
+        } catch (\Throwable $e) {
+            @unlink($zipFile);
+            throw $e;
+        }
+
+        return response()->download($zipFile, $base.'.zip')->deleteFileAfterSend(true);
     }
 
     /**
      * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $lines
      */
-    private function descargarParCsv(string $base, \Illuminate\Support\Collection $lines): \Symfony\Component\HttpFoundation\BinaryFileResponse|RedirectResponse
+    /**
+     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $lines
+     */
+    private function crearZipParCsv(string $base, \Illuminate\Support\Collection $lines): string|RedirectResponse
     {
         $zip = new \ZipArchive();
         $zipFile = tempnam(sys_get_temp_dir(), 'zip');
-        if ($zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+        if ($zipFile === false || $zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
             return back()->withErrors(['export' => 'No se pudo crear el archivo ZIP.']);
         }
 
@@ -475,7 +508,7 @@ class RequisicionController extends Controller
         $zip->addFromString('LEEME_separadores.txt', $this->export->notaSeparadores());
         $zip->close();
 
-        return response()->download($zipFile, $base.'.zip')->deleteFileAfterSend(true);
+        return $zipFile;
     }
 
     /**

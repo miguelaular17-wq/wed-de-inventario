@@ -67,6 +67,7 @@ return [
         'impresora' => 'Impresora',
         'camara' => 'Cámara',
         'corneta' => 'Corneta / Altavoz',
+        'electronica' => 'Electrónica',
     ],
 
     'tipos_impresora' => [
@@ -104,6 +105,14 @@ return [
             'estuche_carga' => 'Estuche de carga',
             'cables' => 'Cables auxiliar o de carga',
             'estuche' => 'Estuche de transporte',
+        ],
+        'electronica' => [
+            'cargador' => 'Cargador',
+            'cable_poder' => 'Cable de poder',
+            'cable_datos' => 'Cable de datos',
+            'control' => 'Control',
+            'bateria' => 'Batería',
+            'estuche' => 'Estuche',
         ],
     ],
 
@@ -156,6 +165,16 @@ return [
             'aud_inalambrico' => 'Conectividad inalámbrica',
             'aud_estuche' => 'Estuche de carga (pines y bisagra; N/A si no aplica)',
             'aud_microfono' => 'Micrófono incorporado',
+        ],
+        'electronica' => [
+            'elec_encendido' => 'Enciende',
+            'elec_carcasa' => 'Carcasa y golpes',
+            'elec_pantalla' => 'Pantalla o indicadores (si tiene)',
+            'elec_puertos' => 'Puertos y conectores',
+            'elec_botones' => 'Botones y controles',
+            'elec_audio' => 'Audio (si aplica)',
+            'elec_alimentacion' => 'Carga o alimentación',
+            'elec_humedad' => 'Sin indicios de humedad',
         ],
     ],
 
