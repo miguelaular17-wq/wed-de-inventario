@@ -193,13 +193,26 @@ class BankReconciliationMatcher
     }
 
     /**
+     * Cuentas que comparten la misma cuenta bancaria física.
+     * Formato: 'BANCO|TITULAR_CLAVE' => 'BANCO|TITULAR_CLAVE_CANONICO'
+     * Las dos entradas se mostrarán en una sola tarjeta de conciliación.
+     */
+    private array $cuentaAliases = [
+        // Mercantil JRZ y Mercantil GRUPO JENU son la misma cuenta física.
+        'MERCANTIL|JRZ' => 'MERCANTIL|JENU',
+    ];
+
+    /**
      * Clave estable para agrupar tarjetas: VENEZUELA|JRZ unifica "JRZ" y "GRUPO JRZ".
+     * Aplica además el mapa de aliases para unificar cuentas físicas iguales.
      */
     public function claveCuenta(?string $banco, ?string $titular): string
     {
         [$b, $t] = $this->partesCuenta($banco, $titular);
 
-        return $b.'|'.$this->titularClave($t);
+        $clave = $b.'|'.$this->titularClave($t);
+
+        return $this->cuentaAliases[$clave] ?? $clave;
     }
 
     /**
