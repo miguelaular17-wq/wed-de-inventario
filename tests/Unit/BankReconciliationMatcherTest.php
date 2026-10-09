@@ -296,6 +296,62 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertTrue($this->matcher->coincideTraslado($entrada, $traslado));
     }
 
+    public function test_el_indice_no_recorre_egresos_de_otro_banco(): void
+    {
+        $linea = new ConciliacionLinea([
+            'banco' => 'BANESCO',
+            'titular' => 'DORAL',
+            'fecha' => '2026-08-04',
+            'referencia' => '5003740987',
+            'descripcion' => 'TodoTicket 2004 C.A.',
+            'monto' => 44759.17,
+            'tipo' => 'cargo',
+        ]);
+        $mismo = (object) [
+            'id' => 11,
+            'banco' => 'Banesco',
+            'titular' => 'Doral',
+            'fecha' => '2026-08-04',
+            'monto_bs' => 37757.50,
+            'referencia' => '5003740987',
+            'motivo' => 'ANTICIPO',
+        ];
+        $otroBanco = (object) [
+            'id' => 12,
+            'banco' => 'BNC',
+            'titular' => 'DORAL',
+            'fecha' => '2026-08-04',
+            'monto_bs' => 44759.17,
+            'referencia' => '5003740987',
+            'motivo' => 'OTRO',
+        ];
+        $neto = new ConciliacionLinea([
+            'banco' => 'VENEZUELA',
+            'titular' => 'GRUPO JRZ',
+            'fecha' => '2026-08-14',
+            'referencia' => '0429716928121',
+            'descripcion' => 'PAGO A OTROS BANCOS',
+            'monto' => -98000.00,
+            'tipo' => 'cargo',
+        ]);
+        $bruto = (object) [
+            'id' => 13,
+            'banco' => 'Venezuela',
+            'titular' => 'Grupo JRZ',
+            'fecha' => '2026-08-14',
+            'monto_bs' => 100000.00,
+            'referencia' => 'otro-ref',
+            'motivo' => 'INSUMOS',
+            'categoria_egreso' => 'egreso_realizado',
+        ];
+
+        $this->matcher->indexarEgresos([$mismo, $otroBanco, $bruto]);
+
+        $this->assertSame(11, $this->matcher->mejorEgreso($linea, $this->matcher->candidatosEgreso($linea))->id);
+        $this->assertSame(13, $this->matcher->mejorEgreso($neto, $this->matcher->candidatosEgreso($neto))->id);
+        $this->assertArrayNotHasKey(12, $this->matcher->candidatosEgreso($linea));
+    }
+
     public function test_parte_cuenta_separa_banco_y_titular(): void
     {
         [$banco, $titular] = $this->matcher->partesCuenta('BANESCO DORAL', null);

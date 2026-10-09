@@ -1256,6 +1256,7 @@ class FinanzasController extends Controller
 
             $cambios = false;
             $flujosNormales = $flujos_posibles->reject(fn ($flujo) => $matcher->esTraslado($flujo))->values();
+            $matcher->indexarEgresos($flujosNormales);
             foreach ($lineas_pendientes as $linea) {
                 if ($matcher->esAbonoLotePuntoVenta($linea->descripcion, $linea->referencia)) {
                     continue;
@@ -1280,9 +1281,11 @@ class FinanzasController extends Controller
                         }
                     }
                     if (! $match) {
-                        $match = $trasladosDisponibles->isEmpty()
-                            ? $matcher->mejorEgreso($linea, $flujosNormales)
-                            : $matcher->mejorEgreso($linea, $flujosNormales->concat($trasladosDisponibles));
+                        $candidatos = $matcher->candidatosEgreso($linea);
+                        foreach ($trasladosDisponibles as $flujo) {
+                            $candidatos[(int) $flujo->id] = $flujo;
+                        }
+                        $match = $matcher->mejorEgreso($linea, $candidatos);
                     }
                 }
 
@@ -1312,6 +1315,7 @@ class FinanzasController extends Controller
                         if (! $isTesoreriaMatch && ! $isCompraDivisaMatch) {
                             $flujos_posibles = $flujos_posibles->reject(fn ($f) => $f->id == $match->id);
                             $flujosNormales = $flujosNormales->reject(fn ($f) => $f->id == $match->id);
+                            $matcher->retirarEgreso($match);
                         }
                     }
                     $match->save();

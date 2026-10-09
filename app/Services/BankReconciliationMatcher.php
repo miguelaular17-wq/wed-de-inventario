@@ -7,6 +7,15 @@ use Carbon\Carbon;
 
 class BankReconciliationMatcher
 {
+    /** @var array<string, array{0:string,1:string}> */
+    private array $partesCache = [];
+
+    /** @var array<string, array<int, array<int, object>>> */
+    private array $egresosPorMonto = [];
+
+    /** @var array<string, array<string, array<int, object>>> */
+    private array $egresosPorRef = [];
+
     public function mismosMontos(float|int|string|null $a, float|int|string|null $b): bool
     {
         return abs($this->aCentavos($a) - $this->aCentavos($b)) < 0.005;
@@ -238,6 +247,113 @@ class BankReconciliationMatcher
     {
         $banco = strtoupper(trim((string) $banco));
         $titular = strtoupper(trim((string) $titular));
+        $cacheKey = $banco."\0".$titular;
+        if (array_key_exists($cacheKey, $this->partesCache)) {
+            return $this->partesCache[$cacheKey];
+        }
+
+        $resuelto = $this->resolverPartesCuenta($banco, $titular);
+
+        return $this->partesCache[$cacheKey] = $resuelto;
+    }
+
+    /**
+     * Índice por banco + monto y por banco + referencia, para no comparar
+     * cada línea del extracto contra todos los egresos.
+     *
+     * @param  iterable<mixed>  $flujos
+     */
+    public function indexarEgresos(iterable $flujos): void
+    {
+        $this->egresosPorMonto = [];
+        $this->egresosPorRef = [];
+
+        foreach ($flujos as $flujo) {
+            if ($this->esTraslado($flujo)) {
+                continue;
+            }
+            $this->agregarEgresoAlIndice($flujo);
+        }
+    }
+
+    /**
+     * @return array<int, object>
+     */
+    public function candidatosEgreso(ConciliacionLinea $linea): array
+    {
+        [$banco] = $this->partesCuenta($linea->banco, $linea->titular);
+        $out = [];
+        $monto = abs((float) $linea->monto);
+        $probes = [(int) round($monto * 100)];
+        if ($this->esBancoVenezuela($linea->banco) && $monto >= 0.01) {
+            foreach ([0.02, 0.015] as $fee) {
+                $base = (int) round(($monto / (1 - $fee)) * 100);
+                for ($delta = -5; $delta <= 5; $delta++) {
+                    $probes[] = $base + $delta;
+                }
+            }
+        }
+        foreach ($probes as $cents) {
+            foreach ($this->egresosPorMonto[$banco][$cents] ?? [] as $id => $flujo) {
+                $out[$id] = $flujo;
+            }
+        }
+
+        $ref = $this->soloDigitos((string) $linea->referencia);
+        if (strlen($ref) >= 4) {
+            foreach ($this->egresosPorRef[$banco][$ref] ?? [] as $id => $flujo) {
+                $out[$id] = $flujo;
+            }
+            if (strlen($ref) >= 8) {
+                foreach ($this->egresosPorRef[$banco][substr($ref, -8)] ?? [] as $id => $flujo) {
+                    $out[$id] = $flujo;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    public function retirarEgreso(object $flujo): void
+    {
+        $id = (int) ($flujo->id ?? 0);
+        if ($id === 0) {
+            return;
+        }
+        [$banco] = $this->partesCuenta($flujo->banco ?? null, $flujo->titular ?? null);
+        foreach ($this->egresosPorMonto[$banco] ?? [] as $cents => $items) {
+            unset($this->egresosPorMonto[$banco][$cents][$id]);
+        }
+        foreach ($this->egresosPorRef[$banco] ?? [] as $ref => $items) {
+            unset($this->egresosPorRef[$banco][$ref][$id]);
+        }
+    }
+
+    private function agregarEgresoAlIndice(object $flujo): void
+    {
+        [$banco] = $this->partesCuenta($flujo->banco ?? null, $flujo->titular ?? null);
+        $id = (int) ($flujo->id ?? spl_object_id($flujo));
+        foreach ([$flujo->monto_bs ?? null, $flujo->monto_usd ?? null, $flujo->monto ?? null] as $monto) {
+            if ($monto === null || abs((float) $monto) < 0.004) {
+                continue;
+            }
+            $cents = (int) round(abs((float) $monto) * 100);
+            $this->egresosPorMonto[$banco][$cents][$id] = $flujo;
+        }
+        $ref = $this->soloDigitos((string) ($flujo->referencia ?? ''));
+        if (strlen($ref) >= 4) {
+            $this->egresosPorRef[$banco][$ref][$id] = $flujo;
+            if (strlen($ref) >= 8) {
+                $this->egresosPorRef[$banco][substr($ref, -8)][$id] = $flujo;
+            }
+        }
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    private function resolverPartesCuenta(string $banco, string $titular): array
+    {
         $known = ['BANCAMIGA', 'BANCARIBE', 'BANESCO', 'MERCANTIL', 'VENEZUELA', 'TESORO', 'BBVA', 'BNC', 'PROVINCIAL'];
 
         foreach ($known as $nombre) {
