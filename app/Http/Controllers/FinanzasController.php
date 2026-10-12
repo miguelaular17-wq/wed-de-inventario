@@ -1901,10 +1901,12 @@ class FinanzasController extends Controller
                 'col_abono'       => 15,  // Haber
                 'skip_desc'       => ['saldo inicial', 'saldo final'],
             ],
-            // F[3]: cabecera | F[4..]: datos
-            // Cols: [0]=Nro [1]=Fecha [2]=Referencia [3]=Código [4]=Concepto [5]=Débito [6]=Crédito
+            // Export actual: F[0]=cabecera | F[1..]=datos
+            // Export viejo: cabecera más abajo. Se reubica con detect_header.
+            // Cols: [0]=Nro [1]=Fecha [2]=Referencia [3]=Código [4]=Concepto/Descripcion [5]=Débito [6]=Crédito
             'TESORO' => [
-                'start_row'       => 4,
+                'start_row'       => 1,
+                'detect_header'   => true,
                 'col_fecha'       => 1,
                 'col_referencia'  => 2,
                 'col_descripcion' => 4,
@@ -2078,6 +2080,39 @@ class FinanzasController extends Controller
                 $c_monto   = $map['col_monto'];
                 $c_cargo   = $map['col_cargo'];
                 $c_abono   = $map['col_abono'];
+
+                // Tesoro (y similares): ubicar la fila de cabecera aunque el export cambie.
+                if (! empty($map['detect_header'])) {
+                    foreach ($all_rows as $hi => $headerRow) {
+                        $cells = array_map(
+                            fn ($c) => strtoupper(trim(preg_replace('/\s+/', ' ', (string) $c) ?? '')),
+                            $headerRow
+                        );
+                        $joined = implode(' ', $cells);
+                        if (
+                            str_contains($joined, 'FECHA')
+                            && (str_contains($joined, 'DEBITO') || str_contains($joined, 'DÉBITO') || str_contains($joined, 'CREDITO') || str_contains($joined, 'CRÉDITO'))
+                        ) {
+                            foreach ($cells as $ci => $label) {
+                                if ($label === 'FECHA') {
+                                    $c_fecha = $ci;
+                                } elseif (str_contains($label, 'REFEREN')) {
+                                    $c_ref = $ci;
+                                } elseif (str_contains($label, 'CONCEPTO') || str_contains($label, 'DESCRIP')) {
+                                    $c_desc = $ci;
+                                } elseif (str_contains($label, 'DEBIT') || str_contains($label, 'DÉBIT')) {
+                                    $c_cargo = $ci;
+                                    $c_monto = null;
+                                } elseif (str_contains($label, 'CREDIT') || str_contains($label, 'CRÉDIT')) {
+                                    $c_abono = $ci;
+                                    $c_monto = null;
+                                }
+                            }
+                            $start = $hi + 1;
+                            break;
+                        }
+                    }
+                }
 
                 foreach ($all_rows as $idx => $data) {
                     if ($idx < $start) continue;

@@ -28,6 +28,7 @@ class BankMovementClassifier
         // Mercantil / extractos recientes
         'comis.pago', 'comis.pago inmediato',
         'com/liq', 'com/liq/tdd',
+        'comsiones', 'comisiones',
     ];
 
     /** @var array<string, list<string>> */
