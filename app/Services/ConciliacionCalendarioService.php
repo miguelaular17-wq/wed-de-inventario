@@ -24,7 +24,7 @@ class ConciliacionCalendarioService
         foreach ($titularesPorBanco as $banco => $titulares) {
             foreach ($titulares as $titular) {
                 [$bancoCanon, $titularCanon] = $this->matcher->partesCuenta($banco, $titular);
-                if ($bancoCanon === '' || $titularCanon === '') {
+                if ($bancoCanon === '' || $titularCanon === '' || ! $this->cuentaIncluida($bancoCanon, $titularCanon)) {
                     continue;
                 }
                 $cuentas[$bancoCanon.'|'.$titularCanon] = [
@@ -45,6 +45,9 @@ class ConciliacionCalendarioService
 
         foreach ($cierres as $cierre) {
             [$bancoCanon, $titularCanon] = $this->matcher->partesCuenta($cierre->banco, $cierre->titular);
+            if ($bancoCanon === '' || $titularCanon === '' || ! $this->cuentaIncluida($bancoCanon, $titularCanon)) {
+                continue;
+            }
             $cuentas[$bancoCanon.'|'.$titularCanon] = [
                 'banco' => $bancoCanon,
                 'titular' => $titularCanon,
@@ -125,5 +128,35 @@ class ConciliacionCalendarioService
             'completas' => count(array_filter($filas, fn (array $fila) => $fila['completo'])),
             'total' => count($filas),
         ];
+    }
+
+    /**
+     * Cuentas que no se concilian: José Jerez en cualquier banco,
+     * y las tarjetas de terceros en Venezuela.
+     */
+    public function cuentaIncluida(?string $banco, ?string $titular): bool
+    {
+        $banco = $this->sinAcento(trim((string) $banco));
+        $titular = $this->sinAcento(trim((string) $titular));
+        if ($titular === '') {
+            return false;
+        }
+        if ($titular === 'JOSE JEREZ' || str_contains($titular, 'JOSE JEREZ')) {
+            return false;
+        }
+
+        $tercerosVenezuela = ['DAYANA LOPEZ', 'EDWARD MAVO', 'JOSE SEMECO', 'MARIA NUNEZ'];
+
+        return ! ($banco === 'VENEZUELA' && in_array($titular, $tercerosVenezuela, true));
+    }
+
+    private function sinAcento(string $texto): string
+    {
+        $texto = strtr($texto, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n',
+            'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ñ' => 'N',
+        ]);
+
+        return strtoupper($texto);
     }
 }

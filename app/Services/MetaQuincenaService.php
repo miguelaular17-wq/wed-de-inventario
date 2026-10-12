@@ -338,12 +338,13 @@ class MetaQuincenaService
     {
         $producto = DB::table('productos')->where('id', $meta->producto_id)->first();
         $stockActual = $this->stockActual((int) $meta->producto_id, $meta->sede);
-        $vendido = $this->unidadesVendidas(
+        $venta = $this->ventaEnPeriodo(
             (int) $meta->producto_id,
             $meta->sede,
             $meta->quincena_inicio,
             $meta->quincena_fin
         );
+        $vendido = $venta['unidades'];
         $cantidadInicial = (float) $meta->cantidad_inicial;
 
         return [
@@ -358,6 +359,7 @@ class MetaQuincenaService
             'cantidad_inicial' => $cantidadInicial,
             'cantidad_actual' => $stockActual,
             'vendido' => $vendido,
+            'ultima_venta' => $venta['ultima_venta'],
             'avance_pct' => $cantidadInicial > 0
                 ? round(min(100, ($vendido / $cantidadInicial) * 100), 1)
                 : ($vendido > 0 ? 100.0 : 0.0),
@@ -438,8 +440,18 @@ class MetaQuincenaService
 
     public function unidadesVendidas(int $productoId, string $sede, Carbon|string $inicio, Carbon|string $fin): float
     {
+        return $this->ventaEnPeriodo($productoId, $sede, $inicio, $fin)['unidades'];
+    }
+
+    /**
+     * Unidades netas vendidas en la quincena y la última fecha de venta (sin devoluciones).
+     *
+     * @return array{unidades: float, ultima_venta: ?string}
+     */
+    private function ventaEnPeriodo(int $productoId, string $sede, Carbon|string $inicio, Carbon|string $fin): array
+    {
         if (! Schema::hasTable('ventas_detalle')) {
-            return 0.0;
+            return ['unidades' => 0.0, 'ultima_venta' => null];
         }
 
         $sede = mb_strtoupper(trim($sede), 'UTF-8');
@@ -457,8 +469,14 @@ class MetaQuincenaService
 
         $row = $query
             ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN -ABS(cantidad) ELSE ABS(cantidad) END) as unidades")
+            ->selectRaw("MAX(CASE WHEN UPPER(COALESCE(tipo_documento, '')) = 'DEV' THEN NULL ELSE fecha END) as ultima_venta")
             ->first();
 
-        return round((float) ($row->unidades ?? 0), 2);
+        $ultima = $row->ultima_venta ?? null;
+
+        return [
+            'unidades' => round((float) ($row->unidades ?? 0), 2),
+            'ultima_venta' => $ultima ? Carbon::parse($ultima)->toDateString() : null,
+        ];
     }
 }

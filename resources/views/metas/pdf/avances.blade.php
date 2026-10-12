@@ -48,7 +48,7 @@
                 Quincena {{ $quincena['etiqueta'] }}
                 · {{ $quincena['inicio']->format('d/m/Y') }} al {{ $quincena['fin']->format('d/m/Y') }}
             </div>
-            <div class="sub">Palacio de los Detalles · Avance de productos meta</div>
+            <div class="sub">Palacio de los Detalles · {{ !empty($soloCompletados) ? 'Productos meta completados' : 'Avance de productos meta' }}</div>
         </div>
     </div>
 
@@ -63,7 +63,7 @@
 
     <div class="kpis">
         <div class="kpi">
-            <span>Productos meta</span>
+            <span>{{ !empty($soloCompletados) ? 'Completados' : 'Productos meta' }}</span>
             <strong>{{ $todas->sum(fn ($b) => $b['totales']['productos']) }}</strong>
         </div>
         <div class="kpi">
@@ -97,7 +97,8 @@
                         <th class="num">Cantidad</th>
                         <th class="num">Cant. actual</th>
                         <th class="num">Vendido</th>
-                        <th style="width:16%;">Avance</th>
+                        <th>Última venta</th>
+                        <th style="width:14%;">Avance</th>
                         <th>Responsable</th>
                     </tr>
                 </thead>
@@ -118,6 +119,7 @@
                             <td class="num">{{ number_format((float) ($fila['cantidad_inicial'] ?? 0), 0) }} u.</td>
                             <td class="num">{{ number_format((float) ($fila['cantidad_actual'] ?? 0), 0) }} u.</td>
                             <td class="num">{{ number_format((float) ($fila['vendido'] ?? 0), 0) }} u.</td>
+                            <td class="num">{{ !empty($fila['ultima_venta']) ? \Carbon\Carbon::parse($fila['ultima_venta'])->format('d/m/Y') : '—' }}</td>
                             <td>
                                 <div class="avance-pct">{{ number_format($avance, 1) }}%</div>
                                 <div class="bar-wrap">
@@ -128,7 +130,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="empty">Sin productos en esta sede.</td>
+                            <td colspan="7" class="empty">Sin productos en esta sede.</td>
                         </tr>
                     @endforelse
                     <tr class="tot">
@@ -136,6 +138,7 @@
                         <td class="num">{{ number_format($bloque['totales']['cantidad_inicial'], 0) }} u.</td>
                         <td class="num">{{ number_format($bloque['totales']['cantidad_actual'], 0) }} u.</td>
                         <td class="num">{{ number_format($bloque['totales']['vendido'], 0) }} u.</td>
+                        <td></td>
                         <td><strong>{{ number_format($bloque['totales']['avance_pct'], 1) }}%</strong></td>
                         <td></td>
                     </tr>
@@ -143,7 +146,7 @@
             </table>
         </div>
     @empty
-        <div class="empty">No hay productos meta para esta quincena{{ $sedeFiltro ? ' en '.$sedeFiltro : '' }}.</div>
+        <div class="empty">No hay productos meta {{ !empty($soloCompletados) ? 'completados ' : '' }}para esta quincena{{ $sedeFiltro ? ' en '.$sedeFiltro : '' }}.</div>
     @endforelse
 
     <div class="note">

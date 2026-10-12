@@ -48,29 +48,27 @@ class TesoreriaController extends Controller
             'comprobante' => 'required|file|mimes:xlsx,xls|max:5120'
         ]);
 
-        $xlsx = \Shuchkin\SimpleXLSX::parse($request->file('comprobante')->path());
-        if (! $xlsx) {
-            return back()->withErrors(['error' => 'No se pudo leer el archivo Excel: ' . \Shuchkin\SimpleXLSX::parseError()]);
+        $rows = $this->filasExcel($request->file('comprobante')->path());
+        if (is_string($rows)) {
+            return back()->withErrors(['error' => 'No se pudo leer el archivo Excel: '.$rows]);
         }
-
-        $rows = $xlsx->rows();
         if (count($rows) === 0) {
             return back()->withErrors(['error' => 'El documento está vacío.']);
         }
 
-        // Encontrar la fila de encabezados
+        // Encontrar la fila de encabezados (reporte clásico o reporte mensual BDV).
         $headerRowIdx = -1;
         $fechaIdx = -1;
         $refIdx = -1;
         $importeIdx = -1;
 
         foreach ($rows as $index => $row) {
-            $rowUpper = array_map(fn($col) => strtoupper(trim((string)$col)), $row);
-            $fIdx = array_search('FECHA', $rowUpper);
-            $rIdx = array_search('REF', $rowUpper);
-            $iIdx = array_search('IMPORTE', $rowUpper);
+            $rowUpper = array_map(fn ($col) => strtoupper(trim((string) $col)), $row);
+            $fIdx = $this->indiceColumna($rowUpper, ['FECHA']);
+            $rIdx = $this->indiceColumna($rowUpper, ['REFERENCIA PAGO', 'REF', 'REFERENCIA']);
+            $iIdx = $this->indiceColumna($rowUpper, ['IMPORTE', 'MONTO']);
 
-            if ($fIdx !== false && $rIdx !== false && $iIdx !== false) {
+            if ($fIdx !== null && $rIdx !== null && $iIdx !== null) {
                 $headerRowIdx = $index;
                 $fechaIdx = $fIdx;
                 $refIdx = $rIdx;
@@ -85,6 +83,9 @@ class TesoreriaController extends Controller
 
         $insertedCount = 0;
         $skippedCount = 0;
+        $conciliadosCount = 0;
+        $lineasUsadas = [];
+        $matcher = app(BankReconciliationMatcher::class);
 
         for ($i = $headerRowIdx + 1; $i < count($rows); $i++) {
             $row = $rows[$i];
@@ -95,7 +96,7 @@ class TesoreriaController extends Controller
             }
 
             $fechaStr = trim((string)($row[$fechaIdx] ?? ''));
-            $ref = trim((string)($row[$refIdx] ?? ''));
+            $ref = $this->referenciaExcel($row[$refIdx] ?? '');
             $importeStr = trim((string)($row[$importeIdx] ?? ''));
 
             // Procesar Monto (puede venir con comas o puntos)
@@ -131,17 +132,21 @@ class TesoreriaController extends Controller
 
             // Evitar duplicados (por banco y referencia, si hay ref)
             if (!empty($ref)) {
-                $exists = TesoreriaIngreso::where('tipo', 'banco')
-                                          ->where('banco', $request->banco)
-                                          ->where('lote_referencia', $ref)
-                                          ->exists();
-                if ($exists) {
+                $yaExiste = TesoreriaIngreso::where('tipo', 'banco')
+                    ->where('banco', $request->banco)
+                    ->where('lote_referencia', $ref)
+                    ->orderByDesc('id')
+                    ->first();
+                if ($yaExiste) {
+                    if (! $yaExiste->es_conciliado && $this->conciliarPagoMovil($yaExiste, $matcher, $lineasUsadas)) {
+                        $conciliadosCount++;
+                    }
                     $skippedCount++;
                     continue;
                 }
             }
 
-            TesoreriaIngreso::create([
+            $ingreso = TesoreriaIngreso::create([
                 'tipo' => 'banco',
                 'banco' => $request->banco,
                 'fecha' => $fecha ?? date('Y-m-d'),
@@ -150,9 +155,15 @@ class TesoreriaController extends Controller
                 'user_id' => auth()->id()
             ]);
             $insertedCount++;
+            if ($this->conciliarPagoMovil($ingreso, $matcher, $lineasUsadas)) {
+                $conciliadosCount++;
+            }
         }
 
         $msg = "Se registraron {$insertedCount} ingresos de banco.";
+        if ($conciliadosCount > 0) {
+            $msg .= " Se conciliaron {$conciliadosCount} con el extracto.";
+        }
         if ($skippedCount > 0) {
             $msg .= " Se omitieron {$skippedCount} duplicados.";
         }
@@ -220,6 +231,106 @@ class TesoreriaController extends Controller
         $lote->delete();
         
         return back()->with('success', 'Lote de punto de venta eliminado exitosamente.');
+    }
+
+    /**
+     * @return array<int, array<int, mixed>>|string filas, o el mensaje de error
+     */
+    private function filasExcel(string $path): array|string
+    {
+        $head = (string) file_get_contents($path, false, null, 0, 8);
+        if (str_starts_with($head, "\xD0\xCF\x11\xE0")) {
+            $xls = \Shuchkin\SimpleXLS::parse($path);
+            if (! $xls) {
+                return \Shuchkin\SimpleXLS::parseError() ?: 'No se pudo leer el .xls';
+            }
+
+            return $xls->rows();
+        }
+
+        $xlsx = \Shuchkin\SimpleXLSX::parse($path);
+        if (! $xlsx) {
+            return \Shuchkin\SimpleXLSX::parseError() ?: 'No se pudo leer el .xlsx';
+        }
+
+        return $xlsx->rows();
+    }
+
+    /**
+     * @param  list<string>  $celdas
+     * @param  list<string>  $nombres
+     */
+    private function indiceColumna(array $celdas, array $nombres): ?int
+    {
+        foreach ($nombres as $nombre) {
+            $idx = array_search($nombre, $celdas, true);
+            if ($idx !== false) {
+                return (int) $idx;
+            }
+        }
+
+        return null;
+    }
+
+    private function referenciaExcel(mixed $valor): string
+    {
+        if (is_int($valor) || is_float($valor)) {
+            return (string) (int) round((float) $valor);
+        }
+
+        $texto = trim((string) $valor);
+        if ($texto !== '' && preg_match('/^\d+\.0+$/', $texto)) {
+            return (string) (int) round((float) $texto);
+        }
+
+        return $texto;
+    }
+
+    /**
+     * Cruza el pago del Excel (referencia corta) con el abono PAGOMOVIL del extracto.
+     *
+     * @param  array<int, true>  $lineasUsadas
+     */
+    private function conciliarPagoMovil(TesoreriaIngreso $ingreso, BankReconciliationMatcher $matcher, array &$lineasUsadas): bool
+    {
+        if ($ingreso->fecha === null || (float) $ingreso->monto < 0.01) {
+            return false;
+        }
+
+        $lineas = \App\Models\ConciliacionLinea::query()
+            ->where('estado', 'pendiente')
+            ->whereDate('fecha', $ingreso->fecha)
+            ->whereNull('tesoreria_ingreso_id')
+            ->get();
+
+        foreach ($lineas as $linea) {
+            if (isset($lineasUsadas[$linea->id])) {
+                continue;
+            }
+            if (! $matcher->esPagoMovil($linea->descripcion)) {
+                continue;
+            }
+            if (! $matcher->mismosMontos($linea->monto, $ingreso->monto)) {
+                continue;
+            }
+            if (! $matcher->referenciasCruzan($linea->referencia, $ingreso->lote_referencia)
+                && ! $matcher->referenciaPagoContenida($linea->referencia, $ingreso->lote_referencia)) {
+                continue;
+            }
+
+            $linea->estado = 'conciliado';
+            $linea->tesoreria_ingreso_id = $ingreso->id;
+            $linea->flujo_caja_id = null;
+            $linea->save();
+
+            $ingreso->es_conciliado = true;
+            $ingreso->save();
+            $lineasUsadas[$linea->id] = true;
+
+            return true;
+        }
+
+        return false;
     }
 
     /**

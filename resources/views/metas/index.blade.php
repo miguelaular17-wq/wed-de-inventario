@@ -48,6 +48,10 @@
                 class="btn primary"
                 href="{{ route('metas.reporte_avances', ['inicio' => $quincena['inicio']->toDateString()]) }}"
             >PDF avances</a>
+            <a
+                class="btn secondary"
+                href="{{ route('metas.reporte_avances', ['inicio' => $quincena['inicio']->toDateString(), 'completados' => 1]) }}"
+            >PDF completados</a>
             @if($puedeMarcar && auth()->user()->canAccess('compras'))
                 <a class="btn secondary" href="{{ route('comprador.dashboard', ['tab' => 'sobrestock']) }}">Ir a Sobre Stock</a>
             @endif
@@ -99,6 +103,7 @@
                     <th style="text-align:right;">Cantidad</th>
                     <th style="text-align:right;">Cant. actual</th>
                     <th style="text-align:right;">Vendido</th>
+                    <th>Última venta</th>
                     <th>Avance</th>
                     <th>Responsable</th>
                     @if($puedeMarcar)
@@ -121,6 +126,9 @@
                         <td style="text-align:right;font-weight:600;">{{ $fmt($fila['cantidad_actual']) }} u.</td>
                         <td style="text-align:right;color:{{ $fila['vendido'] > 0 ? '#15803d' : 'var(--muted)' }};">
                             {{ $fmt($fila['vendido']) }} u.
+                        </td>
+                        <td style="white-space:nowrap;{{ empty($fila['ultima_venta']) ? 'color:var(--muted);' : '' }}">
+                            {{ !empty($fila['ultima_venta']) ? \Carbon\Carbon::parse($fila['ultima_venta'])->format('d/m/Y') : '—' }}
                         </td>
                         <td>
                             <div style="min-width:110px;">
@@ -162,7 +170,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ $puedeMarcar ? 8 : 7 }}" class="muted" style="text-align:center;padding:28px;">
+                        <td colspan="{{ $puedeMarcar ? 9 : 8 }}" class="muted" style="text-align:center;padding:28px;">
                             No hay productos marcados como meta en esta quincena.
                         </td>
                     </tr>

@@ -1189,7 +1189,7 @@ class FinanzasController extends Controller
             : null;
 
         $lineas_query = \App\Models\ConciliacionLinea::query()
-            ->with(['flujoCaja', 'compraDivisa'])
+            ->with(['flujoCaja', 'compraDivisa', 'tesoreriaIngreso'])
             ->orderBy('fecha');
         
         if ($fecha_desde) {
@@ -1457,7 +1457,7 @@ class FinanzasController extends Controller
 
             // Conciliados
             $conciliados = $lineas_normales->where('estado', 'conciliado')
-                ->map(function ($l) {
+                ->map(function ($l) use ($matcher) {
                     $motivo = '-';
                     $tipo_gasto = '-';
                     if ($l->flujo_caja_id) {
@@ -1473,7 +1473,13 @@ class FinanzasController extends Controller
                             $tipo_gasto = 'Compra de divisas';
                         }
                     } elseif ($l->tesoreria_ingreso_id) {
-                        return null;
+                        $tesoreria = $l->tesoreriaIngreso;
+                        if ($tesoreria) {
+                            $motivo = ($tesoreria->tipo === 'punto_venta')
+                                ? 'Lote Punto de Venta'
+                                : ($matcher->esPagoMovil($l->descripcion) ? 'Pago móvil' : 'Ingreso Bancario Tesorería');
+                            $tipo_gasto = 'Ingreso de Tesorería';
+                        }
                     }
 
                     return [
@@ -1627,7 +1633,12 @@ class FinanzasController extends Controller
                     'total_abonos_sistema',
                     'movimiento_neto_sistema'
                 ),
-                ['banco' => $bk, 'titular' => $tit, 'clave' => $bk_key]
+                [
+                    'banco' => $bk,
+                    'titular' => $tit,
+                    'clave' => $bk_key,
+                    'cuenta_digitos' => $this->digitosCuentaPorClave($matcher)[$bk_key] ?? null,
+                ]
             );
         }
 
@@ -1669,6 +1680,44 @@ class FinanzasController extends Controller
     /**
      * @return array{0: \Illuminate\Support\Collection, 1: \Illuminate\Support\Collection, 2: array<string, list<string>>}
      */
+    /**
+     * Últimos 10 dígitos del número de cuenta, agrupados por la misma clave de conciliación.
+     *
+     * @return array<string, string>
+     */
+    private function digitosCuentaPorClave(\App\Services\BankReconciliationMatcher $matcher): array
+    {
+        static $cache = null;
+        if ($cache !== null) {
+            return $cache;
+        }
+
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('cuentas_bancarias', 'numero_cuenta')) {
+            return $cache = [];
+        }
+
+        $cache = [];
+        $cuentas = \App\Models\CuentaBancaria::query()
+            ->whereNotNull('numero_cuenta')
+            ->where('numero_cuenta', '!=', '')
+            ->get(['banco', 'titular', 'numero_cuenta']);
+
+        foreach ($cuentas as $cuenta) {
+            $digitos = preg_replace('/\D+/', '', (string) $cuenta->numero_cuenta) ?? '';
+            if ($digitos === '') {
+                continue;
+            }
+            $clave = $matcher->claveCuenta($cuenta->banco, $cuenta->titular);
+            $previo = $cache[$clave] ?? '';
+            if (strlen($digitos) < strlen($previo)) {
+                continue;
+            }
+            $cache[$clave] = strlen($digitos) > 10 ? substr($digitos, -10) : $digitos;
+        }
+
+        return $cache;
+    }
+
     private function cuentasConciliacion(): array
     {
         $cuentasBancarias = \App\Models\CuentaBancaria::all();
@@ -1678,11 +1727,12 @@ class FinanzasController extends Controller
             ->filter(fn ($b) => in_array($b, $bancosPermitidos, true))
             ->unique()->sort()->values();
 
+        $calendario = app(\App\Services\ConciliacionCalendarioService::class);
         $titularesPorBanco = [];
         foreach ($cuentasBancarias as $cuenta) {
             $b = $this->canonizarBanco($cuenta->banco);
             $t = strtoupper(trim($cuenta->titular));
-            if (in_array($b, $bancosPermitidos, true) && $t) {
+            if (in_array($b, $bancosPermitidos, true) && $t && $calendario->cuentaIncluida($b, $t)) {
                 $titularesPorBanco[$b][] = $t;
             }
         }
@@ -1691,6 +1741,10 @@ class FinanzasController extends Controller
             sort($tits);
         }
         unset($tits);
+
+        $bancos = $bancos
+            ->filter(fn ($b) => ! empty($titularesPorBanco[$b]))
+            ->values();
 
         return [$cuentasBancarias, $bancos, $titularesPorBanco];
     }
@@ -2660,6 +2714,9 @@ class FinanzasController extends Controller
         $data = [
             'banco' => strtoupper($bk_req),
             'titular' => strtoupper($tit_req),
+            'cuenta_digitos' => $clavePdf !== ''
+                ? ($this->digitosCuentaPorClave($matcher)[$clavePdf] ?? null)
+                : null,
             'conciliados' => $conciliados,
             'en_transito' => $en_transito,
             'sin_registrar' => $sin_registrar,

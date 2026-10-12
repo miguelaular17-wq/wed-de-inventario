@@ -3,8 +3,14 @@
 @section('content')
 
 <style>
-    .conc-page { padding: 28px; font-family: 'Inter', sans-serif; background: #f1f5f9; min-height: 100vh; }
-    .conc-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; flex-wrap: wrap; gap: 14px; }
+    body:has(.conc-page) main {
+        max-width: none;
+        width: auto;
+        margin: 8px 10px 16px;
+        padding: 0;
+    }
+    .conc-page { padding: 4px 0 8px; font-family: 'Inter', sans-serif; background: transparent; min-height: 0; }
+    .conc-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 14px; }
     .conc-title { margin: 0; font-size: 1.6rem; color: #0f172a; font-weight: 800; letter-spacing: -0.5px; }
     .conc-title span { color: #2563eb; }
 
@@ -22,7 +28,7 @@
     .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; padding: 14px 18px; border-radius: 10px; margin-bottom: 22px; font-weight: 500; text-align: center; }
 
     /* Bank card */
-    .bank-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,.06); margin-bottom: 40px; overflow: hidden; }
+    .bank-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,.06); margin-bottom: 16px; overflow: hidden; width: 100%; }
     .bank-card-header { background: linear-gradient(135deg, #1e3a5f 0%, #1a4273 100%); padding: 18px 24px; display: flex; align-items: center; gap: 14px; justify-content: space-between; flex-wrap: wrap; }
     .bank-name { color: white; font-size: 1.25rem; font-weight: 800; letter-spacing: .5px; display: flex; align-items: center; gap: 10px; }
     .bank-totals-row { display: flex; gap: 18px; flex-wrap: wrap; }
@@ -51,11 +57,17 @@
 
     .section-title { font-size: 0.88rem; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: .5px; }
     .section-count { margin-left: auto; font-size: 0.75rem; background: #f1f5f9; color: #64748b; border-radius: 20px; padding: 2px 9px; font-weight: 600; }
+    .section-header { cursor: pointer; user-select: none; }
+    .section-toggle { border: 1px solid #e2e8f0; background: white; color: #475569; border-radius: 6px; font-size: 0.72rem; font-weight: 700; padding: 3px 8px; cursor: pointer; font-family: inherit; }
+    .section-toggle:hover { background: #f8fafc; }
+    .section-block.is-collapsed .section-body { display: none; }
+    .section-body { max-height: 480px; overflow-y: auto; }
+    .sections-toolbar { display: flex; justify-content: flex-end; padding: 10px 16px; border-bottom: 1px solid #f1f5f9; background: #f8fafc; }
 
     /* Tables */
     .mini-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     .mini-table thead tr { background: #f8fafc; }
-    .mini-table th { padding: 9px 14px; font-weight: 600; color: #64748b; text-align: left; font-size: 0.78rem; text-transform: uppercase; letter-spacing: .3px; border-bottom: 1px solid #f1f5f9; }
+    .mini-table th { padding: 9px 14px; font-weight: 600; color: #64748b; text-align: left; font-size: 0.78rem; text-transform: uppercase; letter-spacing: .3px; border-bottom: 1px solid #f1f5f9; position: sticky; top: 0; z-index: 1; background: #f8fafc; }
     .mini-table td { padding: 10px 14px; border-bottom: 1px solid #f8fafc; color: #334155; vertical-align: top; }
     .mini-table tr:last-child td { border-bottom: none; }
     .mini-table tr:hover td { background: #f8fafc; }
@@ -72,7 +84,7 @@
     .empty-row td { text-align: center; color: #94a3b8; padding: 24px; font-size: 0.85rem; }
 
     /* Section footer */
-    .section-footer { padding: 10px 14px; background: #f8fafc; border-top: 1px solid #f1f5f9; text-align: right; font-weight: 700; font-size: 0.9rem; color: #1e293b; }
+    .section-footer { padding: 10px 14px; background: #f8fafc; border-top: 1px solid #f1f5f9; text-align: right; font-weight: 700; font-size: 0.9rem; color: #1e293b; position: sticky; bottom: 0; z-index: 1; }
 
     /* Upload modal */
     .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1050; align-items: center; justify-content: center; padding: 20px; }
@@ -189,7 +201,12 @@
                     @endif
                 </div>
                 @if($tit)
-                    <div style="color:rgba(255,255,255,.65); font-size:0.82rem; font-weight:600; margin-top:4px; letter-spacing:.3px;">Titular: {{ $tit }}</div>
+                    <div style="color:rgba(255,255,255,.65); font-size:0.82rem; font-weight:600; margin-top:4px; letter-spacing:.3px;">
+                        Titular: {{ $tit }}
+                        @if(!empty($d['cuenta_digitos']))
+                            · {{ $d['cuenta_digitos'] }}
+                        @endif
+                    </div>
                 @endif
             </div>
             <div class="bank-totals-row">
@@ -268,16 +285,22 @@
         </div>
 
 
+        <div class="sections-toolbar">
+            <button type="button" class="section-toggle" onclick="toggleListasBanco(this)">Ocultar movimientos</button>
+        </div>
+
         {{-- 4 sections grid --}}
         <div class="sections-grid">
 
             {{-- 1. CONSOLIDADOS --}}
-            <div class="section-block">
-                <div class="section-header">
+            <div class="section-block" data-sec="{{ $bk_key }}|consolidados">
+                <div class="section-header" onclick="toggleSeccion(this)">
                     <span class="section-badge badge-green"></span>
                     <span class="section-title">Consolidados</span>
                     <span class="section-count">{{ $d['conciliados']->count() }}</span>
+                    <button type="button" class="section-toggle">Ocultar</button>
                 </div>
+                <div class="section-body">
                 <table class="mini-table">
                     <thead>
                         <tr>
@@ -310,15 +333,18 @@
                 @if($d['conciliados']->count() > 0)
                 <div class="section-footer">Total: Bs. {{ number_format($d['total_conciliados'], 2) }}</div>
                 @endif
+                </div>
             </div>
 
             {{-- 2. EN TRÁNSITO --}}
-            <div class="section-block">
-                <div class="section-header">
+            <div class="section-block" data-sec="{{ $bk_key }}|transito">
+                <div class="section-header" onclick="toggleSeccion(this)">
                     <span class="section-badge badge-yellow"></span>
                     <span class="section-title">En Tránsito</span>
                     <span class="section-count">{{ $d['en_transito']->count() }}</span>
+                    <button type="button" class="section-toggle">Ocultar</button>
                 </div>
+                <div class="section-body">
                 <table class="mini-table">
                     <thead>
                         <tr>
@@ -349,15 +375,18 @@
                 @if($d['en_transito']->count() > 0)
                 <div class="section-footer">Total: Bs. {{ number_format($d['total_transito'], 2) }}</div>
                 @endif
+                </div>
             </div>
 
             {{-- 3. SIN REGISTRAR --}}
-            <div class="section-block">
-                <div class="section-header">
+            <div class="section-block" data-sec="{{ $bk_key }}|banco">
+                <div class="section-header" onclick="toggleSeccion(this)">
                     <span class="section-badge badge-red"></span>
                     <span class="section-title">Movimientos en el Banco</span>
                     <span class="section-count">{{ $d['sin_registrar']->count() }}</span>
+                    <button type="button" class="section-toggle">Ocultar</button>
                 </div>
+                <div class="section-body">
                 <table class="mini-table">
                     <thead>
                         <tr>
@@ -399,15 +428,18 @@
                 @if($d['sin_registrar']->count() > 0)
                 <div class="section-footer">Total: Bs. {{ number_format($d['total_sin_registrar'], 2) }}</div>
                 @endif
+                </div>
             </div>
 
             {{-- 4. COMISIONES BANCARIAS --}}
-            <div class="section-block">
-                <div class="section-header">
+            <div class="section-block" data-sec="{{ $bk_key }}|comisiones">
+                <div class="section-header" onclick="toggleSeccion(this)">
                     <span class="section-badge badge-purple"></span>
                     <span class="section-title">Comisiones Bancarias</span>
                     <span class="section-count">{{ $d['comisiones']->count() }}</span>
+                    <button type="button" class="section-toggle">Ocultar</button>
                 </div>
+                <div class="section-body">
                 <table class="mini-table">
                     <thead>
                         <tr>
@@ -441,15 +473,18 @@
                     · ${{ number_format($d['total_comisiones_usd'] ?? 0, 2) }}
                 </div>
                 @endif
+                </div>
             </div>
 
             {{-- 5. COMPRAS DE DIVISAS (extracto, pendientes de registrar/conciliar) --}}
-            <div class="section-block">
-                <div class="section-header">
+            <div class="section-block" data-sec="{{ $bk_key }}|divisas">
+                <div class="section-header" onclick="toggleSeccion(this)">
                     <span class="section-badge" style="background:#0ea5e9;"></span>
                     <span class="section-title">Compra de Divisas</span>
                     <span class="section-count">{{ ($d['compras_divisas_banco'] ?? collect())->count() }}</span>
+                    <button type="button" class="section-toggle">Ocultar</button>
                 </div>
+                <div class="section-body">
                 <table class="mini-table">
                     <thead>
                         <tr>
@@ -478,15 +513,18 @@
                 @if(($d['compras_divisas_banco'] ?? collect())->count() > 0)
                 <div class="section-footer">Total: Bs. {{ number_format(abs($d['total_compras_divisas'] ?? 0), 2) }} · Regístralas en Flujo de caja → Compra de divisas</div>
                 @endif
+                </div>
             </div>
 
             {{-- 6. PAGO DE CRÉDITO BANCARIO (CREDITO DIGITAL, etc.) --}}
-            <div class="section-block">
-                <div class="section-header">
+            <div class="section-block" data-sec="{{ $bk_key }}|credito">
+                <div class="section-header" onclick="toggleSeccion(this)">
                     <span class="section-badge" style="background:#f43f5e;"></span>
                     <span class="section-title">Pago de Crédito</span>
                     <span class="section-count">{{ ($d['pagos_credito'] ?? collect())->count() }}</span>
+                    <button type="button" class="section-toggle">Ocultar</button>
                 </div>
+                <div class="section-body">
                 <table class="mini-table">
                     <thead>
                         <tr>
@@ -515,6 +553,7 @@
                 @if(($d['pagos_credito'] ?? collect())->count() > 0)
                 <div class="section-footer">Total: Bs. {{ number_format(abs($d['total_pagos_credito'] ?? 0), 2) }}</div>
                 @endif
+                </div>
             </div>
 
         </div>{{-- end sections-grid --}}
@@ -606,6 +645,53 @@ function filtrarTitulares(banco) {
         selTit.value = titularesPorBanco[banco][0];
     }
 }
+
+function aplicarEstadoSeccion(block, collapsed) {
+    block.classList.toggle('is-collapsed', collapsed);
+    const btn = block.querySelector('.section-toggle');
+    if (btn) btn.textContent = collapsed ? 'Mostrar' : 'Ocultar';
+    if (block.dataset.sec) {
+        localStorage.setItem('conc-oculto-' + block.dataset.sec, collapsed ? '1' : '0');
+    }
+}
+
+function sincronizarBotonBanco(card) {
+    const master = card.querySelector('.sections-toolbar .section-toggle');
+    if (!master) return;
+    const blocks = card.querySelectorAll('.section-block');
+    const todosOcultos = blocks.length > 0 && Array.from(blocks).every(function (block) {
+        return block.classList.contains('is-collapsed');
+    });
+    master.dataset.abierto = todosOcultos ? '0' : '1';
+    master.textContent = todosOcultos ? 'Mostrar movimientos' : 'Ocultar movimientos';
+}
+
+function toggleSeccion(header) {
+    const block = header.closest('.section-block');
+    if (!block) return;
+    aplicarEstadoSeccion(block, !block.classList.contains('is-collapsed'));
+    const card = block.closest('.bank-card');
+    if (card) sincronizarBotonBanco(card);
+}
+
+function toggleListasBanco(btn) {
+    const card = btn.closest('.bank-card');
+    if (!card) return;
+    const ocultar = btn.dataset.abierto !== '0';
+    card.querySelectorAll('.section-block').forEach(function (block) {
+        aplicarEstadoSeccion(block, ocultar);
+    });
+    sincronizarBotonBanco(card);
+}
+
+document.querySelectorAll('.bank-card').forEach(function (card) {
+    card.querySelectorAll('.section-block[data-sec]').forEach(function (block) {
+        if (localStorage.getItem('conc-oculto-' + block.dataset.sec) === '1') {
+            aplicarEstadoSeccion(block, true);
+        }
+    });
+    sincronizarBotonBanco(card);
+});
 
 function calcularDiferencia(idx) {
     const inputInicial = document.querySelector(`.saldo-inicial-input[data-idx="${idx}"]`);

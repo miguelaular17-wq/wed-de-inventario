@@ -148,6 +148,28 @@ class BankReconciliationMatcher
         return false;
     }
 
+    /**
+     * La referencia corta del Excel de pago móvil (6 dígitos, a veces con ceros
+     * a la izquierda) va dentro de la referencia larga del extracto.
+     */
+    public function referenciaPagoContenida(?string $referenciaBanco, ?string $referenciaPago): bool
+    {
+        $banco = preg_replace('/\D+/', '', (string) $referenciaBanco) ?? '';
+        $pago = preg_replace('/\D+/', '', (string) $referenciaPago) ?? '';
+        if ($banco === '' || $pago === '' || strlen($pago) > strlen($banco)) {
+            return false;
+        }
+
+        if (strlen($pago) < 6) {
+            $pago = str_pad($pago, 6, '0', STR_PAD_LEFT);
+            if (strlen($pago) > strlen($banco)) {
+                return false;
+            }
+        }
+
+        return str_contains($banco, $pago);
+    }
+
     public function fechaCercana($fechaA, $fechaB, int $dias = 3): bool
     {
         try {
@@ -198,8 +220,7 @@ class BankReconciliationMatcher
      * Las dos entradas se mostrarán en una sola tarjeta de conciliación.
      */
     private array $cuentaAliases = [
-        // Mercantil JRZ y Mercantil GRUPO JENU son la misma cuenta física.
-        'MERCANTIL|JRZ' => 'MERCANTIL|JENU',
+        // JENU es otra cuenta. GRUPO JRZ y JRZ ya se unen en titularClave.
     ];
 
     /**

@@ -85,7 +85,7 @@
     <div class="header">
         <h2>Reporte de Conciliación: {{ $data['banco'] }}</h2>
         @if($data['titular'])
-            <p>Titular: {{ $data['titular'] }}</p>
+            <p>Titular: {{ $data['titular'] }}@if(!empty($data['cuenta_digitos'])) · {{ $data['cuenta_digitos'] }}@endif</p>
         @endif
         <p>Generado el: {{ date('d/m/Y H:i') }}</p>
     </div>

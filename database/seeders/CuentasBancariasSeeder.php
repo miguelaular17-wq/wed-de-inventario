@@ -148,6 +148,31 @@ class CuentasBancariasSeeder extends Seeder
                 );
             }
 
+            foreach (config('cuentas_bancarias_numeros', []) as [$banco, $titular, $numero]) {
+                $cuentaNumero = \App\Models\CuentaBancaria::query()
+                    ->where('banco', $banco)
+                    ->where('titular', $titular)
+                    ->first();
+
+                if (! $cuentaNumero) {
+                    \App\Models\CuentaBancaria::create([
+                        'banco' => $banco,
+                        'titular' => $titular,
+                        'numero_cuenta' => $numero,
+                        'categoria_reporte' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO',
+                        'mostrar_en_principal' => false,
+                        'orden' => 900,
+                    ]);
+
+                    continue;
+                }
+
+                \App\Models\CuentaBancaria::query()
+                    ->where('banco', $banco)
+                    ->where('titular', $titular)
+                    ->update(['numero_cuenta' => $numero]);
+            }
+
             // Crear las 7 filas vacias para planificacion (idempotente)
             for($i = 1; $i <= 7; $i++) {
                 \App\Models\PlanificacionPago::firstOrCreate([

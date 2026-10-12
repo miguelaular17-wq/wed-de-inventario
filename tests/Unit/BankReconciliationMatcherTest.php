@@ -516,6 +516,20 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertTrue($this->matcher->mismoTitular('GRUPO JRZ', 'JRZ', 'VENEZUELA', 'VENEZUELA'));
     }
 
+    public function test_mercantil_une_grupo_jrz_con_jrz_y_deja_jenu_aparte(): void
+    {
+        $this->assertSame(
+            $this->matcher->claveCuenta('MERCANTIL', 'GRUPO JRZ'),
+            $this->matcher->claveCuenta('MERCANTIL', 'JRZ')
+        );
+        $this->assertSame('MERCANTIL|JRZ', $this->matcher->claveCuenta('MERCANTIL', 'JRZ'));
+        $this->assertSame('MERCANTIL|JENU', $this->matcher->claveCuenta('MERCANTIL', 'GRUPO JENU'));
+        $this->assertNotSame(
+            $this->matcher->claveCuenta('MERCANTIL', 'GRUPO JENU'),
+            $this->matcher->claveCuenta('MERCANTIL', 'JRZ')
+        );
+    }
+
     public function test_un_gasto_vacio_copia_del_banco_cede_el_lugar_al_egreso_real_del_mismo_dia(): void
     {
         $linea = new ConciliacionLinea([
@@ -572,5 +586,15 @@ class BankReconciliationMatcherTest extends TestCase
             'PAGOMOVIL OTROS BANCOS 0134 04141234567',
             null
         ));
+    }
+
+    public function test_pago_movil_cruza_referencia_corta_con_ceros_a_la_izquierda(): void
+    {
+        $this->assertTrue($this->matcher->referenciaPagoContenida('0677233029922', '029922'));
+        $this->assertTrue($this->matcher->referenciaPagoContenida('0677228002940', '2940'));
+        $this->assertTrue($this->matcher->referenciaPagoContenida('0677288021694', '021694'));
+        $this->assertTrue($this->matcher->referenciaPagoContenida('0677280087169', '087169'));
+        $this->assertFalse($this->matcher->referenciaPagoContenida('0677288021694', '116'));
+        $this->assertFalse($this->matcher->referenciasCruzan('0677288021694', '116'));
     }
 }

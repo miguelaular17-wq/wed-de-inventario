@@ -170,6 +170,13 @@ class MetaQuincenaController extends Controller
             $filas = $filas->where('sede', $sedeFiltro)->values();
         }
 
+        $soloCompletados = $request->boolean('completados');
+        if ($soloCompletados) {
+            $filas = $filas
+                ->filter(fn ($fila) => (float) ($fila['avance_pct'] ?? 0) >= 100)
+                ->values();
+        }
+
         $porSede = $filas
             ->groupBy('sede')
             ->sortKeys()
@@ -194,15 +201,20 @@ class MetaQuincenaController extends Controller
             ->values()
             ->all();
 
-        $titulo = $sedeFiltro !== ''
-            ? 'Avance productos meta · '.$sedeFiltro
-            : 'Avance productos meta por sede';
+        $titulo = $soloCompletados
+            ? ($sedeFiltro !== ''
+                ? 'Productos meta completados · '.$sedeFiltro
+                : 'Productos meta completados')
+            : ($sedeFiltro !== ''
+                ? 'Avance productos meta · '.$sedeFiltro
+                : 'Avance productos meta por sede');
 
         $pdf = Pdf::loadView('metas.pdf.avances', [
             'titulo' => $titulo,
             'quincena' => $quincena,
             'porSede' => $porSede,
             'sedeFiltro' => $sedeFiltro !== '' ? $sedeFiltro : null,
+            'soloCompletados' => $soloCompletados,
             'logoPath' => $this->logoMetasPdf(),
             'generadoPor' => $user->name,
         ])->setPaper('a4', 'portrait');
@@ -210,7 +222,8 @@ class MetaQuincenaController extends Controller
         $slugSede = $sedeFiltro !== ''
             ? preg_replace('/[^A-Za-z0-9]+/', '_', $sedeFiltro)
             : 'todas';
-        $nombre = 'metas_avances_'.$slugSede.'_'.$quincena['inicio']->format('Ymd').'.pdf';
+        $prefijo = $soloCompletados ? 'metas_completados_' : 'metas_avances_';
+        $nombre = $prefijo.$slugSede.'_'.$quincena['inicio']->format('Ymd').'.pdf';
 
         return $pdf->download($nombre);
     }
