@@ -22,6 +22,8 @@ class BankMovementClassifierTest extends TestCase
         $this->assertTrue($this->classifier->esComision('COM TRF CRINMOB'));
         $this->assertTrue($this->classifier->esComision('COMSER VMTTO CTA'));
         $this->assertTrue($this->classifier->esComision('COMSERVMTTO CTA'));
+        $this->assertTrue($this->classifier->esComision('COMIS.PAGO INMEDIATO'));
+        $this->assertTrue($this->classifier->esComision('COM/LIQ/TDD 87758230'));
         $this->assertTrue($this->classifier->esComision('EMISION DE ESTADO DE CUENTA'));
         $this->assertTrue($this->classifier->esComision('COMIS EMIS EDO DE CUENTAS ME'));
         $this->assertTrue($this->classifier->esComision(

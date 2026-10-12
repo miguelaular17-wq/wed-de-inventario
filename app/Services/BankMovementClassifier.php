@@ -25,6 +25,9 @@ class BankMovementClassifier
         'comis emis edo', 'comis emis',
         'com compra de divisas', 'com compra divisas',
         'com.compra', 'coms ',
+        // Mercantil / extractos recientes
+        'comis.pago', 'comis.pago inmediato',
+        'com/liq', 'com/liq/tdd',
     ];
 
     /** @var array<string, list<string>> */
