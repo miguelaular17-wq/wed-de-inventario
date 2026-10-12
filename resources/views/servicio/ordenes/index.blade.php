@@ -15,9 +15,14 @@
                 @endif
             </p>
         </div>
-        <a class="btn primary" href="{{ route('servicio.ordenes.create', !empty($soloInternas) ? ['tipo_gestion' => \App\Models\StOrden::TIPO_REPARACION_INTERNA] : []) }}">
-            {{ !empty($soloInternas) ? 'Nueva reparación interna' : 'Nueva orden' }}
-        </a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a class="btn secondary" href="{{ route('servicio.ordenes.reporte_marca', !empty($soloInternas) ? ['tipo_gestion' => \App\Models\StOrden::TIPO_REPARACION_INTERNA] : []) }}">
+                Reporte por marca
+            </a>
+            <a class="btn primary" href="{{ route('servicio.ordenes.create', !empty($soloInternas) ? ['tipo_gestion' => \App\Models\StOrden::TIPO_REPARACION_INTERNA] : []) }}">
+                {{ !empty($soloInternas) ? 'Nueva reparación interna' : 'Nueva orden' }}
+            </a>
+        </div>
     </div>
 
     <form method="GET" class="filter-bar" style="margin-top:16px;">
@@ -81,7 +86,7 @@
                     @forelse($evImgs as $i => $url)
                         <a href="{{ route('servicio.ordenes.evidencia', ['orden' => $orden, 'tipo' => 'img', 'index' => $i]) }}" target="_blank" rel="noopener">
                             <img
-                                src="{{ route('servicio.ordenes.evidencia', ['orden' => $orden, 'tipo' => 'img', 'index' => $i]) }}"
+                                src="{{ route('servicio.ordenes.evidencia', ['orden' => $orden, 'tipo' => 'img', 'index' => $i, 'thumb' => 1]) }}"
                                 alt="Foto {{ $i + 1 }} de {{ $orden->codigo() }}"
                                 referrerpolicy="no-referrer"
                                 loading="lazy"

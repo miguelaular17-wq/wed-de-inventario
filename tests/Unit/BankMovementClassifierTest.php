@@ -21,6 +21,7 @@ class BankMovementClassifierTest extends TestCase
         $this->assertTrue($this->classifier->esComision('Mant y Serv Aplic 680956790826'));
         $this->assertTrue($this->classifier->esComision('COM TRF CRINMOB'));
         $this->assertTrue($this->classifier->esComision('COMSER VMTTO CTA'));
+        $this->assertTrue($this->classifier->esComision('COMSERVMTTO CTA'));
         $this->assertTrue($this->classifier->esComision('EMISION DE ESTADO DE CUENTA'));
         $this->assertTrue($this->classifier->esComision('COMIS EMIS EDO DE CUENTAS ME'));
         $this->assertTrue($this->classifier->esComision(

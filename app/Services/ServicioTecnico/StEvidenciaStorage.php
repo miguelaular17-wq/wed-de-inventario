@@ -62,22 +62,112 @@ class StEvidenciaStorage
 
     public function subirArchivo(UploadedFile $file, string $prefijo, string $etiqueta): string
     {
-        if ($this->supabaseDisponible()) {
-            return $this->subirASupabase($file, $prefijo, $etiqueta);
-        }
+        $comprimido = $this->comprimirImagenSiAplica($file);
+        $usar = $comprimido['path'] ?? $file->getRealPath();
+        $mime = $comprimido['mime'] ?? ($file->getMimeType() ?: 'application/octet-stream');
+        $ext = $comprimido['ext'] ?? null;
 
-        return $this->subirLocal($file, $prefijo, $etiqueta);
+        try {
+            if ($this->supabaseDisponible()) {
+                return $this->subirASupabase($file, $prefijo, $etiqueta, $usar, $mime, $ext);
+            }
+
+            return $this->subirLocal($file, $prefijo, $etiqueta, $usar, $ext);
+        } finally {
+            if (! empty($comprimido['path']) && is_file($comprimido['path'])) {
+                @unlink($comprimido['path']);
+            }
+        }
     }
 
-    private function subirASupabase(UploadedFile $file, string $prefijo, string $etiqueta): string
+    /**
+     * Baja un poco peso/resolución de fotos de evidencia para que carguen más rápido.
+     *
+     * @return array{path?:string,mime?:string,ext?:string}|array{}
+     */
+    private function comprimirImagenSiAplica(UploadedFile $file): array
     {
-        $ext = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'bin');
+        if (! function_exists('imagecreatetruecolor')) {
+            return [];
+        }
+
+        $mime = strtolower((string) ($file->getMimeType() ?: ''));
+        $origen = $file->getRealPath();
+        if (! $origen || ! is_file($origen)) {
+            return [];
+        }
+
+        $src = match (true) {
+            str_contains($mime, 'jpeg') || str_contains($mime, 'jpg') => @imagecreatefromjpeg($origen),
+            str_contains($mime, 'png') => @imagecreatefrompng($origen),
+            str_contains($mime, 'webp') && function_exists('imagecreatefromwebp') => @imagecreatefromwebp($origen),
+            default => null,
+        };
+        if (! $src) {
+            return [];
+        }
+
+        $ancho = imagesx($src);
+        $alto = imagesy($src);
+        if ($ancho < 1 || $alto < 1) {
+            imagedestroy($src);
+
+            return [];
+        }
+
+        $maxLado = 1280;
+        $escala = min(1.0, $maxLado / max($ancho, $alto));
+        $nuevoAncho = max(1, (int) round($ancho * $escala));
+        $nuevoAlto = max(1, (int) round($alto * $escala));
+
+        $dst = imagecreatetruecolor($nuevoAncho, $nuevoAlto);
+        if (! $dst) {
+            imagedestroy($src);
+
+            return [];
+        }
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $nuevoAncho, $nuevoAlto, $ancho, $alto);
+        imagedestroy($src);
+
+        $tmp = tempnam(sys_get_temp_dir(), 'stimg_');
+        if ($tmp === false) {
+            imagedestroy($dst);
+
+            return [];
+        }
+        $tmpJpg = $tmp.'.jpg';
+        @unlink($tmp);
+        imagejpeg($dst, $tmpJpg, 72);
+        imagedestroy($dst);
+
+        if (! is_file($tmpJpg) || filesize($tmpJpg) < 1) {
+            @unlink($tmpJpg);
+
+            return [];
+        }
+
+        return [
+            'path' => $tmpJpg,
+            'mime' => 'image/jpeg',
+            'ext' => 'jpg',
+        ];
+    }
+
+    private function subirASupabase(
+        UploadedFile $file,
+        string $prefijo,
+        string $etiqueta,
+        ?string $contenidoPath = null,
+        ?string $contentType = null,
+        ?string $extForzada = null,
+    ): string {
+        $ext = $extForzada ?: strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'bin');
         $ext = preg_replace('/[^a-z0-9]/', '', $ext) ?: 'bin';
         $nombre = $etiqueta.'_'.now()->format('YmdHis').'_'.Str::lower(Str::random(8)).'.'.$ext;
         $path = trim($prefijo, '/').'/'.$nombre;
 
-        $contentType = $file->getMimeType() ?: 'application/octet-stream';
-        $body = file_get_contents($file->getRealPath());
+        $contentType = $contentType ?: ($file->getMimeType() ?: 'application/octet-stream');
+        $body = file_get_contents($contenidoPath ?: $file->getRealPath());
         if ($body === false || $body === '') {
             throw ValidationException::withMessages([
                 'evidencias' => 'No se pudo leer el archivo '.$file->getClientOriginalName(),
@@ -104,18 +194,28 @@ class StEvidenciaStorage
         return $this->baseUrl().'/storage/v1/object/public/'.self::BUCKET.'/'.$path;
     }
 
-    private function subirLocal(UploadedFile $file, string $prefijo, string $etiqueta): string
-    {
-        $ext = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'bin');
+    private function subirLocal(
+        UploadedFile $file,
+        string $prefijo,
+        string $etiqueta,
+        ?string $contenidoPath = null,
+        ?string $extForzada = null,
+    ): string {
+        $ext = $extForzada ?: strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: 'bin');
         $ext = preg_replace('/[^a-z0-9]/', '', $ext) ?: 'bin';
         $nombre = $etiqueta.'_'.now()->format('YmdHis').'_'.Str::lower(Str::random(8)).'.'.$ext;
         $path = trim(self::LOCAL_DIR.'/'.trim($prefijo, '/').'/'.$nombre, '/');
 
-        $stored = Storage::disk(self::DISK_LOCAL)->putFileAs(
-            dirname($path),
-            $file,
-            basename($path)
-        );
+        if ($contenidoPath && is_file($contenidoPath)) {
+            $ok = Storage::disk(self::DISK_LOCAL)->put($path, file_get_contents($contenidoPath));
+            $stored = $ok ? $path : false;
+        } else {
+            $stored = Storage::disk(self::DISK_LOCAL)->putFileAs(
+                dirname($path),
+                $file,
+                basename($path)
+            );
+        }
 
         if (! $stored) {
             throw ValidationException::withMessages([
@@ -124,6 +224,48 @@ class StEvidenciaStorage
         }
 
         return url(Storage::disk(self::DISK_LOCAL)->url($stored));
+    }
+
+    /**
+     * Miniatura JPEG para listados (más liviana que el original).
+     */
+    public function miniaturaDesdeBinario(string $binario, int $maxLado = 480, int $calidad = 62): ?string
+    {
+        if ($binario === '' || ! function_exists('imagecreatetruecolor')) {
+            return null;
+        }
+
+        $src = @imagecreatefromstring($binario);
+        if (! $src) {
+            return null;
+        }
+
+        $ancho = imagesx($src);
+        $alto = imagesy($src);
+        if ($ancho < 1 || $alto < 1) {
+            imagedestroy($src);
+
+            return null;
+        }
+
+        $escala = min(1.0, $maxLado / max($ancho, $alto));
+        $nuevoAncho = max(1, (int) round($ancho * $escala));
+        $nuevoAlto = max(1, (int) round($alto * $escala));
+        $dst = imagecreatetruecolor($nuevoAncho, $nuevoAlto);
+        if (! $dst) {
+            imagedestroy($src);
+
+            return null;
+        }
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $nuevoAncho, $nuevoAlto, $ancho, $alto);
+        imagedestroy($src);
+
+        ob_start();
+        imagejpeg($dst, null, max(40, min(90, $calidad)));
+        imagedestroy($dst);
+        $out = ob_get_clean();
+
+        return is_string($out) && $out !== '' ? $out : null;
     }
 
     private function baseUrl(): string

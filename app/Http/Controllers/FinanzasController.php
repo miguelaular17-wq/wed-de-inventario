@@ -1376,11 +1376,16 @@ class FinanzasController extends Controller
 
         // 6. Construir estructura por banco+titular.
         // "JRZ" y "GRUPO JRZ" son la misma cuenta y salen en una sola tarjeta.
+        // José Jerez y terceros Venezuela no aparecen aunque tengan egresos.
         $cuentas = [];
-        $registrarCuenta = function ($banco, $titular) use (&$cuentas, $matcher) {
+        $calendarioCuentas = app(\App\Services\ConciliacionCalendarioService::class);
+        $registrarCuenta = function ($banco, $titular) use (&$cuentas, $matcher, $calendarioCuentas) {
             $clave = $matcher->claveCuenta($banco, $titular);
             [$bancoCanon, $titularCanon] = $matcher->partesCuenta($banco, $titular);
             if ($bancoCanon === '' || $clave === '|') {
+                return;
+            }
+            if (! $calendarioCuentas->cuentaIncluida($bancoCanon, $titularCanon)) {
                 return;
             }
             if (! isset($cuentas[$clave])) {

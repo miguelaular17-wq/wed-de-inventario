@@ -116,6 +116,147 @@ class OrdenController extends Controller
         return $this->index($request);
     }
 
+    public function reportePorMarca(Request $request): View|Response
+    {
+        $user = $request->user();
+        $desde = $request->query('fecha_desde');
+        $hasta = $request->query('fecha_hasta');
+        if (! is_string($desde) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) {
+            $desde = now()->startOfMonth()->toDateString();
+        }
+        if (! is_string($hasta) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) {
+            $hasta = now()->toDateString();
+        }
+
+        $tipoFiltro = strtoupper(trim((string) $request->query('tipo_gestion', '')));
+        $tiposValidos = array_keys(StOrden::TIPOS_GESTION);
+        if ($tipoFiltro !== '' && ! in_array($tipoFiltro, $tiposValidos, true)) {
+            $tipoFiltro = '';
+        }
+
+        $query = StOrden::query()
+            ->visiblePara($user)
+            ->with(['equipoCelular', 'tecnico'])
+            ->whereDate('fecha_ingreso', '>=', $desde)
+            ->whereDate('fecha_ingreso', '<=', $hasta)
+            ->orderBy('fecha_ingreso')
+            ->orderBy('numero');
+
+        if (! $user->scopesServicioToOwnSede() && $request->filled('sede')) {
+            $query->where('sede', strtoupper((string) $request->query('sede')));
+        } elseif ($user->scopesServicioToOwnSede()) {
+            $query->where('sede', strtoupper((string) $user->sede));
+        }
+
+        if ($tipoFiltro !== '' && Schema::hasColumn('st_ordenes', 'tipo_gestion')) {
+            $query->where('tipo_gestion', $tipoFiltro);
+        }
+
+        $ordenes = $query->get();
+        $porMarca = [];
+        $totales = [
+            'total' => 0,
+            'st' => 0,
+            'garantia' => 0,
+            'interna' => 0,
+        ];
+
+        foreach ($ordenes as $orden) {
+            $marca = $this->marcaParaReporte($orden);
+            if (! isset($porMarca[$marca])) {
+                $porMarca[$marca] = [
+                    'marca' => $marca,
+                    'ordenes' => [],
+                    'total' => 0,
+                    'st' => 0,
+                    'garantia' => 0,
+                    'interna' => 0,
+                ];
+            }
+            $tipo = strtoupper((string) ($orden->tipo_gestion ?? StOrden::TIPO_ST));
+            if ($tipo === StOrden::TIPO_GARANTIA) {
+                $porMarca[$marca]['garantia']++;
+                $totales['garantia']++;
+            } elseif ($tipo === StOrden::TIPO_REPARACION_INTERNA) {
+                $porMarca[$marca]['interna']++;
+                $totales['interna']++;
+            } else {
+                $porMarca[$marca]['st']++;
+                $totales['st']++;
+            }
+            $porMarca[$marca]['total']++;
+            $totales['total']++;
+            $porMarca[$marca]['ordenes'][] = $orden;
+        }
+
+        ksort($porMarca, SORT_NATURAL | SORT_FLAG_CASE);
+        $porMarca = array_values($porMarca);
+
+        $filtroSede = $user->scopesServicioToOwnSede()
+            ? strtoupper((string) $user->sede)
+            : ($request->query('sede') ? strtoupper((string) $request->query('sede')) : null);
+
+        $payload = [
+            'desde' => $desde,
+            'hasta' => $hasta,
+            'porMarca' => $porMarca,
+            'totales' => $totales,
+            'tipoFiltro' => $tipoFiltro,
+            'filtroSede' => $filtroSede,
+            'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
+            'sedes' => config('inventario.sedes_locales'),
+            'tiposGestion' => StOrden::TIPOS_GESTION,
+            'generadoPor' => $user->name,
+        ];
+
+        if ($request->query('formato') === 'pdf') {
+            $logoPath = null;
+            $logoFile = public_path('logo.png');
+            if (is_file($logoFile)) {
+                $raw = @file_get_contents($logoFile);
+                if ($raw !== false && $raw !== '') {
+                    $logoPath = 'data:image/png;base64,'.base64_encode($raw);
+                }
+            }
+
+            $titulo = 'Órdenes por marca';
+            if ($tipoFiltro !== '') {
+                $titulo = (StOrden::TIPOS_GESTION[$tipoFiltro] ?? $tipoFiltro).' por marca';
+            }
+
+            $pdf = Pdf::loadView('servicio.ordenes.pdf-por-marca', $payload + [
+                'titulo' => $titulo,
+                'logoPath' => $logoPath,
+            ])->setPaper('a4', 'landscape');
+
+            $slug = $tipoFiltro !== '' ? strtolower($tipoFiltro) : 'todas';
+            $nombre = 'ordenes_por_marca_'.$slug.'_'.$desde.'_'.$hasta.'.pdf';
+
+            return $pdf->download($nombre);
+        }
+
+        return view('servicio.ordenes.reporte-por-marca', $payload);
+    }
+
+    private function marcaParaReporte(StOrden $orden): string
+    {
+        $marca = trim((string) ($orden->equipoCelular?->marca ?? ''));
+        if ($marca === '') {
+            $attrs = is_array($orden->atributos) ? $orden->atributos : [];
+            $marca = trim((string) ($attrs['marca'] ?? ''));
+        }
+        if ($marca === '') {
+            $desdeEquipo = $orden->marcaEquipo();
+            if ($desdeEquipo !== '' && ! str_contains(mb_strtolower($desdeEquipo, 'UTF-8'), 'marca del equipo')) {
+                $marca = $desdeEquipo;
+            }
+        }
+
+        $marca = mb_strtoupper(trim($marca), 'UTF-8');
+
+        return $marca !== '' ? $marca : 'SIN MARCA';
+    }
+
     public function create(Request $request): View
     {
         $user = $request->user();
@@ -467,30 +608,53 @@ class OrdenController extends Controller
         }
         abort_unless(is_string($url) && $url !== '', 404);
 
+        $thumb = $tipo !== 'video' && $request->boolean('thumb');
+        $binario = null;
+        $contentType = $tipo === 'video' ? 'video/mp4' : 'image/jpeg';
+
         // Archivo local de storage público
         $publicPrefix = rtrim((string) config('app.url'), '/').'/storage/';
         if (str_starts_with($url, '/storage/')) {
             $path = public_path(ltrim($url, '/'));
             abort_unless(is_file($path), 404);
-
-            return response()->file($path);
-        }
-        if (str_starts_with($url, $publicPrefix)) {
+            if (! $thumb) {
+                return response()->file($path);
+            }
+            $binario = file_get_contents($path);
+        } elseif (str_starts_with($url, $publicPrefix)) {
             $relative = substr($url, strlen($publicPrefix));
             $path = storage_path('app/public/'.$relative);
             abort_unless(is_file($path), 404);
-
-            return response()->file($path);
+            if (! $thumb) {
+                return response()->file($path);
+            }
+            $binario = file_get_contents($path);
+        } else {
+            $response = \Illuminate\Support\Facades\Http::withoutVerifying()
+                ->timeout(45)
+                ->withHeaders(['Referer' => ''])
+                ->get($url);
+            abort_unless($response->successful(), 404, 'No se pudo cargar la evidencia.');
+            $binario = $response->body();
+            $contentType = $response->header('Content-Type') ?: $contentType;
+            if (! $thumb) {
+                return response($binario, 200, [
+                    'Content-Type' => $contentType,
+                    'Cache-Control' => 'private, max-age=3600',
+                ]);
+            }
         }
 
-        $response = \Illuminate\Support\Facades\Http::withoutVerifying()
-            ->timeout(45)
-            ->withHeaders(['Referer' => ''])
-            ->get($url);
-        abort_unless($response->successful(), 404, 'No se pudo cargar la evidencia.');
+        $miniatura = $this->evidencias->miniaturaDesdeBinario((string) $binario, 480, 62);
+        if ($miniatura !== null) {
+            return response($miniatura, 200, [
+                'Content-Type' => 'image/jpeg',
+                'Cache-Control' => 'private, max-age=86400',
+            ]);
+        }
 
-        return response($response->body(), 200, [
-            'Content-Type' => $response->header('Content-Type') ?: ($tipo === 'video' ? 'video/mp4' : 'image/jpeg'),
+        return response((string) $binario, 200, [
+            'Content-Type' => $contentType,
             'Cache-Control' => 'private, max-age=3600',
         ]);
     }

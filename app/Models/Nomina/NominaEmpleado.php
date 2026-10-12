@@ -286,6 +286,33 @@ class NominaEmpleado extends Model
         return self::normalizarVendedor($this->codigo_vendedor);
     }
 
+    /**
+     * Código principal + alias (máx. 3 en total).
+     *
+     * @return list<string>
+     */
+    public function codigosVendedor(): array
+    {
+        $codigos = [];
+        if ($principal = $this->codigoVendedor()) {
+            $codigos[] = $principal;
+        }
+
+        foreach ($this->relationLoaded('vendedores') ? $this->vendedores : $this->vendedores()->get() as $alias) {
+            foreach ([$alias->codigo_profit, $alias->nombre_normalizado, $alias->nombre_vendedor] as $valor) {
+                $normalizado = self::normalizarVendedor($valor);
+                if ($normalizado && ! in_array($normalizado, $codigos, true)) {
+                    $codigos[] = $normalizado;
+                }
+            }
+            if (count($codigos) >= 3) {
+                break;
+            }
+        }
+
+        return array_slice($codigos, 0, 3);
+    }
+
     public static function buscarPorVendedor(?string $vendedor): ?self
     {
         $codigo = self::normalizarVendedor($vendedor);
@@ -293,8 +320,25 @@ class NominaEmpleado extends Model
             return null;
         }
 
-        return static::query()
+        $porPrincipal = static::query()
             ->whereRaw('UPPER(TRIM(codigo_vendedor)) = ?', [$codigo])
             ->first();
+        if ($porPrincipal) {
+            return $porPrincipal;
+        }
+
+        if (! \Illuminate\Support\Facades\Schema::hasTable('nomina_empleado_vendedores')) {
+            return null;
+        }
+
+        $alias = NominaEmpleadoVendedor::query()
+            ->with('empleado')
+            ->where(function ($q) use ($codigo) {
+                $q->where('nombre_normalizado', $codigo)
+                    ->orWhereRaw('UPPER(TRIM(COALESCE(codigo_profit, \'\'))) = ?', [$codigo]);
+            })
+            ->first();
+
+        return $alias?->empleado;
     }
 }

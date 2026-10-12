@@ -141,9 +141,28 @@
                     @endforeach
                 </select>
             </div>
-            <div class="field">
-                <label>Código de vendedor</label>
-                <input name="codigo_vendedor" value="{{ old('codigo_vendedor', $empleado?->codigo_vendedor) }}" placeholder="Como aparece en Profit (columna VENDEDOR)">
+            @php
+                $codigosVendedorOld = old('codigos_vendedor');
+                if (! is_array($codigosVendedorOld)) {
+                    $codigosVendedorOld = $empleado?->codigosVendedor() ?? [];
+                    if ($codigosVendedorOld === [] && old('codigo_vendedor')) {
+                        $codigosVendedorOld = [old('codigo_vendedor')];
+                    }
+                }
+                $codigosVendedorOld = array_pad(array_values($codigosVendedorOld), 3, '');
+            @endphp
+            <div class="field field-wide">
+                <label>Códigos de vendedor</label>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+                    @for($i = 0; $i < 3; $i++)
+                        <input
+                            name="codigos_vendedor[]"
+                            value="{{ $codigosVendedorOld[$i] }}"
+                            placeholder="{{ $i === 0 ? 'Principal (Profit)' : 'Código '.($i + 1).' (opcional)' }}"
+                        >
+                    @endfor
+                </div>
+                <span class="muted" style="font-size:.78rem;">Hasta 3 códigos como aparecen en Profit (columna VENDEDOR). Las ventas de todos suman a este empleado.</span>
             </div>
             <div class="field">
                 <label>Modo de comisión</label>

@@ -187,6 +187,7 @@ class EmpleadoController extends Controller
             'cargoCatalogo',
             'supervisor.cliente',
             'jefes.cliente',
+            'vendedores',
             'subordinados.cliente',
             'prestamos.cuotas',
             'prestamos.abonos.usuario',
@@ -320,7 +321,7 @@ class EmpleadoController extends Controller
 
     public function edit(NominaEmpleado $empleado): View
     {
-        $empleado->load(['cliente', 'jefes']);
+        $empleado->load(['cliente', 'jefes', 'vendedores']);
 
         return view('nomina.empleados.form', $this->formData($empleado));
     }
@@ -358,6 +359,8 @@ class EmpleadoController extends Controller
             'exento_retencion_comision' => ['nullable', 'boolean'],
             'modo_comision' => ['nullable', 'in:'.implode(',', array_keys(NominaEmpleado::modosComision()))],
             'codigo_vendedor' => ['nullable', 'string', 'max:255'],
+            'codigos_vendedor' => ['nullable', 'array', 'max:3'],
+            'codigos_vendedor.*' => ['nullable', 'string', 'max:255'],
         ]) + [
             'es_supervisor' => $request->boolean('es_supervisor'),
             'es_servicio_tecnico' => $request->boolean('es_servicio_tecnico'),

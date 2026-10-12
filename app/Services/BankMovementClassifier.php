@@ -20,7 +20,7 @@ class BankMovementClassifier
         'cobro de comision', 'tarifa por',
         // Banesco / extractos recientes
         'mant y serv aplic', 'mant y serv',
-        'com trf', 'comser vmtto', 'comser ',
+        'com trf', 'comser vmtto', 'comservmtto', 'comser ',
         'emision de estado de cuenta', 'emision estado de cuenta',
         'comis emis edo', 'comis emis',
         'com compra de divisas', 'com compra divisas',

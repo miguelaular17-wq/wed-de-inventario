@@ -73,7 +73,8 @@
             <div><span class="muted">Ingreso</span><div>{{ optional($empleado->fecha_ingreso)->format('d/m/Y') ?: '—' }}</div></div>
             <div><span class="muted">Es supervisor</span><div>{{ $empleado->es_supervisor ? 'Sí' : 'No' }}</div></div>
             <div><span class="muted">Servicio Técnico</span><div>{{ $empleado->es_servicio_tecnico ? 'Sí' : 'No' }}</div></div>
-            <div><span class="muted">Código de vendedor</span><div>{{ $empleado->codigo_vendedor ?: '—' }}</div></div>
+            @php $codigosVendedor = $empleado->codigosVendedor(); @endphp
+            <div><span class="muted">Códigos de vendedor</span><div>{{ $codigosVendedor ? implode(' · ', $codigosVendedor) : '—' }}</div></div>
             <div class="field-wide"><span class="muted">Modo de comisión</span><div>{{ \App\Models\Nomina\NominaEmpleado::modosComision()[$empleado->modo_comision] ?? $empleado->modo_comision }}</div></div>
         </div>
 

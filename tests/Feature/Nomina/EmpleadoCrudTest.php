@@ -79,7 +79,7 @@ class EmpleadoCrudTest extends TestCase
             ->assertOk()
             ->assertSee('JUAN PEREZ')
             ->assertSee('Carlos Gomez')
-            ->assertDontSee('Alias de vendedor');
+            ->assertSee('Códigos de vendedor');
 
         $this->get(route('nomina.empleados.show', ['empleado' => $juan, 'tab' => 'comisiones']))
             ->assertOk()
@@ -200,6 +200,69 @@ class EmpleadoCrudTest extends TestCase
             ->assertSee('SET MICROFONOS INALAM. JBL WIRELESS')
             ->assertSee('MARIETH BRACHO')
             ->assertSee('Neto cobrado');
+    }
+
+    public function test_empleado_puede_tener_hasta_tres_codigos_de_vendedor(): void
+    {
+        $this->actingAs($this->rrhh);
+
+        $this->post(route('nomina.empleados.store'), [
+            'cedula' => '28501999',
+            'nombre' => 'Abel Multi',
+            'salario_base' => 100,
+            'tipo_salario' => 'QUINCENAL',
+            'estado' => 'ACTIVO',
+            'modo_comision' => 'VENTAS_PROPIAS',
+            'codigos_vendedor' => ['ABEL YAJURIS', 'ABEL Y.', 'AYAJURIS'],
+        ])->assertRedirect();
+
+        $empleado = NominaEmpleado::query()
+            ->whereHas('cliente', fn ($q) => $q->where('cedula', '28501999'))
+            ->with('vendedores')
+            ->first();
+
+        $this->assertNotNull($empleado);
+        $this->assertSame('ABEL YAJURIS', $empleado->codigo_vendedor);
+        $this->assertEqualsCanonicalizing(
+            ['ABEL YAJURIS', 'ABEL Y.', 'AYAJURIS'],
+            $empleado->codigosVendedor()
+        );
+        $this->assertEquals($empleado->id, NominaEmpleado::buscarPorVendedor('AYAJURIS')?->id);
+
+        \Illuminate\Support\Facades\DB::table('ventas_detalle')->insert([
+            [
+                'sede' => 'CENTRO',
+                'tipo_documento' => 'FAC',
+                'numero_documento' => '8801',
+                'fecha' => now()->toDateString(),
+                'cantidad' => 1,
+                'precio_venta' => 50,
+                'nombre_producto' => 'Producto A',
+                'vendedor' => 'ABEL YAJURIS',
+                'anulado' => false,
+            ],
+            [
+                'sede' => 'CENTRO',
+                'tipo_documento' => 'FAC',
+                'numero_documento' => '8802',
+                'fecha' => now()->toDateString(),
+                'cantidad' => 1,
+                'precio_venta' => 30,
+                'nombre_producto' => 'Producto B',
+                'vendedor' => 'AYAJURIS',
+                'anulado' => false,
+            ],
+        ]);
+
+        $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'ventas']))
+            ->assertOk()
+            ->assertSee('FAC 8801')
+            ->assertSee('FAC 8802');
+
+        $this->get(route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'laboral']))
+            ->assertOk()
+            ->assertSee('ABEL YAJURIS')
+            ->assertSee('AYAJURIS');
     }
 
     public function test_registra_abono_de_sueldo_sin_prestamo(): void

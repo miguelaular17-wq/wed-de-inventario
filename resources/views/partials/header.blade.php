@@ -182,8 +182,9 @@
         $servicioItems = [
             $link('Celulares', route('servicio.celulares.hub'), request()->routeIs('servicio.celulares.*') && ! request()->routeIs('servicio.celulares.por_recibir')),
             $link('Dashboard', route('servicio.dashboard'), request()->routeIs('servicio.dashboard')),
-            $link('Órdenes', route('servicio.ordenes.index'), request()->routeIs('servicio.ordenes.*') && ! request()->routeIs('servicio.ordenes.internas')),
+            $link('Órdenes', route('servicio.ordenes.index'), request()->routeIs('servicio.ordenes.*') && ! request()->routeIs('servicio.ordenes.internas') && ! request()->routeIs('servicio.ordenes.reporte_marca')),
             $link('Reparaciones internas', route('servicio.ordenes.internas'), request()->routeIs('servicio.ordenes.internas')),
+            $link('Reporte por marca', route('servicio.ordenes.reporte_marca'), request()->routeIs('servicio.ordenes.reporte_marca')),
             $link('Por recibir', route('servicio.celulares.por_recibir'), request()->routeIs('servicio.celulares.por_recibir')),
             $link('Facturas', route('servicio.facturas.index'), request()->routeIs('servicio.facturas.*')),
         ];

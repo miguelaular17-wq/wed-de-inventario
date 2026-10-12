@@ -6,8 +6,10 @@ use App\Models\Cliente;
 use App\Models\Nomina\NominaAuditLog;
 use App\Models\Nomina\NominaCargo;
 use App\Models\Nomina\NominaEmpleado;
+use App\Models\Nomina\NominaEmpleadoVendedor;
 use App\Models\Nomina\NominaSede;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class EmployeeService
@@ -52,17 +54,19 @@ class EmployeeService
     public function create(array $data): NominaEmpleado
     {
         return DB::transaction(function () use ($data) {
-            $empleado = NominaEmpleado::create($this->payload($data));
+            $codigos = $this->normalizarCodigosVendedor($data, null);
+            $empleado = NominaEmpleado::create($this->payload($data, null, $codigos[0] ?? null));
             $this->organization->syncJefes(
                 $empleado,
                 $this->idsJefes($data, $empleado)
             );
+            $this->syncCodigosVendedor($empleado, $codigos);
             $this->syncDenormalized($empleado);
 
             NominaAuditLog::registrar('CREAR', 'empleado', $empleado->id, null, $empleado->toArray());
 
             return $empleado->fresh([
-                'cliente', 'sedeCatalogo', 'cargoCatalogo', 'supervisor.cliente', 'jefes.cliente',
+                'cliente', 'sedeCatalogo', 'cargoCatalogo', 'supervisor.cliente', 'jefes.cliente', 'vendedores',
             ]);
         });
     }
@@ -71,23 +75,106 @@ class EmployeeService
     {
         return DB::transaction(function () use ($empleado, $data) {
             $anterior = $empleado->toArray();
-            $empleado->fill($this->payload($data, $empleado));
+            $codigos = $this->normalizarCodigosVendedor($data, $empleado);
+            $empleado->fill($this->payload($data, $empleado, $codigos[0] ?? null));
             $empleado->save();
             $this->organization->syncJefes(
                 $empleado,
                 $this->idsJefes($data, $empleado)
             );
+            $this->syncCodigosVendedor($empleado, $codigos);
             $this->syncDenormalized($empleado);
 
             NominaAuditLog::registrar('ACTUALIZAR', 'empleado', $empleado->id, $anterior, $empleado->fresh()->toArray());
 
             return $empleado->fresh([
-                'cliente', 'sedeCatalogo', 'cargoCatalogo', 'supervisor.cliente', 'jefes.cliente',
+                'cliente', 'sedeCatalogo', 'cargoCatalogo', 'supervisor.cliente', 'jefes.cliente', 'vendedores',
             ]);
         });
     }
 
-    private function payload(array $data, ?NominaEmpleado $empleado = null): array
+    /**
+     * Hasta 3 códigos como aparecen en Profit. El primero es el principal.
+     *
+     * @return list<string>
+     */
+    private function normalizarCodigosVendedor(array $data, ?NominaEmpleado $empleado): array
+    {
+        $entrada = $data['codigos_vendedor'] ?? null;
+        if (! is_array($entrada)) {
+            $entrada = [$data['codigo_vendedor'] ?? null];
+        }
+
+        $codigos = [];
+        foreach ($entrada as $valor) {
+            $normalizado = NominaEmpleado::normalizarVendedor(is_scalar($valor) ? (string) $valor : null);
+            if ($normalizado === null || in_array($normalizado, $codigos, true)) {
+                continue;
+            }
+            $codigos[] = $normalizado;
+            if (count($codigos) >= 3) {
+                break;
+            }
+        }
+
+        foreach ($codigos as $idx => $codigo) {
+            if ($this->codigoVendedorTomado($codigo, $empleado?->id)) {
+                throw ValidationException::withMessages([
+                    'codigos_vendedor.'.$idx => 'El código "'.$codigo.'" ya está asignado a otro empleado.',
+                ]);
+            }
+        }
+
+        return $codigos;
+    }
+
+    private function codigoVendedorTomado(string $codigo, ?int $exceptoEmpleadoId = null): bool
+    {
+        $enPrincipal = NominaEmpleado::query()
+            ->whereRaw('UPPER(TRIM(codigo_vendedor)) = ?', [$codigo])
+            ->when($exceptoEmpleadoId, fn ($q) => $q->where('id', '!=', $exceptoEmpleadoId))
+            ->exists();
+        if ($enPrincipal) {
+            return true;
+        }
+
+        if (! Schema::hasTable('nomina_empleado_vendedores')) {
+            return false;
+        }
+
+        return NominaEmpleadoVendedor::query()
+            ->where('nombre_normalizado', $codigo)
+            ->when($exceptoEmpleadoId, fn ($q) => $q->where('empleado_id', '!=', $exceptoEmpleadoId))
+            ->exists();
+    }
+
+    /**
+     * @param  list<string>  $codigos
+     */
+    private function syncCodigosVendedor(NominaEmpleado $empleado, array $codigos): void
+    {
+        if (! Schema::hasTable('nomina_empleado_vendedores')) {
+            return;
+        }
+
+        $secundarios = array_slice($codigos, 1);
+        NominaEmpleadoVendedor::query()
+            ->where('empleado_id', $empleado->id)
+            ->delete();
+
+        foreach ($secundarios as $codigo) {
+            NominaEmpleadoVendedor::query()->updateOrCreate(
+                ['nombre_normalizado' => $codigo],
+                [
+                    'empleado_id' => $empleado->id,
+                    'nombre_vendedor' => $codigo,
+                    'codigo_profit' => $codigo,
+                ]
+            );
+        }
+    }
+
+    private function payload(array $data, ?NominaEmpleado $empleado = null, ?string $codigoVendedor = null): array
     {
         $cliente = $this->resolveCliente($data, $empleado);
         $supervisorIds = $data['supervisor_ids'] ?? [];
@@ -98,20 +185,6 @@ class EmployeeService
             is_array($supervisorIds) ? $supervisorIds : [$supervisorIds],
             $empleado?->id
         );
-
-        $codigoVendedor = NominaEmpleado::normalizarVendedor($data['codigo_vendedor'] ?? null);
-        if ($codigoVendedor) {
-            $tomado = NominaEmpleado::query()
-                ->whereRaw('UPPER(TRIM(codigo_vendedor)) = ?', [$codigoVendedor])
-                ->when($empleado, fn ($q) => $q->where('id', '!=', $empleado->id))
-                ->exists();
-
-            if ($tomado) {
-                throw ValidationException::withMessages([
-                    'codigo_vendedor' => 'Ese código de vendedor ya está asignado a otro empleado.',
-                ]);
-            }
-        }
 
         return [
             'cliente_id' => $cliente->id,

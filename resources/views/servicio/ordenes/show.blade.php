@@ -211,7 +211,7 @@
                         <a href="{{ route('servicio.ordenes.evidencia', ['orden' => $orden, 'tipo' => 'img', 'index' => $i]) }}" target="_blank" rel="noopener"
                             style="display:block;width:160px;height:160px;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;background:#f8fafc;">
                             <img
-                                src="{{ route('servicio.ordenes.evidencia', ['orden' => $orden, 'tipo' => 'img', 'index' => $i]) }}"
+                                src="{{ route('servicio.ordenes.evidencia', ['orden' => $orden, 'tipo' => 'img', 'index' => $i, 'thumb' => 1]) }}"
                                 alt="Evidencia {{ $i + 1 }}"
                                 referrerpolicy="no-referrer"
                                 style="width:100%;height:100%;object-fit:cover;"
