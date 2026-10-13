@@ -316,6 +316,9 @@
                             @if(!empty($c->es_personal))
                                 <span class="personal-badge">PERSONAL</span>
                             @endif
+                            @if(!empty($c->telefono_celular))
+                                <div style="font-size:9px;color:#1e40af;">{{ $c->telefono_celular }}</div>
+                            @endif
                         </td>
                         <td class="text-right">${{ number_format($c->monto_neto, 2, ',', '.') }}</td>
                         <td class="text-right" style="font-weight:bold;">${{ number_format($c->saldo, 2, ',', '.') }}</td>
@@ -364,6 +367,9 @@
                         {{ $c->nombre_cliente ?? $c->cliente }}
                         @if(!empty($c->es_personal))
                             <span class="personal-badge">PERSONAL</span>
+                        @endif
+                        @if(!empty($c->telefono_celular))
+                            <div style="font-size:9px;color:#1e40af;">{{ $c->telefono_celular }}</div>
                         @endif
                     </td>
                     <td class="text-right" style="font-weight:bold; color:#dc2626;">${{ number_format($c->saldo, 2, ',', '.') }}</td>

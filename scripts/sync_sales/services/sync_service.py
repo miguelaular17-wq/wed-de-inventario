@@ -91,6 +91,13 @@ class SyncService:
                 else:
                     logger.info("[Apertura] ⏭ Módulo Compras desactivado. Saltando.")
 
+                logger.info("[Apertura] ▶ Módulo: Clientes y teléfonos")
+                try:
+                    from services.clientes_service import ClientesService
+                    ClientesService.execute()
+                except Exception as e:
+                    logger.error(f"[Apertura] Error en ClientesService: {e}")
+
                 if success:
                     last_snapshot_date = today
 

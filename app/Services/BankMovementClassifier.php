@@ -111,6 +111,12 @@ class BankMovementClassifier
             return false;
         }
 
+        // Pago de servicios (luz, internet, etc.) no es comisión bancaria.
+        // La palabra "servicio" sí se usa en cargos de mantenimiento.
+        if (str_contains($desc, 'pago de servicios') || str_contains($desc, 'servicios via internet')) {
+            return false;
+        }
+
         // Banco de Venezuela: cargo TELF / CED / CTA con teléfono en ceros (comisión).
         // Un pago móvil real trae un teléfono con dígitos y no entra aquí.
         if (

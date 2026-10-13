@@ -181,6 +181,7 @@ class CobranzaController extends Controller
             ->selectRaw('EXISTS(SELECT 1 FROM cliente_personals WHERE cliente_personals.codigo_cliente = historial_cobranzas.codigo_cliente) as es_personal')
             ->orderBy('nombre_cliente', 'asc')
             ->get();
+        $this->anexarTelefonos($clientes_lista);
 
         if (config('app.debug')) {
             \Log::info(sprintf('Clientes => %d registros', $clientes_lista->count()));
@@ -480,6 +481,7 @@ class CobranzaController extends Controller
         $historialConNotas = $encabezados->anexar($historialConNotas, $ultimaFecha)
             ->filter(fn ($r) => (float) $r->monto_neto > 0 || (float) $r->saldo > 0)
             ->values();
+        $this->anexarTelefonos($historialConNotas);
 
         $agrupadoConNotas = $historialConNotas->groupBy('sede_nombre');
         foreach ($agrupadoConNotas as $sede => $clientesSede) {
@@ -534,6 +536,7 @@ class CobranzaController extends Controller
         }
 
         $resumen = $indicadores->deudoresUnicos($historial, $personalCodes);
+        $this->anexarTelefonos($resumen['deudores']);
         $alcanceLabel = \App\Models\User::COBRANZA_CLIENTES_OPCIONES[$mostrar_clientes] ?? 'Todos';
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('cobranza.pdf_deudores_unicos', [
@@ -1088,6 +1091,47 @@ class CobranzaController extends Controller
                         ->orWhereColumn('p.id_documento', 'historial_cobranzas.factura_padre');
                 });
         });
+    }
+
+    private function anexarTelefonos($filas): void
+    {
+        $lista = collect($filas);
+        if ($lista->isEmpty() || ! \Illuminate\Support\Facades\Schema::hasTable('clientes_directorio')) {
+            return;
+        }
+
+        $codigos = $lista->map(function ($fila) {
+            return trim((string) ($fila->codigo_cliente ?? $fila->codigo ?? ''));
+        })->filter()->unique()->values();
+        if ($codigos->isEmpty()) {
+            return;
+        }
+
+        $porSede = [];
+        $porCodigo = [];
+        $telefonos = \Illuminate\Support\Facades\DB::table('clientes_directorio')
+            ->whereIn('codigo', $codigos->all())
+            ->get(['sede_nombre', 'codigo', 'telefono_celular']);
+        foreach ($telefonos as $tel) {
+            $numero = trim((string) $tel->telefono_celular);
+            if ($numero === '') {
+                continue;
+            }
+            $porSede[$tel->sede_nombre.'|'.$tel->codigo] = $numero;
+            $porCodigo[$tel->codigo][$numero] = $numero;
+        }
+
+        foreach ($lista as $fila) {
+            $codigo = trim((string) ($fila->codigo_cliente ?? $fila->codigo ?? ''));
+            $sede = trim((string) ($fila->sede_nombre ?? $fila->sede ?? ''));
+            if ($sede !== '' && isset($porSede[$sede.'|'.$codigo])) {
+                $fila->telefono_celular = $porSede[$sede.'|'.$codigo];
+            } elseif (isset($porCodigo[$codigo])) {
+                $fila->telefono_celular = implode(' / ', $porCodigo[$codigo]);
+            } else {
+                $fila->telefono_celular = null;
+            }
+        }
     }
 
     private function joinNotas($query)

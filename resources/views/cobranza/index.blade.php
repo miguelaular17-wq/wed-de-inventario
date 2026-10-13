@@ -422,6 +422,9 @@
                                 @if($c->es_personal)
                                     <span style="background: var(--blue); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; margin-left: 5px;">PERSONAL</span>
                                 @endif
+                                @if(!empty($c->telefono_celular))
+                                    <div style="margin-top: 2px; font-size: 0.78rem; color: #1e40af; font-weight: 600;">{{ $c->telefono_celular }}</div>
+                                @endif
                                 <div style="margin-top: 4px; font-size: 0.75rem;">
                                     @php $claveNota = $c->numero_documento ?: $c->id_documento; @endphp
                                     <span style="cursor: pointer; {{ $c->nota_anclada ? 'color: #ea580c; font-weight: 600;' : 'color: #9ca3af;' }}" onclick='event.stopPropagation(); abrirModalNota(@json($claveNota), @json($c->nota_anclada ?? ""))'>
@@ -449,7 +452,7 @@
                                 <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #ccc; background-color: #f8f9fa; cursor: pointer; color: #333;" onclick='marcarPagado(@json($claveNota), this)'>
                                     Pagado
                                 </button>
-                                <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #93c5fd; background-color: #eff6ff; cursor: pointer; color: #1e40af; margin-left: 4px;" onclick="abrirModalLlamadas('{{ $c->codigo }}', '{{ htmlspecialchars($c->cliente) }}')">
+                                <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #93c5fd; background-color: #eff6ff; cursor: pointer; color: #1e40af; margin-left: 4px;" onclick="abrirModalLlamadas(@json($c->codigo), @json($c->cliente), @json($c->telefono_celular ?? ''))">
                                     📞 Llamadas
                                 </button>
                                 <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #fbbf24; background-color: #fef3c7; cursor: pointer; color: #d97706; margin-left: 4px;" onclick='abrirModalEstadoCuenta(@json($c->codigo), @json($c->cliente))'>
@@ -605,9 +608,9 @@
         return d.toISOString().slice(0,16);
     }
 
-    function abrirModalLlamadas(codigo, cliente) {
+    function abrirModalLlamadas(codigo, cliente, telefono) {
         document.getElementById('modal-llamadas').style.display = 'flex';
-        document.getElementById('modalLlamadasTitle').innerText = 'Llamadas: ' + cliente;
+        document.getElementById('modalLlamadasTitle').innerText = 'Llamadas: ' + cliente + (telefono ? ' · ' + telefono : '');
         document.getElementById('llamada_codigo_cliente').value = codigo;
         document.getElementById('formNuevaLlamada').reset();
         document.getElementById('llamada_fecha').value = formatDateLocal(new Date());

@@ -153,6 +153,9 @@
                     @if(!empty($d->es_personal))
                         <span class="badge badge-personal">PERSONAL</span>
                     @endif
+                    @if(!empty($d->telefono_celular))
+                        <div style="font-size:9px;color:#1e40af;">{{ $d->telefono_celular }}</div>
+                    @endif
                 </td>
                 <td>{{ $d->sedes ?: '—' }}</td>
                 <td class="text-center">{{ $d->documentos }}</td>

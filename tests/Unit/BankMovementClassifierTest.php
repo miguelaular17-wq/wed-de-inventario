@@ -32,6 +32,8 @@ class BankMovementClassifierTest extends TestCase
         $this->assertFalse($this->classifier->esComision(
             'TELF.:04141234567 CED.:V12345678 CTA.:010500583510584123'
         ));
+        $this->assertFalse($this->classifier->esComision('PAGO DE SERVICIOS VIA INTERNET'));
+        $this->assertTrue($this->classifier->esComision('SERVICIO USO PUNTO'));
     }
 
     public function test_compra_intervencion_es_compra_divisas_no_comision(): void
