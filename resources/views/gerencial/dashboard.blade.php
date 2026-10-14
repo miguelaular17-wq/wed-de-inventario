@@ -91,8 +91,22 @@
             </thead>
             <tbody>
                 @foreach($porSede as $fila)
-                    <tr>
-                        <td><strong>{{ $fila['sede'] }}</strong></td>
+                    @php
+                        $codigoSede = strtoupper((string) $fila['sede']);
+                        $activa = ($detalleSede ?? '') === $codigoSede;
+                        $qDetalle = request()->query();
+                        unset($qDetalle['page']);
+                        if ($activa) {
+                            unset($qDetalle['detalle_sede']);
+                        } else {
+                            $qDetalle['detalle_sede'] = $codigoSede;
+                        }
+                        $urlDetalle = route('gerencial.dashboard').($qDetalle ? '?'.http_build_query($qDetalle) : '');
+                    @endphp
+                    <tr @if($activa) style="background:#eff6ff;" @endif>
+                        <td>
+                            <a href="{{ $urlDetalle }}" title="{{ $activa ? 'Ocultar el detalle' : 'Ver por día' }}" style="color:inherit;font-weight:700;text-decoration:none;">{{ $fila['sede'] }}</a>
+                        </td>
                         <td>${{ $fmt($fila['ventas_brutas'] ?? ($fila['venta_neta'] + $fila['devoluciones_usd'])) }}</td>
                         <td>${{ $fmt($fila['devoluciones_usd']) }}</td>
                         <td>${{ $fmt($fila['venta_neta'] ?? $fila['ventas_usd']) }}</td>
@@ -106,6 +120,51 @@
             </tbody>
         </table>
     </div>
+
+    @if(!empty($detalleSede) && !empty($porDia))
+        @php
+            $qCerrar = request()->query();
+            unset($qCerrar['detalle_sede'], $qCerrar['page']);
+            $urlCerrar = route('gerencial.dashboard').($qCerrar ? '?'.http_build_query($qCerrar) : '');
+        @endphp
+        <div class="panel-header-flex" style="margin:20px 0 8px; align-items:center;">
+            <h3 style="margin:0;">{{ $detalleSede }} por día</h3>
+            <a href="{{ $urlCerrar }}" class="gerencial-kpi-link">Cerrar</a>
+        </div>
+        <p class="muted" style="margin:0 0 8px;">{{ $periodo['etiqueta'] ?? '' }}</p>
+        <div class="table-wrap" style="max-height:480px;overflow:auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="position:sticky;top:0;background:#fff;">Día</th>
+                        <th style="position:sticky;top:0;background:#fff;">Ventas</th>
+                        <th style="position:sticky;top:0;background:#fff;">DEV</th>
+                        <th style="position:sticky;top:0;background:#fff;">Venta neta</th>
+                        <th style="position:sticky;top:0;background:#fff;">FAC</th>
+                        <th style="position:sticky;top:0;background:#fff;">Nº DEV</th>
+                        <th style="position:sticky;top:0;background:#fff;">Cantidad</th>
+                        <th style="position:sticky;top:0;background:#fff;">Utilidad</th>
+                        <th style="position:sticky;top:0;background:#fff;">% de utilidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($porDia as $dia)
+                        <tr>
+                            <td><strong>{{ $dia['etiqueta'] }}</strong></td>
+                            <td>${{ $fmt($dia['ventas_brutas']) }}</td>
+                            <td>${{ $fmt($dia['devoluciones_usd']) }}</td>
+                            <td>${{ $fmt($dia['venta_neta']) }}</td>
+                            <td>{{ number_format($dia['facturas']) }}</td>
+                            <td>{{ number_format($dia['devoluciones']) }}</td>
+                            <td>{{ number_format($dia['productos']) }}</td>
+                            <td>${{ $fmt($dia['utilidad']) }}</td>
+                            <td>{{ $fmt($dia['margen_pct'], 1) }}%</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
 
     <h3 style="margin:20px 0 8px;">Por área</h3>
     <div class="table-wrap">

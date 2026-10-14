@@ -255,6 +255,7 @@ class RequisicionPersonalizadaService
             'cantidad'    => $m->cantidad,
             'producto'    => $m->producto,
             'sede_origen' => $m->sede_origen,
+            'usuario'     => $m->usuario,
         ])->values();
     }
 

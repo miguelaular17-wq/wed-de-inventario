@@ -1004,8 +1004,8 @@ class CompradorController extends Controller
     }
 
     /**
-     * Si la última compra del producto es posterior a la última solicitud pendiente,
-     * la marca como comprada con el proveedor del catálogo y esa fecha.
+     * Si la última compra del producto cae desde 7 días antes de la solicitud
+     * (o después), la marca como comprada con el proveedor del catálogo y esa fecha.
      */
     private function cerrarPedidosYaComprados(?int $userId): int
     {
@@ -1070,8 +1070,9 @@ class CompradorController extends Controller
             }
 
             $compraDia = substr((string) $info->ultima_compra, 0, 10);
-            $pedidoDia = \Carbon\Carbon::parse($grupo->ultima_solicitud)->toDateString();
-            if ($compraDia <= $pedidoDia) {
+            $desde = \Carbon\Carbon::parse($grupo->ultima_solicitud)->subDays(7)->toDateString();
+            // Compra desde 7 días antes del pedido (incluida esa semana) o después.
+            if ($compraDia < $desde) {
                 continue;
             }
 

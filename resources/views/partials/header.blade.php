@@ -83,7 +83,6 @@
         $gerencialItems[] = $link('Dashboard', route('gerencial.dashboard'), request()->routeIs('gerencial.dashboard'));
         $gerencialItems[] = $link('Metas de tienda', route('metas_tienda.index'), request()->routeIs('metas_tienda.*'));
         $gerencialItems[] = $link('Equipo de compra', route('gerencial.compras'), request()->routeIs('gerencial.compras'));
-        $gerencialItems[] = $link('Efectividad de caja', route('gerencial.cajas'), request()->routeIs('gerencial.cajas'));
     }
     if ($u->canAccess('gerencial.rentabilidad')) {
         $gerencialItems[] = $link('Rentabilidad', route('gerencial.rentabilidad'), request()->routeIs('gerencial.rentabilidad'));
@@ -101,6 +100,18 @@
     }
     if ($u->canAccess('gerencial.ajustes')) {
         $gerencialItems[] = $link('Ajustes', route('gerencial.ajustes'), request()->routeIs('gerencial.ajustes'));
+    }
+
+    $incentivoItems = [];
+    if ($u->canAccess('gerencial')) {
+        $incentivoItems[] = $link('Efectividad de caja', route('gerencial.cajas'), request()->routeIs('gerencial.cajas'));
+        foreach (config('incentivos.modulos', []) as $codigo => $moduloIncentivo) {
+            $incentivoItems[] = $link(
+                $moduloIncentivo['titulo'],
+                route('incentivos.show', $codigo),
+                request()->routeIs('incentivos.show') && request()->route('modulo') === $codigo,
+            );
+        }
     }
 
     $finanzasItems = [
@@ -125,7 +136,11 @@
         if ($gerencialItems) {
             $nav[] = count($gerencialItems) === 1 ? $gerencialItems[0] : $drop('Gerencial', $gerencialItems);
         }
+        if ($incentivoItems) {
+            $nav[] = $drop('Indicadores de incentivo', $incentivoItems);
+        }
         $nav[] = $link('Dashboard', route('admin.dashboard'), request()->routeIs('admin.dashboard'), 'admin-dashboard');
+        $nav[] = $link('Mensajería', route('mensajeria.index'), request()->routeIs('mensajeria.*'));
         $nav[] = $link('Tarjetas NFC', route('nfc.index'), request()->routeIs('nfc.*'));
         $nav[] = $drop('Sistema', [
             $link('Movimientos', route('admin.movimientos.index'), request()->routeIs('admin.movimientos.*'), 'admin-movimientos'),
@@ -144,16 +159,25 @@
 
     if ($u->isGerente()) {
         $nav[] = $link('Gerencial', route('admin.dashboard'), request()->routeIs('admin.dashboard'));
+        $nav[] = $link('Mensajería', route('mensajeria.index'), request()->routeIs('mensajeria.*'));
         if ($gerencialItems) {
             $nav[] = count($gerencialItems) === 1 ? $gerencialItems[0] : $drop('Indicadores', $gerencialItems);
+        }
+        if ($incentivoItems) {
+            $nav[] = $drop('Indicadores de incentivo', $incentivoItems);
         }
         $nav[] = $link(
             'Stock JRZ',
             route('vendedor.jrz', ['dias' => 30]),
             request()->routeIs('vendedor.jrz')
         );
-    } elseif ($u->role !== 'admin' && $gerencialItems) {
-        $nav[] = count($gerencialItems) === 1 ? $gerencialItems[0] : $drop('Gerencial', $gerencialItems);
+    } elseif ($u->role !== 'admin' && ($gerencialItems || $incentivoItems)) {
+        if ($gerencialItems) {
+            $nav[] = count($gerencialItems) === 1 ? $gerencialItems[0] : $drop('Gerencial', $gerencialItems);
+        }
+        if ($incentivoItems) {
+            $nav[] = $drop('Indicadores de incentivo', $incentivoItems);
+        }
     }
 
     if ($u->isVendedor()) {
@@ -272,6 +296,7 @@
         }
         if ($u->canAccess('nomina.comisiones')) {
             $nominaItems[] = $link('Comisiones', route('nomina.comisiones.index'), request()->routeIs('nomina.comisiones.*'));
+            $nominaItems[] = $link('Retenciones', route('nomina.retenciones.index'), request()->routeIs('nomina.retenciones.*'));
         }
         if ($u->canAccess('nomina.faltante_caja') && ! $u->canAccess('nomina')) {
             $nominaItems[] = $link('Faltante de caja', route('nomina.faltante_caja.index'), request()->routeIs('nomina.faltante_caja.*'));

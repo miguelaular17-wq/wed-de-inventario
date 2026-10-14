@@ -31,7 +31,10 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -56,18 +59,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.inventario.data.InventarioItemDto
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.example.inventario.data.MetricasDto
 import com.example.inventario.data.PedidoProductDto
 import com.example.inventario.data.RequisitionDto
@@ -771,7 +779,12 @@ private fun GuestStockRow(item: InventarioItemDto) {
 @Composable
 private fun HomeScreen(state: AppUiState, viewModel: AppViewModel) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Consultar" to "⌕", "Registrar" to "+")
+    val canPedir = state.user?.permissions?.contains("operacion") == true
+    val tabs = buildList {
+        add("Consultar" to "⌕")
+        add("Registrar" to "+")
+        if (canPedir) add("Pedir" to "⇄")
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -892,7 +905,8 @@ private fun HomeScreen(state: AppUiState, viewModel: AppViewModel) {
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (selectedTab) {
                 0 -> ServiceOrdersScreen(state, viewModel)
-                else -> RegisterServiceOrderScreen(state, viewModel)
+                1 -> RegisterServiceOrderScreen(state, viewModel)
+                else -> RequisitionsTab(state, viewModel)
             }
         }
     }
@@ -935,8 +949,45 @@ private fun SiteSelector(
 }
 
 @Composable
+private fun RequisitionsTab(state: AppUiState, viewModel: AppViewModel) {
+    var mode by remember { mutableIntStateOf(0) }
+    Column(Modifier.fillMaxSize()) {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item {
+                FilterChip(
+                    selected = mode == 0,
+                    onClick = { mode = 0 },
+                    label = { Text("Registrar") },
+                )
+            }
+            item {
+                FilterChip(
+                    selected = mode == 1,
+                    onClick = {
+                        mode = 1
+                        viewModel.loadRequisitions()
+                    },
+                    label = { Text("Registradas") },
+                )
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (mode == 0) {
+                InventoryScreen(state, viewModel)
+            } else {
+                RequisitionsScreen(state, viewModel)
+            }
+        }
+    }
+}
+
+@Composable
 private fun InventoryScreen(state: AppUiState, viewModel: AppViewModel) {
     var selectedItem by remember { mutableStateOf<InventarioItemDto?>(null) }
+    val context = LocalContext.current
 
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -949,18 +1000,48 @@ private fun InventoryScreen(state: AppUiState, viewModel: AppViewModel) {
                 label = { Text("Buscar producto o código") },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
+                trailingIcon = {
+                    IconButton(
+                        onClick = {
+                            scanProductCode(context) { code ->
+                                viewModel.setSearch(code)
+                                viewModel.searchInventory()
+                            }
+                        },
+                    ) {
+                        Text("QR", fontWeight = FontWeight.Bold, color = NexoBlue)
+                    }
+                },
             )
             Spacer(Modifier.width(8.dp))
             Button(onClick = viewModel::searchInventory) { Text("Buscar") }
         }
-        OutlinedTextField(
-            value = state.category,
-            onValueChange = viewModel::setCategory,
-            label = { Text("Categoría (opcional)") },
-            singleLine = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+        CategorySelector(
+            label = "Categoría",
+            options = state.categories,
+            selected = state.category,
+            onSelected = { category ->
+                viewModel.setCategory(category)
+                viewModel.searchInventory()
+            },
+        )
+        Spacer(Modifier.height(8.dp))
+        val subcategorias = (state.subcategories + state.inventory.map { it.subcategoria.trim() })
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .sorted()
+        val productos = if (state.subcategory.isBlank()) {
+            state.inventory
+        } else {
+            state.inventory.filter {
+                it.subcategoria.trim().equals(state.subcategory, ignoreCase = true)
+            }
+        }
+        CategorySelector(
+            label = "Subcategoría",
+            options = subcategorias,
+            selected = state.subcategory,
+            onSelected = viewModel::setSubcategory,
         )
         Spacer(Modifier.height(8.dp))
 
@@ -973,8 +1054,21 @@ private fun InventoryScreen(state: AppUiState, viewModel: AppViewModel) {
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(state.inventory, key = { it.codigo }) { item ->
-                    InventoryRow(item = item, onRequest = { selectedItem = item })
+                if (productos.isEmpty()) {
+                    item {
+                        Text(
+                            "No hay productos de esa subcategoría en lo cargado.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                        )
+                    }
+                }
+                items(productos, key = { it.codigo }) { item ->
+                    InventoryRow(
+                        item = item,
+                        activeSite = state.activeSite,
+                        onRequest = { selectedItem = item },
+                    )
                 }
                 item {
                     if (state.inventoryPage < state.inventoryLastPage) {
@@ -1015,30 +1109,76 @@ private fun InventoryScreen(state: AppUiState, viewModel: AppViewModel) {
 }
 
 @Composable
-private fun InventoryRow(item: InventarioItemDto, onRequest: () -> Unit) {
+private fun InventoryRow(item: InventarioItemDto, activeSite: SedeDto?, onRequest: () -> Unit) {
+    val otrasSedes = otrasSedesDe(item, activeSite)
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
         shadowElevation = 1.dp,
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Text(item.displayName, fontWeight = FontWeight.SemiBold)
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                "${item.codigo} · ${item.categoria.ifBlank { "Sin categoría" }}",
+                item.displayName,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                item.codigo,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                "Categoría: ${item.categoria.ifBlank { "Sin categoría" }}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (item.subcategoria.isNotBlank()) {
+                Text(
+                    "Subcategoría: ${item.subcategoria}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Disponible: ${formatNumber(item.available)} ${item.unidad}")
+                Text(
+                    "Disponible: ${formatNumber(item.available)} ${item.unidad}",
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.width(8.dp))
                 Button(onClick = onRequest, shape = RoundedCornerShape(10.dp)) { Text("Solicitar") }
+            }
+            if (otrasSedes.isNotEmpty()) {
+                Text(
+                    "Otras sedes: " + otrasSedes.joinToString(" · ") { "${it.first}: ${formatNumber(it.second)}" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
+}
+
+private val ordenSedes = listOf("DORAL", "VIRTUDES", "ZAMORA", "CENTRO", "SAMBIL", "NUNES", "MOVISTAR")
+
+private fun otrasSedesDe(item: InventarioItemDto, activeSite: SedeDto?): List<Pair<String, Double>> {
+    val actual = activeSite?.apiValue?.trim()?.uppercase().orEmpty()
+    return item.stocks.entries
+        .filter { it.key.trim().uppercase() != actual }
+        .sortedBy { entrada ->
+            val indice = ordenSedes.indexOf(entrada.key.trim().uppercase())
+            if (indice < 0) ordenSedes.size else indice
+        }
+        .map { it.key to it.value }
 }
 
 @Composable
@@ -1064,6 +1204,19 @@ private fun RequisitionDialog(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(item.displayName, fontWeight = FontWeight.SemiBold)
                 Text("Destino: ${activeSite?.displayName ?: "Selecciona una sede activa"}")
+                val otras = otrasSedesDe(item, activeSite)
+                if (otras.isNotEmpty()) {
+                    Text(
+                        "Otras sedes: " + otras.joinToString(" · ") { "${it.first}: ${formatNumber(it.second)}" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    "Queda registrada para descargar el CSV en la web.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 SiteSelector(
                     sites = sites.filter { it.apiValue != activeSite?.apiValue },
                     selected = origin,
@@ -1175,26 +1328,26 @@ private fun RequisitionRow(
     onCancel: () -> Unit,
 ) {
     Surface(shape = MaterialTheme.shapes.medium, tonalElevation = 2.dp) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(item.producto.ifBlank { item.codigo }, fontWeight = FontWeight.SemiBold)
                 Text(
-                    item.estado.ifBlank { "Sin estado" }.uppercase(),
-                    color = if (item.estado.equals("pendiente", true)) {
-                        MaterialTheme.colorScheme.primary
-                    } else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelMedium,
+                    item.producto.ifBlank { item.codigo },
+                    modifier = Modifier.weight(1f),
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
+                Spacer(Modifier.width(8.dp))
+                StatusBadge(item.estado)
             }
-            Spacer(Modifier.height(6.dp))
             Text("Cantidad: ${formatNumber(item.cantidad)}")
             if (item.sedeOrigen.isNotBlank()) Text("Origen: ${item.sedeOrigen}")
             if (item.createdAt.isNotBlank()) {
                 Text(
-                    item.createdAt,
+                    formatWhen(item.createdAt),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1269,5 +1422,114 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
     }
 }
 
+private fun scanProductCode(context: Context, onResult: (String) -> Unit) {
+    val options = GmsBarcodeScannerOptions.Builder()
+        .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS)
+        .enableAutoZoom()
+        .build()
+    GmsBarcodeScanning.getClient(context, options)
+        .startScan()
+        .addOnSuccessListener { barcode ->
+            val value = barcode.rawValue
+                ?.trim()
+                ?.lineSequence()
+                ?.firstOrNull()
+                ?.trim()
+                .orEmpty()
+            if (value.isNotBlank()) onResult(value)
+        }
+        .addOnFailureListener {
+            Toast.makeText(
+                context,
+                "No se pudo abrir el escáner. Escribe el código a mano.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+}
+
 private fun formatNumber(value: Double): String =
     if (value % 1.0 == 0.0) value.toLong().toString() else "%.2f".format(value)
+
+private fun formatWhen(raw: String): String {
+    val value = raw.trim()
+    if (value.length < 16) return value
+    val parts = value.substring(0, 10).split("-")
+    if (parts.size != 3) return value
+    return "${parts[2]}/${parts[1]}/${parts[0]} ${value.substring(11, 16)}"
+}
+
+@Composable
+private fun CategorySelector(
+    label: String,
+    options: List<String>,
+    selected: String,
+    onSelected: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+    ) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            enabled = options.isNotEmpty() || selected.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+        ) {
+            Text(
+                "$label: ${selected.ifBlank { "Todas" }}",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text("Todas") },
+                onClick = {
+                    onSelected("")
+                    expanded = false
+                },
+            )
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = {
+                        onSelected(option)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusBadge(estado: String) {
+    val label = estado.ifBlank { "Sin estado" }.uppercase()
+    val pending = estado.equals("pendiente", ignoreCase = true)
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (pending) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            maxLines = 1,
+            softWrap = false,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (pending) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+    }
+}

@@ -74,7 +74,7 @@ private class FakeRepository(private val authenticated: Boolean) : InventoryRepo
     override suspend fun currentUser() = UserDto(email = "app@test.local", sede = "ZAMORA")
     override suspend fun logout() = Unit
     override suspend fun sites() = SitesResponse(data = listOf(destination), active = "ZAMORA")
-    override suspend fun inventory(page: Int, query: String, category: String, site: String) =
+    override suspend fun inventory(page: Int, query: String, category: String, subcategory: String, site: String) =
         InventoryPage(
             items = listOf(
                 InventarioItemDto(

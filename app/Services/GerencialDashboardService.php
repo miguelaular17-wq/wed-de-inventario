@@ -565,6 +565,137 @@ class GerencialDashboardService
     }
 
     /**
+     * Misma tabla de la sede, un renglón por día del rango.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function detallePorDia(
+        Carbon $inicio,
+        Carbon $fin,
+        string $sede,
+        ?string $categoria,
+        string|array|null $vendedor,
+        ?string $producto
+    ): array {
+        $sede = strtoupper(trim($sede));
+        $usaLineas = filled($categoria) || $this->hayFiltroVendedor($vendedor) || filled($producto);
+        $porFecha = [];
+
+        if ($usaLineas || ! Schema::hasTable('ventas_documentos')) {
+            foreach ($this->lineasPorFecha($inicio, $fin, [$sede], $categoria, $vendedor, $producto) as $fecha => $linea) {
+                $porFecha[$fecha] = $linea;
+            }
+        } else {
+            $docs = DB::table('ventas_documentos')
+                ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+                ->whereRaw('UPPER(TRIM(sede)) = ?', [$sede])
+                ->whereRaw("LOWER(TRIM(COALESCE(estado, ''))) = 'registrado'")
+                ->selectRaw('fecha')
+                ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='FAC' THEN 1 ELSE 0 END) as facturas")
+                ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN 1 ELSE 0 END) as devoluciones")
+                ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='FAC' THEN ABS(total_neto_usd) ELSE 0 END) as ventas_brutas")
+                ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN ABS(total_neto_usd) ELSE 0 END) as devoluciones_usd")
+                ->selectRaw("SUM(CASE WHEN UPPER(tipo_documento)='DEV' THEN -ABS(total_neto_usd) ELSE ABS(total_neto_usd) END) as ventas_usd")
+                ->groupBy('fecha')
+                ->get();
+
+            foreach ($docs as $row) {
+                $fecha = Carbon::parse($row->fecha)->toDateString();
+                $kpi = $this->kpiVacio($sede);
+                $kpi['facturas'] = (int) $row->facturas;
+                $kpi['devoluciones'] = (int) $row->devoluciones;
+                $kpi['devoluciones_usd'] = round((float) $row->devoluciones_usd, 2);
+                $kpi['ventas_brutas'] = round((float) $row->ventas_brutas, 2);
+                $kpi['ventas_usd'] = round((float) $row->ventas_usd, 2);
+                $porFecha[$fecha] = $kpi;
+            }
+
+            foreach ($this->lineasPorFecha($inicio, $fin, [$sede], null, null, null) as $fecha => $linea) {
+                $kpi = $porFecha[$fecha] ?? $this->kpiVacio($sede);
+                $kpi['unidades'] = $linea['unidades'];
+                $kpi['margen_usd'] = $linea['margen_usd'];
+                $kpi['productos'] = $linea['productos'];
+                $porFecha[$fecha] = $kpi;
+            }
+        }
+
+        $filas = [];
+        $cursor = $inicio->copy()->startOfDay();
+        $limite = $fin->copy()->startOfDay();
+        while ($cursor->lte($limite)) {
+            $fecha = $cursor->toDateString();
+            $a = $porFecha[$fecha] ?? $this->kpiVacio($sede);
+            $ventaNeta = (float) $a['ventas_usd'];
+            $ventasBrutas = (float) ($a['ventas_brutas'] ?? ($ventaNeta + (float) $a['devoluciones_usd']));
+            $utilidad = (float) $a['margen_usd'];
+            $filas[] = [
+                'fecha' => $fecha,
+                'etiqueta' => $cursor->format('d/m/Y'),
+                'ventas_brutas' => round($ventasBrutas, 2),
+                'devoluciones_usd' => round((float) $a['devoluciones_usd'], 2),
+                'venta_neta' => round($ventaNeta, 2),
+                'facturas' => (int) $a['facturas'],
+                'devoluciones' => (int) $a['devoluciones'],
+                'productos' => (int) ($a['productos'] ?? 0),
+                'utilidad' => round($utilidad, 2),
+                'margen_pct' => $ventaNeta > 0 ? round($utilidad / $ventaNeta * 100, 1) : 0.0,
+            ];
+            $cursor->addDay();
+        }
+
+        return $filas;
+    }
+
+    /**
+     * @param  list<string>  $sedes
+     * @return array<string, array<string, float|int|string>>
+     */
+    private function lineasPorFecha(
+        Carbon $inicio,
+        Carbon $fin,
+        array $sedes,
+        ?string $categoria,
+        string|array|null $vendedor,
+        ?string $producto
+    ): array {
+        if (! Schema::hasTable('ventas_detalle')) {
+            return [];
+        }
+
+        $query = $this->queryLineas($inicio, $fin, $sedes, $categoria, $vendedor, $producto);
+        $rows = $query->selectRaw('vd.fecha')
+            ->selectRaw("COUNT(DISTINCT CASE WHEN UPPER(vd.tipo_documento)='FAC' THEN vd.numero_documento END) as facturas")
+            ->selectRaw("COUNT(DISTINCT CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN vd.numero_documento END) as devoluciones")
+            ->selectRaw("SUM(CASE WHEN UPPER(vd.tipo_documento)='DEV' THEN -ABS(vd.cantidad) ELSE ABS(vd.cantidad) END) as unidades")
+            ->selectRaw($this->sqlImporteFac().' as ventas_brutas')
+            ->selectRaw($this->sqlImporte('venta').' as ventas_usd')
+            ->selectRaw($this->sqlImporte('neto').' as ventas_neto')
+            ->selectRaw($this->sqlImporte('costo').' as costo')
+            ->selectRaw($this->sqlImporteDev().' as devoluciones_usd')
+            ->selectRaw($this->sqlCantidadFacturada().' as productos')
+            ->groupBy('vd.fecha')
+            ->get();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $fecha = Carbon::parse($row->fecha)->toDateString();
+            $ventas = round((float) ($row->ventas_neto ?: $row->ventas_usd), 2);
+            $kpi = $this->kpiVacio($sedes[0] ?? '');
+            $kpi['facturas'] = (int) $row->facturas;
+            $kpi['devoluciones'] = (int) $row->devoluciones;
+            $kpi['devoluciones_usd'] = round((float) $row->devoluciones_usd, 2);
+            $kpi['ventas_brutas'] = round((float) ($row->ventas_brutas ?? ($ventas + (float) $row->devoluciones_usd)), 2);
+            $kpi['ventas_usd'] = $ventas;
+            $kpi['unidades'] = round((float) $row->unidades, 2);
+            $kpi['margen_usd'] = round($ventas - (float) $row->costo, 2);
+            $kpi['productos'] = (int) round((float) $row->productos);
+            $out[$fecha] = $kpi;
+        }
+
+        return $out;
+    }
+
+    /**
      * KPIs por área de nómina (Call Center, Digital Manage, …) atribuidos por vendedor.
      *
      * @param  list<string>  $sedes

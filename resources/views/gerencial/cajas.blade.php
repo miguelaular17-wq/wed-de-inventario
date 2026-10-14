@@ -11,8 +11,7 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">Efectividad de caja</h1>
-            @include('gerencial._tabs')
-            <p class="muted" style="margin:8px 0 0;">Facturas y dinero facturado por cada cajera, por sede, en {{ $periodo['etiqueta'] }}.</p>
+            <p class="muted" style="margin:8px 0 0;">Indicadores de incentivo · facturas y dinero facturado por cada cajera, por sede, en {{ $periodo['etiqueta'] }}.</p>
         </div>
     </div>
 

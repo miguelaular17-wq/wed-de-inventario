@@ -41,6 +41,7 @@ class InventoryController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
             'q' => ['nullable', 'string', 'max:200'],
             'categoria' => ['nullable', 'string', 'max:200'],
+            'subcategoria' => ['nullable', 'string', 'max:200'],
         ]);
         $sede = $this->context->sede($request);
         $scope = $this->context->usuarioScope($request->user());
@@ -58,8 +59,22 @@ class InventoryController extends Controller
         }
 
         $category = trim((string) ($data['categoria'] ?? ''));
+        $subcategory = trim((string) ($data['subcategoria'] ?? ''));
+        $subcategories = $rows
+            ->when($category !== '', fn ($items) => $items->where('categoria', $category))
+            ->pluck('subcategoria')
+            ->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
         if ($category !== '') {
             $rows = $rows->where('categoria', $category);
+        }
+        if ($subcategory !== '') {
+            $rows = $rows->filter(
+                fn (array $row) => trim((string) ($row['subcategoria'] ?? '')) === $subcategory
+            );
         }
 
         $rows = $rows->values();
@@ -97,6 +112,7 @@ class InventoryController extends Controller
             'filters' => [
                 'sede' => $sede,
                 'categories' => $categories,
+                'subcategories' => $subcategories,
             ],
             'sedes_origen' => $this->context->sedesOrigen($sede),
             'updated_at' => $this->products->lastStockUpdate(),

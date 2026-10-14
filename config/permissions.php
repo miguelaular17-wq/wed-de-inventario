@@ -86,7 +86,7 @@ return [
     'roles' => [
         'admin' => ['*'],
         'gerente' => ['*'],
-        'supervisor' => ['operacion', 'compras.reporte_sede', 'nomina.dias_libres', 'nomina.deudas', 'ventas.diarias'],
+        'supervisor' => ['operacion', 'compras.reporte_sede', 'nomina.dias_libres', 'nomina.deudas', 'ventas.diarias', 'meta.ver'],
         'telefonia' => ['operacion'],
         'sede' => ['operacion'],
         'comprador' => ['operacion', 'compras'],

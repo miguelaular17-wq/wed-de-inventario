@@ -24,6 +24,21 @@ class GerencialController extends Controller
             $ctx['filtros']['ranking']
         );
 
+        $detalleSede = strtoupper(trim((string) $request->query('detalle_sede', '')));
+        if (! in_array($detalleSede, $gerencial->sedesVentas(), true)) {
+            $detalleSede = '';
+        }
+        $porDia = $detalleSede !== ''
+            ? $gerencial->detallePorDia(
+                $ctx['periodo']['inicio'],
+                $ctx['periodo']['fin'],
+                $detalleSede,
+                $ctx['filtros']['categoria'],
+                $ctx['filtros']['vendedor'],
+                $ctx['filtros']['producto']
+            )
+            : [];
+
         return view('gerencial.dashboard', $ctx + [
             'total' => $data['total'],
             'porSede' => $data['por_sede'],
@@ -31,6 +46,8 @@ class GerencialController extends Controller
             'tops' => $data['tops'],
             'diario' => $data['diario'],
             'usaLineas' => $data['usa_lineas'],
+            'detalleSede' => $detalleSede,
+            'porDia' => $porDia,
         ]);
     }
 

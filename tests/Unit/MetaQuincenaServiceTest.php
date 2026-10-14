@@ -189,10 +189,47 @@ class MetaQuincenaServiceTest extends TestCase
             'role' => User::ROLE_SUPERVISOR,
             'sede' => 'DORAL',
         ]);
-        $this->actingAs($supervisor)->get(route('metas.index'))->assertForbidden();
+        $this->actingAs($supervisor)->get(route('metas.index'))->assertOk();
+    }
 
-        UserPermission::create(['user_id' => $supervisor->id, 'permission' => 'meta.ver']);
+    public function test_supervisor_de_doral_no_ve_metas_de_otras_sedes(): void
+    {
+        $productoId = DB::table('productos')->insertGetId([
+            'codigo' => 'META3',
+            'nombre' => 'Producto sede',
+            'categoria' => 'HOGAR',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        foreach (['DORAL', 'CENTRO'] as $sede) {
+            MetaQuincenaProducto::create([
+                'producto_id' => $productoId,
+                'sede' => $sede,
+                'quincena_inicio' => '2026-09-01',
+                'quincena_fin' => '2026-09-15',
+                'cantidad_inicial' => 4,
+            ]);
+        }
+
+        $supervisor = User::create([
+            'name' => 'Supervisor Doral',
+            'email' => 'sup-doral-meta@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_SUPERVISOR,
+            'sede' => 'DORAL',
+        ]);
+        UserPermission::create(['user_id' => $supervisor->id, 'permission' => 'meta']);
         $supervisor->unsetRelation('extraPermissions');
-        $this->actingAs($supervisor->fresh())->get(route('metas.index'))->assertOk();
+
+        $servicio = app(MetaQuincenaService::class);
+        $this->assertFalse($servicio->veTodasLasSedes($supervisor));
+
+        $sedes = $servicio->listarParaUsuario($supervisor->fresh())
+            ->pluck('sede')
+            ->unique()
+            ->values()
+            ->all();
+
+        $this->assertSame(['DORAL'], $sedes);
     }
 }

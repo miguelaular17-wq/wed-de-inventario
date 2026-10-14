@@ -22,22 +22,6 @@ class RequisicionController extends Controller
         private StockMovementService $stock,
     ) {}
 
-    /**
-     * Returns the email to use as user-scope filter for requisiciones.
-     * Admins and gerentes see the full sede; everyone else sees only their own.
-     */
-    private function scopedUsuario(): ?string
-    {
-        $user = auth()->user();
-        if (! $user) {
-            return null;
-        }
-        if ($user->isAdmin() || $user->isGerente()) {
-            return null;
-        }
-        return $user->email;
-    }
-
     public function form(Request $request): View
     {
         ini_set('memory_limit', '512M');
@@ -65,7 +49,7 @@ class RequisicionController extends Controller
             \App\Services\Profiler::start('RequisicionController::form loadForSede');
             $products = $this->products->loadForSede($sede)->keyBy('cod_centro');
             \App\Services\Profiler::stop('RequisicionController::form loadForSede');
-            $manualCats = $this->reqPersonalizada->loadManuales($sede, false, $this->scopedUsuario());
+            $manualCats = $this->reqPersonalizada->loadManuales($sede, false, null);
 
             $subByCat = [];
             $manualCats->each(function ($m) use ($products, &$subByCat) {
@@ -100,7 +84,7 @@ class RequisicionController extends Controller
                 $selectedCategoria !== 'Todas' ? $selectedCategoria : null,
                 $selectedSubcategoria,
                 true,
-                $this->scopedUsuario(),
+                null,
             )->map(function (array $r) use ($products) {
                 $p = $products->get($r['codigo_completo'] ?? $r['codigo']);
 
@@ -111,6 +95,7 @@ class RequisicionController extends Controller
                     'subcategoria' => $p['subcategoria'] ?? '—',
                     'opc' => config('inventario.display.'.$r['sede_origen'], $r['sede_origen']),
                     'cantidad' => $r['cantidad'],
+                    'usuario' => $r['usuario'] ?? null,
                 ];
             });
             \App\Services\Profiler::stop('RequisicionController::form buildExport & map');
@@ -119,7 +104,8 @@ class RequisicionController extends Controller
                 'sede' => $sede,
                 'tipoReporte' => $tipoReporte,
                 'sedesOrigen' => $sedesOrigen,
-                'totalRequisicion' => $this->reqPersonalizada->countPendientes($sede, $this->scopedUsuario()),
+                'totalRequisicion' => $this->reqPersonalizada->countPendientes($sede, null),
+                'pendientesRegistradas' => $this->reqPersonalizada->countPendientes($sede, null),
                 'categories' => $categories,
                 'subcategories' => $subcategories,
                 'subByCat' => $subByCat,
@@ -259,6 +245,7 @@ class RequisicionController extends Controller
             'excludeCodes' => $excludeCodes,
             'previewRows' => $previewRows,
             'filteredCount' => $previewRows->count(),
+            'pendientesRegistradas' => $this->reqPersonalizada->countPendientes($sede, null),
         ]);
     }
 
@@ -280,7 +267,7 @@ class RequisicionController extends Controller
                 : $this->export->resolveSedeKey($sedeOrigen);
 
             if ($sedeOrigen !== 'Todas' && $sedeOrigen !== '' && ! $sedeOrigenKey) {
-                return back()->withErrors(['export' => 'Sede origen inválida.']);
+                return $this->errorExport('Sede origen inválida.');
             }
 
             $lines = $this->reqPersonalizada->buildExport(
@@ -289,68 +276,33 @@ class RequisicionController extends Controller
                 $categoria !== 'Todas' ? $categoria : null,
                 $subcategoria,
                 true,
-                $this->scopedUsuario(),
+                null,
             );
 
             if ($lines->isEmpty()) {
-                return back()->withErrors(['export' => 'No hay requisiciones manuales pendientes para exportar.']);
+                return $this->errorExport('No hay requisiciones registradas pendientes para exportar.');
             }
 
-            if ($sedeOrigenKey === null) {
-                $porSede = $lines->groupBy(fn (array $line) => strtoupper((string) ($line['sede_origen'] ?? '')));
-                $zip = new \ZipArchive();
-                $zipFile = tempnam(sys_get_temp_dir(), 'zip');
-                if ($zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
-                    return back()->withErrors(['export' => 'No se pudo crear el archivo ZIP.']);
+            $documentos = [];
+            foreach ($lines->groupBy(fn (array $line) => strtoupper((string) ($line['sede_origen'] ?? ''))) as $origenKey => $grupo) {
+                if ($origenKey === '' || $grupo->isEmpty()) {
+                    continue;
                 }
-
-                foreach ($porSede as $origenKey => $grupo) {
-                    if ($origenKey === '' || $grupo->isEmpty()) {
-                        continue;
-                    }
-                    $display = config('inventario.display.'.$origenKey, $origenKey);
-                    $this->agregarParCsv($zip, 'Requisicion_manual_'.$display, $grupo->values());
-                }
-                $zip->addFromString('LEEME_separadores.txt', $this->export->notaSeparadores());
-                $zip->close();
-
-                try {
-                    $this->reqPersonalizada->applyExport(
-                        $lines,
-                        $sede,
-                        $this->stock,
-                        auth()->user()?->email,
-                    );
-                } catch (\Throwable $e) {
-                    @unlink($zipFile);
-                    throw $e;
-                }
-
-                return response()->download(
-                    $zipFile,
-                    'Requisicion_manual_'.$sede.'_por_sede.zip'
-                )->deleteFileAfterSend(true);
+                $display = config('inventario.display.'.$origenKey, $origenKey);
+                $documentos[] = [
+                    'filename' => 'Requisicion_manual_'.$display.'.csv',
+                    'lines' => $grupo->values(),
+                ];
             }
 
-            $base = 'Requisicion_manual_'.config('inventario.display.'.$sedeOrigenKey, $sedeOrigenKey);
-            $zipFile = $this->crearZipParCsv($base, $lines);
-            if ($zipFile instanceof RedirectResponse) {
-                return $zipFile;
-            }
+            $this->reqPersonalizada->applyExport(
+                $lines,
+                $sede,
+                $this->stock,
+                auth()->user()?->email,
+            );
 
-            try {
-                $this->reqPersonalizada->applyExport(
-                    $lines,
-                    $sede,
-                    $this->stock,
-                    auth()->user()?->email,
-                );
-            } catch (\Throwable $e) {
-                @unlink($zipFile);
-                throw $e;
-            }
-
-            return response()->download($zipFile, $base.'.zip')->deleteFileAfterSend(true);
+            return $this->descargarDocumentos($sede, $documentos);
         }
 
         $incluirParcial = $request->boolean('incluir_parcial');
@@ -362,14 +314,7 @@ class RequisicionController extends Controller
 
         if ($sedeOrigen === 'Todas') {
             $sedesStock = $this->export->sedesOrigen($sede);
-            
-            $zip = new \ZipArchive();
-            $zipFile = tempnam(sys_get_temp_dir(), 'zip');
-            if ($zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
-                return back()->withErrors(['export' => 'No se pudo crear el archivo ZIP.']);
-            }
-
-            $hasFiles = false;
+            $documentos = [];
             $ventasRows = $this->ventas->calcular($this->products->loadForSede($sede), $sede, $tp);
 
             if ($tipoReporte === 'mayor_demanda') {
@@ -397,7 +342,6 @@ class RequisicionController extends Controller
             }
 
             foreach ($sedesStock as $origSede) {
-                $displayOrig = config('inventario.display.'.$origSede, $origSede);
                 $lines = $this->export->buildExport(
                     $ventasRows,
                     $displayOrig,
@@ -411,27 +355,23 @@ class RequisicionController extends Controller
 
                 if ($lines->isNotEmpty()) {
                     $this->stock->applyRequisition($lines, $origSede, $sede, null, $tipoReporte);
-                    $this->agregarParCsv($zip, 'Requisicion_'.$sede.'_desde_'.$origSede, $lines);
-                    $hasFiles = true;
+                    $documentos[] = [
+                        'filename' => 'Requisicion_'.$sede.'_desde_'.$origSede.'.csv',
+                        'lines' => $lines,
+                    ];
                 }
             }
 
-            if ($hasFiles) {
-                $zip->addFromString('LEEME_separadores.txt', $this->export->notaSeparadores());
-            }
-            $zip->close();
-
-            if (! $hasFiles) {
-                @unlink($zipFile);
-                return back()->withErrors(['export' => 'No hay filas exportables para ninguna sede origen.']);
+            if ($documentos === []) {
+                return $this->errorExport('No hay filas exportables para ninguna sede origen.');
             }
 
-            return response()->download($zipFile, 'Requisiciones_'.$sede.'_todas.zip')->deleteFileAfterSend(true);
+            return $this->descargarDocumentos($sede, $documentos);
         }
 
         $sedeOrigenKey = $this->export->resolveSedeKey($sedeOrigen);
         if (! $sedeOrigenKey) {
-            return back()->withErrors(['export' => 'Sede origen inválida.']);
+            return $this->errorExport('Sede origen inválida.');
         }
 
         $ventasRows = $this->ventas->calcular($this->products->loadForSede($sede), $sede, $tp);
@@ -471,53 +411,42 @@ class RequisicionController extends Controller
         );
 
         if ($lines->isEmpty()) {
-            return back()->withErrors(['export' => 'No hay filas exportables para esa sede origen.']);
+            return $this->errorExport('No hay filas exportables para esa sede origen.');
         }
 
-        $base = 'Requisicion_'.$sede.'_desde_'.$sedeOrigenKey;
-        $zipFile = $this->crearZipParCsv($base, $lines);
-        if ($zipFile instanceof RedirectResponse) {
-            return $zipFile;
+        $this->stock->applyRequisition($lines, $sedeOrigenKey, $sede, null, $tipoReporte);
+
+        return $this->descargarDocumentos($sede, [[
+            'filename' => 'Requisicion_'.$sede.'_desde_'.$sedeOrigenKey.'.csv',
+            'lines' => $lines,
+        ]]);
+    }
+
+    private function errorExport(string $message): \Symfony\Component\HttpFoundation\Response|RedirectResponse
+    {
+        if (request()->ajax() || request()->wantsJson()) {
+            return response()->json(['message' => $message], 422);
         }
 
-        try {
-            $this->stock->applyRequisition($lines, $sedeOrigenKey, $sede, null, $tipoReporte);
-        } catch (\Throwable $e) {
-            @unlink($zipFile);
-            throw $e;
-        }
-
-        return response()->download($zipFile, $base.'.zip')->deleteFileAfterSend(true);
+        return back()->withErrors(['export' => $message]);
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $lines
+     * @param  list<array{filename: string, lines: \Illuminate\Support\Collection<int, array<string, mixed>>}>  $documentos
      */
-    /**
-     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $lines
-     */
-    private function crearZipParCsv(string $base, \Illuminate\Support\Collection $lines): string|RedirectResponse
+    private function descargarDocumentos(string $sede, array $documentos): \Symfony\Component\HttpFoundation\Response
     {
-        $zip = new \ZipArchive();
-        $zipFile = tempnam(sys_get_temp_dir(), 'zip');
-        if ($zipFile === false || $zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
-            return back()->withErrors(['export' => 'No se pudo crear el archivo ZIP.']);
+        $delimiter = $this->export->csvDelimiterForSede($sede);
+        $files = [];
+        foreach ($documentos as $doc) {
+            $files[] = [
+                'filename' => $doc['filename'],
+                'content' => base64_encode($this->export->toCsv($doc['lines'], $delimiter)),
+            ];
         }
 
-        $this->agregarParCsv($zip, $base, $lines);
-        $zip->addFromString('LEEME_separadores.txt', $this->export->notaSeparadores());
-        $zip->close();
-
-        return $zipFile;
-    }
-
-    /**
-     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $lines
-     */
-    private function agregarParCsv(\ZipArchive $zip, string $base, \Illuminate\Support\Collection $lines): void
-    {
-        $par = $this->export->csvPair($lines);
-        $zip->addFromString($base.'_separador_punto_y_coma.csv', $par['punto_y_coma']);
-        $zip->addFromString($base.'_separador_coma.csv', $par['coma']);
+        return response()->json(['files' => $files]);
     }
 }
+
+

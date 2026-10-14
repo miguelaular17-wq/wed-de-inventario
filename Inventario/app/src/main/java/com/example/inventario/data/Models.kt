@@ -52,6 +52,7 @@ data class InventarioItemDto(
     val producto: String = "",
     val nombre: String = "",
     val categoria: String = "",
+    val subcategoria: String = "",
     val stock: Double? = null,
     val existencia: Double? = null,
     @SerialName("existencia_local") val existenciaLocal: Double? = null,
@@ -82,6 +83,7 @@ data class InventoryPageDto(
 data class InventoryFiltersDto(
     val sede: String = "",
     val categories: List<String> = emptyList(),
+    val subcategories: List<String> = emptyList(),
 )
 
 @Serializable
@@ -290,6 +292,7 @@ data class InventoryPage(
     val lastPage: Int,
     val total: Int,
     val categories: List<String>,
+    val subcategories: List<String> = emptyList(),
     val originSites: List<SedeDto>,
 )
 

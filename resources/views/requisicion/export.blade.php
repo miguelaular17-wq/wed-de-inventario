@@ -5,8 +5,20 @@
 @section('content')
 <div class="page-header">
     <h1>Exportar reporte</h1>
-    <p class="lead">Sede {{ $sede }} · Los filtros se aplican al instante.</p>
+    <p class="lead">Sede {{ $sede }} · Los filtros se aplican al instante. Cada documento CSV se descarga aparte, sin ZIP.</p>
 </div>
+
+@if(($pendientesRegistradas ?? 0) > 0 && ($tipoReporte ?? 'ventas') !== 'personalizada')
+    <div class="panel" style="margin-bottom:16px;">
+        <p style="margin:0;">
+            Hay <strong>{{ $pendientesRegistradas }}</strong> requisiciones registradas desde la app.
+            En la web solo falta descargar el CSV.
+        </p>
+        <p style="margin:8px 0 0;">
+            <a href="{{ route('requisicion.form', ['tipo_reporte' => 'personalizada', 'sede_origen' => 'Todas']) }}">Ver las registradas</a>
+        </p>
+    </div>
+@endif
 
 <div class="stats-row">
     <div class="stat-chip"><strong>{{ $totalRequisicion }}</strong> en requisición</div>
@@ -35,10 +47,10 @@
     </p>
 @else
     <p class="muted" style="margin:0 0 16px;">
-        Exporta requisiciones registradas en <a href="{{ route('inventario.index') }}">Inventario</a>.
+        Estas son las requisiciones registradas desde la app o desde Inventario.
         Al descargar se <strong>aplica el movimiento de stock</strong> (resta en origen, suma en {{ $sede }}).
-        Con <strong>Todas las sedes</strong> sale un CSV por origen (ZIP).
-        Si descargas desde <strong>Virtudes</strong>, todos van con coma; desde cualquier otra sede, todos van con punto y coma (incluido el de Virtudes).
+        Cada sede origen baja en su propio CSV, sin ZIP.
+        Si descargas desde <strong>Virtudes</strong>, el separador es coma; desde cualquier otra sede, punto y coma.
     </p>
 @endif
 
@@ -146,6 +158,9 @@
                     <span class="stock-pill">Cant. <strong>{{ $row['cantidad'] }}</strong></span>
                     @if(($tipoReporte ?? 'ventas') === 'personalizada' && ($row['categoria'] ?? '—') !== '—')
                         <span class="stock-pill">{{ $row['categoria'] }}</span>
+                    @endif
+                    @if(($tipoReporte ?? 'ventas') === 'personalizada' && !empty($row['usuario']))
+                        <span class="stock-pill">{{ $row['usuario'] }}</span>
                     @endif
                 </div>
                 @if($isExcluded)
@@ -387,32 +402,50 @@ document.addEventListener('DOMContentLoaded', function () {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             })
             .then(function (response) {
+                const contentType = response.headers.get('Content-Type') || '';
                 if (!response.ok) {
+                    if (contentType.indexOf('application/json') !== -1) {
+                        return response.json().then(function (data) {
+                            throw new Error(data.message || 'Error al exportar.');
+                        });
+                    }
                     return response.text().then(function (text) {
                         throw new Error(text || 'Error al exportar.');
                     });
                 }
-                // Extraer nombre del archivo desde Content-Disposition
-                const disposition = response.headers.get('Content-Disposition') || '';
-                let filename = 'requisicion_manual.csv';
-                const match = disposition.match(/filename="?([^";\r\n]+)"?/i);
-                if (match) filename = match[1];
-
-                return response.blob().then(function (blob) {
-                    // Disparar descarga del archivo
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
+                if (contentType.indexOf('application/json') === -1) {
+                    throw new Error('La exportación no devolvió los CSV.');
+                }
+                return response.json();
+            })
+            .then(function (data) {
+                const files = data.files || [];
+                if (!files.length) {
+                    throw new Error('No hay documentos para descargar.');
+                }
+                files.forEach(function (file, index) {
                     setTimeout(function () {
-                        URL.revokeObjectURL(url);
-                        a.remove();
-                        // Recargar la página para mostrar la lista actualizada
-                        window.location.reload();
-                    }, 500);
+                        const binary = atob(file.content || '');
+                        const bytes = new Uint8Array(binary.length);
+                        for (let i = 0; i < binary.length; i++) {
+                            bytes[i] = binary.charCodeAt(i);
+                        }
+                        const blob = new Blob([bytes], { type: 'text/csv;charset=utf-8' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = file.filename || ('requisicion_' + (index + 1) + '.csv');
+                        document.body.appendChild(a);
+                        a.click();
+                        setTimeout(function () {
+                            URL.revokeObjectURL(url);
+                            a.remove();
+                        }, 1000);
+                    }, index * 400);
                 });
+                setTimeout(function () {
+                    window.location.reload();
+                }, files.length * 400 + 700);
             })
             .catch(function (err) {
                 alert('Error al exportar: ' + err.message);

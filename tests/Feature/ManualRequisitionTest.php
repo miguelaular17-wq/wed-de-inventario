@@ -249,9 +249,12 @@ class ManualRequisitionTest extends TestCase
                 'incluir_parcial' => 0,
             ]);
 
-        $response->assertOk();
-        $response->assertHeader('Content-Type', 'application/zip');
-        $response->assertHeader('Content-Disposition', 'attachment; filename=Requisiciones_ZAMORA_todas.zip');
+        $files = $this->csvFiles($response);
+        $this->assertNotEmpty($files);
+        foreach (array_keys($files) as $filename) {
+            $this->assertStringEndsWith('.csv', $filename);
+            $this->assertStringNotContainsString('.zip', $filename);
+        }
     }
 
     public function test_export_mayor_demanda_requisition()
@@ -354,28 +357,11 @@ class ManualRequisitionTest extends TestCase
                 'incluir_parcial' => 0,
             ]);
 
-        $responseExport->assertOk();
-        $this->assertStringContainsString('application/zip', (string) $responseExport->headers->get('Content-Type'));
-
-        $tmp = tempnam(sys_get_temp_dir(), 'zip');
-        file_put_contents($tmp, $responseExport->getContent());
-        $zip = new \ZipArchive();
-        $this->assertTrue($zip->open($tmp) === true);
-        $puntoYComa = $zip->getFromName('Requisicion_ZAMORA_desde_JRZ_separador_punto_y_coma.csv');
-        $coma = $zip->getFromName('Requisicion_ZAMORA_desde_JRZ_separador_coma.csv');
-        $nota = $zip->getFromName('LEEME_separadores.txt');
-        $zip->close();
-        @unlink($tmp);
-
-        $this->assertNotFalse($puntoYComa);
-        $this->assertNotFalse($coma);
-        $this->assertNotFalse($nota);
-        $this->assertStringContainsString('punto y coma (;)', $nota);
-        $this->assertStringContainsString('coma (,)', $nota);
-        $this->assertStringContainsString('PROD_STAR;UND', $puntoYComa);
-        $this->assertStringContainsString('PROD_STAR,UND', $coma);
-        $this->assertStringNotContainsString('PROD_NON_STAR', $puntoYComa);
-        $this->assertStringNotContainsString('PROD_NON_STAR', $coma);
+        $files = $this->csvFiles($responseExport);
+        $this->assertSame(['Requisicion_ZAMORA_desde_JRZ.csv'], array_keys($files));
+        $csv = $files['Requisicion_ZAMORA_desde_JRZ.csv'];
+        $this->assertStringContainsString('PROD_STAR;UND', $csv);
+        $this->assertStringNotContainsString('PROD_NON_STAR', $csv);
     }
 
     public function test_export_manual_todas_las_sedes_genera_un_csv_por_origen(): void
@@ -446,37 +432,32 @@ class ManualRequisitionTest extends TestCase
                 'subcategoria' => 'Todas',
             ]);
 
+        $files = $this->csvFiles($response);
+        $this->assertCount(2, $files);
+        $this->assertArrayHasKey('Requisicion_manual_JRZ.csv', $files);
+        $this->assertArrayHasKey('Requisicion_manual_Virtude.csv', $files);
+        $this->assertStringContainsString("codigo;unidad;cantidad\n", $files['Requisicion_manual_JRZ.csv']);
+        $this->assertStringContainsString('MAN_JRZ;UND;1', $files['Requisicion_manual_JRZ.csv']);
+        $this->assertStringContainsString('MAN_VIRT;UND;2', $files['Requisicion_manual_Virtude.csv']);
+        $this->assertStringNotContainsString('MAN_VIRT', $files['Requisicion_manual_JRZ.csv']);
+        $this->assertStringNotContainsString('MAN_JRZ', $files['Requisicion_manual_Virtude.csv']);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function csvFiles(\Illuminate\Testing\TestResponse $response): array
+    {
         $response->assertOk();
-        $this->assertStringContainsString('application/zip', (string) $response->headers->get('Content-Type'));
-        $this->assertStringContainsString('Requisicion_manual_ZAMORA_por_sede.zip', (string) $response->headers->get('Content-Disposition'));
+        $response->assertHeader('content-type', 'application/json');
+        $files = $response->json('files');
+        $this->assertIsArray($files);
+        $decoded = [];
+        foreach ($files as $file) {
+            $this->assertStringEndsWith('.csv', $file['filename']);
+            $decoded[$file['filename']] = base64_decode((string) $file['content'], true);
+        }
 
-        $tmp = tempnam(sys_get_temp_dir(), 'zip');
-        file_put_contents($tmp, $response->getContent());
-        $zip = new \ZipArchive();
-        $this->assertTrue($zip->open($tmp) === true);
-        $jrz = $zip->getFromName('Requisicion_manual_JRZ_separador_punto_y_coma.csv');
-        $jrzComa = $zip->getFromName('Requisicion_manual_JRZ_separador_coma.csv');
-        $virt = $zip->getFromName('Requisicion_manual_Virtude_separador_punto_y_coma.csv');
-        $virtComa = $zip->getFromName('Requisicion_manual_Virtude_separador_coma.csv');
-        $nota = $zip->getFromName('LEEME_separadores.txt');
-        $zip->close();
-        @unlink($tmp);
-
-        $this->assertNotFalse($jrz);
-        $this->assertNotFalse($jrzComa);
-        $this->assertNotFalse($virt);
-        $this->assertNotFalse($virtComa);
-        $this->assertNotFalse($nota);
-        $this->assertStringContainsString('_separador_punto_y_coma.csv', $nota);
-        $this->assertStringContainsString('_separador_coma.csv', $nota);
-        $this->assertStringContainsString('codigo;unidad;cantidad', $jrz);
-        $this->assertStringContainsString('MAN_JRZ;UND;1', $jrz);
-        $this->assertStringContainsString('codigo,unidad,cantidad', $jrzComa);
-        $this->assertStringContainsString('MAN_JRZ,UND,1', $jrzComa);
-        $this->assertStringContainsString('codigo;unidad;cantidad', $virt);
-        $this->assertStringContainsString('MAN_VIRT;UND;2', $virt);
-        $this->assertStringContainsString('MAN_VIRT,UND,2', $virtComa);
-        $this->assertStringNotContainsString('MAN_VIRT', $jrz);
-        $this->assertStringNotContainsString('MAN_JRZ', $virt);
+        return $decoded;
     }
 }

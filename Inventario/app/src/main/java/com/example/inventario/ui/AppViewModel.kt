@@ -76,6 +76,7 @@ data class AppUiState(
     val siteLocked: Boolean = false,
     val originSites: List<SedeDto> = emptyList(),
     val categories: List<String> = emptyList(),
+    val subcategories: List<String> = emptyList(),
     val inventory: List<InventarioItemDto> = emptyList(),
     val inventoryPage: Int = 0,
     val inventoryLastPage: Int = 1,
@@ -83,6 +84,7 @@ data class AppUiState(
     val inventoryError: String? = null,
     val search: String = "",
     val category: String = "",
+    val subcategory: String = "",
     val requisitions: List<RequisitionDto> = emptyList(),
     val requisitionStatus: String = "",
     val requisitionsLoading: Boolean = false,
@@ -176,7 +178,7 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
             _state.update {
                 it.copy(sites = sites, activeSite = activeSite, siteLocked = sitesResponse.locked)
             }
-            val inventoryRequest = viewModelScope.async { repository.inventory(1, "", "", activeSite.apiValue) }
+            val inventoryRequest = viewModelScope.async { repository.inventory(1, "", "", "", activeSite.apiValue) }
             val requisitionsRequest = viewModelScope.async { repository.requisitions("", activeSite.apiValue) }
             val page = inventoryRequest.await()
             val requisitions = requisitionsRequest.await()
@@ -187,6 +189,7 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
                     inventoryLastPage = page.lastPage,
                     originSites = page.originSites,
                     categories = page.categories,
+                    subcategories = page.subcategories,
                     inventoryLoading = false,
                     requisitions = requisitions,
                     requisitionsLoading = false,
@@ -409,7 +412,11 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
     }
 
     fun setCategory(value: String) {
-        _state.update { it.copy(category = value) }
+        _state.update { it.copy(category = value, subcategory = "") }
+    }
+
+    fun setSubcategory(value: String) {
+        _state.update { it.copy(subcategory = value) }
     }
 
     fun searchInventory() = loadInventory(reset = true)
@@ -427,7 +434,13 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
         val pageNumber = if (reset) 1 else snapshot.inventoryPage + 1
         _state.update { it.copy(inventoryLoading = true, inventoryError = null) }
         try {
-            val page = repository.inventory(pageNumber, snapshot.search, snapshot.category, site.apiValue)
+            val page = repository.inventory(
+                pageNumber,
+                snapshot.search,
+                snapshot.category,
+                snapshot.subcategory,
+                site.apiValue,
+            )
             _state.update {
                 it.copy(
                     inventory = mergeInventoryPages(it.inventory, page.items, reset),
@@ -435,6 +448,7 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
                     inventoryLastPage = page.lastPage,
                     originSites = page.originSites,
                     categories = page.categories,
+                    subcategories = page.subcategories,
                     inventoryLoading = false,
                 )
             }

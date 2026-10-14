@@ -131,6 +131,18 @@
                                     <strong>{{ number_format($row['existencia_global']) }}</strong>
                                     <span>global</span>
                                 </div>
+                                @if($modoJrz)
+                                    @php
+                                        $totalVendidas = 0.0;
+                                        foreach ($sedes as $sedeSuma) {
+                                            $totalVendidas += (float) ($row['vendidas_por_sede'][strtoupper(trim((string) $sedeSuma))] ?? 0);
+                                        }
+                                    @endphp
+                                    <div class="cat-stock-ventas-total" title="Suma de unidades netas vendidas en todas las sedes (últimos {{ $diasVentas }} días)">
+                                        <strong>{{ number_format($totalVendidas, $totalVendidas == floor($totalVendidas) ? 0 : 1) }}</strong>
+                                        <span>ventas {{ $diasVentas }}d</span>
+                                    </div>
+                                @endif
                                 <div class="cat-stock-sedes">
                                     @foreach ($sedes as $sedeCol)
                                         @php
@@ -415,6 +427,27 @@ main:has(.cat-page) {
     line-height: 1.1;
 }
 .cat-stock-global span {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+.cat-stock-ventas-total {
+    min-width: 78px;
+    text-align: center;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+.cat-stock-ventas-total strong {
+    display: block;
+    font-size: 1.35rem;
+    color: #166534;
+    line-height: 1.1;
+}
+.cat-stock-ventas-total span {
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.04em;

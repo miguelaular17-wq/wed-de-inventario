@@ -49,6 +49,7 @@ use App\Http\Controllers\Nomina\MercanciaController;
 use App\Http\Controllers\Nomina\OrganizacionController;
 use App\Http\Controllers\Nomina\PeriodoController;
 use App\Http\Controllers\Nomina\PrestamoController;
+use App\Http\Controllers\Nomina\RetencionController;
 use App\Http\Controllers\Nomina\SedeNominaController;
 use Illuminate\Support\Facades\Route;
 
@@ -360,6 +361,24 @@ Route::middleware(['auth', 'permission:ventas.diarias,tesoreria'])->prefix('vent
     Route::put('/{reporte}', [\App\Http\Controllers\VentasDiariasController::class, 'update'])->name('update');
 });
 
+Route::middleware(['auth'])->prefix('mensajeria')->name('mensajeria.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\MensajeriaController::class, 'index'])->name('index');
+    Route::post('/configuracion', [\App\Http\Controllers\MensajeriaController::class, 'configuracion'])->name('configuracion');
+    Route::post('/', [\App\Http\Controllers\MensajeriaController::class, 'enviar'])->name('enviar');
+});
+
+Route::middleware(['auth', 'permission:gerencial'])->prefix('incentivos')->name('incentivos.')->group(function () {
+    Route::get('/{modulo}/cruce/buscar', [\App\Http\Controllers\IncentivoController::class, 'buscarCruce'])
+        ->whereIn('modulo', array_keys(config('incentivos.modulos')))
+        ->name('cruce.buscar');
+    Route::post('/{modulo}/cruce', [\App\Http\Controllers\IncentivoController::class, 'guardarCruce'])
+        ->whereIn('modulo', array_keys(config('incentivos.modulos')))
+        ->name('cruce.guardar');
+    Route::get('/{modulo}', [\App\Http\Controllers\IncentivoController::class, 'show'])
+        ->whereIn('modulo', array_keys(config('incentivos.modulos')))
+        ->name('show');
+});
+
 Route::middleware(['auth', 'permission:gerencial,ventas.diarias'])->prefix('metas-tienda')->name('metas_tienda.')->group(function () {
     Route::get('/', [\App\Http\Controllers\MetasTiendaController::class, 'index'])->name('index');
     Route::put('/', [\App\Http\Controllers\MetasTiendaController::class, 'update'])->name('update');
@@ -396,6 +415,8 @@ Route::middleware(['auth', 'permission:nomina,nomina.comisiones'])->prefix('nomi
     Route::post('/comisiones/{periodo}/bonos/{ajuste}', [ComisionController::class, 'quitarBono'])->name('comisiones.bonos.quitar');
     Route::post('/comisiones/{periodo}/empleados/{empleado}/exento-retencion', [ComisionController::class, 'toggleExentoRetencion'])->name('comisiones.exento_retencion');
     Route::get('/comisiones/{periodo}/banco/{empresa}', [ComisionController::class, 'exportarBanco'])->name('comisiones.banco');
+
+    Route::get('/retenciones', [RetencionController::class, 'index'])->name('retenciones.index');
 });
 
 Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina.')->group(function () {

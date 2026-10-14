@@ -29,7 +29,7 @@ interface InventoryRepository {
     suspend fun pedidoSearch(query: String): List<PedidoProductDto>
     suspend fun pedidoCategorias(): List<String>
     suspend fun createPedido(request: CreatePedidoRequest): CreatePedidoResponse
-    suspend fun inventory(page: Int, query: String, category: String, site: String): InventoryPage
+    suspend fun inventory(page: Int, query: String, category: String, subcategory: String, site: String): InventoryPage
     suspend fun requisitions(status: String, site: String): List<RequisitionDto>
     suspend fun metrics(code: String, origin: String, quantity: Int, site: String): MetricasDto
     suspend fun createRequisition(request: CreateRequisitionRequest): RequisitionDto
@@ -141,15 +141,23 @@ class NetworkInventoryRepository(
         page: Int,
         query: String,
         category: String,
+        subcategory: String,
         site: String,
     ): InventoryPage = apiCall {
-        val response = api.inventory(page, query.ifBlank { null }, category.ifBlank { null }, site)
+        val response = api.inventory(
+            page,
+            query.ifBlank { null },
+            category.ifBlank { null },
+            subcategory.ifBlank { null },
+            site,
+        )
         InventoryPage(
             items = response.data,
             currentPage = response.meta.currentPage,
             lastPage = response.meta.lastPage,
             total = response.meta.total,
             categories = response.filters.categories,
+            subcategories = response.filters.subcategories,
             originSites = response.originSites,
         )
     }

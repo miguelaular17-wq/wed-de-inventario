@@ -16,7 +16,9 @@
             <h1 style="margin:0;">Metas de la quincena</h1>
             <p class="muted" style="margin:4px 0 0;">
                 {{ $quincena['etiqueta'] }}
-                @if($puedeMarcar)
+                @if(!empty($soloSuSede))
+                    · Solo las metas de tu sede. Asigna el responsable de cada producto.
+                @elseif($puedeMarcar)
                     · Marca productos desde Marketing → Sobre Stock
                 @else
                     · Productos asignados a tu sede

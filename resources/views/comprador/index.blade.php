@@ -178,11 +178,11 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             <button type="button" id="btn-qpedir-reportes" style="padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid #1e3a8a; background: #2563eb; color: white;">Reportes</button>
         </h2>
         <p style="margin:0 0 12px;color:#64748b;font-size:0.88rem;">
-            Productos solicitados desde el login. Filas en verde ya tienen stock global en sistema. Si la última compra es posterior a la última solicitud, se marca comprado con el proveedor y esa fecha.
+            Productos solicitados desde el login. Filas en verde ya tienen stock global en sistema. Si la última compra cae en la semana anterior a la solicitud o después, se marca comprado con el proveedor y esa fecha.
         </p>
         @if(($qPedirCerrados ?? 0) > 0)
             <p style="margin:0 0 12px;padding:8px 12px;border-radius:8px;background:#ecfdf5;color:#047857;font-size:0.85rem;">
-                Se marcaron {{ $qPedirCerrados }} producto(s) como comprados: la última compra es posterior a la solicitud. Quedaron el proveedor y la fecha.
+                Se marcaron {{ $qPedirCerrados }} producto(s) como comprados: la última compra está dentro de los 7 días previos a la solicitud o es posterior. Quedaron el proveedor y la fecha.
             </p>
         @endif
         <div class="qpedir-tabs" style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid #e2e8f0;">

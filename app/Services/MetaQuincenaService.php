@@ -45,18 +45,26 @@ class MetaQuincenaService
      *
      * @return Collection<int, array{inicio:string,fin:string,etiqueta:string,total:int,es_actual:bool}>
      */
-    public function quincenasParaSelector(?Carbon $fecha = null): Collection
+    public function quincenasParaSelector(?Carbon $fecha = null, ?User $user = null): Collection
     {
         $actual = $this->quincenaActual($fecha);
         $inicioActual = $actual['inicio']->toDateString();
         $items = collect();
 
         if (Schema::hasTable('meta_quincena_productos')) {
-            $items = MetaQuincenaProducto::query()
+            $conteo = MetaQuincenaProducto::query()
                 ->selectRaw('quincena_inicio, quincena_fin, COUNT(*) as total')
                 ->groupBy('quincena_inicio', 'quincena_fin')
-                ->orderByDesc('quincena_inicio')
-                ->get()
+                ->orderByDesc('quincena_inicio');
+            if ($user && ! $this->veTodasLasSedes($user)) {
+                $sedes = $this->sedesDelSupervisor($user);
+                if ($sedes === []) {
+                    $conteo->whereRaw('1 = 0');
+                } else {
+                    $conteo->whereIn(DB::raw('UPPER(TRIM(sede))'), $sedes);
+                }
+            }
+            $items = $conteo->get()
                 ->map(function ($row) use ($inicioActual) {
                     $inicio = Carbon::parse($row->quincena_inicio)->toDateString();
                     $fin = Carbon::parse($row->quincena_fin)->toDateString();
@@ -90,10 +98,10 @@ class MetaQuincenaService
      *
      * @return array{inicio:Carbon,fin:Carbon,etiqueta:string,auto_anterior:bool}
      */
-    public function resolverQuincenaListado(?string $inicioParam, ?Carbon $hoy = null): array
+    public function resolverQuincenaListado(?string $inicioParam, ?Carbon $hoy = null, ?User $user = null): array
     {
         $actual = $this->quincenaActual($hoy);
-        $opciones = $this->quincenasParaSelector($hoy);
+        $opciones = $this->quincenasParaSelector($hoy, $user);
 
         if ($inicioParam) {
             $q = $this->quincenaActual(Carbon::parse($inicioParam, 'America/Caracas')->startOfDay());
@@ -223,7 +231,7 @@ class MetaQuincenaService
             ->orderBy('sede')
             ->orderBy('id');
 
-        if (! $user->isGerente() && ! $user->canAccess('meta')) {
+        if (! $this->veTodasLasSedes($user)) {
             $sedes = $this->sedesDelSupervisor($user);
             if ($sedes === []) {
                 return collect();
@@ -324,6 +332,29 @@ class MetaQuincenaService
         }
 
         return $user->canAccess('meta.ver') || $user->canAccess('meta');
+    }
+
+    /**
+     * Gerencia y quien marca metas ve todas las sedes. Un supervisor solo la suya.
+     */
+    public function veTodasLasSedes(User $user): bool
+    {
+        if ($user->isSupervisor() || $user->role === User::ROLE_SEDE) {
+            return false;
+        }
+
+        return $user->isAdmin() || $user->isGerente() || $user->canAccess('meta');
+    }
+
+    public function puedeOperarSede(User $user, string $sede): bool
+    {
+        if ($this->veTodasLasSedes($user)) {
+            return true;
+        }
+
+        $sede = mb_strtoupper(trim($sede), 'UTF-8');
+
+        return in_array($sede, $this->sedesDelSupervisor($user), true);
     }
 
     public function puedeAsignarResponsable(User $user): bool

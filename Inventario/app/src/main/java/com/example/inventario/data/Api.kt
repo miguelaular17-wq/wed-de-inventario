@@ -94,6 +94,7 @@ interface InventarioApi {
         @Query("page") page: Int,
         @Query("q") query: String? = null,
         @Query("categoria") category: String? = null,
+        @Query("subcategoria") subcategory: String? = null,
         @Query("sede") site: String,
     ): InventoryPageDto
 

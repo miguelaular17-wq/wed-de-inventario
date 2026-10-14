@@ -17,10 +17,10 @@ class MetaQuincenaController extends Controller
         $user = $request->user();
         abort_unless($metas->puedeVerMetas($user), 403);
 
-        $quincenas = $metas->quincenasParaSelector();
-        $quincena = $metas->resolverQuincenaListado($request->query('inicio'));
+        $quincenas = $metas->quincenasParaSelector(null, $user);
+        $quincena = $metas->resolverQuincenaListado($request->query('inicio'), null, $user);
         $filas = $metas->listarParaUsuario($user, $quincena['inicio']);
-        $puedeMarcar = $user->canAccess('meta');
+        $puedeMarcar = $user->canAccess('meta') && $metas->veTodasLasSedes($user);
         $equiposPorSede = [];
 
         foreach ($filas->pluck('sede')->unique() as $sede) {
@@ -40,7 +40,10 @@ class MetaQuincenaController extends Controller
             'filas' => $filas,
             'puedeMarcar' => $puedeMarcar,
             'equiposPorSede' => $equiposPorSede,
-            'sedesDisponibles' => $metas->sedesDisponibles(),
+            'sedesDisponibles' => $metas->veTodasLasSedes($user)
+                ? $metas->sedesDisponibles()
+                : $metas->sedesDelSupervisor($user),
+            'soloSuSede' => ! $metas->veTodasLasSedes($user),
         ]);
     }
 
@@ -52,6 +55,8 @@ class MetaQuincenaController extends Controller
             'producto_id' => ['required', 'integer'],
             'sede' => ['required', 'string', 'max:32'],
         ]);
+
+        abort_unless($metas->puedeOperarSede($request->user(), $data['sede']), 403);
 
         try {
             $meta = $metas->marcar((int) $data['producto_id'], $data['sede'], $request->user());
@@ -84,6 +89,8 @@ class MetaQuincenaController extends Controller
             'sede' => ['required', 'string', 'max:32'],
         ]);
 
+        abort_unless($metas->puedeOperarSede($request->user(), $data['sede']), 403);
+
         $ok = $metas->desmarcar((int) $data['producto_id'], $data['sede']);
 
         return response()->json([
@@ -100,10 +107,7 @@ class MetaQuincenaController extends Controller
         $user = $request->user();
         abort_unless($metas->puedeVerMetas($user), 403);
 
-        if (! $user->canAccess('meta') && ! $user->isAdmin() && ! $user->isGerente()) {
-            $sedes = $metas->sedesDelSupervisor($user);
-            abort_unless(in_array(mb_strtoupper(trim($meta->sede), 'UTF-8'), $sedes, true), 403);
-        }
+        abort_unless($metas->puedeOperarSede($user, (string) $meta->sede), 403);
 
         $data = $request->validate([
             'responsable_empleado_id' => ['nullable', 'integer'],
@@ -158,15 +162,12 @@ class MetaQuincenaController extends Controller
         $user = $request->user();
         abort_unless($metas->puedeVerMetas($user), 403);
 
-        $quincena = $metas->resolverQuincenaListado($request->query('inicio'));
+        $quincena = $metas->resolverQuincenaListado($request->query('inicio'), null, $user);
         $filas = $metas->listarParaUsuario($user, $quincena['inicio']);
 
         $sedeFiltro = mb_strtoupper(trim((string) $request->query('sede', '')), 'UTF-8');
         if ($sedeFiltro !== '') {
-            if (! $user->canAccess('meta') && ! $user->isAdmin() && ! $user->isGerente()) {
-                $permitidas = $metas->sedesDelSupervisor($user);
-                abort_unless(in_array($sedeFiltro, $permitidas, true), 403);
-            }
+            abort_unless($metas->puedeOperarSede($user, $sedeFiltro), 403);
             $filas = $filas->where('sede', $sedeFiltro)->values();
         }
 
