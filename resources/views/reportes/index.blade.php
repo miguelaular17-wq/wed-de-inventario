@@ -18,7 +18,9 @@
                 <p class="muted" style="margin:0 0 16px;">{{ $reporte['descripcion'] }}</p>
                 <div style="display:flex; gap:10px; flex-wrap:wrap;">
                     <a href="{{ $reporte['url'] }}" class="btn btn-primary">Ver reporte</a>
-                    <a href="{{ $reporte['excel'] }}" class="btn btn-success">Descargar Excel</a>
+                    @if(! empty($reporte['excel']))
+                        <a href="{{ $reporte['excel'] }}" class="btn btn-success">Descargar Excel</a>
+                    @endif
                 </div>
             </div>
         @endforeach

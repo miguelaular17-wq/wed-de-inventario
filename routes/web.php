@@ -317,6 +317,8 @@ Route::middleware(['auth', 'permission:reportes,compras.existencias,compras'])->
     Route::get('/', [ReportesController::class, 'index'])->name('index');
     Route::get('/existencias-por-sede', [ReportesController::class, 'existenciasSede'])->name('existencias_sede');
     Route::get('/existencias-por-sede/excel', [ReportesController::class, 'existenciasSedeExcel'])->name('existencias_sede.excel');
+    Route::get('/ventas-por-proveedor', [ReportesController::class, 'proveedor'])->name('proveedor');
+    Route::get('/ventas-por-proveedor/excel', [ReportesController::class, 'proveedorExcel'])->name('proveedor.excel');
 });
 
 Route::middleware(['auth', 'permission:compras.reporte_sede'])->get('/compras/pedidos/reporte-diario-sede', [PedidoSolicitadoController::class, 'reporteDiarioSedePdf'])

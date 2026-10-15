@@ -16,7 +16,7 @@ return [
         'compras.existencias' => 'Compras: Existencias globales',
         'compras.publicidad' => 'Compras: Efectividad publicidad',
         'compras.reporte_sede' => 'Reporte diario de pedidos por sede',
-        'reportes' => 'Reportes (existencias por sede y exportables)',
+        'reportes' => 'Reportes (existencias, ventas por proveedor y exportables)',
         'catalogo.existencias' => 'Catálogo: tabla de stock (existencias por sede)',
         'catalogo.precios' => 'Catálogo: ver precios y Cashea',
         'catalogo.exportar_precios' => 'Catálogo: descargar Excel de precios con descuento',
