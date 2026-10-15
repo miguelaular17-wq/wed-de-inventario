@@ -1189,7 +1189,11 @@ class FinanzasController extends Controller
             : null;
 
         $lineas_query = \App\Models\ConciliacionLinea::query()
-            ->with(['flujoCaja', 'compraDivisa', 'tesoreriaIngreso'])
+            ->with([
+                'flujoCaja:id,motivo,concepto,tipo_gasto,categoria_egreso,banco,titular,banco_receptor,titular_receptor,monto_bs,monto_usd,fecha,referencia',
+                'compraDivisa:id,motivo,concepto,banco,titular,monto_bs,monto_usd,fecha,referencia',
+                'tesoreriaIngreso:id,tipo,banco,titular,monto_bs,fecha,referencia',
+            ])
             ->orderBy('fecha');
         
         if ($fecha_desde) {
@@ -1206,15 +1210,21 @@ class FinanzasController extends Controller
         $this->filtrarPorBanco($lineas_query, $banco_filtro);
         $lineas = $lineas_query->get();
 
-        // 3. Motor de emparejamiento automático
+        // 3. Motor de emparejamiento automático (acotado para no tumbar la página)
         $lineas_pendientes = $lineas->where('estado', 'pendiente')
             ->whereNull('flujo_caja_id')
             ->whereNull('tesoreria_ingreso_id');
         if (\Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'compra_divisa_id')) {
             $lineas_pendientes = $lineas_pendientes->whereNull('compra_divisa_id');
         }
+        $lineas_pendientes = $lineas_pendientes->sortByDesc('id')->take(200)->values();
         if ($lineas_pendientes->count() > 0) {
-            $fecha_minima    = now()->subDays(90)->format('Y-m-d');
+            $fecha_minima = $fecha_desde
+                ? \Carbon\Carbon::parse($fecha_desde)->subDays(7)->format('Y-m-d')
+                : now()->subDays(45)->format('Y-m-d');
+            $fecha_maxima = $fecha_hasta
+                ? \Carbon\Carbon::parse($fecha_hasta)->addDays(7)->format('Y-m-d')
+                : now()->format('Y-m-d');
             
             // Los traslados siguen disponibles tras marcar salida (para poder
             // emparejar también el abono en el banco receptor).
@@ -1224,11 +1234,30 @@ class FinanzasController extends Controller
                 })
                 ->where('tipo', 'egreso')
                 ->where('fecha', '>=', $fecha_minima)
-                ->get();
+                ->where('fecha', '<=', $fecha_maxima);
+            if ($banco_filtro) {
+                $variantesMatch = array_map(
+                    'strtolower',
+                    app(\App\Services\BankReconciliationMatcher::class)->variantesBanco($banco_filtro)
+                );
+                $flujos_posibles->where(function ($q) use ($variantesMatch) {
+                    $q->where(function ($banco) use ($variantesMatch) {
+                        foreach ($variantesMatch as $v) {
+                            $banco->orWhereRaw('LOWER(TRIM(banco)) = ?', [$v]);
+                        }
+                    })->orWhere(function ($receptor) use ($variantesMatch) {
+                        foreach ($variantesMatch as $v) {
+                            $receptor->orWhereRaw('LOWER(TRIM(banco_receptor)) = ?', [$v]);
+                        }
+                    });
+                });
+            }
+            $flujos_posibles = $flujos_posibles->limit(5000)->get();
 
             $comprasDivisasPosibles = \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')
                 ? \App\Models\CompraDivisa::where('es_conciliado', false)
                     ->where('fecha', '>=', $fecha_minima)
+                    ->where('fecha', '<=', $fecha_maxima)
                     ->get()
                 : collect();
 
@@ -1331,9 +1360,11 @@ class FinanzasController extends Controller
         // Repara traslados ya vinculados por salida que quedaron en tránsito
         // (antes se exigían los dos lados para marcar es_conciliado).
         $matcherRepair = app(\App\Services\BankReconciliationMatcher::class);
-        $this->desvincularPagomovilMalEmparejadoConLote($matcherRepair);
-        $this->marcarTrasladosConSalidaConciliados($matcherRepair);
-        $this->reasignarGastosVaciosAlEgresoReal($matcherRepair);
+        $repararDesde = $fecha_desde ?: now()->subDays(14)->format('Y-m-d');
+        $repararHasta = $fecha_hasta ?: now()->format('Y-m-d');
+        $this->desvincularPagomovilMalEmparejadoConLote($matcherRepair, $repararDesde, $repararHasta);
+        $this->marcarTrasladosConSalidaConciliados($matcherRepair, $repararDesde, $repararHasta);
+        $this->reasignarGastosVaciosAlEgresoReal($matcherRepair, $repararDesde, $repararHasta);
 
         // 4. Clasificar comisiones bancarias y compras de divisas del extracto
         $classifier = app(\App\Services\BankMovementClassifier::class);
@@ -1360,8 +1391,15 @@ class FinanzasController extends Controller
         // El archivo bancario solo se usa para conciliar.
         $periodo_desde = $fecha_desde ?: optional($lineas->sortBy('fecha')->first())->fecha;
         $periodo_hasta = $fecha_hasta ?: optional($lineas->sortByDesc('fecha')->first())->fecha;
-        $movimientos_sistema_query = \App\Models\FlujoCaja::where('oculto', false);
-        $ingresos_sistema_query = \App\Models\TesoreriaIngreso::query();
+        $movimientos_sistema_query = \App\Models\FlujoCaja::query()
+            ->where('oculto', false)
+            ->select([
+                'id', 'tipo', 'fecha', 'banco', 'titular', 'banco_receptor', 'titular_receptor',
+                'categoria_egreso', 'tipo_gasto', 'motivo', 'concepto', 'referencia',
+                'monto_bs', 'monto_usd', 'es_conciliado',
+            ]);
+        $ingresos_sistema_query = \App\Models\TesoreriaIngreso::query()
+            ->select(['id', 'tipo', 'fecha', 'banco', 'titular', 'referencia', 'monto_bs', 'es_conciliado']);
         if ($periodo_desde) {
             $movimientos_sistema_query->where('fecha', '>=', $periodo_desde);
             $ingresos_sistema_query->where('fecha', '>=', $periodo_desde);
@@ -1369,6 +1407,23 @@ class FinanzasController extends Controller
         if ($periodo_hasta) {
             $movimientos_sistema_query->where('fecha', '<=', $periodo_hasta);
             $ingresos_sistema_query->where('fecha', '<=', $periodo_hasta);
+        }
+        if ($banco_filtro) {
+            $variantes = array_map(
+                'strtolower',
+                app(\App\Services\BankReconciliationMatcher::class)->variantesBanco($banco_filtro)
+            );
+            $movimientos_sistema_query->where(function ($q) use ($variantes) {
+                $q->where(function ($banco) use ($variantes) {
+                    foreach ($variantes as $v) {
+                        $banco->orWhereRaw('LOWER(TRIM(banco)) = ?', [$v]);
+                    }
+                })->orWhere(function ($receptor) use ($variantes) {
+                    foreach ($variantes as $v) {
+                        $receptor->orWhereRaw('LOWER(TRIM(banco_receptor)) = ?', [$v]);
+                    }
+                });
+            });
         }
         $movimientos_sistema = $movimientos_sistema_query->get();
         $ingresos_sistema = $ingresos_sistema_query->get();
@@ -2788,16 +2843,23 @@ class FinanzasController extends Controller
     /**
      * PagoMóvil mal cruzado con lote POS (el "0134" del concepto es código de banco).
      */
-    private function desvincularPagomovilMalEmparejadoConLote(\App\Services\BankReconciliationMatcher $matcher): void
-    {
+    private function desvincularPagomovilMalEmparejadoConLote(
+        \App\Services\BankReconciliationMatcher $matcher,
+        ?string $desde = null,
+        ?string $hasta = null,
+    ): void {
         $lineas = \App\Models\ConciliacionLinea::query()
             ->whereNotNull('tesoreria_ingreso_id')
             ->where('estado', 'conciliado')
+            ->when($desde, fn ($q) => $q->where('fecha', '>=', $desde))
+            ->when($hasta, fn ($q) => $q->where('fecha', '<=', $hasta))
+            ->when(! $desde && ! $hasta, fn ($q) => $q->where('fecha', '>=', now()->subDays(14)->format('Y-m-d')))
             ->where(function ($q) {
                 foreach (['%pagomovil%', '%pago movil%', '%pago móvil%', '%pago-movil%', '%p. movil%', '%p.móvil%'] as $needle) {
                     $q->orWhereRaw('LOWER(descripcion) LIKE ?', [mb_strtolower($needle, 'UTF-8')]);
                 }
             })
+            ->limit(300)
             ->get();
 
         if ($lineas->isEmpty()) {
@@ -2837,11 +2899,17 @@ class FinanzasController extends Controller
      * Si la línea quedó atada a un egreso vacío (copia del extracto), pásala al
      * gasto real del mismo día para que salga de "En tránsito".
      */
-    private function reasignarGastosVaciosAlEgresoReal(\App\Services\BankReconciliationMatcher $matcher): void
-    {
+    private function reasignarGastosVaciosAlEgresoReal(
+        \App\Services\BankReconciliationMatcher $matcher,
+        ?string $desde = null,
+        ?string $hasta = null,
+    ): void {
+        $desde = $desde ?: now()->subDays(14)->format('Y-m-d');
+        $hasta = $hasta ?: now()->format('Y-m-d');
         $lineas = \App\Models\ConciliacionLinea::query()
             ->where('estado', 'conciliado')
             ->whereNotNull('flujo_caja_id')
+            ->whereBetween('fecha', [$desde, $hasta])
             ->whereHas('flujoCaja', function ($q) {
                 $q->where(function ($q) {
                     $q->whereNull('motivo')->orWhere('motivo', '');
@@ -2853,14 +2921,13 @@ class FinanzasController extends Controller
                 });
             })
             ->with('flujoCaja')
+            ->limit(300)
             ->get();
 
         if ($lineas->isEmpty()) {
             return;
         }
 
-        $desde = \Carbon\Carbon::parse($lineas->min('fecha'))->toDateString();
-        $hasta = \Carbon\Carbon::parse($lineas->max('fecha'))->toDateString();
         $candidatos = \App\Models\FlujoCaja::query()
             ->where('tipo', 'egreso')
             ->where('es_conciliado', false)
@@ -2868,6 +2935,7 @@ class FinanzasController extends Controller
             ->whereDate('fecha', '<=', $hasta)
             ->whereNotNull('motivo')
             ->where('motivo', '!=', '')
+            ->limit(2000)
             ->get();
 
         foreach ($lineas as $linea) {
@@ -2903,12 +2971,19 @@ class FinanzasController extends Controller
      * La entrada en el receptor puede conciliarse después; los traslados siguen disponibles
      * en el motor de emparejamiento.
      */
-    private function marcarTrasladosConSalidaConciliados(\App\Services\BankReconciliationMatcher $matcher): void
-    {
+    private function marcarTrasladosConSalidaConciliados(
+        \App\Services\BankReconciliationMatcher $matcher,
+        ?string $desde = null,
+        ?string $hasta = null,
+    ): void {
         $traslados = \App\Models\FlujoCaja::query()
             ->where('tipo', 'egreso')
             ->where('categoria_egreso', 'traslados')
             ->where('es_conciliado', false)
+            ->when($desde, fn ($q) => $q->where('fecha', '>=', $desde))
+            ->when($hasta, fn ($q) => $q->where('fecha', '<=', $hasta))
+            ->when(! $desde && ! $hasta, fn ($q) => $q->where('fecha', '>=', now()->subDays(45)->format('Y-m-d')))
+            ->limit(500)
             ->get();
 
         if ($traslados->isEmpty()) {

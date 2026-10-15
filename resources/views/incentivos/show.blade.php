@@ -8,7 +8,8 @@
     $pct = fn ($n) => $n === null ? '—' : number_format((float) $n, 1, ',', '.').'%';
     $gruposCruce = $evaluacion['grupos_cruce'] ?? [];
     $nCruce = $clave === 'telefonia' ? max(1, count($gruposCruce)) : 0;
-    $columnas = 15 + ($clave === 'supervisor' ? 1 : 0) + ($nCruce * 3);
+    $porSede = $clave === 'supervisor';
+    $columnas = $porSede ? 18 : (15 + ($nCruce * 3));
     $conSelector = in_array($clave, ['telefonia', 'arreglos'], true);
     $efectividad = in_array($clave, ['telefonia', 'ventas', 'arreglos'], true);
 @endphp
@@ -22,6 +23,8 @@
             El 100% de venta, productos y clientes es lo que vendió la tienda en el mes. La nota es 30% efectividad de piso, 50% venta cruzada y 20% producto meta.
         @elseif($efectividad)
             El 100% de venta, productos y clientes es lo que vendió la tienda en el mes. La nota es 70% efectividad de piso y 30% producto meta.
+        @elseif($porSede)
+            Una fila por sede. La nota promedia metas, nivelación, venta cruzada e inventario. El faltante de caja del mes se resta si es negativo y se suma si es positivo.
         @else
             La meta es la de la tienda, comparada con lo que vendió cada persona. Cada indicador se topa en 120% para la nota.
         @endif
@@ -37,14 +40,11 @@
             <button type="button" class="btn {{ $cruce['activo'] ? '' : 'secondary' }}" id="abrir-cruce">{{ $cruce['activo'] ? 'Activo' : 'Desactivado' }}</button>
         </div>
     @endif
-    <div class="table-wrap inc-wrap {{ $clave === 'telefonia' ? 'inc-scroll' : '' }}">
-        <table class="inc-table {{ $efectividad ? 'inc-efectividad' : '' }} {{ $clave === 'telefonia' ? 'inc-telefonia' : '' }}">
-            @if($clave !== 'telefonia')
+    <div class="table-wrap inc-wrap {{ $clave === 'telefonia' || $porSede ? 'inc-scroll' : '' }}">
+        <table class="inc-table {{ $efectividad ? 'inc-efectividad' : '' }} {{ $clave === 'telefonia' ? 'inc-telefonia' : '' }} {{ $porSede ? 'inc-sede' : '' }}">
+            @if($clave !== 'telefonia' && ! $porSede)
                 @php
                     $anchos = ['15%', '7%'];
-                    if ($clave === 'supervisor') {
-                        $anchos[] = '4%';
-                    }
                     foreach (range(1, 3) as $grupo) {
                         array_push($anchos, '7%', '7.2%', '4.2%');
                     }
@@ -100,13 +100,36 @@
                         <th class="inc-group g-nota">Nota</th>
                         <th class="g-nota">Incentivo</th>
                     </tr>
+                @elseif($porSede)
+                    <tr>
+                        <th class="inc-persona" rowspan="2">Sede</th>
+                        <th class="inc-group g-piso" colspan="9">Efectividad de metas</th>
+                        <th class="inc-group g-nivel" rowspan="2">Efectividad de nivelación</th>
+                        <th class="inc-group g-falta" rowspan="2">Efectividad de faltante de caja</th>
+                        <th class="inc-group g-cruce" rowspan="2">Efectividad de ventas cruzadas</th>
+                        <th class="inc-group g-inv" rowspan="2">Efectividad de inventario</th>
+                        <th class="inc-group g-pmeta" colspan="2">Productos meta</th>
+                        <th class="inc-group g-nota" colspan="2">Resultado</th>
+                    </tr>
+                    <tr>
+                        <th class="g-venta">Real</th>
+                        <th class="g-venta">Meta</th>
+                        <th class="g-venta">%</th>
+                        <th class="inc-group g-prod">Real</th>
+                        <th class="g-prod">Meta</th>
+                        <th class="g-prod">%</th>
+                        <th class="inc-group g-cli">Real</th>
+                        <th class="g-cli">Meta</th>
+                        <th class="g-cli">%</th>
+                        <th class="inc-group g-pmeta">Avance</th>
+                        <th class="g-pmeta">Estado</th>
+                        <th class="inc-group g-nota">Nota</th>
+                        <th class="g-nota">Incentivo</th>
+                    </tr>
                 @else
                     <tr>
                         <th class="inc-persona" rowspan="2">Persona</th>
                         <th rowspan="2">Sede</th>
-                        @if($clave === 'supervisor')
-                            <th rowspan="2">Equipo</th>
-                        @endif
                         <th class="inc-group g-venta" colspan="3">Venta</th>
                         <th class="inc-group g-prod" colspan="3">Productos</th>
                         <th class="inc-group g-cli" colspan="3">Clientes</th>
@@ -133,6 +156,9 @@
             <tbody>
                 @forelse ($evaluacion['filas'] as $fila)
                     <tr>
+                        @if($porSede)
+                            <td class="inc-persona">{{ $fila['nombre'] }}</td>
+                        @else
                         <td class="inc-persona">
                             {{ $fila['nombre'] }}
                             @if($fila['sin_codigo'])
@@ -140,8 +166,6 @@
                             @endif
                         </td>
                         <td>{{ $fila['sede'] }}</td>
-                        @if($clave === 'supervisor')
-                            <td class="inc-num">{{ $numero($fila['equipo']) }}</td>
                         @endif
                         <td class="inc-num inc-group g-venta">{{ $dinero($fila['monto']) }}</td>
                         <td class="inc-num g-venta">{{ $dinero($fila['meta_venta']) }}</td>
@@ -152,6 +176,12 @@
                         <td class="inc-num inc-group g-cli">{{ $numero($fila['clientes']) }}</td>
                         <td class="inc-num g-cli">{{ $numero($fila['meta_clientes']) }}</td>
                         <td class="inc-num g-cli">{{ $pct($fila['pct_clientes']) }}</td>
+                        @if($porSede)
+                            <td class="inc-num inc-group g-nivel" title="Qué tan parecido está el stock de la sede a la parte que le toca por lo que vendió">{{ $pct($fila['nivelacion_pct'] ?? null) }}</td>
+                            <td class="inc-num inc-group g-falta {{ ($fila['faltante_pct'] ?? 0) < 0 ? 'falta-neg' : '' }}" title="El total de faltante del mes es el 100%. Si la sede tiene faltante, el porcentaje es negativo y se resta">{{ $pct($fila['faltante_pct'] ?? null) }}</td>
+                            <td class="inc-num inc-group g-cruce" title="Unidades de las categorías o productos de cruce activos, sobre lo que vendió la sede">{{ $pct($fila['cruce_pct'] ?? null) }}</td>
+                            <td class="inc-num inc-group g-inv" title="Productos con existencia que se vendieron en el mes">{{ $pct($fila['inventario_pct'] ?? null) }}</td>
+                        @endif
                         @php
                             $estadoMeta = $fila['meta_prod_estado'];
                             if ($clave === 'arreglos' && $cruce && ! $cruce['activo']) {
@@ -181,12 +211,12 @@
                                 <td class="inc-num g-cruce">{{ $pct($columna['pct']) }}</td>
                             @endforeach
                         @endif
-                        <td class="inc-num inc-group g-nota" @if($clave === 'telefonia') title="Piso {{ $pct($fila['piso_pct']) }} × 30, cruce {{ $pct($fila['cruce_pct']) }} × 50, producto meta {{ $pct($fila['meta_prod_pct']) }} × 20" @elseif($efectividad) title="Piso {{ $pct($fila['piso_pct']) }} × 70, producto meta {{ $pct($fila['meta_prod_pct']) }} × 30" @endif>{{ $pct($fila['puntuacion']) }}</td>
+                        <td class="inc-num inc-group g-nota" @if($clave === 'telefonia') title="Piso {{ $pct($fila['piso_pct']) }} × 30, cruce {{ $pct($fila['cruce_pct']) }} × 50, producto meta {{ $pct($fila['meta_prod_pct']) }} × 20" @elseif($porSede) title="Promedio de metas {{ $pct($fila['metas_pct'] ?? null) }}, nivelación {{ $pct($fila['nivelacion_pct'] ?? null) }}, venta cruzada {{ $pct($fila['cruce_pct'] ?? null) }} e inventario {{ $pct($fila['inventario_pct'] ?? null) }}. Faltante {{ $pct($fila['faltante_pct'] ?? null) }}" @elseif($efectividad) title="Piso {{ $pct($fila['piso_pct']) }} × 70, producto meta {{ $pct($fila['meta_prod_pct']) }} × 30" @endif>{{ $pct($fila['puntuacion']) }}</td>
                         <td class="inc-num g-nota">{{ $fila['tramo'] ?? '—' }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ $columnas }}">No hay personas activas con este cargo.</td>
+                        <td colspan="{{ $columnas }}">{{ $porSede ? 'No hay sedes para evaluar.' : 'No hay personas activas con este cargo.' }}</td>
                     </tr>
                 @endforelse
             </tbody>
@@ -196,6 +226,8 @@
         <p class="muted" style="margin:10px 0 0;">Hay tres categorías. Cada una tiene Cruce, Estado y %, nueve columnas en total. Activa las que faltan en el botón. El porcentaje es la parte de ese trabajador en esa categoría dentro de su tienda, y el promedio de las activas vale el 50% de la nota.</p>
     @elseif($efectividad)
         <p class="muted" style="margin:10px 0 0;">El porcentaje es la venta de cada trabajador dividida entre lo que vendió la tienda en el mes. Ese piso vale 70% de la nota y el producto meta vale 30%.</p>
+    @elseif($porSede)
+        <p class="muted" style="margin:10px 0 0;">Metas compara lo que vendió la sede con la meta de la tienda. Nivelación mira si el stock se parece a lo que vende. Venta cruzada es la parte de las categorías activas. Inventario es la parte de los productos con existencia que se vendieron. Esas cuatro se promedian. El faltante de caja usa el total del mes como 100%: si hay faltante se resta y si el monto es positivo se suma.</p>
     @endif
 </div>
 
@@ -261,6 +293,18 @@
     .inc-table tbody .g-prod { background: #f6fbf8; }
     .inc-table thead .g-cli { background: #fff4e5; color: #9a3412; }
     .inc-table tbody .g-cli { background: #fffaf3; }
+    .inc-sede { width: max-content; min-width: 100%; table-layout: auto; }
+    .inc-sede .g-nivel,
+    .inc-sede .g-falta,
+    .inc-sede .g-cruce,
+    .inc-sede .g-inv { min-width: 108px; white-space: normal; }
+    .inc-table thead .g-nivel { background: #ccfbf1; color: #115e59; }
+    .inc-table tbody .g-nivel { background: #f0fdfa; }
+    .inc-table thead .g-falta { background: #fee2e2; color: #991b1b; }
+    .inc-table tbody .g-falta { background: #fff5f5; }
+    .falta-neg { color: #b91c1c; font-weight: 700; }
+    .inc-table thead .g-inv { background: #fef3c7; color: #92400e; }
+    .inc-table tbody .g-inv { background: #fffbeb; }
     .inc-table thead .g-cruce { background: #f3e8ff; color: #6b21a8; }
     .inc-table tbody .g-cruce { background: #faf7ff; }
     .inc-table thead .g-pmeta { background: #e0f2fe; color: #075985; }

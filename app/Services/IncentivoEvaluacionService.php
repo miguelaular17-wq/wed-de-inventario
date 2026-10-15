@@ -23,24 +23,15 @@ class IncentivoEvaluacionService
     {
         $desde = now()->startOfMonth();
         $hasta = now();
+        if ($clave === 'supervisor') {
+            return $this->evaluarSedes($desde, $hasta);
+        }
         $personas = $this->personas($modulo['cargos'] ?? []);
         $metas = $this->metasPorSede();
         $claves = [];
         foreach ($personas as $persona) {
             foreach ($this->clavesDe($persona) as $codigo) {
                 $claves[$codigo] = true;
-            }
-        }
-
-        $equipos = [];
-        if ($clave === 'supervisor') {
-            $equipos = $this->equipos($personas->pluck('id')->all());
-            foreach ($equipos as $miembros) {
-                foreach ($miembros as $miembro) {
-                    foreach ($this->clavesDe($miembro) as $codigo) {
-                        $claves[$codigo] = true;
-                    }
-                }
             }
         }
 
@@ -84,13 +75,11 @@ class IncentivoEvaluacionService
 
         $filas = [];
         foreach ($personas as $persona) {
-            $filas[] = $clave === 'supervisor'
-                ? $this->filaSupervisor($persona, $equipos[$persona->id] ?? [], $ventas, $metas, $productosMeta)
-                : $this->filaPersona($persona, $ventas, $metas, $cruces, $clave === 'telefonia', $cruceActivo, $productosMeta, $sinMedicion, $tiendas, $gruposCruce, $crucesPorItem, match ($clave) {
-                    'telefonia' => 'telefonia',
-                    'ventas', 'arreglos' => 'piso',
-                    default => null,
-                });
+            $filas[] = $this->filaPersona($persona, $ventas, $metas, $cruces, $clave === 'telefonia', $cruceActivo, $productosMeta, $sinMedicion, $tiendas, $gruposCruce, $crucesPorItem, match ($clave) {
+                'telefonia' => 'telefonia',
+                'ventas', 'arreglos' => 'piso',
+                default => null,
+            });
         }
 
         usort($filas, function (array $a, array $b) {
@@ -145,60 +134,6 @@ class IncentivoEvaluacionService
         return $out;
     }
 
-    /**
-     * @param  list<int>  $supervisorIds
-     * @return array<int, list<NominaEmpleado>>
-     */
-    private function equipos(array $supervisorIds): array
-    {
-        $out = [];
-        foreach ($supervisorIds as $id) {
-            $out[$id] = [];
-        }
-        if ($supervisorIds === []) {
-            return $out;
-        }
-
-        $ids = [];
-        $porSupervisor = [];
-        if (Schema::hasTable('nomina_empleado_supervisores')) {
-            $pivot = DB::table('nomina_empleado_supervisores')
-                ->whereIn('supervisor_id', $supervisorIds)
-                ->get(['supervisor_id', 'empleado_id']);
-            foreach ($pivot as $row) {
-                $porSupervisor[(int) $row->supervisor_id][] = (int) $row->empleado_id;
-                $ids[] = (int) $row->empleado_id;
-            }
-        }
-
-        $directos = NominaEmpleado::query()
-            ->whereIn('supervisor_id', $supervisorIds)
-            ->where('estado', 'ACTIVO')
-            ->pluck('supervisor_id', 'id');
-        foreach ($directos as $empleadoId => $supervisorId) {
-            $porSupervisor[(int) $supervisorId][] = (int) $empleadoId;
-            $ids[] = (int) $empleadoId;
-        }
-
-        $miembros = NominaEmpleado::query()
-            ->with(['sedeCatalogo', 'vendedores'])
-            ->whereIn('id', array_values(array_unique($ids)))
-            ->where('estado', 'ACTIVO')
-            ->get()
-            ->keyBy('id');
-
-        foreach ($porSupervisor as $supervisorId => $miembroIds) {
-            $lista = [];
-            foreach (array_unique($miembroIds) as $miembroId) {
-                if ($miembros->has($miembroId)) {
-                    $lista[] = $miembros->get($miembroId);
-                }
-            }
-            $out[$supervisorId] = $lista;
-        }
-
-        return $out;
-    }
 
     /**
      * @return list<string>
@@ -623,45 +558,348 @@ class IncentivoEvaluacionService
     }
 
     /**
-     * @param  list<NominaEmpleado>  $equipo
-     * @param  array<string, array{monto:float, unidades:float, clientes:int}>  $ventas
-     * @param  array<string, VentaDiariaMeta>  $metas
-     * @return array<string, mixed>
+     * Una fila por sede. El real es lo que vendió la tienda y la meta es la de esa tienda.
+     *
+     * @return array{desde:string, hasta:string, filas:list<array<string, mixed>>, grupos_cruce:list<empty>}
      */
-    /**
-     * @param  array<string, array{cumplidas:int, total:int, estado:?string}>  $productosMeta
-     */
-    private function filaSupervisor(NominaEmpleado $persona, array $equipo, array $ventas, array $metas, array $productosMeta): array
+    private function evaluarSedes(Carbon $desde, Carbon $hasta): array
     {
-        $claves = [];
-        foreach ($equipo as $miembro) {
-            foreach ($this->clavesDe($miembro) as $codigo) {
-                $claves[] = $codigo;
+        $metas = $this->metasPorSede();
+        $tiendas = $this->totalesTienda($desde, $hasta, [], []);
+        $productos = $this->productosMetaPorSede();
+        $nombres = $this->nombresSede();
+        $nivelacion = $this->nivelacionPorSede($desde, $hasta);
+        $inventario = $this->rotacionInventarioPorSede($desde, $hasta);
+        $faltante = $this->faltantePorSede($desde, $hasta);
+        $cruce = $this->cruceEfectividadPorSede($desde, $hasta, $tiendas);
+        $filas = [];
+        foreach (config('inventario.sedes_locales', []) as $codigo) {
+            $codigo = strtoupper(trim((string) $codigo));
+            if ($codigo === '') {
+                continue;
             }
+            $suma = $tiendas[$codigo] ?? ['monto' => 0.0, 'unidades' => 0.0, 'clientes' => 0];
+            $fila = $this->armarFila(
+                $nombres[$codigo] ?? $codigo,
+                '',
+                $nombres[$codigo] ?? $codigo,
+                false,
+                [
+                    'monto' => (float) $suma['monto'],
+                    'unidades' => (float) $suma['unidades'],
+                    'clientes' => (int) $suma['clientes'],
+                ],
+                $metas[$codigo] ?? null,
+                null,
+                null,
+                null,
+                $productos[$codigo] ?? ['cumplidas' => null, 'total' => null, 'estado' => null],
+            );
+            $fila['metas_pct'] = $fila['puntuacion'];
+            $fila['nivelacion_pct'] = $nivelacion[$codigo] ?? null;
+            $fila['faltante_pct'] = $faltante['por_sede'][$codigo] ?? ($faltante['total'] > 0 ? 0.0 : null);
+            $fila['cruce_pct'] = $cruce[$codigo] ?? null;
+            $fila['inventario_pct'] = $inventario[$codigo] ?? null;
+            $fila['puntuacion'] = $this->notaSede($fila);
+            $fila['tramo'] = $this->tramo($fila['puntuacion']);
+            $filas[] = $fila;
         }
-        $suma = $this->sumarClaves(array_values(array_unique($claves)), $ventas);
-        $meta = $metas[$this->sedeCodigo($persona)] ?? null;
-        if (! $meta) {
-            foreach ($equipo as $miembro) {
-                if ($encontrada = $metas[$this->sedeCodigo($miembro)] ?? null) {
-                    $meta = $encontrada;
-                    break;
+
+        usort($filas, function (array $a, array $b) {
+            $pa = $a['puntuacion'];
+            $pb = $b['puntuacion'];
+            if ($pa === null && $pb === null) {
+                return strcasecmp($a['nombre'], $b['nombre']);
+            }
+            if ($pa === null) {
+                return 1;
+            }
+            if ($pb === null) {
+                return -1;
+            }
+
+            return $pb <=> $pa ?: strcasecmp($a['nombre'], $b['nombre']);
+        });
+
+        return [
+            'desde' => $desde->format('d/m/Y'),
+            'hasta' => $hasta->format('d/m/Y'),
+            'filas' => $filas,
+            'grupos_cruce' => [],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function nombresSede(): array
+    {
+        $out = [];
+        foreach (config('inventario.display', []) as $codigo => $nombre) {
+            $out[strtoupper(trim((string) $codigo))] = (string) $nombre;
+        }
+        if (Schema::hasTable('nomina_sedes')) {
+            foreach (DB::table('nomina_sedes')->get(['codigo', 'nombre']) as $row) {
+                $codigo = strtoupper(trim((string) $row->codigo));
+                $nombre = trim((string) $row->nombre);
+                if ($codigo !== '' && $nombre !== '') {
+                    $out[$codigo] = $nombre;
                 }
             }
         }
 
-        return $this->armarFila(
-            $persona->nombre(),
-            $persona->nombreCargo(),
-            $persona->nombreSede(),
-            false,
-            $suma,
-            $meta,
-            null,
-            0,
-            count($equipo),
-            $productosMeta[$persona->id] ?? ['cumplidas' => null, 'total' => null, 'estado' => null],
-        );
+        return $out;
+    }
+
+    /**
+     * Qué tan cerca está el stock de la sede de la parte que le toca por lo que vendió.
+     *
+     * @return array<string, float>
+     */
+    private function nivelacionPorSede(Carbon $desde, Carbon $hasta): array
+    {
+        if (! Schema::hasTable('stock_actual') || ! Schema::hasTable('ventas_detalle')) {
+            return [];
+        }
+
+        $sedes = $this->codigosSede();
+        if ($sedes === []) {
+            return [];
+        }
+
+        $anulado = Schema::hasColumn('ventas_detalle', 'anulado')
+            ? 'AND (vd.anulado IS NULL OR vd.anulado = false)'
+            : '';
+        $marcas = implode(',', array_fill(0, count($sedes), '?'));
+        $sql = "
+            WITH ventas AS (
+                SELECT vd.producto_id, UPPER(TRIM(vd.sede)) AS sede,
+                    SUM(CASE WHEN vd.tipo_documento = 'DEV' THEN -ABS(COALESCE(vd.cantidad, 0)) ELSE COALESCE(vd.cantidad, 0) END) AS uds
+                FROM ventas_detalle vd
+                WHERE vd.fecha BETWEEN ? AND ?
+                  AND vd.tipo_documento IN ('FAC', 'DEV')
+                  AND vd.producto_id IS NOT NULL
+                  AND UPPER(TRIM(vd.sede)) IN ({$marcas})
+                  {$anulado}
+                GROUP BY vd.producto_id, UPPER(TRIM(vd.sede))
+            ),
+            stock AS (
+                SELECT producto_id, UPPER(TRIM(sede)) AS sede, SUM(COALESCE(existencia, 0)) AS stock
+                FROM stock_actual
+                WHERE producto_id IS NOT NULL
+                  AND UPPER(TRIM(sede)) IN ({$marcas})
+                GROUP BY producto_id, UPPER(TRIM(sede))
+            ),
+            base AS (
+                SELECT COALESCE(v.producto_id, s.producto_id) AS producto_id,
+                       COALESCE(v.sede, s.sede) AS sede,
+                       COALESCE(v.uds, 0) AS uds,
+                       GREATEST(COALESCE(s.stock, 0), 0) AS stock
+                FROM ventas v
+                FULL OUTER JOIN stock s ON s.producto_id = v.producto_id AND s.sede = v.sede
+            ),
+            tot AS (
+                SELECT producto_id, SUM(uds) AS uds, SUM(stock) AS stock
+                FROM base
+                GROUP BY producto_id
+                HAVING SUM(uds) > 0 AND SUM(stock) > 0
+            ),
+            gaps AS (
+                SELECT b.sede,
+                       ABS(b.stock - (t.stock * b.uds / NULLIF(t.uds, 0))) AS gap,
+                       (t.stock * b.uds / NULLIF(t.uds, 0)) AS ideal
+                FROM base b
+                JOIN tot t ON t.producto_id = b.producto_id
+                WHERE b.sede IN ({$marcas})
+            )
+            SELECT sede, COALESCE(SUM(gap), 0) AS gap, COALESCE(SUM(ideal), 0) AS ideal
+            FROM gaps
+            GROUP BY sede
+        ";
+
+        $out = [];
+        foreach (DB::select($sql, array_merge([$desde->toDateString(), $hasta->toDateString()], $sedes, $sedes, $sedes)) as $row) {
+            $ideal = (float) $row->ideal;
+            $out[(string) $row->sede] = $ideal <= 0
+                ? 0.0
+                : round(max(0, min(100, 100 - ((float) $row->gap / $ideal * 100))), 1);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Productos con existencia que además se vendieron en el mes.
+     *
+     * @return array<string, float>
+     */
+    private function rotacionInventarioPorSede(Carbon $desde, Carbon $hasta): array
+    {
+        if (! Schema::hasTable('stock_actual') || ! Schema::hasTable('ventas_detalle') || ! Schema::hasColumn('ventas_detalle', 'producto_id')) {
+            return [];
+        }
+
+        $anulado = Schema::hasColumn('ventas_detalle', 'anulado')
+            ? 'AND (vd.anulado IS NULL OR vd.anulado = false)'
+            : '';
+        $sql = "
+            WITH stock AS (
+                SELECT UPPER(TRIM(sede)) AS sede, producto_id
+                FROM stock_actual
+                WHERE COALESCE(existencia, 0) > 0 AND producto_id IS NOT NULL
+                GROUP BY UPPER(TRIM(sede)), producto_id
+            ),
+            vendidos AS (
+                SELECT DISTINCT UPPER(TRIM(vd.sede)) AS sede, vd.producto_id
+                FROM ventas_detalle vd
+                WHERE vd.fecha BETWEEN ? AND ?
+                  AND vd.tipo_documento = 'FAC'
+                  AND COALESCE(vd.cantidad, 0) > 0
+                  AND vd.producto_id IS NOT NULL
+                  {$anulado}
+            )
+            SELECT s.sede, COUNT(*) AS con_stock, COUNT(v.producto_id) AS rotaron
+            FROM stock s
+            LEFT JOIN vendidos v ON v.sede = s.sede AND v.producto_id = s.producto_id
+            GROUP BY s.sede
+        ";
+
+        $out = [];
+        foreach (DB::select($sql, [$desde->toDateString(), $hasta->toDateString()]) as $row) {
+            $conStock = (int) $row->con_stock;
+            $out[(string) $row->sede] = $conStock > 0
+                ? round(((int) $row->rotaron / $conStock) * 100, 1)
+                : null;
+        }
+
+        return $out;
+    }
+
+    /**
+     * El total de faltante del mes es el 100%. El de la sede sale negativo.
+     *
+     * @return array{total:float, por_sede:array<string, float>}
+     */
+    private function faltantePorSede(Carbon $desde, Carbon $hasta): array
+    {
+        $vacio = ['total' => 0.0, 'por_sede' => []];
+        if (! Schema::hasTable('nomina_comision_descuentos') || ! Schema::hasTable('nomina_empleados')) {
+            return $vacio;
+        }
+
+        $sedeExpr = Schema::hasTable('nomina_sedes')
+            ? "UPPER(TRIM(COALESCE(ns.codigo, e.sede, '')))"
+            : "UPPER(TRIM(COALESCE(e.sede, '')))";
+        $query = DB::table('nomina_comision_descuentos as d')
+            ->join('nomina_empleados as e', 'e.id', '=', 'd.empleado_id')
+            ->where('d.tipo', 'FALTANTE')
+            ->where('d.estado', '!=', 'CANCELADO')
+            ->whereBetween('d.fecha', [$desde->toDateString(), $hasta->toDateString()]);
+        if (Schema::hasTable('nomina_sedes')) {
+            $query->leftJoin('nomina_sedes as ns', 'ns.id', '=', 'e.sede_id');
+        }
+
+        $porMonto = [];
+        $total = 0.0;
+        foreach ($query->selectRaw($sedeExpr.' as sede')->selectRaw('SUM(d.monto) as monto')->groupByRaw($sedeExpr)->get() as $row) {
+            $monto = round((float) $row->monto, 2);
+            $total += $monto;
+            if ((string) $row->sede !== '') {
+                $porMonto[(string) $row->sede] = $monto;
+            }
+        }
+        if ($total <= 0) {
+            return $vacio;
+        }
+
+        $porSede = [];
+        foreach ($this->codigosSede() as $codigo) {
+            $porSede[$codigo] = round(-($porMonto[$codigo] ?? 0) / $total * 100, 1);
+        }
+
+        return ['total' => round($total, 2), 'por_sede' => $porSede];
+    }
+
+    /**
+     * Parte de las unidades de la sede que son de las categorías o productos de cruce activos.
+     *
+     * @param  array<string, array{monto:float, unidades:float, clientes:int, cruce:float}>  $tiendas
+     * @return array<string, float|null>
+     */
+    private function cruceEfectividadPorSede(Carbon $desde, Carbon $hasta, array $tiendas): array
+    {
+        if (! Schema::hasTable('incentivo_cruce_items')) {
+            return [];
+        }
+
+        $grupos = [];
+        foreach (DB::table('incentivo_cruce_items')->where('activo', true)->get(['tipo', 'clave', 'nombre']) as $row) {
+            $clave = strtoupper(trim((string) $row->clave));
+            if ($clave === '') {
+                continue;
+            }
+            $grupos[$row->tipo.'|'.$clave] = [
+                'tipo' => (string) $row->tipo,
+                'clave' => $clave,
+                'nombre' => (string) $row->nombre,
+            ];
+        }
+        if ($grupos === []) {
+            return [];
+        }
+
+        $unidades = [];
+        foreach ($this->cruceSedes($desde, $hasta, array_values($grupos)) as $sede => $porClave) {
+            $unidades[$sede] = array_sum($porClave);
+        }
+
+        $out = [];
+        foreach ($this->codigosSede() as $codigo) {
+            $total = (float) ($tiendas[$codigo]['unidades'] ?? 0);
+            $pct = $this->porcentaje((float) ($unidades[$codigo] ?? 0), $total > 0 ? $total : null);
+            $out[$codigo] = $pct === null ? null : min(100, $pct);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $fila
+     */
+    private function notaSede(array $fila): ?float
+    {
+        $partes = [];
+        foreach (['metas_pct', 'nivelacion_pct', 'cruce_pct', 'inventario_pct'] as $campo) {
+            if (($fila[$campo] ?? null) !== null) {
+                $partes[] = $this->acotarCien((float) $fila[$campo]);
+            }
+        }
+        if ($partes === []) {
+            return null;
+        }
+
+        $nota = array_sum($partes) / count($partes);
+        if (($fila['faltante_pct'] ?? null) !== null) {
+            $nota += (float) $fila['faltante_pct'];
+        }
+
+        return round($nota, 1);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function codigosSede(): array
+    {
+        $out = [];
+        foreach (config('inventario.sedes_locales', []) as $codigo) {
+            $codigo = strtoupper(trim((string) $codigo));
+            if ($codigo !== '') {
+                $out[] = $codigo;
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -795,6 +1033,14 @@ class IncentivoEvaluacionService
     }
 
     /**
+     * @return array<int, array{cumplidas:int, total:int, estado:string}>
+     */
+    public function productosMetaAsignados(): array
+    {
+        return $this->productosMetaPorEmpleado(null, false);
+    }
+
+    /**
      * La meta de producto asignada a cada persona en la quincena.
      * En Arreglo solo entra si además está en la selección activa.
      *
@@ -869,6 +1115,72 @@ class IncentivoEvaluacionService
         }
 
         return $porEmpleado;
+    }
+
+    /**
+     * Productos de la quincena cumplidos en cada sede.
+     *
+     * @return array<string, array{cumplidas:int, total:int, estado:string}>
+     */
+    private function productosMetaPorSede(): array
+    {
+        if (! Schema::hasTable('meta_quincena_productos') || ! Schema::hasTable('productos') || ! Schema::hasTable('ventas_detalle')) {
+            return [];
+        }
+
+        $quincena = $this->metasQuincena->resolverQuincenaListado(null);
+        $inicio = $quincena['inicio']->toDateString();
+        $fin = $quincena['fin']->toDateString();
+
+        $metas = DB::table('meta_quincena_productos as m')
+            ->join('productos as p', 'p.id', '=', 'm.producto_id')
+            ->whereDate('m.quincena_inicio', $inicio)
+            ->get(['m.producto_id', 'm.sede', 'm.cantidad_inicial']);
+
+        if ($metas->isEmpty()) {
+            return [];
+        }
+
+        $ids = $metas->pluck('producto_id')->unique()->values()->all();
+        $ventas = DB::table('ventas_detalle')
+            ->whereIn('producto_id', $ids)
+            ->whereBetween('fecha', [$inicio, $fin])
+            ->when(Schema::hasColumn('ventas_detalle', 'anulado'), function ($query) {
+                $query->where(function ($q) {
+                    $q->whereNull('anulado')->orWhere('anulado', false);
+                });
+            })
+            ->selectRaw('producto_id')
+            ->selectRaw('UPPER(TRIM(sede)) as sede')
+            ->selectRaw("SUM(CASE WHEN UPPER(COALESCE(tipo_documento, '')) = 'DEV' THEN -ABS(COALESCE(cantidad, 0)) ELSE ABS(COALESCE(cantidad, 0)) END) as unidades")
+            ->groupBy('producto_id', DB::raw('UPPER(TRIM(sede))'))
+            ->get();
+
+        $vendido = [];
+        foreach ($ventas as $venta) {
+            $vendido[(int) $venta->producto_id.'|'.(string) $venta->sede] = (float) $venta->unidades;
+        }
+
+        $porSede = [];
+        foreach ($metas as $meta) {
+            $sede = strtoupper(trim((string) $meta->sede));
+            if ($sede === '') {
+                continue;
+            }
+            $inicial = (float) $meta->cantidad_inicial;
+            $unidades = $vendido[(int) $meta->producto_id.'|'.$sede] ?? 0.0;
+            $cumplida = $inicial > 0 ? $unidades >= $inicial : $unidades > 0;
+            $porSede[$sede]['cumplidas'] = ($porSede[$sede]['cumplidas'] ?? 0) + ($cumplida ? 1 : 0);
+            $porSede[$sede]['total'] = ($porSede[$sede]['total'] ?? 0) + 1;
+        }
+
+        foreach ($porSede as $sede => $dato) {
+            $porSede[$sede]['estado'] = $dato['total'] > 0 && $dato['cumplidas'] === $dato['total']
+                ? 'Cumplida'
+                : 'No cumplió';
+        }
+
+        return $porSede;
     }
 
     /**

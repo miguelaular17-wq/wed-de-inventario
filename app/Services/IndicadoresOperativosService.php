@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Nomina\NominaEmpleado;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -9,6 +10,8 @@ use Illuminate\Support\Facades\Schema;
 
 class IndicadoresOperativosService
 {
+    public function __construct(private IncentivoEvaluacionService $incentivos) {}
+
     /**
      * @return array{kpis: array<string, int|float>, personas: list<array<string, mixed>>}
      */
@@ -99,72 +102,105 @@ class IndicadoresOperativosService
     }
 
     /**
-     * @return array{kpis: array<string, int|float>, porCaja: list<array<string, mixed>>}
+     * Misma efectividad en tienda que asesor de ventas. El total de faltante del mes es el 100%:
+     * si la persona tiene faltante el porcentaje es negativo y se resta; si es positivo se suma.
+     *
+     * @return array{desde:string, hasta:string, filas:list<array<string, mixed>>}
      */
     public function cajas(Carbon $inicio, Carbon $fin, ?string $sede): array
     {
         $vacio = [
-            'kpis' => ['facturas' => 0, 'monto' => 0, 'ticket' => 0],
-            'porCaja' => [],
+            'desde' => $inicio->format('d/m/Y'),
+            'hasta' => $fin->format('d/m/Y'),
+            'filas' => [],
         ];
 
         if (! Schema::hasTable('ventas_detalle') || ! Schema::hasColumn('ventas_detalle', 'cajera')) {
             return $vacio;
         }
 
-        $monto = Schema::hasColumn('ventas_detalle', 'precio_neto')
-            ? 'COALESCE(vd.precio_neto, 0)'
-            : 'COALESCE(vd.precio_venta, 0) * COALESCE(vd.cantidad, 0)';
+        $tienda = $this->totalesPorSede($inicio, $fin, $sede);
+        $grupos = $this->ventasPorCajera($inicio, $fin, $sede);
+        $faltantes = $this->faltantesDelMes($inicio, $fin);
+        $totalFaltante = round((float) array_sum($faltantes), 2);
+        $productosMeta = $this->incentivos->productosMetaAsignados();
+        $etiquetas = $this->etiquetasSede();
 
-        $query = DB::table('ventas_detalle as vd')
-            ->where('vd.tipo_documento', 'FAC')
-            ->whereBetween('vd.fecha', [$inicio->toDateString(), $fin->toDateString()]);
-        if ($sede) {
-            $query->whereRaw('UPPER(TRIM(vd.sede)) = ?', [$sede]);
-        }
-
-        if (Schema::hasColumn('ventas_detalle', 'anulado')) {
-            $query->where(function ($q) {
-                $q->whereNull('vd.anulado')->orWhere('vd.anulado', false);
-            });
-        }
-
-        $rows = $query
-            ->selectRaw("UPPER(TRIM(vd.sede)) as sede")
-            ->selectRaw("COALESCE(NULLIF(TRIM(vd.cajera), ''), 'Sin cajera') as cajera")
-            ->selectRaw('COUNT(DISTINCT vd.numero_documento) as facturas')
-            ->selectRaw("SUM({$monto}) as monto")
-            ->groupBy(DB::raw('UPPER(TRIM(vd.sede))'), DB::raw("COALESCE(NULLIF(TRIM(vd.cajera), ''), 'Sin cajera')"))
-            ->orderBy('sede')
-            ->orderByDesc('monto')
+        $empleados = NominaEmpleado::query()
+            ->activos()
+            ->with(['cliente', 'sedeCatalogo', 'cargoCatalogo'])
+            ->where(function ($builder) {
+                $builder
+                    ->whereHas('cargoCatalogo', function ($cargo) {
+                        $cargo->whereRaw('LOWER(nombre) LIKE ?', ['%cajer%']);
+                    })
+                    ->orWhereRaw("LOWER(COALESCE(cargo, '')) LIKE ?", ['%cajer%']);
+            })
             ->get();
 
-        $porSede = [];
-        foreach ($rows as $row) {
-            $facturas = (int) $row->facturas;
-            $importe = round((float) $row->monto, 2);
-            $porSede[$row->sede]['sede'] = $row->sede;
-            $porSede[$row->sede]['facturas'] = ($porSede[$row->sede]['facturas'] ?? 0) + $facturas;
-            $porSede[$row->sede]['monto'] = ($porSede[$row->sede]['monto'] ?? 0) + $importe;
-            $porSede[$row->sede]['cajeras'][] = [
-                'cajera' => $row->cajera,
-                'facturas' => $facturas,
-                'monto' => $importe,
-                'ticket' => $facturas > 0 ? round($importe / $facturas, 2) : 0,
-            ];
+        $pares = [];
+        foreach ($empleados as $empleado) {
+            $tokens = $this->tokensNombre($empleado->nombre());
+            foreach ($grupos as $clave => $grupo) {
+                $puntos = $this->puntajeNombre($tokens, $grupo['tokens']);
+                if ($puntos >= 3) {
+                    $pares[] = ['id' => $empleado->id, 'clave' => $clave, 'puntos' => $puntos];
+                }
+            }
+        }
+        usort($pares, fn (array $a, array $b) => $b['puntos'] <=> $a['puntos']);
+        $asignados = [];
+        $usados = [];
+        foreach ($pares as $par) {
+            if (isset($usados[$par['clave']]) || isset($asignados[$par['id']])) {
+                continue;
+            }
+            $asignados[$par['id']] = $par['clave'];
+            $usados[$par['clave']] = true;
         }
 
-        $sedesOut = array_values($porSede);
-        $facturas = array_sum(array_column($sedesOut, 'facturas'));
-        $totalMonto = array_sum(array_column($sedesOut, 'monto'));
+        $filas = [];
+        foreach ($empleados as $empleado) {
+            $grupo = isset($asignados[$empleado->id]) ? $grupos[$asignados[$empleado->id]] : null;
+            $sedeEmpleado = strtoupper(trim((string) ($empleado->sedeCatalogo?->codigo ?: $empleado->sede)));
+            $bucket = $this->bucketCajera($grupo, $sedeEmpleado);
+            $sedeCodigo = $bucket['sede'] !== '' ? $bucket['sede'] : $sedeEmpleado;
+            $filas[] = $this->filaCaja(
+                $empleado->nombre(),
+                $etiquetas[$sedeCodigo] ?? ($sedeCodigo !== '' ? $sedeCodigo : '—'),
+                $bucket['suma'],
+                $tienda[$sedeCodigo] ?? ['monto' => 0.0, 'unidades' => 0.0, 'clientes' => 0],
+                $productosMeta[$empleado->id] ?? ['cumplidas' => null, 'total' => null, 'estado' => null],
+                (float) ($faltantes[$empleado->id] ?? 0),
+                $totalFaltante,
+            );
+        }
+
+        foreach ($grupos as $clave => $grupo) {
+            if (isset($usados[$clave])) {
+                continue;
+            }
+            $bucket = $this->bucketCajera($grupo, '');
+            $sedeCodigo = $bucket['sede'];
+            $filas[] = $this->filaCaja(
+                $grupo['nombre'],
+                $etiquetas[$sedeCodigo] ?? ($sedeCodigo !== '' ? $sedeCodigo : '—'),
+                $bucket['suma'],
+                $tienda[$sedeCodigo] ?? ['monto' => 0.0, 'unidades' => 0.0, 'clientes' => 0],
+                ['cumplidas' => null, 'total' => null, 'estado' => null],
+                0.0,
+                $totalFaltante,
+            );
+        }
+
+        usort($filas, function (array $a, array $b) {
+            return ($b['puntuacion'] <=> $a['puntuacion']) ?: strcasecmp((string) $a['nombre'], (string) $b['nombre']);
+        });
 
         return [
-            'kpis' => [
-                'facturas' => (int) $facturas,
-                'monto' => round($totalMonto, 2),
-                'ticket' => $facturas > 0 ? round($totalMonto / $facturas, 2) : 0,
-            ],
-            'porCaja' => $sedesOut,
+            'desde' => $inicio->format('d/m/Y'),
+            'hasta' => $fin->format('d/m/Y'),
+            'filas' => $filas,
         ];
     }
 
@@ -242,6 +278,264 @@ class IndicadoresOperativosService
             ],
             'porSede' => $porSede,
         ];
+    }
+
+    /**
+     * @return array<string, array{monto:float, unidades:float, clientes:int}>
+     */
+    private function totalesPorSede(Carbon $inicio, Carbon $fin, ?string $sede): array
+    {
+        $query = $this->ventasCaja($inicio, $fin, $sede);
+        $rows = $query
+            ->selectRaw('UPPER(TRIM(vd.sede)) as sede')
+            ->selectRaw("SUM(CASE WHEN vd.tipo_documento = 'DEV' THEN -ABS(COALESCE(vd.cantidad, 0)) ELSE COALESCE(vd.cantidad, 0) END) as unidades")
+            ->selectRaw("SUM(CASE WHEN vd.tipo_documento = 'DEV' THEN -ABS(COALESCE(vd.cantidad, 0) * COALESCE(vd.precio_neto, vd.precio_venta, 0)) ELSE COALESCE(vd.cantidad, 0) * COALESCE(vd.precio_neto, vd.precio_venta, 0) END) as monto")
+            ->selectRaw("COUNT(DISTINCT CASE WHEN vd.tipo_documento = 'FAC' AND NULLIF(TRIM(vd.cliente), '') IS NOT NULL THEN UPPER(TRIM(vd.cliente)) END) as clientes")
+            ->groupByRaw('UPPER(TRIM(vd.sede))')
+            ->get();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $codigo = (string) $row->sede;
+            if ($codigo === '') {
+                continue;
+            }
+            $out[$codigo] = [
+                'monto' => (float) $row->monto,
+                'unidades' => (float) $row->unidades,
+                'clientes' => (int) $row->clientes,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<string, array{nombre:string, tokens:list<string>, sedes:array<string, array{monto:float, unidades:float, clientes:int}>}>
+     */
+    private function ventasPorCajera(Carbon $inicio, Carbon $fin, ?string $sede): array
+    {
+        $rows = $this->ventasCaja($inicio, $fin, $sede)
+            ->whereRaw("NULLIF(TRIM(vd.cajera), '') IS NOT NULL")
+            ->whereRaw("UPPER(TRIM(vd.cajera)) <> 'SIN CAJERA'")
+            ->selectRaw('UPPER(TRIM(vd.sede)) as sede')
+            ->selectRaw('UPPER(TRIM(vd.cajera)) as cajera')
+            ->selectRaw("SUM(CASE WHEN vd.tipo_documento = 'DEV' THEN -ABS(COALESCE(vd.cantidad, 0)) ELSE COALESCE(vd.cantidad, 0) END) as unidades")
+            ->selectRaw("SUM(CASE WHEN vd.tipo_documento = 'DEV' THEN -ABS(COALESCE(vd.cantidad, 0) * COALESCE(vd.precio_neto, vd.precio_venta, 0)) ELSE COALESCE(vd.cantidad, 0) * COALESCE(vd.precio_neto, vd.precio_venta, 0) END) as monto")
+            ->selectRaw("COUNT(DISTINCT CASE WHEN vd.tipo_documento = 'FAC' AND NULLIF(TRIM(vd.cliente), '') IS NOT NULL THEN UPPER(TRIM(vd.cliente)) END) as clientes")
+            ->groupByRaw('UPPER(TRIM(vd.sede))')
+            ->groupByRaw('UPPER(TRIM(vd.cajera))')
+            ->get();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $nombre = (string) $row->cajera;
+            $codigo = (string) $row->sede;
+            if ($nombre === '' || $codigo === '') {
+                continue;
+            }
+            $out[$nombre]['nombre'] = $nombre;
+            $out[$nombre]['tokens'] = $this->tokensNombre($nombre);
+            $out[$nombre]['sedes'][$codigo] = [
+                'monto' => (float) $row->monto,
+                'unidades' => (float) $row->unidades,
+                'clientes' => (int) $row->clientes,
+            ];
+        }
+
+        return $out;
+    }
+
+    private function ventasCaja(Carbon $inicio, Carbon $fin, ?string $sede)
+    {
+        $query = DB::table('ventas_detalle as vd')
+            ->whereBetween('vd.fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->whereIn('vd.tipo_documento', ['FAC', 'DEV']);
+        if ($sede) {
+            $query->whereRaw('UPPER(TRIM(vd.sede)) = ?', [strtoupper(trim($sede))]);
+        }
+        if (Schema::hasColumn('ventas_detalle', 'anulado')) {
+            $query->where(function ($q) {
+                $q->whereNull('vd.anulado')->orWhere('vd.anulado', false);
+            });
+        }
+
+        return $query;
+    }
+
+    /**
+     * @return array<int, float>
+     */
+    private function faltantesDelMes(Carbon $inicio, Carbon $fin): array
+    {
+        if (! Schema::hasTable('nomina_comision_descuentos')) {
+            return [];
+        }
+
+        $rows = DB::table('nomina_comision_descuentos')
+            ->where('tipo', 'FALTANTE')
+            ->where('estado', '!=', 'CANCELADO')
+            ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->selectRaw('empleado_id')
+            ->selectRaw('SUM(monto) as monto')
+            ->groupBy('empleado_id')
+            ->get();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row->empleado_id] = round((float) $row->monto, 2);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function etiquetasSede(): array
+    {
+        $out = [];
+        foreach (config('inventario.display', []) as $codigo => $nombre) {
+            $out[strtoupper(trim((string) $codigo))] = (string) $nombre;
+        }
+        if (Schema::hasTable('nomina_sedes')) {
+            foreach (DB::table('nomina_sedes')->get(['codigo', 'nombre']) as $row) {
+                $codigo = strtoupper(trim((string) $row->codigo));
+                $nombre = trim((string) $row->nombre);
+                if ($codigo !== '' && $nombre !== '') {
+                    $out[$codigo] = $nombre;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array{nombre:string, tokens:list<string>, sedes:array<string, array{monto:float, unidades:float, clientes:int}>}|null  $grupo
+     * @return array{sede:string, suma:array{monto:float, unidades:float, clientes:int}}
+     */
+    private function bucketCajera(?array $grupo, string $sedePreferida): array
+    {
+        $cero = ['monto' => 0.0, 'unidades' => 0.0, 'clientes' => 0];
+        if ($grupo === null) {
+            return ['sede' => $sedePreferida, 'suma' => $cero];
+        }
+        if ($sedePreferida !== '' && isset($grupo['sedes'][$sedePreferida])) {
+            return ['sede' => $sedePreferida, 'suma' => $grupo['sedes'][$sedePreferida]];
+        }
+
+        $mejor = '';
+        $monto = -INF;
+        foreach ($grupo['sedes'] as $codigo => $suma) {
+            if ($suma['monto'] > $monto) {
+                $monto = $suma['monto'];
+                $mejor = (string) $codigo;
+            }
+        }
+
+        return ['sede' => $mejor, 'suma' => $grupo['sedes'][$mejor] ?? $cero];
+    }
+
+    /**
+     * @param  array{monto:float, unidades:float, clientes:int}  $suma
+     * @param  array{monto:float, unidades:float, clientes:int}  $tienda
+     * @param  array{cumplidas:?int, total:?int, estado:?string}  $productosMeta
+     * @return array<string, mixed>
+     */
+    private function filaCaja(string $nombre, string $sede, array $suma, array $tienda, array $productosMeta, float $faltante, float $faltanteMes): array
+    {
+        $pctVenta = $this->porcentajeCaja((float) $suma['monto'], (float) $tienda['monto']);
+        $pctProductos = $this->porcentajeCaja((float) $suma['unidades'], (float) $tienda['unidades']);
+        $pctClientes = $this->porcentajeCaja((float) $suma['clientes'], (float) $tienda['clientes']);
+        $piso = round((($pctVenta ?? 0) + ($pctProductos ?? 0) + ($pctClientes ?? 0)) / 3, 1);
+        $totalMeta = (int) ($productosMeta['total'] ?? 0);
+        $metaProd = $totalMeta > 0
+            ? round(((int) $productosMeta['cumplidas'] / $totalMeta) * 100, 1)
+            : 0.0;
+        $puntuacion = round($this->acotarCien($piso) * 0.70 + $this->acotarCien($metaProd) * 0.30, 1);
+        $faltantePct = null;
+        if ($faltanteMes > 0) {
+            $faltantePct = round(-$faltante / $faltanteMes * 100, 1);
+            $puntuacion = round($puntuacion + $faltantePct, 1);
+        }
+
+        return [
+            'nombre' => $nombre,
+            'sede' => $sede,
+            'monto' => $suma['monto'],
+            'meta_venta' => (float) $tienda['monto'],
+            'pct_venta' => $pctVenta,
+            'unidades' => $suma['unidades'],
+            'meta_productos' => (float) $tienda['unidades'],
+            'pct_productos' => $pctProductos,
+            'clientes' => $suma['clientes'],
+            'meta_clientes' => (float) $tienda['clientes'],
+            'pct_clientes' => $pctClientes,
+            'piso_pct' => $piso,
+            'meta_prod_pct' => $metaProd,
+            'meta_prod_cumplidas' => $productosMeta['cumplidas'],
+            'meta_prod_total' => $productosMeta['total'],
+            'meta_prod_estado' => $productosMeta['estado'],
+            'faltante' => $faltante,
+            'faltante_mes' => $faltanteMes > 0 ? $faltanteMes : null,
+            'faltante_pct' => $faltantePct,
+            'puntuacion' => $puntuacion,
+        ];
+    }
+
+    private function porcentajeCaja(float $real, float $meta): ?float
+    {
+        if ($meta <= 0) {
+            return null;
+        }
+
+        return round($real / $meta * 100, 1);
+    }
+
+    private function acotarCien(float $porcentaje): float
+    {
+        return min(max($porcentaje, 0), 100);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function tokensNombre(string $nombre): array
+    {
+        $nombre = mb_strtoupper(trim($nombre), 'UTF-8');
+        $nombre = strtr($nombre, ['Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ü' => 'U', 'Ñ' => 'N']);
+        $nombre = preg_replace('/[^A-Z\s]/', ' ', $nombre) ?? '';
+        $partes = preg_split('/\s+/', trim($nombre)) ?: [];
+        $stop = ['DE', 'DEL', 'LA', 'LAS', 'LOS', 'DA', 'DO', 'DAS', 'Y'];
+
+        return array_values(array_filter($partes, fn ($parte) => $parte !== '' && ! in_array($parte, $stop, true)));
+    }
+
+    /**
+     * @param  list<string>  $empleado
+     * @param  list<string>  $cajera
+     */
+    private function puntajeNombre(array $empleado, array $cajera): int
+    {
+        $puntos = 0;
+        $usados = [];
+        foreach ($cajera as $token) {
+            foreach ($empleado as $i => $otro) {
+                if (isset($usados[$i])) {
+                    continue;
+                }
+                $igual = $token === $otro;
+                $cerca = strlen($token) >= 5 && strlen($otro) >= 5 && levenshtein($token, $otro) <= 1;
+                if ($igual || $cerca) {
+                    $usados[$i] = true;
+                    $puntos += $igual ? 2 : 1;
+                    break;
+                }
+            }
+        }
+
+        return $puntos;
     }
 
     /**

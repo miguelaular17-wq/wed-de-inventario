@@ -160,13 +160,9 @@ class GerencialController extends Controller
         return view('gerencial.compras', $ctx + $data);
     }
 
-    public function cajas(Request $request, GerencialDashboardService $gerencial, IndicadoresOperativosService $indicadores): View
+    public function cajas(IndicadoresOperativosService $indicadores): View
     {
-        $ctx = $this->contexto($request, $gerencial);
-        $sede = $this->sedeFiltro($ctx['filtros']['sede']);
-        $data = $indicadores->cajas($ctx['periodo']['inicio'], $ctx['periodo']['fin'], $sede);
-
-        return view('gerencial.cajas', $ctx + $data);
+        return view('gerencial.cajas', $indicadores->cajas(now()->startOfMonth(), now(), null));
     }
 
     public function traslados(Request $request, GerencialDashboardService $gerencial, IndicadoresOperativosService $indicadores): View
