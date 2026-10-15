@@ -24,6 +24,7 @@ use App\Http\Controllers\Nfc\NfcRecompensaController;
 use App\Http\Controllers\Nfc\NfcTarjetaController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PedidoSolicitadoController;
+use App\Http\Controllers\ReportesController;
 use App\Http\Controllers\ServicioTecnico\CelularesController;
 use App\Http\Controllers\ServicioTecnico\DashboardController as ServicioDashboardController;
 use App\Http\Controllers\ServicioTecnico\FacturaController;
@@ -310,6 +311,12 @@ Route::middleware(['auth', 'permission:compras,compras.distribucion,compras.nece
     // Existencias (antes edurar)
     Route::get('/existencias', [\App\Http\Controllers\ExistenciasController::class, 'index'])->name('comprador.existencias');
     Route::get('/existencias/subcategorias', [\App\Http\Controllers\ExistenciasController::class, 'getSubcategorias'])->name('comprador.existencias.subcategorias');
+});
+
+Route::middleware(['auth', 'permission:reportes,compras.existencias,compras'])->prefix('reportes')->name('reportes.')->group(function () {
+    Route::get('/', [ReportesController::class, 'index'])->name('index');
+    Route::get('/existencias-por-sede', [ReportesController::class, 'existenciasSede'])->name('existencias_sede');
+    Route::get('/existencias-por-sede/excel', [ReportesController::class, 'existenciasSedeExcel'])->name('existencias_sede.excel');
 });
 
 Route::middleware(['auth', 'permission:compras.reporte_sede'])->get('/compras/pedidos/reporte-diario-sede', [PedidoSolicitadoController::class, 'reporteDiarioSedePdf'])

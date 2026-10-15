@@ -158,6 +158,10 @@
         if ($comprasAdmin) {
             $nav[] = count($comprasAdmin) === 1 ? $comprasAdmin[0] : $drop('Compras', $comprasAdmin);
         }
+        $nav[] = $drop('Reportes', [
+            $link('Todos los reportes', route('reportes.index'), request()->routeIs('reportes.index')),
+            $link('Existencias por sede', route('reportes.existencias_sede'), request()->routeIs('reportes.existencias_sede*')),
+        ]);
         $nav[] = $drop('Finanzas', $finanzasItems);
         $nav[] = $drop('Cobranza', $cobranzaItems);
     }
@@ -231,6 +235,10 @@
         $nav[] = count($comprasItems) === 1
             ? $comprasItems[0]
             : $drop('Compras', $comprasItems);
+        $nav[] = $drop('Reportes', [
+            $link('Todos los reportes', route('reportes.index'), request()->routeIs('reportes.index')),
+            $link('Existencias por sede', route('reportes.existencias_sede'), request()->routeIs('reportes.existencias_sede*')),
+        ]);
         $nav[] = $drop('Finanzas', $finanzasItems);
         $nav[] = $drop('Cobranza', $cobranzaItems);
     } elseif ($u->role !== 'admin') {
@@ -241,6 +249,12 @@
                     ? $comprasItems[0]
                     : $drop($u->isMarketing() ? 'Marketing' : 'Compras', $comprasItems);
             }
+        }
+        if ($u->canAccessAny(['reportes', 'compras.existencias', 'compras'])) {
+            $nav[] = $drop('Reportes', [
+                $link('Todos los reportes', route('reportes.index'), request()->routeIs('reportes.index')),
+                $link('Existencias por sede', route('reportes.existencias_sede'), request()->routeIs('reportes.existencias_sede*')),
+            ]);
         }
         if ($u->canAccess('finanzas.ver')) {
             $nav[] = $link('Flujo de Caja', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*'));
