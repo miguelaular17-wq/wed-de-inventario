@@ -1190,9 +1190,9 @@ class FinanzasController extends Controller
 
         $lineas_query = \App\Models\ConciliacionLinea::query()
             ->with([
-                'flujoCaja:id,motivo,concepto,tipo_gasto,categoria_egreso,banco,titular,banco_receptor,titular_receptor,monto_bs,monto_usd,fecha,referencia',
+                'flujoCaja:id,motivo,tipo_gasto,categoria_egreso,banco,titular,banco_receptor,titular_receptor,monto_bs,monto_usd,fecha,referencia',
                 'compraDivisa:id,motivo,concepto,banco,titular,monto_bs,monto_usd,fecha,referencia',
-                'tesoreriaIngreso:id,tipo,banco,titular,monto_bs,fecha,referencia',
+                'tesoreriaIngreso:id,tipo,banco,titular,monto,fecha',
             ])
             ->orderBy('fecha');
         
@@ -1395,11 +1395,11 @@ class FinanzasController extends Controller
             ->where('oculto', false)
             ->select([
                 'id', 'tipo', 'fecha', 'banco', 'titular', 'banco_receptor', 'titular_receptor',
-                'categoria_egreso', 'tipo_gasto', 'motivo', 'concepto', 'referencia',
-                'monto_bs', 'monto_usd', 'es_conciliado',
+                'categoria_egreso', 'tipo_gasto', 'motivo', 'referencia',
+                'monto_bs', 'monto_usd', 'comision', 'es_conciliado',
             ]);
         $ingresos_sistema_query = \App\Models\TesoreriaIngreso::query()
-            ->select(['id', 'tipo', 'fecha', 'banco', 'titular', 'referencia', 'monto_bs', 'es_conciliado']);
+            ->select(['id', 'tipo', 'fecha', 'banco', 'titular', 'monto', 'es_conciliado']);
         if ($periodo_desde) {
             $movimientos_sistema_query->where('fecha', '>=', $periodo_desde);
             $ingresos_sistema_query->where('fecha', '>=', $periodo_desde);
