@@ -21,7 +21,7 @@ class ReportesController extends Controller
             'reportes' => [
                 [
                     'titulo' => 'Existencias por sede',
-                    'descripcion' => 'Código, producto, existencia en cada sede (JRZ, Doral, Virtudes, Zamora, Centro, Sambil) y total.',
+                    'descripcion' => 'Código, producto, categoría, subcategoría, existencia en cada sede (JRZ, Doral, Virtudes, Zamora, Centro, Sambil) y total.',
                     'url' => route('reportes.existencias_sede'),
                     'excel' => route('reportes.existencias_sede.excel'),
                 ],
@@ -86,6 +86,8 @@ class ReportesController extends Controller
         $rows = [[
             'Código',
             'Producto',
+            'Categoría',
+            'Subcategoría',
             'JRZ',
             'DORAL',
             'VIRTUDES',
@@ -99,6 +101,8 @@ class ReportesController extends Controller
             $rows[] = [
                 $fila->codigo,
                 $fila->producto,
+                $fila->categoria,
+                $fila->subcategoria,
                 (int) $fila->jrz,
                 (int) $fila->doral,
                 (int) $fila->virtudes,
@@ -305,6 +309,8 @@ class ReportesController extends Controller
             SELECT
                 p.codigo,
                 p.nombre AS producto,
+                p.categoria,
+                p.subcategoria,
                 COALESCE(SUM(sa.existencia) FILTER (WHERE sa.sede = 'JRZ'), 0) AS jrz,
                 COALESCE(SUM(sa.existencia) FILTER (WHERE sa.sede = 'DORAL'), 0) AS doral,
                 COALESCE(SUM(sa.existencia) FILTER (WHERE sa.sede = 'VIRTUDES'), 0) AS virtudes,
@@ -315,7 +321,7 @@ class ReportesController extends Controller
             FROM inventario_v2.productos p
             LEFT JOIN inventario_v2.stock_actual sa ON sa.producto_id = p.id
             WHERE {$where}
-            GROUP BY p.id, p.codigo, p.nombre
+            GROUP BY p.id, p.codigo, p.nombre, p.categoria, p.subcategoria
             ORDER BY p.codigo
         ";
     }

@@ -10,7 +10,7 @@
                 <a href="{{ route('reportes.index') }}">Reportes</a> · Existencias por sede
             </p>
             <h1 style="margin:0;">Existencias por sede</h1>
-            <p class="muted" style="margin:4px 0 0;">Código, producto, stock por sede y total. {{ number_format($total) }} productos.</p>
+            <p class="muted" style="margin:4px 0 0;">Código, producto, categoría, subcategoría, stock por sede y total. {{ number_format($total) }} productos.</p>
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
             <a href="{{ route('reportes.existencias_sede.excel', ['q' => $q]) }}" class="btn btn-success">Descargar Excel</a>
@@ -34,6 +34,8 @@
                 <tr>
                     <th>Código</th>
                     <th>Producto</th>
+                    <th>Categoría</th>
+                    <th>Subcategoría</th>
                     @foreach($sedes as $sede)
                         <th style="text-align:right;">{{ $sede }}</th>
                     @endforeach
@@ -45,6 +47,8 @@
                     <tr>
                         <td><strong>{{ $fila->codigo }}</strong></td>
                         <td>{{ $fila->producto }}</td>
+                        <td>{{ $fila->categoria ?: '—' }}</td>
+                        <td>{{ $fila->subcategoria ?: '—' }}</td>
                         <td style="text-align:right;">{{ number_format((int) $fila->jrz) }}</td>
                         <td style="text-align:right;">{{ number_format((int) $fila->doral) }}</td>
                         <td style="text-align:right;">{{ number_format((int) $fila->virtudes) }}</td>
@@ -55,7 +59,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="9" class="muted" style="text-align:center; padding:24px;">Sin productos para mostrar.</td>
+                        <td colspan="11" class="muted" style="text-align:center; padding:24px;">Sin productos para mostrar.</td>
                     </tr>
                 @endforelse
             </tbody>
