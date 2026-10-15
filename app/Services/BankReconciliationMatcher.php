@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\ConciliacionLinea;
-use Carbon\Carbon;
 
 class BankReconciliationMatcher
 {
@@ -15,6 +14,12 @@ class BankReconciliationMatcher
 
     /** @var array<string, array<string, array<int, object>>> */
     private array $egresosPorRef = [];
+
+    /** @var array<int, array<int, object>> */
+    private array $trasladosPorCents = [];
+
+    /** @var array<string, int|null> */
+    private array $diaCache = [];
 
     public function mismosMontos(float|int|string|null $a, float|int|string|null $b): bool
     {
@@ -172,11 +177,79 @@ class BankReconciliationMatcher
 
     public function fechaCercana($fechaA, $fechaB, int $dias = 3): bool
     {
-        try {
-            return abs(Carbon::parse($fechaA)->diffInDays(Carbon::parse($fechaB))) <= $dias;
-        } catch (\Throwable) {
-            return false;
+        $a = $this->diaNumero($fechaA);
+        $b = $this->diaNumero($fechaB);
+
+        return $a !== null && $b !== null && abs($a - $b) <= $dias;
+    }
+
+    /**
+     * Día juliano simple, sin Carbon. Carbon::parse en cada comparación
+     * tumba la página cuando el mes trae miles de movimientos.
+     */
+    private function diaNumero($fecha): ?int
+    {
+        if ($fecha instanceof \DateTimeInterface) {
+            $clave = $fecha->format('Y-m-d');
+        } elseif (is_string($fecha) || is_numeric($fecha)) {
+            $clave = substr((string) $fecha, 0, 10);
+        } else {
+            return null;
         }
+
+        if (array_key_exists($clave, $this->diaCache)) {
+            return $this->diaCache[$clave];
+        }
+
+        if (! preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $clave, $m)) {
+            return $this->diaCache[$clave] = null;
+        }
+
+        $unix = gmmktime(0, 0, 0, (int) $m[2], (int) $m[3], (int) $m[1]);
+        if ($unix === false) {
+            return $this->diaCache[$clave] = null;
+        }
+
+        return $this->diaCache[$clave] = intdiv((int) $unix, 86400);
+    }
+
+    public function indexarTraslados(iterable $traslados): void
+    {
+        $this->trasladosPorCents = [];
+        foreach ($traslados as $flujo) {
+            $id = (int) ($flujo->id ?? 0);
+            if ($id === 0) {
+                continue;
+            }
+            foreach ([$flujo->monto_bs ?? null, $flujo->monto ?? null] as $monto) {
+                if ($monto === null || abs((float) $monto) < 0.004) {
+                    continue;
+                }
+                $base = round(abs((float) $monto), 2);
+                $cents = (int) round($base * 100);
+                $this->trasladosPorCents[$cents][$id] = $flujo;
+                foreach ([0.02, 0.015] as $fee) {
+                    $neto = (int) round(round($base * (1 - $fee), 2) * 100);
+                    $this->trasladosPorCents[$neto][$id] = $flujo;
+                }
+            }
+        }
+    }
+
+    /**
+     * @return array<int, object>
+     */
+    public function trasladosPorMonto(object $linea): array
+    {
+        $cents = (int) round(abs((float) ($linea->monto ?? 0)) * 100);
+        $out = [];
+        for ($delta = -5; $delta <= 5; $delta++) {
+            foreach ($this->trasladosPorCents[$cents + $delta] ?? [] as $id => $flujo) {
+                $out[$id] = $flujo;
+            }
+        }
+
+        return $out;
     }
 
     public function mismoBanco(?string $a, ?string $b): bool

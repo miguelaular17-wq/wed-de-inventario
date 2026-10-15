@@ -241,6 +241,7 @@ class ManualRequisitionTest extends TestCase
 
         $response = $this->actingAs($user)
             ->withSession(['sede_local' => 'ZAMORA'])
+            ->withHeaders(['X-Requested-With' => 'XMLHttpRequest', 'Accept' => 'application/json'])
             ->post(route('requisicion.export'), [
                 'tipo_reporte' => 'ventas',
                 'sede_origen' => 'Todas',
@@ -349,6 +350,7 @@ class ManualRequisitionTest extends TestCase
         // 2. Export single-sede CSV. CSV content should contain PROD_STAR and NOT PROD_NON_STAR.
         $responseExport = $this->actingAs($user)
             ->withSession(['sede_local' => 'ZAMORA'])
+            ->withHeaders(['X-Requested-With' => 'XMLHttpRequest', 'Accept' => 'application/json'])
             ->post(route('requisicion.export'), [
                 'tipo_reporte' => 'mayor_demanda',
                 'sede_origen' => 'JRZ',
@@ -358,10 +360,17 @@ class ManualRequisitionTest extends TestCase
             ]);
 
         $files = $this->csvFiles($responseExport);
-        $this->assertSame(['Requisicion_ZAMORA_desde_JRZ.csv'], array_keys($files));
-        $csv = $files['Requisicion_ZAMORA_desde_JRZ.csv'];
+        $this->assertSame([
+            'Requisicion_ZAMORA_desde_JRZ_separador_punto_y_coma.csv',
+            'Requisicion_ZAMORA_desde_JRZ_separador_coma.csv',
+        ], array_keys($files));
+        $csv = $files['Requisicion_ZAMORA_desde_JRZ_separador_punto_y_coma.csv'];
         $this->assertStringContainsString('PROD_STAR;UND', $csv);
         $this->assertStringNotContainsString('PROD_NON_STAR', $csv);
+        $this->assertStringContainsString(
+            'PROD_STAR,UND',
+            $files['Requisicion_ZAMORA_desde_JRZ_separador_coma.csv']
+        );
     }
 
     public function test_export_manual_todas_las_sedes_genera_un_csv_por_origen(): void
@@ -425,6 +434,7 @@ class ManualRequisitionTest extends TestCase
 
         $response = $this->actingAs($user)
             ->withSession(['sede_local' => 'ZAMORA'])
+            ->withHeaders(['X-Requested-With' => 'XMLHttpRequest', 'Accept' => 'application/json'])
             ->post(route('requisicion.export'), [
                 'tipo_reporte' => 'personalizada',
                 'sede_origen' => 'Todas',
@@ -433,14 +443,17 @@ class ManualRequisitionTest extends TestCase
             ]);
 
         $files = $this->csvFiles($response);
-        $this->assertCount(2, $files);
-        $this->assertArrayHasKey('Requisicion_manual_JRZ.csv', $files);
-        $this->assertArrayHasKey('Requisicion_manual_Virtude.csv', $files);
-        $this->assertStringContainsString("codigo;unidad;cantidad\n", $files['Requisicion_manual_JRZ.csv']);
-        $this->assertStringContainsString('MAN_JRZ;UND;1', $files['Requisicion_manual_JRZ.csv']);
-        $this->assertStringContainsString('MAN_VIRT;UND;2', $files['Requisicion_manual_Virtude.csv']);
-        $this->assertStringNotContainsString('MAN_VIRT', $files['Requisicion_manual_JRZ.csv']);
-        $this->assertStringNotContainsString('MAN_JRZ', $files['Requisicion_manual_Virtude.csv']);
+        $this->assertCount(4, $files);
+        $this->assertArrayHasKey('Requisicion_manual_JRZ_separador_punto_y_coma.csv', $files);
+        $this->assertArrayHasKey('Requisicion_manual_JRZ_separador_coma.csv', $files);
+        $this->assertArrayHasKey('Requisicion_manual_Virtude_separador_punto_y_coma.csv', $files);
+        $this->assertArrayHasKey('Requisicion_manual_Virtude_separador_coma.csv', $files);
+        $this->assertStringContainsString("codigo;unidad;cantidad\n", $files['Requisicion_manual_JRZ_separador_punto_y_coma.csv']);
+        $this->assertStringContainsString('MAN_JRZ;UND;1', $files['Requisicion_manual_JRZ_separador_punto_y_coma.csv']);
+        $this->assertStringContainsString('MAN_VIRT;UND;2', $files['Requisicion_manual_Virtude_separador_punto_y_coma.csv']);
+        $this->assertStringContainsString('MAN_JRZ,UND,1', $files['Requisicion_manual_JRZ_separador_coma.csv']);
+        $this->assertStringNotContainsString('MAN_VIRT', $files['Requisicion_manual_JRZ_separador_punto_y_coma.csv']);
+        $this->assertStringNotContainsString('MAN_JRZ', $files['Requisicion_manual_Virtude_separador_punto_y_coma.csv']);
     }
 
     /**

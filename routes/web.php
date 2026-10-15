@@ -276,6 +276,7 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'permission:operacion'])->
     Route::get('/inventario/sync', [InventarioController::class, 'sync'])->name('inventario.sync');
     Route::get('/requisicion', [RequisicionController::class, 'form'])->name('requisicion.form');
     Route::post('/requisicion/exportar', [RequisicionController::class, 'export'])->name('requisicion.export');
+    Route::post('/requisicion/exportar-hecha', [RequisicionController::class, 'exportHecha'])->name('requisicion.export_hecha');
 });
 
 

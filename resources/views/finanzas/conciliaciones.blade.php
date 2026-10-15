@@ -330,7 +330,7 @@
                     <tbody>
                         @forelse($d['conciliados'] as $row)
                         <tr>
-                            <td>{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
+                            <td>{{ ($row['fecha'] instanceof \DateTimeInterface ? $row['fecha']->format('d/m/Y') : substr((string) $row['fecha'], 8, 2).'/'.substr((string) $row['fecha'], 5, 2).'/'.substr((string) $row['fecha'], 0, 4)) }}</td>
                             <td>
                                 <span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span>
                             </td>
@@ -374,7 +374,7 @@
                     <tbody>
                         @forelse($d['en_transito'] as $row)
                         <tr>
-                            <td>{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
+                            <td>{{ ($row['fecha'] instanceof \DateTimeInterface ? $row['fecha']->format('d/m/Y') : substr((string) $row['fecha'], 8, 2).'/'.substr((string) $row['fecha'], 5, 2).'/'.substr((string) $row['fecha'], 0, 4)) }}</td>
                             <td><span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span></td>
                             <td style="max-width:200px;font-size:0.82rem;">
                                 {{ Str::limit($row['concepto'] ?: $row['motivo'], 50) }}
@@ -417,7 +417,7 @@
                     <tbody>
                         @forelse($d['sin_registrar'] as $row)
                         <tr>
-                            <td>{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
+                            <td>{{ ($row['fecha'] instanceof \DateTimeInterface ? $row['fecha']->format('d/m/Y') : substr((string) $row['fecha'], 8, 2).'/'.substr((string) $row['fecha'], 5, 2).'/'.substr((string) $row['fecha'], 0, 4)) }}</td>
                             <td><span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span></td>
                             <td style="max-width:200px;font-size:0.82rem;">
                                 {{ Str::limit($row['descripcion'], 55) }}
@@ -469,7 +469,7 @@
                     <tbody>
                         @forelse($d['comisiones'] as $row)
                         <tr>
-                            <td>{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
+                            <td>{{ ($row['fecha'] instanceof \DateTimeInterface ? $row['fecha']->format('d/m/Y') : substr((string) $row['fecha'], 8, 2).'/'.substr((string) $row['fecha'], 5, 2).'/'.substr((string) $row['fecha'], 0, 4)) }}</td>
                             <td style="max-width:200px;font-size:0.82rem;">{{ Str::limit($row['descripcion'], 55) }}</td>
                             <td><span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span></td>
                             <td class="monto-cell monto-purple">
@@ -514,7 +514,7 @@
                     <tbody>
                         @forelse(($d['compras_divisas_banco'] ?? collect()) as $row)
                         <tr>
-                            <td>{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
+                            <td>{{ ($row['fecha'] instanceof \DateTimeInterface ? $row['fecha']->format('d/m/Y') : substr((string) $row['fecha'], 8, 2).'/'.substr((string) $row['fecha'], 5, 2).'/'.substr((string) $row['fecha'], 0, 4)) }}</td>
                             <td><span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span></td>
                             <td style="max-width:200px;font-size:0.82rem;">
                                 {{ Str::limit($row['descripcion'], 55) }}
@@ -554,7 +554,7 @@
                     <tbody>
                         @forelse(($d['pagos_credito'] ?? collect()) as $row)
                         <tr>
-                            <td>{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
+                            <td>{{ ($row['fecha'] instanceof \DateTimeInterface ? $row['fecha']->format('d/m/Y') : substr((string) $row['fecha'], 8, 2).'/'.substr((string) $row['fecha'], 5, 2).'/'.substr((string) $row['fecha'], 0, 4)) }}</td>
                             <td><span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span></td>
                             <td style="max-width:200px;font-size:0.82rem;">
                                 {{ Str::limit($row['descripcion'], 55) }}

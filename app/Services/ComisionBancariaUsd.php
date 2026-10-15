@@ -20,7 +20,9 @@ class ComisionBancariaUsd
             if ($tasa <= 0 || empty($egreso->fecha)) {
                 continue;
             }
-            $fecha = \Carbon\Carbon::parse($egreso->fecha)->toDateString();
+            $fecha = $egreso->fecha instanceof \DateTimeInterface
+                ? $egreso->fecha->format('Y-m-d')
+                : substr((string) $egreso->fecha, 0, 10);
             [$banco, $titular] = $matcher->partesCuenta($egreso->banco ?? '', $egreso->titular ?? '');
             $cubetas[$banco.'|'.$titular.'|'.$fecha][] = $tasa;
             $cubetas['*|'.$fecha][] = $tasa;
@@ -42,7 +44,9 @@ class ComisionBancariaUsd
     public function convertir(Collection $lineas, array $tasas, string $banco, string $titular): array
     {
         $detalle = $lineas->map(function ($linea) use ($tasas, $banco, $titular) {
-            $fecha = \Carbon\Carbon::parse($linea->fecha)->toDateString();
+            $fecha = $linea->fecha instanceof \DateTimeInterface
+                ? $linea->fecha->format('Y-m-d')
+                : substr((string) $linea->fecha, 0, 10);
             $titularClave = app(BankReconciliationMatcher::class)->titularClave($titular);
             $tasa = $tasas[$banco.'|'.$titular.'|'.$fecha]
                 ?? $tasas[$banco.'|'.$titularClave.'|'.$fecha]

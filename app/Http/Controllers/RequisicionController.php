@@ -27,7 +27,7 @@ class RequisicionController extends Controller
         ini_set('memory_limit', '512M');
         $sede = (string) $request->session()->get('sede_local');
         $tipoReporte = $request->query('tipo_reporte', 'ventas');
-        if (! in_array($tipoReporte, ['ventas', 'personalizada', 'mayor_demanda'], true)) {
+        if (! in_array($tipoReporte, ['ventas', 'personalizada', 'mayor_demanda', 'hechas'], true)) {
             $tipoReporte = 'ventas';
         }
 
@@ -40,6 +40,28 @@ class RequisicionController extends Controller
 
         $selectedCategoria = (string) $request->query('categoria', 'Todas');
         $selectedSubcategoria = (string) $request->query('subcategoria', 'Todas');
+
+        if ($tipoReporte === 'hechas') {
+            return view('requisicion.export', [
+                'sede' => $sede,
+                'tipoReporte' => $tipoReporte,
+                'sedesOrigen' => $sedesOrigen,
+                'totalRequisicion' => 0,
+                'pendientesRegistradas' => 0,
+                'categories' => [],
+                'subcategories' => [],
+                'subByCat' => [],
+                'selectedSedeOrigen' => $selectedSedeOrigen,
+                'selectedCategoria' => 'Todas',
+                'selectedSubcategoria' => 'Todas',
+                'excluirCategorias' => false,
+                'excludeCategories' => [],
+                'excludeCodes' => [],
+                'previewRows' => collect(),
+                'filteredCount' => 0,
+                'lotesHechas' => $this->lotesRequisicionesHechas($sede),
+            ]);
+        }
 
         if ($tipoReporte === 'personalizada') {
             $sedeOrigenKey = $selectedSedeOrigen === 'Todas'
@@ -342,6 +364,7 @@ class RequisicionController extends Controller
             }
 
             foreach ($sedesStock as $origSede) {
+                $displayOrig = config('inventario.display.'.$origSede, $origSede);
                 $lines = $this->export->buildExport(
                     $ventasRows,
                     $displayOrig,
@@ -436,16 +459,139 @@ class RequisicionController extends Controller
      */
     private function descargarDocumentos(string $sede, array $documentos): \Symfony\Component\HttpFoundation\Response
     {
-        $delimiter = $this->export->csvDelimiterForSede($sede);
         $files = [];
         foreach ($documentos as $doc) {
+            $base = preg_replace('/\.csv$/i', '', (string) $doc['filename']) ?: 'requisicion';
+            $pair = $this->export->csvPair($doc['lines']);
             $files[] = [
-                'filename' => $doc['filename'],
-                'content' => base64_encode($this->export->toCsv($doc['lines'], $delimiter)),
+                'filename' => $base.'_separador_punto_y_coma.csv',
+                'content' => base64_encode($pair['punto_y_coma']),
+            ];
+            $files[] = [
+                'filename' => $base.'_separador_coma.csv',
+                'content' => base64_encode($pair['coma']),
             ];
         }
 
+        if (! request()->ajax() && ! request()->wantsJson()) {
+            return response()->view('requisicion.descargas', ['files' => $files]);
+        }
+
         return response()->json(['files' => $files]);
+    }
+
+    public function exportHecha(Request $request): \Symfony\Component\HttpFoundation\Response|RedirectResponse
+    {
+        $sede = (string) $request->session()->get('sede_local');
+        $data = $request->validate([
+            'origen' => 'required|string|max:40',
+            'minuto' => 'required|date_format:Y-m-d H:i',
+            'source_type' => 'nullable|string|max:40',
+        ]);
+
+        $lines = $this->lineasRequisicionHecha(
+            $sede,
+            $data['origen'],
+            $data['minuto'],
+            $data['source_type'] ?? ''
+        );
+
+        if ($lines->isEmpty()) {
+            return $this->errorExport('No encontré esa requisición para volver a descargarla.');
+        }
+
+        $origen = strtoupper(trim($data['origen']));
+        $marca = str_replace(['-', ' ', ':'], '', $data['minuto']);
+
+        return $this->descargarDocumentos($sede, [[
+            'filename' => 'Requisicion_'.$sede.'_desde_'.$origen.'_'.$marca.'.csv',
+            'lines' => $lines,
+        ]]);
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    private function lotesRequisicionesHechas(string $sede)
+    {
+        try {
+            $movs = \App\Models\V2\Movimiento::query()
+                ->with('producto:id,codigo,nombre')
+                ->where('tipo', 'REQUISICION')
+                ->whereRaw('UPPER(TRIM(destino)) = ?', [strtoupper(trim($sede))])
+                ->orderByDesc('created_at')
+                ->limit(1500)
+                ->get();
+        } catch (\Throwable) {
+            return collect();
+        }
+
+        return $movs
+            ->groupBy(function ($mov) {
+                $minuto = optional($mov->created_at)->format('Y-m-d H:i') ?: '';
+                $source = (string) ($mov->metadata['source_type'] ?? '');
+
+                return $minuto.'|'.strtoupper((string) $mov->origen).'|'.$source;
+            })
+            ->map(function ($grupo, $clave) {
+                [$minuto, $origen, $source] = array_pad(explode('|', (string) $clave, 3), 3, '');
+                $primero = $grupo->first();
+
+                return [
+                    'minuto' => $minuto,
+                    'fecha' => optional($primero->created_at)->format('d/m/Y H:i') ?: $minuto,
+                    'origen' => $origen,
+                    'origen_label' => config('inventario.display.'.$origen, $origen),
+                    'source_type' => $source,
+                    'source_label' => match ($source) {
+                        'ventas' => 'Automática',
+                        'mayor_demanda' => 'Mayor demanda',
+                        'manual' => 'Registrada',
+                        default => 'Requisición',
+                    },
+                    'productos' => $grupo->count(),
+                    'unidades' => (int) $grupo->sum('cantidad'),
+                ];
+            })
+            ->sortByDesc('minuto')
+            ->take(40)
+            ->values();
+    }
+
+    private function lineasRequisicionHecha(string $sede, string $origen, string $minuto, string $sourceType)
+    {
+        $desde = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $minuto);
+        $hasta = $desde->copy()->addMinute();
+
+        $query = \App\Models\V2\Movimiento::query()
+            ->with('producto:id,codigo,nombre')
+            ->where('tipo', 'REQUISICION')
+            ->whereRaw('UPPER(TRIM(destino)) = ?', [strtoupper(trim($sede))])
+            ->whereRaw('UPPER(TRIM(origen)) = ?', [strtoupper(trim($origen))])
+            ->where('created_at', '>=', $desde)
+            ->where('created_at', '<', $hasta);
+
+        if ($sourceType !== '') {
+            $query->where('metadata->source_type', $sourceType);
+        } else {
+            $query->where(function ($q) {
+                $q->whereNull('metadata->source_type')
+                    ->orWhere('metadata->source_type', '');
+            });
+        }
+
+        return $query->get()->map(function ($mov) {
+            $codigo = trim((string) ($mov->metadata['codigo'] ?? $mov->producto?->codigo ?? ''));
+            if ($codigo === '' || (int) $mov->cantidad <= 0) {
+                return null;
+            }
+
+            return [
+                'codigo' => trim(explode('/', $codigo)[0]),
+                'unidad' => 'UND',
+                'cantidad' => (int) $mov->cantidad,
+            ];
+        })->filter()->values();
     }
 }
 

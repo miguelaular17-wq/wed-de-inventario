@@ -5,7 +5,7 @@
 @section('content')
 <div class="page-header">
     <h1>Exportar reporte</h1>
-    <p class="lead">Sede {{ $sede }} · Los filtros se aplican al instante. Cada documento CSV se descarga aparte, sin ZIP.</p>
+    <p class="lead">Sede {{ $sede }} · Cada requisición baja en dos CSV: uno con punto y coma y otro con coma.</p>
 </div>
 
 @if(($pendientesRegistradas ?? 0) > 0 && ($tipoReporte ?? 'ventas') !== 'personalizada')
@@ -20,7 +20,7 @@
     </div>
 @endif
 
-<div class="stats-row">
+<div class="stats-row" @if(($tipoReporte ?? '') === 'hechas') style="display:none" @endif>
     <div class="stat-chip"><strong>{{ $totalRequisicion }}</strong> en requisición</div>
     <div class="stat-chip"><strong id="filtered-count">{{ max(0, ($filteredCount ?? 0) - count(array_filter($excludeCodes ?? []))) }}</strong> incluidos</div>
     <div class="stat-chip"><strong id="excluded-count">{{ count(array_filter($excludeCodes ?? [])) }}</strong> excluidos</div>
@@ -33,26 +33,71 @@
             <option value="ventas" @selected(($tipoReporte ?? 'ventas') === 'ventas')>Requisición automática (ventas)</option>
             <option value="mayor_demanda" @selected(($tipoReporte ?? '') === 'mayor_demanda')>Requisición por mayor demanda</option>
             <option value="personalizada" @selected(($tipoReporte ?? '') === 'personalizada')>Requisición personalizada (manual)</option>
+            <option value="hechas" @selected(($tipoReporte ?? '') === 'hechas')>Requisiciones ya hechas</option>
         </select>
     </div>
 </form>
 
 @if(($tipoReporte ?? 'ventas') === 'ventas')
     <p class="muted" style="margin:0 0 16px;">
-        Genera CSV y <strong>aplica movimiento de stock</strong> al exportar. Clic en un producto para excluirlo del reporte.
+        Genera dos CSV (punto y coma y coma) y <strong>aplica movimiento de stock</strong> al exportar. Clic en un producto para excluirlo del reporte.
     </p>
 @elseif(($tipoReporte ?? 'ventas') === 'mayor_demanda')
     <p class="muted" style="margin:0 0 16px;">
         Genera CSV para los productos estrella (mayor venta local que en otras sedes) y <strong>aplica movimiento de stock</strong>. Clic en un producto para excluirlo.
     </p>
+@elseif(($tipoReporte ?? '') === 'hechas')
+    <p class="muted" style="margin:0 0 16px;">
+        Estas requisiciones ya movieron el stock. Aquí solo se vuelven a descargar los dos CSV, sin aplicar el movimiento otra vez.
+    </p>
 @else
     <p class="muted" style="margin:0 0 16px;">
         Estas son las requisiciones registradas desde la app o desde Inventario.
         Al descargar se <strong>aplica el movimiento de stock</strong> (resta en origen, suma en {{ $sede }}).
-        Cada sede origen baja en su propio CSV, sin ZIP.
-        Si descargas desde <strong>Virtudes</strong>, el separador es coma; desde cualquier otra sede, punto y coma.
+        Cada sede origen baja en sus dos CSV: punto y coma y coma.
     </p>
 @endif
+
+@if(($tipoReporte ?? 'ventas') === 'hechas')
+<div class="panel">
+    @if(($lotesHechas ?? collect())->isEmpty())
+        <p class="muted" style="margin:0;">Todavía no hay requisiciones exportadas en {{ $sede }}.</p>
+    @else
+        <table class="mini-table" style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr>
+                    <th style="text-align:left; padding:8px;">Fecha</th>
+                    <th style="text-align:left; padding:8px;">Desde</th>
+                    <th style="text-align:left; padding:8px;">Tipo</th>
+                    <th style="text-align:right; padding:8px;">Productos</th>
+                    <th style="text-align:right; padding:8px;">Unidades</th>
+                    <th style="padding:8px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($lotesHechas as $lote)
+                    <tr>
+                        <td style="padding:8px;">{{ $lote['fecha'] }}</td>
+                        <td style="padding:8px;">{{ $lote['origen_label'] }}</td>
+                        <td style="padding:8px;">{{ $lote['source_label'] }}</td>
+                        <td style="padding:8px; text-align:right;">{{ $lote['productos'] }}</td>
+                        <td style="padding:8px; text-align:right;">{{ $lote['unidades'] }}</td>
+                        <td style="padding:8px; text-align:right;">
+                            <form method="POST" action="{{ route('requisicion.export_hecha') }}" class="export-hecha-form" style="margin:0;">
+                                @csrf
+                                <input type="hidden" name="origen" value="{{ $lote['origen'] }}">
+                                <input type="hidden" name="minuto" value="{{ $lote['minuto'] }}">
+                                <input type="hidden" name="source_type" value="{{ $lote['source_type'] }}">
+                                <button type="submit" class="btn">Descargar 2 CSV</button>
+                            </form>
+                        </td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @endif
+</div>
+@else
 
 <form id="filters-form" method="GET" action="{{ route('requisicion.form') }}" class="export-filters-form" data-auto-filter data-auto-filter-delay="400" data-auto-filter-preserve="exclude_codes" data-tour="export-filters">
     <input type="hidden" name="tipo_reporte" value="{{ $tipoReporte ?? 'ventas' }}">
@@ -198,9 +243,9 @@
     <div class="export-actions" data-tour="export-actions">
         <button type="submit" class="btn btn-lg">
             @if(($tipoReporte ?? 'ventas') === 'personalizada')
-                Exportar CSV y aplicar movimiento
+                Exportar 2 CSV y aplicar movimiento
             @else
-                Exportar CSV y aplicar movimiento
+                Exportar 2 CSV y aplicar movimiento
             @endif
         </button>
         @if(($tipoReporte ?? 'ventas') !== 'personalizada')
@@ -208,6 +253,7 @@
         @endif
     </div>
 </form>
+@endif
 @endsection
 
 @push('scripts')
@@ -301,6 +347,7 @@ document.addEventListener('DOMContentLoaded', function () {
     updateExcludeCategoriesUi();
 
     function syncExcludedInputs() {
+        if (!excludedInputs) return;
         excludedInputs.innerHTML = '';
         document.querySelectorAll('#preview-list .product-card.excluded-item').forEach(function (card) {
             const input = document.createElement('input');
@@ -381,24 +428,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     syncExcludedInputs();
 
-    // Interceptar el submit con fetch para todos los tipos de reporte,
-    // descargar el CSV y luego recargar la página para reflejar el estado actualizado.
-    const tipoReporte = '{{ $tipoReporte ?? "ventas" }}';
-    if (exportForm) {
-        exportForm.addEventListener('submit', function (e) {
+    function descargarCsvs(form, recargar) {
+        form.addEventListener('submit', function (e) {
             e.preventDefault();
 
-            const btn = exportForm.querySelector('button[type="submit"]');
+            const btn = form.querySelector('button[type="submit"]');
+            const etiqueta = btn ? btn.textContent : '';
             if (btn) {
                 btn.disabled = true;
-                btn.textContent = 'Exportando…';
+                btn.textContent = 'Descargando…';
             }
 
-            const formData = new FormData(exportForm);
-
-            fetch(exportForm.action, {
+            fetch(form.action, {
                 method: 'POST',
-                body: formData,
+                body: new FormData(form),
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             })
             .then(function (response) {
@@ -434,28 +477,42 @@ document.addEventListener('DOMContentLoaded', function () {
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = file.filename || ('requisicion_' + (index + 1) + '.csv');
+                        a.download = file.filename || 'requisicion.csv';
                         document.body.appendChild(a);
                         a.click();
                         setTimeout(function () {
                             URL.revokeObjectURL(url);
                             a.remove();
-                        }, 1000);
-                    }, index * 400);
+                        }, 2500);
+                    }, index * 350);
                 });
-                setTimeout(function () {
-                    window.location.reload();
-                }, files.length * 400 + 700);
+                if (recargar) {
+                    setTimeout(function () {
+                        window.location.reload();
+                    }, files.length * 350 + 900);
+                } else if (btn) {
+                    setTimeout(function () {
+                        btn.disabled = false;
+                        btn.textContent = etiqueta;
+                    }, files.length * 350 + 400);
+                }
             })
             .catch(function (err) {
                 alert('Error al exportar: ' + err.message);
                 if (btn) {
                     btn.disabled = false;
-                    btn.textContent = 'Exportar CSV y aplicar movimiento';
+                    btn.textContent = etiqueta;
                 }
             });
         });
     }
+
+    if (exportForm) {
+        descargarCsvs(exportForm, true);
+    }
+    document.querySelectorAll('.export-hecha-form').forEach(function (form) {
+        descargarCsvs(form, false);
+    });
 });
 </script>
 @endpush

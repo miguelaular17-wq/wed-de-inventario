@@ -1342,15 +1342,17 @@ class FinanzasController extends Controller
             $matcher = app(\App\Services\BankReconciliationMatcher::class);
             $classifier = app(\App\Services\BankMovementClassifier::class);
             $traslados = $flujos_posibles->filter(fn ($flujo) => $matcher->esTraslado($flujo));
+            $matcher->indexarTraslados($traslados);
+            $trasladosPorId = $traslados->keyBy('id');
             $ladosTrasladosVinculados = [];
             if ($traslados->isNotEmpty()) {
                 $lineasYaVinculadas = \App\Models\ConciliacionLinea::query()
                     ->whereIn('flujo_caja_id', $traslados->pluck('id'))
                     ->where('estado', 'conciliado')
-                    ->get();
+                    ->get(['id', 'flujo_caja_id', 'banco', 'titular', 'tipo', 'monto', 'fecha', 'descripcion', 'referencia']);
 
                 foreach ($lineasYaVinculadas as $lineaVinculada) {
-                    $traslado = $traslados->firstWhere('id', $lineaVinculada->flujo_caja_id);
+                    $traslado = $trasladosPorId->get($lineaVinculada->flujo_caja_id);
                     if (! $traslado) {
                         continue;
                     }
@@ -1372,11 +1374,13 @@ class FinanzasController extends Controller
                 $match         = null;
                 $isTesoreriaMatch = false;
                 $isCompraDivisaMatch = false;
-                $trasladosDisponibles = $traslados->filter(function ($flujo) use ($linea, $matcher, $ladosTrasladosVinculados) {
+                $trasladosDisponibles = [];
+                foreach ($matcher->trasladosPorMonto($linea) as $flujo) {
                     $lado = $matcher->ladoTraslado($linea, $flujo);
-
-                    return $lado !== null && empty($ladosTrasladosVinculados[$flujo->id][$lado]);
-                });
+                    if ($lado !== null && empty($ladosTrasladosVinculados[$flujo->id][$lado])) {
+                        $trasladosDisponibles[(int) $flujo->id] = $flujo;
+                    }
+                }
 
                 if ($linea->esAbono()) {
                     $match = $matcher->mejorEgreso($linea, $trasladosDisponibles);
@@ -1555,14 +1559,15 @@ class FinanzasController extends Controller
             : collect();
 
         $data_por_banco = [];
+        $tasasQuery = \App\Models\FlujoCaja::query()
+            ->where('tipo', 'egreso')
+            ->where('oculto', false)
+            ->where('tasa_cambio', '>', 0)
+            ->when($periodo_desde, fn ($q) => $q->where('fecha', '>=', $periodo_desde))
+            ->when($periodo_hasta, fn ($q) => $q->where('fecha', '<=', $periodo_hasta));
+        $this->filtrarPorBanco($tasasQuery, $banco_filtro);
         $tasasEgreso = app(\App\Services\ComisionBancariaUsd::class)->tasasPorDia(
-            \App\Models\FlujoCaja::query()
-                ->where('tipo', 'egreso')
-                ->where('oculto', false)
-                ->where('tasa_cambio', '>', 0)
-                ->when($periodo_desde, fn ($q) => $q->whereDate('fecha', '>=', $periodo_desde))
-                ->when($periodo_hasta, fn ($q) => $q->whereDate('fecha', '<=', $periodo_hasta))
-                ->get(['fecha', 'banco', 'titular', 'tasa_cambio'])
+            $tasasQuery->get(['fecha', 'banco', 'titular', 'tasa_cambio'])
         );
         foreach ($bancosActivos as $bk_key) {
             $bk = $cuentas[$bk_key]['banco'];
@@ -3025,13 +3030,30 @@ class FinanzasController extends Controller
             ->limit(2000)
             ->get();
 
+        $candidatosPorDiaMonto = [];
+        foreach ($candidatos as $candidato) {
+            $dia = $candidato->fecha instanceof \DateTimeInterface
+                ? $candidato->fecha->format('Y-m-d')
+                : substr((string) $candidato->fecha, 0, 10);
+            $cents = (int) round(abs((float) ($candidato->monto_bs ?? 0)) * 100);
+            $candidatosPorDiaMonto[$dia.'|'.$cents][] = $candidato;
+        }
+
         foreach ($lineas as $linea) {
             $vinculado = $linea->flujoCaja;
             if (! $vinculado) {
                 continue;
             }
 
-            $reemplazo = $matcher->reemplazoDeGastoVacio($linea, $vinculado, $candidatos);
+            $diaLinea = $linea->fecha instanceof \DateTimeInterface
+                ? $linea->fecha->format('Y-m-d')
+                : substr((string) $linea->fecha, 0, 10);
+            $centsLinea = (int) round(abs((float) $linea->monto) * 100);
+            $reemplazo = $matcher->reemplazoDeGastoVacio(
+                $linea,
+                $vinculado,
+                $candidatosPorDiaMonto[$diaLinea.'|'.$centsLinea] ?? []
+            );
             if (! $reemplazo) {
                 continue;
             }
