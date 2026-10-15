@@ -119,8 +119,8 @@
             </a>
 
             <form action="{{ route('finanzas.conciliaciones') }}" method="GET" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap;">
-                <input type="date" name="fecha_desde" class="select-banco" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}" title="Fecha Desde" style="min-width: 130px;">
-                <input type="date" name="fecha_hasta" class="select-banco" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}" title="Fecha Hasta" style="min-width: 130px;">
+                <input type="date" name="fecha_desde" class="select-banco" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}" title="Fecha Desde" required style="min-width: 130px;">
+                <input type="date" name="fecha_hasta" class="select-banco" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}" title="Fecha Hasta" required style="min-width: 130px;">
                 <select name="banco_filtro" class="select-banco">
                     <option value="">Todos los Bancos</option>
                     @foreach($bancos as $b)
@@ -147,10 +147,23 @@
         <div class="alert-success" style="background:#fef2f2;color:#991b1b;border-color:#fca5a5;">⚠️ {{ session('error') }}</div>
     @endif
 
-    @if($bancosActivos->isEmpty())
+    @if($requiereFiltro ?? false)
         <div class="alert-info">
-            📂 No hay movimientos cargados aún.<br>
-            <small>Usa "Añadir Movimientos" para subir el estado de cuenta de un banco.</small>
+            Elige la fecha desde y la fecha hasta, y pulsa Filtrar.<br>
+            <small>Solo se carga ese rango. Las cuentas ya marcadas como cierre no entran.</small>
+        </div>
+    @elseif($bancosActivos->isEmpty())
+        <div class="alert-info">
+            @if(($cuentasCerradasOmitidas ?? 0) > 0)
+                Las cuentas de este rango ya están cerradas.
+            @else
+                📂 No hay movimientos cargados en este rango.<br>
+                <small>Usa "Añadir Movimientos" para subir el estado de cuenta de un banco.</small>
+            @endif
+        </div>
+    @elseif(($cuentasCerradasOmitidas ?? 0) > 0)
+        <div class="alert-info">
+            Se omitieron {{ $cuentasCerradasOmitidas }} {{ $cuentasCerradasOmitidas === 1 ? 'cuenta ya cerrada' : 'cuentas ya cerradas' }} en este rango.
         </div>
     @endif
 
@@ -185,6 +198,9 @@
                             <form action="{{ route('finanzas.conciliaciones.periodos.destroy', ['cierre' => $cierreMarcado->id, 'origen' => 'conciliaciones']) }}" method="POST" style="display:inline; margin-left:8px;" onsubmit="return confirm('¿Quitar el cierre de {{ $bk }} · {{ $tit }}?');">
                                 @csrf
                                 @method('DELETE')
+                                <input type="hidden" name="fecha_desde" value="{{ $fecha_desde }}">
+                                <input type="hidden" name="fecha_hasta" value="{{ $fecha_hasta }}">
+                                <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
                                 <button type="submit" style="font-size: 0.75rem; background-color: #dcfce7; color: #166534; border: none; padding: 4px 10px; border-radius: 4px; font-weight: 700; cursor: pointer;">Cierre marcado</button>
                             </form>
                         @else
@@ -195,6 +211,7 @@
                                 <input type="hidden" name="titular" value="{{ $tit }}">
                                 <input type="hidden" name="fecha_desde" value="{{ $fecha_desde }}">
                                 <input type="hidden" name="fecha_hasta" value="{{ $fecha_hasta }}">
+                                <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
                                 <button type="submit" style="font-size: 0.75rem; background-color: rgba(255,255,255,0.15); color: #fff; border: none; padding: 4px 10px; border-radius: 4px; font-weight: 700; cursor: pointer;">Marcar cierre</button>
                             </form>
                         @endif

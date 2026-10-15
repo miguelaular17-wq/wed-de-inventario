@@ -149,6 +149,52 @@ class FinanzasController extends Controller
         });
     }
 
+    /**
+     * Cuentas cuyo cierre cubre por completo el rango pedido.
+     *
+     * @return array<string, true>
+     */
+    private function clavesCuentasCerradasEnRango(string $desde, string $hasta, \App\Services\BankReconciliationMatcher $matcher): array
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('conciliacion_cierres')) {
+            return [];
+        }
+
+        $claves = [];
+        foreach (\App\Models\ConciliacionCierre::query()
+            ->whereDate('fecha_desde', '<=', $desde)
+            ->whereDate('fecha_hasta', '>=', $hasta)
+            ->get(['banco', 'titular']) as $cierre) {
+            $clave = $matcher->claveCuenta($cierre->banco, $cierre->titular);
+            if ($clave !== '|') {
+                $claves[$clave] = true;
+            }
+        }
+
+        return $claves;
+    }
+
+    /**
+     * @param  array<string, true>  $clavesCerradas
+     * @param  array<string, true>  $omitidas
+     */
+    private function sinCuentasCerradas($filas, array $clavesCerradas, \App\Services\BankReconciliationMatcher $matcher, array &$omitidas)
+    {
+        if ($clavesCerradas === []) {
+            return $filas;
+        }
+
+        return $filas->reject(function ($fila) use ($clavesCerradas, $matcher, &$omitidas) {
+            $clave = $matcher->claveCuenta($fila->banco ?? null, $fila->titular ?? null);
+            if (! isset($clavesCerradas[$clave])) {
+                return false;
+            }
+            $omitidas[$clave] = true;
+
+            return true;
+        })->values();
+    }
+
     private function syncSaldoInicialDisponibilidad($resumen)
     {
         // El saldo inicial es TOTAL DISPONIBILIDAD (TASA BCV)
@@ -1161,7 +1207,8 @@ class FinanzasController extends Controller
     public function conciliaciones(Request $request) {
         $filterKeys = ['fecha_desde', 'fecha_hasta', 'banco_filtro'];
 
-        if ($request->hasAny($filterKeys)) {
+        $vieneDelFiltro = $request->hasAny($filterKeys);
+        if ($vieneDelFiltro) {
             $filtrosConciliacion = [
                 'fecha_desde' => $request->input('fecha_desde') ?: null,
                 'fecha_hasta' => $request->input('fecha_hasta') ?: null,
@@ -1188,27 +1235,62 @@ class FinanzasController extends Controller
             ? \Carbon\Carbon::parse($filtrosConciliacion['fecha_hasta'])->format('Y-m-d')
             : null;
 
-        $lineas_query = \App\Models\ConciliacionLinea::query()
-            ->with([
-                'flujoCaja:id,motivo,tipo_gasto,categoria_egreso,banco,titular,banco_receptor,titular_receptor,monto_bs,monto_usd,fecha,referencia',
-                'compraDivisa:id,motivo,concepto,banco,titular,monto_bs,monto_usd,fecha,referencia',
-                'tesoreriaIngreso:id,tipo,banco,titular,monto,fecha',
-            ])
-            ->orderBy('fecha');
-        
-        if ($fecha_desde) {
-            $lineas_query->where('fecha', '>=', $fecha_desde);
-        } else {
-            // Default behavior if no filter: last 2 days of uploads (created_at)
-            $lineas_query->where('created_at', '>=', now()->subDays(1)->startOfDay());
-        }
-        
-        if ($fecha_hasta) {
-            $lineas_query->where('fecha', '<=', $fecha_hasta);
+        if (! $vieneDelFiltro || ! $fecha_desde || ! $fecha_hasta) {
+            return view('finanzas.conciliaciones', [
+                'lineas' => collect(),
+                'bancos' => $bancos,
+                'cuentasBancarias' => $cuentasBancarias,
+                'egresos_ayer' => collect(),
+                'bancosActivos' => collect(),
+                'data_por_banco' => [],
+                'titularesPorBanco' => $titularesPorBanco,
+                'filtrosConciliacion' => $filtrosConciliacion,
+                'fecha_desde' => $fecha_desde,
+                'fecha_hasta' => $fecha_hasta,
+                'cierresMarcados' => collect(),
+                'requiereFiltro' => true,
+                'cuentasCerradasOmitidas' => 0,
+            ]);
         }
 
+        $matcherCierres = app(\App\Services\BankReconciliationMatcher::class);
+        $clavesCerradas = $this->clavesCuentasCerradasEnRango($fecha_desde, $fecha_hasta, $matcherCierres);
+        $cuentasOmitidas = [];
+
+        $lineas_query = \App\Models\ConciliacionLinea::query()
+            ->where('fecha', '>=', $fecha_desde)
+            ->where('fecha', '<=', $fecha_hasta);
         $this->filtrarPorBanco($lineas_query, $banco_filtro);
-        $lineas = $lineas_query->get();
+        $idsAbiertos = $this->sinCuentasCerradas(
+            (clone $lineas_query)->get(['id', 'banco', 'titular']),
+            $clavesCerradas,
+            $matcherCierres,
+            $cuentasOmitidas
+        )->pluck('id')->values();
+
+        $relacionesLinea = [
+            'flujoCaja:id,motivo,tipo_gasto,categoria_egreso,banco,titular,banco_receptor,titular_receptor,monto_bs,monto_usd,fecha,referencia',
+            'compraDivisa:id,motivo,concepto,banco,titular,monto_bs,monto_usd,fecha,referencia',
+            'tesoreriaIngreso:id,tipo,banco,titular,monto,fecha',
+        ];
+        $cargarLineas = function () use ($idsAbiertos, $relacionesLinea) {
+            if ($idsAbiertos->isEmpty()) {
+                return collect();
+            }
+
+            $lineas = collect();
+            foreach ($idsAbiertos->chunk(1000) as $lote) {
+                $lineas = $lineas->concat(
+                    \App\Models\ConciliacionLinea::query()
+                        ->with($relacionesLinea)
+                        ->whereIn('id', $lote->all())
+                        ->get()
+                );
+            }
+
+            return $lineas->sortBy('fecha')->values();
+        };
+        $lineas = $cargarLineas();
 
         // 3. Motor de emparejamiento automático (acotado para no tumbar la página)
         $lineas_pendientes = $lineas->where('estado', 'pendiente')
@@ -1219,12 +1301,8 @@ class FinanzasController extends Controller
         }
         $lineas_pendientes = $lineas_pendientes->sortByDesc('id')->take(200)->values();
         if ($lineas_pendientes->count() > 0) {
-            $fecha_minima = $fecha_desde
-                ? \Carbon\Carbon::parse($fecha_desde)->subDays(7)->format('Y-m-d')
-                : now()->subDays(45)->format('Y-m-d');
-            $fecha_maxima = $fecha_hasta
-                ? \Carbon\Carbon::parse($fecha_hasta)->addDays(7)->format('Y-m-d')
-                : now()->format('Y-m-d');
+            $fecha_minima = $fecha_desde;
+            $fecha_maxima = $fecha_hasta;
             
             // Los traslados siguen disponibles tras marcar salida (para poder
             // emparejar también el abono en el banco receptor).
@@ -1353,7 +1431,7 @@ class FinanzasController extends Controller
             }
 
             if ($cambios) {
-                $lineas = $lineas_query->get();
+                $lineas = $cargarLineas();
             }
         }
 
@@ -1371,26 +1449,22 @@ class FinanzasController extends Controller
 
         // 5. Egresos del sistema (en tránsito)
         $egresos_query = \App\Models\FlujoCaja::where('tipo', 'egreso')
-            ->where('es_conciliado', false);
-            
-        if ($fecha_desde) {
-            $egresos_query->where('fecha', '>=', $fecha_desde);
-        } else {
-            $ayer = now()->subDay()->format('Y-m-d');
-            $egresos_query->where('fecha', '>=', $ayer);
-        }
-        
-        if ($fecha_hasta) {
-            $egresos_query->where('fecha', '<=', $fecha_hasta);
-        }
+            ->where('es_conciliado', false)
+            ->where('fecha', '>=', $fecha_desde)
+            ->where('fecha', '<=', $fecha_hasta);
 
         $this->filtrarPorBanco($egresos_query, $banco_filtro);
-        $egresos_ayer = $egresos_query->orderBy('id')->get();
+        $egresos_ayer = $this->sinCuentasCerradas(
+            $egresos_query->orderBy('id')->get(),
+            $clavesCerradas,
+            $matcherCierres,
+            $cuentasOmitidas
+        );
 
         // Movimientos registrados en el sistema durante el período del extracto.
         // El archivo bancario solo se usa para conciliar.
-        $periodo_desde = $fecha_desde ?: optional($lineas->sortBy('fecha')->first())->fecha;
-        $periodo_hasta = $fecha_hasta ?: optional($lineas->sortByDesc('fecha')->first())->fecha;
+        $periodo_desde = $fecha_desde;
+        $periodo_hasta = $fecha_hasta;
         $movimientos_sistema_query = \App\Models\FlujoCaja::query()
             ->where('oculto', false)
             ->select([
@@ -1467,12 +1541,17 @@ class FinanzasController extends Controller
         $bancosActivos = collect(array_keys($cuentas));
 
         $comprasTransito = \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')
-            ? \App\Models\CompraDivisa::query()
-                ->where('es_conciliado', false)
-                ->when($fecha_desde, fn ($q) => $q->where('fecha', '>=', $fecha_desde))
-                ->when(! $fecha_desde, fn ($q) => $q->where('fecha', '>=', now()->subDay()->format('Y-m-d')))
-                ->when($fecha_hasta, fn ($q) => $q->where('fecha', '<=', $fecha_hasta))
-                ->get()
+            ? $this->sinCuentasCerradas(
+                \App\Models\CompraDivisa::query()
+                    ->where('es_conciliado', false)
+                    ->where('fecha', '>=', $fecha_desde)
+                    ->where('fecha', '<=', $fecha_hasta)
+                    ->when($banco_filtro, fn ($q) => $this->filtrarPorBanco($q, $banco_filtro))
+                    ->get(),
+                $clavesCerradas,
+                $matcherCierres,
+                $cuentasOmitidas
+            )
             : collect();
 
         $data_por_banco = [];
@@ -1711,10 +1790,14 @@ class FinanzasController extends Controller
                 ->keyBy(fn ($cierre) => $matcher->claveCuenta($cierre->banco, $cierre->titular));
         }
 
+        $cuentasCerradasOmitidas = count($cuentasOmitidas);
+        $requiereFiltro = false;
+
         return view('finanzas.conciliaciones', compact(
             'lineas', 'bancos', 'cuentasBancarias', 'egresos_ayer',
             'bancosActivos', 'data_por_banco', 'titularesPorBanco',
-            'filtrosConciliacion', 'fecha_desde', 'fecha_hasta', 'cierresMarcados'
+            'filtrosConciliacion', 'fecha_desde', 'fecha_hasta', 'cierresMarcados',
+            'requiereFiltro', 'cuentasCerradasOmitidas'
         ));
     }
 
@@ -1863,7 +1946,11 @@ class FinanzasController extends Controller
     private function redirectTrasCierre(Request $request, string $mes)
     {
         if ($request->input('origen') === 'conciliaciones') {
-            return redirect()->route('finanzas.conciliaciones');
+            return redirect()->route('finanzas.conciliaciones', array_filter([
+                'fecha_desde' => $request->input('fecha_desde'),
+                'fecha_hasta' => $request->input('fecha_hasta'),
+                'banco_filtro' => $request->input('banco_filtro'),
+            ]));
         }
 
         return redirect()->route('finanzas.calendario_conciliaciones', ['cal_mes' => $mes]);
