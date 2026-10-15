@@ -23,6 +23,10 @@ class FinanzasController extends Controller
         private BcvRateService $bcvRate,
         private GastoFijoPendienteService $gastosFijosPendientes,
     ) {}
+
+    /** @var array<string, array<string, true>> */
+    private array $clavesExtracto = [];
+
     private function getCuentas()
     {
         return [
@@ -147,6 +151,110 @@ class FinanzasController extends Controller
                 $q->orWhereRaw("LOWER(TRIM({$columna})) = ?", [$v]);
             }
         });
+    }
+
+    /**
+     * Una fila por movimiento. Si el extracto se subió varias veces, se queda
+     * la conciliada y se ignoran las copias pendientes.
+     *
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    private function idsExtractoVisibles(string $desde, string $hasta, string $banco)
+    {
+        $variantes = array_map(
+            'strtolower',
+            app(\App\Services\BankReconciliationMatcher::class)->variantesBanco($banco)
+        );
+        if ($variantes === []) {
+            return collect();
+        }
+
+        $marcas = implode(',', array_fill(0, count($variantes), '?'));
+        $filas = \Illuminate\Support\Facades\DB::select(
+            "SELECT DISTINCT ON (
+                    UPPER(TRIM(banco)),
+                    UPPER(TRIM(COALESCE(titular, ''))),
+                    fecha::date,
+                    ROUND(monto::numeric, 2),
+                    COALESCE(referencia, ''),
+                    COALESCE(descripcion, ''),
+                    COALESCE(tipo, '')
+                ) id
+             FROM conciliacion_lineas
+             WHERE fecha >= ? AND fecha <= ?
+               AND LOWER(TRIM(banco)) IN ({$marcas})
+             ORDER BY
+                UPPER(TRIM(banco)),
+                UPPER(TRIM(COALESCE(titular, ''))),
+                fecha::date,
+                ROUND(monto::numeric, 2),
+                COALESCE(referencia, ''),
+                COALESCE(descripcion, ''),
+                COALESCE(tipo, ''),
+                CASE WHEN estado = 'conciliado' THEN 0 ELSE 1 END,
+                id",
+            array_merge([$desde, $hasta], $variantes)
+        );
+
+        return collect($filas)->pluck('id')->map(fn ($id) => (int) $id)->values();
+    }
+
+    private function guardarLineaExtracto(array $datos): bool
+    {
+        $banco = strtoupper(trim((string) ($datos['banco'] ?? '')));
+        $titular = strtoupper(trim((string) ($datos['titular'] ?? '')));
+        $clave = $this->claveExtracto(
+            $banco,
+            $titular,
+            $datos['fecha'] ?? null,
+            $datos['monto'] ?? 0,
+            $datos['referencia'] ?? '',
+            $datos['descripcion'] ?? '',
+            $datos['tipo'] ?? ''
+        );
+
+        if (! isset($this->clavesExtracto[$banco.'|'.$titular])) {
+            $this->clavesExtracto[$banco.'|'.$titular] = [];
+            $existentes = \App\Models\ConciliacionLinea::query()
+                ->whereRaw('UPPER(TRIM(banco)) = ?', [$banco])
+                ->whereRaw("UPPER(TRIM(COALESCE(titular, ''))) = ?", [$titular])
+                ->get(['fecha', 'monto', 'referencia', 'descripcion', 'tipo']);
+            foreach ($existentes as $fila) {
+                $this->clavesExtracto[$banco.'|'.$titular][$this->claveExtracto(
+                    $banco,
+                    $titular,
+                    $fila->fecha,
+                    $fila->monto,
+                    $fila->referencia,
+                    $fila->descripcion,
+                    $fila->tipo
+                )] = true;
+            }
+        }
+
+        if (isset($this->clavesExtracto[$banco.'|'.$titular][$clave])) {
+            return false;
+        }
+
+        \App\Models\ConciliacionLinea::create($datos);
+        $this->clavesExtracto[$banco.'|'.$titular][$clave] = true;
+
+        return true;
+    }
+
+    private function claveExtracto($banco, $titular, $fecha, $monto, $referencia, $descripcion, $tipo): string
+    {
+        $dia = $fecha instanceof \DateTimeInterface ? $fecha->format('Y-m-d') : substr((string) $fecha, 0, 10);
+
+        return implode('|', [
+            strtoupper(trim((string) $banco)),
+            strtoupper(trim((string) $titular)),
+            $dia,
+            number_format(round((float) $monto, 2), 2, '.', ''),
+            trim((string) $referencia),
+            trim((string) $descripcion),
+            trim((string) $tipo),
+        ]);
     }
 
     private function syncSaldoInicialDisponibilidad($resumen)
@@ -1206,11 +1314,7 @@ class FinanzasController extends Controller
             ]);
         }
 
-        $lineas_query = \App\Models\ConciliacionLinea::query()
-            ->where('fecha', '>=', $fecha_desde)
-            ->where('fecha', '<=', $fecha_hasta);
-        $this->filtrarPorBanco($lineas_query, $banco_filtro);
-        $idsAbiertos = (clone $lineas_query)->pluck('id');
+        $idsAbiertos = $this->idsExtractoVisibles($fecha_desde, $fecha_hasta, $banco_filtro);
 
         $relacionesLinea = [
             'flujoCaja:id,motivo,tipo_gasto,categoria_egreso,banco,titular,banco_receptor,titular_receptor,monto_bs,monto_usd,fecha,referencia',
@@ -1910,6 +2014,7 @@ class FinanzasController extends Controller
 
         $files = $request->file('file');
         $success_count = 0;
+        $repetidas = 0;
         $session_id = session()->getId();
         $banco_nombre  = $this->canonizarBanco($request->banco_seleccionado);
         $titular_nombre = strtoupper(trim($request->titular_seleccionado));
@@ -2087,7 +2192,7 @@ class FinanzasController extends Controller
                                 if (!isset($data['fecha']) || !isset($data['monto'])) continue;
                                 $monto_val = floatval(str_replace(',', '.', (string)$data['monto']));
                                 if ($monto_val == 0) continue;
-                                \App\Models\ConciliacionLinea::create([
+                                $guardo = $this->guardarLineaExtracto([
                                     'session_id'  => $session_id,
                                     'banco'       => $banco_nombre,
                                     'titular'     => $titular_nombre,
@@ -2098,7 +2203,11 @@ class FinanzasController extends Controller
                                     'estado'      => 'pendiente',
                                     'tipo'        => $monto_val < 0 ? 'cargo' : 'abono',
                                 ]);
-                                $success_count++;
+                                if ($guardo) {
+                                    $success_count++;
+                                } else {
+                                    $repetidas++;
+                                }
                             }
                         }
                     }
@@ -2241,7 +2350,7 @@ class FinanzasController extends Controller
                     $descripcion = isset($data[$c_desc]) ? substr(trim((string)$data[$c_desc]), 0, 255) : '';
 
                     try {
-                        \App\Models\ConciliacionLinea::create([
+                        $guardo = $this->guardarLineaExtracto([
                             'session_id'  => $session_id,
                             'banco'       => $banco_nombre,
                             'titular'     => $titular_nombre,
@@ -2252,7 +2361,11 @@ class FinanzasController extends Controller
                             'estado'      => 'pendiente',
                             'tipo'        => $es_egreso ? 'cargo' : 'abono',
                         ]);
-                        $success_count++;
+                        if ($guardo) {
+                            $success_count++;
+                        } else {
+                            $repetidas++;
+                        }
                     } catch (\Exception $e) {
                         \Log::error("Error guardando fila $idx banco $banco_nombre titular $titular_nombre: " . $e->getMessage());
                     }
@@ -2331,7 +2444,7 @@ class FinanzasController extends Controller
                         if (abs($monto_val) == 0) continue;
 
                         try {
-                            \App\Models\ConciliacionLinea::create([
+                            $guardo = $this->guardarLineaExtracto([
                                 'session_id'  => $session_id,
                                 'banco'       => $banco_nombre,
                                 'titular'     => $titular_nombre,
@@ -2342,7 +2455,11 @@ class FinanzasController extends Controller
                                 'estado'      => 'pendiente',
                                 'tipo'        => $es_egreso ? 'cargo' : 'abono',
                             ]);
-                            $success_count++;
+                            if ($guardo) {
+                                $success_count++;
+                            } else {
+                                $repetidas++;
+                            }
                         } catch (\Exception $e) {
                             \Log::error("Error fila $current_row IA: " . $e->getMessage());
                         }
@@ -2354,7 +2471,11 @@ class FinanzasController extends Controller
             }
         }
 
-        return redirect()->route('finanzas.conciliaciones')->with('success', "Archivos procesados correctamente. Se registraron $success_count transacciones.");
+        $avisoRepetidas = $repetidas > 0
+            ? " {$repetidas} ya estaban cargadas y no se volvieron a guardar."
+            : '';
+
+        return redirect()->route('finanzas.conciliaciones')->with('success', "Archivos procesados correctamente. Se registraron {$success_count} transacciones.{$avisoRepetidas}");
     }
 
 
