@@ -104,11 +104,16 @@
 
     $incentivoItems = [];
     if ($u->canAccess('gerencial')) {
-        $incentivoItems[] = $link('Efectividad de caja', route('gerencial.cajas'), request()->routeIs('gerencial.cajas'));
+        $incPeriodo = session('incentivos.periodo', []);
+        $incQuery = array_filter([
+            'desde' => $incPeriodo['desde'] ?? null,
+            'hasta' => $incPeriodo['hasta'] ?? null,
+        ]);
+        $incentivoItems[] = $link('Efectividad de caja', route('gerencial.cajas', $incQuery), request()->routeIs('gerencial.cajas'));
         foreach (config('incentivos.modulos', []) as $codigo => $moduloIncentivo) {
             $incentivoItems[] = $link(
                 $moduloIncentivo['titulo'],
-                route('incentivos.show', $codigo),
+                route('incentivos.show', array_merge(['modulo' => $codigo], $incQuery)),
                 request()->routeIs('incentivos.show') && request()->route('modulo') === $codigo,
             );
         }

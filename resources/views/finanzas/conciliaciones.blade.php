@@ -121,8 +121,8 @@
             <form action="{{ route('finanzas.conciliaciones') }}" method="GET" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap;">
                 <input type="date" name="fecha_desde" class="select-banco" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}" title="Fecha Desde" required style="min-width: 130px;">
                 <input type="date" name="fecha_hasta" class="select-banco" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}" title="Fecha Hasta" required style="min-width: 130px;">
-                <select name="banco_filtro" class="select-banco">
-                    <option value="">Todos los Bancos</option>
+                <select name="banco_filtro" class="select-banco" required>
+                    <option value="" @selected(empty($filtrosConciliacion['banco_filtro']))>Selecciona un banco</option>
                     @foreach($bancos as $b)
                         <option value="{{ $b }}" {{ ($filtrosConciliacion['banco_filtro'] ?? '') == $b ? 'selected' : '' }}>{{ $b }}</option>
                     @endforeach
@@ -149,21 +149,13 @@
 
     @if($requiereFiltro ?? false)
         <div class="alert-info">
-            Elige la fecha desde y la fecha hasta, y pulsa Filtrar.<br>
-            <small>Solo se carga ese rango. Las cuentas ya marcadas como cierre no entran.</small>
+            Elige la fecha desde, la fecha hasta y el banco, y pulsa Filtrar.<br>
+            <small>Solo se carga ese banco, aunque el período ya esté cerrado.</small>
         </div>
     @elseif($bancosActivos->isEmpty())
         <div class="alert-info">
-            @if(($cuentasCerradasOmitidas ?? 0) > 0)
-                Las cuentas de este rango ya están cerradas.
-            @else
-                📂 No hay movimientos cargados en este rango.<br>
-                <small>Usa "Añadir Movimientos" para subir el estado de cuenta de un banco.</small>
-            @endif
-        </div>
-    @elseif(($cuentasCerradasOmitidas ?? 0) > 0)
-        <div class="alert-info">
-            Se omitieron {{ $cuentasCerradasOmitidas }} {{ $cuentasCerradasOmitidas === 1 ? 'cuenta ya cerrada' : 'cuentas ya cerradas' }} en este rango.
+            📂 No hay movimientos cargados en este rango para ese banco.<br>
+            <small>Usa "Añadir Movimientos" para subir el estado de cuenta.</small>
         </div>
     @endif
 

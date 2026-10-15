@@ -13,10 +13,12 @@
     <h1>Efectividad de caja</h1>
     <p class="lead">
         {{ $desde }} al {{ $hasta }}.
-        El 100% de venta, productos y clientes es lo que vendió la tienda en el mes. La nota es 70% efectividad de piso y 30% producto meta.
-        El total de faltante de caja del mes es el 100%: si hay faltante el porcentaje es negativo y se resta; si es positivo se suma.
+        El 100% de venta, productos y clientes es lo que vendió la tienda en el período. La nota es 70% efectividad de piso y 30% producto meta.
+        El total de faltante de caja del período es el 100%: si hay faltante el porcentaje es negativo y se resta; si es positivo se suma.
     </p>
 </div>
+
+@include('incentivos._periodo')
 
 <div class="panel inc-panel">
     <div class="table-wrap inc-wrap">
@@ -106,13 +108,13 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="18">No hay cajas para evaluar en el mes.</td>
+                        <td colspan="18">No hay cajas para evaluar en el período.</td>
                     </tr>
                 @endforelse
             </tbody>
         </table>
     </div>
-    <p class="muted" style="margin:10px 0 0;">El porcentaje de venta, productos y clientes es lo que facturó cada cajera dividido entre lo que vendió su tienda. Ese piso vale 70% y el producto meta 30%. El faltante se mide contra el total del mes: un faltante da porcentaje negativo y se resta de la nota; un monto positivo se suma.</p>
+    <p class="muted" style="margin:10px 0 0;">El porcentaje de venta, productos y clientes es lo que facturó cada cajera dividido entre lo que vendió su tienda. Ese piso vale 70% y el producto meta 30%. El faltante se mide contra el total del período: un faltante da porcentaje negativo y se resta de la nota; un monto positivo se suma.</p>
 </div>
 
 <style>

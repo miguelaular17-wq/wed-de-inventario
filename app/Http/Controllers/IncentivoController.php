@@ -15,16 +15,18 @@ class IncentivoController extends Controller
         private IncentivoCruceService $cruce,
     ) {}
 
-    public function show(string $modulo): View
+    public function show(Request $request, string $modulo): View
     {
         $modulos = config('incentivos.modulos', []);
         abort_unless(isset($modulos[$modulo]), 404);
+        $periodo = $this->evaluacion->periodo($request);
 
         return view('incentivos.show', [
             'clave' => $modulo,
             'modulo' => $modulos[$modulo],
             'modulos' => $modulos,
-            'evaluacion' => $this->evaluacion->evaluar($modulo, $modulos[$modulo]),
+            'periodo' => $periodo,
+            'evaluacion' => $this->evaluacion->evaluar($modulo, $modulos[$modulo], $periodo['inicio'], $periodo['fin']),
             'cruce' => in_array($modulo, ['telefonia', 'arreglos'], true) ? $this->cruce->panel($modulo) : null,
         ]);
     }

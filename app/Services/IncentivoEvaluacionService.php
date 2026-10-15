@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\VentaDiariaMeta;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -19,10 +20,13 @@ class IncentivoEvaluacionService
      * @param  array<string, mixed>  $modulo
      * @return array{desde:string, hasta:string, filas:list<array<string, mixed>>}
      */
-    public function evaluar(string $clave, array $modulo): array
+    public function evaluar(string $clave, array $modulo, ?Carbon $desde = null, ?Carbon $hasta = null): array
     {
-        $desde = now()->startOfMonth();
-        $hasta = now();
+        $desde = ($desde ?? now()->startOfMonth())->copy()->startOfDay();
+        $hasta = ($hasta ?? now())->copy()->endOfDay();
+        if ($hasta->lt($desde)) {
+            $hasta = $desde->copy()->endOfDay();
+        }
         if ($clave === 'supervisor') {
             return $this->evaluarSedes($desde, $hasta);
         }
@@ -82,21 +86,7 @@ class IncentivoEvaluacionService
             });
         }
 
-        usort($filas, function (array $a, array $b) {
-            $pa = $a['puntuacion'];
-            $pb = $b['puntuacion'];
-            if ($pa === null && $pb === null) {
-                return strcasecmp($a['nombre'], $b['nombre']);
-            }
-            if ($pa === null) {
-                return 1;
-            }
-            if ($pb === null) {
-                return -1;
-            }
-
-            return $pb <=> $pa;
-        });
+        usort($filas, fn (array $a, array $b) => $this->porNotaDesc($a, $b));
 
         return [
             'desde' => $desde->format('d/m/Y'),
@@ -605,21 +595,7 @@ class IncentivoEvaluacionService
             $filas[] = $fila;
         }
 
-        usort($filas, function (array $a, array $b) {
-            $pa = $a['puntuacion'];
-            $pb = $b['puntuacion'];
-            if ($pa === null && $pb === null) {
-                return strcasecmp($a['nombre'], $b['nombre']);
-            }
-            if ($pa === null) {
-                return 1;
-            }
-            if ($pb === null) {
-                return -1;
-            }
-
-            return $pb <=> $pa ?: strcasecmp($a['nombre'], $b['nombre']);
-        });
+        usort($filas, fn (array $a, array $b) => $this->porNotaDesc($a, $b));
 
         return [
             'desde' => $desde->format('d/m/Y'),
@@ -627,6 +603,71 @@ class IncentivoEvaluacionService
             'filas' => $filas,
             'grupos_cruce' => [],
         ];
+    }
+
+    /**
+     * Un mismo rango para todos los módulos de incentivos.
+     *
+     * @return array{inicio: Carbon, fin: Carbon, desde: string, hasta: string}
+     */
+    public function periodo(Request $request): array
+    {
+        $guardado = $request->session()->get('incentivos.periodo', []);
+        $desdeIn = $request->query('desde', $guardado['desde'] ?? null);
+        $hastaIn = $request->query('hasta', $guardado['hasta'] ?? null);
+        $desde = $this->fechaPeriodo(is_string($desdeIn) ? $desdeIn : null) ?? now()->startOfMonth();
+        $hasta = $this->fechaPeriodo(is_string($hastaIn) ? $hastaIn : null) ?? now();
+        $desde = $desde->copy()->startOfDay();
+        $hasta = $hasta->copy()->endOfDay();
+        if ($hasta->lt($desde)) {
+            $hasta = $desde->copy()->endOfDay();
+        }
+
+        $iso = [
+            'desde' => $desde->toDateString(),
+            'hasta' => $hasta->toDateString(),
+        ];
+        $request->session()->put('incentivos.periodo', $iso);
+
+        return [
+            'inicio' => $desde,
+            'fin' => $hasta,
+            'desde' => $iso['desde'],
+            'hasta' => $iso['hasta'],
+        ];
+    }
+
+    private function fechaPeriodo(?string $valor): ?Carbon
+    {
+        if ($valor === null || trim($valor) === '') {
+            return null;
+        }
+        try {
+            return Carbon::parse($valor);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $a
+     * @param  array<string, mixed>  $b
+     */
+    private function porNotaDesc(array $a, array $b): int
+    {
+        $pa = $a['puntuacion'] ?? null;
+        $pb = $b['puntuacion'] ?? null;
+        if ($pa === null && $pb === null) {
+            return strcasecmp((string) ($a['nombre'] ?? ''), (string) ($b['nombre'] ?? ''));
+        }
+        if ($pa === null) {
+            return 1;
+        }
+        if ($pb === null) {
+            return -1;
+        }
+
+        return ((float) $pb <=> (float) $pa) ?: strcasecmp((string) ($a['nombre'] ?? ''), (string) ($b['nombre'] ?? ''));
     }
 
     /**
@@ -652,13 +693,14 @@ class IncentivoEvaluacionService
     }
 
     /**
-     * Qué tan cerca está el stock de la sede de la parte que le toca por lo que vendió.
+     * De los productos que otra sede tiene con más de 20, cuántos también tiene esta sede.
+     * Si aquí está en cero, no suma.
      *
      * @return array<string, float>
      */
     private function nivelacionPorSede(Carbon $desde, Carbon $hasta): array
     {
-        if (! Schema::hasTable('stock_actual') || ! Schema::hasTable('ventas_detalle')) {
+        if (! Schema::hasTable('stock_actual')) {
             return [];
         }
 
@@ -667,62 +709,45 @@ class IncentivoEvaluacionService
             return [];
         }
 
-        $anulado = Schema::hasColumn('ventas_detalle', 'anulado')
-            ? 'AND (vd.anulado IS NULL OR vd.anulado = false)'
-            : '';
         $marcas = implode(',', array_fill(0, count($sedes), '?'));
+        $valores = implode(',', array_fill(0, count($sedes), '(?)'));
         $sql = "
-            WITH ventas AS (
-                SELECT vd.producto_id, UPPER(TRIM(vd.sede)) AS sede,
-                    SUM(CASE WHEN vd.tipo_documento = 'DEV' THEN -ABS(COALESCE(vd.cantidad, 0)) ELSE COALESCE(vd.cantidad, 0) END) AS uds
-                FROM ventas_detalle vd
-                WHERE vd.fecha BETWEEN ? AND ?
-                  AND vd.tipo_documento IN ('FAC', 'DEV')
-                  AND vd.producto_id IS NOT NULL
-                  AND UPPER(TRIM(vd.sede)) IN ({$marcas})
-                  {$anulado}
-                GROUP BY vd.producto_id, UPPER(TRIM(vd.sede))
-            ),
-            stock AS (
-                SELECT producto_id, UPPER(TRIM(sede)) AS sede, SUM(COALESCE(existencia, 0)) AS stock
+            WITH stock AS (
+                SELECT producto_id,
+                       UPPER(TRIM(sede)) AS sede,
+                       SUM(GREATEST(COALESCE(existencia, 0), 0)) AS stock
                 FROM stock_actual
                 WHERE producto_id IS NOT NULL
                   AND UPPER(TRIM(sede)) IN ({$marcas})
                 GROUP BY producto_id, UPPER(TRIM(sede))
             ),
-            base AS (
-                SELECT COALESCE(v.producto_id, s.producto_id) AS producto_id,
-                       COALESCE(v.sede, s.sede) AS sede,
-                       COALESCE(v.uds, 0) AS uds,
-                       GREATEST(COALESCE(s.stock, 0), 0) AS stock
-                FROM ventas v
-                FULL OUTER JOIN stock s ON s.producto_id = v.producto_id AND s.sede = v.sede
+            sedes_eval AS (
+                SELECT UPPER(TRIM(sede)) AS sede
+                FROM (VALUES {$valores}) AS t(sede)
             ),
-            tot AS (
-                SELECT producto_id, SUM(uds) AS uds, SUM(stock) AS stock
-                FROM base
-                GROUP BY producto_id
-                HAVING SUM(uds) > 0 AND SUM(stock) > 0
-            ),
-            gaps AS (
-                SELECT b.sede,
-                       ABS(b.stock - (t.stock * b.uds / NULLIF(t.uds, 0))) AS gap,
-                       (t.stock * b.uds / NULLIF(t.uds, 0)) AS ideal
-                FROM base b
-                JOIN tot t ON t.producto_id = b.producto_id
-                WHERE b.sede IN ({$marcas})
+            universo AS (
+                SELECT e.sede,
+                       o.producto_id,
+                       COALESCE(m.stock, 0) AS mio
+                FROM sedes_eval e
+                JOIN stock o ON o.sede <> e.sede AND o.stock > 20
+                LEFT JOIN stock m ON m.sede = e.sede AND m.producto_id = o.producto_id
             )
-            SELECT sede, COALESCE(SUM(gap), 0) AS gap, COALESCE(SUM(ideal), 0) AS ideal
-            FROM gaps
+            SELECT sede,
+                   COUNT(DISTINCT producto_id) AS universo,
+                   COUNT(DISTINCT CASE WHEN mio <= 0 THEN producto_id END) AS en_cero
+            FROM universo
             GROUP BY sede
         ";
 
         $out = [];
-        foreach (DB::select($sql, array_merge([$desde->toDateString(), $hasta->toDateString()], $sedes, $sedes, $sedes)) as $row) {
-            $ideal = (float) $row->ideal;
-            $out[(string) $row->sede] = $ideal <= 0
-                ? 0.0
-                : round(max(0, min(100, 100 - ((float) $row->gap / $ideal * 100))), 1);
+        foreach (DB::select($sql, array_merge($sedes, $sedes)) as $row) {
+            $universo = (int) $row->universo;
+            if ($universo <= 0) {
+                continue;
+            }
+            $conExistencia = $universo - (int) $row->en_cero;
+            $out[(string) $row->sede] = round(max(0, min(100, $conExistencia / $universo * 100)), 1);
         }
 
         return $out;

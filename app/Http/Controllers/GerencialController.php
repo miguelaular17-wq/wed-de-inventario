@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\GerencialAnalyticsService;
 use App\Services\GerencialDashboardService;
+use App\Services\IncentivoEvaluacionService;
 use App\Services\IndicadoresOperativosService;
 use App\Services\StockSedeDashboardService;
 use Illuminate\Http\JsonResponse;
@@ -160,9 +161,13 @@ class GerencialController extends Controller
         return view('gerencial.compras', $ctx + $data);
     }
 
-    public function cajas(IndicadoresOperativosService $indicadores): View
+    public function cajas(Request $request, IndicadoresOperativosService $indicadores, IncentivoEvaluacionService $evaluacion): View
     {
-        return view('gerencial.cajas', $indicadores->cajas(now()->startOfMonth(), now(), null));
+        $periodo = $evaluacion->periodo($request);
+
+        return view('gerencial.cajas', $indicadores->cajas($periodo['inicio'], $periodo['fin'], null) + [
+            'periodo' => $periodo,
+        ]);
     }
 
     public function traslados(Request $request, GerencialDashboardService $gerencial, IndicadoresOperativosService $indicadores): View

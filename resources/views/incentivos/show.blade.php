@@ -20,16 +20,18 @@
     <p class="lead">
         {{ $evaluacion['desde'] }} al {{ $evaluacion['hasta'] }}.
         @if($clave === 'telefonia')
-            El 100% de venta, productos y clientes es lo que vendió la tienda en el mes. La nota es 30% efectividad de piso, 50% venta cruzada y 20% producto meta.
+            El 100% de venta, productos y clientes es lo que vendió la tienda en el período. La nota es 30% efectividad de piso, 50% venta cruzada y 20% producto meta.
         @elseif($efectividad)
-            El 100% de venta, productos y clientes es lo que vendió la tienda en el mes. La nota es 70% efectividad de piso y 30% producto meta.
+            El 100% de venta, productos y clientes es lo que vendió la tienda en el período. La nota es 70% efectividad de piso y 30% producto meta.
         @elseif($porSede)
-            Una fila por sede. La nota promedia metas, nivelación, venta cruzada e inventario. El faltante de caja del mes se resta si es negativo y se suma si es positivo.
+            Una fila por sede. La nota promedia metas, nivelación, venta cruzada e inventario. El faltante de caja del período se resta si es negativo y se suma si es positivo.
         @else
             La meta es la de la tienda, comparada con lo que vendió cada persona. Cada indicador se topa en 120% para la nota.
         @endif
     </p>
 </div>
+
+@include('incentivos._periodo')
 
 <div class="panel inc-panel">
     @if($conSelector && $cruce)
@@ -177,10 +179,10 @@
                         <td class="inc-num g-cli">{{ $numero($fila['meta_clientes']) }}</td>
                         <td class="inc-num g-cli">{{ $pct($fila['pct_clientes']) }}</td>
                         @if($porSede)
-                            <td class="inc-num inc-group g-nivel" title="Qué tan parecido está el stock de la sede a la parte que le toca por lo que vendió">{{ $pct($fila['nivelacion_pct'] ?? null) }}</td>
-                            <td class="inc-num inc-group g-falta {{ ($fila['faltante_pct'] ?? 0) < 0 ? 'falta-neg' : '' }}" title="El total de faltante del mes es el 100%. Si la sede tiene faltante, el porcentaje es negativo y se resta">{{ $pct($fila['faltante_pct'] ?? null) }}</td>
+                            <td class="inc-num inc-group g-nivel" title="De los productos que otra sede tiene con más de 20, cuántos también tiene esta sede. Si aquí está en cero, no cuenta">{{ $pct($fila['nivelacion_pct'] ?? null) }}</td>
+                            <td class="inc-num inc-group g-falta {{ ($fila['faltante_pct'] ?? 0) < 0 ? 'falta-neg' : '' }}" title="El total de faltante del período es el 100%. Si la sede tiene faltante, el porcentaje es negativo y se resta">{{ $pct($fila['faltante_pct'] ?? null) }}</td>
                             <td class="inc-num inc-group g-cruce" title="Unidades de las categorías o productos de cruce activos, sobre lo que vendió la sede">{{ $pct($fila['cruce_pct'] ?? null) }}</td>
-                            <td class="inc-num inc-group g-inv" title="Productos con existencia que se vendieron en el mes">{{ $pct($fila['inventario_pct'] ?? null) }}</td>
+                            <td class="inc-num inc-group g-inv" title="Productos con existencia que se vendieron en el período">{{ $pct($fila['inventario_pct'] ?? null) }}</td>
                         @endif
                         @php
                             $estadoMeta = $fila['meta_prod_estado'];
@@ -225,9 +227,9 @@
     @if($clave === 'telefonia')
         <p class="muted" style="margin:10px 0 0;">Hay tres categorías. Cada una tiene Cruce, Estado y %, nueve columnas en total. Activa las que faltan en el botón. El porcentaje es la parte de ese trabajador en esa categoría dentro de su tienda, y el promedio de las activas vale el 50% de la nota.</p>
     @elseif($efectividad)
-        <p class="muted" style="margin:10px 0 0;">El porcentaje es la venta de cada trabajador dividida entre lo que vendió la tienda en el mes. Ese piso vale 70% de la nota y el producto meta vale 30%.</p>
+        <p class="muted" style="margin:10px 0 0;">El porcentaje es la venta de cada trabajador dividida entre lo que vendió la tienda en el período. Ese piso vale 70% de la nota y el producto meta vale 30%.</p>
     @elseif($porSede)
-        <p class="muted" style="margin:10px 0 0;">Metas compara lo que vendió la sede con la meta de la tienda. Nivelación mira si el stock se parece a lo que vende. Venta cruzada es la parte de las categorías activas. Inventario es la parte de los productos con existencia que se vendieron. Esas cuatro se promedian. El faltante de caja usa el total del mes como 100%: si hay faltante se resta y si el monto es positivo se suma.</p>
+        <p class="muted" style="margin:10px 0 0;">Metas compara lo que vendió la sede con la meta de la tienda. Nivelación toma los productos que otra sede tiene con más de 20 unidades: el porcentaje es cuántos de esos también tiene esta sede. Si aquí está en cero, no suma. Venta cruzada es la parte de las categorías activas. Inventario es la parte de los productos con existencia que se vendieron. Esas cuatro se promedian. El faltante de caja usa el total del período como 100%: si hay faltante se resta y si el monto es positivo se suma.</p>
     @endif
 </div>
 
