@@ -20,7 +20,11 @@ class ConciliacionCuentasExcluidasTest extends TestCase
         $this->assertFalse($servicio->cuentaIncluida('VENEZUELA', 'JOSE SEMECO'));
         $this->assertFalse($servicio->cuentaIncluida('VENEZUELA', 'MARIA NUÑEZ'));
 
-        $this->assertTrue($servicio->cuentaIncluida('VENEZUELA', 'GRUPO JRZ'));
+        $this->assertFalse($servicio->cuentaIncluida('BANCARIBE', 'CURAZAO'));
+        $this->assertFalse($servicio->cuentaIncluida('BANCARIBE', 'EURONISSI'));
+        $this->assertFalse($servicio->cuentaIncluida('BNC', 'EURONISSI'));
+        $this->assertTrue($servicio->cuentaIncluida('BANCARIBE', 'DORAL'));
+        $this->assertTrue($servicio->cuentaIncluida('BNC', 'LNACEH'));
         $this->assertTrue($servicio->cuentaIncluida('BINANCE', 'MARIA NUÑEZ'));
     }
 }

@@ -111,6 +111,14 @@ class BankMovementClassifier
             return false;
         }
 
+        $bancoKey = strtoupper(trim((string) $banco));
+
+        // BNC escribe "COMISION BANCO POS" en el cargo del lote. El abono es la
+        // línea POS y este cargo se concilia con ella; no es mantenimiento.
+        if ($bancoKey === 'BNC' && str_contains($desc, 'comision banco pos')) {
+            return false;
+        }
+
         // Pago de servicios (luz, internet, etc.) no es comisión bancaria.
         // La palabra "servicio" sí se usa en cargos de mantenimiento.
         if (str_contains($desc, 'pago de servicios') || str_contains($desc, 'servicios via internet')) {
@@ -118,9 +126,10 @@ class BankMovementClassifier
         }
 
         // Banco de Venezuela: cargo TELF / CED / CTA con teléfono en ceros (comisión).
-        // Un pago móvil real trae un teléfono con dígitos y no entra aquí.
+        // En BNC el mismo formato es una transferencia (CXC, pago), no una comisión.
         if (
-            preg_match('/telf\.?\s*:?\s*0{8,}/u', $desc) === 1
+            ($bancoKey === 'VENEZUELA' || str_contains($bancoKey, 'VENEZUELA'))
+            && preg_match('/telf\.?\s*:?\s*0{8,}/u', $desc) === 1
             && str_contains($desc, 'ced')
             && str_contains($desc, 'cta')
         ) {
@@ -128,7 +137,6 @@ class BankMovementClassifier
         }
 
         $keywords = $this->comisionKeywords;
-        $bancoKey = strtoupper(trim((string) $banco));
         if ($bancoKey !== '' && isset($this->comisionKeywordsPorBanco[$bancoKey])) {
             $keywords = array_merge($keywords, $this->comisionKeywordsPorBanco[$bancoKey]);
         }

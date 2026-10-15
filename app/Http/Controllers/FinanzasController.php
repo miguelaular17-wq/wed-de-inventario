@@ -154,12 +154,38 @@ class FinanzasController extends Controller
     }
 
     /**
+     * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder
+     */
+    private function filtrarPorTitular($query, ?string $titular, string $columna = 'titular')
+    {
+        $titular = strtoupper(trim((string) $titular));
+        if ($titular === '') {
+            return $query;
+        }
+
+        $clave = app(\App\Services\BankReconciliationMatcher::class)->titularClave($titular);
+        $variantes = array_values(array_unique(array_filter([
+            $titular,
+            $clave,
+            $clave !== '' ? 'GRUPO '.$clave : '',
+            $clave !== '' ? 'L.S. '.$clave : '',
+        ])));
+
+        return $query->where(function ($q) use ($variantes, $columna) {
+            foreach ($variantes as $variante) {
+                $q->orWhereRaw("UPPER(TRIM(COALESCE({$columna}, ''))) = ?", [$variante]);
+            }
+        });
+    }
+
+    /**
      * Una fila por movimiento. Si el extracto se subió varias veces, se queda
      * la conciliada y se ignoran las copias pendientes.
      *
      * @return \Illuminate\Support\Collection<int, int>
      */
-    private function idsExtractoVisibles(string $desde, string $hasta, string $banco)
+    private function idsExtractoVisibles(string $desde, string $hasta, string $banco, ?string $titular = null)
     {
         $variantes = array_map(
             'strtolower',
@@ -170,6 +196,20 @@ class FinanzasController extends Controller
         }
 
         $marcas = implode(',', array_fill(0, count($variantes), '?'));
+        $titularSql = '';
+        $titularBindings = [];
+        $titular = strtoupper(trim((string) $titular));
+        if ($titular !== '') {
+            $clave = app(\App\Services\BankReconciliationMatcher::class)->titularClave($titular);
+            $titulares = array_values(array_unique(array_filter([
+                $titular,
+                $clave,
+                $clave !== '' ? 'GRUPO '.$clave : '',
+                $clave !== '' ? 'L.S. '.$clave : '',
+            ])));
+            $titularSql = ' AND UPPER(TRIM(COALESCE(titular, \'\'))) IN ('.implode(',', array_fill(0, count($titulares), '?')).')';
+            $titularBindings = $titulares;
+        }
         $filas = \Illuminate\Support\Facades\DB::select(
             "SELECT DISTINCT ON (
                     UPPER(TRIM(banco)),
@@ -182,7 +222,7 @@ class FinanzasController extends Controller
                 ) id
              FROM conciliacion_lineas
              WHERE fecha >= ? AND fecha <= ?
-               AND LOWER(TRIM(banco)) IN ({$marcas})
+               AND LOWER(TRIM(banco)) IN ({$marcas}){$titularSql}
              ORDER BY
                 UPPER(TRIM(banco)),
                 UPPER(TRIM(COALESCE(titular, ''))),
@@ -193,7 +233,7 @@ class FinanzasController extends Controller
                 COALESCE(tipo, ''),
                 CASE WHEN estado = 'conciliado' THEN 0 ELSE 1 END,
                 id",
-            array_merge([$desde, $hasta], $variantes)
+            array_merge([$desde, $hasta], $variantes, $titularBindings)
         );
 
         return collect($filas)->pluck('id')->map(fn ($id) => (int) $id)->values();
@@ -1267,7 +1307,7 @@ class FinanzasController extends Controller
     }
 
     public function conciliaciones(Request $request) {
-        $filterKeys = ['fecha_desde', 'fecha_hasta', 'banco_filtro'];
+        $filterKeys = ['fecha_desde', 'fecha_hasta', 'banco_filtro', 'titular_filtro'];
 
         $vieneDelFiltro = $request->hasAny($filterKeys);
         if ($vieneDelFiltro) {
@@ -1275,6 +1315,7 @@ class FinanzasController extends Controller
                 'fecha_desde' => $request->input('fecha_desde') ?: null,
                 'fecha_hasta' => $request->input('fecha_hasta') ?: null,
                 'banco_filtro' => $request->input('banco_filtro') ?: null,
+                'titular_filtro' => $request->input('titular_filtro') ?: null,
             ];
             $request->session()->put('conciliaciones.filtros', $filtrosConciliacion);
         } else {
@@ -1282,10 +1323,12 @@ class FinanzasController extends Controller
                 'fecha_desde' => null,
                 'fecha_hasta' => null,
                 'banco_filtro' => null,
+                'titular_filtro' => null,
             ]);
         }
 
         $banco_filtro = $filtrosConciliacion['banco_filtro'] ?? null;
+        $titular_filtro = $filtrosConciliacion['titular_filtro'] ?? null;
 
         [$cuentasBancarias, $bancos, $titularesPorBanco] = $this->cuentasConciliacion();
 
@@ -1314,7 +1357,7 @@ class FinanzasController extends Controller
             ]);
         }
 
-        $idsAbiertos = $this->idsExtractoVisibles($fecha_desde, $fecha_hasta, $banco_filtro);
+        $idsAbiertos = $this->idsExtractoVisibles($fecha_desde, $fecha_hasta, $banco_filtro, $titular_filtro);
 
         $relacionesLinea = [
             'flujoCaja:id,motivo,tipo_gasto,categoria_egreso,banco,titular,banco_receptor,titular_receptor,monto_bs,monto_usd,fecha,referencia',
@@ -1347,7 +1390,7 @@ class FinanzasController extends Controller
         if (\Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'compra_divisa_id')) {
             $lineas_pendientes = $lineas_pendientes->whereNull('compra_divisa_id');
         }
-        $lineas_pendientes = $lineas_pendientes->sortByDesc('id')->take(200)->values();
+        $lineas_pendientes = $lineas_pendientes->values();
         if ($lineas_pendientes->count() > 0) {
             $fecha_minima = $fecha_desde;
             $fecha_maxima = $fecha_hasta;
@@ -1378,12 +1421,40 @@ class FinanzasController extends Controller
                     });
                 });
             }
+            $this->filtrarPorTitular($flujos_posibles, $titular_filtro);
             $flujos_posibles = $flujos_posibles->limit(5000)->get();
+
+            $clavesEgreso = [];
+            foreach ($flujos_posibles as $flujoPend) {
+                $diaFlujo = $flujoPend->fecha instanceof \DateTimeInterface
+                    ? $flujoPend->fecha->format('Y-m-d')
+                    : substr((string) $flujoPend->fecha, 0, 10);
+                foreach ([$flujoPend->monto_bs ?? null, $flujoPend->monto ?? null] as $montoFlujo) {
+                    if ($montoFlujo === null || abs((float) $montoFlujo) < 0.004) {
+                        continue;
+                    }
+                    $clavesEgreso[$diaFlujo.'|'.(int) round(abs((float) $montoFlujo) * 100)] = true;
+                }
+            }
+            $lineas_pendientes = $lineas_pendientes
+                ->sortBy(function ($linea) use ($clavesEgreso) {
+                    $dia = $linea->fecha instanceof \DateTimeInterface
+                        ? $linea->fecha->format('Y-m-d')
+                        : substr((string) $linea->fecha, 0, 10);
+                    $clave = $dia.'|'.(int) round(abs((float) $linea->monto) * 100);
+                    $prio = (isset($clavesEgreso[$clave]) && $linea->esCargo()) ? 0 : 1;
+
+                    return [$prio, -((int) $linea->id)];
+                })
+                ->take(500)
+                ->values();
 
             $comprasDivisasPosibles = \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')
                 ? \App\Models\CompraDivisa::where('es_conciliado', false)
                     ->where('fecha', '>=', $fecha_minima)
                     ->where('fecha', '<=', $fecha_maxima)
+                    ->tap(fn ($q) => $this->filtrarPorBanco($q, $banco_filtro))
+                    ->tap(fn ($q) => $this->filtrarPorTitular($q, $titular_filtro))
                     ->get()
                 : collect();
 
@@ -1506,6 +1577,7 @@ class FinanzasController extends Controller
             ->where('fecha', '<=', $fecha_hasta);
 
         $this->filtrarPorBanco($egresos_query, $banco_filtro);
+        $this->filtrarPorTitular($egresos_query, $titular_filtro);
         $egresos_ayer = $egresos_query->orderBy('id')->get();
 
         // Movimientos registrados en el sistema durante el período del extracto.
@@ -1546,6 +1618,8 @@ class FinanzasController extends Controller
                 });
             });
         }
+        $this->filtrarPorTitular($movimientos_sistema_query, $titular_filtro);
+        $this->filtrarPorTitular($ingresos_sistema_query, $titular_filtro);
         $movimientos_sistema = $movimientos_sistema_query->get();
         $ingresos_sistema = $ingresos_sistema_query->get();
         $matcher = app(\App\Services\BankReconciliationMatcher::class);
@@ -1593,6 +1667,7 @@ class FinanzasController extends Controller
                 ->where('fecha', '>=', $fecha_desde)
                 ->where('fecha', '<=', $fecha_hasta)
                 ->tap(fn ($q) => $this->filtrarPorBanco($q, $banco_filtro))
+                ->tap(fn ($q) => $this->filtrarPorTitular($q, $titular_filtro))
                 ->get()
             : collect();
 
@@ -1604,6 +1679,7 @@ class FinanzasController extends Controller
             ->when($periodo_desde, fn ($q) => $q->where('fecha', '>=', $periodo_desde))
             ->when($periodo_hasta, fn ($q) => $q->where('fecha', '<=', $periodo_hasta));
         $this->filtrarPorBanco($tasasQuery, $banco_filtro);
+        $this->filtrarPorTitular($tasasQuery, $titular_filtro);
         $tasasEgreso = app(\App\Services\ComisionBancariaUsd::class)->tasasPorDia(
             $tasasQuery->get(['fecha', 'banco', 'titular', 'tasa_cambio'])
         );
@@ -1992,6 +2068,7 @@ class FinanzasController extends Controller
                 'fecha_desde' => $request->input('fecha_desde'),
                 'fecha_hasta' => $request->input('fecha_hasta'),
                 'banco_filtro' => $request->input('banco_filtro'),
+                'titular_filtro' => $request->input('titular_filtro'),
             ]));
         }
 

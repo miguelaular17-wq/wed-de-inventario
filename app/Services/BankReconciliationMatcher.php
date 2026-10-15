@@ -871,6 +871,11 @@ class BankReconciliationMatcher
             return $this->coincideTraslado($linea, $flujo);
         }
 
+        // Un abono (pago móvil, depósito) no puede consumir un egreso del sistema.
+        if (! $linea->esCargo()) {
+            return false;
+        }
+
         if (! $this->mismoBanco($linea->banco, $flujo->banco ?? null)) {
             return false;
         }

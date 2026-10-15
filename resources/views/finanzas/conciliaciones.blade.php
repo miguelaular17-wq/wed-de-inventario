@@ -44,9 +44,8 @@
     .sections-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
     @media(max-width: 900px) { .sections-grid { grid-template-columns: 1fr; } }
 
-    .section-block { border-right: 1px solid #f1f5f9; }
+    .section-block { border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; min-width: 0; }
     .section-block:nth-child(even) { border-right: none; }
-    .section-block:nth-child(1), .section-block:nth-child(2) { border-bottom: 1px solid #f1f5f9; }
 
     .section-header { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid #f1f5f9; }
     .section-badge { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
@@ -127,6 +126,19 @@
                         <option value="{{ $b }}" {{ ($filtrosConciliacion['banco_filtro'] ?? '') == $b ? 'selected' : '' }}>{{ $b }}</option>
                     @endforeach
                 </select>
+                @php
+                    $titsFiltro = $titularesPorBanco[$filtrosConciliacion['banco_filtro'] ?? ''] ?? [];
+                    $titActual = $filtrosConciliacion['titular_filtro'] ?? '';
+                    if ($titActual !== '' && ! in_array($titActual, $titsFiltro, true)) {
+                        $titsFiltro[] = $titActual;
+                    }
+                @endphp
+                <select name="titular_filtro" class="select-banco">
+                    <option value="">Todos los titulares</option>
+                    @foreach($titsFiltro as $tit)
+                        <option value="{{ $tit }}" @selected($titActual === $tit)>{{ $tit }}</option>
+                    @endforeach
+                </select>
                 <button type="submit" class="btn-filtrar">Filtrar</button>
             </form>
 
@@ -193,6 +205,7 @@
                                 <input type="hidden" name="fecha_desde" value="{{ $fecha_desde }}">
                                 <input type="hidden" name="fecha_hasta" value="{{ $fecha_hasta }}">
                                 <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
+                                <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
                                 <button type="submit" style="font-size: 0.75rem; background-color: #dcfce7; color: #166534; border: none; padding: 4px 10px; border-radius: 4px; font-weight: 700; cursor: pointer;">Cierre marcado</button>
                             </form>
                         @else
@@ -204,6 +217,7 @@
                                 <input type="hidden" name="fecha_desde" value="{{ $fecha_desde }}">
                                 <input type="hidden" name="fecha_hasta" value="{{ $fecha_hasta }}">
                                 <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
+                                <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
                                 <button type="submit" style="font-size: 0.75rem; background-color: rgba(255,255,255,0.15); color: #fff; border: none; padding: 4px 10px; border-radius: 4px; font-weight: 700; cursor: pointer;">Marcar cierre</button>
                             </form>
                         @endif
@@ -302,7 +316,7 @@
         <div class="sections-grid">
 
             {{-- 1. CONSOLIDADOS --}}
-            <div class="section-block" data-sec="{{ $bk_key }}|consolidados">
+            <div class="section-block" data-sec="{{ $bk_key }}|consolidados" style="order:3">
                 <div class="section-header" onclick="toggleSeccion(this)">
                     <span class="section-badge badge-green"></span>
                     <span class="section-title">Consolidados</span>
@@ -346,7 +360,7 @@
             </div>
 
             {{-- 2. EN TRÁNSITO --}}
-            <div class="section-block" data-sec="{{ $bk_key }}|transito">
+            <div class="section-block" data-sec="{{ $bk_key }}|transito" style="order:2">
                 <div class="section-header" onclick="toggleSeccion(this)">
                     <span class="section-badge badge-yellow"></span>
                     <span class="section-title">En Tránsito</span>
@@ -388,7 +402,7 @@
             </div>
 
             {{-- 3. SIN REGISTRAR --}}
-            <div class="section-block" data-sec="{{ $bk_key }}|banco">
+            <div class="section-block" data-sec="{{ $bk_key }}|banco" style="order:1">
                 <div class="section-header" onclick="toggleSeccion(this)">
                     <span class="section-badge badge-red"></span>
                     <span class="section-title">Movimientos en el Banco</span>
@@ -441,7 +455,7 @@
             </div>
 
             {{-- 4. COMISIONES BANCARIAS --}}
-            <div class="section-block" data-sec="{{ $bk_key }}|comisiones">
+            <div class="section-block" data-sec="{{ $bk_key }}|comisiones" style="order:4">
                 <div class="section-header" onclick="toggleSeccion(this)">
                     <span class="section-badge badge-purple"></span>
                     <span class="section-title">Comisiones Bancarias</span>

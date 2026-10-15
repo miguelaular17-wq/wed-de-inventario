@@ -145,6 +145,15 @@ class ConciliacionCalendarioService
             return false;
         }
 
+        $ocultas = [
+            'BANCARIBE|CURAZAO',
+            'BANCARIBE|EURONISSI',
+            'BNC|EURONISSI',
+        ];
+        if (in_array($banco.'|'.$titular, $ocultas, true)) {
+            return false;
+        }
+
         $tercerosVenezuela = ['DAYANA LOPEZ', 'EDWARD MAVO', 'JOSE SEMECO', 'MARIA NUNEZ'];
 
         return ! ($banco === 'VENEZUELA' && in_array($titular, $tercerosVenezuela, true));

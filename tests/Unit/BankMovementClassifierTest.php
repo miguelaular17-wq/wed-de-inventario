@@ -27,13 +27,31 @@ class BankMovementClassifierTest extends TestCase
         $this->assertTrue($this->classifier->esComision('EMISION DE ESTADO DE CUENTA'));
         $this->assertTrue($this->classifier->esComision('COMIS EMIS EDO DE CUENTAS ME'));
         $this->assertTrue($this->classifier->esComision(
-            "TELF.:000000000000\nCED.:J502551352\nCTA.:010500583510584123"
+            "TELF.:000000000000\nCED.:J502551352\nCTA.:010500583510584123",
+            'VENEZUELA'
         ));
         $this->assertFalse($this->classifier->esComision(
-            'TELF.:04141234567 CED.:V12345678 CTA.:010500583510584123'
+            'TELF.:04141234567 CED.:V12345678 CTA.:010500583510584123',
+            'VENEZUELA'
         ));
         $this->assertFalse($this->classifier->esComision('PAGO DE SERVICIOS VIA INTERNET'));
         $this->assertTrue($this->classifier->esComision('SERVICIO USO PUNTO'));
+    }
+
+    public function test_bnc_grupo_jrz_no_trata_el_lote_pos_ni_la_transferencia_como_comision(): void
+    {
+        $this->assertFalse($this->classifier->esComision(
+            'COMISION BANCO POS: 860963370 GRUPO JRZ TECH ELECTRONIC LOTE NRO.: 000398 DEPOSITO: 0.00',
+            'BNC'
+        ));
+        $this->assertFalse($this->classifier->esComision(
+            'TELF.:000000000000 CED.:J401722296 CTA.:01140251812510078090 CXC DORAL 4800 A 787 52',
+            'BNC'
+        ));
+        $this->assertTrue($this->classifier->esComision(
+            'SERVICIO USO PUNTO DE VENTA MES: Julio /2026 AFILIACION NRO.:860963370 TERMINAL NRO.:17184',
+            'BNC'
+        ));
     }
 
     public function test_compra_intervencion_es_compra_divisas_no_comision(): void

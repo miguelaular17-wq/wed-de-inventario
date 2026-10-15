@@ -28,7 +28,9 @@
 .cal-cuenta.ok { border-color: #86efac; background: #f0fdf4; }
 .cal-cuenta.parcial { border-color: #fcd34d; background: #fffbeb; }
 .cal-banco { font-weight: 800; color: #0f172a; }
-.cal-titular { color: #475569; font-size: 0.88rem; }
+.cal-titular { color: #475569; font-size: 0.88rem; font-weight: 600; }
+.cal-link { color: inherit; text-decoration: none; display: inline-flex; gap: 6px; align-items: baseline; }
+.cal-link:hover .cal-banco { text-decoration: underline; }
 .cal-estado { font-size: 0.75rem; font-weight: 800; border-radius: 999px; padding: 3px 8px; }
 .cal-estado.ok { background: #dcfce7; color: #166534; }
 .cal-estado.parcial { background: #fef3c7; color: #92400e; }
@@ -116,7 +118,15 @@
                     @endphp
                     <div class="cal-cuenta {{ $estado === 'pend' ? '' : $estado }}">
                         <div>
-                            <div class="cal-banco">{{ $fila['banco'] }} <span class="cal-titular">· {{ $fila['titular'] }}</span></div>
+                            <a class="cal-link" href="{{ route('finanzas.conciliaciones', [
+                                'fecha_desde' => $cal['inicio'],
+                                'fecha_hasta' => $cal['fin'],
+                                'banco_filtro' => $fila['banco'],
+                                'titular_filtro' => $fila['titular'],
+                            ]) }}">
+                                <span class="cal-banco">{{ $fila['banco'] }}</span>
+                                <span class="cal-titular">· {{ $fila['titular'] }}</span>
+                            </a>
                             <div style="margin-top:6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <span class="cal-estado {{ $estado }}">{{ $estadoTexto }}</span>
                                 @foreach($fila['rangos'] as $rango)
