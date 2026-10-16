@@ -101,6 +101,16 @@
     .file-hint { font-size: 0.82rem; color: #94a3b8; margin-top: 10px; }
     .btn-cancel { background: white; border: 1.5px solid #cbd5e1; padding: 10px 20px; border-radius: 9px; font-weight: 600; cursor: pointer; color: #475569; font-family: inherit; }
     .btn-submit { background: linear-gradient(135deg,#2563eb,#1d4ed8); color: white; padding: 10px 22px; border: none; border-radius: 9px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .btn-dash-action {
+        width: 28px; height: 28px; padding: 0; border-radius: 6px; border: 1.5px solid #bfdbfe;
+        background: #eff6ff; color: #2563eb; font-size: 1rem; font-weight: 800; line-height: 1;
+        cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+        font-family: inherit;
+    }
+    .btn-dash-action:hover { background: #dbeafe; }
+    .btn-dash-comision { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
+    .btn-dash-ok { color: #059669; border-color: #a7f3d0; background: #ecfdf5; font-size: 0.95rem; }
+    .btn-dash-ok:hover { background: #d1fae5; }
 </style>
 
 <div class="conc-page">
@@ -345,6 +355,9 @@
                                 @if($row['tipo_gasto'])
                                     <br><span class="tipo-chip chip-cargo">{{ $row['tipo_gasto'] }}</span>
                                 @endif
+                                @if(!empty($row['manual']))
+                                    <br><span class="tipo-chip" style="background:#ecfdf5;color:#059669;">Manual</span>
+                                @endif
                             </td>
                             <td class="monto-cell monto-green">Bs. {{ number_format($row['monto'], 2) }}</td>
                         </tr>
@@ -375,6 +388,7 @@
                             <th>Referencia</th>
                             <th>Concepto / Motivo</th>
                             <th style="text-align:right">Monto Bs.</th>
+                            <th style="width:44px;"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -389,9 +403,27 @@
                                 @endif
                             </td>
                             <td class="monto-cell monto-yellow">{{ number_format($row['monto_bs'], 2) }}</td>
+                            <td style="text-align:center;">
+                                @if(!empty($row['flujo_id']) || !empty($row['compra_id']))
+                                <form action="{{ route('finanzas.conciliaciones.transito_conciliar') }}" method="POST" style="display:inline;" title="Marcar como conciliado" onclick="event.stopPropagation()">
+                                    @csrf
+                                    <input type="hidden" name="fecha_desde" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
+                                    <input type="hidden" name="fecha_hasta" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
+                                    <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
+                                    <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
+                                    @if(!empty($row['flujo_id']))
+                                        <input type="hidden" name="flujo_id" value="{{ $row['flujo_id'] }}">
+                                    @endif
+                                    @if(!empty($row['compra_id']))
+                                        <input type="hidden" name="compra_id" value="{{ $row['compra_id'] }}">
+                                    @endif
+                                    <button type="submit" class="btn-dash-action btn-dash-ok" onclick="event.stopPropagation(); return confirm('¿Marcar este movimiento en tránsito como conciliado?')">✓</button>
+                                </form>
+                                @endif
+                            </td>
                         </tr>
                         @empty
-                        <tr class="empty-row"><td colspan="4">Sin movimientos en tránsito</td></tr>
+                        <tr class="empty-row"><td colspan="5">Sin movimientos en tránsito</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -434,12 +466,14 @@
                             </td>
                             <td class="monto-cell monto-red">Bs. {{ number_format($row['monto'], 2) }}</td>
                             <td style="text-align:center;">
-                                <form action="{{ route('finanzas.conciliaciones.manual') }}" method="POST" style="display:inline-block;" title="Marcar como Conciliado">
+                                <form action="{{ route('finanzas.conciliaciones.marcar_comision') }}" method="POST" style="display:inline;" title="Marcar como comisión bancaria" onclick="event.stopPropagation()">
                                     @csrf
+                                    <input type="hidden" name="fecha_desde" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
+                                    <input type="hidden" name="fecha_hasta" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
+                                    <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
+                                    <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
                                     <input type="hidden" name="linea_id" value="{{ $row['id'] }}">
-                                    <button type="submit" class="btn btn-sm btn-success" style="padding: 2px 6px; font-size: 0.75rem;" onclick="return confirm('¿Marcar este movimiento como conciliado manualmente?')">
-                                        <i class="fas fa-check"></i>
-                                    </button>
+                                    <button type="submit" class="btn-dash-action btn-dash-comision" onclick="event.stopPropagation(); return confirm('¿Pasar este movimiento a Comisiones bancarias?')">—</button>
                                 </form>
                             </td>
                         </tr>

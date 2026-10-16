@@ -1713,6 +1713,61 @@ table.data-table tbody tr:hover {
 .nomina-tabs a.active { color: var(--blue); border-bottom-color: var(--blue); }
 .nomina-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
 .nomina-card { border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: #fff; }
+.retenciones-sede-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+}
+.retenciones-sede-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+a.retenciones-sede-card:hover {
+    border-color: #93c5fd;
+    box-shadow: 0 4px 14px rgba(26, 68, 128, .08);
+    transform: translateY(-1px);
+}
+.retenciones-sede-card.is-active {
+    border-color: var(--blue);
+    background: #eff6ff;
+    box-shadow: 0 0 0 2px rgba(26, 68, 128, .12);
+}
+.retenciones-sede-nombre {
+    font-size: .88rem;
+    font-weight: 700;
+    color: var(--blue);
+    line-height: 1.25;
+}
+.retenciones-sede-total .retenciones-sede-nombre { color: #0f172a; }
+.retenciones-sede-monto {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -.02em;
+}
+.retenciones-sede-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    margin-top: 2px;
+}
+.retenciones-sede-meta span {
+    font-size: .72rem;
+    color: var(--muted);
+    font-weight: 600;
+}
+.retenciones-sede-total {
+    background: #f8fafc;
+    border-style: dashed;
+}
 .org-sede {
     margin-top: 12px;
     padding: 12px;

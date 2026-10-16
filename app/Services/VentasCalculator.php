@@ -8,7 +8,7 @@ class VentasCalculator
 {
     private const STOCK_ORDER = ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL'];
 
-    public function calcular(Collection $products, string $sedeLocal, float $tiempoPronostico): Collection
+    public function calcular(Collection $products, string $sedeLocal, float $tiempoPronostico, bool $soloCompararDeposito = false): Collection
     {
         \App\Services\Profiler::start('VentasCalculator::calcular total');
         \App\Services\Profiler::record('VentasCalculator::calcular input', 0.0, count($products));
@@ -93,12 +93,16 @@ class VentasCalculator
         \App\Services\Profiler::stop('VentasCalculator::calcular map()', count($mapped));
         \App\Services\Profiler::record('VentasCalculator::calcular map() RAM', 0.0, count($mapped), $memDeltaMap);
 
-        // ── FILTER: eliminar sugeridos insuficientes ────────────────────────
+        // ── FILTER: depósito (sede 0 + vende + JRZ) o sugeridos insuficientes ─
         \App\Services\Profiler::start('VentasCalculator::calcular filter(sugerido_min)');
-        $result = $mapped->filter(
-            fn (array $row) => $row['accion'] === 'TIENE EXISTENCIA'
-                || (int) $row['sugerido'] >= $minSugerido
-        )->values();
+        $result = $mapped->filter(function (array $row) use ($minSugerido, $soloCompararDeposito) {
+            if ($soloCompararDeposito) {
+                return VentasFilterService::esCompararDeposito($row);
+            }
+
+            return $row['accion'] === 'TIENE EXISTENCIA'
+                || (int) $row['sugerido'] >= $minSugerido;
+        })->values();
         \App\Services\Profiler::stop('VentasCalculator::calcular filter(sugerido_min)', count($result));
 
         \App\Services\Profiler::stop('VentasCalculator::calcular total', count($result));

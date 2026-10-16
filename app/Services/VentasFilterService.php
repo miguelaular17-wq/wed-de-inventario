@@ -28,7 +28,11 @@ class VentasFilterService
         }
 
         $accion = (string) ($filters['accion'] ?? '');
-        if ($accion !== '' && $accion !== 'Ninguno' && $accion !== 'SIN VENTA') {
+        $compararDeposito = $accion === 'COMPARAR CON DEPOSITO';
+
+        if ($compararDeposito) {
+            $out = $out->filter(fn (array $r) => self::esCompararDeposito($r));
+        } elseif ($accion !== '' && $accion !== 'Ninguno' && $accion !== 'SIN VENTA') {
             $out = $out->filter(fn (array $r) => ($r['accion'] ?? '') === $accion);
         }
 
@@ -43,7 +47,8 @@ class VentasFilterService
 
         $reqOpc = (string) ($filters['req_opc'] ?? '');
         $reqColor = (string) ($filters['req_color'] ?? '');
-        $reqFiltersActive = ($accion === 'HACER REQUISICION' || $reqOpc !== '' || $reqColor !== '');
+        $reqFiltersActive = ! $compararDeposito
+            && ($accion === 'HACER REQUISICION' || $reqOpc !== '' || $reqColor !== '');
 
         if ($reqFiltersActive) {
             $out = $out->filter(fn (array $r) => ($r['accion'] ?? '') === 'HACER REQUISICION');
@@ -59,6 +64,19 @@ class VentasFilterService
         }
 
         return $out->values();
+    }
+
+    /**
+     * Vende en la sede, existencia local en 0 y el depósito (JRZ) tiene stock.
+     */
+    public static function esCompararDeposito(array $row): bool
+    {
+        $deposito = (string) config('inventario.sede_central', 'JRZ');
+        $vende = ((float) ($row['venta'] ?? 0)) > 0 || ((float) ($row['ventas_60d'] ?? 0)) > 0;
+
+        return $vende
+            && (int) ($row['existencia'] ?? 0) === 0
+            && (int) (($row['stocks'][$deposito] ?? 0)) > 0;
     }
 
     public function categorias(Collection $rows): array
@@ -110,6 +128,7 @@ class VentasFilterService
         return collect(config('inventario.acciones'))
             ->reject(fn ($a) => $a === 'SIN VENTA')
             ->prepend('Ninguno')
+            ->push('COMPARAR CON DEPOSITO')
             ->values()
             ->all();
     }

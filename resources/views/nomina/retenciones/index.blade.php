@@ -46,42 +46,33 @@
     </div>
 
     <h2 style="margin:22px 0 8px;font-size:1.05rem;">Por sede</h2>
-    <div class="table-wrap">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Sede</th>
-                    <th style="text-align:right;">Trabajadores</th>
-                    <th style="text-align:right;">Quincenas</th>
-                    <th style="text-align:right;">Retención</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse($resumen['sedes'] as $fila)
-                    <tr>
-                        <td>
-                            <a href="{{ route('nomina.retenciones.index', ['anio' => $anioParam, 'sede' => $fila['nombre']]) }}">
-                                {{ $fila['nombre'] }}
-                            </a>
-                        </td>
-                        <td style="text-align:right;">{{ $fila['trabajadores'] }}</td>
-                        <td style="text-align:right;">{{ $fila['quincenas'] }}</td>
-                        <td style="text-align:right;"><strong>{{ $dinero($fila['retencion']) }}</strong></td>
-                    </tr>
-                @empty
-                    <tr><td colspan="4" class="muted">No hay retenciones en este período.</td></tr>
-                @endforelse
-                @if($resumen['sedes'] !== [])
-                    <tr>
-                        <td><strong>Total</strong></td>
-                        <td></td>
-                        <td></td>
-                        <td style="text-align:right;"><strong>{{ $dinero($resumen['total']) }}</strong></td>
-                    </tr>
-                @endif
-            </tbody>
-        </table>
-    </div>
+    @if($resumen['sedes'] === [])
+        <p class="muted" style="margin:0;">No hay retenciones en este período.</p>
+    @else
+        <div class="retenciones-sede-grid">
+            @foreach($resumen['sedes'] as $fila)
+                <a
+                    href="{{ route('nomina.retenciones.index', ['anio' => $anioParam, 'sede' => $fila['nombre']]) }}"
+                    class="retenciones-sede-card {{ $sede === $fila['nombre'] ? 'is-active' : '' }}"
+                >
+                    <div class="retenciones-sede-nombre">{{ $fila['nombre'] }}</div>
+                    <div class="retenciones-sede-monto">{{ $dinero($fila['retencion']) }}</div>
+                    <div class="retenciones-sede-meta">
+                        <span>{{ $fila['trabajadores'] }} trabajadores</span>
+                        <span>{{ $fila['quincenas'] }} quincenas</span>
+                    </div>
+                </a>
+            @endforeach
+            <div class="retenciones-sede-card retenciones-sede-total">
+                <div class="retenciones-sede-nombre">Total</div>
+                <div class="retenciones-sede-monto">{{ $dinero($resumen['total']) }}</div>
+                <div class="retenciones-sede-meta">
+                    <span>{{ count($resumen['sedes']) }} sedes</span>
+                    <span>{{ $trabajadoresTotal }} trabajadores</span>
+                </div>
+            </div>
+        </div>
+    @endif
 
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:22px 0 8px;">
         <h2 style="margin:0;font-size:1.05rem;">Por trabajador{{ $sede !== '' ? ' · '.$sede : '' }}</h2>

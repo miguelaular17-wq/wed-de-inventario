@@ -8,10 +8,16 @@ class ConciliacionLinea extends Model
 {
     protected $fillable = [
         'banco', 'titular',
-        'fecha', 'descripcion', 'referencia', 'monto', 'estado', 'flujo_caja_id',
+        'fecha', 'descripcion', 'referencia', 'monto', 'estado', 'forzar_comision', 'flujo_caja_id',
         'session_id', 'tipo',
         'tesoreria_ingreso_id',
         'compra_divisa_id',
+    ];
+
+    protected $casts = [
+        'forzar_comision' => 'boolean',
+        'fecha' => 'date',
+        'monto' => 'float',
     ];
 
     public function flujoCaja()

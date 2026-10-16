@@ -86,6 +86,10 @@ class RequisicionPersonalizadaService
             $out = $out->filter(fn (array $r) => ($r['subcategoria'] ?? '') === $sub);
         }
 
+        if (($filters['comparar'] ?? 'Ninguno') === 'deposito') {
+            $out = $out->filter(fn (array $r) => VentasFilterService::esCompararDeposito($r));
+        }
+
         return $out->values();
     }
 

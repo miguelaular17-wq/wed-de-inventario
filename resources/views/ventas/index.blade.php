@@ -53,7 +53,9 @@
         <label for="accion-select">Acción</label>
         <select name="accion" id="accion-select">
             @foreach ($accionesCombo as $acc)
-                <option value="{{ $acc }}" @selected($filters['accion'] === $acc)>{{ $acc === 'Ninguno' ? 'Todas' : $acc }}</option>
+                <option value="{{ $acc }}" @selected($filters['accion'] === $acc)>
+                    {{ $acc === 'Ninguno' ? 'Todas' : ($acc === 'COMPARAR CON DEPOSITO' ? 'Comparar con depósito' : $acc) }}
+                </option>
             @endforeach
         </select>
     </div>

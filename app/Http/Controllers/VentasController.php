@@ -91,8 +91,10 @@ class VentasController extends Controller
         }
         \App\Services\Profiler::stop('VentasController::buildIndexData filter');
 
+        $soloCompararDeposito = $filterInput['accion'] === 'COMPARAR CON DEPOSITO';
+
         \App\Services\Profiler::start('VentasController::buildIndexData ventas->calcular');
-        $calculated = $this->ventas->calcular($products, $sede, $tp);
+        $calculated = $this->ventas->calcular($products, $sede, $tp, $soloCompararDeposito);
         \App\Services\Profiler::stop('VentasController::buildIndexData ventas->calcular');
         
         \App\Services\Profiler::start('VentasController::buildIndexData filters->apply & paginate');

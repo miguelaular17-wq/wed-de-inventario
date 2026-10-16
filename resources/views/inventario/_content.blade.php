@@ -8,7 +8,13 @@
 
 @if($rows->isEmpty())
     <div class="panel empty-state" data-tour="inventario-grid">
-        <p>No hay productos con stock en otras sedes para estos filtros.</p>
+        <p>
+            @if(($filters['comparar'] ?? 'Ninguno') === 'deposito')
+                No hay productos que vendan en esta sede, estén en 0 y tengan stock en el depósito (JRZ).
+            @else
+                No hay productos con stock en otras sedes para estos filtros.
+            @endif
+        </p>
     </div>
 @else
     <div class="product-grid" data-tour="inventario-grid">

@@ -55,7 +55,10 @@ class InventarioController extends Controller
             'q' => trim((string) $request->query('q', '')),
             'categoria' => (string) $request->query('categoria', 'Ninguno'),
             'subcategoria' => (string) $request->query('subcategoria', 'Ninguno'),
+            'comparar' => (string) $request->query('comparar', 'Ninguno'),
         ];
+        $compararDeposito = $filters['comparar'] === 'deposito';
+        $sedeDeposito = (string) config('inventario.sede_central', 'JRZ');
 
         if (config('database.default') === 'pgsql') {
             $page = (int) $request->query('page', 1);
@@ -82,16 +85,41 @@ class InventarioController extends Controller
                 $whereClauses[] = 'LOWER(p.categoria) IN ('.$this->sqlCategoriasTelefonia().')';
             }
 
+            if ($compararDeposito) {
+                $bindings['sedeLocalStock'] = $sede;
+                $bindings['sedeLocalVenta'] = $sede;
+                $bindings['sedeDeposito'] = $sedeDeposito;
+                // Sede local en 0, vende en la sede, y el depósito (JRZ) tiene stock
+                $whereClauses[] = 'COALESCE((
+                    SELECT sa_local.existencia FROM inventario_v2.stock_actual sa_local
+                    WHERE sa_local.producto_id = p.id AND sa_local.sede = :sedeLocalStock
+                    LIMIT 1
+                ), 0) = 0';
+                $whereClauses[] = 'EXISTS (
+                    SELECT 1 FROM inventario_v2.ventas_historicas vh
+                    WHERE vh.producto_id = p.id AND vh.sede = :sedeLocalVenta
+                      AND (COALESCE(vh.venta_promedio, 0) > 0 OR COALESCE(vh.ventas_60d, 0) > 0)
+                )';
+                $whereClauses[] = 'EXISTS (
+                    SELECT 1 FROM inventario_v2.stock_actual sa_dep
+                    WHERE sa_dep.producto_id = p.id AND sa_dep.sede = :sedeDeposito AND sa_dep.existencia > 0
+                )';
+                // sedeLocal binding unused in comparar mode; drop to avoid unused-param issues
+                unset($bindings['sedeLocal']);
+            } else {
+                $whereClauses[] = 'EXISTS (
+                    SELECT 1 FROM inventario_v2.stock_actual sa
+                    WHERE sa.producto_id = p.id AND sa.sede != :sedeLocal AND sa.existencia > 0
+                )';
+            }
+
             $whereSql = implode(' AND ', $whereClauses);
 
             // 1. Get total count
             $countSql = "
                 SELECT COUNT(*) as total_count 
                 FROM inventario_v2.productos p 
-                WHERE {$whereSql} AND EXISTS (
-                    SELECT 1 FROM inventario_v2.stock_actual sa 
-                    WHERE sa.producto_id = p.id AND sa.sede != :sedeLocal AND sa.existencia > 0
-                )
+                WHERE {$whereSql}
             ";
             $totalCountRow = \Illuminate\Support\Facades\DB::connection('pgsql')->selectOne($countSql, $bindings);
             $totalCount = $totalCountRow ? (int) $totalCountRow->total_count : 0;
@@ -101,10 +129,7 @@ class InventarioController extends Controller
             $itemsSql = "
                 SELECT p.id, p.codigo, p.nombre, p.categoria, p.subcategoria, p.proveedor, p.precio_unidad, p.precio_mayor, p.url_imagen
                 FROM inventario_v2.productos p 
-                WHERE {$whereSql} AND EXISTS (
-                    SELECT 1 FROM inventario_v2.stock_actual sa 
-                    WHERE sa.producto_id = p.id AND sa.sede != :sedeLocal AND sa.existencia > 0
-                )
+                WHERE {$whereSql}
                 ORDER BY p.codigo 
                 LIMIT {$perPage} OFFSET {$offset}
             ";
@@ -389,6 +414,7 @@ class InventarioController extends Controller
                 'q' => $request->query('q', $request->input('q')),
                 'categoria' => $request->query('categoria', $request->input('categoria', 'Ninguno')),
                 'subcategoria' => $request->query('subcategoria', $request->input('subcategoria', 'Ninguno')),
+                'comparar' => $request->query('comparar', $request->input('comparar', 'Ninguno')),
                 'page' => $request->query('page', $request->input('page', 1)),
             ])
             ->with('status', 'Requisición guardada. El stock se aplicará al exportar el CSV.');
@@ -474,6 +500,7 @@ class InventarioController extends Controller
                 'q'           => $request->query('q', $request->input('q')),
                 'categoria'   => $request->query('categoria', $request->input('categoria', 'Ninguno')),
                 'subcategoria' => $request->query('subcategoria', $request->input('subcategoria', 'Ninguno')),
+                'comparar'    => $request->query('comparar', $request->input('comparar', 'Ninguno')),
                 'page'         => $request->query('page', $request->input('page', 1)),
             ])
             ->with('status', 'Requisición eliminada correctamente.');

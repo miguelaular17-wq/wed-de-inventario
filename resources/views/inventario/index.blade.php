@@ -42,6 +42,13 @@
             @endforeach
         </select>
     </div>
+    <div class="field">
+        <label for="comparar">Comparar</label>
+        <select id="comparar" name="comparar">
+            <option value="Ninguno" @selected(($filters['comparar'] ?? 'Ninguno') === 'Ninguno')>Normal</option>
+            <option value="deposito" @selected(($filters['comparar'] ?? 'Ninguno') === 'deposito')>Con depósito (JRZ)</option>
+        </select>
+    </div>
 </form>
 
 <div id="inventario-content" class="ajax-content">
@@ -92,6 +99,7 @@
             <input type="hidden" name="q" value="{{ $filters['q'] ?? '' }}">
             <input type="hidden" name="categoria" value="{{ $filters['categoria'] ?? 'Ninguno' }}">
             <input type="hidden" name="subcategoria" value="{{ $filters['subcategoria'] ?? 'Ninguno' }}">
+            <input type="hidden" name="comparar" value="{{ $filters['comparar'] ?? 'Ninguno' }}">
             <input type="hidden" name="page" value="{{ request()->query('page', 1) }}">
 
             <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
@@ -122,6 +130,7 @@
             <input type="hidden" name="q" value="{{ $filters['q'] ?? '' }}">
             <input type="hidden" name="categoria" value="{{ $filters['categoria'] ?? 'Ninguno' }}">
             <input type="hidden" name="subcategoria" value="{{ $filters['subcategoria'] ?? 'Ninguno' }}">
+            <input type="hidden" name="comparar" value="{{ $filters['comparar'] ?? 'Ninguno' }}">
             <input type="hidden" name="page" value="{{ request()->query('page', 1) }}">
         </form>
 
@@ -555,6 +564,7 @@
             url.searchParams.set('q', document.getElementById('q').value);
             url.searchParams.set('categoria', document.getElementById('categoria').value);
             url.searchParams.set('subcategoria', document.getElementById('subcategoria').value);
+            url.searchParams.set('comparar', document.getElementById('comparar')?.value || 'Ninguno');
 
             const r = await fetch(url.toString());
             if (!r.ok) return;

@@ -161,6 +161,13 @@ Route::middleware('guest')->group(function () {
     Route::post('/pedidos', [PedidoSolicitadoController::class, 'store'])->name('pedidos.store');
 });
 
+/** Lector QR en tablet (kiosco): sin login; salida solo con PIN de admin. */
+Route::prefix('lector-qr')->name('lector_qr.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\LectorQrController::class, 'index'])->name('index');
+    Route::get('/producto', [\App\Http\Controllers\LectorQrController::class, 'lookup'])->name('lookup');
+    Route::post('/desbloquear', [\App\Http\Controllers\LectorQrController::class, 'unlock'])->name('unlock');
+});
+
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('auth');
 Route::get('/logout', [AuthController::class, 'logout']);
 
@@ -610,6 +617,8 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::post('/conciliaciones/add-missing', [App\Http\Controllers\FinanzasController::class, 'addMissingConciliacion'])->name('finanzas.conciliaciones.add_missing');
     Route::post('/conciliaciones/ignore', [App\Http\Controllers\FinanzasController::class, 'ignoreConciliacion'])->name('finanzas.conciliaciones.ignore');
     Route::post('/conciliaciones/manual', [App\Http\Controllers\FinanzasController::class, 'manualConciliacion'])->name('finanzas.conciliaciones.manual');
+    Route::post('/conciliaciones/marcar-comision', [App\Http\Controllers\FinanzasController::class, 'marcarComisionBancaria'])->name('finanzas.conciliaciones.marcar_comision');
+    Route::post('/conciliaciones/transito-conciliar', [App\Http\Controllers\FinanzasController::class, 'marcarTransitoConciliado'])->name('finanzas.conciliaciones.transito_conciliar');
     Route::post('/conciliaciones/clear', [App\Http\Controllers\FinanzasController::class, 'clearConciliacion'])->name('finanzas.conciliaciones.clear');
     Route::get('/conciliaciones/reporte', [App\Http\Controllers\FinanzasController::class, 'reporteConciliacion'])->name('finanzas.conciliaciones.reporte');
     Route::get('/conciliaciones/reporte-banco', [App\Http\Controllers\FinanzasController::class, 'reporteBancoPdf'])->name('finanzas.conciliaciones.reporte-banco');

@@ -148,7 +148,7 @@
     }
     .product-card {
         background: #fff;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #000;
         border-radius: 14px;
         overflow: hidden;
         display: flex;
@@ -159,7 +159,7 @@
     .product-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
-        border-color: #cbd5e1;
+        border-color: #000;
     }
     .product-img-wrapper {
         width: 100%;

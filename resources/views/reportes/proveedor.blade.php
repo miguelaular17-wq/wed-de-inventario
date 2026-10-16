@@ -22,9 +22,9 @@
         @endif
     </div>
 
-    <form method="GET" action="{{ route('reportes.proveedor') }}" class="nomina-card gerencial-filtros" style="margin-top:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:end;">
-        <div style="min-width:220px; flex:1;">
-            <label for="proveedor" style="display:block; font-size:0.75rem; color:#64748b; margin-bottom:4px;">Proveedor</label>
+    <form method="GET" action="{{ route('reportes.proveedor') }}" class="nomina-card gerencial-filtros" style="margin-top:16px; display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="field" style="flex:1 1 240px; max-width:360px; margin:0;">
+            <label for="proveedor">Proveedor</label>
             <select id="proveedor" name="proveedor" required style="width:100%;">
                 <option value="">Selecciona un proveedor…</option>
                 @foreach($proveedores as $prov)
@@ -32,15 +32,17 @@
                 @endforeach
             </select>
         </div>
-        <div>
-            <label for="desde" style="display:block; font-size:0.75rem; color:#64748b; margin-bottom:4px;">Desde</label>
-            <input id="desde" type="date" name="desde" value="{{ $filtros['desde'] }}" required>
+        <div class="field" style="flex:0 1 160px; margin:0;">
+            <label for="desde">Desde</label>
+            <input id="desde" type="date" name="desde" value="{{ $filtros['desde'] }}" required style="width:100%;">
         </div>
-        <div>
-            <label for="hasta" style="display:block; font-size:0.75rem; color:#64748b; margin-bottom:4px;">Hasta</label>
-            <input id="hasta" type="date" name="hasta" value="{{ $filtros['hasta'] }}" required>
+        <div class="field" style="flex:0 1 160px; margin:0;">
+            <label for="hasta">Hasta</label>
+            <input id="hasta" type="date" name="hasta" value="{{ $filtros['hasta'] }}" required style="width:100%;">
         </div>
-        <button type="submit" class="btn btn-primary">Consultar</button>
+        <div class="field" style="flex:0 0 auto; margin:0; display:flex; align-items:flex-end;">
+            <button type="submit" class="btn btn-primary">Consultar</button>
+        </div>
     </form>
 
     @if($filtros['proveedor'] === '')

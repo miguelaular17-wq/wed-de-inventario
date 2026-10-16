@@ -48,7 +48,7 @@
             width: 22%; /* 4 por fila forzado */
             margin-right: 1.5%;
             margin-bottom: 20px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #000;
             border-radius: 8px;
             background-color: #fff;
             padding-bottom: 10px;

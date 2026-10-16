@@ -86,16 +86,28 @@
                 <p>Acceso rápido</p>
                 <div class="nexo-login-quick-row">
                     <a href="{{ route('vendedor.dashboard') }}" class="nexo-login-chip">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
-                        Existencias
+                        <span class="nexo-login-chip-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
+                        </span>
+                        <span class="nexo-login-chip-label">Existencias</span>
                     </a>
                     <button type="button" id="btn-q-pedir" class="nexo-login-chip">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                        Q Pedir
+                        <span class="nexo-login-chip-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                        </span>
+                        <span class="nexo-login-chip-label">Q Pedir</span>
                     </button>
                     <a href="{{ route('servicio.celulares.hub') }}" class="nexo-login-chip">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
-                        Servicio técnico
+                        <span class="nexo-login-chip-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                        </span>
+                        <span class="nexo-login-chip-label">Servicio técnico</span>
+                    </a>
+                    <a href="{{ route('lector_qr.index') }}" class="nexo-login-chip nexo-login-chip-qr">
+                        <span class="nexo-login-chip-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><path d="M14 14h3v3h-3z"></path><path d="M18 14h3"></path><path d="M18 17h3"></path><path d="M14 20h7"></path></svg>
+                        </span>
+                        <span class="nexo-login-chip-label">Lector QR</span>
                     </a>
                 </div>
             </div>
@@ -461,7 +473,7 @@
     }
 
     .nexo-login-quick p {
-        margin: 0 0 10px;
+        margin: 0 0 12px;
         font-size: 0.78rem;
         font-weight: 600;
         letter-spacing: 0.04em;
@@ -470,39 +482,85 @@
     }
 
     .nexo-login-quick-row {
-        display: flex;
-        gap: 8px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
     }
 
     .nexo-login-chip {
-        flex: 1;
-        display: inline-flex;
+        display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 7px;
-        padding: 9px 10px;
-        border-radius: 999px;
+        gap: 8px;
+        min-height: 76px;
+        padding: 12px 10px;
+        border-radius: 14px;
         border: 1px solid #e2e8f0;
         background: #fff;
-        color: #475569;
+        color: #334155;
         font-size: 0.82rem;
-        font-weight: 600;
+        font-weight: 700;
         text-decoration: none;
         cursor: pointer;
         font-family: inherit;
-        transition: border-color 0.15s, color 0.15s, background 0.15s;
+        transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+    }
+
+    .nexo-login-chip-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #f1f5f9;
+        color: #475569;
+        flex-shrink: 0;
+    }
+
+    .nexo-login-chip-label {
+        line-height: 1.2;
+        text-align: center;
     }
 
     .nexo-login-chip:hover {
         border-color: #e879f9;
         color: #86198f;
         background: #fdf4ff;
+        box-shadow: 0 4px 12px rgba(192, 38, 211, 0.08);
+    }
+
+    .nexo-login-chip:hover .nexo-login-chip-icon {
+        background: #fae8ff;
+        color: #a21caf;
     }
 
     .nexo-login-chip.is-active {
         border-color: #a855f7;
         color: #7e22ce;
         background: #faf5ff;
+    }
+
+    .nexo-login-chip-qr {
+        border-color: #bfdbfe;
+        background: #f8fbff;
+    }
+
+    .nexo-login-chip-qr .nexo-login-chip-icon {
+        background: #dbeafe;
+        color: #1a4480;
+    }
+
+    .nexo-login-chip-qr:hover {
+        border-color: #93c5fd;
+        color: #1a4480;
+        background: #eff6ff;
+    }
+
+    .nexo-login-chip-qr:hover .nexo-login-chip-icon {
+        background: #bfdbfe;
+        color: #1a4480;
     }
 
     .nexo-login-footer {
