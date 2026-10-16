@@ -126,17 +126,15 @@ class IndicadoresOperativosService
         $productosMeta = $this->incentivos->productosMetaAsignados();
         $etiquetas = $this->etiquetasSede();
 
-        $empleados = NominaEmpleado::query()
+        $todosEmpleados = NominaEmpleado::query()
             ->activos()
             ->with(['cliente', 'sedeCatalogo', 'cargoCatalogo'])
-            ->where(function ($builder) {
-                $builder
-                    ->whereHas('cargoCatalogo', function ($cargo) {
-                        $cargo->whereRaw('LOWER(nombre) LIKE ?', ['%cajer%']);
-                    })
-                    ->orWhereRaw("LOWER(COALESCE(cargo, '')) LIKE ?", ['%cajer%']);
-            })
             ->get();
+
+        // Solo cajeros/cajeras; sin supervisores, telefonía ni call center.
+        $empleados = $todosEmpleados
+            ->filter(fn (NominaEmpleado $e) => $this->esCajeroEfectividadCaja($e) && ! $this->excluidoEfectividadCaja($e))
+            ->values();
 
         $pares = [];
         foreach ($empleados as $empleado) {
@@ -159,6 +157,20 @@ class IndicadoresOperativosService
             $usados[$par['clave']] = true;
         }
 
+        // Nombres del POS que corresponden a roles excluidos (no deben salir como huérfanos).
+        $clavesExcluidas = [];
+        foreach ($todosEmpleados as $empleado) {
+            if (! $this->excluidoEfectividadCaja($empleado)) {
+                continue;
+            }
+            $tokens = $this->tokensNombre($empleado->nombre());
+            foreach ($grupos as $clave => $grupo) {
+                if ($this->puntajeNombre($tokens, $grupo['tokens']) >= 3) {
+                    $clavesExcluidas[$clave] = true;
+                }
+            }
+        }
+
         $filas = [];
         foreach ($empleados as $empleado) {
             $grupo = isset($asignados[$empleado->id]) ? $grupos[$asignados[$empleado->id]] : null;
@@ -177,7 +189,7 @@ class IndicadoresOperativosService
         }
 
         foreach ($grupos as $clave => $grupo) {
-            if (isset($usados[$clave])) {
+            if (isset($usados[$clave]) || isset($clavesExcluidas[$clave])) {
                 continue;
             }
             $bucket = $this->bucketCajera($grupo, '');
@@ -482,6 +494,49 @@ class IndicadoresOperativosService
             'faltante_pct' => $faltantePct,
             'puntuacion' => $puntuacion,
         ];
+    }
+
+    private function cargoNombreEmpleado(NominaEmpleado $empleado): string
+    {
+        $empleado->loadMissing('cargoCatalogo', 'sedeCatalogo');
+
+        return mb_strtolower(trim((string) ($empleado->cargoCatalogo?->nombre ?: $empleado->cargo ?: '')), 'UTF-8');
+    }
+
+    private function esCajeroEfectividadCaja(NominaEmpleado $empleado): bool
+    {
+        return str_contains($this->cargoNombreEmpleado($empleado), 'cajer');
+    }
+
+    private function excluidoEfectividadCaja(NominaEmpleado $empleado): bool
+    {
+        if ((bool) ($empleado->es_supervisor ?? false)) {
+            return true;
+        }
+
+        $cargo = $this->cargoNombreEmpleado($empleado);
+        $cargoCompacto = str_replace([' ', '-'], '', $cargo);
+
+        if (str_contains($cargo, 'supervisor') || str_contains($cargo, 'coordinador de tienda')) {
+            return true;
+        }
+
+        if (str_contains($cargo, 'telefon') || str_contains($cargoCompacto, 'telefonia')) {
+            return true;
+        }
+
+        if (str_contains($cargo, 'call center') || str_contains($cargoCompacto, 'callcenter')) {
+            return true;
+        }
+
+        $empleado->loadMissing('sedeCatalogo');
+        $sede = mb_strtolower(trim((string) ($empleado->sedeCatalogo?->nombre ?: $empleado->sedeCatalogo?->codigo ?: $empleado->sede ?: '')), 'UTF-8');
+        $sedeCompacta = str_replace([' ', '-'], '', $sede);
+        if (str_contains($sede, 'call center') || str_contains($sedeCompacta, 'callcenter')) {
+            return true;
+        }
+
+        return false;
     }
 
     private function porcentajeCaja(float $real, float $meta): ?float

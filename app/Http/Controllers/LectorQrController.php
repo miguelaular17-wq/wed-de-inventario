@@ -76,18 +76,36 @@ class LectorQrController extends Controller
         }
 
         $producto = $this->buscarProducto($codigo, $sede);
-        if (! $producto) {
+        if ($producto) {
             return response()->json([
-                'ok' => false,
-                'error' => 'Producto no encontrado.',
-                'codigo_buscado' => $codigo,
-            ], 404);
+                'ok' => true,
+                'producto' => $producto,
+            ]);
+        }
+
+        // Código físico distinto al del sistema: probar por los primeros 7 dígitos.
+        $candidatos = $this->buscarPorPrefijoSieteDigitos($codigo, $sede);
+        if (count($candidatos) === 1) {
+            return response()->json([
+                'ok' => true,
+                'producto' => $candidatos[0],
+                'match' => 'prefijo7',
+            ]);
+        }
+        if (count($candidatos) > 1) {
+            return response()->json([
+                'ok' => true,
+                'multiples' => true,
+                'prefijo' => $this->prefijoSieteDigitos($codigo),
+                'productos' => $candidatos,
+            ]);
         }
 
         return response()->json([
-            'ok' => true,
-            'producto' => $producto,
-        ]);
+            'ok' => false,
+            'error' => 'Producto no encontrado.',
+            'codigo_buscado' => $codigo,
+        ], 404);
     }
 
     public function unlock(Request $request): JsonResponse
@@ -122,6 +140,8 @@ class LectorQrController extends Controller
     private function normalizarCodigo(string $raw): string
     {
         $raw = trim($raw);
+        // Escáner/teclado a veces manda apóstrofe en vez de guion (ej. YQ'665 → YQ-665)
+        $raw = str_replace(["'", "\u{2018}", "\u{2019}", "\u{02BC}", '`'], '-', $raw);
 
         // Si el QR trae una URL, usar el último segmento
         if (preg_match('#^https?://#i', $raw)) {
@@ -139,6 +159,16 @@ class LectorQrController extends Controller
         }
 
         return trim($raw);
+    }
+
+    private function prefijoSieteDigitos(string $codigo): ?string
+    {
+        $digitos = preg_replace('/\D+/', '', $codigo) ?? '';
+        if (strlen($digitos) < 7) {
+            return null;
+        }
+
+        return substr($digitos, 0, 7);
     }
 
     /** @return array<string, mixed>|null */
@@ -185,10 +215,58 @@ class LectorQrController extends Controller
                 'p.url_imagen',
             ]);
 
-        if (! $row) {
-            return null;
+        return $row ? $this->mapProducto($row, $sede) : null;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function buscarPorPrefijoSieteDigitos(string $codigo, string $sede): array
+    {
+        if (config('database.default') !== 'pgsql') {
+            return [];
         }
 
+        $prefijo = $this->prefijoSieteDigitos($codigo);
+        if ($prefijo === null) {
+            return [];
+        }
+
+        $rows = DB::connection('pgsql')
+            ->table('productos as p')
+            ->where('p.activo', true)
+            ->where(function ($q) use ($prefijo) {
+                $q->where('p.codigo', 'ilike', $prefijo.'%')
+                    ->orWhereRaw(
+                        "regexp_replace(split_part(TRIM(p.codigo), '/', 1), '[^0-9]', '', 'g') LIKE ?",
+                        [$prefijo.'%']
+                    );
+            })
+            ->orderBy('p.nombre')
+            ->limit(24)
+            ->get([
+                'p.id',
+                'p.codigo',
+                'p.nombre',
+                'p.categoria',
+                'p.subcategoria',
+                'p.proveedor',
+                'p.precio_unidad',
+                'p.precio_mayor',
+                'p.url_imagen',
+            ]);
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = $this->mapProducto($row, $sede);
+        }
+
+        return $out;
+    }
+
+    /** @return array<string, mixed> */
+    private function mapProducto(object $row, string $sede): array
+    {
         $existencia = (int) (DB::connection('pgsql')
             ->table('stock_actual')
             ->where('producto_id', $row->id)

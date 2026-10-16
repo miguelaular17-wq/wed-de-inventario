@@ -476,6 +476,102 @@
         }
         .toast.is-on { display: block; }
 
+        /* —— Varios candidatos (prefijo 7 dígitos) —— */
+        #screen-elegir {
+            padding: 10px 14px 16px;
+            gap: 10px;
+            overflow: hidden;
+            background: #f8fafc;
+        }
+        .elegir-head {
+            flex-shrink: 0;
+        }
+        .elegir-head h2 {
+            margin: 8px 0 4px;
+            font-size: 1.2rem;
+            font-weight: 800;
+        }
+        .elegir-head p {
+            margin: 0;
+            color: var(--muted);
+            font-size: .9rem;
+            line-height: 1.35;
+        }
+        .elegir-grid {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+            padding: 4px 2px 8px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .elegir-card {
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 14px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            text-align: left;
+            transition: border-color .15s, box-shadow .15s, transform .12s;
+        }
+        .elegir-card:active { transform: scale(0.98); }
+        .elegir-card:hover {
+            border-color: #93c5fd;
+            box-shadow: 0 4px 14px rgba(26, 68, 128, .12);
+        }
+        .elegir-img {
+            width: 100%;
+            aspect-ratio: 1;
+            background: #f8fafc;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .elegir-img img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .elegir-card .ec-code {
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: .68rem;
+            color: var(--muted);
+            font-weight: 700;
+            word-break: break-all;
+        }
+        .elegir-card .ec-name {
+            font-size: .88rem;
+            font-weight: 800;
+            line-height: 1.25;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            min-height: 3.3em;
+        }
+        .elegir-card .ec-precio {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: var(--accent);
+        }
+        .elegir-card .ec-stock {
+            font-size: .75rem;
+            color: var(--muted);
+            font-weight: 700;
+        }
+        .elegir-footer {
+            flex-shrink: 0;
+            display: flex;
+            justify-content: flex-end;
+        }
+
         /* —— PIN —— */
         #pin-modal {
             display: none;
@@ -562,6 +658,22 @@
         <p class="espera-msg">Escanea el código</p>
         <p class="espera-hint">Usa el escáner de la tablet. La pantalla espera el código del producto.</p>
         <button type="button" class="btn-escribir" id="btn-escribir">Escribir código</button>
+    </section>
+
+    {{-- 3b. Varios productos (mismo prefijo) --}}
+    <section id="screen-elegir" class="screen">
+        <div class="top-bar" style="position:static;padding:0 0 4px;">
+            <div class="sede-pill" id="elegir-sede-label">—</div>
+            <button type="button" class="btn-salir" id="btn-pedir-salir-3">Salir</button>
+        </div>
+        <div class="elegir-head">
+            <h2>¿Cuál es?</h2>
+            <p id="elegir-hint">Hay varios productos con ese código. Toca la foto correcta.</p>
+        </div>
+        <div class="elegir-grid" id="elegir-grid"></div>
+        <div class="elegir-footer">
+            <button type="button" class="btn-ghost" id="btn-elegir-cancel" style="padding:12px 18px;border-radius:12px;">Cancelar</button>
+        </div>
     </section>
 
     {{-- 3. Producto --}}
@@ -691,6 +803,7 @@
 
     const screenSede = document.getElementById('screen-sede');
     const screenEspera = document.getElementById('screen-espera');
+    const screenElegir = document.getElementById('screen-elegir');
     const screenProducto = document.getElementById('screen-producto');
     const pinModal = document.getElementById('pin-modal');
     const manualModal = document.getElementById('manual-modal');
@@ -710,8 +823,13 @@
     let wedgeTimer = null;
 
     function showScreen(el) {
-        [screenSede, screenEspera, screenProducto].forEach(s => s.classList.remove('is-active'));
+        [screenSede, screenEspera, screenElegir, screenProducto].forEach(s => s.classList.remove('is-active'));
         el.classList.add('is-active');
+    }
+
+    /** Apóstrofe del teclado → guion (mismo criterio que el servidor). */
+    function normalizarCodigoCliente(raw) {
+        return String(raw || '').trim().replace(/['\u2018\u2019\u02BC`]/g, '-');
     }
 
     function showToast(msg) {
@@ -790,7 +908,7 @@
     }
 
     async function onCodigo(rawCodigo) {
-        const code = String(rawCodigo || '').trim();
+        const code = normalizarCodigoCliente(rawCodigo);
         if (!code || busy) return;
         if (pinModal.classList.contains('is-open')) return;
         if (manualModal.classList.contains('is-open') && document.activeElement === manualInput) return;
@@ -809,6 +927,10 @@
                 showToast(j.error || 'Producto no encontrado');
                 return;
             }
+            if (j.multiples && Array.isArray(j.productos) && j.productos.length > 1) {
+                renderElegir(j.productos, j.prefijo || '');
+                return;
+            }
             renderProducto(j.producto);
             showScreen(screenProducto);
             startCountdown();
@@ -817,6 +939,54 @@
         } finally {
             busy = false;
         }
+    }
+
+    function setImgWithFallback(img, p) {
+        img.dataset.triedPng = 'false';
+        img.onerror = function () {
+            if (img.dataset.triedPng !== 'true') {
+                img.dataset.triedPng = 'true';
+                img.src = p.imagen_png;
+            } else {
+                img.onerror = null;
+                img.src = p.imagen_fallback;
+            }
+        };
+        img.src = p.imagen_url;
+    }
+
+    function renderElegir(productos, prefijo) {
+        clearAuto();
+        document.getElementById('elegir-sede-label').textContent = sedeLabel;
+        document.getElementById('elegir-hint').textContent = prefijo
+            ? `Varios productos empiezan con ${prefijo}. Toca la foto y el precio correctos.`
+            : 'Hay varios productos parecidos. Toca la foto correcta.';
+
+        const grid = document.getElementById('elegir-grid');
+        grid.innerHTML = '';
+        productos.forEach((p) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'elegir-card';
+            btn.innerHTML =
+                `<div class="elegir-img"><img alt=""></div>` +
+                `<div class="ec-code"></div>` +
+                `<div class="ec-name"></div>` +
+                `<div class="ec-precio"></div>` +
+                `<div class="ec-stock"></div>`;
+            btn.querySelector('.ec-code').textContent = p.codigo || '';
+            btn.querySelector('.ec-name').textContent = p.nombre || '';
+            btn.querySelector('.ec-precio').textContent = money(p.precio_unidad);
+            btn.querySelector('.ec-stock').textContent = `Existencia: ${p.existencia ?? 0}`;
+            setImgWithFallback(btn.querySelector('img'), p);
+            btn.addEventListener('click', () => {
+                renderProducto(p);
+                showScreen(screenProducto);
+                startCountdown();
+            });
+            grid.appendChild(btn);
+        });
+        showScreen(screenElegir);
     }
 
     function renderProducto(p) {
@@ -853,18 +1023,7 @@
             document.getElementById('cashea-neto-bs').textContent = '';
         }
 
-        const img = document.getElementById('prod-img');
-        img.dataset.triedPng = 'false';
-        img.onerror = function () {
-            if (img.dataset.triedPng !== 'true') {
-                img.dataset.triedPng = 'true';
-                img.src = p.imagen_png;
-            } else {
-                img.onerror = null;
-                img.src = p.imagen_fallback;
-            }
-        };
-        img.src = p.imagen_url;
+        setImgWithFallback(document.getElementById('prod-img'), p);
     }
 
     function renderCashea(precioUnit) {
@@ -918,6 +1077,7 @@
     });
 
     document.getElementById('btn-otro').addEventListener('click', irAEspera);
+    document.getElementById('btn-elegir-cancel').addEventListener('click', irAEspera);
 
     // Manual
     function openManual() {
@@ -932,7 +1092,7 @@
     document.getElementById('btn-escribir').addEventListener('click', openManual);
     document.getElementById('manual-cancel').addEventListener('click', closeManual);
     document.getElementById('manual-ok').addEventListener('click', () => {
-        const v = manualInput.value.trim();
+        const v = normalizarCodigoCliente(manualInput.value);
         if (!v) return;
         closeManual();
         onCodigo(v);
@@ -952,16 +1112,18 @@
     document.addEventListener('keydown', (e) => {
         if (pinModal.classList.contains('is-open')) return;
         if (manualModal.classList.contains('is-open')) return;
-        if (!screenEspera.classList.contains('is-active') && !screenProducto.classList.contains('is-active')) return;
+        if (!screenEspera.classList.contains('is-active')
+            && !screenProducto.classList.contains('is-active')
+            && !screenElegir.classList.contains('is-active')) return;
         if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
 
-        // Si están en producto y escanean otro, cortar countdown y buscar
+        // Si están en producto/elección y escanean otro, cortar countdown y buscar
         if (e.key === 'Enter') {
             if (wedgeBuffer.length >= 3) {
                 e.preventDefault();
                 const code = wedgeBuffer;
                 wedgeBuffer = '';
-                if (screenProducto.classList.contains('is-active')) clearAuto();
+                if (screenProducto.classList.contains('is-active') || screenElegir.classList.contains('is-active')) clearAuto();
                 onCodigo(code);
             }
             return;
@@ -1031,6 +1193,7 @@
 
     document.getElementById('btn-pedir-salir').addEventListener('click', openPin);
     document.getElementById('btn-pedir-salir-2').addEventListener('click', openPin);
+    document.getElementById('btn-pedir-salir-3').addEventListener('click', openPin);
     document.getElementById('pin-pad').addEventListener('click', (e) => {
         const key = e.target.closest('[data-key]')?.dataset.key;
         if (!key) return;
