@@ -61,18 +61,24 @@ class FaltanteCajaController extends Controller
             'fecha' => ['required', 'date'],
             'monto' => ['required', 'numeric', 'min:0.01'],
             'motivo' => ['nullable', 'string', 'max:255'],
+            'accion' => ['nullable', 'in:sumar,restar'],
             'q' => ['nullable', 'string'],
         ]);
 
         $empleado = NominaEmpleado::query()->findOrFail($data['empleado_id']);
         $this->faltantes->create($empleado, $data, auth()->id());
 
+        $restar = ($data['accion'] ?? 'sumar') === 'restar';
+        $msg = $restar
+            ? '$'.number_format((float) $data['monto'], 2).' restado de la cuenta de '.$empleado->nombre().'.'
+            : 'Faltante sumado a la cuenta de '.$empleado->nombre().'. Luego indica cuánto descontar.';
+
         return redirect()
             ->route('nomina.faltante_caja.index', [
                 'fecha' => $data['fecha'],
                 'q' => $data['q'] ?? '',
             ])
-            ->with('status', 'Faltante sumado a la cuenta de '.$empleado->nombre().'. Luego indica cuánto descontar.');
+            ->with('status', $msg);
     }
 
     public function descontarCuenta(Request $request): RedirectResponse

@@ -79,26 +79,51 @@ class FaltanteCajaService
             ]);
         }
 
-        $monto = round((float) ($data['monto'] ?? 0), 2);
+        $monto = round(abs((float) ($data['monto'] ?? 0)), 2);
         if ($monto <= 0) {
             throw ValidationException::withMessages([
                 'monto' => 'El monto debe ser mayor a cero.',
             ]);
         }
 
+        $accion = mb_strtolower(trim((string) ($data['accion'] ?? 'sumar')), 'UTF-8');
+        $restar = in_array($accion, ['restar', 'resta', '-'], true);
+
+        if ($restar) {
+            $saldo = $this->saldoCuenta($empleado);
+            if ($monto > $saldo + 0.001) {
+                throw ValidationException::withMessages([
+                    'monto' => 'La cuenta solo tiene $'.number_format($saldo, 2).'. No puedes restar más.',
+                ]);
+            }
+        }
+
         $fecha = Carbon::parse($data['fecha'] ?? now())->startOfDay();
         $motivo = trim((string) ($data['motivo'] ?? ''));
-        if ($motivo === '') {
-            $motivo = 'Faltante de caja';
-        } elseif (! str_contains(mb_strtolower($motivo), 'faltante')) {
-            $motivo = 'Faltante de caja: '.$motivo;
+        if ($restar) {
+            if ($motivo === '') {
+                throw ValidationException::withMessages([
+                    'motivo' => 'Indica el motivo de la resta.',
+                ]);
+            }
+            $motivo = str_contains(mb_strtolower($motivo), 'ajuste') || str_contains(mb_strtolower($motivo), 'resta')
+                ? $motivo
+                : 'Ajuste (resta): '.$motivo;
+            $montoGuardar = -1 * $monto;
+        } else {
+            if ($motivo === '') {
+                $motivo = 'Faltante de caja';
+            } elseif (! str_contains(mb_strtolower($motivo), 'faltante')) {
+                $motivo = 'Faltante de caja: '.$motivo;
+            }
+            $montoGuardar = $monto;
         }
 
         $payload = [
             'empleado_id' => $empleado->id,
             'fecha' => $fecha->toDateString(),
             'tipo' => 'FALTANTE',
-            'monto' => $monto,
+            'monto' => $montoGuardar,
             'motivo' => $motivo,
             'estado' => 'PENDIENTE',
             'created_by' => $usuarioId,
@@ -109,13 +134,20 @@ class FaltanteCajaService
 
         $row = NominaComisionDescuento::create($payload);
 
-        NominaAuditLog::registrar('FALTANTE_CAJA_CREAR', 'faltante_caja', $row->id, null, [
-            'empleado_id' => $empleado->id,
-            'monto' => $monto,
-            'motivo' => $motivo,
-            'fecha' => $fecha->toDateString(),
-            'decision' => $payload['decision'] ?? null,
-        ]);
+        NominaAuditLog::registrar(
+            $restar ? 'FALTANTE_CAJA_RESTAR' : 'FALTANTE_CAJA_CREAR',
+            'faltante_caja',
+            $row->id,
+            null,
+            [
+                'empleado_id' => $empleado->id,
+                'monto' => $montoGuardar,
+                'accion' => $restar ? 'restar' : 'sumar',
+                'motivo' => $motivo,
+                'fecha' => $fecha->toDateString(),
+                'decision' => $payload['decision'] ?? null,
+            ]
+        );
 
         return $row;
     }
@@ -392,6 +424,10 @@ class FaltanteCajaService
                 }
 
                 $lineaMonto = round((float) $linea->monto, 2);
+                // Ajustes (restas) quedan como monto negativo; no se usan para descontar.
+                if ($lineaMonto <= 0) {
+                    continue;
+                }
                 if ($lineaMonto <= $restante + 0.001) {
                     $anterior = $linea->decision;
                     $linea->decision = $decision;

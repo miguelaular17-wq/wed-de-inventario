@@ -209,7 +209,7 @@ Route::middleware(['auth'])->prefix('gerencial')->group(function () {
         ->middleware('permission:gerencial')
         ->name('gerencial.compras');
     Route::get('/cajas', [GerencialController::class, 'cajas'])
-        ->middleware('permission:gerencial')
+        ->middleware('permission:incentivos,gerencial')
         ->name('gerencial.cajas');
     Route::get('/traslados', [GerencialController::class, 'traslados'])
         ->middleware('permission:gerencial.valorizados')
@@ -389,7 +389,7 @@ Route::middleware(['auth'])->prefix('mensajeria')->name('mensajeria.')->group(fu
     Route::post('/', [\App\Http\Controllers\MensajeriaController::class, 'enviar'])->name('enviar');
 });
 
-Route::middleware(['auth', 'permission:gerencial'])->prefix('incentivos')->name('incentivos.')->group(function () {
+Route::middleware(['auth', 'permission:incentivos'])->prefix('incentivos')->name('incentivos.')->group(function () {
     Route::get('/{modulo}/cruce/buscar', [\App\Http\Controllers\IncentivoController::class, 'buscarCruce'])
         ->whereIn('modulo', array_keys(config('incentivos.modulos')))
         ->name('cruce.buscar');

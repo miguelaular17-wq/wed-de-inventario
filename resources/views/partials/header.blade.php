@@ -103,7 +103,7 @@
     }
 
     $incentivoItems = [];
-    if ($u->canAccess('gerencial')) {
+    if ($u->canAccess('incentivos')) {
         $incPeriodo = session('incentivos.periodo', []);
         $incQuery = array_filter([
             'desde' => $incPeriodo['desde'] ?? null,

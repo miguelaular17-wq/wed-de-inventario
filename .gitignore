@@ -36,6 +36,10 @@ dump_*.php
 *.py
 *.sql
 
+# Imágenes locales (se sincronizan por otro medio, no van en git)
+/storage/app/imagenes_centro/
+/storage/app/_check_env.php
+
 # Local assets / foreign projects / bank dumps
 /Imagenes_Articulos_JRZ/
 /app 1/

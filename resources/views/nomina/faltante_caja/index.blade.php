@@ -8,7 +8,7 @@
         <div>
             <h1 style="margin:0;">Faltante de caja</h1>
             <p class="muted" style="margin:4px 0 0;">
-                Quincena {{ $quincena['etiqueta'] }}. Cada registro se suma a la cuenta de la persona; tú eliges cuánto descontar en comisión.
+                Quincena {{ $quincena['etiqueta'] }}. Puedes sumar o restar en la cuenta; luego eliges cuánto descontar en nómina o comisión.
             </p>
         </div>
     </div>
@@ -49,7 +49,7 @@
                     <th>Salto registrado</th>
                     <th>Cuenta</th>
                     <th>A descontar</th>
-                    <th>Registrar (suma a cuenta)</th>
+                    <th>Registrar (sumar / restar)</th>
                 </tr>
             </thead>
             <tbody>
@@ -82,9 +82,17 @@
                                 <input type="hidden" name="empleado_id" value="{{ $empleado->id }}">
                                 <input type="hidden" name="fecha" value="{{ $fecha }}">
                                 <input type="hidden" name="q" value="{{ $q }}">
-                                <input type="number" step="0.01" min="0.01" name="monto" placeholder="Monto" required style="width:95px;">
-                                <input name="motivo" placeholder="Detalle" style="min-width:110px;flex:1;">
-                                <button class="btn primary" type="submit">Sumar</button>
+                                <input type="number" step="0.01" min="0.01" name="monto" placeholder="Monto" required style="width:95px;" @if(($cuenta['cuenta'] ?? 0) > 0) data-saldo="{{ $cuenta['cuenta'] }}" @endif>
+                                <input name="motivo" placeholder="Detalle / motivo" style="min-width:110px;flex:1;">
+                                <button class="btn primary" type="submit" name="accion" value="sumar">Sumar</button>
+                                <button
+                                    class="btn secondary"
+                                    type="submit"
+                                    name="accion"
+                                    value="restar"
+                                    title="Baja la cuenta (requiere motivo; no puede superar el saldo)"
+                                    @disabled(($cuenta['cuenta'] ?? 0) <= 0)
+                                >Restar</button>
                             </form>
                         </td>
                     </tr>
@@ -163,8 +171,10 @@
                                 <tbody>
                                     @foreach($grupo['lineas'] as $item)
                                         <tr>
-                                            <td>${{ number_format($item->monto, 2) }}</td>
-                                            <td>{{ $item->etiquetaDecision() }}</td>
+                                            <td style="{{ (float) $item->monto < 0 ? 'color:#b91c1c;font-weight:700;' : '' }}">
+                                                ${{ number_format((float) $item->monto, 2) }}
+                                            </td>
+                                            <td>{{ (float) $item->monto < 0 ? 'Ajuste (resta)' : $item->etiquetaDecision() }}</td>
                                             <td>{{ $item->estado }}</td>
                                             <td>{{ $item->creador?->name ?: '—' }}</td>
                                             <td>{{ $item->motivo ?: '—' }}</td>
