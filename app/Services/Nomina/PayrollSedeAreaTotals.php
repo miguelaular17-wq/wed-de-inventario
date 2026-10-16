@@ -111,6 +111,54 @@ class PayrollSedeAreaTotals
     }
 
     /**
+     * Gastos de personal por sede/área: paquete (asignaciones de nómina),
+     * total nómina, total comisiones (neto tras bonos/retenciones) y suma.
+     *
+     * @param  iterable<NominaRegistro>  $registros
+     * @param  iterable<NominaLiquidacionComision>  $liquidaciones
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function gastosPersonal(iterable $registros, iterable $liquidaciones, float $tasaBcv): Collection
+    {
+        $grupos = [];
+
+        foreach ($registros as $registro) {
+            $grupo = $this->grupoDeEmpleado($registro->empleado);
+            $desglose = $registro->desglose();
+            $paquete = round(
+                (float) $registro->salario_base
+                + (float) ($desglose['horas_extras'] ?? $registro->total_otros_ingresos ?? 0)
+                + $registro->montoBonificaciones(),
+                2
+            );
+            $this->acumularGastos(
+                $grupos,
+                $grupo,
+                (int) ($registro->empleado_id ?? 0),
+                $paquete,
+                round((float) $registro->total_pagar, 2),
+                0.0,
+                $tasaBcv
+            );
+        }
+
+        foreach ($liquidaciones as $liq) {
+            $grupo = $this->grupoDeEmpleado($liq->empleado);
+            $this->acumularGastos(
+                $grupos,
+                $grupo,
+                (int) ($liq->empleado_id ?? 0),
+                0.0,
+                0.0,
+                round((float) $liq->total_pagar, 2),
+                $tasaBcv
+            );
+        }
+
+        return $this->ordenar($grupos);
+    }
+
+    /**
      * Totales con venta neta de la quincena.
      * Omite sedes sin venta. Áreas Call Center / Digital Manage usan venta por vendedor;
      * Administración se incluye aunque no tenga venta propia.
@@ -318,6 +366,62 @@ class PayrollSedeAreaTotals
 
     /**
      * @param  array<string, array<string, mixed>>  $grupos
+     * @param  array{tipo: string, nombre: string, clave: string, etiqueta: string}  $grupo
+     */
+    private function acumularGastos(
+        array &$grupos,
+        array $grupo,
+        int $empleadoId,
+        float $paqueteSalarial,
+        float $totalNomina,
+        float $totalComisiones,
+        float $tasaBcv
+    ): void {
+        $clave = $grupo['clave'];
+        if (! isset($grupos[$clave])) {
+            $grupos[$clave] = [
+                'clave' => $clave,
+                'tipo' => $grupo['tipo'],
+                'etiqueta' => $grupo['etiqueta'],
+                'nombre' => $grupo['nombre'],
+                'empleados' => 0,
+                'empleado_ids' => [],
+                'paquete_salarial' => 0.0,
+                'total_nomina' => 0.0,
+                'total_comisiones' => 0.0,
+                'total_gastos' => 0.0,
+                // Compatibilidad con conVentasNetas / ordenar
+                'asignaciones' => 0.0,
+                'deducciones' => 0.0,
+                'pagar_usd' => 0.0,
+                'pagar_bs' => 0.0,
+            ];
+        }
+
+        if ($empleadoId > 0) {
+            $grupos[$clave]['empleado_ids'][$empleadoId] = true;
+        } else {
+            $grupos[$clave]['empleados']++;
+        }
+
+        $grupos[$clave]['paquete_salarial'] = round($grupos[$clave]['paquete_salarial'] + $paqueteSalarial, 2);
+        $grupos[$clave]['total_nomina'] = round($grupos[$clave]['total_nomina'] + $totalNomina, 2);
+        $grupos[$clave]['total_comisiones'] = round($grupos[$clave]['total_comisiones'] + $totalComisiones, 2);
+        $grupos[$clave]['total_gastos'] = round(
+            $grupos[$clave]['total_nomina'] + $grupos[$clave]['total_comisiones'],
+            2
+        );
+
+        $grupos[$clave]['empleados'] = ! empty($grupos[$clave]['empleado_ids'])
+            ? count($grupos[$clave]['empleado_ids'])
+            : (int) $grupos[$clave]['empleados'];
+        $grupos[$clave]['asignaciones'] = $grupos[$clave]['paquete_salarial'];
+        $grupos[$clave]['pagar_usd'] = $grupos[$clave]['total_gastos'];
+        $grupos[$clave]['pagar_bs'] = round($grupos[$clave]['total_gastos'] * $tasaBcv, 2);
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $grupos
      * @return Collection<int, array<string, mixed>>
      */
     private function ordenar(array $grupos): Collection
@@ -328,18 +432,24 @@ class PayrollSedeAreaTotals
             mb_strtoupper(self::AREA_ADMINISTRACION, 'UTF-8') => 2,
         ];
 
-        return collect(array_values($grupos))->sortBy([
-            fn ($a, $b) => ($a['tipo'] === 'AREA' ? 1 : 0) <=> ($b['tipo'] === 'AREA' ? 1 : 0),
-            function ($a, $b) use ($ordenArea) {
-                if (($a['tipo'] ?? '') !== 'AREA' || ($b['tipo'] ?? '') !== 'AREA') {
-                    return 0;
-                }
-                $oa = $ordenArea[mb_strtoupper((string) $a['nombre'], 'UTF-8')] ?? 99;
-                $ob = $ordenArea[mb_strtoupper((string) $b['nombre'], 'UTF-8')] ?? 99;
+        return collect(array_values($grupos))
+            ->map(function (array $g) {
+                unset($g['empleado_ids']);
 
-                return $oa <=> $ob;
-            },
-            fn ($a, $b) => strcmp(mb_strtoupper((string) $a['nombre'], 'UTF-8'), mb_strtoupper((string) $b['nombre'], 'UTF-8')),
-        ])->values();
+                return $g;
+            })
+            ->sortBy([
+                fn ($a, $b) => ($a['tipo'] === 'AREA' ? 1 : 0) <=> ($b['tipo'] === 'AREA' ? 1 : 0),
+                function ($a, $b) use ($ordenArea) {
+                    if (($a['tipo'] ?? '') !== 'AREA' || ($b['tipo'] ?? '') !== 'AREA') {
+                        return 0;
+                    }
+                    $oa = $ordenArea[mb_strtoupper((string) $a['nombre'], 'UTF-8')] ?? 99;
+                    $ob = $ordenArea[mb_strtoupper((string) $b['nombre'], 'UTF-8')] ?? 99;
+
+                    return $oa <=> $ob;
+                },
+                fn ($a, $b) => strcmp(mb_strtoupper((string) $a['nombre'], 'UTF-8'), mb_strtoupper((string) $b['nombre'], 'UTF-8')),
+            ])->values();
     }
 }

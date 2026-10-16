@@ -13,6 +13,7 @@ use App\Models\Nomina\NominaEmpresa;
 use App\Models\Nomina\NominaHoraExtra;
 use App\Models\Nomina\NominaInasistencia;
 use App\Models\Nomina\NominaAbonoSueldo;
+use App\Models\Nomina\NominaLiquidacionComision;
 use App\Models\Nomina\NominaPeriodo;
 use App\Services\BcvRateService;
 use App\Services\Nomina\AjusteService;
@@ -309,6 +310,43 @@ class PeriodoController extends Controller
         ])->setPaper('a4', 'landscape');
 
         return $pdf->download('totales_sedes_nomina_'.$periodo->id.'_'.$periodo->fecha_inicio?->format('Ymd').'.pdf');
+    }
+
+    public function reporteGastosPersonalPdf(NominaPeriodo $periodo)
+    {
+        if ($periodo->estado === NominaPeriodo::ABIERTO) {
+            return redirect()
+                ->route('nomina.periodos.show', $periodo)
+                ->withErrors(['periodo' => 'Calcula la nómina antes de descargar este reporte.']);
+        }
+
+        $periodo->load([
+            'registros.empleado.cliente',
+            'registros.empleado.sedeCatalogo',
+        ]);
+
+        $liquidaciones = NominaLiquidacionComision::query()
+            ->where('periodo_id', $periodo->id)
+            ->visibles()
+            ->with(['empleado.cliente', 'empleado.sedeCatalogo'])
+            ->orderBy('id')
+            ->get();
+
+        $tasaBcv = $this->bcv->tasaParaPeriodo($periodo);
+        $filas = $this->sedeAreaTotals->conVentasNetas(
+            $this->sedeAreaTotals->gastosPersonal($periodo->registros, $liquidaciones, $tasaBcv),
+            $periodo
+        );
+
+        $pdf = Pdf::loadView('nomina.periodos.pdf-gastos-personal-sede', [
+            'periodo' => $periodo,
+            'filas' => $filas,
+            'tasaBcv' => $tasaBcv,
+            'logoPath' => $this->logoNominaPdf(),
+            'titulo' => 'Gastos de personal por sede',
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('gastos_personal_sedes_'.$periodo->id.'_'.$periodo->fecha_inicio?->format('Ymd').'.pdf');
     }
 
     public function buscarEmpleados(Request $request, NominaPeriodo $periodo): JsonResponse

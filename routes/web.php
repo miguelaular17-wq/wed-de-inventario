@@ -328,6 +328,11 @@ Route::middleware(['auth', 'permission:reportes,compras.existencias,compras'])->
     Route::get('/ventas-por-proveedor/excel', [ReportesController::class, 'proveedorExcel'])->name('proveedor.excel');
 });
 
+Route::middleware(['auth', 'permission:reportes,compras.existencias,compras,inventario'])->prefix('analisis-categorias')->name('analisis_categorias.')->group(function () {
+    Route::get('/', [App\Http\Controllers\AnalisisCategoriasController::class, 'index'])->name('index');
+    Route::post('/toggle', [App\Http\Controllers\AnalisisCategoriasController::class, 'toggle'])->name('toggle');
+});
+
 Route::middleware(['auth', 'permission:compras.reporte_sede'])->get('/compras/pedidos/reporte-diario-sede', [PedidoSolicitadoController::class, 'reporteDiarioSedePdf'])
     ->name('comprador.pedidos.diario_sede');
 
@@ -418,6 +423,7 @@ Route::middleware(['auth', 'permission:nomina,nomina.periodos'])->prefix('nomina
     Route::get('/periodos/{periodo}/banco/{empresa}', [PeriodoController::class, 'exportarBanco'])->name('periodos.banco');
     Route::get('/periodos/{periodo}/relacion', [PeriodoController::class, 'relacion'])->name('periodos.relacion');
     Route::get('/periodos/{periodo}/reporte-sedes.pdf', [PeriodoController::class, 'reporteSedesPdf'])->name('periodos.reporte_sedes');
+    Route::get('/periodos/{periodo}/reporte-gastos-personal.pdf', [PeriodoController::class, 'reporteGastosPersonalPdf'])->name('periodos.reporte_gastos_personal');
 });
 
 Route::middleware(['auth', 'permission:nomina,nomina.comisiones'])->prefix('nomina')->name('nomina.')->group(function () {

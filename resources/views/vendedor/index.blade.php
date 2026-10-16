@@ -624,11 +624,18 @@ main:has(.cat-page) {
 
     const fmt = v => '$' + parseFloat(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+    const CASHEA_MIN_USD = 10;
+
     function openCashea(row) {
         const nombre      = row.dataset.producto;
         const codigo      = row.dataset.codigo;
         const precioUnit  = parseFloat(row.dataset.precioUnidad) || 0;
         const precioMayor = parseFloat(row.dataset.precioMayor)  || 0;
+
+        if (precioUnit < CASHEA_MIN_USD) {
+            alert('Cashea aplica solo a productos de $10.00 o más.');
+            return;
+        }
 
         document.getElementById('cashea-nombre').textContent  = `${nombre} — ${codigo}`;
         document.getElementById('cashea-punit').textContent   = precioUnit  > 0 ? fmt(precioUnit)  : '—';

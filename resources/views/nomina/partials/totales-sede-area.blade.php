@@ -21,6 +21,9 @@
             @if(!empty($pdfRoute))
                 <a class="btn secondary" href="{{ $pdfRoute }}">PDF con ventas netas</a>
             @endif
+            @if(!empty($pdfGastosRoute))
+                <a class="btn secondary" href="{{ $pdfGastosRoute }}">PDF gastos de personal</a>
+            @endif
             <label class="field" style="margin:0;min-width:220px;">
                 <span style="font-size:.75rem;font-weight:700;color:#64748b;text-transform:uppercase;">Ver sede o área</span>
                 <select class="filtro-sede-area" data-targets="{{ implode(',', $filtroTargets) }}" style="margin-top:4px;width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-weight:600;">

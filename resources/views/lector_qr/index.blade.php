@@ -302,9 +302,30 @@
             font-weight: 700;
             margin-bottom: 3px;
         }
-        .stat strong { font-size: 1.05rem; }
+        .stat strong { font-size: 1.05rem; display: block; }
+        .stat .monto-bs {
+            display: block;
+            font-size: .68rem;
+            font-weight: 700;
+            color: var(--muted);
+            margin-top: 2px;
+            line-height: 1.2;
+        }
         .stat.stock-ok strong { color: var(--ok); }
         .stat.stock-zero strong { color: var(--bad); }
+        .tasa-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: .72rem;
+            font-weight: 800;
+            margin: 2px 0 4px;
+        }
 
         .cashea-box {
             border: 1px solid #c7d2fe;
@@ -361,10 +382,33 @@
             color: var(--ok);
             margin-top: 2px;
         }
+        .cashea-nivel .i-bs {
+            display: block;
+            font-size: .62rem;
+            font-weight: 700;
+            color: var(--muted);
+            margin-top: 1px;
+            line-height: 1.15;
+        }
         .cashea-nivel .d {
             display: block;
             font-size: .62rem;
             color: var(--muted);
+            margin-top: 1px;
+        }
+        .cashea-res div .monto-bs {
+            display: block;
+            font-size: .62rem;
+            font-weight: 700;
+            color: var(--muted);
+            margin-top: 1px;
+        }
+        .cashea-neto .monto-bs {
+            display: block;
+            text-align: right;
+            font-size: .68rem;
+            color: var(--muted);
+            font-weight: 700;
             margin-top: 1px;
         }
         .cashea-res {
@@ -535,6 +579,7 @@
                     <div class="prod-code" id="prod-codigo">—</div>
                     <h2 class="prod-name" id="prod-nombre">—</h2>
                     <div class="prod-meta" id="prod-meta">—</div>
+                    <div class="tasa-pill" id="tasa-pill">Tasa BCV: —</div>
                 </div>
                 <div class="prod-stats">
                     <div class="stat" id="stat-stock">
@@ -544,22 +589,39 @@
                     <div class="stat">
                         <span>P. unidad</span>
                         <strong id="prod-precio">—</strong>
+                        <span class="monto-bs" id="prod-precio-bs"></span>
                     </div>
                     <div class="stat">
                         <span>P. mayor</span>
                         <strong id="prod-mayor">—</strong>
+                        <span class="monto-bs" id="prod-mayor-bs"></span>
                     </div>
                 </div>
                 <div class="cashea-box">
                     <div class="cashea-head">
                         <strong>Cashea</strong>
-                        <span class="cashea-neto" id="cashea-neto">Neto desc. —</span>
+                        <span class="cashea-neto" id="cashea-neto-wrap">
+                            <span id="cashea-neto">Neto desc. —</span>
+                            <span class="monto-bs" id="cashea-neto-bs"></span>
+                        </span>
                     </div>
                     <div class="cashea-niveles" id="cashea-niveles"></div>
                     <div class="cashea-res" id="cashea-res">
-                        <div><span>Inicial</span><strong id="cashea-inicial">—</strong></div>
-                        <div><span>Restante</span><strong id="cashea-restante">—</strong></div>
-                        <div><span>3 cuotas</span><strong id="cashea-cuota">—</strong></div>
+                        <div>
+                            <span>Inicial</span>
+                            <strong id="cashea-inicial">—</strong>
+                            <span class="monto-bs" id="cashea-inicial-bs"></span>
+                        </div>
+                        <div>
+                            <span>Restante</span>
+                            <strong id="cashea-restante">—</strong>
+                            <span class="monto-bs" id="cashea-restante-bs"></span>
+                        </div>
+                        <div>
+                            <span>3 cuotas</span>
+                            <strong id="cashea-cuota">—</strong>
+                            <span class="monto-bs" id="cashea-cuota-bs"></span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -618,6 +680,8 @@
     const PIN_LEN = {{ (int) ($pinLength ?? 4) }};
     const NETO_FACTOR = {{ (float) ($netoFactor ?? 0.75) }};
     const DESC_PCT = {{ (int) ($descPct ?? 25) }};
+    const CASHEA_MIN_USD = 10;
+    const TASA_BCV = {{ (float) ($tasaBcv ?? 0) }};
     const CASHEA_NIVELES = [
         @foreach(($casheaLevels ?? [1 => 60, 2 => 50, 3 => 40, 4 => 40, 5 => 40, 6 => 40]) as $nivel => $pct)
         { id: {{ (int) $nivel }}, label: 'N{{ (int) $nivel }}', factor: {{ ((int) $pct) / 100 }}, pct: {{ (int) $pct }} },
@@ -660,6 +724,18 @@
     function money(n) {
         const v = Number(n) || 0;
         return '$' + v.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function moneyBs(usd) {
+        if (!TASA_BCV || TASA_BCV <= 0) return '';
+        const bs = (Number(usd) || 0) * TASA_BCV;
+        return 'Bs. ' + bs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function setBs(elId, usd) {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        el.textContent = moneyBs(usd);
     }
 
     function clearAuto() {
@@ -755,13 +831,27 @@
         stockEl.classList.toggle('stock-zero', (p.existencia || 0) <= 0);
         document.getElementById('prod-precio').textContent = money(p.precio_unidad);
         document.getElementById('prod-mayor').textContent = money(p.precio_mayor);
+        setBs('prod-precio-bs', p.precio_unidad);
+        setBs('prod-mayor-bs', p.precio_mayor);
+        document.getElementById('tasa-pill').textContent = TASA_BCV > 0
+            ? `Tasa BCV: Bs. ${Number(TASA_BCV).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
+            : 'Tasa BCV: no disponible';
 
         precioActual = Number(p.precio_unidad) || 0;
         const neto = precioActual * NETO_FACTOR;
-        document.getElementById('cashea-neto').textContent = precioActual > 0
-            ? `Neto -${DESC_PCT}%: ${money(neto)}`
-            : 'Sin precio';
-        renderCashea(precioActual);
+        const casheaBox = document.querySelector('.cashea-box');
+        if (precioActual >= CASHEA_MIN_USD) {
+            casheaBox.style.display = '';
+            document.getElementById('cashea-neto').textContent = `Neto -${DESC_PCT}%: ${money(neto)}`;
+            setBs('cashea-neto-bs', neto);
+            renderCashea(precioActual);
+        } else {
+            casheaBox.style.display = 'none';
+            document.getElementById('cashea-niveles').innerHTML = '';
+            document.getElementById('cashea-res').classList.remove('is-on');
+            setBs('cashea-neto-bs', 0);
+            document.getElementById('cashea-neto-bs').textContent = '';
+        }
 
         const img = document.getElementById('prod-img');
         img.dataset.triedPng = 'false';
@@ -783,8 +873,8 @@
         wrap.innerHTML = '';
         res.classList.remove('is-on');
 
-        if (precioUnit <= 0) {
-            wrap.innerHTML = '<div style="grid-column:1/-1;color:#64748b;font-size:.85rem;text-align:center;">Sin precio para Cashea</div>';
+        if (precioUnit < CASHEA_MIN_USD) {
+            wrap.innerHTML = `<div style="grid-column:1/-1;color:#64748b;font-size:.85rem;text-align:center;">Cashea aplica desde ${money(CASHEA_MIN_USD)}</div>`;
             return;
         }
 
@@ -793,9 +883,11 @@
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'cashea-nivel';
+            const bsInicial = moneyBs(inicial);
             btn.innerHTML =
                 `<span class="n">${nivel.label}</span>` +
                 `<span class="i">${money(inicial)}</span>` +
+                (bsInicial ? `<span class="i-bs">${bsInicial}</span>` : '') +
                 `<span class="d">${nivel.pct}% inicial</span>`;
             btn.addEventListener('click', () => {
                 wrap.querySelectorAll('.cashea-nivel').forEach((el) => el.classList.remove('is-active'));
@@ -805,6 +897,9 @@
                 document.getElementById('cashea-inicial').textContent = money(inicial);
                 document.getElementById('cashea-restante').textContent = money(restante);
                 document.getElementById('cashea-cuota').textContent = money(cuota);
+                setBs('cashea-inicial-bs', inicial);
+                setBs('cashea-restante-bs', restante);
+                setBs('cashea-cuota-bs', cuota);
                 res.classList.add('is-on');
             });
             wrap.appendChild(btn);

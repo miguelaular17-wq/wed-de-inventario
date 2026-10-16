@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\BcvRateService;
 use App\Support\VentaDescuento;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -10,7 +11,7 @@ use Illuminate\View\View;
 
 class LectorQrController extends Controller
 {
-    public function index(): View
+    public function index(BcvRateService $bcv): View
     {
         $sedes = collect(config('inventario.sedes_locales', []))
             ->map(fn (string $sede) => [
@@ -29,6 +30,7 @@ class LectorQrController extends Controller
             'casheaLevels' => $this->casheaLevels(),
             'netoFactor' => VentaDescuento::factorNeto(),
             'descPct' => (int) round(VentaDescuento::factorDescuento() * 100),
+            'tasaBcv' => (float) $bcv->getRateForToday(),
         ]);
     }
 

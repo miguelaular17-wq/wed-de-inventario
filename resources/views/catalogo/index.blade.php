@@ -781,6 +781,7 @@
 })();
 window.openCasheaFromCard = function (card) {
     if (!card) return;
+    const CASHEA_MIN_USD = 10;
     const NIVELES = [
         { id: 1, label: 'Nivel 1', factor: {{ ($casheaLevels[1] ?? 60) / 100 }}, desc: '{{ $casheaLevels[1] ?? 60 }}% de inicial' },
         { id: 2, label: 'Nivel 2', factor: {{ ($casheaLevels[2] ?? 50) / 100 }}, desc: '{{ $casheaLevels[2] ?? 50 }}% de inicial' },
@@ -795,6 +796,11 @@ window.openCasheaFromCard = function (card) {
     const precioUnit = parseFloat(card.getAttribute('data-precio-unidad')) || 0;
     const precioMayor = parseFloat(card.getAttribute('data-precio-mayor')) || 0;
     const overlay = document.getElementById('cashea-overlay');
+
+    if (precioUnit < CASHEA_MIN_USD) {
+        alert('Cashea aplica solo a productos de $10.00 o más.');
+        return;
+    }
 
     document.getElementById('cashea-nombre').textContent = nombre + ' — ' + codigo;
     document.getElementById('cashea-punit').textContent = precioUnit > 0 ? fmt(precioUnit) : '—';

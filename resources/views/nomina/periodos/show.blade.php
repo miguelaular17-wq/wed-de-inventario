@@ -366,6 +366,7 @@
             'tasaBcvEtiqueta' => 'Tasa BCV del cierre ('.($periodo->fecha_fin?->format('d/m/Y') ?: '—').')',
             'filtroTargets' => ['tabla-nomina-periodo'],
             'pdfRoute' => $periodo->estado !== 'ABIERTO' ? route('nomina.periodos.reporte_sedes', $periodo) : null,
+            'pdfGastosRoute' => $periodo->estado !== 'ABIERTO' ? route('nomina.periodos.reporte_gastos_personal', $periodo) : null,
             'pdfPorGrupo' => $periodo->estado !== 'ABIERTO' ? route('nomina.periodos.relacion', $periodo) : null,
             'mostrarTitulo' => false,
         ])

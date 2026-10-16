@@ -162,6 +162,7 @@
             $link('Todos los reportes', route('reportes.index'), request()->routeIs('reportes.index')),
             $link('Existencias por sede', route('reportes.existencias_sede'), request()->routeIs('reportes.existencias_sede*')),
             $link('Ventas por proveedor', route('reportes.proveedor'), request()->routeIs('reportes.proveedor*')),
+            $link('Análisis de categorías', route('analisis_categorias.index'), request()->routeIs('analisis_categorias.*')),
         ]);
         $nav[] = $drop('Finanzas', $finanzasItems);
         $nav[] = $drop('Cobranza', $cobranzaItems);
@@ -240,6 +241,7 @@
             $link('Todos los reportes', route('reportes.index'), request()->routeIs('reportes.index')),
             $link('Existencias por sede', route('reportes.existencias_sede'), request()->routeIs('reportes.existencias_sede*')),
             $link('Ventas por proveedor', route('reportes.proveedor'), request()->routeIs('reportes.proveedor*')),
+            $link('Análisis de categorías', route('analisis_categorias.index'), request()->routeIs('analisis_categorias.*')),
         ]);
         $nav[] = $drop('Finanzas', $finanzasItems);
         $nav[] = $drop('Cobranza', $cobranzaItems);
@@ -257,6 +259,7 @@
                 $link('Todos los reportes', route('reportes.index'), request()->routeIs('reportes.index')),
                 $link('Existencias por sede', route('reportes.existencias_sede'), request()->routeIs('reportes.existencias_sede*')),
                 $link('Ventas por proveedor', route('reportes.proveedor'), request()->routeIs('reportes.proveedor*')),
+                $link('Análisis de categorías', route('analisis_categorias.index'), request()->routeIs('analisis_categorias.*')),
             ]);
         }
         if ($u->canAccess('finanzas.ver')) {

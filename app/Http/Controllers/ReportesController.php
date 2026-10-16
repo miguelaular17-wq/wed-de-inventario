@@ -31,6 +31,12 @@ class ReportesController extends Controller
                     'url' => route('reportes.proveedor'),
                     'excel' => null,
                 ],
+                [
+                    'titulo' => 'Análisis de categorías',
+                    'descripcion' => 'Por sede: marca subcategorías en verde; al completarlas, la categoría también queda en verde.',
+                    'url' => route('analisis_categorias.index'),
+                    'excel' => null,
+                ],
             ],
         ]);
     }
