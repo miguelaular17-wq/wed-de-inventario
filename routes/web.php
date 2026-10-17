@@ -254,6 +254,7 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::get('/sincronizadores', [SyncRemoteController::class, 'index'])->name('sync.index');
     Route::post('/sincronizadores/comando', [SyncRemoteController::class, 'sendCommand'])->name('sync.command');
     Route::get('/sincronizadores/status', [SyncRemoteController::class, 'status'])->name('sync.status');
+    Route::get('/sincronizadores/codigos-compuestos', [SyncRemoteController::class, 'codigosCompuestos'])->name('sync.codigos_compuestos');
     Route::post('/sincronizadores/version', [SyncDesktopController::class, 'publish'])->name('sync.publish');
 });
 

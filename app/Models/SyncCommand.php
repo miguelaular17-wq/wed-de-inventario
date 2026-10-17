@@ -17,10 +17,12 @@ class SyncCommand extends Model
     ];
 
     const LABELS = [
-        'sync_stock'     => 'Stock / Inventario',
-        'sync_precios'   => 'Precios',
-        'sync_cobranzas' => 'Cobranzas',
-        'sync_compras'   => 'Compras',
+        'sync_stock'                   => 'Stock / Inventario',
+        'sync_precios'                 => 'Precios',
+        'sync_cobranzas'               => 'Cobranzas',
+        'sync_compras'                 => 'Compras',
+        'verificar_codigos_compuestos' => 'Verificar códigos compuestos',
+        'separar_codigos_compuestos'   => 'Separar códigos compuestos',
     ];
 
     const ESTADO_COLORS = [

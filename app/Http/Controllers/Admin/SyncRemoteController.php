@@ -32,7 +32,21 @@ class SyncRemoteController extends Controller
         // Opciones de comando disponibles
         $opciones = SyncCommand::LABELS;
 
-        return view('admin.sync.index', compact('heartbeats', 'comandos', 'opciones', 'sedesFallback'));
+        // Última auditoría de códigos compuestos (cualquier sede)
+        $ultimaAuditoria = SyncCommand::query()
+            ->where('comando', 'verificar_codigos_compuestos')
+            ->whereIn('estado', ['completado', 'error'])
+            ->orderByDesc('ejecutado_at')
+            ->orderByDesc('id')
+            ->first();
+
+        return view('admin.sync.index', compact(
+            'heartbeats',
+            'comandos',
+            'opciones',
+            'sedesFallback',
+            'ultimaAuditoria',
+        ));
     }
 
     // ── Enviar comando remoto ───────────────────────────────────────────
@@ -87,5 +101,46 @@ class SyncRemoteController extends Controller
             ]);
 
         return response()->json(compact('heartbeats', 'comandos'));
+    }
+
+    // ── Resultado de verificación códigos compuestos (hecha por el syncer) ──
+    public function codigosCompuestos(Request $request)
+    {
+        $sede = $request->query('sede');
+
+        $q = SyncCommand::query()
+            ->where('comando', 'verificar_codigos_compuestos')
+            ->whereIn('estado', ['completado', 'error', 'pendiente', 'ejecutando'])
+            ->orderByDesc('id');
+
+        if (is_string($sede) && trim($sede) !== '') {
+            $q->where('sede', strtoupper(trim($sede)));
+        }
+
+        $cmd = $q->first();
+
+        if (! $cmd) {
+            return response()->json([
+                'estado' => null,
+                'mensaje' => 'Aún no se ha enviado la verificación. Elige una sede y pulsa «Enviar al sincronizador».',
+                'detalles' => null,
+            ]);
+        }
+
+        $parametros = $cmd->parametros;
+        if (is_string($parametros)) {
+            $parametros = json_decode($parametros, true);
+        }
+        $detalles = is_array($parametros) ? ($parametros['resultado'] ?? null) : null;
+
+        return response()->json([
+            'id' => $cmd->id,
+            'sede' => $cmd->sede,
+            'estado' => $cmd->estado,
+            'mensaje' => $cmd->mensaje,
+            'ejecutado_at' => $cmd->ejecutado_at?->toIso8601String(),
+            'ejecutado_humano' => $cmd->ejecutado_at?->diffForHumans(),
+            'detalles' => $detalles,
+        ]);
     }
 }

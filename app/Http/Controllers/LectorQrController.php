@@ -83,6 +83,24 @@ class LectorQrController extends Controller
             ]);
         }
 
+        // QR de tienda: solo los últimos 6 dígitos del código completo (no inicio ni medio).
+        $candidatos = $this->buscarPorUltimosSeisDigitos($codigo, $sede);
+        if (count($candidatos) === 1) {
+            return response()->json([
+                'ok' => true,
+                'producto' => $candidatos[0],
+                'match' => 'ultimos6',
+            ]);
+        }
+        if (count($candidatos) > 1) {
+            return response()->json([
+                'ok' => true,
+                'multiples' => true,
+                'prefijo' => $this->ultimosSeisDigitos($codigo),
+                'productos' => $candidatos,
+            ]);
+        }
+
         // Código físico distinto al del sistema: probar por los primeros 7 dígitos.
         $candidatos = $this->buscarPorPrefijoSieteDigitos($codigo, $sede);
         if (count($candidatos) === 1) {
@@ -102,7 +120,10 @@ class LectorQrController extends Controller
         }
 
         // Físico parcial / con prefijo distinto (ej. -9908A → DL-9908A).
-        $candidatos = $this->buscarPorSufijoCodigo($codigo, $sede);
+        // No usar para solo-6-dígitos: eso ya se resolvió como sufijo numérico estricto.
+        $candidatos = $this->esSoloSeisDigitos($codigo)
+            ? []
+            : $this->buscarPorSufijoCodigo($codigo, $sede);
         if (count($candidatos) === 1) {
             return response()->json([
                 'ok' => true,
@@ -193,6 +214,81 @@ class LectorQrController extends Controller
         return substr($digitos, 0, 7);
     }
 
+    /** QR de tienda: exactamente 6 dígitos (últimos del código completo). */
+    private function esSoloSeisDigitos(string $codigo): bool
+    {
+        return (bool) preg_match('/^\d{6}$/', trim($codigo));
+    }
+
+    private function ultimosSeisDigitos(string $codigo): ?string
+    {
+        $digitos = preg_replace('/\D+/', '', $codigo) ?? '';
+        if (strlen($digitos) !== 6) {
+            return null;
+        }
+
+        return $digitos;
+    }
+
+    /**
+     * Coincide solo si los 6 dígitos escaneados son los ÚLTIMOS 6 dígitos
+     * de algún tramo del código (no principio ni medio).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function buscarPorUltimosSeisDigitos(string $codigo, string $sede): array
+    {
+        if (config('database.default') !== 'pgsql') {
+            return [];
+        }
+
+        $sufijo = $this->ultimosSeisDigitos($codigo);
+        if ($sufijo === null) {
+            return [];
+        }
+
+        // RIGHT(solo_dígitos(tramo), 6) = sufijo  →  no matchea inicio/medio.
+        $rows = DB::connection('pgsql')
+            ->table('productos as p')
+            ->where('p.activo', true)
+            ->whereRaw(
+                <<<'SQL'
+                EXISTS (
+                    SELECT 1
+                    FROM unnest(
+                        string_to_array(replace(trim(p.codigo), ' / ', '/'), '/')
+                    ) AS seg(codigo_tramo)
+                    WHERE length(regexp_replace(trim(seg.codigo_tramo), '[^0-9]', '', 'g')) >= 6
+                      AND right(
+                            regexp_replace(trim(seg.codigo_tramo), '[^0-9]', '', 'g'),
+                            6
+                          ) = ?
+                )
+                SQL,
+                [$sufijo]
+            )
+            ->orderBy('p.nombre')
+            ->limit(24)
+            ->get([
+                'p.id',
+                'p.codigo',
+                'p.nombre',
+                'p.categoria',
+                'p.subcategoria',
+                'p.proveedor',
+                'p.precio_unidad',
+                'p.precio_mayor',
+                'p.url_imagen',
+            ]);
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = $this->mapProducto($row, $sede);
+        }
+
+        return $out;
+    }
+
     /** Solo letras y números, mayúsculas (para comparar -9908A con DL-9908A). */
     private function nucleoAlfanumerico(string $codigo): string
     {
@@ -206,21 +302,21 @@ class LectorQrController extends Controller
             return null;
         }
 
-        // Códigos compuestos: "A / B / C" — buscar por cualquier tramo
+        // Códigos compuestos: "A / B / C" — tramo exacto (nunca %codigo% en medio).
         $row = DB::connection('pgsql')
             ->table('productos as p')
             ->where('p.activo', true)
             ->where(function ($q) use ($codigo) {
                 $q->where('p.codigo', $codigo)
                     ->orWhereRaw('UPPER(TRIM(p.codigo)) = UPPER(?)', [$codigo])
+                    ->orWhere('p.codigo', 'ilike', $codigo.' / %')
                     ->orWhere('p.codigo', 'ilike', $codigo.'/%')
-                    ->orWhere('p.codigo', 'ilike', $codigo.' /%')
-                    ->orWhere('p.codigo', 'ilike', '%/ '.$codigo)
+                    ->orWhere('p.codigo', 'ilike', '% / '.$codigo)
                     ->orWhere('p.codigo', 'ilike', '%/'.$codigo)
-                    ->orWhere('p.codigo', 'ilike', '%/ '.$codigo.' /%')
+                    ->orWhere('p.codigo', 'ilike', '% / '.$codigo.' / %')
                     ->orWhere('p.codigo', 'ilike', '%/'.$codigo.'/%')
-                    ->orWhere('p.codigo', 'ilike', '% '.$codigo)
-                    ->orWhere('p.codigo', 'ilike', '%'.$codigo.'%');
+                    ->orWhere('p.codigo', 'ilike', '% / '.$codigo.'/%')
+                    ->orWhere('p.codigo', 'ilike', '%/'.$codigo.' / %');
             })
             ->orderByRaw(
                 "CASE
@@ -229,7 +325,7 @@ class LectorQrController extends Controller
                     WHEN p.codigo ILIKE ? THEN 2
                     ELSE 3
                 END",
-                [$codigo, $codigo.' /%', '%/ '.$codigo]
+                [$codigo, $codigo.' / %', '% / '.$codigo]
             )
             ->first([
                 'p.id',
