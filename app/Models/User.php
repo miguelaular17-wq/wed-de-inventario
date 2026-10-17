@@ -133,6 +133,16 @@ class User extends Authenticatable
         return $this->role === self::ROLE_COMPRADOR;
     }
 
+    /** @return list<string> */
+    public function proveedoresAsignados(): array
+    {
+        if (! $this->isComprador()) {
+            return [];
+        }
+
+        return ProveedorComprador::proveedoresDeUsuario((int) $this->id);
+    }
+
     public function isSede(): bool
     {
         return $this->role === self::ROLE_SEDE;

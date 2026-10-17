@@ -284,7 +284,7 @@
         }
         .prod-stats {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr;
             gap: 8px;
         }
         .stat {
@@ -561,11 +561,6 @@
             font-weight: 800;
             color: var(--accent);
         }
-        .elegir-card .ec-stock {
-            font-size: .75rem;
-            color: var(--muted);
-            font-weight: 700;
-        }
         .elegir-footer {
             flex-shrink: 0;
             display: flex;
@@ -637,7 +632,7 @@
     <section id="screen-sede" class="screen is-active">
         <img class="brand-logo" src="{{ $logoUrl }}" alt="Palacio de los Detalles">
         <h1 class="sede-title">Lector QR</h1>
-        <p class="sede-sub">Elige la sede de esta tablet. Luego solo verás existencias de esa tienda.</p>
+        <p class="sede-sub">Elige la sede de esta tablet.</p>
         <div class="sede-grid">
             @foreach ($sedes as $sede)
                 <button type="button" class="sede-btn" data-sede="{{ $sede['codigo'] }}" data-label="{{ $sede['nombre'] }}">
@@ -694,10 +689,6 @@
                     <div class="tasa-pill" id="tasa-pill">Tasa BCV: —</div>
                 </div>
                 <div class="prod-stats">
-                    <div class="stat" id="stat-stock">
-                        <span>Existencia</span>
-                        <strong id="prod-existencia">0</strong>
-                    </div>
                     <div class="stat">
                         <span>P. unidad</span>
                         <strong id="prod-precio">—</strong>
@@ -972,12 +963,10 @@
                 `<div class="elegir-img"><img alt=""></div>` +
                 `<div class="ec-code"></div>` +
                 `<div class="ec-name"></div>` +
-                `<div class="ec-precio"></div>` +
-                `<div class="ec-stock"></div>`;
+                `<div class="ec-precio"></div>`;
             btn.querySelector('.ec-code').textContent = p.codigo || '';
             btn.querySelector('.ec-name').textContent = p.nombre || '';
             btn.querySelector('.ec-precio').textContent = money(p.precio_unidad);
-            btn.querySelector('.ec-stock').textContent = `Existencia: ${p.existencia ?? 0}`;
             setImgWithFallback(btn.querySelector('img'), p);
             btn.addEventListener('click', () => {
                 renderProducto(p);
@@ -995,10 +984,6 @@
         document.getElementById('prod-nombre').textContent = p.nombre;
         const meta = [p.categoria, p.subcategoria].filter(Boolean).join(' · ');
         document.getElementById('prod-meta').textContent = meta || '—';
-        document.getElementById('prod-existencia').textContent = String(p.existencia ?? 0);
-        const stockEl = document.getElementById('stat-stock');
-        stockEl.classList.toggle('stock-ok', (p.existencia || 0) > 0);
-        stockEl.classList.toggle('stock-zero', (p.existencia || 0) <= 0);
         document.getElementById('prod-precio').textContent = money(p.precio_unidad);
         document.getElementById('prod-mayor').textContent = money(p.precio_mayor);
         setBs('prod-precio-bs', p.precio_unidad);

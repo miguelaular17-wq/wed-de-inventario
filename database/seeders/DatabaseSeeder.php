@@ -25,5 +25,8 @@ class DatabaseSeeder extends Seeder
 
         // [Producción/Base] Personal oficial y asignación de sede/área
         $this->call(NominaPersonalSeeder::class);
+
+        // [Producción/Base] Comprador asignado a cada proveedor (MAVO / CARLOS / PAOLA)
+        $this->call(ProveedorCompradoresSeeder::class);
     }
 }

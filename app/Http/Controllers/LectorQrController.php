@@ -101,6 +101,24 @@ class LectorQrController extends Controller
             ]);
         }
 
+        // Físico parcial / con prefijo distinto (ej. -9908A → DL-9908A).
+        $candidatos = $this->buscarPorSufijoCodigo($codigo, $sede);
+        if (count($candidatos) === 1) {
+            return response()->json([
+                'ok' => true,
+                'producto' => $candidatos[0],
+                'match' => 'sufijo',
+            ]);
+        }
+        if (count($candidatos) > 1) {
+            return response()->json([
+                'ok' => true,
+                'multiples' => true,
+                'prefijo' => $codigo,
+                'productos' => $candidatos,
+            ]);
+        }
+
         return response()->json([
             'ok' => false,
             'error' => 'Producto no encontrado.',
@@ -140,8 +158,12 @@ class LectorQrController extends Controller
     private function normalizarCodigo(string $raw): string
     {
         $raw = trim($raw);
-        // Escáner/teclado a veces manda apóstrofe en vez de guion (ej. YQ'665 → YQ-665)
-        $raw = str_replace(["'", "\u{2018}", "\u{2019}", "\u{02BC}", '`'], '-', $raw);
+        // Escáner/teclado: apóstrofe o guiones tipográficos → guion ASCII (ej. YQ'665 → YQ-665)
+        $raw = str_replace(
+            ["'", "\u{2018}", "\u{2019}", "\u{02BC}", '`', "\u{2010}", "\u{2011}", "\u{2012}", "\u{2013}", "\u{2014}", "\u{2212}"],
+            '-',
+            $raw
+        );
 
         // Si el QR trae una URL, usar el último segmento
         if (preg_match('#^https?://#i', $raw)) {
@@ -169,6 +191,12 @@ class LectorQrController extends Controller
         }
 
         return substr($digitos, 0, 7);
+    }
+
+    /** Solo letras y números, mayúsculas (para comparar -9908A con DL-9908A). */
+    private function nucleoAlfanumerico(string $codigo): string
+    {
+        return strtoupper((string) preg_replace('/[^A-Za-z0-9]+/', '', $codigo));
     }
 
     /** @return array<string, mixed>|null */
@@ -264,15 +292,79 @@ class LectorQrController extends Controller
         return $out;
     }
 
+    /**
+     * Código físico que es sufijo o núcleo del código del sistema
+     * (ej. escanea -9908A y en BDD está DL-9908A).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function buscarPorSufijoCodigo(string $codigo, string $sede): array
+    {
+        if (config('database.default') !== 'pgsql') {
+            return [];
+        }
+
+        $codigo = trim($codigo);
+        $sinGuionesExtremos = trim($codigo, "-_ .");
+        $nucleo = $this->nucleoAlfanumerico($codigo);
+        if (strlen($nucleo) < 4 && strlen($sinGuionesExtremos) < 4) {
+            return [];
+        }
+
+        $rows = DB::connection('pgsql')
+            ->table('productos as p')
+            ->where('p.activo', true)
+            ->where(function ($q) use ($codigo, $sinGuionesExtremos, $nucleo) {
+                // Termina con el código escaneado: DL-9908A ← -9908A
+                $q->whereRaw('UPPER(TRIM(p.codigo)) LIKE UPPER(?)', ['%'.$codigo])
+                    ->orWhereRaw('UPPER(TRIM(split_part(p.codigo, \'/\', 1))) LIKE UPPER(?)', ['%'.$codigo]);
+
+                if ($sinGuionesExtremos !== '' && strcasecmp($sinGuionesExtremos, $codigo) !== 0) {
+                    $q->orWhereRaw('UPPER(TRIM(p.codigo)) LIKE UPPER(?)', ['%'.$sinGuionesExtremos])
+                        ->orWhereRaw('UPPER(TRIM(split_part(p.codigo, \'/\', 1))) LIKE UPPER(?)', ['%-'.$sinGuionesExtremos])
+                        ->orWhereRaw('UPPER(TRIM(split_part(p.codigo, \'/\', 1))) LIKE UPPER(?)', ['%'.$sinGuionesExtremos]);
+                }
+
+                // Mismos caracteres alfanuméricos al final: DL9908A ← 9908A
+                if (strlen($nucleo) >= 4) {
+                    $q->orWhereRaw(
+                        "UPPER(regexp_replace(split_part(TRIM(p.codigo), '/', 1), '[^A-Za-z0-9]', '', 'g')) LIKE ?",
+                        ['%'.$nucleo]
+                    );
+                }
+            })
+            ->orderByRaw(
+                "CASE
+                    WHEN UPPER(TRIM(split_part(p.codigo, '/', 1))) LIKE UPPER(?) THEN 0
+                    WHEN UPPER(regexp_replace(split_part(TRIM(p.codigo), '/', 1), '[^A-Za-z0-9]', '', 'g')) LIKE ? THEN 1
+                    ELSE 2
+                END, p.nombre",
+                ['%'.$codigo, '%'.$nucleo]
+            )
+            ->limit(24)
+            ->get([
+                'p.id',
+                'p.codigo',
+                'p.nombre',
+                'p.categoria',
+                'p.subcategoria',
+                'p.proveedor',
+                'p.precio_unidad',
+                'p.precio_mayor',
+                'p.url_imagen',
+            ]);
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = $this->mapProducto($row, $sede);
+        }
+
+        return $out;
+    }
+
     /** @return array<string, mixed> */
     private function mapProducto(object $row, string $sede): array
     {
-        $existencia = (int) (DB::connection('pgsql')
-            ->table('stock_actual')
-            ->where('producto_id', $row->id)
-            ->where('sede', $sede)
-            ->value('existencia') ?? 0);
-
         $primaryCode = trim(explode('/', (string) $row->codigo)[0]);
         $base = rtrim((string) env('SUPABASE_URL', 'https://hbhqbmzixgcvxkilwsau.supabase.co'), '/');
         $imgBase = $base.'/storage/v1/object/public/imagenes_producto/imagenes/';
@@ -289,7 +381,6 @@ class LectorQrController extends Controller
             'proveedor' => (string) ($row->proveedor ?? ''),
             'precio_unidad' => (float) ($row->precio_unidad ?? 0),
             'precio_mayor' => (float) ($row->precio_mayor ?? 0),
-            'existencia' => $existencia,
             'sede' => $sede,
             'sede_label' => config('inventario.display.'.$sede, $sede),
             'imagen_url' => $imagen,

@@ -39,6 +39,8 @@ dump_*.php
 # Imágenes locales (se sincronizan por otro medio, no van en git)
 /storage/app/imagenes_centro/
 /storage/app/_check_env.php
+/storage/app/_pares_count.txt
+/storage/app/_pares_prov.json
 
 # Local assets / foreign projects / bank dumps
 /Imagenes_Articulos_JRZ/
