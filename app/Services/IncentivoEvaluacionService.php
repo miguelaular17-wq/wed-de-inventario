@@ -230,10 +230,20 @@ class IncentivoEvaluacionService
                     $filtro->whereIn(DB::raw("UPPER(TRIM(COALESCE(p.categoria, '')))"), $categorias);
                 }
                 if ($productos !== []) {
-                    $metodo = $categorias === [] ? 'whereIn' : 'orWhereIn';
+                    $codigos = [];
+                    foreach ($productos as $prod) {
+                        $prod = mb_strtoupper(trim((string) $prod));
+                        $codigos[] = $prod;
+                        $codigos[] = mb_strtoupper(trim(explode('/', $prod)[0]));
+                    }
+                    $codigos = array_values(array_unique(array_filter($codigos)));
+                    $metodo = $categorias === [] ? 'where' : 'orWhere';
                     $codigoVenta = "UPPER(TRIM(SPLIT_PART(COALESCE(vd.codigo_producto, ''), '/', 1)))";
-                    $filtro->{$metodo}(DB::raw($codigoVenta), $productos);
-                    $filtro->orWhereIn(DB::raw("UPPER(TRIM(COALESCE(p.codigo, '')))"), $productos);
+                    $filtro->{$metodo}(function ($q) use ($codigos, $codigoVenta) {
+                        $q->whereIn(DB::raw($codigoVenta), $codigos)
+                            ->orWhereIn(DB::raw("UPPER(TRIM(COALESCE(p.codigo, '')))"), $codigos)
+                            ->orWhereIn(DB::raw("UPPER(TRIM(SPLIT_PART(COALESCE(p.codigo, ''), '/', 1)))"), $codigos);
+                    });
                 }
             });
 
@@ -320,10 +330,21 @@ class IncentivoEvaluacionService
             ->whereIn('vd.tipo_documento', ['FAC', 'DEV']);
 
         if ($grupo['tipo'] === 'producto') {
+            // Clave puede venir como "2311545510212 / VT06"; en ventas suele ir solo el primer tramo.
+            $clave = mb_strtoupper(trim((string) $grupo['clave']));
+            $clavePrimario = mb_strtoupper(trim(explode('/', $clave)[0]));
+            $nombre = mb_strtoupper(trim((string) ($grupo['nombre'] ?? '')));
             $codigoVenta = "UPPER(TRIM(SPLIT_PART(COALESCE(vd.codigo_producto, ''), '/', 1)))";
-            $query->where(function ($filtro) use ($grupo, $codigoVenta) {
-                $filtro->whereRaw($codigoVenta.' = ?', [$grupo['clave']])
-                    ->orWhereRaw("UPPER(TRIM(COALESCE(p.codigo, ''))) = ?", [$grupo['clave']]);
+            $query->where(function ($filtro) use ($clave, $clavePrimario, $nombre, $codigoVenta) {
+                $filtro->whereRaw($codigoVenta.' = ?', [$clave])
+                    ->orWhereRaw($codigoVenta.' = ?', [$clavePrimario])
+                    ->orWhereRaw("UPPER(TRIM(COALESCE(p.codigo, ''))) = ?", [$clave])
+                    ->orWhereRaw("UPPER(TRIM(SPLIT_PART(COALESCE(p.codigo, ''), '/', 1))) = ?", [$clavePrimario]);
+                // Si activaron "VIDRIO BLINDADO" buscando un SKU, contar todos los del mismo nombre.
+                if ($nombre !== '' && $nombre !== $clave && $nombre !== $clavePrimario) {
+                    $filtro->orWhereRaw("UPPER(TRIM(COALESCE(p.nombre, ''))) = ?", [$nombre])
+                        ->orWhereRaw("UPPER(TRIM(COALESCE(vd.nombre_producto, ''))) = ?", [$nombre]);
+                }
             });
         } else {
             $query->whereRaw("UPPER(TRIM(COALESCE(p.categoria, ''))) = ?", [$grupo['clave']]);
