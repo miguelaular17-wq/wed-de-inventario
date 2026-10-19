@@ -256,11 +256,35 @@
                                 <span class="muted">—</span>
                             @endif
                         </td>
+                        @php $manualesSt = ($egresosStManuales ?? collect())->get($liq->empleado_id, collect()); @endphp
                         <td>
                             @if($liq->egresos058() > 0)
                                 ${{ number_format($liq->egresos058(), 2) }}
                             @else
                                 <span class="muted">—</span>
+                            @endif
+                            @foreach($manualesSt as $manual)
+                                <div class="muted" style="font-size:.72rem;display:flex;gap:4px;align-items:center;">
+                                    <span>{{ $manual->monto >= 0 ? '+' : '−' }}${{ number_format(abs((float) $manual->monto), 2) }} · {{ $manual->motivo }}</span>
+                                    @if($periodo->estado !== \App\Models\Nomina\NominaPeriodo::CERRADO)
+                                        <form method="POST" action="{{ route('nomina.comisiones.egresos_st.destroy', [$periodo, $manual]) }}" onsubmit="return confirm('¿Quitar este egreso 058 manual y recalcular?')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" title="Quitar" style="border:0;background:none;color:#b91c1c;cursor:pointer;font-weight:700;">×</button>
+                                        </form>
+                                    @endif
+                                </div>
+                            @endforeach
+                            @if($periodo->estado !== \App\Models\Nomina\NominaPeriodo::CERRADO)
+                                <details style="margin-top:4px;">
+                                    <summary style="cursor:pointer;font-size:.72rem;color:#1d4ed8;">+ Monto manual</summary>
+                                    <form method="POST" action="{{ route('nomina.comisiones.egresos_st.store', [$periodo, $liq->empleado]) }}" style="display:grid;gap:4px;margin-top:4px;min-width:180px;">
+                                        @csrf
+                                        <input type="number" name="monto" step="0.01" required placeholder="Monto USD (negativo resta)" style="font-size:.78rem;padding:4px 6px;">
+                                        <input type="text" name="motivo" required minlength="3" maxlength="255" placeholder="Motivo (obligatorio)" style="font-size:.78rem;padding:4px 6px;">
+                                        <button type="submit" class="btn" style="font-size:.75rem;padding:4px 8px;">Guardar y recalcular</button>
+                                    </form>
+                                </details>
                             @endif
                         </td>
                         <td>${{ number_format($comisionSt, 2) }}</td>

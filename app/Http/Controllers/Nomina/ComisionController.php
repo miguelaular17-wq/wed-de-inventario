@@ -11,6 +11,7 @@ use App\Services\BcvRateService;
 use App\Models\Nomina\NominaComisionDescuento;
 use App\Models\Nomina\NominaEmpleadoAjuste;
 use App\Models\Nomina\NominaPrestamoPlan;
+use App\Models\Nomina\NominaStEgresoAjuste;
 use App\Services\Nomina\AjusteService;
 use App\Services\Nomina\FaltanteCajaService;
 use App\Services\Nomina\LoanDiscountPlanService;
@@ -80,6 +81,14 @@ class ComisionController extends Controller
             'tasaBcv' => $tasaBcv,
             'totalesPorGrupo' => $this->sedeAreaTotals->deLiquidaciones($liquidaciones, $tasaBcv),
             'ajustesPeriodo' => $this->ajustesPeriodo($periodo),
+            'egresosStManuales' => Schema::hasTable('nomina_st_egreso_ajustes')
+                ? NominaStEgresoAjuste::query()
+                    ->where('periodo_id', $periodo->id)
+                    ->with('creador')
+                    ->orderBy('id')
+                    ->get()
+                    ->groupBy('empleado_id')
+                : collect(),
         ]);
     }
 
@@ -340,6 +349,69 @@ class ComisionController extends Controller
         return redirect()
             ->route('nomina.comisiones.show', $periodo)
             ->with('status', $mensaje);
+    }
+
+    public function registrarEgresoSt(Request $request, NominaPeriodo $periodo, NominaEmpleado $empleado): RedirectResponse
+    {
+        $volver = fn () => redirect()->route('nomina.comisiones.show', $periodo);
+
+        if ($periodo->estado === NominaPeriodo::CERRADO) {
+            return $volver()->withErrors(['estado' => 'La quincena está cerrada. Ya no se pueden cambiar los egresos 058.']);
+        }
+        if (! $empleado->es_servicio_tecnico) {
+            return $volver()->withErrors(['empleado' => $empleado->nombre().' no es de servicio técnico.']);
+        }
+
+        $validator = validator($request->all(), [
+            'monto' => ['required', 'numeric', 'not_in:0', 'between:-100000,100000'],
+            'motivo' => ['required', 'string', 'min:3', 'max:255'],
+        ], [
+            'monto.not_in' => 'El monto no puede ser 0.',
+            'motivo.required' => 'El motivo es obligatorio.',
+            'motivo.min' => 'Escribe un motivo de al menos 3 caracteres.',
+        ]);
+        if ($validator->fails()) {
+            return $volver()->withErrors($validator)->withInput();
+        }
+
+        $data = $validator->validated();
+        NominaStEgresoAjuste::create([
+            'periodo_id' => $periodo->id,
+            'empleado_id' => $empleado->id,
+            'monto' => round((float) $data['monto'], 2),
+            'motivo' => trim($data['motivo']),
+            'created_by' => auth()->id(),
+        ]);
+
+        $mensaje = $empleado->nombre().': egreso 058 de $'.number_format((float) $data['monto'], 2).' registrado.';
+        if ($periodo->estado !== NominaPeriodo::ABIERTO) {
+            $this->periods->recalcularComisiones($periodo, auth()->id());
+            $mensaje .= ' Comisiones recalculadas.';
+        }
+
+        return $volver()->with('status', $mensaje);
+    }
+
+    public function quitarEgresoSt(NominaPeriodo $periodo, NominaStEgresoAjuste $ajuste): RedirectResponse
+    {
+        $volver = fn () => redirect()->route('nomina.comisiones.show', $periodo);
+
+        if ((int) $ajuste->periodo_id !== (int) $periodo->id) {
+            abort(404);
+        }
+        if ($periodo->estado === NominaPeriodo::CERRADO) {
+            return $volver()->withErrors(['estado' => 'La quincena está cerrada. Ya no se pueden cambiar los egresos 058.']);
+        }
+
+        $ajuste->delete();
+
+        $mensaje = 'Egreso 058 manual quitado.';
+        if ($periodo->estado !== NominaPeriodo::ABIERTO) {
+            $this->periods->recalcularComisiones($periodo, auth()->id());
+            $mensaje .= ' Comisiones recalculadas.';
+        }
+
+        return $volver()->with('status', $mensaje);
     }
 
     public function recalcular(NominaPeriodo $periodo): RedirectResponse

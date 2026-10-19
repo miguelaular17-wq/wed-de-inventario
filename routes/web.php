@@ -438,6 +438,8 @@ Route::middleware(['auth', 'permission:nomina,nomina.comisiones'])->prefix('nomi
     Route::post('/comisiones/{periodo}/bonos/aplicar', [ComisionController::class, 'aplicarBonos'])->name('comisiones.bonos.aplicar');
     Route::post('/comisiones/{periodo}/bonos/{ajuste}', [ComisionController::class, 'quitarBono'])->name('comisiones.bonos.quitar');
     Route::post('/comisiones/{periodo}/empleados/{empleado}/exento-retencion', [ComisionController::class, 'toggleExentoRetencion'])->name('comisiones.exento_retencion');
+    Route::post('/comisiones/{periodo}/empleados/{empleado}/egresos-st', [ComisionController::class, 'registrarEgresoSt'])->name('comisiones.egresos_st.store');
+    Route::delete('/comisiones/{periodo}/egresos-st/{ajuste}', [ComisionController::class, 'quitarEgresoSt'])->name('comisiones.egresos_st.destroy');
     Route::get('/comisiones/{periodo}/banco/{empresa}', [ComisionController::class, 'exportarBanco'])->name('comisiones.banco');
 
     Route::get('/retenciones', [RetencionController::class, 'index'])->name('retenciones.index');

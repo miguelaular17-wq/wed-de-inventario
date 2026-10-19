@@ -542,7 +542,9 @@ class CommissionCalculationService
         [$lineasSt, $lineasVenta] = $this->separarLineasServicioTecnico($lineas);
 
         $ventasSt = round($lineasSt->sum(fn ($linea) => $this->baseLinea($linea, 'NETO')), 2);
-        $gastos = $this->gastosServicioTecnico($periodo, $empleado);
+        $gastosFlujo = $this->gastosServicioTecnico($periodo, $empleado);
+        $ajusteEgresos = $this->ajusteManualEgresosSt($periodo, $empleado);
+        $gastos = max(0, round($gastosFlujo + $ajusteEgresos, 2));
         $baseSt = max(0, round($ventasSt - $gastos, 2));
         $pctSt = NominaConfig::getDecimal('comision_servicio_tecnico_pct', 50);
         $comisionSt = round($baseSt * $pctSt / 100, 2);
@@ -551,6 +553,8 @@ class CommissionCalculationService
             $this->registrarAgregado($periodo, $empleado, 'SERVICIO_TECNICO', $empleado->sede, $baseSt, $pctSt, $comisionSt, [
                 'ventas_usd' => $ventasSt,
                 'egresos_058_usd' => $gastos,
+                'egresos_058_flujo_usd' => $gastosFlujo,
+                'egresos_058_ajuste_usd' => $ajusteEgresos,
                 'lineas_venta' => $lineasSt->count(),
                 'formula' => 'max(0, ventas_st - egresos_058_usd) * porcentaje_servicio_tecnico',
             ]);
@@ -661,6 +665,18 @@ class CommissionCalculationService
             ->first();
 
         return round((float) ($row->total ?? 0), 2);
+    }
+
+    private function ajusteManualEgresosSt(NominaPeriodo $periodo, NominaEmpleado $empleado): float
+    {
+        if (! $this->flag('nomina_st_egreso_ajustes')) {
+            return 0.0;
+        }
+
+        return round((float) DB::table('nomina_st_egreso_ajustes')
+            ->where('periodo_id', $periodo->id)
+            ->where('empleado_id', $empleado->id)
+            ->sum('monto'), 2);
     }
 
     private function lineasVentas(NominaPeriodo $periodo, array $claves = []): Builder
@@ -830,6 +846,7 @@ class CommissionCalculationService
             'nomina_comision_registros' => Schema::hasTable('nomina_comision_registros'),
             'nomina_empleado_supervisores' => Schema::hasTable('nomina_empleado_supervisores'),
             'flujo_cajas_st' => Schema::hasTable('flujo_cajas') && Schema::hasColumn('flujo_cajas', 'nomina_empleado_id'),
+            'nomina_st_egreso_ajustes' => Schema::hasTable('nomina_st_egreso_ajustes'),
             'nomina_sedes_excluir' => Schema::hasTable('nomina_sedes') && Schema::hasColumn('nomina_sedes', 'excluir_comision'),
         ];
 
