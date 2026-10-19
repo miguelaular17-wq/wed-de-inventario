@@ -46,6 +46,9 @@ class BankMovementClassifier
         'intervención electronic',
         'intervencion electrónic',
         'intervención electrónic',
+        // Bancaribe
+        'mecanismo intervencion cambiaria',
+        'mecanismo intervención cambiaria',
     ];
 
     /** @var list<string> */
@@ -82,8 +85,10 @@ class BankMovementClassifier
         }
 
         // "COM COMPRA DE DIVISAS..." es comisión bancaria, no la compra.
+        // "REV.MECANISMO..." (Bancaribe) es el reverso, no una compra.
         if (
-            str_contains($desc, 'com compra')
+            str_starts_with($desc, 'rev')
+            || str_contains($desc, 'com compra')
             || str_contains($desc, 'com. compra')
             || str_contains($desc, 'comision compra')
             || str_contains($desc, 'comisión compra')

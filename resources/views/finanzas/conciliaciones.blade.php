@@ -652,7 +652,7 @@
                 <div class="file-wrap">
                     <label class="file-label">
                         Elegir Archivo
-                        <input type="file" name="file[]" multiple accept=".csv,.txt,.xls,.xlsx,image/jpeg,image/png,.jpg,.jpeg,.png" required
+                        <input type="file" name="file[]" multiple accept=".csv,.txt,.xls,.xlsx,.pdf,image/jpeg,image/png,.jpg,.jpeg,.png" required
                                id="csvUploadInput"
                                onchange="document.getElementById('csvFileName').value = this.files.length > 1 ? this.files.length + ' archivos' : (this.files[0] ? this.files[0].name : '');"
                                style="display:none;">

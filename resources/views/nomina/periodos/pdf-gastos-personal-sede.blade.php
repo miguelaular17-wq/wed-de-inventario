@@ -46,6 +46,8 @@
                 <th>Total nómina</th>
                 <th>Total comisiones</th>
                 <th>Total gastos del personal</th>
+                <th>Venta neta quincena</th>
+                <th>% gastos / venta</th>
             </tr>
         </thead>
         <tbody>
@@ -60,10 +62,18 @@
                     <td class="num">{{ number_format($fila['total_nomina'] ?? 0, 2) }}</td>
                     <td class="num">{{ number_format($fila['total_comisiones'] ?? 0, 2) }}</td>
                     <td class="num"><strong>{{ number_format($fila['total_gastos'] ?? 0, 2) }}</strong></td>
+                    <td class="num">{{ ($fila['venta_neta'] ?? 0) > 0 ? number_format($fila['venta_neta'], 2) : '—' }}</td>
+                    <td class="num">
+                        @if(($fila['pct_nomina_sobre_venta'] ?? null) !== null)
+                            <strong>{{ number_format($fila['pct_nomina_sobre_venta'], 2) }}%</strong>
+                        @else
+                            —
+                        @endif
+                    </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" style="text-align:center;padding:16px;color:#64748b;">
+                    <td colspan="8" style="text-align:center;padding:16px;color:#64748b;">
                         No hay sedes o áreas con venta neta mayor a cero en esta quincena.
                     </td>
                 </tr>
@@ -78,6 +88,16 @@
                     <td class="num">{{ number_format($filas->sum('total_nomina'), 2) }}</td>
                     <td class="num">{{ number_format($filas->sum('total_comisiones'), 2) }}</td>
                     <td class="num">{{ number_format($filas->sum('total_gastos'), 2) }}</td>
+                    @php
+                        // La venta de las áreas (por vendedor) ya está dentro de la venta de las sedes.
+                        $ventaTotal = (float) $filas->where('tipo', 'SEDE')->sum('venta_neta');
+                        if ($ventaTotal <= 0) {
+                            $ventaTotal = (float) $filas->sum('venta_neta');
+                        }
+                        $gastosTotal = (float) $filas->sum('total_gastos');
+                    @endphp
+                    <td class="num">{{ $ventaTotal > 0 ? number_format($ventaTotal, 2) : '—' }}</td>
+                    <td class="num">{{ $ventaTotal > 0 ? number_format(($gastosTotal / $ventaTotal) * 100, 2).'%' : '—' }}</td>
                 </tr>
             </tfoot>
         @endif
@@ -90,6 +110,8 @@
         Total nómina = neto a pagar de nómina.
         Total comisiones = neto a pagar de comisiones (luego de bonos y retenciones).
         Total gastos del personal = total nómina + total comisiones.
+        Venta neta sedes = facturas − devoluciones (USD) de la quincena; Call Center y Digital Manage = ventas de sus vendedores.
+        % = total gastos del personal ÷ venta neta × 100. El % del total usa solo la venta de las sedes.
     </div>
 </body>
 </html>

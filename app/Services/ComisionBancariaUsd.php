@@ -43,7 +43,10 @@ class ComisionBancariaUsd
      */
     public function convertir(Collection $lineas, array $tasas, string $banco, string $titular): array
     {
-        $detalle = $lineas->map(function ($linea) use ($tasas, $banco, $titular) {
+        $bcv = app(BcvRateService::class);
+        $tasasBcv = [];
+
+        $detalle = $lineas->map(function ($linea) use ($tasas, $banco, $titular, $bcv, &$tasasBcv) {
             $fecha = $linea->fecha instanceof \DateTimeInterface
                 ? $linea->fecha->format('Y-m-d')
                 : substr((string) $linea->fecha, 0, 10);
@@ -52,6 +55,12 @@ class ComisionBancariaUsd
                 ?? $tasas[$banco.'|'.$titularClave.'|'.$fecha]
                 ?? $tasas['*|'.$fecha]
                 ?? null;
+
+            if (! $tasa && $fecha !== '') {
+                $tasasBcv[$fecha] ??= $bcv->getRateForDate($fecha);
+                // getRateForDate devuelve 1.0 cuando no encuentra tasa.
+                $tasa = $tasasBcv[$fecha] > 1.0 ? $tasasBcv[$fecha] : null;
+            }
             $monto = (float) $linea->monto;
 
             return [

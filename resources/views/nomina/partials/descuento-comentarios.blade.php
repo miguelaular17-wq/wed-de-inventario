@@ -76,7 +76,8 @@
             const raw = btn.getAttribute('data-payload') || '';
             if (!raw) return [];
             try {
-                const json = atob(raw);
+                const bytes = Uint8Array.from(atob(raw), function (c) { return c.charCodeAt(0); });
+                const json = new TextDecoder('utf-8').decode(bytes);
                 const parsed = JSON.parse(json);
                 return Array.isArray(parsed) ? parsed : [];
             } catch (err) {

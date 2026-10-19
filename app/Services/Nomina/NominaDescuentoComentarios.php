@@ -34,7 +34,10 @@ class NominaDescuentoComentarios
         }
 
         if (! empty($desglose['descuentos_lineas']) && is_array($desglose['descuentos_lineas'])) {
-            $lineas = $this->normalizar($desglose['descuentos_lineas']);
+            $lineas = array_values(array_filter(
+                $this->normalizar($desglose['descuentos_lineas']),
+                fn (array $l) => ! ($l['grupo'] === 'prestamo' && $this->esAbonoDeComision($l['comentario']))
+            ));
             $tieneAdelanto = collect($lineas)->contains(fn (array $l) => $l['grupo'] === 'adelanto');
             $montoAdelanto = (float) ($desglose['abonos_sueldo'] ?? 0);
             // Snapshot viejo o incompleto: reconstruir adelantos desde la tabla real.
@@ -174,7 +177,7 @@ class NominaDescuentoComentarios
         $lineas = [];
         foreach ($this->cuotasPeriodo($periodo)->get($empleado->id, []) as $cuota) {
                 $monto = (float) ($cuota->abono?->monto ?? $cuota->monto_pagado ?? 0);
-                if ($monto <= 0) {
+                if ($monto <= 0 || $this->esAbonoDeComision($cuota->abono?->observacion)) {
                     continue;
                 }
                 $comentario = $cuota->abono?->observacion
@@ -184,7 +187,7 @@ class NominaDescuentoComentarios
         }
 
         foreach ($this->abonosPeriodo($periodo)->get($empleado->id, []) as $abono) {
-                if ($abono->cuota_id) {
+                if ($abono->cuota_id || $this->esAbonoDeComision($abono->observacion)) {
                     continue;
                 }
                 $lineas[] = $this->linea(
@@ -196,6 +199,12 @@ class NominaDescuentoComentarios
         }
 
         return $lineas;
+    }
+
+    /** Las cuotas cobradas de la comisión se registran como abono de nómina con esta observación. */
+    private function esAbonoDeComision(?string $observacion): bool
+    {
+        return str_starts_with(mb_strtolower(trim((string) $observacion)), 'descuento de comisión');
     }
 
     /**

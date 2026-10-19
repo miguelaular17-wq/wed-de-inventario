@@ -2165,12 +2165,12 @@ class FinanzasController extends Controller
         $request->validate([
             'file' => 'required|array|min:1',
             // extensions: más fiable que mimes (xlsx a veces llega como zip; csv como octet-stream)
-            'file.*' => ['required', 'file', 'max:15360', 'extensions:csv,txt,xlsx,xls,png,jpg,jpeg'],
+            'file.*' => ['required', 'file', 'max:15360', 'extensions:csv,txt,xlsx,xls,pdf,png,jpg,jpeg'],
             'banco_seleccionado' => 'required|string',
             'titular_seleccionado' => 'required|string',
         ], [
             'file.required' => 'Selecciona al menos un archivo del banco.',
-            'file.*.extensions' => 'El archivo debe ser CSV, TXT, Excel (.xlsx/.xls) o imagen (.png/.jpg/.jpeg).',
+            'file.*.extensions' => 'El archivo debe ser CSV, TXT, Excel (.xlsx/.xls), PDF de Bancaribe o imagen (.png/.jpg/.jpeg).',
             'file.*.max' => 'Cada archivo no puede superar 15 MB.',
         ]);
 
@@ -2380,7 +2380,40 @@ class FinanzasController extends Controller
                 continue; // siguiente archivo
             }
 
-            // 2. LEER ARCHIVO EXCEL / CSV
+            // 2. PDF (solo Bancaribe: estado de cuenta con "Detalles de Movimientos")
+            if ($ext === 'pdf') {
+                if ($banco_nombre !== 'BANCARIBE') {
+                    return redirect()->back()->with('error', 'Por ahora solo se aceptan PDF de Bancaribe. Para '.$banco_nombre.' sube el Excel o CSV.');
+                }
+                try {
+                    $movimientos = app(\App\Services\BancaribePdfParser::class)->parse($file->getRealPath());
+                } catch (\Throwable $e) {
+                    \Log::error('uploadConciliacion PDF Bancaribe: '.$e->getMessage());
+
+                    return redirect()->back()->with('error', 'No se pudo leer el PDF de Bancaribe.');
+                }
+                foreach ($movimientos as $mov) {
+                    $guardo = $this->guardarLineaExtracto([
+                        'session_id'  => $session_id,
+                        'banco'       => $banco_nombre,
+                        'titular'     => $titular_nombre,
+                        'fecha'       => $mov['fecha'],
+                        'descripcion' => $mov['descripcion'],
+                        'referencia'  => $mov['referencia'],
+                        'monto'       => $mov['monto'],
+                        'estado'      => 'pendiente',
+                        'tipo'        => $mov['tipo'],
+                    ]);
+                    if ($guardo) {
+                        $success_count++;
+                    } else {
+                        $repetidas++;
+                    }
+                }
+                continue;
+            }
+
+            // 3. LEER ARCHIVO EXCEL / CSV
             if ($ext === 'xlsx') {
                 if ($xlsx = \Shuchkin\SimpleXLSX::parse($file->getRealPath())) {
                     $all_rows = $xlsx->rows();
