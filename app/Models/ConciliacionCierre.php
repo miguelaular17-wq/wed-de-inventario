@@ -14,6 +14,7 @@ class ConciliacionCierre extends Model
     protected $casts = [
         'fecha_desde' => 'date',
         'fecha_hasta' => 'date',
+        'sin_movimientos' => 'boolean',
     ];
 
     public function usuario(): BelongsTo

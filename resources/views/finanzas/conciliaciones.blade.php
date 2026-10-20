@@ -359,7 +359,10 @@
                                     <br><span class="tipo-chip" style="background:#ecfdf5;color:#059669;">Manual</span>
                                 @endif
                             </td>
-                            <td class="monto-cell monto-green">Bs. {{ number_format($row['monto'], 2) }}</td>
+                            @php $esEgreso = ($row['tipo'] ?? 'cargo') === 'cargo'; @endphp
+                            <td class="monto-cell {{ $esEgreso ? 'monto-red' : 'monto-green' }}">
+                                {{ $esEgreso ? '−' : '+' }}Bs. {{ number_format(abs((float) $row['monto']), 2) }}
+                            </td>
                         </tr>
                         @empty
                         <tr class="empty-row"><td colspan="4">Sin movimientos consolidados</td></tr>
@@ -367,7 +370,15 @@
                     </tbody>
                 </table>
                 @if($d['conciliados']->count() > 0)
-                <div class="section-footer">Total: Bs. {{ number_format($d['total_conciliados'], 2) }}</div>
+                @php
+                    $ingresosCons = (float) $d['conciliados']->where('tipo', 'abono')->sum(fn ($r) => abs((float) $r['monto']));
+                    $egresosCons = (float) $d['conciliados']->where('tipo', '!=', 'abono')->sum(fn ($r) => abs((float) $r['monto']));
+                @endphp
+                <div class="section-footer">
+                    <span class="monto-green">Ingresos +Bs. {{ number_format($ingresosCons, 2) }}</span>
+                    · <span class="monto-red">Egresos −Bs. {{ number_format($egresosCons, 2) }}</span>
+                    · Neto: Bs. {{ number_format($ingresosCons - $egresosCons, 2) }}
+                </div>
                 @endif
                 </div>
             </div>

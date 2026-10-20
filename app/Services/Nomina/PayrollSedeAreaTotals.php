@@ -111,8 +111,9 @@ class PayrollSedeAreaTotals
     }
 
     /**
-     * Gastos de personal por sede/área: paquete (asignaciones de nómina),
-     * total nómina, total comisiones (neto tras bonos/retenciones) y suma.
+     * Gastos de personal por sede/área: paquete (salario de la quincena),
+     * total nómina y total comisiones antes de deducciones, su suma
+     * y las deducciones de ambos aparte.
      *
      * @param  iterable<NominaRegistro>  $registros
      * @param  iterable<NominaLiquidacionComision>  $liquidaciones
@@ -125,8 +126,9 @@ class PayrollSedeAreaTotals
         foreach ($registros as $registro) {
             $grupo = $this->grupoDeEmpleado($registro->empleado);
             $desglose = $registro->desglose();
-            $paquete = round(
-                (float) $registro->salario_base
+            $salarioQuincena = round((float) $registro->salario_base, 2);
+            $nominaBruta = round(
+                $salarioQuincena
                 + (float) ($desglose['horas_extras'] ?? $registro->total_otros_ingresos ?? 0)
                 + $registro->montoBonificaciones(),
                 2
@@ -135,9 +137,10 @@ class PayrollSedeAreaTotals
                 $grupos,
                 $grupo,
                 (int) ($registro->empleado_id ?? 0),
-                $paquete,
-                round((float) $registro->total_pagar, 2),
+                $salarioQuincena,
+                $nominaBruta,
                 0.0,
+                round((float) $registro->total_deducciones, 2),
                 $tasaBcv
             );
         }
@@ -150,7 +153,8 @@ class PayrollSedeAreaTotals
                 (int) ($liq->empleado_id ?? 0),
                 0.0,
                 0.0,
-                round((float) $liq->total_pagar, 2),
+                round((float) $liq->comision_total + (float) $liq->abonos, 2),
+                round((float) $liq->retencion + (float) $liq->descuentos + (float) $liq->prestamos, 2),
                 $tasaBcv
             );
         }
@@ -375,6 +379,7 @@ class PayrollSedeAreaTotals
         float $paqueteSalarial,
         float $totalNomina,
         float $totalComisiones,
+        float $totalDeducciones,
         float $tasaBcv
     ): void {
         $clave = $grupo['clave'];
@@ -390,6 +395,7 @@ class PayrollSedeAreaTotals
                 'total_nomina' => 0.0,
                 'total_comisiones' => 0.0,
                 'total_gastos' => 0.0,
+                'total_deducciones' => 0.0,
                 // Compatibilidad con conVentasNetas / ordenar
                 'asignaciones' => 0.0,
                 'deducciones' => 0.0,
@@ -407,6 +413,8 @@ class PayrollSedeAreaTotals
         $grupos[$clave]['paquete_salarial'] = round($grupos[$clave]['paquete_salarial'] + $paqueteSalarial, 2);
         $grupos[$clave]['total_nomina'] = round($grupos[$clave]['total_nomina'] + $totalNomina, 2);
         $grupos[$clave]['total_comisiones'] = round($grupos[$clave]['total_comisiones'] + $totalComisiones, 2);
+        $grupos[$clave]['total_deducciones'] = round($grupos[$clave]['total_deducciones'] + $totalDeducciones, 2);
+        $grupos[$clave]['deducciones'] = $grupos[$clave]['total_deducciones'];
         $grupos[$clave]['total_gastos'] = round(
             $grupos[$clave]['total_nomina'] + $grupos[$clave]['total_comisiones'],
             2

@@ -39,6 +39,7 @@ class ConciliacionCalendarioService
             $cierres = ConciliacionCierre::query()
                 ->whereDate('fecha_desde', '<=', $fin->toDateString())
                 ->whereDate('fecha_hasta', '>=', $inicio->toDateString())
+                ->with('usuario')
                 ->orderBy('fecha_desde')
                 ->get();
         }
@@ -55,7 +56,26 @@ class ConciliacionCalendarioService
         }
 
         $filas = [];
+        $sinMovimientos = [];
         foreach ($cuentas as $cuenta) {
+            $marcaSinMov = $cierres->first(function ($cierre) use ($cuenta) {
+                if (empty($cierre->sin_movimientos)) {
+                    return false;
+                }
+                [$bancoCanon, $titularCanon] = $this->matcher->partesCuenta($cierre->banco, $cierre->titular);
+
+                return $bancoCanon === $cuenta['banco'] && $titularCanon === $cuenta['titular'];
+            });
+            if ($marcaSinMov) {
+                $sinMovimientos[] = $cuenta + [
+                    'cierre_id' => $marcaSinMov->id,
+                    'marcado_por' => $marcaSinMov->usuario?->name,
+                    'marcado_el' => $marcaSinMov->updated_at?->format('d/m/Y H:i'),
+                ];
+
+                continue;
+            }
+
             $dias = array_fill(1, $diasMes, false);
             $rangos = [];
             foreach ($cierres as $cierre) {
@@ -76,6 +96,8 @@ class ConciliacionCalendarioService
                     'id' => $cierre->id,
                     'desde' => $cierre->fecha_desde->toDateString(),
                     'hasta' => $cierre->fecha_hasta->toDateString(),
+                    'marcado_por' => $cierre->usuario?->name,
+                    'marcado_el' => $cierre->created_at?->format('d/m/Y H:i'),
                 ];
             }
             $cubiertos = count(array_filter($dias));
@@ -90,6 +112,9 @@ class ConciliacionCalendarioService
         }
 
         usort($filas, function (array $a, array $b) {
+            return [$a['banco'], $a['titular']] <=> [$b['banco'], $b['titular']];
+        });
+        usort($sinMovimientos, function (array $a, array $b) {
             return [$a['banco'], $a['titular']] <=> [$b['banco'], $b['titular']];
         });
 
@@ -124,6 +149,7 @@ class ConciliacionCalendarioService
             'anterior' => $inicio->copy()->subMonth()->format('Y-m'),
             'siguiente' => $inicio->copy()->addMonth()->format('Y-m'),
             'filas' => $filas,
+            'sin_movimientos' => $sinMovimientos,
             'celdas' => $celdas,
             'completas' => count(array_filter($filas, fn (array $fila) => $fila['completo'])),
             'total' => count($filas),

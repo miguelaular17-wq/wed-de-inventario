@@ -617,6 +617,7 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
 // Conciliaciones routes - solo admin y contabilidad
 Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->group(function () {
     Route::get('/calendario-conciliaciones', [FinanzasController::class, 'calendarioConciliaciones'])->name('finanzas.calendario_conciliaciones');
+    Route::get('/calendario-conciliaciones/pdf', [FinanzasController::class, 'calendarioConciliacionesPdf'])->name('finanzas.calendario_conciliaciones.pdf');
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
     Route::get('/conciliaciones/lotes', [FinanzasController::class, 'lotesPuntoVenta'])->name('finanzas.conciliaciones.lotes');
     Route::post('/conciliaciones/lotes/manual', [FinanzasController::class, 'conciliarLoteManual'])->name('finanzas.conciliaciones.lotes.manual');
@@ -633,6 +634,7 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::get('/conciliaciones/reporte-banco', [App\Http\Controllers\FinanzasController::class, 'reporteBancoPdf'])->name('finanzas.conciliaciones.reporte-banco');
     Route::post('/conciliaciones/periodos', [FinanzasController::class, 'marcarConciliacionPeriodo'])->name('finanzas.conciliaciones.periodos.store');
     Route::delete('/conciliaciones/periodos/{cierre}', [FinanzasController::class, 'quitarConciliacionPeriodo'])->name('finanzas.conciliaciones.periodos.destroy');
+    Route::post('/conciliaciones/periodos/sin-movimientos', [FinanzasController::class, 'marcarSinMovimientos'])->name('finanzas.conciliaciones.periodos.sin_movimientos');
 });
 
 // Cobranza routes

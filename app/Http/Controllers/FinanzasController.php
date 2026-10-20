@@ -123,6 +123,15 @@ class FinanzasController extends Controller
     }
 
     /** Canoniza nombre de banco (p.ej. BANCO DE VENEZUELA → VENEZUELA). */
+    /** Orden cronológico (más viejo primero); a igual fecha, por referencia. */
+    private function claveOrdenFecha(array $row): string
+    {
+        $fecha = $row['fecha'] ?? null;
+        $dia = $fecha instanceof \DateTimeInterface ? $fecha->format('Y-m-d') : substr((string) $fecha, 0, 10);
+
+        return $dia.'|'.str_pad((string) ($row['referencia'] ?? ''), 30, '0', STR_PAD_LEFT);
+    }
+
     private function canonizarBanco(?string $banco): string
     {
         return app(\App\Services\BankReconciliationMatcher::class)
@@ -1840,7 +1849,7 @@ class FinanzasController extends Controller
                     'tipo'        => 'cargo',
                     'manual'      => true,
                 ])
-            )->values();
+            )->sortBy(fn (array $row) => $this->claveOrdenFecha($row))->values();
 
             $sin_registrar = $lineas_normales->where('estado', 'pendiente')
                 ->map(fn ($l) => [
@@ -2012,6 +2021,32 @@ class FinanzasController extends Controller
         ));
     }
 
+    public function calendarioConciliacionesPdf(Request $request)
+    {
+        [, , $titularesPorBanco] = $this->cuentasConciliacion();
+
+        $calMes = $request->input('cal_mes');
+        if (! is_string($calMes) || ! preg_match('/^\d{4}-\d{2}$/', $calMes)) {
+            $calMes = now()->format('Y-m');
+        }
+
+        $cal = app(\App\Services\ConciliacionCalendarioService::class)->armar($calMes, $titularesPorBanco);
+
+        $logo = null;
+        $logoRaw = is_file(public_path('logo.png')) ? @file_get_contents(public_path('logo.png')) : false;
+        if ($logoRaw) {
+            $logo = 'data:image/png;base64,'.base64_encode($logoRaw);
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('finanzas.pdf.calendario_conciliaciones', [
+            'cal' => $cal,
+            'generadoPor' => $request->user()?->name,
+            'logoPath' => $logo,
+        ])
+            ->setPaper('a4', 'portrait')
+            ->download('Calendario_conciliaciones_'.$cal['mes'].'.pdf');
+    }
+
     /**
      * @return array{0: \Illuminate\Support\Collection, 1: \Illuminate\Support\Collection, 2: array<string, list<string>>}
      */
@@ -2124,6 +2159,39 @@ class FinanzasController extends Controller
             : "{$banco} · {$titular} quedó marcado como conciliado.";
 
         return $this->redirectTrasCierre($request, $mes)->with('success', $mensaje);
+    }
+
+    public function marcarSinMovimientos(Request $request)
+    {
+        $data = $request->validate([
+            'banco' => 'required|string|max:80',
+            'titular' => 'required|string|max:120',
+            'mes' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+        ]);
+
+        [$banco, $titular] = app(\App\Services\BankReconciliationMatcher::class)
+            ->partesCuenta($data['banco'], $data['titular']);
+        if ($banco === '' || $titular === '') {
+            return redirect()->route('finanzas.calendario_conciliaciones', ['cal_mes' => $data['mes']])
+                ->with('error', 'Cuenta no válida.');
+        }
+
+        $inicio = \Carbon\Carbon::createFromFormat('Y-m-d', $data['mes'].'-01')->startOfMonth();
+        ConciliacionCierre::query()->updateOrCreate(
+            [
+                'banco' => $banco,
+                'titular' => $titular,
+                'fecha_desde' => $inicio->toDateString(),
+                'fecha_hasta' => $inicio->copy()->endOfMonth()->toDateString(),
+            ],
+            [
+                'sin_movimientos' => true,
+                'user_id' => $request->user()?->id,
+            ]
+        );
+
+        return redirect()->route('finanzas.calendario_conciliaciones', ['cal_mes' => $data['mes']])
+            ->with('success', "{$banco} · {$titular} quedó como sin movimientos este mes.");
     }
 
     public function quitarConciliacionPeriodo(Request $request, ConciliacionCierre $cierre)
@@ -2946,6 +3014,7 @@ class FinanzasController extends Controller
             'tesoreria_ingreso_id' => 'required|integer',
             'linea_ids' => 'required|array|min:1',
             'linea_ids.*' => 'integer',
+            'aceptar_diferencia' => 'nullable|boolean',
         ]);
 
         $lote = \App\Models\TesoreriaIngreso::query()
@@ -2984,11 +3053,24 @@ class FinanzasController extends Controller
 
         $suma = round((float) $lineas->sum(fn ($l) => abs((float) $l->monto)), 2);
         $netoLote = round(abs((float) $lote->monto), 2);
-        if (abs($suma - $netoLote) > 0.05) {
+        $diferencia = round($suma - $netoLote, 2);
+        $conDiferencia = abs($diferencia) > 0.05;
+        if ($conDiferencia && ! $request->boolean('aceptar_diferencia')) {
             return back()->with(
                 'error',
                 'La suma de LIQ (Bs. '.number_format($suma, 2, ',', '.').') no coincide con el lote (Bs. '.number_format($netoLote, 2, ',', '.').').'
             );
+        }
+        if ($conDiferencia) {
+            \Log::info('Lote punto de venta conciliado con diferencia', [
+                'tesoreria_ingreso_id' => $lote->id,
+                'lote' => $lote->lote_referencia,
+                'neto_lote' => $netoLote,
+                'suma_liq' => $suma,
+                'diferencia' => $diferencia,
+                'linea_ids' => $ids,
+                'user_id' => auth()->id(),
+            ]);
         }
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($lote, $lineas) {
@@ -3006,7 +3088,8 @@ class FinanzasController extends Controller
 
         return back()->with(
             'success',
-            'Lote '.$ref.' conciliado manualmente con '.$lineas->count().' liquidación(es).'
+            'Lote '.$ref.' conciliado manualmente con '.$lineas->count().' liquidación(es)'
+            .($conDiferencia ? ', con diferencia de Bs. '.number_format($diferencia, 2, ',', '.') : '').'.'
         );
     }
 
@@ -3141,7 +3224,7 @@ class FinanzasController extends Controller
                     'monto'       => $l->monto,
                     'tipo'        => $l->tipo,
                 ];
-            })->values();
+            })->sortBy(fn (array $row) => $this->claveOrdenFecha($row))->values();
 
         $sin_registrar = $lineas_normales->where('estado', 'pendiente')
             ->map(fn($l) => [

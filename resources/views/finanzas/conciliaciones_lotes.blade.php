@@ -17,7 +17,14 @@
     .kpi span { display: block; color: #64748b; font-size: 0.75rem; text-transform: uppercase; letter-spacing: .4px; }
     .kpi strong { font-size: 1.35rem; color: #0f172a; }
     .bank-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,.06); margin-bottom: 28px; overflow: hidden; }
-    .bank-card-header { background: linear-gradient(135deg, #134e4a 0%, #0f766e 100%); padding: 16px 22px; color: white; }
+    .bank-card-header { background: linear-gradient(135deg, #134e4a 0%, #0f766e 100%); padding: 16px 22px; color: white; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 3; }
+    .header-manual { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .header-manual .manual-resumen { font-size: 0.85rem; font-weight: 600; opacity: .95; }
+    .header-manual .diff-ok { color: #bbf7d0; font-weight: 800; }
+    .header-manual .diff-bad { color: #fde68a; font-weight: 800; }
+    .header-manual .btn-conciliar { background: white; color: #0f766e; }
+    .section-scroll { height: 460px; overflow-y: auto; }
+    .section-scroll thead th { position: sticky; top: 0; z-index: 1; }
     .sections-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; }
     @media(max-width: 1100px) { .sections-grid { grid-template-columns: 1fr; } }
     .section-block { border-right: 1px solid #f1f5f9; }
@@ -94,17 +101,28 @@
 
     @forelse($tarjetas as $idx => $tarjeta)
         <div class="bank-card" data-card="{{ $idx }}">
-            <div class="bank-card-header">
-                <strong>{{ $tarjeta['banco'] }}</strong>
-                @if($tarjeta['titular'])
-                    <div style="opacity:.8;font-size:.85rem;">Titular: {{ $tarjeta['titular'] }}</div>
-                @endif
-            </div>
             <form action="{{ route('finanzas.conciliaciones.lotes.manual') }}" method="POST" class="manual-lote-form" data-card="{{ $idx }}">
                 @csrf
+                <input type="hidden" name="aceptar_diferencia" value="0">
+                <div class="bank-card-header">
+                    <div>
+                        <strong>{{ $tarjeta['banco'] }}</strong>
+                        @if($tarjeta['titular'])
+                            <div style="opacity:.8;font-size:.85rem;">Titular: {{ $tarjeta['titular'] }}</div>
+                        @endif
+                    </div>
+                    @if($tarjeta['pendientes']->count() > 0 && $tarjeta['liq_pendientes']->count() > 0)
+                        <div class="header-manual">
+                            <span class="manual-resumen">Marca 1 lote y una o varias LIQ</span>
+                            <span class="manual-diff"></span>
+                            <button type="submit" class="btn-conciliar" disabled>Conciliar manualmente</button>
+                        </div>
+                    @endif
+                </div>
                 <div class="sections-grid">
                     <div class="section-block">
                         <div class="section-header"><span class="section-title">Lotes conciliados</span><span class="section-count">{{ $tarjeta['conciliados']->count() }}</span></div>
+                        <div class="section-scroll">
                         <table class="mini-table">
                             <thead><tr><th>Fecha</th><th>Lote</th><th>Neto</th></tr></thead>
                             <tbody>
@@ -119,12 +137,14 @@
                                 @endforelse
                             </tbody>
                         </table>
+                        </div>
                         @if($tarjeta['conciliados']->count() > 0)
                             <div class="section-footer">Bs. {{ number_format($tarjeta['total_conciliado'], 2) }}</div>
                         @endif
                     </div>
                     <div class="section-block">
                         <div class="section-header"><span class="section-title">Lotes sin liquidación</span><span class="section-count">{{ $tarjeta['pendientes']->count() }}</span></div>
+                        <div class="section-scroll">
                         <table class="mini-table">
                             <thead><tr><th class="pick-cell"></th><th>Fecha</th><th>Lote</th><th>Neto</th></tr></thead>
                             <tbody>
@@ -147,12 +167,14 @@
                                 @endforelse
                             </tbody>
                         </table>
+                        </div>
                         @if($tarjeta['pendientes']->count() > 0)
                             <div class="section-footer">Bs. {{ number_format($tarjeta['total_pendiente'], 2) }}</div>
                         @endif
                     </div>
                     <div class="section-block">
                         <div class="section-header"><span class="section-title">LIQ del banco sin lote</span><span class="section-count">{{ $tarjeta['liq_pendientes']->count() }}</span></div>
+                        <div class="section-scroll">
                         <table class="mini-table">
                             <thead><tr><th class="pick-cell"></th><th>Fecha</th><th>Descripción</th><th>Monto</th></tr></thead>
                             <tbody>
@@ -174,21 +196,12 @@
                                 @endforelse
                             </tbody>
                         </table>
+                        </div>
                         @if($tarjeta['liq_pendientes']->count() > 0)
                             <div class="section-footer">Bs. {{ number_format($tarjeta['total_liq'], 2) }}</div>
                         @endif
                     </div>
                 </div>
-                @if($tarjeta['pendientes']->count() > 0 && $tarjeta['liq_pendientes']->count() > 0)
-                    <div class="manual-bar">
-                        <div class="hint">
-                            Marca <strong>1 lote</strong> y una o varias <strong>LIQ</strong>.
-                            <span class="manual-resumen">Lote: — · LIQ: Bs. 0,00</span>
-                            <span class="manual-diff"></span>
-                        </div>
-                        <button type="submit" class="btn-conciliar" disabled>Conciliar manualmente</button>
-                    </div>
-                @endif
             </form>
         </div>
     @empty
@@ -239,7 +252,8 @@ function actualizarManualBar(form) {
     const loteMonto = radio ? parseFloat(radio.dataset.monto || '0') : 0;
     const loteRef = radio ? (radio.dataset.lote || '—') : '—';
     const sumaLiq = checks.reduce((acc, el) => acc + parseFloat(el.dataset.monto || '0'), 0);
-    const ok = !!radio && checks.length > 0 && Math.abs(sumaLiq - loteMonto) <= 0.05;
+    const seleccion = !!radio && checks.length > 0;
+    const ok = seleccion && Math.abs(sumaLiq - loteMonto) <= 0.05;
 
     form.querySelectorAll('tr[data-role="lote"]').forEach(tr => {
         tr.classList.toggle('is-selected', !!(tr.querySelector('input[type=radio]')?.checked));
@@ -267,8 +281,30 @@ function actualizarManualBar(form) {
             diff.className = 'manual-diff diff-bad';
         }
     }
-    if (btn) btn.disabled = !ok;
+    if (btn) btn.disabled = !seleccion;
 }
-document.querySelectorAll('form.manual-lote-form').forEach(actualizarManualBar);
+document.querySelectorAll('form.manual-lote-form').forEach(function (form) {
+    actualizarManualBar(form);
+    form.addEventListener('submit', function (e) {
+        const radio = form.querySelector('input[name="tesoreria_ingreso_id"]:checked');
+        const checks = [...form.querySelectorAll('input[name="linea_ids[]"]:checked')];
+        const loteMonto = radio ? parseFloat(radio.dataset.monto || '0') : 0;
+        const sumaLiq = checks.reduce((acc, el) => acc + parseFloat(el.dataset.monto || '0'), 0);
+        const delta = sumaLiq - loteMonto;
+        const aceptar = form.querySelector('input[name="aceptar_diferencia"]');
+        aceptar.value = '0';
+        if (Math.abs(delta) > 0.05) {
+            const msg = 'El lote ' + (radio.dataset.lote || '') + ' es ' + fmtBs(loteMonto)
+                + ' y las LIQ marcadas suman ' + fmtBs(sumaLiq)
+                + '.\nDiferencia: ' + fmtBs(Math.abs(delta)) + (delta > 0 ? ' de más' : ' de menos')
+                + '.\n\n¿Deseas conciliarlo con esa diferencia?';
+            if (!confirm(msg)) {
+                e.preventDefault();
+                return;
+            }
+            aceptar.value = '1';
+        }
+    });
+});
 </script>
 @endsection

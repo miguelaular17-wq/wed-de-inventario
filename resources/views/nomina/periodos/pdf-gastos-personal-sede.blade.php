@@ -46,6 +46,7 @@
                 <th>Total nómina</th>
                 <th>Total comisiones</th>
                 <th>Total gastos del personal</th>
+                <th>Total deducciones</th>
                 <th>Venta neta quincena</th>
                 <th>% gastos / venta</th>
             </tr>
@@ -62,6 +63,7 @@
                     <td class="num">{{ number_format($fila['total_nomina'] ?? 0, 2) }}</td>
                     <td class="num">{{ number_format($fila['total_comisiones'] ?? 0, 2) }}</td>
                     <td class="num"><strong>{{ number_format($fila['total_gastos'] ?? 0, 2) }}</strong></td>
+                    <td class="num">{{ number_format($fila['total_deducciones'] ?? 0, 2) }}</td>
                     <td class="num">{{ ($fila['venta_neta'] ?? 0) > 0 ? number_format($fila['venta_neta'], 2) : '—' }}</td>
                     <td class="num">
                         @if(($fila['pct_nomina_sobre_venta'] ?? null) !== null)
@@ -73,7 +75,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="8" style="text-align:center;padding:16px;color:#64748b;">
+                    <td colspan="9" style="text-align:center;padding:16px;color:#64748b;">
                         No hay sedes o áreas con venta neta mayor a cero en esta quincena.
                     </td>
                 </tr>
@@ -88,6 +90,7 @@
                     <td class="num">{{ number_format($filas->sum('total_nomina'), 2) }}</td>
                     <td class="num">{{ number_format($filas->sum('total_comisiones'), 2) }}</td>
                     <td class="num">{{ number_format($filas->sum('total_gastos'), 2) }}</td>
+                    <td class="num">{{ number_format($filas->sum('total_deducciones'), 2) }}</td>
                     @php
                         // La venta de las áreas (por vendedor) ya está dentro de la venta de las sedes.
                         $ventaTotal = (float) $filas->where('tipo', 'SEDE')->sum('venta_neta');
@@ -106,12 +109,13 @@
     <div class="note">
         Generado {{ now()->format('d/m/Y H:i') }}.
         Montos en USD.
-        Paquete salarial = total de asignaciones de nómina.
-        Total nómina = neto a pagar de nómina.
-        Total comisiones = neto a pagar de comisiones (luego de bonos y retenciones).
+        Paquete salarial = salario de la quincena.
+        Total nómina = salario + horas extras + bonos, sin deducciones.
+        Total comisiones = comisión + bonos de comisión, sin retención ni descuentos.
         Total gastos del personal = total nómina + total comisiones.
-        Venta neta sedes = facturas − devoluciones (USD) de la quincena; Call Center y Digital Manage = ventas de sus vendedores.
-        % = total gastos del personal ÷ venta neta × 100. El % del total usa solo la venta de las sedes.
+        Total deducciones = deducciones de nómina + retención, descuentos y préstamos de comisión.
+        Venta neta sedes = facturas - devoluciones (USD) de la quincena; Call Center y Digital Manage = ventas de sus vendedores.
+        % = total gastos del personal / venta neta x 100. El % del total usa solo la venta de las sedes.
     </div>
 </body>
 </html>

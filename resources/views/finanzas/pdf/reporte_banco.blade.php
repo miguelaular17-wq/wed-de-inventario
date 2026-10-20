@@ -119,7 +119,10 @@
                 <td class="text-center">{{ \Carbon\Carbon::parse($row['fecha'])->format('d/m/Y') }}</td>
                 <td>{{ $row['referencia'] }}</td>
                 <td>{{ $row['motivo'] }}</td>
-                <td class="text-right">Bs. {{ number_format($row['monto'], 2) }}</td>
+                @php $esEgreso = ($row['tipo'] ?? 'cargo') === 'cargo'; @endphp
+                <td class="text-right" style="color: {{ $esEgreso ? '#dc2626' : '#059669' }};">
+                    {{ $esEgreso ? '-' : '+' }}Bs. {{ number_format(abs((float) $row['monto']), 2) }}
+                </td>
             </tr>
             @empty
             <tr>
@@ -127,9 +130,17 @@
             </tr>
             @endforelse
             @if($data['conciliados']->count() > 0)
+            @php
+                $ingresosCons = (float) $data['conciliados']->where('tipo', 'abono')->sum(fn ($r) => abs((float) $r['monto']));
+                $egresosCons = (float) $data['conciliados']->where('tipo', '!=', 'abono')->sum(fn ($r) => abs((float) $r['monto']));
+            @endphp
             <tr class="total-row">
-                <td colspan="3" class="text-right">Total:</td>
-                <td class="text-right">Bs. {{ number_format($data['total_conciliados'], 2) }}</td>
+                <td colspan="3" class="text-right">Ingresos / Egresos / Neto:</td>
+                <td class="text-right">
+                    +Bs. {{ number_format($ingresosCons, 2) }}<br>
+                    -Bs. {{ number_format($egresosCons, 2) }}<br>
+                    Bs. {{ number_format($ingresosCons - $egresosCons, 2) }}
+                </td>
             </tr>
             @endif
         </tbody>

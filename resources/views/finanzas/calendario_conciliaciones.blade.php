@@ -37,6 +37,10 @@
 .cal-estado.pend { background: #f1f5f9; color: #64748b; }
 .cal-rango { font-size: 0.8rem; color: #334155; display: flex; align-items: center; gap: 8px; }
 .cal-quitar { background: white; border: 1px solid #fecaca; color: #b91c1c; border-radius: 7px; padding: 3px 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
+.cal-sinmov-btn { background: white; border: 1px solid #cbd5e1; color: #475569; border-radius: 7px; padding: 3px 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
+.cal-sinmov { margin-top: 18px; border-top: 1px dashed #cbd5e1; padding-top: 12px; }
+.cal-sinmov summary { cursor: pointer; font-size: 0.82rem; font-weight: 800; color: #64748b; }
+.cal-sinmov-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; margin-top: 8px; border-radius: 10px; background: #f8fafc; color: #64748b; }
 .cal-dias { display: flex; gap: 2px; flex-wrap: wrap; max-width: 280px; }
 .cal-dot { width: 8px; height: 8px; border-radius: 2px; background: #e2e8f0; }
 .cal-dot.on { background: #10b981; }
@@ -62,6 +66,7 @@
                 <div class="cal-resumen">{{ $cal['completas'] }} de {{ $cal['total'] }} cuentas conciliadas el mes completo</div>
             </div>
             <div class="cal-nav">
+                <a href="{{ route('finanzas.calendario_conciliaciones.pdf', ['cal_mes' => $cal['mes']]) }}">Descargar PDF</a>
                 <a href="{{ route('finanzas.calendario_conciliaciones', ['cal_mes' => $cal['anterior']]) }}">←</a>
                 <a href="{{ route('finanzas.calendario_conciliaciones', ['cal_mes' => $cal['siguiente']]) }}">→</a>
             </div>
@@ -129,6 +134,16 @@
                             </a>
                             <div style="margin-top:6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <span class="cal-estado {{ $estado }}">{{ $estadoTexto }}</span>
+                                @if(! $fila['completo'])
+                                    <form action="{{ route('finanzas.conciliaciones.periodos.sin_movimientos') }}" method="POST" style="margin:0;"
+                                          onsubmit="return confirm('¿Quitar {{ $fila['banco'] }} · {{ $fila['titular'] }} de {{ $cal['titulo'] }} por no tener movimientos?');">
+                                        @csrf
+                                        <input type="hidden" name="banco" value="{{ $fila['banco'] }}">
+                                        <input type="hidden" name="titular" value="{{ $fila['titular'] }}">
+                                        <input type="hidden" name="mes" value="{{ $cal['mes'] }}">
+                                        <button type="submit" class="cal-sinmov-btn">Sin movimientos</button>
+                                    </form>
+                                @endif
                                 @foreach($fila['rangos'] as $rango)
                                     <span class="cal-rango">
                                         {{ \Carbon\Carbon::parse($rango['desde'])->format('d/m/Y') }} – {{ \Carbon\Carbon::parse($rango['hasta'])->format('d/m/Y') }}
@@ -151,6 +166,22 @@
                     <div class="alert-info" style="margin:0;">No hay cuentas bancarias para mostrar en el calendario.</div>
                 @endforelse
             </div>
+
+            @if(! empty($cal['sin_movimientos']))
+                <details class="cal-sinmov">
+                    <summary>Sin movimientos en {{ $cal['titulo'] }} ({{ count($cal['sin_movimientos']) }})</summary>
+                    @foreach($cal['sin_movimientos'] as $cuenta)
+                        <div class="cal-sinmov-item">
+                            <span><strong>{{ $cuenta['banco'] }}</strong> · {{ $cuenta['titular'] }}</span>
+                            <form action="{{ route('finanzas.conciliaciones.periodos.destroy', $cuenta['cierre_id']) }}" method="POST" style="margin:0;">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="cal-sinmov-btn">Volver a mostrar</button>
+                            </form>
+                        </div>
+                    @endforeach
+                </details>
+            @endif
         </div>
     </div>
 </div>
