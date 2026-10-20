@@ -962,24 +962,74 @@ document.addEventListener('keydown', function (e) {
     @endunless
 
     // --- LÓGICA PARA ACTUALIZAR IMAGEN VÍA URL ---
-    async function pedirUrlImagen(codigo, nombre) {
-        nombre = String(nombre || '').replace(/^[\/\s]+/, '').trim();
-        // El texto de un prompt() no se puede seleccionar: el nombre se copia solo al portapapeles.
-        let copiado = false;
-        if (nombre && navigator.clipboard && window.isSecureContext) {
-            try {
-                await navigator.clipboard.writeText(nombre);
-                copiado = true;
-            } catch (e) {
-                copiado = false;
+    // Ventana propia (no prompt()): sigue abierta al cambiar de pestaña y el nombre
+    // solo se copia al pulsar el botón, para no pisar el enlace que el usuario copió.
+    function modalImagenUrl() {
+        let wrap = document.getElementById('img-url-modal');
+        if (wrap) return wrap;
+        wrap = document.createElement('div');
+        wrap.id = 'img-url-modal';
+        wrap.style.cssText = 'display:none;position:fixed;inset:0;z-index:2000;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:16px;';
+        wrap.innerHTML = ''
+            + '<div style="background:#fff;border-radius:12px;width:min(480px,100%);padding:18px 20px;box-shadow:0 20px 40px rgba(0,0,0,.25);font-family:inherit;">'
+            + '  <h3 style="margin:0 0 10px;font-size:1.05rem;color:#1e3a8a;">Cambiar imagen</h3>'
+            + '  <div style="font-size:.75rem;color:#64748b;text-transform:uppercase;font-weight:700;">Producto</div>'
+            + '  <div style="display:flex;gap:8px;align-items:center;margin:4px 0 14px;">'
+            + '    <input type="text" readonly data-campo="nombre" style="flex:1;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;font-size:.9rem;">'
+            + '    <button type="button" data-accion="copiar" style="padding:8px 12px;border:1px solid #1e3a8a;border-radius:8px;background:#fff;color:#1e3a8a;font-weight:700;cursor:pointer;white-space:nowrap;">Copiar nombre</button>'
+            + '  </div>'
+            + '  <div style="font-size:.75rem;color:#64748b;text-transform:uppercase;font-weight:700;">Enlace de la nueva imagen (.jpg o .png)</div>'
+            + '  <input type="url" data-campo="url" placeholder="Pega aquí la dirección de la imagen" style="width:100%;box-sizing:border-box;margin:4px 0 16px;padding:9px 10px;border:1.5px solid #93c5fd;border-radius:8px;font-size:.9rem;">'
+            + '  <div style="display:flex;justify-content:flex-end;gap:8px;">'
+            + '    <button type="button" data-accion="cancelar" style="padding:9px 14px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-weight:700;cursor:pointer;">Cancelar</button>'
+            + '    <button type="button" data-accion="guardar" style="padding:9px 14px;border:0;border-radius:8px;background:#1e3a8a;color:#fff;font-weight:700;cursor:pointer;">Guardar imagen</button>'
+            + '  </div>'
+            + '</div>';
+        document.body.appendChild(wrap);
+
+        const campoNombre = wrap.querySelector('[data-campo="nombre"]');
+        const campoUrl = wrap.querySelector('[data-campo="url"]');
+        const btnCopiar = wrap.querySelector('[data-accion="copiar"]');
+        const cerrar = () => { wrap.style.display = 'none'; };
+
+        wrap.addEventListener('click', e => { if (e.target === wrap) cerrar(); });
+        wrap.querySelector('[data-accion="cancelar"]').addEventListener('click', cerrar);
+        btnCopiar.addEventListener('click', async () => {
+            let ok = false;
+            if (navigator.clipboard && window.isSecureContext) {
+                try { await navigator.clipboard.writeText(campoNombre.value); ok = true; } catch (e) { ok = false; }
             }
-        }
-        const encabezado = nombre
-            ? 'Producto: ' + nombre + (copiado ? '\n(nombre copiado: pégalo en el buscador de imágenes)' : '') + '\n\n'
-            : '';
-        const nuevaUrl = prompt(encabezado + 'Pega aquí el enlace de la nueva imagen (debe terminar en .jpg o .png):');
-        if (!nuevaUrl || nuevaUrl.trim() === '') return;
-        
+            if (!ok) {
+                campoNombre.select();
+                ok = document.execCommand && document.execCommand('copy');
+            }
+            btnCopiar.textContent = ok ? '¡Copiado!' : 'Selecciónalo y copia';
+            setTimeout(() => { btnCopiar.textContent = 'Copiar nombre'; }, 1800);
+        });
+        wrap.querySelector('[data-accion="guardar"]').addEventListener('click', () => {
+            const url = campoUrl.value.trim();
+            if (!url) { campoUrl.focus(); return; }
+            cerrar();
+            subirImagenUrl(wrap.dataset.codigo, url);
+        });
+        campoUrl.addEventListener('keydown', e => {
+            if (e.key === 'Enter') wrap.querySelector('[data-accion="guardar"]').click();
+            if (e.key === 'Escape') cerrar();
+        });
+
+        return wrap;
+    }
+
+    function pedirUrlImagen(codigo, nombre) {
+        const wrap = modalImagenUrl();
+        wrap.dataset.codigo = codigo;
+        wrap.querySelector('[data-campo="nombre"]').value = String(nombre || '').replace(/^[\/\s.]+/, '').trim();
+        wrap.querySelector('[data-campo="url"]').value = '';
+        wrap.style.display = 'flex';
+        wrap.querySelector('[data-campo="url"]').focus();
+    }
+
+    async function subirImagenUrl(codigo, nuevaUrl) {
         try {
             // Mostrar estado de carga usando un toast o alert temporal
             window.showStatusMessage ? window.showStatusMessage('Descargando y subiendo imagen...', false) : console.log('Subiendo...');

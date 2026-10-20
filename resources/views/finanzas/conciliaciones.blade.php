@@ -475,7 +475,10 @@
                                     {{ $row['tipo'] == 'cargo' ? 'CARGO' : 'ABONO' }}
                                 </span>
                             </td>
-                            <td class="monto-cell monto-red">Bs. {{ number_format($row['monto'], 2) }}</td>
+                            @php $esEgreso = ($row['tipo'] ?? 'cargo') === 'cargo'; @endphp
+                            <td class="monto-cell {{ $esEgreso ? 'monto-red' : 'monto-green' }}">
+                                {{ $esEgreso ? '−' : '+' }}Bs. {{ number_format(abs((float) $row['monto']), 2) }}
+                            </td>
                             <td style="text-align:center;">
                                 <form action="{{ route('finanzas.conciliaciones.marcar_comision') }}" method="POST" style="display:inline;" title="Marcar como comisión bancaria" onclick="event.stopPropagation()">
                                     @csrf
@@ -494,7 +497,15 @@
                     </tbody>
                 </table>
                 @if($d['sin_registrar']->count() > 0)
-                <div class="section-footer">Total: Bs. {{ number_format($d['total_sin_registrar'], 2) }}</div>
+                @php
+                    $ingresosBanco = (float) $d['sin_registrar']->where('tipo', 'abono')->sum(fn ($r) => abs((float) $r['monto']));
+                    $egresosBanco = (float) $d['sin_registrar']->where('tipo', '!=', 'abono')->sum(fn ($r) => abs((float) $r['monto']));
+                @endphp
+                <div class="section-footer">
+                    <span class="monto-green">Ingresos +Bs. {{ number_format($ingresosBanco, 2) }}</span>
+                    · <span class="monto-red">Egresos −Bs. {{ number_format($egresosBanco, 2) }}</span>
+                    · Neto: Bs. {{ number_format($ingresosBanco - $egresosBanco, 2) }}
+                </div>
                 @endif
                 </div>
             </div>
