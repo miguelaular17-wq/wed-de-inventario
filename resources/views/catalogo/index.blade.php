@@ -685,7 +685,7 @@
                     @endif
                     @if(!$modoCliente && auth()->check() && auth()->user()->role === 'vendedor')
                         <button type="button" 
-                                onclick="event.stopPropagation(); pedirUrlImagen('{{ $primary_code }}')"
+                                onclick="event.stopPropagation(); pedirUrlImagen('{{ $primary_code }}', this.closest('.product-card').dataset.producto)"
                                 style="position: absolute; top: 6px; right: 6px; background: rgba(255,255,255,0.94); border: 1px solid #cbd5e1; border-radius: 6px; padding: 2px 6px; font-size: 0.72rem; cursor: pointer; color: #1e3a8a;">
                             🔗
                         </button>
@@ -962,8 +962,22 @@ document.addEventListener('keydown', function (e) {
     @endunless
 
     // --- LÓGICA PARA ACTUALIZAR IMAGEN VÍA URL ---
-    async function pedirUrlImagen(codigo) {
-        const nuevaUrl = prompt('Pega aquí el enlace de la nueva imagen (debe terminar en .jpg o .png):');
+    async function pedirUrlImagen(codigo, nombre) {
+        nombre = String(nombre || '').replace(/^[\/\s]+/, '').trim();
+        // El texto de un prompt() no se puede seleccionar: el nombre se copia solo al portapapeles.
+        let copiado = false;
+        if (nombre && navigator.clipboard && window.isSecureContext) {
+            try {
+                await navigator.clipboard.writeText(nombre);
+                copiado = true;
+            } catch (e) {
+                copiado = false;
+            }
+        }
+        const encabezado = nombre
+            ? 'Producto: ' + nombre + (copiado ? '\n(nombre copiado: pégalo en el buscador de imágenes)' : '') + '\n\n'
+            : '';
+        const nuevaUrl = prompt(encabezado + 'Pega aquí el enlace de la nueva imagen (debe terminar en .jpg o .png):');
         if (!nuevaUrl || nuevaUrl.trim() === '') return;
         
         try {
