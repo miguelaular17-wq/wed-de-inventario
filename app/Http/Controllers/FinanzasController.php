@@ -3008,10 +3008,15 @@ class FinanzasController extends Controller
             ->diff($lineas_comisiones)
             ->diff($lineas_compra_divisas)
             ->filter(fn ($l) => $classifier->esPagoCredito($l->descripcion));
+        // Igual que la pantalla: los abonos de lotes de punto de venta se concilian en la página de lotes.
+        $lineas_lotes = $lineas_banco->filter(
+            fn ($l) => $matcher->esAbonoLotePuntoVenta($l->descripcion, $l->referencia)
+        );
         $lineas_normales = $lineas_banco
             ->diff($lineas_comisiones)
             ->diff($lineas_compra_divisas)
-            ->diff($lineas_pago_credito);
+            ->diff($lineas_pago_credito)
+            ->diff($lineas_lotes);
 
         $conciliados = $lineas_normales->where('estado', 'conciliado')
             ->map(function($l) {

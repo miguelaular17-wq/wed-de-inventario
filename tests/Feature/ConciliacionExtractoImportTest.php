@@ -267,7 +267,7 @@ class ConciliacionExtractoImportTest extends TestCase
         $user = $this->makeUser(User::ROLE_CONTABILIDAD);
         $base = [
             'banco' => 'VENEZUELA', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-16',
-            'descripcion' => 'LIQ.TARJETA DEBITO MAESTRO BDV', 'referencia' => '1742502415086',
+            'descripcion' => 'TRANSFERENCIA RECIBIDA DE TERCEROS', 'referencia' => '1742502415086',
             'tipo' => 'abono',
         ];
         ConciliacionLinea::create($base + ['monto' => 4080.51, 'estado' => 'conciliado']);
@@ -300,6 +300,48 @@ class ConciliacionExtractoImportTest extends TestCase
         $this->assertCount(1, $capturado['conciliados']);
         $this->assertCount(1, $capturado['sin_registrar']);
         $this->assertEquals(17688.99, (float) $capturado['sin_registrar'][0]['monto']);
+    }
+
+    public function test_pdf_no_lista_cancelacion_resumen_de_ventas_como_movimiento_del_banco(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-31',
+            'descripcion' => 'CANCELACION RESUMEN DE VENTAS Y RETENCIO', 'referencia' => '14502001242',
+            'monto' => 792900.62, 'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+        ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-30',
+            'descripcion' => 'CANCELACION RESUMEN DE VENTAS Y RETENCIO', 'referencia' => '14502001241',
+            'monto' => 1450449.09, 'estado' => 'conciliado', 'tipo' => 'abono',
+        ]);
+        ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-31',
+            'descripcion' => 'CREDITO INMEDIATO CAMARA DE COMPENSACION', 'referencia' => '20490581436',
+            'monto' => 15912.00, 'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+
+        $capturado = null;
+        $pdf = \Mockery::mock(\Barryvdh\DomPDF\PDF::class);
+        $pdf->shouldReceive('setPaper')->andReturnSelf();
+        $pdf->shouldReceive('download')->andReturn(response('pdf'));
+        \Barryvdh\DomPDF\Facade\Pdf::shouldReceive('loadView')->once()
+            ->andReturnUsing(function ($vista, $datos) use (&$capturado, $pdf) {
+                $capturado = $datos['data'];
+
+                return $pdf;
+            });
+
+        $this->actingAs($user)
+            ->get(route('finanzas.conciliaciones.reporte-banco', [
+                'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ',
+                'fecha_desde' => '2026-08-01', 'fecha_hasta' => '2026-08-31',
+            ]))
+            ->assertOk();
+
+        $this->assertCount(1, $capturado['sin_registrar']);
+        $this->assertSame('20490581436', $capturado['sin_registrar'][0]['referencia']);
+        $this->assertCount(0, $capturado['conciliados']);
     }
 
     public function test_estado_importacion_solo_visible_al_dueno_o_admin(): void

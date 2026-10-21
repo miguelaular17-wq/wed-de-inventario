@@ -572,6 +572,18 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertSame(2470, $reemplazo->id);
     }
 
+    public function test_mercantil_cancelacion_resumen_de_ventas_es_lote_pos(): void
+    {
+        $this->assertTrue($this->matcher->esAbonoLotePuntoVenta(
+            'CANCELACION RESUMEN DE VENTAS Y RETENCIO',
+            '14502001242'
+        ));
+        $this->assertFalse($this->matcher->esAbonoLotePuntoVenta(
+            'CREDITO INMEDIATO CAMARA DE COMPENSACION',
+            '20490581436'
+        ));
+    }
+
     public function test_detecta_abono_banesco_con_l_punto_como_lote_pos(): void
     {
         $this->assertTrue($this->matcher->esAbonoLotePuntoVenta(

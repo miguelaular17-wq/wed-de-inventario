@@ -633,6 +633,8 @@ class BankReconciliationMatcher
             't/credito vs/mc',
             't/crédito vs/mc',
             'pos:',
+            // Mercantil: "CANCELACION RESUMEN DE VENTAS Y RETENCIO" (el cargo "DESCUENTO TARJETA" es la comisión).
+            'resumen de venta',
         ];
 
         foreach ($needles as $needle) {
