@@ -50,6 +50,7 @@ use App\Http\Controllers\Nomina\MercanciaController;
 use App\Http\Controllers\Nomina\OrganizacionController;
 use App\Http\Controllers\Nomina\PeriodoController;
 use App\Http\Controllers\Nomina\PrestamoController;
+use App\Http\Controllers\Nomina\ReporteTrabajadorController;
 use App\Http\Controllers\Nomina\RetencionController;
 use App\Http\Controllers\Nomina\SedeNominaController;
 use Illuminate\Support\Facades\Route;
@@ -443,6 +444,9 @@ Route::middleware(['auth', 'permission:nomina,nomina.comisiones'])->prefix('nomi
     Route::get('/comisiones/{periodo}/banco/{empresa}', [ComisionController::class, 'exportarBanco'])->name('comisiones.banco');
 
     Route::get('/retenciones', [RetencionController::class, 'index'])->name('retenciones.index');
+
+    Route::get('/reportes', [ReporteTrabajadorController::class, 'index'])->name('reportes.index');
+    Route::get('/reportes/trabajador.pdf', [ReporteTrabajadorController::class, 'pdf'])->name('reportes.trabajador_pdf');
 });
 
 Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina.')->group(function () {
@@ -622,6 +626,7 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::get('/conciliaciones/lotes', [FinanzasController::class, 'lotesPuntoVenta'])->name('finanzas.conciliaciones.lotes');
     Route::post('/conciliaciones/lotes/manual', [FinanzasController::class, 'conciliarLoteManual'])->name('finanzas.conciliaciones.lotes.manual');
     Route::post('/conciliaciones/upload', [FinanzasController::class, 'uploadConciliacion'])->name('finanzas.conciliaciones.upload');
+    Route::get('/conciliaciones/importaciones/{importacion}', [FinanzasController::class, 'estadoImportacion'])->whereNumber('importacion')->name('finanzas.conciliaciones.importaciones.show');
     Route::post('/conciliaciones/medios-pago', [FinanzasController::class, 'uploadMediosPago'])->name('finanzas.conciliaciones.medios_pago');
     Route::post('/conciliaciones/process', [FinanzasController::class, 'processConciliacion'])->name('finanzas.conciliaciones.process');
     Route::post('/conciliaciones/add-missing', [App\Http\Controllers\FinanzasController::class, 'addMissingConciliacion'])->name('finanzas.conciliaciones.add_missing');

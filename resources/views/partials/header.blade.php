@@ -322,6 +322,7 @@
         if ($u->canAccess('nomina.comisiones')) {
             $nominaItems[] = $link('Comisiones', route('nomina.comisiones.index'), request()->routeIs('nomina.comisiones.*'));
             $nominaItems[] = $link('Retenciones', route('nomina.retenciones.index'), request()->routeIs('nomina.retenciones.*'));
+            $nominaItems[] = $link('Reportes', route('nomina.reportes.index'), request()->routeIs('nomina.reportes.*'));
         }
         if ($u->canAccess('nomina.faltante_caja') && ! $u->canAccess('nomina')) {
             $nominaItems[] = $link('Faltante de caja', route('nomina.faltante_caja.index'), request()->routeIs('nomina.faltante_caja.*'));

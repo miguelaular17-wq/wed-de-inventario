@@ -12,6 +12,8 @@ class ConciliacionLinea extends Model
         'session_id', 'tipo',
         'tesoreria_ingreso_id',
         'compra_divisa_id',
+        'importacion_id',
+        'fila_origen',
     ];
 
     protected $casts = [

@@ -59,5 +59,8 @@ RUN sed -ri -e 's!AllowOverride None!AllowOverride All!g' /etc/apache2/apache2.c
 # Expose default HTTP port
 EXPOSE 80
 
-# Run migrations and start Apache server
-CMD php artisan optimize:clear && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && apache2-foreground
+# Run migrations and start Apache server.
+# Con RUN_QUEUE_WORKER=true también se levanta un worker de cola (se reinicia solo cada hora o si se cae).
+CMD php artisan optimize:clear && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force \
+    && if [ "$RUN_QUEUE_WORKER" = "true" ]; then (while true; do su -s /bin/sh www-data -c "php artisan queue:work --queue=conciliaciones,default --tries=3 --timeout=900 --max-time=3600 --sleep=3"; sleep 5; done) & fi \
+    && apache2-foreground

@@ -441,6 +441,7 @@
     {{-- BARRA DE BÚSQUEDA / FILTROS --}}
     <div id="barra-filtros-egresos" style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px; margin-bottom:14px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; box-shadow:0 1px 4px rgba(0,0,0,.05);">
         <input id="filtro-texto" type="text" placeholder="🔍 Buscar motivo o tipo de gasto..." oninput="aplicarFiltros()" style="flex:1; min-width:180px; padding:7px 12px; border:1px solid #cbd5e1; border-radius:7px; font-size:0.875rem; outline:none;">
+        <input id="filtro-referencia" type="search" inputmode="numeric" autocomplete="off" placeholder="# Buscar referencia..." oninput="aplicarFiltros()" style="flex:1; min-width:150px; padding:7px 12px; border:1px solid #cbd5e1; border-radius:7px; font-size:0.875rem; outline:none;">
         <input id="filtro-banco" type="text" placeholder="🏦 Buscar banco..." oninput="aplicarFiltros()" style="flex:1; min-width:120px; padding:7px 12px; border:1px solid #cbd5e1; border-radius:7px; font-size:0.875rem; outline:none;">
         <input id="filtro-beneficiario" type="text" placeholder="👤 Buscar beneficiario..." oninput="aplicarFiltros()" style="flex:1; min-width:120px; padding:7px 12px; border:1px solid #cbd5e1; border-radius:7px; font-size:0.875rem; outline:none;">
         <select id="filtro-cat" onchange="aplicarFiltros()" style="flex:1; min-width:160px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:7px; font-size:0.875rem; background:#f8fafc;">
@@ -471,7 +472,7 @@
                 </thead>
                 <tbody>
                     @forelse($egresos_realizados as $mov)
-                        <tr data-egreso-cat="egreso_realizado">
+                        <tr data-egreso-cat="egreso_realizado" data-referencia="{{ $mov->referencia }}">
                             <td>{{ $mov->fecha }}</td>
                             <td>
                                 <div style="display: flex; gap: 15px; align-items: center;">
@@ -616,7 +617,7 @@
                 </thead>
                 <tbody>
                     @forelse($otros_egresos as $mov)
-                        <tr data-egreso-cat="otros_egresos">
+                        <tr data-egreso-cat="otros_egresos" data-referencia="{{ $mov->referencia }}">
                             <td>{{ $mov->fecha }}</td>
                             <td>
                                 <div style="display: flex; gap: 15px; align-items: center;">
@@ -736,7 +737,7 @@
                     </thead>
                     <tbody>
                         @forelse($egresos_divisas as $mov)
-                            <tr data-egreso-cat="egreso_divisas">
+                            <tr data-egreso-cat="egreso_divisas" data-referencia="{{ $mov->referencia }}">
                                 <td>{{ $mov->fecha }}</td>
                                 <td>
                                     <strong style="color: #166534;">{{ $mov->banco }}</strong><br>
@@ -895,7 +896,7 @@
                 </thead>
                 <tbody>
                     @forelse($traslados as $mov)
-                        <tr data-egreso-cat="traslados">
+                        <tr data-egreso-cat="traslados" data-referencia="{{ $mov->referencia }}">
                             <td>{{ $mov->fecha }}</td>
                             <td>
                                 <strong style="color: #7c3aed;">{{ $mov->banco }}</strong><br>
@@ -1547,9 +1548,11 @@ function descargarReporteBusqueda(formato) {
         const fDesde = document.getElementById('fecha_desde_input')?.value || '';
         const fHasta = document.getElementById('fecha_hasta_input')?.value || '';
         const txt = document.getElementById('filtro-texto')?.value || '';
+        const ref = document.getElementById('filtro-referencia')?.value || '';
         const cats = result.value || [];
         let url = '{{ route("finanzas.flujo_caja.reporte") }}?desde=' + encodeURIComponent(fDesde) + '&hasta=' + encodeURIComponent(fHasta);
         if (txt) url += '&q=' + encodeURIComponent(txt);
+        if (ref) url += '&ref=' + encodeURIComponent(ref);
         url += '&cats=' + encodeURIComponent(cats.join(','));
         url += '&formato=' + encodeURIComponent(formato);
         window.open(url, '_blank');
@@ -3102,6 +3105,7 @@ function aplicarFiltros() {
     const texto = (document.getElementById('filtro-texto')?.value || '').toLowerCase().trim();
     const banco = (document.getElementById('filtro-banco')?.value || '').toLowerCase().trim();
     const beneficiario = (document.getElementById('filtro-beneficiario')?.value || '').toLowerCase().trim();
+    const referencia = normalizarReferencia(document.getElementById('filtro-referencia')?.value || '');
     const cat = document.getElementById('filtro-cat')?.value || '';
 
     // Map section identifiers
@@ -3123,28 +3127,36 @@ function aplicarFiltros() {
         const textMatch = !texto || rowText.includes(texto);
         const bancoMatch = !banco || rowText.includes(banco);
         const beneficiarioMatch = !beneficiario || rowText.includes(beneficiario);
+        const referenciaMatch = !referencia || normalizarReferencia(tr.dataset.referencia || '').includes(referencia);
         
-        const show = catMatch && textMatch && bancoMatch && beneficiarioMatch;
+        const show = catMatch && textMatch && bancoMatch && beneficiarioMatch && referenciaMatch;
         tr.style.display = show ? '' : 'none';
         if (show) visible++;
     });
 
     const contador = document.getElementById('filtro-contador');
     if (contador) {
-        contador.textContent = texto || cat || banco || beneficiario
+        contador.textContent = texto || cat || banco || beneficiario || referencia
             ? `Mostrando ${visible} de ${total} registros`
             : '';
     }
+}
+
+// Ignora espacios, guiones y mayúsculas: "0012-345" encuentra "0012345".
+function normalizarReferencia(valor) {
+    return String(valor).toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 function limpiarFiltros() {
     const txt = document.getElementById('filtro-texto');
     const txtBanco = document.getElementById('filtro-banco');
     const txtBeneficiario = document.getElementById('filtro-beneficiario');
+    const txtReferencia = document.getElementById('filtro-referencia');
     const cat = document.getElementById('filtro-cat');
     if (txt) txt.value = '';
     if (txtBanco) txtBanco.value = '';
     if (txtBeneficiario) txtBeneficiario.value = '';
+    if (txtReferencia) txtReferencia.value = '';
     if (cat) cat.value = '';
     aplicarFiltros();
 }

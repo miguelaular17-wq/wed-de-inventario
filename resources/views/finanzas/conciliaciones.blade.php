@@ -169,6 +169,67 @@
         <div class="alert-success" style="background:#fef2f2;color:#991b1b;border-color:#fca5a5;">⚠️ {{ session('error') }}</div>
     @endif
 
+    @if(($importacionesRecientes ?? collect())->isNotEmpty())
+        <div class="bank-card" id="importaciones-panel" style="padding:14px 18px;">
+            <div style="font-weight:800;color:#0f172a;margin-bottom:8px;">Archivos cargados recientemente</div>
+            <table class="mini-table">
+                <thead>
+                    <tr>
+                        <th>Archivo</th>
+                        <th>Estado</th>
+                        <th style="text-align:right">Leídas</th>
+                        <th style="text-align:right">Importadas</th>
+                        <th style="text-align:right">Ya cargadas</th>
+                        <th style="text-align:right">Conciliadas</th>
+                        <th style="text-align:right">Por conciliar</th>
+                        <th style="text-align:right">Rechazadas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($importacionesRecientes as $imp)
+                        @php
+                            $colorEstado = match ($imp->estado) {
+                                \App\Models\ConciliacionImportacion::COMPLETADA => '#059669',
+                                \App\Models\ConciliacionImportacion::COMPLETADA_CON_PENDIENTES => '#b45309',
+                                \App\Models\ConciliacionImportacion::FALLIDA => '#dc2626',
+                                default => '#2563eb',
+                            };
+                        @endphp
+                        @php $impTerminada = $imp->terminada() && ! \Illuminate\Support\Facades\Cache::has(\App\Jobs\ProcesarImportacionExtracto::llaveConciliando($imp->id)); @endphp
+                        <tr data-importacion="{{ $imp->id }}" data-terminada="{{ $impTerminada ? '1' : '0' }}"
+                            data-url="{{ route('finanzas.conciliaciones.importaciones.show', $imp) }}">
+                            <td style="font-size:0.82rem;">
+                                <strong>{{ \Illuminate\Support\Str::limit($imp->archivo_nombre, 40) }}</strong>
+                                <div style="color:#64748b;">{{ $imp->banco }} · {{ $imp->titular }} · {{ $imp->created_at?->format('d/m H:i') }}</div>
+                                <div class="imp-mensaje" style="color:#64748b;">{{ $imp->mensaje }}</div>
+                            </td>
+                            <td><span class="imp-estado" style="font-weight:800;color:{{ $colorEstado }};">{{ $imp->etiquetaEstado() }}</span></td>
+                            <td class="imp-leidas" style="text-align:right">{{ number_format($imp->filas_leidas) }}</td>
+                            <td class="imp-importadas" style="text-align:right">{{ number_format($imp->filas_importadas) }}</td>
+                            <td class="imp-duplicadas" style="text-align:right">{{ number_format($imp->filas_duplicadas) }}</td>
+                            <td class="imp-conciliadas" style="text-align:right">{{ number_format($imp->filas_conciliadas) }}</td>
+                            <td class="imp-pendientes" style="text-align:right">{{ number_format($imp->filas_pendientes) }}</td>
+                            <td class="imp-rechazadas" style="text-align:right">
+                                {{ number_format($imp->filas_rechazadas) }}
+                                @if(! empty($imp->rechazos))
+                                    <details style="text-align:left;font-size:0.78rem;">
+                                        <summary style="cursor:pointer;color:#b45309;">Ver motivos</summary>
+                                        @foreach(array_slice($imp->rechazos, 0, 50) as $r)
+                                            <div>Fila {{ $r['fila'] }}: {{ $r['motivo'] }}</div>
+                                        @endforeach
+                                        @if(count($imp->rechazos) > 50 || $imp->filas_rechazadas > count($imp->rechazos))
+                                            <div style="color:#64748b;">…y otras {{ $imp->filas_rechazadas - min(50, count($imp->rechazos)) }}</div>
+                                        @endif
+                                    </details>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+
     @if($requiereFiltro ?? false)
         <div class="alert-info">
             Elige la fecha desde, la fecha hasta y el banco, y pulsa Filtrar.<br>
@@ -695,6 +756,43 @@
 {{-- MEDIOS DE PAGO BDV se carga en Lotes punto de venta --}}
 {{-- Mapa banco → titulares (generado desde PHP/BD) --}}
 <script>
+// Avance de importaciones en segundo plano: consulta cada 3 s mientras alguna siga en curso.
+(function () {
+    const filas = () => [...document.querySelectorAll('tr[data-importacion][data-terminada="0"]')];
+    if (!filas().length) return;
+    const colores = { completada: '#059669', completada_con_pendientes: '#b45309', fallida: '#dc2626' };
+    const fmt = n => Number(n || 0).toLocaleString('es-VE');
+    let terminoAlguna = false;
+    const tick = async () => {
+        const pendientes = filas();
+        if (!pendientes.length) {
+            if (terminoAlguna) window.location.reload();
+            return;
+        }
+        await Promise.all(pendientes.map(async tr => {
+            try {
+                const r = await fetch(tr.dataset.url, { headers: { 'Accept': 'application/json' } });
+                if (!r.ok) return;
+                const d = await r.json();
+                tr.querySelector('.imp-estado').textContent = d.estado_texto;
+                tr.querySelector('.imp-estado').style.color = colores[d.estado] || '#2563eb';
+                tr.querySelector('.imp-leidas').textContent = fmt(d.filas_leidas);
+                tr.querySelector('.imp-importadas').textContent = fmt(d.filas_importadas);
+                tr.querySelector('.imp-duplicadas').textContent = fmt(d.filas_duplicadas);
+                tr.querySelector('.imp-conciliadas').textContent = fmt(d.filas_conciliadas);
+                tr.querySelector('.imp-pendientes').textContent = fmt(d.filas_pendientes);
+                tr.querySelector('.imp-mensaje').textContent = d.mensaje || '';
+                if (d.terminada) {
+                    tr.dataset.terminada = '1';
+                    terminoAlguna = true;
+                }
+            } catch (e) { /* se reintenta en el siguiente ciclo */ }
+        }));
+        setTimeout(tick, 3000);
+    };
+    setTimeout(tick, 2000);
+})();
+
 const titularesPorBanco = @json($titularesPorBanco);
 
 function filtrarTitulares(banco) {

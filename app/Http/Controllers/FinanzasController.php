@@ -25,7 +25,11 @@ class FinanzasController extends Controller
     ) {}
 
     /** @var array<string, array<string, true>> */
-    private array $clavesExtracto = [];
+    /** @var list<array<string, mixed>> */
+    private array $bufferExtracto = [];
+
+    /** @var array<string, mixed>|null */
+    private ?array $bufferContexto = null;
 
     private function getCuentas()
     {
@@ -248,62 +252,150 @@ class FinanzasController extends Controller
         return collect($filas)->pluck('id')->map(fn ($id) => (int) $id)->values();
     }
 
+    /**
+     * Imágenes, PDF de Bancaribe y bancos leídos por IA: las líneas se acumulan por archivo
+     * y se guardan juntas con el importador por bloques (misma regla de duplicados).
+     */
     private function guardarLineaExtracto(array $datos): bool
     {
-        $banco = strtoupper(trim((string) ($datos['banco'] ?? '')));
-        $titular = strtoupper(trim((string) ($datos['titular'] ?? '')));
-        $clave = $this->claveExtracto(
-            $banco,
-            $titular,
-            $datos['fecha'] ?? null,
-            $datos['monto'] ?? 0,
-            $datos['referencia'] ?? '',
-            $datos['descripcion'] ?? '',
-            $datos['tipo'] ?? ''
-        );
-
-        if (! isset($this->clavesExtracto[$banco.'|'.$titular])) {
-            $this->clavesExtracto[$banco.'|'.$titular] = [];
-            $existentes = \App\Models\ConciliacionLinea::query()
-                ->whereRaw('UPPER(TRIM(banco)) = ?', [$banco])
-                ->whereRaw("UPPER(TRIM(COALESCE(titular, ''))) = ?", [$titular])
-                ->get(['fecha', 'monto', 'referencia', 'descripcion', 'tipo']);
-            foreach ($existentes as $fila) {
-                $this->clavesExtracto[$banco.'|'.$titular][$this->claveExtracto(
-                    $banco,
-                    $titular,
-                    $fila->fecha,
-                    $fila->monto,
-                    $fila->referencia,
-                    $fila->descripcion,
-                    $fila->tipo
-                )] = true;
-            }
-        }
-
-        if (isset($this->clavesExtracto[$banco.'|'.$titular][$clave])) {
-            return false;
-        }
-
-        \App\Models\ConciliacionLinea::create($datos);
-        $this->clavesExtracto[$banco.'|'.$titular][$clave] = true;
+        $this->bufferExtracto[] = $datos;
 
         return true;
     }
 
-    private function claveExtracto($banco, $titular, $fecha, $monto, $referencia, $descripcion, $tipo): string
+    /**
+     * @param  list<\App\Models\ConciliacionImportacion>  $importaciones
+     */
+    private function volcarBufferExtracto(array &$importaciones): void
     {
-        $dia = $fecha instanceof \DateTimeInterface ? $fecha->format('Y-m-d') : substr((string) $fecha, 0, 10);
+        $lineas = $this->bufferExtracto;
+        $ctx = $this->bufferContexto;
+        $this->bufferExtracto = [];
+        if ($lineas === [] || $ctx === null) {
+            return;
+        }
 
-        return implode('|', [
-            strtoupper(trim((string) $banco)),
-            strtoupper(trim((string) $titular)),
-            $dia,
-            number_format(round((float) $monto, 2), 2, '.', ''),
-            trim((string) $referencia),
-            trim((string) $descripcion),
-            trim((string) $tipo),
+        $imp = \App\Models\ConciliacionImportacion::create([
+            'user_id' => auth()->id(),
+            'session_id' => $ctx['session_id'],
+            'banco' => $ctx['banco'],
+            'titular' => $ctx['titular'],
+            'archivo_nombre' => mb_substr((string) $ctx['nombre'], 0, 255),
+            'archivo_hash' => $ctx['hash'],
+            'extension' => $ctx['ext'],
+            'estado' => \App\Models\ConciliacionImportacion::PENDIENTE,
         ]);
+
+        $parser = app(\App\Services\Conciliacion\ExtractoParser::class);
+        $filas = (function () use ($lineas, $parser) {
+            foreach ($lineas as $i => $d) {
+                $fecha = $parser->normalizarFecha($d['fecha'] ?? '');
+                $monto = $parser->normalizarMonto($d['monto'] ?? null);
+                if ($fecha === null) {
+                    yield ['tipo' => 'rechazo', 'fila' => $i + 1, 'motivo' => 'Fecha inválida'];
+
+                    continue;
+                }
+                if ($monto === null || ltrim($monto, '-') === '0.00') {
+                    yield ['tipo' => 'rechazo', 'fila' => $i + 1, 'motivo' => 'Sin monto'];
+
+                    continue;
+                }
+                yield ['tipo' => 'linea', 'fila' => $i + 1, 'datos' => [
+                    'fecha' => $fecha,
+                    'descripcion' => mb_substr(trim((string) ($d['descripcion'] ?? '')), 0, 255),
+                    'referencia' => mb_substr(trim((string) ($d['referencia'] ?? '')), 0, 255),
+                    'monto' => ltrim($monto, '-'),
+                    'tipo' => ($d['tipo'] ?? '') === 'cargo' ? 'cargo' : 'abono',
+                ]];
+            }
+        })();
+
+        try {
+            $importaciones[] = app(\App\Services\Conciliacion\ExtractoImporter::class)->importarFilas($imp, $filas);
+        } catch (\Throwable $e) {
+            report($e);
+            $importer = app(\App\Services\Conciliacion\ExtractoImporter::class);
+            $importaciones[] = $importer->fallar($imp->refresh(), $importer->mensajeFalloInesperado($imp));
+        }
+    }
+
+    private function registrarImportacion(\Illuminate\Http\UploadedFile $file, string $ext, string $banco, string $titular, string $sessionId): \App\Models\ConciliacionImportacion
+    {
+        $path = $file->storeAs('conciliaciones', \Illuminate\Support\Str::uuid()->toString().'.'.$ext, 'local');
+
+        return \App\Models\ConciliacionImportacion::create([
+            'user_id' => auth()->id(),
+            'session_id' => $sessionId,
+            'banco' => $banco,
+            'titular' => $titular,
+            'archivo_nombre' => mb_substr($file->getClientOriginalName(), 0, 255),
+            'archivo_path' => $path,
+            'archivo_hash' => hash_file('sha256', $file->getRealPath()) ?: null,
+            'extension' => $ext,
+            'estado' => \App\Models\ConciliacionImportacion::PENDIENTE,
+        ]);
+    }
+
+    /**
+     * Procesa (o encola) las importaciones creadas y arma el mensaje para el usuario.
+     *
+     * @param  list<\App\Models\ConciliacionImportacion>  $importaciones
+     */
+    private function responderImportaciones(array $importaciones)
+    {
+        $async = (bool) config('conciliacion.import_async');
+        $enCola = 0;
+        foreach ($importaciones as $i => $imp) {
+            if ($imp->terminada()) {
+                continue;
+            }
+            if ($async) {
+                \App\Jobs\ProcesarImportacionExtracto::dispatch($imp->id)
+                    ->onQueue((string) config('conciliacion.import_queue', 'conciliaciones'));
+                $enCola++;
+
+                continue;
+            }
+            try {
+                \App\Jobs\ProcesarImportacionExtracto::dispatchSync($imp->id);
+            } catch (\Throwable $e) {
+                report($e);
+                $importer = app(\App\Services\Conciliacion\ExtractoImporter::class);
+                $importer->fallar($imp->refresh(), $importer->mensajeFalloInesperado($imp));
+                $importer->borrarArchivo($imp);
+            }
+            $importaciones[$i] = $imp->refresh();
+        }
+
+        $ids = array_map(fn ($imp) => $imp->id, $importaciones);
+        $importadas = array_sum(array_map(fn ($imp) => (int) $imp->filas_importadas, $importaciones));
+        $duplicadas = array_sum(array_map(fn ($imp) => (int) $imp->filas_duplicadas, $importaciones));
+        $rechazadas = array_sum(array_map(fn ($imp) => (int) $imp->filas_rechazadas, $importaciones));
+        $conciliadas = array_sum(array_map(fn ($imp) => (int) ($imp->filas_conciliadas ?? 0), $importaciones));
+        $fallidas = array_values(array_filter($importaciones, fn ($imp) => $imp->estado === \App\Models\ConciliacionImportacion::FALLIDA));
+
+        if ($enCola > 0) {
+            $mensaje = "Se recibieron {$enCola} archivo(s). Se están procesando en segundo plano; el avance aparece abajo.";
+        } else {
+            $mensaje = "Archivos procesados correctamente. Se registraron {$importadas} transacciones.";
+            if ($duplicadas > 0) {
+                $mensaje .= " {$duplicadas} ya estaban cargadas y no se volvieron a guardar.";
+            }
+            if ($conciliadas > 0) {
+                $mensaje .= " {$conciliadas} se conciliaron automáticamente.";
+            }
+            if ($rechazadas > 0) {
+                $mensaje .= " {$rechazadas} filas rechazadas (ver detalle abajo).";
+            }
+        }
+
+        $redirect = redirect()->route('finanzas.conciliaciones')->with('importaciones_ids', $ids);
+        if ($fallidas !== [] && $enCola === 0 && $importadas === 0) {
+            return $redirect->with('error', $fallidas[0]->mensaje ?: 'No se pudo procesar el archivo.');
+        }
+
+        return $redirect->with('success', $mensaje);
     }
 
     private function syncSaldoInicialDisponibilidad($resumen)
@@ -1363,6 +1455,7 @@ class FinanzasController extends Controller
                 'fecha_hasta' => $fecha_hasta,
                 'cierresMarcados' => collect(),
                 'requiereFiltro' => true,
+                'importacionesRecientes' => $this->importacionesRecientes(),
             ]);
         }
 
@@ -1393,178 +1486,10 @@ class FinanzasController extends Controller
         $lineas = $cargarLineas();
 
         // 3. Motor de emparejamiento automático (acotado para no tumbar la página)
-        $lineas_pendientes = $lineas->where('estado', 'pendiente')
-            ->whereNull('flujo_caja_id')
-            ->whereNull('tesoreria_ingreso_id');
-        if (\Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'compra_divisa_id')) {
-            $lineas_pendientes = $lineas_pendientes->whereNull('compra_divisa_id');
-        }
-        $lineas_pendientes = $lineas_pendientes->values();
-        if ($lineas_pendientes->count() > 0) {
-            $fecha_minima = $fecha_desde;
-            $fecha_maxima = $fecha_hasta;
-            
-            // Los traslados siguen disponibles tras marcar salida (para poder
-            // emparejar también el abono en el banco receptor).
-            $flujos_posibles = \App\Models\FlujoCaja::where(function ($query) {
-                    $query->where('es_conciliado', false)
-                        ->orWhere('categoria_egreso', 'traslados');
-                })
-                ->where('tipo', 'egreso')
-                ->where('fecha', '>=', $fecha_minima)
-                ->where('fecha', '<=', $fecha_maxima);
-            if ($banco_filtro) {
-                $variantesMatch = array_map(
-                    'strtolower',
-                    app(\App\Services\BankReconciliationMatcher::class)->variantesBanco($banco_filtro)
-                );
-                $flujos_posibles->where(function ($q) use ($variantesMatch) {
-                    $q->where(function ($banco) use ($variantesMatch) {
-                        foreach ($variantesMatch as $v) {
-                            $banco->orWhereRaw('LOWER(TRIM(banco)) = ?', [$v]);
-                        }
-                    })->orWhere(function ($receptor) use ($variantesMatch) {
-                        foreach ($variantesMatch as $v) {
-                            $receptor->orWhereRaw('LOWER(TRIM(banco_receptor)) = ?', [$v]);
-                        }
-                    });
-                });
-            }
-            $this->filtrarPorTitular($flujos_posibles, $titular_filtro);
-            $flujos_posibles = $flujos_posibles->limit(5000)->get();
-
-            $clavesEgreso = [];
-            foreach ($flujos_posibles as $flujoPend) {
-                $diaFlujo = $flujoPend->fecha instanceof \DateTimeInterface
-                    ? $flujoPend->fecha->format('Y-m-d')
-                    : substr((string) $flujoPend->fecha, 0, 10);
-                foreach ([$flujoPend->monto_bs ?? null, $flujoPend->monto ?? null] as $montoFlujo) {
-                    if ($montoFlujo === null || abs((float) $montoFlujo) < 0.004) {
-                        continue;
-                    }
-                    $clavesEgreso[$diaFlujo.'|'.(int) round(abs((float) $montoFlujo) * 100)] = true;
-                }
-            }
-            $lineas_pendientes = $lineas_pendientes
-                ->sortBy(function ($linea) use ($clavesEgreso) {
-                    $dia = $linea->fecha instanceof \DateTimeInterface
-                        ? $linea->fecha->format('Y-m-d')
-                        : substr((string) $linea->fecha, 0, 10);
-                    $clave = $dia.'|'.(int) round(abs((float) $linea->monto) * 100);
-                    $prio = (isset($clavesEgreso[$clave]) && $linea->esCargo()) ? 0 : 1;
-
-                    return [$prio, -((int) $linea->id)];
-                })
-                ->take(500)
-                ->values();
-
-            $comprasDivisasPosibles = \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')
-                ? \App\Models\CompraDivisa::where('es_conciliado', false)
-                    ->where('fecha', '>=', $fecha_minima)
-                    ->where('fecha', '<=', $fecha_maxima)
-                    ->tap(fn ($q) => $this->filtrarPorBanco($q, $banco_filtro))
-                    ->tap(fn ($q) => $this->filtrarPorTitular($q, $titular_filtro))
-                    ->get()
-                : collect();
-
-            $matcher = app(\App\Services\BankReconciliationMatcher::class);
-            $classifier = app(\App\Services\BankMovementClassifier::class);
-            $traslados = $flujos_posibles->filter(fn ($flujo) => $matcher->esTraslado($flujo));
-            $matcher->indexarTraslados($traslados);
-            $trasladosPorId = $traslados->keyBy('id');
-            $ladosTrasladosVinculados = [];
-            if ($traslados->isNotEmpty()) {
-                $lineasYaVinculadas = \App\Models\ConciliacionLinea::query()
-                    ->whereIn('flujo_caja_id', $traslados->pluck('id'))
-                    ->where('estado', 'conciliado')
-                    ->get(['id', 'flujo_caja_id', 'banco', 'titular', 'tipo', 'monto', 'fecha', 'descripcion', 'referencia']);
-
-                foreach ($lineasYaVinculadas as $lineaVinculada) {
-                    $traslado = $trasladosPorId->get($lineaVinculada->flujo_caja_id);
-                    if (! $traslado) {
-                        continue;
-                    }
-                    $lado = $matcher->ladoTraslado($lineaVinculada, $traslado);
-                    if ($lado !== null) {
-                        $ladosTrasladosVinculados[$traslado->id][$lado] = true;
-                    }
-                }
-            }
-
-            $cambios = false;
-            $flujosNormales = $flujos_posibles->reject(fn ($flujo) => $matcher->esTraslado($flujo))->values();
-            $matcher->indexarEgresos($flujosNormales);
-            foreach ($lineas_pendientes as $linea) {
-                if ($matcher->esAbonoLotePuntoVenta($linea->descripcion, $linea->referencia)) {
-                    continue;
-                }
-
-                $match         = null;
-                $isTesoreriaMatch = false;
-                $isCompraDivisaMatch = false;
-                $trasladosDisponibles = [];
-                foreach ($matcher->trasladosPorMonto($linea) as $flujo) {
-                    $lado = $matcher->ladoTraslado($linea, $flujo);
-                    if ($lado !== null && empty($ladosTrasladosVinculados[$flujo->id][$lado])) {
-                        $trasladosDisponibles[(int) $flujo->id] = $flujo;
-                    }
-                }
-
-                if ($linea->esAbono()) {
-                    $match = $matcher->mejorEgreso($linea, $trasladosDisponibles);
-                } else {
-                    if ($classifier->esCompraDivisas($linea->descripcion)) {
-                        $match = $matcher->mejorCompraDivisa($linea, $comprasDivisasPosibles);
-                        if ($match) {
-                            $isCompraDivisaMatch = true;
-                        }
-                    }
-                    if (! $match) {
-                        $candidatos = $matcher->candidatosEgreso($linea);
-                        foreach ($trasladosDisponibles as $flujo) {
-                            $candidatos[(int) $flujo->id] = $flujo;
-                        }
-                        $match = $matcher->mejorEgreso($linea, $candidatos);
-                    }
-                }
-
-                if ($match) {
-                    $linea->estado = 'conciliado';
-                    if ($isCompraDivisaMatch) {
-                        $linea->compra_divisa_id = $match->id;
-                        $comprasDivisasPosibles = $comprasDivisasPosibles->reject(fn ($c) => $c->id == $match->id);
-                    } else {
-                        $linea->flujo_caja_id = $match->id;
-                    }
-                    $linea->save();
-
-                    if ($isCompraDivisaMatch) {
-                        $match->es_conciliado = true;
-                    } elseif (! $isTesoreriaMatch && $matcher->esTraslado($match)) {
-                        $lado = $matcher->ladoTraslado($linea, $match);
-                        if ($lado !== null) {
-                            $ladosTrasladosVinculados[$match->id][$lado] = true;
-                        }
-                        // Sale de "En tránsito" al conciliar la salida (banco emisor).
-                        // La entrada en el banco receptor puede seguir emparejándose
-                        // porque los traslados permanecen en flujos_posibles.
-                        $match->es_conciliado = ! empty($ladosTrasladosVinculados[$match->id]['salida']);
-                    } else {
-                        $match->es_conciliado = true;
-                        if (! $isTesoreriaMatch && ! $isCompraDivisaMatch) {
-                            $flujos_posibles = $flujos_posibles->reject(fn ($f) => $f->id == $match->id);
-                            $flujosNormales = $flujosNormales->reject(fn ($f) => $f->id == $match->id);
-                            $matcher->retirarEgreso($match);
-                        }
-                    }
-                    $match->save();
-                    $cambios = true;
-                }
-            }
-
-            if ($cambios) {
-                $lineas = $cargarLineas();
-            }
+        $conciliadasAhora = app(\App\Services\Conciliacion\ConciliacionAutoMatcher::class)
+            ->conciliar($lineas, $fecha_desde, $fecha_hasta, $banco_filtro, $titular_filtro, 500);
+        if ($conciliadasAhora > 0) {
+            $lineas = $cargarLineas();
         }
 
         // Repara traslados ya vinculados por salida que quedaron en tránsito
@@ -1999,7 +1924,53 @@ class FinanzasController extends Controller
             'bancosActivos', 'data_por_banco', 'titularesPorBanco',
             'filtrosConciliacion', 'fecha_desde', 'fecha_hasta', 'cierresMarcados',
             'requiereFiltro'
-        ));
+        ) + ['importacionesRecientes' => $this->importacionesRecientes()]);
+    }
+
+    /**
+     * Últimas importaciones del usuario (para el panel de avance).
+     *
+     * @return \Illuminate\Support\Collection<int, \App\Models\ConciliacionImportacion>
+     */
+    private function importacionesRecientes()
+    {
+        if (! auth()->check() || ! \Illuminate\Support\Facades\Schema::hasTable('conciliacion_importaciones')) {
+            return collect();
+        }
+
+        return \App\Models\ConciliacionImportacion::query()
+            ->where('user_id', auth()->id())
+            ->where(function ($q) {
+                $q->where('created_at', '>=', now()->subDay())
+                    ->orWhereIn('estado', [\App\Models\ConciliacionImportacion::PENDIENTE, \App\Models\ConciliacionImportacion::PROCESANDO]);
+            })
+            ->latest('id')
+            ->limit(5)
+            ->get();
+    }
+
+    public function estadoImportacion(\App\Models\ConciliacionImportacion $importacion)
+    {
+        abort_unless($importacion->visiblePara(auth()->user()), 403);
+
+        return response()->json([
+            'id' => $importacion->id,
+            'archivo' => $importacion->archivo_nombre,
+            'banco' => $importacion->banco,
+            'titular' => $importacion->titular,
+            'estado' => $importacion->estado,
+            'estado_texto' => $importacion->etiquetaEstado(),
+            'terminada' => $importacion->terminada()
+                && ! \Illuminate\Support\Facades\Cache::has(\App\Jobs\ProcesarImportacionExtracto::llaveConciliando($importacion->id)),
+            'filas_leidas' => $importacion->filas_leidas,
+            'filas_importadas' => $importacion->filas_importadas,
+            'filas_duplicadas' => $importacion->filas_duplicadas,
+            'filas_rechazadas' => $importacion->filas_rechazadas,
+            'filas_conciliadas' => $importacion->filas_conciliadas,
+            'filas_pendientes' => $importacion->filas_pendientes,
+            'rechazos' => array_slice($importacion->rechazos ?? [], 0, 50),
+            'mensaje' => $importacion->mensaje,
+        ]);
     }
 
     public function calendarioConciliaciones(Request $request)
@@ -2249,112 +2220,8 @@ class FinanzasController extends Controller
         $banco_nombre  = $this->canonizarBanco($request->banco_seleccionado);
         $titular_nombre = strtoupper(trim($request->titular_seleccionado));
 
-        // ── Mapeo fijo de columnas por banco ─────────────────────────────────
-        // Basado en análisis real de los archivos de cada banco.
-        // col_monto: columna única (negativo=cargo, positivo=abono)
-        // col_cargo / col_abono: columnas separadas Debe/Haber
-        // start_row: índice 0-based de la primera fila con datos reales
-        // skip_desc_contains: palabras en descripción que indican filas a omitir (SALDO)
-        $bankMappings = [
-            // F[0]: vacío | F[5]: cabeceras | F[6]: datos
-            // Cols: [0]=vacío [1]=Fecha [2]=Descripción [3]=vacío [4]=Referencia [5]=Débito [6]=Crédito
-            'BANCAMIGA' => [
-                'start_row'       => 6,
-                'col_fecha'       => 1,
-                'col_referencia'  => 2,
-                'col_descripcion' => 3,
-                'col_monto'       => null,
-                'col_cargo'       => 4,   // Débito
-                'col_abono'       => 5,   // Crédito
-                'skip_desc'       => ['saldo inicial', 'saldo final', 'totales'],
-            ],
-            // CSV con separador ';': Fecha;Referencia;Descripción;Monto;...
-            // F[0]: cabecera | F[1..]: datos
-            'BANCARIBE' => [
-                'start_row'       => 1,
-                'col_fecha'       => 0,
-                'col_referencia'  => 1,
-                'col_descripcion' => 2,
-                'col_monto'       => null,
-                'col_cargo'       => 3,
-                'col_abono'       => 4,
-                'skip_desc'       => ['saldo inicial', 'saldo final'],
-            ],
-            // F[0]: Fecha|Referencia|Descripción|Monto|Balance — datos directos
-            'BANESCO' => [
-                'start_row'       => 1,
-                'col_fecha'       => 0,
-                'col_referencia'  => 1,
-                'col_descripcion' => 2,
-                'col_monto'       => 3,
-                'col_cargo'       => null,
-                'col_abono'       => null,
-                'skip_desc'       => ['saldo inicial', 'saldo final'],
-            ],
-            // CSV con separador ';' y comillas: Fecha;Ref;Desc;Importe;Saldo
-            // F[0]: cabecera | F[1..]: datos en col[0] como "fecha;ref;desc;importe;saldo"
-            'BBVA' => [
-                'start_row'       => 1,
-                'col_fecha'       => 0,
-                'col_referencia'  => 1,
-                'col_descripcion' => 2,
-                'col_monto'       => 3,   // Importe
-                'col_cargo'       => null,
-                'col_abono'       => null,
-                'skip_desc'       => ['saldo inicial', 'saldo final'],
-                'csv_semicolon'   => true,
-            ],
-            // F[15]: cabecera | F[16..]: datos
-            // Cols: [1]=Fecha [12]=Referencia [7]=Descripción [13]=Debe [15]=Haber [16]=Saldo
-            'BNC' => [
-                'start_row'       => 16,
-                'col_fecha'       => 1,
-                'col_referencia'  => 12,
-                'col_descripcion' => 7,
-                'col_monto'       => null,
-                'col_cargo'       => 13,  // Debe
-                'col_abono'       => 15,  // Haber
-                'skip_desc'       => ['saldo inicial', 'saldo final'],
-            ],
-            // Export actual: F[0]=cabecera | F[1..]=datos
-            // Export viejo: cabecera más abajo. Se reubica con detect_header.
-            // Cols: [0]=Nro [1]=Fecha [2]=Referencia [3]=Código [4]=Concepto/Descripcion [5]=Débito [6]=Crédito
-            'TESORO' => [
-                'start_row'       => 1,
-                'detect_header'   => true,
-                'col_fecha'       => 1,
-                'col_referencia'  => 2,
-                'col_descripcion' => 4,
-                'col_monto'       => null,
-                'col_cargo'       => 5,   // Débito
-                'col_abono'       => 6,   // Crédito
-                'skip_desc'       => ['saldo inicial', 'saldo final'],
-            ],
-            // F[0]: cabecera | F[1..]: datos
-            // Cols: [0]=fecha [1]=referencia [2]=concepto [3]=saldo [4]=monto [5]=tipoMovimiento
-            'VENEZUELA' => [
-                'start_row'       => 1,
-                'col_fecha'       => 0,
-                'col_referencia'  => 1,
-                'col_descripcion' => 2,
-                'col_monto'       => 4,   // monto (negativo=débito, positivo=crédito)
-                'col_cargo'       => null,
-                'col_abono'       => null,
-                'skip_desc'       => ['saldo inicial', 'saldo final'],
-            ],
-            // F[5]: cabecera | F[6]: SALDO INICIAL (skip) | F[7..]: datos
-            // Cols: [0]=Fecha [1]=Referencia [2]=Descripción [3]=Monto (negativo=cargo)
-            'MERCANTIL' => [
-                'start_row'       => 6,
-                'col_fecha'       => 0,
-                'col_referencia'  => 1,
-                'col_descripcion' => 2,
-                'col_monto'       => 3,
-                'col_cargo'       => null,
-                'col_abono'       => null,
-                'skip_desc'       => ['saldo inicial', 'saldo final'],
-            ],
-        ];
+        $parserExtracto = app(\App\Services\Conciliacion\ExtractoParser::class);
+        $importaciones = [];
 
         // Helper: limpiar y convertir monto a float
         $parseMonto = function($raw) {
@@ -2389,8 +2256,17 @@ class FinanzasController extends Controller
         };
 
         foreach ($files as $file) {
+            $this->volcarBufferExtracto($importaciones);
             $ext = strtolower($file->getClientOriginalExtension());
             $all_rows = [];
+            $this->bufferContexto = [
+                'nombre' => $file->getClientOriginalName(),
+                'ext' => $ext,
+                'hash' => hash_file('sha256', $file->getRealPath()) ?: null,
+                'banco' => $banco_nombre,
+                'titular' => $titular_nombre,
+                'session_id' => $session_id,
+            ];
 
             // 1. IMÁGENES → IA (Gemini)
             if (in_array($ext, ['png', 'jpg', 'jpeg'])) {
@@ -2481,7 +2357,14 @@ class FinanzasController extends Controller
                 continue;
             }
 
-            // 3. LEER ARCHIVO EXCEL / CSV
+            // 3. Excel/CSV de un banco con mapeo fijo: importación por bloques (en cola o en la misma petición).
+            if (in_array($ext, ['csv', 'txt', 'xlsx', 'xls'], true) && $parserExtracto->soportaBanco($banco_nombre)) {
+                $importaciones[] = $this->registrarImportacion($file, $ext, $banco_nombre, $titular_nombre, $session_id);
+
+                continue;
+            }
+
+            // 4. LEER ARCHIVO EXCEL / CSV (bancos sin mapeo: la IA ubica las columnas)
             if ($ext === 'xlsx') {
                 if ($xlsx = \Shuchkin\SimpleXLSX::parse($file->getRealPath())) {
                     $all_rows = $xlsx->rows();
@@ -2495,7 +2378,7 @@ class FinanzasController extends Controller
             } else {
                 // CSV — detectar separador real
                 $handle = fopen($file->getRealPath(), 'r');
-                $csv_semicolon = $bankMappings[$banco_nombre]['csv_semicolon'] ?? false;
+                $csv_semicolon = false;
                 while (($line = fgets($handle)) !== false) {
                     $line = rtrim($line, "\r\n");
                     if ($line === '') {
@@ -2521,120 +2404,7 @@ class FinanzasController extends Controller
                 continue;
             }
 
-            // 3. SELECCIONAR PARSER: fijo si el banco es conocido, IA si no
-            if (isset($bankMappings[$banco_nombre])) {
-                // ── PARSER FIJO ──────────────────────────────────────────────
-                $map = $bankMappings[$banco_nombre];
-                $start     = $map['start_row'];
-                $c_fecha   = $map['col_fecha'];
-                $c_ref     = $map['col_referencia'];
-                $c_desc    = $map['col_descripcion'];
-                $c_monto   = $map['col_monto'];
-                $c_cargo   = $map['col_cargo'];
-                $c_abono   = $map['col_abono'];
-
-                // Tesoro (y similares): ubicar la fila de cabecera aunque el export cambie.
-                if (! empty($map['detect_header'])) {
-                    foreach ($all_rows as $hi => $headerRow) {
-                        $cells = array_map(
-                            fn ($c) => strtoupper(trim(preg_replace('/\s+/', ' ', (string) $c) ?? '')),
-                            $headerRow
-                        );
-                        $joined = implode(' ', $cells);
-                        if (
-                            str_contains($joined, 'FECHA')
-                            && (str_contains($joined, 'DEBITO') || str_contains($joined, 'DÉBITO') || str_contains($joined, 'CREDITO') || str_contains($joined, 'CRÉDITO'))
-                        ) {
-                            foreach ($cells as $ci => $label) {
-                                if ($label === 'FECHA') {
-                                    $c_fecha = $ci;
-                                } elseif (str_contains($label, 'REFEREN')) {
-                                    $c_ref = $ci;
-                                } elseif (str_contains($label, 'CONCEPTO') || str_contains($label, 'DESCRIP')) {
-                                    $c_desc = $ci;
-                                } elseif (str_contains($label, 'DEBIT') || str_contains($label, 'DÉBIT')) {
-                                    $c_cargo = $ci;
-                                    $c_monto = null;
-                                } elseif (str_contains($label, 'CREDIT') || str_contains($label, 'CRÉDIT')) {
-                                    $c_abono = $ci;
-                                    $c_monto = null;
-                                }
-                            }
-                            $start = $hi + 1;
-                            break;
-                        }
-                    }
-                }
-
-                foreach ($all_rows as $idx => $data) {
-                    if ($idx < $start) continue;
-                    if (!isset($data[$c_fecha])) continue;
-
-                    $fecha_str = $parseFecha($data[$c_fecha]);
-                    if (!$fecha_str) continue;
-
-                    // Omitir filas de saldo inicial/final/totales
-                    $skip_desc = $map['skip_desc'] ?? [];
-                    if (!empty($skip_desc) && isset($data[$c_desc])) {
-                        $desc_lower = strtolower(trim((string)$data[$c_desc]));
-                        $skip = false;
-                        foreach ($skip_desc as $sw) {
-                            if (strpos($desc_lower, $sw) !== false) { $skip = true; break; }
-                        }
-                        if ($skip) continue;
-                    }
-
-                    $monto_val = 0;
-                    $es_egreso = false;
-
-                    if ($c_monto !== null && isset($data[$c_monto])) {
-                        $monto_val = $parseMonto($data[$c_monto]);
-                        $es_egreso = $monto_val < 0;
-                    } else {
-                        $cargo = ($c_cargo !== null && isset($data[$c_cargo])) ? $parseMonto($data[$c_cargo]) : 0;
-                        $abono = ($c_abono !== null && isset($data[$c_abono])) ? $parseMonto($data[$c_abono]) : 0;
-                        if (abs($cargo) > 0) {
-                            $monto_val = abs($cargo);
-                            $es_egreso = true;
-                        } elseif (abs($abono) > 0) {
-                            $monto_val = abs($abono);
-                            $es_egreso = false;
-                        }
-                    }
-
-                    if (abs($monto_val) == 0) continue;
-
-                    $referencia = isset($data[$c_ref]) ? substr(trim((string)$data[$c_ref]), 0, 255) : '';
-                    // Normalizar referencias en notación científica (ej: 3.103E+10)
-                    if (preg_match('/^\d[\d\.]+E[+\-]\d+$/i', $referencia)) {
-                        $referencia = number_format((float)$referencia, 0, '', '');
-                    }
-
-                    $descripcion = isset($data[$c_desc]) ? substr(trim((string)$data[$c_desc]), 0, 255) : '';
-
-                    try {
-                        $guardo = $this->guardarLineaExtracto([
-                            'session_id'  => $session_id,
-                            'banco'       => $banco_nombre,
-                            'titular'     => $titular_nombre,
-                            'fecha'       => $fecha_str,
-                            'descripcion' => $descripcion,
-                            'referencia'  => $referencia,
-                            'monto'       => abs($monto_val),
-                            'estado'      => 'pendiente',
-                            'tipo'        => $es_egreso ? 'cargo' : 'abono',
-                        ]);
-                        if ($guardo) {
-                            $success_count++;
-                        } else {
-                            $repetidas++;
-                        }
-                    } catch (\Exception $e) {
-                        \Log::error("Error guardando fila $idx banco $banco_nombre titular $titular_nombre: " . $e->getMessage());
-                    }
-                }
-
-            } else {
+            if (! $parserExtracto->soportaBanco($banco_nombre)) {
                 // ── FALLBACK: IA (para MERCANTIL u otros desconocidos) ────────
                 $apiKey = env('GEMINI_API_KEY') ?? null;
                 if (!$apiKey) {
@@ -2734,11 +2504,9 @@ class FinanzasController extends Controller
             }
         }
 
-        $avisoRepetidas = $repetidas > 0
-            ? " {$repetidas} ya estaban cargadas y no se volvieron a guardar."
-            : '';
+        $this->volcarBufferExtracto($importaciones);
 
-        return redirect()->route('finanzas.conciliaciones')->with('success', "Archivos procesados correctamente. Se registraron {$success_count} transacciones.{$avisoRepetidas}");
+        return $this->responderImportaciones($importaciones);
     }
 
 
@@ -2983,22 +2751,43 @@ class FinanzasController extends Controller
             'compra_id' => ['nullable', 'integer'],
         ]);
 
+        $filtros = $request->session()->get('conciliaciones.filtros', []);
+        $desde = $request->input('fecha_desde') ?: ($filtros['fecha_desde'] ?? null);
+        $hasta = $request->input('fecha_hasta') ?: ($filtros['fecha_hasta'] ?? null);
+        $desde = $desde ? \Carbon\Carbon::parse($desde)->toDateString() : null;
+        $hasta = $hasta ? \Carbon\Carbon::parse($hasta)->toDateString() : null;
+        $autoMatcher = app(\App\Services\Conciliacion\ConciliacionAutoMatcher::class);
+        $mensaje = function (?\App\Models\ConciliacionLinea $linea, string $sinLinea) {
+            if (! $linea) {
+                return $sinLinea.' No había en el extracto una línea pendiente con ese monto.';
+            }
+
+            return 'Conciliado con el movimiento del banco del '.$linea->fecha->format('d/m/Y')
+                .($linea->referencia ? ' (ref. '.$linea->referencia.')' : '').'.';
+        };
+
         if (! empty($data['flujo_id'])) {
             $flujo = \App\Models\FlujoCaja::findOrFail($data['flujo_id']);
-            $flujo->es_conciliado = true;
-            $flujo->save();
+            $linea = $flujo->es_conciliado ? null : $autoMatcher->conciliarManual($flujo, false, $desde, $hasta);
+            if (! $linea) {
+                $flujo->es_conciliado = true;
+                $flujo->save();
+            }
 
             return $this->redirectConciliacionesConFiltros($request)
-                ->with('success', 'Movimiento en tránsito marcado como conciliado.');
+                ->with('success', $mensaje($linea, 'Movimiento en tránsito marcado como conciliado.'));
         }
 
         if (! empty($data['compra_id']) && \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')) {
             $compra = \App\Models\CompraDivisa::findOrFail($data['compra_id']);
-            $compra->es_conciliado = true;
-            $compra->save();
+            $linea = $compra->es_conciliado ? null : $autoMatcher->conciliarManual($compra, true, $desde, $hasta);
+            if (! $linea) {
+                $compra->es_conciliado = true;
+                $compra->save();
+            }
 
             return $this->redirectConciliacionesConFiltros($request)
-                ->with('success', 'Compra de divisas marcada como conciliada.');
+                ->with('success', $mensaje($linea, 'Compra de divisas marcada como conciliada.'));
         }
 
         return back()->with('error', 'No se indicó el movimiento a conciliar.');
@@ -4229,6 +4018,7 @@ class FinanzasController extends Controller
         $fecha_desde = $request->query('desde', date('Y-m-d'));
         $fecha_hasta = $request->query('hasta', date('Y-m-d'));
         $q = strtolower(trim($request->query('q', '')));
+        $ref = $this->normalizarReferenciaBusqueda((string) $request->query('ref', ''));
         $cats_str = $request->query('cats', '');
         $selected_cats = $cats_str ? explode(',', $cats_str) : ['egreso_realizado', 'otros_egresos', 'traslados', 'egreso_divisas', 'compra_divisas'];
         $catsFlujo = array_values(array_intersect($selected_cats, ['egreso_realizado', 'otros_egresos', 'traslados', 'egreso_divisas']));
@@ -4263,12 +4053,22 @@ class FinanzasController extends Controller
                        strpos($placa, $q) !== false;
             });
         }
+        if ($ref !== '') {
+            $movimientos = $movimientos->filter(
+                fn ($m) => str_contains($this->normalizarReferenciaBusqueda((string) ($m->referencia ?? '')), $ref)
+            );
+        }
 
         $egresos = $movimientos->where('categoria_egreso', 'egreso_realizado');
         $otros = $movimientos->where('categoria_egreso', 'otros_egresos');
         $traslados = $movimientos->where('categoria_egreso', 'traslados');
         $divisas = $movimientos->where('categoria_egreso', 'egreso_divisas');
         $compras = $this->comprasDivisasReporte($fecha_desde, $fecha_hasta, $q, $selected_cats);
+        if ($ref !== '') {
+            $compras = $compras->filter(
+                fn ($c) => str_contains($this->normalizarReferenciaBusqueda((string) ($c->referencia ?? '')), $ref)
+            )->values();
+        }
 
         return [
             'fecha_desde' => $fecha_desde,
@@ -4342,6 +4142,12 @@ class FinanzasController extends Controller
     /**
      * @return \Illuminate\Support\Collection<int, \App\Models\CompraDivisa>
      */
+    /** Igual que en la pantalla: sin espacios, guiones ni mayúsculas. */
+    private function normalizarReferenciaBusqueda(string $valor): string
+    {
+        return (string) preg_replace('/[^a-z0-9]/', '', strtolower(trim($valor)));
+    }
+
     private function comprasDivisasReporte(string $desde, string $hasta, string $q, array $selectedCats)
     {
         if (! in_array('compra_divisas', $selectedCats, true) || ! \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')) {

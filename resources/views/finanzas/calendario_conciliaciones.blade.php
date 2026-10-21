@@ -36,6 +36,8 @@
 .cal-estado.parcial { background: #fef3c7; color: #92400e; }
 .cal-estado.pend { background: #f1f5f9; color: #64748b; }
 .cal-rango { font-size: 0.8rem; color: #334155; display: flex; align-items: center; gap: 8px; }
+.cal-pdf { background: #1a4480; border: 1px solid #1a4480; color: white; border-radius: 7px; padding: 3px 8px; font-size: 0.75rem; font-weight: 700; text-decoration: none; }
+.cal-pdf:hover { background: #153a6e; }
 .cal-quitar { background: white; border: 1px solid #fecaca; color: #b91c1c; border-radius: 7px; padding: 3px 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
 .cal-sinmov-btn { background: white; border: 1px solid #cbd5e1; color: #475569; border-radius: 7px; padding: 3px 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
 .cal-sinmov { margin-top: 18px; border-top: 1px dashed #cbd5e1; padding-top: 12px; }
@@ -147,6 +149,14 @@
                                 @foreach($fila['rangos'] as $rango)
                                     <span class="cal-rango">
                                         {{ \Carbon\Carbon::parse($rango['desde'])->format('d/m/Y') }} – {{ \Carbon\Carbon::parse($rango['hasta'])->format('d/m/Y') }}
+                                        <a class="cal-pdf" target="_blank" rel="noopener"
+                                           title="Descargar el documento de conciliación de este rango"
+                                           href="{{ route('finanzas.conciliaciones.reporte-banco', [
+                                               'banco' => $fila['banco'],
+                                               'titular' => $fila['titular'],
+                                               'fecha_desde' => \Carbon\Carbon::parse($rango['desde'])->toDateString(),
+                                               'fecha_hasta' => \Carbon\Carbon::parse($rango['hasta'])->toDateString(),
+                                           ]) }}">PDF</a>
                                         <form action="{{ route('finanzas.conciliaciones.periodos.destroy', $rango['id']) }}" method="POST" onsubmit="return confirm('¿Quitar esta marca?');" style="margin:0;">
                                             @csrf
                                             @method('DELETE')
