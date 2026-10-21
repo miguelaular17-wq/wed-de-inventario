@@ -2923,6 +2923,33 @@ class FinanzasController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
+    /**
+     * Mismo criterio que idsExtractoVisibles: un extracto subido varias veces deja copias
+     * idénticas; se muestra una sola, prefiriendo la conciliada y luego la más antigua.
+     *
+     * @param  \Illuminate\Support\Collection<int, \App\Models\ConciliacionLinea>  $lineas
+     * @return \Illuminate\Support\Collection<int, \App\Models\ConciliacionLinea>
+     */
+    private function sinCopiasExtracto($lineas)
+    {
+        return $lineas
+            ->sortBy(fn ($l) => [$l->estado === 'conciliado' ? 0 : 1, (int) $l->id])
+            ->unique(fn ($l) => implode('|', [
+                strtoupper(trim((string) $l->banco)),
+                strtoupper(trim((string) ($l->titular ?? ''))),
+                $l->fecha instanceof \DateTimeInterface ? $l->fecha->format('Y-m-d') : substr((string) $l->fecha, 0, 10),
+                number_format(round((float) $l->monto, 2), 2, '.', ''),
+                (string) ($l->referencia ?? ''),
+                (string) ($l->descripcion ?? ''),
+                (string) ($l->tipo ?? ''),
+            ]))
+            ->sortBy(fn ($l) => [
+                $l->fecha instanceof \DateTimeInterface ? $l->fecha->format('Y-m-d') : substr((string) $l->fecha, 0, 10),
+                (int) $l->id,
+            ])
+            ->values();
+    }
+
     public function reporteBancoPdf(Request $request) {
         $bk_req = strtolower(trim($request->query('banco', '')));
         $tit_req = strtolower(trim($request->query('titular', '')));
@@ -2943,7 +2970,7 @@ class FinanzasController extends Controller
         if ($fecha_hasta_filtro) {
             $lineas_query->whereDate('fecha', '<=', $fecha_hasta_filtro);
         }
-        $lineas = $lineas_query->get();
+        $lineas = $this->sinCopiasExtracto($lineas_query->get());
 
         $egresos_query = \App\Models\FlujoCaja::where('tipo', 'egreso')
             ->where('es_conciliado', false);

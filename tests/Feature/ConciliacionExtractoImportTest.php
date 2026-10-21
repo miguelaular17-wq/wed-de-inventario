@@ -262,6 +262,46 @@ class ConciliacionExtractoImportTest extends TestCase
         $this->assertTrue((bool) $flujo->fresh()->es_conciliado);
     }
 
+    public function test_pdf_de_conciliacion_no_repite_copias_del_mismo_movimiento(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $base = [
+            'banco' => 'VENEZUELA', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-16',
+            'descripcion' => 'LIQ.TARJETA DEBITO MAESTRO BDV', 'referencia' => '1742502415086',
+            'tipo' => 'abono',
+        ];
+        ConciliacionLinea::create($base + ['monto' => 4080.51, 'estado' => 'conciliado']);
+        ConciliacionLinea::create($base + ['monto' => 4080.51, 'estado' => 'pendiente']);
+        ConciliacionLinea::create($base + ['monto' => 4080.51, 'estado' => 'pendiente']);
+        // Misma referencia, otro monto: es otro movimiento y debe seguir apareciendo.
+        ConciliacionLinea::create($base + ['monto' => 17688.99, 'estado' => 'pendiente']);
+
+        $capturado = null;
+        $pdf = \Mockery::mock(\Barryvdh\DomPDF\PDF::class);
+        $pdf->shouldReceive('setPaper')->andReturnSelf();
+        $pdf->shouldReceive('download')->andReturn(response('pdf'));
+        \Barryvdh\DomPDF\Facade\Pdf::shouldReceive('loadView')
+            ->once()
+            ->andReturnUsing(function ($vista, $datos) use (&$capturado, $pdf) {
+                $capturado = $datos['data'];
+
+                return $pdf;
+            });
+
+        $this->actingAs($user)
+            ->get(route('finanzas.conciliaciones.reporte-banco', [
+                'banco' => 'VENEZUELA',
+                'titular' => 'GRUPO JRZ',
+                'fecha_desde' => '2026-08-01',
+                'fecha_hasta' => '2026-08-31',
+            ]))
+            ->assertOk();
+
+        $this->assertCount(1, $capturado['conciliados']);
+        $this->assertCount(1, $capturado['sin_registrar']);
+        $this->assertEquals(17688.99, (float) $capturado['sin_registrar'][0]['monto']);
+    }
+
     public function test_estado_importacion_solo_visible_al_dueno_o_admin(): void
     {
         $dueno = $this->makeUser(User::ROLE_CONTABILIDAD);
