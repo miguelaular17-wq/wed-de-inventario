@@ -12,23 +12,43 @@ class EtiquetasPrecioService
 {
     public const MAX_ETIQUETAS = 600;
 
-    /** Medida fija de cada tipo de ficha (mm) y cuántas caben en una hoja carta. */
+    /** Medida por defecto de cada tipo (mm). Cada equipo puede ajustarla en "Configuración de medidas". */
     public const TAMANOS = [
-        'clasica' => ['columnas' => 2, 'filas' => 5, 'ancho' => 70, 'alto' => 50],
-        'locura' => ['columnas' => 2, 'filas' => 5, 'ancho' => 70, 'alto' => 50],
-        'pc' => ['columnas' => 2, 'filas' => 2, 'ancho' => 90, 'alto' => 105],
+        'clasica' => ['ancho' => 70, 'alto' => 50],
+        'locura' => ['ancho' => 70, 'alto' => 50],
+        'pc' => ['ancho' => 90, 'alto' => 83],
     ];
+
+    public const MEDIDA_MIN = ['ancho' => 40, 'alto' => 30];
+
+    public const MEDIDA_MAX = ['ancho' => 200, 'alto' => 260];
+
+    /** Área útil de la hoja carta con márgenes de 7 mm. */
+    public const HOJA_UTIL = ['ancho' => 201.9, 'alto' => 265.4];
+
+    public const SEPARACION = 2;
+
+    /**
+     * @return array{ancho: float, alto: float, columnas: int, filas: int}
+     */
+    public function tamano(string $tipo, ?float $anchoMm = null, ?float $altoMm = null): array
+    {
+        $base = self::TAMANOS[$tipo] ?? self::TAMANOS['clasica'];
+        $ancho = $anchoMm ? max(self::MEDIDA_MIN['ancho'], min(self::MEDIDA_MAX['ancho'], $anchoMm)) : $base['ancho'];
+        $alto = $altoMm ? max(self::MEDIDA_MIN['alto'], min(self::MEDIDA_MAX['alto'], $altoMm)) : $base['alto'];
+
+        return [
+            'ancho' => round($ancho, 1),
+            'alto' => round($alto, 1),
+            'columnas' => max(1, (int) floor((self::HOJA_UTIL['ancho'] + self::SEPARACION) / ($ancho + self::SEPARACION))),
+            'filas' => max(1, (int) floor((self::HOJA_UTIL['alto'] + self::SEPARACION) / ($alto + self::SEPARACION))),
+        ];
+    }
 
     public const TIPOS = [
         'clasica' => 'Clásica (1 pza / mayor)',
         'locura' => 'Precios de locura',
         'pc' => 'PC / Laptop (ficha técnica)',
-    ];
-
-    public const TIPOS_DESCRIPCION = [
-        'clasica' => '7 × 5 cm · 10 por hoja',
-        'locura' => '7 × 5 cm · 10 por hoja',
-        'pc' => '9 × 10,5 cm · 4 por hoja',
     ];
 
     public const WEB = 'www.elpalaciodelosdetalles.com';
@@ -294,7 +314,7 @@ class EtiquetasPrecioService
             }
         }
 
-        if ($specs['almacenamiento'] === '' && preg_match_all('/(?<![\d+\/])(\d{2,4}\s?GB|\d\s?TB)\s?(SSD|HDD|NVME|EMMC|M\.2)?\b/u', $n, $mm, PREG_SET_ORDER)) {
+        if ($specs['almacenamiento'] === '' && preg_match_all('/(?<![\d+\/])(\d{2,4}\s?GB|\d\s?TB)\s?(SSD|HDD|NVME|EMMC|UFS|M\.2)?\b/u', $n, $mm, PREG_SET_ORDER)) {
             foreach ($mm as $m) {
                 $cap = (int) preg_replace('/\D/', '', $m[1]);
                 if (str_contains($m[1], 'TB') || $cap >= 64) {
@@ -325,9 +345,9 @@ class EtiquetasPrecioService
             }
         }
 
-        if (preg_match('/\b(?:W|WIN|WINDOWS)\s?(10|11)(?:\s?(HOME|PRO))?\b/u', $n, $m)) {
+        if (preg_match('/\b(?:W|WIN|WINDOWS)\s?(10|11)(?:\s?(HOME|PRO))?(\s?S\s?MODE)?\b/u', $n, $m)) {
             $usado[] = $m[0];
-            $specs['sistema'] = 'Windows ' . $m[1] . (($m[2] ?? '') !== '' ? ' ' . ucfirst(strtolower($m[2])) : '');
+            $specs['sistema'] = 'Windows ' . $m[1] . (($m[2] ?? '') !== '' ? ' ' . ucfirst(strtolower($m[2])) : '') . (($m[3] ?? '') !== '' ? ' S' : '');
         } elseif (preg_match('/\bCHROME\s?OS\b|\bFREE\s?DOS\b|\bMAC\s?OS\b|\bUBUNTU\b|\bLINUX\b/u', $n, $m)) {
             $usado[] = $m[0];
             $specs['sistema'] = trim($m[0]);

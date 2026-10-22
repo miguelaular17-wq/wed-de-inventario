@@ -62,11 +62,31 @@
                         @foreach($tipos as $clave => $label)
                             <label class="etq-tipo">
                                 <input type="radio" name="tipo" value="{{ $clave }}" @checked($loop->first)>
-                                <span>{{ $label }}<small>{{ $tiposDescripcion[$clave] ?? '' }}</small></span>
+                                <span>{{ $label }}<small data-medida="{{ $clave }}"></small></span>
                             </label>
                         @endforeach
                     </div>
                 </div>
+                <input type="hidden" name="ancho_mm" id="etq-ancho-mm">
+                <input type="hidden" name="alto_mm" id="etq-alto-mm">
+                <details class="etq-config" id="etq-config">
+                    <summary>⚙️ Configuración de medidas</summary>
+                    <p class="etq-hint" style="margin:6px 0 10px;">Ajusta el ancho y el alto (en cm) de cada etiqueta según el papel o la mica que uses. Se guarda en este equipo.</p>
+                    <table class="etq-config-tabla">
+                        <thead><tr><th>Etiqueta</th><th>Ancho (cm)</th><th>Alto (cm)</th><th>Por hoja</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach($tipos as $clave => $label)
+                                <tr data-tipo="{{ $clave }}">
+                                    <td>{{ $label }}</td>
+                                    <td><input type="number" step="0.1" min="{{ $medidaMin['ancho'] / 10 }}" max="{{ $medidaMax['ancho'] / 10 }}" data-dim="ancho"></td>
+                                    <td><input type="number" step="0.1" min="{{ $medidaMin['alto'] / 10 }}" max="{{ $medidaMax['alto'] / 10 }}" data-dim="alto"></td>
+                                    <td data-por-hoja></td>
+                                    <td><button type="button" class="btn secondary etq-btn-sm" data-reset="{{ $clave }}">Restablecer</button></td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </details>
                 <label id="etq-cant-mayor-wrap">
                     Precio mayor desde
                     <span style="display:flex; align-items:center; gap:6px;">
@@ -134,6 +154,13 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 .etq-opciones label.etq-tipo:has(input:checked) { border-color: #7c3aed; background: #f5f3ff; color: #5b21b6; }
 .etq-tipo input { margin: 0; padding: 0; }
 .etq-tipo small { display: block; font-size: .72rem; font-weight: 500; color: #64748b; }
+.etq-config { width: 100%; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; background: #f8fafc; }
+.etq-config summary { cursor: pointer; font-weight: 700; color: #334155; font-size: .88rem; }
+.etq-config-tabla { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.etq-config-tabla th { text-align: left; font-size: .7rem; text-transform: uppercase; letter-spacing: .03em; color: #64748b; padding: 4px 6px; }
+.etq-config-tabla td { padding: 4px 6px; border-top: 1px solid #e2e8f0; }
+.etq-config-tabla input { width: 80px; padding: 6px 8px; border-radius: 8px; border: 1.5px solid var(--border); font-size: .88rem; }
+.etq-config-tabla td[data-por-hoja] { font-weight: 700; color: #6d28d9; }
 .etq-specs-row td { background: #faf5ff; padding-top: 4px !important; }
 .etq-specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 8px; }
 .etq-specs label { display: flex; flex-direction: column; gap: 2px; font-size: .68rem; font-weight: 700; color: #7c3aed; text-transform: uppercase; }
@@ -198,7 +225,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 .etq-card-name b { font-size: 13px; line-height: 1.15; text-transform: uppercase; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .etq-card-prices { display: flex; gap: 8px; flex: 1; }
 .etq-card-box { flex: 1; background: #fff; color: #0f172a; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
-.etq-card-box .h { background: #1e1b4b; color: #fff; text-align: center; font-weight: 800; font-size: 11px; padding: 3px 0; letter-spacing: .03em; }
+.etq-card-box .h { background: #1e1b4b; color: #fff; text-align: center; font-weight: 800; font-size: 15px; line-height: 1.1; padding: 5px 0; letter-spacing: .03em; white-space: nowrap; }
 .etq-card-box .h em { font-style: normal; color: #fde047; }
 .etq-card-box.mayor { border: 3px solid #facc15; }
 .etq-card-box.mayor .h { background: #facc15; color: #1e1b4b; }
@@ -219,8 +246,60 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
     const STORAGE_KEY = 'etiquetas_lista_v1';
     const BUSCAR_URL = @json(route('etiquetas.buscar'));
     const LOGO = @json(asset('logo.png'));
-    const POR_HOJA = @json(collect(\App\Services\EtiquetasPrecioService::TAMANOS)->map(fn ($t) => $t['columnas'] * $t['filas']));
-    const MEDIDA = @json($tiposDescripcion);
+    const MEDIDAS_DEFECTO = @json($tamanos);
+    const MEDIDA_MIN = @json($medidaMin);
+    const MEDIDA_MAX = @json($medidaMax);
+    const HOJA = @json($hojaUtil);
+    const SEP = {{ (float) $separacion }};
+    const MEDIDAS_KEY = 'etiquetas_medidas_v1';
+    let medidas = JSON.parse(JSON.stringify(MEDIDAS_DEFECTO));
+    try {
+        const guardadas = JSON.parse(localStorage.getItem(MEDIDAS_KEY) || '{}') || {};
+        Object.keys(medidas).forEach(t => { if (guardadas[t]) medidas[t] = Object.assign({}, medidas[t], guardadas[t]); });
+    } catch (e) {}
+    const medidaDe = t => medidas[t] || MEDIDAS_DEFECTO.clasica;
+    const porHojaDe = t => {
+        const m = medidaDe(t);
+        return Math.max(1, Math.floor((HOJA.ancho + SEP) / (m.ancho + SEP))) * Math.max(1, Math.floor((HOJA.alto + SEP) / (m.alto + SEP)));
+    };
+    const cm = mm => (Math.round(mm) / 10).toLocaleString('es-VE', { maximumFractionDigits: 1 });
+    const textoMedida = t => `${cm(medidaDe(t).ancho)} × ${cm(medidaDe(t).alto)} cm · ${porHojaDe(t)} por hoja`;
+
+    function pintarConfig() {
+        document.querySelectorAll('[data-medida]').forEach(el => { el.textContent = textoMedida(el.dataset.medida); });
+        document.querySelectorAll('.etq-config-tabla tr[data-tipo]').forEach(tr => {
+            const m = medidaDe(tr.dataset.tipo);
+            tr.querySelector('[data-dim="ancho"]').value = m.ancho / 10;
+            tr.querySelector('[data-dim="alto"]').value = m.alto / 10;
+            tr.querySelector('[data-por-hoja]').textContent = porHojaDe(tr.dataset.tipo);
+        });
+    }
+
+    function guardarMedidas() {
+        localStorage.setItem(MEDIDAS_KEY, JSON.stringify(medidas));
+        pintarConfig();
+        render();
+    }
+
+    document.querySelectorAll('.etq-config-tabla input[data-dim]').forEach(inp => inp.addEventListener('change', () => {
+        const tipo = inp.closest('tr').dataset.tipo;
+        const dim = inp.dataset.dim;
+        let mm = Math.round((parseFloat(String(inp.value).replace(',', '.')) || 0) * 10);
+        mm = Math.max(MEDIDA_MIN[dim], Math.min(MEDIDA_MAX[dim], mm || MEDIDAS_DEFECTO[tipo][dim]));
+        medidas[tipo] = Object.assign({}, medidaDe(tipo), { [dim]: mm });
+        guardarMedidas();
+    }));
+    document.querySelectorAll('[data-reset]').forEach(btn => btn.addEventListener('click', () => {
+        medidas[btn.dataset.reset] = Object.assign({}, MEDIDAS_DEFECTO[btn.dataset.reset]);
+        guardarMedidas();
+    }));
+
+    // Tamaño de la vista previa en pantalla con la misma proporción que la etiqueta real.
+    function tamanoPreview(tipo) {
+        const m = medidaDe(tipo);
+        const escala = Math.min(4, 380 / m.ancho, 360 / m.alto);
+        return `width:${Math.round(m.ancho * escala)}px; height:${Math.round(m.alto * escala)}px;`;
+    }
     const MAX = {{ (int) $maxEtiquetas }};
     const TIPO_KEY = 'etiquetas_tipo_v1';
     const WEB = @json(\App\Services\EtiquetasPrecioService::WEB);
@@ -372,7 +451,9 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         const esPc = tipo === 'pc';
         document.getElementById('etq-count').textContent = lista.length;
         document.getElementById('etq-cant-mayor-wrap').style.display = esPc ? 'none' : '';
-        document.getElementById('etq-tipo-nota').textContent = 'Medida: ' + (MEDIDA[tipo] || '');
+        document.getElementById('etq-tipo-nota').textContent = 'Medida: ' + textoMedida(tipo);
+        document.getElementById('etq-ancho-mm').value = medidaDe(tipo).ancho;
+        document.getElementById('etq-alto-mm').value = medidaDe(tipo).alto;
         if (lista.length === 0) {
             $body.innerHTML = '<tr><td colspan="5"><div class="etq-empty" style="border:none;">La lista está vacía.</div></td></tr>';
         } else {
@@ -412,7 +493,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 
         const total = Math.min(MAX, lista.reduce((s, p) => s + (p.copias || 1), 0));
         document.getElementById('etq-total-etiquetas').textContent = total;
-        document.getElementById('etq-total-hojas').textContent = Math.ceil(total / (POR_HOJA[tipo] || 10));
+        document.getElementById('etq-total-hojas').textContent = Math.ceil(total / porHojaDe(tipo));
         document.getElementById('etq-generar').disabled = lista.length === 0;
 
         pintarFormItems();
@@ -435,7 +516,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
             ? `<div class="etq-lz-marca"><img src="${LOGOS[lk]}" alt="${esc(marca)}"></div>`
             : (marca ? `<div class="etq-lz-marca"><b>${esc(marca.toUpperCase())}</b></div>` : '');
         return `
-            <div class="etq-lz ${caja ? 'con-marca' : ''}">
+            <div class="etq-lz ${caja ? 'con-marca' : ''}" style="${tamanoPreview('locura')}">
                 <div class="etq-lz-izq">
                     <img src="${LOGO}" alt="">
                     <div class="etq-lz-de">PRECIOS DE</div>
@@ -466,7 +547,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         for (let f = 0; f < Math.max(izq.length, der3.length); f++) specs += spec(izq[f]) + spec(der3[f]);
         const lk = logoKey(p);
         return `
-            <div class="etq-pc">
+            <div class="etq-pc" style="${tamanoPreview('pc')}">
                 <div class="etq-pc-izq">
                     <div class="etq-pc-caja"><img src="${LOGO}" alt=""><b>PRECIO</b><b>REGULAR</b></div>
                     <div class="etq-pc-pill"><small>REF</small><strong>${entero > 0 ? '$' + entero.toLocaleString('es-VE') : '—'}</strong></div>
@@ -496,11 +577,11 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         const mayor = Number(p.precio_mayor);
         const ahorro = tieneMayor(p) && unidad > 0 ? Math.round((1 - mayor / unidad) * 100) : 0;
         const precios = tieneMayor(p)
-            ? `<div class="etq-card-box"><div class="h">COMPRA <em>1 PZA</em></div><div class="p"><small>REF</small><strong>${fmt(unidad)}</strong></div></div>
-               <div class="etq-card-box mayor"><div class="h">COMPRA <em>${cant}+ PZAS</em></div><div class="p"><small>REF</small><strong>${fmt(mayor)}</strong></div>${ahorro > 0 ? `<div class="ahorro">¡AHORRAS ${ahorro}% C/U!</div>` : ''}</div>`
-            : `<div class="etq-card-box"><div class="h">PRECIO</div><div class="p"><small>REF</small><strong>${fmt(unidad)}</strong></div></div>`;
+            ? `<div class="etq-card-box"><div class="h">COMPRA<br><em>1 PZA</em></div><div class="p"><small>REF</small><strong>${fmt(unidad)}</strong></div></div>
+               <div class="etq-card-box mayor"><div class="h">COMPRA<br><em>${cant}+ PZAS</em></div><div class="p"><small>REF</small><strong>${fmt(mayor)}</strong></div>${ahorro > 0 ? `<div class="ahorro">¡AHORRAS ${ahorro}% C/U!</div>` : ''}</div>`
+            : `<div class="etq-card-box"><div class="h" style="letter-spacing:.12em;">PRECIO</div><div class="p"><small>REF</small><strong>${fmt(unidad)}</strong></div></div>`;
         cont.innerHTML = `
-            <div class="etq-card">
+            <div class="etq-card" style="${tamanoPreview('clasica')}">
                 <div class="etq-card-top">
                     <img class="etq-card-logo" src="${LOGO}" alt="">
                     <div class="etq-card-name"><small>PRODUCTO</small><b style="font-size:${p.nombre.length <= 26 ? 15 : (p.nombre.length <= 46 ? 13 : (p.nombre.length <= 75 ? 11 : 9.5))}px;">${esc(p.nombre)}</b></div>
@@ -538,6 +619,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         render();
     }));
 
+    pintarConfig();
     render();
     if (tipoActual() !== 'clasica') completarSpecs();
 })();

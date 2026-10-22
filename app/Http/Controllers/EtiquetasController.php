@@ -21,8 +21,11 @@ class EtiquetasController extends Controller
 
         return view('etiquetas.index', [
             'tamanos' => EtiquetasPrecioService::TAMANOS,
+            'medidaMin' => EtiquetasPrecioService::MEDIDA_MIN,
+            'medidaMax' => EtiquetasPrecioService::MEDIDA_MAX,
+            'hojaUtil' => EtiquetasPrecioService::HOJA_UTIL,
+            'separacion' => EtiquetasPrecioService::SEPARACION,
             'tipos' => EtiquetasPrecioService::TIPOS,
-            'tiposDescripcion' => EtiquetasPrecioService::TIPOS_DESCRIPCION,
             'specsPc' => EtiquetasPrecioService::SPECS_PC,
             'maxEtiquetas' => EtiquetasPrecioService::MAX_ETIQUETAS,
         ]);
@@ -47,6 +50,8 @@ class EtiquetasController extends Controller
             'items.*.specs.*' => ['nullable', 'string', 'max:40'],
             'tipo' => ['nullable', Rule::in(array_keys(EtiquetasPrecioService::TIPOS))],
             'cantidad_mayor' => ['nullable', 'integer', 'min:2', 'max:999'],
+            'ancho_mm' => ['nullable', 'numeric', 'min:' . EtiquetasPrecioService::MEDIDA_MIN['ancho'], 'max:' . EtiquetasPrecioService::MEDIDA_MAX['ancho']],
+            'alto_mm' => ['nullable', 'numeric', 'min:' . EtiquetasPrecioService::MEDIDA_MIN['alto'], 'max:' . EtiquetasPrecioService::MEDIDA_MAX['alto']],
         ]);
 
         $tipo = $data['tipo'] ?? 'clasica';
@@ -65,8 +70,11 @@ class EtiquetasController extends Controller
         ini_set('memory_limit', '512M');
         ini_set('max_execution_time', '300');
 
-        $tamanoClave = $tipo;
-        $tamano = EtiquetasPrecioService::TAMANOS[$tipo];
+        $tamano = $this->etiquetas->tamano(
+            $tipo,
+            isset($data['ancho_mm']) ? (float) $data['ancho_mm'] : null,
+            isset($data['alto_mm']) ? (float) $data['alto_mm'] : null,
+        );
         $porPagina = $tamano['columnas'] * $tamano['filas'];
 
         $pdf = app('dompdf.wrapper');
@@ -81,7 +89,6 @@ class EtiquetasController extends Controller
                 => $this->etiquetas->ajustarNombre($nombre, $anchoPt, $altoLineaPt, $anchoMm, $altoMm, $tamanos, $maxLineas, $mayusculas),
             'tipo' => $tipo,
             'tamano' => $tamano,
-            'tamanoClave' => $tamanoClave,
             'logo' => $this->imagenDataUri(public_path('logo.png')),
             'fondo' => $this->fondoDegradado($tamano['ancho'], $tamano['alto']),
             'fecha' => now()->format('d/m/Y'),
@@ -131,7 +138,7 @@ class EtiquetasController extends Controller
      * Dompdf no dibuja linear-gradient ni escala fondos (background-size): se genera una vez
      * un PNG rosa → morado → azul al tamaño exacto de la etiqueta (96 dpi).
      */
-    private function fondoDegradado(int $anchoMm, int $altoMm): ?string
+    private function fondoDegradado(float $anchoMm, float $altoMm): ?string
     {
         $w = (int) ceil($anchoMm / 25.4 * 96);
         $h = (int) ceil($altoMm / 25.4 * 96);

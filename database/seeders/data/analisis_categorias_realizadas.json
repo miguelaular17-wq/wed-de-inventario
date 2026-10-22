@@ -1,0 +1,3399 @@
+{
+ "CENTRO": [
+  {
+   "categoria": null,
+   "subcategoria": "RELOJES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "BILLETERAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CORREAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "GORRAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "LENTES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "LLAVEROS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MONEDEROS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ORGANIZADORES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PORTACOSMETICOS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ACCESORIOS DE UÑAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ARTICULOS PARA CEJAS/PESTAÑAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ARTICULOS PARA DEPILAR"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "EQUIPOS PARA UÑAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ESMALTES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "COLITAS/GANCHETAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "EQUIPOS PARA EL CABELLO"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "UTENSILIOS PARA CABELLO"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "EXTENSIONES PARA CABELLO"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "LIBRETAS/AGENDAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "BOLIGRAFOS/LAPICES/CREYONES/COLORES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PAPELERIA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "UTILES ESCOLARES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "SALUD/BIOSEGURIDAD"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ANILLOS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "COLLARES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PULSERAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ZARCILLOS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "BANDOLEROS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CARTERAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "KOALAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "LONCHERAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MALETA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MORRALES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "BOX EMPRENDIMIENTO"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "BASES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "BROCHAS Y ESPONJAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "COMPACTOS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CORRECTORES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "DELINEADOR"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ILUMINADOR/BRONZER"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "LABIAL"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "LAPICES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PALETAS Y KITS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PESTAÑAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PRIMER/FIJADOR"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RIMEL"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RUBOR"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "SOMBRAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CREMAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MASCARILLAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PRODUCTOS DE ASEO PERSONAL"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PROTECTOR SOLAR"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ZOAH"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "VASOS IMPORTADOS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ARTICULOS DEL HOGAR"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CAVAS/TERMOS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ELECTRODOMESTICOS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "HERRAMIENTAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MASCOTAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PRODUCTOS DE LIMPIEZA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "UTENSILIOS DE COCINA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "VASOS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "BISUTERIA INVICTA/MAYAMAR"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ESTUCHES INVICTA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJES INVICTA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JUEGO DIDACTICOS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JUEGO DE MESA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "BICILETAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CARROS MONTABLES/MONOPATIN"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JUEGUETERIA NIÑA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JUEGUETERIA NIÑO"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ARTICULOS ACUATICOS/INFLABLES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JUEGO DEPORTIVOS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PELUCHE"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CORRECTORES ORIGINALES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RIMEL ORIGINAL"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MAQUILLAJE ORIGINAL VARIOS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PRIMER/FIJADOR ORIGINAL"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "COMPACTOS ORIGINALES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "BASES ORIGINALES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PALETAS ORIGINALES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "LABIALES ORIGINALES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "DELINEADORES ORIGINALES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "SOMBRAS ORIGINALES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "BROCHAS/ESPONJAS ORIGINAL"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PESTAÑAS ORIGINALES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RUBOR ORIGINAL"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PERFUMES EN OFERTA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PERFUME DE ACEITE 30ML"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "COMBO SPLASH Y CREMA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MINI PERFUME"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PERFUME 35ML CON CREMA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PERFUMES AA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PERFUMES AAA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PERFUMES LARGO DE 35ML"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PERFUMES ORIGINALES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "SPLASH 250ML"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "SPLASH 60ML"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "SPLASH 90ML"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PERFUME DE ACEITE 60ML"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "KABA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "AMPOLLAS Y GOTAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CIRUGIA/KERATINA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "DECOLORANTES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "SHAMPOO"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TINTES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PRODUCTOS IMPORTADOS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ALIMENTOS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "BEBIDAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CARAMELOS Y GALLETAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CHOCOLATES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "LICORES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MEDICINAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CAMISA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CONJUNTOS/PIYAMAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "DISFRAZES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MEDIAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PANTALONES/SHORT"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TRAJE BAÑO/ LENCERIA"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "VESTIDOS / BRAGAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TEXTILES"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ELECTRONICA",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CONSOLAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "EQUIPOS LED",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "EQUIPOS VARIOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "EQUIPOS STRIMING",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ALEXA",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TINTAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PLAYSTATION",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "NINTENDO SWITCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "XBOX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JUEGOS NINTENDO SWITCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JUEGOS PLAYSTATION",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "POWER BANK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "IMPRESORAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CAMARAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PROYECTOR",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CORNETAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "UPS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "STARLINK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MICROFONOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JBL",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "LAPTOS/COMPUTADORAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ROUTERS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TABLET",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TECLADO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PLANTAS ELECTRICAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MOUSE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "PREVENTA",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "HONOR",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "HUAWEI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "INFINIX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "IPHONE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "SAMSUNG",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "TECNO SPARK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "VARIAS MARCAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "XIAOMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "TELEFONOS GAMER",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "GOOGLE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "IPHONE SEMI NUEVOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "ITEL",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "LOGIC",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "MEIZU",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "VORTEX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": "ZTE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "RELOJ SAMSUNG",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "RELOJ XIAOMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "RELOJ APPLE WATCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "RELOJ BLACK SHARK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "RELOJ BLACKVIEW",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "RELOJ REDMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "RELOJ ARGOM",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "RELOJ AMAZFIT",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "RELOJ MIBRO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "RELOJ SMART WATCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "RELOJ CUBITT",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "CABLES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "PENDRIVES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "VIDRIOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "ACCESORIOS GAMER",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "AUDIFONOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "CARGADORES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "FORROS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "MEMORIAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "RELOJES INTELIGENTES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "FORROS IPHONE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "FORROS SAMSUNG",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "FORROS POCO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "FORROS REDMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "FORROS INFINIX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "FORROS TECNO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "FORROS TABLET",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "FORROS HONOR",
+   "lista": "telefonia"
+  }
+ ],
+ "DORAL": [
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "RELOJES"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "BILLETERAS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "CORREAS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "GORRAS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "LENTES"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "LLAVEROS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "MONEDEROS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "ORGANIZADORES"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "PORTACOSMETICOS"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "ACCESORIOS DE UÑAS"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "ARTICULOS PARA CEJAS/PESTAÑAS"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "ARTICULOS PARA DEPILAR"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "EQUIPOS PARA UÑAS"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "ESMALTES"
+  },
+  {
+   "categoria": "ARTICULOS DE CABELLO",
+   "subcategoria": "COLITAS/GANCHETAS"
+  },
+  {
+   "categoria": "ARTICULOS DE CABELLO",
+   "subcategoria": "EQUIPOS PARA EL CABELLO"
+  },
+  {
+   "categoria": "ARTICULOS DE CABELLO",
+   "subcategoria": "UTENSILIOS PARA CABELLO"
+  },
+  {
+   "categoria": "ARTICULOS DE CABELLO",
+   "subcategoria": "EXTENSIONES PARA CABELLO"
+  },
+  {
+   "categoria": "ARTICULOS ESCOLARES",
+   "subcategoria": "LIBRETAS/AGENDAS"
+  },
+  {
+   "categoria": "ARTICULOS ESCOLARES",
+   "subcategoria": "BOLIGRAFOS/LAPICES/CREYONES/COLORES"
+  },
+  {
+   "categoria": "ARTICULOS ESCOLARES",
+   "subcategoria": "PAPELERIA"
+  },
+  {
+   "categoria": "ARTICULOS ESCOLARES",
+   "subcategoria": "UTILES ESCOLARES"
+  },
+  {
+   "categoria": "BIOSEGURIDAD",
+   "subcategoria": "SALUD/BIOSEGURIDAD"
+  },
+  {
+   "categoria": "BISUTERIA",
+   "subcategoria": "ANILLOS"
+  },
+  {
+   "categoria": "BISUTERIA",
+   "subcategoria": "COLLARES"
+  },
+  {
+   "categoria": "BISUTERIA",
+   "subcategoria": "PULSERAS"
+  },
+  {
+   "categoria": "BISUTERIA",
+   "subcategoria": "ZARCILLOS"
+  },
+  {
+   "categoria": "CARTERAS EN OFERTA",
+   "subcategoria": null
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "BANDOLEROS"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "CARTERAS"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "KOALAS"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "LONCHERAS"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "MALETA"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "MORRALES"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "BOX EMPRENDIMIENTO"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "BASES"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "BROCHAS Y ESPONJAS"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "COMPACTOS"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "CORRECTORES"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "DELINEADOR"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "ILUMINADOR/BRONZER"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "LABIAL"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "LAPICES"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "PALETAS Y KITS"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "PESTAÑAS"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "PRIMER/FIJADOR"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "RIMEL"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "RUBOR"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "SOMBRAS"
+  },
+  {
+   "categoria": "DECORACION Y ARREGLOS",
+   "subcategoria": null
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "CREMAS"
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "MASCARILLAS"
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "PRODUCTOS DE ASEO PERSONAL"
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "PROTECTOR SOLAR"
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "ZOAH"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "VASOS IMPORTADOS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "ARTICULOS DEL HOGAR"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "CAVAS/TERMOS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "ELECTRODOMESTICOS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "HERRAMIENTAS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "MASCOTAS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "PRODUCTOS DE LIMPIEZA"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "UTENSILIOS DE COCINA"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "VASOS"
+  },
+  {
+   "categoria": "INVICTA",
+   "subcategoria": "BISUTERIA INVICTA/MAYAMAR"
+  },
+  {
+   "categoria": "INVICTA",
+   "subcategoria": "ESTUCHES INVICTA"
+  },
+  {
+   "categoria": "INVICTA",
+   "subcategoria": "RELOJES INVICTA"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGO DIDACTICOS"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGO DE MESA"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "BICILETAS"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "CARROS MONTABLES/MONOPATIN"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGUETERIA NIÑA"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGUETERIA NIÑO"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "ARTICULOS ACUATICOS/INFLABLES"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGO DEPORTIVOS"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "PELUCHE"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "CORRECTORES ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "RIMEL ORIGINAL"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "MAQUILLAJE ORIGINAL VARIOS"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "PRIMER/FIJADOR ORIGINAL"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "COMPACTOS ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "BASES ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "PALETAS ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "LABIALES ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "DELINEADORES ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "SOMBRAS ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "BROCHAS/ESPONJAS ORIGINAL"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "PESTAÑAS ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "RUBOR ORIGINAL"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES EN OFERTA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUME DE ACEITE 30ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "COMBO SPLASH Y CREMA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "MINI PERFUME"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUME 35ML CON CREMA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES AA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES AAA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES LARGO DE 35ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES ORIGINALES"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "SPLASH 250ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "SPLASH 60ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "SPLASH 90ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUME DE ACEITE 60ML"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "KABA"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "AMPOLLAS Y GOTAS"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "CIRUGIA/KERATINA"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "DECOLORANTES"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "SHAMPOO"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "TINTES"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "PRODUCTOS IMPORTADOS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "ALIMENTOS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "BEBIDAS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "CARAMELOS Y GALLETAS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "CHOCOLATES"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "LICORES"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "MEDICINAS"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "CAMISA"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "CONJUNTOS/PIYAMAS"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "DISFRAZES"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "MEDIAS"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "PANTALONES/SHORT"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "TRAJE BAÑO/ LENCERIA"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "VESTIDOS / BRAGAS"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": null
+  },
+  {
+   "categoria": "TEXTILES",
+   "subcategoria": null
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "CABLES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "PENDRIVES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "VIDRIOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "ACCESORIOS GAMER",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "AUDIFONOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "CARGADORES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "FORROS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "MEMORIAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ACCESORIOS TECNOLOGICOS",
+   "subcategoria": "RELOJES INTELIGENTES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "CONSOLAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "EQUIPOS LED",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "EQUIPOS VARIOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "EQUIPOS STRIMING",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "ALEXA",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "TINTAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "PLAYSTATION",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "NINTENDO SWITCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "XBOX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "JUEGOS NINTENDO SWITCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "JUEGOS PLAYSTATION",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "POWER BANK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "IMPRESORAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "CAMARAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "PROYECTOR",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "CORNETAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "UPS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "STARLINK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "MICROFONOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "JBL",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "LAPTOS/COMPUTADORAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "ROUTERS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "TABLET",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "TECLADO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "PLANTAS ELECTRICAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "ELECTRONICA",
+   "subcategoria": "MOUSE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "FORROS IPHONE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "FORROS SAMSUNG",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "FORROS POCO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "FORROS REDMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "FORROS INFINIX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "FORROS TECNO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "FORROS TABLET",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "FORROS HONOR",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "PREVENTA",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "HONOR",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "HUAWEI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "INFINIX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "IPHONE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "SAMSUNG",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "TECNO SPARK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "VARIAS MARCAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "XIAOMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "TELEFONOS GAMER",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "GOOGLE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "IPHONE SEMI NUEVOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "ITEL",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "LOGIC",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "MEIZU",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "VORTEX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "ZTE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "RELOJ SAMSUNG",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "RELOJ XIAOMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "RELOJ APPLE WATCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "RELOJ BLACK SHARK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "RELOJ BLACKVIEW",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "RELOJ REDMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "RELOJ ARGOM",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "RELOJ AMAZFIT",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "RELOJ MIBRO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "RELOJ SMART WATCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": "FORROS",
+   "subcategoria": "RELOJ CUBITT",
+   "lista": "telefonia"
+  }
+ ],
+ "VIRTUDES": [
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "RELOJES"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "BILLETERAS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "CORREAS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "GORRAS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "LENTES"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "LLAVEROS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "MONEDEROS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "ORGANIZADORES"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "PORTACOSMETICOS"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "ACCESORIOS DE UÑAS"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "ARTICULOS PARA CEJAS/PESTAÑAS"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "ARTICULOS PARA DEPILAR"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "EQUIPOS PARA UÑAS"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "ESMALTES"
+  },
+  {
+   "categoria": "ARTICULOS DE CABELLO",
+   "subcategoria": "COLITAS/GANCHETAS"
+  },
+  {
+   "categoria": "ARTICULOS DE CABELLO",
+   "subcategoria": "EQUIPOS PARA EL CABELLO"
+  },
+  {
+   "categoria": "ARTICULOS DE CABELLO",
+   "subcategoria": "UTENSILIOS PARA CABELLO"
+  },
+  {
+   "categoria": "ARTICULOS DE CABELLO",
+   "subcategoria": "EXTENSIONES PARA CABELLO"
+  },
+  {
+   "categoria": "ARTICULOS ESCOLARES",
+   "subcategoria": "LIBRETAS/AGENDAS"
+  },
+  {
+   "categoria": "ARTICULOS ESCOLARES",
+   "subcategoria": "BOLIGRAFOS/LAPICES/CREYONES/COLORES"
+  },
+  {
+   "categoria": "ARTICULOS ESCOLARES",
+   "subcategoria": "PAPELERIA"
+  },
+  {
+   "categoria": "ARTICULOS ESCOLARES",
+   "subcategoria": "UTILES ESCOLARES"
+  },
+  {
+   "categoria": "BIOSEGURIDAD",
+   "subcategoria": "SALUD/BIOSEGURIDAD"
+  },
+  {
+   "categoria": "BISUTERIA",
+   "subcategoria": "ANILLOS"
+  },
+  {
+   "categoria": "BISUTERIA",
+   "subcategoria": "COLLARES"
+  },
+  {
+   "categoria": "BISUTERIA",
+   "subcategoria": "PULSERAS"
+  },
+  {
+   "categoria": "BISUTERIA",
+   "subcategoria": "ZARCILLOS"
+  },
+  {
+   "categoria": "CARTERAS EN OFERTA",
+   "subcategoria": null
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "BANDOLEROS"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "CARTERAS"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "KOALAS"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "LONCHERAS"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "MALETA"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "MORRALES"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "BOX EMPRENDIMIENTO"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "BASES"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "BROCHAS Y ESPONJAS"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "COMPACTOS"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "CORRECTORES"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "DELINEADOR"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "ILUMINADOR/BRONZER"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "LABIAL"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "LAPICES"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "PALETAS Y KITS"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "PESTAÑAS"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "PRIMER/FIJADOR"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "RIMEL"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "RUBOR"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "SOMBRAS"
+  },
+  {
+   "categoria": "DECORACION Y ARREGLOS",
+   "subcategoria": null
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "CREMAS"
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "MASCARILLAS"
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "PRODUCTOS DE ASEO PERSONAL"
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "PROTECTOR SOLAR"
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "ZOAH"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "VASOS IMPORTADOS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "ARTICULOS DEL HOGAR"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "CAVAS/TERMOS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "ELECTRODOMESTICOS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "HERRAMIENTAS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "MASCOTAS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "PRODUCTOS DE LIMPIEZA"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "UTENSILIOS DE COCINA"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "VASOS"
+  },
+  {
+   "categoria": "INVICTA",
+   "subcategoria": "BISUTERIA INVICTA/MAYAMAR"
+  },
+  {
+   "categoria": "INVICTA",
+   "subcategoria": "ESTUCHES INVICTA"
+  },
+  {
+   "categoria": "INVICTA",
+   "subcategoria": "RELOJES INVICTA"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGO DIDACTICOS"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGO DE MESA"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "BICILETAS"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "CARROS MONTABLES/MONOPATIN"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGUETERIA NIÑA"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGUETERIA NIÑO"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "ARTICULOS ACUATICOS/INFLABLES"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGO DEPORTIVOS"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "PELUCHE"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "CORRECTORES ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "RIMEL ORIGINAL"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "MAQUILLAJE ORIGINAL VARIOS"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "PRIMER/FIJADOR ORIGINAL"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "COMPACTOS ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "BASES ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "PALETAS ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "LABIALES ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "DELINEADORES ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "SOMBRAS ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "BROCHAS/ESPONJAS ORIGINAL"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "PESTAÑAS ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "RUBOR ORIGINAL"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES EN OFERTA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUME DE ACEITE 30ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "COMBO SPLASH Y CREMA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "MINI PERFUME"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUME 35ML CON CREMA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES AA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES AAA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES LARGO DE 35ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES ORIGINALES"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "SPLASH 250ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "SPLASH 60ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "SPLASH 90ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUME DE ACEITE 60ML"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "KABA"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "AMPOLLAS Y GOTAS"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "CIRUGIA/KERATINA"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "DECOLORANTES"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "SHAMPOO"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "TINTES"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "PRODUCTOS IMPORTADOS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "ALIMENTOS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "BEBIDAS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "CARAMELOS Y GALLETAS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "CHOCOLATES"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "LICORES"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "MEDICINAS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "CAMISA"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "CONJUNTOS/PIYAMAS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "DISFRAZES"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "MEDIAS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "PANTALONES/SHORT"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "TRAJE BAÑO/ LENCERIA"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "VESTIDOS / BRAGAS"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CABLES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PENDRIVES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "VIDRIOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ACCESORIOS GAMER",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "AUDIFONOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CARGADORES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MEMORIAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJES INTELIGENTES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CONSOLAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "EQUIPOS LED",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "EQUIPOS VARIOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "EQUIPOS STRIMING",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ALEXA",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TINTAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PLAYSTATION",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "NINTENDO SWITCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "XBOX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JUEGOS NINTENDO SWITCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JUEGOS PLAYSTATION",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "POWER BANK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "IMPRESORAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CAMARAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PROYECTOR",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CORNETAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "UPS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "STARLINK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MICROFONOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JBL",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "LAPTOS/COMPUTADORAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ROUTERS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TABLET",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TECLADO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PLANTAS ELECTRICAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MOUSE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS IPHONE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS SAMSUNG",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS POCO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS REDMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS INFINIX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS TECNO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS TABLET",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS HONOR",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ SAMSUNG",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ XIAOMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ APPLE WATCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ BLACK SHARK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ BLACKVIEW",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ REDMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ ARGOM",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ AMAZFIT",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ MIBRO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ SMART WATCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ CUBITT",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PREVENTA",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "HONOR",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "HUAWEI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "INFINIX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "IPHONE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "SAMSUNG",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TECNO SPARK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "VARIAS MARCAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "XIAOMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TELEFONOS GAMER",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "GOOGLE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "IPHONE SEMI NUEVOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ITEL",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "LOGIC",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MEIZU",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "VORTEX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ZTE",
+   "lista": "telefonia"
+  }
+ ],
+ "ZAMORA": [
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "RELOJES"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "BILLETERAS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "CORREAS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "GORRAS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "LENTES"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "LLAVEROS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "MONEDEROS"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "ORGANIZADORES"
+  },
+  {
+   "categoria": "ACCESORIOS DE VESTIR",
+   "subcategoria": "PORTACOSMETICOS"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "ACCESORIOS DE UÑAS"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "ARTICULOS PARA CEJAS/PESTAÑAS"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "ARTICULOS PARA DEPILAR"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "EQUIPOS PARA UÑAS"
+  },
+  {
+   "categoria": "ACCESORIOS ESTETICOS",
+   "subcategoria": "ESMALTES"
+  },
+  {
+   "categoria": "ARTICULOS DE CABELLO",
+   "subcategoria": "COLITAS/GANCHETAS"
+  },
+  {
+   "categoria": "ARTICULOS DE CABELLO",
+   "subcategoria": "EQUIPOS PARA EL CABELLO"
+  },
+  {
+   "categoria": "ARTICULOS DE CABELLO",
+   "subcategoria": "UTENSILIOS PARA CABELLO"
+  },
+  {
+   "categoria": "ARTICULOS DE CABELLO",
+   "subcategoria": "EXTENSIONES PARA CABELLO"
+  },
+  {
+   "categoria": "ARTICULOS ESCOLARES",
+   "subcategoria": "LIBRETAS/AGENDAS"
+  },
+  {
+   "categoria": "ARTICULOS ESCOLARES",
+   "subcategoria": "BOLIGRAFOS/LAPICES/CREYONES/COLORES"
+  },
+  {
+   "categoria": "ARTICULOS ESCOLARES",
+   "subcategoria": "PAPELERIA"
+  },
+  {
+   "categoria": "ARTICULOS ESCOLARES",
+   "subcategoria": "UTILES ESCOLARES"
+  },
+  {
+   "categoria": "BIOSEGURIDAD",
+   "subcategoria": "SALUD/BIOSEGURIDAD"
+  },
+  {
+   "categoria": "BISUTERIA",
+   "subcategoria": "ANILLOS"
+  },
+  {
+   "categoria": "BISUTERIA",
+   "subcategoria": "COLLARES"
+  },
+  {
+   "categoria": "BISUTERIA",
+   "subcategoria": "PULSERAS"
+  },
+  {
+   "categoria": "BISUTERIA",
+   "subcategoria": "ZARCILLOS"
+  },
+  {
+   "categoria": "CARTERAS EN OFERTA",
+   "subcategoria": null
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "BANDOLEROS"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "CARTERAS"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "KOALAS"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "LONCHERAS"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "MALETA"
+  },
+  {
+   "categoria": "CARTERAS Y BOLSOS",
+   "subcategoria": "MORRALES"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "BOX EMPRENDIMIENTO"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "BASES"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "BROCHAS Y ESPONJAS"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "COMPACTOS"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "CORRECTORES"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "DELINEADOR"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "ILUMINADOR/BRONZER"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "LABIAL"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "LAPICES"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "PALETAS Y KITS"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "PESTAÑAS"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "PRIMER/FIJADOR"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "RIMEL"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "RUBOR"
+  },
+  {
+   "categoria": "COSMETICOS",
+   "subcategoria": "SOMBRAS"
+  },
+  {
+   "categoria": "DECORACION Y ARREGLOS",
+   "subcategoria": null
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "CREMAS"
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "MASCARILLAS"
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "PRODUCTOS DE ASEO PERSONAL"
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "PROTECTOR SOLAR"
+  },
+  {
+   "categoria": "HIGIENE",
+   "subcategoria": "ZOAH"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "VASOS IMPORTADOS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "ARTICULOS DEL HOGAR"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "CAVAS/TERMOS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "ELECTRODOMESTICOS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "HERRAMIENTAS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "MASCOTAS"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "PRODUCTOS DE LIMPIEZA"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "UTENSILIOS DE COCINA"
+  },
+  {
+   "categoria": "HOGAR",
+   "subcategoria": "VASOS"
+  },
+  {
+   "categoria": "INVICTA",
+   "subcategoria": "BISUTERIA INVICTA/MAYAMAR"
+  },
+  {
+   "categoria": "INVICTA",
+   "subcategoria": "ESTUCHES INVICTA"
+  },
+  {
+   "categoria": "INVICTA",
+   "subcategoria": "RELOJES INVICTA"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGO DIDACTICOS"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGO DE MESA"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "BICILETAS"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "CARROS MONTABLES/MONOPATIN"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGUETERIA NIÑA"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGUETERIA NIÑO"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "ARTICULOS ACUATICOS/INFLABLES"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "JUEGO DEPORTIVOS"
+  },
+  {
+   "categoria": "JUGUETERIA",
+   "subcategoria": "PELUCHE"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "CORRECTORES ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "RIMEL ORIGINAL"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "MAQUILLAJE ORIGINAL VARIOS"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "PRIMER/FIJADOR ORIGINAL"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "COMPACTOS ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "BASES ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "PALETAS ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "LABIALES ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "DELINEADORES ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "SOMBRAS ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "BROCHAS/ESPONJAS ORIGINAL"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "PESTAÑAS ORIGINALES"
+  },
+  {
+   "categoria": "MAQUILLAJE ORIGINAL",
+   "subcategoria": "RUBOR ORIGINAL"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES EN OFERTA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUME DE ACEITE 30ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "COMBO SPLASH Y CREMA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "MINI PERFUME"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUME 35ML CON CREMA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES AA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES AAA"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES LARGO DE 35ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUMES ORIGINALES"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "SPLASH 250ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "SPLASH 60ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "SPLASH 90ML"
+  },
+  {
+   "categoria": "PERFUMERIA",
+   "subcategoria": "PERFUME DE ACEITE 60ML"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "KABA"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "AMPOLLAS Y GOTAS"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "CIRUGIA/KERATINA"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "DECOLORANTES"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "SHAMPOO"
+  },
+  {
+   "categoria": "PRODUCTOS CAPILARES",
+   "subcategoria": "TINTES"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "PRODUCTOS IMPORTADOS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "ALIMENTOS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "BEBIDAS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "CARAMELOS Y GALLETAS"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "CHOCOLATES"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "LICORES"
+  },
+  {
+   "categoria": "PRODUCTOS DE CONSUMO",
+   "subcategoria": "MEDICINAS"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "CAMISA"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "CONJUNTOS/PIYAMAS"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "DISFRAZES"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "MEDIAS"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "PANTALONES/SHORT"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "TRAJE BAÑO/ LENCERIA"
+  },
+  {
+   "categoria": "RELOJES INTELIGENTES",
+   "subcategoria": "VESTIDOS / BRAGAS"
+  },
+  {
+   "categoria": "TELEFONIA",
+   "subcategoria": null
+  },
+  {
+   "categoria": "TEXTILES",
+   "subcategoria": null
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ SAMSUNG",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ XIAOMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ APPLE WATCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ BLACK SHARK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ BLACKVIEW",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ REDMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ ARGOM",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ AMAZFIT",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ MIBRO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ SMART WATCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJ CUBITT",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PREVENTA",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "HONOR",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "HUAWEI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "INFINIX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "IPHONE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "SAMSUNG",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TECNO SPARK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "VARIAS MARCAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "XIAOMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TELEFONOS GAMER",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "GOOGLE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "IPHONE SEMI NUEVOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ITEL",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "LOGIC",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MEIZU",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "VORTEX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ZTE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CABLES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PENDRIVES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "VIDRIOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ACCESORIOS GAMER",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "AUDIFONOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CARGADORES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MEMORIAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "RELOJES INTELIGENTES",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CONSOLAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "EQUIPOS LED",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "EQUIPOS VARIOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "EQUIPOS STRIMING",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ALEXA",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TINTAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PLAYSTATION",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "NINTENDO SWITCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "XBOX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JUEGOS NINTENDO SWITCH",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JUEGOS PLAYSTATION",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "POWER BANK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "IMPRESORAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CAMARAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PROYECTOR",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "CORNETAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "UPS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "STARLINK",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MICROFONOS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "JBL",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "LAPTOS/COMPUTADORAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "ROUTERS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TABLET",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "TECLADO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "PLANTAS ELECTRICAS",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "MOUSE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS IPHONE",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS SAMSUNG",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS POCO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS REDMI",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS INFINIX",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS TECNO",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS TABLET",
+   "lista": "telefonia"
+  },
+  {
+   "categoria": null,
+   "subcategoria": "FORROS HONOR",
+   "lista": "telefonia"
+  }
+ ]
+}

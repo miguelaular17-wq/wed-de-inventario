@@ -234,6 +234,35 @@ class EtiquetasPrecioTest extends TestCase
         $this->assertSame('$5', $fichas[0]['unidad_entero_fmt']);
     }
 
+    public function test_medidas_configurables_y_etiquetas_por_hoja(): void
+    {
+        $svc = new EtiquetasPrecioService();
+
+        $clasica = $svc->tamano('clasica');
+        $this->assertSame([70.0, 50.0, 2, 5], [(float) $clasica['ancho'], (float) $clasica['alto'], $clasica['columnas'], $clasica['filas']]);
+        $pc = $svc->tamano('pc');
+        $this->assertSame([90.0, 83.0, 2, 3], [(float) $pc['ancho'], (float) $pc['alto'], $pc['columnas'], $pc['filas']]);
+
+        $chica = $svc->tamano('clasica', 60, 40);
+        $this->assertSame([3, 6], [$chica['columnas'], $chica['filas']]);
+
+        $limitada = $svc->tamano('pc', 5, 999);
+        $this->assertSame([40.0, 260.0], [(float) $limitada['ancho'], (float) $limitada['alto']]);
+
+        $this->post(route('etiquetas.pdf'), [
+            'items' => [['id' => 2, 'copias' => 2]],
+            'tipo' => 'pc',
+            'ancho_mm' => 89.7,
+            'alto_mm' => 83.1,
+        ])->assertOk()->assertHeader('content-type', 'application/pdf');
+
+        $this->post(route('etiquetas.pdf'), [
+            'items' => [['id' => 2, 'copias' => 1]],
+            'tipo' => 'clasica',
+            'ancho_mm' => 5,
+        ])->assertSessionHasErrors('ancho_mm');
+    }
+
     public function test_requiere_permiso_de_ver_precios(): void
     {
         $this->get(route('etiquetas.index'))->assertOk()->assertSee('Etiquetas de precio');
