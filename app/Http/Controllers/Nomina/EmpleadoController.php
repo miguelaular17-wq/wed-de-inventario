@@ -15,6 +15,7 @@ use App\Models\Nomina\NominaSede;
 use App\Models\User;
 use App\Services\Nomina\AjusteService;
 use App\Services\Nomina\AttendanceService;
+use App\Services\Nomina\EmpleadoFotoStorage;
 use App\Services\Nomina\EmployeeSalesService;
 use App\Services\Nomina\EmployeeService;
 use App\Services\Nomina\FaltanteCajaService;
@@ -43,6 +44,7 @@ class EmpleadoController extends Controller
         private FaltanteCajaService $faltanteCaja,
         private OtherDeductionService $otrasDeducciones,
         private AjusteService $ajustes,
+        private EmpleadoFotoStorage $fotos,
     ) {
     }
 
@@ -159,10 +161,13 @@ class EmpleadoController extends Controller
     {
         $data = $this->validated($request);
 
+        $this->validarFoto($request);
+
         if (! empty($data['cliente_id'])) {
             $existente = NominaEmpleado::query()->where('cliente_id', $data['cliente_id'])->first();
             if ($existente) {
                 $this->employees->update($existente, $data);
+                $this->aplicarFoto($request, $existente);
 
                 return redirect()
                     ->route('nomina.empleados.show', $existente)
@@ -171,6 +176,7 @@ class EmpleadoController extends Controller
         }
 
         $empleado = $this->employees->create($data);
+        $this->aplicarFoto($request, $empleado);
 
         return redirect()
             ->route('nomina.empleados.show', $empleado)
@@ -328,7 +334,10 @@ class EmpleadoController extends Controller
 
     public function update(Request $request, NominaEmpleado $empleado): RedirectResponse
     {
-        $this->employees->update($empleado, $this->validated($request));
+        $data = $this->validated($request);
+        $this->validarFoto($request);
+        $this->employees->update($empleado, $data);
+        $this->aplicarFoto($request, $empleado);
 
         return redirect()
             ->route('nomina.empleados.show', $empleado)
@@ -366,6 +375,31 @@ class EmpleadoController extends Controller
             'es_servicio_tecnico' => $request->boolean('es_servicio_tecnico'),
             'exento_retencion_comision' => $request->boolean('exento_retencion_comision'),
         ];
+    }
+
+    private function validarFoto(Request $request): void
+    {
+        $request->validate([
+            'foto' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+            'quitar_foto' => ['nullable', 'boolean'],
+        ], [
+            'foto.image' => 'La foto debe ser una imagen.',
+            'foto.mimes' => 'La foto debe ser JPG, PNG o WEBP.',
+            'foto.max' => 'La foto no puede pesar más de 10 MB.',
+        ]);
+    }
+
+    private function aplicarFoto(Request $request, NominaEmpleado $empleado): void
+    {
+        if (! Schema::hasColumn('nomina_empleados', 'foto_url')) {
+            return;
+        }
+
+        if ($request->hasFile('foto')) {
+            $this->fotos->guardar($empleado, $request->file('foto'));
+        } elseif ($request->boolean('quitar_foto')) {
+            $this->fotos->quitar($empleado);
+        }
     }
 
     private function formData(?NominaEmpleado $empleado = null): array

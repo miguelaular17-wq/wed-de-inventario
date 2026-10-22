@@ -56,14 +56,25 @@
             <form method="POST" action="{{ route('etiquetas.pdf') }}" target="_blank" id="etq-form" class="etq-opciones">
                 @csrf
                 <div id="etq-form-items"></div>
-                <label>
+                <div class="etq-tipos">
+                    <span class="etq-tipos-label">Tipo de etiqueta</span>
+                    <div class="etq-tipos-opciones">
+                        @foreach($tipos as $clave => $label)
+                            <label class="etq-tipo">
+                                <input type="radio" name="tipo" value="{{ $clave }}" @checked($loop->first)>
+                                <span>{{ $label }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                </div>
+                <label id="etq-tamano-wrap">
                     Tamaño
                     <select name="tamano" id="etq-tamano">
                         <option value="normal">Normal · 9,7 × 5 cm (10 por hoja)</option>
                         <option value="pequena">Pequeña · 6,4 × 3,5 cm (21 por hoja)</option>
                     </select>
                 </label>
-                <label>
+                <label id="etq-cant-mayor-wrap">
                     Precio mayor desde
                     <span style="display:flex; align-items:center; gap:6px;">
                         <input type="number" name="cantidad_mayor" id="etq-cant-mayor" value="3" min="2" max="999" style="width:80px;">
@@ -72,6 +83,7 @@
                 </label>
                 <div class="etq-total">
                     <strong id="etq-total-etiquetas">0</strong> etiquetas · <span id="etq-total-hojas">0</span> hoja(s) carta
+                    <div id="etq-tipo-nota" class="etq-hint" style="margin:4px 0 0; display:none;">Esta etiqueta sale en tamaño normal (9,7 × 5 cm).</div>
                 </div>
                 <button type="submit" class="btn primary etq-generar" id="etq-generar" disabled>🖨️ Generar PDF para imprimir</button>
             </form>
@@ -121,6 +133,63 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 .etq-opciones label { display: flex; flex-direction: column; gap: 4px; font-size: .75rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .03em; }
 .etq-opciones select, .etq-opciones input { padding: 9px 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: .9rem; }
 .etq-total { font-size: .88rem; color: #475569; padding-bottom: 10px; }
+.etq-tipos { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.etq-tipos-label { font-size: .75rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .03em; }
+.etq-tipos-opciones { display: flex; gap: 8px; flex-wrap: wrap; }
+.etq-opciones label.etq-tipo { flex-direction: row; align-items: center; gap: 8px; cursor: pointer; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px;
+    font-size: .85rem; font-weight: 600; color: #334155; text-transform: none; letter-spacing: 0; background: #fff; }
+.etq-opciones label.etq-tipo:has(input:checked) { border-color: #7c3aed; background: #f5f3ff; color: #5b21b6; }
+.etq-tipo input { margin: 0; padding: 0; }
+.etq-specs-row td { background: #faf5ff; padding-top: 4px !important; }
+.etq-specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 8px; }
+.etq-specs label { display: flex; flex-direction: column; gap: 2px; font-size: .68rem; font-weight: 700; color: #7c3aed; text-transform: uppercase; }
+.etq-specs input { padding: 5px 7px; border-radius: 6px; border: 1px solid #ddd6fe; font-size: .8rem; font-weight: 500; color: #0f172a; text-transform: none; }
+
+/* Vista previa: Precios de locura */
+.etq-lz { width: 388px; height: 200px; border-radius: 14px; padding: 10px; box-sizing: border-box; display: flex; gap: 8px;
+    background: linear-gradient(135deg, #ec4899 0%, #9333ea 50%, #3b82f6 100%); font-family: inherit; }
+.etq-lz-izq { width: 152px; display: flex; flex-direction: column; align-items: center; gap: 4px; color: #fff; }
+.etq-lz-izq img { width: 50px; height: 50px; }
+.etq-lz-de { font-weight: 800; font-size: 15px; letter-spacing: .03em; }
+.etq-lz-loc { width: 100%; text-align: center; background: #3b0764; color: #facc15; font-weight: 900; font-size: 28px; border-radius: 8px; border-bottom: 3px solid #facc15; line-height: 1.25; }
+.etq-lz-cinta { width: 92%; text-align: center; background: #facc15; color: #9d174d; font-weight: 800; font-size: 8px; border-radius: 4px; padding: 3px 0; }
+.etq-lz.con-marca .etq-lz-izq { gap: 3px; }
+.etq-lz.con-marca .etq-lz-izq > img { width: 38px; height: 38px; }
+.etq-lz.con-marca .etq-lz-de { font-size: 13px; }
+.etq-lz.con-marca .etq-lz-loc { font-size: 24px; }
+.etq-lz-marca { width: 86%; height: 32px; background: #fff; border-radius: 7px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+.etq-lz-marca img { max-height: 24px; max-width: 88%; object-fit: contain; }
+.etq-lz-marca b { color: #1e1b4b; font-size: 14px; font-weight: 900; letter-spacing: .08em; }
+.etq-lz-cod { margin-top: auto; font-size: 7.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.etq-lz-der { flex: 1; background: #fff; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; color: #0f172a; min-width: 0; }
+.etq-lz-pill { align-self: flex-start; background: #7c3aed; color: #fff; font-weight: 800; font-size: 9px; letter-spacing: .1em; padding: 2px 12px; border-radius: 999px; }
+.etq-lz-precio { display: flex; align-items: flex-start; justify-content: center; gap: 4px; margin-top: 2px; }
+.etq-lz-precio small { font-size: 9px; font-weight: 800; color: #64748b; margin-top: 6px; }
+.etq-lz-precio strong { font-size: 36px; font-weight: 900; line-height: 1.1; }
+.etq-lz-mayor { text-align: center; font-size: 9px; font-weight: 800; color: #7c3aed; }
+.etq-lz-nombre { border-top: 1px dashed #c4b5fd; margin-top: 4px; padding-top: 5px; font-weight: 800; font-size: 11px; text-transform: uppercase; line-height: 1.2;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.etq-lz-web { margin-top: auto; text-align: center; font-size: 7px; font-weight: 700; color: #7c3aed; }
+
+/* Vista previa: PC */
+.etq-pc { width: 388px; height: 200px; border-radius: 14px; padding: 10px; box-sizing: border-box; display: flex; gap: 8px;
+    background: linear-gradient(135deg, #ec4899 0%, #9333ea 50%, #3b82f6 100%); font-family: inherit; }
+.etq-pc-izq { width: 144px; display: flex; flex-direction: column; gap: 0; color: #fff; }
+.etq-pc-caja { position: relative; background: #4c1d95; border-radius: 10px; padding: 8px 10px 12px; }
+.etq-pc-caja img { position: absolute; right: 6px; top: 5px; width: 34px; height: 34px; }
+.etq-pc-caja b { display: block; font-size: 17px; font-weight: 900; line-height: 1.15; }
+.etq-pc-caja b + b { color: #facc15; font-size: 19px; margin-top: 6px; }
+.etq-pc-pill { margin-top: -6px; background: #db2777; border: 2px solid #fff; border-radius: 12px; padding: 4px 8px; position: relative; text-align: center; }
+.etq-pc-pill small { position: absolute; left: 8px; top: 5px; font-size: 8px; font-weight: 800; color: #fde68a; }
+.etq-pc-pill strong { font-size: 32px; font-weight: 900; }
+.etq-pc-pie { margin-top: auto; text-align: center; font-size: 7.5px; font-weight: 700; }
+.etq-pc-der { flex: 1; background: #fff; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; color: #0f172a; min-width: 0; }
+.etq-pc-marca { font-size: 22px; font-weight: 900; letter-spacing: .06em; line-height: 1.1; }
+.etq-pc-cod { font-size: 7.5px; font-weight: 700; color: #64748b; margin: 2px 0 6px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.etq-pc-grid { display: grid; grid-template-columns: 1.27fr 1fr; gap: 5px 6px; }
+.etq-pc-spec { display: flex; align-items: center; gap: 5px; font-size: 9.5px; font-weight: 800; line-height: 1.15; min-width: 0; }
+.etq-pc-spec i { flex-shrink: 0; width: 17px; height: 17px; border-radius: 50%; background: #db2777; color: #fff; font-style: normal; font-size: 10px; display: flex; align-items: center; justify-content: center; }
+.etq-pc-web { margin-top: auto; text-align: center; font-size: 7.5px; font-weight: 700; color: #7c3aed; }
 .etq-generar { padding: 11px 18px !important; font-weight: 700; margin-left: auto; }
 .etq-generar:disabled { opacity: .5; cursor: not-allowed; }
 
@@ -158,9 +227,34 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
     const LOGO = @json(asset('logo.png'));
     const POR_HOJA = { normal: 10, pequena: 21 };
     const MAX = {{ (int) $maxEtiquetas }};
+    const TIPO_KEY = 'etiquetas_tipo_v1';
+    const WEB = @json(\App\Services\EtiquetasPrecioService::WEB);
+    const SPECS = @json($specsPc);
+    const SPEC_LABEL = { marca: 'Marca', modelo: 'Modelo', procesador: 'Procesador', grafica: 'Tarjeta gráfica', pantalla: 'Pantalla', ram: 'RAM', almacenamiento: 'Almacenamiento', sistema: 'Sistema' };
+    const SPEC_ICONO = { modelo: '◆', procesador: '⚙', grafica: '▦', pantalla: '▭', ram: '▤', almacenamiento: '◉', sistema: '⊞' };
+    const LOGOS = @json(collect(\App\Services\EtiquetasPrecioService::LOGOS_MARCA)->filter(fn ($m) => is_file(public_path("img/marcas/{$m}.png")))->mapWithKeys(fn ($m) => [$m => asset("img/marcas/{$m}.png")]));
+    function logoKey(p) {
+        const s = p.specs || {};
+        const marca = (s.marca || '').trim().toUpperCase();
+        const texto = `${marca} ${s.modelo || ''} ${p.nombre}`.toUpperCase();
+        let k = null;
+        if (texto.includes('VICTUS')) k = 'victus';
+        else if (/\bPOCO\b/.test(texto)) k = 'poco';
+        else if (marca === 'REDMI') k = 'xiaomi';
+        else if (marca === 'APPLE' || (marca === '' && /\b(APPLE|MACBOOK|IMAC)\b/.test(texto))) k = 'apple';
+        else if (marca) k = marca.toLowerCase();
+        return k && LOGOS[k] ? k : null;
+    }
+    const FECHA = @json(now()->format('d/m/Y'));
 
     let lista = [];
     try { lista = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') || []; } catch (e) { lista = []; }
+    const tipoGuardado = localStorage.getItem(TIPO_KEY);
+    if (tipoGuardado) {
+        const radio = document.querySelector(`input[name="tipo"][value="${tipoGuardado}"]`);
+        if (radio) radio.checked = true;
+    }
+    const tipoActual = () => (document.querySelector('input[name="tipo"]:checked') || {}).value || 'clasica';
 
     const $q = document.getElementById('etq-q');
     const $res = document.getElementById('etq-resultados');
@@ -170,8 +264,13 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
     let ultimoAgregado = null;
 
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const fmt = v => (Number(v) > 0) ? Number(v).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-    const tieneMayor = p => Number(p.precio_mayor) > 0 && (Number(p.precio_unidad) <= 0 || Number(p.precio_mayor) < Number(p.precio_unidad));
+    const ceilPrecio = v => { const n = Number(v); return n > 0 ? Math.ceil(Math.round(n * 100) / 100) : 0; };
+    const fmt = v => { const n = ceilPrecio(v); return n > 0 ? n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'; };
+    const tieneMayor = p => {
+        const u = ceilPrecio(p.precio_unidad);
+        const m = ceilPrecio(p.precio_mayor);
+        return m > 0 && (u <= 0 || m < u);
+    };
 
     function guardar() { localStorage.setItem(STORAGE_KEY, JSON.stringify(lista)); render(); }
 
@@ -200,7 +299,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
             existente.copias = Math.min(100, (existente.copias || 1) + 1);
             flash(`+1 copia: ${p.nombre} (${existente.copias})`);
         } else {
-            lista.push({ id: p.id, codigo: p.codigo, nombre: p.nombre, precio_unidad: p.precio_unidad, precio_mayor: p.precio_mayor, copias: 1 });
+            lista.push({ id: p.id, codigo: p.codigo, nombre: p.nombre, precio_unidad: p.precio_unidad, precio_mayor: p.precio_mayor, specs: p.specs || null, copias: 1 });
             flash(`Agregado: ${p.nombre}`);
         }
         ultimoAgregado = p.id;
@@ -249,8 +348,37 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         });
     }
 
+    // Productos guardados antes de existir la ficha técnica: se piden al buscador por código.
+    async function completarSpecs() {
+        const faltan = lista.filter(p => !p.specs);
+        for (const p of faltan) {
+            try {
+                const r = await fetch(BUSCAR_URL + '?q=' + encodeURIComponent(p.codigo.split('/')[0].trim()), { headers: { 'Accept': 'application/json' } });
+                const data = await r.json();
+                const hit = (data.resultados || []).find(x => x.id === p.id);
+                p.specs = hit && hit.specs ? hit.specs : Object.fromEntries(SPECS.map(s => [s, '']));
+            } catch (e) {
+                p.specs = Object.fromEntries(SPECS.map(s => [s, '']));
+            }
+        }
+        if (faltan.length) guardar();
+    }
+
+    function filaSpecs(p, i) {
+        const s = p.specs || {};
+        return `<tr class="etq-specs-row"><td colspan="5"><div class="etq-specs">${SPECS.map(campo => `
+            <label>${SPEC_LABEL[campo]}<input type="text" maxlength="40" value="${esc(s[campo] || '')}" data-spec="${i}" data-campo="${campo}"></label>`).join('')}
+            <button type="button" class="btn secondary etq-btn-sm" data-releer="${i}" style="align-self:end;" title="Volver a leer la ficha técnica del nombre del producto">↻ Releer del nombre</button>
+        </div></td></tr>`;
+    }
+
     function render() {
+        const tipo = tipoActual();
+        const esPc = tipo === 'pc';
         document.getElementById('etq-count').textContent = lista.length;
+        document.getElementById('etq-tamano-wrap').style.display = tipo === 'clasica' ? '' : 'none';
+        document.getElementById('etq-cant-mayor-wrap').style.display = esPc ? 'none' : '';
+        document.getElementById('etq-tipo-nota').style.display = tipo === 'clasica' ? 'none' : 'block';
         if (lista.length === 0) {
             $body.innerHTML = '<tr><td colspan="5"><div class="etq-empty" style="border:none;">La lista está vacía.</div></td></tr>';
         } else {
@@ -261,7 +389,22 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
                     <td style="text-align:right; font-weight:600; color:#7c3aed;">${tieneMayor(p) ? fmt(p.precio_mayor) : (Number(p.precio_mayor) > 0 ? `<span style="color:#94a3b8; font-weight:500;" title="Mismo precio que 1 pza: la etiqueta lleva un solo precio">igual · ${fmt(p.precio_mayor)}</span>` : '—')}</td>
                     <td style="text-align:center;"><input type="number" min="1" max="100" value="${p.copias}" data-copias="${i}"></td>
                     <td><button type="button" class="etq-quitar" title="Quitar" data-quitar="${i}">✕</button></td>
-                </tr>`).join('');
+                </tr>${esPc ? filaSpecs(p, i) : ''}`).join('');
+            $body.querySelectorAll('[data-releer]').forEach(btn => btn.addEventListener('click', () => {
+                const item = lista[Number(btn.dataset.releer)];
+                item.specs = null;
+                ultimoAgregado = item.id;
+                completarSpecs();
+            }));
+            $body.querySelectorAll('[data-spec]').forEach(inp => inp.addEventListener('input', () => {
+                const item = lista[Number(inp.dataset.spec)];
+                item.specs = item.specs || {};
+                item.specs[inp.dataset.campo] = inp.value;
+                ultimoAgregado = item.id;
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(lista));
+                pintarFormItems();
+                pintarPreview();
+            }));
             $body.querySelectorAll('[data-copias]').forEach(inp => inp.addEventListener('change', () => {
                 const v = Math.max(1, Math.min(100, parseInt(inp.value, 10) || 1));
                 lista[Number(inp.dataset.copias)].copias = v;
@@ -274,16 +417,77 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         }
 
         const total = Math.min(MAX, lista.reduce((s, p) => s + (p.copias || 1), 0));
-        const tam = document.getElementById('etq-tamano').value;
+        const tam = tipo === 'clasica' ? document.getElementById('etq-tamano').value : 'normal';
         document.getElementById('etq-total-etiquetas').textContent = total;
         document.getElementById('etq-total-hojas').textContent = Math.ceil(total / (POR_HOJA[tam] || 10));
         document.getElementById('etq-generar').disabled = lista.length === 0;
 
+        pintarFormItems();
+        pintarPreview();
+    }
+
+    function pintarFormItems() {
+        const esPc = tipoActual() === 'pc';
         document.getElementById('etq-form-items').innerHTML = lista.map((p, i) =>
             `<input type="hidden" name="items[${i}][id]" value="${p.id}"><input type="hidden" name="items[${i}][copias]" value="${p.copias}">`
+            + (esPc && p.specs ? SPECS.map(c => `<input type="hidden" name="items[${i}][specs][${c}]" value="${esc(p.specs[c] || '')}">`).join('') : '')
         ).join('');
+    }
 
-        pintarPreview();
+    function previewLocura(p) {
+        const cant = Math.max(2, parseInt(document.getElementById('etq-cant-mayor').value, 10) || 3);
+        const marca = ((p.specs || {}).marca || '').trim();
+        const lk = logoKey(p);
+        const caja = lk
+            ? `<div class="etq-lz-marca"><img src="${LOGOS[lk]}" alt="${esc(marca)}"></div>`
+            : (marca ? `<div class="etq-lz-marca"><b>${esc(marca.toUpperCase())}</b></div>` : '');
+        return `
+            <div class="etq-lz ${caja ? 'con-marca' : ''}">
+                <div class="etq-lz-izq">
+                    <img src="${LOGO}" alt="">
+                    <div class="etq-lz-de">PRECIOS DE</div>
+                    <div class="etq-lz-loc">LOCURA</div>
+                    <div class="etq-lz-cinta">PRECIOS BAJOS TODO EL AÑO</div>
+                    ${caja}
+                    <div class="etq-lz-cod">Cód. ${esc(p.codigo)}</div>
+                </div>
+                <div class="etq-lz-der">
+                    <span class="etq-lz-pill">PRECIO</span>
+                    <div class="etq-lz-precio"><small>REF</small><strong>${fmt(p.precio_unidad)}</strong></div>
+                    ${tieneMayor(p) ? `<div class="etq-lz-mayor">${cant}+ PZAS: REF ${fmt(p.precio_mayor)} C/U</div>` : ''}
+                    <div class="etq-lz-nombre">${esc(p.nombre)}</div>
+                    <div class="etq-lz-web">${esc(WEB)} · ${FECHA}</div>
+                </div>
+            </div>`;
+    }
+
+    function previewPc(p) {
+        const s = p.specs || {};
+        const marca = (s.marca || '').trim() || (p.nombre.split(' ')[0] || '').toUpperCase();
+        const entero = ceilPrecio(p.precio_unidad);
+        const lleno = c => (s[c] || '').trim() !== '';
+        const izq = ['modelo', 'procesador', 'pantalla'].filter(lleno);
+        const der = ['grafica', 'ram', 'almacenamiento', 'sistema'].filter(lleno);
+        while (izq.length < 3 && der.length > 3) izq.push(der.shift());
+        const spec = c => c ? `<div class="etq-pc-spec"><i>${SPEC_ICONO[c]}</i><span>${esc(s[c])}</span></div>` : '<div></div>';
+        const der3 = der.slice(0, 3);
+        let specs = '';
+        for (let f = 0; f < Math.max(izq.length, der3.length); f++) specs += spec(izq[f]) + spec(der3[f]);
+        const lk = logoKey(p);
+        return `
+            <div class="etq-pc">
+                <div class="etq-pc-izq">
+                    <div class="etq-pc-caja"><img src="${LOGO}" alt=""><b>PRECIO</b><b>REGULAR</b></div>
+                    <div class="etq-pc-pill"><small>REF</small><strong>${entero > 0 ? '$' + entero.toLocaleString('es-VE') : '—'}</strong></div>
+                    <div class="etq-pc-pie">Precios en REF<br><span style="font-weight:500;">${FECHA}</span></div>
+                </div>
+                <div class="etq-pc-der">
+                    ${lk ? `<img src="${LOGOS[lk]}" alt="${esc(marca)}" style="height:${['dell', 'apple', 'victus', 'hp', 'xiaomi', 'poco'].includes(lk) ? 30 : 24}px; max-width:120px; object-fit:contain; align-self:center;">` : `<div class="etq-pc-marca" style="text-align:center;">${esc(marca)}</div>`}
+                    <div class="etq-pc-cod">COD: ${esc(p.codigo)}</div>
+                    <div class="etq-pc-grid">${specs || '<span style="font-size:10px; color:#94a3b8;">Completa la ficha técnica en la lista.</span>'}</div>
+                    <div class="etq-pc-web">${esc(WEB)}</div>
+                </div>
+            </div>`;
     }
 
     function pintarPreview() {
@@ -293,6 +497,9 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
             cont.innerHTML = '<div class="etq-empty">Agrega un producto para ver cómo queda la ficha.</div>';
             return;
         }
+        const tipo = tipoActual();
+        if (tipo === 'locura') { cont.innerHTML = previewLocura(p); return; }
+        if (tipo === 'pc') { cont.innerHTML = previewPc(p); return; }
         const cant = Math.max(2, parseInt(document.getElementById('etq-cant-mayor').value, 10) || 3);
         const unidad = Number(p.precio_unidad);
         const mayor = Number(p.precio_mayor);
@@ -335,8 +542,14 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
     });
     document.getElementById('etq-tamano').addEventListener('change', render);
     document.getElementById('etq-cant-mayor').addEventListener('input', pintarPreview);
+    document.querySelectorAll('input[name="tipo"]').forEach(r => r.addEventListener('change', () => {
+        localStorage.setItem(TIPO_KEY, tipoActual());
+        if (tipoActual() !== 'clasica') completarSpecs();
+        render();
+    }));
 
     render();
+    if (tipoActual() !== 'clasica') completarSpecs();
 })();
 </script>
 @endpush

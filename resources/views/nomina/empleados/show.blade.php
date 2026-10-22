@@ -23,12 +23,26 @@
 @section('content')
 <div class="panel nomina-page">
     <div class="nomina-ficha-head">
-        <div>
-            <a href="{{ route('nomina.empleados.index') }}" class="muted" style="font-size:.82rem;">← Volver</a>
-            <h1 style="margin:4px 0 0;">{{ $empleado->nombre() }}</h1>
-            <p class="muted" style="margin:4px 0 0;">
-                Cargo: {{ $empleado->nombreCargo() }}  · Supervisor: {{ $empleado->nombreSupervisor() }}
-            </p>
+        <div style="display:flex; align-items:center; gap:16px;">
+            @php
+                $partesFicha = preg_split('/\s+/', trim($empleado->nombre())) ?: [];
+                $inicialesFicha = mb_strtoupper(mb_substr($partesFicha[0] ?? '?', 0, 1).mb_substr($partesFicha[1] ?? '', 0, 1));
+            @endphp
+            <a href="{{ route('nomina.empleados.edit', $empleado) }}" title="{{ $empleado->foto_url ? 'Cambiar foto' : 'Agregar foto' }}"
+               style="width:76px; height:76px; border-radius:16px; overflow:hidden; flex:none; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#134e4a,#0f766e); color:#fff; font-weight:800; font-size:1.4rem; text-decoration:none;">
+                @if($empleado->foto_url)
+                    <img src="{{ $empleado->foto_url }}" alt="{{ $empleado->nombre() }}" style="width:100%; height:100%; object-fit:cover;">
+                @else
+                    {{ $inicialesFicha }}
+                @endif
+            </a>
+            <div>
+                <a href="{{ route('nomina.empleados.index') }}" class="muted" style="font-size:.82rem;">← Volver</a>
+                <h1 style="margin:4px 0 0;">{{ $empleado->nombre() }}</h1>
+                <p class="muted" style="margin:4px 0 0;">
+                    Cargo: {{ $empleado->nombreCargo() }}  · Supervisor: {{ $empleado->nombreSupervisor() }}
+                </p>
+            </div>
         </div>
         <div class="nomina-ficha-meta">
             <div><span>Salario mensual</span><strong>${{ number_format($empleado->salario_base, 2) }}</strong></div>

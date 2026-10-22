@@ -21,6 +21,8 @@ class EtiquetasController extends Controller
 
         return view('etiquetas.index', [
             'tamanos' => EtiquetasPrecioService::TAMANOS,
+            'tipos' => EtiquetasPrecioService::TIPOS,
+            'specsPc' => EtiquetasPrecioService::SPECS_PC,
             'maxEtiquetas' => EtiquetasPrecioService::MAX_ETIQUETAS,
         ]);
     }
@@ -40,9 +42,20 @@ class EtiquetasController extends Controller
             'items' => ['required', 'array', 'min:1', 'max:300'],
             'items.*.id' => ['required', 'integer'],
             'items.*.copias' => ['required', 'integer', 'min:1', 'max:100'],
+            'items.*.specs' => ['nullable', 'array'],
+            'items.*.specs.*' => ['nullable', 'string', 'max:40'],
+            'tipo' => ['nullable', Rule::in(array_keys(EtiquetasPrecioService::TIPOS))],
             'tamano' => ['required', Rule::in(array_keys(EtiquetasPrecioService::TAMANOS))],
             'cantidad_mayor' => ['required', 'integer', 'min:2', 'max:999'],
         ]);
+
+        $tipo = $data['tipo'] ?? 'clasica';
+        if ($tipo !== 'pc') {
+            foreach ($data['items'] as &$item) {
+                unset($item['specs']);
+            }
+            unset($item);
+        }
 
         $fichas = $this->etiquetas->armarEtiquetas($data['items'], (int) $data['cantidad_mayor']);
         if ($fichas === []) {
@@ -52,7 +65,8 @@ class EtiquetasController extends Controller
         ini_set('memory_limit', '512M');
         ini_set('max_execution_time', '300');
 
-        $tamano = EtiquetasPrecioService::TAMANOS[$data['tamano']];
+        $tamanoClave = $tipo === 'clasica' ? $data['tamano'] : 'normal';
+        $tamano = EtiquetasPrecioService::TAMANOS[$tamanoClave];
         $porPagina = $tamano['columnas'] * $tamano['filas'];
 
         $pdf = app('dompdf.wrapper');
@@ -63,13 +77,16 @@ class EtiquetasController extends Controller
 
         $pdf->loadView('etiquetas.pdf', [
             'paginas' => array_chunk($fichas, $porPagina),
-            'ajustarNombre' => fn (string $nombre, float $anchoMm, float $altoMm, array $tamanos)
-                => $this->etiquetas->ajustarNombre($nombre, $anchoPt, $altoLineaPt, $anchoMm, $altoMm, $tamanos),
+            'ajustarNombre' => fn (string $nombre, float $anchoMm, float $altoMm, array $tamanos, int $maxLineas = 3, bool $mayusculas = true)
+                => $this->etiquetas->ajustarNombre($nombre, $anchoPt, $altoLineaPt, $anchoMm, $altoMm, $tamanos, $maxLineas, $mayusculas),
+            'tipo' => $tipo,
             'tamano' => $tamano,
-            'tamanoClave' => $data['tamano'],
+            'tamanoClave' => $tamanoClave,
             'logo' => $this->imagenDataUri(public_path('logo.png')),
             'fondo' => $this->fondoDegradado($tamano['ancho'], $tamano['alto']),
             'fecha' => now()->format('d/m/Y'),
+            'web' => EtiquetasPrecioService::WEB,
+            'logosMarca' => in_array($tipo, ['pc', 'locura'], true) ? $this->logosMarca($fichas) : [],
         ])->setPaper('letter', 'portrait');
 
         return $pdf->stream('etiquetas_' . now()->format('Ymd_His') . '.pdf');
@@ -79,6 +96,25 @@ class EtiquetasController extends Controller
     {
         $user = $request->user();
         abort_unless($user && $user->canSeeCatalogoPrecios(), 403, 'No tienes permiso para ver precios del catálogo.');
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $fichas
+     * @return array<string, array{src: string, ratio: float}>
+     */
+    private function logosMarca(array $fichas): array
+    {
+        $out = [];
+        foreach (array_unique(array_filter(array_column($fichas, 'logo_marca'))) as $clave) {
+            $path = public_path("img/marcas/{$clave}.png");
+            $info = @getimagesize($path);
+            $src = $this->imagenDataUri($path);
+            if ($info && $src) {
+                $out[$clave] = ['src' => $src, 'ratio' => $info[0] / max(1, $info[1])];
+            }
+        }
+
+        return $out;
     }
 
     private function imagenDataUri(string $path): ?string

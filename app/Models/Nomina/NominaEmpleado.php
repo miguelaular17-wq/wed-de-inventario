@@ -30,6 +30,7 @@ class NominaEmpleado extends Model
         'user_id',
         'email',
         'telefono',
+        'foto_url',
         'fecha_ingreso',
         'cargo',
         'sede',

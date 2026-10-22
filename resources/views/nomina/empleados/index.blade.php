@@ -82,7 +82,13 @@
             @endphp
             <a class="emp-card" href="{{ route('nomina.empleados.show', $empleado) }}">
                 <div class="emp-card-top">
-                    <div class="emp-foto" aria-hidden="true">{{ $iniciales }}</div>
+                    <div class="emp-foto" aria-hidden="true">
+                        @if($empleado->foto_url)
+                            <img src="{{ $empleado->foto_url }}" alt="" loading="lazy">
+                        @else
+                            {{ $iniciales }}
+                        @endif
+                    </div>
                     <div class="emp-id">
                         <strong>{{ $empleado->nombre() }}</strong>
                         <div class="muted">{{ $empleado->cedula() ?: 'Sin cédula' }}</div>
@@ -120,7 +126,8 @@
 .emp-card { display: block; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; text-decoration: none; color: inherit; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
 .emp-card:hover { border-color: #99f6e4; box-shadow: 0 6px 18px rgba(15,118,110,.08); }
 .emp-card-top { display: flex; align-items: center; gap: 12px; }
-.emp-foto { width: 56px; height: 56px; border-radius: 14px; flex: none; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #134e4a, #0f766e); color: #fff; font-weight: 800; letter-spacing: .4px; }
+.emp-foto { width: 56px; height: 56px; border-radius: 14px; flex: none; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #134e4a, #0f766e); color: #fff; font-weight: 800; letter-spacing: .4px; overflow: hidden; }
+.emp-foto img { width: 100%; height: 100%; object-fit: cover; }
 .emp-id { min-width: 0; flex: 1; }
 .emp-id strong { display: block; line-height: 1.2; }
 .emp-datos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin: 14px 0 0; }

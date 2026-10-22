@@ -16,11 +16,35 @@
         <div class="alert error" style="margin-top:12px;">{{ $errors->first() }}</div>
     @endif
 
-    <form method="POST" action="{{ $empleado ? route('nomina.empleados.update', $empleado) : route('nomina.empleados.store') }}" class="nomina-form">
+    <form method="POST" action="{{ $empleado ? route('nomina.empleados.update', $empleado) : route('nomina.empleados.store') }}" class="nomina-form" enctype="multipart/form-data">
         @csrf
         @if($empleado) @method('PUT') @endif
 
         <h3>Información personal</h3>
+        @php
+            $fotoActual = $empleado?->foto_url;
+            $partesNombre = preg_split('/\s+/', trim((string) $empleado?->nombre())) ?: [];
+            $inicialesForm = mb_strtoupper(mb_substr($partesNombre[0] ?? '', 0, 1).mb_substr($partesNombre[1] ?? '', 0, 1)) ?: '+';
+        @endphp
+        <div class="emp-foto-field">
+            <label class="emp-foto-preview" for="emp-foto-input" title="Cambiar foto">
+                <img id="emp-foto-img" src="{{ $fotoActual }}" alt="" style="{{ $fotoActual ? '' : 'display:none;' }}">
+                <span id="emp-foto-ini" style="{{ $fotoActual ? 'display:none;' : '' }}">{{ $inicialesForm }}</span>
+            </label>
+            <div class="emp-foto-acciones">
+                <strong>Foto del empleado</strong>
+                <span class="muted">JPG, PNG o WEBP, hasta 10 MB. Se recorta cuadrada automáticamente.</span>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+                    <label for="emp-foto-input" class="btn secondary" style="cursor:pointer;">{{ $fotoActual ? 'Cambiar foto' : 'Subir foto' }}</label>
+                    <input type="file" name="foto" id="emp-foto-input" accept="image/jpeg,image/png,image/webp" capture="user" style="display:none;">
+                    @if($fotoActual)
+                        <label style="display:flex; align-items:center; gap:6px; font-size:.85rem; cursor:pointer;">
+                            <input type="checkbox" name="quitar_foto" value="1" id="emp-foto-quitar"> Quitar foto
+                        </label>
+                    @endif
+                </div>
+            </div>
+        </div>
         <div class="nomina-form-grid">
             @if(!$empleado)
             <div class="field field-wide">
@@ -206,8 +230,32 @@
         </div>
     </form>
 </div>
+@push('head')
+<style>
+.emp-foto-field { display: flex; align-items: center; gap: 16px; margin: 4px 0 16px; }
+.emp-foto-preview { width: 96px; height: 96px; border-radius: 18px; overflow: hidden; flex: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #134e4a, #0f766e); color: #fff; font-weight: 800; font-size: 1.6rem; box-shadow: 0 2px 8px rgba(15, 23, 42, .15); }
+.emp-foto-preview img { width: 100%; height: 100%; object-fit: cover; }
+.emp-foto-acciones { display: flex; flex-direction: column; gap: 2px; }
+.emp-foto-acciones .muted { font-size: .82rem; }
+</style>
+@endpush
 @push('scripts')
 <script>
+document.getElementById('emp-foto-input')?.addEventListener('change', function () {
+    const file = this.files && this.files[0];
+    if (!file) return;
+    const img = document.getElementById('emp-foto-img');
+    img.src = URL.createObjectURL(file);
+    img.style.display = '';
+    document.getElementById('emp-foto-ini').style.display = 'none';
+    const quitar = document.getElementById('emp-foto-quitar');
+    if (quitar) quitar.checked = false;
+});
+document.getElementById('emp-foto-quitar')?.addEventListener('change', function () {
+    document.getElementById('emp-foto-img').style.opacity = this.checked ? '.25' : '1';
+});
+
 document.getElementById('nomina-cliente')?.addEventListener('change', function () {
     const opt = this.options[this.selectedIndex];
     const cedula = document.getElementById('nomina-cedula');

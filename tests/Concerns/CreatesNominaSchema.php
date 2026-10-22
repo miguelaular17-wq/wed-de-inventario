@@ -187,6 +187,7 @@ trait CreatesNominaSchema
                 $table->unsignedBigInteger('user_id')->nullable();
                 $table->string('email')->nullable();
                 $table->string('telefono', 64)->nullable();
+                $table->string('foto_url', 500)->nullable();
                 $table->date('fecha_ingreso')->nullable();
                 $table->string('cargo', 128)->nullable();
                 $table->string('sede', 32)->nullable();
@@ -209,6 +210,11 @@ trait CreatesNominaSchema
         } elseif (! Schema::hasColumn('nomina_empleados', 'empresa_id')) {
             Schema::table('nomina_empleados', function (Blueprint $table) {
                 $table->unsignedBigInteger('empresa_id')->nullable();
+            });
+        }
+        if (! Schema::hasColumn('nomina_empleados', 'foto_url')) {
+            Schema::table('nomina_empleados', function (Blueprint $table) {
+                $table->string('foto_url', 500)->nullable();
             });
         }
 
