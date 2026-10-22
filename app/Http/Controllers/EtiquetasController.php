@@ -22,6 +22,7 @@ class EtiquetasController extends Controller
         return view('etiquetas.index', [
             'tamanos' => EtiquetasPrecioService::TAMANOS,
             'tipos' => EtiquetasPrecioService::TIPOS,
+            'tiposDescripcion' => EtiquetasPrecioService::TIPOS_DESCRIPCION,
             'specsPc' => EtiquetasPrecioService::SPECS_PC,
             'maxEtiquetas' => EtiquetasPrecioService::MAX_ETIQUETAS,
         ]);
@@ -45,8 +46,7 @@ class EtiquetasController extends Controller
             'items.*.specs' => ['nullable', 'array'],
             'items.*.specs.*' => ['nullable', 'string', 'max:40'],
             'tipo' => ['nullable', Rule::in(array_keys(EtiquetasPrecioService::TIPOS))],
-            'tamano' => ['required', Rule::in(array_keys(EtiquetasPrecioService::TAMANOS))],
-            'cantidad_mayor' => ['required', 'integer', 'min:2', 'max:999'],
+            'cantidad_mayor' => ['nullable', 'integer', 'min:2', 'max:999'],
         ]);
 
         $tipo = $data['tipo'] ?? 'clasica';
@@ -57,7 +57,7 @@ class EtiquetasController extends Controller
             unset($item);
         }
 
-        $fichas = $this->etiquetas->armarEtiquetas($data['items'], (int) $data['cantidad_mayor']);
+        $fichas = $this->etiquetas->armarEtiquetas($data['items'], (int) ($data['cantidad_mayor'] ?? 3));
         if ($fichas === []) {
             return back()->with('error', 'Ninguno de los productos de la lista está activo.');
         }
@@ -65,8 +65,8 @@ class EtiquetasController extends Controller
         ini_set('memory_limit', '512M');
         ini_set('max_execution_time', '300');
 
-        $tamanoClave = $tipo === 'clasica' ? $data['tamano'] : 'normal';
-        $tamano = EtiquetasPrecioService::TAMANOS[$tamanoClave];
+        $tamanoClave = $tipo;
+        $tamano = EtiquetasPrecioService::TAMANOS[$tipo];
         $porPagina = $tamano['columnas'] * $tamano['filas'];
 
         $pdf = app('dompdf.wrapper');
@@ -94,8 +94,9 @@ class EtiquetasController extends Controller
 
     private function autorizar(Request $request): void
     {
+        // Sin sesión se permite (igual que los precios del catálogo); con sesión se respeta el permiso de ver precios.
         $user = $request->user();
-        abort_unless($user && $user->canSeeCatalogoPrecios(), 403, 'No tienes permiso para ver precios del catálogo.');
+        abort_if($user && ! $user->canSeeCatalogoPrecios(), 403, 'No tienes permiso para ver precios del catálogo.');
     }
 
     /**

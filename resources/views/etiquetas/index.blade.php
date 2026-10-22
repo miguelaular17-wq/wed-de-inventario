@@ -62,18 +62,11 @@
                         @foreach($tipos as $clave => $label)
                             <label class="etq-tipo">
                                 <input type="radio" name="tipo" value="{{ $clave }}" @checked($loop->first)>
-                                <span>{{ $label }}</span>
+                                <span>{{ $label }}<small>{{ $tiposDescripcion[$clave] ?? '' }}</small></span>
                             </label>
                         @endforeach
                     </div>
                 </div>
-                <label id="etq-tamano-wrap">
-                    Tamaño
-                    <select name="tamano" id="etq-tamano">
-                        <option value="normal">Normal · 9,7 × 5 cm (10 por hoja)</option>
-                        <option value="pequena">Pequeña · 6,4 × 3,5 cm (21 por hoja)</option>
-                    </select>
-                </label>
                 <label id="etq-cant-mayor-wrap">
                     Precio mayor desde
                     <span style="display:flex; align-items:center; gap:6px;">
@@ -83,7 +76,7 @@
                 </label>
                 <div class="etq-total">
                     <strong id="etq-total-etiquetas">0</strong> etiquetas · <span id="etq-total-hojas">0</span> hoja(s) carta
-                    <div id="etq-tipo-nota" class="etq-hint" style="margin:4px 0 0; display:none;">Esta etiqueta sale en tamaño normal (9,7 × 5 cm).</div>
+                    <div id="etq-tipo-nota" class="etq-hint" style="margin:4px 0 0;"></div>
                 </div>
                 <button type="submit" class="btn primary etq-generar" id="etq-generar" disabled>🖨️ Generar PDF para imprimir</button>
             </form>
@@ -140,24 +133,25 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
     font-size: .85rem; font-weight: 600; color: #334155; text-transform: none; letter-spacing: 0; background: #fff; }
 .etq-opciones label.etq-tipo:has(input:checked) { border-color: #7c3aed; background: #f5f3ff; color: #5b21b6; }
 .etq-tipo input { margin: 0; padding: 0; }
+.etq-tipo small { display: block; font-size: .72rem; font-weight: 500; color: #64748b; }
 .etq-specs-row td { background: #faf5ff; padding-top: 4px !important; }
 .etq-specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 8px; }
 .etq-specs label { display: flex; flex-direction: column; gap: 2px; font-size: .68rem; font-weight: 700; color: #7c3aed; text-transform: uppercase; }
 .etq-specs input { padding: 5px 7px; border-radius: 6px; border: 1px solid #ddd6fe; font-size: .8rem; font-weight: 500; color: #0f172a; text-transform: none; }
 
 /* Vista previa: Precios de locura */
-.etq-lz { width: 388px; height: 200px; border-radius: 14px; padding: 10px; box-sizing: border-box; display: flex; gap: 8px;
+.etq-lz { width: 280px; height: 200px; border-radius: 14px; padding: 9px; box-sizing: border-box; display: flex; gap: 7px;
     background: linear-gradient(135deg, #ec4899 0%, #9333ea 50%, #3b82f6 100%); font-family: inherit; }
-.etq-lz-izq { width: 152px; display: flex; flex-direction: column; align-items: center; gap: 4px; color: #fff; }
-.etq-lz-izq img { width: 50px; height: 50px; }
-.etq-lz-de { font-weight: 800; font-size: 15px; letter-spacing: .03em; }
-.etq-lz-loc { width: 100%; text-align: center; background: #3b0764; color: #facc15; font-weight: 900; font-size: 28px; border-radius: 8px; border-bottom: 3px solid #facc15; line-height: 1.25; }
-.etq-lz-cinta { width: 92%; text-align: center; background: #facc15; color: #9d174d; font-weight: 800; font-size: 8px; border-radius: 4px; padding: 3px 0; }
+.etq-lz-izq { width: 108px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; color: #fff; }
+.etq-lz-izq img { width: 48px; height: 48px; }
+.etq-lz-de { font-weight: 800; font-size: 12px; letter-spacing: .03em; white-space: nowrap; }
+.etq-lz-loc { width: 100%; text-align: center; background: #3b0764; color: #facc15; font-weight: 900; font-size: 21px; border-radius: 7px; border-bottom: 3px solid #facc15; line-height: 1.3; }
+.etq-lz-cinta { width: 92%; text-align: center; background: #facc15; color: #9d174d; font-weight: 800; font-size: 7px; border-radius: 4px; padding: 2px 4px; line-height: 1.3; }
 .etq-lz.con-marca .etq-lz-izq { gap: 3px; }
-.etq-lz.con-marca .etq-lz-izq > img { width: 38px; height: 38px; }
-.etq-lz.con-marca .etq-lz-de { font-size: 13px; }
-.etq-lz.con-marca .etq-lz-loc { font-size: 24px; }
-.etq-lz-marca { width: 86%; height: 32px; background: #fff; border-radius: 7px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+.etq-lz.con-marca .etq-lz-izq > img { width: 34px; height: 34px; }
+.etq-lz.con-marca .etq-lz-de { font-size: 11px; }
+.etq-lz.con-marca .etq-lz-loc { font-size: 18px; }
+.etq-lz-marca { width: 94%; height: 30px; background: #fff; border-radius: 7px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
 .etq-lz-marca img { max-height: 24px; max-width: 88%; object-fit: contain; }
 .etq-lz-marca b { color: #1e1b4b; font-size: 14px; font-weight: 900; letter-spacing: .08em; }
 .etq-lz-cod { margin-top: auto; font-size: 7.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
@@ -165,28 +159,28 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 .etq-lz-pill { align-self: flex-start; background: #7c3aed; color: #fff; font-weight: 800; font-size: 9px; letter-spacing: .1em; padding: 2px 12px; border-radius: 999px; }
 .etq-lz-precio { display: flex; align-items: flex-start; justify-content: center; gap: 4px; margin-top: 2px; }
 .etq-lz-precio small { font-size: 9px; font-weight: 800; color: #64748b; margin-top: 6px; }
-.etq-lz-precio strong { font-size: 36px; font-weight: 900; line-height: 1.1; }
+.etq-lz-precio strong { font-size: 30px; font-weight: 900; line-height: 1.1; }
 .etq-lz-mayor { text-align: center; font-size: 9px; font-weight: 800; color: #7c3aed; }
 .etq-lz-nombre { border-top: 1px dashed #c4b5fd; margin-top: 4px; padding-top: 5px; font-weight: 800; font-size: 11px; text-transform: uppercase; line-height: 1.2;
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .etq-lz-web { margin-top: auto; text-align: center; font-size: 7px; font-weight: 700; color: #7c3aed; }
 
 /* Vista previa: PC */
-.etq-pc { width: 388px; height: 200px; border-radius: 14px; padding: 10px; box-sizing: border-box; display: flex; gap: 8px;
+.etq-pc { width: 270px; height: 315px; border-radius: 14px; padding: 9px; box-sizing: border-box; display: flex; flex-direction: column; gap: 7px;
     background: linear-gradient(135deg, #ec4899 0%, #9333ea 50%, #3b82f6 100%); font-family: inherit; }
-.etq-pc-izq { width: 144px; display: flex; flex-direction: column; gap: 0; color: #fff; }
-.etq-pc-caja { position: relative; background: #4c1d95; border-radius: 10px; padding: 8px 10px 12px; }
-.etq-pc-caja img { position: absolute; right: 6px; top: 5px; width: 34px; height: 34px; }
-.etq-pc-caja b { display: block; font-size: 17px; font-weight: 900; line-height: 1.15; }
-.etq-pc-caja b + b { color: #facc15; font-size: 19px; margin-top: 6px; }
-.etq-pc-pill { margin-top: -6px; background: #db2777; border: 2px solid #fff; border-radius: 12px; padding: 4px 8px; position: relative; text-align: center; }
-.etq-pc-pill small { position: absolute; left: 8px; top: 5px; font-size: 8px; font-weight: 800; color: #fde68a; }
-.etq-pc-pill strong { font-size: 32px; font-weight: 900; }
-.etq-pc-pie { margin-top: auto; text-align: center; font-size: 7.5px; font-weight: 700; }
+.etq-pc-izq { display: flex; flex-direction: column; gap: 0; color: #fff; }
+.etq-pc-caja { position: relative; background: #4c1d95; border-radius: 10px; padding: 8px 14px 14px; }
+.etq-pc-caja img { position: absolute; right: 10px; top: 7px; width: 50px; height: 50px; }
+.etq-pc-caja b { display: block; font-size: 21px; font-weight: 900; line-height: 1.1; text-align: center; }
+.etq-pc-caja b + b { color: #facc15; font-size: 23px; margin-top: 2px; }
+.etq-pc-pill { margin-top: -8px; background: #db2777; border: 2px solid #fff; border-radius: 12px; padding: 4px 8px; position: relative; text-align: center; }
+.etq-pc-pill small { position: absolute; left: 12px; top: 7px; font-size: 9px; font-weight: 800; color: #fde68a; }
+.etq-pc-pill strong { font-size: 44px; font-weight: 900; line-height: 1.15; }
+.etq-pc-pie { display: none; }
 .etq-pc-der { flex: 1; background: #fff; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; color: #0f172a; min-width: 0; }
 .etq-pc-marca { font-size: 22px; font-weight: 900; letter-spacing: .06em; line-height: 1.1; }
 .etq-pc-cod { font-size: 7.5px; font-weight: 700; color: #64748b; margin: 2px 0 6px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.etq-pc-grid { display: grid; grid-template-columns: 1.27fr 1fr; gap: 5px 6px; }
+.etq-pc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; }
 .etq-pc-spec { display: flex; align-items: center; gap: 5px; font-size: 9.5px; font-weight: 800; line-height: 1.15; min-width: 0; }
 .etq-pc-spec i { flex-shrink: 0; width: 17px; height: 17px; border-radius: 50%; background: #db2777; color: #fff; font-style: normal; font-size: 10px; display: flex; align-items: center; justify-content: center; }
 .etq-pc-web { margin-top: auto; text-align: center; font-size: 7.5px; font-weight: 700; color: #7c3aed; }
@@ -195,7 +189,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 
 /* Vista previa (misma ficha que el PDF) */
 .etq-preview-wrap { display: flex; justify-content: center; padding: 16px; background: #f1f5f9; border-radius: 12px; }
-.etq-card { width: 388px; height: 200px; border-radius: 14px; padding: 10px 12px; box-sizing: border-box; color: #fff;
+.etq-card { width: 280px; height: 200px; border-radius: 14px; padding: 10px 12px; box-sizing: border-box; color: #fff;
     background: linear-gradient(135deg, #ec4899 0%, #9333ea 50%, #3b82f6 100%); display: flex; flex-direction: column; gap: 7px; font-family: inherit; }
 .etq-card-top { display: flex; gap: 10px; align-items: stretch; height: 64px; }
 .etq-card-logo { width: 64px; height: 64px; border-radius: 50%; background: #fff; padding: 2px; box-sizing: border-box; flex-shrink: 0; }
@@ -225,7 +219,8 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
     const STORAGE_KEY = 'etiquetas_lista_v1';
     const BUSCAR_URL = @json(route('etiquetas.buscar'));
     const LOGO = @json(asset('logo.png'));
-    const POR_HOJA = { normal: 10, pequena: 21 };
+    const POR_HOJA = @json(collect(\App\Services\EtiquetasPrecioService::TAMANOS)->map(fn ($t) => $t['columnas'] * $t['filas']));
+    const MEDIDA = @json($tiposDescripcion);
     const MAX = {{ (int) $maxEtiquetas }};
     const TIPO_KEY = 'etiquetas_tipo_v1';
     const WEB = @json(\App\Services\EtiquetasPrecioService::WEB);
@@ -376,9 +371,8 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         const tipo = tipoActual();
         const esPc = tipo === 'pc';
         document.getElementById('etq-count').textContent = lista.length;
-        document.getElementById('etq-tamano-wrap').style.display = tipo === 'clasica' ? '' : 'none';
         document.getElementById('etq-cant-mayor-wrap').style.display = esPc ? 'none' : '';
-        document.getElementById('etq-tipo-nota').style.display = tipo === 'clasica' ? 'none' : 'block';
+        document.getElementById('etq-tipo-nota').textContent = 'Medida: ' + (MEDIDA[tipo] || '');
         if (lista.length === 0) {
             $body.innerHTML = '<tr><td colspan="5"><div class="etq-empty" style="border:none;">La lista está vacía.</div></td></tr>';
         } else {
@@ -417,9 +411,8 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         }
 
         const total = Math.min(MAX, lista.reduce((s, p) => s + (p.copias || 1), 0));
-        const tam = tipo === 'clasica' ? document.getElementById('etq-tamano').value : 'normal';
         document.getElementById('etq-total-etiquetas').textContent = total;
-        document.getElementById('etq-total-hojas').textContent = Math.ceil(total / (POR_HOJA[tam] || 10));
+        document.getElementById('etq-total-hojas').textContent = Math.ceil(total / (POR_HOJA[tipo] || 10));
         document.getElementById('etq-generar').disabled = lista.length === 0;
 
         pintarFormItems();
@@ -466,11 +459,9 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         const marca = (s.marca || '').trim() || (p.nombre.split(' ')[0] || '').toUpperCase();
         const entero = ceilPrecio(p.precio_unidad);
         const lleno = c => (s[c] || '').trim() !== '';
-        const izq = ['modelo', 'procesador', 'pantalla'].filter(lleno);
-        const der = ['grafica', 'ram', 'almacenamiento', 'sistema'].filter(lleno);
-        while (izq.length < 3 && der.length > 3) izq.push(der.shift());
+        const izq = ['modelo', 'procesador', 'grafica', 'pantalla'].filter(lleno);
+        const der3 = ['ram', 'almacenamiento', 'sistema'].filter(lleno);
         const spec = c => c ? `<div class="etq-pc-spec"><i>${SPEC_ICONO[c]}</i><span>${esc(s[c])}</span></div>` : '<div></div>';
-        const der3 = der.slice(0, 3);
         let specs = '';
         for (let f = 0; f < Math.max(izq.length, der3.length); f++) specs += spec(izq[f]) + spec(der3[f]);
         const lk = logoKey(p);
@@ -540,7 +531,6 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         const q = $q.value.trim();
         debounce = setTimeout(() => buscar(q, false), 350);
     });
-    document.getElementById('etq-tamano').addEventListener('change', render);
     document.getElementById('etq-cant-mayor').addEventListener('input', pintarPreview);
     document.querySelectorAll('input[name="tipo"]').forEach(r => r.addEventListener('change', () => {
         localStorage.setItem(TIPO_KEY, tipoActual());

@@ -12,16 +12,23 @@ class EtiquetasPrecioService
 {
     public const MAX_ETIQUETAS = 600;
 
+    /** Medida fija de cada tipo de ficha (mm) y cuántas caben en una hoja carta. */
     public const TAMANOS = [
-        'normal' => ['columnas' => 2, 'filas' => 5, 'ancho' => 97, 'alto' => 50],
-        'pequena' => ['columnas' => 3, 'filas' => 7, 'ancho' => 64, 'alto' => 35],
+        'clasica' => ['columnas' => 2, 'filas' => 5, 'ancho' => 70, 'alto' => 50],
+        'locura' => ['columnas' => 2, 'filas' => 5, 'ancho' => 70, 'alto' => 50],
+        'pc' => ['columnas' => 2, 'filas' => 2, 'ancho' => 90, 'alto' => 105],
     ];
 
-    /** Tipos de ficha. "locura" y "pc" solo existen en tamaño normal. */
     public const TIPOS = [
         'clasica' => 'Clásica (1 pza / mayor)',
         'locura' => 'Precios de locura',
         'pc' => 'PC / Laptop (ficha técnica)',
+    ];
+
+    public const TIPOS_DESCRIPCION = [
+        'clasica' => '7 × 5 cm · 10 por hoja',
+        'locura' => '7 × 5 cm · 10 por hoja',
+        'pc' => '9 × 10,5 cm · 4 por hoja',
     ];
 
     public const WEB = 'www.elpalaciodelosdetalles.com';
@@ -330,7 +337,7 @@ class EtiquetasPrecioService
         foreach ($usado as $u) {
             $resto = str_replace($u, ' ', $resto);
         }
-        $resto = preg_replace('/\b(LAPTOP|NOTEBOOK|COMPUTADORA|PORTATIL|PORTÁTIL|PC|MINI|ALL IN ONE|AIO|INTEL|AMD|CORE|GAMING|GAMER|MEMORY|MEMORIA|RAM|NVIDIA|GEFORCE|FULL|HD|FHD)\b/u', ' ', $resto) ?? $resto;
+        $resto = preg_replace('/\b(LAPTOP|NOTEBOOK|COMPUTADORA|PORTATIL|PORTÁTIL|PC|MINI|ALL IN ONE|AIO|INTEL|AMD|CORE|GAMING|GAMER|MEMORY|MEMORIA|RAM|NVIDIA|GEFORCE|FULL|HD|FHD|SCREEN|TOUCH|TOUCHSCREEN|WITH|AND|CON|PANTALLA|TACTIL|TÁCTIL|DISPLAY)\b/u', ' ', $resto) ?? $resto;
         $resto = preg_replace('/(^|\s)[-–|,·\/+]+(?=\s|$)/u', ' ', $resto) ?? $resto;
         $resto = trim(preg_replace('/\s+/u', ' ', $resto) ?? '');
         $specs['modelo'] = mb_substr(trim(($specs['marca'] !== '' ? $specs['marca'] . ' ' : '') . implode(' ', array_slice(explode(' ', $resto), 0, 3))), 0, 40);

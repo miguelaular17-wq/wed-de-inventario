@@ -236,7 +236,11 @@ class EtiquetasPrecioTest extends TestCase
 
     public function test_requiere_permiso_de_ver_precios(): void
     {
-        $this->get(route('etiquetas.index'))->assertRedirect();
+        $this->get(route('etiquetas.index'))->assertOk()->assertSee('Etiquetas de precio');
+        $this->getJson(route('etiquetas.buscar', ['q' => '0707']))->assertOk()->assertJsonPath('exacto.id', 1);
+        $this->post(route('etiquetas.pdf'), ['items' => [['id' => 1, 'copias' => 1]], 'tipo' => 'clasica'])
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
 
         $this->actingAs($this->makeUser(User::ROLE_SUPERVISOR))
             ->get(route('etiquetas.index'))

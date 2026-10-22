@@ -71,6 +71,9 @@
                 $sedeItems[] = $link('Stock JRZ', route('vendedor.jrz'), request()->routeIs('vendedor.jrz'));
             }
         }
+        if ($u->canSeeCatalogoPrecios() && ! $u->isVendedor()) {
+            $sedeItems[] = $link('Sacar etiquetas', route('etiquetas.index'), request()->routeIs('etiquetas.*'));
+        }
         $sedeItems[] = $link('Exportar', route('requisicion.form'), request()->routeIs('requisicion.*'), 'nav-export');
         if (! in_array($u->role, ['supervisor', 'telefonia'], true)) {
             $sedeItems[] = $link('Catálogo Visual', route('catalogo.index'), request()->routeIs('catalogo.*'), 'nav-catalogo', true);
@@ -201,6 +204,7 @@
                 $nav[] = $link('Stock JRZ', route('vendedor.jrz'), request()->routeIs('vendedor.jrz'));
             }
         }
+        $nav[] = $link('Sacar etiquetas', route('etiquetas.index'), request()->routeIs('etiquetas.*'));
     }
 
     if ($sedeItems) {

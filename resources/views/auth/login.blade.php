@@ -109,6 +109,12 @@
                         </span>
                         <span class="nexo-login-chip-label">Lector QR</span>
                     </a>
+                    <a href="{{ route('etiquetas.index') }}" class="nexo-login-chip nexo-login-chip-etq">
+                        <span class="nexo-login-chip-icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+                        </span>
+                        <span class="nexo-login-chip-label">Sacar etiquetas</span>
+                    </a>
                 </div>
             </div>
 
@@ -561,6 +567,25 @@
     .nexo-login-chip-qr:hover .nexo-login-chip-icon {
         background: #bfdbfe;
         color: #1a4480;
+    }
+
+    .nexo-login-chip-etq {
+        grid-column: 1 / -1;
+        flex-direction: row;
+        min-height: 54px;
+        border-color: #ddd6fe;
+        background: #faf5ff;
+    }
+
+    .nexo-login-chip-etq .nexo-login-chip-icon {
+        background: #ede9fe;
+        color: #6d28d9;
+    }
+
+    .nexo-login-chip-etq:hover {
+        border-color: #c4b5fd;
+        color: #6d28d9;
+        background: #f5f3ff;
     }
 
     .nexo-login-footer {

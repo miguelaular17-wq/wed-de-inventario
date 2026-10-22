@@ -366,10 +366,11 @@ Route::prefix('vendedor')->group(function () {
 Route::middleware(['auth', 'permission:vendedor.jrz'])->group(function () {
     Route::get('/vendedor/jrz', [\App\Http\Controllers\VendedorController::class, 'jrz'])->name('vendedor.jrz');
 });
-Route::middleware('auth')->prefix('etiquetas')->name('etiquetas.')->group(function () {
+// Etiquetas de precio: públicas como el catálogo de existencias (las tiendas imprimen sin iniciar sesión).
+Route::prefix('etiquetas')->name('etiquetas.')->group(function () {
     Route::get('/', [\App\Http\Controllers\EtiquetasController::class, 'index'])->name('index');
-    Route::get('/buscar', [\App\Http\Controllers\EtiquetasController::class, 'buscar'])->name('buscar');
-    Route::post('/pdf', [\App\Http\Controllers\EtiquetasController::class, 'pdf'])->name('pdf');
+    Route::get('/buscar', [\App\Http\Controllers\EtiquetasController::class, 'buscar'])->middleware('throttle:240,1')->name('buscar');
+    Route::post('/pdf', [\App\Http\Controllers\EtiquetasController::class, 'pdf'])->middleware('throttle:20,1')->name('pdf');
 });
 
 // Tesoreria routes

@@ -38,7 +38,7 @@
         @if(! $modoJrz && auth()->user()?->canAccess('vendedor.jrz'))
             <a href="{{ route('vendedor.jrz', ['dias' => 30]) }}" class="btn secondary" style="padding:10px 14px; border-radius:8px; text-decoration:none;">Vista JRZ + ventas</a>
         @endif
-        @if(! $modoJrz && auth()->user()?->canSeeCatalogoPrecios())
+        @if(! $modoJrz && $verPrecios)
             <a href="{{ route('etiquetas.index') }}" class="btn secondary" style="padding:10px 14px; border-radius:8px; text-decoration:none; font-weight:600;">🏷️ Sacar etiquetas</a>
         @endif
         <a href="{{ route('catalogo.index') }}" class="btn btn-primary" style="background-color: var(--blue); color: white; padding: 10px 16px; border-radius: 8px; text-decoration: none; font-weight: 500; display: flex; align-items: center; gap: 8px;">
