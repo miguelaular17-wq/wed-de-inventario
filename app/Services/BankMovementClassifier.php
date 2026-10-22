@@ -30,6 +30,8 @@ class BankMovementClassifier
         'op.cred.dirt', 'op cred dirt',
         'com.pat', 'com pat app',
         'com/liq', 'com/liq/tdd',
+        // Tesoro: "MANT PLAT POS AGO 82258507-8" (mantenimiento plataforma POS).
+        'mant plat pos', 'mant plat',
         'comsiones', 'comisiones',
     ];
 

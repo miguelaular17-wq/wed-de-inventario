@@ -11,7 +11,7 @@ return [
         'compras.distribucion' => 'Compras: Distribución',
         'compras.necesidad' => 'Compras: Necesidad de compra',
         'compras.proveedores' => 'Compras: General por proveedor',
-        'compras.sobrestock' => 'Compras: Sobre stock / sin rotación',
+        'compras.sobrestock' => 'Análisis de inventario (sobre stock / sin rotación)',
         'compras.qpedir' => 'Compras: Q Pedir',
         'compras.existencias' => 'Compras: Existencias globales',
         'compras.publicidad' => 'Compras: Efectividad publicidad',

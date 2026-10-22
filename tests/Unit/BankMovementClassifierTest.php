@@ -58,6 +58,8 @@ class BankMovementClassifierTest extends TestCase
     {
         $this->assertTrue($this->classifier->esComision('OP.CRED.DIRT. CLTE-CLTE PJ -VIA ELECTRON', 'MERCANTIL'));
         $this->assertTrue($this->classifier->esComision('COM.PAT APP-0163 4121936966', null));
+        $this->assertTrue($this->classifier->esComision('MANT PLAT POS AGO 82258507-8', 'TESORO'));
+        $this->assertTrue($this->classifier->esComision('MANT PLAT POS AGO 82258507-9', null));
         $this->assertFalse($this->classifier->esComision('TRANSF ENTRE CTAS BM PERS JURIDICA', 'MERCANTIL'));
     }
 
