@@ -344,6 +344,296 @@ class ConciliacionExtractoImportTest extends TestCase
         $this->assertCount(0, $capturado['conciliados']);
     }
 
+    public function test_la_comision_del_banco_no_se_queda_con_el_egreso_de_la_transferencia(): void
+    {
+        $flujo = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'Mercantil', 'titular' => 'JRZ', 'fecha' => '2026-08-05',
+            'monto_bs' => 22654.80, 'monto_usd' => 30, 'comision' => 2.26, 'referencia' => '47900003411',
+            'motivo' => '2 LIMPIEZAS', 'tipo_gasto' => '036 - MANT. Y REP. LOCALES/CASAS EMPEÑO', 'oculto' => false,
+        ]);
+        $flujo->forceFill(['es_conciliado' => true])->save();
+        $comision = ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-05',
+            'descripcion' => 'OP.CRED.DIRT. CLTE-CLTE PJ -VIA ELECTRON', 'referencia' => '43700003411',
+            'monto' => 2.26, 'estado' => 'conciliado', 'tipo' => 'cargo', 'flujo_caja_id' => $flujo->id,
+        ]);
+        $transferencia = ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-05',
+            'descripcion' => 'TRANSF ENTRE CTAS BM PERS JURIDICA', 'referencia' => '47900003411',
+            'monto' => 22654.80, 'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+
+        $matcher = app(\App\Services\BankReconciliationMatcher::class);
+        $this->assertTrue($matcher->referenciasCruzan('43700003411', '47900003411'));
+        $this->assertFalse($matcher->coincideEgreso($comision, $flujo));
+
+        $reparar = new \ReflectionMethod(\App\Http\Controllers\FinanzasController::class, 'desvincularComisionEmparejadaConEgreso');
+        $reparar->invoke(app(\App\Http\Controllers\FinanzasController::class), $matcher, '2026-08-01', '2026-08-31');
+
+        $this->assertSame('pendiente', $comision->fresh()->estado);
+        $this->assertNull($comision->fresh()->flujo_caja_id);
+        $this->assertFalse((bool) $flujo->fresh()->es_conciliado);
+
+        $n = app(ConciliacionAutoMatcher::class)->conciliar(
+            ConciliacionLinea::query()->get(), '2026-08-01', '2026-08-31', 'MERCANTIL', 'GRUPO JRZ', 500
+        );
+
+        $this->assertSame(1, $n);
+        $this->assertSame('conciliado', $transferencia->fresh()->estado);
+        $this->assertSame((int) $flujo->id, (int) $transferencia->fresh()->flujo_caja_id);
+        $this->assertSame('pendiente', $comision->fresh()->estado);
+    }
+
+    public function test_comision_op_cred_dirt_se_libera_aunque_el_egreso_no_tenga_comision_registrada(): void
+    {
+        $flujo = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'Mercantil', 'titular' => 'JRZ', 'fecha' => '2026-08-06',
+            'monto_bs' => 15000.00, 'referencia' => '47900005555', 'motivo' => 'PAGO', 'oculto' => false,
+        ]);
+        $flujo->forceFill(['es_conciliado' => true])->save();
+        $comision = ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-06',
+            'descripcion' => 'OP.CRED.DIRT. CLTE-CLTE PJ -VIA ELECTRON', 'referencia' => '43700005555',
+            'monto' => 4.10, 'estado' => 'conciliado', 'tipo' => 'cargo', 'flujo_caja_id' => $flujo->id,
+        ]);
+        $transferencia = ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-06',
+            'descripcion' => 'TRANSF ENTRE CTAS BM PERS JURIDICA', 'referencia' => '47900005555',
+            'monto' => 15000.00, 'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+
+        $reparar = new \ReflectionMethod(\App\Http\Controllers\FinanzasController::class, 'desvincularComisionEmparejadaConEgreso');
+        $reparar->invoke(app(\App\Http\Controllers\FinanzasController::class), app(\App\Services\BankReconciliationMatcher::class), '2026-08-01', '2026-08-31');
+
+        $this->assertSame('pendiente', $comision->fresh()->estado);
+        $this->assertFalse((bool) $flujo->fresh()->es_conciliado);
+
+        $n = app(ConciliacionAutoMatcher::class)->conciliar(
+            ConciliacionLinea::query()->get(), '2026-08-01', '2026-08-31', 'MERCANTIL', 'GRUPO JRZ', 500
+        );
+
+        $this->assertSame(1, $n);
+        $this->assertSame((int) $flujo->id, (int) $transferencia->fresh()->flujo_caja_id);
+        $this->assertNull($comision->fresh()->flujo_caja_id);
+    }
+
+    public function test_comision_en_bs_igual_a_los_usd_del_egreso_no_se_queda_con_el(): void
+    {
+        $flujo = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'Mercantil', 'titular' => 'JRZ', 'fecha' => '2026-08-27',
+            'monto_bs' => 11078.48, 'monto_usd' => 14.00, 'comision' => 33.23, 'referencia' => '20407456706',
+            'motivo' => 'ROLINERAS DELANTERAS DEL MOTO CARGUERO', 'oculto' => false,
+        ]);
+        $flujo->forceFill(['es_conciliado' => true])->save();
+        $comisionAjena = ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-26',
+            'descripcion' => 'COMISION POR TRANSFERENCIA DE FONDOS', 'referencia' => '10707052087',
+            'monto' => 14.00, 'estado' => 'conciliado', 'tipo' => 'cargo', 'flujo_caja_id' => $flujo->id,
+        ]);
+        $transferencia = ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-27',
+            'descripcion' => 'CREDITO INMEDIATO CAMARA DE COMPENSACION', 'referencia' => '20407456706',
+            'monto' => 11078.48, 'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+
+        $matcher = app(\App\Services\BankReconciliationMatcher::class);
+        $controller = app(\App\Http\Controllers\FinanzasController::class);
+        foreach (['desvincularComisionEmparejadaConEgreso', 'reasignarEgresoALaReferenciaExacta'] as $metodo) {
+            (new \ReflectionMethod($controller, $metodo))->invoke($controller, $matcher, '2026-08-01', '2026-08-31');
+        }
+        app(ConciliacionAutoMatcher::class)->conciliar(
+            ConciliacionLinea::query()->get(), '2026-08-01', '2026-08-31', 'MERCANTIL', 'GRUPO JRZ', 500
+        );
+
+        $this->assertNull($comisionAjena->fresh()->flujo_caja_id);
+        $this->assertSame((int) $flujo->id, (int) $transferencia->fresh()->flujo_caja_id);
+        $this->assertSame('conciliado', $transferencia->fresh()->estado);
+    }
+
+    public function test_egreso_pasa_al_reenvio_con_su_referencia_y_el_intento_devuelto_se_une_a_la_devolucion(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $base = ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-21', 'monto' => 49205.88];
+        $egreso = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'Mercantil', 'titular' => 'JRZ', 'fecha' => '2026-08-21',
+            'monto_bs' => 49205.88, 'referencia' => '20403735674', 'motivo' => 'FLETE DE MERCANCIA', 'oculto' => false,
+        ]);
+        $egreso->forceFill(['es_conciliado' => true])->save();
+        $intento = ConciliacionLinea::create($base + [
+            'descripcion' => 'CREDITO INMEDIATO CAMARA DE COMPENSACION', 'referencia' => '20403730500',
+            'estado' => 'conciliado', 'tipo' => 'cargo', 'flujo_caja_id' => $egreso->id,
+        ]);
+        $reenvio = ConciliacionLinea::create($base + [
+            'descripcion' => 'CREDITO INMEDIATO CAMARA DE COMPENSACION', 'referencia' => '20403735674',
+            'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+        $devolucion = ConciliacionLinea::create($base + [
+            'descripcion' => 'DEVOLUCION CREDITO INMEDIATO', 'referencia' => '17103730500',
+            'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+
+        $reparar = new \ReflectionMethod(\App\Http\Controllers\FinanzasController::class, 'reasignarEgresoALaReferenciaExacta');
+        $reparar->invoke(app(\App\Http\Controllers\FinanzasController::class), app(\App\Services\BankReconciliationMatcher::class), '2026-08-01', '2026-08-31');
+
+        $this->assertSame((int) $egreso->id, (int) $reenvio->fresh()->flujo_caja_id);
+        $this->assertSame('conciliado', $reenvio->fresh()->estado);
+        $this->assertSame('pendiente', $intento->fresh()->estado);
+        $this->assertNull($intento->fresh()->flujo_caja_id);
+
+        // El flete tiene la referencia del reenvío, no la del intento devuelto: no se ofrece para anular.
+        $this->actingAs($user)
+            ->getJson(route('finanzas.conciliaciones.devolucion.egresos', ['linea_id' => $devolucion->id, 'contraparte_id' => $intento->id]))
+            ->assertOk()
+            ->assertJsonCount(0, 'egresos');
+
+        $this->actingAs($user)
+            ->post(route('finanzas.conciliaciones.devolucion'), [
+                'linea_id' => $devolucion->id,
+                'contraparte_id' => $intento->id,
+                'anular' => [$egreso->id],
+            ])
+            ->assertSessionHasErrors('devolucion');
+        $this->assertFalse((bool) $egreso->fresh()->anulado);
+
+        $this->actingAs($user)
+            ->post(route('finanzas.conciliaciones.devolucion'), [
+                'linea_id' => $devolucion->id,
+                'contraparte_id' => $intento->id,
+            ])
+            ->assertSessionHas('success');
+
+        $this->assertSame((int) $devolucion->id, (int) $intento->fresh()->devolucion_linea_id);
+        $this->assertFalse((bool) $egreso->fresh()->anulado);
+        $this->assertSame(0, ConciliacionLinea::query()->where('estado', 'pendiente')->count());
+    }
+
+    public function test_el_emparejamiento_prefiere_la_linea_con_la_referencia_del_egreso(): void
+    {
+        $base = ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-21', 'monto' => 49205.88,
+            'descripcion' => 'CREDITO INMEDIATO CAMARA DE COMPENSACION', 'estado' => 'pendiente', 'tipo' => 'cargo'];
+        $egreso = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'Mercantil', 'titular' => 'JRZ', 'fecha' => '2026-08-21',
+            'monto_bs' => 49205.88, 'referencia' => '20403735674', 'motivo' => 'FLETE', 'oculto' => false,
+        ]);
+        // La del intento devuelto tiene id mayor: antes se procesaba primero y se quedaba con el egreso.
+        $reenvio = ConciliacionLinea::create($base + ['referencia' => '20403735674']);
+        $intento = ConciliacionLinea::create($base + ['referencia' => '20403730500']);
+
+        app(ConciliacionAutoMatcher::class)->conciliar(
+            ConciliacionLinea::query()->get(), '2026-08-01', '2026-08-31', 'MERCANTIL', 'GRUPO JRZ', 500
+        );
+
+        $this->assertSame((int) $egreso->id, (int) $reenvio->fresh()->flujo_caja_id);
+        $this->assertSame('pendiente', $intento->fresh()->estado);
+    }
+
+    public function test_devolucion_une_cargo_y_abono_y_anula_el_egreso(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $cargo = ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-05',
+            'descripcion' => 'CREDITO INMEDIATO CAMARA DE COMPENSACION', 'referencia' => '20493920369',
+            'monto' => 90619.20, 'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+        $abono = ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-05',
+            'descripcion' => 'DEVOLUCION CREDITO INMEDIATO', 'referencia' => '17193858492',
+            'monto' => 90619.20, 'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+        $egreso = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'Mercantil', 'titular' => 'JRZ', 'fecha' => '2026-08-05',
+            'monto_bs' => 90619.20, 'referencia' => '20493920369', 'motivo' => 'PAGO PROVEEDOR', 'oculto' => false,
+        ]);
+        $otraCuenta = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'Banesco', 'titular' => 'DORAL', 'fecha' => '2026-08-05',
+            'monto_bs' => 90619.20, 'referencia' => '20493920369', 'motivo' => 'OTRA CUENTA', 'oculto' => false,
+        ]);
+        FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'Mercantil', 'titular' => 'JRZ', 'fecha' => '2026-08-05',
+            'monto_bs' => 90619.20, 'referencia' => '20499999999', 'motivo' => 'MISMO MONTO, OTRA REFERENCIA', 'oculto' => false,
+        ]);
+
+        // Se puede empezar desde el abono: el sistema identifica cuál es el cargo.
+        $this->actingAs($user)
+            ->getJson(route('finanzas.conciliaciones.devolucion.egresos', ['linea_id' => $abono->id, 'contraparte_id' => $cargo->id]))
+            ->assertOk()
+            ->assertJsonCount(1, 'egresos')
+            ->assertJsonPath('egresos.0.id', $egreso->id)
+            ->assertJsonPath('egresos.0.conciliado_con', null);
+
+        $this->actingAs($user)
+            ->post(route('finanzas.conciliaciones.devolucion'), [
+                'linea_id' => $abono->id,
+                'contraparte_id' => $cargo->id,
+                'anular' => [$egreso->id],
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame('conciliado', $cargo->fresh()->estado);
+        $this->assertSame('conciliado', $abono->fresh()->estado);
+        $this->assertSame((int) $abono->id, (int) $cargo->fresh()->devolucion_linea_id);
+        $this->assertSame((int) $cargo->id, (int) $abono->fresh()->devolucion_linea_id);
+        $egreso->refresh();
+        $this->assertTrue((bool) $egreso->anulado);
+        $this->assertTrue((bool) $egreso->oculto);
+        $this->assertStringContainsString('20493920369', (string) $egreso->anulado_motivo);
+        $this->assertFalse((bool) $otraCuenta->fresh()->anulado);
+    }
+
+    public function test_cargo_y_devolucion_no_aparecen_en_el_pdf(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $base = ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-12', 'monto' => 83200.00, 'estado' => 'conciliado'];
+        $cargo = ConciliacionLinea::create($base + ['descripcion' => 'CREDITO INMEDIATO CAMARA DE COMPENSACION', 'referencia' => '20498030130', 'tipo' => 'cargo']);
+        $abono = ConciliacionLinea::create($base + ['descripcion' => 'DEVOLUCION CREDITO INMEDIATO', 'referencia' => '17198030130', 'tipo' => 'abono']);
+        $cargo->forceFill(['devolucion_linea_id' => $abono->id])->save();
+        $abono->forceFill(['devolucion_linea_id' => $cargo->id])->save();
+        ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-12', 'monto' => 500,
+            'descripcion' => 'TRANSF ENTRE CTAS BM PERS JURIDICA', 'referencia' => '47900011111', 'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+
+        $capturado = null;
+        $pdf = \Mockery::mock(\Barryvdh\DomPDF\PDF::class);
+        $pdf->shouldReceive('setPaper')->andReturnSelf();
+        $pdf->shouldReceive('download')->andReturn(response('pdf'));
+        \Barryvdh\DomPDF\Facade\Pdf::shouldReceive('loadView')->once()
+            ->andReturnUsing(function ($vista, $datos) use (&$capturado, $pdf) {
+                $capturado = $datos['data'];
+
+                return $pdf;
+            });
+
+        $this->actingAs($user)
+            ->get(route('finanzas.conciliaciones.reporte-banco', [
+                'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha_desde' => '2026-08-01', 'fecha_hasta' => '2026-08-31',
+            ]))
+            ->assertOk();
+
+        $this->assertCount(0, $capturado['conciliados']);
+        $this->assertCount(1, $capturado['sin_registrar']);
+        $this->assertSame('47900011111', $capturado['sin_registrar'][0]['referencia']);
+    }
+
+    public function test_devolucion_rechaza_montos_distintos_o_mismo_tipo(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $base = ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-05', 'estado' => 'pendiente'];
+        $cargo = ConciliacionLinea::create($base + ['descripcion' => 'CARGO', 'referencia' => '1', 'monto' => 100, 'tipo' => 'cargo']);
+        $abonoDistinto = ConciliacionLinea::create($base + ['descripcion' => 'DEV', 'referencia' => '2', 'monto' => 99, 'tipo' => 'abono']);
+        $otroCargo = ConciliacionLinea::create($base + ['descripcion' => 'CARGO 2', 'referencia' => '3', 'monto' => 100, 'tipo' => 'cargo']);
+
+        foreach ([$abonoDistinto, $otroCargo] as $contraparte) {
+            $this->actingAs($user)
+                ->from(route('finanzas.conciliaciones'))
+                ->post(route('finanzas.conciliaciones.devolucion'), ['linea_id' => $cargo->id, 'contraparte_id' => $contraparte->id])
+                ->assertSessionHasErrors('devolucion');
+        }
+
+        $this->assertSame(3, ConciliacionLinea::query()->where('estado', 'pendiente')->count());
+    }
+
     public function test_estado_importacion_solo_visible_al_dueno_o_admin(): void
     {
         $dueno = $this->makeUser(User::ROLE_CONTABILIDAD);
@@ -461,12 +751,21 @@ class ConciliacionExtractoImportTest extends TestCase
                 $table->unsignedBigInteger('compra_divisa_id')->nullable();
                 $table->unsignedBigInteger('importacion_id')->nullable();
                 $table->unsignedInteger('fila_origen')->nullable();
+                $table->unsignedBigInteger('devolucion_linea_id')->nullable();
                 $table->timestamps();
             });
-        } elseif (! Schema::hasColumn('conciliacion_lineas', 'importacion_id')) {
+        } else {
             Schema::table('conciliacion_lineas', function (Blueprint $table) {
-                $table->unsignedBigInteger('importacion_id')->nullable();
-                $table->unsignedInteger('fila_origen')->nullable();
+                if (! Schema::hasColumn('conciliacion_lineas', 'importacion_id')) {
+                    $table->unsignedBigInteger('importacion_id')->nullable();
+                    $table->unsignedInteger('fila_origen')->nullable();
+                }
+                if (! Schema::hasColumn('conciliacion_lineas', 'forzar_comision')) {
+                    $table->boolean('forzar_comision')->default(false);
+                }
+                if (! Schema::hasColumn('conciliacion_lineas', 'devolucion_linea_id')) {
+                    $table->unsignedBigInteger('devolucion_linea_id')->nullable();
+                }
             });
         }
 
@@ -514,21 +813,29 @@ class ConciliacionExtractoImportTest extends TestCase
                 $table->string('referencia')->nullable();
                 $table->decimal('monto_bs', 15, 2)->nullable();
                 $table->decimal('monto_usd', 15, 2)->nullable();
+                $table->decimal('comision', 15, 2)->nullable();
                 $table->boolean('es_conciliado')->default(false);
                 $table->boolean('oculto')->default(false);
+                $table->boolean('anulado')->default(false);
+                $table->string('anulado_motivo')->nullable();
+                $table->timestamp('anulado_at')->nullable();
                 $table->timestamps();
             });
         } else {
             $faltantes = array_values(array_filter([
                 'banco', 'titular', 'banco_receptor', 'titular_receptor',
                 'categoria_egreso', 'concepto', 'motivo', 'referencia',
-                'es_conciliado', 'oculto',
+                'es_conciliado', 'oculto', 'comision', 'anulado', 'anulado_motivo', 'anulado_at',
             ], fn (string $col) => ! Schema::hasColumn('flujo_cajas', $col)));
             if ($faltantes !== []) {
                 Schema::table('flujo_cajas', function (Blueprint $table) use ($faltantes) {
                     foreach ($faltantes as $col) {
-                        if (in_array($col, ['es_conciliado', 'oculto'], true)) {
+                        if (in_array($col, ['es_conciliado', 'oculto', 'anulado'], true)) {
                             $table->boolean($col)->default(false);
+                        } elseif ($col === 'comision') {
+                            $table->decimal('comision', 15, 2)->nullable();
+                        } elseif ($col === 'anulado_at') {
+                            $table->timestamp('anulado_at')->nullable();
                         } else {
                             $table->string($col)->nullable();
                         }

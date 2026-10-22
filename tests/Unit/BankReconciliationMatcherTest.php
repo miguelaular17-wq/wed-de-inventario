@@ -572,6 +572,14 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertSame(2470, $reemplazo->id);
     }
 
+    public function test_tesoro_lq_tdd_es_lote_pos_y_su_comision_no(): void
+    {
+        $this->assertTrue($this->matcher->esAbonoLotePuntoVenta('LQ TDD 82258507 0008 0052', '0'));
+        $this->assertTrue($this->matcher->esAbonoLotePuntoVenta('LQ TDC 87758230 0001 0016', '0'));
+        $this->assertTrue($this->matcher->esAbonoLotePuntoVenta('LQ ELE 82258507 0008 0049', '0'));
+        $this->assertFalse($this->matcher->esAbonoLotePuntoVenta('COM/LIQ/TDD 82258507 0008', '0'));
+    }
+
     public function test_mercantil_cancelacion_resumen_de_ventas_es_lote_pos(): void
     {
         $this->assertTrue($this->matcher->esAbonoLotePuntoVenta(

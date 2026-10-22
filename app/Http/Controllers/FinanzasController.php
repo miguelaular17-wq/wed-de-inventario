@@ -1459,6 +1459,11 @@ class FinanzasController extends Controller
             ]);
         }
 
+        // Reparaciones de vínculos antes de elegir qué copia de cada movimiento se muestra.
+        $matcherReparar = app(\App\Services\BankReconciliationMatcher::class);
+        $this->desvincularComisionEmparejadaConEgreso($matcherReparar, $fecha_desde, $fecha_hasta);
+        $this->reasignarEgresoALaReferenciaExacta($matcherReparar, $fecha_desde, $fecha_hasta);
+
         $idsAbiertos = $this->idsExtractoVisibles($fecha_desde, $fecha_hasta, $banco_filtro, $titular_filtro);
 
         $relacionesLinea = [
@@ -1489,7 +1494,7 @@ class FinanzasController extends Controller
         $conciliadasAhora = app(\App\Services\Conciliacion\ConciliacionAutoMatcher::class)
             ->conciliar($lineas, $fecha_desde, $fecha_hasta, $banco_filtro, $titular_filtro, 500);
         if ($conciliadasAhora > 0) {
-            $lineas = $cargarLineas();
+                $lineas = $cargarLineas();
         }
 
         // Repara traslados ya vinculados por salida que quedaron en tránsito
@@ -1520,6 +1525,9 @@ class FinanzasController extends Controller
             ->where('es_conciliado', true)
             ->where('fecha', '>=', $fecha_desde)
             ->where('fecha', '<=', $fecha_hasta);
+        if (\Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'anulado')) {
+            $egresos_conciliados_query->where('anulado', false);
+        }
         $this->filtrarPorBanco($egresos_conciliados_query, $banco_filtro);
         $this->filtrarPorTitular($egresos_conciliados_query, $titular_filtro);
         $egresos_conciliados_sistema = $egresos_conciliados_query->orderBy('id')->get();
@@ -1668,8 +1676,9 @@ class FinanzasController extends Controller
                 return $matcher->claveCuenta($item->banco ?? null, $item->titular ?? null) === $bk_key;
             };
 
-            // Líneas del banco+titular cargadas
-            $lineas_banco = $lineas->filter($mismaCuenta);
+            // Líneas del banco+titular cargadas. Cargo y devolución se anulan entre sí: no se muestran.
+            $lineas_banco = $lineas->filter($mismaCuenta)
+                ->reject(fn ($l) => (bool) ($l->devolucion_linea_id ?? null));
 
             // Separar comisiones, compras de divisas, pago de crédito y normales
             $lineas_comisiones = $lineas_banco->filter(
@@ -2743,6 +2752,199 @@ class FinanzasController extends Controller
             ->with('success', 'Movimiento marcado como comisión bancaria.');
     }
 
+    /**
+     * Egresos del sistema que pueden ser el pago que el banco devolvió:
+     * misma cuenta y misma referencia que el cargo, ±15 días.
+     */
+    public function egresosParaDevolucion(Request $request)
+    {
+        $data = $request->validate([
+            'linea_id' => ['required', 'integer'],
+            'contraparte_id' => ['required', 'integer'],
+        ]);
+
+        try {
+            [$cargo] = $this->lineasDevolucion((int) $data['linea_id'], (int) $data['contraparte_id']);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['message' => collect($e->errors())->flatten()->first()], 422);
+        }
+
+        $matcher = app(\App\Services\BankReconciliationMatcher::class);
+        $dia = $cargo->fecha->copy()->startOfDay();
+        $query = \App\Models\FlujoCaja::query()
+            ->where('tipo', 'egreso')
+            ->whereBetween('fecha', [$dia->copy()->subDays(15)->toDateString(), $dia->copy()->addDays(15)->toDateString()]);
+        if (\Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'anulado')) {
+            $query->where('anulado', false);
+        }
+        $this->filtrarPorBanco($query, $cargo->banco);
+        $this->filtrarPorTitular($query, $cargo->titular);
+
+        $candidatos = $query->limit(500)->get()
+            ->filter(fn ($f) => $this->egresoCoincideConCargo($matcher, $cargo, $f))
+            ->values();
+        $vinculados = \App\Models\ConciliacionLinea::query()
+            ->whereIn('flujo_caja_id', $candidatos->pluck('id'))
+            ->where('estado', 'conciliado')
+            ->get(['id', 'flujo_caja_id', 'fecha', 'referencia', 'monto'])
+            ->keyBy('flujo_caja_id');
+
+        $egresos = $candidatos
+            ->sortBy(fn ($f) => [
+                $matcher->referenciasCruzan($cargo->referencia, $f->referencia) ? 0 : 1,
+                abs(\Carbon\Carbon::parse($f->fecha)->startOfDay()->diffInDays($dia, false)),
+                (int) $f->id,
+            ])
+            ->map(function ($f) use ($vinculados) {
+                $linea = $vinculados->get($f->id);
+
+                return [
+                    'id' => $f->id,
+                    'fecha' => \Carbon\Carbon::parse($f->fecha)->format('d/m/Y'),
+                    'motivo' => $f->motivo ?: ($f->concepto ?? '') ?: '-',
+                    'tipo_gasto' => $f->tipo_gasto ?: $f->categoria_egreso,
+                    'referencia' => $f->referencia,
+                    'monto_bs' => (float) $f->monto_bs,
+                    'monto_usd' => $f->monto_usd !== null ? (float) $f->monto_usd : null,
+                    'conciliado_con' => $linea
+                        ? 'Ya conciliado con el movimiento del banco del '.$linea->fecha->format('d/m/Y').' (ref. '.$linea->referencia.')'
+                        : null,
+                ];
+            })
+            ->values();
+
+        return response()->json(['egresos' => $egresos]);
+    }
+
+    /**
+     * Devolución del banco: el cargo y su abono de devolución quedan conciliados entre sí.
+     * Los egresos elegidos (el pago que no llegó a salir) se anulan y dejan de contar en el flujo de caja.
+     */
+    public function marcarDevolucion(Request $request)
+    {
+        $data = $request->validate([
+            'linea_id' => ['required', 'integer'],
+            'contraparte_id' => ['required', 'integer'],
+            'anular' => ['nullable', 'array'],
+            'anular.*' => ['integer'],
+        ]);
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'devolucion_linea_id')) {
+            return back()->with('error', 'Falta migrar las columnas de devolución. Ejecuta: php artisan migrate');
+        }
+
+        $matcher = app(\App\Services\BankReconciliationMatcher::class);
+        $anulados = 0;
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($data, $matcher, &$anulados) {
+            [$cargo, $abono] = $this->lineasDevolucion((int) $data['linea_id'], (int) $data['contraparte_id'], true);
+            $ahora = now();
+
+            foreach ([[$cargo, $abono], [$abono, $cargo]] as [$linea, $otra]) {
+                $ok = \Illuminate\Support\Facades\DB::table('conciliacion_lineas')
+                    ->where('id', $linea->id)
+                    ->where('estado', 'pendiente')
+                    ->whereNull('devolucion_linea_id')
+                    ->update(['estado' => 'conciliado', 'devolucion_linea_id' => $otra->id, 'updated_at' => $ahora]);
+                if ($ok !== 1) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'devolucion' => 'Otro usuario ya concilió uno de los movimientos. Recarga la página.',
+                    ]);
+                }
+            }
+
+            $ids = array_values(array_unique(array_map('intval', $data['anular'] ?? [])));
+            if ($ids === []) {
+                return;
+            }
+            $motivo = mb_substr('Devuelto por el banco: cargo ref. '.($cargo->referencia ?: '—').' del '.$cargo->fecha->format('d/m/Y')
+                .', devolución ref. '.($abono->referencia ?: '—').' del '.$abono->fecha->format('d/m/Y'), 0, 255);
+
+            foreach (\App\Models\FlujoCaja::query()->whereIn('id', $ids)->lockForUpdate()->get() as $flujo) {
+                $conciliadoConLinea = \App\Models\ConciliacionLinea::query()
+                    ->where('flujo_caja_id', $flujo->id)
+                    ->where('estado', 'conciliado')
+                    ->exists();
+                if ($flujo->tipo !== 'egreso' || $flujo->anulado || $conciliadoConLinea
+                    || $matcher->claveCuenta($flujo->banco, $flujo->titular) !== $matcher->claveCuenta($cargo->banco, $cargo->titular)
+                    || ! $this->egresoCoincideConCargo($matcher, $cargo, $flujo)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'devolucion' => 'El egreso #'.$flujo->id.' no corresponde a ese movimiento del banco o ya está conciliado.',
+                    ]);
+                }
+
+                $flujo->forceFill([
+                    'anulado' => true,
+                    'anulado_motivo' => $motivo,
+                    'anulado_at' => $ahora,
+                    'oculto' => true,
+                    'es_conciliado' => true,
+                ])->save();
+                $anulados++;
+            }
+        });
+
+        $mensaje = 'Devolución registrada: el cargo y su devolución quedaron conciliados entre sí.';
+        if ($anulados > 0) {
+            $mensaje .= ' '.$anulados.' egreso(s) marcados como nulos.';
+        }
+
+        return $this->redirectConciliacionesConFiltros($request)->with('success', $mensaje);
+    }
+
+    /**
+     * Valida el par de líneas de una devolución y devuelve [cargo, abono].
+     *
+     * @return array{0: \App\Models\ConciliacionLinea, 1: \App\Models\ConciliacionLinea}
+     */
+    private function lineasDevolucion(int $lineaId, int $contraparteId, bool $bloquear = false): array
+    {
+        $error = fn (string $m) => \Illuminate\Validation\ValidationException::withMessages(['devolucion' => $m]);
+        if ($lineaId === $contraparteId) {
+            throw $error('Elige el otro movimiento del banco (el cargo o el abono de la devolución).');
+        }
+
+        $lineas = \App\Models\ConciliacionLinea::query()
+            ->whereIn('id', [$lineaId, $contraparteId])
+            ->when($bloquear, fn ($q) => $q->lockForUpdate())
+            ->get()
+            ->keyBy('id');
+        $a = $lineas->get($lineaId);
+        $b = $lineas->get($contraparteId);
+        if (! $a || ! $b) {
+            throw $error('No se encontró uno de los movimientos del banco.');
+        }
+
+        $tieneDevolucion = \Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'devolucion_linea_id');
+        foreach ([$a, $b] as $l) {
+            if ($l->estado !== 'pendiente' || $l->flujo_caja_id || $l->tesoreria_ingreso_id || $l->compra_divisa_id
+                || ($tieneDevolucion && $l->devolucion_linea_id)) {
+                throw $error('Los dos movimientos deben estar pendientes en "Movimientos en el banco".');
+            }
+        }
+
+        $matcher = app(\App\Services\BankReconciliationMatcher::class);
+        if ($matcher->claveCuenta($a->banco, $a->titular) !== $matcher->claveCuenta($b->banco, $b->titular)) {
+            throw $error('Los dos movimientos deben ser de la misma cuenta del banco.');
+        }
+        if ($a->esCargo() === $b->esCargo()) {
+            throw $error('Una devolución une un cargo con un abono: elige un movimiento del tipo contrario.');
+        }
+        if (! $matcher->mismosMontos(abs((float) $a->monto), abs((float) $b->monto))) {
+            throw $error('El cargo y la devolución deben tener el mismo monto.');
+        }
+
+        return $a->esCargo() ? [$a, $b] : [$b, $a];
+    }
+
+    /** Solo el egreso con la misma referencia que el cargo devuelto puede anularse. */
+    private function egresoCoincideConCargo(\App\Services\BankReconciliationMatcher $matcher, \App\Models\ConciliacionLinea $cargo, object $flujo): bool
+    {
+        $digitos = fn ($v) => ltrim(preg_replace('/\D+/', '', (string) $v) ?? '', '0');
+        $refCargo = $digitos($cargo->referencia);
+
+        return $refCargo !== '' && $refCargo === $digitos($flujo->referencia ?? null);
+    }
+
     /** Marca un egreso/compra en tránsito como conciliado sin match del extracto. */
     public function marcarTransitoConciliado(Request $request)
     {
@@ -2950,6 +3152,49 @@ class FinanzasController extends Controller
             ->values();
     }
 
+    /** Por encima de esta cantidad de filas, la sección del PDF se muestra resumida por día. */
+    private const PDF_CONCILIACION_LIMITE_DETALLE = 500;
+
+    /**
+     * Resumen diario de una sección del PDF; null si la sección es pequeña y va con detalle.
+     * Sin campo "tipo" (en tránsito, comisiones) todo cuenta como egreso.
+     *
+     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $filas
+     * @return \Illuminate\Support\Collection<int, array{fecha:string,cantidad:int,ingresos:float,egresos:float}>|null
+     */
+    private function resumenPdfPorDia($filas, string $campoMonto = 'monto')
+    {
+        if ($filas->count() <= self::PDF_CONCILIACION_LIMITE_DETALLE) {
+            return null;
+        }
+
+        return $filas
+            ->groupBy(fn ($r) => $r['fecha'] instanceof \DateTimeInterface
+                ? $r['fecha']->format('Y-m-d')
+                : substr((string) $r['fecha'], 0, 10))
+            ->map(function ($grupo, $dia) use ($campoMonto) {
+                $ingresos = 0.0;
+                $egresos = 0.0;
+                foreach ($grupo as $r) {
+                    $monto = abs((float) ($r[$campoMonto] ?? 0));
+                    if (($r['tipo'] ?? 'cargo') === 'abono') {
+                        $ingresos += $monto;
+                    } else {
+                        $egresos += $monto;
+                    }
+                }
+
+                return [
+                    'fecha' => (string) $dia,
+                    'cantidad' => $grupo->count(),
+                    'ingresos' => round($ingresos, 2),
+                    'egresos' => round($egresos, 2),
+                ];
+            })
+            ->sortKeys()
+            ->values();
+    }
+
     public function reporteBancoPdf(Request $request) {
         $bk_req = strtolower(trim($request->query('banco', '')));
         $tit_req = strtolower(trim($request->query('titular', '')));
@@ -2960,7 +3205,16 @@ class FinanzasController extends Controller
             return redirect()->back()->with('error', 'Banco no especificado.');
         }
 
-        $lineas_query = \App\Models\ConciliacionLinea::query();
+        // Cuentas con miles de movimientos (p. ej. Cashea): dompdf necesita bastante memoria.
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(300);
+
+        $lineas_query = \App\Models\ConciliacionLinea::query()
+            ->select(array_merge([
+                'id', 'banco', 'titular', 'fecha', 'descripcion', 'referencia', 'monto', 'estado', 'tipo',
+                'forzar_comision', 'flujo_caja_id', 'tesoreria_ingreso_id',
+            ], \Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'devolucion_linea_id') ? ['devolucion_linea_id'] : []))
+            ->with(['flujoCaja', 'tesoreriaIngreso:id,tipo']);
         $this->filtrarPorBanco($lineas_query, $bk_req);
         if ($fecha_desde_filtro) {
             $lineas_query->whereDate('fecha', '>=', $fecha_desde_filtro);
@@ -2990,6 +3244,10 @@ class FinanzasController extends Controller
         $clavePdf = $tit_req !== '' ? $matcher->claveCuenta($bk_req, $tit_req) : '';
 
         $lineas_banco = $lineas->filter(function ($l) use ($matcher, $clavePdf, $tit_req) {
+            // Cargo y devolución se anulan entre sí: no se muestran.
+            if ($l->devolucion_linea_id ?? null) {
+                return false;
+            }
             if ($tit_req === '') {
                 return true;
             }
@@ -3023,13 +3281,13 @@ class FinanzasController extends Controller
                 $motivo = '-';
                 $tipo_gasto = '-';
                 if ($l->flujo_caja_id) {
-                    $flujo = \App\Models\FlujoCaja::find($l->flujo_caja_id);
+                    $flujo = $l->flujoCaja;
                     if ($flujo) {
                         $motivo = $flujo->motivo ?: $flujo->concepto;
                         $tipo_gasto = $flujo->tipo_gasto ?: $flujo->categoria_egreso;
                     }
                 } elseif ($l->tesoreria_ingreso_id) {
-                    $tesoreria = \App\Models\TesoreriaIngreso::find($l->tesoreria_ingreso_id);
+                    $tesoreria = $l->tesoreriaIngreso;
                     if ($tesoreria) {
                         $motivo = ($tesoreria->tipo === 'punto_venta' ? 'Lote Punto de Venta' : 'Ingreso Bancario Tesorería');
                         $tipo_gasto = 'Ingreso de Tesorería';
@@ -3121,6 +3379,14 @@ class FinanzasController extends Controller
             'total_pagos_credito' => $pagos_credito->sum('monto'),
             'fecha_desde' => $fecha_desde_filtro,
             'fecha_hasta' => $fecha_hasta_filtro,
+            'limite_detalle' => self::PDF_CONCILIACION_LIMITE_DETALLE,
+            'por_dia' => [
+                'conciliados' => $this->resumenPdfPorDia($conciliados),
+                'en_transito' => $this->resumenPdfPorDia($en_transito, 'monto_bs'),
+                'sin_registrar' => $this->resumenPdfPorDia($sin_registrar),
+                'comisiones' => $this->resumenPdfPorDia($comisiones),
+                'pagos_credito' => $this->resumenPdfPorDia($pagos_credito),
+            ],
         ];
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('finanzas.pdf.reporte_banco', ['data' => $data]);
@@ -3134,6 +3400,109 @@ class FinanzasController extends Controller
         $fecha_desde = now()->subDays(1)->startOfDay();
         \App\Models\ConciliacionLinea::where('created_at', '>=', $fecha_desde)->delete();
         return redirect()->route('finanzas.conciliaciones')->with('success', 'Se han borrado los movimientos bancarios cargados.');
+    }
+
+    /**
+     * Línea de comisión del banco que quedó con un egreso de otro monto (por cruce de referencia)
+     * en lugar de la transferencia real. Se libera para que el emparejamiento tome la línea correcta.
+     */
+    private function desvincularComisionEmparejadaConEgreso(
+        \App\Services\BankReconciliationMatcher $matcher,
+        string $desde,
+        string $hasta,
+    ): void {
+        $classifier = app(\App\Services\BankMovementClassifier::class);
+        $lineas = \App\Models\ConciliacionLinea::query()
+            ->where('estado', 'conciliado')
+            ->whereNotNull('flujo_caja_id')
+            ->whereBetween('fecha', [$desde, $hasta])
+            ->with('flujoCaja')
+            ->limit(2000)
+            ->get();
+
+        foreach ($lineas as $linea) {
+            $flujo = $linea->flujoCaja;
+            if (! $flujo || $matcher->esTraslado($flujo)) {
+                continue;
+            }
+            if (! $matcher->comisionNoCorrespondeAlEgreso($linea, $flujo, $classifier->esComision($linea->descripcion, $linea->banco))) {
+                continue;
+            }
+
+            $linea->flujo_caja_id = null;
+            $linea->estado = 'pendiente';
+            $linea->save();
+
+            $sigueVinculado = \App\Models\ConciliacionLinea::query()
+                ->where('flujo_caja_id', $flujo->id)
+                ->where('estado', 'conciliado')
+                ->exists();
+            if (! $sigueVinculado) {
+                $flujo->es_conciliado = false;
+                $flujo->save();
+            }
+        }
+    }
+
+    /**
+     * El banco tiene dos cargos del mismo monto (p. ej. intento devuelto + reenvío) y el egreso quedó
+     * en el que no es su referencia. Si hay una línea pendiente con la referencia exacta del egreso,
+     * el egreso pasa a esa línea y la otra queda libre (para marcarla como devolución).
+     */
+    private function reasignarEgresoALaReferenciaExacta(
+        \App\Services\BankReconciliationMatcher $matcher,
+        string $desde,
+        string $hasta,
+    ): void {
+        $digitos = fn ($v) => ltrim(preg_replace('/\D+/', '', (string) $v) ?? '', '0');
+        $lineas = \App\Models\ConciliacionLinea::query()
+            ->where('estado', 'conciliado')
+            ->whereNotNull('flujo_caja_id')
+            ->whereBetween('fecha', [$desde, $hasta])
+            ->with('flujoCaja')
+            ->limit(2000)
+            ->get();
+
+        foreach ($lineas as $linea) {
+            $flujo = $linea->flujoCaja;
+            $refEgreso = $digitos($flujo?->referencia);
+            if (! $flujo || $matcher->esTraslado($flujo) || strlen($refEgreso) < 6 || $digitos($linea->referencia) === $refEgreso) {
+                continue;
+            }
+
+            $correcta = \App\Models\ConciliacionLinea::query()
+                ->where('estado', 'pendiente')
+                ->whereNull('flujo_caja_id')
+                ->whereNull('tesoreria_ingreso_id')
+                ->where('id', '!=', $linea->id)
+                ->whereBetween('fecha', [
+                    \Carbon\Carbon::parse($flujo->fecha)->subDays(3)->toDateString(),
+                    \Carbon\Carbon::parse($flujo->fecha)->addDays(3)->toDateString(),
+                ])
+                ->whereRaw('TRIM(referencia) LIKE ?', ['%'.$refEgreso])
+                ->orderBy('id')
+                ->get()
+                ->first(fn ($c) => $digitos($c->referencia) === $refEgreso
+                    && $c->esCargo()
+                    && $matcher->montoIgualEgreso($c, $flujo)
+                    && $matcher->claveCuenta($c->banco, $c->titular) === $matcher->claveCuenta($linea->banco, $linea->titular));
+            if (! $correcta) {
+                continue;
+            }
+
+            \Illuminate\Support\Facades\DB::transaction(function () use ($linea, $correcta, $flujo) {
+                $ahora = now();
+                $tomada = \Illuminate\Support\Facades\DB::table('conciliacion_lineas')
+                    ->where('id', $correcta->id)->where('estado', 'pendiente')->whereNull('flujo_caja_id')
+                    ->update(['estado' => 'conciliado', 'flujo_caja_id' => $flujo->id, 'updated_at' => $ahora]);
+                if ($tomada !== 1) {
+                    return;
+                }
+                \Illuminate\Support\Facades\DB::table('conciliacion_lineas')
+                    ->where('id', $linea->id)->where('flujo_caja_id', $flujo->id)
+                    ->update(['estado' => 'pendiente', 'flujo_caja_id' => null, 'updated_at' => $ahora]);
+            });
+        }
     }
 
     /**

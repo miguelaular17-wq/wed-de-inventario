@@ -1231,6 +1231,7 @@
                     <option value="098 - MEJORAS INSTALACIONES TIENDAS">098 - MEJORAS INSTALACIONES TIENDAS</option>
                     <option value="099 - DEVOLUCIONES CLIENTES">099 - DEVOLUCIONES CLIENTES</option>
                     <option value="100 - TODOTICKET">100 - TODOTICKET</option>
+                    <option value="101 - GASTOS DE MARIA NUÑES">101 - GASTOS DE MARIA NUÑES</option>
                 </select>
             </div>
             
@@ -2543,7 +2544,7 @@ const tiposGastoList = [
     "091 - HONORARIOS PROFESIONALES", "092 - GASTOS DELIVERY", "093 - GASTOS DIRECTIVO",
     "094 - SALDO MOVISTAR", "095 - TASAS Y CONTRIBUCIONES", "096 - PRESTAMO PERSONAL DIVISAS",
     "097 - INSTALACIONES Y MEJORAS GALPON Y DEPOSITO", "098 - MEJORAS INSTALACIONES TIENDAS",
-    "099 - DEVOLUCIONES CLIENTES", "100 - TODOTICKET"
+    "099 - DEVOLUCIONES CLIENTES", "100 - TODOTICKET", "101 - GASTOS DE MARIA NUÑES"
 ];
 
 function buildTipoGastoOptions(selectedValue) {

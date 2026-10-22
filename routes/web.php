@@ -322,7 +322,7 @@ Route::middleware(['auth', 'permission:compras,compras.distribucion,compras.nece
     Route::get('/existencias/subcategorias', [\App\Http\Controllers\ExistenciasController::class, 'getSubcategorias'])->name('comprador.existencias.subcategorias');
 });
 
-Route::middleware(['auth', 'permission:reportes,compras.existencias,compras'])->prefix('reportes')->name('reportes.')->group(function () {
+Route::middleware(['auth', \App\Http\Middleware\EnsureReportesAccess::class])->prefix('reportes')->name('reportes.')->group(function () {
     Route::get('/', [ReportesController::class, 'index'])->name('index');
     Route::get('/existencias-por-sede', [ReportesController::class, 'existenciasSede'])->name('existencias_sede');
     Route::get('/existencias-por-sede/excel', [ReportesController::class, 'existenciasSedeExcel'])->name('existencias_sede.excel');
@@ -330,7 +330,7 @@ Route::middleware(['auth', 'permission:reportes,compras.existencias,compras'])->
     Route::get('/ventas-por-proveedor/excel', [ReportesController::class, 'proveedorExcel'])->name('proveedor.excel');
 });
 
-Route::middleware(['auth', 'permission:reportes,compras.existencias,compras,inventario'])->prefix('analisis-categorias')->name('analisis_categorias.')->group(function () {
+Route::middleware(['auth', \App\Http\Middleware\EnsureReportesAccess::class.':inventario'])->prefix('analisis-categorias')->name('analisis_categorias.')->group(function () {
     Route::get('/', [App\Http\Controllers\AnalisisCategoriasController::class, 'index'])->name('index');
     Route::post('/toggle', [App\Http\Controllers\AnalisisCategoriasController::class, 'toggle'])->name('toggle');
 });
@@ -633,6 +633,8 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::post('/conciliaciones/ignore', [App\Http\Controllers\FinanzasController::class, 'ignoreConciliacion'])->name('finanzas.conciliaciones.ignore');
     Route::post('/conciliaciones/manual', [App\Http\Controllers\FinanzasController::class, 'manualConciliacion'])->name('finanzas.conciliaciones.manual');
     Route::post('/conciliaciones/marcar-comision', [App\Http\Controllers\FinanzasController::class, 'marcarComisionBancaria'])->name('finanzas.conciliaciones.marcar_comision');
+    Route::get('/conciliaciones/devolucion/egresos', [FinanzasController::class, 'egresosParaDevolucion'])->name('finanzas.conciliaciones.devolucion.egresos');
+    Route::post('/conciliaciones/devolucion', [FinanzasController::class, 'marcarDevolucion'])->name('finanzas.conciliaciones.devolucion');
     Route::post('/conciliaciones/transito-conciliar', [App\Http\Controllers\FinanzasController::class, 'marcarTransitoConciliado'])->name('finanzas.conciliaciones.transito_conciliar');
     Route::post('/conciliaciones/clear', [App\Http\Controllers\FinanzasController::class, 'clearConciliacion'])->name('finanzas.conciliaciones.clear');
     Route::get('/conciliaciones/reporte', [App\Http\Controllers\FinanzasController::class, 'reporteConciliacion'])->name('finanzas.conciliaciones.reporte');

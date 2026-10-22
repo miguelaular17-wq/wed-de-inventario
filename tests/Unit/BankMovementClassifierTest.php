@@ -54,6 +54,13 @@ class BankMovementClassifierTest extends TestCase
         ));
     }
 
+    public function test_mercantil_op_cred_dirt_es_comision(): void
+    {
+        $this->assertTrue($this->classifier->esComision('OP.CRED.DIRT. CLTE-CLTE PJ -VIA ELECTRON', 'MERCANTIL'));
+        $this->assertTrue($this->classifier->esComision('COM.PAT APP-0163 4121936966', null));
+        $this->assertFalse($this->classifier->esComision('TRANSF ENTRE CTAS BM PERS JURIDICA', 'MERCANTIL'));
+    }
+
     public function test_compra_intervencion_es_compra_divisas_no_comision(): void
     {
         $desc = 'COMPRA INTERVENCION ELECTRONIC';

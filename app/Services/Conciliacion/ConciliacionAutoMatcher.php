@@ -55,6 +55,9 @@ class ConciliacionAutoMatcher
             ->where('tipo', 'egreso')
             ->where('fecha', '>=', $fecha_minima)
             ->where('fecha', '<=', $fecha_maxima);
+        if (Schema::hasColumn('flujo_cajas', 'anulado')) {
+            $flujos_posibles->where('anulado', false);
+        }
         if ($banco_filtro) {
             $variantesMatch = array_map('strtolower', $this->matcher->variantesBanco($banco_filtro));
             $flujos_posibles->where(function ($q) use ($variantesMatch) {
@@ -73,6 +76,7 @@ class ConciliacionAutoMatcher
         $flujos_posibles = $flujos_posibles->limit(5000)->get();
 
         $clavesEgreso = [];
+        $referenciasEgreso = [];
         foreach ($flujos_posibles as $flujoPend) {
             $diaFlujo = $flujoPend->fecha instanceof \DateTimeInterface
                 ? $flujoPend->fecha->format('Y-m-d')
@@ -83,16 +87,23 @@ class ConciliacionAutoMatcher
                 }
                 $clavesEgreso[$diaFlujo.'|'.(int) round(abs((float) $montoFlujo) * 100)] = true;
             }
+            $ref = $this->digitosReferencia($flujoPend->referencia ?? null);
+            if (strlen($ref) >= 6) {
+                $referenciasEgreso[$ref] = true;
+            }
         }
+        // Primero las líneas con la referencia exacta de un egreso: si el banco tiene dos cargos
+        // del mismo monto y día (intento devuelto + reenvío), el egreso va con el de su referencia.
         $lineas_pendientes = $lineas_pendientes
-            ->sortBy(function ($linea) use ($clavesEgreso) {
+            ->sortBy(function ($linea) use ($clavesEgreso, $referenciasEgreso) {
                 $dia = $linea->fecha instanceof \DateTimeInterface
                     ? $linea->fecha->format('Y-m-d')
                     : substr((string) $linea->fecha, 0, 10);
                 $clave = $dia.'|'.(int) round(abs((float) $linea->monto) * 100);
                 $prio = (isset($clavesEgreso[$clave]) && $linea->esCargo()) ? 0 : 1;
+                $prioRef = isset($referenciasEgreso[$this->digitosReferencia($linea->referencia)]) ? 0 : 1;
 
-                return [$prio, -((int) $linea->id)];
+                return [$prio, $prioRef, -((int) $linea->id)];
             })
             ->take($limite)
             ->values();
@@ -167,6 +178,12 @@ class ConciliacionAutoMatcher
             }
 
             if (! $match) {
+                continue;
+            }
+
+            // Una comisión del banco no se queda con la transferencia por cruce de referencia.
+            if (! $isCompraDivisaMatch && ! $matcher->esTraslado($match)
+                && $matcher->comisionNoCorrespondeAlEgreso($linea, $match, $classifier->esComision($linea->descripcion, $linea->banco))) {
                 continue;
             }
 
@@ -355,6 +372,11 @@ class ConciliacionAutoMatcher
         }
 
         return true;
+    }
+
+    private function digitosReferencia(?string $referencia): string
+    {
+        return ltrim(preg_replace('/\D+/', '', (string) $referencia) ?? '', '0');
     }
 
     private function filtrarPorBanco($query, ?string $bancoFiltro, string $columna = 'banco')

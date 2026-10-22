@@ -520,6 +520,19 @@ class User extends Authenticatable
         return $this->canAccess('nomina');
     }
 
+    /**
+     * Menú y rutas de Reportes. Marketing tiene "compras" solo para Sobre Stock y Publicidad:
+     * no ve reportes salvo que se le asigne el permiso "reportes" a ese usuario.
+     */
+    public function puedeVerReportes(): bool
+    {
+        if ($this->isMarketing()) {
+            return $this->canAccess('reportes');
+        }
+
+        return $this->canAccessAny(['reportes', 'compras.existencias', 'compras']);
+    }
+
     public function canViewTeamPublicidad(): bool
     {
         return $this->canAccess('marketing.publicidad_equipo');

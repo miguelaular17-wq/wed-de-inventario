@@ -14,6 +14,7 @@ class ConciliacionLinea extends Model
         'compra_divisa_id',
         'importacion_id',
         'fila_origen',
+        'devolucion_linea_id',
     ];
 
     protected $casts = [

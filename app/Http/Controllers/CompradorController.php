@@ -90,6 +90,7 @@ class CompradorController extends Controller
             'min_dias_sin_venta' => $request->query('ss_min_dias'),
             'min_existencia' => $request->query('ss_min_stock'),
             'buscar' => $this->resolveBuscarFilter($request),
+            'incluir_sin_stock' => $this->incluirSinStock($request),
         ];
         $sortBy = (string) $request->query('ss_sort', 'prioridad');
         $sortDir = (string) $request->query('ss_dir', 'desc');
@@ -493,6 +494,7 @@ class CompradorController extends Controller
                 'min_dias_sin_venta' => $request->query('ss_min_dias'),
                 'min_existencia' => $request->query('ss_min_stock'),
                 'buscar' => $this->resolveBuscarFilter($request),
+                'incluir_sin_stock' => $this->incluirSinStock($request),
             ];
 
             Profiler::start('AnalisisInventarioService::getAnalysis');
@@ -760,6 +762,7 @@ class CompradorController extends Controller
                 'min_dias_sin_venta' => $request->query('ss_min_dias'),
                 'min_existencia' => $request->query('ss_min_stock'),
                 'buscar' => $this->resolveBuscarFilter($request),
+                'incluir_sin_stock' => $this->incluirSinStock($request),
             ];
 
             Profiler::start('AnalisisInventarioService::getAnalysis');
@@ -1016,6 +1019,16 @@ class CompradorController extends Controller
         Profiler::stop('CompradorController::index Blade render');
         Profiler::stop('CompradorController::index');
         return $viewResult;
+    }
+
+    /** Sobre Stock con productos en 0: activado por defecto para Marketing (para publicitarlos). */
+    private function incluirSinStock(Request $request): bool
+    {
+        if ($request->has('ss_sin_stock')) {
+            return $request->boolean('ss_sin_stock');
+        }
+
+        return (bool) $request->user()?->isMarketing();
     }
 
     private function resolveBuscarFilter(Request $request): string

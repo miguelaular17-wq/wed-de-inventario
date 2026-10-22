@@ -78,6 +78,12 @@
             font-style: italic;
             color: #94a3b8;
         }
+        .nota-resumen {
+            margin: 0 0 6px;
+            font-size: 10px;
+            color: #64748b;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -104,6 +110,9 @@
 
     <!-- CONSOLIDADOS -->
     <div class="section-title">CONSOLIDADOS ({{ $data['conciliados']->count() }})</div>
+    @if($data['por_dia']['conciliados'] ?? null)
+        @include('finanzas.pdf.partials.resumen_por_dia', ['filas' => $data['por_dia']['conciliados'], 'total' => $data['conciliados']->count(), 'limite' => $data['limite_detalle']])
+    @else
     <table class="data-table">
         <thead>
             <tr>
@@ -145,9 +154,13 @@
             @endif
         </tbody>
     </table>
+    @endif
 
     <!-- EN TRANSITO -->
     <div class="section-title">EN TRÁNSITO ({{ $data['en_transito']->count() }})</div>
+    @if($data['por_dia']['en_transito'] ?? null)
+        @include('finanzas.pdf.partials.resumen_por_dia', ['filas' => $data['por_dia']['en_transito'], 'total' => $data['en_transito']->count(), 'limite' => $data['limite_detalle']])
+    @else
     <table class="data-table">
         <thead>
             <tr>
@@ -178,9 +191,13 @@
             @endif
         </tbody>
     </table>
+    @endif
 
     <!-- SIN REGISTRAR / MOVIMIENTOS EN BANCO -->
     <div class="section-title">MOVIMIENTOS EN EL BANCO ({{ $data['sin_registrar']->count() }})</div>
+    @if($data['por_dia']['sin_registrar'] ?? null)
+        @include('finanzas.pdf.partials.resumen_por_dia', ['filas' => $data['por_dia']['sin_registrar'], 'total' => $data['sin_registrar']->count(), 'limite' => $data['limite_detalle']])
+    @else
     <table class="data-table">
         <thead>
             <tr>
@@ -222,9 +239,13 @@
             @endif
         </tbody>
     </table>
+    @endif
 
     <!-- COMISIONES -->
     <div class="section-title">COMISIONES BANCARIAS ({{ $data['comisiones']->count() }})</div>
+    @if($data['por_dia']['comisiones'] ?? null)
+        @include('finanzas.pdf.partials.resumen_por_dia', ['filas' => $data['por_dia']['comisiones'], 'total' => $data['comisiones']->count(), 'limite' => $data['limite_detalle']])
+    @else
     <table class="data-table">
         <thead>
             <tr>
@@ -260,9 +281,13 @@
             @endif
         </tbody>
     </table>
+    @endif
 
     <!-- PAGO DE CRÉDITO -->
     <div class="section-title">PAGO DE CRÉDITO ({{ ($data['pagos_credito'] ?? collect())->count() }})</div>
+    @if($data['por_dia']['pagos_credito'] ?? null)
+        @include('finanzas.pdf.partials.resumen_por_dia', ['filas' => $data['por_dia']['pagos_credito'], 'total' => $data['pagos_credito']->count(), 'limite' => $data['limite_detalle']])
+    @else
     <table class="data-table">
         <thead>
             <tr>
@@ -293,6 +318,7 @@
             @endif
         </tbody>
     </table>
+    @endif
 
 </body>
 </html>

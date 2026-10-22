@@ -111,6 +111,22 @@
     .btn-dash-comision { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
     .btn-dash-ok { color: #059669; border-color: #a7f3d0; background: #ecfdf5; font-size: 0.95rem; }
     .btn-dash-ok:hover { background: #d1fae5; }
+    .btn-dash-menu { font-size: 1.15rem; letter-spacing: 0; }
+    .mov-menu-flotante { position: fixed; z-index: 1040; min-width: 210px; background: white; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 28px rgba(15,23,42,.16); padding: 5px; }
+    .mov-menu-item { display: block; width: 100%; text-align: left; padding: 9px 12px; border: 0; background: none; border-radius: 7px; font-family: inherit; font-size: 0.86rem; font-weight: 600; color: #334155; cursor: pointer; }
+    .mov-menu-item:hover { background: #f1f5f9; }
+    .mov-menu-item small { display: block; font-weight: 400; color: #64748b; font-size: 0.75rem; margin-top: 2px; }
+    .dev-mov { border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; display: flex; gap: 10px; align-items: flex-start; font-size: 0.86rem; }
+    .dev-mov.is-origen { background: #f8fafc; }
+    label.dev-mov { cursor: pointer; }
+    label.dev-mov:has(input:checked) { border-color: #2563eb; background: #eff6ff; }
+    .dev-mov-info { flex: 1; min-width: 0; }
+    .dev-mov-info strong { color: #0f172a; }
+    .dev-mov-meta { color: #64748b; font-size: 0.78rem; margin-top: 2px; }
+    .dev-mov-monto { font-weight: 800; white-space: nowrap; }
+    .dev-paso { font-weight: 700; color: #334155; font-size: 0.9rem; margin: 16px 0 8px; }
+    .dev-vacio { color: #64748b; font-size: 0.85rem; font-style: italic; margin: 4px 0 0; }
+    .dev-nulo { color: #b91c1c; font-weight: 700; font-size: 0.8rem; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
 </style>
 
 <div class="conc-page">
@@ -541,15 +557,17 @@
                                 {{ $esEgreso ? '−' : '+' }}Bs. {{ number_format(abs((float) $row['monto']), 2) }}
                             </td>
                             <td style="text-align:center;">
-                                <form action="{{ route('finanzas.conciliaciones.marcar_comision') }}" method="POST" style="display:inline;" title="Marcar como comisión bancaria" onclick="event.stopPropagation()">
+                                <form id="form-comision-{{ $row['id'] }}" action="{{ route('finanzas.conciliaciones.marcar_comision') }}" method="POST" style="display:none;">
                                     @csrf
                                     <input type="hidden" name="fecha_desde" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
                                     <input type="hidden" name="fecha_hasta" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
                                     <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
                                     <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
                                     <input type="hidden" name="linea_id" value="{{ $row['id'] }}">
-                                    <button type="submit" class="btn-dash-action btn-dash-comision" onclick="event.stopPropagation(); return confirm('¿Pasar este movimiento a Comisiones bancarias?')">—</button>
                                 </form>
+                                <button type="button" class="btn-dash-action btn-dash-menu" title="Opciones"
+                                        data-linea="{{ $row['id'] }}" data-cuenta="{{ $bk_key }}"
+                                        onclick="abrirMenuMovimiento(event, this)">⋮</button>
                             </td>
                         </tr>
                         @empty
@@ -753,6 +771,52 @@
     </div>
 </div>
 
+{{-- Menú ⋮ de "Movimientos en el banco" (uno solo, flotante: la tabla tiene scroll y lo recortaría) --}}
+<div id="movMenu" class="mov-menu-flotante" hidden>
+    <button type="button" class="mov-menu-item" onclick="marcarComisionDesdeMenu()">
+        Marcar como comisión
+        <small>Pasa el movimiento a Comisiones bancarias</small>
+    </button>
+    <button type="button" class="mov-menu-item" onclick="abrirDevolucionDesdeMenu()">
+        Devolución
+        <small>Une el cargo con el abono que lo devolvió</small>
+    </button>
+</div>
+
+{{-- DEVOLUCIÓN --}}
+<div id="devolucionModal" class="modal-overlay">
+    <div class="modal-box" style="max-width:640px;">
+        <form id="devolucionForm" action="{{ route('finanzas.conciliaciones.devolucion') }}" method="POST" onsubmit="return confirmarDevolucion()">
+            @csrf
+            <input type="hidden" name="fecha_desde" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
+            <input type="hidden" name="fecha_hasta" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
+            <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
+            <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
+            <input type="hidden" name="linea_id" id="devLineaId">
+            <div class="modal-head">
+                <h5 class="modal-title">Marcar devolución</h5>
+                <button type="button" class="modal-close" onclick="cerrarDevolucion()">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height:65vh;overflow-y:auto;">
+                <div class="dev-paso" style="margin-top:0;">Movimiento elegido</div>
+                <div id="devOrigen"></div>
+
+                <div class="dev-paso" id="devPasoContraparte"></div>
+                <div id="devContrapartes"></div>
+
+                <div id="devBloqueEgresos" hidden>
+                    <div class="dev-paso">Egresos del sistema con la misma referencia del cargo</div>
+                    <div id="devEgresos"></div>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn-cancel" onclick="cerrarDevolucion()">Cancelar</button>
+                <button type="submit" class="btn-submit" id="devGuardar" disabled>Registrar devolución</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 {{-- MEDIOS DE PAGO BDV se carga en Lotes punto de venta --}}
 {{-- Mapa banco → titulares (generado desde PHP/BD) --}}
 <script>
@@ -794,6 +858,145 @@
 })();
 
 const titularesPorBanco = @json($titularesPorBanco);
+
+@php
+    $movimientosPendientesJs = collect($data_por_banco ?? [])->map(fn ($d) => $d['sin_registrar']->map(fn ($r) => [
+        'id' => $r['id'],
+        'fecha' => $r['fecha'] instanceof \DateTimeInterface ? $r['fecha']->format('d/m/Y') : \Carbon\Carbon::parse($r['fecha'])->format('d/m/Y'),
+        'referencia' => $r['referencia'],
+        'descripcion' => $r['descripcion'],
+        'monto' => round(abs((float) $r['monto']), 2),
+        'tipo' => ($r['tipo'] ?? 'cargo') === 'abono' ? 'abono' : 'cargo',
+    ])->values());
+    $urlEgresosDevolucion = route('finanzas.conciliaciones.devolucion.egresos');
+@endphp
+// Movimientos pendientes por cuenta, para elegir la otra mitad de una devolución.
+const movimientosPendientes = @json($movimientosPendientesJs);
+const urlEgresosDevolucion = @json($urlEgresosDevolucion);
+let menuMovimiento = { linea: null, cuenta: null };
+
+const fmtBs = n => Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const htmlMovimiento = (m, extra = '') => `
+    <div class="dev-mov-info">
+        <strong>${esc(m.descripcion)}</strong>
+        <div class="dev-mov-meta">${esc(m.fecha)} · Ref. ${esc(m.referencia || '—')} · ${m.tipo === 'abono' ? 'ABONO' : 'CARGO'}</div>
+        ${extra}
+    </div>
+    <div class="dev-mov-monto" style="color:${m.tipo === 'abono' ? '#059669' : '#dc2626'}">${m.tipo === 'abono' ? '+' : '−'}Bs. ${fmtBs(m.monto)}</div>`;
+
+function abrirMenuMovimiento(ev, boton) {
+    ev.stopPropagation();
+    const menu = document.getElementById('movMenu');
+    const mismo = !menu.hidden && menuMovimiento.linea === boton.dataset.linea;
+    menu.hidden = true;
+    if (mismo) return;
+    menuMovimiento = { linea: boton.dataset.linea, cuenta: boton.dataset.cuenta };
+    menu.hidden = false;
+    const r = boton.getBoundingClientRect();
+    const ancho = menu.offsetWidth;
+    const alto = menu.offsetHeight;
+    menu.style.left = Math.max(8, r.right - ancho) + 'px';
+    menu.style.top = (r.bottom + 6 + alto > window.innerHeight ? r.top - alto - 6 : r.bottom + 6) + 'px';
+}
+function cerrarMenuMovimiento() { document.getElementById('movMenu').hidden = true; }
+document.addEventListener('click', e => { if (!e.target.closest('#movMenu')) cerrarMenuMovimiento(); });
+window.addEventListener('scroll', cerrarMenuMovimiento, true);
+
+function marcarComisionDesdeMenu() {
+    cerrarMenuMovimiento();
+    if (confirm('¿Pasar este movimiento a Comisiones bancarias?')) {
+        document.getElementById('form-comision-' + menuMovimiento.linea).submit();
+    }
+}
+
+function abrirDevolucionDesdeMenu() {
+    cerrarMenuMovimiento();
+    const lista = movimientosPendientes[menuMovimiento.cuenta] || [];
+    const origen = lista.find(m => String(m.id) === String(menuMovimiento.linea));
+    if (!origen) return;
+
+    document.getElementById('devLineaId').value = origen.id;
+    document.getElementById('devOrigen').innerHTML = `<div class="dev-mov is-origen">${htmlMovimiento(origen)}</div>`;
+    const buscado = origen.tipo === 'abono' ? 'cargo' : 'abono';
+    document.getElementById('devPasoContraparte').textContent = buscado === 'cargo'
+        ? 'Marca el movimiento del banco que se devolvió (el cargo):'
+        : 'Marca el movimiento del banco donde está el abono de la devolución:';
+
+    // Mercantil: la devolución trae la misma cola de 8 dígitos que el cargo devuelto (171…03730500 / 204…03730500).
+    const candidatos = lista
+        .filter(m => m.tipo === buscado && Math.abs(m.monto - origen.monto) < 0.005)
+        .map(m => ({ ...m, mismaRef: referenciasCoinciden(m.referencia, origen.referencia) }))
+        .sort((a, b) => Number(b.mismaRef) - Number(a.mismaRef));
+    const conRef = candidatos.filter(m => m.mismaRef);
+    document.getElementById('devContrapartes').innerHTML = candidatos.length
+        ? candidatos.map(m => `<label class="dev-mov"><input type="radio" name="contraparte_id" value="${m.id}" onchange="buscarEgresosDevolucion()"${conRef.length === 1 && m.mismaRef ? ' checked' : ''}>${htmlMovimiento(m, m.mismaRef ? '<span class="tipo-chip" style="background:#ecfdf5;color:#059669;margin-top:4px;display:inline-block;">Misma referencia</span>' : '')}</label>`).join('')
+        : `<p class="dev-vacio">No hay ${buscado === 'cargo' ? 'un cargo' : 'un abono'} pendiente de Bs. ${fmtBs(origen.monto)} en esta cuenta y período.</p>`;
+
+    document.getElementById('devBloqueEgresos').hidden = true;
+    document.getElementById('devEgresos').innerHTML = '';
+    document.getElementById('devGuardar').disabled = true;
+    document.getElementById('devolucionModal').style.display = 'flex';
+    if (conRef.length === 1) buscarEgresosDevolucion();
+}
+
+function referenciasCoinciden(a, b) {
+    const da = String(a || '').replace(/\D+/g, '').replace(/^0+/, '');
+    const db = String(b || '').replace(/\D+/g, '').replace(/^0+/, '');
+    if (!da || !db) return false;
+    if (da === db) return true;
+    return da.length >= 8 && db.length >= 8 && da.slice(-8) === db.slice(-8);
+}
+
+function cerrarDevolucion() { document.getElementById('devolucionModal').style.display = 'none'; }
+
+async function buscarEgresosDevolucion() {
+    const elegido = document.querySelector('#devContrapartes input[name="contraparte_id"]:checked');
+    if (!elegido) return;
+    document.getElementById('devGuardar').disabled = false;
+    const bloque = document.getElementById('devBloqueEgresos');
+    const caja = document.getElementById('devEgresos');
+    bloque.hidden = false;
+    caja.innerHTML = '<p class="dev-vacio">Buscando egresos…</p>';
+
+    const params = new URLSearchParams({ linea_id: document.getElementById('devLineaId').value, contraparte_id: elegido.value });
+    try {
+        const r = await fetch(urlEgresosDevolucion + '?' + params, { headers: { 'Accept': 'application/json' } });
+        const d = await r.json();
+        if (!r.ok) {
+            caja.innerHTML = `<p class="dev-vacio" style="color:#b91c1c;">${esc(d.message || 'No se pudo buscar los egresos.')}</p>`;
+            document.getElementById('devGuardar').disabled = true;
+            return;
+        }
+        if (!d.egresos.length) {
+            caja.innerHTML = '<p class="dev-vacio">Ningún egreso del sistema tiene la referencia del cargo. Solo se unirán los dos movimientos del banco.</p>';
+            return;
+        }
+        caja.innerHTML = d.egresos.map(e => {
+            const meta = `<div class="dev-mov-meta">${esc(e.fecha)} · Ref. ${esc(e.referencia || '—')}${e.tipo_gasto ? ' · ' + esc(e.tipo_gasto) : ''}</div>`
+                + (e.conciliado_con ? `<div class="dev-mov-meta" style="color:#b45309;">${esc(e.conciliado_con)}</div>` : '');
+            const marca = e.conciliado_con
+                ? '<span class="dev-mov-meta">No se puede anular</span>'
+                : `<label class="dev-nulo"><input type="checkbox" name="anular[]" value="${e.id}"> Marcar como nulo</label>`;
+            return `<div class="dev-mov">
+                <div class="dev-mov-info"><strong>${esc(e.motivo)}</strong>${meta}</div>
+                <div style="text-align:right;">
+                    <div class="dev-mov-monto" style="color:#dc2626;">Bs. ${fmtBs(e.monto_bs)}</div>
+                    ${marca}
+                </div>
+            </div>`;
+        }).join('');
+    } catch (err) {
+        caja.innerHTML = '<p class="dev-vacio" style="color:#b91c1c;">No se pudo buscar los egresos. Intenta de nuevo.</p>';
+    }
+}
+
+function confirmarDevolucion() {
+    const nulos = document.querySelectorAll('#devEgresos input[name="anular[]"]:checked').length;
+    return confirm(nulos
+        ? `Se unirán los dos movimientos del banco como devolución y ${nulos} egreso(s) quedarán NULOS (dejan de contar en el flujo de caja). ¿Continuar?`
+        : 'Se unirán los dos movimientos del banco como devolución. ¿Continuar?');
+}
 
 function filtrarTitulares(banco) {
     const selTit = document.getElementById('selectTitular');

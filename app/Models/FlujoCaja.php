@@ -15,6 +15,7 @@ class FlujoCaja extends Model
         'es_todoticket', 'detalle_todoticket',
         'sede', 'placa_vehiculo', 'oculto', 'comprobante_url',
         'desglose', 'comprobantes', 'cuenta_por_pagar_id',
+        'anulado', 'anulado_motivo', 'anulado_at',
     ];
 
     public function cuentaPorPagar()
@@ -27,5 +28,7 @@ class FlujoCaja extends Model
         'comprobantes' => 'array',
         'detalle_todoticket' => 'array',
         'es_todoticket' => 'boolean',
+        'anulado' => 'boolean',
+        'anulado_at' => 'datetime',
     ];
 }

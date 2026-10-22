@@ -39,14 +39,19 @@ class AnalisisInventarioService
 
         $stockUpdatedAt = $this->products->lastStockUpdate();
         $stockUpdateMd5 = md5((string) $stockUpdatedAt);
+        // Productos sin stock: para publicitarlos (marketing) o al buscar uno por código/nombre.
+        $incluirSinStock = ! empty($filters['incluir_sin_stock']) || ! empty($filters['buscar'])
+            || ($filters['sobrestock_filter'] ?? '') === 'Sin stock';
         // Build a unique cache key for these base filters
         $filtersHash = md5(json_encode([
             $filters['categoria'] ?? 'Ninguno',
             $filters['subcategoria'] ?? 'Ninguno',
             $filters['proveedor'] ?? 'Ninguno',
-            $filters['buscar'] ?? ''
+            $filters['buscar'] ?? '',
+            $incluirSinStock,
         ]));
-        $cacheKey = "analisis_inv_base_v4_{$stockUpdateMd5}_{$filtersHash}";
+        $cacheKey = "analisis_inv_base_v5_{$stockUpdateMd5}_{$filtersHash}";
+        $condicionStock = $incluirSinStock ? 'TRUE' : 'pm.total_stock > 0';
 
         $bindings = [];
         $whereClauses = [];
@@ -193,7 +198,7 @@ WITH product_metrics AS (
                     (CURRENT_DATE - pm.ultima_compra) as dias_sin_compra_raw
                 FROM product_metrics pm
                 LEFT JOIN multisede_agg msa ON pm.id = msa.producto_id
-                WHERE pm.total_stock > 0
+                WHERE {$condicionStock}
             ),
             inventory_months AS (
                 SELECT *,
@@ -225,6 +230,7 @@ WITH product_metrics AS (
                     
                     -- 2. Regla de Sobrestock
                     CASE 
+                        WHEN total_stock <= 0 THEN 'Sin stock'
                         WHEN meses_inventario IS NULL AND dias_sin_venta > " . self::DIAS_SIN_ROTACION . " THEN 'Crítico / Sin Rotación'
                         WHEN meses_inventario IS NULL THEN 'Crítico / Sin Rotación'
                         WHEN meses_inventario <= " . self::MESES_NORMAL . " THEN 'Normal'
@@ -233,6 +239,7 @@ WITH product_metrics AS (
                         ELSE 'Crítico / Sin Rotación'
                     END as sobrestock,
                     CASE 
+                        WHEN total_stock <= 0 THEN 'gris'
                         WHEN meses_inventario IS NULL THEN 'rojo'
                         WHEN meses_inventario <= " . self::MESES_NORMAL . " THEN 'verde'
                         WHEN meses_inventario <= " . self::MESES_VIGILAR . " THEN 'amarillo'

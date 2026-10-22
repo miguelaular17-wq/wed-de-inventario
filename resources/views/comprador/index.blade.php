@@ -753,6 +753,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         <input type="hidden" name="ss_semaforo" value="{{ $ssFilters['semaforo_filter'] }}">
         <input type="hidden" name="ss_min_dias" value="{{ $ssFilters['min_dias_sin_venta'] }}">
         <input type="hidden" name="ss_min_stock" value="{{ $ssFilters['min_existencia'] }}">
+        <input type="hidden" name="ss_sin_stock" value="{{ !empty($ssFilters['incluir_sin_stock']) ? 1 : 0 }}">
         <input type="hidden" name="ss_sort" value="{{ $ssSortBy }}">
         <input type="hidden" name="ss_dir" value="{{ $ssSortDir }}">
         <div style="flex: 1; max-width: 480px; position: relative;">
@@ -844,6 +845,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                 <option value="Vigilar" @selected($ssFilters['sobrestock_filter'] === 'Vigilar')>Vigilar</option>
                 <option value="Sobrestock" @selected($ssFilters['sobrestock_filter'] === 'Sobrestock')>Sobrestock</option>
                 <option value="Sobrestock Crítico" @selected($ssFilters['sobrestock_filter'] === 'Sobrestock Crítico')>Sobrestock Crítico</option>
+                <option value="Sin stock" @selected($ssFilters['sobrestock_filter'] === 'Sin stock')>Sin stock</option>
             </select>
         </div>
         <div class="field" style="width: 130px;">
@@ -863,6 +865,14 @@ table.data-table tbody tr.row-mala-distribucion:hover {
         <div class="field" style="width: 110px;">
             <label for="ss_min_stock">Stock ≥</label>
             <input type="number" id="ss_min_stock" name="ss_min_stock" value="{{ $ssFilters['min_existencia'] }}" min="0" placeholder="0">
+        </div>
+        <div class="field" style="width: auto;">
+            <label for="ss_sin_stock">Sin stock</label>
+            <input type="hidden" name="ss_sin_stock" value="0">
+            <label style="display: flex; align-items: center; gap: 6px; font-weight: 500; font-size: 0.85rem; padding: 8px 0; cursor: pointer;">
+                <input type="checkbox" id="ss_sin_stock" name="ss_sin_stock" value="1" @checked(!empty($ssFilters['incluir_sin_stock'])) onchange="document.getElementById('ss-form').submit();">
+                Incluir productos con stock 0
+            </label>
         </div>
         <div>
             <button type="submit" class="btn primary" style="padding: 10px 16px;">Aplicar</button>

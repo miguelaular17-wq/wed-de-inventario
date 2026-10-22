@@ -27,6 +27,8 @@ class BankMovementClassifier
         'com.compra', 'coms ',
         // Mercantil / extractos recientes
         'comis.pago', 'comis.pago inmediato',
+        'op.cred.dirt', 'op cred dirt',
+        'com.pat', 'com pat app',
         'com/liq', 'com/liq/tdd',
         'comsiones', 'comisiones',
     ];

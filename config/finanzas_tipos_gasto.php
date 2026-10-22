@@ -103,5 +103,6 @@ return [
         '098 - MEJORAS INSTALACIONES TIENDAS',
         '099 - DEVOLUCIONES CLIENTES',
         '100 - TODOTICKET',
+        '101 - GASTOS DE MARIA NUÑES',
     ],
 ];

@@ -635,6 +635,10 @@ class BankReconciliationMatcher
             'pos:',
             // Mercantil: "CANCELACION RESUMEN DE VENTAS Y RETENCIO" (el cargo "DESCUENTO TARJETA" es la comisión).
             'resumen de venta',
+            // Tesoro: "LQ TDD 82258507 0008 0052" / LQ TDC / LQ ELE (el cargo "COM/LIQ/TDD" es la comisión).
+            'lq tdd',
+            'lq tdc',
+            'lq ele',
         ];
 
         foreach ($needles as $needle) {
@@ -867,6 +871,51 @@ class BankReconciliationMatcher
         return $puntos;
     }
 
+    /**
+     * La línea es el cargo de comisión del egreso (su monto es el campo "comision" y no el
+     * monto del egreso). Mercantil le da a la comisión una referencia con la misma cola de
+     * 8 dígitos que la transferencia (437…3411 / 479…3411), así que cruza por referencia.
+     */
+    public function esComisionDelEgreso(ConciliacionLinea $linea, object $flujo): bool
+    {
+        $comision = abs((float) ($flujo->comision ?? 0));
+        if ($comision < 0.01 || ! $this->mismosMontos(abs((float) $linea->monto), $comision)) {
+            return false;
+        }
+
+        return ! $this->montoIgualEgreso($linea, $flujo);
+    }
+
+    /**
+     * Cargo de comisión del banco que no puede quedarse con este egreso: es su comisión registrada,
+     * o es una comisión del extracto (p. ej. OP.CRED.DIRT.) mucho menor que el egreso (≤ 5 %).
+     */
+    public function comisionNoCorrespondeAlEgreso(ConciliacionLinea $linea, object $flujo, bool $lineaEsComision): bool
+    {
+        if ($this->esComisionDelEgreso($linea, $flujo)) {
+            return true;
+        }
+        $mayor = max(abs((float) ($flujo->monto_bs ?? 0)), abs((float) ($flujo->monto ?? 0)));
+        // Solo montos en Bs: una comisión de Bs 14,00 no es un egreso de USD 14,00 (= Bs 11.078,48).
+        if (! $lineaEsComision || $mayor <= 0 || $this->mismosMontos(abs((float) $linea->monto), $mayor)) {
+            return false;
+        }
+
+        return abs((float) $linea->monto) <= $mayor * 0.05;
+    }
+
+    /** El monto de la línea es el del egreso (Bs, USD o monto genérico). */
+    public function montoIgualEgreso(ConciliacionLinea $linea, object $flujo): bool
+    {
+        foreach ([$flujo->monto_bs ?? null, $flujo->monto_usd ?? null, $flujo->monto ?? null] as $monto) {
+            if ($monto !== null && $this->mismosMontos(abs((float) $linea->monto), abs((float) $monto))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function coincideEgreso(ConciliacionLinea $linea, object $flujo): bool
     {
         if ($this->esTraslado($flujo)) {
@@ -882,6 +931,10 @@ class BankReconciliationMatcher
             return false;
         }
         if (! $this->mismoTitular($linea->titular, $flujo->titular ?? null, $linea->banco, $flujo->banco ?? null)) {
+            return false;
+        }
+
+        if ($this->esComisionDelEgreso($linea, $flujo)) {
             return false;
         }
 

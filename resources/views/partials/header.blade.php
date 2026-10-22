@@ -254,7 +254,7 @@
                     : $drop($u->isMarketing() ? 'Marketing' : 'Compras', $comprasItems);
             }
         }
-        if ($u->canAccessAny(['reportes', 'compras.existencias', 'compras'])) {
+        if ($u->puedeVerReportes()) {
             $nav[] = $drop('Reportes', [
                 $link('Todos los reportes', route('reportes.index'), request()->routeIs('reportes.index')),
                 $link('Existencias por sede', route('reportes.existencias_sede'), request()->routeIs('reportes.existencias_sede*')),

@@ -28,6 +28,22 @@ class UserPermissionAccessTest extends TestCase
             ->assertRedirect('/');
     }
 
+    public function test_marketing_no_ve_reportes_salvo_permiso_asignado(): void
+    {
+        $marketing = $this->makeUser(User::ROLE_MARKETING);
+
+        $this->assertTrue($marketing->canAccess('compras'));
+        $this->assertFalse($marketing->puedeVerReportes());
+        $this->actingAs($marketing)->get(route('reportes.index'))->assertRedirect('/');
+        $this->actingAs($marketing)->get(route('reportes.proveedor'))->assertRedirect('/');
+        $this->actingAs($marketing)->get(route('analisis_categorias.index'))->assertRedirect('/');
+
+        $marketing->syncExtraPermissions(['reportes']);
+        $this->assertTrue($marketing->fresh()->puedeVerReportes());
+
+        $this->assertTrue($this->makeUser(User::ROLE_COMPRADOR)->puedeVerReportes());
+    }
+
     public function test_extra_permission_unlocks_a_view_from_another_role(): void
     {
         $user = $this->makeUser(User::ROLE_VENDEDOR);
