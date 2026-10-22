@@ -366,6 +366,11 @@ Route::prefix('vendedor')->group(function () {
 Route::middleware(['auth', 'permission:vendedor.jrz'])->group(function () {
     Route::get('/vendedor/jrz', [\App\Http\Controllers\VendedorController::class, 'jrz'])->name('vendedor.jrz');
 });
+Route::middleware('auth')->prefix('etiquetas')->name('etiquetas.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\EtiquetasController::class, 'index'])->name('index');
+    Route::get('/buscar', [\App\Http\Controllers\EtiquetasController::class, 'buscar'])->name('buscar');
+    Route::post('/pdf', [\App\Http\Controllers\EtiquetasController::class, 'pdf'])->name('pdf');
+});
 
 // Tesoreria routes
 Route::middleware(['auth', 'permission:tesoreria'])->prefix('tesoreria')->name('tesoreria.')->group(function () {

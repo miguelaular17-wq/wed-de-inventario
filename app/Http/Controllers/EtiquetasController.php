@@ -1,0 +1,136 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Services\EtiquetasPrecioService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\Response;
+
+class EtiquetasController extends Controller
+{
+    public function __construct(
+        private EtiquetasPrecioService $etiquetas,
+    ) {}
+
+    public function index(Request $request): View
+    {
+        $this->autorizar($request);
+
+        return view('etiquetas.index', [
+            'tamanos' => EtiquetasPrecioService::TAMANOS,
+            'maxEtiquetas' => EtiquetasPrecioService::MAX_ETIQUETAS,
+        ]);
+    }
+
+    public function buscar(Request $request): JsonResponse
+    {
+        $this->autorizar($request);
+        $q = mb_substr(trim((string) $request->query('q', '')), 0, 80);
+
+        return response()->json($this->etiquetas->buscar($q));
+    }
+
+    public function pdf(Request $request): Response
+    {
+        $this->autorizar($request);
+        $data = $request->validate([
+            'items' => ['required', 'array', 'min:1', 'max:300'],
+            'items.*.id' => ['required', 'integer'],
+            'items.*.copias' => ['required', 'integer', 'min:1', 'max:100'],
+            'tamano' => ['required', Rule::in(array_keys(EtiquetasPrecioService::TAMANOS))],
+            'cantidad_mayor' => ['required', 'integer', 'min:2', 'max:999'],
+        ]);
+
+        $fichas = $this->etiquetas->armarEtiquetas($data['items'], (int) $data['cantidad_mayor']);
+        if ($fichas === []) {
+            return back()->with('error', 'Ninguno de los productos de la lista está activo.');
+        }
+
+        ini_set('memory_limit', '512M');
+        ini_set('max_execution_time', '300');
+
+        $tamano = EtiquetasPrecioService::TAMANOS[$data['tamano']];
+        $porPagina = $tamano['columnas'] * $tamano['filas'];
+
+        $pdf = app('dompdf.wrapper');
+        $metricas = $pdf->getDomPDF()->getFontMetrics();
+        $fuente = $metricas->getFont('DejaVu Sans', 'bold');
+        $anchoPt = fn (string $texto, float $fs) => (float) $metricas->getTextWidth($texto, $fuente, $fs);
+        $altoLineaPt = fn (float $fs) => (float) $metricas->getFontHeight($fuente, $fs);
+
+        $pdf->loadView('etiquetas.pdf', [
+            'paginas' => array_chunk($fichas, $porPagina),
+            'ajustarNombre' => fn (string $nombre, float $anchoMm, float $altoMm, array $tamanos)
+                => $this->etiquetas->ajustarNombre($nombre, $anchoPt, $altoLineaPt, $anchoMm, $altoMm, $tamanos),
+            'tamano' => $tamano,
+            'tamanoClave' => $data['tamano'],
+            'logo' => $this->imagenDataUri(public_path('logo.png')),
+            'fondo' => $this->fondoDegradado($tamano['ancho'], $tamano['alto']),
+            'fecha' => now()->format('d/m/Y'),
+        ])->setPaper('letter', 'portrait');
+
+        return $pdf->stream('etiquetas_' . now()->format('Ymd_His') . '.pdf');
+    }
+
+    private function autorizar(Request $request): void
+    {
+        $user = $request->user();
+        abort_unless($user && $user->canSeeCatalogoPrecios(), 403, 'No tienes permiso para ver precios del catálogo.');
+    }
+
+    private function imagenDataUri(string $path): ?string
+    {
+        if (! is_file($path)) {
+            return null;
+        }
+
+        return 'data:image/png;base64,' . base64_encode((string) file_get_contents($path));
+    }
+
+    /**
+     * Dompdf no dibuja linear-gradient ni escala fondos (background-size): se genera una vez
+     * un PNG rosa → morado → azul al tamaño exacto de la etiqueta (96 dpi).
+     */
+    private function fondoDegradado(int $anchoMm, int $altoMm): ?string
+    {
+        $w = (int) ceil($anchoMm / 25.4 * 96);
+        $h = (int) ceil($altoMm / 25.4 * 96);
+        $path = storage_path("app/etiquetas/fondo_v1_{$w}x{$h}.png");
+        if (is_file($path)) {
+            return $this->imagenDataUri($path);
+        }
+        if (! function_exists('imagecreatetruecolor')) {
+            return null;
+        }
+
+        $img = imagecreatetruecolor($w, $h);
+        $paradas = [[0.0, [236, 72, 153]], [0.5, [147, 51, 234]], [1.0, [59, 130, 246]]];
+        $diag = $w + $h;
+        for ($x = 0; $x < $w; $x++) {
+            for ($y = 0; $y < $h; $y++) {
+                $t = ($x + ($h - $y)) / $diag;
+                [$t0, $c0] = $t <= 0.5 ? $paradas[0] : $paradas[1];
+                [$t1, $c1] = $t <= 0.5 ? $paradas[1] : $paradas[2];
+                $k = ($t - $t0) / ($t1 - $t0);
+                $color = imagecolorallocate(
+                    $img,
+                    (int) round($c0[0] + ($c1[0] - $c0[0]) * $k),
+                    (int) round($c0[1] + ($c1[1] - $c0[1]) * $k),
+                    (int) round($c0[2] + ($c1[2] - $c0[2]) * $k),
+                );
+                imagesetpixel($img, $x, $y, $color);
+            }
+        }
+
+        if (! is_dir(dirname($path))) {
+            @mkdir(dirname($path), 0775, true);
+        }
+        imagepng($img, $path);
+        imagedestroy($img);
+
+        return $this->imagenDataUri($path);
+    }
+}
