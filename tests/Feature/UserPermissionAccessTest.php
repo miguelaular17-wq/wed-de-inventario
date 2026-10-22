@@ -180,6 +180,30 @@ class UserPermissionAccessTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_publicitar_varios_requiere_permiso_de_publicidad(): void
+    {
+        $soloAnalisis = $this->makeUser(User::ROLE_SUPERVISOR);
+        $soloAnalisis->syncExtraPermissions(['compras.sobrestock']);
+
+        $this->actingAs($soloAnalisis)
+            ->postJson(route('comprador.publicidad.varios'), ['producto_ids' => [1, 2]])
+            ->assertForbidden();
+
+        $marketing = $this->makeUser(User::ROLE_MARKETING);
+
+        $this->actingAs($marketing)
+            ->postJson(route('comprador.publicidad.varios'), ['producto_ids' => []])
+            ->assertStatus(422);
+
+        $this->actingAs($marketing)
+            ->postJson(route('comprador.publicidad.varios'), [
+                'producto_ids' => [5, 5, 7],
+                'fecha_publicidad' => '2026-10-22',
+            ])
+            ->assertOk()
+            ->assertJson(['success' => true, 'skipped' => [5, 7]]);
+    }
+
     public function test_full_compras_extra_still_unlocks_every_tab(): void
     {
         $user = $this->makeUser(User::ROLE_SUPERVISOR);

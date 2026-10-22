@@ -888,6 +888,13 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             <span style="font-size: 0.9rem; color: var(--muted);">
                 Mostrando <strong>{{ $sobreStock->count() }}</strong> de <strong>{{ number_format($sobreStock->total()) }}</strong> productos
             </span>
+            @if(!empty($puedePublicitar))
+                <div id="pub-bulk-bar" style="display: none; align-items: center; gap: 10px;">
+                    <span style="font-size: 0.85rem; color: var(--muted);"><strong id="pub-bulk-count">0</strong> seleccionado(s)</span>
+                    <button type="button" class="btn secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="limpiarSeleccionPublicidad()">Quitar selección</button>
+                    <button type="button" id="pub-bulk-btn" class="btn primary" style="padding: 6px 12px; font-size: 0.8rem; font-weight: 600;" onclick="publicitarSeleccionados()">📢 Publicitar seleccionados</button>
+                </div>
+            @endif
         </div>
         <div class="table-wrap">
             <table class="data-table" style="font-size: 0.85rem;">
@@ -930,7 +937,12 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                         </th>
                         <th style="width: 120px; text-align: center;">Sobrestock</th>
                         @if(!empty($puedePublicitar))
-                            <th style="width: 120px; text-align: center;">Publicidad</th>
+                            <th style="width: 140px; text-align: center;">
+                                <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer;" title="Seleccionar todos los de esta página">
+                                    <input type="checkbox" id="pub-check-all" onchange="seleccionarTodosPublicidad(this.checked)">
+                                    Publicidad
+                                </label>
+                            </th>
                         @endif
                         @if(!empty($puedeMarcarMeta))
                             <th style="width: 110px; text-align: center;">Meta</th>
@@ -1009,6 +1021,13 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                                     @php
                                         $isAdvertised = in_array($item['id'], $advertisedProductIds, true);
                                     @endphp
+                                    <input type="checkbox"
+                                           class="pub-check"
+                                           value="{{ $item['id'] }}"
+                                           title="Seleccionar para publicitar varios a la vez"
+                                           onchange="actualizarSeleccionPublicidad()"
+                                           style="vertical-align: middle; margin-right: 4px; {{ $isAdvertised ? 'visibility: hidden;' : '' }}"
+                                           @disabled($isAdvertised)>
                                     <button type="button" 
                                             onclick="toggleAdvertising({{ $item['id'] }}, this)" 
                                             class="btn {{ $isAdvertised ? 'primary' : 'secondary' }}" 
@@ -1391,6 +1410,7 @@ async function toggleAdvertising(productId, btn) {
                 btn.innerText = '➕ Publicitar';
                 btn.className = 'btn secondary';
             }
+            marcarCheckPublicidad(productId, res.status === 'added');
             // Update other matching buttons
             document.querySelectorAll(`button[onclick^="toggleAdvertising(${productId},"]`).forEach(otherBtn => {
                 if (otherBtn !== btn) {
@@ -1413,6 +1433,90 @@ async function toggleAdvertising(productId, btn) {
         btn.innerText = originalText;
     } finally {
         btn.disabled = false;
+    }
+}
+
+function marcarCheckPublicidad(productId, enCampana) {
+    document.querySelectorAll(`.pub-check[value="${productId}"]`).forEach(chk => {
+        chk.checked = false;
+        chk.disabled = enCampana;
+        chk.style.visibility = enCampana ? 'hidden' : '';
+    });
+    actualizarSeleccionPublicidad();
+}
+
+function checksPublicidadDisponibles() {
+    return Array.from(document.querySelectorAll('.pub-check')).filter(chk => !chk.disabled);
+}
+
+function actualizarSeleccionPublicidad() {
+    const bar = document.getElementById('pub-bulk-bar');
+    if (!bar) return;
+    const disponibles = checksPublicidadDisponibles();
+    const marcados = disponibles.filter(chk => chk.checked).length;
+    document.getElementById('pub-bulk-count').innerText = marcados;
+    bar.style.display = marcados > 0 ? 'flex' : 'none';
+    const all = document.getElementById('pub-check-all');
+    if (all) {
+        all.checked = disponibles.length > 0 && marcados === disponibles.length;
+        all.indeterminate = marcados > 0 && marcados < disponibles.length;
+    }
+}
+
+function seleccionarTodosPublicidad(checked) {
+    checksPublicidadDisponibles().forEach(chk => { chk.checked = checked; });
+    actualizarSeleccionPublicidad();
+}
+
+function limpiarSeleccionPublicidad() {
+    seleccionarTodosPublicidad(false);
+}
+
+async function publicitarSeleccionados() {
+    const ids = checksPublicidadDisponibles().filter(chk => chk.checked).map(chk => Number(chk.value));
+    if (ids.length === 0) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const fecha = prompt(`Fecha de inicio de la publicidad para ${ids.length} producto(s) (si desea retroactivo):`, today);
+    if (fecha === null) return;
+
+    const btn = document.getElementById('pub-bulk-btn');
+    const originalText = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = 'Guardando...';
+    try {
+        const response = await fetch("{{ route('comprador.publicidad.varios') }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ producto_ids: ids, fecha_publicidad: fecha || null })
+        });
+        const res = await response.json();
+        if (!response.ok || !res.success) {
+            alert(res.message || 'Error al publicitar los productos seleccionados.');
+            return;
+        }
+        (res.added || []).forEach(id => {
+            document.querySelectorAll(`button[onclick^="toggleAdvertising(${id},"]`).forEach(b => {
+                b.innerText = '📢 En campaña';
+                b.className = 'btn primary';
+            });
+            marcarCheckPublicidad(id, true);
+        });
+        (res.skipped || []).forEach(id => {
+            document.querySelectorAll(`.pub-check[value="${id}"]`).forEach(chk => { chk.checked = false; });
+        });
+        actualizarSeleccionPublicidad();
+        alert(res.message);
+    } catch (error) {
+        console.error(error);
+        alert('Error de conexión.');
+    } finally {
+        btn.disabled = false;
+        btn.innerText = originalText;
     }
 }
 

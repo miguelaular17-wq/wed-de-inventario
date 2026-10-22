@@ -298,6 +298,7 @@ Route::middleware(['auth', 'permission:compras,compras.distribucion,compras.nece
     Route::get('/quiebre-inventario/exportar', [CompradorController::class, 'exportInventoryBreak'])->name('comprador.quiebre.export');
     Route::post('/notificar', [CompradorController::class, 'notifyRedistribution'])->name('comprador.notify');
     Route::post('/publicidad/toggle', [CompradorController::class, 'togglePublicidad'])->name('comprador.publicidad.toggle');
+    Route::post('/publicidad/varios', [CompradorController::class, 'publicitarVarios'])->name('comprador.publicidad.varios');
     
     // Histórico de ventas mensuales
     Route::get('/historico-ventas', [\App\Http\Controllers\CompradorVentasController::class, 'index'])->name('comprador.historico');

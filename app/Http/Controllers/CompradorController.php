@@ -1597,6 +1597,89 @@ class CompradorController extends Controller
         ]);
     }
 
+    /**
+     * Marca varios productos en campaña con la misma fecha (líneas publicadas el mismo día).
+     */
+    public function publicitarVarios(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $this->denyUnlessComprasTab('publicidad');
+        $data = $request->validate([
+            'producto_ids' => ['required', 'array', 'min:1', 'max:500'],
+            'producto_ids.*' => ['integer'],
+            'fecha_publicidad' => ['nullable', 'date'],
+        ]);
+
+        $ids = array_values(array_unique(array_map('intval', $data['producto_ids'])));
+
+        if (config('database.default') !== 'pgsql') {
+            return response()->json([
+                'success' => true,
+                'added' => [],
+                'skipped' => $ids,
+                'message' => 'Campaña de publicidad no disponible en SQLite.',
+            ]);
+        }
+
+        $db = \Illuminate\Support\Facades\DB::connection('pgsql');
+
+        $yaEnCampana = $db->table('publicidad_productos')
+            ->whereIn('producto_id', $ids)
+            ->pluck('producto_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $nuevos = array_values(array_diff($ids, $yaEnCampana));
+
+        if ($nuevos === []) {
+            return response()->json([
+                'success' => true,
+                'added' => [],
+                'skipped' => $ids,
+                'message' => 'Todos los productos seleccionados ya estaban en campaña.',
+            ]);
+        }
+
+        $ultimasVentas = $db->table('ventas_historicas')
+            ->whereIn('producto_id', $nuevos)
+            ->groupBy('producto_id')
+            ->select('producto_id', \Illuminate\Support\Facades\DB::raw('MAX(ultima_venta) as ultima_venta'))
+            ->pluck('ultima_venta', 'producto_id');
+
+        $fechaPublicidad = isset($data['fecha_publicidad']) ? \Carbon\Carbon::parse($data['fecha_publicidad']) : now();
+        $userId = auth()->id();
+        $now = now();
+
+        $rows = array_map(fn (int $id) => [
+            'producto_id' => $id,
+            'user_id' => $userId,
+            'fecha_publicidad' => $fechaPublicidad,
+            'ultima_venta_original' => $ultimasVentas[$id] ?? null,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ], $nuevos);
+
+        $db->table('publicidad_productos')->insertOrIgnore($rows);
+
+        $agregados = $db->table('publicidad_productos')
+            ->whereIn('producto_id', $nuevos)
+            ->where('user_id', $userId)
+            ->pluck('producto_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $omitidos = array_values(array_diff($ids, $agregados));
+
+        $mensaje = count($agregados) . ' producto(s) marcados en campaña.';
+        if ($omitidos !== []) {
+            $mensaje .= ' ' . count($omitidos) . ' ya estaban en campaña y se omitieron.';
+        }
+
+        return response()->json([
+            'success' => true,
+            'added' => $agregados,
+            'skipped' => $omitidos,
+            'message' => $mensaje,
+        ]);
+    }
+
     public function toggleExclusion(Request $request, $id)
     {
         $user = $request->user();
