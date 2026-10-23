@@ -200,9 +200,9 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 .etq-pc-caja img { position: absolute; right: 10px; top: 7px; width: 50px; height: 50px; }
 .etq-pc-caja b { display: block; font-size: 21px; font-weight: 900; line-height: 1.1; text-align: center; }
 .etq-pc-caja b + b { color: #facc15; font-size: 23px; margin-top: 2px; }
-.etq-pc-pill { margin-top: -8px; background: #db2777; border: 2px solid #fff; border-radius: 12px; padding: 4px 8px; position: relative; text-align: center; }
-.etq-pc-pill small { position: absolute; left: 12px; top: 7px; font-size: 9px; font-weight: 800; color: #fde68a; }
-.etq-pc-pill strong { font-size: 44px; font-weight: 900; line-height: 1.15; }
+.etq-pc-pill { margin-top: -8px; align-self: center; display: inline-flex; align-items: center; gap: 8px; background: #db2777; border: 2px solid #fff; border-radius: 12px; padding: 3px 14px; }
+.etq-pc-pill small { font-size: 9px; font-weight: 800; color: #fde68a; }
+.etq-pc-pill strong { font-size: 24px; font-weight: 900; line-height: 1.1; color: #fff; }
 .etq-pc-pie { display: none; }
 .etq-pc-der { flex: 1; background: #fff; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; color: #0f172a; min-width: 0; }
 .etq-pc-marca { font-size: 22px; font-weight: 900; letter-spacing: .06em; line-height: 1.1; }

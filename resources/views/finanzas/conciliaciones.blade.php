@@ -142,6 +142,9 @@
             <a href="{{ route('finanzas.conciliaciones.lotes') }}" class="btn-upload" style="background:linear-gradient(135deg,#0f766e,#0d9488);text-decoration:none;">
                 Lotes punto de venta
             </a>
+            <button type="button" class="btn-upload" style="background:linear-gradient(135deg,#7c3aed,#6366f1);" onclick="document.getElementById('divisasModal').style.display='flex'">
+                Transferencias en divisas (PDF)
+            </button>
 
             <form action="{{ route('finanzas.conciliaciones') }}" method="GET" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap;">
                 <input type="date" name="fecha_desde" class="select-banco" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}" title="Fecha Desde" required style="min-width: 130px;">
@@ -183,6 +186,9 @@
     @endif
     @if(session('error'))
         <div class="alert-success" style="background:#fef2f2;color:#991b1b;border-color:#fca5a5;">⚠️ {{ session('error') }}</div>
+    @endif
+    @if($errors->any())
+        <div class="alert-success" style="background:#fef2f2;color:#991b1b;border-color:#fca5a5;">⚠️ {{ $errors->first() }}</div>
     @endif
 
     @if(($importacionesRecientes ?? collect())->isNotEmpty())
@@ -770,6 +776,73 @@
         </form>
     </div>
 </div>
+
+{{-- TRANSFERENCIAS EN DIVISAS (documento adicional) --}}
+<div id="divisasModal" class="modal-overlay">
+    <div class="modal-box">
+        <form action="{{ route('finanzas.conciliaciones.divisas.preview') }}" method="POST" enctype="multipart/form-data"
+              onsubmit="const b = this.querySelector('.btn-submit'); b.disabled = true; b.innerText = 'Leyendo PDF…';">
+            @csrf
+            <div class="modal-head">
+                <h5 class="modal-title">Transferencias en divisas</h5>
+                <button type="button" class="modal-close" onclick="document.getElementById('divisasModal').style.display='none'">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="file-hint" style="margin-top:0;">
+                    Sube el PDF de transferencias del proveedor de cambio (Wells Fargo, Citizens, Mercantil Panamá, efectivo…).
+                    Cada envío se busca en los débitos pendientes del banco por referencia y por <strong>USD × tasa interna</strong>.
+                    Primero verás el resultado; no se guarda nada hasta que confirmes.
+                </p>
+
+                <label class="form-label">1. Banco del extracto:</label>
+                <select name="banco" id="divisasBanco" required class="form-control" onchange="divisasTitulares(this.value)">
+                    <option value="">-- Seleccione el Banco --</option>
+                    @foreach($bancos as $b)
+                        <option value="{{ $b }}" @selected(($filtrosConciliacion['banco_filtro'] ?? '') === $b)>{{ $b }}</option>
+                    @endforeach
+                </select>
+
+                <label class="form-label">2. Titular de la cuenta:</label>
+                <select name="titular" id="divisasTitular" required class="form-control"></select>
+
+                <label class="form-label">3. Débitos del banco entre (opcional):</label>
+                <div style="display:flex; gap:8px;">
+                    <input type="date" name="fecha_desde" class="form-control" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
+                    <input type="date" name="fecha_hasta" class="form-control" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
+                </div>
+                <p class="file-hint">Si lo dejas vacío, se usan las fechas del PDF (±3 días).</p>
+
+                <label class="form-label">4. PDF de transferencias:</label>
+                <div class="file-wrap">
+                    <label class="file-label">
+                        Elegir PDF
+                        <input type="file" name="archivo" accept=".pdf,application/pdf" required style="display:none;"
+                               onchange="document.getElementById('divisasFileName').value = this.files[0] ? this.files[0].name : '';">
+                    </label>
+                    <input type="text" id="divisasFileName" placeholder="Ningún archivo seleccionado" readonly class="file-name">
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn-cancel" onclick="document.getElementById('divisasModal').style.display='none'">Cancelar</button>
+                <button type="submit" class="btn-submit">Ver match</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+(function () {
+    const titulares = @json($titularesPorBanco ?? []);
+    const actual = @json($filtrosConciliacion['titular_filtro'] ?? '');
+    window.divisasTitulares = function (banco) {
+        const sel = document.getElementById('divisasTitular');
+        const lista = titulares[banco] || [];
+        sel.innerHTML = lista.length
+            ? lista.map(t => `<option value="${String(t).replace(/"/g, '&quot;')}" ${t === actual ? 'selected' : ''}>${t}</option>`).join('')
+            : '<option value="">-- Primero seleccione un Banco --</option>';
+    };
+    divisasTitulares(document.getElementById('divisasBanco').value);
+})();
+</script>
 
 {{-- Menú ⋮ de "Movimientos en el banco" (uno solo, flotante: la tabla tiene scroll y lo recortaría) --}}
 <div id="movMenu" class="mov-menu-flotante" hidden>

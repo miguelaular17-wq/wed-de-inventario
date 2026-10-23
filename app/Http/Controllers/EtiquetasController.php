@@ -87,6 +87,7 @@ class EtiquetasController extends Controller
             'paginas' => array_chunk($fichas, $porPagina),
             'ajustarNombre' => fn (string $nombre, float $anchoMm, float $altoMm, array $tamanos, int $maxLineas = 3, bool $mayusculas = true)
                 => $this->etiquetas->ajustarNombre($nombre, $anchoPt, $altoLineaPt, $anchoMm, $altoMm, $tamanos, $maxLineas, $mayusculas),
+            'anchoTextoMm' => fn (string $texto, float $fs) => $anchoPt($texto, $fs) * 25.4 / 72,
             'tipo' => $tipo,
             'tamano' => $tamano,
             'logo' => $this->imagenDataUri(public_path('logo.png')),

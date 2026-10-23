@@ -633,6 +633,8 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::get('/conciliaciones/lotes', [FinanzasController::class, 'lotesPuntoVenta'])->name('finanzas.conciliaciones.lotes');
     Route::post('/conciliaciones/lotes/manual', [FinanzasController::class, 'conciliarLoteManual'])->name('finanzas.conciliaciones.lotes.manual');
     Route::post('/conciliaciones/upload', [FinanzasController::class, 'uploadConciliacion'])->name('finanzas.conciliaciones.upload');
+    Route::post('/conciliaciones/divisas/preview', [\App\Http\Controllers\ConciliacionDivisasController::class, 'preview'])->name('finanzas.conciliaciones.divisas.preview');
+    Route::post('/conciliaciones/divisas/aplicar', [\App\Http\Controllers\ConciliacionDivisasController::class, 'aplicar'])->name('finanzas.conciliaciones.divisas.aplicar');
     Route::get('/conciliaciones/importaciones/{importacion}', [FinanzasController::class, 'estadoImportacion'])->whereNumber('importacion')->name('finanzas.conciliaciones.importaciones.show');
     Route::post('/conciliaciones/medios-pago', [FinanzasController::class, 'uploadMediosPago'])->name('finanzas.conciliaciones.medios_pago');
     Route::post('/conciliaciones/process', [FinanzasController::class, 'processConciliacion'])->name('finanzas.conciliaciones.process');

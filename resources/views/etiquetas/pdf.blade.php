@@ -72,7 +72,8 @@
     // PC / Laptop
     $pcCajaH = $m(20);
     $pcPillTop = $pad + $m(17.5);
-    $pcPillH = $m(17);
+    $pcPillH = $m(11);
+    $anchoTextoMm = $anchoTextoMm ?? fn (string $t, float $fs) => mb_strlen($t) * $fs * 0.62 * 0.3528;
     $pcPanelTop = $pcPillTop + $pcPillH + $m(2.6);
     $pcPanelH = $H - $pcPanelTop - $pad - $m(4.4);
     $pcColW = ($inW - $m(8)) / 2;
@@ -120,7 +121,7 @@
     .lz-pill div { left: 0; width: 100%; top: {{ $m(0.9) }}mm; font-size: {{ round(6.3 * $k, 1) }}pt; color: #fff; letter-spacing: 0.7pt; }
 
     .pc-caja { left: {{ $pad }}mm; top: {{ $pad }}mm; width: {{ $inW }}mm; height: {{ $pcCajaH }}mm; background: #4c1d95; border-radius: {{ $radio }}mm; }
-    .pc-pill { left: {{ $pad }}mm; top: {{ $pcPillTop }}mm; width: {{ $inW - $m(1.4) }}mm; height: {{ $pcPillH }}mm; background: #db2777; border-radius: {{ $m(3.5) }}mm; border: {{ $m(0.7) }}mm solid #fff; }
+    .pc-pill { top: {{ $pcPillTop }}mm; height: {{ $pcPillH }}mm; background: #db2777; border-radius: {{ $m(3.5) }}mm; border: {{ $m(0.7) }}mm solid #fff; }
     .pc-panel { left: {{ $pad }}mm; top: {{ $pcPanelTop }}mm; width: {{ $inW }}mm; height: {{ $pcPanelH }}mm; border-radius: {{ $radio }}mm; }
     .pc-ico { background: #db2777; }
     .pc-ico div { left: 0; width: 100%; color: #fff; font-weight: normal; text-align: center; }
@@ -193,7 +194,13 @@
                 @php
                     $specs = $e['specs'] ?? [];
                     $marca = trim((string) ($specs['marca'] ?? '')) ?: mb_strtoupper(explode(' ', $e['nombre'])[0] ?? '');
-                    $precio = $fit('pcnum', $e['unidad_entero_fmt'], $inW - $m(14), $fs([40, 36, 32, 28, 24, 20]));
+                    $precio = $fit('pcnum', $e['unidad_entero_fmt'], $inW - $m(30), $fs([22, 21, 20, 19, 18, 17, 16]));
+                    $refFs = round(6.5 * $k, 1);
+                    $pillPad = $m(4);
+                    $refW = $anchoTextoMm('REF', $refFs);
+                    $numW = $anchoTextoMm($e['unidad_entero_fmt'], $precio['fs']);
+                    $pillW = min($inW, $pillPad + $refW + $m(2.2) + $numW + $pillPad);
+                    $pillLeft = $pad + ($inW - $pillW) / 2;
                     $logoM = $logosMarca[$e['logo_marca'] ?? ''] ?? null;
                     if ($logoM) {
                         $lmH = $m($logoM['ratio'] < 1.6 ? 8 : 6.4);
@@ -222,9 +229,9 @@
                     <div class="abs b nw centro" style="left: 0; width: 100%; top: {{ $m(9) }}mm; font-size: {{ round(18 * $k, 1) }}pt; color: #facc15; letter-spacing: 0.4pt;">REGULAR</div>
                     @if($logo)<img class="abs" src="{{ $logo }}" alt="" style="left: {{ $inW - $m(16.5) }}mm; top: {{ $m(1.6) }}mm; width: {{ $m(13.5) }}mm; height: {{ $m(13.5) }}mm;">@endif
                 </div>
-                <div class="abs pc-pill">
-                    <div class="abs b" style="left: {{ $m(4) }}mm; top: {{ $m(2.4) }}mm; font-size: {{ round(7 * $k, 1) }}pt; color: #fde68a;">REF</div>
-                    <div class="abs num" style="top: {{ ($pcPillH - $m(1.4) - $ptMm($precio['fs'])) / 2 + $m(0.4) }}mm; font-size: {{ $precio['fs'] }}pt; color: #fff;">{{ $e['unidad_entero_fmt'] }}</div>
+                <div class="abs pc-pill" style="left: {{ $pillLeft }}mm; width: {{ $pillW - 2 * $m(0.7) }}mm;">
+                    <div class="abs b nw" style="left: {{ $pillPad }}mm; top: {{ ($pcPillH - $m(1.4) - $ptMm($refFs)) / 2 }}mm; font-size: {{ $refFs }}pt; color: #fde68a;">REF</div>
+                    <div class="abs b nw" style="left: {{ $pillPad + $refW + $m(2.2) }}mm; top: {{ ($pcPillH - $m(1.4) - $ptMm($precio['fs'])) / 2 + $m(0.3) }}mm; font-size: {{ $precio['fs'] }}pt; line-height: 1; color: #fff; letter-spacing: -0.3pt;">{{ $e['unidad_entero_fmt'] }}</div>
                 </div>
 
                 <div class="abs pc-panel blanco">
