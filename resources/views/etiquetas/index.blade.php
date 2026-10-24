@@ -468,7 +468,17 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
     const tieneMayor = p => {
         const u = pu(p);
         const m = pm(p);
-        return m > 0 && (u <= 0 || m < u);
+        return m > 0 && (u <= 0 || m < u || manual(p.manual_mayor) !== null);
+    };
+    // Igual que EtiquetasPrecioService::ficha: mayor escrito a mano igual o mayor que 1 pza = precio del paquete.
+    const esPaquete = p => tieneMayor(p) && pu(p) > 0 && pm(p) >= pu(p) && cantDe(p) > 1;
+    const porPieza = p => esPaquete(p) ? Math.round(pm(p) / cantDe(p) * 100) / 100 : pm(p);
+    const ahorroDe = p => tieneMayor(p) && pu(p) > 0 && porPieza(p) < pu(p) ? Math.round((1 - porPieza(p) / pu(p)) * 100) : 0;
+    const textoMayor = p => `${cantDe(p)}${esPaquete(p) ? ' PZAS' : '+ PZAS'}`;
+    const textoAhorro = p => {
+        const a = ahorroDe(p);
+        if (a <= 0) return '';
+        return esPaquete(p) ? `¡AHORRAS ${a}%! ${fmt(porPieza(p))} C/U` : `¡AHORRAS ${a}% C/U!`;
     };
 
     function guardar() { localStorage.setItem(STORAGE_KEY, JSON.stringify(lista)); render(); }
@@ -598,7 +608,8 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
                         </label>
                         <input type="text" inputmode="decimal" class="etq-precio m ${manual(p.manual_mayor) !== null ? 'editado' : ''}" value="${enCampo(pm(p))}" placeholder="—" data-precio="manual_mayor" data-i="${i}"
                             title="Precio del sistema: ${fmt(ceilPrecio(p.precio_mayor))}. Pon 0 para no mostrar precio al mayor.">
-                        ${pm(p) > 0 && !tieneMayor(p) ? '<div class="etq-igual" title="Igual o mayor que 1 pza: la etiqueta lleva un solo precio">igual · un solo precio</div>' : ''}
+                        ${pm(p) > 0 && !tieneMayor(p) ? '<div class="etq-igual" title="Igual o mayor que 1 pza: la etiqueta lleva un solo precio. Escríbelo a mano si es el precio del paquete.">igual · un solo precio</div>' : ''}
+                        ${esPaquete(p) ? `<div class="etq-igual" style="color:#7c3aed;" title="Es mayor que 1 pza: se toma como precio de las ${cantDe(p)} piezas juntas">paquete · ${fmt(porPieza(p))} c/u</div>` : ''}
                     </td>
                     <td style="text-align:center;"><input type="number" min="1" max="100" value="${p.copias}" data-copias="${i}"></td>
                     <td style="white-space:nowrap;">
@@ -704,7 +715,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
                 <div class="etq-lz-der">
                     <span class="etq-lz-pill">PRECIO</span>
                     <div class="etq-lz-precio"><small>REF</small><strong>${fmt(pu(p))}</strong></div>
-                    ${tieneMayor(p) ? `<div class="etq-lz-mayor">${cant}+ PZAS: REF ${fmt(pm(p))} C/U</div>` : ''}
+                    ${tieneMayor(p) ? `<div class="etq-lz-mayor">${textoMayor(p)}: REF ${fmt(pm(p))}${esPaquete(p) ? '' : ' C/U'}</div>` : ''}
                     <div class="etq-lz-nombre">${esc(p.nombre)}</div>
                     <div class="etq-lz-web">${esc(WEB)} · ${FECHA}</div>
                 </div>
@@ -793,15 +804,15 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         const cant = cantDe(p);
         const unidad = pu(p);
         const mayor = pm(p);
-        const ahorro = tieneMayor(p) && unidad > 0 ? Math.round((1 - mayor / unidad) * 100) : 0;
+        const ahorro = textoAhorro(p);
         const nomPt = p.nombre.length <= 26 ? 10 : (p.nombre.length <= 52 ? 8.5 : 7);
         let precios;
         if (tieneMayor(p)) {
             const colW = (64 - 2.4) / 2;
-            precios = [[3, esc(textoUnidad(p)), fmt(unidad), '#0b1f4d'], [3 + colW + 2.4, `${cant}+ PZAS`, fmt(mayor), '#7e22ce']].map(([x, txt, valor, color], i) =>
+            precios = [[3, esc(textoUnidad(p)), fmt(unidad), '#0b1f4d'], [3 + colW + 2.4, textoMayor(p), fmt(mayor), '#7e22ce']].map(([x, txt, valor, color], i) =>
                 thCaja(base, x + 2.5, 22.2, colW - 5, 7.6, 'cab', `font-size:${thFs(base, 7.5)};`, `COMPRA<em>${txt}</em>`)
                 + thCaja(base, x, 29.8, colW, 14.8, 'blanco precio', `font-size:${thFs(base, 18)}; color:${color};`, `<small style="font-size:${thFs(base, 4.6)};">REF</small>${valor}`
-                    + (i === 1 && ahorro > 0 ? `<i style="position:absolute; bottom:6%; left:0; width:100%; text-align:center; font-style:normal; font-size:${thFs(base, 4.8)}; color:#c026d3;">¡AHORRAS ${ahorro}% C/U!</i>` : ''))
+                    + (i === 1 && ahorro ? `<i style="position:absolute; bottom:6%; left:0; width:100%; text-align:center; font-style:normal; font-size:${thFs(base, 4.8)}; color:#c026d3; white-space:nowrap;">${ahorro}</i>` : ''))
             ).join('');
         } else {
             const conTexto = textoPrecio(p) !== 'PRECIO';
@@ -866,10 +877,10 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         const cant = cantDe(p);
         const unidad = pu(p);
         const mayor = pm(p);
-        const ahorro = tieneMayor(p) && unidad > 0 ? Math.round((1 - mayor / unidad) * 100) : 0;
+        const ahorro = textoAhorro(p);
         const precios = tieneMayor(p)
             ? `<div class="etq-card-box"><div class="h">COMPRA<br><em>${esc(textoUnidad(p))}</em></div><div class="p"><small>REF</small><strong>${fmt(unidad)}</strong></div></div>
-               <div class="etq-card-box mayor"><div class="h">COMPRA<br><em>${cant}+ PZAS</em></div><div class="p"><small>REF</small><strong>${fmt(mayor)}</strong></div>${ahorro > 0 ? `<div class="ahorro">¡AHORRAS ${ahorro}% C/U!</div>` : ''}</div>`
+               <div class="etq-card-box mayor"><div class="h">COMPRA<br><em>${textoMayor(p)}</em></div><div class="p"><small>REF</small><strong>${fmt(mayor)}</strong></div>${ahorro ? `<div class="ahorro">${ahorro}</div>` : ''}</div>`
             : `<div class="etq-card-box"><div class="h" style="letter-spacing:${textoPrecio(p) === 'PRECIO' ? '.12em' : '.03em'};">${esc(textoPrecio(p))}</div><div class="p"><small>REF</small><strong>${fmt(unidad)}</strong></div></div>`;
         cont.innerHTML = `
             <div class="etq-card" style="${tamanoPreview('clasica')}">

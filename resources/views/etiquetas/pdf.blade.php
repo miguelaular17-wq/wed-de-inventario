@@ -348,7 +348,7 @@
                         $colW = ($nomW - $colGap) / 2;
                         $cabH = $my(7.6);
                         $cajaH = $areaH - $cabH;
-                        $txtMayor = $e['cantidad_mayor'] . '+ PZAS';
+                        $txtMayor = $e['texto_mayor'] ?? $e['cantidad_mayor'] . '+ PZAS';
                         $numTams = $fs([20, 18, 16, 14, 12, 10]);
                         $numFsCl = min($fit('thclu', $e['unidad_fmt'], $colW - $m(5), $numTams)['fs'], $fit('thclm', $e['mayor_fmt'], $colW - $m(5), $numTams)['fs']);
                         $numTamsIguales = [$numFsCl];
@@ -357,7 +357,8 @@
                         {!! $thCabecera($cx + $mx(2.5), $areaT, $colW - 2 * $mx(2.5), $cabH, 'COMPRA', $cant, $fs([8.5, 8, 7.5, 7, 6.5, 6]), 'thclcab') !!}
                         {!! $thPrecio($cx, $areaT + $cabH, $colW, $cajaH, $valor, $numTamsIguales, 'thcl' . ($esMayor ? 'm' : 'u'), $esMayor ? '#7e22ce' : '#0b1f4d') !!}
                         @if($esMayor && $conAhorro)
-                            <div class="abs b centro nw" style="left: {{ $cx }}mm; width: {{ $colW }}mm; top: {{ $areaT + $areaH - $m(2.6) }}mm; font-size: {{ round(4.8 * $k, 1) }}pt; color: #c026d3;">¡AHORRAS {{ $e['ahorro_pct'] }}% C/U!</div>
+                            @php $ahTh = $fit('thclah' . $e['texto_ahorro'], $e['texto_ahorro'], $colW - $m(1.5), $fs([4.8, 4.4, 4, 3.6])); @endphp
+                            <div class="abs b centro nw" style="left: {{ $cx }}mm; width: {{ $colW }}mm; top: {{ $areaT + $areaH - $m(2.6) }}mm; font-size: {{ $ahTh['fs'] }}pt; color: #c026d3;">{{ $e['texto_ahorro'] }}</div>
                         @endif
                     @endforeach
                 @else
@@ -392,7 +393,7 @@
                         $mH = $mW / $lzLogoM['ratio'];
                     }
                     $precio = $fit('lznum', $e['unidad_fmt'], $lzPanelW - $m(5), $fs([26, 24, 22, 20, 18, 16, 14]));
-                    $mayor = $e['con_mayor'] ? $fit('lzmay', $e['cantidad_mayor'] . '+ PZAS: REF ' . $e['mayor_fmt'] . ' C/U', $lzPanelW - $m(3), $fs([6.5, 6, 5.5, 5, 4.5])) : null;
+                    $mayor = $e['con_mayor'] ? $fit('lzmay', $e['texto_mayor'] . ': REF ' . $e['mayor_fmt'] . ($e['es_paquete'] ? '' : ' C/U'), $lzPanelW - $m(3), $fs([6.5, 6, 5.5, 5, 4.5])) : null;
                     $nomTop = $m(25);
                     $nomH = $lzPanelH - $nomTop - $m(4.6);
                     $nom = $ajustar('lz' . $e['id'], $e['nombre'], $lzPanelW - $m(5), $nomH, $fs([9, 8.5, 8, 7.5, 7, 6.5, 6, 5.5]));
@@ -506,7 +507,7 @@
                     $txtPrecio = $txtUnidad === '1 PZA' ? 'PRECIO' : 'COMPRA ' . $txtUnidad;
                     if ($e['con_mayor']) {
                         $headH = $headH2;
-                        $txtMayor = $e['cantidad_mayor'] . '+ PZAS';
+                        $txtMayor = $e['texto_mayor'] ?? $e['cantidad_mayor'] . '+ PZAS';
                         $hFs = min(
                             $fit('cabc', 'COMPRA', $boxW - $m(2), $cabFs)['fs'],
                             $fit('cabu' . $txtUnidad, $txtUnidad, $boxW - $m(2), $cabFs)['fs'],
@@ -546,7 +547,8 @@
                             <div class="abs ref" style="top: {{ $headH + $m(0.8) }}mm;">REF</div>
                             <div class="abs num" style="top: {{ $esMayor ? $numTopMayor : $numTop }}mm; font-size: {{ $numFs }}pt; {{ $esMayor ? 'color: #6d28d9;' : '' }}">{{ $valor }}</div>
                             @if($esMayor && $conAhorro)
-                                <div class="abs ahorro" style="top: {{ $ahorroTop }}mm;">¡AHORRAS {{ $e['ahorro_pct'] }}% C/U!</div>
+                                @php $ahCl = $fit('clah' . $e['texto_ahorro'], $e['texto_ahorro'], $boxW - $m(1.5), $fs([5.3, 4.9, 4.5, 4.1, 3.7])); @endphp
+                                <div class="abs ahorro" style="top: {{ $ahorroTop }}mm; font-size: {{ $ahCl['fs'] }}pt;">{{ $e['texto_ahorro'] }}</div>
                             @endif
                             @if($esMayor)<div class="abs marco"></div>@endif
                         </div>

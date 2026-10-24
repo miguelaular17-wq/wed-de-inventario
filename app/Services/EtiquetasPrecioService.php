@@ -171,27 +171,37 @@ class EtiquetasPrecioService
     }
 
     /**
+     * El mayor del sistema solo sale si, ya redondeado, es más barato que 1 pza. Uno escrito a mano siempre sale:
+     * si es igual o mayor que 1 pza se toma como precio del paquete (23,00 por 12 pzas = 1,92 c/u).
+     *
      * @param  array<string, mixed>  $producto
-     * @return array<string, mixed>
-     */
-    /**
      * @param  array{precio_unidad?: float, precio_mayor?: float}  $manual  precios escritos a mano: van tal cual, sin redondear
+     * @return array<string, mixed>
      */
     public function ficha(array $producto, int $cantidadMayor, float $recargoRegular = self::RECARGO_REGULAR, array $manual = []): array
     {
         $unidad = $manual['precio_unidad'] ?? $this->redondearArriba((float) $producto['precio_unidad']);
         $mayor = $manual['precio_mayor'] ?? $this->redondearArriba((float) $producto['precio_mayor']);
         $regular = $this->redondearArriba($unidad * (1 + max(0, $recargoRegular) / 100));
-        // Solo mostrar mayor si, ya redondeados, sigue siendo más barato.
-        $conMayor = $mayor > 0 && ($unidad <= 0 || $mayor < $unidad);
-        $ahorro = $conMayor && $unidad > 0 ? (int) round((1 - $mayor / $unidad) * 100) : 0;
+        $conMayor = $mayor > 0 && ($unidad <= 0 || $mayor < $unidad || array_key_exists('precio_mayor', $manual));
+        $esPaquete = $conMayor && $unidad > 0 && $mayor >= $unidad && $cantidadMayor > 1;
+        $porPieza = $esPaquete ? round($mayor / $cantidadMayor, 2) : $mayor;
+        $ahorro = $conMayor && $unidad > 0 && $porPieza < $unidad ? (int) round((1 - $porPieza / $unidad) * 100) : 0;
+        $textoAhorro = match (true) {
+            $ahorro <= 0 => '',
+            $esPaquete => '¡AHORRAS ' . $ahorro . '%! ' . $this->formatoPrecio($porPieza) . ' C/U',
+            default => '¡AHORRAS ' . $ahorro . '% C/U!',
+        };
 
         return array_merge($producto, [
             'precio_unidad' => $unidad,
             'precio_mayor' => $mayor,
             'con_mayor' => $conMayor,
             'cantidad_mayor' => $cantidadMayor,
+            'es_paquete' => $esPaquete,
+            'texto_mayor' => $cantidadMayor . ($esPaquete ? ' PZAS' : '+ PZAS'),
             'ahorro_pct' => $ahorro,
+            'texto_ahorro' => $textoAhorro,
             'unidad_fmt' => $this->formatoPrecio($unidad),
             'mayor_fmt' => $this->formatoPrecio($mayor),
             'unidad_entero_fmt' => $this->formatoPrecioEntero($unidad),

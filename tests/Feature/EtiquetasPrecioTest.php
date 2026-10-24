@@ -333,6 +333,16 @@ class EtiquetasPrecioTest extends TestCase
             'items' => [['id' => 1, 'copias' => 1, 'cantidad_mayor' => 1]],
         ])->assertSessionHasErrors('items.0.cantidad_mayor');
 
+        $paquete = $svc->armarEtiquetas([
+            ['id' => 1, 'copias' => 1, 'precio_unidad' => 3, 'precio_mayor' => 23, 'cantidad_mayor' => 12],
+            ['id' => 1, 'copias' => 1, 'precio_unidad' => 3, 'precio_mayor' => 40, 'cantidad_mayor' => 12],
+        ], 3);
+        $this->assertSame([true, true, '12 PZAS', 36, '¡AHORRAS 36%! 1,92 C/U'], [
+            $paquete[0]['con_mayor'], $paquete[0]['es_paquete'], $paquete[0]['texto_mayor'], $paquete[0]['ahorro_pct'], $paquete[0]['texto_ahorro'],
+        ]);
+        $this->assertSame([true, 0, ''], [$paquete[1]['con_mayor'], $paquete[1]['ahorro_pct'], $paquete[1]['texto_ahorro']]);
+        $this->assertSame(['6+ PZAS', '¡AHORRAS 21% C/U!'], [$fichas[0]['texto_mayor'], $fichas[0]['texto_ahorro']]);
+
         $this->assertSame(['1 PZA', '1 PZA', '2 PZAS', 'PAR', 'MEDIA DOCENA'], array_map([$svc, 'textoUnidad'], [null, '1', '2', ' par ', 'media  docena']));
         $con = $svc->armarEtiquetas([['id' => 1, 'copias' => 1, 'texto_unidad' => '2']], 3);
         $this->assertSame('2 PZAS', $con[0]['texto_unidad']);
@@ -340,7 +350,11 @@ class EtiquetasPrecioTest extends TestCase
 
         foreach (['clasica', 'th_clasica'] as $tipo) {
             $this->post(route('etiquetas.pdf'), [
-                'items' => [['id' => 1, 'copias' => 1, 'texto_unidad' => 'DOCENA', 'precio_mayor' => '1.5'], ['id' => 3, 'copias' => 1, 'texto_unidad' => '2']],
+                'items' => [
+                    ['id' => 1, 'copias' => 1, 'texto_unidad' => 'DOCENA', 'precio_mayor' => '1.5'],
+                    ['id' => 3, 'copias' => 1, 'texto_unidad' => '2'],
+                    ['id' => 2, 'copias' => 1, 'precio_unidad' => '3', 'precio_mayor' => '23', 'cantidad_mayor' => 12],
+                ],
                 'tipo' => $tipo,
             ])->assertOk()->assertHeader('content-type', 'application/pdf');
         }
