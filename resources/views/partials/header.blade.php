@@ -129,6 +129,7 @@
         $link('Gasto Directivos', route('finanzas.gasto_directivos'), request()->routeIs('finanzas.gasto_directivos*')),
         $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*')),
         $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones')),
+        $link('Conciliación en divisas', route('finanzas.conciliacion_usd.index'), request()->routeIs('finanzas.conciliacion_usd.*')),
         $link('Lotes punto de venta', route('finanzas.conciliaciones.lotes'), request()->routeIs('finanzas.conciliaciones.lotes')),
         $link('Calendario conciliaciones', route('finanzas.calendario_conciliaciones'), request()->routeIs('finanzas.calendario_conciliaciones')),
         $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*')),
@@ -275,6 +276,7 @@
         }
         if ($u->canAccess('conciliaciones')) {
             $nav[] = $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones'));
+            $nav[] = $link('Conciliación en divisas', route('finanzas.conciliacion_usd.index'), request()->routeIs('finanzas.conciliacion_usd.*'));
             $nav[] = $link('Lotes punto de venta', route('finanzas.conciliaciones.lotes'), request()->routeIs('finanzas.conciliaciones.lotes'));
             $nav[] = $link('Calendario conciliaciones', route('finanzas.calendario_conciliaciones'), request()->routeIs('finanzas.calendario_conciliaciones'));
         }

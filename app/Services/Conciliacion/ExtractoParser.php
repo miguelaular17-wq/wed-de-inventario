@@ -297,6 +297,16 @@ class ExtractoParser
     }
 
     /**
+     * Filas tal cual vienen en el archivo (Excel o CSV), sin interpretar columnas.
+     *
+     * @return iterable<int, list<mixed>>
+     */
+    public function filasCrudas(string $path, string $ext): iterable
+    {
+        return $this->leerFilas($path, strtolower($ext), false);
+    }
+
+    /**
      * @return iterable<int, list<mixed>>
      */
     private function leerFilas(string $path, string $ext, bool $csvSemicolon): iterable

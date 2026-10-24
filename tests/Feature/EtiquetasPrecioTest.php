@@ -155,6 +155,8 @@ class EtiquetasPrecioTest extends TestCase
             'ram' => '8GB DDR5',
             'almacenamiento' => '512GB SSD',
             'sistema' => 'Windows 11',
+            'camara' => '',
+            'bateria' => '',
         ], $specs);
     }
 
@@ -261,6 +263,50 @@ class EtiquetasPrecioTest extends TestCase
             'tipo' => 'clasica',
             'ancho_mm' => 5,
         ])->assertSessionHasErrors('ancho_mm');
+    }
+
+    public function test_tecno_house_regular_es_la_promo_mas_el_recargo_redondeado_hacia_arriba(): void
+    {
+        $svc = new EtiquetasPrecioService();
+        $base = ['id' => 9, 'codigo' => 'X', 'nombre' => 'LAPTOP', 'categoria' => '', 'precio_mayor' => 0];
+
+        $ficha = $svc->ficha($base + ['precio_unidad' => 869.40], 3);
+        $this->assertSame('$870', $ficha['unidad_entero_fmt']);
+        $this->assertSame('$957', $ficha['regular_entero_fmt']);
+
+        $this->assertSame('$1.264', $svc->ficha($base + ['precio_unidad' => 1149], 3)['regular_entero_fmt']);
+        $this->assertSame('$1.207', $svc->ficha($base + ['precio_unidad' => 1149], 3, 5)['regular_entero_fmt']);
+    }
+
+    public function test_celular_lee_pantalla_camara_y_bateria(): void
+    {
+        $specs = (new EtiquetasPrecioService())->sugerirSpecsPc('REDMI 15 8/256GB 6.9" 50MP 7000MAH MIDNIGHT BLACK');
+
+        $this->assertSame('Pantalla 6.9"', $specs['pantalla']);
+        $this->assertSame('50MP', $specs['camara']);
+        $this->assertSame('7000 mAh', $specs['bateria']);
+        $this->assertSame('8GB RAM', $specs['ram']);
+        $this->assertSame('256GB', $specs['almacenamiento']);
+        $this->assertSame('REDMI 15 MIDNIGHT BLACK', $specs['modelo']);
+    }
+
+    public function test_genera_pdf_de_las_tres_etiquetas_tecno_house(): void
+    {
+        $specs = ['marca' => 'LENOVO', 'modelo' => 'IDEAPAD SLIM 3', 'procesador' => 'INTEL I7-1255U', 'pantalla' => '16" WUXGA', 'ram' => '16GB DDR4', 'almacenamiento' => '512GB SSD', 'sistema' => 'Windows 11 Home'];
+        foreach (['th_pc', 'th_cel', 'th_clasica'] as $tipo) {
+            $this->post(route('etiquetas.pdf'), [
+                'items' => [['id' => 1, 'copias' => 1, 'specs' => $specs], ['id' => 3, 'copias' => 1]],
+                'tipo' => $tipo,
+                'cantidad_mayor' => 3,
+                'recargo_regular' => 10,
+            ])->assertOk()->assertHeader('content-type', 'application/pdf');
+        }
+
+        $this->post(route('etiquetas.pdf'), [
+            'items' => [['id' => 1, 'copias' => 1]],
+            'tipo' => 'th_pc',
+            'recargo_regular' => 150,
+        ])->assertSessionHasErrors('recargo_regular');
     }
 
     public function test_requiere_permiso_de_ver_precios(): void

@@ -119,6 +119,8 @@ class ProcesarImportacionExtracto implements ShouldBeUnique, ShouldQueue
                 break;
             }
         }
+        $total += app(\App\Services\Conciliacion\LotesPuntoVentaAutoMatcher::class)
+            ->conciliar($desde, $hasta, $imp->banco, $imp->titular);
 
         $pendientes = DB::table('conciliacion_lineas')
             ->where('importacion_id', $imp->id)

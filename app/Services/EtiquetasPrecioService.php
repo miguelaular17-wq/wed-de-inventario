@@ -17,7 +17,16 @@ class EtiquetasPrecioService
         'clasica' => ['ancho' => 70, 'alto' => 50],
         'locura' => ['ancho' => 70, 'alto' => 50],
         'pc' => ['ancho' => 90, 'alto' => 83],
+        'th_clasica' => ['ancho' => 70, 'alto' => 50],
+        'th_pc' => ['ancho' => 90, 'alto' => 83],
+        'th_cel' => ['ancho' => 90, 'alto' => 83],
     ];
+
+    /** Tipos que llevan ficha técnica editable. */
+    public const TIPOS_CON_SPECS = ['pc', 'th_pc', 'th_cel'];
+
+    /** Tecno House: el precio del sistema es la promo en divisa; el regular lleva este recargo (%). */
+    public const RECARGO_REGULAR = 10;
 
     public const MEDIDA_MIN = ['ancho' => 40, 'alto' => 30];
 
@@ -49,11 +58,14 @@ class EtiquetasPrecioService
         'clasica' => 'Clásica (1 pza / mayor)',
         'locura' => 'Precios de locura',
         'pc' => 'PC / Laptop (ficha técnica)',
+        'th_clasica' => 'Tecno House · Clásica',
+        'th_pc' => 'Tecno House · PC / Laptop',
+        'th_cel' => 'Tecno House · Celular',
     ];
 
     public const WEB = 'www.elpalaciodelosdetalles.com';
 
-    public const SPECS_PC = ['marca', 'modelo', 'procesador', 'grafica', 'pantalla', 'ram', 'almacenamiento', 'sistema'];
+    public const SPECS_PC = ['marca', 'modelo', 'procesador', 'grafica', 'pantalla', 'ram', 'almacenamiento', 'sistema', 'camara', 'bateria'];
 
     /** Logos en public/img/marcas/{clave}.png */
     public const LOGOS_MARCA = [
@@ -114,7 +126,7 @@ class EtiquetasPrecioService
      * @param  list<array{id: int, copias: int, specs?: array<string, ?string>}>  $items
      * @return list<array<string, mixed>>  Una entrada por etiqueta a imprimir, en el orden de la lista.
      */
-    public function armarEtiquetas(array $items, int $cantidadMayor): array
+    public function armarEtiquetas(array $items, int $cantidadMayor, float $recargoRegular = self::RECARGO_REGULAR): array
     {
         $ids = array_values(array_unique(array_map(fn ($i) => (int) $i['id'], $items)));
         if ($ids === []) {
@@ -132,7 +144,7 @@ class EtiquetasPrecioService
             if (! $producto) {
                 continue;
             }
-            $ficha = $this->ficha($producto, $cantidadMayor);
+            $ficha = $this->ficha($producto, $cantidadMayor, $recargoRegular);
             $ficha['specs'] = $this->specsFinales($producto['nombre'], $item['specs'] ?? null);
             $ficha['logo_marca'] = $this->logoMarca($ficha['specs'], $producto['nombre']);
             $copias = max(1, min(100, (int) $item['copias']));
@@ -148,10 +160,11 @@ class EtiquetasPrecioService
      * @param  array<string, mixed>  $producto
      * @return array<string, mixed>
      */
-    public function ficha(array $producto, int $cantidadMayor): array
+    public function ficha(array $producto, int $cantidadMayor, float $recargoRegular = self::RECARGO_REGULAR): array
     {
         $unidad = $this->redondearArriba((float) $producto['precio_unidad']);
         $mayor = $this->redondearArriba((float) $producto['precio_mayor']);
+        $regular = $this->redondearArriba($unidad * (1 + max(0, $recargoRegular) / 100));
         // Solo mostrar mayor si, ya redondeados, sigue siendo más barato.
         $conMayor = $mayor > 0 && ($unidad <= 0 || $mayor < $unidad);
         $ahorro = $conMayor && $unidad > 0 ? (int) round((1 - $mayor / $unidad) * 100) : 0;
@@ -165,6 +178,8 @@ class EtiquetasPrecioService
             'unidad_fmt' => $this->formatoPrecio($unidad),
             'mayor_fmt' => $this->formatoPrecio($mayor),
             'unidad_entero_fmt' => $this->formatoPrecioEntero($unidad),
+            'precio_regular' => $regular,
+            'regular_entero_fmt' => $this->formatoPrecioEntero($regular),
         ]);
     }
 
@@ -326,7 +341,10 @@ class EtiquetasPrecioService
             }
         }
 
-        if (preg_match_all('/(?<![\w.\-+])(1[0-8](?:[.,]\d)?)\s?("|”|\'\'|PULG(?:ADAS)?\b|IN\b)?\s?(FHD|FULL HD|QHD|OLED|IPS|TOUCH|HD)?(?![\w.])/u', $n, $mm, PREG_SET_ORDER)) {
+        if ($esCelular && preg_match('/(?<![\w.\-+\/])([4-8][.,]\d{1,2})\s?("|”|\'\'|PULG(?:ADAS)?\b)?\s?(AMOLED|OLED|IPS|LCD|HD\+?)?(?![\w.])/u', $n, $m)) {
+            $usado[] = trim($m[0]);
+            $specs['pantalla'] = 'Pantalla ' . str_replace(',', '.', $m[1]) . '"' . (($m[3] ?? '') !== '' ? ' ' . $m[3] : '');
+        } elseif (preg_match_all('/(?<![\w.\-+])(1[0-8](?:[.,]\d)?)\s?("|”|\'\'|PULG(?:ADAS)?\b|IN\b)?\s?(FHD|FULL HD|WUXGA|QHD|UHD|4K|2K|OLED|IPS|TOUCH|HD)?(?![\w.])/u', $n, $mm, PREG_SET_ORDER)) {
             foreach ($mm as $m) {
                 $conUnidad = ($m[2] ?? '') !== '';
                 $conTipo = ($m[3] ?? '') !== '';
@@ -345,10 +363,19 @@ class EtiquetasPrecioService
             }
         }
 
+        if (preg_match('/\b(\d{1,3}(?:[.,]\d)?)\s?MP\b/u', $n, $m)) {
+            $usado[] = $m[0];
+            $specs['camara'] = str_replace(',', '.', $m[1]) . 'MP';
+        }
+        if (preg_match('/\b(\d{4,5})\s?MAH\b/u', $n, $m)) {
+            $usado[] = $m[0];
+            $specs['bateria'] = $m[1] . ' mAh';
+        }
+
         if (preg_match('/\b(?:W|WIN|WINDOWS)\s?(10|11)(?:\s?(HOME|PRO))?(\s?S\s?MODE)?\b/u', $n, $m)) {
             $usado[] = $m[0];
             $specs['sistema'] = 'Windows ' . $m[1] . (($m[2] ?? '') !== '' ? ' ' . ucfirst(strtolower($m[2])) : '') . (($m[3] ?? '') !== '' ? ' S' : '');
-        } elseif (preg_match('/\bCHROME\s?OS\b|\bFREE\s?DOS\b|\bMAC\s?OS\b|\bUBUNTU\b|\bLINUX\b/u', $n, $m)) {
+        } elseif (preg_match('/\bANDROID\s?\d{1,2}\b|\bIOS\s?\d{1,2}\b|\bCHROME\s?OS\b|\bFREE\s?DOS\b|\bMAC\s?OS\b|\bUBUNTU\b|\bLINUX\b/u', $n, $m)) {
             $usado[] = $m[0];
             $specs['sistema'] = trim($m[0]);
         }

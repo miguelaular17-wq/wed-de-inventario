@@ -16,7 +16,7 @@ class BankMovementClassifier
         'comision por transferencia', 'tarifa mantenimiento', 'descuento tarjeta', 'emision edo',
         'com mantenimiento', 'cobro comision', 'com pago otr', 'comision cobro centralizado',
         'comis uso canal', 'stament service',
-        'serv mtto', 'com. banesco pago movil', 'contraprestacion pago proveedores',
+        'serv mtto', 'com. banesco pago movil', 'com banesco pago movil', 'contraprestacion pago proveedores',
         'cobro de comision', 'tarifa por',
         // Banesco / extractos recientes
         'mant y serv aplic', 'mant y serv',

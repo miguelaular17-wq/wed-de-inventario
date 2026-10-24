@@ -81,6 +81,58 @@
         'modelo' => '◆', 'procesador' => '⚙', 'grafica' => '▦', 'pantalla' => '▭',
         'ram' => '▤', 'almacenamiento' => '◉', 'sistema' => '⊞',
     ];
+
+    // Tecno House: medidas tomadas del diseño de referencia; el ancho y el alto escalan por separado.
+    $esTh = str_starts_with($tipo, 'th_');
+    $logoTh = $logoTh ?? null;
+    $iconosTh = $iconosTh ?? [];
+    $mx = fn (float $mm) => $mm * $W / $base['ancho'];
+    $my = fn (float $mm) => $mm * $H / $base['alto'];
+    $thEtiquetas = '/(^|\s)(Modelo|Procesador|Gráfica|Pantalla|Ram|Disco|Almacenamiento|Cámara|Batería|OS):/u';
+    $thLineas = function (array $aj, float $left, float $top) use ($ptMm, $thEtiquetas) {
+        $html = '';
+        foreach ($aj['lineas'] as $li => $l) {
+            $txt = preg_replace($thEtiquetas, '$1<b>$2:</b>', e($l));
+            $html .= '<div class="abs th-txt" style="left: ' . $left . 'mm; top: ' . ($top + $li * $ptMm($aj['alto_linea'])) . 'mm; font-size: ' . $aj['fs'] . 'pt; line-height: ' . $aj['alto_linea'] . 'pt; height: ' . $aj['alto_linea'] . 'pt;">' . $txt . '</div>';
+        }
+        return $html;
+    };
+    $thLogo = function (float $top, float $alto) use ($logoTh, $W) {
+        if (! $logoTh) {
+            return '';
+        }
+        $ancho = min($W - 8, $alto * $logoTh['ratio']);
+        $alto = $ancho / $logoTh['ratio'];
+        return '<img class="abs" src="' . $logoTh['src'] . '" alt="" style="left: ' . (($W - $ancho) / 2) . 'mm; top: ' . $top . 'mm; width: ' . $ancho . 'mm; height: ' . $alto . 'mm;">';
+    };
+    $thCabecera = function (float $left, float $top, float $ancho, float $alto, string $l1, string $l2, array $tamanos, string $clave) use ($fit, $ptMm, $m) {
+        $fsCab = min(
+            $fit($clave . 'a' . $l1, $l1, $ancho - $m(2), $tamanos)['fs'],
+            $fit($clave . 'b' . $l2, $l2, $ancho - $m(2), $tamanos)['fs'],
+            round(($alto - $m(1.2)) / 2 / 1.06 / 0.3528, 1),
+        );
+        $lh = $ptMm($fsCab) * 1.06;
+        $t = max($m(0.3), ($alto - 2 * $lh) / 2 - $m(0.1));
+        return '<div class="abs th-cab" style="left: ' . $left . 'mm; top: ' . $top . 'mm; width: ' . $ancho . 'mm; height: ' . $alto . 'mm;">'
+            . '<div class="abs" style="top: ' . $t . 'mm; font-size: ' . $fsCab . 'pt;">' . e($l1) . '</div>'
+            . '<div class="abs th-fucsia" style="top: ' . ($t + $lh) . 'mm; font-size: ' . $fsCab . 'pt;">' . e($l2) . '</div></div>';
+    };
+    $thPrecio = function (float $left, float $top, float $ancho, float $alto, string $valor, array $tamanos, string $clave, string $color = '#0b1f4d') use ($fit, $ptMm, $m, $k) {
+        $p = $fit($clave, $valor, $ancho - $m(5), $tamanos);
+        return '<div class="abs th-blanco" style="left: ' . $left . 'mm; top: ' . $top . 'mm; width: ' . $ancho . 'mm; height: ' . $alto . 'mm;">'
+            . '<div class="abs b" style="left: ' . $m(1.3) . 'mm; top: ' . $m(0.8) . 'mm; font-size: ' . round(4.6 * $k, 1) . 'pt; color: #64748b;">REF</div>'
+            . '<div class="abs num" style="top: ' . (($alto - $ptMm($p['fs'])) / 2 + $m(0.5)) . 'mm; font-size: ' . $p['fs'] . 'pt; color: ' . $color . ';">' . e($valor) . '</div></div>';
+    };
+    $thLema = function (float $centroY, float $anchoMax, array $tamanos) use ($fit, $anchoTextoMm, $ptMm, $W) {
+        $a = '¡Tecnología ';
+        $b = 'a tu alcance!';
+        $fsL = $fit('thlema' . round($anchoMax, 2), $a . $b, $anchoMax, $tamanos)['fs'];
+        $wa = $anchoTextoMm($a, $fsL);
+        $left = ($W - $wa - $anchoTextoMm($b, $fsL)) / 2;
+        $top = $centroY - $ptMm($fsL) / 2;
+        return '<div class="abs b nw" style="left: ' . $left . 'mm; top: ' . $top . 'mm; font-size: ' . $fsL . 'pt; color: #fff;">' . e($a) . '</div>'
+            . '<div class="abs b nw" style="left: ' . ($left + $wa) . 'mm; top: ' . $top . 'mm; font-size: ' . $fsL . 'pt; color: #22d3ee;">' . e($b) . '</div>';
+    };
 @endphp
 <style>
     @page { margin: 7mm; }
@@ -126,6 +178,14 @@
     .pc-ico { background: #db2777; }
     .pc-ico div { left: 0; width: 100%; color: #fff; font-weight: normal; text-align: center; }
     .pc-pie { top: {{ $H - $pad - $m(3.2) }}mm; color: #fff; font-size: {{ round(6 * $k, 1) }}pt; font-weight: bold; white-space: nowrap; }
+
+    .etq.th { background-color: #041a4a; }
+    .th-cab { background: #2e1065; border: {{ $m(0.35) }}mm solid #38bdf8; border-radius: {{ $m(1.6) }}mm; color: #fff; }
+    .th-cab div { left: 0; width: 100%; text-align: center; white-space: nowrap; line-height: 1; font-weight: bold; letter-spacing: 0.3pt; }
+    .th-fucsia { color: #e879f9; }
+    .th-blanco { background: #fff; border-radius: {{ $m(2) }}mm; overflow: hidden; }
+    .th-blanco .num { color: #0b1f4d; }
+    .th-txt { white-space: nowrap; color: #0b1f4d; font-weight: normal; }
 </style>
 </head>
 <body>
@@ -133,8 +193,141 @@
     <div class="hoja {{ $loop->last ? '' : 'salto' }}">
         @foreach($fichas as $i => $e)
             @php [$x, $y] = $pos($i); @endphp
-            <div class="etq" style="left: {{ $x }}mm; top: {{ $y }}mm;">
-            @if($tipo === 'locura')
+            <div class="etq {{ $esTh ? 'th' : '' }}" style="left: {{ $x }}mm; top: {{ $y }}mm;">
+            @if($tipo === 'th_pc' || $tipo === 'th_cel')
+                @php
+                    $specs = $e['specs'] ?? [];
+                    $esCel = $tipo === 'th_cel';
+                    $val = fn (string $c) => trim((string) ($specs[$c] ?? ''));
+                    $marca = $val('marca');
+                    $logoM = $logosMarca[$e['logo_marca'] ?? ''] ?? null;
+                    $modelo = $val('modelo');
+                    // Con el logo de la misma marca a la vista no se repite la marca en el modelo.
+                    if ($logoM && $marca !== '' && ($e['logo_marca'] ?? '') === mb_strtolower($marca) && mb_stripos($modelo, $marca . ' ') === 0) {
+                        $modelo = trim(mb_substr($modelo, mb_strlen($marca) + 1));
+                    }
+                    $pantalla = (string) preg_replace('/^pantalla\s+/iu', '', $val('pantalla'));
+                    $ram = (string) preg_replace('/\s+RAM$/iu', '', $val('ram'));
+                    $alm = $val('almacenamiento');
+                    $memoria = trim(($ram !== '' ? 'Ram: ' . $ram : '') . ($ram !== '' && $alm !== '' ? '   ' : '') . ($alm !== '' ? ($esCel ? 'Almacenamiento: ' : 'Disco: ') . $alm : ''));
+                    $filasTh = $esCel
+                        ? [['celular', 'Modelo', $modelo], ['pantalla', 'Pantalla', $pantalla], ['ram', '', $memoria], ['chip', 'Procesador', $val('procesador')], ['camara', 'Cámara', $val('camara')], ['bateria', 'Batería', $val('bateria')], ['sistema', 'OS', $val('sistema')]]
+                        : [['laptop', 'Modelo', $modelo], ['chip', 'Procesador', $val('procesador')], ['grafica', 'Gráfica', $val('grafica')], ['pantalla', 'Pantalla', $pantalla], ['ram', '', $memoria], ['windows', 'OS', $val('sistema')]];
+                    $filasTh = array_slice(array_values(array_filter($filasTh, fn ($f) => $f[2] !== '')), 0, 6);
+                    if ($filasTh === []) {
+                        $filasTh = [[$esCel ? 'celular' : 'laptop', '', $e['nombre']]];
+                    }
+
+                    $panL = $mx(8.2);
+                    $panT = $my(35);
+                    $panW = $mx(76);
+                    $panH = $my(38.7);
+                    $nF = count($filasTh);
+                    $filaH = min($my(6.9), ($panH - $my(4.4)) / $nF);
+                    $filasTop = $panT + ($panH - $nF * $filaH) / 2;
+                    $icoD = min($m(6.4), $filaH - $m(0.3));
+                    $icoCx = $mx(8.7);
+                    $txtL = $icoCx + $icoD / 2 + $mx(1.6);
+                    $txtW = $panL + $panW - $mx(2) - $txtL;
+
+                    $marcaL = $mx(64.4);
+                    $marcaT = $my(23.8);
+                    $marcaW = $mx(19.8);
+                    $marcaH = $my(7);
+                    if ($logoM) {
+                        $lmW = min($marcaW - $m(2.4), ($marcaH - $m(1.8)) * $logoM['ratio']);
+                        $lmH = $lmW / $logoM['ratio'];
+                    } elseif ($marca !== '') {
+                        $marcaFit = $fit('thmarca' . $marca, mb_strtoupper($marca), $marcaW - $m(2), $fs([12, 11, 10, 9, 8, 7, 6]));
+                    }
+                    $codFit = $fit('thcod' . $e['id'], 'COD: ' . $e['codigo'], $W - $m(10), $fs([5, 4.6, 4.2, 3.8]));
+                @endphp
+                {!! $thLogo($my(3.4), $m(8)) !!}
+
+                {!! $thCabecera($mx(10.6), $my(13.7), $mx(23.6), $my(7.9), 'PROMO', 'EN DIVISA', $fs([10, 9.5, 9, 8.5, 8, 7.5]), 'thpromo') !!}
+                {!! $thPrecio($mx(8.8), $my(21.6), $mx(26.9), $my(10), $e['unidad_entero_fmt'], $fs([24, 22, 20, 18, 16, 14, 12]), 'thpnum') !!}
+                {!! $thCabecera($mx(40.3), $my(16.7), $mx(19.2), $my(6.7), 'PRECIO', 'REGULAR', $fs([8, 7.5, 7, 6.5, 6]), 'threg') !!}
+                {!! $thPrecio($mx(38.4), $my(23.4), $mx(20.5), $my(7.9), $e['regular_entero_fmt'], $fs([18, 17, 16, 15, 14, 12, 11, 10]), 'thrnum') !!}
+
+                @if($logoM || $marca !== '')
+                    <div class="abs th-blanco" style="left: {{ $marcaL }}mm; top: {{ $marcaT }}mm; width: {{ $marcaW }}mm; height: {{ $marcaH }}mm;">
+                        @if($logoM)
+                            <img class="abs" src="{{ $logoM['src'] }}" alt="" style="left: {{ ($marcaW - $lmW) / 2 }}mm; top: {{ ($marcaH - $lmH) / 2 }}mm; width: {{ $lmW }}mm; height: {{ $lmH }}mm;">
+                        @else
+                            <div class="abs b centro nw" style="left: 0; width: 100%; top: {{ ($marcaH - $ptMm($marcaFit['fs'])) / 2 - $m(0.2) }}mm; font-size: {{ $marcaFit['fs'] }}pt; color: #0b1f4d; letter-spacing: 0.6pt;">{{ $marcaFit['lineas'][0] ?? '' }}</div>
+                        @endif
+                    </div>
+                @endif
+
+                <div class="abs th-blanco" style="left: {{ $panL }}mm; top: {{ $panT }}mm; width: {{ $panW }}mm; height: {{ $panH }}mm; border-radius: {{ $m(3) }}mm;"></div>
+                @foreach($filasTh as $f => [$icono, $etiqueta, $valor])
+                    @php
+                        $fy = $filasTop + $f * $filaH;
+                        $texto = $etiqueta !== '' ? $etiqueta . ': ' . $valor : $valor;
+                        $sp = $ajustar('th' . $e['id'] . $f . md5($texto) . round($filaH, 2), $texto, $txtW, $filaH - $m(0.3), $fs([9.5, 9, 8.5, 8, 7.5, 7, 6.5, 6, 5.5]), 2, false);
+                    @endphp
+                    @if(isset($iconosTh[$icono]))
+                        <img class="abs" src="{{ $iconosTh[$icono] }}" alt="" style="left: {{ $icoCx - $icoD / 2 }}mm; top: {{ $fy + ($filaH - $icoD) / 2 }}mm; width: {{ $icoD }}mm; height: {{ $icoD }}mm;">
+                    @endif
+                    {!! $thLineas($sp, $txtL, $fy + max(0, ($filaH - $altoLineas($sp)) / 2)) !!}
+                @endforeach
+
+                {!! $thLema($my(76.9), $W - $m(14), $fs([11, 10.5, 10, 9.5, 9, 8.5, 8, 7])) !!}
+                <div class="abs b centro nw" style="left: 0; width: 100%; top: {{ $my(79.9) }}mm; font-size: {{ $codFit['fs'] }}pt; color: #bae6fd;">{{ $codFit['lineas'][0] ?? '' }}</div>
+            @elseif($tipo === 'th_clasica')
+                @php
+                    $nomL = $mx(3);
+                    $nomT = $my(8.8);
+                    $nomW = $W - 2 * $mx(3);
+                    $nomH = $my(11.6);
+                    $nomTxtT = $m(2.6);
+                    $nomTxtH = $nomH - $nomTxtT - $m(0.6);
+                    $nom = $ajustar('thcl' . $e['id'], $e['nombre'], $nomW - $m(4), $nomTxtH, $fs([10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5, 6]));
+                    $codFit = $fit('thclcod' . $e['id'], 'Cód. ' . $e['codigo'], $nomW - $m(3), $fs([4.6, 4.2, 3.8]));
+                    $areaT = $my(22.2);
+                    $areaH = $my(22.4);
+                    $conAhorro = $e['con_mayor'] && $e['ahorro_pct'] > 0;
+                @endphp
+                {!! $thLogo($my(2.2), $m(5.4)) !!}
+                <div class="abs th-blanco" style="left: {{ $nomL }}mm; top: {{ $nomT }}mm; width: {{ $nomW }}mm; height: {{ $nomH }}mm;">
+                    <div class="abs b nw" style="left: {{ $m(1.5) }}mm; top: {{ $m(0.7) }}mm; font-size: {{ $codFit['fs'] }}pt; color: #64748b;">{{ $codFit['lineas'][0] ?? '' }}</div>
+                    @foreach($nom['lineas'] as $li => $l)
+                        <div class="abs linea centro" style="left: 0; width: 100%; top: {{ $nomTxtT + max(0, ($nomTxtH - $altoLineas($nom)) / 2) + $li * $ptMm($nom['alto_linea']) }}mm; font-size: {{ $nom['fs'] }}pt; line-height: {{ $nom['alto_linea'] }}pt; height: {{ $nom['alto_linea'] }}pt; color: #0b1f4d;">{{ $l }}</div>
+                    @endforeach
+                </div>
+
+                @if($e['con_mayor'])
+                    @php
+                        $colGap = $mx(2.4);
+                        $colW = ($nomW - $colGap) / 2;
+                        $cabH = $my(7.6);
+                        $cajaH = $areaH - $cabH;
+                        $txtMayor = $e['cantidad_mayor'] . '+ PZAS';
+                        $numTams = $fs([20, 18, 16, 14, 12, 10]);
+                        $numFsCl = min($fit('thclu', $e['unidad_fmt'], $colW - $m(5), $numTams)['fs'], $fit('thclm', $e['mayor_fmt'], $colW - $m(5), $numTams)['fs']);
+                        $numTamsIguales = [$numFsCl];
+                    @endphp
+                    @foreach([['1 PZA', $e['unidad_fmt'], $nomL, false], [$txtMayor, $e['mayor_fmt'], $nomL + $colW + $colGap, true]] as [$cant, $valor, $cx, $esMayor])
+                        {!! $thCabecera($cx + $mx(2.5), $areaT, $colW - 2 * $mx(2.5), $cabH, 'COMPRA', $cant, $fs([8.5, 8, 7.5, 7, 6.5, 6]), 'thclcab') !!}
+                        {!! $thPrecio($cx, $areaT + $cabH, $colW, $cajaH, $valor, $numTamsIguales, 'thcl' . ($esMayor ? 'm' : 'u'), $esMayor ? '#7e22ce' : '#0b1f4d') !!}
+                        @if($esMayor && $conAhorro)
+                            <div class="abs b centro nw" style="left: {{ $cx }}mm; width: {{ $colW }}mm; top: {{ $areaT + $areaH - $m(2.6) }}mm; font-size: {{ round(4.8 * $k, 1) }}pt; color: #c026d3;">¡AHORRAS {{ $e['ahorro_pct'] }}% C/U!</div>
+                        @endif
+                    @endforeach
+                @else
+                    @php
+                        $cabW = $mx(26);
+                        $cajaW = $mx(44);
+                    @endphp
+                    <div class="abs th-cab" style="left: {{ ($W - $cabW) / 2 }}mm; top: {{ $areaT + $my(0.6) }}mm; width: {{ $cabW }}mm; height: {{ $my(6) }}mm;">
+                        @php $fsP = $fit('thclp', 'PRECIO', $cabW - $m(3), $fs([10, 9.5, 9, 8.5, 8]))['fs']; @endphp
+                        <div class="abs" style="top: {{ ($my(6) - $ptMm($fsP)) / 2 + $m(0.15) }}mm; font-size: {{ $fsP }}pt; letter-spacing: 1.2pt;">PRECIO</div>
+                    </div>
+                    {!! $thPrecio(($W - $cajaW) / 2, $areaT + $my(6.6), $cajaW, $areaH - $my(6.6), $e['unidad_fmt'], $fs([28, 26, 24, 22, 20, 18, 16, 14]), 'thcls') !!}
+                @endif
+
+                {!! $thLema($my(47.3), $W - $m(10), $fs([7.5, 7, 6.5, 6, 5.5, 5])) !!}
+            @elseif($tipo === 'locura')
                 @php
                     $lzLogoM = $logosMarca[$e['logo_marca'] ?? ''] ?? null;
                     $lzMarca = trim((string) ($e['specs']['marca'] ?? ''));

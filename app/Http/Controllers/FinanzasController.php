@@ -2637,7 +2637,18 @@ class FinanzasController extends Controller
 
         $matcher = app(\App\Services\BankReconciliationMatcher::class);
 
-        $lineasQuery = \App\Models\ConciliacionLinea::query()->orderBy('fecha');
+        $lotesAutoConciliados = app(\App\Services\Conciliacion\LotesPuntoVentaAutoMatcher::class)->conciliar(
+            $fechaDesde ?: \Carbon\Carbon::parse($fechaHasta)->subMonth()->toDateString(),
+            $fechaHasta ?: now()->toDateString(),
+            $bancoFiltro
+        );
+
+        // Solo liquidaciones sin lote ligado y por conciliar. Se recorren por bloques: una cuenta como
+        // BNC L.S. CASHEA tiene decenas de miles de movimientos al mes y cargarlos todos agota la memoria.
+        $lineasQuery = \App\Models\ConciliacionLinea::query()
+            ->select(['id', 'banco', 'titular', 'fecha', 'descripcion', 'referencia', 'monto', 'estado', 'tipo', 'tesoreria_ingreso_id'])
+            ->whereNull('tesoreria_ingreso_id')
+            ->where('estado', '!=', 'conciliado');
         if ($fechaDesde) {
             $lineasQuery->where('fecha', '>=', $fechaDesde);
         }
@@ -2645,10 +2656,18 @@ class FinanzasController extends Controller
             $lineasQuery->where('fecha', '<=', $fechaHasta);
         }
         $this->filtrarPorBanco($lineasQuery, $bancoFiltro);
-        $liquidaciones = $lineasQuery->get()->filter(
-            fn ($linea) => $matcher->esAbonoLotePuntoVenta($linea->descripcion, $linea->referencia)
-                && empty($linea->tesoreria_ingreso_id)
-        )->values();
+        $classifier = app(\App\Services\BankMovementClassifier::class);
+        $liquidaciones = collect();
+        foreach ($lineasQuery->lazyById(2000) as $linea) {
+            // "COMISION BANCO POS: …" (BNC) trae "POS:" pero es el cargo de la comisión, no la liquidación.
+            if ($linea->esCargo() || $classifier->esComision($linea->descripcion, $linea->banco)) {
+                continue;
+            }
+            if ($matcher->esAbonoLotePuntoVenta($linea->descripcion, $linea->referencia)) {
+                $liquidaciones->push($linea);
+            }
+        }
+        $liquidaciones = $liquidaciones->sortBy(fn ($l) => [$l->fecha?->format('Y-m-d'), $l->id])->values();
 
         $lotesQuery = \App\Models\TesoreriaIngreso::query()
             ->where('tipo', 'punto_venta')
@@ -2721,6 +2740,7 @@ class FinanzasController extends Controller
             'totalConciliados' => $lotes->where('es_conciliado', true)->count(),
             'totalPendientes' => $lotes->where('es_conciliado', false)->count(),
             'totalLiq' => $liquidaciones->where('estado', '!=', 'conciliado')->count(),
+            'lotesAutoConciliados' => $lotesAutoConciliados,
         ]);
     }
 

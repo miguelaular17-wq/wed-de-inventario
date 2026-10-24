@@ -85,6 +85,9 @@
     @if(session('success'))
         <div class="alert-success">{{ session('success') }}</div>
     @endif
+    @if(($lotesAutoConciliados ?? 0) > 0)
+        <div class="alert-success">Se conciliaron automáticamente {{ $lotesAutoConciliados }} lote(s) Banesco por el número de lote en la descripción del banco.</div>
+    @endif
     @if(session('error'))
         <div class="alert-success" style="background:#fef2f2;color:#991b1b;border-color:#fca5a5;">{{ session('error') }}</div>
     @endif
