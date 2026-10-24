@@ -97,13 +97,27 @@
         }
         return $html;
     };
-    $thLogo = function (float $top, float $alto) use ($logoTh, $W) {
+    // Temporada: gorro (Navidad) o sombrero de bruja (Halloween) sobre el círculo del logo.
+    $tema = $tema ?? 'ninguno';
+    $gorro = $gorro ?? null;
+    $ponGorro = function (float $circL, float $circT, float $d) use ($gorro) {
+        if (! $gorro) {
+            return '';
+        }
+        $gw = $d * 0.85;
+        $gh = $gw / $gorro['ratio'];
+        // El ala del dibujo queda al 84 % de su alto: se apoya al 30 % del círculo, un poco a la derecha.
+        return '<img class="abs" src="' . $gorro['src'] . '" alt="" style="left: ' . ($circL + ($d - $gw) / 2 + $d * 0.06) . 'mm; top: ' . ($circT + $d * 0.30 - $gh * 0.84) . 'mm; width: ' . $gw . 'mm; height: ' . $gh . 'mm;">';
+    };
+    $thLogo = function (float $top, float $alto) use ($logoTh, $W, $ponGorro) {
         if (! $logoTh) {
             return '';
         }
         $ancho = min($W - 8, $alto * $logoTh['ratio']);
         $alto = $ancho / $logoTh['ratio'];
-        return '<img class="abs" src="' . $logoTh['src'] . '" alt="" style="left: ' . (($W - $ancho) / 2) . 'mm; top: ' . $top . 'mm; width: ' . $ancho . 'mm; height: ' . $alto . 'mm;">';
+        $left = ($W - $ancho) / 2;
+        return '<img class="abs" src="' . $logoTh['src'] . '" alt="" style="left: ' . $left . 'mm; top: ' . $top . 'mm; width: ' . $ancho . 'mm; height: ' . $alto . 'mm;">'
+            . $ponGorro($left, $top, $alto);
     };
     $thCabecera = function (float $left, float $top, float $ancho, float $alto, string $l1, string $l2, array $tamanos, string $clave) use ($fit, $ptMm, $m) {
         $fsCab = min(
@@ -186,6 +200,38 @@
     .th-blanco { background: #fff; border-radius: {{ $m(2) }}mm; overflow: hidden; }
     .th-blanco .num { color: #0b1f4d; }
     .th-txt { white-space: nowrap; color: #0b1f4d; font-weight: normal; }
+
+    @if($tema === 'halloween')
+        .etq { background-color: #7e22ce; }
+        .caja .h { background: #1c1917; }
+        .caja .h span { color: #fb923c; }
+        .caja.mayor .h { background: #f97316; color: #1c1917; }
+        .caja.mayor .h span { color: #581c87; }
+        .caja.mayor .marco { border-color: #f97316; }
+        .ahorro { color: #c2410c; }
+        .lz-locura { background: #1c1917; border-bottom-color: #f97316; }
+        .lz-cinta { background: #fb923c; }
+        .lz-cinta div { color: #1c1917; }
+        .lz-pill { background: #ea580c; }
+        .pc-caja { background: #1c1917; }
+        .pc-pill, .pc-ico { background: #ea580c; }
+        .th-cab { background: #1c1917; border-color: #f97316; }
+        .th-fucsia { color: #fb923c; }
+    @elseif($tema === 'navidad')
+        .etq { background-color: #b91c1c; }
+        .caja .h { background: #14532d; }
+        .caja .h span { color: #fde047; }
+        .caja.mayor .h { background: #dc2626; color: #fff; }
+        .caja.mayor .h span { color: #fde047; }
+        .ahorro { color: #b91c1c; }
+        .lz-locura { background: #14532d; }
+        .lz-cinta div { color: #b91c1c; }
+        .lz-pill { background: #b91c1c; }
+        .pc-caja { background: #14532d; }
+        .pc-pill, .pc-ico { background: #b91c1c; }
+        .th-cab { background: #7f1d1d; border-color: #facc15; }
+        .th-fucsia { color: #fde047; }
+    @endif
 </style>
 </head>
 <body>
@@ -350,7 +396,7 @@
                     $nom = $ajustar('lz' . $e['id'], $e['nombre'], $lzPanelW - $m(5), $nomH, $fs([9, 8.5, 8, 7.5, 7, 6.5, 6, 5.5]));
                     $webFit = $fit('lzweb', $web, $lzPanelW - $m(3), $fs([5, 4.6, 4.2, 4]));
                 @endphp
-                @if($logo)<img class="abs" src="{{ $logo }}" alt="" style="left: {{ $pad + ($lzW - $m($L['logo'])) / 2 }}mm; top: {{ $pad }}mm; width: {{ $m($L['logo']) }}mm; height: {{ $m($L['logo']) }}mm;">@endif
+                @if($logo)<img class="abs" src="{{ $logo }}" alt="" style="left: {{ $pad + ($lzW - $m($L['logo'])) / 2 }}mm; top: {{ $pad }}mm; width: {{ $m($L['logo']) }}mm; height: {{ $m($L['logo']) }}mm;">{!! $ponGorro($pad + ($lzW - $m($L['logo'])) / 2, $pad, $m($L['logo'])) !!}@endif
                 <div class="abs lz-de b centro nw" style="top: {{ $pad + $m($L['de']) }}mm; font-size: {{ $de['fs'] }}pt;">PRECIOS DE</div>
                 <div class="abs lz-locura" style="top: {{ $pad + $m($L['loc']) }}mm; height: {{ $m($L['locH']) }}mm;">
                     <div class="abs b centro nw" style="left: 0; width: 100%; top: {{ ($m($L['locH']) - $ptMm($loc['fs'])) / 2 - $m(0.4) }}mm; font-size: {{ $loc['fs'] }}pt; color: #facc15;">LOCURA</div>
@@ -420,7 +466,7 @@
                 <div class="abs pc-caja">
                     <div class="abs b nw centro" style="left: 0; width: 100%; top: {{ $m(2.4) }}mm; font-size: {{ round(16 * $k, 1) }}pt; color: #fff; letter-spacing: 0.6pt;">PRECIO</div>
                     <div class="abs b nw centro" style="left: 0; width: 100%; top: {{ $m(9) }}mm; font-size: {{ round(18 * $k, 1) }}pt; color: #facc15; letter-spacing: 0.4pt;">REGULAR</div>
-                    @if($logo)<img class="abs" src="{{ $logo }}" alt="" style="left: {{ $inW - $m(16.5) }}mm; top: {{ $m(1.6) }}mm; width: {{ $m(13.5) }}mm; height: {{ $m(13.5) }}mm;">@endif
+                    @if($logo)<img class="abs" src="{{ $logo }}" alt="" style="left: {{ $inW - $m(16.5) }}mm; top: {{ $m(1.6) }}mm; width: {{ $m(13.5) }}mm; height: {{ $m(13.5) }}mm;">{!! $ponGorro($inW - $m(16.5), $m(1.6), $m(13.5)) !!}@endif
                 </div>
                 <div class="abs pc-pill" style="left: {{ $pillLeft }}mm; width: {{ $pillW - 2 * $m(0.7) }}mm;">
                     <div class="abs b nw" style="left: {{ $pillPad }}mm; top: {{ ($pcPillH - $m(1.4) - $ptMm($refFs)) / 2 }}mm; font-size: {{ $refFs }}pt; color: #fde68a;">REF</div>
@@ -478,7 +524,7 @@
                     $ahorroTop = $precioH - $ptMm(5.3 * $k) - $m(1.2);
                     $cod = $fit('clcod' . $e['id'], 'Cód. ' . $e['codigo'], $inW * 0.55, $fs([5.5, 5, 4.5, 4]));
                 @endphp
-                @if($logo)<img class="abs" src="{{ $logo }}" alt="" style="left: {{ $pad }}mm; top: {{ $pad }}mm; width: {{ $topH }}mm; height: {{ $topH }}mm;">@endif
+                @if($logo)<img class="abs" src="{{ $logo }}" alt="" style="left: {{ $pad }}mm; top: {{ $pad }}mm; width: {{ $topH }}mm; height: {{ $topH }}mm;">{!! $ponGorro($pad, $pad, $topH) !!}@endif
 
                 <div class="abs blanco" style="left: {{ $nameLeft }}mm; top: {{ $pad }}mm; width: {{ $nameW }}mm; height: {{ $topH }}mm;">
                     <div class="abs b" style="left: {{ $nomPadX }}mm; top: {{ $m(1.1) }}mm; font-size: {{ round(5 * $k, 1) }}pt; letter-spacing: 0.5pt; color: #7c3aed;">PRODUCTO</div>

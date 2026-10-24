@@ -309,6 +309,24 @@ class EtiquetasPrecioTest extends TestCase
         ])->assertSessionHasErrors('recargo_regular');
     }
 
+    public function test_genera_pdf_con_toque_de_halloween_y_navidad(): void
+    {
+        foreach (['halloween', 'navidad'] as $tema) {
+            foreach (['clasica', 'locura', 'pc', 'th_pc', 'th_clasica'] as $tipo) {
+                $this->post(route('etiquetas.pdf'), [
+                    'items' => [['id' => 1, 'copias' => 1]],
+                    'tipo' => $tipo,
+                    'tema' => $tema,
+                ])->assertOk()->assertHeader('content-type', 'application/pdf');
+            }
+        }
+
+        $this->assertFileExists(public_path('img/temporada/gorro_navidad.png'));
+        $this->assertFileExists(public_path('img/temporada/sombrero_bruja.png'));
+        $this->post(route('etiquetas.pdf'), ['items' => [['id' => 1, 'copias' => 1]], 'tema' => 'carnaval'])
+            ->assertSessionHasErrors('tema');
+    }
+
     public function test_requiere_permiso_de_ver_precios(): void
     {
         $this->get(route('etiquetas.index'))->assertOk()->assertSee('Etiquetas de precio');

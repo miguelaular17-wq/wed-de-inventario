@@ -67,6 +67,17 @@
                         @endforeach
                     </div>
                 </div>
+                <div class="etq-tipos">
+                    <span class="etq-tipos-label">Temporada</span>
+                    <div class="etq-tipos-opciones">
+                        @foreach($temas as $clave => $label)
+                            <label class="etq-tipo">
+                                <input type="radio" name="tema" value="{{ $clave }}" @checked($loop->first)>
+                                <span>{{ $label }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                </div>
                 <input type="hidden" name="ancho_mm" id="etq-ancho-mm">
                 <input type="hidden" name="alto_mm" id="etq-alto-mm">
                 <details class="etq-config" id="etq-config">
@@ -266,6 +277,40 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 .etq-th .lema { left: 0; width: 100%; text-align: center; color: #fff; font-weight: 800; white-space: nowrap; }
 .etq-th .lema em { font-style: normal; color: #22d3ee; }
 .etq-th .nombre { display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 800; text-transform: uppercase; line-height: 1.15; padding: 0 4%; }
+
+/* Temporada en la vista previa (mismos colores que el PDF) */
+.etq-preview-wrap { position: relative; }
+.etq-gorro { position: absolute; pointer-events: none; }
+.etq-th::before { content: ''; position: absolute; inset: 0; background: var(--patron-th, none) center / 100% 100% no-repeat; }
+[data-tema="halloween"] .etq-card, [data-tema="halloween"] .etq-lz, [data-tema="halloween"] .etq-pc {
+    background: url('{{ asset('img/temporada/patron_halloween.png') }}') center / 100% 100% no-repeat, linear-gradient(135deg, #f97316 0%, #7e22ce 50%, #1c1917 100%); }
+[data-tema="halloween"] .etq-th { --patron-th: url('{{ asset('img/temporada/patron_halloween_oscuro.png') }}'); }
+[data-tema="halloween"] .etq-card-box .h { background: #1c1917; }
+[data-tema="halloween"] .etq-card-box .h em { color: #fb923c; }
+[data-tema="halloween"] .etq-card-box.mayor { border-color: #f97316; }
+[data-tema="halloween"] .etq-card-box.mayor .h { background: #f97316; color: #1c1917; }
+[data-tema="halloween"] .etq-card-box.mayor .h em { color: #581c87; }
+[data-tema="halloween"] .etq-lz-loc { background: #1c1917; border-bottom-color: #f97316; }
+[data-tema="halloween"] .etq-lz-cinta { background: #fb923c; color: #1c1917; }
+[data-tema="halloween"] .etq-lz-pill { background: #ea580c; }
+[data-tema="halloween"] .etq-pc-caja { background: #1c1917; }
+[data-tema="halloween"] .etq-pc-pill, [data-tema="halloween"] .etq-pc-spec i { background: #ea580c; }
+[data-tema="halloween"] .etq-th .cab { background: #1c1917; border-color: #f97316; }
+[data-tema="halloween"] .etq-th .cab em { color: #fb923c; }
+[data-tema="navidad"] .etq-card, [data-tema="navidad"] .etq-lz, [data-tema="navidad"] .etq-pc {
+    background: url('{{ asset('img/temporada/patron_navidad.png') }}') center / 100% 100% no-repeat, linear-gradient(135deg, #dc2626 0%, #991b1b 50%, #15803d 100%); }
+[data-tema="navidad"] .etq-th { --patron-th: url('{{ asset('img/temporada/patron_navidad_oscuro.png') }}'); }
+[data-tema="navidad"] .etq-card-box .h { background: #14532d; }
+[data-tema="navidad"] .etq-card-box .h em { color: #fde047; }
+[data-tema="navidad"] .etq-card-box.mayor .h { background: #dc2626; color: #fff; }
+[data-tema="navidad"] .etq-card-box.mayor .h em { color: #fde047; }
+[data-tema="navidad"] .etq-lz-loc { background: #14532d; }
+[data-tema="navidad"] .etq-lz-cinta { color: #b91c1c; }
+[data-tema="navidad"] .etq-lz-pill { background: #b91c1c; }
+[data-tema="navidad"] .etq-pc-caja { background: #14532d; }
+[data-tema="navidad"] .etq-pc-pill, [data-tema="navidad"] .etq-pc-spec i { background: #b91c1c; }
+[data-tema="navidad"] .etq-th .cab { background: #7f1d1d; border-color: #facc15; }
+[data-tema="navidad"] .etq-th .cab em { color: #fde047; }
 
 @media (max-width: 1000px) { .etq-grid { grid-template-columns: 1fr; } }
 </style>
@@ -559,7 +604,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         return `
             <div class="etq-lz ${caja ? 'con-marca' : ''}" style="${tamanoPreview('locura')}">
                 <div class="etq-lz-izq">
-                    <img src="${LOGO}" alt="">
+                    <img src="${LOGO}" alt="" data-logo>
                     <div class="etq-lz-de">PRECIOS DE</div>
                     <div class="etq-lz-loc">LOCURA</div>
                     <div class="etq-lz-cinta">PRECIOS BAJOS TODO EL AÑO</div>
@@ -590,7 +635,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         return `
             <div class="etq-pc" style="${tamanoPreview('pc')}">
                 <div class="etq-pc-izq">
-                    <div class="etq-pc-caja"><img src="${LOGO}" alt=""><b>PRECIO</b><b>REGULAR</b></div>
+                    <div class="etq-pc-caja"><img src="${LOGO}" alt="" data-logo><b>PRECIO</b><b>REGULAR</b></div>
                     <div class="etq-pc-pill"><small>REF</small><strong>${entero > 0 ? '$' + entero.toLocaleString('es-VE') : '—'}</strong></div>
                     <div class="etq-pc-pie">Precios en REF<br><span style="font-weight:500;">${FECHA}</span></div>
                 </div>
@@ -608,7 +653,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         return `<div class="${clase}" style="left:${l / base.ancho * 100}%; top:${t / base.alto * 100}%; width:${w / base.ancho * 100}%; height:${h / base.alto * 100}%; ${css || ''}">${inner || ''}</div>`;
     }
     const thFs = (base, pt) => `${(pt * 0.3528 / base.ancho * 100).toFixed(2)}cqw`;
-    const thLogo = (base, top, alto) => `<img src="${LOGO_TH}" alt="Tecno House" style="left:50%; transform:translateX(-50%); top:${top / base.alto * 100}%; height:${alto / base.alto * 100}%;">`;
+    const thLogo = (base, top, alto) => `<img src="${LOGO_TH}" alt="Tecno House" data-logo style="left:50%; transform:translateX(-50%); top:${top / base.alto * 100}%; height:${alto / base.alto * 100}%;">`;
     const thLema = (base, top, pt) => thCaja(base, 0, top, base.ancho, pt * 0.3528 * 1.3, 'lema', `font-size:${thFs(base, pt)};`, '¡Tecnología <em>a tu alcance!</em>');
     const recargo = () => Math.max(0, parseFloat(document.getElementById('etq-recargo').value) || 0);
     const entero = n => n > 0 ? '$' + n.toLocaleString('es-VE') : '—';
@@ -681,7 +726,41 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
             </div>`;
     }
 
+    const TEMA_KEY = 'etiquetas_tema_v1';
+    const GORROS = {
+        halloween: @json(asset('img/temporada/sombrero_bruja.png')),
+        navidad: @json(asset('img/temporada/gorro_navidad.png')),
+    };
+    const GORRO_RATIO = 800 / 560;
+    const temaActual = () => (document.querySelector('input[name="tema"]:checked') || {}).value || 'ninguno';
+
+    // Gorro sobre el círculo del logo, con la misma regla que el PDF (ala al 30 % del círculo).
+    function aplicarTema(cont) {
+        const tema = temaActual();
+        cont.dataset.tema = tema;
+        const logo = cont.querySelector('[data-logo]');
+        if (!GORROS[tema] || !logo) return;
+        const poner = () => {
+            const rc = cont.getBoundingClientRect();
+            const rl = logo.getBoundingClientRect();
+            const d = rl.height;
+            const gw = d * 0.85;
+            const g = document.createElement('img');
+            g.src = GORROS[tema];
+            g.alt = '';
+            g.className = 'etq-gorro';
+            g.style.cssText = `width:${gw}px; left:${rl.left - rc.left + (d - gw) / 2 + d * 0.06}px; top:${rl.top - rc.top + d * 0.30 - gw / GORRO_RATIO * 0.84}px;`;
+            cont.appendChild(g);
+        };
+        if (logo.complete && logo.naturalHeight) poner(); else logo.addEventListener('load', poner, { once: true });
+    }
+
     function pintarPreview() {
+        pintarPreviewTipo();
+        aplicarTema(document.getElementById('etq-preview'));
+    }
+
+    function pintarPreviewTipo() {
         const cont = document.getElementById('etq-preview');
         const p = lista.find(x => x.id === ultimoAgregado) || lista[lista.length - 1];
         if (!p) {
@@ -704,7 +783,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         cont.innerHTML = `
             <div class="etq-card" style="${tamanoPreview('clasica')}">
                 <div class="etq-card-top">
-                    <img class="etq-card-logo" src="${LOGO}" alt="">
+                    <img class="etq-card-logo" src="${LOGO}" alt="" data-logo>
                     <div class="etq-card-name"><small>PRODUCTO</small><b style="font-size:${p.nombre.length <= 26 ? 15 : (p.nombre.length <= 46 ? 13 : (p.nombre.length <= 75 ? 11 : 9.5))}px;">${esc(p.nombre)}</b></div>
                 </div>
                 <div class="etq-card-prices">${precios}</div>
@@ -734,6 +813,15 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         debounce = setTimeout(() => buscar(q, false), 350);
     });
     document.getElementById('etq-cant-mayor').addEventListener('input', pintarPreview);
+    const temaGuardado = localStorage.getItem(TEMA_KEY);
+    if (temaGuardado) {
+        const radio = document.querySelector(`input[name="tema"][value="${temaGuardado}"]`);
+        if (radio) radio.checked = true;
+    }
+    document.querySelectorAll('input[name="tema"]').forEach(r => r.addEventListener('change', () => {
+        localStorage.setItem(TEMA_KEY, temaActual());
+        pintarPreview();
+    }));
     const $recargo = document.getElementById('etq-recargo');
     if (localStorage.getItem(RECARGO_KEY) !== null) $recargo.value = localStorage.getItem(RECARGO_KEY);
     $recargo.addEventListener('input', () => {

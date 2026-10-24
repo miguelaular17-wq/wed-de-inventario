@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\EtiquetasPrecioService;
+use App\Services\EtiquetasTemporadaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -13,6 +14,7 @@ class EtiquetasController extends Controller
 {
     public function __construct(
         private EtiquetasPrecioService $etiquetas,
+        private EtiquetasTemporadaService $temporada,
     ) {}
 
     public function index(Request $request): View
@@ -29,6 +31,7 @@ class EtiquetasController extends Controller
             'specsPc' => EtiquetasPrecioService::SPECS_PC,
             'tiposConSpecs' => EtiquetasPrecioService::TIPOS_CON_SPECS,
             'recargoRegular' => EtiquetasPrecioService::RECARGO_REGULAR,
+            'temas' => EtiquetasTemporadaService::TEMAS,
             'maxEtiquetas' => EtiquetasPrecioService::MAX_ETIQUETAS,
         ]);
     }
@@ -55,9 +58,11 @@ class EtiquetasController extends Controller
             'ancho_mm' => ['nullable', 'numeric', 'min:' . EtiquetasPrecioService::MEDIDA_MIN['ancho'], 'max:' . EtiquetasPrecioService::MEDIDA_MAX['ancho']],
             'alto_mm' => ['nullable', 'numeric', 'min:' . EtiquetasPrecioService::MEDIDA_MIN['alto'], 'max:' . EtiquetasPrecioService::MEDIDA_MAX['alto']],
             'recargo_regular' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'tema' => ['nullable', Rule::in(array_keys(EtiquetasTemporadaService::TEMAS))],
         ]);
 
         $tipo = $data['tipo'] ?? 'clasica';
+        $tema = $data['tema'] ?? 'ninguno';
         $esTecnoHouse = str_starts_with($tipo, 'th_');
         if (! in_array($tipo, EtiquetasPrecioService::TIPOS_CON_SPECS, true)) {
             foreach ($data['items'] as &$item) {
@@ -100,8 +105,10 @@ class EtiquetasController extends Controller
             'tamano' => $tamano,
             'logo' => $this->imagenDataUri(public_path('logo.png')),
             'fondo' => $esTecnoHouse
-                ? $this->fondoTecnoHouse($tamano['ancho'], $tamano['alto'])
-                : $this->fondoDegradado($tamano['ancho'], $tamano['alto']),
+                ? $this->fondoTecnoHouse($tamano['ancho'], $tamano['alto'], $tema)
+                : $this->fondoDegradado($tamano['ancho'], $tamano['alto'], $tema),
+            'tema' => $tema,
+            'gorro' => ($g = $this->temporada->gorro($tema)) ? $this->imagenConRatio($g) : null,
             'fecha' => now()->format('d/m/Y'),
             'web' => EtiquetasPrecioService::WEB,
             'logosMarca' => $tipo !== 'clasica' && $tipo !== 'th_clasica' ? $this->logosMarca($fichas) : [],
@@ -166,11 +173,12 @@ class EtiquetasController extends Controller
      * Fondo Tecno House: azul noche con destellos diagonales cian y azul, más intensos hacia los bordes.
      * Se genera una vez por medida (150 dpi) porque Dompdf no dibuja degradados.
      */
-    private function fondoTecnoHouse(float $anchoMm, float $altoMm): ?string
+    private function fondoTecnoHouse(float $anchoMm, float $altoMm, string $tema = 'ninguno'): ?string
     {
         $w = (int) ceil($anchoMm / 25.4 * 150);
         $h = (int) ceil($altoMm / 25.4 * 150);
-        $path = storage_path("app/etiquetas/fondo_th_v1_{$w}x{$h}.png");
+        $sufijo = $tema === 'ninguno' ? '' : "_{$tema}";
+        $path = storage_path("app/etiquetas/fondo_th_v1_{$w}x{$h}{$sufijo}.png");
         if (is_file($path)) {
             return $this->imagenDataUri($path);
         }
@@ -217,6 +225,7 @@ class EtiquetasController extends Controller
                 imagesetpixel($img, $x, $y, imagecolorallocate($img, (int) min(255, $r), (int) min(255, $g), (int) min(255, $b)));
             }
         }
+        $this->temporada->decorar($img, $w, $h, $tema, true);
 
         if (! is_dir(dirname($path))) {
             @mkdir(dirname($path), 0775, true);
@@ -238,13 +247,15 @@ class EtiquetasController extends Controller
 
     /**
      * Dompdf no dibuja linear-gradient ni escala fondos (background-size): se genera una vez
-     * un PNG rosa → morado → azul al tamaño exacto de la etiqueta (96 dpi).
+     * un PNG rosa → morado → azul al tamaño exacto de la etiqueta (96 dpi; 150 con adornos de temporada).
      */
-    private function fondoDegradado(float $anchoMm, float $altoMm): ?string
+    private function fondoDegradado(float $anchoMm, float $altoMm, string $tema = 'ninguno'): ?string
     {
-        $w = (int) ceil($anchoMm / 25.4 * 96);
-        $h = (int) ceil($altoMm / 25.4 * 96);
-        $path = storage_path("app/etiquetas/fondo_v1_{$w}x{$h}.png");
+        $dpi = $tema === 'ninguno' ? 96 : 150;
+        $w = (int) ceil($anchoMm / 25.4 * $dpi);
+        $h = (int) ceil($altoMm / 25.4 * $dpi);
+        $sufijo = $tema === 'ninguno' ? '' : "_{$tema}";
+        $path = storage_path("app/etiquetas/fondo_v1_{$w}x{$h}{$sufijo}.png");
         if (is_file($path)) {
             return $this->imagenDataUri($path);
         }
@@ -253,7 +264,7 @@ class EtiquetasController extends Controller
         }
 
         $img = imagecreatetruecolor($w, $h);
-        $paradas = [[0.0, [236, 72, 153]], [0.5, [147, 51, 234]], [1.0, [59, 130, 246]]];
+        $paradas = $this->temporada->paradas($tema);
         $diag = $w + $h;
         for ($x = 0; $x < $w; $x++) {
             for ($y = 0; $y < $h; $y++) {
@@ -270,6 +281,7 @@ class EtiquetasController extends Controller
                 imagesetpixel($img, $x, $y, $color);
             }
         }
+        $this->temporada->decorar($img, $w, $h, $tema);
 
         if (! is_dir(dirname($path))) {
             @mkdir(dirname($path), 0775, true);
