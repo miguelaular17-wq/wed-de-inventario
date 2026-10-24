@@ -43,10 +43,10 @@
                     <thead>
                         <tr>
                             <th>Producto</th>
-                            <th style="text-align:right;">1 pza</th>
-                            <th style="text-align:right;">Mayor</th>
+                            <th style="text-align:right;" title="Texto de la primera caja (1 PZA) y su precio">1er precio</th>
+                            <th style="text-align:right;" title="Piezas desde las que aplica el precio al mayor y su precio">Mayor</th>
                             <th style="width:80px; text-align:center;">Copias</th>
-                            <th style="width:36px;"></th>
+                            <th style="width:56px;"></th>
                         </tr>
                     </thead>
                     <tbody id="etq-lista-body"></tbody>
@@ -156,8 +156,23 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 .etq-lista-wrap { max-height: 40vh; overflow-y: auto; margin-top: 12px; border: 1px solid #e2e8f0; border-radius: 10px; }
 .etq-lista { width: 100%; font-size: .85rem; margin: 0; }
 .etq-lista td { vertical-align: middle; }
-.etq-lista input[type=number] { width: 64px; padding: 6px; border-radius: 8px; border: 1px solid var(--border); text-align: center; }
+.etq-lista input[type=number], .etq-lista input.etq-precio { width: 64px; padding: 6px; border-radius: 8px; border: 1px solid var(--border); text-align: center; }
 .etq-quitar { border: none; background: none; color: #dc2626; font-size: 1rem; cursor: pointer; }
+.etq-restablecer { color: #7c3aed; font-weight: 800; }
+.etq-lista input.etq-precio { width: 90px; text-align: right; font-weight: 700; }
+.etq-lista input.etq-precio.u { color: #16a34a; }
+.etq-lista input.etq-precio.m { color: #7c3aed; }
+.etq-pz-wrap { display: flex !important; flex-direction: row !important; align-items: center; justify-content: center; gap: 2px; width: 90px; box-sizing: border-box;
+    margin: 0 0 4px auto; padding: 0 6px; border-radius: 8px; border: 1px solid var(--border); background: #fff; cursor: text; }
+.etq-pz-wrap.editado { background: #fef9c3; border-color: #facc15; }
+.etq-pz-wrap span { font-size: .72rem; font-weight: 700; color: #334155; white-space: nowrap; }
+.etq-lista .etq-pz-wrap input.etq-piezas { width: 34px; padding: 4px 0; border: none; background: transparent; font-size: .72rem; font-weight: 700; text-align: right; color: #334155; -moz-appearance: textfield; }
+.etq-pz-wrap input::-webkit-outer-spin-button, .etq-pz-wrap input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.etq-pz-wrap input:focus { outline: none; }
+.etq-lista input.etq-texto-u { display: block; width: 90px; margin: 0 0 4px auto; padding: 4px 6px; border-radius: 8px; border: 1px solid var(--border);
+    font-size: .72rem; font-weight: 700; text-align: center; text-transform: uppercase; color: #334155; }
+.etq-lista input.editado { background: #fef9c3; border-color: #facc15; }
+.etq-igual { font-size: .68rem; color: #94a3b8; margin-top: 2px; }
 .etq-row-new { animation: etqFlash 1.2s ease; }
 @keyframes etqFlash { from { background: #ede9fe; } to { background: transparent; } }
 .etq-opciones { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-top: 16px; }
@@ -241,16 +256,17 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 .etq-card-name { flex: 1; background: #fff; color: #0f172a; border-radius: 10px; padding: 6px 10px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
 .etq-card-name small { font-size: 8px; letter-spacing: .12em; color: #7c3aed; font-weight: 800; }
 .etq-card-name b { font-size: 13px; line-height: 1.15; text-transform: uppercase; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.etq-card-prices { display: flex; gap: 8px; flex: 1; }
-.etq-card-box { flex: 1; background: #fff; color: #0f172a; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
-.etq-card-box .h { background: #1e1b4b; color: #fff; text-align: center; font-weight: 800; font-size: 15px; line-height: 1.1; padding: 5px 0; letter-spacing: .03em; white-space: nowrap; }
+.etq-card-prices { display: flex; gap: 8px; flex: 1; min-height: 0; }
+.etq-card-box { flex: 1; min-height: 0; background: #fff; color: #0f172a; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+.etq-card-box .h { background: #1e1b4b; color: #fff; text-align: center; font-weight: 800; font-size: 14px; line-height: 1.1; padding: 3px 0; letter-spacing: .03em; white-space: nowrap; }
 .etq-card-box .h em { font-style: normal; color: #fde047; }
 .etq-card-box.mayor { border: 3px solid #facc15; }
 .etq-card-box.mayor .h { background: #facc15; color: #1e1b4b; }
 .etq-card-box.mayor .h em { color: #9d174d; }
 .etq-card-box .p { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; }
 .etq-card-box .p small { font-size: 10px; font-weight: 800; color: #64748b; align-self: flex-start; margin-top: 10px; }
-.etq-card-box .p strong { font-size: 32px; font-weight: 900; letter-spacing: -.02em; }
+.etq-card-box .p { min-height: 0; }
+.etq-card-box .p strong { font-size: 30px; font-weight: 900; letter-spacing: -.02em; }
 .etq-card-box .ahorro { text-align: center; font-size: 9px; font-weight: 800; color: #be185d; padding-bottom: 3px; }
 .etq-card-foot { display: flex; justify-content: space-between; font-size: 9px; opacity: .95; font-weight: 600; }
 
@@ -424,10 +440,34 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const ceilPrecio = v => { const n = Number(v); return n > 0 ? Math.ceil(Math.round(n * 100) / 100) : 0; };
-    const fmt = v => { const n = ceilPrecio(v); return n > 0 ? n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'; };
+    const fmt = v => { const n = Number(v); return n > 0 ? n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'; };
+    // Precio ajustado a mano en la lista (tal cual se escribió) o el del sistema redondeado hacia arriba.
+    const aNumero = v => {
+        let s = String(v ?? '').trim().replace(/\s/g, '');
+        if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+        return s === '' ? NaN : Number(s);
+    };
+    const manual = v => { const n = aNumero(v); return isNaN(n) ? null : Math.max(0, Math.round(n * 100) / 100); };
+    const enCampo = n => n > 0 ? n.toFixed(2).replace('.', ',') : '';
+    const pu = p => manual(p.manual_unidad) ?? ceilPrecio(p.precio_unidad);
+    const pm = p => manual(p.manual_mayor) ?? ceilPrecio(p.precio_mayor);
+    const editado = p => manual(p.manual_unidad) !== null || manual(p.manual_mayor) !== null || !!p.piezas || !!p.texto_unidad;
+    const TEXTO_UNIDAD = @json(\App\Services\EtiquetasPrecioService::TEXTO_UNIDAD);
+    const TEXTO_UNIDAD_MAX = {{ \App\Services\EtiquetasPrecioService::TEXTO_UNIDAD_MAX }};
+    // Igual que EtiquetasPrecioService::textoUnidad: "2" → "2 PZAS", "par" → "PAR".
+    const textoUnidadDe = v => {
+        const t = String(v ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
+        if (t === '') return TEXTO_UNIDAD;
+        if (/^\d{1,3}$/.test(t)) return Number(t) === 1 ? TEXTO_UNIDAD : `${Number(t)} PZAS`;
+        return t.slice(0, TEXTO_UNIDAD_MAX);
+    };
+    const textoUnidad = p => textoUnidadDe(p.texto_unidad);
+    const textoPrecio = p => textoUnidad(p) === TEXTO_UNIDAD ? 'PRECIO' : 'COMPRA ' + textoUnidad(p);
+    const cantGlobal = () => Math.max(2, parseInt(document.getElementById('etq-cant-mayor').value, 10) || 3);
+    const cantDe = p => (p.piezas ? Math.max(2, Math.min(999, parseInt(p.piezas, 10) || 0)) : 0) || cantGlobal();
     const tieneMayor = p => {
-        const u = ceilPrecio(p.precio_unidad);
-        const m = ceilPrecio(p.precio_mayor);
+        const u = pu(p);
+        const m = pm(p);
         return m > 0 && (u <= 0 || m < u);
     };
 
@@ -497,7 +537,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
             <div class="etq-res">
                 <div>
                     <div class="etq-res-name">${esc(p.nombre)}</div>
-                    <div class="etq-res-meta"><code>${esc(p.codigo)}</code> · 1 pza <b>REF ${fmt(p.precio_unidad)}</b>${tieneMayor(p) ? ` · mayor <b>REF ${fmt(p.precio_mayor)}</b>` : ''}</div>
+                    <div class="etq-res-meta"><code>${esc(p.codigo)}</code> · 1 pza <b>REF ${fmt(pu(p))}</b>${tieneMayor(p) ? ` · mayor <b>REF ${fmt(pm(p))}</b>` : ''}</div>
                 </div>
                 <button type="button" class="btn primary etq-btn-sm" data-add="${p.id}">➕ Agregar</button>
             </div>`).join('');
@@ -546,11 +586,57 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
             $body.innerHTML = lista.map((p, i) => `
                 <tr class="${p.id === ultimoAgregado ? 'etq-row-new' : ''}">
                     <td><div style="font-weight:600;">${esc(p.nombre)}</div><div style="font-size:.74rem; color:#64748b;">${esc(p.codigo)}</div></td>
-                    <td style="text-align:right; font-weight:600; color:#16a34a;">${fmt(p.precio_unidad)}</td>
-                    <td style="text-align:right; font-weight:600; color:#7c3aed;">${tieneMayor(p) ? fmt(p.precio_mayor) : (Number(p.precio_mayor) > 0 ? `<span style="color:#94a3b8; font-weight:500;" title="Mismo precio que 1 pza: la etiqueta lleva un solo precio">igual · ${fmt(p.precio_mayor)}</span>` : '—')}</td>
+                    <td style="text-align:right;">
+                        <input type="text" class="etq-texto-u ${p.texto_unidad ? 'editado' : ''}" maxlength="${TEXTO_UNIDAD_MAX}" value="${esc(p.texto_unidad || '')}" placeholder="${TEXTO_UNIDAD}" data-texto="${i}"
+                            title="Lo que dice la caja del primer precio (COMPRA 1 PZA). Escribe un número (2 → 2 PZAS) o un texto: PAR, DOCENA, CAJA…">
+                        <input type="text" inputmode="decimal" class="etq-precio u ${manual(p.manual_unidad) !== null ? 'editado' : ''}" value="${enCampo(pu(p))}" data-precio="manual_unidad" data-i="${i}"
+                            title="Precio del sistema: ${fmt(ceilPrecio(p.precio_unidad))}">
+                    </td>
+                    <td style="text-align:right;">
+                        <label class="etq-pz-wrap ${p.piezas ? 'editado' : ''}" title="Piezas desde las que aplica el precio al mayor (vacío: ${cantGlobal()})">
+                            <input type="number" class="etq-piezas" min="2" max="999" value="${p.piezas || ''}" placeholder="${cantGlobal()}" data-piezas="${i}"><span>+ PZAS</span>
+                        </label>
+                        <input type="text" inputmode="decimal" class="etq-precio m ${manual(p.manual_mayor) !== null ? 'editado' : ''}" value="${enCampo(pm(p))}" placeholder="—" data-precio="manual_mayor" data-i="${i}"
+                            title="Precio del sistema: ${fmt(ceilPrecio(p.precio_mayor))}. Pon 0 para no mostrar precio al mayor.">
+                        ${pm(p) > 0 && !tieneMayor(p) ? '<div class="etq-igual" title="Igual o mayor que 1 pza: la etiqueta lleva un solo precio">igual · un solo precio</div>' : ''}
+                    </td>
                     <td style="text-align:center;"><input type="number" min="1" max="100" value="${p.copias}" data-copias="${i}"></td>
-                    <td><button type="button" class="etq-quitar" title="Quitar" data-quitar="${i}">✕</button></td>
+                    <td style="white-space:nowrap;">
+                        ${editado(p) ? `<button type="button" class="etq-quitar etq-restablecer" title="Volver a los precios y piezas del sistema" data-restablecer="${i}">↺</button>` : ''}
+                        <button type="button" class="etq-quitar" title="Quitar" data-quitar="${i}">✕</button>
+                    </td>
                 </tr>${esPc ? filaSpecs(p, i) : ''}`).join('');
+            $body.querySelectorAll('[data-precio]').forEach(inp => inp.addEventListener('change', () => {
+                const item = lista[Number(inp.dataset.i)];
+                const sistema = ceilPrecio(inp.dataset.precio === 'manual_unidad' ? item.precio_unidad : item.precio_mayor);
+                const v = manual(inp.value);
+                item[inp.dataset.precio] = v === null || v === sistema ? null : v;
+                ultimoAgregado = item.id;
+                guardar();
+            }));
+            $body.querySelectorAll('[data-texto]').forEach(inp => inp.addEventListener('change', () => {
+                const item = lista[Number(inp.dataset.texto)];
+                const t = textoUnidadDe(inp.value);
+                item.texto_unidad = t === TEXTO_UNIDAD ? null : t;
+                ultimoAgregado = item.id;
+                guardar();
+            }));
+            $body.querySelectorAll('[data-piezas]').forEach(inp => inp.addEventListener('change', () => {
+                const item = lista[Number(inp.dataset.piezas)];
+                const v = parseInt(inp.value, 10);
+                item.piezas = v >= 2 ? Math.min(999, v) : null;
+                ultimoAgregado = item.id;
+                guardar();
+            }));
+            $body.querySelectorAll('[data-restablecer]').forEach(btn => btn.addEventListener('click', () => {
+                const item = lista[Number(btn.dataset.restablecer)];
+                item.manual_unidad = null;
+                item.manual_mayor = null;
+                item.piezas = null;
+                item.texto_unidad = null;
+                ultimoAgregado = item.id;
+                guardar();
+            }));
             $body.querySelectorAll('[data-releer]').forEach(btn => btn.addEventListener('click', () => {
                 const item = lista[Number(btn.dataset.releer)];
                 item.specs = null;
@@ -590,12 +676,16 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         const esPc = conSpecs(tipoActual());
         document.getElementById('etq-form-items').innerHTML = lista.map((p, i) =>
             `<input type="hidden" name="items[${i}][id]" value="${p.id}"><input type="hidden" name="items[${i}][copias]" value="${p.copias}">`
+            + (manual(p.manual_unidad) !== null ? `<input type="hidden" name="items[${i}][precio_unidad]" value="${manual(p.manual_unidad)}">` : '')
+            + (manual(p.manual_mayor) !== null ? `<input type="hidden" name="items[${i}][precio_mayor]" value="${manual(p.manual_mayor)}">` : '')
+            + `<input type="hidden" name="items[${i}][cantidad_mayor]" value="${cantDe(p)}">`
+            + (p.texto_unidad ? `<input type="hidden" name="items[${i}][texto_unidad]" value="${esc(p.texto_unidad)}">` : '')
             + (esPc && p.specs ? SPECS.map(c => `<input type="hidden" name="items[${i}][specs][${c}]" value="${esc(p.specs[c] || '')}">`).join('') : '')
         ).join('');
     }
 
     function previewLocura(p) {
-        const cant = Math.max(2, parseInt(document.getElementById('etq-cant-mayor').value, 10) || 3);
+        const cant = cantDe(p);
         const marca = ((p.specs || {}).marca || '').trim();
         const lk = logoKey(p);
         const caja = lk
@@ -613,8 +703,8 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
                 </div>
                 <div class="etq-lz-der">
                     <span class="etq-lz-pill">PRECIO</span>
-                    <div class="etq-lz-precio"><small>REF</small><strong>${fmt(p.precio_unidad)}</strong></div>
-                    ${tieneMayor(p) ? `<div class="etq-lz-mayor">${cant}+ PZAS: REF ${fmt(p.precio_mayor)} C/U</div>` : ''}
+                    <div class="etq-lz-precio"><small>REF</small><strong>${fmt(pu(p))}</strong></div>
+                    ${tieneMayor(p) ? `<div class="etq-lz-mayor">${cant}+ PZAS: REF ${fmt(pm(p))} C/U</div>` : ''}
                     <div class="etq-lz-nombre">${esc(p.nombre)}</div>
                     <div class="etq-lz-web">${esc(WEB)} · ${FECHA}</div>
                 </div>
@@ -624,7 +714,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
     function previewPc(p) {
         const s = p.specs || {};
         const marca = (s.marca || '').trim() || (p.nombre.split(' ')[0] || '').toUpperCase();
-        const entero = ceilPrecio(p.precio_unidad);
+        const entero = Math.round(pu(p));
         const lleno = c => (s[c] || '').trim() !== '';
         const izq = ['modelo', 'procesador', 'grafica', 'pantalla'].filter(lleno);
         const der3 = ['ram', 'almacenamiento', 'sistema'].filter(lleno);
@@ -678,8 +768,8 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
                fila('pantalla', 'Pantalla', v('pantalla').replace(/^pantalla\s+/i, '')), memoria ? { icono: 'ram', html: memoria } : null, fila('windows', 'OS', v('sistema'))]
         ).filter(Boolean).slice(0, 6);
         if (!filas.length) filas = [{ icono: esCel ? 'celular' : 'laptop', html: esc(p.nombre) }];
-        const promo = ceilPrecio(p.precio_unidad);
-        const regular = ceilPrecio(promo * (1 + recargo() / 100));
+        const promo = Math.round(pu(p));
+        const regular = ceilPrecio(pu(p) * (1 + recargo() / 100));
         const filaH = Math.min(6.9, (38.7 - 4.4) / filas.length);
         const icoPct = Math.min(6.4, filaH - 0.3) / base.ancho * 100;
         const filasHtml = filas.map(f => `<div class="fila" style="height:${filaH / 38.7 * 100}%;"><img src="${ICONO_TH(f.icono)}" alt="" style="width:${icoPct}cqw; height:${icoPct}cqw;"><span style="padding-left:1.8cqw;">${f.html}</span></div>`).join('');
@@ -700,21 +790,22 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 
     function previewThClasica(p) {
         const base = MEDIDAS_DEFECTO.th_clasica;
-        const cant = Math.max(2, parseInt(document.getElementById('etq-cant-mayor').value, 10) || 3);
-        const unidad = Number(p.precio_unidad);
-        const mayor = Number(p.precio_mayor);
+        const cant = cantDe(p);
+        const unidad = pu(p);
+        const mayor = pm(p);
         const ahorro = tieneMayor(p) && unidad > 0 ? Math.round((1 - mayor / unidad) * 100) : 0;
         const nomPt = p.nombre.length <= 26 ? 10 : (p.nombre.length <= 52 ? 8.5 : 7);
         let precios;
         if (tieneMayor(p)) {
             const colW = (64 - 2.4) / 2;
-            precios = [[3, '1 PZA', fmt(unidad), '#0b1f4d'], [3 + colW + 2.4, `${cant}+ PZAS`, fmt(mayor), '#7e22ce']].map(([x, txt, valor, color], i) =>
+            precios = [[3, esc(textoUnidad(p)), fmt(unidad), '#0b1f4d'], [3 + colW + 2.4, `${cant}+ PZAS`, fmt(mayor), '#7e22ce']].map(([x, txt, valor, color], i) =>
                 thCaja(base, x + 2.5, 22.2, colW - 5, 7.6, 'cab', `font-size:${thFs(base, 7.5)};`, `COMPRA<em>${txt}</em>`)
                 + thCaja(base, x, 29.8, colW, 14.8, 'blanco precio', `font-size:${thFs(base, 18)}; color:${color};`, `<small style="font-size:${thFs(base, 4.6)};">REF</small>${valor}`
                     + (i === 1 && ahorro > 0 ? `<i style="position:absolute; bottom:6%; left:0; width:100%; text-align:center; font-style:normal; font-size:${thFs(base, 4.8)}; color:#c026d3;">¡AHORRAS ${ahorro}% C/U!</i>` : ''))
             ).join('');
         } else {
-            precios = thCaja(base, 22, 22.8, 26, 6, 'cab', `font-size:${thFs(base, 9)}; letter-spacing:.12em;`, 'PRECIO')
+            const conTexto = textoPrecio(p) !== 'PRECIO';
+            precios = thCaja(base, conTexto ? 15 : 22, 22.8, conTexto ? 40 : 26, 6, 'cab', `font-size:${thFs(base, conTexto ? 7.5 : 9)}; letter-spacing:${conTexto ? '.02em' : '.12em'};`, esc(textoPrecio(p)))
                 + thCaja(base, 13, 28.8, 44, 15.8, 'blanco precio', `font-size:${thFs(base, 26)};`, `<small style="font-size:${thFs(base, 4.6)};">REF</small>${fmt(unidad)}`);
         }
         return `
@@ -772,14 +863,14 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         if (tipo === 'pc') { cont.innerHTML = previewPc(p); return; }
         if (tipo === 'th_pc' || tipo === 'th_cel') { cont.innerHTML = previewTh(p, tipo); return; }
         if (tipo === 'th_clasica') { cont.innerHTML = previewThClasica(p); return; }
-        const cant = Math.max(2, parseInt(document.getElementById('etq-cant-mayor').value, 10) || 3);
-        const unidad = Number(p.precio_unidad);
-        const mayor = Number(p.precio_mayor);
+        const cant = cantDe(p);
+        const unidad = pu(p);
+        const mayor = pm(p);
         const ahorro = tieneMayor(p) && unidad > 0 ? Math.round((1 - mayor / unidad) * 100) : 0;
         const precios = tieneMayor(p)
-            ? `<div class="etq-card-box"><div class="h">COMPRA<br><em>1 PZA</em></div><div class="p"><small>REF</small><strong>${fmt(unidad)}</strong></div></div>
+            ? `<div class="etq-card-box"><div class="h">COMPRA<br><em>${esc(textoUnidad(p))}</em></div><div class="p"><small>REF</small><strong>${fmt(unidad)}</strong></div></div>
                <div class="etq-card-box mayor"><div class="h">COMPRA<br><em>${cant}+ PZAS</em></div><div class="p"><small>REF</small><strong>${fmt(mayor)}</strong></div>${ahorro > 0 ? `<div class="ahorro">¡AHORRAS ${ahorro}% C/U!</div>` : ''}</div>`
-            : `<div class="etq-card-box"><div class="h" style="letter-spacing:.12em;">PRECIO</div><div class="p"><small>REF</small><strong>${fmt(unidad)}</strong></div></div>`;
+            : `<div class="etq-card-box"><div class="h" style="letter-spacing:${textoPrecio(p) === 'PRECIO' ? '.12em' : '.03em'};">${esc(textoPrecio(p))}</div><div class="p"><small>REF</small><strong>${fmt(unidad)}</strong></div></div>`;
         cont.innerHTML = `
             <div class="etq-card" style="${tamanoPreview('clasica')}">
                 <div class="etq-card-top">
@@ -812,7 +903,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         const q = $q.value.trim();
         debounce = setTimeout(() => buscar(q, false), 350);
     });
-    document.getElementById('etq-cant-mayor').addEventListener('input', pintarPreview);
+    document.getElementById('etq-cant-mayor').addEventListener('input', render);
     const temaGuardado = localStorage.getItem(TEMA_KEY);
     if (temaGuardado) {
         const radio = document.querySelector(`input[name="tema"][value="${temaGuardado}"]`);

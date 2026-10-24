@@ -28,6 +28,10 @@ class EtiquetasPrecioService
     /** Tecno House: el precio del sistema es la promo en divisa; el regular lleva este recargo (%). */
     public const RECARGO_REGULAR = 10;
 
+    public const TEXTO_UNIDAD = '1 PZA';
+
+    public const TEXTO_UNIDAD_MAX = 14;
+
     public const MEDIDA_MIN = ['ancho' => 40, 'alto' => 30];
 
     public const MEDIDA_MAX = ['ancho' => 200, 'alto' => 260];
@@ -123,7 +127,9 @@ class EtiquetasPrecioService
     }
 
     /**
-     * @param  list<array{id: int, copias: int, specs?: array<string, ?string>}>  $items
+     * Precios y piezas del mayor ajustados a mano en la lista reemplazan los del sistema solo en la etiqueta.
+     *
+     * @param  list<array{id: int, copias: int, specs?: array<string, ?string>, precio_unidad?: ?float, precio_mayor?: ?float, cantidad_mayor?: ?int}>  $items
      * @return list<array<string, mixed>>  Una entrada por etiqueta a imprimir, en el orden de la lista.
      */
     public function armarEtiquetas(array $items, int $cantidadMayor, float $recargoRegular = self::RECARGO_REGULAR): array
@@ -144,7 +150,15 @@ class EtiquetasPrecioService
             if (! $producto) {
                 continue;
             }
-            $ficha = $this->ficha($producto, $cantidadMayor, $recargoRegular);
+            $manual = [];
+            foreach (['precio_unidad', 'precio_mayor'] as $campo) {
+                if (isset($item[$campo]) && is_numeric($item[$campo])) {
+                    $manual[$campo] = round(max(0, (float) $item[$campo]), 2);
+                }
+            }
+            $cantidad = isset($item['cantidad_mayor']) && (int) $item['cantidad_mayor'] >= 2 ? (int) $item['cantidad_mayor'] : $cantidadMayor;
+            $ficha = $this->ficha($producto, $cantidad, $recargoRegular, $manual);
+            $ficha['texto_unidad'] = $this->textoUnidad($item['texto_unidad'] ?? null);
             $ficha['specs'] = $this->specsFinales($producto['nombre'], $item['specs'] ?? null);
             $ficha['logo_marca'] = $this->logoMarca($ficha['specs'], $producto['nombre']);
             $copias = max(1, min(100, (int) $item['copias']));
@@ -160,10 +174,13 @@ class EtiquetasPrecioService
      * @param  array<string, mixed>  $producto
      * @return array<string, mixed>
      */
-    public function ficha(array $producto, int $cantidadMayor, float $recargoRegular = self::RECARGO_REGULAR): array
+    /**
+     * @param  array{precio_unidad?: float, precio_mayor?: float}  $manual  precios escritos a mano: van tal cual, sin redondear
+     */
+    public function ficha(array $producto, int $cantidadMayor, float $recargoRegular = self::RECARGO_REGULAR, array $manual = []): array
     {
-        $unidad = $this->redondearArriba((float) $producto['precio_unidad']);
-        $mayor = $this->redondearArriba((float) $producto['precio_mayor']);
+        $unidad = $manual['precio_unidad'] ?? $this->redondearArriba((float) $producto['precio_unidad']);
+        $mayor = $manual['precio_mayor'] ?? $this->redondearArriba((float) $producto['precio_mayor']);
         $regular = $this->redondearArriba($unidad * (1 + max(0, $recargoRegular) / 100));
         // Solo mostrar mayor si, ya redondeados, sigue siendo más barato.
         $conMayor = $mayor > 0 && ($unidad <= 0 || $mayor < $unidad);
@@ -178,9 +195,26 @@ class EtiquetasPrecioService
             'unidad_fmt' => $this->formatoPrecio($unidad),
             'mayor_fmt' => $this->formatoPrecio($mayor),
             'unidad_entero_fmt' => $this->formatoPrecioEntero($unidad),
+            'texto_unidad' => self::TEXTO_UNIDAD,
             'precio_regular' => $regular,
             'regular_entero_fmt' => $this->formatoPrecioEntero($regular),
         ]);
+    }
+
+    /**
+     * Texto de la caja del primer precio ("COMPRA 1 PZA"), editable en la lista: "2" → "2 PZAS", "par" → "PAR".
+     */
+    public function textoUnidad(?string $texto): string
+    {
+        $t = mb_strtoupper(trim(preg_replace('/\s+/u', ' ', (string) $texto) ?? ''), 'UTF-8');
+        if ($t === '') {
+            return self::TEXTO_UNIDAD;
+        }
+        if (preg_match('/^\d{1,3}$/', $t)) {
+            return (int) $t === 1 ? self::TEXTO_UNIDAD : (int) $t . ' PZAS';
+        }
+
+        return mb_substr($t, 0, self::TEXTO_UNIDAD_MAX);
     }
 
     /** Precios de etiqueta: siempre hacia arriba al entero (26,66 → 27). */

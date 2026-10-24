@@ -353,7 +353,7 @@
                         $numFsCl = min($fit('thclu', $e['unidad_fmt'], $colW - $m(5), $numTams)['fs'], $fit('thclm', $e['mayor_fmt'], $colW - $m(5), $numTams)['fs']);
                         $numTamsIguales = [$numFsCl];
                     @endphp
-                    @foreach([['1 PZA', $e['unidad_fmt'], $nomL, false], [$txtMayor, $e['mayor_fmt'], $nomL + $colW + $colGap, true]] as [$cant, $valor, $cx, $esMayor])
+                    @foreach([[$e['texto_unidad'] ?? '1 PZA', $e['unidad_fmt'], $nomL, false], [$txtMayor, $e['mayor_fmt'], $nomL + $colW + $colGap, true]] as [$cant, $valor, $cx, $esMayor])
                         {!! $thCabecera($cx + $mx(2.5), $areaT, $colW - 2 * $mx(2.5), $cabH, 'COMPRA', $cant, $fs([8.5, 8, 7.5, 7, 6.5, 6]), 'thclcab') !!}
                         {!! $thPrecio($cx, $areaT + $cabH, $colW, $cajaH, $valor, $numTamsIguales, 'thcl' . ($esMayor ? 'm' : 'u'), $esMayor ? '#7e22ce' : '#0b1f4d') !!}
                         @if($esMayor && $conAhorro)
@@ -362,12 +362,14 @@
                     @endforeach
                 @else
                     @php
-                        $cabW = $mx(26);
+                        $txtUnidadTh = $e['texto_unidad'] ?? '1 PZA';
+                        $txtPrecioTh = $txtUnidadTh === '1 PZA' ? 'PRECIO' : 'COMPRA ' . $txtUnidadTh;
+                        $cabW = $txtPrecioTh === 'PRECIO' ? $mx(26) : $mx(40);
                         $cajaW = $mx(44);
                     @endphp
                     <div class="abs th-cab" style="left: {{ ($W - $cabW) / 2 }}mm; top: {{ $areaT + $my(0.6) }}mm; width: {{ $cabW }}mm; height: {{ $my(6) }}mm;">
-                        @php $fsP = $fit('thclp', 'PRECIO', $cabW - $m(3), $fs([10, 9.5, 9, 8.5, 8]))['fs']; @endphp
-                        <div class="abs" style="top: {{ ($my(6) - $ptMm($fsP)) / 2 + $m(0.15) }}mm; font-size: {{ $fsP }}pt; letter-spacing: 1.2pt;">PRECIO</div>
+                        @php $fsP = $fit('thclp' . $txtPrecioTh, $txtPrecioTh, $cabW - $m(3), $fs([10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5]))['fs']; @endphp
+                        <div class="abs" style="top: {{ ($my(6) - $ptMm($fsP)) / 2 + $m(0.15) }}mm; font-size: {{ $fsP }}pt; letter-spacing: {{ $txtPrecioTh === 'PRECIO' ? 1.2 : 0.3 }}pt;">{{ $txtPrecioTh }}</div>
                     </div>
                     {!! $thPrecio(($W - $cajaW) / 2, $areaT + $my(6.6), $cajaW, $areaH - $my(6.6), $e['unidad_fmt'], $fs([28, 26, 24, 22, 20, 18, 16, 14]), 'thcls') !!}
                 @endif
@@ -500,11 +502,14 @@
                 @php
                     $nom = $ajustar('cl' . $e['id'], $e['nombre'], $nomAnchoTxt, $nomAltoTxt, $fs([11, 10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5, 6]));
                     $conAhorro = $e['con_mayor'] && $e['ahorro_pct'] > 0;
+                    $txtUnidad = $e['texto_unidad'] ?? '1 PZA';
+                    $txtPrecio = $txtUnidad === '1 PZA' ? 'PRECIO' : 'COMPRA ' . $txtUnidad;
                     if ($e['con_mayor']) {
                         $headH = $headH2;
                         $txtMayor = $e['cantidad_mayor'] . '+ PZAS';
                         $hFs = min(
                             $fit('cabc', 'COMPRA', $boxW - $m(2), $cabFs)['fs'],
+                            $fit('cabu' . $txtUnidad, $txtUnidad, $boxW - $m(2), $cabFs)['fs'],
                             $fit('cabm' . $txtMayor, $txtMayor, $boxW - $m(2), $cabFs)['fs'],
                         );
                         $hLinea = $ptMm($hFs) * 1.08;
@@ -514,7 +519,7 @@
                         $numFs = min($pu['fs'], $pm['fs']);
                     } else {
                         $headH = $headH1;
-                        $hFs = $fit('cabs', 'PRECIO', $inW - $m(4), $cabFs)['fs'];
+                        $hFs = $fit('cabs' . $txtPrecio, $txtPrecio, $inW - $m(4), $cabFs)['fs'];
                         $hTop = max($m(0.4), ($headH - $ptMm($hFs)) / 2 + $m(0.2));
                         $numFs = $fit('cls', $e['unidad_fmt'], $inW - $m(8), $fs([30, 28, 26, 24, 22, 20, 18]))['fs'];
                     }
@@ -532,7 +537,7 @@
                 </div>
 
                 @if($e['con_mayor'])
-                    @foreach([['1 PZA', $e['unidad_fmt'], $pad, false], [$txtMayor, $e['mayor_fmt'], $pad + $boxW + $boxGap, true]] as [$cant, $valor, $bx, $esMayor])
+                    @foreach([[$txtUnidad, $e['unidad_fmt'], $pad, false], [$txtMayor, $e['mayor_fmt'], $pad + $boxW + $boxGap, true]] as [$cant, $valor, $bx, $esMayor])
                         <div class="abs caja blanco {{ $esMayor ? 'mayor' : '' }}" style="left: {{ $bx }}mm; width: {{ $boxW }}mm;">
                             <div class="abs h" style="height: {{ $headH }}mm;">
                                 <div class="abs" style="top: {{ $hTop }}mm; font-size: {{ $hFs }}pt;">COMPRA</div>
@@ -549,7 +554,7 @@
                 @else
                     <div class="abs caja blanco" style="left: {{ $pad }}mm; width: {{ $inW }}mm;">
                         <div class="abs h" style="height: {{ $headH }}mm;">
-                            <div class="abs" style="top: {{ $hTop }}mm; font-size: {{ $hFs }}pt; letter-spacing: 1.2pt;">PRECIO</div>
+                            <div class="abs" style="top: {{ $hTop }}mm; font-size: {{ $hFs }}pt; letter-spacing: {{ $txtPrecio === 'PRECIO' ? 1.2 : 0.3 }}pt;">{{ $txtPrecio }}</div>
                         </div>
                         <div class="abs ref" style="top: {{ $headH + $m(0.8) }}mm;">REF</div>
                         <div class="abs num" style="top: {{ $numTop }}mm; font-size: {{ $numFs }}pt;">{{ $e['unidad_fmt'] }}</div>

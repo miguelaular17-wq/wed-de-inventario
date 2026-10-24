@@ -309,6 +309,46 @@ class EtiquetasPrecioTest extends TestCase
         ])->assertSessionHasErrors('recargo_regular');
     }
 
+    public function test_precios_y_piezas_ajustados_en_la_lista_reemplazan_los_del_sistema(): void
+    {
+        $svc = new EtiquetasPrecioService();
+        $fichas = $svc->armarEtiquetas([
+            ['id' => 1, 'copias' => 1, 'precio_unidad' => 3.5, 'precio_mayor' => 2.75, 'cantidad_mayor' => 6],
+            ['id' => 2, 'copias' => 1, 'precio_mayor' => 0],
+            ['id' => 3, 'copias' => 1],
+        ], 3);
+
+        $this->assertSame(['3,50', '2,75', true, 6], [$fichas[0]['unidad_fmt'], $fichas[0]['mayor_fmt'], $fichas[0]['con_mayor'], $fichas[0]['cantidad_mayor']]);
+        $this->assertSame(21, $fichas[0]['ahorro_pct']);
+        $this->assertFalse($fichas[1]['con_mayor']);
+        $this->assertSame('5,00', $fichas[1]['unidad_fmt']);
+        $this->assertSame(['2,00', 3], [$fichas[2]['unidad_fmt'], $fichas[2]['cantidad_mayor']]);
+
+        $this->post(route('etiquetas.pdf'), [
+            'items' => [['id' => 1, 'copias' => 1, 'precio_unidad' => '3.5', 'precio_mayor' => '2.75', 'cantidad_mayor' => 6]],
+            'tipo' => 'clasica',
+        ])->assertOk()->assertHeader('content-type', 'application/pdf');
+
+        $this->post(route('etiquetas.pdf'), [
+            'items' => [['id' => 1, 'copias' => 1, 'cantidad_mayor' => 1]],
+        ])->assertSessionHasErrors('items.0.cantidad_mayor');
+
+        $this->assertSame(['1 PZA', '1 PZA', '2 PZAS', 'PAR', 'MEDIA DOCENA'], array_map([$svc, 'textoUnidad'], [null, '1', '2', ' par ', 'media  docena']));
+        $con = $svc->armarEtiquetas([['id' => 1, 'copias' => 1, 'texto_unidad' => '2']], 3);
+        $this->assertSame('2 PZAS', $con[0]['texto_unidad']);
+        $this->assertSame('1 PZA', $fichas[2]['texto_unidad']);
+
+        foreach (['clasica', 'th_clasica'] as $tipo) {
+            $this->post(route('etiquetas.pdf'), [
+                'items' => [['id' => 1, 'copias' => 1, 'texto_unidad' => 'DOCENA', 'precio_mayor' => '1.5'], ['id' => 3, 'copias' => 1, 'texto_unidad' => '2']],
+                'tipo' => $tipo,
+            ])->assertOk()->assertHeader('content-type', 'application/pdf');
+        }
+        $this->post(route('etiquetas.pdf'), [
+            'items' => [['id' => 1, 'copias' => 1, 'texto_unidad' => str_repeat('X', 20)]],
+        ])->assertSessionHasErrors('items.0.texto_unidad');
+    }
+
     public function test_genera_pdf_con_toque_de_halloween_y_navidad(): void
     {
         foreach (['halloween', 'navidad'] as $tema) {
