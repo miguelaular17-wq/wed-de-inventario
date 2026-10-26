@@ -41,6 +41,30 @@ class ExtractoParserTest extends TestCase
         $this->assertNull($this->parser->normalizarMonto('12-34'));
     }
 
+    public function test_lee_el_xls_de_banesco_que_en_realidad_es_una_tabla_html(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'bn') . '.xls';
+        file_put_contents($tmp, "<table border='2'><tr><td><b>Fecha</b></td><td><b>Referencia</b></td><td><b>Descripción</b></td><td><b>Monto</b></td><td><b>Balance</b></td></tr>"
+            . "<tr><td>2026/08/03</td><td>21517002254</td><td>COMPRA POS CTA/CTE   </td><td>-59.486,27</td><td>2.302.615,89</td></tr>"
+            . "<tr><td>2026/08/03</td><td>00000000915</td><td>TD 0001425125 000915 31/07/26 0037417107</td><td>+6.761,24</td><td>2.309.377,13</td></tr></table>");
+
+        $filas = iterator_to_array($this->parser->filas($tmp, 'xls', 'BANESCO'), false);
+        @unlink($tmp);
+
+        $this->assertCount(2, $filas);
+        $this->assertSame(['2026-08-03', 'COMPRA POS CTA/CTE', '21517002254', '59486.27', 'cargo'], array_values($filas[0]['datos']));
+        $this->assertSame(['abono', '6761.24'], [$filas[1]['datos']['tipo'], $filas[1]['datos']['monto']]);
+        $this->assertSame('Descripción', iterator_to_array($this->parser->filasCrudas($this->html(), 'xls'), false)[0][2]);
+    }
+
+    private function html(): string
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'bh') . '.xls';
+        file_put_contents($tmp, "\xEF\xBB\xBF  <table><tr><th>Fecha</th><th>Ref</th><th>Descripción</th></tr></table>");
+
+        return $tmp;
+    }
+
     public function test_normaliza_fechas_de_texto_y_seriales_de_excel(): void
     {
         $this->assertSame('2026-08-03', $this->parser->normalizarFecha('03/08/2026'));

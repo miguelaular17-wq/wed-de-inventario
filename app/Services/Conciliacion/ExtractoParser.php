@@ -311,6 +311,11 @@ class ExtractoParser
      */
     private function leerFilas(string $path, string $ext, bool $csvSemicolon): iterable
     {
+        // Banesco (y otros portales) exportan una tabla HTML con extensión .xls: Excel la abre igual.
+        if ($ext !== 'xlsx' && $this->esTablaHtml($path)) {
+            return $this->leerTablaHtml($path);
+        }
+
         if ($ext === 'xlsx') {
             $xlsx = SimpleXLSX::parse($path);
             if (! $xlsx) {
@@ -331,6 +336,57 @@ class ExtractoParser
         }
 
         return $this->leerCsv($path, $csvSemicolon);
+    }
+
+    private function esTablaHtml(string $path): bool
+    {
+        $inicio = (string) @file_get_contents($path, false, null, 0, 4096);
+        $inicio = ltrim(preg_replace('/^\xEF\xBB\xBF/', '', $inicio) ?? $inicio);
+
+        return str_starts_with($inicio, '<') && preg_match('/<table\b/i', $inicio) === 1;
+    }
+
+    /**
+     * Filas de una tabla HTML (<tr>/<td>), con el texto de cada celda limpio.
+     *
+     * @return list<list<string>>
+     */
+    private function leerTablaHtml(string $path): array
+    {
+        $html = (string) file_get_contents($path);
+        if (! mb_check_encoding($html, 'UTF-8')) {
+            $html = mb_convert_encoding($html, 'UTF-8', 'Windows-1252');
+        }
+
+        $dom = new \DOMDocument();
+        $previo = libxml_use_internal_errors(true);
+        try {
+            $ok = $dom->loadHTML('<?xml encoding="UTF-8"><meta http-equiv="Content-Type" content="text/html; charset=utf-8">' . $html, LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_PARSEHUGE);
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previo);
+        }
+        if (! $ok) {
+            throw new FormatoExtractoException('El archivo (.xls) es una tabla HTML que no se pudo leer.');
+        }
+
+        $filas = [];
+        foreach ($dom->getElementsByTagName('tr') as $tr) {
+            $fila = [];
+            foreach ($tr->childNodes as $celda) {
+                if (! $celda instanceof \DOMElement || ! in_array(strtolower($celda->nodeName), ['td', 'th'], true)) {
+                    continue;
+                }
+                $texto = trim(preg_replace('/[\s\x{00A0}]+/u', ' ', $celda->textContent) ?? '');
+                $fila[] = $texto;
+                for ($c = (int) $celda->getAttribute('colspan'); $c > 1; $c--) {
+                    $fila[] = '';
+                }
+            }
+            $filas[] = $fila;
+        }
+
+        return $filas;
     }
 
     /**
