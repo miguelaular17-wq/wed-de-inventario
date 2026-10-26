@@ -82,41 +82,54 @@
                 <button type="submit" class="btn nexo-login-submit">Entrar a Nexo PD</button>
             </form>
 
+            @if(collect(app(\App\Services\AccesosService::class)->clavesInvitado())->contains(fn ($c) => app(\App\Services\AccesosService::class)->accesoRapidoActivo($c)))
             <div class="nexo-login-quick">
                 <p>Acceso rápido</p>
                 <div class="nexo-login-quick-row">
+                    @accesoRapido('rapido_existencias')
                     <a href="{{ route('vendedor.dashboard') }}" class="nexo-login-chip">
                         <span class="nexo-login-chip-icon" aria-hidden="true">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
                         </span>
                         <span class="nexo-login-chip-label">Existencias</span>
                     </a>
+                    @endaccesoRapido
+                    @accesoRapido('rapido_q_pedir')
                     <button type="button" id="btn-q-pedir" class="nexo-login-chip">
                         <span class="nexo-login-chip-icon" aria-hidden="true">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                         </span>
                         <span class="nexo-login-chip-label">Q Pedir</span>
                     </button>
+                    @endaccesoRapido
+                    @accesoRapido('rapido_servicio')
                     <a href="{{ route('servicio.celulares.hub') }}" class="nexo-login-chip">
                         <span class="nexo-login-chip-icon" aria-hidden="true">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
                         </span>
                         <span class="nexo-login-chip-label">Servicio técnico</span>
                     </a>
+                    @endaccesoRapido
+                    @accesoRapido('rapido_lector_qr')
                     <a href="{{ route('lector_qr.index') }}" class="nexo-login-chip nexo-login-chip-qr">
                         <span class="nexo-login-chip-icon" aria-hidden="true">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><path d="M14 14h3v3h-3z"></path><path d="M18 14h3"></path><path d="M18 17h3"></path><path d="M14 20h7"></path></svg>
                         </span>
                         <span class="nexo-login-chip-label">Lector QR</span>
                     </a>
+                    @endaccesoRapido
+                    @accesoRapido('rapido_etiquetas')
                     <a href="{{ route('etiquetas.index') }}" class="nexo-login-chip nexo-login-chip-etq">
                         <span class="nexo-login-chip-icon" aria-hidden="true">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
                         </span>
                         <span class="nexo-login-chip-label">Sacar etiquetas</span>
                     </a>
+                    @endaccesoRapido
                 </div>
             </div>
+
+            @endif
 
             <div class="auth-footer nexo-login-footer">
                 ¿No tienes cuenta? <a href="{{ route('register') }}">Regístrate aquí</a>

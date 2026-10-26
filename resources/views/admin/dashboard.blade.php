@@ -7,9 +7,11 @@
     <h1 style="margin-top:0;">Panel de administración</h1>
     <p class="muted">Gestión multisede: importación de stock y auditoría de movimientos.</p>
     @if(auth()->user()?->isGerente() || auth()->user()?->role === 'admin')
-        <p style="margin:12px 0 0;">
-            <a href="{{ route('gerencial.dashboard') }}" class="btn primary">Ver ventas por sede</a>
-        </p>
+        @accesible('gerencial.dashboard')
+            <p style="margin:12px 0 0;">
+                <a href="{{ route('gerencial.dashboard') }}" class="btn primary">Ver ventas por sede</a>
+            </p>
+        @endaccesible
     @endif
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:20px 0;">
@@ -38,7 +40,9 @@
             <h3 style="margin:0;color:#1e293b;font-size:1.1rem;font-weight:600;display:flex;align-items:center;gap:8px;">
                 <span>📊</span> Niveles de Existencia Total por Sede
             </h3>
-            <a href="{{ route('vendedor.jrz', ['dias' => 30]) }}" class="btn primary" style="white-space:nowrap;">Ver stock JRZ</a>
+            @accesible('vendedor.jrz')
+                <a href="{{ route('vendedor.jrz', ['dias' => 30]) }}" class="btn primary" style="white-space:nowrap;">Ver stock JRZ</a>
+            @endaccesible
         </div>
         <p class="muted" style="margin:0 0 12px;font-size:0.85rem;">Haz clic en una barra para abrir el catálogo con existencias y ventas por sede.</p>
         <div style="position:relative;height:280px;width:100%;">

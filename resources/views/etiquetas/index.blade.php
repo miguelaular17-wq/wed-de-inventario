@@ -266,6 +266,8 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 .etq-card-box .p { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; }
 .etq-card-box .p small { font-size: 10px; font-weight: 800; color: #64748b; align-self: flex-start; margin-top: 10px; }
 .etq-card-box .p { min-height: 0; }
+.etq-num { display: inline-block; line-height: 1; white-space: nowrap; }
+sup.etq-dec { font-size: .5em; vertical-align: top; position: relative; top: .12em; margin-left: .05em; line-height: 1; }
 .etq-card-box .p strong { font-size: 30px; font-weight: 900; letter-spacing: -.02em; }
 .etq-card-box .ahorro { text-align: center; font-size: 9px; font-weight: 800; color: #be185d; padding-bottom: 3px; }
 .etq-card-foot { display: flex; justify-content: space-between; font-size: 9px; opacity: .95; font-weight: 600; }
@@ -418,8 +420,17 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         else if (marca === 'REDMI') k = 'xiaomi';
         else if (marca === 'APPLE' || (marca === '' && /\b(APPLE|MACBOOK|IMAC)\b/.test(texto))) k = 'apple';
         else if (marca) k = marca.toLowerCase();
+        if (!(k && LOGOS[k]) && esChromeOs(p)) k = 'chromeos';
         return k && LOGOS[k] ? k : null;
     }
+    // Igual que EtiquetasPrecioService::logoSistema.
+    function esChromeOs(p) {
+        const sis = ((p.specs || {}).sistema || '').trim().toUpperCase();
+        return /CHROME\s?OS/.test(sis) || (sis === '' && /\bCHROME(BOOK|BASE|BOX|BIT)\b/.test((p.nombre || '').toUpperCase()));
+    }
+    const osHtml = (p, conEtiqueta) => esChromeOs(p) && LOGOS.chromeos
+        ? `${conEtiqueta ? '<b>OS:</b>' : ''}<img src="${LOGOS.chromeos}" alt="ChromeOS" style="height:1.5em; vertical-align:middle; margin-left:${conEtiqueta ? '.4em' : '0'};">`
+        : null;
     const FECHA = @json(now()->format('d/m/Y'));
 
     let lista = [];
@@ -440,15 +451,22 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const ceilPrecio = v => { const n = Number(v); return n > 0 ? Math.ceil(Math.round(n * 100) / 100) : 0; };
-    const fmt = v => { const n = Number(v); return n > 0 ? n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'; };
+    // Igual que EtiquetasPrecioService::formatoPrecio: decimales con punto y miles con coma (1,450.75).
+    const fmt = v => { const n = Number(v); return n > 0 ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'; };
+    // Igual que en el PDF: entero grande y ".00" chico arriba.
+    const sup = txt => { const m = String(txt).match(/^(.*?)(\.\d{1,2})$/); return m ? `<span class="etq-num">${m[1]}<sup class="etq-dec">${m[2]}</sup></span>` : txt; };
     // Precio ajustado a mano en la lista (tal cual se escribió) o el del sistema redondeado hacia arriba.
+    // Acepta "3.50", "3,50", "1,450.75" y "1.450,75": el último separador es el de los decimales.
     const aNumero = v => {
         let s = String(v ?? '').trim().replace(/\s/g, '');
-        if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+        const coma = s.lastIndexOf(',');
+        const punto = s.lastIndexOf('.');
+        if (coma > punto) s = s.replace(/\./g, '').replace(',', '.');
+        else if (coma !== -1) s = s.replace(/,/g, '');
         return s === '' ? NaN : Number(s);
     };
     const manual = v => { const n = aNumero(v); return isNaN(n) ? null : Math.max(0, Math.round(n * 100) / 100); };
-    const enCampo = n => n > 0 ? n.toFixed(2).replace('.', ',') : '';
+    const enCampo = n => n > 0 ? n.toFixed(2) : '';
     const pu = p => manual(p.manual_unidad) ?? ceilPrecio(p.precio_unidad);
     const pm = p => manual(p.manual_mayor) ?? ceilPrecio(p.precio_mayor);
     const editado = p => manual(p.manual_unidad) !== null || manual(p.manual_mayor) !== null || !!p.piezas || !!p.texto_unidad;
@@ -714,7 +732,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
                 </div>
                 <div class="etq-lz-der">
                     <span class="etq-lz-pill">PRECIO</span>
-                    <div class="etq-lz-precio"><small>REF</small><strong>${fmt(pu(p))}</strong></div>
+                    <div class="etq-lz-precio"><small>REF</small><strong>${sup(fmt(pu(p)))}</strong></div>
                     ${tieneMayor(p) ? `<div class="etq-lz-mayor">${textoMayor(p)}: REF ${fmt(pm(p))}${esPaquete(p) ? '' : ' C/U'}</div>` : ''}
                     <div class="etq-lz-nombre">${esc(p.nombre)}</div>
                     <div class="etq-lz-web">${esc(WEB)} · ${FECHA}</div>
@@ -729,7 +747,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         const lleno = c => (s[c] || '').trim() !== '';
         const izq = ['modelo', 'procesador', 'grafica', 'pantalla'].filter(lleno);
         const der3 = ['ram', 'almacenamiento', 'sistema'].filter(lleno);
-        const spec = c => c ? `<div class="etq-pc-spec"><i>${SPEC_ICONO[c]}</i><span>${esc(s[c])}</span></div>` : '<div></div>';
+        const spec = c => c ? `<div class="etq-pc-spec"><i>${SPEC_ICONO[c]}</i><span>${(c === 'sistema' && osHtml(p, false)) || esc(s[c])}</span></div>` : '<div></div>';
         let specs = '';
         for (let f = 0; f < Math.max(izq.length, der3.length); f++) specs += spec(izq[f]) + spec(der3[f]);
         const lk = logoKey(p);
@@ -737,7 +755,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
             <div class="etq-pc" style="${tamanoPreview('pc')}">
                 <div class="etq-pc-izq">
                     <div class="etq-pc-caja"><img src="${LOGO}" alt="" data-logo><b>PRECIO</b><b>REGULAR</b></div>
-                    <div class="etq-pc-pill"><small>REF</small><strong>${entero > 0 ? '$' + entero.toLocaleString('es-VE') : '—'}</strong></div>
+                    <div class="etq-pc-pill"><small>REF</small><strong>${entero > 0 ? '$' + entero.toLocaleString('en-US') : '—'}</strong></div>
                     <div class="etq-pc-pie">Precios en REF<br><span style="font-weight:500;">${FECHA}</span></div>
                 </div>
                 <div class="etq-pc-der">
@@ -757,7 +775,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
     const thLogo = (base, top, alto) => `<img src="${LOGO_TH}" alt="Tecno House" data-logo style="left:50%; transform:translateX(-50%); top:${top / base.alto * 100}%; height:${alto / base.alto * 100}%;">`;
     const thLema = (base, top, pt) => thCaja(base, 0, top, base.ancho, pt * 0.3528 * 1.3, 'lema', `font-size:${thFs(base, pt)};`, '¡Tecnología <em>a tu alcance!</em>');
     const recargo = () => Math.max(0, parseFloat(document.getElementById('etq-recargo').value) || 0);
-    const entero = n => n > 0 ? '$' + n.toLocaleString('es-VE') : '—';
+    const dolar = n => n > 0 ? sup('$' + fmt(n)) : '—';
 
     function previewTh(p, tipo) {
         const base = MEDIDAS_DEFECTO[tipo];
@@ -772,14 +790,15 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         const alm = v('almacenamiento');
         const memoria = [ram ? `<b>Ram:</b> ${esc(ram)}` : '', alm ? `<b>${esCel ? 'Almacenamiento' : 'Disco'}:</b> ${esc(alm)}` : ''].filter(Boolean).join('&nbsp;&nbsp; ');
         const fila = (icono, etiqueta, valor) => valor ? { icono, html: etiqueta ? `<b>${etiqueta}:</b> ${esc(valor)}` : valor } : null;
+        const filaOs = icono => osHtml(p, true) ? { icono, html: osHtml(p, true) } : fila(icono, 'OS', v('sistema'));
         let filas = (esCel
             ? [fila('celular', 'Modelo', modelo), fila('pantalla', 'Pantalla', v('pantalla').replace(/^pantalla\s+/i, '')), memoria ? { icono: 'ram', html: memoria } : null,
-               fila('chip', 'Procesador', v('procesador')), fila('camara', 'Cámara', v('camara')), fila('bateria', 'Batería', v('bateria')), fila('sistema', 'OS', v('sistema'))]
+               fila('chip', 'Procesador', v('procesador')), fila('camara', 'Cámara', v('camara')), fila('bateria', 'Batería', v('bateria')), filaOs('sistema')]
             : [fila('laptop', 'Modelo', modelo), fila('chip', 'Procesador', v('procesador')), fila('grafica', 'Gráfica', v('grafica')),
-               fila('pantalla', 'Pantalla', v('pantalla').replace(/^pantalla\s+/i, '')), memoria ? { icono: 'ram', html: memoria } : null, fila('windows', 'OS', v('sistema'))]
+               fila('pantalla', 'Pantalla', v('pantalla').replace(/^pantalla\s+/i, '')), memoria ? { icono: 'ram', html: memoria } : null, filaOs(/windows/i.test(v('sistema')) ? 'windows' : 'sistema')]
         ).filter(Boolean).slice(0, 6);
         if (!filas.length) filas = [{ icono: esCel ? 'celular' : 'laptop', html: esc(p.nombre) }];
-        const promo = Math.round(pu(p));
+        const promo = pu(p);
         const regular = ceilPrecio(pu(p) * (1 + recargo() / 100));
         const filaH = Math.min(6.9, (38.7 - 4.4) / filas.length);
         const icoPct = Math.min(6.4, filaH - 0.3) / base.ancho * 100;
@@ -789,9 +808,9 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
             <div class="etq-th" style="${tamanoPreview(tipo)}">
                 ${thLogo(base, 3.4, 8)}
                 ${thCaja(base, 10.6, 13.7, 23.6, 7.9, 'cab', `font-size:${thFs(base, 9)};`, 'PROMO<em>EN DIVISA</em>')}
-                ${thCaja(base, 8.8, 21.6, 26.9, 10, 'blanco precio', `font-size:${thFs(base, promo >= 1000 ? 18 : 22)};`, `<small style="font-size:${thFs(base, 4.6)};">REF</small>${entero(promo)}`)}
+                ${thCaja(base, 8.8, 21.6, 26.9, 10, 'blanco precio', `font-size:${thFs(base, promo >= 1000 ? 18 : 22)};`, `<small style="font-size:${thFs(base, 4.6)};">REF</small>${dolar(promo)}`)}
                 ${thCaja(base, 40.3, 16.7, 19.2, 6.7, 'cab', `font-size:${thFs(base, 7)};`, 'PRECIO<em>REGULAR</em>')}
-                ${thCaja(base, 38.4, 23.4, 20.5, 7.9, 'blanco precio', `font-size:${thFs(base, regular >= 1000 ? 13 : 16)};`, `<small style="font-size:${thFs(base, 4.6)};">REF</small>${entero(regular)}`)}
+                ${thCaja(base, 38.4, 23.4, 20.5, 7.9, 'blanco precio', `font-size:${thFs(base, regular >= 1000 ? 13 : 16)};`, `<small style="font-size:${thFs(base, 4.6)};">REF</small>${dolar(regular)}`)}
                 ${marcaHtml ? thCaja(base, 64.4, 23.8, 19.8, 7, 'blanco marca', 'color:#0b1f4d;', marcaHtml) : ''}
                 ${thCaja(base, 8.2, 35, 76, 38.7, 'blanco filas', `font-size:${thFs(base, filas.length > 5 ? 8 : 9)}; border-radius:10px; overflow:visible; padding:0 2.5cqw 0 0;`, filasHtml)}
                 ${thLema(base, 74.9, 10.5)}
@@ -809,7 +828,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         let precios;
         if (tieneMayor(p)) {
             const colW = (64 - 2.4) / 2;
-            precios = [[3, esc(textoUnidad(p)), fmt(unidad), '#0b1f4d'], [3 + colW + 2.4, textoMayor(p), fmt(mayor), '#7e22ce']].map(([x, txt, valor, color], i) =>
+            precios = [[3, esc(textoUnidad(p)), sup(fmt(unidad)), '#0b1f4d'], [3 + colW + 2.4, textoMayor(p), sup(fmt(mayor)), '#7e22ce']].map(([x, txt, valor, color], i) =>
                 thCaja(base, x + 2.5, 22.2, colW - 5, 7.6, 'cab', `font-size:${thFs(base, 7.5)};`, `COMPRA<em>${txt}</em>`)
                 + thCaja(base, x, 29.8, colW, 14.8, 'blanco precio', `font-size:${thFs(base, 18)}; color:${color};`, `<small style="font-size:${thFs(base, 4.6)};">REF</small>${valor}`
                     + (i === 1 && ahorro ? `<i style="position:absolute; bottom:6%; left:0; width:100%; text-align:center; font-style:normal; font-size:${thFs(base, 4.8)}; color:#c026d3; white-space:nowrap;">${ahorro}</i>` : ''))
@@ -817,7 +836,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         } else {
             const conTexto = textoPrecio(p) !== 'PRECIO';
             precios = thCaja(base, conTexto ? 15 : 22, 22.8, conTexto ? 40 : 26, 6, 'cab', `font-size:${thFs(base, conTexto ? 7.5 : 9)}; letter-spacing:${conTexto ? '.02em' : '.12em'};`, esc(textoPrecio(p)))
-                + thCaja(base, 13, 28.8, 44, 15.8, 'blanco precio', `font-size:${thFs(base, 26)};`, `<small style="font-size:${thFs(base, 4.6)};">REF</small>${fmt(unidad)}`);
+                + thCaja(base, 13, 28.8, 44, 15.8, 'blanco precio', `font-size:${thFs(base, 26)};`, `<small style="font-size:${thFs(base, 4.6)};">REF</small>${sup(fmt(unidad))}`);
         }
         return `
             <div class="etq-th" style="${tamanoPreview('th_clasica')}">
@@ -879,9 +898,9 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
         const mayor = pm(p);
         const ahorro = textoAhorro(p);
         const precios = tieneMayor(p)
-            ? `<div class="etq-card-box"><div class="h">COMPRA<br><em>${esc(textoUnidad(p))}</em></div><div class="p"><small>REF</small><strong>${fmt(unidad)}</strong></div></div>
-               <div class="etq-card-box mayor"><div class="h">COMPRA<br><em>${textoMayor(p)}</em></div><div class="p"><small>REF</small><strong>${fmt(mayor)}</strong></div>${ahorro ? `<div class="ahorro">${ahorro}</div>` : ''}</div>`
-            : `<div class="etq-card-box"><div class="h" style="letter-spacing:${textoPrecio(p) === 'PRECIO' ? '.12em' : '.03em'};">${esc(textoPrecio(p))}</div><div class="p"><small>REF</small><strong>${fmt(unidad)}</strong></div></div>`;
+            ? `<div class="etq-card-box"><div class="h">COMPRA<br><em>${esc(textoUnidad(p))}</em></div><div class="p"><small>REF</small><strong>${sup(fmt(unidad))}</strong></div></div>
+               <div class="etq-card-box mayor"><div class="h">COMPRA<br><em>${textoMayor(p)}</em></div><div class="p"><small>REF</small><strong>${sup(fmt(mayor))}</strong></div>${ahorro ? `<div class="ahorro">${ahorro}</div>` : ''}</div>`
+            : `<div class="etq-card-box"><div class="h" style="letter-spacing:${textoPrecio(p) === 'PRECIO' ? '.12em' : '.03em'};">${esc(textoPrecio(p))}</div><div class="p"><small>REF</small><strong>${sup(fmt(unidad))}</strong></div></div>`;
         cont.innerHTML = `
             <div class="etq-card" style="${tamanoPreview('clasica')}">
                 <div class="etq-card-top">

@@ -37,7 +37,7 @@
                     <th>Categoría</th>
                     <th>Subcategoría</th>
                     @foreach($sedes as $sede)
-                        <th style="text-align:right;">{{ $sede }}</th>
+                        <th style="text-align:right;">{{ config('inventario.display.' . $sede, $sede) }}</th>
                     @endforeach
                     <th style="text-align:right;">Total</th>
                 </tr>
@@ -49,17 +49,14 @@
                         <td>{{ $fila->producto }}</td>
                         <td>{{ $fila->categoria ?: '—' }}</td>
                         <td>{{ $fila->subcategoria ?: '—' }}</td>
-                        <td style="text-align:right;">{{ number_format((int) $fila->jrz) }}</td>
-                        <td style="text-align:right;">{{ number_format((int) $fila->doral) }}</td>
-                        <td style="text-align:right;">{{ number_format((int) $fila->virtudes) }}</td>
-                        <td style="text-align:right;">{{ number_format((int) $fila->zamora) }}</td>
-                        <td style="text-align:right;">{{ number_format((int) $fila->centro) }}</td>
-                        <td style="text-align:right;">{{ number_format((int) $fila->sambil) }}</td>
+                        @foreach($sedes as $sede)
+                            <td style="text-align:right;">{{ number_format((int) $fila->{strtolower($sede)}) }}</td>
+                        @endforeach
                         <td style="text-align:right;"><strong>{{ number_format((int) $fila->total) }}</strong></td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="11" class="muted" style="text-align:center; padding:24px;">Sin productos para mostrar.</td>
+                        <td colspan="{{ 5 + count($sedes) }}" class="muted" style="text-align:center; padding:24px;">Sin productos para mostrar.</td>
                     </tr>
                 @endforelse
             </tbody>

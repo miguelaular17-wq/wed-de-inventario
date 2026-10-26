@@ -5,11 +5,11 @@ return [
     | Sedes con interfaz Ventas + Inventario (sin JRZ local ni pestaña Compra).
     | JRZ sigue en BD como almacén origen de requisiciones.
     */
-    'sedes_locales' => ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'MOVISTAR'],
+    'sedes_locales' => ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'MOVISTAR', 'TECNOHOUSE'],
 
-    'sedes_stock' => ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES'],
+    'sedes_stock' => ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'TECNOHOUSE'],
 
-    'sedes_gerencial' => ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'JRZ', 'MOVISTAR'],
+    'sedes_gerencial' => ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'JRZ', 'MOVISTAR', 'TECNOHOUSE'],
 
     /** Áreas de nómina cuyas ventas se muestran en el dashboard gerencial (por vendedor). */
     'areas_gerencial' => [
@@ -28,6 +28,7 @@ return [
         'SAMBIL' => 'Sambil',
         'NUNES' => 'Nunes',
         'MOVISTAR' => 'Movistar',
+        'TECNOHOUSE' => 'Tecno House',
     ],
 
     /** Etiquetas de columnas en Excel multisede → clave sede */
@@ -39,6 +40,7 @@ return [
         'CENTRO' => 'Centro',
         'SAMBIL' => 'Sambil',
         'NUNES' => 'Nunes',
+        'TECNOHOUSE' => 'Tecno House',
     ],
 
     'tiempo_venta_sede' => 15,

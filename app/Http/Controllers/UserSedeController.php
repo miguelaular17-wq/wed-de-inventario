@@ -10,6 +10,8 @@ class UserSedeController extends Controller
 {
     public function edit(): View
     {
+        abort_if(Auth::user()?->tieneSedeFija(), 403, 'Tu sede asignada la cambia un administrador.');
+
         return view('user.sede', [
             'sedes' => config('inventario.sedes_locales'),
             'display' => config('inventario.display'),
@@ -18,6 +20,8 @@ class UserSedeController extends Controller
 
     public function update(Request $request)
     {
+        abort_if(Auth::user()?->tieneSedeFija(), 403, 'Tu sede asignada la cambia un administrador.');
+
         $data = $request->validate([
             'sede' => ['required', 'string'],
         ]);

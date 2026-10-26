@@ -137,7 +137,7 @@ class EtiquetasController extends Controller
     private function logosMarca(array $fichas): array
     {
         $out = [];
-        foreach (array_unique(array_filter(array_column($fichas, 'logo_marca'))) as $clave) {
+        foreach (array_unique(array_filter([...array_column($fichas, 'logo_marca'), ...array_column($fichas, 'logo_sistema')])) as $clave) {
             $path = public_path("img/marcas/{$clave}.png");
             $info = @getimagesize($path);
             $src = $this->imagenDataUri($path);

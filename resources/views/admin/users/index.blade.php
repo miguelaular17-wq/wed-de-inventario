@@ -193,6 +193,10 @@
                             </form>
                         </td>
                         <td style="text-align: center; vertical-align: middle;">
+                            @if ($user->role !== 'admin' && auth()->user()->role === 'admin')
+                                <a href="{{ route('admin.accesos.index', ['usuario' => $user->id]) }}" class="btn secondary" title="Quitar accesos o funciones a esta persona"
+                                   style="display:inline-block; padding:6px 10px; font-size:0.78rem; border-radius:6px; margin-bottom:6px; text-decoration:none; white-space:nowrap;">🔒 Accesos</a>
+                            @endif
                             @if ($user->id !== auth()->id())
                                 <form method="POST" action="{{ route('admin.users.destroy', $user) }}" onsubmit="return confirm('¿Está seguro de que desea eliminar a este usuario?')" style="display:inline; margin:0;">
                                     @csrf

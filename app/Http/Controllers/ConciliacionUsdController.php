@@ -36,51 +36,135 @@ class ConciliacionUsdController extends Controller
         return view('finanzas.conciliacion_usd.index', compact('cuentas', 'banco', 'titular', 'desde', 'hasta', 'datos', 'egresosManual'));
     }
 
-    /** Paso 1: se guarda el archivo y se muestra para elegir columnas. */
+    /**
+     * Paso 1: se suben los documentos de la cuenta (uno o varios). Los formatos conocidos —historial de Binance
+     * y reporte de pagos de caja de Cloud— se importan y se cruzan solos; uno desconocido pasa a elegir columnas.
+     */
     public function subir(Request $request): View|RedirectResponse
     {
-        $data = $request->validate([
+        $request->validate([
             'cuenta' => ['required', 'string', 'max:220', 'regex:/\|/'],
-            'archivo' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:20480'],
+            'archivos' => ['required_without:archivo', 'array', 'max:6'],
+            'archivos.*' => ['file', 'mimes:xlsx,xls,csv,txt', 'max:20480'],
+            'archivo' => ['required_without:archivos', 'file', 'mimes:xlsx,xls,csv,txt', 'max:20480'],
         ], [
+            'archivos.*.mimes' => 'Los documentos deben ser Excel (.xlsx / .xls) o CSV.',
             'archivo.mimes' => 'El extracto debe ser Excel (.xlsx / .xls) o CSV.',
+            'archivos.*.uploaded' => 'Un archivo no llegó al servidor (límite: ' . ini_get('upload_max_filesize') . ').',
             'archivo.uploaded' => 'El archivo no llegó al servidor (límite: ' . ini_get('upload_max_filesize') . ').',
+            'archivos.required_without' => 'Elige el extracto o el reporte de pagos.',
         ]);
-        [$banco, $titular] = explode('|', $data['cuenta'], 2);
+        [$banco, $titular] = explode('|', (string) $request->input('cuenta'), 2);
+        $files = $request->file('archivos') ?: [$request->file('archivo')];
 
-        $ext = strtolower($request->file('archivo')->getClientOriginalExtension() ?: 'csv');
-        $ext = $ext === 'txt' ? 'csv' : $ext;
-        $token = (string) Str::uuid();
-        $path = $request->file('archivo')->storeAs(self::DIR, "{$token}.{$ext}", 'local');
+        $extractos = [];
+        $pagos = [];
+        $desconocidos = [];
+        foreach ($files as $file) {
+            $ext = strtolower($file->getClientOriginalExtension() ?: 'csv');
+            $ext = $ext === 'txt' ? 'csv' : $ext;
+            $token = (string) Str::uuid();
+            $path = $file->storeAs(self::DIR, "{$token}.{$ext}", 'local');
+            $doc = ['path' => $path, 'ext' => $ext, 'nombre' => $file->getClientOriginalName(), 'token' => $token];
+            try {
+                $doc['muestra'] = $this->servicio->muestra(Storage::disk('local')->path($path), $ext);
+            } catch (\Throwable $e) {
+                $this->borrar([$doc, ...$extractos, ...$pagos, ...$desconocidos]);
 
+                return back()->with('error', 'No se pudo leer «' . $doc['nombre'] . '»: ' . $e->getMessage());
+            }
+            if ($doc['muestra'] === []) {
+                $this->borrar([$doc, ...$extractos, ...$pagos, ...$desconocidos]);
+
+                return back()->with('error', '«' . $doc['nombre'] . '» está vacío.');
+            }
+            $formato = $this->servicio->detectarFormato($doc['muestra']);
+            match ($formato['tipo'] ?? null) {
+                'extracto' => $extractos[] = $doc + ['mapeo' => $formato['mapeo'], 'formato' => $formato['nombre']],
+                'pagos' => $pagos[] = $doc,
+                default => $desconocidos[] = $doc,
+            };
+        }
+
+        if (count($desconocidos) > 1 || ($desconocidos !== [] && ($extractos !== [] || $pagos !== []))) {
+            $this->borrar([...$extractos, ...$pagos, ...$desconocidos]);
+
+            return back()->with('error', 'No reconozco el formato de «' . $desconocidos[0]['nombre'] . '». Súbelo solo para elegir qué columna es cada dato.');
+        }
+
+        if ($desconocidos !== []) {
+            $doc = $desconocidos[0];
+            $request->session()->put('conciliacion_usd.' . $doc['token'], [
+                'path' => $doc['path'], 'ext' => $doc['ext'], 'banco' => $banco, 'titular' => $titular, 'archivo' => $doc['nombre'],
+            ]);
+
+            return view('finanzas.conciliacion_usd.mapeo', [
+                'token' => $doc['token'],
+                'banco' => $banco,
+                'titular' => $titular,
+                'archivo' => $doc['nombre'],
+                'muestra' => $doc['muestra'],
+                'columnas' => max(array_map('count', $doc['muestra'])),
+                'mapeo' => $this->servicio->formatoGuardado($banco, $titular) ?? $this->adivinarMapeo($doc['muestra']),
+                'formatosFecha' => ConciliacionDivisasService::FORMATOS_FECHA,
+            ]);
+        }
+
+        $partes = [];
+        $rechazadas = [];
+        $rangos = [];
         try {
-            $muestra = $this->servicio->muestra(Storage::disk('local')->path($path), $ext);
+            foreach ($extractos as $doc) {
+                $r = $this->servicio->importar(
+                    Storage::disk('local')->path($doc['path']), $doc['ext'], $banco, $titular, $doc['mapeo'], $doc['nombre'], $request->user()?->id,
+                );
+                $partes[] = sprintf('Extracto (%s): %d movimientos nuevos, %d ya estaban cargados', $doc['formato'], $r['nuevas'], $r['duplicadas']);
+                $rechazadas = [...$rechazadas, ...$r['rechazadas']];
+                $f = \App\Models\ConciliacionDivisaLinea::query()->where('banco', $banco)->where('titular', $titular)->where('archivo', $doc['nombre'])
+                    ->selectRaw('MIN(fecha) d, MAX(fecha) h')->first();
+                $rangos[] = [$f?->d ? substr((string) $f->d, 0, 10) : null, $f?->h ? substr((string) $f->h, 0, 10) : null, 'extracto'];
+            }
+            foreach ($pagos as $doc) {
+                $r = $this->servicio->importarPagos(
+                    Storage::disk('local')->path($doc['path']), $doc['ext'], $banco, $titular, $doc['nombre'], $request->user()?->id,
+                );
+                $partes[] = sprintf('Reporte de pagos de caja: %d cobros nuevos, %d ya estaban cargados', $r['nuevas'], $r['duplicadas']);
+                $rechazadas = [...$rechazadas, ...$r['rechazadas']];
+                $rangos[] = [$r['desde'], $r['hasta'], 'pagos'];
+            }
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Throwable $e) {
-            Storage::disk('local')->delete($path);
-
-            return back()->with('error', 'No se pudo leer el archivo: ' . $e->getMessage());
-        }
-        if ($muestra === []) {
-            Storage::disk('local')->delete($path);
-
-            return back()->with('error', 'El archivo está vacío.');
+            return back()->with('error', 'No se pudo importar: ' . $e->getMessage());
+        } finally {
+            $this->borrar([...$extractos, ...$pagos]);
         }
 
-        $request->session()->put('conciliacion_usd.' . $token, [
-            'path' => $path, 'ext' => $ext, 'banco' => $banco, 'titular' => $titular,
-            'archivo' => $request->file('archivo')->getClientOriginalName(),
-        ]);
+        // Período a conciliar: el del reporte de pagos si vino (un mes); si no, el del extracto.
+        $deCaja = array_values(array_filter($rangos, fn ($r) => $r[2] === 'pagos' && $r[0]));
+        $base = $deCaja !== [] ? $deCaja : array_values(array_filter($rangos, fn ($r) => $r[0]));
+        $desde = $base !== [] ? min(array_column($base, 0)) : now()->startOfMonth()->toDateString();
+        $hasta = $base !== [] ? max(array_column($base, 1)) : now()->toDateString();
 
-        return view('finanzas.conciliacion_usd.mapeo', [
-            'token' => $token,
-            'banco' => $banco,
-            'titular' => $titular,
-            'archivo' => $request->file('archivo')->getClientOriginalName(),
-            'muestra' => $muestra,
-            'columnas' => max(array_map('count', $muestra)),
-            'mapeo' => $this->servicio->formatoGuardado($banco, $titular) ?? $this->adivinarMapeo($muestra),
-            'formatosFecha' => ConciliacionDivisasService::FORMATOS_FECHA,
-        ]);
+        $match = $this->servicio->conciliar($banco, $titular, $desde, $hasta);
+        $cruce = $this->servicio->cruzarPagos($banco, $titular, $desde, $hasta);
+        $partes[] = sprintf(
+            'Match automático: %d con pagos de caja (%d cobros sin abono), %d con egresos, %d comisiones, %d traslados internos apartados',
+            $cruce['cruzados'], $cruce['sin_abono'], $match['conciliadas'], $match['comisiones'], $match['internos'],
+        );
+
+        return redirect()
+            ->route('finanzas.conciliacion_usd.index', ['cuenta' => $banco . '|' . $titular, 'fecha_desde' => $desde, 'fecha_hasta' => $hasta])
+            ->with('success', implode('. ', $partes) . '.')
+            ->with('rechazadas', array_slice($rechazadas, 0, 15));
+    }
+
+    /** @param  list<array{path: string}>  $docs */
+    private function borrar(array $docs): void
+    {
+        foreach ($docs as $doc) {
+            Storage::disk('local')->delete($doc['path']);
+        }
     }
 
     /** Paso 2: se importan las filas con el mapeo elegido y se corre el match automático. */
@@ -136,10 +220,11 @@ class ConciliacionUsdController extends Controller
         $desde = $fechas?->d ? substr((string) $fechas->d, 0, 10) : now()->startOfMonth()->toDateString();
         $hasta = $fechas?->h ? substr((string) $fechas->h, 0, 10) : now()->toDateString();
         $match = $this->servicio->conciliar($sesion['banco'], $sesion['titular'], $desde, $hasta);
+        $pagos = $this->servicio->cruzarPagos($sesion['banco'], $sesion['titular'], $desde, $hasta);
 
         $msg = sprintf(
-            '%d movimientos nuevos (%d ya estaban cargados). Match automático: %d conciliados, %d comisiones.',
-            $r['nuevas'], $r['duplicadas'], $match['conciliadas'], $match['comisiones'],
+            '%d movimientos nuevos (%d ya estaban cargados). Match automático: %d con egresos, %d con pagos de caja, %d comisiones, %d traslados internos apartados.',
+            $r['nuevas'], $r['duplicadas'], $match['conciliadas'], $pagos['cruzados'], $match['comisiones'], $match['internos'],
         );
 
         return redirect()
@@ -152,21 +237,69 @@ class ConciliacionUsdController extends Controller
     {
         [$banco, $titular, $desde, $hasta] = $this->filtro($request);
         $r = $this->servicio->conciliar($banco, $titular, $desde, $hasta);
+        $p = $this->servicio->cruzarPagos($banco, $titular, $desde, $hasta);
 
-        return back()->with('success', "Match automático: {$r['conciliadas']} conciliados, {$r['comisiones']} comisiones.");
+        return back()->with('success', "Match automático: {$r['conciliadas']} con egresos, {$p['cruzados']} con pagos de caja, {$r['comisiones']} comisiones, {$r['internos']} traslados internos apartados.");
+    }
+
+    /**
+     * Segundo documento: reporte de pagos recibidos en caja (Cloud). Se cruza con los abonos del extracto ya cargado.
+     */
+    public function subirPagos(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'cuenta' => ['required', 'string', 'max:220', 'regex:/\|/'],
+            'archivo' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:20480'],
+        ], [
+            'archivo.mimes' => 'El reporte de pagos debe ser Excel (.xlsx / .xls) o CSV.',
+            'archivo.uploaded' => 'El archivo no llegó al servidor (límite: ' . ini_get('upload_max_filesize') . ').',
+        ]);
+        [$banco, $titular] = explode('|', $data['cuenta'], 2);
+        $ext = strtolower($request->file('archivo')->getClientOriginalExtension() ?: 'csv');
+        $ext = $ext === 'txt' ? 'csv' : $ext;
+        $path = $request->file('archivo')->storeAs(self::DIR, Str::uuid() . ".{$ext}", 'local');
+
+        try {
+            $r = $this->servicio->importarPagos(
+                Storage::disk('local')->path($path), $ext, $banco, $titular,
+                $request->file('archivo')->getClientOriginalName(), $request->user()?->id,
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            return back()->with('error', 'No se pudo leer el reporte de pagos: ' . $e->getMessage());
+        } finally {
+            Storage::disk('local')->delete($path);
+        }
+
+        $desde = $r['desde'] ?? now()->startOfMonth()->toDateString();
+        $hasta = $r['hasta'] ?? now()->toDateString();
+        $this->servicio->ignorarInternos($banco, $titular, $desde, $hasta);
+        $cruce = $this->servicio->cruzarPagos($banco, $titular, $desde, $hasta);
+
+        return redirect()
+            ->route('finanzas.conciliacion_usd.index', ['cuenta' => $banco . '|' . $titular, 'fecha_desde' => $desde, 'fecha_hasta' => $hasta])
+            ->with('success', sprintf(
+                'Reporte de pagos: %d cobros nuevos (%d ya estaban cargados). %d cruzados con su abono en el extracto; %d sin abono.',
+                $r['nuevas'], $r['duplicadas'], $cruce['cruzados'], $cruce['sin_abono'],
+            ))
+            ->with('rechazadas', $r['rechazadas']);
     }
 
     public function accion(Request $request): RedirectResponse
     {
         $data = $request->validate([
             'linea_id' => ['required', 'integer'],
-            'accion' => ['required', Rule::in(['vincular', 'desvincular', 'comision', 'ignorar', 'restaurar'])],
+            'accion' => ['required', Rule::in(['vincular', 'vincular_pago', 'desvincular', 'comision', 'ignorar', 'restaurar'])],
             'flujo_caja_id' => ['nullable', 'required_if:accion,vincular', 'integer'],
+            'pago_id' => ['nullable', 'required_if:accion,vincular_pago', 'integer'],
         ]);
 
         match ($data['accion']) {
             'vincular' => $this->servicio->vincular((int) $data['linea_id'], (int) $data['flujo_caja_id'])
                 ?: throw \Illuminate\Validation\ValidationException::withMessages(['flujo_caja_id' => 'Ese egreso ya está conciliado con otro movimiento.']),
+            'vincular_pago' => $this->servicio->vincularPago((int) $data['pago_id'], (int) $data['linea_id'])
+                ?: throw \Illuminate\Validation\ValidationException::withMessages(['pago_id' => 'Ese pago o ese abono ya están cruzados.']),
             'desvincular' => $this->servicio->desvincular((int) $data['linea_id']),
             'comision' => $this->servicio->marcar((int) $data['linea_id'], 'comision'),
             'ignorar' => $this->servicio->marcar((int) $data['linea_id'], 'ignorado'),
@@ -198,28 +331,40 @@ class ConciliacionUsdController extends Controller
     private function adivinarMapeo(array $muestra): array
     {
         $buscar = [
-            'fecha' => ['date(utc)', 'date', 'fecha', 'posted date', 'transaction date', 'time', 'fecha valor'],
-            'descripcion' => ['description', 'descripcion', 'descripción', 'concepto', 'detalle', 'operation', 'type', 'memo', 'payee'],
+            'fecha' => ['date(utc)', 'date', 'fecha', 'posted date', 'transaction date', 'time', 'tiempo', 'fecha valor'],
+            'descripcion' => ['description', 'descripcion', 'descripción', 'concepto', 'detalle', 'operation', 'operación', 'operacion', 'type', 'memo', 'payee', 'observación', 'observacion', 'remark'],
             'referencia' => ['order id', 'orderid', 'transaction id', 'txid', 'reference', 'referencia', 'ref', 'confirmation', 'check number', 'número', 'numero'],
-            'monto' => ['amount', 'monto', 'importe', 'change', 'total'],
+            'monto' => ['amount', 'monto', 'importe', 'change', 'cambio', 'total'],
             'debito' => ['debit', 'debito', 'débito', 'withdrawal', 'withdrawals', 'cargo', 'retiro'],
             'credito' => ['credit', 'credito', 'crédito', 'deposit', 'deposits', 'abono'],
         ];
         foreach (array_slice($muestra, 0, 15) as $i => $fila) {
             $cols = [];
+            $descripcion = [];
             foreach ($fila as $j => $celda) {
                 $c = mb_strtolower(trim($celda));
                 foreach ($buscar as $campo => $nombres) {
-                    if (! isset($cols[$campo]) && in_array($c, $nombres, true)) {
+                    if (! in_array($c, $nombres, true)) {
+                        continue;
+                    }
+                    if ($campo === 'descripcion') {
+                        $descripcion[] = $j;
+                    } elseif (! isset($cols[$campo])) {
                         $cols[$campo] = $j;
                     }
                 }
             }
             if (isset($cols['fecha']) && (isset($cols['monto']) || isset($cols['debito']) || isset($cols['credito']))) {
+                // Binance (español): la billetera (Funding / Spot) también va a la descripción.
+                $cuenta = array_search('cuenta', array_map(fn ($c) => mb_strtolower(trim($c)), $fila), true);
+                if ($cuenta !== false && $descripcion !== []) {
+                    array_unshift($descripcion, (int) $cuenta);
+                }
+
                 return [
                     'fila_cabecera' => $i,
                     'fecha' => $cols['fecha'],
-                    'descripcion' => isset($cols['descripcion']) ? [$cols['descripcion']] : [],
+                    'descripcion' => $descripcion,
                     'referencia' => $cols['referencia'] ?? null,
                     'monto' => $cols['monto'] ?? null,
                     'debito' => $cols['debito'] ?? null,

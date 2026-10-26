@@ -19,7 +19,7 @@
     <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
         <div>
             <h1 style="margin:0;">Conciliación en divisas</h1>
-            <p class="muted" style="margin:4px 0 0;">Binance, Mercantil Panamá, Wells Fargo y Citizens (Zelle)… Montos en USD contra los egresos del flujo de caja de cada cuenta.</p>
+            <p class="muted" style="margin:4px 0 0;">Binance, Mercantil Panamá, Wells Fargo y Citizens (Zelle)… El extracto de la cuenta se cruza con los egresos del flujo de caja y con el reporte de pagos recibidos en caja.</p>
         </div>
         <a href="{{ route('finanzas.conciliaciones') }}" class="btn secondary">Conciliación en bolívares</a>
     </div>
@@ -60,7 +60,7 @@
 
         <form method="POST" action="{{ route('finanzas.conciliacion_usd.subir') }}" enctype="multipart/form-data" class="panel" style="padding:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
             @csrf
-            <label class="field" style="flex:1; min-width:220px;">Subir extracto (Excel o CSV) de
+            <label class="field" style="flex:1; min-width:220px;">Subir documentos de
                 <select name="cuenta" required>
                     <option value="">— Cuenta —</option>
                     @foreach($cuentas as $c)
@@ -69,8 +69,8 @@
                     @endforeach
                 </select>
             </label>
-            <label class="field">Archivo <input type="file" name="archivo" accept=".xlsx,.xls,.csv,.txt" required></label>
-            <button type="submit" class="btn primary">Subir</button>
+            <label class="field">Archivos <input type="file" name="archivos[]" accept=".xlsx,.xls,.csv,.txt" multiple required></label>
+            <button type="submit" class="btn primary">Subir y conciliar</button>
         </form>
     </div>
 
@@ -96,6 +96,25 @@
             </form>
         </div>
 
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:10px; margin-bottom:14px;">
+            @foreach([
+                ['banco', '🏦 Banco', '#0f766e', 'movimientos'],
+                ['cobros', '🧾 App de cobros', '#0369a1', 'cobros'],
+            ] as [$lado, $titulo, $color, $unidad])
+                <div class="panel" style="padding:12px 14px; border-top:4px solid {{ $color }};">
+                    <div style="font-weight:800; color:{{ $color }};">{{ $titulo }}</div>
+                    @forelse($datos['documentos'][$lado] as $doc)
+                        <div style="display:flex; justify-content:space-between; gap:8px; font-size:.8rem; padding:5px 0; border-top:1px solid #eef2f7;">
+                            <span style="font-weight:700; word-break:break-all;">📄 {{ $doc['archivo'] }}</span>
+                            <span class="muted" style="white-space:nowrap;">{{ $doc['filas'] }} {{ $unidad }} · {{ $fmt($doc['desde']) }}–{{ $fmt($doc['hasta']) }}{{ $doc['subido'] ? ' · subido ' . \Carbon\Carbon::parse($doc['subido'])->format('d/m H:i') : '' }}</span>
+                        </div>
+                    @empty
+                        <div style="font-size:.8rem; color:#b45309; font-weight:700;">Aún no se ha subido para este período.</div>
+                    @endforelse
+                </div>
+            @endforeach
+        </div>
+
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-bottom:14px;">
             @foreach([
                 ['Consolidados', $datos['consolidados'], '#16a34a'],
@@ -111,16 +130,78 @@
                 <div class="muted" style="font-size:.75rem; text-transform:uppercase; font-weight:700;">Egresos sin movimiento ({{ $datos['egresos_sin_pareja']->count() }})</div>
                 <div style="font-size:1.25rem; font-weight:800;">{{ $usd(-$datos['egresos_sin_pareja']->sum(fn ($f) => abs((float) $f->monto_usd))) }}</div>
             </div>
+            @if($datos['pagos_total'] > 0)
+                <div class="panel" style="padding:12px; border-left:4px solid #0ea5e9;">
+                    <div class="muted" style="font-size:.75rem; text-transform:uppercase; font-weight:700;">Pagos de caja: {{ $datos['pagos_cruzados'] }} de {{ $datos['pagos_total'] }} cruzados</div>
+                    <div style="font-size:1.25rem; font-weight:800; color:{{ $datos['pagos_sin_abono']->isEmpty() ? '#16a34a' : '#dc2626' }};">
+                        {{ $datos['pagos_sin_abono']->count() }} sin abono · {{ $usd($datos['pagos_sin_abono']->sum('monto')) }}
+                    </div>
+                </div>
+            @endif
         </div>
 
+        @if($datos['pagos_sin_abono']->isNotEmpty())
+            @php
+                $abonosLibres = $datos['pendientes']->reject(fn ($l) => $l->esCargo());
+            @endphp
+            <h3 style="margin:16px 0 6px;">Pagos de caja sin abono en el banco ({{ $datos['pagos_sin_abono']->count() }})</h3>
+            <p class="muted" style="margin:0 0 6px; font-size:.78rem;">🧾 Están en la app de cobros (Cloud) pero no aparecen en el extracto del banco.</p>
+            <div class="table-wrap">
+                <table class="data-table" style="font-size:.82rem;">
+                    <thead><tr><th>Nro</th><th>Fecha y hora</th><th>Localidad · caja</th><th>Cajero</th><th>Pagador</th><th style="text-align:right;">Monto</th><th>Ligar con abono del banco</th></tr></thead>
+                    <tbody>
+                        @foreach($datos['pagos_sin_abono'] as $p)
+                            @php
+                                $cands = $abonosLibres
+                                    ->filter(fn ($l) => abs(abs((float) $l->monto) - (float) $p->monto) <= max(1, (float) $p->monto * 0.05) && abs($l->fecha->diffInDays($p->fecha, false)) <= 3)
+                                    ->sortBy(fn ($l) => [abs(abs((float) $l->monto) - (float) $p->monto) > 0.009 ? 1 : 0, abs($l->fecha->diffInDays($p->fecha, false))])
+                                    ->take(12);
+                            @endphp
+                            <tr>
+                                <td>
+                                    {{ $p->nro }}
+                                    @if($p->duplicado_de)
+                                        <div style="font-size:.72rem; font-weight:700; color:#b45309;" title="Mismo monto y pagador con minutos de diferencia: el banco recibió un solo pago">⚠ Posible duplicado de #{{ $p->duplicado_de }}</div>
+                                    @endif
+                                </td>
+                                <td style="white-space:nowrap;">{{ $p->fecha_hora ? $p->fecha_hora->format('d/m/Y h:i A') : $p->fecha->format('d/m/Y') }}</td>
+                                <td>{{ $p->localidad }}{{ $p->terminal ? ' · ' . $p->terminal : '' }}</td>
+                                <td>{{ $p->usuario }}</td>
+                                <td>{{ $p->pagador }}</td>
+                                <td style="text-align:right; font-weight:700;">{{ $usd($p->monto) }}</td>
+                                <td>
+                                    @if($cands->isNotEmpty())
+                                        <form method="POST" action="{{ route('finanzas.conciliacion_usd.accion') }}" style="display:flex; gap:6px;">
+                                            @csrf
+                                            <input type="hidden" name="accion" value="vincular_pago">
+                                            <input type="hidden" name="pago_id" value="{{ $p->id }}">
+                                            <select name="linea_id" style="max-width:300px; font-size:.78rem;">
+                                                @foreach($cands as $l)
+                                                    <option value="{{ $l->id }}">{{ $l->fecha->format('d/m') }} {{ $l->hora ? substr($l->hora, 0, 5) : '' }} · {{ $usd($l->monto) }} · {{ \Illuminate\Support\Str::limit($l->descripcion, 30) }}</option>
+                                                @endforeach
+                                            </select>
+                                            <button type="submit" class="btn primary" style="padding:3px 8px; font-size:.75rem;">Ligar</button>
+                                        </form>
+                                    @else
+                                        <span class="muted" style="font-size:.78rem;">Sin abonos parecidos (±3 días)</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+
         <h3 style="margin:16px 0 6px;">Movimientos en el banco sin pareja ({{ $datos['pendientes']->count() }})</h3>
+        <p class="muted" style="margin:0 0 6px; font-size:.78rem;">🏦 Están en el extracto del banco pero no tienen su cobro en la app ni su egreso en el flujo de caja.</p>
         <div class="table-wrap">
             <table class="data-table" style="font-size:.82rem;">
                 <thead><tr><th>Fecha</th><th>Referencia</th><th>Descripción</th><th style="text-align:right;">Monto</th><th>Ligar con egreso</th><th></th></tr></thead>
                 <tbody>
                     @forelse($datos['pendientes'] as $l)
                         <tr>
-                            <td>{{ $l->fecha->format('d/m/Y') }}</td>
+                            <td style="white-space:nowrap;">{{ $l->fecha->format('d/m/Y') }}{{ $l->hora ? ' ' . substr($l->hora, 0, 5) : '' }}</td>
                             <td><code>{{ $l->referencia }}</code></td>
                             <td style="max-width:320px;">{{ \Illuminate\Support\Str::limit($l->descripcion, 90) }}</td>
                             <td style="text-align:right; font-weight:700; color:{{ $l->monto < 0 ? '#dc2626' : '#16a34a' }};">{{ $usd($l->monto) }}</td>
@@ -173,14 +254,21 @@
         <h3 style="margin:20px 0 6px;">Consolidados ({{ $datos['consolidados']->count() }})</h3>
         <div class="table-wrap">
             <table class="data-table" style="font-size:.82rem;">
-                <thead><tr><th>Fecha</th><th>Referencia</th><th>Descripción del banco</th><th>Egreso del sistema</th><th style="text-align:right;">Monto</th><th></th></tr></thead>
+                <thead><tr><th>Fecha</th><th>Referencia</th><th>🏦 Banco (extracto)</th><th>🧾 App de cobros / flujo de caja</th><th style="text-align:right;">Monto</th><th></th></tr></thead>
                 <tbody>
                     @forelse($datos['consolidados'] as $l)
+                        @php $pagoL = $l->relationLoaded('pago') ? $l->pago : null; @endphp
                         <tr>
-                            <td>{{ $l->fecha->format('d/m/Y') }}</td>
+                            <td style="white-space:nowrap;">{{ $l->fecha->format('d/m/Y') }}{{ $l->hora ? ' ' . substr($l->hora, 0, 5) : '' }}</td>
                             <td><code>{{ $l->referencia }}</code></td>
                             <td style="max-width:280px;">{{ \Illuminate\Support\Str::limit($l->descripcion, 70) }}</td>
-                            <td style="max-width:280px;">{{ \Illuminate\Support\Str::limit((string) $l->flujoCaja?->motivo, 70) }}</td>
+                            <td style="max-width:280px;">
+                                @if($pagoL)
+                                    <span title="Pago de caja #{{ $pagoL->nro }}">💳 Caja #{{ $pagoL->nro }} · {{ $pagoL->localidad }} · {{ $pagoL->usuario }}{{ $pagoL->fecha_hora ? ' · ' . $pagoL->fecha_hora->format('h:i A') : '' }}{{ $pagoL->pagador ? ' · ' . $pagoL->pagador : '' }}</span>
+                                @else
+                                    {{ \Illuminate\Support\Str::limit((string) $l->flujoCaja?->motivo, 70) }}
+                                @endif
+                            </td>
                             <td style="text-align:right; font-weight:700;">{{ $usd($l->monto) }}</td>
                             <td>{!! $accion($l->id, 'desvincular', 'Desligar') !!}</td>
                         </tr>

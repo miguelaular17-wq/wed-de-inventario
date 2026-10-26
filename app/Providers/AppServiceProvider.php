@@ -14,6 +14,7 @@ class AppServiceProvider extends ServiceProvider
         // 12,947 productos cuando m\u00faltiples m\u00e9todos la solicitan en el mismo request.
         $this->app->scoped(\App\Services\InventarioV2Repository::class);
         $this->app->scoped(\App\Services\ProductRepository::class);
+        $this->app->scoped(\App\Services\AccesosService::class);
     }
 
     public function boot(): void
@@ -41,6 +42,11 @@ class AppServiceProvider extends ServiceProvider
         }
 
         \Illuminate\Pagination\Paginator::useBootstrapFive();
+
+        // @accesible('nombre.ruta') … @endaccesible: oculta atajos a accesos desactivados por el administrador.
+        \Illuminate\Support\Facades\Blade::if('accesible', fn (string $ruta) => ! app(\App\Services\AccesosService::class)->rutaBloqueada(auth()->user(), $ruta));
+        // @accesoRapido('rapido_etiquetas') … @endaccesoRapido: atajos de la pantalla de inicio de sesión.
+        \Illuminate\Support\Facades\Blade::if('accesoRapido', fn (string $clave) => app(\App\Services\AccesosService::class)->accesoRapidoActivo($clave));
 
         if ($path = env('SESSION_PATH')) {
             if (! is_dir($path)) {

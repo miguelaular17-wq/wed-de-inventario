@@ -38,6 +38,7 @@ class ConciliacionUsdTest extends TestCase
             $t->timestamps();
         });
         (require database_path('migrations/2026_10_23_200000_create_conciliacion_divisas_tables.php'))->up();
+        (require database_path('migrations/2026_10_24_130000_add_pagos_to_conciliacion_divisas.php'))->up();
         $this->user = User::create([
             'name' => 'Contabilidad', 'email' => 'contab-usd@test.local', 'password' => 'password123', 'role' => User::ROLE_CONTABILIDAD,
         ]);
@@ -112,6 +113,118 @@ class ConciliacionUsdTest extends TestCase
             ->assertOk()
             ->assertSee('Consolidados (2)')
             ->assertSee('Movimientos en el banco sin pareja (1)');
+    }
+
+    public function test_binance_se_cruza_con_el_reporte_de_pagos_de_caja_por_monto_y_hora(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'bn') . '.csv';
+        file_put_contents($tmp, "ID de usuario,Tiempo,Cuenta,Operación,Moneda,Cambio,Observación\n"
+            . "851908350,2026-08-31 19:55:30,Funding,Transfer,USDT,70,Binance Pay - P_A1\n"
+            . "851908350,2026-08-31 19:58:02,Funding,Transfer,USDT,70,Binance Pay - P_A2\n"
+            . "851908350,2026-08-31 16:10:40,Spot,Transfer,USDT,262.32,Binance Pay - P_A3\n"
+            . "851908350,2026-08-31 15:00:00,Spot,Transfer Funds to Spot,USDT,11520,\n"
+            . "851908350,2026-08-31 15:00:00,Funding,Transfer Funds to Funding Wallet,USDT,-11520,\n"
+            . "851908350,2026-08-31 18:00:00,Funding,Transfer,USDT,45,Binance Pay - P_A4\n");
+        // El historial de Binance se reconoce por su cabecera: se importa sin pasar por el mapeo de columnas.
+        $this->actingAs($this->user)->post(route('finanzas.conciliacion_usd.subir'), [
+            'cuenta' => 'Binance|Grupo JENU', 'archivo' => new UploadedFile($tmp, 'binance.csv', 'text/csv', null, true),
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertSame('19:55:30', ConciliacionDivisaLinea::query()->where('descripcion', 'like', '%P_A1%')->value('hora'));
+        $this->assertSame('Funding · Transfer · Binance Pay - P_A1', ConciliacionDivisaLinea::query()->where('descripcion', 'like', '%P_A1%')->value('descripcion'));
+        $this->assertSame(2, ConciliacionDivisaLinea::query()->where('estado', 'ignorado')->count());
+
+        $cloud = tempnam(sys_get_temp_dir(), 'cl') . '.csv';
+        file_put_contents($cloud, "REPORTE MENSUAL DE PAGOS BINANCE\n01/08/2026 - 31/08/2026\n"
+            . "NRO,ADMINISTRADOR,MONTO,LOCALIDAD,FECHA CONFIRMADO,TERMINAL,USUARIO,MEDIO,CUENTA,PAGADOR\n"
+            . "1,Palacio,70,Las Virtudes,31/08/2026 7:58:17 PM,Caja 1,VALENTINA,chat,grupojenu2022@gmail.com,Abel\n"
+            . "2,Palacio,70,Doral,31/08/2026 7:56:16 PM,Caja 2,ANGEL,chat,grupojenu2022@gmail.com,Rosa\n"
+            . "3,Palacio,262.32,Doral,31/08/2026 4:11:17 PM,Caja 1,ANA,chat,grupojenu2022@gmail.com,User-56983\n"
+            . "4,Palacio,940,Zamora,31/08/2026 11:16:17 AM,Caja 2,IVANIA,chat,grupojenu2022@gmail.com,Nilson\n"
+            . "5,Palacio,45,Zamora,31/08/2026 6:01:10 PM,Caja 2,IVANIA,chat,grupojenu2022@gmail.com,Mia\n"
+            . "6,Palacio,45,,31/08/2026 6:02:00 PM,,,,grupojenu2022@gmail.com,Mia\n");
+
+        $this->actingAs($this->user)->post(route('finanzas.conciliacion_usd.pagos'), [
+            'cuenta' => 'Binance|Grupo JENU', 'archivo' => new UploadedFile($cloud, 'cloud_pagos_binance.csv', 'text/csv', null, true),
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $pagos = \App\Models\ConciliacionDivisaPago::query()->orderBy('nro')->get()->keyBy('nro');
+        $this->assertCount(6, $pagos);
+        $this->assertSame($linea = (int) ConciliacionDivisaLinea::query()->where('descripcion', 'like', '%P_A4%')->value('id'), (int) $pagos['5']->linea_id);
+        $this->assertNull($pagos['6']->linea_id);
+        $linea = fn (string $obs) => (int) ConciliacionDivisaLinea::query()->where('descripcion', 'like', "%{$obs}%")->value('id');
+        // Dos cobros de 70 seguidos: cada uno con el abono más cercano antes de su confirmación.
+        $this->assertSame($linea('P_A2'), (int) $pagos['1']->linea_id);
+        $this->assertSame($linea('P_A1'), (int) $pagos['2']->linea_id);
+        $this->assertSame($linea('P_A3'), (int) $pagos['3']->linea_id);
+        $this->assertNull($pagos['4']->linea_id);
+        $this->assertSame('conciliado', ConciliacionDivisaLinea::query()->find($linea('P_A3'))->estado);
+        $this->assertSame('conciliado', ConciliacionDivisaLinea::query()->find($linea('P_A4'))->estado);
+
+        // Subir el mismo reporte otra vez no duplica.
+        $this->actingAs($this->user)->post(route('finanzas.conciliacion_usd.pagos'), [
+            'cuenta' => 'Binance|Grupo JENU', 'archivo' => new UploadedFile($cloud, 'cloud_pagos_binance.csv', 'text/csv', null, true),
+        ])->assertRedirect();
+        $this->assertSame(6, \App\Models\ConciliacionDivisaPago::query()->count());
+
+        $this->actingAs($this->user)
+            ->get(route('finanzas.conciliacion_usd.index', ['cuenta' => 'Binance|Grupo JENU', 'fecha_desde' => '2026-08-01', 'fecha_hasta' => '2026-08-31']))
+            ->assertOk()
+            ->assertSee('Pagos de caja: 4 de 6 cruzados')
+            ->assertSee('Pagos de caja sin abono en el banco (2)')
+            ->assertSee('Posible duplicado de #5')
+            ->assertSee('Caja #3')
+            ->assertSeeInOrder(['🏦 Banco', 'binance.csv', '🧾 App de cobros', 'cloud_pagos_binance.csv', '6 cobros']);
+
+        // A mano: el cobro de 940 con el abono de 45 no (monto muy distinto); se liga y se desliga uno de 70.
+        $this->actingAs($this->user)->post(route('finanzas.conciliacion_usd.accion'), ['linea_id' => $linea('P_A3'), 'accion' => 'desvincular'])->assertRedirect();
+        $this->assertNull($pagos['3']->fresh()->linea_id);
+        $this->assertSame('pendiente', ConciliacionDivisaLinea::query()->find($linea('P_A3'))->estado);
+        $this->actingAs($this->user)->post(route('finanzas.conciliacion_usd.accion'), [
+            'linea_id' => $linea('P_A3'), 'accion' => 'vincular_pago', 'pago_id' => $pagos['3']->id,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame($linea('P_A3'), (int) $pagos['3']->fresh()->linea_id);
+    }
+
+    public function test_los_dos_documentos_juntos_se_reconocen_y_se_cruzan(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $bin = tempnam(sys_get_temp_dir(), 'bn') . '.csv';
+        file_put_contents($bin, "Historial de transacciones\n\nID de usuario,Tiempo,Cuenta,Operación,Moneda,Cambio,Observación\n"
+            . "851908350,2026-08-06 10:56:14,Funding,Transfer,USDT,940,Binance Pay - P_X1\n"
+            . "851908350,2026-08-06 11:02:48,Funding,Transfer,USDT,100,Binance Pay - P_X2\n");
+        $cloud = tempnam(sys_get_temp_dir(), 'cl') . '.csv';
+        file_put_contents($cloud, "REPORTE MENSUAL DE PAGOS BINANCE\nNRO,ADMINISTRADOR,MONTO,LOCALIDAD,FECHA CONFIRMADO,TERMINAL,USUARIO,MEDIO,CUENTA,PAGADOR\n"
+            . "293,Palacio,940,Sambil Paraguaná,06/08/2026 11:15:19 AM,Caja 1,OSCAR PALOMO,chat,x,Nilsonguanipa20\n"
+            . "294,Palacio,100,Doral,06/08/2026 11:03:16 AM,Caja 2,ANA,chat,x,Pedro\n");
+
+        // El orden no importa: primero se carga el extracto y después se cruzan los pagos.
+        $this->actingAs($this->user)->post(route('finanzas.conciliacion_usd.subir'), [
+            'cuenta' => 'Binance|Grupo JENU',
+            'archivos' => [
+                new UploadedFile($cloud, 'cloud_pagos_binance_mes_2026_08.csv', 'text/csv', null, true),
+                new UploadedFile($bin, 'Binance-Historial.csv', 'text/csv', null, true),
+            ],
+        ])->assertRedirect(route('finanzas.conciliacion_usd.index', ['cuenta' => 'Binance|Grupo JENU', 'fecha_desde' => '2026-08-06', 'fecha_hasta' => '2026-08-06']))
+            ->assertSessionHas('success', fn ($m) => str_contains($m, '2 con pagos de caja (0 cobros sin abono)'));
+
+        $this->assertSame(2, ConciliacionDivisaLinea::query()->where('estado', 'conciliado')->count());
+        $this->assertSame(2, \App\Models\ConciliacionDivisaPago::query()->whereNotNull('linea_id')->count());
+        $this->assertSame([], \Illuminate\Support\Facades\Storage::disk('local')->files('conciliacion_usd'));
+    }
+
+    public function test_formato_desconocido_junto_con_otro_pide_subirlo_solo(): void
+    {
+        $bin = tempnam(sys_get_temp_dir(), 'bn') . '.csv';
+        file_put_contents($bin, "ID de usuario,Tiempo,Cuenta,Operación,Moneda,Cambio,Observación\n1,2026-08-06 10:56:14,Funding,Transfer,USDT,940,P\n");
+        $raro = tempnam(sys_get_temp_dir(), 'rr') . '.csv';
+        file_put_contents($raro, "Fecha,Concepto,Importe\n06/08/2026,Algo,10\n");
+
+        $this->actingAs($this->user)->from(route('finanzas.conciliacion_usd.index'))->post(route('finanzas.conciliacion_usd.subir'), [
+            'cuenta' => 'Binance|Grupo JENU',
+            'archivos' => [new UploadedFile($bin, 'binance.csv', 'text/csv', null, true), new UploadedFile($raro, 'otro.csv', 'text/csv', null, true)],
+        ])->assertRedirect(route('finanzas.conciliacion_usd.index'))->assertSessionHas('error');
+        $this->assertSame(0, ConciliacionDivisaLinea::query()->count());
     }
 
     public function test_fechas_de_ee_uu_y_debito_credito_por_separado(): void

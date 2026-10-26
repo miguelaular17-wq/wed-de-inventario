@@ -1,0 +1,107 @@
+<?php
+
+/*
+ * Accesos que el administrador puede desactivar (para todos o para una persona, gerente incluido).
+ * Cada uno cubre sus rutas por nombre (comodín *): al desactivarlo se quita del menú y de los atajos,
+ * y la ruta responde "acceso desactivado" aunque se escriba la dirección a mano.
+ * Además, cada permiso de config/permissions.php se puede negar como "función".
+ */
+return [
+    'grupos' => [
+        // Atajos públicos de la pantalla de inicio de sesión: aplican a quien entra sin sesión (solo "para todos").
+        'Accesos rápidos (pantalla de inicio)' => [
+            'rapido_existencias' => ['label' => 'Existencias', 'rutas' => ['vendedor.dashboard'], 'invitado' => true],
+            'rapido_q_pedir' => ['label' => 'Q Pedir', 'rutas' => ['pedidos.*'], 'invitado' => true],
+            'rapido_servicio' => ['label' => 'Servicio técnico', 'rutas' => ['servicio.celulares.*'], 'invitado' => true],
+            'rapido_lector_qr' => ['label' => 'Lector QR', 'rutas' => ['lector_qr.*'], 'invitado' => true],
+            'rapido_etiquetas' => ['label' => 'Sacar etiquetas', 'rutas' => ['etiquetas.*'], 'invitado' => true],
+        ],
+        'Tienda y ventas' => [
+            'ventas' => ['label' => 'Ventas', 'rutas' => ['ventas.index', 'ventas.sync']],
+            'mayor_demanda' => ['label' => 'Mayor demanda', 'rutas' => ['ventas.mayor_demanda']],
+            'inventario' => ['label' => 'Inventario tienda', 'rutas' => ['inventario.*']],
+            'stock_tienda' => ['label' => 'Stock tienda', 'rutas' => ['vendedor.dashboard']],
+            'stock_jrz' => ['label' => 'Stock JRZ', 'rutas' => ['vendedor.jrz']],
+            'etiquetas' => ['label' => 'Sacar etiquetas', 'rutas' => ['etiquetas.*']],
+            'exportar' => ['label' => 'Exportar (requisiciones)', 'rutas' => ['requisicion.*']],
+            'catalogo' => ['label' => 'Catálogo visual', 'rutas' => ['catalogo.*']],
+            'lector_qr' => ['label' => 'Lector QR', 'rutas' => ['lector_qr.*']],
+        ],
+        'Compras y marketing' => [
+            'compras' => ['label' => 'Compras / Marketing (todas las tablas)', 'rutas' => ['comprador.dashboard', 'comprador.export', 'comprador.historico*', 'comprador.pedidos.*', 'comprador.quiebre.*', 'comprador.sustitutos']],
+            'existencias_globales' => ['label' => 'Existencias globales', 'rutas' => ['comprador.existencias*']],
+            'metas_quincena' => ['label' => 'Metas de quincena', 'rutas' => ['metas.*']],
+        ],
+        'Gerencial' => [
+            'gerencial_dashboard' => ['label' => 'Dashboard gerencial (ventas por sede)', 'rutas' => ['gerencial.dashboard']],
+            'metas_tienda' => ['label' => 'Metas de tienda', 'rutas' => ['metas_tienda.*']],
+            'equipo_compra' => ['label' => 'Equipo de compra', 'rutas' => ['gerencial.compras']],
+            'rentabilidad' => ['label' => 'Rentabilidad', 'rutas' => ['gerencial.rentabilidad']],
+            'clientes_sede' => ['label' => 'Clientes por sede', 'rutas' => ['gerencial.clientes']],
+            'devoluciones' => ['label' => 'Devoluciones', 'rutas' => ['gerencial.devoluciones']],
+            'valorizados' => ['label' => 'Inventario valorizado', 'rutas' => ['gerencial.valorizados']],
+            'stock_sede' => ['label' => 'Stock por sede', 'rutas' => ['gerencial.stock']],
+            'traslados' => ['label' => 'Traslados', 'rutas' => ['gerencial.traslados']],
+            'ajustes_inventario' => ['label' => 'Ajustes de inventario', 'rutas' => ['gerencial.ajustes*']],
+            'efectividad_caja' => ['label' => 'Efectividad de caja', 'rutas' => ['gerencial.cajas']],
+            'incentivos' => ['label' => 'Indicadores de incentivo', 'rutas' => ['incentivos.*']],
+        ],
+        'Finanzas' => [
+            'flujo_caja' => ['label' => 'Flujo de caja', 'rutas' => ['finanzas.flujo_caja*', 'finanzas.reporte_consolidado']],
+            'cuentas_por_pagar' => ['label' => 'Cuentas por pagar', 'rutas' => ['finanzas.cuentas_por_pagar*']],
+            'my_delivery' => ['label' => 'My Delivery', 'rutas' => ['finanzas.my_delivery*']],
+            'gasto_directivos' => ['label' => 'Gasto directivos', 'rutas' => ['finanzas.gasto_directivos*']],
+            'gastos_fijos' => ['label' => 'Gastos fijos', 'rutas' => ['finanzas.gastos_fijos*']],
+            'conciliaciones' => ['label' => 'Conciliaciones (bolívares)', 'rutas' => ['finanzas.conciliaciones', 'finanzas.conciliaciones.devolucion*', 'finanzas.conciliaciones.importaciones*', 'finanzas.conciliaciones.reporte*']],
+            'conciliacion_usd' => ['label' => 'Conciliación en divisas', 'rutas' => ['finanzas.conciliacion_usd.*']],
+            'lotes_pos' => ['label' => 'Lotes punto de venta', 'rutas' => ['finanzas.conciliaciones.lotes*']],
+            'calendario_conciliaciones' => ['label' => 'Calendario de conciliaciones', 'rutas' => ['finanzas.calendario_conciliaciones*']],
+            'tesoreria' => ['label' => 'Tesorería', 'rutas' => ['tesoreria.*']],
+            'ventas_diarias' => ['label' => 'Ventas diarias', 'rutas' => ['ventas_diarias.*']],
+            'cobranza' => ['label' => 'Cobranza', 'rutas' => ['cobranza.*']],
+            'contratos' => ['label' => 'Contratos', 'rutas' => ['contratos.*']],
+            'patrimonial' => ['label' => 'Patrimonial', 'rutas' => ['patrimonial.*']],
+        ],
+        'Reportes' => [
+            'reportes' => ['label' => 'Todos los reportes', 'rutas' => ['reportes.index']],
+            'existencias_sede' => ['label' => 'Existencias por sede', 'rutas' => ['reportes.existencias_sede*']],
+            'ventas_proveedor' => ['label' => 'Ventas por proveedor', 'rutas' => ['reportes.proveedor*']],
+            'analisis_categorias' => ['label' => 'Análisis de categorías', 'rutas' => ['analisis_categorias.*']],
+        ],
+        'Nómina' => [
+            'nomina_periodos' => ['label' => 'Períodos', 'rutas' => ['nomina.periodos.*']],
+            'nomina_comisiones' => ['label' => 'Comisiones', 'rutas' => ['nomina.comisiones.*']],
+            'nomina_retenciones' => ['label' => 'Retenciones', 'rutas' => ['nomina.retenciones.*']],
+            'nomina_reportes' => ['label' => 'Reportes de nómina', 'rutas' => ['nomina.reportes.*']],
+            'nomina_comisiones_marca' => ['label' => 'Comisiones de marca', 'rutas' => ['nomina.comisiones_marca.*']],
+            'nomina_adelantos' => ['label' => 'Adelantos', 'rutas' => ['nomina.adelantos.*']],
+            'nomina_faltante' => ['label' => 'Faltante de caja', 'rutas' => ['nomina.faltante_caja.*']],
+            'nomina_mercancia' => ['label' => 'Descuento mercancía', 'rutas' => ['nomina.mercancia.*']],
+            'nomina_ajustes' => ['label' => 'Deducciones y bonos', 'rutas' => ['nomina.ajustes.*']],
+            'nomina_horas_extras' => ['label' => 'Horas extras', 'rutas' => ['nomina.horas_extras.*']],
+            'nomina_dias_libres' => ['label' => 'Días libres', 'rutas' => ['nomina.dias_libres.*']],
+            'nomina_prestamos' => ['label' => 'Préstamos', 'rutas' => ['nomina.prestamos.*']],
+            'nomina_deudas' => ['label' => 'Deudas del personal', 'rutas' => ['nomina.deudas.*']],
+            'nomina_empleados' => ['label' => 'Empleados', 'rutas' => ['nomina.empleados.*']],
+            'nomina_organigrama' => ['label' => 'Organigrama', 'rutas' => ['nomina.organizacion']],
+            'nomina_configuracion' => ['label' => 'Ajustes, sedes, cargos y empresas', 'rutas' => ['nomina.configuracion.*', 'nomina.sedes.*', 'nomina.cargos.*', 'nomina.empresas.*']],
+            'nomina_equipo' => ['label' => 'Nómina del equipo', 'rutas' => ['nomina.equipo.*']],
+        ],
+        'Servicio técnico' => [
+            'servicio_celulares' => ['label' => 'Celulares', 'rutas' => ['servicio.celulares.*']],
+            'servicio_dashboard' => ['label' => 'Dashboard de servicio', 'rutas' => ['servicio.dashboard']],
+            'servicio_ordenes' => ['label' => 'Órdenes, reparaciones internas y reporte por marca', 'rutas' => ['servicio.ordenes.*', 'servicio.reparaciones.*']],
+            'servicio_facturas' => ['label' => 'Facturas de servicio', 'rutas' => ['servicio.facturas.*']],
+            'servicio_repuestos' => ['label' => 'Repuestos', 'rutas' => ['servicio.repuestos.*']],
+        ],
+        'General' => [
+            'panel_gerente' => ['label' => 'Panel principal (gerente)', 'rutas' => ['admin.dashboard']],
+            'mensajeria' => ['label' => 'Mensajería', 'rutas' => ['mensajeria.*']],
+            'nfc' => ['label' => 'Tarjetas NFC', 'rutas' => ['nfc.*']],
+            'movimientos' => ['label' => 'Movimientos', 'rutas' => ['admin.movimientos.*']],
+            'productos' => ['label' => 'Productos', 'rutas' => ['admin.productos.*']],
+            'sincronizadores' => ['label' => 'Sincronizadores y sync logs', 'rutas' => ['admin.sync.*', 'admin.sync_logs.*']],
+            'catalogo_auto' => ['label' => 'Automatizador de catálogos', 'rutas' => ['admin.catalogo-auto.*']],
+        ],
+    ],
+];

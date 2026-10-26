@@ -33,7 +33,7 @@
             <span>Facturas</span>
             <strong>{{ number_format($total['facturas']) }}</strong>
             @if(auth()->user()->canAccess('gerencial.clientes'))
-                <a href="{{ route('gerencial.clientes', request()->except(['page', 'ranking'])) }}" class="gerencial-kpi-link">Ver clientes</a>
+                @accesible('gerencial.clientes')<a href="{{ route('gerencial.clientes', request()->except(['page', 'ranking'])) }}" class="gerencial-kpi-link">Ver clientes</a>@endaccesible
             @endif
         </div>
         <div class="nomina-kpi warn">
@@ -41,7 +41,7 @@
             <strong>{{ number_format($total['devoluciones']) }}</strong>
             <div class="muted" style="font-size:.75rem;">${{ $fmt($total['devoluciones_usd']) }}</div>
             @if(auth()->user()->canAccess('gerencial.devoluciones'))
-                <a href="{{ route('gerencial.devoluciones', request()->except('page')) }}" class="gerencial-kpi-link">Ver módulo</a>
+                @accesible('gerencial.devoluciones')<a href="{{ route('gerencial.devoluciones', request()->except('page')) }}" class="gerencial-kpi-link">Ver módulo</a>@endaccesible
             @endif
         </div>
         <div class="nomina-kpi">
@@ -52,7 +52,7 @@
             <span>Margen</span>
             <strong>${{ $fmt($total['margen_usd']) }}</strong>
             @if(auth()->user()->canAccess('gerencial.rentabilidad'))
-                <a href="{{ route('gerencial.rentabilidad', request()->except(['page', 'ranking'])) }}" class="gerencial-kpi-link">Ver rentabilidad</a>
+                @accesible('gerencial.rentabilidad')<a href="{{ route('gerencial.rentabilidad', request()->except(['page', 'ranking'])) }}" class="gerencial-kpi-link">Ver rentabilidad</a>@endaccesible
             @endif
         </div>
         <div class="nomina-kpi">
@@ -60,7 +60,7 @@
             <strong>${{ $fmt($total['inventario_valor']) }}</strong>
             <div class="muted" style="font-size:.75rem;">{{ $fmt($total['inventario_unidades'], 0) }} unds</div>
             @if(auth()->user()->canAccess('gerencial.valorizados'))
-                <a href="{{ route('gerencial.valorizados', request()->except(['page', 'ranking'])) }}" class="gerencial-kpi-link">Ver valorizado</a>
+                @accesible('gerencial.valorizados')<a href="{{ route('gerencial.valorizados', request()->except(['page', 'ranking'])) }}" class="gerencial-kpi-link">Ver valorizado</a>@endaccesible
             @endif
         </div>
         <div class="nomina-kpi">
@@ -68,7 +68,7 @@
             <strong>{{ $fmt($total['ajustes_unidades'], 0) }}</strong>
             <div class="muted" style="font-size:.75rem;">${{ $fmt($total['ajustes_valor']) }}</div>
             @if(auth()->user()->canAccess('gerencial.ajustes'))
-                <a href="{{ route('gerencial.ajustes', request()->except(['page', 'ranking'])) }}" class="gerencial-kpi-link">Ver consolidado</a>
+                @accesible('gerencial.ajustes')<a href="{{ route('gerencial.ajustes', request()->except(['page', 'ranking'])) }}" class="gerencial-kpi-link">Ver consolidado</a>@endaccesible
             @endif
         </div>
     </div>

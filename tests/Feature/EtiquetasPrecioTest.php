@@ -76,17 +76,17 @@ class EtiquetasPrecioTest extends TestCase
         $this->assertSame(6.0, $con['precio_unidad']);
         $this->assertSame(5.0, $con['precio_mayor']);
         $this->assertSame(17, $con['ahorro_pct']);
-        $this->assertSame('6,00', $con['unidad_fmt']);
-        $this->assertSame('5,00', $con['mayor_fmt']);
+        $this->assertSame('6.00', $con['unidad_fmt']);
+        $this->assertSame('5.00', $con['mayor_fmt']);
 
         // 5,00 y 4,50 → ambos a 5: un solo precio en la etiqueta.
         $ceilIgual = $svc->ficha(['id' => 2, 'codigo' => 'x', 'nombre' => 'x', 'categoria' => '', 'precio_unidad' => 5.0, 'precio_mayor' => 4.5], 3);
         $this->assertFalse($ceilIgual['con_mayor']);
-        $this->assertSame('5,00', $ceilIgual['unidad_fmt']);
+        $this->assertSame('5.00', $ceilIgual['unidad_fmt']);
 
         $sin = $svc->ficha(['id' => 3, 'codigo' => 'x', 'nombre' => 'x', 'categoria' => '', 'precio_unidad' => 1.5, 'precio_mayor' => 0], 3);
         $this->assertFalse($sin['con_mayor']);
-        $this->assertSame('2,00', $sin['unidad_fmt']);
+        $this->assertSame('2.00', $sin['unidad_fmt']);
 
         $mayorIgual = $svc->ficha(['id' => 3, 'codigo' => 'x', 'nombre' => 'x', 'categoria' => '', 'precio_unidad' => 2.0, 'precio_mayor' => 2.0], 3);
         $this->assertFalse($mayorIgual['con_mayor']);
@@ -179,6 +179,15 @@ class EtiquetasPrecioTest extends TestCase
         $this->assertSame('apple', $svc->logoMarca(['marca' => ''], 'MACBOOK AIR M2'));
         $this->assertSame('hp', $svc->logoMarca(['marca' => 'HP'], 'LAPTOP HP 15'));
         $this->assertNull($svc->logoMarca(['marca' => 'MSI'], 'LAPTOP MSI THIN'));
+
+        $this->assertSame('gateway', $svc->logoMarca(['marca' => 'GATEWAY'], 'LAPTOP GATEWAY ULTRA SLIM'));
+        $chromebook = $svc->sugerirSpecsPc('HP CHROMEBOOK 14 INTEL CELERON N4500 4GB 64GB EMMC');
+        $this->assertSame('ChromeOS', $chromebook['sistema']);
+        $this->assertSame('hp', $svc->logoMarca($chromebook, 'HP CHROMEBOOK 14'));
+        $this->assertSame('chromeos', $svc->logoSistema($chromebook));
+        $this->assertSame('chromeos', $svc->logoMarca(['marca' => ''], 'CHROMEBOOK 11 GENERICA'));
+        $this->assertNull($svc->logoSistema(['sistema' => 'Windows 11']));
+        $this->assertNull($svc->logoSistema([], 'GCHROME MAGNETIC RING CASE'));
     }
 
     public function test_celulares_leen_ram_y_almacenamiento_y_usan_su_logo(): void
@@ -274,8 +283,10 @@ class EtiquetasPrecioTest extends TestCase
         $this->assertSame('$870', $ficha['unidad_entero_fmt']);
         $this->assertSame('$957', $ficha['regular_entero_fmt']);
 
-        $this->assertSame('$1.264', $svc->ficha($base + ['precio_unidad' => 1149], 3)['regular_entero_fmt']);
-        $this->assertSame('$1.207', $svc->ficha($base + ['precio_unidad' => 1149], 3, 5)['regular_entero_fmt']);
+        $this->assertSame('$1,264', $svc->ficha($base + ['precio_unidad' => 1149], 3)['regular_entero_fmt']);
+        $this->assertSame('$1,207', $svc->ficha($base + ['precio_unidad' => 1149], 3, 5)['regular_entero_fmt']);
+        $this->assertSame(['$870.00', '$957.00'], [$ficha['unidad_usd_fmt'], $ficha['regular_usd_fmt']]);
+        $this->assertSame('1,450.75', $svc->formatoPrecio(1450.75));
     }
 
     public function test_celular_lee_pantalla_camara_y_bateria(): void
@@ -318,11 +329,11 @@ class EtiquetasPrecioTest extends TestCase
             ['id' => 3, 'copias' => 1],
         ], 3);
 
-        $this->assertSame(['3,50', '2,75', true, 6], [$fichas[0]['unidad_fmt'], $fichas[0]['mayor_fmt'], $fichas[0]['con_mayor'], $fichas[0]['cantidad_mayor']]);
+        $this->assertSame(['3.50', '2.75', true, 6], [$fichas[0]['unidad_fmt'], $fichas[0]['mayor_fmt'], $fichas[0]['con_mayor'], $fichas[0]['cantidad_mayor']]);
         $this->assertSame(21, $fichas[0]['ahorro_pct']);
         $this->assertFalse($fichas[1]['con_mayor']);
-        $this->assertSame('5,00', $fichas[1]['unidad_fmt']);
-        $this->assertSame(['2,00', 3], [$fichas[2]['unidad_fmt'], $fichas[2]['cantidad_mayor']]);
+        $this->assertSame('5.00', $fichas[1]['unidad_fmt']);
+        $this->assertSame(['2.00', 3], [$fichas[2]['unidad_fmt'], $fichas[2]['cantidad_mayor']]);
 
         $this->post(route('etiquetas.pdf'), [
             'items' => [['id' => 1, 'copias' => 1, 'precio_unidad' => '3.5', 'precio_mayor' => '2.75', 'cantidad_mayor' => 6]],
@@ -337,7 +348,7 @@ class EtiquetasPrecioTest extends TestCase
             ['id' => 1, 'copias' => 1, 'precio_unidad' => 3, 'precio_mayor' => 23, 'cantidad_mayor' => 12],
             ['id' => 1, 'copias' => 1, 'precio_unidad' => 3, 'precio_mayor' => 40, 'cantidad_mayor' => 12],
         ], 3);
-        $this->assertSame([true, true, '12 PZAS', 36, '¡AHORRAS 36%! 1,92 C/U'], [
+        $this->assertSame([true, true, '12 PZAS', 36, '¡AHORRAS 36%! 1.92 C/U'], [
             $paquete[0]['con_mayor'], $paquete[0]['es_paquete'], $paquete[0]['texto_mayor'], $paquete[0]['ahorro_pct'], $paquete[0]['texto_ahorro'],
         ]);
         $this->assertSame([true, 0, ''], [$paquete[1]['con_mayor'], $paquete[1]['ahorro_pct'], $paquete[1]['texto_ahorro']]);

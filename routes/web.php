@@ -227,6 +227,8 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::post('/usuarios/{user}', [UserController::class, 'update'])->name('users.update');
     Route::delete('/usuarios/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::post('/config/cashea', [UserController::class, 'updateCashea'])->name('config.cashea.update');
+    Route::get('/accesos', [\App\Http\Controllers\Admin\AccesosController::class, 'index'])->name('accesos.index');
+    Route::post('/accesos', [\App\Http\Controllers\Admin\AccesosController::class, 'guardar'])->name('accesos.guardar');
     Route::post('/clear-cache', [DashboardController::class, 'clearCache'])->name('clear-cache');
     Route::post('/clear-data', [DashboardController::class, 'clearData'])->name('clear-data');
     
@@ -637,6 +639,7 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::post('/conciliacion-divisas/subir', [\App\Http\Controllers\ConciliacionUsdController::class, 'subir'])->name('finanzas.conciliacion_usd.subir');
     Route::post('/conciliacion-divisas/importar', [\App\Http\Controllers\ConciliacionUsdController::class, 'importar'])->name('finanzas.conciliacion_usd.importar');
     Route::post('/conciliacion-divisas/conciliar', [\App\Http\Controllers\ConciliacionUsdController::class, 'conciliar'])->name('finanzas.conciliacion_usd.conciliar');
+    Route::post('/conciliacion-divisas/pagos', [\App\Http\Controllers\ConciliacionUsdController::class, 'subirPagos'])->name('finanzas.conciliacion_usd.pagos');
     Route::post('/conciliacion-divisas/accion', [\App\Http\Controllers\ConciliacionUsdController::class, 'accion'])->name('finanzas.conciliacion_usd.accion');
     Route::post('/conciliaciones/divisas/preview', [\App\Http\Controllers\ConciliacionDivisasController::class, 'preview'])->name('finanzas.conciliaciones.divisas.preview');
     Route::post('/conciliaciones/divisas/aplicar', [\App\Http\Controllers\ConciliacionDivisasController::class, 'aplicar'])->name('finanzas.conciliaciones.divisas.aplicar');

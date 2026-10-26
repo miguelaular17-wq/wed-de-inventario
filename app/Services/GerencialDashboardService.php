@@ -16,7 +16,7 @@ class GerencialDashboardService
     public function sedesVentas(): array
     {
         return array_values(config('inventario.sedes_gerencial', [
-            'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'JRZ', 'MOVISTAR',
+            'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'JRZ', 'MOVISTAR', 'TECNOHOUSE',
         ]));
     }
 

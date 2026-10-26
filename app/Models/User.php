@@ -51,7 +51,7 @@ class User extends Authenticatable
         self::ROLE_RRHH,
     ];
 
-    /** Roles con sede fija asignada; no pueden cambiarla. */
+    /** Roles con sede fija asignada; solo cambian de sede de operación con el permiso sede.cambiar. */
     public const ROLES_SEDE_LOCKED = [
         self::ROLE_SUPERVISOR,
         self::ROLE_TELEFONIA,
@@ -233,6 +233,12 @@ class User extends Authenticatable
 
     public function sedeIsLocked(): bool
     {
+        return $this->tieneSedeFija() && ! $this->canAccess('sede.cambiar');
+    }
+
+    /** Su sede asignada la cambia solo un administrador, aunque tenga permiso de operar en otra. */
+    public function tieneSedeFija(): bool
+    {
         return in_array($this->role, self::ROLES_SEDE_LOCKED, true);
     }
 
@@ -275,13 +281,7 @@ class User extends Authenticatable
 
     public function hasFullComprasAccess(): bool
     {
-        if ($this->isAdmin()) {
-            return true;
-        }
-
-        $owned = array_merge($this->rolePermissionKeys(), $this->extraPermissionKeys());
-
-        return in_array('compras', $owned, true);
+        return $this->canAccess('compras');
     }
 
     public function canEnterCompras(): bool
@@ -301,6 +301,11 @@ class User extends Authenticatable
 
     public function canAccessComprasTab(string $tab): bool
     {
+        $permiso = self::comprasTabPermissions()[$tab] ?? null;
+        if ($permiso && app(\App\Services\AccesosService::class)->permisoBloqueado($this, $permiso)) {
+            return false;
+        }
+
         if ($this->hasFullComprasAccess()) {
             return true;
         }
@@ -417,6 +422,11 @@ class User extends Authenticatable
 
     public function canAccess(string $permission): bool
     {
+        // Función negada por el administrador: pesa más que el rol, también para el gerente.
+        if (app(\App\Services\AccesosService::class)->permisoBloqueado($this, $permission)) {
+            return false;
+        }
+
         if ($this->isAdmin()) {
             return true;
         }

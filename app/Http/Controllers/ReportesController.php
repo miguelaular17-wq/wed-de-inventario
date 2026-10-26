@@ -13,7 +13,7 @@ use Illuminate\View\View;
 
 class ReportesController extends Controller
 {
-    private const SEDES = ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL'];
+    private const SEDES = ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'TECNOHOUSE'];
 
     public function index(): View
     {
@@ -21,7 +21,7 @@ class ReportesController extends Controller
             'reportes' => [
                 [
                     'titulo' => 'Existencias por sede',
-                    'descripcion' => 'Código, producto, categoría, subcategoría, existencia en cada sede (JRZ, Doral, Virtudes, Zamora, Centro, Sambil) y total.',
+                    'descripcion' => 'Código, producto, categoría, subcategoría, existencia en cada sede (JRZ, Doral, Virtudes, Zamora, Centro, Sambil, Tecno House) y total.',
                     'url' => route('reportes.existencias_sede'),
                     'excel' => route('reportes.existencias_sede.excel'),
                 ],
@@ -100,6 +100,7 @@ class ReportesController extends Controller
             'ZAMORA',
             'CENTRO',
             'SAMBIL',
+            'TECNO HOUSE',
             'Total',
         ]];
 
@@ -115,6 +116,7 @@ class ReportesController extends Controller
                 (int) $fila->zamora,
                 (int) $fila->centro,
                 (int) $fila->sambil,
+                (int) $fila->tecnohouse,
                 (int) $fila->total,
             ];
         }
@@ -323,6 +325,7 @@ class ReportesController extends Controller
                 COALESCE(SUM(sa.existencia) FILTER (WHERE sa.sede = 'ZAMORA'), 0) AS zamora,
                 COALESCE(SUM(sa.existencia) FILTER (WHERE sa.sede = 'CENTRO'), 0) AS centro,
                 COALESCE(SUM(sa.existencia) FILTER (WHERE sa.sede = 'SAMBIL'), 0) AS sambil,
+                COALESCE(SUM(sa.existencia) FILTER (WHERE sa.sede = 'TECNOHOUSE'), 0) AS tecnohouse,
                 COALESCE(SUM(sa.existencia), 0) AS total
             FROM inventario_v2.productos p
             LEFT JOIN inventario_v2.stock_actual sa ON sa.producto_id = p.id

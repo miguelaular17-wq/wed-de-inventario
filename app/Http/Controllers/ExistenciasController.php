@@ -10,8 +10,8 @@ use Illuminate\View\View;
 
 class ExistenciasController extends Controller
 {
-    /** Orden de columnas; Nunes y Movistar también tienen stock. */
-    private const SEDES_BASE = ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'MOVISTAR'];
+    /** Orden de columnas; Nunes, Movistar y Tecno House también tienen stock. */
+    private const SEDES_BASE = ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'MOVISTAR', 'TECNOHOUSE'];
 
     public function index(Request $request): View
     {

@@ -74,7 +74,7 @@ class EtiquetasPrecioService
     /** Logos en public/img/marcas/{clave}.png */
     public const LOGOS_MARCA = [
         'acer', 'apple', 'asus', 'dell', 'hp', 'lenovo', 'victus',
-        'samsung', 'xiaomi', 'poco', 'tecno', 'infinix', 'honor', 'blu', 'cubot', 'cubitt',
+        'samsung', 'xiaomi', 'poco', 'tecno', 'infinix', 'honor', 'blu', 'cubot', 'cubitt', 'gateway', 'chromeos',
     ];
 
     private const MARCAS_PC = [
@@ -161,6 +161,7 @@ class EtiquetasPrecioService
             $ficha['texto_unidad'] = $this->textoUnidad($item['texto_unidad'] ?? null);
             $ficha['specs'] = $this->specsFinales($producto['nombre'], $item['specs'] ?? null);
             $ficha['logo_marca'] = $this->logoMarca($ficha['specs'], $producto['nombre']);
+            $ficha['logo_sistema'] = $this->logoSistema($ficha['specs'], $producto['nombre']);
             $copias = max(1, min(100, (int) $item['copias']));
             for ($i = 0; $i < $copias && count($etiquetas) < self::MAX_ETIQUETAS; $i++) {
                 $etiquetas[] = $ficha;
@@ -208,6 +209,8 @@ class EtiquetasPrecioService
             'texto_unidad' => self::TEXTO_UNIDAD,
             'precio_regular' => $regular,
             'regular_entero_fmt' => $this->formatoPrecioEntero($regular),
+            'unidad_usd_fmt' => $this->formatoPrecioDolar($unidad),
+            'regular_usd_fmt' => $this->formatoPrecioDolar($regular),
         ]);
     }
 
@@ -419,9 +422,14 @@ class EtiquetasPrecioService
         if (preg_match('/\b(?:W|WIN|WINDOWS)\s?(10|11)(?:\s?(HOME|PRO))?(\s?S\s?MODE)?\b/u', $n, $m)) {
             $usado[] = $m[0];
             $specs['sistema'] = 'Windows ' . $m[1] . (($m[2] ?? '') !== '' ? ' ' . ucfirst(strtolower($m[2])) : '') . (($m[3] ?? '') !== '' ? ' S' : '');
-        } elseif (preg_match('/\bANDROID\s?\d{1,2}\b|\bIOS\s?\d{1,2}\b|\bCHROME\s?OS\b|\bFREE\s?DOS\b|\bMAC\s?OS\b|\bUBUNTU\b|\bLINUX\b/u', $n, $m)) {
+        } elseif (preg_match('/\bCHROME\s?OS\b/u', $n, $m)) {
+            $usado[] = $m[0];
+            $specs['sistema'] = 'ChromeOS';
+        } elseif (preg_match('/\bANDROID\s?\d{1,2}\b|\bIOS\s?\d{1,2}\b|\bFREE\s?DOS\b|\bMAC\s?OS\b|\bUBUNTU\b|\bLINUX\b/u', $n, $m)) {
             $usado[] = $m[0];
             $specs['sistema'] = trim($m[0]);
+        } elseif (preg_match('/\bCHROME(BOOK|BASE|BOX|BIT)\b/u', $n)) {
+            $specs['sistema'] = 'ChromeOS';
         }
 
         $resto = $n;
@@ -471,20 +479,42 @@ class EtiquetasPrecioService
             $marca === 'REDMI' => 'xiaomi',
             $marca === 'APPLE' || ($marca === '' && preg_match('/\b(APPLE|MACBOOK|IMAC)\b/u', $texto)) => 'apple',
             in_array(mb_strtolower($marca), self::LOGOS_MARCA, true) => mb_strtolower($marca),
+            // Sin marca reconocida: el logo del sistema de las Chromebook.
+            $this->logoSistema($specs, $nombre) !== null => 'chromeos',
             default => null,
         };
 
         return $clave !== null && is_file(public_path("img/marcas/{$clave}.png")) ? $clave : null;
     }
 
+    /**
+     * Logo del sistema operativo para la fila "OS" de la ficha (hoy solo ChromeOS).
+     *
+     * @param  array<string, string>  $specs
+     */
+    public function logoSistema(array $specs, string $nombre = ''): ?string
+    {
+        $sistema = mb_strtoupper(trim((string) ($specs['sistema'] ?? '')), 'UTF-8');
+        $esChrome = preg_match('/CHROME\s?OS/u', $sistema) === 1
+            || ($sistema === '' && preg_match('/\bCHROME(BOOK|BASE|BOX|BIT)\b/u', mb_strtoupper($nombre, 'UTF-8')) === 1);
+
+        return $esChrome && is_file(public_path('img/marcas/chromeos.png')) ? 'chromeos' : null;
+    }
+
+    /** Precios de etiqueta: decimales con punto y miles con coma (1,450.75). */
     public function formatoPrecioEntero(float $valor): string
     {
-        return $valor > 0 ? '$' . number_format($valor, 0, ',', '.') : '—';
+        return $valor > 0 ? '$' . number_format($valor, 0, '.', ',') : '—';
     }
 
     public function formatoPrecio(float $valor): string
     {
-        return $valor > 0 ? number_format($valor, 2, ',', '.') : '—';
+        return $valor > 0 ? number_format($valor, 2, '.', ',') : '—';
+    }
+
+    public function formatoPrecioDolar(float $valor): string
+    {
+        return $valor > 0 ? '$' . $this->formatoPrecio($valor) : '—';
     }
 
     /**

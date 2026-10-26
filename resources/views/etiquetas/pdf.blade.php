@@ -131,11 +131,38 @@
             . '<div class="abs" style="top: ' . $t . 'mm; font-size: ' . $fsCab . 'pt;">' . e($l1) . '</div>'
             . '<div class="abs th-fucsia" style="top: ' . ($t + $lh) . 'mm; font-size: ' . $fsCab . 'pt;">' . e($l2) . '</div></div>';
     };
-    $thPrecio = function (float $left, float $top, float $ancho, float $alto, string $valor, array $tamanos, string $clave, string $color = '#0b1f4d') use ($fit, $ptMm, $m, $k) {
-        $p = $fit($clave, $valor, $ancho - $m(5), $tamanos);
+    // Precio con decimales chicos arriba ("3" grande y ".00" pequeño a la altura del tope del número).
+    $partesPrecio = fn (string $valor) => preg_match('/^(.*?)(\.\d{1,2})$/u', $valor, $pp) ? [$pp[1], $pp[2]] : [$valor, ''];
+    $anchoSup = function (string $valor, float $fs) use ($partesPrecio, $anchoTextoMm) {
+        [$ent, $dec] = $partesPrecio($valor);
+        return $anchoTextoMm($ent, $fs) + ($dec !== '' ? $anchoTextoMm($dec, $fs * 0.5) + 0.25 : 0);
+    };
+    $fitSup = function (array $valores, float $ancho, array $tamanos) use ($anchoSup) {
+        foreach ($tamanos as $fsSup) {
+            if (max(array_map(fn ($v) => $anchoSup($v, $fsSup), $valores)) <= $ancho) {
+                return $fsSup;
+            }
+        }
+        return end($tamanos);
+    };
+    $precioSup = function (string $valor, float $fs, float $top, float $anchoCaja, string $color = '#0f172a') use ($partesPrecio, $anchoTextoMm) {
+        [$ent, $dec] = $partesPrecio($valor);
+        $fsDec = round($fs * 0.5, 1);
+        $wE = $anchoTextoMm($ent, $fs);
+        $wD = $dec !== '' ? $anchoTextoMm($dec, $fsDec) + 0.25 : 0;
+        $left = max(0, ($anchoCaja - $wE - $wD) / 2);
+        $html = '<div class="abs sup-num" style="left: ' . $left . 'mm; top: ' . $top . 'mm; font-size: ' . $fs . 'pt; color: ' . $color . ';">' . e($ent) . '</div>';
+        if ($dec !== '') {
+            // El tope del glifo chico queda alineado con el del grande.
+            $html .= '<div class="abs sup-num" style="left: ' . ($left + $wE + 0.25) . 'mm; top: ' . ($top + ($fs - $fsDec) * 0.3528 * 0.13) . 'mm; font-size: ' . $fsDec . 'pt; color: ' . $color . ';">' . e($dec) . '</div>';
+        }
+        return $html;
+    };
+    $thPrecio = function (float $left, float $top, float $ancho, float $alto, string $valor, array $tamanos, string $clave, string $color = '#0b1f4d') use ($fitSup, $precioSup, $ptMm, $m, $k) {
+        $fsP = $fitSup([$valor], $ancho - $m(5), $tamanos);
         return '<div class="abs th-blanco" style="left: ' . $left . 'mm; top: ' . $top . 'mm; width: ' . $ancho . 'mm; height: ' . $alto . 'mm;">'
             . '<div class="abs b" style="left: ' . $m(1.3) . 'mm; top: ' . $m(0.8) . 'mm; font-size: ' . round(4.6 * $k, 1) . 'pt; color: #64748b;">REF</div>'
-            . '<div class="abs num" style="top: ' . (($alto - $ptMm($p['fs'])) / 2 + $m(0.5)) . 'mm; font-size: ' . $p['fs'] . 'pt; color: ' . $color . ';">' . e($valor) . '</div></div>';
+            . $precioSup($valor, $fsP, ($alto - $ptMm($fsP)) / 2 + $m(0.5), $ancho, $color) . '</div>';
     };
     $thLema = function (float $centroY, float $anchoMax, array $tamanos) use ($fit, $anchoTextoMm, $ptMm, $W) {
         $a = '¡Tecnología ';
@@ -166,6 +193,7 @@
     .blanco { background: #fff; border-radius: {{ $m(2) }}mm; overflow: hidden; }
     .linea { white-space: nowrap; font-weight: bold; color: #0f172a; }
     .num { left: 0; width: 100%; text-align: center; font-weight: bold; line-height: 1; white-space: nowrap; letter-spacing: -0.3pt; }
+    .sup-num { font-weight: bold; line-height: 1; white-space: nowrap; }
 
     .caja { top: {{ $precioTop }}mm; height: {{ $precioH }}mm; }
     .caja .h { left: 0; top: 0; width: 100%; background: #1e1b4b; color: #fff; font-weight: bold; }
@@ -256,9 +284,11 @@
                     $ram = (string) preg_replace('/\s+RAM$/iu', '', $val('ram'));
                     $alm = $val('almacenamiento');
                     $memoria = trim(($ram !== '' ? 'Ram: ' . $ram : '') . ($ram !== '' && $alm !== '' ? '   ' : '') . ($alm !== '' ? ($esCel ? 'Almacenamiento: ' : 'Disco: ') . $alm : ''));
+                    $logoSis = $logosMarca[$e['logo_sistema'] ?? ''] ?? null;
+                    $iconoOs = preg_match('/windows/i', $val('sistema')) ? 'windows' : 'sistema';
                     $filasTh = $esCel
-                        ? [['celular', 'Modelo', $modelo], ['pantalla', 'Pantalla', $pantalla], ['ram', '', $memoria], ['chip', 'Procesador', $val('procesador')], ['camara', 'Cámara', $val('camara')], ['bateria', 'Batería', $val('bateria')], ['sistema', 'OS', $val('sistema')]]
-                        : [['laptop', 'Modelo', $modelo], ['chip', 'Procesador', $val('procesador')], ['grafica', 'Gráfica', $val('grafica')], ['pantalla', 'Pantalla', $pantalla], ['ram', '', $memoria], ['windows', 'OS', $val('sistema')]];
+                        ? [['celular', 'Modelo', $modelo], ['pantalla', 'Pantalla', $pantalla], ['ram', '', $memoria], ['chip', 'Procesador', $val('procesador')], ['camara', 'Cámara', $val('camara')], ['bateria', 'Batería', $val('bateria')], ['sistema', 'OS', $val('sistema'), $logoSis]]
+                        : [['laptop', 'Modelo', $modelo], ['chip', 'Procesador', $val('procesador')], ['grafica', 'Gráfica', $val('grafica')], ['pantalla', 'Pantalla', $pantalla], ['ram', '', $memoria], [$iconoOs, 'OS', $val('sistema'), $logoSis]];
                     $filasTh = array_slice(array_values(array_filter($filasTh, fn ($f) => $f[2] !== '')), 0, 6);
                     if ($filasTh === []) {
                         $filasTh = [[$esCel ? 'celular' : 'laptop', '', $e['nombre']]];
@@ -291,9 +321,9 @@
                 {!! $thLogo($my(3.4), $m(8)) !!}
 
                 {!! $thCabecera($mx(10.6), $my(13.7), $mx(23.6), $my(7.9), 'PROMO', 'EN DIVISA', $fs([10, 9.5, 9, 8.5, 8, 7.5]), 'thpromo') !!}
-                {!! $thPrecio($mx(8.8), $my(21.6), $mx(26.9), $my(10), $e['unidad_entero_fmt'], $fs([24, 22, 20, 18, 16, 14, 12]), 'thpnum') !!}
+                {!! $thPrecio($mx(8.8), $my(21.6), $mx(26.9), $my(10), $e['unidad_usd_fmt'] ?? $e['unidad_entero_fmt'], $fs([24, 22, 20, 18, 16, 14, 12]), 'thpnum') !!}
                 {!! $thCabecera($mx(40.3), $my(16.7), $mx(19.2), $my(6.7), 'PRECIO', 'REGULAR', $fs([8, 7.5, 7, 6.5, 6]), 'threg') !!}
-                {!! $thPrecio($mx(38.4), $my(23.4), $mx(20.5), $my(7.9), $e['regular_entero_fmt'], $fs([18, 17, 16, 15, 14, 12, 11, 10]), 'thrnum') !!}
+                {!! $thPrecio($mx(38.4), $my(23.4), $mx(20.5), $my(7.9), $e['regular_usd_fmt'] ?? $e['regular_entero_fmt'], $fs([18, 17, 16, 15, 14, 12, 11, 10]), 'thrnum') !!}
 
                 @if($logoM || $marca !== '')
                     <div class="abs th-blanco" style="left: {{ $marcaL }}mm; top: {{ $marcaT }}mm; width: {{ $marcaW }}mm; height: {{ $marcaH }}mm;">
@@ -306,8 +336,10 @@
                 @endif
 
                 <div class="abs th-blanco" style="left: {{ $panL }}mm; top: {{ $panT }}mm; width: {{ $panW }}mm; height: {{ $panH }}mm; border-radius: {{ $m(3) }}mm;"></div>
-                @foreach($filasTh as $f => [$icono, $etiqueta, $valor])
+                @foreach($filasTh as $f => $filaTh)
                     @php
+                        [$icono, $etiqueta, $valor] = $filaTh;
+                        $logoFila = $filaTh[3] ?? null;
                         $fy = $filasTop + $f * $filaH;
                         $texto = $etiqueta !== '' ? $etiqueta . ': ' . $valor : $valor;
                         $sp = $ajustar('th' . $e['id'] . $f . md5($texto) . round($filaH, 2), $texto, $txtW, $filaH - $m(0.3), $fs([9.5, 9, 8.5, 8, 7.5, 7, 6.5, 6, 5.5]), 2, false);
@@ -315,7 +347,20 @@
                     @if(isset($iconosTh[$icono]))
                         <img class="abs" src="{{ $iconosTh[$icono] }}" alt="" style="left: {{ $icoCx - $icoD / 2 }}mm; top: {{ $fy + ($filaH - $icoD) / 2 }}mm; width: {{ $icoD }}mm; height: {{ $icoD }}mm;">
                     @endif
-                    {!! $thLineas($sp, $txtL, $fy + max(0, ($filaH - $altoLineas($sp)) / 2)) !!}
+                    @if($logoFila)
+                        @php
+                            // El sistema con su logo (ChromeOS) en lugar del texto.
+                            $fsOs = min(round(9.5 * $k, 1), round(($filaH - $m(0.6)) / 0.3528 / 1.2, 1));
+                            $osW = $anchoTextoMm('OS: ', $fsOs);
+                            $lsH = min($filaH - $m(1.2), $m(5));
+                            $lsW = min($txtW - $osW, $lsH * $logoFila['ratio']);
+                            $lsH = $lsW / $logoFila['ratio'];
+                        @endphp
+                        <div class="abs th-txt" style="left: {{ $txtL }}mm; top: {{ $fy + ($filaH - $ptMm($fsOs)) / 2 - $m(0.3) }}mm; font-size: {{ $fsOs }}pt;"><b>OS:</b></div>
+                        <img class="abs" src="{{ $logoFila['src'] }}" alt="" style="left: {{ $txtL + $osW }}mm; top: {{ $fy + ($filaH - $lsH) / 2 }}mm; width: {{ $lsW }}mm; height: {{ $lsH }}mm;">
+                    @else
+                        {!! $thLineas($sp, $txtL, $fy + max(0, ($filaH - $altoLineas($sp)) / 2)) !!}
+                    @endif
                 @endforeach
 
                 {!! $thLema($my(76.9), $W - $m(14), $fs([11, 10.5, 10, 9.5, 9, 8.5, 8, 7])) !!}
@@ -350,7 +395,7 @@
                         $cajaH = $areaH - $cabH;
                         $txtMayor = $e['texto_mayor'] ?? $e['cantidad_mayor'] . '+ PZAS';
                         $numTams = $fs([20, 18, 16, 14, 12, 10]);
-                        $numFsCl = min($fit('thclu', $e['unidad_fmt'], $colW - $m(5), $numTams)['fs'], $fit('thclm', $e['mayor_fmt'], $colW - $m(5), $numTams)['fs']);
+                        $numFsCl = $fitSup([$e['unidad_fmt'], $e['mayor_fmt']], $colW - $m(5), $numTams);
                         $numTamsIguales = [$numFsCl];
                     @endphp
                     @foreach([[$e['texto_unidad'] ?? '1 PZA', $e['unidad_fmt'], $nomL, false], [$txtMayor, $e['mayor_fmt'], $nomL + $colW + $colGap, true]] as [$cant, $valor, $cx, $esMayor])
@@ -392,7 +437,7 @@
                         $mW = min($lzW - $m(6), $mH * $lzLogoM['ratio']);
                         $mH = $mW / $lzLogoM['ratio'];
                     }
-                    $precio = $fit('lznum', $e['unidad_fmt'], $lzPanelW - $m(5), $fs([26, 24, 22, 20, 18, 16, 14]));
+                    $precio = ['fs' => $fitSup([$e['unidad_fmt']], $lzPanelW - $m(5), $fs([26, 24, 22, 20, 18, 16, 14]))];
                     $mayor = $e['con_mayor'] ? $fit('lzmay', $e['texto_mayor'] . ': REF ' . $e['mayor_fmt'] . ($e['es_paquete'] ? '' : ' C/U'), $lzPanelW - $m(3), $fs([6.5, 6, 5.5, 5, 4.5])) : null;
                     $nomTop = $m(25);
                     $nomH = $lzPanelH - $nomTop - $m(4.6);
@@ -424,7 +469,7 @@
                     <div class="abs lz-pill"><div class="abs b centro nw">PRECIO</div></div>
                     <div class="abs b der nw" style="left: 0; width: {{ $lzPanelW - $m(2.4) }}mm; top: {{ $m(3.2) }}mm; font-size: {{ round(4.8 * $k, 1) }}pt; color: #94a3b8;">{{ $fecha }}</div>
                     <div class="abs b" style="left: {{ $m(2.6) }}mm; top: {{ $m(7.6) }}mm; font-size: {{ round(5.5 * $k, 1) }}pt; color: #64748b;">REF</div>
-                    <div class="abs num" style="top: {{ $m(8.6) + ($m(10.6) - $ptMm($precio['fs'])) / 2 }}mm; font-size: {{ $precio['fs'] }}pt;">{{ $e['unidad_fmt'] }}</div>
+                    {!! $precioSup($e['unidad_fmt'], $precio['fs'], $m(8.6) + ($m(10.6) - $ptMm($precio['fs'])) / 2, $lzPanelW) !!}
                     @if($mayor)
                         <div class="abs b centro nw" style="left: 0; width: 100%; top: {{ $m(19.8) }}mm; font-size: {{ $mayor['fs'] }}pt; color: #7c3aed;">{{ $mayor['lineas'][0] ?? '' }}</div>
                     @endif
@@ -493,7 +538,17 @@
                             <div class="abs pc-ico" style="left: {{ $sx }}mm; top: {{ $sy + ($filaH - $ico) / 2 - $m(0.4) }}mm; width: {{ $ico }}mm; height: {{ $ico }}mm; border-radius: {{ $ico / 2 }}mm;">
                                 <div class="abs" style="top: {{ $ico * 0.17 }}mm; font-size: {{ round($ico * 1.6, 1) }}pt;">{{ $pcIcono[$campo] }}</div>
                             </div>
-                            {!! $lineas($sp, $sx + $ico + $m(1.6), $sy + max(0, ($filaH - $altoLineas($sp)) / 2) - $m(0.4)) !!}
+                            @php $logoSisPc = $campo === 'sistema' ? ($logosMarca[$e['logo_sistema'] ?? ''] ?? null) : null; @endphp
+                            @if($logoSisPc)
+                                @php
+                                    $lsH = min($filaH - $m(1.2), $m(4.6));
+                                    $lsW = min($pcColW - $ico - $m(1.6), $lsH * $logoSisPc['ratio']);
+                                    $lsH = $lsW / $logoSisPc['ratio'];
+                                @endphp
+                                <img class="abs" src="{{ $logoSisPc['src'] }}" alt="" style="left: {{ $sx + $ico + $m(1.6) }}mm; top: {{ $sy + ($filaH - $lsH) / 2 - $m(0.4) }}mm; width: {{ $lsW }}mm; height: {{ $lsH }}mm;">
+                            @else
+                                {!! $lineas($sp, $sx + $ico + $m(1.6), $sy + max(0, ($filaH - $altoLineas($sp)) / 2) - $m(0.4)) !!}
+                            @endif
                         @endforeach
                     @endforeach
                 </div>
@@ -515,14 +570,12 @@
                         );
                         $hLinea = $ptMm($hFs) * 1.08;
                         $hTop = max($m(0.4), ($headH - 2 * $hLinea) / 2 + $m(0.2));
-                        $pu = $fit('clu', $e['unidad_fmt'], $boxW - $m(3), $fs([22, 20, 18, 16, 14, 12, 10]));
-                        $pm = $fit('clm', $e['mayor_fmt'], $boxW - $m(3), $fs([22, 20, 18, 16, 14, 12, 10]));
-                        $numFs = min($pu['fs'], $pm['fs']);
+                        $numFs = $fitSup([$e['unidad_fmt'], $e['mayor_fmt']], $boxW - $m(3), $fs([22, 20, 18, 16, 14, 12, 10]));
                     } else {
                         $headH = $headH1;
                         $hFs = $fit('cabs' . $txtPrecio, $txtPrecio, $inW - $m(4), $cabFs)['fs'];
                         $hTop = max($m(0.4), ($headH - $ptMm($hFs)) / 2 + $m(0.2));
-                        $numFs = $fit('cls', $e['unidad_fmt'], $inW - $m(8), $fs([30, 28, 26, 24, 22, 20, 18]))['fs'];
+                        $numFs = $fitSup([$e['unidad_fmt']], $inW - $m(8), $fs([30, 28, 26, 24, 22, 20, 18]));
                     }
                     $libreH = $precioH - $headH;
                     $numTop = $headH + ($libreH - $ptMm($numFs)) / 2 + $m(0.6);
@@ -545,7 +598,7 @@
                                 <div class="abs" style="top: {{ $hTop + $hLinea }}mm; font-size: {{ $hFs }}pt;"><span>{{ $cant }}</span></div>
                             </div>
                             <div class="abs ref" style="top: {{ $headH + $m(0.8) }}mm;">REF</div>
-                            <div class="abs num" style="top: {{ $esMayor ? $numTopMayor : $numTop }}mm; font-size: {{ $numFs }}pt; {{ $esMayor ? 'color: #6d28d9;' : '' }}">{{ $valor }}</div>
+                            {!! $precioSup($valor, $numFs, $esMayor ? $numTopMayor : $numTop, $boxW, $esMayor ? '#6d28d9' : '#0f172a') !!}
                             @if($esMayor && $conAhorro)
                                 @php $ahCl = $fit('clah' . $e['texto_ahorro'], $e['texto_ahorro'], $boxW - $m(1.5), $fs([5.3, 4.9, 4.5, 4.1, 3.7])); @endphp
                                 <div class="abs ahorro" style="top: {{ $ahorroTop }}mm; font-size: {{ $ahCl['fs'] }}pt;">{{ $e['texto_ahorro'] }}</div>
@@ -559,7 +612,7 @@
                             <div class="abs" style="top: {{ $hTop }}mm; font-size: {{ $hFs }}pt; letter-spacing: {{ $txtPrecio === 'PRECIO' ? 1.2 : 0.3 }}pt;">{{ $txtPrecio }}</div>
                         </div>
                         <div class="abs ref" style="top: {{ $headH + $m(0.8) }}mm;">REF</div>
-                        <div class="abs num" style="top: {{ $numTop }}mm; font-size: {{ $numFs }}pt;">{{ $e['unidad_fmt'] }}</div>
+                        {!! $precioSup($e['unidad_fmt'], $numFs, $numTop, $inW) !!}
                     </div>
                 @endif
 
