@@ -43,10 +43,14 @@ class AppServiceProvider extends ServiceProvider
 
         \Illuminate\Pagination\Paginator::useBootstrapFive();
 
-        // @accesible('nombre.ruta') … @endaccesible: oculta atajos a accesos desactivados por el administrador.
-        \Illuminate\Support\Facades\Blade::if('accesible', fn (string $ruta) => ! app(\App\Services\AccesosService::class)->rutaBloqueada(auth()->user(), $ruta));
-        // @accesoRapido('rapido_etiquetas') … @endaccesoRapido: atajos de la pantalla de inicio de sesión.
-        \Illuminate\Support\Facades\Blade::if('accesoRapido', fn (string $clave) => app(\App\Services\AccesosService::class)->accesoRapidoActivo($clave));
+        // Se registran al resolver el compilador: crearlo aquí exige storage/framework/views, que en el build
+        // de Docker todavía no existe cuando composer corre package:discover.
+        $this->callAfterResolving('blade.compiler', function (\Illuminate\View\Compilers\BladeCompiler $blade) {
+            // @accesible('nombre.ruta') … @endaccesible: oculta atajos a accesos desactivados por el administrador.
+            $blade->if('accesible', fn (string $ruta) => ! app(\App\Services\AccesosService::class)->rutaBloqueada(auth()->user(), $ruta));
+            // @accesoRapido('rapido_etiquetas') … @endaccesoRapido: atajos de la pantalla de inicio de sesión.
+            $blade->if('accesoRapido', fn (string $clave) => app(\App\Services\AccesosService::class)->accesoRapidoActivo($clave));
+        });
 
         if ($path = env('SESSION_PATH')) {
             if (! is_dir($path)) {
