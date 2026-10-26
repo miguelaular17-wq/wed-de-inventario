@@ -37,6 +37,7 @@
     letter-spacing: .04em;
 }
 .tesoreria-filter select,
+.tesoreria-filter input[type="search"],
 .tesoreria-filter input[type="date"] {
     min-width: 180px;
     padding: 8px 12px;
@@ -140,8 +141,12 @@
             Hasta
             <input type="date" name="hasta" value="{{ $hasta ?? '' }}">
         </label>
+        <label>
+            Referencia / lote
+            <input type="search" name="ref" value="{{ $ref ?? '' }}" placeholder="Ej. 000916 o 916" autocomplete="off">
+        </label>
         <button type="submit">Filtrar</button>
-        @if(($desde ?? '') || ($hasta ?? ''))
+        @if(($desde ?? '') || ($hasta ?? '') || ($ref ?? '') !== '')
             <a href="{{ route('tesoreria.dashboard') }}" style="font-size: 0.85rem; font-weight: 600; color: #2563eb; text-decoration: none; padding-bottom: 8px;">Quitar filtro</a>
         @endif
     </form>

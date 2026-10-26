@@ -23,7 +23,16 @@ class ConciliacionDivisasService
 
     private const COMISION = [
         'fee', 'comision', 'comisión', 'commission', 'service charge', 'monthly service', 'maintenance',
-        'mantenimiento', 'cargo por servicio', 'wire charge', 'cargo mensual', 'overdraft',
+        'mantenimiento', 'cargo por servicio', 'wire charge', 'cargo mensual', 'overdraft', 'servicecharge',
+    ];
+
+    /**
+     * Correo del aviso de pago (columna BANCO del reporte de Cloud) → banco de la cuenta. Un mismo reporte
+     * de Zelle trae los cobros de todas las cuentas; solo se importan los de la cuenta elegida.
+     */
+    private const AVISOS_BANCO = [
+        'citizens' => 'citizens', 'amerant' => 'amerant', 'wellsfargo' => 'wells', 'regions' => 'regions',
+        'truist' => 'truist', '.citi.com' => 'citi', '@citi.com' => 'citi',
     ];
 
     /** Traslados entre billeteras de la misma cuenta (no son cobros ni pagos). */
@@ -38,6 +47,7 @@ class ConciliacionDivisasService
 
     public function __construct(
         private ExtractoParser $parser,
+        private EstadoCuentaPdfParser $pdf,
     ) {}
 
     /**
@@ -140,31 +150,10 @@ class ConciliacionDivisasService
             $desc = trim(implode(' · ', array_filter(array_map(fn ($c) => $fila[$c] ?? '', $mapeo['descripcion']))));
             $ref = $mapeo['referencia'] !== null ? trim($fila[$mapeo['referencia']] ?? '') : '';
             $hora = $conHora ? $this->hora($fila[$mapeo['fecha']] ?? '') : null;
-            $base = implode('|', [mb_strtoupper($banco), mb_strtoupper($titular), $fecha . ($hora ? ' ' . $hora : ''), number_format($monto, 2, '.', ''), $ref, mb_strtoupper($desc)]);
-            $ocurrencias[$base] = ($ocurrencias[$base] ?? 0) + 1;
-
-            $filas[] = [
-                'banco' => $banco,
-                'titular' => $titular,
-                'fecha' => $fecha,
-            ] + ($conHora ? ['hora' => $hora] : []) + [
-                'descripcion' => mb_substr($desc !== '' ? $desc : '(sin descripción)', 0, 500),
-                'referencia' => $ref !== '' ? mb_substr($ref, 0, 120) : null,
-                'monto' => round($monto, 2),
-                'tipo' => $monto < 0 ? 'cargo' : 'abono',
-                'estado' => 'pendiente',
-                'huella' => hash('sha256', $base . '|' . $ocurrencias[$base]),
-                'archivo' => mb_substr($archivo, 0, 255),
-                'user_id' => $userId,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
+            $filas[] = $this->filaLinea($banco, $titular, $fecha, $hora, $desc, $ref, $monto, $archivo, $userId, $ocurrencias, $conHora);
         }
 
-        $nuevas = 0;
-        foreach (array_chunk($filas, 300) as $chunk) {
-            $nuevas += DB::table('conciliacion_divisas_lineas')->insertOrIgnore($chunk);
-        }
+        $nuevas = $this->insertarLineas($filas);
 
         DB::table('conciliacion_divisas_formatos')->updateOrInsert(
             ['banco' => $banco, 'titular' => $titular],
@@ -172,6 +161,157 @@ class ConciliacionDivisasService
         );
 
         return ['leidas' => $leidas, 'nuevas' => $nuevas, 'duplicadas' => count($filas) - $nuevas, 'rechazadas' => $rechazadas];
+    }
+
+    /**
+     * Estado de cuenta en PDF (Citizens, Amerant). No lleva mapeo: el formato de cada banco es fijo.
+     *
+     * @return array{nuevas: int, duplicadas: int, movimientos: int, banco_pdf: string, cuenta: ?string, cuadra: bool, desde: ?string, hasta: ?string}
+     */
+    public function importarPdf(string $path, string $banco, string $titular, string $archivo, ?int $userId): array
+    {
+        $r = $this->pdf->leer($path);
+        if ($r === null) {
+            throw ValidationException::withMessages(['archivos' => "«{$archivo}» no es un estado de cuenta en PDF que reconozca (Citizens o Amerant)."]);
+        }
+        $clave = $this->claveBanco($banco);
+        if ($clave !== null && $clave !== $this->claveBanco($r['banco'])) {
+            throw ValidationException::withMessages(['archivos' => "«{$archivo}» es un estado de cuenta de {$r['banco']} y la cuenta elegida es {$banco}."]);
+        }
+
+        $conHora = Schema::hasColumn('conciliacion_divisas_lineas', 'hora');
+        $ocurrencias = [];
+        $filas = [];
+        foreach ($r['movimientos'] as $m) {
+            $filas[] = $this->filaLinea($banco, $titular, $m['fecha'], null, $m['descripcion'], '', $m['monto'], $archivo, $userId, $ocurrencias, $conHora);
+        }
+        $nuevas = $this->insertarLineas($filas);
+        $fechas = array_column($r['movimientos'], 'fecha');
+
+        return [
+            'nuevas' => $nuevas, 'duplicadas' => count($filas) - $nuevas, 'movimientos' => count($filas),
+            'banco_pdf' => $r['banco'], 'cuenta' => $r['cuenta'], 'cuadra' => $r['cuadra'],
+            'desde' => $r['desde'] ?? ($fechas ? min($fechas) : null), 'hasta' => $r['hasta'] ?? ($fechas ? max($fechas) : null),
+        ];
+    }
+
+    /** @param  array<string, int>  $ocurrencias  movimientos idénticos dentro del mismo archivo (cada uno cuenta) */
+    private function filaLinea(string $banco, string $titular, string $fecha, ?string $hora, string $desc, string $ref, float $monto, string $archivo, ?int $userId, array &$ocurrencias, bool $conHora): array
+    {
+        $base = implode('|', [mb_strtoupper($banco), mb_strtoupper($titular), $fecha . ($hora ? ' ' . $hora : ''), number_format($monto, 2, '.', ''), $ref, mb_strtoupper($desc)]);
+        $ocurrencias[$base] = ($ocurrencias[$base] ?? 0) + 1;
+
+        return [
+            'banco' => $banco,
+            'titular' => $titular,
+            'fecha' => $fecha,
+        ] + ($conHora ? ['hora' => $hora] : []) + [
+            'descripcion' => mb_substr($desc !== '' ? $desc : '(sin descripción)', 0, 500),
+            'referencia' => $ref !== '' ? mb_substr($ref, 0, 120) : null,
+            'monto' => round($monto, 2),
+            'tipo' => $monto < 0 ? 'cargo' : 'abono',
+            'estado' => 'pendiente',
+            'huella' => hash('sha256', $base . '|' . $ocurrencias[$base]),
+            'archivo' => mb_substr($archivo, 0, 255),
+            'user_id' => $userId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+    }
+
+    private function insertarLineas(array $filas): int
+    {
+        $nuevas = 0;
+        foreach (array_chunk($filas, 300) as $chunk) {
+            $nuevas += DB::table('conciliacion_divisas_lineas')->insertOrIgnore($chunk);
+        }
+
+        return $nuevas;
+    }
+
+    /** citizens / amerant / wells / … a partir del nombre del banco de la cuenta o del PDF. */
+    private function claveBanco(string $banco): ?string
+    {
+        $b = mb_strtolower($banco);
+        foreach (['citizens', 'amerant', 'wells', 'regions', 'truist'] as $k) {
+            if (str_contains($b, $k)) {
+                return $k;
+            }
+        }
+
+        return preg_match('/\bciti(bank)?\b/', $b) ? 'citi' : null;
+    }
+
+    /** Banco al que llegó el aviso de pago, por el correo que lo notificó (null si no es un correo conocido). */
+    private function bancoDelAviso(?string $correo): ?string
+    {
+        $c = mb_strtolower((string) $correo);
+        foreach (self::AVISOS_BANCO as $patron => $clave) {
+            if ($c !== '' && str_contains($c, $patron)) {
+                return $clave;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Nombre de quien envía el Zelle en la descripción del banco:
+     * "ZELLECREDIT … ZelleHMOLINASR8006566561" (Citizens), "ZELLE CREDIT ZELLE GUILLERMO LUENGO V AMERANT…" (Amerant).
+     */
+    public static function nombreZelle(?string $descripcion): string
+    {
+        $d = mb_strtoupper((string) $descripcion);
+        if (! preg_match_all('/ZELLE\s*+(?!CREDIT|DEBIT|PAYMENT)(?:FROM\s+)?([A-Z][A-Z .\'-]*?)\s*(?=8006566561|AMERANT|\bON\b|[^A-Z .\'-]|$)/', $d, $m)) {
+            return '';
+        }
+
+        return self::nombreNormalizado(end($m[1]));
+    }
+
+    /** Solo letras A-Z: los bancos pegan o cortan las palabras ("PINAGOMEZ", "QU EVEDO"). */
+    public static function nombreNormalizado(?string $nombre): string
+    {
+        $s = (string) $nombre;
+        $ascii = function_exists('iconv') ? @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $s) : false;
+
+        return preg_replace('/[^A-Z]/', '', strtoupper($ascii !== false ? $ascii : $s)) ?? '';
+    }
+
+    /** 2 = mismo nombre (los bancos cortan el nombre: se comparan los primeros 12 caracteres), 1 = parecido, 0 = distinto. */
+    public static function similitudNombre(string $a, string $b): int
+    {
+        $l = min(strlen($a), strlen($b), 12);
+        if ($l < 4) {
+            return 0;
+        }
+        if (substr($a, 0, $l) === substr($b, 0, $l)) {
+            return 2;
+        }
+        similar_text(substr($a, 0, 15), substr($b, 0, 15), $pct);
+        if ($pct >= 70) {
+            return 1;
+        }
+        // Cada palabra recortada: "DAVIDCON LUGO LUGO" es "DAVID CONCEPCION LUGO LUGO".
+        [$corto, $largo] = strlen($a) <= strlen($b) ? [$a, $b] : [$b, $a];
+
+        return strlen($corto) >= 8 && substr($corto, 0, 5) === substr($largo, 0, 5) && self::esSubsecuencia($corto, $largo) ? 1 : 0;
+    }
+
+    private static function esSubsecuencia(string $corto, string $largo): bool
+    {
+        $j = 0;
+        $n = strlen($largo);
+        for ($i = 0, $m = strlen($corto); $i < $m; $i++) {
+            while ($j < $n && $largo[$j] !== $corto[$i]) {
+                $j++;
+            }
+            if ($j++ >= $n) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -280,6 +420,8 @@ class ConciliacionDivisasService
         $rechazadas = [];
         $ocurrencias = [];
         $leidas = 0;
+        $otrasCuentas = [];
+        $claveCuenta = $this->claveBanco($banco);
         foreach ($this->parser->filasCrudas($path, $ext) as $i => $fila) {
             $fila = array_map(fn ($v) => $this->texto($v, true), (array) $fila);
             if ($cols === null) {
@@ -289,9 +431,19 @@ class ConciliacionDivisasService
             if (implode('', $fila) === '') {
                 continue;
             }
+            $aviso = isset($cols['aviso']) ? $this->bancoDelAviso($fila[$cols['aviso']] ?? '') : null;
+            if ($aviso !== null && $claveCuenta !== null && $aviso !== $claveCuenta) {
+                $otrasCuentas[$aviso] = ($otrasCuentas[$aviso] ?? 0) + 1;
+
+                continue;
+            }
             $leidas++;
             [$fecha, $fechaHora] = $this->fechaHora($fila[$cols['fecha']] ?? '');
             $monto = $this->parser->normalizarMonto($fila[$cols['monto']] ?? '');
+            if (($monto !== null && abs((float) $monto) < 0.005) || strcasecmp(trim($fila[$cols['monto']] ?? ''), 'NaN') === 0) {
+                // Avisos del banco sin dinero (alta de beneficiario, cambio de datos) o que Cloud no pudo leer.
+                continue;
+            }
             if ($fecha === null || $monto === null || (float) $monto <= 0) {
                 if (count($rechazadas) < 15 && trim(implode('', $fila)) !== '') {
                     $rechazadas[] = 'Fila ' . ($i + 1) . ': ' . ($fecha === null ? 'fecha no reconocida' : 'monto no reconocido')
@@ -335,6 +487,7 @@ class ConciliacionDivisasService
         return [
             'leidas' => $leidas, 'nuevas' => $nuevas, 'duplicadas' => count($filas) - $nuevas, 'rechazadas' => $rechazadas,
             'desde' => $fechas ? min($fechas) : null, 'hasta' => $fechas ? max($fechas) : null,
+            'otras_cuentas' => $otrasCuentas,
         ];
     }
 
@@ -352,19 +505,24 @@ class ConciliacionDivisasService
         }
         $pagos = $this->pagos($banco, $titular, $desde, $hasta)->whereNull('linea_id')->values();
         $ocupadas = ConciliacionDivisaPago::query()->whereNotNull('linea_id')->pluck('linea_id')->flip();
-        $lineas = $this->lineas($banco, $titular, date('Y-m-d', strtotime($desde . ' -1 day')), date('Y-m-d', strtotime($hasta . ' +1 day')))
+        $lineas = $this->lineas($banco, $titular, date('Y-m-d', strtotime($desde . ' -2 days')), date('Y-m-d', strtotime($hasta . ' +4 days')))
             ->where('estado', 'pendiente')
             ->filter(fn ($l) => ! $l->esCargo() && ! isset($ocupadas[$l->id]))
             ->values();
 
         $porMonto = [];
+        $nombreLinea = [];
         foreach ($lineas as $k => $l) {
             $porMonto[(int) round(abs($l->monto) * 100)][] = $k;
+            $nombreLinea[$k] = self::nombreZelle($l->descripcion);
         }
+        $nombrePago = $pagos->map(fn ($p) => self::nombreNormalizado($p->pagador))->all();
         $tsLinea = fn ($l) => $l->hora ? strtotime($l->fecha->format('Y-m-d') . ' ' . $l->hora) : null;
         $dig = fn ($r) => ltrim(preg_replace('/\D/', '', (string) $r), '0');
 
-        $pasadas = ['ref', [-120, 900], [-600, 7200], [-1800, 43200], 'dia'];
+        // Estados de cuenta sin hora (PDF de Citizens / Amerant): el nombre de quien envía el Zelle decide,
+        // y el banco puede asentar el abono hasta 2 días antes o 4 después de la confirmación en caja.
+        $pasadas = ['ref', [-120, 900], [-600, 7200], [-1800, 43200], 'nombre', 'dia'];
         $libresPago = array_fill_keys(array_keys($pagos->all()), true);
         $libresLinea = array_fill_keys(array_keys($lineas->all()), true);
         $pares = [];
@@ -383,10 +541,25 @@ class ConciliacionDivisasService
                         $rp = $dig($p->referencia);
                         $ok = strlen($rp) >= 4 && (str_contains($dig($l->referencia) . ' ' . $dig($l->descripcion), $rp));
                         $score = $tp && $tl ? abs($tp - $tl) : 0;
+                    } elseif ($pasada === 'nombre') {
+                        $dias = (int) round(($l->fecha->copy()->startOfDay()->getTimestamp() - $p->fecha->copy()->startOfDay()->getTimestamp()) / 86400);
+                        $nombre = self::similitudNombre($nombrePago[$pk], $nombreLinea[$lk]);
+                        // Abono sin nombre en el banco: solo por monto, el mismo día o hasta 3 después.
+                        $sinNombre = $nombreLinea[$lk] === '' && $p->terminal && $dias >= 0 && $dias <= 3;
+                        $ok = ($tp === null || $tl === null) && (($nombre > 0 && $dias >= -2 && $dias <= 4) || $sinNombre);
+                        // Mismo nombre antes que parecido; el cobro confirmado por un cajero antes que el aviso suelto.
+                        $score = match (true) {
+                            $nombre === 2 => 0,
+                            $nombre === 1 => 10,
+                            default => 20,
+                        } + abs($dias) + ($p->terminal ? 0 : 5);
                     } elseif ($pasada === 'dia') {
                         $dias = abs($l->fecha->diffInDays($p->fecha, false));
-                        $ok = ($tp === null || $tl === null) ? $dias <= 1 : false;
-                        $score = $dias;
+                        // Un aviso que ningún cajero confirmó no se liga con el Zelle de otra persona.
+                        $otraPersona = ! $p->terminal && $nombrePago[$pk] !== '' && $nombreLinea[$lk] !== ''
+                            && self::similitudNombre($nombrePago[$pk], $nombreLinea[$lk]) === 0;
+                        $ok = ($tp === null || $tl === null) && $dias <= 1 && ! $otraPersona;
+                        $score = $dias + ($p->terminal ? 0 : 5);
                     } else {
                         if ($tp === null || $tl === null) {
                             continue;
@@ -510,6 +683,7 @@ class ConciliacionDivisasService
             'usuario' => ['USUARIO', 'CAJERO', 'VENDEDOR'],
             'pagador' => ['PAGADOR', 'CLIENTE', 'NOMBRE', 'TITULAR'],
             'referencia' => ['REFERENCIA', 'REF', 'REF.', 'CODIGO', 'ORDER ID', 'ID TRANSACCION'],
+            'aviso' => ['BANCO', 'CORREO', 'REMITENTE'],
         ];
         $norm = fn ($s) => mb_strtoupper(trim(strtr((string) $s, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U'])));
         $celdas = array_map($norm, $fila);
@@ -671,12 +845,34 @@ class ConciliacionDivisasService
             ->reject(fn ($f) => isset($vinculados[$f->id]))
             ->values();
         $pagos = $conPagos ? $this->pagos($banco, $titular, $desde, $hasta) : collect();
-        // Cobro registrado dos veces en caja: mismo monto y pagador con minutos de diferencia; el banco recibió uno solo.
-        foreach ($pagos->whereNull('linea_id') as $p) {
+        $sinAbono = $pagos->whereNull('linea_id')->values();
+        $repetidos = collect();
+        $cruzadosPorNombre = $pagos->whereNotNull('linea_id')->groupBy(fn ($o) => self::nombreNormalizado($o->pagador));
+        foreach ($sinAbono as $p) {
+            // Cobro registrado dos veces en caja: mismo monto y pagador con minutos de diferencia; el banco recibió uno solo.
             $p->duplicado_de = $pagos->first(fn ($o) => $o->id !== $p->id && abs($o->monto - $p->monto) < 0.005
                 && $p->pagador && mb_strtoupper(trim((string) $o->pagador)) === mb_strtoupper(trim($p->pagador))
                 && $o->fecha_hora && $p->fecha_hora && abs($o->fecha_hora->getTimestamp() - $p->fecha_hora->getTimestamp()) <= 900)?->nro;
+            $p->repetido_de = null;
+            $p->motivo_repetido = null;
+            $p->posible_x100_de = null;
+            if (! $p->pagador) {
+                continue;
+            }
+            // Aviso de correo que ningún cajero confirmó y que repite un cobro ya cruzado con el banco:
+            // Cloud volvió a leer el correo (a veces sin el punto decimal: $92.00 → 9200).
+            $gemelo = $cruzadosPorNombre->get(self::nombreNormalizado($p->pagador), collect())
+                ->first(fn ($o) => abs($o->monto - $p->monto) < 0.005 || abs($o->monto * 100 - $p->monto) < 0.005);
+            if ($gemelo && $p->terminal) {
+                // Lo confirmó un cajero: se deja a la vista, pero se avisa si el monto parece el de otro cobro ×100.
+                $p->posible_x100_de = abs($gemelo->monto * 100 - $p->monto) < 0.005 ? $gemelo->nro : null;
+            } elseif ($gemelo) {
+                $p->repetido_de = $gemelo->nro;
+                $p->motivo_repetido = abs($gemelo->monto - $p->monto) < 0.005 ? 'mismo aviso leído otra vez' : 'monto leído sin el punto decimal';
+                $repetidos->push($p);
+            }
         }
+        $repetidosIds = $repetidos->pluck('id')->flip();
 
         return [
             'consolidados' => $lineas->where('estado', 'conciliado')->values(),
@@ -688,9 +884,10 @@ class ConciliacionDivisasService
                 'banco' => $this->documentosCargados('conciliacion_divisas_lineas', $banco, $titular, $desde, $hasta),
                 'cobros' => $conPagos ? $this->documentosCargados('conciliacion_divisas_pagos', $banco, $titular, $desde, $hasta) : [],
             ],
-            'pagos_total' => $pagos->count(),
+            'pagos_total' => $pagos->count() - $repetidos->count(),
             'pagos_cruzados' => $pagos->whereNotNull('linea_id')->count(),
-            'pagos_sin_abono' => $pagos->whereNull('linea_id')->values(),
+            'pagos_sin_abono' => $sinAbono->reject(fn ($p) => isset($repetidosIds[$p->id]))->values(),
+            'pagos_repetidos' => $repetidos,
             'total_lineas' => $lineas->count(),
         ];
     }

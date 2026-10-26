@@ -170,9 +170,10 @@ class ConciliacionUsdTest extends TestCase
         $this->actingAs($this->user)
             ->get(route('finanzas.conciliacion_usd.index', ['cuenta' => 'Binance|Grupo JENU', 'fecha_desde' => '2026-08-01', 'fecha_hasta' => '2026-08-31']))
             ->assertOk()
-            ->assertSee('Pagos de caja: 4 de 6 cruzados')
-            ->assertSee('Pagos de caja sin abono en el banco (2)')
-            ->assertSee('Posible duplicado de #5')
+            ->assertSee('Pagos de caja: 4 de 5 cruzados')
+            ->assertSee('Pagos de caja sin abono en el banco (1)')
+            ->assertSee('Avisos de Cloud repetidos (1')
+            ->assertSee('mismo aviso leído otra vez')
             ->assertSee('Caja #3')
             ->assertSeeInOrder(['🏦 Banco', 'binance.csv', '🧾 App de cobros', 'cloud_pagos_binance.csv', '6 cobros']);
 
@@ -224,6 +225,100 @@ class ConciliacionUsdTest extends TestCase
             'cuenta' => 'Binance|Grupo JENU',
             'archivos' => [new UploadedFile($bin, 'binance.csv', 'text/csv', null, true), new UploadedFile($raro, 'otro.csv', 'text/csv', null, true)],
         ])->assertRedirect(route('finanzas.conciliacion_usd.index'))->assertSessionHas('error');
+        $this->assertSame(0, ConciliacionDivisaLinea::query()->count());
+    }
+
+    public function test_zelle_estado_de_cuenta_pdf_con_el_reporte_de_cloud_por_nombre(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        // El PDF real lo lee smalot; aquí se entrega directo el texto que devuelve para un estado de Citizens.
+        $this->app->instance(\App\Services\Conciliacion\EstadoCuentaPdfParser::class, new class extends \App\Services\Conciliacion\EstadoCuentaPdfParser
+        {
+            public function leer(string $path): ?array
+            {
+                return $this->leerTexto(\Tests\Unit\EstadoCuentaPdfParserTest::CITIZENS);
+            }
+        });
+        $pdf = tempnam(sys_get_temp_dir(), 'ct') . '.pdf';
+        file_put_contents($pdf, "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n");
+        $cloud = tempnam(sys_get_temp_dir(), 'cz') . '.csv';
+        file_put_contents($cloud, "REPORTE MENSUAL DE PAGOS ZELLE\n"
+            . "NRO,ADMINISTRADOR,MONTO,LOCALIDAD,FECHA CONFIRMADO,TERMINAL,USUARIO,MEDIO,BANCO,MENSAJE,PAGADOR\n"
+            . "1,Palacio,100,Doral,10/08/2026 4:29:14 PM,Caja Avance,Dayana,chat,Onlineservices@citizensbankonline.com,x,EDILIO PEREA GUARDIA\n"
+            . "2,Palacio,92,Doral,10/08/2026 4:00:15 PM,Caja Avance,Dayana,chat,Onlineservices@citizensbankonline.com,x,JOSE CARRASQUERO\n"
+            . "3,Palacio,100,Doral,10/08/2026 5:10:00 PM,Caja Avance,Dayana,chat,Onlineservices@citizensbankonline.com,x,ANA PEREZ\n"
+            . "4,Palacio,10000,,22/08/2026 12:42:15 PM,,,,Onlineservices@citizensbankonline.com,x,EDILIOPEREAGUARDIA\n"
+            . "5,Palacio,50,Doral,12/08/2026 1:00:00 PM,Caja 1,Ana,chat,Onlineservices@citizensbankonline.com,x,MARIA LOPEZ\n"
+            . "6,Palacio,500,Doral,10/08/2026 3:00:00 PM,Caja 1,Ana,chat,alerts@notify.wellsfargo.com,x,PEDRO\n"
+            . "7,Palacio,0,,11/08/2026 12:27:51 PM,,,,Onlineservices@citizensbankonline.com,Citizens account update,AVISO\n");
+
+        $this->actingAs($this->user)->post(route('finanzas.conciliacion_usd.subir'), [
+            'cuenta' => 'Citizens Money Market|Doral',
+            'archivos' => [
+                new UploadedFile($pdf, 'EDO_CTA_CITIZENS_AGOSTO.pdf', 'application/pdf', null, true),
+                new UploadedFile($cloud, 'cloud_pagos_zelle_mes.csv', 'text/csv', null, true),
+            ],
+        ])->assertRedirect(route('finanzas.conciliacion_usd.index', ['cuenta' => 'Citizens Money Market|Doral', 'fecha_desde' => '2026-08-01', 'fecha_hasta' => '2026-08-31']))
+            ->assertSessionHas('success', fn ($m) => str_contains($m, 'Estado de cuenta Citizens …5803 (PDF): 4 movimientos nuevos')
+                && str_contains($m, 'cuadra con los totales') && str_contains($m, '1 de Wells Fargo'));
+
+        $pagos = \App\Models\ConciliacionDivisaPago::query()->orderBy('nro')->get()->keyBy('nro');
+        $this->assertSame(['1', '2', '3', '4', '5'], $pagos->keys()->map(fn ($k) => (string) $k)->all());
+        $abono = fn (string $nombre) => (int) ConciliacionDivisaLinea::query()->where('descripcion', 'like', "%{$nombre}%")->value('id');
+        // Dos Zelle de 100 el 10 y el 11: cada cobro va con el de su pagador, no con el más cercano en fecha.
+        $this->assertSame($abono('EDILIO'), (int) $pagos['1']->linea_id);
+        $this->assertSame($abono('CARRASQUERO'), (int) $pagos['2']->linea_id);
+        $this->assertSame($abono('ANAPEREZ'), (int) $pagos['3']->linea_id);
+        $this->assertNull($pagos['4']->linea_id);
+        $this->assertNull($pagos['5']->linea_id);
+        $this->assertSame('comision', ConciliacionDivisaLinea::query()->where('descripcion', 'like', 'SERVICECHARGE%')->value('estado'));
+
+        $this->actingAs($this->user)
+            ->get(route('finanzas.conciliacion_usd.index', ['cuenta' => 'Citizens Money Market|Doral', 'fecha_desde' => '2026-08-01', 'fecha_hasta' => '2026-08-31']))
+            ->assertOk()
+            ->assertSee('Pagos de caja: 3 de 4 cruzados')
+            ->assertSee('Pagos de caja sin abono en el banco (1)')
+            ->assertSee('Avisos de Cloud repetidos (1')
+            ->assertSee('monto leído sin el punto decimal')
+            ->assertSeeInOrder(['🏦 Banco', 'EDO_CTA_CITIZENS_AGOSTO.pdf', '🧾 App de cobros', 'cloud_pagos_zelle_mes.csv']);
+        $this->assertSame([], \Illuminate\Support\Facades\Storage::disk('local')->files('conciliacion_usd'));
+    }
+
+    public function test_pdf_con_movimientos_identicos_los_guarda_todos_y_no_duplica_al_resubir(): void
+    {
+        $this->app->instance(\App\Services\Conciliacion\EstadoCuentaPdfParser::class, new class extends \App\Services\Conciliacion\EstadoCuentaPdfParser
+        {
+            public function leer(string $path): ?array
+            {
+                return $this->leerTexto(\Tests\Unit\EstadoCuentaPdfParserTest::AMERANT);
+            }
+        });
+        $servicio = app(\App\Services\Conciliacion\ConciliacionDivisasService::class);
+
+        $r = $servicio->importarPdf('x.pdf', 'Amerant Investment', 'Doral', 'amerant.pdf', null);
+        $this->assertSame([4, 0, true], [$r['nuevas'], $r['duplicadas'], $r['cuadra']]);
+        $this->assertSame(2, ConciliacionDivisaLinea::query()->where('monto', -2)->count());
+
+        $otra = $servicio->importarPdf('x.pdf', 'Amerant Investment', 'Doral', 'amerant.pdf', null);
+        $this->assertSame([0, 4], [$otra['nuevas'], $otra['duplicadas']]);
+    }
+
+    public function test_pdf_de_otro_banco_que_la_cuenta_elegida_se_rechaza(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $this->app->instance(\App\Services\Conciliacion\EstadoCuentaPdfParser::class, new class extends \App\Services\Conciliacion\EstadoCuentaPdfParser
+        {
+            public function leer(string $path): ?array
+            {
+                return $this->leerTexto(\Tests\Unit\EstadoCuentaPdfParserTest::AMERANT);
+            }
+        });
+        $pdf = tempnam(sys_get_temp_dir(), 'am') . '.pdf';
+        file_put_contents($pdf, "%PDF-1.4\n%%EOF\n");
+
+        $this->actingAs($this->user)->from(route('finanzas.conciliacion_usd.index'))->post(route('finanzas.conciliacion_usd.subir'), [
+            'cuenta' => 'Citizens Money Market|Doral', 'archivos' => [new UploadedFile($pdf, 'amerant.pdf', 'application/pdf', null, true)],
+        ])->assertSessionHasErrors(['archivos' => '«amerant.pdf» es un estado de cuenta de Amerant y la cuenta elegida es Citizens Money Market.']);
         $this->assertSame(0, ConciliacionDivisaLinea::query()->count());
     }
 

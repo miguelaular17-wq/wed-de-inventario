@@ -326,7 +326,7 @@ class ExtractoParser
         }
 
         if ($ext === 'xls') {
-            if (class_exists(SimpleXLS::class) && ($xls = SimpleXLS::parse($path))) {
+            if (class_exists(SimpleXLS::class) && ($xls = LectorXls::parse($path))) {
                 return $xls->rows();
             }
             if ($xlsx = SimpleXLSX::parse($path)) {

@@ -13,10 +13,12 @@ class TesoreriaController extends Controller
     {
         $desde = $this->fechaFiltro($request->query('desde'));
         $hasta = $this->fechaFiltro($request->query('hasta'));
+        $ref = mb_substr(trim((string) $request->query('ref', '')), 0, 60);
 
         $ingresosBancos = TesoreriaIngreso::where('tipo', 'banco')
             ->when($desde, fn ($q) => $q->whereDate('fecha', '>=', $desde))
             ->when($hasta, fn ($q) => $q->whereDate('fecha', '<=', $hasta))
+            ->when($ref !== '', fn ($q) => $this->filtrarReferencia($q, $ref))
             ->latest('fecha')
             ->latest('id')
             ->get();
@@ -24,11 +26,28 @@ class TesoreriaController extends Controller
         $lotesPuntos = TesoreriaIngreso::where('tipo', 'punto_venta')
             ->when($desde, fn ($q) => $q->whereDate('fecha', '>=', $desde))
             ->when($hasta, fn ($q) => $q->whereDate('fecha', '<=', $hasta))
+            ->when($ref !== '', fn ($q) => $this->filtrarReferencia($q, $ref))
             ->latest('fecha')
             ->latest('id')
             ->get();
 
-        return view('tesoreria.dashboard', compact('ingresosBancos', 'lotesPuntos', 'desde', 'hasta'));
+        return view('tesoreria.dashboard', compact('ingresosBancos', 'lotesPuntos', 'desde', 'hasta', 'ref'));
+    }
+
+    /**
+     * Referencia o lote, aunque se escriba sin los ceros de adelante ("916" encuentra "000916").
+     */
+    private function filtrarReferencia($query, string $ref)
+    {
+        $escapar = fn (string $s) => str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], mb_strtolower($s));
+        $sinCeros = ltrim($ref, '0');
+
+        return $query->where(function ($w) use ($ref, $sinCeros, $escapar) {
+            $w->whereRaw('LOWER(lote_referencia) LIKE ?', ['%' . $escapar($ref) . '%']);
+            if ($sinCeros !== '' && $sinCeros !== $ref) {
+                $w->orWhereRaw('LOWER(lote_referencia) LIKE ?', ['%' . $escapar($sinCeros) . '%']);
+            }
+        });
     }
 
     private function fechaFiltro(mixed $value): ?string
@@ -240,7 +259,7 @@ class TesoreriaController extends Controller
     {
         $head = (string) file_get_contents($path, false, null, 0, 8);
         if (str_starts_with($head, "\xD0\xCF\x11\xE0")) {
-            $xls = \Shuchkin\SimpleXLS::parse($path);
+            $xls = \App\Services\Conciliacion\LectorXls::parse($path);
             if (! $xls) {
                 return \Shuchkin\SimpleXLS::parseError() ?: 'No se pudo leer el .xls';
             }

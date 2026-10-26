@@ -2379,7 +2379,7 @@ class FinanzasController extends Controller
                     $all_rows = $xlsx->rows();
                 }
             } elseif ($ext === 'xls') {
-                if (class_exists('\Shuchkin\SimpleXLS') && $xls = \Shuchkin\SimpleXLS::parse($file->getRealPath())) {
+                if (class_exists('\Shuchkin\SimpleXLS') && $xls = \App\Services\Conciliacion\LectorXls::parse($file->getRealPath())) {
                     $all_rows = $xls->rows();
                 } elseif ($xlsx = \Shuchkin\SimpleXLSX::parse($file->getRealPath())) {
                     $all_rows = $xlsx->rows();
@@ -4815,7 +4815,7 @@ class FinanzasController extends Controller
                 fclose($handle);
                 $allSheetsRows[] = $rows;
             } elseif ($ext === 'xls') {
-                if ($xls = \Shuchkin\SimpleXLS::parse($path)) {
+                if ($xls = \App\Services\Conciliacion\LectorXls::parse($path)) {
                     foreach ($xls->sheetNames() as $index => $name) {
                         $allSheetsRows[] = $xls->rows($index);
                     }

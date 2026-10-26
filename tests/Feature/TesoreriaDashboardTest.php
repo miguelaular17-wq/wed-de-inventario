@@ -74,4 +74,34 @@ class TesoreriaDashboardTest extends TestCase
             ->assertSee('L-DORAL')
             ->assertDontSee('L-JRZ');
     }
+
+    public function test_busca_por_referencia_aunque_se_escriba_sin_ceros(): void
+    {
+        $user = User::create([
+            'name' => 'Tesorería',
+            'email' => 'tesoreria-'.uniqid().'@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_TESORERIA,
+        ]);
+        foreach ([['000916', 'LNACEH', '2026-08-03'], ['000917', 'LNACEH', '2026-08-04'], ['001916', 'JRZ', '2026-09-20']] as [$lote, $titular, $fecha]) {
+            TesoreriaIngreso::create([
+                'tipo' => 'punto_venta', 'banco' => 'BANESCO', 'titular' => $titular, 'fecha' => $fecha,
+                'monto' => 100, 'lote_referencia' => $lote, 'user_id' => $user->id,
+            ]);
+        }
+        TesoreriaIngreso::create(['tipo' => 'banco', 'banco' => 'MERCANTIL', 'fecha' => '2026-08-03', 'monto' => 50, 'lote_referencia' => 'REF-916-X', 'user_id' => $user->id]);
+        TesoreriaIngreso::create(['tipo' => 'banco', 'banco' => 'MERCANTIL', 'fecha' => '2026-08-03', 'monto' => 60, 'lote_referencia' => 'REF-777', 'user_id' => $user->id]);
+
+        $this->actingAs($user)
+            ->get(route('tesoreria.dashboard', ['ref' => '916']))
+            ->assertOk()
+            ->assertSee('000916')->assertSee('001916')->assertSee('REF-916-X')
+            ->assertDontSee('000917')->assertDontSee('REF-777')
+            ->assertSee('Quitar filtro');
+
+        $this->actingAs($user)
+            ->get(route('tesoreria.dashboard', ['ref' => '000916', 'hasta' => '2026-08-31']))
+            ->assertOk()
+            ->assertSee('000916')->assertDontSee('001916');
+    }
 }

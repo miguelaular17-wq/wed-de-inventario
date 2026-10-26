@@ -45,10 +45,10 @@ class ConciliacionUsdController extends Controller
         $request->validate([
             'cuenta' => ['required', 'string', 'max:220', 'regex:/\|/'],
             'archivos' => ['required_without:archivo', 'array', 'max:6'],
-            'archivos.*' => ['file', 'mimes:xlsx,xls,csv,txt', 'max:20480'],
-            'archivo' => ['required_without:archivos', 'file', 'mimes:xlsx,xls,csv,txt', 'max:20480'],
+            'archivos.*' => ['file', 'mimes:xlsx,xls,csv,txt,pdf', 'max:20480'],
+            'archivo' => ['required_without:archivos', 'file', 'mimes:xlsx,xls,csv,txt,pdf', 'max:20480'],
         ], [
-            'archivos.*.mimes' => 'Los documentos deben ser Excel (.xlsx / .xls) o CSV.',
+            'archivos.*.mimes' => 'Los documentos deben ser Excel (.xlsx / .xls), CSV o el estado de cuenta en PDF.',
             'archivo.mimes' => 'El extracto debe ser Excel (.xlsx / .xls) o CSV.',
             'archivos.*.uploaded' => 'Un archivo no llegó al servidor (límite: ' . ini_get('upload_max_filesize') . ').',
             'archivo.uploaded' => 'El archivo no llegó al servidor (límite: ' . ini_get('upload_max_filesize') . ').',
@@ -58,6 +58,7 @@ class ConciliacionUsdController extends Controller
         $files = $request->file('archivos') ?: [$request->file('archivo')];
 
         $extractos = [];
+        $pdfs = [];
         $pagos = [];
         $desconocidos = [];
         foreach ($files as $file) {
@@ -66,15 +67,20 @@ class ConciliacionUsdController extends Controller
             $token = (string) Str::uuid();
             $path = $file->storeAs(self::DIR, "{$token}.{$ext}", 'local');
             $doc = ['path' => $path, 'ext' => $ext, 'nombre' => $file->getClientOriginalName(), 'token' => $token];
+            if ($ext === 'pdf') {
+                $pdfs[] = $doc;
+
+                continue;
+            }
             try {
                 $doc['muestra'] = $this->servicio->muestra(Storage::disk('local')->path($path), $ext);
             } catch (\Throwable $e) {
-                $this->borrar([$doc, ...$extractos, ...$pagos, ...$desconocidos]);
+                $this->borrar([$doc, ...$extractos, ...$pdfs, ...$pagos, ...$desconocidos]);
 
                 return back()->with('error', 'No se pudo leer «' . $doc['nombre'] . '»: ' . $e->getMessage());
             }
             if ($doc['muestra'] === []) {
-                $this->borrar([$doc, ...$extractos, ...$pagos, ...$desconocidos]);
+                $this->borrar([$doc, ...$extractos, ...$pdfs, ...$pagos, ...$desconocidos]);
 
                 return back()->with('error', '«' . $doc['nombre'] . '» está vacío.');
             }
@@ -86,8 +92,8 @@ class ConciliacionUsdController extends Controller
             };
         }
 
-        if (count($desconocidos) > 1 || ($desconocidos !== [] && ($extractos !== [] || $pagos !== []))) {
-            $this->borrar([...$extractos, ...$pagos, ...$desconocidos]);
+        if (count($desconocidos) > 1 || ($desconocidos !== [] && ($extractos !== [] || $pdfs !== [] || $pagos !== []))) {
+            $this->borrar([...$extractos, ...$pdfs, ...$pagos, ...$desconocidos]);
 
             return back()->with('error', 'No reconozco el formato de «' . $desconocidos[0]['nombre'] . '». Súbelo solo para elegir qué columna es cada dato.');
         }
@@ -124,11 +130,21 @@ class ConciliacionUsdController extends Controller
                     ->selectRaw('MIN(fecha) d, MAX(fecha) h')->first();
                 $rangos[] = [$f?->d ? substr((string) $f->d, 0, 10) : null, $f?->h ? substr((string) $f->h, 0, 10) : null, 'extracto'];
             }
+            foreach ($pdfs as $doc) {
+                $r = $this->servicio->importarPdf(Storage::disk('local')->path($doc['path']), $banco, $titular, $doc['nombre'], $request->user()?->id);
+                $partes[] = sprintf(
+                    'Estado de cuenta %s%s (PDF): %d movimientos nuevos, %d ya estaban cargados%s',
+                    $r['banco_pdf'], $r['cuenta'] ? ' …' . substr($r['cuenta'], -4) : '', $r['nuevas'], $r['duplicadas'],
+                    $r['cuadra'] ? ' — cuadra con los totales del estado' : ' — ⚠ NO cuadra con los totales del estado, revisa el PDF',
+                );
+                $rangos[] = [$r['desde'], $r['hasta'], 'pdf'];
+            }
             foreach ($pagos as $doc) {
                 $r = $this->servicio->importarPagos(
                     Storage::disk('local')->path($doc['path']), $doc['ext'], $banco, $titular, $doc['nombre'], $request->user()?->id,
                 );
-                $partes[] = sprintf('Reporte de pagos de caja: %d cobros nuevos, %d ya estaban cargados', $r['nuevas'], $r['duplicadas']);
+                $partes[] = sprintf('Reporte de pagos de caja: %d cobros nuevos, %d ya estaban cargados', $r['nuevas'], $r['duplicadas'])
+                    . $this->textoOtrasCuentas($r['otras_cuentas']);
                 $rechazadas = [...$rechazadas, ...$r['rechazadas']];
                 $rangos[] = [$r['desde'], $r['hasta'], 'pagos'];
             }
@@ -137,12 +153,12 @@ class ConciliacionUsdController extends Controller
         } catch (\Throwable $e) {
             return back()->with('error', 'No se pudo importar: ' . $e->getMessage());
         } finally {
-            $this->borrar([...$extractos, ...$pagos]);
+            $this->borrar([...$extractos, ...$pdfs, ...$pagos]);
         }
 
-        // Período a conciliar: el del reporte de pagos si vino (un mes); si no, el del extracto.
-        $deCaja = array_values(array_filter($rangos, fn ($r) => $r[2] === 'pagos' && $r[0]));
-        $base = $deCaja !== [] ? $deCaja : array_values(array_filter($rangos, fn ($r) => $r[0]));
+        // Período a conciliar: el del estado de cuenta en PDF (un mes); si no, el del reporte de pagos; si no, el del extracto.
+        $de = fn (string $tipo) => array_values(array_filter($rangos, fn ($r) => $r[2] === $tipo && $r[0]));
+        $base = $de('pdf') ?: $de('pagos') ?: array_values(array_filter($rangos, fn ($r) => $r[0]));
         $desde = $base !== [] ? min(array_column($base, 0)) : now()->startOfMonth()->toDateString();
         $hasta = $base !== [] ? max(array_column($base, 1)) : now()->toDateString();
 
@@ -157,6 +173,17 @@ class ConciliacionUsdController extends Controller
             ->route('finanzas.conciliacion_usd.index', ['cuenta' => $banco . '|' . $titular, 'fecha_desde' => $desde, 'fecha_hasta' => $hasta])
             ->with('success', implode('. ', $partes) . '.')
             ->with('rechazadas', array_slice($rechazadas, 0, 15));
+    }
+
+    /** @param  array<string, int>  $otras  cobros del reporte que llegaron a otros bancos */
+    private function textoOtrasCuentas(array $otras): string
+    {
+        if ($otras === []) {
+            return '';
+        }
+        $nombres = ['citizens' => 'Citizens', 'amerant' => 'Amerant', 'wells' => 'Wells Fargo', 'regions' => 'Regions', 'truist' => 'Truist', 'citi' => 'Citi'];
+
+        return ' (se apartaron ' . implode(', ', array_map(fn ($k, $n) => "{$n} de " . ($nombres[$k] ?? $k), array_keys($otras), $otras)) . ': son de otras cuentas)';
     }
 
     /** @param  list<array{path: string}>  $docs */
@@ -280,8 +307,8 @@ class ConciliacionUsdController extends Controller
         return redirect()
             ->route('finanzas.conciliacion_usd.index', ['cuenta' => $banco . '|' . $titular, 'fecha_desde' => $desde, 'fecha_hasta' => $hasta])
             ->with('success', sprintf(
-                'Reporte de pagos: %d cobros nuevos (%d ya estaban cargados). %d cruzados con su abono en el extracto; %d sin abono.',
-                $r['nuevas'], $r['duplicadas'], $cruce['cruzados'], $cruce['sin_abono'],
+                'Reporte de pagos: %d cobros nuevos (%d ya estaban cargados)%s. %d cruzados con su abono en el extracto; %d sin abono.',
+                $r['nuevas'], $r['duplicadas'], $this->textoOtrasCuentas($r['otras_cuentas']), $cruce['cruzados'], $cruce['sin_abono'],
             ))
             ->with('rechazadas', $r['rechazadas']);
     }

@@ -69,8 +69,12 @@
                     @endforeach
                 </select>
             </label>
-            <label class="field">Archivos <input type="file" name="archivos[]" accept=".xlsx,.xls,.csv,.txt" multiple required></label>
+            <label class="field">Archivos <input type="file" name="archivos[]" accept=".xlsx,.xls,.csv,.txt,.pdf" multiple required></label>
             <button type="submit" class="btn primary">Subir y conciliar</button>
+            <div class="muted" style="flex-basis:100%; font-size:.75rem;">
+                Sube juntos el documento del banco (historial de Binance, o el estado de cuenta en PDF de Citizens / Amerant) y el reporte de pagos de Cloud.
+                Del reporte de Zelle solo se toman los cobros que llegaron al banco de la cuenta elegida.
+            </div>
         </form>
     </div>
 
@@ -136,9 +140,41 @@
                     <div style="font-size:1.25rem; font-weight:800; color:{{ $datos['pagos_sin_abono']->isEmpty() ? '#16a34a' : '#dc2626' }};">
                         {{ $datos['pagos_sin_abono']->count() }} sin abono · {{ $usd($datos['pagos_sin_abono']->sum('monto')) }}
                     </div>
+                    @if($datos['pagos_repetidos']->isNotEmpty())
+                        <div class="muted" style="font-size:.72rem;">+ {{ $datos['pagos_repetidos']->count() }} avisos repetidos que no cuentan</div>
+                    @endif
                 </div>
             @endif
         </div>
+
+        @if($datos['pagos_repetidos']->isNotEmpty())
+            <details class="panel" style="padding:10px 14px; margin-bottom:12px; border-left:4px solid #94a3b8;">
+                <summary style="cursor:pointer; font-weight:700;">
+                    🔁 Avisos de Cloud repetidos ({{ $datos['pagos_repetidos']->count() }} · {{ $usd($datos['pagos_repetidos']->sum('monto')) }}) — no son dinero nuevo
+                </summary>
+                <p class="muted" style="margin:6px 0; font-size:.78rem;">
+                    Ningún cajero los confirmó y repiten un cobro que ya está cruzado con el banco (mismo pagador y monto).
+                    Cloud volvió a leer el correo del banco; a veces sin el punto decimal ($92.00 quedó como 9,200).
+                </p>
+                <div class="table-wrap" style="max-height:360px; overflow:auto;">
+                    <table class="data-table" style="font-size:.8rem;">
+                        <thead><tr><th>Nro</th><th>Fecha en Cloud</th><th>Pagador</th><th style="text-align:right;">Monto</th><th>Repite a</th><th>Motivo</th></tr></thead>
+                        <tbody>
+                            @foreach($datos['pagos_repetidos'] as $p)
+                                <tr>
+                                    <td>{{ $p->nro }}</td>
+                                    <td style="white-space:nowrap;">{{ $p->fecha_hora ? $p->fecha_hora->format('d/m/Y h:i A') : $p->fecha->format('d/m/Y') }}</td>
+                                    <td>{{ $p->pagador }}</td>
+                                    <td style="text-align:right;">{{ $usd($p->monto) }}</td>
+                                    <td>#{{ $p->repetido_de }}</td>
+                                    <td>{{ $p->motivo_repetido }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        @endif
 
         @if($datos['pagos_sin_abono']->isNotEmpty())
             @php
@@ -162,6 +198,9 @@
                                     {{ $p->nro }}
                                     @if($p->duplicado_de)
                                         <div style="font-size:.72rem; font-weight:700; color:#b45309;" title="Mismo monto y pagador con minutos de diferencia: el banco recibió un solo pago">⚠ Posible duplicado de #{{ $p->duplicado_de }}</div>
+                                    @endif
+                                    @if($p->posible_x100_de ?? null)
+                                        <div style="font-size:.72rem; font-weight:700; color:#b91c1c;" title="Mismo pagador; el monto es exactamente 100 veces el de otro cobro ya cruzado con el banco">⚠ Parece el #{{ $p->posible_x100_de }} sin el punto decimal (×100)</div>
                                     @endif
                                 </td>
                                 <td style="white-space:nowrap;">{{ $p->fecha_hora ? $p->fecha_hora->format('d/m/Y h:i A') : $p->fecha->format('d/m/Y') }}</td>
