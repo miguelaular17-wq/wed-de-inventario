@@ -33,6 +33,10 @@
                 <input type="number" step="0.0001" min="0" max="100" name="comision_supervisor_pct" value="{{ number_format($comisionSupervisorPct, 4, '.', '') }}" required>
             </div>
             <div class="field">
+                <label>Comisión encargado de tienda — venta neta tienda (%)</label>
+                <input type="number" step="0.0001" min="0" max="100" name="comision_encargado_pct" value="{{ number_format($comisionEncargadoPct, 4, '.', '') }}" required>
+            </div>
+            <div class="field">
                 <label>Comisión supervisor de equipo / Marketing (%)</label>
                 <input type="number" step="0.0001" min="0" max="100" name="comision_marketing_pct" value="{{ number_format($comisionMarketingPct, 4, '.', '') }}" required>
             </div>

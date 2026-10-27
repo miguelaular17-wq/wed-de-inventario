@@ -100,6 +100,29 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertDatabaseCount('nomina_comision_registros', 1);
     }
 
+    public function test_encargado_de_tienda_cobra_su_porcentaje_sobre_toda_la_tienda(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_ENCARGADO, 'ENC-001', true);
+        $periodo = $this->periodo();
+        $this->venta('ENC-001', 400);
+        $this->documento('CENTRO', 400);
+        $this->venta('OTRO-ENC', 600);
+        $this->documento('CENTRO', 600);
+
+        // Sin porcentaje configurado no paga nada.
+        $sinConfigurar = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+        $this->assertSame(1000.0, $sinConfigurar['base']);
+        $this->assertSame(0.0, $sinConfigurar['total']);
+
+        NominaConfig::put('comision_encargado_pct', 0.03);
+        app(CommissionCalculationService::class)->limpiarPeriodo($periodo);
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(1000.0, $resultado['base']);
+        $this->assertSame(0.3, $resultado['total']);
+        $this->assertContains(NominaEmpleado::COMISION_ENCARGADO, NominaEmpleado::modosComisionAgregadosSede());
+    }
+
     public function test_supervisor_de_sede_usa_venta_neta_con_precio_neto(): void
     {
         $empleado = $this->empleado(NominaEmpleado::COMISION_SUPERVISOR_SEDE, 'SUP-NETO', true);

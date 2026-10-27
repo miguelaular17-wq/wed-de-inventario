@@ -9,16 +9,21 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Cruce automático de lotes de punto de venta Banesco con sus liquidaciones del extracto.
+ * Cruce automático de lotes de punto de venta (Banesco y BNC) con sus liquidaciones del extracto.
  *
  * Banesco abona cada lote en uno o dos movimientos con el número de lote en la descripción
  * ("TMD 0037638504 L683 20260801 683" débito, "TDB CAPIT 0037638504 L000683 30687" crédito).
+ * BNC lo abona por tipo de tarjeta ("POS: 860982552 … LOTE:000068 TERM:17213012 TIPO:TRJ. DEBITO"),
+ * y cada punto lleva su propia numeración de lotes, así que se agrupa por punto y lote.
  * El abono llega 1 a 3 días después y descontada la comisión (0 % a 2 %), así que se exige:
  * misma cuenta, mismo número de lote, fecha cercana y suma del banco entre el neto del lote
  * menos COMISION_MAX y el neto del lote. Si hay más de un lote posible no se cruza nada.
  */
 class LotesPuntoVentaAutoMatcher
 {
+    /** Bancos cuyas liquidaciones traen el número de lote (nombre en minúsculas como aparece en el extracto). */
+    private const BANCOS = ['banesco', 'bnc'];
+
     public const COMISION_MAX = 0.03;
 
     public const DIAS_ANTES = 1;
@@ -49,13 +54,21 @@ class LotesPuntoVentaAutoMatcher
      */
     public function propuestas(string $desde, string $hasta, ?string $bancoFiltro = null, ?string $titularFiltro = null): array
     {
-        if ($bancoFiltro && ! $this->matcher->mismoBanco($bancoFiltro, 'BANESCO')) {
+        $bancos = array_values(array_filter(self::BANCOS, fn ($b) => ! $bancoFiltro || $this->matcher->mismoBanco($bancoFiltro, strtoupper($b))));
+        if ($bancos === []) {
             return [];
         }
+        $deEstosBancos = function ($q) use ($bancos) {
+            $q->where(function ($w) use ($bancos) {
+                foreach ($bancos as $b) {
+                    $w->orWhereRaw('LOWER(banco) LIKE ?', ['%' . $b . '%']);
+                }
+            });
+        };
 
         $lineas = ConciliacionLinea::query()
             ->select(['id', 'banco', 'titular', 'fecha', 'descripcion', 'referencia', 'monto'])
-            ->whereRaw('LOWER(banco) LIKE ?', ['%banesco%'])
+            ->tap($deEstosBancos)
             ->where('estado', 'pendiente')
             ->whereNull('tesoreria_ingreso_id')
             ->whereNull('flujo_caja_id')
@@ -72,7 +85,7 @@ class LotesPuntoVentaAutoMatcher
         $lotes = TesoreriaIngreso::query()
             ->where('tipo', 'punto_venta')
             ->where('es_conciliado', false)
-            ->whereRaw('LOWER(banco) LIKE ?', ['%banesco%'])
+            ->tap($deEstosBancos)
             ->where('fecha', '>=', $this->sumarDias($desde, -self::DIAS_DESPUES))
             ->where('fecha', '<=', $this->sumarDias($hasta, self::DIAS_ANTES))
             ->get();
@@ -80,10 +93,14 @@ class LotesPuntoVentaAutoMatcher
             return [];
         }
 
-        $grupos = $lineas->groupBy(fn ($l) => $this->matcher->claveCuenta($l->banco, $l->titular).'|'.$this->numeroLote($l->descripcion));
+        $grupos = $lineas->groupBy(fn ($l) => $this->matcher->claveCuenta($l->banco, $l->titular).'|'.$this->puntoDeVenta($l->descripcion).'|'.$this->numeroLote($l->descripcion));
 
         $propuestas = [];
         foreach ($grupos as $grupo) {
+            // La misma liquidación dos veces (extracto importado dos veces): no se cruza hasta depurar.
+            if ($grupo->countBy(fn ($l) => round((float) $l->monto, 2) . '|' . $l->descripcion . '|' . $l->referencia)->max() > 1) {
+                continue;
+            }
             $filas = $this->lotesDelGrupo($grupo, $lotes);
             if ($filas === null || ! $this->montoCuadra($grupo, $filas)) {
                 continue;
@@ -97,15 +114,22 @@ class LotesPuntoVentaAutoMatcher
     }
 
     /**
-     * Número de lote Banesco en la descripción: "L683", "L000685", "L.58".
+     * Número de lote en la descripción: BNC "LOTE:000068"; Banesco "L683", "L000685", "L.58".
      */
     public function numeroLote(?string $descripcion): ?string
     {
-        if (preg_match('/(?:^|[^0-9A-Z])L\.?\s*0*(\d{1,})(?![0-9])/i', (string) $descripcion, $m) !== 1) {
-            return null;
+        $d = (string) $descripcion;
+        if (preg_match('/\bLOTE\s*:?\s*0*(\d+)/i', $d, $m) === 1 || preg_match('/(?:^|[^0-9A-Z])L\.?\s*0*(\d{1,})(?![0-9])/i', $d, $m) === 1) {
+            return $m[1] === '' ? null : $m[1];
         }
 
-        return $m[1] === '' ? null : $m[1];
+        return null;
+    }
+
+    /** Punto de venta BNC ("POS: 860982552"): cada uno numera sus lotes por separado. Vacío en Banesco. */
+    private function puntoDeVenta(?string $descripcion): string
+    {
+        return preg_match('/\bPOS\s*:\s*(\d+)/i', (string) $descripcion, $m) === 1 ? $m[1] : '';
     }
 
     /**

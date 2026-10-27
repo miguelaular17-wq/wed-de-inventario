@@ -128,6 +128,7 @@
         $link('My Delivery', route('finanzas.my_delivery'), request()->routeIs('finanzas.my_delivery')),
         $link('Gasto Directivos', route('finanzas.gasto_directivos'), request()->routeIs('finanzas.gasto_directivos*')),
         $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*')),
+        $link('Configuración', route('finanzas.configuracion'), request()->routeIs('finanzas.configuracion*')),
         $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones')),
         $link('Conciliación en divisas', route('finanzas.conciliacion_usd.index'), request()->routeIs('finanzas.conciliacion_usd.*')),
         $link('Lotes punto de venta', route('finanzas.conciliaciones.lotes'), request()->routeIs('finanzas.conciliaciones.lotes')),
@@ -274,6 +275,7 @@
             $nav[] = $link('My Delivery', route('finanzas.my_delivery'), request()->routeIs('finanzas.my_delivery'));
             $nav[] = $link('Gasto Directivos', route('finanzas.gasto_directivos'), request()->routeIs('finanzas.gasto_directivos*'));
             $nav[] = $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*'));
+            $nav[] = $link('Configuración', route('finanzas.configuracion'), request()->routeIs('finanzas.configuracion*'));
         }
         if ($u->canAccess('conciliaciones')) {
             $nav[] = $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones'));

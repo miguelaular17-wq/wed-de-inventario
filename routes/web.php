@@ -598,8 +598,11 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
     Route::get('/gasto-directivos/reporte', [\App\Http\Controllers\GastoDirectivosController::class, 'reporte'])->name('finanzas.gasto_directivos.reporte');
     Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
     Route::get('/gastos-fijos/pendientes', [FinanzasController::class, 'getGastosFijosParaVincular'])->name('finanzas.gastos_fijos.pendientes');
+    Route::get('/configuracion', [\App\Http\Controllers\FinanzasConfiguracionController::class, 'index'])->name('finanzas.configuracion');
 
     Route::middleware(['permission:finanzas.editar'])->group(function () {
+        Route::post('/configuracion', [\App\Http\Controllers\FinanzasConfiguracionController::class, 'store'])->name('finanzas.configuracion.store');
+        Route::post('/configuracion/{catalogo}/activo', [\App\Http\Controllers\FinanzasConfiguracionController::class, 'toggle'])->name('finanzas.configuracion.toggle');
         Route::post('/cuentas-por-pagar', [\App\Http\Controllers\CuentaPorPagarController::class, 'store'])->name('finanzas.cuentas_por_pagar.store');
         Route::post('/flujo-caja/reset', [FinanzasController::class, 'resetDaily'])->name('finanzas.reset_daily');
         Route::post('/flujo-caja/egreso', [FinanzasController::class, 'storeEgreso'])->name('finanzas.store_egreso');
@@ -643,6 +646,8 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::post('/conciliacion-divisas/accion', [\App\Http\Controllers\ConciliacionUsdController::class, 'accion'])->name('finanzas.conciliacion_usd.accion');
     Route::post('/conciliaciones/divisas/preview', [\App\Http\Controllers\ConciliacionDivisasController::class, 'preview'])->name('finanzas.conciliaciones.divisas.preview');
     Route::post('/conciliaciones/divisas/aplicar', [\App\Http\Controllers\ConciliacionDivisasController::class, 'aplicar'])->name('finanzas.conciliaciones.divisas.aplicar');
+    Route::post('/conciliaciones/pagos-manuales/preview', [\App\Http\Controllers\PagosManualesController::class, 'preview'])->name('finanzas.conciliaciones.pagos_manuales.preview');
+    Route::post('/conciliaciones/pagos-manuales/aplicar', [\App\Http\Controllers\PagosManualesController::class, 'aplicar'])->name('finanzas.conciliaciones.pagos_manuales.aplicar');
     Route::get('/conciliaciones/importaciones/{importacion}', [FinanzasController::class, 'estadoImportacion'])->whereNumber('importacion')->name('finanzas.conciliaciones.importaciones.show');
     Route::post('/conciliaciones/medios-pago', [FinanzasController::class, 'uploadMediosPago'])->name('finanzas.conciliaciones.medios_pago');
     Route::post('/conciliaciones/process', [FinanzasController::class, 'processConciliacion'])->name('finanzas.conciliaciones.process');

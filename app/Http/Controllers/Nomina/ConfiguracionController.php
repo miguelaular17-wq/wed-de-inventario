@@ -26,6 +26,7 @@ class ConfiguracionController extends Controller
             'valorHoraExtraSupervisor' => $this->attendance->valorHoraSupervisor(),
             'descuentoVentaPct' => NominaConfig::getDecimal('descuento_venta_pct', 25),
             'comisionSupervisorPct' => NominaConfig::getDecimal('comision_supervisor_pct', 0.05),
+            'comisionEncargadoPct' => NominaConfig::getDecimal('comision_encargado_pct', 0.0),
             'comisionMarketingPct' => NominaConfig::getDecimal('comision_marketing_pct', 0.10),
             'comisionNunesPct' => NominaConfig::getDecimal('comision_nunes_pct', 0.60),
             'comisionDigitalPct' => NominaConfig::getDecimal('comision_digital_pct', 0.30),
@@ -49,6 +50,7 @@ class ConfiguracionController extends Controller
             'valor_hora_extra_supervisor' => ['nullable', 'numeric', 'min:0'],
             'descuento_venta_pct' => ['required', 'numeric', 'min:0', 'max:100'],
             'comision_supervisor_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'comision_encargado_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'comision_marketing_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'comision_nunes_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'comision_digital_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
@@ -65,6 +67,7 @@ class ConfiguracionController extends Controller
         NominaConfig::put('descuento_venta_pct', round((float) $data['descuento_venta_pct'], 2));
         foreach ([
             'comision_supervisor_pct',
+            'comision_encargado_pct',
             'comision_marketing_pct',
             'comision_nunes_pct',
             'comision_digital_pct',

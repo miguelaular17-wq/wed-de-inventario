@@ -145,6 +145,9 @@
             <button type="button" class="btn-upload" style="background:linear-gradient(135deg,#7c3aed,#6366f1);" onclick="document.getElementById('divisasModal').style.display='flex'">
                 Transferencias en divisas / Pago móvil C2P
             </button>
+            <button type="button" class="btn-upload" style="background:linear-gradient(135deg,#b45309,#d97706);" onclick="document.getElementById('pagosManualesModal').style.display='flex'">
+                Pagos manuales (Cloud)
+            </button>
 
             <form action="{{ route('finanzas.conciliaciones') }}" method="GET" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap;">
                 <input type="date" name="fecha_desde" class="select-banco" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}" title="Fecha Desde" required style="min-width: 130px;">
@@ -772,6 +775,41 @@
             <div class="modal-foot">
                 <button type="button" class="btn-cancel" onclick="document.getElementById('uploadModal').style.display='none'">Cancelar</button>
                 <button type="submit" class="btn-submit">Subir y Analizar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- PAGOS MANUALES DE CLOUD (documento adicional) --}}
+<div id="pagosManualesModal" class="modal-overlay">
+    <div class="modal-box">
+        <form action="{{ route('finanzas.conciliaciones.pagos_manuales.preview') }}" method="POST" enctype="multipart/form-data"
+              onsubmit="const b = this.querySelector('.btn-submit'); b.disabled = true; b.innerText = 'Buscando en los bancos…';">
+            @csrf
+            <div class="modal-head">
+                <h5 class="modal-title">Pagos manuales (Cloud)</h5>
+                <button type="button" class="modal-close" onclick="document.getElementById('pagosManualesModal').style.display='none'">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="file-hint" style="margin-top:0;">
+                    Sube el «Reporte específico de pagos manuales». El reporte no dice a qué cuenta llegó cada pago,
+                    así que se busca por <strong>referencia y monto</strong> en los abonos de <strong>todos los bancos</strong>:
+                    los de «Banco Nacional» en las cuentas en bolívares, y los de Binance, Zelle o Mercantil Panamá en las de divisas.
+                    Primero verás el resultado; no se guarda nada hasta que confirmes.
+                </p>
+                <label class="form-label">Reporte de pagos manuales:</label>
+                <div class="file-wrap">
+                    <label class="file-label">
+                        Elegir archivo
+                        <input type="file" name="archivo" accept=".xls,.xlsx,.csv" required style="display:none;"
+                               onchange="document.getElementById('pagosManualesFileName').value = this.files[0] ? this.files[0].name : '';">
+                    </label>
+                    <input type="text" id="pagosManualesFileName" placeholder="Ningún archivo seleccionado" readonly class="file-name">
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn-cancel" onclick="document.getElementById('pagosManualesModal').style.display='none'">Cancelar</button>
+                <button type="submit" class="btn-submit">Verificar</button>
             </div>
         </form>
     </div>

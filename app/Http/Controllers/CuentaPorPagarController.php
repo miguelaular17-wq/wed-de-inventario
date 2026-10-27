@@ -50,7 +50,7 @@ class CuentaPorPagarController extends Controller
 
         return view('finanzas.cuentas_por_pagar', [
             'cuentas_por_pagar' => $cuentas_por_pagar,
-            'tiposGasto' => config('finanzas_tipos_gasto.tipos_gasto', []),
+            'tiposGasto' => \App\Models\FinanzasCatalogo::tiposGasto(),
             'sedes' => config('inventario.sedes_locales', []),
             'beneficiarios' => $beneficiarios,
             'puedeEditar' => auth()->user()?->canAccess('finanzas.editar') && ! auth()->user()?->isAuditor(),

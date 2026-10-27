@@ -28,5 +28,8 @@ class DatabaseSeeder extends Seeder
 
         // [Producción/Base] Comprador asignado a cada proveedor (MAVO / CARLOS / PAOLA)
         $this->call(ProveedorCompradoresSeeder::class);
+
+        // Finanzas → Configuración: tipos de gasto, cuentas y beneficiarios que ya existen (idempotente)
+        $this->call(FinanzasCatalogoSeeder::class);
     }
 }

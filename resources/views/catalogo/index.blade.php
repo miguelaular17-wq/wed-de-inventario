@@ -105,6 +105,24 @@
         color: var(--text, #333);
         box-sizing: border-box;
     }
+    .subcat-multi { position: relative; }
+    .subcat-toggle {
+        text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        padding-right: 28px;
+        background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='3'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
+    }
+    .subcat-panel {
+        position: absolute; top: 100%; left: 0; z-index: 40; margin-top: 4px;
+        width: max(100%, 280px); background: #fff; border: 1px solid #cbd5e1; border-radius: 10px;
+        box-shadow: 0 10px 25px -5px rgba(15, 23, 42, .18); padding: 8px;
+    }
+    .subcat-buscar { width: 100%; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: .85rem; box-sizing: border-box; }
+    .subcat-acciones { display: flex; justify-content: space-between; gap: 6px; margin: 6px 0; }
+    .subcat-acciones button { background: none; border: none; color: #1d4ed8; font-size: .78rem; font-weight: 600; cursor: pointer; padding: 2px 0; }
+    .subcat-lista { max-height: 260px; overflow-y: auto; }
+    .subcat-opcion { display: flex; align-items: center; gap: 6px; padding: 5px 4px; font-size: .85rem; cursor: pointer; border-radius: 6px; }
+    .subcat-opcion:hover { background: #f1f5f9; }
+    .subcat-vacio { color: #64748b; font-size: .82rem; padding: 6px 4px; }
     .filter-actions {
         display: flex;
         gap: 8px;
@@ -536,14 +554,17 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="filter-item">
+                <div class="filter-item subcat-multi">
                     <label>Subcategoría</label>
-                    <select name="subcategoria" id="subcategoria" class="filter-input">
-                        <option value="todas">Todas</option>
-                        @foreach($subcategorias as $sub)
-                            <option value="{{ $sub }}" {{ request('subcategoria') == $sub ? 'selected' : '' }}>{{ $sub }}</option>
-                        @endforeach
-                    </select>
+                    <button type="button" class="filter-input subcat-toggle" id="subcatToggle" aria-haspopup="true" aria-expanded="false">Todas</button>
+                    <div class="subcat-panel" id="subcatPanel" hidden>
+                        <input type="search" id="subcatBuscar" class="subcat-buscar" placeholder="Buscar subcategoría…" autocomplete="off">
+                        <div class="subcat-acciones">
+                            <button type="button" id="subcatMarcarVisibles">Marcar visibles</button>
+                            <button type="button" id="subcatLimpiar">Todas (quitar filtro)</button>
+                        </div>
+                        <div class="subcat-lista" id="subcatLista"></div>
+                    </div>
                 </div>
                 <div class="filter-item">
                     <label>Sede</label>
@@ -851,42 +872,86 @@ document.addEventListener('keydown', function (e) {
 <script>
     const catSubcatMap = @json($catSubcatMap);
     const allSubcategorias = @json($subcategorias);
-    let selectedSubcat = '{{ request('subcategoria', 'todas') }}';
+    // Varias subcategorías: casillas subcategoria[]; ninguna marcada = todas.
+    let selectedSubcats = new Set(@json($subcategoriasElegidas));
 
     const categoriaSelect = document.getElementById('categoria');
-    const subcategoriaSelect = document.getElementById('subcategoria');
+    const subcatToggle = document.getElementById('subcatToggle');
+    const subcatPanel = document.getElementById('subcatPanel');
+    const subcatLista = document.getElementById('subcatLista');
+    const subcatBuscar = document.getElementById('subcatBuscar');
+
+    function textoSubcats() {
+        const n = selectedSubcats.size;
+        subcatToggle.textContent = n === 0 ? 'Todas' : (n === 1 ? [...selectedSubcats][0] : n + ' subcategorías');
+        subcatToggle.title = n ? [...selectedSubcats].join(', ') : '';
+    }
 
     function updateSubcategorias() {
         const cat = categoriaSelect.value;
-        let options = [];
+        const options = cat === 'todas' ? allSubcategorias : (catSubcatMap[cat] || []);
+        // Una subcategoría que no es de la categoría elegida deja de filtrar.
+        selectedSubcats = new Set([...selectedSubcats].filter(s => options.includes(s)));
 
-        if (cat === 'todas') {
-            options = allSubcategorias;
-        } else {
-            options = catSubcatMap[cat] || [];
-        }
-
-        subcategoriaSelect.innerHTML = '<option value="todas">Todas</option>';
-        
+        subcatLista.innerHTML = '';
         options.forEach(sub => {
-            const opt = document.createElement('option');
-            opt.value = sub;
-            opt.textContent = sub;
-            if (sub === selectedSubcat) {
-                opt.selected = true;
-            }
-            subcategoriaSelect.appendChild(opt);
+            const label = document.createElement('label');
+            label.className = 'subcat-opcion';
+            label.dataset.nombre = sub.toLowerCase();
+            const chk = document.createElement('input');
+            chk.type = 'checkbox';
+            chk.name = 'subcategoria[]';
+            chk.value = sub;
+            chk.checked = selectedSubcats.has(sub);
+            chk.addEventListener('change', () => {
+                chk.checked ? selectedSubcats.add(sub) : selectedSubcats.delete(sub);
+                textoSubcats();
+            });
+            label.append(chk, document.createTextNode(' ' + sub));
+            subcatLista.appendChild(label);
         });
+        if (!options.length) subcatLista.innerHTML = '<div class="subcat-vacio">Esta categoría no tiene subcategorías.</div>';
+        subcatBuscar.value = '';
+        textoSubcats();
     }
 
+    subcatToggle.addEventListener('click', () => {
+        const abrir = subcatPanel.hidden;
+        subcatPanel.hidden = !abrir;
+        subcatToggle.setAttribute('aria-expanded', String(abrir));
+        if (abrir) subcatBuscar.focus();
+    });
+    document.addEventListener('click', (e) => {
+        if (!subcatPanel.hidden && !e.target.closest('.subcat-multi')) {
+            subcatPanel.hidden = true;
+            subcatToggle.setAttribute('aria-expanded', 'false');
+        }
+    });
+    subcatBuscar.addEventListener('input', () => {
+        const q = subcatBuscar.value.trim().toLowerCase();
+        subcatLista.querySelectorAll('.subcat-opcion').forEach(el => el.style.display = el.dataset.nombre.includes(q) ? '' : 'none');
+    });
+    subcatBuscar.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+    document.getElementById('subcatMarcarVisibles').addEventListener('click', () => {
+        subcatLista.querySelectorAll('.subcat-opcion').forEach(el => {
+            if (el.style.display === 'none') return;
+            const chk = el.querySelector('input');
+            chk.checked = true;
+            selectedSubcats.add(chk.value);
+        });
+        textoSubcats();
+    });
+    document.getElementById('subcatLimpiar').addEventListener('click', () => {
+        selectedSubcats.clear();
+        subcatLista.querySelectorAll('input[type=checkbox]').forEach(chk => chk.checked = false);
+        textoSubcats();
+    });
+
     categoriaSelect.addEventListener('change', function() {
-        // Reset subcategory selection to "todas" when category changes manually
-        subcategoriaSelect.value = 'todas';
-        selectedSubcat = 'todas'; 
+        selectedSubcats.clear();
         updateSubcategorias();
     });
 
-    // Initialize subcategories on page load
     updateSubcategorias();
     
     // --- NUEVA LÓGICA DE PDF ASÍNCRONA ---

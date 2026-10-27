@@ -113,6 +113,7 @@ class CatalogoController extends Controller
             'productos' => $productos,
             'categorias' => $categorias,
             'subcategorias' => $subcategorias,
+            'subcategoriasElegidas' => $this->subcategoriasElegidas($request),
             'catSubcatMap' => $catSubcatMap,
             'sedes' => $sedes,
             'modoCliente' => $modoCliente,
@@ -142,7 +143,7 @@ class CatalogoController extends Controller
                 ? $request->sede
                 : 'Global (Todas)';
             $catFiltro = $request->categoria && $request->categoria !== 'todas' ? $request->categoria : 'Todas';
-            $subcatFiltro = $request->subcategoria && $request->subcategoria !== 'todas' ? $request->subcategoria : 'Todas';
+            $subcatFiltro = implode(', ', $this->subcategoriasElegidas($request)) ?: 'Todas';
 
             $filtrosActivos = [
                 'Sede' => $sedeFiltro,
@@ -305,6 +306,22 @@ class CatalogoController extends Controller
         ], 500);
     }
 
+    /**
+     * Subcategorías del filtro: una (?subcategoria=X, enlaces viejos) o varias (?subcategoria[]=X&subcategoria[]=Y).
+     *
+     * @return list<string>
+     */
+    private function subcategoriasElegidas(Request $request): array
+    {
+        $valor = $request->input('subcategoria');
+        $lista = is_array($valor) ? $valor : [$valor];
+
+        return array_values(array_unique(array_filter(
+            array_map(fn ($s) => trim((string) $s), $lista),
+            fn ($s) => $s !== '' && strtolower($s) !== 'todas'
+        )));
+    }
+
     private function buildQuery(Request $request, bool $modoCliente = false)
     {
         $query = Producto::select('id', 'codigo', 'nombre as descripcion', 'categoria', 'subcategoria', 'precio_unidad', 'precio_mayor')
@@ -314,8 +331,9 @@ class CatalogoController extends Controller
             $query->where('categoria', $request->categoria);
         }
 
-        if ($request->filled('subcategoria') && $request->subcategoria !== 'todas') {
-            $query->where('subcategoria', $request->subcategoria);
+        $subcategorias = $this->subcategoriasElegidas($request);
+        if ($subcategorias !== []) {
+            $query->whereIn('subcategoria', $subcategorias);
         }
 
         if (! $modoCliente && $request->filled('search')) {

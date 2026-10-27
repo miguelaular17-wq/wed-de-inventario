@@ -148,16 +148,57 @@ class LotesPuntoVentaAutoMatcherTest extends TestCase
         $this->assertTrue((bool) $lote->fresh()->es_conciliado);
     }
 
+    public function test_bnc_cruza_el_lote_abonado_por_tipo_de_tarjeta(): void
+    {
+        $lote = $this->lote('DORAL', '2026-08-03', '69', 126391.49, 'BNC');
+        $debito = $this->linea('DORAL', '2026-08-04', 'POS: 860982552 INVERSIONES DORAL PARAGUA FECHA:04/08/2026 HORA:03:34:00 LOTE:000069 TERM:17213012 TIPO:TRJ. DEBITO', 123426.29, 'BNC');
+        $electron = $this->linea('DORAL', '2026-08-04', 'POS: 860982552 INVERSIONES DORAL PARAGUA FECHA:04/08/2026 HORA:03:34:00 LOTE:000069 TERM:17213012 TIPO:TRJ. DEB.ELC', 2965.20, 'BNC');
+
+        $this->assertSame(1, $this->servicio()->conciliar('2026-08-01', '2026-08-31', 'BNC', 'DORAL'));
+
+        $this->assertTrue((bool) $lote->fresh()->es_conciliado);
+        $this->assertSame((int) $lote->id, (int) $debito->fresh()->tesoreria_ingreso_id);
+        $this->assertSame((int) $lote->id, (int) $electron->fresh()->tesoreria_ingreso_id);
+    }
+
+    public function test_bnc_cada_punto_tiene_su_numeracion_de_lotes(): void
+    {
+        // Lote 439 del punto 860963077 y lote 439 del punto 860982552 son lotes distintos.
+        $loteA = $this->lote('DORAL', '2026-08-01', '000439', 29903.30, 'BNC');
+        $a1 = $this->linea('DORAL', '2026-08-01', 'POS: 860963077 INVERSIONES DORAL FECHA:01/08/2026 LOTE:000439 TERM:17183717 TIPO:TRJ. DEB.ELC', 16799.18, 'BNC');
+        $a2 = $this->linea('DORAL', '2026-08-01', 'POS: 860963077 INVERSIONES DORAL FECHA:01/08/2026 LOTE:000439 TERM:17183717 TIPO:TRJ. DEBITO', 13104.12, 'BNC');
+        $otroPunto = $this->linea('DORAL', '2026-08-02', 'POS: 860982552 INVERSIONES DORAL FECHA:02/08/2026 LOTE:000439 TERM:17213012 TIPO:TRJ. DEBITO', 5000.00, 'BNC');
+
+        $this->assertSame(1, $this->servicio()->conciliar('2026-08-01', '2026-08-31'));
+
+        $this->assertSame((int) $loteA->id, (int) $a1->fresh()->tesoreria_ingreso_id);
+        $this->assertSame((int) $loteA->id, (int) $a2->fresh()->tesoreria_ingreso_id);
+        $this->assertSame('pendiente', $otroPunto->fresh()->estado);
+    }
+
+    public function test_no_cruza_si_el_extracto_trae_la_misma_liquidacion_dos_veces(): void
+    {
+        $this->lote('LNACEH', '2026-08-08', '499', 118405.95, 'BNC');
+        $this->lote('LNACEH', '2026-08-09', '0499', 118405.95, 'BNC');
+        $desc = 'POS: 860963149 LNACEH SPORT CA FECHA:09/08/2026 HORA:03:38:46 LOTE:000499 TERM:17183807 TIPO:TRJ. DEBITO';
+        $l1 = $this->linea('LNACEH', '2026-08-09', $desc, 118405.95, 'BNC');
+        $l2 = $this->linea('LNACEH', '2026-08-09', $desc, 118405.95, 'BNC');
+
+        $this->assertSame(0, $this->servicio()->conciliar('2026-08-01', '2026-08-31'));
+        $this->assertSame('pendiente', $l1->fresh()->estado);
+        $this->assertSame('pendiente', $l2->fresh()->estado);
+    }
+
     private function servicio(): LotesPuntoVentaAutoMatcher
     {
         return app(LotesPuntoVentaAutoMatcher::class);
     }
 
-    private function lote(string $titular, string $fecha, string $numero, float $monto): TesoreriaIngreso
+    private function lote(string $titular, string $fecha, string $numero, float $monto, string $banco = 'BANESCO'): TesoreriaIngreso
     {
         return TesoreriaIngreso::create([
             'tipo' => 'punto_venta',
-            'banco' => 'BANESCO',
+            'banco' => $banco,
             'titular' => $titular,
             'fecha' => $fecha,
             'monto' => $monto,
@@ -166,14 +207,14 @@ class LotesPuntoVentaAutoMatcherTest extends TestCase
         ]);
     }
 
-    private function linea(string $titular, string $fecha, string $descripcion, float $monto): ConciliacionLinea
+    private function linea(string $titular, string $fecha, string $descripcion, float $monto, string $banco = 'BANESCO'): ConciliacionLinea
     {
         return ConciliacionLinea::create([
-            'banco' => 'BANESCO',
+            'banco' => $banco,
             'titular' => $titular,
             'fecha' => $fecha,
             'descripcion' => $descripcion,
-            'referencia' => (string) ltrim((string) preg_replace('/.*L\.?0*(\d+).*/', '$1', $descripcion), '0'),
+            'referencia' => (string) ltrim((string) preg_replace('/.*L(?:OTE:)?\.?0*(\d+).*/', '$1', $descripcion), '0'),
             'monto' => $monto,
             'estado' => 'pendiente',
             'tipo' => 'abono',

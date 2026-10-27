@@ -1212,107 +1212,9 @@
                 <label id="lbl_tipo_gasto" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tipo de Gasto</label>
                 <select name="tipo_gasto" id="tipo_gasto" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                     <option value="">-- Seleccione un tipo de gasto --</option>
-                    <option value="083 - GASTOS MEDICOS EMPLEADOS">083 - GASTOS MEDICOS EMPLEADOS</option>
-                    <option value="002 - IMPUESTO MUNICIPAL (ALCALDIAS)">002 - IMPUESTO MUNICIPAL (ALCALDIAS)</option>
-                    <option value="003 - ALQUILERES">003 - ALQUILERES</option>
-                    <option value="004 - AYUDA FAMILIAR">004 - AYUDA FAMILIAR</option>
-                    <option value="005 - COLABORACIONES">005 - COLABORACIONES</option>
-                    <option value="006 - DONACIONES (LEGALES)">006 - DONACIONES (LEGALES)</option>
-                    <option value="007 - INSUMOS ARREGLOS">007 - INSUMOS ARREGLOS</option>
-                    <option value="008 - CONSUMIBLES TIENDA">008 - CONSUMIBLES TIENDA</option>
-                    <option value="009 - ARTICULOS DE PAPELERIA">009 - ARTICULOS DE PAPELERIA</option>
-                    <option value="010 - CONDOMINIO TIENDAS">010 - CONDOMINIO TIENDAS</option>
-                    <option value="011 - ENVIOS Y ENCOMIENDAS">011 - ENVIOS Y ENCOMIENDAS</option>
-                    <option value="012 - GASTOS NOTARIA/LEGALES">012 - GASTOS NOTARIA/LEGALES</option>
-                    <option value="013 - GASTOS NOTARIA/LEGALES (EMPEÑO)">013 - GASTOS NOTARIA/LEGALES (EMPEÑO)</option>
-                    <option value="014 - GASTOS INTERNET TIENDAS">014 - GASTOS INTERNET TIENDAS</option>
-                    <option value="0141 - GASTOS TELEFONICOS">0141 - GASTOS TELEFONICOS</option>
-                    <option value="015 - MANT. Y REP. VEHICULOS TIENDAS">015 - MANT. Y REP. VEHICULOS TIENDAS</option>
-                    <option value="017 - MANT. Y REP. VEHICULOS EMPEÑOS">017 - MANT. Y REP. VEHICULOS EMPEÑOS</option>
-                    <option value="016 - MANT. Y REP. VEHICULOS DIRECTIVO">016 - MANT. Y REP. VEHICULOS DIRECTIVO</option>
-                    <option value="018 - FLETE COMPRA MERCANCIA">018 - FLETE COMPRA MERCANCIA</option>
-                    <option value="019 - IMASEO TIENDA">019 - IMASEO TIENDA</option>
-                    <option value="020 - IMPUESTOS Y TASAS ( SENIAT)">020 - IMPUESTOS Y TASAS ( SENIAT)</option>
-                    <option value="021 - INCES">021 - INCES</option>
-                    <option value="022 - FAOV">022 - FAOV</option>
-                    <option value="023 - IVSS">023 - IVSS</option>
-                    <option value="024 - AGAZAGOS PERSONAL">024 - AGAZAGOS PERSONAL</option>
-                    <option value="025 - UTILIDADES PERSONAL">025 - UTILIDADES PERSONAL</option>
-                    <option value="026 - VACACIONES PERSONAL">026 - VACACIONES PERSONAL</option>
-                    <option value="027 - NOMINA LEGAL">027 - NOMINA LEGAL</option>
-                    <option value="028 - NOMINA ESPECIAL">028 - NOMINA ESPECIAL</option>
-                    <option value="029 - PRESTACIONES SOCIALES">029 - PRESTACIONES SOCIALES</option>
-                    <option value="030 - UNIFORME PERSONAL">030 - UNIFORME PERSONAL</option>
-                    <option value="031 - ARTICULOS DE LIMPIEZA">031 - ARTICULOS DE LIMPIEZA</option>
-                    <option value="032 - COMBUSTIBLE PLANTAS ELECTRICAS">032 - COMBUSTIBLE PLANTAS ELECTRICAS</option>
-                    <option value="033 - COMBUSTIBLE VEHICULOS TIENDAS">033 - COMBUSTIBLE VEHICULOS TIENDAS</option>
-                    <option value="034 - COMBUSTIBLE VEHICULOS DIRECTIVO">034 - COMBUSTIBLE VEHICULOS DIRECTIVO</option>
-                    <option value="035 - MANT. Y REP. LOCALES TIENDA">035 - MANT. Y REP. LOCALES TIENDA</option>
-                    <option value="036 - MANT. Y REP. LOCALES/CASAS EMPEÑO">036 - MANT. Y REP. LOCALES/CASAS EMPEÑO</option>
-                    <option value="037 - CONDOMINIOS EMPEÑOS">037 - CONDOMINIOS EMPEÑOS</option>
-                    <option value="038 - CONDOMINIOS DIRECTIVO">038 - CONDOMINIOS DIRECTIVO</option>
-                    <option value="039 - GASTOS INTERNET DIRECTIVO">039 - GASTOS INTERNET DIRECTIVO</option>
-                    <option value="040 - SUELDOS Y SALARIO DIRECTIVO">040 - SUELDOS Y SALARIO DIRECTIVO</option>
-                    <option value="041 - SUELDO Y SALARIO MARIA NUÑEZ">041 - SUELDO Y SALARIO MARIA NUÑEZ</option>
-                    <option value="042 - GASTOS CAFETIN">042 - GASTOS CAFETIN</option>
-                    <option value="043 - CORPOELEC TIENDAS">043 - CORPOELEC TIENDAS</option>
-                    <option value="044 - HIDROFALCON TIENDAS">044 - HIDROFALCON TIENDAS</option>
-                    <option value="045 - GASTOS AGUA CISTERNA">045 - GASTOS AGUA CISTERNA</option>
-                    <option value="046 - REPUESTOS VEHICULOS TIENDA">046 - REPUESTOS VEHICULOS TIENDA</option>
-                    <option value="047 - REPUESTOS VEHICULOS DIRECTIVO">047 - REPUESTOS VEHICULOS DIRECTIVO</option>
-                    <option value="048 - REPUESTOS VEHICULOS EMPEÑO">048 - REPUESTOS VEHICULOS EMPEÑO</option>
-                    <option value="049 - INSUMOS MANTENIMIENTO">049 - INSUMOS MANTENIMIENTO</option>
-                    <option value="050 - GASTOS BOUTIQUIN MEDICINAS">050 - GASTOS BOUTIQUIN MEDICINAS</option>
-                    <option value="051 - ACTIVOS (EQUIPOS-MOBILIARIOS)">051 - ACTIVOS (EQUIPOS-MOBILIARIOS)</option>
-                    <option value="052 - GASTOS SISTEMA INTEGRA/UNIX">052 - GASTOS SISTEMA INTEGRA/UNIX</option>
-                    <option value="053 - GASTOS ASESORIAS EXTERNAS">053 - GASTOS ASESORIAS EXTERNAS</option>
-                    <option value="054 - GASTOS PERMISOLOGIAS">054 - GASTOS PERMISOLOGIAS</option>
-                    <option value="055 - PUBLICIDAD">055 - PUBLICIDAD</option>
-                    <option value="056 - SERVICIO COULD PAGO">056 - SERVICIO COULD PAGO</option>
-                    <option value="057 - REPUESTOS TELEFONIA (CAJA CHICA)">057 - REPUESTOS TELEFONIA (CAJA CHICA)</option>
-                    <option value="058 - SERVICIO TECNICO (GARANTIAS)">058 - SERVICIO TECNICO (GARANTIAS)</option>
-                    <option value="059 - COMISIONES EMPEÑO">059 - COMISIONES EMPEÑO</option>
-                    <option value="060 - SUSCRIPCIONES">060 - SUSCRIPCIONES</option>
-                    <option value="061 - MANTENIMIENTO MOBILIARIOS Y EQUIPOS">061 - MANTENIMIENTO MOBILIARIOS Y EQUIPOS</option>
-                    <option value="062 - SERVICIO PAGINA WEB">062 - SERVICIO PAGINA WEB</option>
-                    <option value="063 - GASTOS SISTEMA PREMIUM">063 - GASTOS SISTEMA PREMIUM</option>
-                    <option value="064 - SERVICIO INTEGRA">064 - SERVICIO INTEGRA</option>
-                    <option value="065 - FONACIT">065 - FONACIT</option>
-                    <option value="066 - CURSOS Y ADIESTRAMIENTOS">066 - CURSOS Y ADIESTRAMIENTOS</option>
-                    <option value="067 - INGRESO VENTAS">067 - INGRESO VENTAS</option>
-                    <option value="068 - CXC GRUPO JENU (AVANCES)">068 - CXC GRUPO JENU (AVANCES)</option>
-                    <option value="069 - CXC/CXP DIRECTIVO JOSE JEREZ">069 - CXC/CXP DIRECTIVO JOSE JEREZ</option>
-                    <option value="070 - DESEMBOLSO NOMINA DIVISAS">070 - DESEMBOLSO NOMINA DIVISAS</option>
-                    <option value="071 - DESEMBOLSO NOMINA BOLIVARES">071 - DESEMBOLSO NOMINA BOLIVARES</option>
-                    <option value="072 - ANTICIPO NOMINAS DIVISAS">072 - ANTICIPO NOMINAS DIVISAS</option>
-                    <option value="073 - ANTICIPO NOMINAS BOLIVARES">073 - ANTICIPO NOMINAS BOLIVARES</option>
-                    <option value="096 - PRESTAMO PERSONAL DIVISAS">096 - PRESTAMO PERSONAL DIVISAS</option>
-                    <option value="074 - PRESTAMO PERSONAL BOLIVARES (TRANSF)">074 - PRESTAMO PERSONAL BOLIVARES (TRANSF)</option>
-                    <option value="075 - COMISION HONOR">075 - COMISION HONOR</option>
-                    <option value="076 - EMPEÑOS">076 - EMPEÑOS</option>
-                    <option value="077 - COMPRA DIVISAS BANCOS">077 - COMPRA DIVISAS BANCOS</option>
-                    <option value="078 - DEPOSITO BANCARIO">078 - DEPOSITO BANCARIO</option>
-                    <option value="079 - COMISION EMPEÑO">079 - COMISION EMPEÑO</option>
-                    <option value="080 - INGRESO ALQUILERES">080 - INGRESO ALQUILERES</option>
-                    <option value="081 - COMPRA DIVISAS TERCEROS">081 - COMPRA DIVISAS TERCEROS</option>
-                    <option value="082 - FONDO BOLIVARES">082 - FONDO BOLIVARES</option>
-                    <option value="084 - ABONO TIENDA EMPLEADOS">084 - ABONO TIENDA EMPLEADOS</option>
-                    <option value="085 - PEAJES">085 - PEAJES</option>
-                    <option value="086 - COMISION ZTE">086 - COMISION ZTE</option>
-                    <option value="087 - PAGO PROVEEDORES">087 - PAGO PROVEEDORES</option>
-                    <option value="088 - INCENTIVOS PERSONAL">088 - INCENTIVOS PERSONAL</option>
-                    <option value="089 - INSUMOS TIENDA">089 - INSUMOS TIENDA</option>
-                    <option value="090 - PROTECCION PRECIO HONOR">090 - PROTECCION PRECIO HONOR</option>
-                    <option value="091 - HONORARIOS PROFESIONALES">091 - HONORARIOS PROFESIONALES</option>
-                    <option value="092 - GASTOS DELIVERY">092 - GASTOS DELIVERY</option>
-                    <option value="093 - GASTOS DIRECTIVO">093 - GASTOS DIRECTIVO</option>
-                    <option value="094 - SALDO MOVISTAR">094 - SALDO MOVISTAR</option>
-                    <option value="095 - TASAS Y CONTRIBUCIONES">095 - TASAS Y CONTRIBUCIONES</option>
-                    <option value="097 - INSTALACIONES Y MEJORAS GALPON Y DEPOSITO">097 - INSTALACIONES Y MEJORAS GALPON Y DEPOSITO</option>
-                    <option value="098 - MEJORAS INSTALACIONES TIENDAS">098 - MEJORAS INSTALACIONES TIENDAS</option>
-                    <option value="099 - DEVOLUCIONES CLIENTES">099 - DEVOLUCIONES CLIENTES</option>
-                    <option value="100 - TODOTICKET">100 - TODOTICKET</option>
-                    <option value="101 - GASTOS DE MARIA NUÑES">101 - GASTOS DE MARIA NUÑES</option>
+                    @foreach(array_diff($tiposGasto, ['001 - COMPRA DE MERCANCIA']) as $tipoGasto)
+                        <option value="{{ $tipoGasto }}">{{ $tipoGasto }}</option>
+                    @endforeach
                 </select>
             </div>
             
@@ -1329,7 +1231,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div style="flex: 1;">
+                <div style="flex: 1;" id="col_placa">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Placa del vehículo</label>
                     <input type="text" name="placa_vehiculo" placeholder="Ej. ABC-123" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
@@ -1707,6 +1609,7 @@ function aplicarModoIngreso(isIngreso) {
         set('tipo_gasto', el => el.required = false);
     }
     set('row_opciones_egreso', el => el.style.display = isIngreso ? 'none' : 'flex');
+    set('col_placa', el => el.style.display = isIngreso ? 'none' : '');
     set('row_monto_total_gasto', el => el.style.display = (isIngreso || enPagoCuenta) ? 'none' : '');
     set('lbl_banco_titular', el => { if (isIngreso) el.innerText = 'Cuenta que recibe el dinero'; });
     set('lbl_tipo_gasto', el => el.innerText = isIngreso ? 'Tipo de ingreso (opcional)' : 'Tipo de Gasto');
@@ -1902,7 +1805,8 @@ function actualizarBeneficiariosPorTipoGasto() {
     select.required = esServicioTecnico;
     const nominaId = document.getElementById('nomina_empleado_id');
     if (nominaId) nominaId.value = '';
-    if (label) label.textContent = esServicioTecnico ? 'Empleado de Servicio Técnico' : 'Beneficiario';
+    const esIngreso = document.getElementById('categoria_egreso')?.value === 'ingresos';
+    if (label) label.textContent = esServicioTecnico ? 'Empleado de Servicio Técnico' : (esIngreso ? 'Quién paga (origen)' : 'Beneficiario');
     if (ayuda) ayuda.style.display = esServicioTecnico ? 'block' : 'none';
     if (ayudaLibre) ayudaLibre.style.display = esServicioTecnico ? 'none' : 'block';
 
@@ -2064,6 +1968,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     window.openNuevoEgresoModal = function() {
         window.resetNuevoEgresoCuenta();
+        if (typeof toggleTraslados === 'function') toggleTraslados();
         document.getElementById('nuevoEgresoModal').style.display = 'flex';
     };
     window.closeNuevoEgresoModal = function() {
@@ -2622,41 +2527,7 @@ function buildOptions(list, selectedValue) {
     return options;
 }
 
-const tiposGastoList = [
-    "001 - COMPRA DE MERCANCIA", "002 - IMPUESTO MUNICIPAL (ALCALDIAS)", "003 - ALQUILERES", 
-    "004 - AYUDA FAMILIAR", "005 - COLABORACIONES", "006 - DONACIONES (LEGALES)", "007 - INSUMOS ARREGLOS",
-    "008 - CONSUMIBLES TIENDA", "009 - ARTICULOS DE PAPELERIA", "010 - CONDOMINIO TIENDAS",
-    "011 - ENVIOS Y ENCOMIENDAS", "012 - GASTOS NOTARIA/LEGALES", "013 - GASTOS NOTARIA/LEGALES (EMPEÑO)",
-    "014 - GASTOS INTERNET TIENDAS", "0141 - GASTOS TELEFONICOS", "015 - MANT. Y REP. VEHICULOS TIENDAS",
-    "016 - MANT. Y REP. VEHICULOS DIRECTIVO", "017 - MANT. Y REP. VEHICULOS EMPEÑOS", "018 - FLETE COMPRA MERCANCIA",
-    "019 - IMASEO TIENDA", "020 - IMPUESTOS Y TASAS ( SENIAT)", "021 - INCES", "022 - FAOV", "023 - IVSS",
-    "024 - AGAZAGOS PERSONAL", "025 - UTILIDADES PERSONAL", "026 - VACACIONES PERSONAL", "027 - NOMINA LEGAL",
-    "028 - NOMINA ESPECIAL", "029 - PRESTACIONES SOCIALES", "030 - UNIFORME PERSONAL", "031 - ARTICULOS DE LIMPIEZA",
-    "032 - COMBUSTIBLE PLANTAS ELECTRICAS", "033 - COMBUSTIBLE VEHICULOS TIENDAS",
-    "034 - COMBUSTIBLE VEHICULOS DIRECTIVO", "035 - MANT. Y REP. LOCALES TIENDA",
-    "036 - MANT. Y REP. LOCALES/CASAS EMPEÑO", "037 - CONDOMINIOS EMPEÑOS", "038 - CONDOMINIOS DIRECTIVO",
-    "039 - GASTOS INTERNET DIRECTIVO", "040 - SUELDOS Y SALARIO DIRECTIVO", "041 - SUELDO Y SALARIO MARIA NUÑEZ",
-    "042 - GASTOS CAFETIN", "043 - CORPOELEC TIENDAS", "044 - HIDROFALCON TIENDAS",
-    "045 - GASTOS AGUA CISTERNA", "046 - REPUESTOS VEHICULOS TIENDA", "047 - REPUESTOS VEHICULOS DIRECTIVO",
-    "048 - REPUESTOS VEHICULOS EMPEÑO", "049 - INSUMOS MANTENIMIENTO", "050 - GASTOS BOUTIQUIN MEDICINAS",
-    "051 - ACTIVOS (EQUIPOS-MOBILIARIOS)", "052 - GASTOS SISTEMA INTEGRA/UNIX",
-    "053 - GASTOS ASESORIAS EXTERNAS", "054 - GASTOS PERMISOLOGIAS", "055 - PUBLICIDAD",
-    "056 - SERVICIO COULD PAGO", "057 - REPUESTOS TELEFONIA (CAJA CHICA)", "058 - SERVICIO TECNICO (GARANTIAS)",
-    "059 - COMISIONES EMPEÑO", "060 - SUSCRIPCIONES", "061 - MANTENIMIENTO MOBILIARIOS Y EQUIPOS",
-    "062 - SERVICIO PAGINA WEB", "063 - GASTOS SISTEMA PREMIUM", "064 - SERVICIO INTEGRA",
-    "065 - FONACIT", "066 - CURSOS Y ADIESTRAMIENTOS", "067 - INGRESO VENTAS",
-    "068 - CXC GRUPO JENU (AVANCES)", "069 - CXC/CXP DIRECTIVO JOSE JEREZ", "070 - DESEMBOLSO NOMINA DIVISAS",
-    "071 - DESEMBOLSO NOMINA BOLIVARES", "072 - ANTICIPO NOMINAS DIVISAS", "073 - ANTICIPO NOMINAS BOLIVARES",
-    "074 - PRESTAMO PERSONAL BOLIVARES (TRANSF)", "075 - COMISION HONOR", "076 - EMPEÑOS",
-    "077 - COMPRA DIVISAS BANCOS", "078 - DEPOSITO BANCARIO", "079 - COMISION EMPEÑO",
-    "080 - INGRESO ALQUILERES", "081 - COMPRA DIVISAS TERCEROS", "082 - FONDO BOLIVARES",
-    "083 - GASTOS MEDICOS EMPLEADOS", "084 - ABONO TIENDA EMPLEADOS", "085 - PEAJES", "086 - COMISION ZTE", 
-    "087 - PAGO PROVEEDORES", "088 - INCENTIVOS PERSONAL", "089 - INSUMOS TIENDA", "090 - PROTECCION PRECIO HONOR",
-    "091 - HONORARIOS PROFESIONALES", "092 - GASTOS DELIVERY", "093 - GASTOS DIRECTIVO",
-    "094 - SALDO MOVISTAR", "095 - TASAS Y CONTRIBUCIONES", "096 - PRESTAMO PERSONAL DIVISAS",
-    "097 - INSTALACIONES Y MEJORAS GALPON Y DEPOSITO", "098 - MEJORAS INSTALACIONES TIENDAS",
-    "099 - DEVOLUCIONES CLIENTES", "100 - TODOTICKET", "101 - GASTOS DE MARIA NUÑES"
-];
+const tiposGastoList = @json($tiposGasto);
 
 function buildTipoGastoOptions(selectedValue) {
     let options = '<option value="">-- Tipo Gasto --</option>';

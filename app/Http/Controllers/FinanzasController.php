@@ -31,7 +31,14 @@ class FinanzasController extends Controller
     /** @var array<string, mixed>|null */
     private ?array $bufferContexto = null;
 
+    /** Cuentas del sistema más las agregadas en Finanzas → Configuración. */
     private function getCuentas()
+    {
+        return \App\Models\FinanzasCatalogo::combinarCuentas(self::cuentasBase());
+    }
+
+    /** @return list<array{banco: string, titular: string, categoria: string}> */
+    public static function cuentasBase(): array
     {
         return [
             ['banco' => 'Banesco', 'titular' => 'Grupo JRZ', 'categoria' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO'],
@@ -502,12 +509,15 @@ class FinanzasController extends Controller
         $total_diferencial_cambiario = $egresos_realizados->sum('diferencial_cambiario') 
                                      + $otros_egresos->sum('diferencial_cambiario');
         
-        $proveedores = \Illuminate\Support\Facades\DB::table('inventario_v2.productos')
-                        ->whereNotNull('proveedor')
-                        ->where('proveedor', '!=', '')
-                        ->distinct()
-                        ->orderBy('proveedor')
-                        ->pluck('proveedor');
+        $proveedores = collect(\App\Models\FinanzasCatalogo::beneficiarios(
+            \Illuminate\Support\Facades\DB::table('inventario_v2.productos')
+                ->whereNotNull('proveedor')
+                ->where('proveedor', '!=', '')
+                ->distinct()
+                ->orderBy('proveedor')
+                ->pluck('proveedor')
+        ));
+        $tiposGasto = \App\Models\FinanzasCatalogo::tiposGasto();
 
         $empleadosServicioTecnico = NominaEmpleado::query()
             ->with('cliente:id,nombre,cedula')
@@ -547,6 +557,7 @@ class FinanzasController extends Controller
             'fecha_desde',
             'fecha_hasta',
             'proveedores',
+            'tiposGasto',
             'empleadosServicioTecnico',
             'cuentas_por_pagar'
         ));

@@ -69,6 +69,7 @@ class CommissionCalculationService
                 NominaEmpleado::COMISION_VENTAS_PROPIAS => $this->ventasVendedor($periodo, $empleado),
                 NominaEmpleado::COMISION_MOVISTAR => $this->ventasMovistar($periodo, $empleado),
                 NominaEmpleado::COMISION_SUPERVISOR_SEDE => $this->supervisorSede($periodo, $empleado),
+                NominaEmpleado::COMISION_ENCARGADO => $this->comisionEncargado($periodo, $empleado),
                 NominaEmpleado::COMISION_SUPERVISOR_EQUIPO => $this->supervisorEquipo($periodo, $empleado),
                 NominaEmpleado::COMISION_DIGITAL => $this->comisionDigital($periodo, $empleado),
                 NominaEmpleado::COMISION_PCP => $this->comisionPcp($periodo, $empleado),
@@ -162,6 +163,19 @@ class CommissionCalculationService
             0.05,
             'SUPERVISOR_SEDE',
             'venta_neta_sede * porcentaje_supervisor'
+        );
+    }
+
+    /** Encargado de tienda: igual que el supervisor de sede (venta neta de su tienda), con su propio porcentaje. */
+    private function comisionEncargado(NominaPeriodo $periodo, NominaEmpleado $empleado): array
+    {
+        return $this->comisionSobreSedeEmpleado(
+            $periodo,
+            $empleado,
+            'comision_encargado_pct',
+            0.0,
+            'ENCARGADO',
+            'venta_neta_tienda * porcentaje_encargado'
         );
     }
 

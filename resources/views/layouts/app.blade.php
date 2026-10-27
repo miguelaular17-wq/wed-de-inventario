@@ -128,13 +128,19 @@ document.addEventListener("DOMContentLoaded", function() {
         
         let resetPage = false;
         let resetPageSS = false;
-        
+
+        // Los campos del formulario mandan lo que el formulario trae ahora: varios valores (subcategoria[])
+        // se conservan todos, y una casilla desmarcada deja de filtrar. Lo que no es del formulario se mantiene.
+        new Set(Array.from(form.elements).map(el => el.name).filter(Boolean)).forEach(nombre => {
+            params.delete(nombre);
+            if (nombre.endsWith('[]')) params.delete(nombre.slice(0, -2));
+        });
+
         for (const [key, value] of formData.entries()) {
-            // Only merge if not empty/null or if it overrides
-            params.set(key, value);
+            params.append(key, value);
             
             // If filters on tab 1 change, we reset tab 1 page
-            if (key === 'q' || key === 'categoria' || key === 'proveedor' || key === 'subcategoria' || key === 'status') {
+            if (key === 'q' || key === 'categoria' || key === 'proveedor' || key === 'subcategoria' || key === 'subcategoria[]' || key === 'status') {
                 resetPage = true;
             }
             // If filters on tab 2 change, we reset tab 2 page
