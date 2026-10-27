@@ -6,7 +6,6 @@ use App\Services\Profiler;
 
 use App\Models\Notification;
 use App\Models\PedidoSolicitado;
-use App\Models\ProveedorComprador;
 use App\Models\User;
 use App\Services\AnalisisInventarioService;
 use App\Services\InventoryBreakReportService;
@@ -133,10 +132,6 @@ class CompradorController extends Controller
                 'tp' => $tp,
             ];
 
-            $proveedoresAsignados = ($user && $user->isComprador())
-                ? ProveedorComprador::proveedoresDeUsuario((int) $user->id)
-                : [];
-
             $whereClauses = [];
             if ($category !== 'Ninguno') {
                 $whereClauses[] = "p.categoria = :categoria";
@@ -147,21 +142,8 @@ class CompradorController extends Controller
                 $bindings['subcategoria'] = $subcategoria;
             }
             if ($proveedor !== 'Ninguno') {
-                if ($proveedoresAsignados !== [] && ! in_array($proveedor, $proveedoresAsignados, true)) {
-                    $proveedor = 'Ninguno';
-                } else {
-                    $whereClauses[] = "p.proveedor = :proveedor";
-                    $bindings['proveedor'] = $proveedor;
-                }
-            }
-            if ($proveedor === 'Ninguno' && $proveedoresAsignados !== []) {
-                $placeholders = [];
-                foreach (array_values($proveedoresAsignados) as $i => $nombreProv) {
-                    $key = 'prov_asig_'.$i;
-                    $placeholders[] = ':'.$key;
-                    $bindings[$key] = $nombreProv;
-                }
-                $whereClauses[] = 'p.proveedor IN ('.implode(', ', $placeholders).')';
+                $whereClauses[] = "p.proveedor = :proveedor";
+                $bindings['proveedor'] = $proveedor;
             }
             if ($search !== '') {
                 $whereClauses[] = "(LOWER(p.codigo) LIKE :search OR LOWER(p.nombre) LIKE :search)";
@@ -450,13 +432,6 @@ class CompradorController extends Controller
                     ->pluck('proveedor')
                     ->all();
             });
-            if ($proveedoresAsignados !== []) {
-                $asignadosSet = array_fill_keys($proveedoresAsignados, true);
-                $proveedores = array_values(array_filter(
-                    $proveedores,
-                    fn ($p) => isset($asignadosSet[trim((string) $p)])
-                ));
-            }
 
             $subcatDb = \Illuminate\Support\Facades\Cache::remember("comprador_subcats_{$stockUpdateMd5}", 1800, function () {
                 return \Illuminate\Support\Facades\DB::connection('pgsql')

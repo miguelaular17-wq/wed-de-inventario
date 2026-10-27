@@ -1514,6 +1514,9 @@ class FinanzasController extends Controller
             ->where('es_conciliado', false)
             ->where('fecha', '>=', $fecha_desde)
             ->where('fecha', '<=', $fecha_hasta);
+        if (\Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'anulado')) {
+            $egresos_query->where('anulado', false);
+        }
 
         $this->filtrarPorBanco($egresos_query, $banco_filtro);
         $this->filtrarPorTitular($egresos_query, $titular_filtro);
@@ -3248,6 +3251,9 @@ class FinanzasController extends Controller
 
         $egresos_query = \App\Models\FlujoCaja::where('tipo', 'egreso')
             ->where('es_conciliado', false);
+        if (\Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'anulado')) {
+            $egresos_query->where('anulado', false);
+        }
         $this->filtrarPorBanco($egresos_query, $bk_req);
         if ($fecha_desde_filtro) {
             $egresos_query->whereDate('fecha', '>=', $fecha_desde_filtro);
