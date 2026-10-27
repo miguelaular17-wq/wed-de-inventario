@@ -182,6 +182,32 @@ class ConciliacionExtractoImportTest extends TestCase
         $this->assertTrue((bool) FlujoCaja::query()->first()->es_conciliado);
     }
 
+    public function test_abono_del_banco_se_concilia_con_el_ingreso_registrado_y_no_con_un_egreso(): void
+    {
+        $abono = ConciliacionLinea::create([
+            'banco' => 'BANESCO', 'titular' => 'DORAL', 'fecha' => '2026-08-07', 'descripcion' => 'TRANSFERENCIA RECIBIDA',
+            'referencia' => '0012345678', 'monto' => 5000, 'estado' => 'pendiente', 'tipo' => 'abono', 'importacion_id' => 1,
+        ]);
+        $cargo = ConciliacionLinea::create([
+            'banco' => 'BANESCO', 'titular' => 'DORAL', 'fecha' => '2026-08-07', 'descripcion' => 'PAGO',
+            'referencia' => '777', 'monto' => 5000, 'estado' => 'pendiente', 'tipo' => 'cargo', 'importacion_id' => 1,
+        ]);
+        $ingreso = FlujoCaja::create([
+            'tipo' => 'ingreso', 'categoria_egreso' => 'ingresos', 'banco' => 'Banesco', 'titular' => 'Doral',
+            'fecha' => '2026-08-06', 'monto_bs' => 5000, 'referencia' => '12345678', 'motivo' => 'Reintegro proveedor',
+            'es_conciliado' => false, 'oculto' => false,
+        ]);
+
+        $n = app(ConciliacionAutoMatcher::class)->conciliar(ConciliacionLinea::query()->get(), '2026-08-01', '2026-08-31', 'BANESCO', 'DORAL', 500);
+
+        $this->assertSame(1, $n);
+        $this->assertSame($ingreso->id, $abono->fresh()->flujo_caja_id);
+        $this->assertSame('conciliado', $abono->fresh()->estado);
+        $this->assertTrue((bool) $ingreso->fresh()->es_conciliado);
+        // Un cargo del mismo monto nunca se queda con un ingreso.
+        $this->assertSame('pendiente', $cargo->fresh()->estado);
+    }
+
     public function test_no_permite_doble_conciliacion_del_mismo_egreso(): void
     {
         $l1 = ConciliacionLinea::create([

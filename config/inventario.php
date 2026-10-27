@@ -7,6 +7,9 @@ return [
     */
     'sedes_locales' => ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'MOVISTAR', 'TECNOHOUSE'],
 
+    // Destinos de gasto en Finanzas que no son tiendas (se suman a sedes_locales en los selectores).
+    'sedes_finanzas_extra' => ['DEPÓSITO', 'ADMON', 'BELLA VISTA', 'JENUS'],
+
     'sedes_stock' => ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'TECNOHOUSE'],
 
     'sedes_gerencial' => ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'JRZ', 'MOVISTAR', 'TECNOHOUSE'],

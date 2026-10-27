@@ -716,6 +716,86 @@
     </div>
 </div>
 
+    <!-- INGRESOS -->
+    <div class="dashboard-container" style="margin-top: 10px;">
+        <h3 style="margin-bottom: 15px; color: #0f766e; display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 19V5m-7 7l7-7 7 7"/></svg>
+            INGRESOS
+        </h3>
+        <div class="panel" style="padding: 0; overflow: hidden; margin-bottom: 30px; border: 1.5px solid #99f6e4;">
+            <div class="table-wrap">
+                <table class="data-table" style="width: 100%;">
+                    <thead>
+                        <tr style="background: #f0fdfa;">
+                            <th style="width: 100px;">Fecha</th>
+                            <th>Cuenta</th>
+                            <th>Origen · tipo</th>
+                            <th>Motivo</th>
+                            <th>Ref.</th>
+                            <th class="col-number" style="text-align: right;">Monto Bs</th>
+                            <th class="col-number" style="text-align: right;">Monto USD</th>
+                            <th style="text-align: center; width: 90px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($ingresos as $mov)
+                            <tr data-egreso-cat="ingresos" data-referencia="{{ $mov->referencia }}">
+                                <td>{{ $mov->fecha }}</td>
+                                <td>
+                                    <strong style="color: #0f766e;">{{ $mov->banco }}</strong><br>
+                                    <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular }}</span>
+                                </td>
+                                <td>
+                                    {{ $mov->titular_receptor ?: '-' }}
+                                    @if($mov->tipo_gasto)<br><span class="muted" style="font-size: 0.8rem;">{{ $mov->tipo_gasto }}</span>@endif
+                                </td>
+                                <td>{{ $mov->motivo ?: '-' }}</td>
+                                <td>
+                                    {{ $mov->referencia ?: '-' }}
+                                    @if($mov->es_conciliado)<br><span style="font-size: 0.72rem; color: #15803d; font-weight: 700;">✓ en el banco</span>@endif
+                                </td>
+                                <td class="col-number" style="text-align: right; font-weight: 500; color: #0f766e;">Bs. {{ number_format((float) $mov->monto_bs, 2) }}</td>
+                                <td class="col-number" style="text-align: right;">{{ $mov->monto_usd ? '$'.number_format($mov->monto_usd, 2) : '-' }}</td>
+                                <td style="text-align: center; white-space: nowrap;">
+                                    @php
+                                        $allComprobantesIng = array_values(array_filter(array_merge(
+                                            $mov->comprobantes ?? [],
+                                            ($mov->comprobante_url && !in_array($mov->comprobante_url, $mov->comprobantes ?? [])) ? [$mov->comprobante_url] : []
+                                        )));
+                                    @endphp
+                                    @if(count($allComprobantesIng) > 0)
+                                        <button type="button" onclick='abrirGaleria(@json($allComprobantesIng))' title="Ver comprobantes ({{ count($allComprobantesIng) }})"
+                                            style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer; margin-right: 2px;">📎 {{ count($allComprobantesIng) }}</button>
+                                    @endif
+                                    @if(auth()->user()->canAccess('finanzas.eliminar'))
+                                    <form method="POST" action="{{ route('finanzas.destroy_egreso', $mov->id) }}" style="display:inline;" onsubmit="return confirm('¿Seguro que deseas eliminar este ingreso? Esta acción no se puede deshacer.');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" title="Eliminar ingreso"
+                                            style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:4px;padding:3px 7px;font-size:0.8rem;cursor:pointer;">🗑️</button>
+                                    </form>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="8" style="text-align: center; padding: 30px; color: var(--muted);">No hay ingresos registrados. Regístralos con «Nuevo Egreso» → Tipo: INGRESOS.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                    <tfoot>
+                        <tr style="background-color: #f0fdfa; border-top: 2px solid #99f6e4; font-weight: bold;">
+                            <td colspan="5" style="text-align: right; color: #0f766e;">TOTAL INGRESOS</td>
+                            <td class="col-number" style="text-align: right; color: #0f766e;">Bs. {{ number_format((float) $ingresos->sum('monto_bs'), 2) }}</td>
+                            <td class="col-number" style="text-align: right; color: #0f766e;">$ {{ number_format((float) $ingresos->sum('monto_usd'), 2) }}</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- EGRESOS EN DIVISAS -->
     <div class="dashboard-container" style="margin-top: 10px;">
         <h3 style="margin-bottom: 15px; color: #166534; display: flex; align-items: center; gap: 8px;">
@@ -1028,6 +1108,7 @@
                         <option value="compra_divisas">COMPRA DE DIVISAS</option>
                         <option value="otros_egresos">OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
                         <option value="traslados">TRASLADOS</option>
+                        <option value="ingresos">INGRESOS</option>
                     </select>
                 </div>
                 <div style="flex: 1;">
@@ -1128,7 +1209,7 @@
             </div>
 
             <div id="row_tipo_gasto" style="margin-bottom: 10px;">
-                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tipo de Gasto</label>
+                <label id="lbl_tipo_gasto" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tipo de Gasto</label>
                 <select name="tipo_gasto" id="tipo_gasto" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                     <option value="">-- Seleccione un tipo de gasto --</option>
                     <option value="083 - GASTOS MEDICOS EMPLEADOS">083 - GASTOS MEDICOS EMPLEADOS</option>
@@ -1241,7 +1322,7 @@
                     <select name="sede" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                         <option value="">-- Seleccione una sede --</option>
                         @php
-                            $sedesFinanzas = array_merge(config('inventario.sedes_locales', []), ['Nunes', 'Movistar', 'Depósito', 'Admon', 'Bella vista', 'Jenus', 'TECNO HOUSE']);
+                            $sedesFinanzas = array_values(array_unique(array_merge(config('inventario.sedes_locales', []), config('inventario.sedes_finanzas_extra', []))));
                         @endphp
                         @foreach($sedesFinanzas as $sedeLocal)
                             <option value="{{ $sedeLocal }}">{{ $sedeLocal }}</option>
@@ -1273,10 +1354,10 @@
 
             <div style="margin-bottom: 10px;">
                 <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Motivo (Breve descripción)</label>
-                <input type="text" name="motivo" placeholder="Ej. Pago de internet mensual..." style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                <input type="text" name="motivo" id="motivo_egreso" placeholder="Ej. Pago de internet mensual..." style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
             </div>
 
-            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 12px 0 10px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
+            <div id="row_opciones_egreso" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 12px 0 10px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem; white-space: nowrap;">
                     <input type="checkbox" id="chk_desglose" onchange="toggleDesglose()" style="width: 16px; height: 16px;">
                     Desglose
@@ -1577,6 +1658,7 @@ function toggleTraslados() {
     const isTraslado = val === 'traslados';
     const isDivisas = val === 'egreso_divisas';
     const isCompraDivisas = val === 'compra_divisas';
+    const isIngreso = val === 'ingresos';
     
     document.getElementById('row_receptor').style.display = isTraslado ? 'flex' : 'none';
     document.getElementById('banco_titular_receptor').required = isTraslado;
@@ -1608,7 +1690,33 @@ function toggleTraslados() {
     // When switching to traslado mode, auto-calc USD if monto_bs already has value
     if (isTraslado) calcTraslado();
     
-    document.getElementById('tipo_gasto').required = !isTraslado && !isCompraDivisas && !document.getElementById('chk_todoticket')?.checked;
+    document.getElementById('tipo_gasto').required = !isTraslado && !isCompraDivisas && !isIngreso && !document.getElementById('chk_todoticket')?.checked;
+    aplicarModoIngreso(isIngreso);
+}
+
+// Ingreso: dinero que entra a la cuenta. Sin diferencial, comisión, desglose ni cuenta por pagar.
+function aplicarModoIngreso(isIngreso) {
+    const enPagoCuenta = !!document.getElementById('cuenta_por_pagar_id')?.value;
+    const set = (id, fn) => { const el = document.getElementById(id); if (el) fn(el); };
+    if (isIngreso) {
+        document.getElementById('row_diferencial').style.display = 'none';
+        set('comision', el => el.disabled = true);
+        ['chk_desglose', 'chk_cuenta_por_pagar', 'chk_todoticket', 'chk_gasto_fijo'].forEach(id => set(id, el => {
+            if (el.checked) { el.checked = false; el.dispatchEvent(new Event('change')); }
+        }));
+        set('tipo_gasto', el => el.required = false);
+    }
+    set('row_opciones_egreso', el => el.style.display = isIngreso ? 'none' : 'flex');
+    set('row_monto_total_gasto', el => el.style.display = (isIngreso || enPagoCuenta) ? 'none' : '');
+    set('lbl_banco_titular', el => { if (isIngreso) el.innerText = 'Cuenta que recibe el dinero'; });
+    set('lbl_tipo_gasto', el => el.innerText = isIngreso ? 'Tipo de ingreso (opcional)' : 'Tipo de Gasto');
+    set('beneficiario_label', el => el.innerText = isIngreso ? 'Quién paga (origen)' : 'Beneficiario');
+    set('motivo_egreso', el => el.placeholder = isIngreso ? 'Ej. Cobro de alquiler local 3...' : 'Ej. Pago de internet mensual...');
+    if (!enPagoCuenta) {
+        set('nuevoEgresoModalTitulo', el => el.textContent = isIngreso ? 'Nuevo Ingreso' : 'Nuevo Egreso');
+        const btn = document.querySelector('#nuevoEgresoModal button[type="submit"]');
+        if (btn) btn.innerText = isIngreso ? 'Guardar Ingreso' : 'Guardar Egreso';
+    }
 }
 
 function formatBsVe(n) {
@@ -2504,9 +2612,12 @@ const proveedoresList = @json($proveedores);
 const sedesList = @json($sedesFinanzas);
 
 function buildOptions(list, selectedValue) {
+    // "Nunes", "TECNO HOUSE" o "Depósito" guardados antes coinciden con NUNES, TECNOHOUSE y DEPÓSITO.
+    const clave = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f\s]/g, '').toUpperCase();
+    const sel = clave(selectedValue);
     let options = '<option value="">-- Seleccione --</option>';
     list.forEach(item => {
-        options += `<option value="${item}" ${item === selectedValue ? 'selected' : ''}>${item}</option>`;
+        options += `<option value="${item}" ${sel !== '' && clave(item) === sel ? 'selected' : ''}>${item}</option>`;
     });
     return options;
 }

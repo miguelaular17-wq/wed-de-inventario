@@ -75,6 +75,24 @@ class ConciliacionAutoMatcher
         $this->filtrarPorTitular($flujos_posibles, $titular_filtro);
         $flujos_posibles = $flujos_posibles->limit(5000)->get();
 
+        // Ingresos registrados en flujo de caja: se emparejan con los abonos del extracto.
+        $ingresos_posibles = FlujoCaja::where('tipo', 'ingreso')
+            ->where('es_conciliado', false)
+            ->where('fecha', '>=', date('Y-m-d', strtotime($fecha_minima . ' -3 days')))
+            ->where('fecha', '<=', date('Y-m-d', strtotime($fecha_maxima . ' +3 days')));
+        if (Schema::hasColumn('flujo_cajas', 'anulado')) {
+            $ingresos_posibles->where('anulado', false);
+        }
+        if ($banco_filtro) {
+            $ingresos_posibles->where(function ($q) use ($banco_filtro) {
+                foreach (array_map('strtolower', $this->matcher->variantesBanco($banco_filtro)) as $v) {
+                    $q->orWhereRaw('LOWER(TRIM(banco)) = ?', [$v]);
+                }
+            });
+        }
+        $this->filtrarPorTitular($ingresos_posibles, $titular_filtro);
+        $ingresos_posibles = $ingresos_posibles->limit(2000)->get();
+
         $clavesEgreso = [];
         $referenciasEgreso = [];
         foreach ($flujos_posibles as $flujoPend) {
@@ -151,6 +169,7 @@ class ConciliacionAutoMatcher
 
             $match = null;
             $isCompraDivisaMatch = false;
+            $esIngreso = false;
             $trasladosDisponibles = [];
             foreach ($matcher->trasladosPorMonto($linea) as $flujo) {
                 $lado = $matcher->ladoTraslado($linea, $flujo);
@@ -161,6 +180,10 @@ class ConciliacionAutoMatcher
 
             if ($linea->esAbono()) {
                 $match = $matcher->mejorEgreso($linea, $trasladosDisponibles);
+                if (! $match && $ingresos_posibles->isNotEmpty()) {
+                    $match = $matcher->mejorIngresoFlujo($linea, $ingresos_posibles);
+                    $esIngreso = $match !== null;
+                }
             } else {
                 if ($classifier->esCompraDivisas($linea->descripcion)) {
                     $match = $matcher->mejorCompraDivisa($linea, $comprasDivisasPosibles);
@@ -182,7 +205,7 @@ class ConciliacionAutoMatcher
             }
 
             // Una comisión del banco no se queda con la transferencia por cruce de referencia.
-            if (! $isCompraDivisaMatch && ! $matcher->esTraslado($match)
+            if (! $isCompraDivisaMatch && ! $esIngreso && ! $matcher->esTraslado($match)
                 && $matcher->comisionNoCorrespondeAlEgreso($linea, $match, $classifier->esComision($linea->descripcion, $linea->banco))) {
                 continue;
             }
@@ -203,7 +226,9 @@ class ConciliacionAutoMatcher
 
             if (! $this->vincular($linea, $match, $isCompraDivisaMatch, $esTraslado, $marcarConciliado, $tieneCompraDivisa)) {
                 // Otro proceso tomó la línea o el egreso: no se fuerza el vínculo.
-                if (! $isCompraDivisaMatch && ! $esTraslado) {
+                if ($esIngreso) {
+                    $ingresos_posibles = $ingresos_posibles->reject(fn ($f) => $f->id == $match->id);
+                } elseif (! $isCompraDivisaMatch && ! $esTraslado) {
                     $matcher->retirarEgreso($match);
                 }
 
@@ -223,6 +248,8 @@ class ConciliacionAutoMatcher
                     if ($ladoNuevo !== null) {
                         $ladosTrasladosVinculados[$match->id][$ladoNuevo] = true;
                     }
+                } elseif ($esIngreso) {
+                    $ingresos_posibles = $ingresos_posibles->reject(fn ($f) => $f->id == $match->id);
                 } else {
                     $flujos_posibles = $flujos_posibles->reject(fn ($f) => $f->id == $match->id);
                     $flujosNormales = $flujosNormales->reject(fn ($f) => $f->id == $match->id);

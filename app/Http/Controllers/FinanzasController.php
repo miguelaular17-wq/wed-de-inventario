@@ -465,6 +465,8 @@ class FinanzasController extends Controller
 
         $movimientos = FlujoCaja::whereBetween('fecha', [$fecha_desde, $fecha_hasta])->where('oculto', false)->orderBy('fecha', 'desc')->get();
         Profiler::stop('FinanzasController::flujoCaja query');
+        $ingresos = $movimientos->where('tipo', 'ingreso')->values();
+        $movimientos = $movimientos->where('tipo', '!=', 'ingreso');
         $egresos_realizados = $movimientos->where('categoria_egreso', 'egreso_realizado');
         $otros_egresos = $movimientos->where('categoria_egreso', 'otros_egresos');
         $traslados = $movimientos->where('categoria_egreso', 'traslados');
@@ -530,6 +532,7 @@ class FinanzasController extends Controller
         Profiler::start('FinanzasController::flujoCaja Blade render');
         $result = view('finanzas.flujo_caja', compact(
             'movimientos', 
+            'ingresos',
             'egresos_realizados', 
             'otros_egresos',
             'traslados',
@@ -643,7 +646,7 @@ class FinanzasController extends Controller
             }
 
             $data = $request->validate([
-                'categoria_egreso' => 'required|in:egreso_realizado,otros_egresos,traslados,egreso_divisas,compra_divisas',
+                'categoria_egreso' => 'required|in:egreso_realizado,otros_egresos,traslados,egreso_divisas,compra_divisas,ingresos',
                 'banco_titular' => 'required|string',
                 'banco_titular_receptor' => 'nullable|string',
                 'referencia' => 'nullable|string|max:255',
@@ -722,6 +725,10 @@ class FinanzasController extends Controller
             $banco = $cuentaInfo[0] ?? null;
             $titular = $cuentaInfo[1] ?? null;
             $categoria_cuenta = $cuentaInfo[2] ?? null;
+
+            if ($data['categoria_egreso'] === 'ingresos') {
+                return $this->guardarIngreso($request, $data, $banco, $titular, $categoria_cuenta);
+            }
 
             if ($data['categoria_egreso'] === 'compra_divisas') {
                 $comprobanteUrl = null;
@@ -969,6 +976,55 @@ class FinanzasController extends Controller
             \Illuminate\Support\Facades\Log::error('Error registrando egreso: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Error del sistema: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Dinero que entra a una cuenta (cobro, reintegro, préstamo recibido…). Suma al saldo del sistema
+     * en la conciliación y se empareja con el abono del extracto; no cuenta como salida del día.
+     */
+    private function guardarIngreso(Request $request, array $data, ?string $banco, ?string $titular, ?string $categoriaCuenta)
+    {
+        $montoBs = (float) ($data['monto_bs'] ?? 0);
+        $montoUsd = (float) ($data['monto_usd'] ?? 0);
+        $tasa = (float) ($data['tasa_cambio'] ?? 0);
+        if ($montoBs <= 0 && $montoUsd <= 0) {
+            return back()->withInput()->with('error', 'El monto del ingreso debe ser mayor a cero.');
+        }
+        if ($montoUsd <= 0 && $tasa > 0) {
+            $montoUsd = round($montoBs / $tasa, 2);
+        }
+        if (empty($data['motivo'])) {
+            return back()->withInput()->with('error', 'Escribe el motivo del ingreso.');
+        }
+
+        $comprobantes = [];
+        foreach ((array) $request->file('comprobantes', []) as $file) {
+            if ($url = $this->uploadComprobante($file, $data['referencia'] ?? null)) {
+                $comprobantes[] = $url;
+            }
+        }
+
+        FlujoCaja::create([
+            'fecha' => $data['fecha'],
+            'tipo' => 'ingreso',
+            'categoria_egreso' => 'ingresos',
+            'banco' => $banco,
+            'titular' => $titular,
+            'categoria_cuenta' => $categoriaCuenta,
+            'titular_receptor' => $data['beneficiario'] ?? null,
+            'referencia' => $data['referencia'] ?? null,
+            'monto_usd' => $montoUsd,
+            'tasa_cambio' => $tasa,
+            'diferencial_cambiario' => 0,
+            'monto_bs' => $montoBs,
+            'comision' => 0,
+            'motivo' => $data['motivo'],
+            'sede' => $data['sede'] ?? null,
+            'comprobante_url' => $comprobantes[0] ?? null,
+            'comprobantes' => $comprobantes ?: null,
+        ]);
+
+        return redirect()->back()->with('success', 'Ingreso registrado correctamente.');
     }
 
     /**
@@ -1270,10 +1326,12 @@ class FinanzasController extends Controller
         $categorias = ['egreso_realizado', 'otros_egresos', 'traslados', 'egreso_divisas'];
 
         $egreso = FlujoCaja::query()
-            ->where('tipo', 'egreso')
             ->where(function ($query) use ($categorias) {
-                $query->whereIn('categoria_egreso', $categorias)
-                    ->orWhereNull('categoria_egreso');
+                $query->where('tipo', 'egreso')
+                    ->where(function ($cat) use ($categorias) {
+                        $cat->whereIn('categoria_egreso', $categorias)->orWhereNull('categoria_egreso');
+                    })
+                    ->orWhere(fn ($ing) => $ing->where('tipo', 'ingreso')->where('categoria_egreso', 'ingresos'));
             })
             ->findOrFail($id);
         $fecha = $egreso->fecha;

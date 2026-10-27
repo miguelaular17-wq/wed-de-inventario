@@ -124,7 +124,7 @@
 
 @if(!empty($puedeEditar))
 @php
-    $sedesAbrirCpp = array_merge(config('inventario.sedes_locales', []), ['Nunes', 'Movistar', 'Depósito', 'Admon', 'Bella vista', 'Jenus', 'TECNO HOUSE']);
+    $sedesAbrirCpp = array_values(array_unique(array_merge(config('inventario.sedes_locales', []), config('inventario.sedes_finanzas_extra', []))));
 @endphp
 <div id="abrirCuentaModal" class="modal-overlay" style="display: none; z-index: 1210;">
     <div class="panel modal-box" style="width: 95%; max-width: 560px; position: relative; padding: 18px 22px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">

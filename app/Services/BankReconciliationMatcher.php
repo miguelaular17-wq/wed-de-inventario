@@ -732,6 +732,34 @@ class BankReconciliationMatcher
         return $candidatos[0];
     }
 
+    /** Ingreso registrado en flujo de caja (tipo "ingreso") para un abono del extracto. */
+    public function mejorIngresoFlujo(ConciliacionLinea $linea, iterable $ingresos): ?object
+    {
+        if ($linea->esCargo()) {
+            return null;
+        }
+        $mejor = null;
+        $mejorPuntos = -1;
+        foreach ($ingresos as $ingreso) {
+            if (! $this->mismoBanco($linea->banco, $ingreso->banco ?? null)
+                || ! $this->mismoTitular($linea->titular, $ingreso->titular ?? null, $linea->banco, $ingreso->banco ?? null)
+                || ! $this->mismosMontos(abs((float) $linea->monto), $ingreso->monto_bs ?? 0)) {
+                continue;
+            }
+            $porRef = $this->referenciasCruzan($linea->referencia, $ingreso->referencia ?? null);
+            if (! $porRef && ! $this->fechaCercana($linea->fecha, $ingreso->fecha)) {
+                continue;
+            }
+            $puntos = ($porRef ? 20 : 0) + ($this->fechaCercana($linea->fecha, $ingreso->fecha, 0) ? 10 : 0);
+            if ($puntos > $mejorPuntos) {
+                $mejor = $ingreso;
+                $mejorPuntos = $puntos;
+            }
+        }
+
+        return $mejor;
+    }
+
     public function mejorIngresoTesoreria(ConciliacionLinea $linea, iterable $ingresos): ?object
     {
         $candidatos = [];
