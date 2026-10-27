@@ -96,6 +96,84 @@ class TransferenciasDivisasImporter
     }
 
     /**
+     * Reporte de pagos móviles C2P del mismo proveedor (Excel "Dashboard | Cloud Mai Services"):
+     * Pago, Fecha, C2P (banco), Ref ("tm-ARMANDO 11.25$"), Importe, Comisión, Total, Tasa Interna, Monto USD…
+     * El banco debita el Importe como "PAGO MOVIL"; la comisión llega en otra línea.
+     *
+     * @return list<array<string, mixed>>  mismo formato que leerPdf()
+     */
+    public function leerExcel(string $path, string $ext): array
+    {
+        $parser = app(ExtractoParser::class);
+        $norm = fn ($v) => mb_strtoupper(trim(preg_replace('/\s+/u', ' ', (string) $v) ?? ''), 'UTF-8');
+        $cols = null;
+        $out = [];
+        foreach ($parser->filasCrudas($path, $ext) as $fila) {
+            $fila = array_values((array) $fila);
+            if ($cols === null) {
+                $celdas = array_map($norm, $fila);
+                $c = function (array $nombres) use ($celdas): ?int {
+                    foreach ($nombres as $n) {
+                        $i = array_search($n, $celdas, true);
+                        if ($i !== false) {
+                            return (int) $i;
+                        }
+                    }
+
+                    return null;
+                };
+                $cols = ['pago' => $c(['PAGO', 'NRO']), 'fecha' => $c(['FECHA']), 'banco' => $c(['C2P', 'BANCO']), 'ref' => $c(['REF', 'REFERENCIA']),
+                    'importe' => $c(['IMPORTE']), 'usd' => $c(['MONTO USD']), 'tasa' => $c(['TASA INTERNA BCV', 'TASA INTERNA', 'INTERNA'])];
+                if (in_array(null, [$cols['pago'], $cols['fecha'], $cols['importe'], $cols['usd']], true)) {
+                    $cols = null;
+                }
+
+                continue;
+            }
+            $nro = trim((string) ($fila[$cols['pago']] ?? ''));
+            $importe = (float) ($parser->normalizarMonto($fila[$cols['importe']] ?? '') ?? 0);
+            $usd = (float) ($parser->normalizarMonto($fila[$cols['usd']] ?? '') ?? 0);
+            $fecha = $this->fechaExcel($fila[$cols['fecha']] ?? null, $parser);
+            if (! preg_match('/^\d{1,9}$/', $nro) || $importe <= 0 || $usd <= 0 || $fecha === null) {
+                continue;
+            }
+            $tasa = $cols['tasa'] !== null ? (float) ($parser->normalizarMonto($fila[$cols['tasa']] ?? '') ?? 0) : 0.0;
+            $ref = trim((string) ($cols['ref'] !== null ? ($fila[$cols['ref']] ?? '') : ''));
+            // "tm-FREDDY ALBERTO 50$" → FREDDY ALBERTO (el monto ya viene en su columna).
+            $nombre = trim(preg_replace('/\s*\d[\d.,\/]*\s*\$.*$|\s+\d[\d.,\/]*(\s.*)?$/u', '', preg_replace('/^tm-/i', '', $ref) ?? '') ?? '');
+            $out[] = [
+                'nro' => (int) $nro,
+                'banco' => trim((string) ($cols['banco'] !== null ? ($fila[$cols['banco']] ?? '') : '')) . ' C2P',
+                'titular' => $nombre !== '' ? $nombre : $ref,
+                'correo' => '',
+                // Sin referencia bancaria: se guarda el número de pago de Cloud para no registrarlo dos veces.
+                'referencia' => $nro,
+                'monto_usd' => $usd,
+                'fecha' => $fecha,
+                'tasa' => $tasa > 0 ? $tasa : round($importe / $usd, 2),
+                'monto_bs' => round($importe, 2),
+                'tipo' => 'Pago móvil',
+                'preferir' => 'PAGO MOVIL',
+            ];
+        }
+
+        return $out;
+    }
+
+    private function fechaExcel(mixed $v, ExtractoParser $parser): ?string
+    {
+        if ($v instanceof \DateTimeInterface) {
+            return $v->format('Y-m-d');
+        }
+        $s = trim((string) $v);
+        if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})#', $s, $m)) {
+            return sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+        }
+
+        return $s === '' ? null : $parser->normalizarFecha($s);
+    }
+
+    /**
      * @param  list<array<string, mixed>>  $transferencias
      * @return array{pares: list<array{t: array<string, mixed>, linea: ConciliacionLinea, como: string}>, sin_pareja: list<array<string, mixed>>, lineas_pendientes: int}
      */
@@ -118,7 +196,7 @@ class TransferenciasDivisasImporter
         $registradas = $this->transferenciasYaRegistradas($banco, $titular, $desde, $hasta, $simularDeshechas);
         $yaRegistradas = [];
         $transferencias = array_values(array_filter($transferencias, function ($t) use ($registradas, &$yaRegistradas) {
-            $clave = $t['referencia'] . '|' . number_format($t['monto_usd'], 2, '.', '');
+            $clave = (($t['tipo'] ?? '') === 'Pago móvil' ? 'PM:' : '') . $t['referencia'] . '|' . number_format($t['monto_usd'], 2, '.', '');
             if (($registradas[$clave] ?? 0) > 0) {
                 $registradas[$clave]--;
                 $yaRegistradas[] = $t;
@@ -132,14 +210,16 @@ class TransferenciasDivisasImporter
         $dig = fn ($r) => preg_replace('/\D/', '', (string) $r);
         $diasEntre = fn ($l, $t) => abs((strtotime($l->fecha->format('Y-m-d')) - strtotime($t['fecha'])) / 86400);
         $montoOk = fn ($l, $t, float $tol) => abs(abs((float) $l->monto) - $t['monto_bs']) <= $tol;
-        $refDe = fn ($l, $t) => strlen($t['referencia']) >= 6 && str_ends_with($dig($l->referencia), $t['referencia']);
+        // En el pago móvil C2P la "referencia" es el número de pago de Cloud, no la del banco.
+        $refBanco = fn ($t) => ($t['tipo'] ?? '') === 'Pago móvil' ? '' : (string) $t['referencia'];
+        $refDe = fn ($l, $t) => strlen($refBanco($t)) >= 6 && str_ends_with($dig($l->referencia), $refBanco($t));
 
         // Un débito cuya referencia es de otra transferencia del PDF no se le da a nadie más por monto
         // (ref 492736 de Jhonny Arias no puede ir a otra transferencia de $100 × 842).
         $refsDelPdf = [];
         foreach (array_merge($transferencias, $yaRegistradas) as $t) {
-            if (strlen($t['referencia']) >= 6) {
-                $refsDelPdf[$t['referencia']] = true;
+            if (strlen($refBanco($t)) >= 6) {
+                $refsDelPdf[$refBanco($t)] = true;
             }
         }
         $reservada = function ($l, $t) use ($dig, $refsDelPdf) {
@@ -160,7 +240,7 @@ class TransferenciasDivisasImporter
 
         // Pasadas en orden de confianza; cada una recorre todas las transferencias que siguen sin pareja.
         $pasadas = [
-            'referencia' => fn ($l, $t) => $dig($l->referencia) === $t['referencia'] && $montoOk($l, $t, max(1.0, $t['monto_bs'] * 0.005)),
+            'referencia' => fn ($l, $t) => $refBanco($t) !== '' && $dig($l->referencia) === $refBanco($t) && $montoOk($l, $t, max(1.0, $t['monto_bs'] * 0.005)),
             'referencia_final' => fn ($l, $t) => $refDe($l, $t) && $montoOk($l, $t, 1.0),
             // El banco cobró con otra tasa (ref 071187: $50 × 885 = 44.250 en el PDF, 43.750 = × 875 en el banco).
             'referencia_otra_tasa' => fn ($l, $t) => $refDe($l, $t) && $diasEntre($l, $t) <= 5
@@ -212,8 +292,13 @@ class TransferenciasDivisasImporter
                     continue;
                 }
                 $dias = $diasEntre($l, $t);
-                if ($dias <= 3 && ($mejor === null || $dias < $mejor[1])) {
-                    $mejor = [$l, $dias];
+                if ($dias > 3) {
+                    continue;
+                }
+                // Pago móvil C2P: entre débitos del mismo monto, primero los que el banco describe como PAGO MOVIL.
+                $score = $dias + (isset($t['preferir']) && ! str_contains(mb_strtoupper((string) $l->descripcion), $t['preferir']) ? 10 : 0);
+                if ($mejor === null || $score < $mejor[1]) {
+                    $mejor = [$l, $score];
                 }
             }
             if ($mejor) {
@@ -237,8 +322,8 @@ class TransferenciasDivisasImporter
      */
     private function pagoPartido(array $t, Collection $lineas, array $usadas, callable $dig, callable $reservada): ?array
     {
-        $ref = $t['referencia'];
-        if (strlen($ref) < 6) {
+        $ref = (string) $t['referencia'];
+        if (strlen($ref) < 6 || ($t['tipo'] ?? '') === 'Pago móvil') {
             return null;
         }
         $cent = fn ($v) => (int) round(abs((float) $v) * 100);
@@ -342,13 +427,13 @@ class TransferenciasDivisasImporter
             ->whereRaw('UPPER(TRIM(titular)) LIKE ?', ['%' . mb_strtoupper(trim($titular)) . '%'])
             ->when($desde, fn ($q) => $q->where('fecha', '>=', date('Y-m-d', strtotime($desde . ' -10 days'))))
             ->when($hasta, fn ($q) => $q->where('fecha', '<=', date('Y-m-d', strtotime($hasta . ' +10 days'))))
-            ->where('motivo', 'like', 'Transferencia %(ref %')
+            ->where(fn ($q) => $q->where('motivo', 'like', 'Transferencia %(ref %')->orWhere('motivo', 'like', 'Pago móvil %(ref %'))
             ->pluck('motivo');
 
         $out = [];
         foreach ($motivos as $motivo) {
             if (preg_match('/\$(\d+(?:\.\d+)?) x [\d.]+ \(ref (\d+)\)/', (string) $motivo, $m)) {
-                $clave = $m[2] . '|' . number_format((float) $m[1], 2, '.', '');
+                $clave = (str_starts_with((string) $motivo, 'Pago móvil') ? 'PM:' : '') . $m[2] . '|' . number_format((float) $m[1], 2, '.', '');
                 $out[$clave] = ($out[$clave] ?? 0) + 1;
             }
         }
@@ -396,7 +481,8 @@ class TransferenciasDivisasImporter
                 'referencia' => $l->referencia,
                 'concepto' => 'COMPRA DE DIVISAS',
                 'motivo' => mb_substr(sprintf(
-                    'Transferencia %s · %s · $%s x %s (ref %s)%s',
+                    '%s %s · %s · $%s x %s (ref %s)%s',
+                    $t['tipo'] ?? 'Transferencia',
                     mb_strtoupper($t['banco']),
                     $t['titular'],
                     number_format($t['monto_usd'], 2, '.', ''),

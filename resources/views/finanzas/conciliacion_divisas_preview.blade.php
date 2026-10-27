@@ -33,7 +33,7 @@
 
     <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin:18px 0;">
         <div class="panel" style="padding:14px; border-left:4px solid #6366f1;">
-            <div class="muted" style="font-size:.78rem; text-transform:uppercase; font-weight:700;">En el PDF</div>
+            <div class="muted" style="font-size:.78rem; text-transform:uppercase; font-weight:700;">En el documento</div>
             <div style="font-size:1.6rem; font-weight:800;">{{ count($transferencias) }}</div>
             <div class="muted">${{ number_format($usdTotal, 2) }}</div>
         </div>
@@ -109,7 +109,7 @@
         <h3 style="margin:22px 0 8px;">Emparejadas ({{ $pares->count() }})</h3>
         <div class="table-wrap">
             <table class="data-table" style="font-size:.82rem;">
-                <thead><tr><th>#</th><th>Fecha banco</th><th>Ref. banco</th><th>Ref. PDF</th><th>Destino · titular</th><th style="text-align:right;">USD × tasa</th><th style="text-align:right;">Débito banco</th><th>Cómo</th></tr></thead>
+                <thead><tr><th>#</th><th>Fecha banco</th><th>Ref. banco</th><th>Ref. documento</th><th>Destino · titular</th><th style="text-align:right;">USD × tasa</th><th style="text-align:right;">Débito banco</th><th>Cómo</th></tr></thead>
                 <tbody>
                     @foreach($pares as $p)
                         <tr>

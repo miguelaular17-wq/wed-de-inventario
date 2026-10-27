@@ -143,7 +143,7 @@
                 Lotes punto de venta
             </a>
             <button type="button" class="btn-upload" style="background:linear-gradient(135deg,#7c3aed,#6366f1);" onclick="document.getElementById('divisasModal').style.display='flex'">
-                Transferencias en divisas (PDF)
+                Transferencias en divisas / Pago móvil C2P
             </button>
 
             <form action="{{ route('finanzas.conciliaciones') }}" method="GET" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap;">
@@ -781,16 +781,18 @@
 <div id="divisasModal" class="modal-overlay">
     <div class="modal-box">
         <form action="{{ route('finanzas.conciliaciones.divisas.preview') }}" method="POST" enctype="multipart/form-data"
-              onsubmit="const b = this.querySelector('.btn-submit'); b.disabled = true; b.innerText = 'Leyendo PDF…';">
+              onsubmit="const b = this.querySelector('.btn-submit'); b.disabled = true; b.innerText = 'Leyendo documento…';">
             @csrf
             <div class="modal-head">
-                <h5 class="modal-title">Transferencias en divisas</h5>
+                <h5 class="modal-title">Transferencias en divisas / Pago móvil C2P</h5>
                 <button type="button" class="modal-close" onclick="document.getElementById('divisasModal').style.display='none'">&times;</button>
             </div>
             <div class="modal-body">
                 <p class="file-hint" style="margin-top:0;">
-                    Sube el PDF de transferencias del proveedor de cambio (Wells Fargo, Citizens, Mercantil Panamá, efectivo…).
-                    Cada envío se busca en los débitos pendientes del banco por referencia y por <strong>USD × tasa interna</strong>.
+                    Sube el PDF de transferencias del proveedor de cambio (Wells Fargo, Citizens, Mercantil Panamá, efectivo…)
+                    o el Excel de pagos móviles C2P (Dashboard Cloud Mai: Pago, Fecha, C2P, Ref, Importe…).
+                    Cada envío se busca en los débitos pendientes del banco por referencia y por <strong>USD × tasa interna</strong>;
+                    cada pago móvil, por su <strong>Importe</strong> en el débito PAGO MOVIL (±3 días).
                     Primero verás el resultado; no se guarda nada hasta que confirmes.
                 </p>
 
@@ -810,13 +812,13 @@
                     <input type="date" name="fecha_desde" class="form-control" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
                     <input type="date" name="fecha_hasta" class="form-control" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
                 </div>
-                <p class="file-hint">Si lo dejas vacío, se usan las fechas del PDF (±3 días).</p>
+                <p class="file-hint">Si lo dejas vacío, se usan las fechas del documento (±3 días).</p>
 
-                <label class="form-label">4. PDF de transferencias:</label>
+                <label class="form-label">4. PDF de transferencias o Excel de pagos móviles C2P:</label>
                 <div class="file-wrap">
                     <label class="file-label">
-                        Elegir PDF
-                        <input type="file" name="archivo" accept=".pdf,application/pdf" required style="display:none;"
+                        Elegir archivo
+                        <input type="file" name="archivo" accept=".pdf,application/pdf,.xlsx,.xls" required style="display:none;"
                                onchange="document.getElementById('divisasFileName').value = this.files[0] ? this.files[0].name : '';">
                     </label>
                     <input type="text" id="divisasFileName" placeholder="Ningún archivo seleccionado" readonly class="file-name">
