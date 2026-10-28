@@ -98,6 +98,8 @@ class ProcesarImportacionExtracto implements ShouldBeUnique, ShouldQueue
         }
         $desde = substr((string) $rango->desde, 0, 10);
         $hasta = substr((string) $rango->hasta, 0, 10);
+        // Antes del emparejamiento: así ese cargo nunca se liga con un egreso del mismo monto.
+        app(\App\Services\Conciliacion\ComisionPagoMovilBanesco::class)->marcar($desde, $hasta);
 
         // En segundo plano no hace falta el tope de 500 de la pantalla: se revisan todas las líneas
         // nuevas, en bloques por id para que la memoria no crezca con el tamaño del archivo.

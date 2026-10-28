@@ -78,6 +78,7 @@ class ConciliacionAutoMatcher
         // Ingresos registrados en flujo de caja: se emparejan con los abonos del extracto.
         $ingresos_posibles = FlujoCaja::where('tipo', 'ingreso')
             ->where('es_conciliado', false)
+            ->vigentes()
             ->where('fecha', '>=', date('Y-m-d', strtotime($fecha_minima . ' -3 days')))
             ->where('fecha', '<=', date('Y-m-d', strtotime($fecha_maxima . ' +3 days')));
         if (Schema::hasColumn('flujo_cajas', 'anulado')) {

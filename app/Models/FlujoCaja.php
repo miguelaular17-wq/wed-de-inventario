@@ -18,6 +18,16 @@ class FlujoCaja extends Model
         'anulado', 'anulado_motivo', 'anulado_at',
     ];
 
+    /** Sin los anulados (duplicados, devoluciones): no cuentan en listados ni totales. */
+    public function scopeVigentes($query)
+    {
+        if (\Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'anulado')) {
+            $query->where(fn ($q) => $q->where('anulado', false)->orWhereNull('anulado'));
+        }
+
+        return $query;
+    }
+
     public function cuentaPorPagar()
     {
         return $this->belongsTo(CuentaPorPagar::class, 'cuenta_por_pagar_id');

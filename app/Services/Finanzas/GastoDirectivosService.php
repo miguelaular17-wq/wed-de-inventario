@@ -394,6 +394,7 @@ class GastoDirectivosService
         $query = FlujoCaja::query()
             ->where('tipo', 'egreso')
             ->whereBetween('fecha', [$desde, $hasta])
+            ->vigentes()
             ->where(function ($q) {
                 foreach (array_keys(self::CONCEPTOS) as $code) {
                     $q->orWhere('tipo_gasto', 'like', $code.' - %')

@@ -381,6 +381,157 @@ class ConciliacionExtractoImportTest extends TestCase
             ->assertSessionHas('error', fn ($m) => str_contains($m, 'ya no está pendiente'));
     }
 
+    public function test_recalcular_una_cuenta_concilia_lo_que_se_habia_quedado_pendiente(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $linea = ConciliacionLinea::create([
+            'banco' => 'BANESCO', 'titular' => 'DORAL', 'fecha' => '2026-08-06', 'descripcion' => 'PAGO PROVEEDOR',
+            'referencia' => '5003745290', 'monto' => 30268, 'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+        $otraCuenta = ConciliacionLinea::create([
+            'banco' => 'BANESCO', 'titular' => 'JRZ', 'fecha' => '2026-08-06', 'descripcion' => 'PAGO',
+            'referencia' => '5003745290', 'monto' => 30268, 'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+        $flujo = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'Banesco', 'titular' => 'Doral', 'fecha' => '2026-08-06',
+            'monto_bs' => 30268, 'referencia' => '5003745290', 'motivo' => '073 - ANTICIPO', 'oculto' => false,
+        ]);
+
+        $this->actingAs($user)->post(route('finanzas.conciliaciones.recalcular'), [
+            'banco' => 'BANESCO', 'titular' => 'DORAL', 'fecha_desde' => '2026-08-01', 'fecha_hasta' => '2026-08-31', 'banco_filtro' => 'BANESCO',
+        ])
+            ->assertRedirect()
+            ->assertSessionHas('success', fn ($m) => str_contains($m, 'Recalculado BANESCO · DORAL') && str_contains($m, '1 movimientos conciliados') && str_contains($m, '1 → 0'));
+
+        $this->assertSame('conciliado', $linea->fresh()->estado);
+        $this->assertSame((int) $flujo->id, (int) $linea->fresh()->flujo_caja_id);
+        $this->assertSame('pendiente', $otraCuenta->fresh()->estado);
+
+        // Sin nada nuevo, lo dice.
+        $this->actingAs($user)->post(route('finanzas.conciliaciones.recalcular'), [
+            'banco' => 'BANESCO', 'titular' => 'DORAL', 'fecha_desde' => '2026-08-01', 'fecha_hasta' => '2026-08-31',
+        ])->assertSessionHas('success', fn ($m) => str_contains($m, 'no apareció ninguna coincidencia nueva'));
+    }
+
+    public function test_cargo_banesco_despues_del_abono_de_pago_movil_es_comision(): void
+    {
+        $mov = fn (string $tipo, string $ref, float $monto, string $titular = 'DORAL', string $desc = 'Banesco Pago Movil') => ConciliacionLinea::create([
+            'banco' => 'BANESCO', 'titular' => $titular, 'fecha' => '2026-08-04', 'descripcion' => $desc,
+            'referencia' => $ref, 'monto' => $monto, 'estado' => 'pendiente', 'tipo' => $tipo,
+        ]);
+        $mov('abono', '62167593808', 2065.00);
+        $comision1 = $mov('cargo', '62167593808', 30.98);
+        $mov('abono', '62168051075', 4265.00);
+        $comision2 = $mov('cargo', '62168051075', 63.98);
+        // Pago móvil pequeño: comisión mínima de Bs 14 (más del 5 %).
+        $mov('abono', '62160000001', 100.00);
+        $minima = $mov('cargo', '62160000001', 14.00);
+        // Sin abono con esa referencia: es un pago móvil enviado, no comisión.
+        $enviado = $mov('cargo', '62167549276', 432.21);
+        // Mismo monto que el abono: no es comisión (sería una devolución).
+        $mov('abono', '700', 500.00);
+        $devuelto = $mov('cargo', '700', 500.00);
+        // Otra cuenta con la misma referencia: no se cruza.
+        $otraCuenta = $mov('cargo', '62168060209', 20.00, 'JRZ');
+        $mov('abono', '62168060209', 94295.55);
+
+        $this->assertSame(3, app(\App\Services\Conciliacion\ComisionPagoMovilBanesco::class)->marcar('2026-08-01', '2026-08-31'));
+        $this->assertTrue($comision1->fresh()->forzar_comision);
+        $this->assertTrue($comision2->fresh()->forzar_comision);
+        $this->assertTrue($minima->fresh()->forzar_comision);
+        $this->assertFalse($enviado->fresh()->forzar_comision);
+        $this->assertFalse($devuelto->fresh()->forzar_comision);
+        $this->assertFalse($otraCuenta->fresh()->forzar_comision);
+        // Correrlo otra vez no cambia nada.
+        $this->assertSame(0, app(\App\Services\Conciliacion\ComisionPagoMovilBanesco::class)->marcar('2026-08-01', '2026-08-31'));
+    }
+
+    public function test_buscar_el_error_no_usa_el_monto_en_dolares_ni_comisiones(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $flujo = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'BANESCO', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-01',
+            'monto_bs' => 149758.00, 'monto_usd' => 200, 'referencia' => '79', 'motivo' => 'SUELDO', 'oculto' => false,
+        ]);
+        foreach (['Com. Banesco Pago Movil', 'OP.CRED.DIRT. CLTE-CLTE PJ -VIA ELECTRON'] as $desc) {
+            ConciliacionLinea::create([
+                'banco' => 'BANESCO', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-07-31', 'descripcion' => $desc,
+                'referencia' => '43700084086', 'monto' => 2.00, 'estado' => 'pendiente', 'tipo' => 'cargo',
+            ]);
+        }
+        $cerca = ConciliacionLinea::create([
+            'banco' => 'BANESCO', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-04', 'descripcion' => 'PAGO NOMINA',
+            'referencia' => '1', 'monto' => 149758.00, 'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+        $mismoDia = ConciliacionLinea::create([
+            'banco' => 'BANESCO', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-01', 'descripcion' => 'PAGO NOMINA',
+            'referencia' => '2', 'monto' => 149758.00, 'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+
+        $r = $this->actingAs($user)->getJson(route('finanzas.conciliaciones.transito.buscar', ['flujo_id' => $flujo->id]))->assertOk()->json();
+        // Solo los de mismo monto, el más cercano a la fecha primero.
+        $this->assertSame([$mismoDia->id, $cerca->id], array_column($r['resultados'], 'id'));
+        $this->assertSame('mismo día', $r['resultados'][0]['cuando']);
+        $this->assertSame('3 días después', $r['resultados'][1]['cuando']);
+    }
+
+    public function test_egreso_duplicado_se_anula_desde_buscar_el_error(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $original = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'BANESCO', 'titular' => 'DORAL', 'fecha' => '2026-08-06',
+            'monto_bs' => 5000, 'referencia' => '123456789', 'motivo' => 'PAGO PROVEEDOR', 'oculto' => false,
+        ]);
+        $original->forceFill(['es_conciliado' => true])->save();
+        $linea = ConciliacionLinea::create([
+            'banco' => 'BANESCO', 'titular' => 'DORAL', 'fecha' => '2026-08-06', 'descripcion' => 'PAGO',
+            'referencia' => '123456789', 'monto' => 5000, 'estado' => 'conciliado', 'tipo' => 'cargo', 'flujo_caja_id' => $original->id,
+        ]);
+        $copia = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'BANESCO', 'titular' => 'DORAL', 'fecha' => '2026-08-07',
+            'monto_bs' => 5000, 'referencia' => '123456789', 'motivo' => 'PAGO PROVEEDOR', 'oculto' => false,
+        ]);
+
+        $r = $this->actingAs($user)->getJson(route('finanzas.conciliaciones.transito.buscar', ['flujo_id' => $copia->id]))->assertOk()->json();
+        $this->assertSame($linea->id, $r['resultados'][0]['id']);
+        $this->assertSame($original->id, $r['resultados'][0]['duplicado_de']);
+        $this->assertSame($original->id, $r['duplicados'][0]['id']);
+        $this->assertTrue($r['duplicados'][0]['duplicado']);
+
+        $this->actingAs($user)->post(route('finanzas.conciliaciones.transito.anular_duplicado'), ['flujo_id' => $copia->id, 'duplicado_de' => $original->id])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, 'anulado por estar duplicado'));
+        $copia->refresh();
+        $this->assertTrue($copia->anulado);
+        $this->assertStringStartsWith('Duplicado del egreso #'.$original->id, $copia->anulado_motivo);
+        $this->assertFalse((bool) $original->fresh()->anulado);
+        // Ya no sale en Flujo de Caja ni en los totales.
+        $this->assertSame([$original->id], FlujoCaja::query()->vigentes()->pluck('id')->all());
+
+        // El original (conciliado) no se puede anular como duplicado.
+        $this->actingAs($user)->post(route('finanzas.conciliaciones.transito.anular_duplicado'), ['flujo_id' => $original->id, 'duplicado_de' => $copia->id])
+            ->assertSessionHas('error');
+        $this->assertFalse((bool) $original->fresh()->anulado);
+    }
+
+    public function test_en_transito_marca_el_duplicado_de_un_egreso_ya_conciliado(): void
+    {
+        $base = ['tipo' => 'egreso', 'banco' => 'BANESCO', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-17', 'monto_bs' => 227.59, 'oculto' => false];
+        $conciliado = FlujoCaja::create($base + ['referencia' => '110', 'motivo' => 'COMISIONES DEL PAGO MOVIL']);
+        $conciliado->forceFill(['es_conciliado' => true])->save();
+        $copia = FlujoCaja::create($base + ['referencia' => '110', 'motivo' => '0,30% DE COMISION DEL PAGO MOVIL']);
+        // Mismo monto y día pero otra referencia: dos pagos distintos, no se marca.
+        $otro = FlujoCaja::create($base + ['referencia' => '111', 'motivo' => 'OTRO PAGO']);
+        // Misma referencia en otra cuenta: no se marca.
+        $otraCuenta = FlujoCaja::create(array_merge($base, ['titular' => 'DORAL', 'referencia' => '110', 'motivo' => 'X']));
+
+        $metodo = new \ReflectionMethod(\App\Http\Controllers\FinanzasController::class, 'duplicadosEnTransito');
+        $dup = $metodo->invoke(app(\App\Http\Controllers\FinanzasController::class),
+            FlujoCaja::query()->whereIn('id', [$copia->id, $otro->id, $otraCuenta->id])->get(), '2026-08-01', '2026-08-31', 'BANESCO', null);
+
+        $this->assertSame([$copia->id], array_keys($dup));
+        $this->assertSame($conciliado->id, $dup[$copia->id]['id']);
+    }
+
     public function test_justificar_con_linea_de_otro_monto_pide_nota(): void
     {
         $user = $this->makeUser(User::ROLE_CONTABILIDAD);

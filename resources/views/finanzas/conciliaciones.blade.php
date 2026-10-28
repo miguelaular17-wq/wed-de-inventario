@@ -297,6 +297,18 @@
                             : null;
                     @endphp
                     @if($fecha_desde && $fecha_hasta && $tit)
+                        <form action="{{ route('finanzas.conciliaciones.recalcular') }}" method="POST" style="display:inline; margin-left:8px;"
+                              title="Vuelve a buscar coincidencias para lo pendiente de esta cuenta en el período"
+                              onsubmit="const b = this.querySelector('button'); b.disabled = true; b.textContent = '↻ Recalculando…';">
+                            @csrf
+                            <input type="hidden" name="banco" value="{{ $bk }}">
+                            <input type="hidden" name="titular" value="{{ $tit }}">
+                            <input type="hidden" name="fecha_desde" value="{{ $fecha_desde }}">
+                            <input type="hidden" name="fecha_hasta" value="{{ $fecha_hasta }}">
+                            <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
+                            <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
+                            <button type="submit" style="font-size: 0.75rem; background-color: rgba(255,255,255,0.15); color: #fff; border: none; padding: 4px 10px; border-radius: 4px; font-weight: 700; cursor: pointer;">↻ Recalcular</button>
+                        </form>
                         @if($cierreMarcado)
                             <form action="{{ route('finanzas.conciliaciones.periodos.destroy', ['cierre' => $cierreMarcado->id, 'origen' => 'conciliaciones']) }}" method="POST" style="display:inline; margin-left:8px;" onsubmit="return confirm('¿Quitar el cierre de {{ $bk }} · {{ $tit }}?');">
                                 @csrf
@@ -500,6 +512,10 @@
                                 {{ Str::limit($row['concepto'] ?: $row['motivo'], 50) }}
                                 @if($row['tipo_gasto'])
                                     <br><span class="tipo-chip chip-cargo">{{ $row['tipo_gasto'] }}</span>
+                                @endif
+                                @if(!empty($row['duplicado_de']))
+                                    <br><span class="tipo-chip" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;margin-top:4px;display:inline-block;"
+                                              title="{{ $row['duplicado_de']['motivo'] }}">Posible duplicado del #{{ $row['duplicado_de']['id'] }} (ya conciliado)</span>
                                 @endif
                             </td>
                             <td class="monto-cell monto-yellow">{{ number_format($row['monto_bs'], 2) }}</td>
@@ -997,6 +1013,16 @@
     <input type="hidden" name="compra_id" value="">
 </form>
 
+<form id="form-transito-duplicado" action="{{ route('finanzas.conciliaciones.transito.anular_duplicado') }}" method="POST" style="display:none;">
+    @csrf
+    <input type="hidden" name="fecha_desde" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
+    <input type="hidden" name="fecha_hasta" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
+    <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
+    <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
+    <input type="hidden" name="flujo_id" value="">
+    <input type="hidden" name="duplicado_de" value="">
+</form>
+
 {{-- JUSTIFICAR / BUSCAR EL ERROR (movimiento en tránsito) --}}
 <div id="transitoModal" class="modal-overlay">
     <div class="modal-box" style="max-width:760px;">
@@ -1230,12 +1256,16 @@ function htmlLineaTransito(l, conRadio) {
         + (l.misma_ref ? chip('Misma referencia', '#2563eb', '#eff6ff') : '')
         + (l.x100 ? chip('Monto ×100 / ÷100', '#b45309', '#fffbeb') : '')
         + (!l.misma_cuenta ? chip('Otra cuenta', '#7c3aed', '#f5f3ff') : '');
+    const anular = l.duplicado_de && menuTransito.flujo
+        ? `<button type="button" class="tipo-chip" style="border:1px solid #fecaca;background:#fef2f2;color:#b91c1c;cursor:pointer;margin-top:6px;" onclick="anularDuplicado(event, ${l.duplicado_de})">Anular este egreso (duplicado del #${l.duplicado_de})</button>`
+        : '';
     const info = `<div class="dev-mov-info">
             <strong>${esc(l.descripcion)}</strong>
-            <div class="dev-mov-meta">${esc(l.fecha)} · Ref. ${esc(l.referencia || '—')} · ${esc(l.cuenta)} · ${l.tipo === 'abono' ? 'ABONO' : 'CARGO'}</div>
+            <div class="dev-mov-meta">${esc(l.fecha)} (${esc(l.cuando)}) · Ref. ${esc(l.referencia || '—')} · ${esc(l.cuenta)} · ${l.tipo === 'abono' ? 'ABONO' : 'CARGO'}</div>
             ${l.ligado ? `<div class="dev-mov-meta" style="color:#b45309;">${esc(l.ligado)}</div>` : ''}
             <div class="dev-mov-meta" style="color:#334155;">${esc(l.pista)}</div>
             <div>${chips}</div>
+            ${anular}
         </div>
         <div class="dev-mov-monto" style="color:${l.tipo === 'abono' ? '#059669' : '#dc2626'}">Bs. ${fmtBs(l.monto)}</div>`;
     if (!conRadio || !l.accion) return `<div class="dev-mov" style="opacity:${l.accion ? 1 : .75}">${info}</div>`;
@@ -1280,20 +1310,42 @@ async function abrirTransito(modo) {
         html += `<label class="dev-mov"><input type="radio" name="linea_id" value="" data-mover="0" data-nota="1" onchange="elegirLineaTransito(this)">
             <div class="dev-mov-info"><strong>No aparece en el banco</strong><div class="dev-mov-meta">Se da por conciliado solo con la justificación que escribas abajo.</div></div></label>`;
     } else {
-        html += '<div class="dev-paso">Dónde puede estar el pago (todos los bancos, por monto y referencia)</div>';
-        html += d.resultados.length
-            ? d.resultados.map(l => htmlLineaTransito(l, true)).join('')
-            : '<p class="dev-vacio">No hay ningún movimiento en los extractos con ese monto ni esa referencia. Puede que el extracto de ese período aún no esté cargado, o que el pago no haya salido.</p>';
+        const titulos = ['Mismo monto y misma referencia', 'Mismo monto', 'Misma referencia (otro monto)', 'Posible error de coma (monto ×100 / ÷100)'];
         if (d.duplicados.length) {
-            html += '<div class="dev-paso">Otros egresos registrados con la misma referencia o el mismo monto (posible duplicado)</div>';
-            html += d.duplicados.map(e => `<div class="dev-mov"><div class="dev-mov-info"><strong>#${e.id} · ${esc(e.motivo)}</strong>
-                <div class="dev-mov-meta">${esc(e.fecha)} · Ref. ${esc(e.referencia || '—')} · ${esc(e.cuenta)}</div>
-                <div class="dev-mov-meta" style="color:${e.conciliado ? '#059669' : '#b45309'};">${e.conciliado ? 'Conciliado' : 'En tránsito'}</div></div>
+            html += '<div class="dev-paso">Otros egresos registrados en el sistema con el mismo monto o la misma referencia</div>';
+            html += d.duplicados.map(e => `<div class="dev-mov"${e.duplicado ? ' style="border-color:#fca5a5;"' : ''}><div class="dev-mov-info"><strong>#${e.id} · ${esc(e.motivo)}</strong>
+                <div class="dev-mov-meta">${esc(e.fecha)} (${esc(e.cuando)}) · Ref. ${esc(e.referencia || '—')} · ${esc(e.cuenta)}</div>
+                <div class="dev-mov-meta" style="color:${e.conciliado ? '#059669' : '#b45309'};">${e.conciliado ? 'Conciliado' : 'En tránsito'}${e.duplicado ? ' · <strong style="color:#b91c1c;">Posible duplicado de este egreso</strong>' : ''}</div>
+                <div>${(e.mismo_monto ? chip('Mismo monto', '#059669', '#ecfdf5') : '') + (e.misma_ref ? chip('Misma referencia', '#2563eb', '#eff6ff') : '')}</div>
+                ${e.duplicado ? `<button type="button" class="tipo-chip" style="border:1px solid #fecaca;background:#fef2f2;color:#b91c1c;cursor:pointer;margin-top:6px;" onclick="anularDuplicado(event, ${e.id})">Anular este egreso en tránsito (es copia del #${e.id})</button>` : ''}
+                </div>
                 <div class="dev-mov-monto" style="color:#dc2626;">Bs. ${fmtBs(e.monto)}</div></div>`).join('');
         }
+        html += '<div class="dev-paso">Dónde puede estar el pago en los bancos</div>';
+        if (!d.resultados.length) {
+            html += '<p class="dev-vacio">No hay ningún movimiento en los extractos con ese monto ni esa referencia. Puede que el extracto de ese período aún no esté cargado, o que el pago no haya salido.</p>';
+        }
+        let grupoActual = null;
+        d.resultados.forEach(l => {
+            if (l.grupo !== grupoActual) {
+                grupoActual = l.grupo;
+                html += `<div style="font-size:.78rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px;">${titulos[l.grupo]}</div>`;
+            }
+            html += htmlLineaTransito(l, true);
+        });
     }
     document.getElementById('trCuerpo').innerHTML = html;
     document.getElementById('trNotaAyuda').textContent = modo === 'buscar' ? '(opcional; obligatoria si el monto no coincide)' : '';
+}
+
+function anularDuplicado(ev, originalId) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (!confirm(`Este egreso en tránsito se marcará como NULO por estar duplicado con el egreso #${originalId}. No se borra: queda anulado con el motivo y sale de En tránsito. ¿Continuar?`)) return;
+    const form = document.getElementById('form-transito-duplicado');
+    form.querySelector('[name=flujo_id]').value = menuTransito.flujo;
+    form.querySelector('[name=duplicado_de]').value = originalId;
+    form.submit();
 }
 
 function elegirLineaTransito(input) {

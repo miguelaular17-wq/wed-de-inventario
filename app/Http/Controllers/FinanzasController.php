@@ -418,14 +418,18 @@ class FinanzasController extends Controller
         return $resumen;
     }
 
-    private function syncTotalesSalidas($fecha)
+    public function syncTotalesSalidas($fecha)
     {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('finanzas_resumen')) {
+            return;
+        }
         $resumen = \App\Models\FinanzasResumen::where('fecha', $fecha)->first();
         if (!$resumen) return;
 
         $egresos = \App\Models\FlujoCaja::where('fecha', $fecha)
             ->where('tipo', 'egreso')
             ->where('oculto', false)
+            ->vigentes()
             ->where(function($q) {
                 $q->whereNull('categoria_egreso')
                   ->orWhereNotIn('categoria_egreso', ['traslados', 'egreso_divisas']);
@@ -470,7 +474,7 @@ class FinanzasController extends Controller
         $fecha_hasta = request('fecha_hasta', request('fecha_filtro', date('Y-m-d')));
         $fecha_filtro = $fecha_hasta;
 
-        $movimientos = FlujoCaja::whereBetween('fecha', [$fecha_desde, $fecha_hasta])->where('oculto', false)->orderBy('fecha', 'desc')->get();
+        $movimientos = FlujoCaja::whereBetween('fecha', [$fecha_desde, $fecha_hasta])->where('oculto', false)->vigentes()->orderBy('fecha', 'desc')->get();
         Profiler::stop('FinanzasController::flujoCaja query');
         $ingresos = $movimientos->where('tipo', 'ingreso')->values();
         $movimientos = $movimientos->where('tipo', '!=', 'ingreso');
@@ -1576,6 +1580,7 @@ class FinanzasController extends Controller
         $this->desvincularPagomovilMalEmparejadoConLote($matcherRepair, $repararDesde, $repararHasta);
         $this->marcarTrasladosConSalidaConciliados($matcherRepair, $repararDesde, $repararHasta);
         $this->reasignarGastosVaciosAlEgresoReal($matcherRepair, $repararDesde, $repararHasta);
+        app(\App\Services\Conciliacion\ComisionPagoMovilBanesco::class)->marcar($repararDesde, $repararHasta);
 
         // 4. Clasificar comisiones bancarias y compras de divisas del extracto
         $classifier = app(\App\Services\BankMovementClassifier::class);
@@ -1605,6 +1610,7 @@ class FinanzasController extends Controller
         $this->filtrarPorBanco($egresos_conciliados_query, $banco_filtro);
         $this->filtrarPorTitular($egresos_conciliados_query, $titular_filtro);
         $egresos_conciliados_sistema = $egresos_conciliados_query->orderBy('id')->get();
+        $duplicadosTransito = $this->duplicadosEnTransito($egresos_ayer, $fecha_desde, $fecha_hasta, $banco_filtro, $titular_filtro);
 
         // Movimientos registrados en el sistema durante el período del extracto.
         // El archivo bancario solo se usa para conciliar.
@@ -1612,6 +1618,7 @@ class FinanzasController extends Controller
         $periodo_hasta = $fecha_hasta;
         $movimientos_sistema_query = \App\Models\FlujoCaja::query()
             ->where('oculto', false)
+            ->vigentes()
             ->select([
                 'id', 'tipo', 'fecha', 'banco', 'titular', 'banco_receptor', 'titular_receptor',
                 'categoria_egreso', 'tipo_gasto', 'motivo', 'referencia',
@@ -1909,6 +1916,7 @@ class FinanzasController extends Controller
                     'monto_usd'  => $e->monto_usd,
                     'flujo_id'   => $e->id,
                     'compra_id'  => null,
+                    'duplicado_de' => $duplicadosTransito[$e->id] ?? null,
                 ])->values();
 
             $compras_transito = $comprasTransito
@@ -2267,6 +2275,47 @@ class FinanzasController extends Controller
         }
 
         return redirect()->route('finanzas.calendario_conciliaciones', ['cal_mes' => $mes]);
+    }
+
+    /**
+     * Egresos en tránsito que repiten otro egreso ya conciliado de la misma cuenta: mismo monto y misma
+     * referencia (o, sin referencia, el mismo día). El banco tiene un solo pago y ya lo tomó el otro.
+     *
+     * @return array<int, array{id: int, motivo: string}> id en tránsito => egreso conciliado que repite
+     */
+    private function duplicadosEnTransito($transito, string $desde, string $hasta, ?string $banco, ?string $titular): array
+    {
+        if ($transito->isEmpty()) {
+            return [];
+        }
+        $matcher = app(\App\Services\BankReconciliationMatcher::class);
+        $q = \App\Models\FlujoCaja::query()->where('tipo', 'egreso')->where('es_conciliado', true)
+            ->where('fecha', '>=', \Carbon\Carbon::parse($desde)->subDays(7)->toDateString())
+            ->where('fecha', '<=', \Carbon\Carbon::parse($hasta)->addDays(7)->toDateString());
+        if (\Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'anulado')) {
+            $q->where('anulado', false);
+        }
+        $this->filtrarPorBanco($q, $banco);
+        $this->filtrarPorTitular($q, $titular);
+        $porMonto = $q->get()->groupBy(fn ($f) => number_format(abs((float) $f->monto_bs), 2, '.', ''));
+
+        $dup = [];
+        foreach ($transito as $e) {
+            $dia = substr((string) ($e->fecha instanceof \DateTimeInterface ? $e->fecha->format('Y-m-d') : $e->fecha), 0, 10);
+            $cuenta = $matcher->claveCuenta($e->banco, $e->titular);
+            foreach ($porMonto->get(number_format(abs((float) $e->monto_bs), 2, '.', ''), []) as $f) {
+                $diaF = substr((string) ($f->fecha instanceof \DateTimeInterface ? $f->fecha->format('Y-m-d') : $f->fecha), 0, 10);
+                $sinRef = trim((string) $e->referencia) === '' || trim((string) $f->referencia) === '';
+                if ((int) $f->id !== (int) $e->id
+                    && $matcher->claveCuenta($f->banco, $f->titular) === $cuenta
+                    && ($matcher->referenciasCruzan($e->referencia, $f->referencia) || ($sinRef && $dia === $diaF))) {
+                    $dup[$e->id] = ['id' => (int) $f->id, 'motivo' => (string) ($f->motivo ?: $f->concepto)];
+                    break;
+                }
+            }
+        }
+
+        return $dup;
     }
 
     /** Vuelve a conciliaciones con el mismo filtro (fecha/banco/titular) activo. */
@@ -4525,6 +4574,7 @@ class FinanzasController extends Controller
 
         $movimientos_query = \App\Models\FlujoCaja::whereBetween('fecha', [$fecha_desde, $fecha_hasta])
                                 ->where('oculto', false)
+                                ->vigentes()
                                 ->when($catsFlujo !== [], fn ($q) => $q->whereIn('categoria_egreso', $catsFlujo), fn ($q) => $q->whereRaw('1 = 0'))
                                 ->orderBy('fecha', 'desc');
 

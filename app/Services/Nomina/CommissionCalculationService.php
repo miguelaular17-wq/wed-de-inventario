@@ -672,6 +672,7 @@ class CommissionCalculationService
             ->where('nomina_empleado_id', $empleado->id)
             ->where('tipo_gasto', self::GASTO_SERVICIO_TECNICO)
             ->whereBetween('fecha', [$periodo->fecha_inicio->toDateString(), $periodo->fecha_fin->toDateString()])
+            ->when(\Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'anulado'), fn ($q) => $q->where(fn ($w) => $w->where('anulado', false)->orWhereNull('anulado')))
             ->selectRaw('COALESCE(SUM(CASE
                 WHEN monto_usd IS NOT NULL AND monto_usd <> 0 THEN ABS(monto_usd)
                 WHEN tasa_cambio IS NOT NULL AND tasa_cambio > 0 THEN ABS(monto_bs) / tasa_cambio
