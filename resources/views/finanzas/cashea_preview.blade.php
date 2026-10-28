@@ -47,17 +47,28 @@
         </div>
     @endif
 
-    @if($porEstado->has('conciliar'))
+    @if($porEstado->has('conciliar') || $copias > 0)
         <form method="POST" action="{{ route('finanzas.conciliaciones.cashea.aplicar') }}"
               onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').innerText = 'Conciliando…';"
               style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; padding:14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:12px;">
             @csrf
             <input type="hidden" name="token" value="{{ $plan['token'] }}">
             <div style="flex:1; min-width:260px;">
-                Se conciliarán <strong>{{ number_format($porEstado['conciliar']->sum(fn ($p) => count($p['lineas']))) }} abonos</strong> de {{ number_format($porEstado['conciliar']->count()) }} pagos ({{ $bs($porEstado['conciliar']->sum('monto_banco')) }}):
-                un ingreso de Tesorería por día ({{ $porDia->count() }} días) ligado a sus abonos. Lo demás no se toca.
+                @if($porEstado->has('conciliar'))
+                    Se conciliarán <strong>{{ number_format($porEstado['conciliar']->sum(fn ($p) => count($p['lineas']))) }} abonos</strong> de {{ number_format($porEstado['conciliar']->count()) }} pagos ({{ $bs($porEstado['conciliar']->sum('monto_banco')) }}):
+                    un ingreso de Tesorería por día ({{ $porDia->count() }} días) ligado a sus abonos.
+                @else
+                    No hay abonos nuevos para conciliar.
+                @endif
+                @if($copias > 0)
+                    <label style="display:flex; align-items:flex-start; gap:6px; margin-top:6px; font-size:.86rem; color:#9a3412;">
+                        <input type="checkbox" name="quitar_copias" value="1" checked style="margin-top:3px;">
+                        <span>Quitar también las <strong>{{ number_format($copias) }} líneas repetidas</strong> del extracto: de cada movimiento queda una sola
+                        (la conciliada o la más antigua). Solo se borran copias pendientes y sin nada ligado, y se guarda un respaldo.</span>
+                    </label>
+                @endif
             </div>
-            <button type="submit" class="btn primary" style="padding:10px 18px; font-weight:700;">Confirmar y conciliar</button>
+            <button type="submit" class="btn primary" style="padding:10px 18px; font-weight:700;">{{ $porEstado->has('conciliar') ? 'Confirmar y conciliar' : 'Quitar repetidas' }}</button>
         </form>
 
         <details style="margin-bottom:14px;">

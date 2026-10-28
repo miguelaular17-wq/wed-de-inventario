@@ -272,7 +272,7 @@ class ConciliacionExtractoImportTest extends TestCase
         $this->assertSame('pendiente', $otraCuenta->fresh()->estado);
     }
 
-    public function test_conciliar_en_transito_sin_linea_en_el_extracto_solo_marca_el_egreso(): void
+    public function test_conciliar_en_transito_automatico_sin_linea_no_lo_da_por_conciliado(): void
     {
         $user = $this->makeUser(User::ROLE_CONTABILIDAD);
         $flujo = FlujoCaja::create([
@@ -283,8 +283,124 @@ class ConciliacionExtractoImportTest extends TestCase
         $this->actingAs($user)
             ->post(route('finanzas.conciliaciones.transito_conciliar'), ['flujo_id' => $flujo->id])
             ->assertRedirect()
-            ->assertSessionHas('success', fn ($m) => str_contains($m, 'No había en el extracto'));
+            ->assertSessionHas('error', fn ($m) => str_contains($m, 'No se encontró en el banco') && str_contains($m, 'Justificar'));
 
+        $this->assertFalse((bool) $flujo->fresh()->es_conciliado);
+    }
+
+    public function test_justificar_en_transito_sin_linea_exige_nota_y_la_guarda(): void
+    {
+        Schema::table('flujo_cajas', fn (Blueprint $t) => $t->text('conciliacion_nota')->nullable());
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $flujo = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'BANESCO', 'titular' => 'DORAL',
+            'fecha' => '2026-08-06', 'monto_bs' => 123.45, 'motivo' => 'X', 'oculto' => false,
+        ]);
+        $ruta = route('finanzas.conciliaciones.transito.justificar');
+
+        $this->actingAs($user)->post($ruta, ['flujo_id' => $flujo->id, 'justificacion' => ''])
+            ->assertSessionHas('error', fn ($m) => str_contains($m, 'Escribe qué es'));
+        $this->assertFalse((bool) $flujo->fresh()->es_conciliado);
+
+        $this->actingAs($user)->post($ruta, ['flujo_id' => $flujo->id, 'justificacion' => 'Se pagó en efectivo'])
+            ->assertSessionHas('success');
+        $this->assertTrue((bool) $flujo->fresh()->es_conciliado);
+        $this->assertStringContainsString('Sin movimiento en el banco: Se pagó en efectivo', \Illuminate\Support\Facades\DB::table('flujo_cajas')->where('id', $flujo->id)->value('conciliacion_nota'));
+    }
+
+    public function test_buscar_el_error_encuentra_el_pago_en_otra_cuenta_y_lo_mueve_al_conciliar(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $flujo = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'BNC', 'titular' => 'LNACEH',
+            'fecha' => '2026-09-24', 'monto_bs' => 188890.03, 'referencia' => '2692125415',
+            'motivo' => 'DECLARACION', 'oculto' => false,
+        ]);
+        $enOtraCuenta = ConciliacionLinea::create([
+            'banco' => 'BNC', 'titular' => 'JRZ', 'fecha' => '2026-09-25', 'descripcion' => 'PAGO SENIAT',
+            'referencia' => '0002692125415', 'monto' => 188890.03, 'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+        $coma = ConciliacionLinea::create([
+            'banco' => 'BNC', 'titular' => 'LNACEH', 'fecha' => '2026-09-24', 'descripcion' => 'PAGO',
+            'referencia' => '55', 'monto' => 1888.90, 'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+        ConciliacionLinea::create([
+            'banco' => 'BANESCO', 'titular' => 'DORAL', 'fecha' => '2026-09-24', 'descripcion' => 'OTRA COSA',
+            'referencia' => '1', 'monto' => 5, 'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+
+        $r = $this->actingAs($user)->getJson(route('finanzas.conciliaciones.transito.buscar', ['flujo_id' => $flujo->id]))->assertOk()->json();
+        $this->assertCount(2, $r['resultados']);
+        // Lo que tiene la coma corrida (188.890,03 vs 1.888,90) también sale, pero después.
+        $this->assertSame($coma->id, $r['resultados'][1]['id']);
+        $this->assertTrue($r['resultados'][1]['x100']);
+        $this->assertSame('conciliar', $r['resultados'][1]['accion']);
+        $hallado = $r['resultados'][0];
+        $this->assertSame($enOtraCuenta->id, $hallado['id']);
+        $this->assertTrue($hallado['mismo_monto'] && $hallado['misma_ref']);
+        $this->assertFalse($hallado['misma_cuenta']);
+        $this->assertSame('mover', $hallado['accion']);
+        // En «Justificar» solo salen los cargos pendientes de la cuenta del egreso.
+        $this->assertSame([$coma->id], array_column($r['pendientes_cuenta'], 'id'));
+
+        $ruta = route('finanzas.conciliaciones.transito.justificar');
+        $this->actingAs($user)->post($ruta, ['flujo_id' => $flujo->id, 'linea_id' => $enOtraCuenta->id])
+            ->assertSessionHas('error', fn ($m) => str_contains($m, 'otra cuenta'));
+
+        $this->actingAs($user)->post($ruta, ['flujo_id' => $flujo->id, 'linea_id' => $enOtraCuenta->id, 'mover_cuenta' => 1])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, '25/09/2026') && str_contains($m, 'JRZ'));
+        $this->assertSame('conciliado', $enOtraCuenta->fresh()->estado);
+        $this->assertSame((int) $flujo->id, (int) $enOtraCuenta->fresh()->flujo_caja_id);
+        $this->assertTrue((bool) $flujo->fresh()->es_conciliado);
+        $this->assertSame('JRZ', $flujo->fresh()->titular);
+    }
+
+    public function test_justificar_movimiento_del_banco_lo_concilia_con_la_nota(): void
+    {
+        Schema::table('conciliacion_lineas', fn (Blueprint $t) => $t->text('conciliacion_nota')->nullable());
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $linea = ConciliacionLinea::create([
+            'banco' => 'BNC', 'titular' => 'L.S. CASHEA', 'fecha' => '2026-09-01', 'descripcion' => 'PAGO MOVIL',
+            'referencia' => '1043941122', 'monto' => 7576.11, 'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+        $ruta = route('finanzas.conciliaciones.linea.justificar');
+
+        $this->actingAs($user)->post($ruta, ['linea_id' => $linea->id, 'justificacion' => 'abc'])
+            ->assertSessionHas('error', fn ($m) => str_contains($m, 'mínimo 5'));
+        $this->assertSame('pendiente', $linea->fresh()->estado);
+
+        $this->actingAs($user)->post($ruta, ['linea_id' => $linea->id, 'justificacion' => 'Cobro Cashea de agosto'])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, 'Cobro Cashea de agosto'));
+        $linea->refresh();
+        $this->assertSame('conciliado', $linea->estado);
+        $this->assertNull($linea->flujo_caja_id);
+        $this->assertStringStartsWith('Cobro Cashea de agosto — Contabilidad, ', $linea->conciliacion_nota);
+
+        // Una línea ya conciliada no se vuelve a justificar.
+        $this->actingAs($user)->post($ruta, ['linea_id' => $linea->id, 'justificacion' => 'Otra cosa distinta'])
+            ->assertSessionHas('error', fn ($m) => str_contains($m, 'ya no está pendiente'));
+    }
+
+    public function test_justificar_con_linea_de_otro_monto_pide_nota(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $flujo = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'BANESCO', 'titular' => 'DORAL',
+            'fecha' => '2026-08-06', 'monto_bs' => 1000, 'motivo' => 'X', 'oculto' => false,
+        ]);
+        $linea = ConciliacionLinea::create([
+            'banco' => 'BANESCO', 'titular' => 'DORAL', 'fecha' => '2026-08-07', 'descripcion' => 'PAGO',
+            'referencia' => '9', 'monto' => 1003.5, 'estado' => 'pendiente', 'tipo' => 'cargo',
+        ]);
+        $ruta = route('finanzas.conciliaciones.transito.justificar');
+
+        $this->actingAs($user)->post($ruta, ['flujo_id' => $flujo->id, 'linea_id' => $linea->id])
+            ->assertSessionHas('error', fn ($m) => str_contains($m, 'no coincide'));
+        $this->assertSame('pendiente', $linea->fresh()->estado);
+
+        $this->actingAs($user)->post($ruta, ['flujo_id' => $flujo->id, 'linea_id' => $linea->id, 'justificacion' => 'Comisión cobrada en el mismo cargo'])
+            ->assertSessionHas('success');
+        $this->assertSame('conciliado', $linea->fresh()->estado);
         $this->assertTrue((bool) $flujo->fresh()->es_conciliado);
     }
 

@@ -58,13 +58,18 @@ class CasheaConciliacionController extends Controller
 
         $r = $this->calcular($plan);
         $hecho = $this->conciliador->aplicar($r['pagos'], $plan['archivo'], $request->user()?->id);
+        // Después de conciliar: así la copia que queda de cada movimiento es la que quedó ligada.
+        $copias = $request->boolean('quitar_copias') && $r['desde']
+            ? $this->conciliador->quitarCopias($r['desde'], $r['hasta'])
+            : ['borradas' => 0, 'respaldo' => null];
         Storage::disk('local')->delete($path);
         $estados = collect($r['pagos'])->countBy('estado');
 
         return redirect()->route('finanzas.conciliaciones')->with('success', sprintf(
-            'Cashea: %d abonos conciliados (Bs %s) en %d ingresos de Tesorería, uno por día. %d ya estaban conciliados, %d para revisar y %d sin abono en el banco.',
+            'Cashea: %d abonos conciliados (Bs %s) en %d ingresos de Tesorería, uno por día. %d ya estaban conciliados, %d para revisar y %d sin abono en el banco.%s',
             $hecho['lineas'], number_format($hecho['monto'], 2, ',', '.'), $hecho['ingresos'],
             $estados['ya_conciliado'] ?? 0, $estados['revisar'] ?? 0, $estados['no_encontrado'] ?? 0,
+            $copias['borradas'] > 0 ? sprintf(' Se quitaron %s líneas repetidas del extracto (respaldo: %s).', number_format($copias['borradas'], 0, ',', '.'), $copias['respaldo']) : '',
         ));
     }
 

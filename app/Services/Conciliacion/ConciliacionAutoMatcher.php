@@ -284,6 +284,14 @@ class ConciliacionAutoMatcher
         return null;
     }
 
+    /** Liga el movimiento en tránsito con la línea que eligió el usuario (aunque el monto o la fecha no cuadren). */
+    public function vincularElegida(ConciliacionLinea $linea, object $movimiento, bool $esCompraDivisa): bool
+    {
+        $esTraslado = ! $esCompraDivisa && $this->matcher->esTraslado($movimiento);
+
+        return $this->vincular($linea, $movimiento, $esCompraDivisa, $esTraslado, true, Schema::hasColumn('conciliacion_lineas', 'compra_divisa_id'));
+    }
+
     /**
      * @return Collection<int, ConciliacionLinea>
      */

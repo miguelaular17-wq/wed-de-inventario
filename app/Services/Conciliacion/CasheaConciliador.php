@@ -179,6 +179,69 @@ class CasheaConciliador
         return $hecho;
     }
 
+    /**
+     * Quita las copias de movimientos cargados más de una vez en las cuentas de Cashea (mismo banco, titular, fecha,
+     * tipo, referencia, monto y descripción). De cada movimiento queda una sola línea: la que ya está conciliada o,
+     * si ninguna, la más antigua. Solo se borran copias pendientes y sin nada ligado; antes se guardan en un respaldo.
+     *
+     * @return array{borradas: int, respaldo: ?string}
+     */
+    public function quitarCopias(string $desde, string $hasta): array
+    {
+        $cols = ['id', 'banco', 'titular', 'fecha', 'tipo', 'referencia', 'monto', 'descripcion', 'estado', 'flujo_caja_id', 'tesoreria_ingreso_id'];
+        foreach (['compra_divisa_id', 'devolucion_linea_id', 'importacion_id', 'created_at'] as $c) {
+            if (Schema::hasColumn('conciliacion_lineas', $c)) {
+                $cols[] = $c;
+            }
+        }
+        $grupos = [];
+        DB::table('conciliacion_lineas')
+            ->whereRaw('UPPER(titular) LIKE ?', ['%CASHEA%'])
+            ->whereBetween('fecha', [$desde, $hasta])
+            ->orderBy('id')
+            ->select($cols)
+            ->chunk(5000, function ($filas) use (&$grupos) {
+                foreach ($filas as $l) {
+                    $k = implode('|', [$l->banco, $l->titular, substr((string) $l->fecha, 0, 10), $l->tipo, $l->referencia, round((float) $l->monto, 2), $l->descripcion]);
+                    $grupos[$k][] = $l;
+                }
+            });
+
+        $borrar = [];
+        foreach ($grupos as $copias) {
+            if (count($copias) < 2) {
+                continue;
+            }
+            $queda = collect($copias)->first(fn ($l) => ! $this->libreParaBorrar($l)) ?? $copias[0];
+            foreach ($copias as $l) {
+                if ($l->id !== $queda->id && $this->libreParaBorrar($l)) {
+                    $borrar[] = $l;
+                }
+            }
+        }
+        if ($borrar === []) {
+            return ['borradas' => 0, 'respaldo' => null];
+        }
+
+        $respaldo = 'respaldos/conciliacion_copias_cashea_' . date('Ymd_His') . '.json';
+        \Illuminate\Support\Facades\Storage::disk('local')->put($respaldo, json_encode($borrar, JSON_UNESCAPED_UNICODE));
+        $borradas = 0;
+        foreach (array_chunk(array_map(fn ($l) => $l->id, $borrar), 1000) as $ids) {
+            $borradas += DB::table('conciliacion_lineas')->whereIn('id', $ids)->where('estado', 'pendiente')
+                ->whereNull('flujo_caja_id')->whereNull('tesoreria_ingreso_id')
+                ->when(Schema::hasColumn('conciliacion_lineas', 'compra_divisa_id'), fn ($q) => $q->whereNull('compra_divisa_id'))
+                ->when(Schema::hasColumn('conciliacion_lineas', 'devolucion_linea_id'), fn ($q) => $q->whereNull('devolucion_linea_id'))
+                ->delete();
+        }
+
+        return ['borradas' => $borradas, 'respaldo' => $respaldo];
+    }
+
+    private function libreParaBorrar(object $l): bool
+    {
+        return $this->libre($l) && empty($l->compra_divisa_id) && empty($l->devolucion_linea_id);
+    }
+
     /** @return list<array<string, mixed>> un elemento por pago móvil (fecha + referencia) */
     private function agrupar(array $filas): array
     {

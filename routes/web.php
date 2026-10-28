@@ -661,6 +661,9 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::get('/conciliaciones/devolucion/egresos', [FinanzasController::class, 'egresosParaDevolucion'])->name('finanzas.conciliaciones.devolucion.egresos');
     Route::post('/conciliaciones/devolucion', [FinanzasController::class, 'marcarDevolucion'])->name('finanzas.conciliaciones.devolucion');
     Route::post('/conciliaciones/transito-conciliar', [App\Http\Controllers\FinanzasController::class, 'marcarTransitoConciliado'])->name('finanzas.conciliaciones.transito_conciliar');
+    Route::get('/conciliaciones/transito/buscar', [App\Http\Controllers\TransitoConciliacionController::class, 'buscar'])->name('finanzas.conciliaciones.transito.buscar');
+    Route::post('/conciliaciones/transito/justificar', [App\Http\Controllers\TransitoConciliacionController::class, 'justificar'])->name('finanzas.conciliaciones.transito.justificar');
+    Route::post('/conciliaciones/linea/justificar', [App\Http\Controllers\TransitoConciliacionController::class, 'justificarLinea'])->name('finanzas.conciliaciones.linea.justificar');
     Route::post('/conciliaciones/clear', [App\Http\Controllers\FinanzasController::class, 'clearConciliacion'])->name('finanzas.conciliaciones.clear');
     Route::get('/conciliaciones/reporte', [App\Http\Controllers\FinanzasController::class, 'reporteConciliacion'])->name('finanzas.conciliaciones.reporte');
     Route::get('/conciliaciones/reporte-banco', [App\Http\Controllers\FinanzasController::class, 'reporteBancoPdf'])->name('finanzas.conciliaciones.reporte-banco');

@@ -1800,6 +1800,9 @@ class FinanzasController extends Controller
                                 : ($matcher->esPagoMovil($l->descripcion) ? 'Pago móvil' : 'Ingreso Bancario Tesorería');
                             $tipo_gasto = 'Ingreso de Tesorería';
                         }
+                    } elseif (! empty($l->conciliacion_nota)) {
+                        $motivo = $l->conciliacion_nota;
+                        $tipo_gasto = 'Justificado';
                     }
 
                     return [
@@ -3053,37 +3056,32 @@ class FinanzasController extends Controller
         $desde = $desde ? \Carbon\Carbon::parse($desde)->toDateString() : null;
         $hasta = $hasta ? \Carbon\Carbon::parse($hasta)->toDateString() : null;
         $autoMatcher = app(\App\Services\Conciliacion\ConciliacionAutoMatcher::class);
-        $mensaje = function (?\App\Models\ConciliacionLinea $linea, string $sinLinea) {
+        // Sin línea del banco no se da por conciliado: para eso está «Justificar» (deja nota) o «Buscar el error».
+        $responder = function (object $mov, ?\App\Models\ConciliacionLinea $linea) use ($request) {
+            if ($mov->es_conciliado && ! $linea) {
+                return $this->redirectConciliacionesConFiltros($request)->with('error', 'Ese movimiento ya estaba conciliado.');
+            }
             if (! $linea) {
-                return $sinLinea.' No había en el extracto una línea pendiente con ese monto.';
+                return $this->redirectConciliacionesConFiltros($request)->with('error', sprintf(
+                    'No se encontró en el banco un movimiento pendiente de Bs %s en esta cuenta (±15 días). Usa «Justificar» para ligarlo a mano o explicar qué es, o «Buscar el error» para ver dónde quedó el pago.',
+                    number_format((float) $mov->monto_bs, 2, ',', '.')
+                ));
             }
 
-            return 'Conciliado con el movimiento del banco del '.$linea->fecha->format('d/m/Y')
-                .($linea->referencia ? ' (ref. '.$linea->referencia.')' : '').'.';
+            return $this->redirectConciliacionesConFiltros($request)->with('success', 'Conciliado con el movimiento del banco del '.$linea->fecha->format('d/m/Y')
+                .($linea->referencia ? ' (ref. '.$linea->referencia.')' : '').'.');
         };
 
         if (! empty($data['flujo_id'])) {
             $flujo = \App\Models\FlujoCaja::findOrFail($data['flujo_id']);
-            $linea = $flujo->es_conciliado ? null : $autoMatcher->conciliarManual($flujo, false, $desde, $hasta);
-            if (! $linea) {
-                $flujo->es_conciliado = true;
-                $flujo->save();
-            }
 
-            return $this->redirectConciliacionesConFiltros($request)
-                ->with('success', $mensaje($linea, 'Movimiento en tránsito marcado como conciliado.'));
+            return $responder($flujo, $flujo->es_conciliado ? null : $autoMatcher->conciliarManual($flujo, false, $desde, $hasta));
         }
 
         if (! empty($data['compra_id']) && \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')) {
             $compra = \App\Models\CompraDivisa::findOrFail($data['compra_id']);
-            $linea = $compra->es_conciliado ? null : $autoMatcher->conciliarManual($compra, true, $desde, $hasta);
-            if (! $linea) {
-                $compra->es_conciliado = true;
-                $compra->save();
-            }
 
-            return $this->redirectConciliacionesConFiltros($request)
-                ->with('success', $mensaje($linea, 'Compra de divisas marcada como conciliada.'));
+            return $responder($compra, $compra->es_conciliado ? null : $autoMatcher->conciliarManual($compra, true, $desde, $hasta));
         }
 
         return back()->with('error', 'No se indicó el movimiento a conciliar.');
@@ -3307,7 +3305,8 @@ class FinanzasController extends Controller
             ->select(array_merge([
                 'id', 'banco', 'titular', 'fecha', 'descripcion', 'referencia', 'monto', 'estado', 'tipo',
                 'forzar_comision', 'flujo_caja_id', 'tesoreria_ingreso_id',
-            ], \Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'devolucion_linea_id') ? ['devolucion_linea_id'] : []))
+            ], \Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'devolucion_linea_id') ? ['devolucion_linea_id'] : [],
+                \Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'conciliacion_nota') ? ['conciliacion_nota'] : []))
             ->with(['flujoCaja', 'tesoreriaIngreso:id,tipo']);
         $this->filtrarPorBanco($lineas_query, $bk_req);
         if ($fecha_desde_filtro) {
@@ -3389,6 +3388,9 @@ class FinanzasController extends Controller
                         $motivo = ($tesoreria->tipo === 'punto_venta' ? 'Lote Punto de Venta' : 'Ingreso Bancario Tesorería');
                         $tipo_gasto = 'Ingreso de Tesorería';
                     }
+                } elseif (! empty($l->conciliacion_nota)) {
+                    $motivo = $l->conciliacion_nota;
+                    $tipo_gasto = 'Justificado';
                 }
 
                 return [

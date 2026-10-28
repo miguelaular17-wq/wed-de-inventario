@@ -109,15 +109,21 @@ class CasheaConciliacionTest extends TestCase
             ->assertSee('Abonos del banco sin pago en Cashea (1', false);
 
         $token = array_key_first(session('cashea'));
-        $this->actingAs($user)->post(route('finanzas.conciliaciones.cashea.aplicar'), ['token' => $token])
+        $this->actingAs($user)->post(route('finanzas.conciliaciones.cashea.aplicar'), ['token' => $token, 'quitar_copias' => 1])
             ->assertRedirect(route('finanzas.conciliaciones'))
-            ->assertSessionHas('success', fn ($m) => str_contains($m, '4 abonos conciliados') && str_contains($m, '4 ingresos de Tesorería') && str_contains($m, '1 para revisar') && str_contains($m, '1 sin abono'));
+            ->assertSessionHas('success', fn ($m) => str_contains($m, '4 abonos conciliados') && str_contains($m, '4 ingresos de Tesorería') && str_contains($m, '1 para revisar') && str_contains($m, '1 sin abono')
+                && str_contains($m, 'Se quitaron 1 líneas repetidas'));
+        // La copia repetida se borró (con respaldo); la línea conciliada se queda.
+        $this->assertNull(ConciliacionLinea::find($copia->id));
+        $this->assertNotNull(ConciliacionLinea::find($agrupado->id));
+        $respaldos = Storage::disk('local')->files('respaldos');
+        $this->assertCount(1, $respaldos);
+        $this->assertSame($copia->id, json_decode(Storage::disk('local')->get($respaldos[0]))[0]->id);
 
         $this->assertSame('conciliado', $exacto->fresh()->estado);
         $this->assertSame('conciliado', $agrupado->fresh()->estado);
         $this->assertSame('conciliado', $diferencia->fresh()->estado);
         $this->assertSame('conciliado', $cola->fresh()->estado);
-        $this->assertSame('pendiente', $copia->fresh()->estado);
         $this->assertSame('pendiente', $revisar->fresh()->estado);
         $this->assertSame('pendiente', $sobra->fresh()->estado);
         $this->assertSame('pendiente', $otraCuenta->fresh()->estado);

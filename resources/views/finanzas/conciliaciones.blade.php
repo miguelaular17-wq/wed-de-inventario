@@ -505,20 +505,9 @@
                             <td class="monto-cell monto-yellow">{{ number_format($row['monto_bs'], 2) }}</td>
                             <td style="text-align:center;">
                                 @if(!empty($row['flujo_id']) || !empty($row['compra_id']))
-                                <form action="{{ route('finanzas.conciliaciones.transito_conciliar') }}" method="POST" style="display:inline;" title="Marcar como conciliado" onclick="event.stopPropagation()">
-                                    @csrf
-                                    <input type="hidden" name="fecha_desde" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
-                                    <input type="hidden" name="fecha_hasta" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
-                                    <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
-                                    <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
-                                    @if(!empty($row['flujo_id']))
-                                        <input type="hidden" name="flujo_id" value="{{ $row['flujo_id'] }}">
-                                    @endif
-                                    @if(!empty($row['compra_id']))
-                                        <input type="hidden" name="compra_id" value="{{ $row['compra_id'] }}">
-                                    @endif
-                                    <button type="submit" class="btn-dash-action btn-dash-ok" onclick="event.stopPropagation(); return confirm('¿Marcar este movimiento en tránsito como conciliado?')">✓</button>
-                                </form>
+                                <button type="button" class="btn-dash-action btn-dash-menu" title="Opciones"
+                                        data-flujo="{{ $row['flujo_id'] ?? '' }}" data-compra="{{ $row['compra_id'] ?? '' }}"
+                                        onclick="abrirMenuTransito(event, this)">⋮</button>
                                 @endif
                             </td>
                         </tr>
@@ -944,6 +933,100 @@
         Devolución
         <small>Une el cargo con el abono que lo devolvió</small>
     </button>
+    <button type="button" class="mov-menu-item" onclick="abrirJustificarLinea()">
+        Justificar
+        <small>Lo concilia explicando qué es el movimiento</small>
+    </button>
+</div>
+
+{{-- JUSTIFICAR un movimiento del banco --}}
+<div id="lineaJustModal" class="modal-overlay">
+    <div class="modal-box" style="max-width:600px;">
+        <form action="{{ route('finanzas.conciliaciones.linea.justificar') }}" method="POST" onsubmit="return confirmarJustificarLinea()">
+            @csrf
+            <input type="hidden" name="fecha_desde" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
+            <input type="hidden" name="fecha_hasta" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
+            <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
+            <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
+            <input type="hidden" name="linea_id" id="ljLinea">
+            <div class="modal-head">
+                <h5 class="modal-title">Justificar movimiento del banco</h5>
+                <button type="button" class="modal-close" onclick="cerrarJustificarLinea()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="dev-paso" style="margin-top:0;">Movimiento</div>
+                <div id="ljOrigen"></div>
+                <div class="dev-paso">¿Qué es?</div>
+                <div id="ljSugerencias" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+                <textarea name="justificacion" id="ljNota" rows="3" maxlength="500" required
+                          style="width:100%;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 10px;font-family:inherit;font-size:.86rem;"
+                          placeholder="Explica qué es este movimiento y por qué no tiene registro en el sistema"></textarea>
+                <p class="dev-vacio" style="font-style:normal;">Pasa a Consolidados con esta justificación como motivo. Queda guardado quién y cuándo lo justificó.</p>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn-cancel" onclick="cerrarJustificarLinea()">Cancelar</button>
+                <button type="submit" class="btn-submit" id="ljGuardar">Conciliar con justificación</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Menú ⋮ de "En tránsito" --}}
+<div id="transitoMenu" class="mov-menu-flotante" hidden>
+    <button type="button" class="mov-menu-item" onclick="transitoAutomatico()">
+        Conciliar automáticamente
+        <small>Busca en el banco el movimiento con el mismo monto</small>
+    </button>
+    <button type="button" class="mov-menu-item" onclick="abrirTransito('justificar')">
+        Justificar
+        <small>Elige el movimiento del banco o explica qué es</small>
+    </button>
+    <button type="button" class="mov-menu-item" onclick="abrirTransito('buscar')">
+        Buscar el error
+        <small>Busca el pago por monto y referencia en todos los bancos</small>
+    </button>
+</div>
+
+<form id="form-transito-auto" action="{{ route('finanzas.conciliaciones.transito_conciliar') }}" method="POST" style="display:none;">
+    @csrf
+    <input type="hidden" name="fecha_desde" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
+    <input type="hidden" name="fecha_hasta" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
+    <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
+    <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
+    <input type="hidden" name="flujo_id" value="">
+    <input type="hidden" name="compra_id" value="">
+</form>
+
+{{-- JUSTIFICAR / BUSCAR EL ERROR (movimiento en tránsito) --}}
+<div id="transitoModal" class="modal-overlay">
+    <div class="modal-box" style="max-width:760px;">
+        <form id="transitoForm" action="{{ route('finanzas.conciliaciones.transito.justificar') }}" method="POST" onsubmit="return confirmarTransito()">
+            @csrf
+            <input type="hidden" name="fecha_desde" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
+            <input type="hidden" name="fecha_hasta" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
+            <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
+            <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
+            <input type="hidden" name="flujo_id" id="trFlujo">
+            <input type="hidden" name="compra_id" id="trCompra">
+            <input type="hidden" name="mover_cuenta" id="trMover" value="0">
+            <div class="modal-head">
+                <h5 class="modal-title" id="trTitulo">Justificar</h5>
+                <button type="button" class="modal-close" onclick="cerrarTransito()">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height:68vh;overflow-y:auto;">
+                <div class="dev-paso" style="margin-top:0;">Movimiento en tránsito</div>
+                <div id="trOrigen"><p class="dev-vacio">Cargando…</p></div>
+                <div id="trCuerpo"></div>
+                <div class="dev-paso">Justificación <span id="trNotaAyuda" style="font-weight:400;color:#64748b;font-size:.8rem;"></span></div>
+                <textarea name="justificacion" id="trNota" rows="2" maxlength="500" style="width:100%;border:1.5px solid #e2e8f0;border-radius:10px;padding:8px 10px;font-family:inherit;font-size:.86rem;"
+                          placeholder="Ej.: se pagó en efectivo, comisión incluida en otro cargo, el banco lo reflejó en octubre…"></textarea>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn-cancel" onclick="cerrarTransito()">Cancelar</button>
+                <button type="submit" class="btn-submit" id="trGuardar" disabled>Conciliar</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 {{-- DEVOLUCIÓN --}}
@@ -1078,6 +1161,163 @@ function marcarComisionDesdeMenu() {
         form.submit();
     }
 }
+
+const sugerenciasJustificacion = {
+    abono: ['Cobro Cashea', 'Pago móvil de cliente', 'Venta por transferencia', 'Traslado desde otra cuenta propia', 'Reintegro / devolución de proveedor', 'Intereses del banco'],
+    cargo: ['Traslado a otra cuenta propia', 'Pago a proveedor sin registrar', 'Impuesto / retención', 'Débito automático del banco', 'Pago de nómina'],
+};
+function abrirJustificarLinea() {
+    cerrarMenuMovimiento();
+    const lista = movimientosPendientes[menuMovimiento.cuenta] || [];
+    const mov = lista.find(m => String(m.id) === String(menuMovimiento.linea));
+    if (!mov) return;
+    document.getElementById('ljLinea').value = mov.id;
+    document.getElementById('ljOrigen').innerHTML = `<div class="dev-mov is-origen">${htmlMovimiento(mov)}</div>`;
+    document.getElementById('ljNota').value = '';
+    document.getElementById('ljGuardar').disabled = false;
+    document.getElementById('ljSugerencias').innerHTML = (sugerenciasJustificacion[mov.tipo] || []).map(s =>
+        `<button type="button" class="tipo-chip" style="border:1px solid #e2e8f0;background:#f8fafc;color:#334155;cursor:pointer;" onclick="usarSugerencia(this)">${esc(s)}</button>`).join('');
+    document.getElementById('lineaJustModal').style.display = 'flex';
+    document.getElementById('ljNota').focus();
+}
+function usarSugerencia(boton) {
+    const nota = document.getElementById('ljNota');
+    nota.value = boton.textContent + (nota.value.trim() ? ' — ' + nota.value.trim() : ': ');
+    nota.focus();
+}
+function confirmarJustificarLinea() {
+    if (document.getElementById('ljNota').value.trim().length < 5) {
+        alert('Escribe qué es el movimiento (mínimo 5 caracteres).');
+        return false;
+    }
+    document.getElementById('ljGuardar').disabled = true;
+    return true;
+}
+function cerrarJustificarLinea() { document.getElementById('lineaJustModal').style.display = 'none'; }
+
+// ── En tránsito: ⋮ conciliar automáticamente / justificar / buscar el error ──
+const urlBuscarTransito = @json(route('finanzas.conciliaciones.transito.buscar'));
+let menuTransito = { flujo: '', compra: '' };
+
+function abrirMenuTransito(ev, boton) {
+    ev.stopPropagation();
+    const menu = document.getElementById('transitoMenu');
+    const clave = boton.dataset.flujo + '|' + boton.dataset.compra;
+    const mismo = !menu.hidden && (menuTransito.flujo + '|' + menuTransito.compra) === clave;
+    menu.hidden = true;
+    if (mismo) return;
+    menuTransito = { flujo: boton.dataset.flujo, compra: boton.dataset.compra };
+    menu.hidden = false;
+    const r = boton.getBoundingClientRect();
+    menu.style.left = Math.max(8, r.right - menu.offsetWidth) + 'px';
+    menu.style.top = (r.bottom + 6 + menu.offsetHeight > window.innerHeight ? r.top - menu.offsetHeight - 6 : r.bottom + 6) + 'px';
+}
+function cerrarMenuTransito() { document.getElementById('transitoMenu').hidden = true; }
+document.addEventListener('click', e => { if (!e.target.closest('#transitoMenu')) cerrarMenuTransito(); });
+window.addEventListener('scroll', cerrarMenuTransito, true);
+
+function transitoAutomatico() {
+    cerrarMenuTransito();
+    const form = document.getElementById('form-transito-auto');
+    form.querySelector('[name=flujo_id]').value = menuTransito.flujo;
+    form.querySelector('[name=compra_id]').value = menuTransito.compra;
+    form.submit();
+}
+
+const chip = (texto, color, fondo) => `<span class="tipo-chip" style="background:${fondo};color:${color};margin:4px 4px 0 0;display:inline-block;">${texto}</span>`;
+function htmlLineaTransito(l, conRadio) {
+    const chips = (l.mismo_monto ? chip('Mismo monto', '#059669', '#ecfdf5') : '')
+        + (l.misma_ref ? chip('Misma referencia', '#2563eb', '#eff6ff') : '')
+        + (l.x100 ? chip('Monto ×100 / ÷100', '#b45309', '#fffbeb') : '')
+        + (!l.misma_cuenta ? chip('Otra cuenta', '#7c3aed', '#f5f3ff') : '');
+    const info = `<div class="dev-mov-info">
+            <strong>${esc(l.descripcion)}</strong>
+            <div class="dev-mov-meta">${esc(l.fecha)} · Ref. ${esc(l.referencia || '—')} · ${esc(l.cuenta)} · ${l.tipo === 'abono' ? 'ABONO' : 'CARGO'}</div>
+            ${l.ligado ? `<div class="dev-mov-meta" style="color:#b45309;">${esc(l.ligado)}</div>` : ''}
+            <div class="dev-mov-meta" style="color:#334155;">${esc(l.pista)}</div>
+            <div>${chips}</div>
+        </div>
+        <div class="dev-mov-monto" style="color:${l.tipo === 'abono' ? '#059669' : '#dc2626'}">Bs. ${fmtBs(l.monto)}</div>`;
+    if (!conRadio || !l.accion) return `<div class="dev-mov" style="opacity:${l.accion ? 1 : .75}">${info}</div>`;
+    const etiqueta = l.accion === 'mover' ? '<div class="dev-mov-meta" style="color:#7c3aed;font-weight:700;">Al elegirla, el egreso pasa a esta cuenta</div>' : '';
+    return `<label class="dev-mov"><input type="radio" name="linea_id" value="${l.id}" data-mover="${l.accion === 'mover' ? 1 : 0}" data-nota="${l.pide_nota ? 1 : 0}" onchange="elegirLineaTransito(this)">${info.replace('</strong>', '</strong>' + etiqueta)}</label>`;
+}
+
+async function abrirTransito(modo) {
+    cerrarMenuTransito();
+    document.getElementById('trFlujo').value = menuTransito.flujo;
+    document.getElementById('trCompra').value = menuTransito.compra;
+    document.getElementById('trMover').value = '0';
+    document.getElementById('trNota').value = '';
+    document.getElementById('trGuardar').disabled = true;
+    document.getElementById('trTitulo').textContent = modo === 'buscar' ? 'Buscar el error' : 'Justificar';
+    document.getElementById('trOrigen').innerHTML = '<p class="dev-vacio">Buscando…</p>';
+    document.getElementById('trCuerpo').innerHTML = '';
+    document.getElementById('trNotaAyuda').textContent = '';
+    document.getElementById('transitoModal').style.display = 'flex';
+
+    let d;
+    try {
+        const params = new URLSearchParams({ flujo_id: menuTransito.flujo, compra_id: menuTransito.compra });
+        const r = await fetch(urlBuscarTransito + '?' + params, { headers: { 'Accept': 'application/json' } });
+        d = await r.json();
+        if (!r.ok) throw new Error(d.message || '');
+    } catch (err) {
+        document.getElementById('trOrigen').innerHTML = `<p class="dev-vacio" style="color:#b91c1c;">No se pudo buscar. ${esc(err.message)}</p>`;
+        return;
+    }
+    const m = d.movimiento;
+    document.getElementById('trOrigen').innerHTML = `<div class="dev-mov is-origen"><div class="dev-mov-info"><strong>${esc(m.concepto)}</strong>
+        <div class="dev-mov-meta">${esc(m.fecha)} · Ref. ${esc(m.referencia || '—')} · ${esc(m.cuenta)}</div></div>
+        <div class="dev-mov-monto" style="color:#b45309;">Bs. ${fmtBs(m.monto)}</div></div>`;
+
+    let html = '';
+    if (modo === 'justificar') {
+        html += '<div class="dev-paso">¿Con qué movimiento del banco se pagó? (cargos pendientes de esta cuenta, ±30 días)</div>';
+        html += d.pendientes_cuenta.length
+            ? d.pendientes_cuenta.map(l => htmlLineaTransito(l, true)).join('')
+            : '<p class="dev-vacio">No hay cargos pendientes en esta cuenta cerca de esa fecha.</p>';
+        html += `<label class="dev-mov"><input type="radio" name="linea_id" value="" data-mover="0" data-nota="1" onchange="elegirLineaTransito(this)">
+            <div class="dev-mov-info"><strong>No aparece en el banco</strong><div class="dev-mov-meta">Se da por conciliado solo con la justificación que escribas abajo.</div></div></label>`;
+    } else {
+        html += '<div class="dev-paso">Dónde puede estar el pago (todos los bancos, por monto y referencia)</div>';
+        html += d.resultados.length
+            ? d.resultados.map(l => htmlLineaTransito(l, true)).join('')
+            : '<p class="dev-vacio">No hay ningún movimiento en los extractos con ese monto ni esa referencia. Puede que el extracto de ese período aún no esté cargado, o que el pago no haya salido.</p>';
+        if (d.duplicados.length) {
+            html += '<div class="dev-paso">Otros egresos registrados con la misma referencia o el mismo monto (posible duplicado)</div>';
+            html += d.duplicados.map(e => `<div class="dev-mov"><div class="dev-mov-info"><strong>#${e.id} · ${esc(e.motivo)}</strong>
+                <div class="dev-mov-meta">${esc(e.fecha)} · Ref. ${esc(e.referencia || '—')} · ${esc(e.cuenta)}</div>
+                <div class="dev-mov-meta" style="color:${e.conciliado ? '#059669' : '#b45309'};">${e.conciliado ? 'Conciliado' : 'En tránsito'}</div></div>
+                <div class="dev-mov-monto" style="color:#dc2626;">Bs. ${fmtBs(e.monto)}</div></div>`).join('');
+        }
+    }
+    document.getElementById('trCuerpo').innerHTML = html;
+    document.getElementById('trNotaAyuda').textContent = modo === 'buscar' ? '(opcional; obligatoria si el monto no coincide)' : '';
+}
+
+function elegirLineaTransito(input) {
+    document.getElementById('trMover').value = input.dataset.mover;
+    document.getElementById('trGuardar').disabled = false;
+    document.getElementById('trNotaAyuda').textContent = input.dataset.nota === '1'
+        ? (input.value ? '(obligatoria: el monto del banco no coincide)' : '(obligatoria: explica qué es)')
+        : '(opcional)';
+}
+
+function confirmarTransito() {
+    const elegido = document.querySelector('#trCuerpo input[name="linea_id"]:checked');
+    if (!elegido) return false;
+    const nota = document.getElementById('trNota').value.trim();
+    if (elegido.dataset.nota === '1' && nota.length < 5) {
+        alert('Escribe la justificación (mínimo 5 caracteres).');
+        document.getElementById('trNota').focus();
+        return false;
+    }
+    if (elegido.dataset.mover === '1' && !confirm('El egreso se cambiará a la cuenta de ese movimiento y quedará conciliado. ¿Continuar?')) return false;
+    document.getElementById('trGuardar').disabled = true;
+    return true;
+}
+function cerrarTransito() { document.getElementById('transitoModal').style.display = 'none'; }
 
 function abrirDevolucionDesdeMenu() {
     cerrarMenuMovimiento();
