@@ -142,7 +142,6 @@ class PagosManualesVerificador
     private function clasificar(array $p, array $porMonto, array &$usadas, Collection $conPago): array
     {
         $cent = (int) round($p['monto'] * 100);
-        $libre = fn ($l) => ! isset($usadas[$this->clave($l)]) && $this->pendiente($l, $conPago);
         $refOk = fn ($l) => $this->refCoincide($l, $p['ref']);
         $dias = fn ($l) => (int) round((strtotime($l->fecha->format('Y-m-d')) - strtotime($p['fecha'])) / 86400);
         $enVentana = fn ($l, int $antes = self::DIAS_ANTES, int $despues = self::DIAS_DESPUES) => $dias($l) >= -$antes && $dias($l) <= $despues;
@@ -150,6 +149,10 @@ class PagosManualesVerificador
 
         $mismoMonto = $cent > 0 ? ($porMonto[$cent] ?? []) : [];
         $conRef = array_values(array_filter($mismoMonto, fn ($l) => $refOk($l) && $enVentana($l, 7, 10)));
+        // Extracto cargado dos veces: la copia pendiente de un movimiento ya conciliado no se vuelve a usar.
+        $copia = fn ($l) => $l->banco . '|' . $l->titular . '|' . $l->fecha->format('Y-m-d') . '|' . $l->referencia . '|' . $l->descripcion;
+        $tomadas = array_flip(array_map($copia, array_filter($conRef, fn ($l) => ! $this->pendiente($l, $conPago))));
+        $libre = fn ($l) => ! isset($usadas[$this->clave($l)]) && $this->pendiente($l, $conPago) && ! isset($tomadas[$copia($l)]);
 
         $exacta = $cerca(array_filter($conRef, $libre))[0] ?? null;
         if ($exacta) {

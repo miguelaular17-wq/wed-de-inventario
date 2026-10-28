@@ -148,6 +148,9 @@
             <button type="button" class="btn-upload" style="background:linear-gradient(135deg,#b45309,#d97706);" onclick="document.getElementById('pagosManualesModal').style.display='flex'">
                 Pagos manuales (Cloud)
             </button>
+            <button type="button" class="btn-upload" style="background:linear-gradient(135deg,#be185d,#db2777);" onclick="document.getElementById('casheaModal').style.display='flex'">
+                Pagos Cashea
+            </button>
 
             <form action="{{ route('finanzas.conciliaciones') }}" method="GET" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap;">
                 <input type="date" name="fecha_desde" class="select-banco" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}" title="Fecha Desde" required style="min-width: 130px;">
@@ -550,7 +553,12 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($d['sin_registrar'] as $row)
+                        @php
+                            // Cuentas con miles de pagos (Cashea): pintar todo tumba la página. Totales y contador usan todos.
+                            $limiteMovimientosBanco ??= 600;
+                            $filasBancoVisibles = $d['sin_registrar']->take($limiteMovimientosBanco);
+                        @endphp
+                        @forelse($filasBancoVisibles as $row)
                         <tr>
                             <td>{{ ($row['fecha'] instanceof \DateTimeInterface ? $row['fecha']->format('d/m/Y') : substr((string) $row['fecha'], 8, 2).'/'.substr((string) $row['fecha'], 5, 2).'/'.substr((string) $row['fecha'], 0, 4)) }}</td>
                             <td><span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span></td>
@@ -566,14 +574,6 @@
                                 {{ $esEgreso ? '−' : '+' }}Bs. {{ number_format(abs((float) $row['monto']), 2) }}
                             </td>
                             <td style="text-align:center;">
-                                <form id="form-comision-{{ $row['id'] }}" action="{{ route('finanzas.conciliaciones.marcar_comision') }}" method="POST" style="display:none;">
-                                    @csrf
-                                    <input type="hidden" name="fecha_desde" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
-                                    <input type="hidden" name="fecha_hasta" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
-                                    <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
-                                    <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
-                                    <input type="hidden" name="linea_id" value="{{ $row['id'] }}">
-                                </form>
                                 <button type="button" class="btn-dash-action btn-dash-menu" title="Opciones"
                                         data-linea="{{ $row['id'] }}" data-cuenta="{{ $bk_key }}"
                                         onclick="abrirMenuMovimiento(event, this)">⋮</button>
@@ -582,6 +582,12 @@
                         @empty
                         <tr class="empty-row"><td colspan="5">Sin movimientos detectados</td></tr>
                         @endforelse
+                        @if($d['sin_registrar']->count() > $filasBancoVisibles->count())
+                        <tr class="empty-row"><td colspan="5" style="color:#b45309;">
+                            Se muestran {{ number_format($filasBancoVisibles->count()) }} de {{ number_format($d['sin_registrar']->count()) }} movimientos (los totales sí incluyen todos).
+                            Acorta el rango de fechas para ver el resto, o concilia en bloque con «Pagos Cashea», «Pagos manuales» o «Lotes punto de venta».
+                        </td></tr>
+                        @endif
                     </tbody>
                 </table>
                 @if($d['sin_registrar']->count() > 0)
@@ -780,6 +786,40 @@
     </div>
 </div>
 
+{{-- EXPORT DE CASHEA (documento adicional) --}}
+<div id="casheaModal" class="modal-overlay">
+    <div class="modal-box">
+        <form action="{{ route('finanzas.conciliaciones.cashea.preview') }}" method="POST" enctype="multipart/form-data"
+              onsubmit="const b = this.querySelector('.btn-submit'); b.disabled = true; b.innerText = 'Cruzando con el banco…';">
+            @csrf
+            <div class="modal-head">
+                <h5 class="modal-title">Pagos Cashea</h5>
+                <button type="button" class="modal-close" onclick="document.getElementById('casheaModal').style.display='none'">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="file-hint" style="margin-top:0;">
+                    Sube el export de Cashea (Fecha, Referencia, Debito bs, Usd, Tipo pago, Orden…). Cada pago móvil se busca por
+                    <strong>referencia y monto</strong> en los abonos de las cuentas de Cashea (BNC · L.S. CASHEA). Las cuotas pagadas con
+                    un mismo pago móvil se suman. Primero verás el resultado; no se guarda nada hasta que confirmes.
+                </p>
+                <label class="form-label">Export de Cashea:</label>
+                <div class="file-wrap">
+                    <label class="file-label">
+                        Elegir archivo
+                        <input type="file" name="archivo" accept=".xlsx,.xls,.csv" required style="display:none;"
+                               onchange="document.getElementById('casheaFileName').value = this.files[0] ? this.files[0].name : '';">
+                    </label>
+                    <input type="text" id="casheaFileName" placeholder="Ningún archivo seleccionado" readonly class="file-name">
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn-cancel" onclick="document.getElementById('casheaModal').style.display='none'">Cancelar</button>
+                <button type="submit" class="btn-submit">Verificar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 {{-- PAGOS MANUALES DE CLOUD (documento adicional) --}}
 <div id="pagosManualesModal" class="modal-overlay">
     <div class="modal-box">
@@ -884,6 +924,16 @@
 })();
 </script>
 
+{{-- Un solo formulario para «pasar a comisiones»: el menú pone el id del movimiento. --}}
+<form id="form-comision" action="{{ route('finanzas.conciliaciones.marcar_comision') }}" method="POST" style="display:none;">
+    @csrf
+    <input type="hidden" name="fecha_desde" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
+    <input type="hidden" name="fecha_hasta" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
+    <input type="hidden" name="banco_filtro" value="{{ $filtrosConciliacion['banco_filtro'] ?? '' }}">
+    <input type="hidden" name="titular_filtro" value="{{ $filtrosConciliacion['titular_filtro'] ?? '' }}">
+    <input type="hidden" name="linea_id" value="">
+</form>
+
 {{-- Menú ⋮ de "Movimientos en el banco" (uno solo, flotante: la tabla tiene scroll y lo recortaría) --}}
 <div id="movMenu" class="mov-menu-flotante" hidden>
     <button type="button" class="mov-menu-item" onclick="marcarComisionDesdeMenu()">
@@ -973,7 +1023,11 @@
 const titularesPorBanco = @json($titularesPorBanco);
 
 @php
-    $movimientosPendientesJs = collect($data_por_banco ?? [])->map(fn ($d) => $d['sin_registrar']->map(fn ($r) => [
+    // Solo lo que se ve en la tabla y todos los cargos (contraparte de una devolución de abono): con miles de abonos el JSON no cabe.
+    $limiteMovimientosBanco ??= 600;
+    $movimientosPendientesJs = collect($data_por_banco ?? [])->map(fn ($d) => $d['sin_registrar']->take($limiteMovimientosBanco)
+        ->concat($d['sin_registrar']->slice($limiteMovimientosBanco)->filter(fn ($r) => ($r['tipo'] ?? 'cargo') !== 'abono'))
+        ->map(fn ($r) => [
         'id' => $r['id'],
         'fecha' => $r['fecha'] instanceof \DateTimeInterface ? $r['fecha']->format('d/m/Y') : \Carbon\Carbon::parse($r['fecha'])->format('d/m/Y'),
         'referencia' => $r['referencia'],
@@ -1019,7 +1073,9 @@ window.addEventListener('scroll', cerrarMenuMovimiento, true);
 function marcarComisionDesdeMenu() {
     cerrarMenuMovimiento();
     if (confirm('¿Pasar este movimiento a Comisiones bancarias?')) {
-        document.getElementById('form-comision-' + menuMovimiento.linea).submit();
+        const form = document.getElementById('form-comision');
+        form.querySelector('[name=linea_id]').value = menuMovimiento.linea;
+        form.submit();
     }
 }
 

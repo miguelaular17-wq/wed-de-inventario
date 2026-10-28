@@ -316,6 +316,10 @@ class ExtractoParser
             return $this->leerTablaHtml($path);
         }
 
+        if (in_array($ext, ['xlsx', 'xls'], true)) {
+            $this->memoriaParaExcel($path);
+        }
+
         if ($ext === 'xlsx') {
             $xlsx = SimpleXLSX::parse($path);
             if (! $xlsx) {
@@ -336,6 +340,40 @@ class ExtractoParser
         }
 
         return $this->leerCsv($path, $csvSemicolon);
+    }
+
+    /**
+     * SimpleXLS / SimpleXLSX cargan el libro entero en memoria: un .xls de 7 MB del BNC (≈ 23.000 filas)
+     * necesita ~250 MB. Se sube el límite solo para esta petición, nunca se baja.
+     */
+    private function memoriaParaExcel(string $path): void
+    {
+        $tamano = (int) @filesize($path);
+        if ($tamano < 1024 * 1024) {
+            return;
+        }
+        $necesario = max(512, min(2048, (int) ceil($tamano / 1048576) * 80 + 256)) * 1048576;
+        $actual = $this->bytes((string) ini_get('memory_limit'));
+        if ($actual !== -1 && $actual < $necesario) {
+            @ini_set('memory_limit', (string) intdiv($necesario, 1048576) . 'M');
+        }
+    }
+
+    /** "128M" → bytes; -1 = sin límite. */
+    private function bytes(string $valor): int
+    {
+        $valor = trim($valor);
+        if ($valor === '' || $valor === '-1') {
+            return -1;
+        }
+        $n = (int) $valor;
+
+        return match (strtolower(substr($valor, -1))) {
+            'g' => $n * 1073741824,
+            'm' => $n * 1048576,
+            'k' => $n * 1024,
+            default => $n,
+        };
     }
 
     private function esTablaHtml(string $path): bool

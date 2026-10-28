@@ -19,6 +19,20 @@ class FinanzasConfiguracionTest extends TestCase
         parent::setUp();
         $this->setUpNominaSchema();
         (require database_path('migrations/2026_10_27_160000_create_finanzas_catalogos_table.php'))->up();
+        (require database_path('migrations/2026_10_27_180000_add_reporte_to_finanzas_catalogos.php'))->up();
+        if (! \Illuminate\Support\Facades\Schema::hasTable('cuentas_bancarias')) {
+            \Illuminate\Support\Facades\Schema::create('cuentas_bancarias', function (\Illuminate\Database\Schema\Blueprint $t) {
+                $t->id();
+                $t->string('banco');
+                $t->string('titular');
+                $t->string('categoria_reporte')->nullable();
+                $t->boolean('mostrar_en_principal')->default(false);
+                $t->string('color_tc')->nullable();
+                $t->integer('orden')->default(0);
+                $t->decimal('reporte_bs', 18, 2)->default(0);
+                $t->timestamps();
+            });
+        }
         $this->user = User::create(['name' => 'Finanzas', 'email' => 'fin-conf@test.local', 'password' => 'password123', 'role' => User::ROLE_FINANZAS]);
     }
 
@@ -42,6 +56,41 @@ class FinanzasConfiguracionTest extends TestCase
             'tipo' => 'cuenta', 'banco' => 'banesco', 'nombre' => 'grupo  jrz', 'categoria' => FinanzasCatalogo::CATEGORIAS_CUENTA[0],
         ])->assertSessionHas('error');
         $this->assertSame(0, FinanzasCatalogo::query()->count());
+    }
+
+    public function test_cuenta_registrada_sale_en_disponibilidad_y_reporte_y_se_puede_quitar(): void
+    {
+        \App\Models\CuentaBancaria::query()->create(['banco' => 'BANESCO', 'titular' => 'GRUPO JRZ', 'categoria_reporte' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'mostrar_en_principal' => true, 'orden' => 17]);
+
+        $this->actingAs($this->user)->post(route('finanzas.configuracion.store'), [
+            'tipo' => 'cuenta', 'banco' => 'Banesco', 'nombre' => 'Tecno House', 'categoria' => FinanzasCatalogo::CATEGORIAS_CUENTA[0],
+            'reporte_categoria' => 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', 'color_tc' => '#00b050',
+        ])->assertSessionHas('success', fn ($m) => str_contains($m, 'ya sale en Flujo de Caja'));
+
+        $cuenta = \App\Models\CuentaBancaria::query()->where('titular', 'TECNO HOUSE')->sole();
+        $this->assertSame(['BANESCO', 'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO', '#00b050', 18], [$cuenta->banco, $cuenta->categoria_reporte, $cuenta->color_tc, (int) $cuenta->orden]);
+        $this->assertTrue((bool) $cuenta->mostrar_en_principal);
+        $catalogo = FinanzasCatalogo::query()->where('nombre', 'Tecno House')->sole();
+        $this->assertSame($cuenta->id, (int) $catalogo->cuenta_bancaria_id);
+
+        // A billeteras: sale en el reporte, no en Disponibilidad (solo banca nacional).
+        $this->actingAs($this->user)->post(route('finanzas.configuracion.reporte', $catalogo), ['reporte_categoria' => 'BANCA INTERNACIONAL / BILLETERAS']);
+        $cuenta->refresh();
+        $this->assertSame('BANCA INTERNACIONAL / BILLETERAS', $cuenta->categoria_reporte);
+        $this->assertFalse((bool) $cuenta->mostrar_en_principal);
+
+        // Desactivada: deja de salir (sin borrar la fila ni sus saldos); al reactivar vuelve.
+        $cuenta->update(['reporte_bs' => 1500]);
+        $this->actingAs($this->user)->post(route('finanzas.configuracion.toggle', $catalogo));
+        $this->assertSame(FinanzasCatalogo::SECCION_OCULTA, $cuenta->fresh()->categoria_reporte);
+        $this->actingAs($this->user)->post(route('finanzas.configuracion.toggle', $catalogo));
+        $this->assertSame('BANCA INTERNACIONAL / BILLETERAS', $cuenta->fresh()->categoria_reporte);
+        $this->assertEquals(1500, (float) $cuenta->fresh()->reporte_bs);
+        $this->assertSame(2, \App\Models\CuentaBancaria::query()->count());
+
+        // «No mostrar».
+        $this->actingAs($this->user)->post(route('finanzas.configuracion.reporte', $catalogo), ['reporte_categoria' => '']);
+        $this->assertSame(FinanzasCatalogo::SECCION_OCULTA, $cuenta->fresh()->categoria_reporte);
     }
 
     public function test_ajuste_repara_la_tabla_creada_con_la_primera_version(): void

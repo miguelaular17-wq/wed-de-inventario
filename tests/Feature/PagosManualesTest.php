@@ -83,6 +83,8 @@ class PagosManualesTest extends TestCase
         $banesco = $this->linea('BANESCO', 'GRUPO JRZ', '2026-08-03', '965084918', 6418);
         $venezuela = $this->linea('VENEZUELA', 'GRUPO JRZ', '2026-08-01', '62137791586', 1189.46);
         $otra = $this->linea('BNC', 'LNACEH', '2026-08-01', '62137791586', 1189.46, ['estado' => 'conciliado', 'tesoreria_ingreso_id' => 99]);
+        // Copia del abono de Banesco (extracto cargado dos veces): al resubir no se concilia la copia.
+        $copiaBanesco = $this->linea('BANESCO', 'GRUPO JRZ', '2026-08-03', '965084918', 6418);
         $x100 = $this->linea('BANESCO', 'LNACEH', '2026-08-07', '33767725', 214050.56);
         $user = User::create(['name' => 'Contab', 'email' => 'contab-pm@test.local', 'password' => 'password123', 'role' => User::ROLE_CONTABILIDAD]);
 
@@ -117,5 +119,6 @@ class PagosManualesTest extends TestCase
             ->assertSee('Ya conciliados (2)')
             ->assertDontSee('Confirmar y conciliar');
         $this->assertSame(2, TesoreriaIngreso::query()->count());
+        $this->assertSame('pendiente', $copiaBanesco->fresh()->estado);
     }
 }

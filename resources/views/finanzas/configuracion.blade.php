@@ -50,11 +50,23 @@
                         <input type="text" name="banco" required list="bancosSistema" maxlength="120" placeholder="Banco (ej. Banesco, BNC, Binance)" value="{{ old('tipo') === $tipo ? old('banco') : '' }}" style="{{ $campo }}">
                         <datalist id="bancosSistema">@foreach($bancos as $b)<option value="{{ $b }}">@endforeach</datalist>
                         <input type="text" name="nombre" required maxlength="200" placeholder="Empresa / titular (ej. Tecno House)" value="{{ old('tipo') === $tipo ? old('nombre') : '' }}" style="{{ $campo }}">
-                        <select name="categoria" required style="{{ $campo }}">
+                        <label style="font-size:.78rem; color:#475569; font-weight:600;">Grupo en «Banco y Titular» (egresos)</label>
+                        <select name="categoria" required style="{{ $campo }}"
+                                onchange="const s = this.form.querySelector('[name=reporte_categoria]'); const m = @js($seccionPorGrupo); s.value = m[this.value] ?? '';">
                             @foreach($categorias as $cat)
                                 <option value="{{ $cat }}" @selected(old('categoria') === $cat)>{{ $cat }}</option>
                             @endforeach
                         </select>
+                        <label style="font-size:.78rem; color:#475569; font-weight:600;">Mostrar en Flujo de Caja (Disponibilidad) y en el reporte</label>
+                        <div style="display:grid; grid-template-columns: 1fr 52px; gap:8px;">
+                            <select name="reporte_categoria" style="{{ $campo }}">
+                                <option value="">No mostrar</option>
+                                @foreach($secciones as $sec => $etiqueta)
+                                    <option value="{{ $sec }}" @selected(old('reporte_categoria', $seccionPorGrupo[old('categoria', $categorias[0])] ?? '') === $sec)>{{ $etiqueta }}</option>
+                                @endforeach
+                            </select>
+                            <input type="color" name="color_tc" value="{{ old('color_tc', '#f4b183') }}" title="Color de la columna TC en Disponibilidad" style="width:100%; height:36px; padding:2px; border:1px solid #cbd5e1; border-radius:6px;">
+                        </div>
                     @endif
                     <button type="submit" class="btn primary" style="justify-self:start; padding:7px 16px;">Agregar</button>
                 </form>
@@ -74,6 +86,21 @@
                             @if($tipo === \App\Models\FinanzasCatalogo::CUENTA)
                                 <strong>{{ $item->banco }}</strong> · {{ $item->nombre }}
                                 <div class="muted" style="font-size:.72rem;">{{ $item->categoria }}</div>
+                                @if($item->reporte_categoria)
+                                    <div style="font-size:.72rem; color:#0f766e; font-weight:600;">📊 {{ $secciones[$item->reporte_categoria] ?? $item->reporte_categoria }}</div>
+                                @endif
+                                @if($puedeEditar && $item->activo && $item->origen === 'manual')
+                                    <form method="POST" action="{{ route('finanzas.configuracion.reporte', $item) }}" style="display:flex; gap:4px; margin-top:4px;">
+                                        @csrf
+                                        <select name="reporte_categoria" style="font-size:.74rem; padding:2px 4px; border:1px solid #cbd5e1; border-radius:4px; max-width:210px;">
+                                            <option value="">No sale en Flujo de Caja ni en el reporte</option>
+                                            @foreach($secciones as $sec => $etiqueta)
+                                                <option value="{{ $sec }}" @selected($item->reporte_categoria === $sec)>{{ $etiqueta }}</option>
+                                            @endforeach
+                                        </select>
+                                        <button type="submit" style="font-size:.72rem; padding:2px 6px; border:1px solid #cbd5e1; border-radius:4px; background:#f8fafc; cursor:pointer;">Guardar</button>
+                                    </form>
+                                @endif
                             @else
                                 {{ $item->nombre }}
                             @endif

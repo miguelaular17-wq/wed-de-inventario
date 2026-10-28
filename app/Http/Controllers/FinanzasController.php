@@ -1477,6 +1477,8 @@ class FinanzasController extends Controller
     }
 
     public function conciliaciones(Request $request) {
+        // Cuentas como BNC · L.S. CASHEA traen ~25.000 movimientos al mes.
+        @ini_set('memory_limit', '512M');
         $filterKeys = ['fecha_desde', 'fecha_hasta', 'banco_filtro', 'titular_filtro'];
 
         $vieneDelFiltro = $request->hasAny($filterKeys);
