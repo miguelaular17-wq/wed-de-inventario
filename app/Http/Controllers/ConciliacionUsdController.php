@@ -45,11 +45,12 @@ class ConciliacionUsdController extends Controller
         $request->validate([
             'cuenta' => ['required', 'string', 'max:220', 'regex:/\|/'],
             'archivos' => ['required_without:archivo', 'array', 'max:6'],
-            'archivos.*' => ['file', 'mimes:xlsx,xls,csv,txt,pdf', 'max:20480'],
-            'archivo' => ['required_without:archivos', 'file', 'mimes:xlsx,xls,csv,txt,pdf', 'max:20480'],
+            // extensions y no mimes: un .xlsx generado (Binance) puede llegar detectado como zip.
+            'archivos.*' => ['file', 'extensions:xlsx,xls,csv,txt,pdf', 'max:20480'],
+            'archivo' => ['required_without:archivos', 'file', 'extensions:xlsx,xls,csv,txt,pdf', 'max:20480'],
         ], [
-            'archivos.*.mimes' => 'Los documentos deben ser Excel (.xlsx / .xls), CSV o el estado de cuenta en PDF.',
-            'archivo.mimes' => 'El extracto debe ser Excel (.xlsx / .xls) o CSV.',
+            'archivos.*.extensions' => 'Los documentos deben ser Excel (.xlsx / .xls), CSV o el estado de cuenta en PDF.',
+            'archivo.extensions' => 'El extracto debe ser Excel (.xlsx / .xls) o CSV.',
             'archivos.*.uploaded' => 'Un archivo no llegó al servidor (límite: ' . ini_get('upload_max_filesize') . ').',
             'archivo.uploaded' => 'El archivo no llegó al servidor (límite: ' . ini_get('upload_max_filesize') . ').',
             'archivos.required_without' => 'Elige el extracto o el reporte de pagos.',
@@ -276,9 +277,9 @@ class ConciliacionUsdController extends Controller
     {
         $data = $request->validate([
             'cuenta' => ['required', 'string', 'max:220', 'regex:/\|/'],
-            'archivo' => ['required', 'file', 'mimes:xlsx,xls,csv,txt', 'max:20480'],
+            'archivo' => ['required', 'file', 'extensions:xlsx,xls,csv,txt', 'max:20480'],
         ], [
-            'archivo.mimes' => 'El reporte de pagos debe ser Excel (.xlsx / .xls) o CSV.',
+            'archivo.extensions' => 'El reporte de pagos debe ser Excel (.xlsx / .xls) o CSV.',
             'archivo.uploaded' => 'El archivo no llegó al servidor (límite: ' . ini_get('upload_max_filesize') . ').',
         ]);
         [$banco, $titular] = explode('|', $data['cuenta'], 2);
