@@ -48,7 +48,18 @@ class ConciliacionDivisasService
     public function __construct(
         private ExtractoParser $parser,
         private EstadoCuentaPdfParser $pdf,
+        private ReportePagosPdfParser $reportePdf,
     ) {}
+
+    /** PDF del reporte de pagos recibidos de Cloud (no un estado de cuenta del banco). */
+    public function esReportePagosPdf(string $path): bool
+    {
+        try {
+            return $this->reportePdf->esReporte($this->reportePdf->texto($path));
+        } catch (\Throwable) {
+            return false;
+        }
+    }
 
     /**
      * Cuentas en divisas: las que tienen egresos en flujo de caja o movimientos ya cargados.
@@ -172,7 +183,7 @@ class ConciliacionDivisasService
     {
         $r = $this->pdf->leer($path);
         if ($r === null) {
-            throw ValidationException::withMessages(['archivos' => "«{$archivo}» no es un estado de cuenta en PDF que reconozca (Citizens o Amerant)."]);
+            throw ValidationException::withMessages(['archivos' => "«{$archivo}» no es un PDF que reconozca: estado de cuenta de Citizens o Amerant, o el reporte de pagos de Cloud."]);
         }
         $clave = $this->claveBanco($banco);
         if ($clave !== null && $clave !== $this->claveBanco($r['banco'])) {
@@ -233,13 +244,31 @@ class ConciliacionDivisasService
     private function claveBanco(string $banco): ?string
     {
         $b = mb_strtolower($banco);
-        foreach (['citizens', 'amerant', 'wells', 'regions', 'truist'] as $k) {
+        foreach (['citizens', 'amerant', 'wells', 'regions', 'truist', 'panam', 'binance'] as $k) {
             if (str_contains($b, $k)) {
                 return $k;
             }
         }
 
         return preg_match('/\bciti(bank)?\b/', $b) ? 'citi' : null;
+    }
+
+    /**
+     * Columna BANCO del reporte de Cloud: en Excel es el correo del aviso del banco; en el PDF es el nombre
+     * ("amerant", "wellsfargo", "mercantilpanama", "efectivodivisa"…). Un nombre que no es de un banco de
+     * Zelle conocido cuenta como otra cuenta, para no mezclar sus cobros con los de la cuenta elegida.
+     */
+    private function bancoDelAvisoONombre(?string $valor): ?string
+    {
+        $v = mb_strtolower(trim((string) $valor));
+        if ($v === '' || str_contains($v, '@')) {
+            return $this->bancoDelAviso($v);
+        }
+        if (str_contains($v, 'wells')) {
+            return 'wells';
+        }
+
+        return $this->claveBanco($v) ?? $v;
     }
 
     /** Banco al que llegó el aviso de pago, por el correo que lo notificó (null si no es un correo conocido). */
@@ -422,7 +451,12 @@ class ConciliacionDivisasService
         $leidas = 0;
         $otrasCuentas = [];
         $claveCuenta = $this->claveBanco($banco);
-        foreach ($this->parser->filasCrudas($path, $ext) as $i => $fila) {
+        $pdf = null;
+        if (strtolower($ext) === 'pdf') {
+            $pdf = $this->reportePdf->leer($this->reportePdf->texto($path));
+            $rechazadas = $pdf['rechazadas'];
+        }
+        foreach ($pdf['filas'] ?? $this->parser->filasCrudas($path, $ext) as $i => $fila) {
             $fila = array_map(fn ($v) => $this->texto($v, true), (array) $fila);
             if ($cols === null) {
                 $cols = $this->columnasPagos($fila);
@@ -431,7 +465,7 @@ class ConciliacionDivisasService
             if (implode('', $fila) === '') {
                 continue;
             }
-            $aviso = isset($cols['aviso']) ? $this->bancoDelAviso($fila[$cols['aviso']] ?? '') : null;
+            $aviso = isset($cols['aviso']) ? $this->bancoDelAvisoONombre($fila[$cols['aviso']] ?? '') : null;
             if ($aviso !== null && $claveCuenta !== null && $aviso !== $claveCuenta) {
                 $otrasCuentas[$aviso] = ($otrasCuentas[$aviso] ?? 0) + 1;
 
@@ -488,6 +522,7 @@ class ConciliacionDivisasService
             'leidas' => $leidas, 'nuevas' => $nuevas, 'duplicadas' => count($filas) - $nuevas, 'rechazadas' => $rechazadas,
             'desde' => $fechas ? min($fechas) : null, 'hasta' => $fechas ? max($fechas) : null,
             'otras_cuentas' => $otrasCuentas,
+            'pdf' => $pdf ? ['filas' => count($pdf['filas']) - 1, 'total' => $pdf['total_reporte'], 'cuadra' => $pdf['cuadra']] : null,
         ];
     }
 

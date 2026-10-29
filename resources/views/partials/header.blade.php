@@ -106,14 +106,21 @@
     }
 
     $incentivoItems = [];
-    if ($u->canAccess('incentivos')) {
+    $verTodosIncentivos = $u->canAccess('incentivos');
+    $modulosIncentivo = array_filter(
+        config('incentivos.modulos', []),
+        fn (array $m) => $verTodosIncentivos || (! empty($m['permiso']) && $u->canAccess($m['permiso']))
+    );
+    if ($modulosIncentivo) {
         $incPeriodo = session('incentivos.periodo', []);
         $incQuery = array_filter([
             'desde' => $incPeriodo['desde'] ?? null,
             'hasta' => $incPeriodo['hasta'] ?? null,
         ]);
-        $incentivoItems[] = $link('Efectividad de caja', route('gerencial.cajas', $incQuery), request()->routeIs('gerencial.cajas'));
-        foreach (config('incentivos.modulos', []) as $codigo => $moduloIncentivo) {
+        if ($verTodosIncentivos) {
+            $incentivoItems[] = $link('Efectividad de caja', route('gerencial.cajas', $incQuery), request()->routeIs('gerencial.cajas'));
+        }
+        foreach ($modulosIncentivo as $codigo => $moduloIncentivo) {
             $incentivoItems[] = $link(
                 $moduloIncentivo['titulo'],
                 route('incentivos.show', array_merge(['modulo' => $codigo], $incQuery)),

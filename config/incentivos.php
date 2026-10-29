@@ -21,6 +21,17 @@ return [
                 ['nombre' => 'Producto meta', 'peso' => '30%', 'mide' => '100% si cumplió el producto que se le asignó.'],
             ],
         ],
+        'call_center' => [
+            'cargos' => ['call center'],
+            'titulo' => 'Call center',
+            // Quien tenga este permiso ve solo este módulo; con "incentivos" se ven todos.
+            'permiso' => 'incentivos.call_center',
+            'resumen' => 'El 100% es lo que vendió todo el equipo de call center en el mes. La nota es 70% efectividad y 30% producto meta.',
+            'indicadores' => [
+                ['nombre' => 'Efectividad en el equipo', 'peso' => '70%', 'mide' => 'Promedio de la parte de cada trabajador en la venta, los productos y los clientes de todo el call center en el mes.'],
+                ['nombre' => 'Producto meta', 'peso' => '30%', 'mide' => '100% si cumplió el producto que se le asignó.'],
+            ],
+        ],
         'arreglos' => [
             'cargos' => ['arreglos', 'servicio tecnico'],
             'titulo' => 'Arreglo',

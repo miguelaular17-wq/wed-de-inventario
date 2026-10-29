@@ -114,6 +114,7 @@ class CatalogoController extends Controller
             'categorias' => $categorias,
             'subcategorias' => $subcategorias,
             'subcategoriasElegidas' => $this->subcategoriasElegidas($request),
+            'sedesExcluidas' => $this->sedesExcluidas($request),
             'catSubcatMap' => $catSubcatMap,
             'sedes' => $sedes,
             'modoCliente' => $modoCliente,
@@ -139,20 +140,8 @@ class CatalogoController extends Controller
                 $productos = $query->get();
             }
 
-            $sedeFiltro = $request->sede && $request->sede !== 'todas' && ! $this->sedeOcultaEnCatalogo((string) $request->sede)
-                ? $request->sede
-                : 'Global (Todas)';
-            $catFiltro = $request->categoria && $request->categoria !== 'todas' ? $request->categoria : 'Todas';
-            $subcatFiltro = implode(', ', $this->subcategoriasElegidas($request)) ?: 'Todas';
-
-            $filtrosActivos = [
-                'Sede' => $sedeFiltro,
-                'Categoría' => $catFiltro,
-                'Subcategoría' => $subcatFiltro,
-            ];
-
             $pdf = Pdf::setOptions(['isRemoteEnabled' => true])
-                ->loadView('catalogo.pdf', compact('productos', 'filtrosActivos'));
+                ->loadView('catalogo.pdf', compact('productos'));
             
             $pdf->setPaper('A4', 'portrait');
 
@@ -348,30 +337,45 @@ class CatalogoController extends Controller
         if ($this->sedeOcultaEnCatalogo((string) $sede)) {
             $sede = null;
         }
-        if ($sede && $sede !== 'todas') {
-            $query->withSum(['stock as existencia' => function ($q) use ($sede) {
+        $excluidas = $this->sedesExcluidas($request);
+
+        $filtrarSede = function ($q) use ($sede, $excluidas) {
+            if ($sede && $sede !== 'todas') {
                 $q->where('sede', $sede);
-            }], 'existencia');
-        } else {
-            $query->withSum('stock as existencia', 'existencia');
-        }
+            } elseif ($excluidas !== []) {
+                $q->whereNotIn('sede', $excluidas);
+            }
+        };
+
+        $query->withSum(['stock as existencia' => $filtrarSede], 'existencia');
 
         $soloExistencia = $modoCliente || ($request->has('solo_existencia') && $request->solo_existencia == '1');
         if ($soloExistencia) {
-            if ($sede && $sede !== 'todas') {
-                $query->whereHas('stock', function ($q) use ($sede) {
-                    $q->where('sede', $sede)->where('existencia', '>', 0);
-                });
-            } else {
-                $query->whereHas('stock', function ($q) {
-                    $q->where('existencia', '>', 0);
-                });
-            }
+            $query->whereHas('stock', function ($q) use ($filtrarSede) {
+                $filtrarSede($q);
+                $q->where('existencia', '>', 0);
+            });
         }
 
         $query->orderBy('nombre', 'asc');
 
         return $query;
+    }
+
+    /**
+     * Sedes que no suman existencia en la vista Global (?excluir_sede[]=X&excluir_sede[]=Y).
+     *
+     * @return list<string>
+     */
+    private function sedesExcluidas(Request $request): array
+    {
+        $valor = $request->input('excluir_sede', []);
+        $lista = is_array($valor) ? $valor : [$valor];
+
+        return array_values(array_unique(array_filter(
+            array_map(fn ($s) => strtoupper(trim((string) $s)), $lista),
+            fn ($s) => $s !== ''
+        )));
     }
 
     private function sedeOcultaEnCatalogo(string $sede): bool

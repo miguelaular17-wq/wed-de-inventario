@@ -400,7 +400,8 @@ Route::middleware(['auth'])->prefix('mensajeria')->name('mensajeria.')->group(fu
     Route::post('/', [\App\Http\Controllers\MensajeriaController::class, 'enviar'])->name('enviar');
 });
 
-Route::middleware(['auth', 'permission:incentivos'])->prefix('incentivos')->name('incentivos.')->group(function () {
+$permisosIncentivo = array_merge(['incentivos'], array_values(array_filter(array_column(config('incentivos.modulos', []), 'permiso'))));
+Route::middleware(['auth', 'permission:'.implode(',', $permisosIncentivo)])->prefix('incentivos')->name('incentivos.')->group(function () {
     Route::get('/{modulo}/cruce/buscar', [\App\Http\Controllers\IncentivoController::class, 'buscarCruce'])
         ->whereIn('modulo', array_keys(config('incentivos.modulos')))
         ->name('cruce.buscar');

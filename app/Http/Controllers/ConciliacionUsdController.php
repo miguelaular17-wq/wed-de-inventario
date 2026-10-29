@@ -69,7 +69,12 @@ class ConciliacionUsdController extends Controller
             $path = $file->storeAs(self::DIR, "{$token}.{$ext}", 'local');
             $doc = ['path' => $path, 'ext' => $ext, 'nombre' => $file->getClientOriginalName(), 'token' => $token];
             if ($ext === 'pdf') {
-                $pdfs[] = $doc;
+                // El reporte de pagos de Cloud también se exporta a PDF; el resto son estados de cuenta del banco.
+                if ($this->servicio->esReportePagosPdf(Storage::disk('local')->path($path))) {
+                    $pagos[] = $doc;
+                } else {
+                    $pdfs[] = $doc;
+                }
 
                 continue;
             }
@@ -144,8 +149,12 @@ class ConciliacionUsdController extends Controller
                 $r = $this->servicio->importarPagos(
                     Storage::disk('local')->path($doc['path']), $doc['ext'], $banco, $titular, $doc['nombre'], $request->user()?->id,
                 );
-                $partes[] = sprintf('Reporte de pagos de caja: %d cobros nuevos, %d ya estaban cargados', $r['nuevas'], $r['duplicadas'])
-                    . $this->textoOtrasCuentas($r['otras_cuentas']);
+                $partes[] = sprintf('Reporte de pagos de caja%s: %d cobros nuevos, %d ya estaban cargados', $r['pdf'] ? ' (PDF)' : '', $r['nuevas'], $r['duplicadas'])
+                    . $this->textoOtrasCuentas($r['otras_cuentas'])
+                    . ($r['pdf'] ? sprintf(
+                        $r['pdf']['cuadra'] ? ' — se leyeron las %d filas del PDF y cuadran con su total ($%s)' : ' — ⚠ se leyeron %d filas pero NO cuadran con el total del PDF ($%s): revisa las filas rechazadas',
+                        $r['pdf']['filas'], number_format((float) $r['pdf']['total'], 2, ',', '.'),
+                    ) : '');
                 $rechazadas = [...$rechazadas, ...$r['rechazadas']];
                 $rangos[] = [$r['desde'], $r['hasta'], 'pagos'];
             }
@@ -182,7 +191,10 @@ class ConciliacionUsdController extends Controller
         if ($otras === []) {
             return '';
         }
-        $nombres = ['citizens' => 'Citizens', 'amerant' => 'Amerant', 'wells' => 'Wells Fargo', 'regions' => 'Regions', 'truist' => 'Truist', 'citi' => 'Citi'];
+        $nombres = [
+            'citizens' => 'Citizens', 'amerant' => 'Amerant', 'wells' => 'Wells Fargo', 'regions' => 'Regions', 'truist' => 'Truist', 'citi' => 'Citi',
+            'panam' => 'Mercantil Panamá', 'binance' => 'Binance', 'efectivodivisa' => 'efectivo en divisas',
+        ];
 
         return ' (se apartaron ' . implode(', ', array_map(fn ($k, $n) => "{$n} de " . ($nombres[$k] ?? $k), array_keys($otras), $otras)) . ': son de otras cuentas)';
     }

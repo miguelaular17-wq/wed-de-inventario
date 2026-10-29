@@ -11,7 +11,9 @@
     $porSede = $clave === 'supervisor';
     $columnas = $porSede ? 18 : (15 + ($nCruce * 3));
     $conSelector = in_array($clave, ['telefonia', 'arreglos'], true);
-    $efectividad = in_array($clave, ['telefonia', 'ventas', 'arreglos'], true);
+    $efectividad = in_array($clave, ['telefonia', 'ventas', 'arreglos', 'call_center'], true);
+    $porEquipo = $clave === 'call_center';
+    $referencia = $porEquipo ? 'Equipo' : 'Tienda';
 @endphp
 
 @section('content')
@@ -21,6 +23,8 @@
         {{ $evaluacion['desde'] }} al {{ $evaluacion['hasta'] }}.
         @if($clave === 'telefonia')
             El 100% de venta, productos y clientes es lo que vendió la tienda en el período. La nota es 30% efectividad de piso, 50% venta cruzada y 20% producto meta.
+        @elseif($porEquipo)
+            El 100% de venta, productos y clientes es lo que vendió todo el equipo de call center en el período. La nota es 70% efectividad y 30% producto meta.
         @elseif($efectividad)
             El 100% de venta, productos y clientes es lo que vendió la tienda en el período. La nota es 70% efectividad de piso y 30% producto meta.
         @elseif($porSede)
@@ -63,7 +67,7 @@
                     <tr>
                         <th class="inc-persona" rowspan="3">Persona</th>
                         <th rowspan="3">Sede</th>
-                        <th class="inc-group g-piso" colspan="9">Efectividad en tienda</th>
+                        <th class="inc-group g-piso" colspan="9">{{ $porEquipo ? 'Efectividad en el equipo' : 'Efectividad en tienda' }}</th>
                         <th class="inc-group g-pmeta" colspan="2" rowspan="2">Productos meta</th>
                         @if($clave === 'telefonia')
                             <th class="inc-group g-cruce" colspan="{{ $nCruce * 3 }}">Efectividad de venta cruzada</th>
@@ -82,13 +86,13 @@
                     </tr>
                     <tr>
                         <th class="g-venta">Real</th>
-                        <th class="g-venta">Tienda</th>
+                        <th class="g-venta">{{ $referencia }}</th>
                         <th class="g-venta">%</th>
                         <th class="inc-group g-prod">Real</th>
-                        <th class="g-prod">Tienda</th>
+                        <th class="g-prod">{{ $referencia }}</th>
                         <th class="g-prod">%</th>
                         <th class="inc-group g-cli">Real</th>
-                        <th class="g-cli">Tienda</th>
+                        <th class="g-cli">{{ $referencia }}</th>
                         <th class="g-cli">%</th>
                         <th class="inc-group g-pmeta">Avance</th>
                         <th class="g-pmeta">Estado</th>
@@ -226,6 +230,8 @@
     </div>
     @if($clave === 'telefonia')
         <p class="muted" style="margin:10px 0 0;">Hay tres categorías. Cada una tiene Cruce, Estado y %, nueve columnas en total. Activa las que faltan en el botón. El porcentaje es la parte de ese trabajador en esa categoría dentro de su tienda, y el promedio de las activas vale el 50% de la nota.</p>
+    @elseif($porEquipo)
+        <p class="muted" style="margin:10px 0 0;">El porcentaje es la venta de cada trabajador dividida entre lo que vendió todo el call center en el período. Esa efectividad vale 70% de la nota y el producto meta vale 30%.</p>
     @elseif($efectividad)
         <p class="muted" style="margin:10px 0 0;">El porcentaje es la venta de cada trabajador dividida entre lo que vendió la tienda en el período. Ese piso vale 70% de la nota y el producto meta vale 30%.</p>
     @elseif($porSede)

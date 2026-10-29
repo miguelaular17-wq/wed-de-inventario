@@ -78,7 +78,7 @@
     }
     .filters-grid {
         display: grid;
-        grid-template-columns: minmax(180px, 1.6fr) repeat(3, minmax(130px, 1fr)) 88px auto;
+        grid-template-columns: minmax(180px, 1.6fr) repeat(4, minmax(130px, 1fr)) 88px auto;
         gap: 10px;
         align-items: end;
     }
@@ -162,7 +162,7 @@
     }
 
     .filters-grid.is-cliente {
-        grid-template-columns: repeat(3, minmax(130px, 1fr)) 88px auto;
+        grid-template-columns: repeat(4, minmax(130px, 1fr)) 88px auto;
     }
     .product-card {
         background: #fff;
@@ -568,12 +568,30 @@
                 </div>
                 <div class="filter-item">
                     <label>Sede</label>
-                    <select name="sede" class="filter-input">
+                    <select name="sede" id="sedeSelect" class="filter-input">
                         <option value="todas">Global (Todas)</option>
                         @foreach($sedes as $s)
                             <option value="{{ $s }}" {{ request('sede') == $s ? 'selected' : '' }}>{{ $s }}</option>
                         @endforeach
                     </select>
+                </div>
+                <div class="filter-item subcat-multi" id="excluirSedeWrap">
+                    <label>Excluir sedes</label>
+                    <button type="button" class="filter-input subcat-toggle" id="excluirSedeToggle" aria-haspopup="true" aria-expanded="false">Ninguna</button>
+                    <div class="subcat-panel" id="excluirSedePanel" hidden>
+                        <div class="subcat-acciones">
+                            <span style="font-size:.75rem; color:#64748b;">Solo aplica con sede Global</span>
+                            <button type="button" id="excluirSedeLimpiar">Ninguna</button>
+                        </div>
+                        <div class="subcat-lista">
+                            @foreach($sedes as $s)
+                                <label class="subcat-opcion">
+                                    <input type="checkbox" name="excluir_sede[]" value="{{ $s }}" {{ in_array(strtoupper($s), $sedesExcluidas ?? [], true) ? 'checked' : '' }}>
+                                    {{ $s }}
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
                 </div>
                 <div class="filter-item is-per-page">
                     <label>Mostrar</label>
@@ -922,7 +940,7 @@ document.addEventListener('keydown', function (e) {
         if (abrir) subcatBuscar.focus();
     });
     document.addEventListener('click', (e) => {
-        if (!subcatPanel.hidden && !e.target.closest('.subcat-multi')) {
+        if (!subcatPanel.hidden && e.target.closest('.subcat-multi') !== subcatPanel.parentElement) {
             subcatPanel.hidden = true;
             subcatToggle.setAttribute('aria-expanded', 'false');
         }
@@ -953,6 +971,45 @@ document.addEventListener('keydown', function (e) {
     });
 
     updateSubcategorias();
+
+    (function () {
+        const sedeSelect = document.getElementById('sedeSelect');
+        const toggle = document.getElementById('excluirSedeToggle');
+        const panel = document.getElementById('excluirSedePanel');
+        const checks = [...panel.querySelectorAll('input[type=checkbox]')];
+
+        function refrescar() {
+            const esGlobal = sedeSelect.value === 'todas';
+            const marcadas = checks.filter(c => c.checked).map(c => c.value);
+            // Con una sede específica la exclusión no aplica: se deshabilita para no enviarla.
+            checks.forEach(c => c.disabled = !esGlobal);
+            toggle.disabled = !esGlobal;
+            toggle.style.opacity = esGlobal ? '' : '.55';
+            toggle.textContent = !esGlobal || marcadas.length === 0
+                ? 'Ninguna'
+                : (marcadas.length <= 2 ? 'Sin ' + marcadas.join(', ') : marcadas.length + ' sedes excluidas');
+            toggle.title = marcadas.join(', ');
+            if (!esGlobal) panel.hidden = true;
+        }
+
+        toggle.addEventListener('click', () => {
+            panel.hidden = !panel.hidden;
+            toggle.setAttribute('aria-expanded', String(!panel.hidden));
+        });
+        document.addEventListener('click', (e) => {
+            if (!panel.hidden && !e.target.closest('#excluirSedeWrap')) {
+                panel.hidden = true;
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+        document.getElementById('excluirSedeLimpiar').addEventListener('click', () => {
+            checks.forEach(c => c.checked = false);
+            refrescar();
+        });
+        checks.forEach(c => c.addEventListener('change', refrescar));
+        sedeSelect.addEventListener('change', refrescar);
+        refrescar();
+    })();
     
     // --- NUEVA LÓGICA DE PDF ASÍNCRONA ---
     @unless($modoCliente)

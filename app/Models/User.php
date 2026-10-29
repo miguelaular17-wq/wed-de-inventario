@@ -469,6 +469,10 @@ class User extends Authenticatable
             return true;
         }
 
+        if (str_starts_with($permission, 'incentivos.') && array_intersect(['incentivos', 'gerencial'], $owned) !== []) {
+            return true;
+        }
+
         if ($permission === 'meta.ver' && in_array('meta', $owned, true)) {
             return true;
         }

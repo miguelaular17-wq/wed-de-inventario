@@ -62,6 +62,9 @@ class IncentivoEvaluacionService
             if ($clave === 'ventas') {
                 $tiendas = $this->totalesTienda($desde, $hasta, [], []);
             }
+            if ($clave === 'call_center') {
+                $tiendas = $this->totalesEquipo($personas, $ventas);
+            }
             if ($clave === 'telefonia') {
                 $gruposCruce = $this->cruce->activosDetalle($clave);
                 $cruceActivo = $gruposCruce !== [];
@@ -81,7 +84,7 @@ class IncentivoEvaluacionService
         foreach ($personas as $persona) {
             $filas[] = $this->filaPersona($persona, $ventas, $metas, $cruces, $clave === 'telefonia', $cruceActivo, $productosMeta, $sinMedicion, $tiendas, $gruposCruce, $crucesPorItem, match ($clave) {
                 'telefonia' => 'telefonia',
-                'ventas', 'arreglos' => 'piso',
+                'ventas', 'arreglos', 'call_center' => 'piso',
                 default => null,
             });
         }
@@ -373,6 +376,32 @@ class IncentivoEvaluacionService
                 continue;
             }
             $out[$clave] = (float) $row->unidades;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Lo que vendió todo el equipo, como si fuera una sola tienda: en call center ese total es el 100%.
+     * Se guarda bajo la sede de cada persona porque la fila busca su "tienda" por sede.
+     *
+     * @param  iterable<NominaEmpleado>  $personas
+     * @param  array<string, array{monto:float, unidades:float, clientes:int}>  $ventas
+     * @return array<string, array{monto:float, unidades:float, clientes:int, cruce:float}>
+     */
+    private function totalesEquipo(iterable $personas, array $ventas): array
+    {
+        $claves = [];
+        foreach ($personas as $persona) {
+            foreach ($this->clavesDe($persona) as $codigo) {
+                $claves[$codigo] = true;
+            }
+        }
+        $total = $this->sumarClaves(array_keys($claves), $ventas) + ['cruce' => 0.0];
+
+        $out = [];
+        foreach ($personas as $persona) {
+            $out[$this->sedeCodigo($persona)] = $total;
         }
 
         return $out;

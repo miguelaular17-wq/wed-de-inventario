@@ -7,6 +7,7 @@
         'efectividad de caja' => '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 6V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1M3 11h18"/>',
         'asesor de telefonía' => '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
         'asesor de ventas' => '<path d="M3 17 9 11l4 4 8-8"/><path d="M14 7h7v7"/>',
+        'call center' => '<path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M21 14v3a2 2 0 0 1-2 2h-1v-6h3zM3 14v3a2 2 0 0 0 2 2h1v-6H3z"/>',
         'arreglo' => '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4z"/>',
         'arreglos o reparaciones' => '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4z"/>',
         'supervisor' => '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',

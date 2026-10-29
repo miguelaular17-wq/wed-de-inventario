@@ -72,7 +72,7 @@
             <label class="field">Archivos <input type="file" name="archivos[]" accept=".xlsx,.xls,.csv,.txt,.pdf" multiple required></label>
             <button type="submit" class="btn primary">Subir y conciliar</button>
             <div class="muted" style="flex-basis:100%; font-size:.75rem;">
-                Sube juntos el documento del banco (historial de Binance, o el estado de cuenta en PDF de Citizens / Amerant) y el reporte de pagos de Cloud.
+                Sube juntos el documento del banco (historial de Binance, o el estado de cuenta en PDF de Citizens / Amerant) y el reporte de pagos de Cloud (Excel o PDF).
                 Del reporte de Zelle solo se toman los cobros que llegaron al banco de la cuenta elegida.
             </div>
         </form>

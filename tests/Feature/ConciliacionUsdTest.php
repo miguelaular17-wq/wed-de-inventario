@@ -284,6 +284,59 @@ class ConciliacionUsdTest extends TestCase
         $this->assertSame([], \Illuminate\Support\Facades\Storage::disk('local')->files('conciliacion_usd'));
     }
 
+    public function test_reporte_de_pagos_de_cloud_en_pdf_solo_toma_los_cobros_de_la_cuenta(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        // Texto como lo devuelve smalot del "Dashboard | Cloud Mai Services": nombres en dos líneas, banco pegado
+        // al nombre, referencia pegada al monto y correo pegado a la referencia.
+        $texto = "Dashboard | Cloud Mai Services, C.A.\nNRO Banco\tTítular\tCorreo\tReferencia Monto Fecha BCV Binance Interna\nDif\nBCV\nDif\nBina\n"
+            . "21 amerant FERNANDO GAVIRIA agenteconsultor08@gmail.com 404266 279.33 31/08/2026794.99 935.45 897.00 -35.84 11.48\n"
+            . "44 amerant YULIBETH SCARBAY\nBERMUDEZ\nagenteconsultor08@gmail.com 941215 406.00 29/08/2026794.99 941.90 897.00 -52.10 19.35\n"
+            . "106 wellsfargo MARTONE\nCONSTRUCTIONS\nconsultorempre.04@gmail.com 20406570565100.00 25/08/2026785.07 936.40 882.00 -12.35 5.81\n"
+            . "114 mercantilpanamaANDREA MARIN MERCANTIL@GMAIL.COM 2040641620150.00 25/08/2026785.07 936.40 890.00 -6.68 2.48\n"
+            . "491 truist ANGELICA PETITPETIT consultorempresarial002@gmail.com767301 60.00 05/08/2026755.16 843.70 800.00 -3.56 3.11\n"
+            . "5 efectivodivisa CAMBIO A BS\tbs@gmail.com\t015900 50.00 31/08/2026794.99 935.45 905.00 -6.92 1.63\n"
+            . "TOTAL:TOTAL:\tTOTAL: 945.33 TOTALES:\n-- 1 of 1 --\n";
+        $this->app->instance(\App\Services\Conciliacion\ReportePagosPdfParser::class, new class($texto) extends \App\Services\Conciliacion\ReportePagosPdfParser
+        {
+            public function __construct(private string $fijo) {}
+
+            public function texto(string $path): string
+            {
+                return $this->fijo;
+            }
+        });
+        $pdf = tempnam(sys_get_temp_dir(), 'cr') . '.pdf';
+        file_put_contents($pdf, "%PDF-1.4\n%%EOF\n");
+
+        $this->actingAs($this->user)->post(route('finanzas.conciliacion_usd.subir'), [
+            'cuenta' => 'Amerant Investment|Doral',
+            'archivos' => [new UploadedFile($pdf, 'TRANSFERENCIAS MERCANTIL -01-08-26 a 31-08-26.pdf', 'application/pdf', null, true)],
+        ])->assertRedirect()
+            ->assertSessionHas('success', fn ($m) => str_contains($m, 'Reporte de pagos de caja (PDF): 2 cobros nuevos')
+                && str_contains($m, 'se leyeron las 6 filas del PDF y cuadran con su total ($945,33)')
+                && str_contains($m, '1 de Wells Fargo') && str_contains($m, '1 de Mercantil Panamá') && str_contains($m, '1 de efectivo en divisas'));
+
+        $pagos = \App\Models\ConciliacionDivisaPago::query()->orderBy('nro')->get();
+        $this->assertSame(['21', '44'], $pagos->pluck('nro')->map(fn ($n) => (string) $n)->all());
+        $this->assertSame('YULIBETH SCARBAY BERMUDEZ', $pagos[1]->pagador);
+        $this->assertSame(['404266', '941215'], $pagos->pluck('referencia')->all());
+        $this->assertEquals([279.33, 406.00], $pagos->pluck('monto')->map(fn ($m) => (float) $m)->all());
+    }
+
+    public function test_reporte_pdf_separa_la_referencia_pegada_al_monto_con_la_dif_bcv(): void
+    {
+        $r = (new \App\Services\Conciliacion\ReportePagosPdfParser)->leer(
+            "Dashboard | Cloud Mai Services\nNRO Banco Títular Correo Referencia Monto\n"
+            . "112 wellsfargo JOSE CASAS consultorempre.04@gmail.com 204064184131400.00 25/08/2026785.07 936.40 885.00 -178.20 76.8\n"
+            . "110 wellsfargo DOMINGO GOITIA consultorempre.04@gmail.com 2040649021155.00 25/08/2026785.07 936.40 880.00 -6.65 3.31\n"
+            . "TOTAL: 1455.00\n"
+        );
+        $this->assertSame(['20406418413', '1400.00'], [$r['filas'][1][4], $r['filas'][1][5]]);
+        $this->assertSame(['20406490211', '55.00'], [$r['filas'][2][4], $r['filas'][2][5]]);
+        $this->assertTrue($r['cuadra']);
+    }
+
     public function test_pdf_con_movimientos_identicos_los_guarda_todos_y_no_duplica_al_resubir(): void
     {
         $this->app->instance(\App\Services\Conciliacion\EstadoCuentaPdfParser::class, new class extends \App\Services\Conciliacion\EstadoCuentaPdfParser
