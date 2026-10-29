@@ -103,6 +103,7 @@
                                         <option value="tesoreria" @selected($user->role === 'tesoreria')>Tesorería</option>
                                         <option value="gerente" @selected($user->role === 'gerente')>Gerente</option>
                                         <option value="rrhh" @selected($user->role === 'rrhh')>RRHH</option>
+                                        <option value="avances" @selected($user->role === 'avances')>Avances</option>
                                     </select>
                                 </div>
                                 <div class="field" style="margin:0;">
@@ -270,7 +271,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .filter(input => input.dataset.isExtra === '1')
                 .map(input => input.value)
         );
-        const noSedeRoles = ['comprador', 'marketing', 'finanzas', 'cobranza', 'contabilidad', 'auditor', 'tesoreria', 'gerente', 'rrhh'];
+        const noSedeRoles = ['comprador', 'marketing', 'finanzas', 'cobranza', 'contabilidad', 'auditor', 'tesoreria', 'gerente', 'rrhh', 'avances'];
 
         const inheritedFor = (role) => {
             const perms = rolePermissions[role] || [];

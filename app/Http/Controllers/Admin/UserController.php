@@ -65,7 +65,7 @@ class UserController extends Controller
         $sedesLocales = config('inventario.sedes_locales', []);
         $sedesPermitidas = array_values(array_unique(array_merge(['JRZ'], $sedesLocales)));
         $data = $request->validate([
-            'role' => ['required', 'string', 'in:admin,supervisor,telefonia,tecnico,comprador,sede,vendedor,marketing,finanzas,cobranza,contabilidad,auditor,tesoreria,gerente,rrhh'],
+            'role' => ['required', 'string', 'in:admin,supervisor,telefonia,tecnico,comprador,sede,vendedor,marketing,finanzas,cobranza,contabilidad,auditor,tesoreria,gerente,rrhh,avances'],
             'sede' => ['nullable', 'string', 'in:'.implode(',', $sedesPermitidas)],
             'password_plain' => ['nullable', 'string', 'min:6'],
             'ver_publicidad_equipo' => ['nullable', 'boolean'],

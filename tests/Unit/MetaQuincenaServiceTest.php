@@ -170,6 +170,126 @@ class MetaQuincenaServiceTest extends TestCase
         $this->assertSame(10.0, $fila['vendido']);
     }
 
+    public function test_area_call_center_se_marca_con_cantidad_y_sin_stock(): void
+    {
+        $productoId = DB::table('productos')->insertGetId([
+            'codigo' => 'META-CC',
+            'nombre' => 'Producto call center',
+            'categoria' => 'HOGAR',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $servicio = app(MetaQuincenaService::class);
+
+        try {
+            $servicio->marcar($productoId, 'Call Center');
+            $this->fail('Sin cantidad no debe marcar meta de área.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('cantidad', $e->errors());
+        }
+
+        $meta = $servicio->marcar($productoId, 'call_center', null, 5);
+
+        $this->assertSame('CALL CENTER', $meta->sede);
+        $this->assertSame(5.0, (float) $meta->cantidad_inicial);
+        $this->assertSame(['CALL CENTER' => 5.0], $servicio->cantidadesAreaDelProducto($productoId));
+        $this->assertTrue($servicio->desmarcar($productoId, 'CALL CENTER'));
+    }
+
+    public function test_meta_de_area_cuenta_ventas_de_sus_empleados_en_cualquier_sede(): void
+    {
+        $productoId = DB::table('productos')->insertGetId([
+            'codigo' => 'META-CC2',
+            'nombre' => 'Producto call center',
+            'categoria' => 'HOGAR',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('clientes')->insert(['id' => 9101, 'nombre' => 'Agente', 'cedula' => 'V-9101', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('nomina_empleados')->insert([
+            'cliente_id' => 9101,
+            'sede' => 'Call Center',
+            'codigo_vendedor' => 'AGENTE CC',
+            'estado' => 'ACTIVO',
+            'salario_base' => 100,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        MetaQuincenaProducto::create([
+            'producto_id' => $productoId,
+            'sede' => 'CALL CENTER',
+            'quincena_inicio' => '2026-09-01',
+            'quincena_fin' => '2026-09-15',
+            'cantidad_inicial' => 10,
+        ]);
+        DB::table('ventas_detalle')->insert([
+            ['producto_id' => $productoId, 'sede' => 'DORAL', 'tipo_documento' => 'FAC', 'numero_documento' => 'CC-1', 'fecha' => '2026-09-05', 'cantidad' => 3, 'vendedor' => 'AGENTE CC', 'anulado' => false],
+            ['producto_id' => $productoId, 'sede' => 'CENTRO', 'tipo_documento' => 'FAC', 'numero_documento' => 'CC-2', 'fecha' => '2026-09-06', 'cantidad' => 4, 'vendedor' => 'AGENTE CC', 'anulado' => false],
+            ['producto_id' => $productoId, 'sede' => 'DORAL', 'tipo_documento' => 'FAC', 'numero_documento' => 'X-1', 'fecha' => '2026-09-06', 'cantidad' => 50, 'vendedor' => 'OTRO VEND', 'anulado' => false],
+        ]);
+
+        $admin = User::create([
+            'name' => 'Admin',
+            'email' => 'admin-area@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_ADMIN,
+        ]);
+
+        $fila = app(MetaQuincenaService::class)->listarParaUsuario($admin)->firstWhere('producto_id', $productoId);
+
+        $this->assertTrue($fila['es_area']);
+        $this->assertSame(7.0, $fila['vendido']);
+        $this->assertSame(3.0, $fila['cantidad_actual']);
+        $this->assertSame(70.0, $fila['avance_pct']);
+    }
+
+    public function test_con_permiso_meta_quien_esta_en_call_center_solo_ve_su_area(): void
+    {
+        $productoId = DB::table('productos')->insertGetId([
+            'codigo' => 'META-CC3',
+            'nombre' => 'Producto',
+            'categoria' => 'HOGAR',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        foreach (['DORAL', 'CALL CENTER'] as $sede) {
+            MetaQuincenaProducto::create([
+                'producto_id' => $productoId,
+                'sede' => $sede,
+                'quincena_inicio' => '2026-09-01',
+                'quincena_fin' => '2026-09-15',
+                'cantidad_inicial' => 4,
+            ]);
+        }
+
+        $user = User::create([
+            'name' => 'Maria Petit',
+            'email' => 'maria-cc@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_VENDEDOR,
+        ]);
+        UserPermission::create(['user_id' => $user->id, 'permission' => 'meta']);
+        DB::table('clientes')->insert(['id' => 9201, 'nombre' => 'Maria', 'cedula' => 'V-9201', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('nomina_empleados')->insert([
+            'cliente_id' => 9201,
+            'user_id' => $user->id,
+            'sede' => 'CALL_CENTER',
+            'estado' => 'ACTIVO',
+            'salario_base' => 100,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $user = $user->fresh();
+        $servicio = app(MetaQuincenaService::class);
+
+        $this->assertFalse($servicio->veTodasLasSedes($user));
+        $this->assertSame('CALL CENTER', $servicio->areaDelUsuario($user));
+        $this->assertSame(['CALL CENTER'], $servicio->sedesOperables($user));
+        $this->assertTrue($servicio->puedeOperarSede($user, 'Call Center'));
+        $this->assertFalse($servicio->puedeOperarSede($user, 'DORAL'));
+        $this->assertSame(['CALL CENTER'], $servicio->listarParaUsuario($user)->pluck('sede')->unique()->values()->all());
+    }
+
     public function test_ruta_metas_exige_permiso_ver(): void
     {
         $user = User::create([

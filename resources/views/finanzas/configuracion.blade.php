@@ -9,7 +9,6 @@
     $paneles = [
         \App\Models\FinanzasCatalogo::TIPO_GASTO => ['Tipos de gasto', '#1a4273', 'Se suman a los ' . count($tiposSistema) . ' tipos del sistema en Flujo de Caja (egresos e ingresos) y en Cuentas por pagar.'],
         \App\Models\FinanzasCatalogo::BENEFICIARIO => ['Beneficiarios', '#0f766e', 'Aparecen en el selector de beneficiario de los egresos, junto a los proveedores del inventario.'],
-        \App\Models\FinanzasCatalogo::CUENTA => ['Empresas y cuentas', '#7c3aed', 'Banco + empresa (titular). Aparecen en «Banco y Titular» de Flujo de Caja.'],
     ];
 @endphp
 <div style="max-width: 1200px; margin: 0 auto;">
@@ -131,6 +130,14 @@
                 @endif
             </div>
         @endforeach
+        <a href="{{ route('finanzas.cuentas') }}" class="panel" style="padding: 16px; border-top: 4px solid #7c3aed; text-decoration:none; color:inherit; display:block;">
+            <h3 style="margin: 0 0 4px; color: #7c3aed;">Empresas y cuentas →</h3>
+            <p class="muted" style="margin: 0 0 10px; font-size: .82rem;">
+                Ahora tienen su propio módulo, <strong>Cuentas bancarias</strong>: una fila por cuenta, con sus grupos en «Banco y Titular»,
+                su sección en Disponibilidad y el reporte, el número de cuenta, el color y el orden, todo editable.
+            </p>
+            <span class="btn primary" style="padding:7px 16px;">Abrir Cuentas bancarias</span>
+        </a>
     </div>
     @endif
 </div>

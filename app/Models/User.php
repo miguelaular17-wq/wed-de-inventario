@@ -27,6 +27,7 @@ class User extends Authenticatable
     public const ROLE_GERENTE = 'gerente';
     public const ROLE_RRHH = 'rrhh';
     public const ROLE_TECNICO = 'tecnico';
+    public const ROLE_AVANCES = 'avances';
 
     public const COBRANZA_CLIENTES_TODOS = 'todos';
     public const COBRANZA_CLIENTES_REGULARES = 'regulares';
@@ -49,6 +50,7 @@ class User extends Authenticatable
         self::ROLE_TESORERIA,
         self::ROLE_GERENTE,
         self::ROLE_RRHH,
+        self::ROLE_AVANCES,
     ];
 
     /** Roles con sede fija asignada; solo cambian de sede de operación con el permiso sede.cambiar. */
@@ -196,6 +198,17 @@ class User extends Authenticatable
     public function isTecnico(): bool
     {
         return $this->role === self::ROLE_TECNICO;
+    }
+
+    public function isAvances(): bool
+    {
+        return $this->role === self::ROLE_AVANCES;
+    }
+
+    /** Flujo de Caja reducido a «Otros egresos (avances y cambios)»: tiene el permiso de avances y no el de finanzas. */
+    public function soloAvances(): bool
+    {
+        return $this->canAccess('finanzas.avances') && ! $this->canAccess('finanzas.ver');
     }
 
     /**

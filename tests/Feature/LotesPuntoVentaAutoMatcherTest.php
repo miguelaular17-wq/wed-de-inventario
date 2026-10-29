@@ -148,6 +148,46 @@ class LotesPuntoVentaAutoMatcherTest extends TestCase
         $this->assertTrue((bool) $lote->fresh()->es_conciliado);
     }
 
+    public function test_lote_del_cierre_de_mes_se_pasa_al_mes_siguiente_y_se_puede_devolver(): void
+    {
+        if (! Schema::hasTable('cuentas_bancarias')) {
+            Schema::create('cuentas_bancarias', function (Blueprint $table) {
+                $table->id();
+                $table->string('banco');
+                $table->string('titular');
+                $table->string('categoria_reporte')->nullable();
+                $table->boolean('mostrar_en_principal')->default(true);
+                $table->integer('orden')->default(0);
+                $table->timestamps();
+            });
+        }
+        (require database_path('migrations/2026_10_29_150000_add_conciliar_en_to_tesoreria_ingresos.php'))->up();
+        $user = User::create(['name' => 'Contabilidad', 'email' => 'contab-'.uniqid().'@test.local', 'password' => 'password123', 'role' => User::ROLE_CONTABILIDAD]);
+        $cierre = $this->lote('DORAL', '2026-08-31', '777', 4500.00, 'TESORO');
+        $otro = $this->lote('DORAL', '2026-08-30', '776', 1200.00, 'TESORO');
+        $agosto = ['fecha_desde' => '2026-08-01', 'fecha_hasta' => '2026-08-31'];
+        $septiembre = ['fecha_desde' => '2026-09-01', 'fecha_hasta' => '2026-09-30'];
+
+        $this->actingAs($user)->post(route('finanzas.conciliaciones.lotes.diferir'), ['diferir_id' => $cierre->id])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, 'septiembre 2026'));
+        $this->assertSame('2026-09-01', substr((string) $cierre->fresh()->conciliar_en, 0, 10));
+
+        // Agosto: ya no está entre los pendientes, sale en «Pasan al mes siguiente».
+        $vista = $this->actingAs($user)->get(route('finanzas.conciliaciones.lotes', $agosto))->assertOk();
+        $vista->assertSee('Pasan al mes siguiente (1)');
+        $tarjeta = collect($vista->viewData('tarjetas'))->first();
+        $this->assertSame([$otro->id], $tarjeta['pendientes']->pluck('id')->all());
+        $this->assertSame(1, $vista->viewData('totalPendientes'));
+
+        // Septiembre: aparece para conciliarlo con la LIQ del día 1.
+        $sep = $this->actingAs($user)->get(route('finanzas.conciliaciones.lotes', $septiembre))->assertOk()->assertSee('Del mes anterior');
+        $this->assertSame([$cierre->id], collect($sep->viewData('tarjetas'))->first()['pendientes']->pluck('id')->all());
+
+        $this->actingAs($user)->post(route('finanzas.conciliaciones.lotes.diferir'), ['volver_id' => $cierre->id])->assertSessionHas('success');
+        $this->assertNull($cierre->fresh()->conciliar_en);
+        $this->assertSame(2, $this->actingAs($user)->get(route('finanzas.conciliaciones.lotes', $agosto))->viewData('totalPendientes'));
+    }
+
     public function test_bnc_cruza_el_lote_abonado_por_tipo_de_tarjeta(): void
     {
         $lote = $this->lote('DORAL', '2026-08-03', '69', 126391.49, 'BNC');

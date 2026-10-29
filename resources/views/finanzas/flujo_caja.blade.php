@@ -205,8 +205,21 @@
 
 <div class="dashboard-container py-4">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-        <h2 style="margin: 0; font-size: 1.5rem; color: var(--blue); font-weight: 600;">Flujo de Caja y Disponibilidad</h2>
-        @if(!auth()->user()->isAuditor())
+        <h2 style="margin: 0; font-size: 1.5rem; color: var(--blue); font-weight: 600;">{{ ($soloAvances ?? false) ? 'Avances y cambios' : 'Flujo de Caja y Disponibilidad' }}</h2>
+        @if($soloAvances ?? false)
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <form method="GET" action="{{ route('finanzas.flujo_caja') }}" style="display: flex; gap: 8px; align-items: center; margin: 0;">
+                <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Desde:</label>
+                <input type="date" name="fecha_desde" value="{{ $fecha_desde }}" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px;" onchange="this.form.submit()">
+                <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Hasta:</label>
+                <input type="date" name="fecha_hasta" value="{{ $fecha_hasta }}" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px;" onchange="this.form.submit()">
+            </form>
+            <button class="btn btn-primary" style="background-color: #1a4273; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px;" onclick="openNuevoEgresoModal()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Nuevo Egreso
+            </button>
+        </div>
+        @elseif(!auth()->user()->isAuditor())
         <div style="display: flex; gap: 10px;">
             <form action="{{ route('finanzas.reset_daily') }}" method="POST" onsubmit="return confirm('¿Estás seguro de que deseas eliminar TODOS los datos financieros y empezar el día completamente en blanco?');">
                 @csrf
@@ -227,7 +240,7 @@
         @endif
     </div>
 
-    @if(!auth()->user()->isAuditor())
+    @if(!auth()->user()->isAuditor() && ! ($soloAvances ?? false))
     <div class="custom-row">
         <!-- TABLA DISPONIBILIDAD (IZQUIERDA) -->
         <div class="custom-left mb-4">
@@ -423,6 +436,7 @@
     </div>
     @endif
 
+@unless($soloAvances ?? false)
 <!-- EGRESOS REALIZADOS -->
     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; margin-bottom: 10px;">
         <h3 style="color: var(--blue); margin: 0;">EGRESOS REALIZADOS</h3>
@@ -596,6 +610,7 @@
         </div>
     </div>
 
+@endunless
     <!-- OTROS EGRESOS (AVANCES Y CAMBIOS) -->
     <h3 style="margin-bottom: 15px; color: var(--blue);">OTROS EGRESOS (AVANCES Y CAMBIOS)</h3>
     <div class="panel" style="padding: 0; overflow: hidden; margin-bottom: 30px;">
@@ -662,7 +677,7 @@
                                     title="Editar egreso"
                                     style="background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">✏️</button>
                                 @endif
-                                @if(auth()->user()->canAccess('finanzas.eliminar'))
+                                @if(auth()->user()->canAccess('finanzas.eliminar') || ($soloAvances ?? false))
                                 <form method="POST" action="{{ route('finanzas.destroy_egreso', $mov->id) }}" style="display:inline;" onsubmit="return confirm('¿Seguro que deseas eliminar este avance o egreso? Esta acción no se puede deshacer.');">
                                     @csrf
                                     @method('DELETE')
@@ -716,6 +731,7 @@
     </div>
 </div>
 
+@unless($soloAvances ?? false)
     <!-- INGRESOS -->
     <div class="dashboard-container" style="margin-top: 10px;">
         <h3 style="margin-bottom: 15px; color: #0f766e; display: flex; align-items: center; gap: 8px;">
@@ -1080,6 +1096,7 @@
         </div>
     </div>
 </div>
+@endunless
 
 
 <!-- Modal Nuevo Egreso -->
@@ -1103,12 +1120,16 @@
                 <div style="flex: 1;">
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tipo de Egreso</label>
                     <select name="categoria_egreso" id="categoria_egreso" onchange="toggleTraslados()" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                        @if($soloAvances ?? false)
+                            <option value="otros_egresos" selected>OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
+                        @else
                         <option value="egreso_realizado">EGRESOS REALIZADOS</option>
                         <option value="egreso_divisas">EGRESOS EN DIVISAS</option>
                         <option value="compra_divisas">COMPRA DE DIVISAS</option>
                         <option value="otros_egresos">OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
                         <option value="traslados">TRASLADOS</option>
                         <option value="ingresos">INGRESOS</option>
+                        @endif
                     </select>
                 </div>
                 <div style="flex: 1;">

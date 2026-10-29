@@ -33,6 +33,30 @@ class MetaQuincenaService
     }
 
     /**
+     * Áreas sin tienda (Call Center…) que también reciben producto meta.
+     * No tienen stock: la meta es una cantidad a vender y cuenta lo que venden sus empleados en cualquier sede.
+     *
+     * @return list<string>
+     */
+    public function areasDisponibles(): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            fn ($area) => $this->normalizarArea((string) $area),
+            config('inventario.metas_areas', ['CALL CENTER'])
+        ))));
+    }
+
+    public function esArea(string $sede): bool
+    {
+        return in_array($this->normalizarArea($sede), $this->areasDisponibles(), true);
+    }
+
+    private function normalizarArea(string $valor): string
+    {
+        return mb_strtoupper(trim(str_replace('_', ' ', $valor)), 'UTF-8');
+    }
+
+    /**
      * @return array{inicio:Carbon,fin:Carbon,etiqueta:string}
      */
     public function quincenaActual(?Carbon $fecha = null): array
@@ -135,11 +159,15 @@ class MetaQuincenaService
         ];
     }
 
-    public function marcar(int $productoId, string $sede, ?User $user = null): MetaQuincenaProducto
+    public function marcar(int $productoId, string $sede, ?User $user = null, ?float $cantidad = null): MetaQuincenaProducto
     {
-        $sede = mb_strtoupper(trim($sede), 'UTF-8');
-        if (! in_array($sede, $this->sedesDisponibles(), true)) {
+        $esArea = $this->esArea($sede);
+        $sede = $esArea ? $this->normalizarArea($sede) : mb_strtoupper(trim($sede), 'UTF-8');
+        if (! $esArea && ! in_array($sede, $this->sedesDisponibles(), true)) {
             throw ValidationException::withMessages(['sede' => 'Sede no válida para meta.']);
+        }
+        if ($esArea && ($cantidad === null || $cantidad <= 0)) {
+            throw ValidationException::withMessages(['cantidad' => 'Indica cuántas unidades debe vender '.$sede.'.']);
         }
 
         if (! Schema::hasTable('meta_quincena_productos')) {
@@ -162,7 +190,7 @@ class MetaQuincenaService
             return $existente;
         }
 
-        $stock = $this->stockActual($productoId, $sede);
+        $stock = $esArea ? round((float) $cantidad, 2) : $this->stockActual($productoId, $sede);
         if ($stock <= 0) {
             throw ValidationException::withMessages([
                 'sede' => 'No hay stock en '.$sede.' para marcar como meta.',
@@ -181,7 +209,7 @@ class MetaQuincenaService
 
     public function desmarcar(int $productoId, string $sede, ?Carbon $fecha = null): bool
     {
-        $sede = mb_strtoupper(trim($sede), 'UTF-8');
+        $sede = $this->esArea($sede) ? $this->normalizarArea($sede) : mb_strtoupper(trim($sede), 'UTF-8');
         $q = $this->quincenaActual($fecha);
 
         return MetaQuincenaProducto::query()
@@ -210,6 +238,31 @@ class MetaQuincenaService
         $out = [];
         foreach ($rows as $row) {
             $out[(int) $row->producto_id][] = mb_strtoupper(trim($row->sede), 'UTF-8');
+        }
+
+        return $out;
+    }
+
+    /**
+     * Cantidad meta de cada área para el producto en la quincena actual.
+     *
+     * @return array<string, float>
+     */
+    public function cantidadesAreaDelProducto(int $productoId, ?Carbon $fecha = null): array
+    {
+        if (! Schema::hasTable('meta_quincena_productos')) {
+            return [];
+        }
+
+        $q = $this->quincenaActual($fecha);
+        $out = [];
+        foreach (MetaQuincenaProducto::query()
+            ->where('producto_id', $productoId)
+            ->whereDate('quincena_inicio', $q['inicio']->toDateString())
+            ->get(['sede', 'cantidad_inicial']) as $meta) {
+            if ($this->esArea($meta->sede)) {
+                $out[$this->normalizarArea($meta->sede)] = (float) $meta->cantidad_inicial;
+            }
         }
 
         return $out;
@@ -257,11 +310,22 @@ class MetaQuincenaService
             $ids[] = (int) $yo->id;
         }
 
+        // Un área se guarda como "CALL CENTER" y en nómina puede estar como código "CALL_CENTER" o nombre "Call Center".
+        $esDeLaSede = function ($sq) use ($sede) {
+            $sq->where(function ($w) use ($sede) {
+                $w->whereRaw('UPPER(TRIM(codigo)) = ?', [$sede]);
+                if ($this->esArea($sede)) {
+                    $w->orWhereRaw("UPPER(REPLACE(TRIM(codigo), '_', ' ')) = ?", [$sede])
+                        ->orWhereRaw('UPPER(TRIM(nombre)) = ?', [$sede]);
+                }
+            });
+        };
+
         if ($ids === [] && ($user->isAdmin() || $user->isGerente())) {
             return NominaEmpleado::query()
                 ->with(['cliente', 'cargoCatalogo', 'sedeCatalogo'])
                 ->where('estado', 'ACTIVO')
-                ->whereHas('sedeCatalogo', fn ($q) => $q->whereRaw('UPPER(TRIM(codigo)) = ?', [$sede]))
+                ->whereHas('sedeCatalogo', $esDeLaSede)
                 ->orderBy('id')
                 ->get();
         }
@@ -274,8 +338,8 @@ class MetaQuincenaService
             ->with(['cliente', 'cargoCatalogo', 'sedeCatalogo'])
             ->whereIn('id', $ids)
             ->where('estado', 'ACTIVO')
-            ->where(function ($q) use ($sede) {
-                $q->whereHas('sedeCatalogo', fn ($sq) => $sq->whereRaw('UPPER(TRIM(codigo)) = ?', [$sede]))
+            ->where(function ($q) use ($sede, $esDeLaSede) {
+                $q->whereHas('sedeCatalogo', $esDeLaSede)
                     ->orWhereRaw('UPPER(TRIM(COALESCE(sede, \'\'))) = ?', [$sede]);
             })
             ->orderBy('id')
@@ -312,6 +376,9 @@ class MetaQuincenaService
         $yo = $this->org->empleadoDelUsuario($user);
         if ($yo) {
             $codigo = mb_strtoupper(trim((string) ($yo->sedeCatalogo?->codigo ?? $yo->sede)), 'UTF-8');
+            if ($this->esArea($codigo)) {
+                return [$this->normalizarArea($codigo)];
+            }
             if ($codigo !== '' && $codigo !== 'GERENCIA') {
                 return [$codigo];
             }
@@ -343,7 +410,41 @@ class MetaQuincenaService
             return false;
         }
 
-        return $user->isAdmin() || $user->isGerente() || $user->canAccess('meta');
+        if ($user->isAdmin() || $user->isGerente()) {
+            return true;
+        }
+
+        // Quien trabaja en un área (Call Center…) solo ve y marca las metas de su área, aunque tenga el permiso "meta".
+        if ($this->areaDelUsuario($user) !== null) {
+            return false;
+        }
+
+        return $user->canAccess('meta');
+    }
+
+    public function areaDelUsuario(User $user): ?string
+    {
+        $yo = $this->org->empleadoDelUsuario($user);
+        if (! $yo) {
+            return null;
+        }
+        $codigo = (string) ($yo->sedeCatalogo?->codigo ?? $yo->sede);
+
+        return $this->esArea($codigo) ? $this->normalizarArea($codigo) : null;
+    }
+
+    /**
+     * Sedes y áreas donde el usuario puede marcar meta.
+     *
+     * @return list<string>
+     */
+    public function sedesOperables(User $user): array
+    {
+        if ($this->veTodasLasSedes($user)) {
+            return array_values(array_merge($this->sedesDisponibles(), $this->areasDisponibles()));
+        }
+
+        return $this->sedesDelSupervisor($user);
     }
 
     public function puedeOperarSede(User $user, string $sede): bool
@@ -352,7 +453,7 @@ class MetaQuincenaService
             return true;
         }
 
-        $sede = mb_strtoupper(trim($sede), 'UTF-8');
+        $sede = $this->esArea($sede) ? $this->normalizarArea($sede) : mb_strtoupper(trim($sede), 'UTF-8');
 
         return in_array($sede, $this->sedesDelSupervisor($user), true);
     }
@@ -368,7 +469,6 @@ class MetaQuincenaService
     private function enriquecer(MetaQuincenaProducto $meta): array
     {
         $producto = DB::table('productos')->where('id', $meta->producto_id)->first();
-        $stockActual = $this->stockActual((int) $meta->producto_id, $meta->sede);
         $venta = $this->ventaEnPeriodo(
             (int) $meta->producto_id,
             $meta->sede,
@@ -377,6 +477,10 @@ class MetaQuincenaService
         );
         $vendido = $venta['unidades'];
         $cantidadInicial = (float) $meta->cantidad_inicial;
+        // Un área no tiene stock: su "cantidad actual" es lo que le falta por vender.
+        $stockActual = $this->esArea($meta->sede)
+            ? max(0.0, round($cantidadInicial - $vendido, 2))
+            : $this->stockActual((int) $meta->producto_id, $meta->sede);
 
         return [
             'id' => $meta->id,
@@ -385,6 +489,7 @@ class MetaQuincenaService
             'producto' => $producto->nombre ?? 'Producto #'.$meta->producto_id,
             'categoria' => $producto->categoria ?? '',
             'sede' => mb_strtoupper(trim($meta->sede), 'UTF-8'),
+            'es_area' => $this->esArea($meta->sede),
             'quincena_inicio' => $meta->quincena_inicio?->toDateString(),
             'quincena_fin' => $meta->quincena_fin?->toDateString(),
             'cantidad_inicial' => $cantidadInicial,
@@ -491,8 +596,20 @@ class MetaQuincenaService
 
         $query = DB::table('ventas_detalle')
             ->where('producto_id', $productoId)
-            ->whereBetween('fecha', [$inicio, $fin])
-            ->whereRaw('UPPER(TRIM(sede)) = ?', [$sede]);
+            ->whereBetween('fecha', [$inicio, $fin]);
+
+        if ($this->esArea($sede)) {
+            $claves = app(GerencialDashboardService::class)->clavesVendedoresArea($this->normalizarArea($sede));
+            if ($claves === []) {
+                return ['unidades' => 0.0, 'ultima_venta' => null];
+            }
+            $query->whereIn(DB::raw('UPPER(TRIM(vendedor))'), array_map(
+                fn ($c) => mb_strtoupper(trim((string) $c), 'UTF-8'),
+                $claves
+            ));
+        } else {
+            $query->whereRaw('UPPER(TRIM(sede)) = ?', [$sede]);
+        }
 
         if (Schema::hasColumn('ventas_detalle', 'anulado')) {
             $query->where('anulado', false);

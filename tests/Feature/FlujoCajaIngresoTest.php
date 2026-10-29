@@ -94,6 +94,34 @@ class FlujoCajaIngresoTest extends TestCase
         $this->assertSame(0, FlujoCaja::query()->count());
     }
 
+    public function test_rol_avances_solo_maneja_otros_egresos(): void
+    {
+        $avances = User::create(['name' => 'Avances', 'email' => 'avances-'.uniqid().'@test.local', 'password' => 'password123', 'role' => User::ROLE_AVANCES]);
+        $this->assertTrue($avances->soloAvances());
+        $this->assertFalse($avances->canAccess('finanzas.ver'));
+
+        $realizado = FlujoCaja::create([
+            'tipo' => 'egreso', 'categoria_egreso' => 'egreso_realizado', 'banco' => 'Banesco', 'titular' => 'Grupo JRZ',
+            'fecha' => '2026-09-05', 'monto_bs' => 10, 'motivo' => 'Pago proveedor', 'es_conciliado' => false, 'oculto' => false,
+        ]);
+        $avance = FlujoCaja::create([
+            'tipo' => 'egreso', 'categoria_egreso' => 'otros_egresos', 'banco' => 'Binance', 'titular' => 'Grupo JENU',
+            'fecha' => '2026-09-05', 'monto_bs' => 99200, 'motivo' => 'CAMBIO DE BINANCE A BS', 'es_conciliado' => false, 'oculto' => false,
+        ]);
+
+        // Otras pantallas de Finanzas: sin acceso.
+        $this->actingAs($avances)->get(route('finanzas.cuentas_por_pagar'))->assertRedirect('/');
+
+        // Solo puede registrar, editar y borrar otros egresos.
+        $this->actingAs($avances)->post(route('finanzas.store_egreso'), [
+            'categoria_egreso' => 'egreso_realizado', 'banco_titular' => 'Banesco|Grupo JRZ|X', 'fecha' => '2026-09-05', 'monto_bs' => '10',
+        ])->assertSessionHas('error', fn ($m) => str_contains($m, 'Solo puedes registrar'));
+        $this->actingAs($avances)->delete(route('finanzas.destroy_egreso', $realizado->id))->assertForbidden();
+        $this->assertNotNull(FlujoCaja::find($realizado->id));
+        $this->actingAs($avances)->delete(route('finanzas.destroy_egreso', $avance->id))->assertRedirect();
+        $this->assertNull(FlujoCaja::find($avance->id));
+    }
+
     public function test_se_puede_eliminar_un_ingreso(): void
     {
         $ing = FlujoCaja::create([

@@ -786,12 +786,19 @@ class CompradorController extends Controller
         $puedeVerEquipoPublicidad = auth()->user()->canViewTeamPublicidad();
         $publicidadUsuarios = collect();
         $puedeMarcarMeta = auth()->user()->canAccess('meta');
-        $metaSedesPorProducto = $puedeMarcarMeta
-            ? app(\App\Services\MetaQuincenaService::class)->sedesMetaPorProducto()
-            : [];
-        $sedesMetaDisponibles = $puedeMarcarMeta
-            ? array_values(app(\App\Services\MetaQuincenaService::class)->sedesDisponibles())
-            : [];
+        $metaSedesPorProducto = [];
+        $sedesMetaDisponibles = [];
+        if ($puedeMarcarMeta) {
+            $metasService = app(\App\Services\MetaQuincenaService::class);
+            $operables = $metasService->sedesOperables(auth()->user());
+            foreach ($metasService->sedesMetaPorProducto() as $productoMetaId => $sedesMeta) {
+                $visibles = array_values(array_intersect($sedesMeta, $operables));
+                if ($visibles !== []) {
+                    $metaSedesPorProducto[$productoMetaId] = $visibles;
+                }
+            }
+            $sedesMetaDisponibles = array_values(array_intersect($metasService->sedesDisponibles(), $operables));
+        }
 
         if (($needsPublicidad || $needsAnalysis) && config('database.default') === 'pgsql') {
             $authId = auth()->id();

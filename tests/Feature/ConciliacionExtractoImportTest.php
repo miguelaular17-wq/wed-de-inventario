@@ -51,6 +51,31 @@ class ConciliacionExtractoImportTest extends TestCase
         $this->assertEquals(300.0, (float) $lineas[1]->monto);
     }
 
+    public function test_mercantil_no_guarda_cancelacion_resumen_de_ventas_y_el_descuento_es_comision(): void
+    {
+        $imp = ConciliacionImportacion::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'archivo_nombre' => 'mercantil.xlsx',
+            'extension' => 'xlsx', 'estado' => ConciliacionImportacion::PENDIENTE,
+        ]);
+        $fila = fn (int $n, string $desc, float $monto, string $tipo, string $ref) => ['fila' => $n, 'tipo' => 'ok', 'datos' => [
+            'fecha' => '2026-09-02', 'descripcion' => $desc, 'referencia' => $ref, 'monto' => $monto, 'tipo' => $tipo,
+        ]];
+
+        $imp = app(ExtractoImporter::class)->importarFilas($imp, [
+            $fila(2, 'CANCELACION RESUMEN DE VENTAS Y RETENCIO', 1308438.05, 'abono', '14502001244'),
+            $fila(3, 'DESCUENTO TARJETA', 26168.77, 'cargo', '95402001244'),
+            $fila(4, 'CREDITO INMEDIATO CAMARA DE COMPENSACION', 100000.00, 'cargo', '20412031049'),
+        ]);
+
+        $this->assertSame(2, $imp->filas_importadas);
+        $this->assertStringContainsString('1 «CANCELACION RESUMEN DE VENTAS» de Mercantil no se guardaron', (string) $imp->mensaje);
+        $this->assertSame(['DESCUENTO TARJETA', 'CREDITO INMEDIATO CAMARA DE COMPENSACION'], ConciliacionLinea::query()->orderBy('id')->pluck('descripcion')->all());
+        $classifier = app(\App\Services\BankMovementClassifier::class);
+        $this->assertTrue($classifier->esComision('DESCUENTO TARJETA', 'MERCANTIL'));
+        // En otro banco la misma descripción se guarda.
+        $this->assertFalse(ExtractoImporter::seIgnora('BANESCO', 'CANCELACION RESUMEN DE VENTAS Y RETENCIO'));
+    }
+
     public function test_archivo_vacio_queda_fallido(): void
     {
         $path = $this->xlsxBanesco([]);

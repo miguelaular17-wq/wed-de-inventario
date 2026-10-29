@@ -123,9 +123,19 @@
                                 <div class="muted" style="font-size:.75rem;">{{ $fila['categoria'] }}</div>
                             @endif
                         </td>
-                        <td><strong>{{ $fila['sede'] }}</strong></td>
+                        <td>
+                            <strong>{{ $fila['sede'] }}</strong>
+                            @if(!empty($fila['es_area']))
+                                <div class="muted" style="font-size:.72rem;">Área · ventas de su equipo</div>
+                            @endif
+                        </td>
                         <td style="text-align:right;">{{ $fmt($fila['cantidad_inicial']) }} u.</td>
-                        <td style="text-align:right;font-weight:600;">{{ $fmt($fila['cantidad_actual']) }} u.</td>
+                        <td style="text-align:right;font-weight:600;">
+                            {{ $fmt($fila['cantidad_actual']) }} u.
+                            @if(!empty($fila['es_area']))
+                                <div class="muted" style="font-size:.72rem;font-weight:400;">por vender</div>
+                            @endif
+                        </td>
                         <td style="text-align:right;color:{{ $fila['vendido'] > 0 ? '#15803d' : 'var(--muted)' }};">
                             {{ $fmt($fila['vendido']) }} u.
                         </td>

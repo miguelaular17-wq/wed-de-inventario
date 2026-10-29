@@ -19,7 +19,8 @@ class TesoreriaIngreso extends Model
         'descripcion',
         'comprobante_path',
         'user_id',
-        'es_conciliado'
+        'es_conciliado',
+        'conciliar_en',
     ];
 
     public function user()

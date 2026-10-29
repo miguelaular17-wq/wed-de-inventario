@@ -135,6 +135,7 @@
         $link('My Delivery', route('finanzas.my_delivery'), request()->routeIs('finanzas.my_delivery')),
         $link('Gasto Directivos', route('finanzas.gasto_directivos'), request()->routeIs('finanzas.gasto_directivos*')),
         $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*')),
+        $link('Cuentas bancarias', route('finanzas.cuentas'), request()->routeIs('finanzas.cuentas*')),
         $link('Configuración', route('finanzas.configuracion'), request()->routeIs('finanzas.configuracion*')),
         $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones')),
         $link('Conciliación en divisas', route('finanzas.conciliacion_usd.index'), request()->routeIs('finanzas.conciliacion_usd.*')),
@@ -276,12 +277,16 @@
                 $link('Análisis de categorías', route('analisis_categorias.index'), request()->routeIs('analisis_categorias.*')),
             ]);
         }
+        if ($u->soloAvances()) {
+            $nav[] = $link('Avances y cambios', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*'));
+        }
         if ($u->canAccess('finanzas.ver')) {
             $nav[] = $link('Flujo de Caja', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*'));
             $nav[] = $link('Cuentas por Pagar', route('finanzas.cuentas_por_pagar'), request()->routeIs('finanzas.cuentas_por_pagar'));
             $nav[] = $link('My Delivery', route('finanzas.my_delivery'), request()->routeIs('finanzas.my_delivery'));
             $nav[] = $link('Gasto Directivos', route('finanzas.gasto_directivos'), request()->routeIs('finanzas.gasto_directivos*'));
             $nav[] = $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*'));
+            $nav[] = $link('Cuentas bancarias', route('finanzas.cuentas'), request()->routeIs('finanzas.cuentas*'));
             $nav[] = $link('Configuración', route('finanzas.configuracion'), request()->routeIs('finanzas.configuracion*'));
         }
         if ($u->canAccess('conciliaciones')) {
@@ -404,6 +409,7 @@
         'tesoreria' => 'Tesorería',
         'rrhh' => 'RRHH',
         'tecnico' => 'Técnico',
+        'avances' => 'Avances',
     ];
     $roleLabel = $roleLabels[$u->role] ?? ucfirst($u->role);
     $nameParts = preg_split('/\s+/', trim($u->name)) ?: [];

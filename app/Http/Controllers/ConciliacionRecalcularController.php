@@ -69,6 +69,11 @@ class ConciliacionRecalcularController extends Controller
             }
         }
         $nLotes = $lotes->conciliar($desde, $hasta, $data['banco'], $data['titular']);
+        if (stripos($data['banco'], 'MERCANTIL') !== false) {
+            $mercantil = app(\App\Services\Conciliacion\MercantilLotesConciliador::class)->conciliarAutomatico($desde, $hasta, $data['titular']);
+            $nLotes += $mercantil['conciliados'];
+            $nComisiones += $mercantil['descuentos'];
+        }
 
         $despues = $pendientes()->get(['id', 'banco', 'titular'])
             ->filter(fn ($l) => $matcher->claveCuenta($l->banco, $l->titular) === $cuenta)->count();

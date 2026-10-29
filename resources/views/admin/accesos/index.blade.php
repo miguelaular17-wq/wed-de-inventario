@@ -6,7 +6,7 @@
 @php
     $roles = ['gerente' => 'Gerente', 'supervisor' => 'Supervisor', 'telefonia' => 'Telefonía', 'comprador' => 'Comprador', 'sede' => 'Sede',
         'vendedor' => 'Vendedor', 'marketing' => 'Marketing', 'finanzas' => 'Finanzas', 'cobranza' => 'Cobranza', 'contabilidad' => 'Contabilidad',
-        'auditor' => 'Auditor', 'tesoreria' => 'Tesorería', 'rrhh' => 'RRHH', 'tecnico' => 'Técnico'];
+        'auditor' => 'Auditor', 'tesoreria' => 'Tesorería', 'rrhh' => 'RRHH', 'tecnico' => 'Técnico', 'avances' => 'Avances'];
     $totalMarcadas = count($marcadas);
 @endphp
 <div class="panel">

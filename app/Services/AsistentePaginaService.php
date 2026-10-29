@@ -52,8 +52,8 @@ class AsistentePaginaService
         try {
             $response = Http::withoutVerifying()
                 ->timeout(60)
-                ->withHeaders(['Content-Type' => 'application/json'])
-                ->post('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key='.$apiKey, $payload);
+                ->withHeaders(['Content-Type' => 'application/json', 'x-goog-api-key' => $apiKey])
+                ->post('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent', $payload);
         } catch (ConnectionException $e) {
             throw new RuntimeException('No se pudo conectar con el asistente.');
         }

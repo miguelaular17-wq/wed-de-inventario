@@ -167,8 +167,12 @@ class FinanzasConfiguracionTest extends TestCase
         $this->actingAs($this->user)->get(route('finanzas.configuracion'))
             ->assertOk()
             ->assertSee('Configuración de Finanzas')
-            ->assertSee('Tecno House')
-            ->assertSee('desactivado')
+            ->assertSee('Abrir Cuentas bancarias')
             ->assertSee('Vigilancia Falcón C.A.');
+        // Las cuentas ya no están en Configuración: viven en el módulo Cuentas bancarias.
+        $this->actingAs($this->user)->get(route('finanzas.cuentas', ['tab' => 'selector']))
+            ->assertOk()
+            ->assertSee('Tecno House')
+            ->assertSee('desactivada');
     }
 }

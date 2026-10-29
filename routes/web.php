@@ -67,7 +67,7 @@ Route::get('/', function () {
         if ($user->isComprador() || $user->isMarketing()) {
             return redirect()->route('comprador.dashboard');
         }
-        if ($user->isFinanzas() || $user->isAuditor()) {
+        if ($user->isFinanzas() || $user->isAuditor() || $user->isAvances()) {
             return redirect()->route('finanzas.flujo_caja');
         }
         if ($user->isCobranza()) {
@@ -587,12 +587,20 @@ Route::middleware('auth')->group(function () {
     Route::post('/perfil/sede', [\App\Http\Controllers\UserSedeController::class, 'update'])->name('user.sede.update');
 });
 
+// Flujo de Caja: el rol «avances» entra solo a «Otros egresos (avances y cambios)»; el controlador limita la categoría.
+Route::middleware('auth')->prefix('finanzas')->group(function () {
+    Route::get('/flujo-caja', [FinanzasController::class, 'flujoCaja'])->middleware('permission:finanzas.ver,finanzas.avances')->name('finanzas.flujo_caja');
+    Route::post('/flujo-caja/parse-desglose', [FinanzasController::class, 'parseArchivoDesglose'])->middleware('permission:finanzas.ver,finanzas.avances')->name('finanzas.parse_desglose');
+    Route::get('/flujo-caja/api/bcv', [FinanzasController::class, 'fetchBcvApi'])->middleware('permission:finanzas.ver,finanzas.avances')->name('finanzas.api_bcv');
+    Route::post('/flujo-caja/egreso', [FinanzasController::class, 'storeEgreso'])->middleware('permission:finanzas.editar,finanzas.avances')->name('finanzas.store_egreso');
+    Route::post('/flujo-caja/egreso/{id}', [FinanzasController::class, 'updateEgreso'])->middleware('permission:finanzas.editar,finanzas.avances')->name('finanzas.update_egreso');
+    Route::post('/flujo-caja/ocr-receipt', [FinanzasController::class, 'ocrReceipt'])->middleware('permission:finanzas.editar,finanzas.avances')->name('finanzas.ocr_receipt');
+    Route::delete('/flujo-caja/egreso/{id}', [FinanzasController::class, 'destroyEgreso'])->middleware('permission:finanzas.eliminar,finanzas.avances')->name('finanzas.destroy_egreso');
+});
+
 // Finanzas routes
 Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->group(function () {
-    Route::get('/flujo-caja', [FinanzasController::class, 'flujoCaja'])->name('finanzas.flujo_caja');
-    Route::post('/flujo-caja/parse-desglose', [FinanzasController::class, 'parseArchivoDesglose'])->name('finanzas.parse_desglose');
     Route::get('/flujo-caja/reporte', [FinanzasController::class, 'reporteFlujoCajaBusqueda'])->name('finanzas.flujo_caja.reporte');
-    Route::get('/flujo-caja/api/bcv', [FinanzasController::class, 'fetchBcvApi'])->name('finanzas.api_bcv');
     Route::get('/cuentas-por-pagar', [\App\Http\Controllers\CuentaPorPagarController::class, 'index'])->name('finanzas.cuentas_por_pagar');
     Route::get('/my-delivery', [\App\Http\Controllers\MyDeliveryController::class, 'index'])->name('finanzas.my_delivery');
     Route::get('/gasto-directivos', [\App\Http\Controllers\GastoDirectivosController::class, 'index'])->name('finanzas.gasto_directivos');
@@ -600,17 +608,19 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
     Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
     Route::get('/gastos-fijos/pendientes', [FinanzasController::class, 'getGastosFijosParaVincular'])->name('finanzas.gastos_fijos.pendientes');
     Route::get('/configuracion', [\App\Http\Controllers\FinanzasConfiguracionController::class, 'index'])->name('finanzas.configuracion');
+    Route::get('/cuentas', [\App\Http\Controllers\FinanzasCuentasController::class, 'index'])->name('finanzas.cuentas');
 
     Route::middleware(['permission:finanzas.editar'])->group(function () {
         Route::post('/configuracion', [\App\Http\Controllers\FinanzasConfiguracionController::class, 'store'])->name('finanzas.configuracion.store');
         Route::post('/configuracion/{catalogo}/activo', [\App\Http\Controllers\FinanzasConfiguracionController::class, 'toggle'])->name('finanzas.configuracion.toggle');
         Route::post('/configuracion/{catalogo}/reporte', [\App\Http\Controllers\FinanzasConfiguracionController::class, 'reporte'])->name('finanzas.configuracion.reporte');
+        Route::post('/cuentas', [\App\Http\Controllers\FinanzasCuentasController::class, 'crear'])->name('finanzas.cuentas.crear');
+        Route::post('/cuentas/grupos', [\App\Http\Controllers\FinanzasCuentasController::class, 'grupos'])->name('finanzas.cuentas.grupos');
+        Route::post('/cuentas/{cuenta}', [\App\Http\Controllers\FinanzasCuentasController::class, 'guardar'])->whereNumber('cuenta')->name('finanzas.cuentas.guardar');
+        Route::post('/cuentas/{cuenta}/quitar', [\App\Http\Controllers\FinanzasCuentasController::class, 'ocultar'])->whereNumber('cuenta')->name('finanzas.cuentas.quitar');
         Route::post('/cuentas-por-pagar', [\App\Http\Controllers\CuentaPorPagarController::class, 'store'])->name('finanzas.cuentas_por_pagar.store');
         Route::post('/flujo-caja/reset', [FinanzasController::class, 'resetDaily'])->name('finanzas.reset_daily');
-        Route::post('/flujo-caja/egreso', [FinanzasController::class, 'storeEgreso'])->name('finanzas.store_egreso');
-        Route::post('/flujo-caja/egreso/{id}', [FinanzasController::class, 'updateEgreso'])->name('finanzas.update_egreso');
         Route::post('/flujo-caja/egresos-bulk', [FinanzasController::class, 'storeEgresosBulk'])->name('finanzas.store_egresos_bulk');
-        Route::post('/flujo-caja/ocr-receipt', [FinanzasController::class, 'ocrReceipt'])->name('finanzas.ocr_receipt');
         Route::post('/flujo-caja/ocr-saldos', [FinanzasController::class, 'ocrSaldos'])->name('finanzas.ocr_saldos');
         Route::post('/flujo-caja/cuenta/{id}', [FinanzasController::class, 'updateCuenta'])->name('finanzas.update_cuenta');
         Route::post('/flujo-caja/resumen/{id}', [FinanzasController::class, 'updateResumen'])->name('finanzas.update_resumen');
@@ -624,9 +634,6 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
         Route::post('/gastos-fijos/eliminar', [FinanzasController::class, 'eliminarGastoFijoFila'])->name('finanzas.gastos_fijos.eliminar');
     });
 
-    Route::delete('/flujo-caja/egreso/{id}', [FinanzasController::class, 'destroyEgreso'])
-        ->middleware('permission:finanzas.eliminar')
-        ->name('finanzas.destroy_egreso');
     Route::delete('/flujo-caja/compra-divisa/{id}', [FinanzasController::class, 'destroyCompraDivisa'])
         ->middleware('permission:finanzas.eliminar')
         ->name('finanzas.destroy_compra_divisa');
@@ -639,6 +646,8 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
     Route::get('/conciliaciones/lotes', [FinanzasController::class, 'lotesPuntoVenta'])->name('finanzas.conciliaciones.lotes');
     Route::post('/conciliaciones/lotes/manual', [FinanzasController::class, 'conciliarLoteManual'])->name('finanzas.conciliaciones.lotes.manual');
+    Route::post('/conciliaciones/lotes/diferir', [FinanzasController::class, 'diferirLote'])->name('finanzas.conciliaciones.lotes.diferir');
+    Route::post('/conciliaciones/lotes/quitar-repetidos', [FinanzasController::class, 'quitarLotesRepetidos'])->name('finanzas.conciliaciones.lotes.quitar_repetidos');
     Route::post('/conciliaciones/upload', [FinanzasController::class, 'uploadConciliacion'])->name('finanzas.conciliaciones.upload');
     Route::get('/conciliacion-divisas', [\App\Http\Controllers\ConciliacionUsdController::class, 'index'])->name('finanzas.conciliacion_usd.index');
     Route::post('/conciliacion-divisas/subir', [\App\Http\Controllers\ConciliacionUsdController::class, 'subir'])->name('finanzas.conciliacion_usd.subir');
@@ -651,6 +660,8 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::post('/conciliaciones/pagos-manuales/preview', [\App\Http\Controllers\PagosManualesController::class, 'preview'])->name('finanzas.conciliaciones.pagos_manuales.preview');
     Route::post('/conciliaciones/pagos-manuales/aplicar', [\App\Http\Controllers\PagosManualesController::class, 'aplicar'])->name('finanzas.conciliaciones.pagos_manuales.aplicar');
     Route::post('/conciliaciones/cashea/preview', [\App\Http\Controllers\CasheaConciliacionController::class, 'preview'])->name('finanzas.conciliaciones.cashea.preview');
+    Route::post('/conciliaciones/mercantil-lotes/preview', [\App\Http\Controllers\MercantilLotesController::class, 'preview'])->name('finanzas.conciliaciones.mercantil_lotes.preview');
+    Route::post('/conciliaciones/mercantil-lotes/aplicar', [\App\Http\Controllers\MercantilLotesController::class, 'aplicar'])->name('finanzas.conciliaciones.mercantil_lotes.aplicar');
     Route::post('/conciliaciones/cashea/aplicar', [\App\Http\Controllers\CasheaConciliacionController::class, 'aplicar'])->name('finanzas.conciliaciones.cashea.aplicar');
     Route::get('/conciliaciones/importaciones/{importacion}', [FinanzasController::class, 'estadoImportacion'])->whereNumber('importacion')->name('finanzas.conciliaciones.importaciones.show');
     Route::post('/conciliaciones/medios-pago', [FinanzasController::class, 'uploadMediosPago'])->name('finanzas.conciliaciones.medios_pago');

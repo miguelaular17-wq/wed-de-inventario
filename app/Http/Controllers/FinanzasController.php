@@ -564,7 +564,7 @@ class FinanzasController extends Controller
             'tiposGasto',
             'empleadosServicioTecnico',
             'cuentas_por_pagar'
-        ));
+        ) + ['soloAvances' => (bool) auth()->user()?->soloAvances()]);
         Profiler::stop('FinanzasController::flujoCaja Blade render');
 
         Profiler::stop('FinanzasController::flujoCaja');
@@ -635,6 +635,9 @@ class FinanzasController extends Controller
 
     public function storeEgreso(Request $request)
     {
+        if ($request->user()?->soloAvances() && $request->input('categoria_egreso') !== 'otros_egresos') {
+            return back()->withInput()->with('error', 'Solo puedes registrar «Otros egresos (avances y cambios)».');
+        }
         try {
             // Normalizar campos numéricos: convertir "35.750,00" o "35750,00" → "35750.00"
             $numericFields = [
@@ -1165,6 +1168,9 @@ class FinanzasController extends Controller
     {
         try {
             $egreso = FlujoCaja::findOrFail($id);
+            if ($request->user()?->soloAvances() && $egreso->categoria_egreso !== 'otros_egresos') {
+                abort(403, 'Solo puedes editar «Otros egresos (avances y cambios)».');
+            }
 
         // Normalizar campos numéricos: convertir "35.750,00" o "35750,00" → "35750.00"
         $numericFields = ['monto_usd', 'tasa_cambio', 'diferencial_cambiario', 'monto_bs', 'comision'];
@@ -1339,6 +1345,9 @@ class FinanzasController extends Controller
     public function destroyEgreso($id)
     {
         $categorias = ['egreso_realizado', 'otros_egresos', 'traslados', 'egreso_divisas'];
+        if (auth()->user()?->soloAvances()) {
+            abort_unless(FlujoCaja::query()->whereKey($id)->where('categoria_egreso', 'otros_egresos')->exists(), 403, 'Solo puedes eliminar «Otros egresos (avances y cambios)».');
+        }
 
         $egreso = FlujoCaja::query()
             ->where(function ($query) use ($categorias) {
@@ -2411,8 +2420,8 @@ class FinanzasController extends Controller
                     $apiKey = env('GEMINI_API_KEY');
                     if (!$apiKey) continue;
 
-                    $response = \Illuminate\Support\Facades\Http::post(
-                        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={$apiKey}",
+                    $response = \Illuminate\Support\Facades\Http::withHeaders(['x-goog-api-key' => $apiKey])->post(
+                        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
                         [
                             'contents' => [[
                                 'parts' => [
@@ -2566,8 +2575,8 @@ class FinanzasController extends Controller
                     . "}\n\nFilas:\n" . $csv_preview;
 
                 try {
-                    $response = \Illuminate\Support\Facades\Http::post(
-                        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={$apiKey}",
+                    $response = \Illuminate\Support\Facades\Http::withHeaders(['x-goog-api-key' => $apiKey])->post(
+                        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
                         [
                             'contents' => [[ 'parts' => [['text' => $prompt]] ]],
                             'generationConfig' => ['response_mime_type' => 'application/json']
@@ -2768,6 +2777,13 @@ class FinanzasController extends Controller
             $fechaHasta ?: now()->toDateString(),
             $bancoFiltro
         );
+        // El abono del cierre llega al día siguiente: se mira hasta 5 días después del rango para tomar los lotes del final.
+        $mercantilAuto = (! $bancoFiltro || stripos($bancoFiltro, 'MERCANTIL') !== false)
+            ? app(\App\Services\Conciliacion\MercantilLotesConciliador::class)->conciliarAutomatico(
+                $fechaDesde ?: \Carbon\Carbon::parse($fechaHasta)->subMonth()->toDateString(),
+                \Carbon\Carbon::parse($fechaHasta ?: now())->addDays(5)->toDateString(),
+            )['conciliados']
+            : 0;
 
         // Solo liquidaciones sin lote ligado y por conciliar. Se recorren por bloques: una cuenta como
         // BNC L.S. CASHEA tiene decenas de miles de movimientos al mes y cargarlos todos agota la memoria.
@@ -2795,18 +2811,30 @@ class FinanzasController extends Controller
         }
         $liquidaciones = $liquidaciones->sortBy(fn ($l) => [$l->fecha?->format('Y-m-d'), $l->id])->values();
 
+        $conDiferidos = \Illuminate\Support\Facades\Schema::hasColumn('tesoreria_ingresos', 'conciliar_en');
         $lotesQuery = \App\Models\TesoreriaIngreso::query()
             ->where('tipo', 'punto_venta')
+            ->where(function ($q) use ($fechaDesde, $fechaHasta, $conDiferidos) {
+                $q->where(function ($w) use ($fechaDesde, $fechaHasta) {
+                    $w->when($fechaDesde, fn ($x) => $x->where('fecha', '>=', $fechaDesde))
+                        ->when($fechaHasta, fn ($x) => $x->where('fecha', '<=', $fechaHasta));
+                });
+                // Lotes del cierre de mes pasados a este período: se concilian aquí con la LIQ del día 1.
+                if ($conDiferidos) {
+                    $q->orWhere(function ($w) use ($fechaDesde, $fechaHasta) {
+                        $w->whereNotNull('conciliar_en')
+                            ->when($fechaDesde, fn ($x) => $x->where('conciliar_en', '>=', $fechaDesde))
+                            ->when($fechaHasta, fn ($x) => $x->where('conciliar_en', '<=', $fechaHasta));
+                    });
+                }
+            })
             ->orderBy('fecha')
             ->orderBy('id');
-        if ($fechaDesde) {
-            $lotesQuery->where('fecha', '>=', $fechaDesde);
-        }
-        if ($fechaHasta) {
-            $lotesQuery->where('fecha', '<=', $fechaHasta);
-        }
         $this->filtrarPorBanco($lotesQuery, $bancoFiltro);
         $lotes = $lotesQuery->get();
+        $diaConciliar = fn ($l) => $conDiferidos && $l->conciliar_en ? substr((string) $l->conciliar_en, 0, 10) : null;
+        // Pasados al mes siguiente: aquí solo se listan aparte; se cuentan y concilian en el período de conciliar_en.
+        $esDiferido = fn ($l) => $diaConciliar($l) && $fechaHasta && $diaConciliar($l) > $fechaHasta;
 
         $grupos = [];
         $registrar = function ($banco, $titular) use (&$grupos, $matcher) {
@@ -2835,6 +2863,18 @@ class FinanzasController extends Controller
         }
         ksort($grupos);
 
+        // Abonos de Mercantil conciliados a medias: en la lista cuenta solo lo que falta.
+        $parcialesLiq = app(\App\Services\Conciliacion\MercantilLotesConciliador::class)
+            ->parciales($liquidaciones->where('estado', '!=', 'conciliado')->pluck('id')->all())
+            ->map(fn ($filas) => [
+                'faltan' => $filas->whereNull('tesoreria_ingreso_id')->values(),
+                'ligados' => $filas->whereNotNull('tesoreria_ingreso_id')->values(),
+                'pendiente' => round((float) $filas->whereNull('tesoreria_ingreso_id')->sum('monto'), 2),
+            ]);
+        $montoLiq = fn ($l) => isset($parcialesLiq[$l->id]) ? $parcialesLiq[$l->id]['pendiente'] : abs((float) $l->monto);
+        // Lotes registrados dos veces: la copia no se concilia nunca; se marca para quitarla.
+        $copiasLotes = app(\App\Services\Conciliacion\LotesRepetidos::class)->copias($lotes);
+
         $tarjetas = [];
         foreach ($grupos as $meta) {
             $bancoCard = $meta['banco'];
@@ -2844,16 +2884,18 @@ class FinanzasController extends Controller
                     && $matcher->mismoTitular($item->titular ?? null, $titularCard, $item->banco ?? null, $bancoCard);
             };
             $liqBanco = $liquidaciones->filter($mismo)->values();
-            $lotesBanco = $lotes->filter($mismo)->values();
+            $todosBanco = $lotes->filter($mismo)->values();
+            $lotesBanco = $todosBanco->reject($esDiferido)->values();
             $tarjetas[] = [
                 'banco' => $bancoCard,
                 'titular' => $titularCard,
                 'conciliados' => $lotesBanco->where('es_conciliado', true)->values(),
                 'pendientes' => $lotesBanco->where('es_conciliado', false)->values(),
+                'diferidos' => $todosBanco->filter($esDiferido)->values(),
                 'liq_pendientes' => $liqBanco->where('estado', '!=', 'conciliado')->values(),
                 'total_conciliado' => round((float) $lotesBanco->where('es_conciliado', true)->sum('monto'), 2),
                 'total_pendiente' => round((float) $lotesBanco->where('es_conciliado', false)->sum('monto'), 2),
-                'total_liq' => round((float) $liqBanco->where('estado', '!=', 'conciliado')->sum('monto'), 2),
+                'total_liq' => round((float) $liqBanco->where('estado', '!=', 'conciliado')->sum($montoLiq), 2),
             ];
         }
 
@@ -2862,12 +2904,58 @@ class FinanzasController extends Controller
             'bancos' => $bancos,
             'titularesPorBanco' => $titularesPorBanco,
             'tarjetas' => $tarjetas,
-            'totalLotes' => $lotes->count(),
-            'totalConciliados' => $lotes->where('es_conciliado', true)->count(),
-            'totalPendientes' => $lotes->where('es_conciliado', false)->count(),
+            'totalLotes' => $lotes->reject($esDiferido)->count(),
+            'totalConciliados' => $lotes->reject($esDiferido)->where('es_conciliado', true)->count(),
+            'totalPendientes' => $lotes->reject($esDiferido)->where('es_conciliado', false)->count(),
+            'conDiferidos' => $conDiferidos,
+            'filtroDesde' => $fechaDesde,
             'totalLiq' => $liquidaciones->where('estado', '!=', 'conciliado')->count(),
             'lotesAutoConciliados' => $lotesAutoConciliados,
+            'mercantilAuto' => $mercantilAuto,
+            'parcialesLiq' => $parcialesLiq,
+            'copiasLotes' => $copiasLotes,
+            'lotesPorId' => $lotes->keyBy('id'),
         ]);
+    }
+
+    /**
+     * Lote del cierre de mes que el banco abona el día 1: se pasa al mes siguiente (o se devuelve a su mes).
+     */
+    public function diferirLote(Request $request)
+    {
+        $data = $request->validate([
+            'diferir_id' => ['nullable', 'integer', 'required_without:volver_id'],
+            'volver_id' => ['nullable', 'integer'],
+        ]);
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('tesoreria_ingresos', 'conciliar_en')) {
+            return back()->with('error', 'Falta la columna conciliar_en: ejecuta php artisan migrate.');
+        }
+        $lote = \App\Models\TesoreriaIngreso::query()->where('tipo', 'punto_venta')
+            ->findOrFail($data['diferir_id'] ?? $data['volver_id']);
+        if ($lote->es_conciliado) {
+            return back()->with('error', 'El lote '.$lote->lote_referencia.' ya está conciliado.');
+        }
+        if (! empty($data['diferir_id'])) {
+            $mes = \Carbon\Carbon::parse($lote->fecha)->addMonthNoOverflow()->startOfMonth();
+            $lote->update(['conciliar_en' => $mes->toDateString()]);
+
+            return back()->with('success', 'Lote '.$lote->lote_referencia.' del '.\Carbon\Carbon::parse($lote->fecha)->format('d/m/Y')
+                .' pasado a '.$mes->locale('es')->translatedFormat('F Y').': se concilia ahí con la LIQ del banco del día 1.');
+        }
+        $lote->update(['conciliar_en' => null]);
+
+        return back()->with('success', 'Lote '.$lote->lote_referencia.' devuelto a su mes.');
+    }
+
+    /** Quita de Tesorería las copias de lotes registrados dos veces (las sin conciliar ni ligar). */
+    public function quitarLotesRepetidos(Request $request)
+    {
+        $data = $request->validate(['ids' => ['required', 'array', 'min:1'], 'ids.*' => ['integer']]);
+        $r = app(\App\Services\Conciliacion\LotesRepetidos::class)->quitar(array_map('intval', $data['ids']));
+
+        return redirect()->route('finanzas.conciliaciones.lotes')->with($r['borradas'] > 0 ? 'success' : 'error', $r['borradas'] > 0
+            ? "Se quitaron {$r['borradas']} lote(s) repetidos de Tesorería. Queda uno de cada lote (respaldo: {$r['respaldo']})."
+            : 'No se quitó nada: esos lotes ya no están repetidos o están ligados a un movimiento del banco.');
     }
 
     public function manualConciliacion(Request $request)
@@ -3181,6 +3269,14 @@ class FinanzasController extends Controller
             if (! $matcher->mismoTitular($linea->titular, $lote->titular, $linea->banco, $lote->banco)) {
                 return back()->with('error', 'El titular del lote y de la liquidación no coinciden.');
             }
+        }
+
+        // Abono de Mercantil conciliado a medias: el lote elegido completa lo que falta.
+        $mercantil = app(\App\Services\Conciliacion\MercantilLotesConciliador::class);
+        if ($lineas->count() === 1 && $mercantil->parciales([$lineas->first()->id])->isNotEmpty()) {
+            return $mercantil->completarConLote($lineas->first(), $lote)
+                ? back()->with('success', 'Lote '.$lote->lote_referencia.' ligado al abono del '.$lineas->first()->fecha->format('d/m/Y').': completa lo que faltaba del cierre.')
+                : back()->with('error', 'El monto del lote no es el que falta en ese abono (mira el detalle en «LIQ del banco sin lote»).');
         }
 
         $suma = round((float) $lineas->sum(fn ($l) => abs((float) $l->monto)), 2);
@@ -4054,8 +4150,8 @@ class FinanzasController extends Controller
 
             while ($attempt < $maxRetries) {
                 $response = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(120)
-                    ->withHeaders(['Content-Type' => 'application/json'])
-                    ->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}", $payload);
+                    ->withHeaders(['Content-Type' => 'application/json', 'x-goog-api-key' => $apiKey])
+                    ->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", $payload);
 
                 if ($response->successful()) {
                     break;
@@ -4145,8 +4241,8 @@ class FinanzasController extends Controller
 
             while ($attempt < $maxRetries) {
                 $response = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(120)
-                    ->withHeaders(['Content-Type' => 'application/json'])
-                    ->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}", $payload);
+                    ->withHeaders(['Content-Type' => 'application/json', 'x-goog-api-key' => $apiKey])
+                    ->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", $payload);
 
                 if ($response->successful()) {
                     break;

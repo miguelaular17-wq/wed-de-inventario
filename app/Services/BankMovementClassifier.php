@@ -38,6 +38,8 @@ class BankMovementClassifier
     /** @var array<string, list<string>> */
     private array $comisionKeywordsPorBanco = [
         'BANCAMIGA' => ['envio de sms', 'emision estado de cuenta'],
+        // El descuento de los cierres de punto de venta (el abono «CANCELACION RESUMEN DE VENTAS» no se importa).
+        'MERCANTIL' => ['descuento tarjeta'],
     ];
 
     /** @var list<string> */

@@ -18,6 +18,9 @@ class ExtractoImporter
 {
     private ?bool $trazabilidad = null;
 
+    /** Filas que se dejaron fuera en la última importación (ver seIgnora). */
+    private int $ignoradas = 0;
+
     public function __construct(private ExtractoParser $parser) {}
 
     public function importarArchivo(ConciliacionImportacion $imp): ConciliacionImportacion
@@ -66,6 +69,7 @@ class ExtractoImporter
         $rechazosBloque = [];
         $ultimaFilaBloque = $desde;
         $vistas = 0;
+        $this->ignoradas = 0;
 
         foreach ($filas as $fila) {
             $n = (int) ($fila['fila'] ?? 0);
@@ -79,6 +83,8 @@ class ExtractoImporter
 
             if (($fila['tipo'] ?? '') === 'rechazo') {
                 $rechazosBloque[] = ['fila' => $n, 'motivo' => (string) $fila['motivo']];
+            } elseif (self::seIgnora((string) $imp->banco, $fila['datos']['descripcion'] ?? null)) {
+                $this->ignoradas++;
             } else {
                 $bloque[] = ['fila' => $n] + $fila['datos'];
             }
@@ -95,6 +101,16 @@ class ExtractoImporter
         }
 
         return $this->finalizar($imp->refresh());
+    }
+
+    /**
+     * Movimientos del extracto que no se guardan: en Mercantil, «CANCELACION RESUMEN DE VENTAS Y RETENCIO»
+     * (el abono de los cierres de punto de venta) no se concilia en esta cuenta.
+     */
+    public static function seIgnora(string $banco, ?string $descripcion): bool
+    {
+        return str_contains(mb_strtoupper($banco), 'MERCANTIL')
+            && str_starts_with(mb_strtoupper(trim((string) $descripcion)), 'CANCELACION RESUMEN DE VENTAS');
     }
 
     public function fallar(ConciliacionImportacion $imp, string $mensaje): ConciliacionImportacion
@@ -256,6 +272,9 @@ class ExtractoImporter
         }
         if ($imp->filas_rechazadas > 0) {
             $mensaje .= " {$imp->filas_rechazadas} filas rechazadas.";
+        }
+        if ($this->ignoradas > 0) {
+            $mensaje .= " {$this->ignoradas} «CANCELACION RESUMEN DE VENTAS» de Mercantil no se guardaron.";
         }
 
         $imp->forceFill([

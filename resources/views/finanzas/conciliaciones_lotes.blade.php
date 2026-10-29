@@ -68,6 +68,7 @@
         <div class="conc-toolbar">
             <a class="btn-link" href="{{ route('finanzas.conciliaciones') }}">Egresos</a>
             <button type="button" class="btn-upload" onclick="document.getElementById('mediosPagoModal').style.display='flex'">Medios de pago BDV</button>
+            <button type="button" class="btn-upload" style="background:#1d4ed8;" onclick="document.getElementById('mercantilLotesModal').style.display='flex'">Balance Mercantil (imagen)</button>
             <form action="{{ route('finanzas.conciliaciones.lotes') }}" method="GET" style="display:flex;gap:8px;flex-wrap:wrap;margin:0;">
                 <input type="date" name="fecha_desde" class="select-banco" value="{{ $filtros['fecha_desde'] ?? '' }}">
                 <input type="date" name="fecha_hasta" class="select-banco" value="{{ $filtros['fecha_hasta'] ?? '' }}">
@@ -84,6 +85,12 @@
 
     @if(session('success'))
         <div class="alert-success">{{ session('success') }}</div>
+    @endif
+    @if(session('error'))
+        <div class="alert-success" style="background:#fef2f2;color:#b91c1c;border-color:#fecaca;">{{ session('error') }}</div>
+    @endif
+    @if(($mercantilAuto ?? 0) > 0)
+        <div class="alert-success">Se conciliaron automáticamente {{ $mercantilAuto }} cierre(s) de Mercantil: los lotes del día suman exacto el abono «CANCELACION RESUMEN DE VENTAS».</div>
     @endif
     @if(($lotesAutoConciliados ?? 0) > 0)
         <div class="alert-success">Se conciliaron automáticamente {{ $lotesAutoConciliados }} lote(s) Banesco por el número de lote en la descripción del banco.</div>
@@ -152,6 +159,20 @@
                             <thead><tr><th class="pick-cell"></th><th>Fecha</th><th>Lote</th><th>Neto</th></tr></thead>
                             <tbody>
                                 @forelse($tarjeta['pendientes'] as $lote)
+                                    @php
+                                        $original = isset($copiasLotes[$lote->id]) ? ($lotesPorId[$copiasLotes[$lote->id]] ?? null) : null;
+                                    @endphp
+                                    @if($original)
+                                        <tr style="opacity:.6; background:#fff7ed;" title="Copia del lote #{{ $original->id }}">
+                                            <td class="pick-cell"></td>
+                                            <td>{{ \Carbon\Carbon::parse($lote->fecha)->format('d/m/Y') }}</td>
+                                            <td>{{ $lote->lote_referencia ?: '—' }}</td>
+                                            <td>Bs. {{ number_format((float) $lote->monto, 2) }}
+                                                <div style="font-size:.7rem; color:#c2410c; font-weight:700;">Repetido · {{ $original->es_conciliado ? 'el otro ya está conciliado' : 'copia del #'.$original->id }}</div>
+                                            </td>
+                                        </tr>
+                                        @continue
+                                    @endif
                                     <tr class="row-pick" data-role="lote" onclick="this.querySelector('input[type=radio]').checked = true; actualizarManualBar(this.closest('form'));">
                                         <td class="pick-cell">
                                             <input type="radio"
@@ -163,13 +184,40 @@
                                         </td>
                                         <td>{{ \Carbon\Carbon::parse($lote->fecha)->format('d/m/Y') }}</td>
                                         <td>{{ $lote->lote_referencia ?: '—' }}</td>
-                                        <td>Bs. {{ number_format((float) $lote->monto, 2) }}</td>
+                                        <td>Bs. {{ number_format((float) $lote->monto, 2) }}
+                                            @if(($conDiferidos ?? false) && $lote->conciliar_en && ($filtroDesde ?? null) && substr((string) $lote->fecha, 0, 10) < $filtroDesde)
+                                                <div style="font-size:.7rem; color:#1d4ed8; font-weight:700;">Del mes anterior
+                                                    <button type="submit" formaction="{{ route('finanzas.conciliaciones.lotes.diferir') }}" name="volver_id" value="{{ $lote->id }}" formnovalidate
+                                                            onclick="event.stopPropagation();" style="font-size:.68rem; border:0; background:none; color:#64748b; text-decoration:underline; cursor:pointer;">devolver</button>
+                                                </div>
+                                            @elseif($conDiferidos ?? false)
+                                                <button type="submit" formaction="{{ route('finanzas.conciliaciones.lotes.diferir') }}" name="diferir_id" value="{{ $lote->id }}" formnovalidate
+                                                        onclick="event.stopPropagation(); return confirm('¿Pasar el lote {{ $lote->lote_referencia }} al mes siguiente? Se concilia ahí con la LIQ del banco del día 1.');"
+                                                        title="El banco lo abona el mes siguiente (lote del cierre de mes)"
+                                                        style="display:block; margin-top:2px; font-size:.68rem; padding:1px 6px; border:1px solid #bfdbfe; border-radius:4px; background:#eff6ff; color:#1d4ed8; cursor:pointer;">→ Mes sig.</button>
+                                            @endif
+                                        </td>
                                     </tr>
                                 @empty
                                     <tr class="empty-row"><td colspan="4">Todos los lotes tienen LIQ</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
+                        @if(($tarjeta['diferidos'] ?? collect())->isNotEmpty())
+                            <div style="padding:8px 12px; background:#eff6ff; border-top:1px solid #bfdbfe; font-size:.78rem;">
+                                <div style="font-weight:800; color:#1d4ed8; margin-bottom:4px;">Pasan al mes siguiente ({{ $tarjeta['diferidos']->count() }})</div>
+                                @foreach($tarjeta['diferidos'] as $lote)
+                                    <div style="display:flex; justify-content:space-between; gap:6px; padding:2px 0;">
+                                        <span>{{ \Carbon\Carbon::parse($lote->fecha)->format('d/m/Y') }} · lote {{ $lote->lote_referencia ?: '—' }} · Bs. {{ number_format((float) $lote->monto, 2) }}
+                                            <span style="color:#64748b;">→ {{ \Carbon\Carbon::parse($lote->conciliar_en)->locale('es')->translatedFormat('F Y') }}{{ $lote->es_conciliado ? ' · conciliado' : '' }}</span></span>
+                                        @unless($lote->es_conciliado)
+                                            <button type="submit" formaction="{{ route('finanzas.conciliaciones.lotes.diferir') }}" name="volver_id" value="{{ $lote->id }}" formnovalidate
+                                                    style="font-size:.7rem; border:0; background:none; color:#64748b; text-decoration:underline; cursor:pointer;">devolver</button>
+                                        @endunless
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
                         </div>
                         @if($tarjeta['pendientes']->count() > 0)
                             <div class="section-footer">Bs. {{ number_format($tarjeta['total_pendiente'], 2) }}</div>
@@ -182,17 +230,29 @@
                             <thead><tr><th class="pick-cell"></th><th>Fecha</th><th>Descripción</th><th>Monto</th></tr></thead>
                             <tbody>
                                 @forelse($tarjeta['liq_pendientes'] as $linea)
+                                    @php $parcial = ($parcialesLiq ?? collect())->get($linea->id); @endphp
                                     <tr class="row-pick" data-role="liq" onclick="var c=this.querySelector('input[type=checkbox]'); c.checked=!c.checked; actualizarManualBar(this.closest('form'));">
                                         <td class="pick-cell">
                                             <input type="checkbox"
                                                    name="linea_ids[]"
                                                    value="{{ $linea->id }}"
-                                                   data-monto="{{ round(abs((float) $linea->monto), 2) }}"
+                                                   data-monto="{{ $parcial ? $parcial['pendiente'] : round(abs((float) $linea->monto), 2) }}"
                                                    onclick="event.stopPropagation(); actualizarManualBar(this.closest('form'));">
                                         </td>
                                         <td>{{ \Carbon\Carbon::parse($linea->fecha)->format('d/m/Y') }}</td>
-                                        <td title="{{ $linea->descripcion }}">{{ \Illuminate\Support\Str::limit($linea->descripcion, 42) }}</td>
-                                        <td>Bs. {{ number_format((float) $linea->monto, 2) }}</td>
+                                        <td title="{{ $linea->descripcion }}">
+                                            {{ \Illuminate\Support\Str::limit($linea->descripcion, 42) }}
+                                            @if($parcial)
+                                                <div style="font-size:.72rem; color:#b45309; font-weight:700; margin-top:2px;">
+                                                    Falta {{ $parcial['faltan']->count() === 1 ? 'el lote' : 'los lotes' }}
+                                                    {{ $parcial['faltan']->map(fn ($f) => $f->lote.' (Bs. '.number_format((float) $f->monto, 2).')')->implode(', ') }}
+                                                </div>
+                                                <div style="font-size:.7rem; color:#64748b;">
+                                                    Ya conciliados: lotes {{ $parcial['ligados']->pluck('lote')->implode(', ') }} · abono total Bs. {{ number_format((float) $linea->monto, 2) }}
+                                                </div>
+                                            @endif
+                                        </td>
+                                        <td>Bs. {{ number_format($parcial ? $parcial['pendiente'] : (float) $linea->monto, 2) }}</td>
                                     </tr>
                                 @empty
                                     <tr class="empty-row"><td colspan="4">Sin liquidaciones pendientes</td></tr>
@@ -206,10 +266,61 @@
                     </div>
                 </div>
             </form>
+            @php $repetidos = $tarjeta['pendientes']->filter(fn ($l) => isset($copiasLotes[$l->id])); @endphp
+            @if($repetidos->isNotEmpty())
+                <form method="POST" action="{{ route('finanzas.conciliaciones.lotes.quitar_repetidos') }}"
+                      onsubmit="return confirm('¿Quitar de Tesorería {{ $repetidos->count() }} lote(s) registrados dos veces? Queda uno de cada lote y se guarda un respaldo.');"
+                      style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 16px; background:#fff7ed; border-top:1px solid #fed7aa; font-size:.84rem; color:#9a3412;">
+                    @csrf
+                    @foreach($repetidos as $l)<input type="hidden" name="ids[]" value="{{ $l->id }}">@endforeach
+                    <span><strong>{{ $repetidos->count() }} lote(s) repetidos</strong> en Tesorería (misma fecha, número y monto que otro). El banco los abona una sola vez: la copia nunca se concilia y duplica los ingresos.</span>
+                    <button type="submit" class="btn-conciliar" style="background:#c2410c; color:white; border:none;">Quitar repetidos</button>
+                </form>
+            @endif
         </div>
     @empty
         <div class="bank-card" style="padding:28px;color:#64748b;">No hay lotes ni liquidaciones en ese rango. Sube el Excel de medios de pago o carga primero el extracto en Conciliación de egresos.</div>
     @endforelse
+</div>
+
+<div id="mercantilLotesModal" class="modal-overlay">
+    <div class="modal-box">
+        <form action="{{ route('finanzas.conciliaciones.mercantil_lotes.preview') }}" method="POST" enctype="multipart/form-data"
+              onsubmit="const b = this.querySelector('.btn-submit'); b.disabled = true; b.innerText = 'Leyendo las capturas…';">
+            @csrf
+            <input type="hidden" name="volver" value="lotes">
+            <div class="modal-head">
+                <h3 style="margin:0;">Balance de transacciones — Mercantil</h3>
+                <button type="button" class="btn-cancel" onclick="document.getElementById('mercantilLotesModal').style.display='none'">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="color:#64748b;margin-top:0;">
+                    Captura del portal de Mercantil <strong>«Balance de Transacciones en el período»</strong> de un cierre: una fila por lote
+                    con Importe Bruto, Descuento, Retención ISLR, Importe Abonado y el Total General. Su total bruto es el abono
+                    «CANCELACION RESUMEN DE VENTAS» del banco. Se concilian los lotes que están en Tesorería; si falta alguno no se crea:
+                    su monto queda en «LIQ del banco sin lote» y se completa solo al registrarlo. Una captura por cierre; puedes subir varias.
+                    Primero verás el resultado.
+                </p>
+                <label class="form-label">Cuenta</label>
+                <select name="titular" class="form-control" required>
+                    @foreach(($titularesPorBanco['MERCANTIL'] ?? []) as $titular)
+                        <option value="{{ $titular }}" @selected(str_contains(strtoupper($titular), 'JRZ'))>MERCANTIL · {{ $titular }}</option>
+                    @endforeach
+                </select>
+                <label class="form-label">Capturas</label>
+                <div class="file-wrap">
+                    <label class="file-label">Elegir
+                        <input type="file" name="imagenes[]" accept=".png,.jpg,.jpeg,.webp" multiple required style="display:none;" onchange="document.getElementById('mercantilFileName').value = [...this.files].map(f => f.name).join(', ');">
+                    </label>
+                    <input id="mercantilFileName" class="file-name" placeholder="Ninguna imagen" readonly>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn-cancel" onclick="document.getElementById('mercantilLotesModal').style.display='none'">Cancelar</button>
+                <button type="submit" class="btn-submit">Verificar</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <div id="mediosPagoModal" class="modal-overlay">

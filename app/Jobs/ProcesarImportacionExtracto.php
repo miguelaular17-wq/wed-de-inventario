@@ -123,6 +123,10 @@ class ProcesarImportacionExtracto implements ShouldBeUnique, ShouldQueue
         }
         $total += app(\App\Services\Conciliacion\LotesPuntoVentaAutoMatcher::class)
             ->conciliar($desde, $hasta, $imp->banco, $imp->titular);
+        if (stripos((string) $imp->banco, 'MERCANTIL') !== false) {
+            $total += app(\App\Services\Conciliacion\MercantilLotesConciliador::class)
+                ->conciliarAutomatico($desde, $hasta, $imp->titular)['conciliados'];
+        }
 
         $pendientes = DB::table('conciliacion_lineas')
             ->where('importacion_id', $imp->id)

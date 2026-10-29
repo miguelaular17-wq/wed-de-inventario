@@ -1177,7 +1177,9 @@ class IncentivoEvaluacionService
             $empleadoId = (int) $meta->responsable_empleado_id;
             $sede = mb_strtoupper(trim((string) $meta->sede));
             $inicial = (float) $meta->cantidad_inicial;
-            $unidades = $vendido[(int) $meta->producto_id.'|'.$sede] ?? 0.0;
+            $unidades = $this->metasQuincena->esArea($sede)
+                ? $this->metasQuincena->unidadesVendidas((int) $meta->producto_id, $sede, $inicio, $fin)
+                : ($vendido[(int) $meta->producto_id.'|'.$sede] ?? 0.0);
             $cumplida = $inicial > 0 ? $unidades >= $inicial : $unidades > 0;
             $porEmpleado[$empleadoId]['cumplidas'] = ($porEmpleado[$empleadoId]['cumplidas'] ?? 0) + ($cumplida ? 1 : 0);
             $porEmpleado[$empleadoId]['total'] = ($porEmpleado[$empleadoId]['total'] ?? 0) + 1;
