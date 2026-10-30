@@ -2,18 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\Conciliacion\MercantilBalanceImagen;
+use App\Services\Conciliacion\MercantilBalanceExcel;
 use App\Services\Conciliacion\MercantilLotesConciliador;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
-/** Capturas del "Balance de Transacciones" de Mercantil: concilian el abono del cierre con sus lotes. */
+/** Excel del "Balance de Transacciones" de Mercantil: concilia los lotes del cierre con su movimiento del banco. */
 class MercantilLotesController extends Controller
 {
     public function __construct(
-        private MercantilBalanceImagen $lector,
+        private MercantilBalanceExcel $lector,
         private MercantilLotesConciliador $conciliador,
     ) {}
 
@@ -21,20 +21,21 @@ class MercantilLotesController extends Controller
     {
         $data = $request->validate([
             'titular' => ['required', 'string', 'max:120'],
-            'imagenes' => ['required', 'array', 'min:1', 'max:10'],
-            'imagenes.*' => ['file', 'extensions:png,jpg,jpeg,webp', 'max:8192'],
+            'archivos' => ['required', 'array', 'min:1', 'max:10'],
+            'archivos.*' => ['file', 'extensions:xlsx,xls,csv', 'max:8192'],
         ], [
-            'imagenes.required' => 'Elige al menos una captura del balance.',
-            'imagenes.*.extensions' => 'Las capturas deben ser imágenes (.png, .jpg).',
+            'archivos.required' => 'Elige al menos un Excel del balance.',
+            'archivos.*.extensions' => 'El balance debe ser Excel (.xlsx / .xls) o CSV.',
         ]);
 
         $balances = [];
-        foreach ($request->file('imagenes') as $img) {
+        foreach ($request->file('archivos') as $archivo) {
             try {
-                $leido = $this->lector->leer($img->getRealPath(), $img->getMimeType() ?: 'image/png');
-                $balances[] = ['archivo' => $img->getClientOriginalName(), 'lotes' => $leido['lotes'], 'error' => null];
+                $ext = strtolower($archivo->getClientOriginalExtension() ?: 'xlsx');
+                $leido = $this->lector->leer($archivo->getRealPath(), $ext);
+                $balances[] = ['archivo' => $archivo->getClientOriginalName(), 'lotes' => $leido['lotes'], 'error' => null];
             } catch (\Throwable $e) {
-                $balances[] = ['archivo' => $img->getClientOriginalName(), 'lotes' => [], 'error' => $e->getMessage()];
+                $balances[] = ['archivo' => $archivo->getClientOriginalName(), 'lotes' => [], 'error' => $e->getMessage()];
             }
         }
         $token = (string) Str::uuid();
@@ -54,7 +55,7 @@ class MercantilLotesController extends Controller
         $token = (string) $request->validate(['token' => ['required', 'uuid']])['token'];
         $sesion = $request->session()->pull('mercantil_lotes.'.$token);
         if (! $sesion) {
-            return redirect()->route('finanzas.conciliaciones')->with('error', 'La vista previa venció. Vuelve a subir las capturas.');
+            return redirect()->route('finanzas.conciliaciones')->with('error', 'La vista previa venció. Vuelve a subir el Excel.');
         }
 
         $conciliados = 0;
@@ -73,10 +74,10 @@ class MercantilLotesController extends Controller
 
         $partes = [];
         if ($conciliados > 0) {
-            $partes[] = $conciliados.' abono(s) de cierre conciliados con todos sus lotes';
+            $partes[] = $conciliados.' cierre(s) conciliados con todos sus lotes';
         }
         if ($parciales > 0) {
-            $partes[] = $parciales.' conciliado(s) en parte: los lotes que faltan en Tesorería quedan en «LIQ del banco sin lote» y se completan solos al registrarlos';
+            $partes[] = $parciales.' cierre(s) conciliados en parte: los lotes que faltan en Tesorería se concilian solos al registrarlos';
         }
 
         return redirect()->route($sesion['volver'] ?? 'finanzas.conciliaciones')->with($partes !== [] ? 'success' : 'error', 'Lotes Mercantil: '

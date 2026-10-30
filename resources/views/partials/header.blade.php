@@ -357,6 +357,7 @@
                     $link('Descuento mercancía', route('nomina.mercancia.index'), request()->routeIs('nomina.mercancia.*')),
                     $link('Deducciones y bonos', route('nomina.ajustes.index'), request()->routeIs('nomina.ajustes.index', 'nomina.ajustes.escritorio')),
                     $link('Horas extras', route('nomina.horas_extras.index'), request()->routeIs('nomina.horas_extras.index', 'nomina.horas_extras.masivas')),
+                    $link('Inasistencias', route('nomina.inasistencias.index'), request()->routeIs('nomina.inasistencias.index', 'nomina.inasistencias.masivas')),
                 ]),
                 $group('Personal', [
                     $link('Días libres', route('nomina.dias_libres.index'), request()->routeIs('nomina.dias_libres.*')),

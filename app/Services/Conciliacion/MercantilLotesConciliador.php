@@ -37,7 +37,8 @@ class MercantilLotesConciliador
     {
         $abonos = $this->abonosPendientes($desde, $hasta, $titularFiltro);
         $descuentos = $this->marcarDescuentos($abonos);
-        $conciliados = $this->completarParciales($abonos);
+        // Cierres aplicados a medias (por su abono o su «DESCUENTO TARJETA»): se completan con los lotes que se registren.
+        $conciliados = $this->completarParciales($this->lineasConParcial($desde, $hasta));
         // Los que ya tienen un balance aplicado a medias solo se completan con sus lotes faltantes.
         $conParcial = $this->parciales($abonos->pluck('id')->all())->keys()->all();
         $abonos = $abonos->reject(fn ($l) => in_array($l->id, $conParcial, true))->values();
@@ -75,17 +76,30 @@ class MercantilLotesConciliador
     public function planBalance(array $balance, string $titular): array
     {
         $total = round(array_sum(array_column($balance, 'bruto')), 2);
-        $vacio = ['abono' => null, 'descuento' => null, 'total' => $total, 'filas' => []];
+        $totalDescuento = round(array_sum(array_column($balance, 'descuento')), 2);
+        $vacio = ['abono' => null, 'descuento' => null, 'via' => null, 'total' => $total, 'total_descuento' => $totalDescuento, 'filas' => []];
         if ($balance === [] || $total < 0.01) {
-            return $vacio + ['error' => 'La imagen no trae lotes con importe bruto.'];
+            return $vacio + ['error' => 'El archivo no trae lotes con importe bruto.'];
         }
 
-        $abonos = $this->abonosPendientes(now()->subYear()->toDateString(), now()->toDateString(), $titular)
+        // El movimiento del banco del cierre: el abono «CANCELACION RESUMEN DE VENTAS» por el bruto (si quedó cargado) o,
+        // como ese abono ya no se importa, el «DESCUENTO TARJETA» del mismo cierre por el descuento total.
+        $desde = now()->subYear()->toDateString();
+        $hasta = now()->toDateString();
+        $abonos = $this->abonosPendientes($desde, $hasta, $titular)
             ->filter(fn ($l) => abs(abs((float) $l->monto) - $total) <= self::TOLERANCIA)->values();
+        $via = 'abono';
+        if ($abonos->isEmpty() && $totalDescuento >= 0.01) {
+            $abonos = $this->descuentosPendientes($desde, $hasta, $titular)
+                ->filter(fn ($l) => abs(abs((float) $l->monto) - $totalDescuento) <= self::TOLERANCIA)->values();
+            $via = 'descuento';
+        }
         if ($abonos->count() !== 1) {
             return $vacio + ['error' => $abonos->isEmpty()
-                ? 'No hay en el extracto de Mercantil · '.$titular.' un abono «CANCELACION RESUMEN DE VENTAS» pendiente por Bs '.number_format($total, 2, ',', '.').' (el total bruto del balance). ¿Ya está cargado el extracto de esa fecha, o ya se concilió?'
-                : 'Hay '.$abonos->count().' abonos pendientes por Bs '.number_format($total, 2, ',', '.').': no sé a cuál corresponde este balance.'];
+                ? 'No hay en el extracto de Mercantil · '.$titular.' un «DESCUENTO TARJETA» pendiente por Bs '.number_format($totalDescuento, 2, ',', '.')
+                    .' (el descuento total del balance) ni un abono «CANCELACION RESUMEN DE VENTAS» por Bs '.number_format($total, 2, ',', '.')
+                    .'. ¿Ya está cargado el extracto de esa fecha, o ya se concilió?'
+                : 'Hay '.$abonos->count().' movimientos pendientes por ese monto en el extracto: no sé a cuál corresponde este balance.'];
         }
         $abono = $abonos->first();
         $previo = $this->parciales([$abono->id])->get($abono->id);
@@ -126,19 +140,23 @@ class MercantilLotesConciliador
         $error = $conflictos === [] ? null : 'En Tesorería '.implode('; ', array_map(
             fn ($f) => 'el lote '.$f['lote'].' está por Bs '.number_format((float) $f['conflicto']->monto, 2, ',', '.').' y el balance dice Bs '.number_format($f['bruto'], 2, ',', '.'),
             $conflictos,
-        )).': corrige el monto del lote y vuelve a subir la imagen.';
+        )).': corrige el monto del lote y vuelve a subir el archivo.';
         if ($error === null && $existentes->isEmpty()) {
-            $error = 'Ninguno de los lotes del balance está en Tesorería: regístralos y el abono se concilia solo.';
+            $error = 'Ninguno de los lotes del balance está en Tesorería: regístralos y vuelve a subir el archivo.';
         }
         if ($error === null && $faltan !== [] && ! Schema::hasTable('conciliacion_lotes_parciales')) {
             $error = 'Para conciliar en parte falta la tabla conciliacion_lotes_parciales: ejecuta php artisan migrate.';
         }
-        // Los que faltan no se crean: se concilian los presentes y el abono queda en «LIQ del banco sin lote» por lo que falta.
+        // Los que faltan no se crean: se concilian los presentes y el cierre se completa solo cuando se registren.
         $aviso = $faltan === [] ? null : 'Se conciliarán los lotes que están en Tesorería. Falta registrar '
             .$this->textoFaltan(collect($faltan)->map(fn ($f) => (object) ['lote' => $f['lote'], 'monto' => $f['bruto']]))
-            .' (cierre del '.$fechaSesion.'): ese monto queda en «LIQ del banco sin lote» y se concilia solo cuando lo registres.';
+            .' (cierre del '.$fechaSesion.'): se concilia solo cuando lo registres en Tesorería.';
 
-        return ['error' => $error, 'aviso' => $aviso, 'abono' => $abono, 'descuento' => $this->descuentoDe($abono), 'total' => $total, 'filas' => $filas];
+        return [
+            'error' => $error, 'aviso' => $aviso, 'abono' => $abono, 'via' => $via,
+            'descuento' => $via === 'abono' ? $this->descuentoDe($abono) : $abono,
+            'total' => $total, 'total_descuento' => $totalDescuento, 'filas' => $filas,
+        ];
     }
 
     /**
@@ -229,6 +247,18 @@ class MercantilLotesConciliador
         return $completos;
     }
 
+    /** @return Collection<int, ConciliacionLinea> */
+    private function lineasConParcial(string $desde, string $hasta): Collection
+    {
+        if (! Schema::hasTable('conciliacion_lotes_parciales')) {
+            return collect();
+        }
+        $ids = DB::table('conciliacion_lotes_parciales')->whereNull('tesoreria_ingreso_id')->distinct()->pluck('conciliacion_linea_id');
+
+        return $ids->isEmpty() ? collect() : ConciliacionLinea::query()->whereIn('id', $ids)
+            ->where('estado', 'pendiente')->whereBetween('fecha', [$desde, $hasta])->get();
+    }
+
     /**
      * «Conciliar manualmente» con un abono a medias: el lote elegido cubre lo que falta (mismo monto, ±0,05).
      */
@@ -311,6 +341,21 @@ class MercantilLotesConciliador
             ->whereNull('tesoreria_ingreso_id')->whereNull('flujo_caja_id')
             ->when(Schema::hasColumn('conciliacion_lineas', 'compra_divisa_id'), fn ($q) => $q->whereNull('compra_divisa_id'))
             ->whereRaw('UPPER(descripcion) LIKE ?', ['CANCELACION RESUMEN DE VENTAS%'])
+            ->whereBetween('fecha', [$desde, $hasta])
+            ->get()
+            ->filter(fn ($l) => ! $titular || $this->matcher->mismoTitular($l->titular, $titular, $l->banco, 'MERCANTIL'))
+            ->values();
+    }
+
+    /** Cargos «DESCUENTO TARJETA» de Mercantil sin ligar (la comisión de cada cierre de punto de venta). */
+    public function descuentosPendientes(string $desde, string $hasta, ?string $titular = null): Collection
+    {
+        return ConciliacionLinea::query()
+            ->whereRaw('UPPER(banco) LIKE ?', ['%MERCANTIL%'])
+            ->where('tipo', 'cargo')
+            ->where('estado', 'pendiente')
+            ->whereNull('tesoreria_ingreso_id')->whereNull('flujo_caja_id')
+            ->whereRaw('UPPER(descripcion) LIKE ?', ['DESCUENTO TARJETA%'])
             ->whereBetween('fecha', [$desde, $hasta])
             ->get()
             ->filter(fn ($l) => ! $titular || $this->matcher->mismoTitular($l->titular, $titular, $l->banco, 'MERCANTIL'))

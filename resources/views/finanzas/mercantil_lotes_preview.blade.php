@@ -12,8 +12,8 @@
         <div>
             <h1 style="margin:0;">Lotes Mercantil · Verificación en el banco</h1>
             <p class="muted" style="margin:6px 0 0;">
-                Mercantil · {{ $titular }} · {{ count($planes) }} captura(s). El total bruto de cada balance es el abono
-                «CANCELACION RESUMEN DE VENTAS» del cierre; el descuento sale aparte como «DESCUENTO TARJETA».
+                Mercantil · {{ $titular }} · {{ count($planes) }} archivo(s). Cada cierre se comprueba con su «DESCUENTO TARJETA»
+                del extracto (bruto − abonado del balance), o con el abono «CANCELACION RESUMEN DE VENTAS» si quedó cargado.
             </p>
         </div>
         <a href="{{ route($volver ?? 'finanzas.conciliaciones') }}" class="btn secondary">Cancelar</a>
@@ -25,7 +25,7 @@
             <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
                 <strong>{{ $p['archivo'] }}</strong>
                 @if($plan)
-                    <span class="muted">Total bruto del balance: <strong>{{ $bs($plan['total']) }}</strong></span>
+                    <span class="muted">Bruto: <strong>{{ $bs($plan['total']) }}</strong> · Descuento: <strong>{{ $bs($plan['total_descuento'] ?? 0) }}</strong></span>
                 @endif
             </div>
 
@@ -37,10 +37,16 @@
 
             @if($plan && $plan['abono'])
                 <p style="margin:10px 0 6px;">
-                    Abono del banco: <strong>{{ $plan['abono']->fecha->format('d/m/Y') }}</strong> · ref. {{ $plan['abono']->referencia }} ·
-                    {{ $plan['abono']->descripcion }} · <strong>{{ $bs($plan['abono']->monto) }}</strong>
-                    @if($plan['descuento'])
-                        <br><span class="muted">Descuento: {{ $plan['descuento']->descripcion }} ref. {{ $plan['descuento']->referencia }} · {{ $bs($plan['descuento']->monto) }} → pasa a Comisiones bancarias.</span>
+                    @if(($plan['via'] ?? 'abono') === 'descuento')
+                        Comprobado con el banco: <strong>{{ $plan['abono']->fecha->format('d/m/Y') }}</strong> · ref. {{ $plan['abono']->referencia }} ·
+                        {{ $plan['abono']->descripcion }} · <strong>{{ $bs($plan['abono']->monto) }}</strong>
+                        <br><span class="muted">Es el descuento del cierre (bruto − abonado); queda como comisión bancaria.</span>
+                    @else
+                        Abono del banco: <strong>{{ $plan['abono']->fecha->format('d/m/Y') }}</strong> · ref. {{ $plan['abono']->referencia }} ·
+                        {{ $plan['abono']->descripcion }} · <strong>{{ $bs($plan['abono']->monto) }}</strong>
+                        @if($plan['descuento'])
+                            <br><span class="muted">Descuento: {{ $plan['descuento']->descripcion }} ref. {{ $plan['descuento']->referencia }} · {{ $bs($plan['descuento']->monto) }} → pasa a Comisiones bancarias.</span>
+                        @endif
                     @endif
                 </p>
             @endif
@@ -63,7 +69,7 @@
                                     @elseif($f['conflicto'])
                                         <span style="color:#b91c1c;">Registrado por {{ $bs($f['conflicto']->monto) }}: no coincide</span>
                                     @else
-                                        <span style="color:#b45309;">Falta en Tesorería: queda en «LIQ del banco sin lote» hasta registrarlo</span>
+                                        <span style="color:#b45309;">Falta en Tesorería: se concilia solo cuando lo registres</span>
                                     @endif
                                 </td>
                             </tr>
@@ -81,8 +87,8 @@
             @csrf
             <input type="hidden" name="token" value="{{ $token }}">
             <div style="flex:1; min-width:260px;">
-                Se conciliarán <strong>{{ $listos->count() }} abono(s)</strong> con los lotes que están en Tesorería. Lo que falte
-                queda en «LIQ del banco sin lote» y se completa solo al registrar el lote. Las capturas con error no se tocan.
+                Se conciliarán <strong>{{ $listos->count() }} cierre(s)</strong> con los lotes que están en Tesorería. Los lotes que
+                falten se concilian solos cuando los registres. Los archivos con error no se tocan.
             </div>
             <button type="submit" class="btn primary" style="padding:10px 18px; font-weight:700;">Confirmar y conciliar</button>
         </form>

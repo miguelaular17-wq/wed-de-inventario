@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\ConciliacionLinea;
 use App\Models\TesoreriaIngreso;
 use App\Models\User;
-use App\Services\Conciliacion\MercantilBalanceImagen;
 use App\Services\Conciliacion\MercantilLotesConciliador;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
@@ -109,25 +108,19 @@ class MercantilLotesConciliadorTest extends TestCase
         $this->assertSame('pendiente', $abono->fresh()->estado);
 
         $user = $this->makeUser(User::ROLE_CONTABILIDAD);
-        $this->app->instance(MercantilBalanceImagen::class, new class extends MercantilBalanceImagen
-        {
-            public function leer(string $path, string $mime): array
-            {
-                return $this->desdeJson(['lotes' => [
-                    ['lote' => '278', 'bruto' => 823680.51, 'descuento' => 16473.61, 'retencion' => 0, 'abonado' => 807206.90],
-                    ['lote' => '285', 'bruto' => 30097.04, 'descuento' => 601.94, 'retencion' => 0, 'abonado' => 29495.10],
-                    ['lote' => '339', 'bruto' => 454660.50, 'descuento' => 9093.22, 'retencion' => 0, 'abonado' => 445567.28],
-                ], 'total' => ['bruto' => 1308438.05, 'descuento' => 26168.77, 'retencion' => 0, 'abonado' => 1282269.28]]);
-            }
-        });
+        $excel = $this->excelBalance([
+            ['278', 823680.51, 807206.90],
+            ['285', 30097.04, 29495.10],
+            ['339', 454660.50, 445567.28],
+        ], 1308438.05, 1282269.28);
 
         $vista = $this->actingAs($user)->post(route('finanzas.conciliaciones.mercantil_lotes.preview'), [
             'titular' => 'GRUPO JRZ',
-            'imagenes' => [UploadedFile::fake()->image('balance.png')],
+            'archivos' => [$excel],
             'volver' => 'lotes',
         ]);
         $vista->assertOk()
-            ->assertSee('Falta en Tesorería: queda en «LIQ del banco sin lote» hasta registrarlo', false)
+            ->assertSee('Falta en Tesorería: se concilia solo cuando lo registres', false)
             ->assertSee('Falta registrar el lote 285 por Bs 30.097,04 (cierre del 01/09/2026)')
             ->assertSee('Lote #'.$l278->id)
             ->assertSee('Confirmar y conciliar');
@@ -136,7 +129,7 @@ class MercantilLotesConciliadorTest extends TestCase
         // Se concilian los lotes presentes; el abono queda pendiente por lo que falta y no se crea nada en Tesorería.
         $this->actingAs($user)->post(route('finanzas.conciliaciones.mercantil_lotes.aplicar'), ['token' => $token])
             ->assertRedirect(route('finanzas.conciliaciones.lotes'))
-            ->assertSessionHas('success', fn ($m) => str_contains($m, '1 conciliado(s) en parte'));
+            ->assertSessionHas('success', fn ($m) => str_contains($m, '1 cierre(s) conciliados en parte'));
         $this->assertSame(2, TesoreriaIngreso::query()->count());
         $this->assertTrue((bool) $l278->fresh()->es_conciliado);
         $this->assertTrue((bool) $l339->fresh()->es_conciliado);
@@ -148,7 +141,7 @@ class MercantilLotesConciliadorTest extends TestCase
 
         // Subir otra vez el mismo balance no lo aplica dos veces.
         $otra = $this->actingAs($user)->post(route('finanzas.conciliaciones.mercantil_lotes.preview'), [
-            'titular' => 'GRUPO JRZ', 'imagenes' => [UploadedFile::fake()->image('balance.png')],
+            'titular' => 'GRUPO JRZ', 'archivos' => [$this->excelBalance([['278', 823680.51, 807206.90], ['285', 30097.04, 29495.10], ['339', 454660.50, 445567.28]], 1308438.05, 1282269.28)],
         ]);
         $otra->assertSee('Este abono ya tiene su balance aplicado')->assertDontSee('Confirmar y conciliar');
 
@@ -229,25 +222,62 @@ class MercantilLotesConciliadorTest extends TestCase
         $this->assertStringContainsString('No hay en el extracto', (string) $sinAbono['error']);
     }
 
-    public function test_lectura_de_la_imagen_valida_las_cuentas(): void
+    public function test_excel_del_balance_se_comprueba_con_el_descuento_tarjeta_si_no_hay_abono(): void
     {
-        $lector = new MercantilBalanceImagen;
-        $ok = $lector->desdeJson(['lotes' => [['lote' => '0278', 'bruto' => '823,680.51', 'descuento' => 16473.61, 'retencion' => 0, 'abonado' => 807206.90]], 'total' => ['bruto' => 823680.51]]);
-        $this->assertSame('278', $ok['lotes'][0]['lote']);
-        $this->assertSame(823680.51, $ok['lotes'][0]['bruto']);
+        // Cierre del 01/10 (el abono «CANCELACION» ya no se importa): el banco deja el DESCUENTO TARJETA por bruto − abonado.
+        $l303 = $this->lote('2026-10-01', '303', 227539.29);
+        $l368 = $this->lote('2026-10-01', '368', 2009723.03);
+        $descuento = $this->linea('2026-10-02', '95402001300', 'DESCUENTO TARJETA', 54920.73, 'cargo');
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $excel = $this->excelBalance([['303', 227539.29, 222988.51], ['308', 508771.49, 498596.04], ['368', 2009723.03, 1969528.53]], 2746033.81, 2691113.08);
+
+        $vista = $this->actingAs($user)->post(route('finanzas.conciliaciones.mercantil_lotes.preview'), ['titular' => 'GRUPO JRZ', 'archivos' => [$excel]]);
+        $vista->assertOk()->assertSee('Comprobado con el banco')->assertSee('Falta registrar el lote 308 por Bs 508.771,49 (cierre del 01/10/2026)')
+            ->assertSee('Confirmar y conciliar');
+        $this->actingAs($user)->post(route('finanzas.conciliaciones.mercantil_lotes.aplicar'), ['token' => $vista->viewData('token')])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, 'conciliados en parte'));
+        $this->assertTrue((bool) $l303->fresh()->es_conciliado);
+        $this->assertTrue((bool) $l368->fresh()->es_conciliado);
+        $this->assertSame('pendiente', $descuento->fresh()->estado);
+
+        // Al registrar el lote 308, el cierre se completa con su descuento.
+        $l308 = $this->lote('2026-10-01', '308', 508771.49);
+        $this->assertSame(1, $this->servicio()->conciliarAutomatico('2026-10-01', '2026-10-31')['conciliados']);
+        $this->assertTrue((bool) $l308->fresh()->es_conciliado);
+        $this->assertSame('conciliado', $descuento->fresh()->estado);
+        $this->assertSame((int) $l368->id, (int) $descuento->fresh()->tesoreria_ingreso_id);
+    }
+
+    public function test_lectura_del_excel_valida_las_cuentas(): void
+    {
+        $lector = app(\App\Services\Conciliacion\MercantilBalanceExcel::class);
+        $leer = function (UploadedFile $f) use ($lector) {
+            return $lector->leer($f->getRealPath(), 'xlsx');
+        };
+        $ok = $leer($this->excelBalance([['0303', 227539.29, 222988.51], ['368', 2009723.03, 1969528.53]], 2237262.32, 2192517.04));
+        $this->assertSame(['303', '368'], array_column($ok['lotes'], 'lote'));
+        $this->assertSame(4550.78, $ok['lotes'][0]['descuento']);
 
         try {
-            $lector->desdeJson(['lotes' => [['lote' => '278', 'bruto' => 823680.51, 'descuento' => 16473.61, 'retencion' => 0, 'abonado' => 807206.00]]]);
-            $this->fail('Debió rechazar un lote que no cuadra');
-        } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('Lote 278: lo leído no cuadra', $e->getMessage());
-        }
-        try {
-            $lector->desdeJson(['lotes' => [['lote' => '278', 'bruto' => 100, 'descuento' => 0, 'retencion' => 0, 'abonado' => 100]], 'total' => ['bruto' => 130]]);
+            $leer($this->excelBalance([['303', 227539.29, 222988.51]], 300000.00, 222988.51));
             $this->fail('Debió rechazar un total que no cuadra');
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('no da el Total General', $e->getMessage());
         }
+        try {
+            $leer($this->excelBalance([['303', 100.00, 150.00]], 100.00, 150.00));
+            $this->fail('Debió rechazar un abonado mayor que el bruto');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Lote 303: no cuadra', $e->getMessage());
+        }
+    }
+
+    /** Excel como el del portal: Lote | Importe Bruto | Total Abonado, y la fila «Total General». */
+    private function excelBalance(array $filas, float $totalBruto, float $totalAbonado): UploadedFile
+    {
+        $hoja = array_merge([['Lote', 'Importe Bruto', 'Total Abonado']], $filas, [['Total General', $totalBruto, $totalAbonado]]);
+
+        return UploadedFile::fake()->createWithContent('resumen_transacciones.xlsx', \App\Support\SimpleXlsxWriter::toString(['Balance' => $hoja]));
     }
 
     private function servicio(): MercantilLotesConciliador

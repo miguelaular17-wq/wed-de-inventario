@@ -152,7 +152,7 @@
                 Pagos Cashea
             </button>
             <button type="button" class="btn-upload" style="background:linear-gradient(135deg,#1d4ed8,#2563eb);" onclick="document.getElementById('mercantilLotesModal').style.display='flex'">
-                Lotes Mercantil (balance)
+                Lotes Mercantil (Excel)
             </button>
 
             <form action="{{ route('finanzas.conciliaciones') }}" method="GET" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap;">
@@ -794,11 +794,11 @@
     </div>
 </div>
 
-{{-- BALANCE DE TRANSACCIONES DE MERCANTIL (capturas del portal) --}}
+{{-- BALANCE DE TRANSACCIONES DE MERCANTIL (Excel del portal) --}}
 <div id="mercantilLotesModal" class="modal-overlay">
     <div class="modal-box">
         <form action="{{ route('finanzas.conciliaciones.mercantil_lotes.preview') }}" method="POST" enctype="multipart/form-data"
-              onsubmit="const b = this.querySelector('.btn-submit'); b.disabled = true; b.innerText = 'Leyendo las capturas…';">
+              onsubmit="const b = this.querySelector('.btn-submit'); b.disabled = true; b.innerText = 'Leyendo el Excel…';">
             @csrf
             <div class="modal-head">
                 <h5 class="modal-title">Lotes Mercantil · Balance de transacciones</h5>
@@ -806,11 +806,11 @@
             </div>
             <div class="modal-body">
                 <p class="file-hint" style="margin-top:0;">
-                    Los cierres de Mercantil se concilian solos cuando los lotes de Tesorería suman el abono
-                    «CANCELACION RESUMEN DE VENTAS». Si falta un lote (por ejemplo de otro terminal), sube la captura del
-                    <strong>Balance de Transacciones en el período</strong> de ese cierre: una fila por lote con Importe Bruto,
-                    Descuento, Retención ISLR, Importe Abonado y el Total General. Se concilian los lotes que están en Tesorería;
-                    el que falte no se crea: queda en «LIQ del banco sin lote» hasta registrarlo. Una captura por cierre; puedes subir varias. Primero verás el resultado; no se guarda nada hasta que confirmes.
+                    Sube el Excel del <strong>Balance de Transacciones en el período</strong> de cada cierre: columnas Lote,
+                    Importe Bruto y Total Abonado, una fila por lote y el Total General. Se comprueba con el «DESCUENTO TARJETA»
+                    del extracto (bruto − abonado) y se concilian los lotes que están en Tesorería; el que falte no se crea:
+                    se concilia solo cuando lo registres. Un archivo por cierre; puedes subir varios. Primero verás el resultado;
+                    no se guarda nada hasta que confirmes.
                 </p>
                 <label class="form-label">Cuenta Mercantil:</label>
                 <select name="titular" class="form-control" required>
@@ -818,14 +818,14 @@
                         <option value="{{ $t }}" @selected(str_contains(strtoupper($t), 'JRZ'))>MERCANTIL · {{ $t }}</option>
                     @endforeach
                 </select>
-                <label class="form-label" style="margin-top:10px;">Capturas del balance:</label>
+                <label class="form-label" style="margin-top:10px;">Excel del balance:</label>
                 <div class="file-wrap">
                     <label class="file-label">
-                        Elegir imágenes
-                        <input type="file" name="imagenes[]" accept=".png,.jpg,.jpeg,.webp" multiple required style="display:none;"
+                        Elegir archivos
+                        <input type="file" name="archivos[]" accept=".xlsx,.xls,.csv" multiple required style="display:none;"
                                onchange="document.getElementById('mercantilFileName').value = [...this.files].map(f => f.name).join(', ');">
                     </label>
-                    <input type="text" id="mercantilFileName" placeholder="Ninguna imagen seleccionada" readonly class="file-name">
+                    <input type="text" id="mercantilFileName" placeholder="Ningún archivo seleccionado" readonly class="file-name">
                 </div>
             </div>
             <div class="modal-foot">

@@ -47,9 +47,74 @@ class AttendanceController extends Controller
             ->with('status', 'Quedó marcado que faltó hoy. Se descuenta 1 día en esta quincena.');
     }
 
-    public function cancelarInasistencia(NominaInasistencia $inasistencia): RedirectResponse
+    /** Módulo «Inasistencias» (Nómina → Del día): marcar a varios de una sede que faltaron un día. */
+    public function indexInasistencias(Request $request): View
+    {
+        $fecha = $this->fechaConsulta($request);
+        $sedeId = $request->filled('sede_id') ? (int) $request->query('sede_id') : null;
+        $delDia = $this->attendance->inasistenciasDelDia($fecha, $sedeId);
+        $yaFaltaron = $delDia->where('estado', '!=', 'CANCELADO')->pluck('empleado_id')->flip();
+
+        return view('nomina.inasistencias.index', [
+            'fecha' => $fecha->toDateString(),
+            'sedeId' => $sedeId,
+            'candidatos' => $sedeId
+                ? $this->attendance->empleadosDeSede($sedeId)->map(function ($empleado) use ($yaFaltaron) {
+                    $empleado->setAttribute('valor_dia', $this->attendance->valorDia($empleado));
+                    $empleado->setAttribute('ya_falto', isset($yaFaltaron[$empleado->id]));
+
+                    return $empleado;
+                })
+                : collect(),
+            'sedes' => NominaSede::query()->where('estado', 'ACTIVO')->ordenCatalogo()->get(),
+            'delDia' => $delDia,
+            'quincena' => $this->excelQuincena->quincenaDe($fecha),
+        ]);
+    }
+
+    public function storeInasistenciasMasivas(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'sede_id' => ['required', 'integer', 'exists:nomina_sedes,id'],
+            'fecha' => ['required', 'date'],
+            'cantidad' => ['required', 'numeric', 'min:0.5', 'max:31'],
+            'motivo' => ['nullable', 'string', 'max:255'],
+            'empleado_ids' => ['required', 'array', 'min:1'],
+            'empleado_ids.*' => ['integer', 'exists:nomina_empleados,id'],
+        ], [
+            'empleado_ids.required' => 'Marca al menos una persona.',
+        ]);
+
+        $r = $this->attendance->registrarInasistenciasMasivas($data['empleado_ids'], $data, auth()->id());
+        $mensaje = 'Inasistencia registrada a '.$r['creadas']->count().' persona(s): se descuenta del sueldo en esa quincena.';
+        if ($r['omitidos'] !== []) {
+            $mensaje .= ' No se registró a: '.implode(', ', $r['omitidos']).'.';
+        }
+
+        return redirect()
+            ->route('nomina.inasistencias.index', ['sede_id' => $data['sede_id'], 'fecha' => $data['fecha']])
+            ->with('status', $mensaje);
+    }
+
+    public function exportarExcelInasistencias(Request $request): Response
+    {
+        $quincena = $this->excelQuincena->resolverDesdeRequest(
+            $request->query('inicio'),
+            $request->query('fecha', $this->fechaConsulta($request)->toDateString())
+        );
+
+        return $this->excelQuincena->descargar('inasistencias', $quincena);
+    }
+
+    public function cancelarInasistencia(Request $request, NominaInasistencia $inasistencia): RedirectResponse
     {
         $this->attendance->cancelarInasistencia($inasistencia);
+
+        if ($request->input('origen') === 'inasistencias') {
+            return redirect()
+                ->route('nomina.inasistencias.index', ['fecha' => $inasistencia->fecha?->toDateString(), 'sede_id' => $request->input('sede_id')])
+                ->with('status', 'Inasistencia cancelada. El historial se conserva.');
+        }
 
         return redirect()
             ->route('nomina.empleados.show', ['empleado' => $inasistencia->empleado_id, 'tab' => 'nomina'])

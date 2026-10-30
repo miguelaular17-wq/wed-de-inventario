@@ -508,6 +508,9 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::post('/empleados/{empleado}/inasistencias', [AttendanceController::class, 'storeInasistencia'])->name('inasistencias.store');
     Route::post('/empleados/{empleado}/inasistencias/hoy', [AttendanceController::class, 'marcarFaltoHoy'])->name('inasistencias.hoy');
     Route::post('/inasistencias/{inasistencia}/cancelar', [AttendanceController::class, 'cancelarInasistencia'])->name('inasistencias.cancelar');
+    Route::get('/inasistencias', [AttendanceController::class, 'indexInasistencias'])->name('inasistencias.index');
+    Route::get('/inasistencias/excel', [AttendanceController::class, 'exportarExcelInasistencias'])->name('inasistencias.excel');
+    Route::post('/inasistencias', [AttendanceController::class, 'storeInasistenciasMasivas'])->name('inasistencias.masivas');
     Route::get('/horas-extras', [AttendanceController::class, 'indexHorasExtras'])->name('horas_extras.index');
     Route::get('/horas-extras/excel', [AttendanceController::class, 'exportarExcelHorasExtras'])->name('horas_extras.excel');
     Route::post('/horas-extras', [AttendanceController::class, 'storeHorasExtrasMasivas'])->name('horas_extras.masivas');

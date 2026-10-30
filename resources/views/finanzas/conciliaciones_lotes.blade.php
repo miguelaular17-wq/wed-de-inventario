@@ -88,7 +88,7 @@
         <div class="conc-toolbar">
             <a class="btn-link" href="{{ route('finanzas.conciliaciones') }}">Egresos</a>
             <button type="button" class="btn-upload" onclick="document.getElementById('mediosPagoModal').style.display='flex'">Medios de pago BDV</button>
-            <button type="button" class="btn-upload" style="background:#1d4ed8;" onclick="document.getElementById('mercantilLotesModal').style.display='flex'">Balance Mercantil (imagen)</button>
+            <button type="button" class="btn-upload" style="background:#1d4ed8;" onclick="document.getElementById('mercantilLotesModal').style.display='flex'">Balance Mercantil (Excel)</button>
             <form action="{{ route('finanzas.conciliaciones.lotes') }}" method="GET" style="display:flex;gap:8px;flex-wrap:wrap;margin:0;">
                 <input type="date" name="fecha_desde" class="select-banco" value="{{ $filtros['fecha_desde'] ?? '' }}">
                 <input type="date" name="fecha_hasta" class="select-banco" value="{{ $filtros['fecha_hasta'] ?? '' }}">
@@ -382,7 +382,7 @@
 <div id="mercantilLotesModal" class="modal-overlay">
     <div class="modal-box">
         <form action="{{ route('finanzas.conciliaciones.mercantil_lotes.preview') }}" method="POST" enctype="multipart/form-data"
-              onsubmit="const b = this.querySelector('.btn-submit'); b.disabled = true; b.innerText = 'Leyendo las capturas…';">
+              onsubmit="const b = this.querySelector('.btn-submit'); b.disabled = true; b.innerText = 'Leyendo el Excel…';">
             @csrf
             <input type="hidden" name="volver" value="lotes">
             <div class="modal-head">
@@ -391,10 +391,10 @@
             </div>
             <div class="modal-body">
                 <p style="color:#64748b;margin-top:0;">
-                    Captura del portal de Mercantil <strong>«Balance de Transacciones en el período»</strong> de un cierre: una fila por lote
-                    con Importe Bruto, Descuento, Retención ISLR, Importe Abonado y el Total General. Su total bruto es el abono
-                    «CANCELACION RESUMEN DE VENTAS» del banco. Se concilian los lotes que están en Tesorería; si falta alguno no se crea:
-                    su monto queda en «LIQ del banco sin lote» y se completa solo al registrarlo. Una captura por cierre; puedes subir varias.
+                    Excel del <strong>«Balance de Transacciones en el período»</strong> de un cierre: columnas <strong>Lote</strong>,
+                    <strong>Importe Bruto</strong> y <strong>Total Abonado</strong>, una fila por lote y al final «Total General».
+                    Se comprueba con el «DESCUENTO TARJETA» del extracto (bruto − abonado) y se concilian los lotes que están en
+                    Tesorería; si falta alguno no se crea: se concilia solo cuando lo registres. Un archivo por cierre; puedes subir varios.
                     Primero verás el resultado.
                 </p>
                 <label class="form-label">Cuenta</label>
@@ -403,12 +403,12 @@
                         <option value="{{ $titular }}" @selected(str_contains(strtoupper($titular), 'JRZ'))>MERCANTIL · {{ $titular }}</option>
                     @endforeach
                 </select>
-                <label class="form-label">Capturas</label>
+                <label class="form-label">Excel del balance</label>
                 <div class="file-wrap">
                     <label class="file-label">Elegir
-                        <input type="file" name="imagenes[]" accept=".png,.jpg,.jpeg,.webp" multiple required style="display:none;" onchange="document.getElementById('mercantilFileName').value = [...this.files].map(f => f.name).join(', ');">
+                        <input type="file" name="archivos[]" accept=".xlsx,.xls,.csv" multiple required style="display:none;" onchange="document.getElementById('mercantilFileName').value = [...this.files].map(f => f.name).join(', ');">
                     </label>
-                    <input id="mercantilFileName" class="file-name" placeholder="Ninguna imagen" readonly>
+                    <input id="mercantilFileName" class="file-name" placeholder="Ningún archivo" readonly>
                 </div>
             </div>
             <div class="modal-foot">

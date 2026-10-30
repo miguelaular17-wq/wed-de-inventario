@@ -259,6 +259,58 @@ class AttendanceService
         });
     }
 
+    /**
+     * La misma inasistencia a varios de una sede. Quien ya tiene una ese día se salta (no se descuenta dos veces).
+     *
+     * @return array{creadas: Collection<int, NominaInasistencia>, omitidos: list<string>}
+     */
+    public function registrarInasistenciasMasivas(array $empleadoIds, array $data, ?int $usuarioId = null): array
+    {
+        $sedeId = (int) ($data['sede_id'] ?? 0);
+        if ($sedeId <= 0) {
+            throw ValidationException::withMessages(['sede_id' => 'Elige la sede o área.']);
+        }
+        $permitidos = $this->empleadosDeSede($sedeId)->keyBy('id');
+        $seleccionados = collect($empleadoIds)->map(fn ($id) => $permitidos->get((int) $id))->filter()->values();
+        if ($seleccionados->isEmpty()) {
+            throw ValidationException::withMessages(['empleado_ids' => 'Marca al menos una persona activa de esa sede.']);
+        }
+
+        $fecha = Carbon::parse($data['fecha'] ?? now())->startOfDay();
+        $omitidos = [];
+
+        $creadas = DB::transaction(function () use ($seleccionados, $data, $fecha, $usuarioId, &$omitidos) {
+            $out = collect();
+            foreach ($seleccionados as $empleado) {
+                if ($this->inasistenciaDelDia($empleado, $fecha)) {
+                    $omitidos[] = $empleado->nombre().' (ya tenía una ese día)';
+
+                    continue;
+                }
+                if ($this->valorDia($empleado) <= 0) {
+                    $omitidos[] = $empleado->nombre().' (sin salario base)';
+
+                    continue;
+                }
+                $out->push($this->registrarInasistencia($empleado, $data, $usuarioId));
+            }
+
+            return $out;
+        });
+
+        return ['creadas' => $creadas, 'omitidos' => $omitidos];
+    }
+
+    public function inasistenciasDelDia(Carbon|string $fecha, ?int $sedeId = null): Collection
+    {
+        return NominaInasistencia::query()
+            ->with(['empleado.cliente', 'empleado.sedeCatalogo', 'creador'])
+            ->whereDate('fecha', Carbon::parse($fecha)->toDateString())
+            ->when($sedeId, fn ($q) => $q->whereHas('empleado', fn ($e) => $e->where('sede_id', $sedeId)))
+            ->orderByDesc('id')
+            ->get();
+    }
+
     public function extrasDelDia(Carbon|string $fecha, ?int $sedeId = null): Collection
     {
         $dia = Carbon::parse($fecha)->toDateString();

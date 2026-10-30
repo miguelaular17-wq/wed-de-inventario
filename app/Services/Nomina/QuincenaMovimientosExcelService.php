@@ -8,6 +8,7 @@ use App\Models\Nomina\NominaDescuentoMercancia;
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaEmpleadoAjuste;
 use App\Models\Nomina\NominaHoraExtra;
+use App\Models\Nomina\NominaInasistencia;
 use App\Models\Nomina\NominaPrestamo;
 use App\Models\Nomina\NominaPrestamoAbono;
 use App\Models\Nomina\NominaPrestamoPlan;
@@ -80,7 +81,7 @@ class QuincenaMovimientosExcelService
         $inicioLabel = $quincena['inicio']->format('Ymd');
         $finLabel = $quincena['fin']->format('Ymd');
 
-        if (! in_array($modulo, ['adelantos', 'faltante_caja', 'mercancia', 'ajustes', 'horas_extras', 'prestamos'], true)) {
+        if (! in_array($modulo, ['adelantos', 'faltante_caja', 'mercancia', 'ajustes', 'horas_extras', 'inasistencias', 'prestamos'], true)) {
             throw new \InvalidArgumentException('Módulo de exportación no válido.');
         }
 
@@ -109,6 +110,7 @@ class QuincenaMovimientosExcelService
             'Descuento mercancia' => $this->filasMercancia($quincena),
             'Deducciones y bonos' => $this->filasAjustes($quincena),
             'Horas extras' => $this->filasHorasExtras($quincena),
+            'Inasistencias' => $this->filasInasistencias($quincena),
             'Prestamos descuentos' => $this->filasPrestamoPlanes($quincena),
             'Prestamos pagos' => $this->filasPrestamoPagos($quincena),
             'Prestamos otorgados' => $this->filasPrestamosOtorgados($quincena),
@@ -246,6 +248,42 @@ class QuincenaMovimientosExcelService
                 $row->fecha?->toDateString(),
                 $row->tipo,
                 $row->destino,
+                round((float) $row->monto, 2),
+                $row->estado,
+                $row->motivo ?? '',
+                $quincena['etiqueta'],
+            ]);
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array{inicio:Carbon,fin:Carbon,etiqueta:string}  $quincena
+     * @return list<list<string|float|int|null>>
+     */
+    public function filasInasistencias(array $quincena): array
+    {
+        $header = $this->headerEmpleado(['Fecha', 'Días', 'Valor día', 'Descuento USD', 'Estado', 'Motivo', 'Quincena']);
+        if (! Schema::hasTable('nomina_inasistencias')) {
+            return [$header];
+        }
+
+        $rows = NominaInasistencia::query()
+            ->with(['empleado.cliente', 'empleado.sedeCatalogo', 'empleado.empresa'])
+            ->whereDate('quincena_inicio', $quincena['inicio']->toDateString())
+            ->whereDate('quincena_fin', $quincena['fin']->toDateString())
+            ->where('estado', '!=', 'CANCELADO')
+            ->orderBy('fecha')
+            ->orderBy('id')
+            ->get();
+
+        $out = [$header];
+        foreach ($rows as $row) {
+            $out[] = array_merge($this->colsEmpleado($row->empleado), [
+                $row->fecha?->toDateString(),
+                round((float) $row->cantidad, 2),
+                round((float) $row->valor_unitario, 2),
                 round((float) $row->monto, 2),
                 $row->estado,
                 $row->motivo ?? '',
