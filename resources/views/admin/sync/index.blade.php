@@ -161,6 +161,8 @@
     </div>
 
     {{-- ── Publicar versión del escritorio ─────────────────────────── --}}
+    @php $esAdmin = (bool) auth()->user()?->isAdmin(); @endphp
+    @if($esAdmin)
     @php
         $manifestPath = storage_path('app/'.trim(config('sync_desktop.storage_dir'), '/').'/'.config('sync_desktop.manifest_name'));
         $manifest = is_file($manifestPath) ? json_decode(@file_get_contents($manifestPath), true) : null;
@@ -207,6 +209,7 @@
             @enderror
         </form>
     </div>
+    @endif
 
     {{-- ── Formulario de comando ───────────────────────────────────── --}}
     <div class="cmd-form-box">
@@ -237,6 +240,7 @@
                     <select name="comando" class="cmd-select" required>
                         <option value="">— Seleccionar —</option>
                         @foreach($opciones as $val => $lbl)
+                            @continue($val === 'separar_codigos_compuestos' && ! $esAdmin)
                             <option value="{{ $val }}">{{ $lbl }}</option>
                         @endforeach
                     </select>
@@ -284,6 +288,7 @@
                 <input type="hidden" name="sede" id="cc-sede-verify" value="">
                 <button type="submit" class="cmd-btn" id="cc-send">Verificar</button>
             </form>
+            @if($esAdmin)
             <form method="POST" action="{{ route('admin.sync.command') }}" id="cc-form-separar" style="display:contents;"
                   onsubmit="return confirm('¿Separar en la web todos los compuestos con precios distintos en Suite?');">
                 @csrf
@@ -291,6 +296,7 @@
                 <input type="hidden" name="sede" id="cc-sede-separar" value="">
                 <button type="submit" class="cmd-btn" id="cc-separar" style="background:var(--sync-danger);">Separar en la web</button>
             </form>
+            @endif
             <button type="button" class="cmd-btn" id="cc-refresh" style="background:#475569;">Ver último resultado</button>
         </div>
         <div class="cc-stats" id="cc-stats" hidden>
@@ -514,13 +520,14 @@ function loadCodigosCompuestosResultado() {
 function syncCcSedeInputs() {
     const sede = document.getElementById('cc-sede').value;
     document.getElementById('cc-sede-verify').value = sede;
-    document.getElementById('cc-sede-separar').value = sede;
+    const separar = document.getElementById('cc-sede-separar');
+    if (separar) separar.value = sede;
 }
 document.getElementById('cc-sede').addEventListener('change', syncCcSedeInputs);
 syncCcSedeInputs();
 
 ['cc-form-verify', 'cc-form-separar'].forEach(id => {
-    document.getElementById(id).addEventListener('submit', function (e) {
+    document.getElementById(id)?.addEventListener('submit', function (e) {
         syncCcSedeInputs();
         if (!document.getElementById('cc-sede').value) {
             e.preventDefault();

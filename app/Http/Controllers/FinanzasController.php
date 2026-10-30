@@ -516,10 +516,10 @@ class FinanzasController extends Controller
         
         $proveedores = collect(\App\Models\FinanzasCatalogo::beneficiarios(
             \Illuminate\Support\Facades\DB::table('inventario_v2.productos')
-                ->whereNotNull('proveedor')
-                ->where('proveedor', '!=', '')
-                ->distinct()
-                ->orderBy('proveedor')
+                        ->whereNotNull('proveedor')
+                        ->where('proveedor', '!=', '')
+                        ->distinct()
+                        ->orderBy('proveedor')
                 ->pluck('proveedor')
         ));
         $tiposGasto = \App\Models\FinanzasCatalogo::tiposGasto();
@@ -2881,9 +2881,10 @@ class FinanzasController extends Controller
         $abonadoPorLote = $idsConciliados === [] ? collect() : \App\Models\ConciliacionLinea::query()
             ->whereIn('tesoreria_ingreso_id', $idsConciliados)
             ->where('estado', 'conciliado')
-            ->get(['tesoreria_ingreso_id', 'monto'])
+            ->get(['tesoreria_ingreso_id', 'monto', 'descripcion'])
             ->groupBy('tesoreria_ingreso_id')
-            ->map(fn ($l) => round((float) $l->sum(fn ($x) => abs((float) $x->monto)), 2));
+            // La LIQ del balance de Mercantil va por el bruto; lo abonado de verdad viene en su descripción.
+            ->map(fn ($l) => round((float) $l->sum(fn ($x) => \App\Services\Conciliacion\MercantilLiqBalance::abonado($x->descripcion) ?? abs((float) $x->monto)), 2));
         $comisionLote = function ($lote) use ($abonadoPorLote) {
             $neto = round(abs((float) $lote->monto), 2);
             $abonado = $abonadoPorLote[$lote->id] ?? null;
@@ -3001,7 +3002,7 @@ class FinanzasController extends Controller
 
         [$banco, $titular] = $matcher->partesCuenta($linea->banco, $linea->titular);
         $neto = round((float) $data['monto'], 2);
-        $abonado = round(abs((float) $linea->monto), 2);
+        $abonado = round(\App\Services\Conciliacion\MercantilLiqBalance::abonado($linea->descripcion) ?? abs((float) $linea->monto), 2);
         $lote = null;
         try {
             \Illuminate\Support\Facades\DB::transaction(function () use ($data, $linea, $banco, $titular, $neto, &$lote) {

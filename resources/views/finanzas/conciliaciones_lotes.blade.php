@@ -391,11 +391,10 @@
             </div>
             <div class="modal-body">
                 <p style="color:#64748b;margin-top:0;">
-                    Excel del <strong>«Balance de Transacciones en el período»</strong> de un cierre: columnas <strong>Lote</strong>,
-                    <strong>Importe Bruto</strong> y <strong>Total Abonado</strong>, una fila por lote y al final «Total General».
-                    Se comprueba con el «DESCUENTO TARJETA» del extracto (bruto − abonado) y se concilian los lotes que están en
-                    Tesorería; si falta alguno no se crea: se concilia solo cuando lo registres. Un archivo por cierre; puedes subir varios.
-                    Primero verás el resultado.
+                    Excel del <strong>«Balance de Transacciones»</strong>: columnas <strong>Lote</strong>, <strong>Importe Bruto</strong>
+                    y <strong>Total Abonado</strong>, una fila por lote (un cierre o el mes completo). Cada lote entra como LIQ del banco:
+                    el que está en Tesorería con el mismo número y monto queda conciliado, y el que no, va a «LIQ del banco sin lote».
+                    Subir otra vez el mismo archivo no repite nada. Primero verás el resultado.
                 </p>
                 <label class="form-label">Cuenta</label>
                 <select name="titular" class="form-control" required>

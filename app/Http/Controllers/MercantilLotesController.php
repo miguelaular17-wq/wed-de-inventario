@@ -3,18 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Services\Conciliacion\MercantilBalanceExcel;
-use App\Services\Conciliacion\MercantilLotesConciliador;
+use App\Services\Conciliacion\MercantilLiqBalance;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
-/** Excel del "Balance de Transacciones" de Mercantil: concilia los lotes del cierre con su movimiento del banco. */
+/** Excel del "Balance de Transacciones" de Mercantil: cada lote entra como LIQ del banco y se concilia con su lote de Tesorería. */
 class MercantilLotesController extends Controller
 {
     public function __construct(
         private MercantilBalanceExcel $lector,
-        private MercantilLotesConciliador $conciliador,
+        private MercantilLiqBalance $liq,
     ) {}
 
     public function preview(Request $request): View|RedirectResponse
@@ -58,37 +58,34 @@ class MercantilLotesController extends Controller
             return redirect()->route('finanzas.conciliaciones')->with('error', 'La vista previa venció. Vuelve a subir el Excel.');
         }
 
-        $conciliados = 0;
-        $parciales = 0;
-        $fallidos = [];
+        $ligadas = 0;
+        $sinLote = 0;
+        // Se recalcula: si entre la vista previa y la confirmación alguien concilió un lote, no se pisa.
         foreach ($this->planes($sesion['balances'], $sesion['titular']) as $p) {
-            if ($p['error'] || $p['plan']['error']) {
+            if ($p['error']) {
                 continue;
             }
-            match ($this->conciliador->aplicarBalance($p['plan'], $request->user()?->id)) {
-                'conciliado' => $conciliados++,
-                'parcial' => $parciales++,
-                default => $fallidos[] = $p['archivo'],
-            };
+            $r = $this->liq->aplicar($p['filas'], $sesion['titular']);
+            $ligadas += $r['ligadas'];
+            $sinLote += $r['sin_lote'];
         }
 
         $partes = [];
-        if ($conciliados > 0) {
-            $partes[] = $conciliados.' cierre(s) conciliados con todos sus lotes';
+        if ($ligadas > 0) {
+            $partes[] = $ligadas.' lote(s) conciliados con su LIQ';
         }
-        if ($parciales > 0) {
-            $partes[] = $parciales.' cierre(s) conciliados en parte: los lotes que faltan en Tesorería se concilian solos al registrarlos';
+        if ($sinLote > 0) {
+            $partes[] = $sinLote.' LIQ sin su lote en Tesorería: quedan en «LIQ del banco sin lote» para conciliarlas o registrar el lote desde ahí';
         }
 
-        return redirect()->route($sesion['volver'] ?? 'finanzas.conciliaciones')->with($partes !== [] ? 'success' : 'error', 'Lotes Mercantil: '
-            .($partes !== [] ? implode('; ', $partes).'.' : 'no se concilió nada.')
-            .($fallidos !== [] ? ' No se pudo con: '.implode(', ', $fallidos).' (otro proceso ya tomó el abono o un lote).' : ''));
+        return redirect()->route($sesion['volver'] ?? 'finanzas.conciliaciones')->with($partes !== [] ? 'success' : 'error', 'Balance Mercantil: '
+            .($partes !== [] ? implode('; ', $partes).'.' : 'no había nada nuevo que cargar (esos lotes ya estaban).'));
     }
 
     private function planes(array $balances, string $titular): array
     {
         return array_map(fn ($b) => $b + [
-            'plan' => $b['error'] ? null : $this->conciliador->planBalance($b['lotes'], $titular),
+            'filas' => $b['error'] ? [] : $this->liq->plan($b['lotes'], $titular),
         ], $balances);
     }
 }

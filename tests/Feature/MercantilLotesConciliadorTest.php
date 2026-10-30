@@ -107,29 +107,17 @@ class MercantilLotesConciliadorTest extends TestCase
         $this->assertSame(1, $this->servicio()->conciliarAutomatico('2026-09-01', '2026-09-30')['sin_cuadrar']);
         $this->assertSame('pendiente', $abono->fresh()->estado);
 
-        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
-        $excel = $this->excelBalance([
-            ['278', 823680.51, 807206.90],
-            ['285', 30097.04, 29495.10],
-            ['339', 454660.50, 445567.28],
-        ], 1308438.05, 1282269.28);
-
-        $vista = $this->actingAs($user)->post(route('finanzas.conciliaciones.mercantil_lotes.preview'), [
-            'titular' => 'GRUPO JRZ',
-            'archivos' => [$excel],
-            'volver' => 'lotes',
-        ]);
-        $vista->assertOk()
-            ->assertSee('Falta en Tesorería: se concilia solo cuando lo registres', false)
-            ->assertSee('Falta registrar el lote 285 por Bs 30.097,04 (cierre del 01/09/2026)')
-            ->assertSee('Lote #'.$l278->id)
-            ->assertSee('Confirmar y conciliar');
-        $token = $vista->viewData('token');
+        $balance = [
+            ['lote' => '278', 'bruto' => 823680.51, 'descuento' => 16473.61, 'retencion' => 0, 'abonado' => 807206.90],
+            ['lote' => '285', 'bruto' => 30097.04, 'descuento' => 601.94, 'retencion' => 0, 'abonado' => 29495.10],
+            ['lote' => '339', 'bruto' => 454660.50, 'descuento' => 9093.22, 'retencion' => 0, 'abonado' => 445567.28],
+        ];
+        $plan = $this->servicio()->planBalance($balance, 'GRUPO JRZ');
+        $this->assertNull($plan['error']);
+        $this->assertStringContainsString('Falta registrar el lote 285 por Bs 30.097,04 (cierre del 01/09/2026)', (string) $plan['aviso']);
 
         // Se concilian los lotes presentes; el abono queda pendiente por lo que falta y no se crea nada en Tesorería.
-        $this->actingAs($user)->post(route('finanzas.conciliaciones.mercantil_lotes.aplicar'), ['token' => $token])
-            ->assertRedirect(route('finanzas.conciliaciones.lotes'))
-            ->assertSessionHas('success', fn ($m) => str_contains($m, '1 cierre(s) conciliados en parte'));
+        $this->assertSame('parcial', $this->servicio()->aplicarBalance($plan));
         $this->assertSame(2, TesoreriaIngreso::query()->count());
         $this->assertTrue((bool) $l278->fresh()->es_conciliado);
         $this->assertTrue((bool) $l339->fresh()->es_conciliado);
@@ -139,11 +127,8 @@ class MercantilLotesConciliadorTest extends TestCase
         $parcial = $this->servicio()->parciales([$abono->id])->get($abono->id);
         $this->assertSame(['285'], $parcial->whereNull('tesoreria_ingreso_id')->pluck('lote')->all());
 
-        // Subir otra vez el mismo balance no lo aplica dos veces.
-        $otra = $this->actingAs($user)->post(route('finanzas.conciliaciones.mercantil_lotes.preview'), [
-            'titular' => 'GRUPO JRZ', 'archivos' => [$this->excelBalance([['278', 823680.51, 807206.90], ['285', 30097.04, 29495.10], ['339', 454660.50, 445567.28]], 1308438.05, 1282269.28)],
-        ]);
-        $otra->assertSee('Este abono ya tiene su balance aplicado')->assertDontSee('Confirmar y conciliar');
+        // El mismo balance no se aplica dos veces.
+        $this->assertStringContainsString('Este abono ya tiene su balance aplicado', (string) $this->servicio()->planBalance($balance, 'GRUPO JRZ')['error']);
 
         // Registrado el lote que faltaba, se completa solo.
         $l285 = $this->lote('2026-09-01', '285', 30097.04);
@@ -222,30 +207,49 @@ class MercantilLotesConciliadorTest extends TestCase
         $this->assertStringContainsString('No hay en el extracto', (string) $sinAbono['error']);
     }
 
-    public function test_excel_del_balance_se_comprueba_con_el_descuento_tarjeta_si_no_hay_abono(): void
+    public function test_excel_del_balance_pone_cada_lote_como_liq_y_el_que_falta_queda_sin_lote(): void
     {
-        // Cierre del 01/10 (el abono «CANCELACION» ya no se importa): el banco deja el DESCUENTO TARJETA por bruto − abonado.
+        // Excel del mes sin fecha ni Total General (como resumen_lotes_completo.xlsx); el lote 307 se repite con otro monto.
+        $l302 = $this->lote('2026-09-30', '302', 137093.29);
         $l303 = $this->lote('2026-10-01', '303', 227539.29);
         $l368 = $this->lote('2026-10-01', '368', 2009723.03);
-        $descuento = $this->linea('2026-10-02', '95402001300', 'DESCUENTO TARJETA', 54920.73, 'cargo');
+        $l307 = $this->lote('2026-10-05', '307', 16733.69);
         $user = $this->makeUser(User::ROLE_CONTABILIDAD);
-        $excel = $this->excelBalance([['303', 227539.29, 222988.51], ['308', 508771.49, 498596.04], ['368', 2009723.03, 1969528.53]], 2746033.81, 2691113.08);
+        $hoja = [['Lote', 'Importe Bruto', 'Total Abonado'], ['302', 137093.29, 134351.42], ['303', 227539.29, 222988.51],
+            ['308', 508771.49, 498596.04], ['368', 2009723.03, 1969528.53], ['307', 16733.69, 16399.01], ['Total General', '', '']];
+        $excel = fn () => UploadedFile::fake()->createWithContent('resumen_lotes_completo.xlsx', \App\Support\SimpleXlsxWriter::toString(['Hoja1' => $hoja]));
 
-        $vista = $this->actingAs($user)->post(route('finanzas.conciliaciones.mercantil_lotes.preview'), ['titular' => 'GRUPO JRZ', 'archivos' => [$excel]]);
-        $vista->assertOk()->assertSee('Comprobado con el banco')->assertSee('Falta registrar el lote 308 por Bs 508.771,49 (cierre del 01/10/2026)')
-            ->assertSee('Confirmar y conciliar');
+        $vista = $this->actingAs($user)->post(route('finanzas.conciliaciones.mercantil_lotes.preview'), ['titular' => 'GRUPO JRZ', 'archivos' => [$excel()], 'volver' => 'lotes']);
+        $vista->assertOk()->assertSee('Se concilia con el lote del 01/10/2026')->assertSee('No está en Tesorería')
+            ->assertSee('(aprox.)', false)->assertSee('Confirmar y cargar');
         $this->actingAs($user)->post(route('finanzas.conciliaciones.mercantil_lotes.aplicar'), ['token' => $vista->viewData('token')])
-            ->assertSessionHas('success', fn ($m) => str_contains($m, 'conciliados en parte'));
-        $this->assertTrue((bool) $l303->fresh()->es_conciliado);
-        $this->assertTrue((bool) $l368->fresh()->es_conciliado);
-        $this->assertSame('pendiente', $descuento->fresh()->estado);
+            ->assertRedirect(route('finanzas.conciliaciones.lotes'))
+            ->assertSessionHas('success', fn ($m) => str_contains($m, '4 lote(s) conciliados') && str_contains($m, '1 LIQ sin su lote'));
 
-        // Al registrar el lote 308, el cierre se completa con su descuento.
+        foreach ([$l302, $l303, $l368, $l307] as $l) {
+            $this->assertTrue((bool) $l->fresh()->es_conciliado);
+        }
+        $liq303 = ConciliacionLinea::query()->where('tesoreria_ingreso_id', $l303->id)->firstOrFail();
+        $this->assertSame('conciliado', $liq303->estado);
+        $this->assertEquals(227539.29, (float) $liq303->monto);
+        $this->assertSame(222988.51, \App\Services\Conciliacion\MercantilLiqBalance::abonado($liq303->descripcion));
+        // El 308 no está en Tesorería: su LIQ queda pendiente con la fecha del cierre vecino.
+        $liq308 = ConciliacionLinea::query()->where('referencia', '308')->firstOrFail();
+        $this->assertSame('pendiente', $liq308->estado);
+        $this->assertSame('2026-10-01', $liq308->fecha->format('Y-m-d'));
+        $this->assertTrue(app(\App\Services\BankReconciliationMatcher::class)->esAbonoLotePuntoVenta($liq308->descripcion, $liq308->referencia));
+
+        // Subir otra vez el mismo Excel no repite nada.
+        $otra = $this->actingAs($user)->post(route('finanzas.conciliaciones.mercantil_lotes.preview'), ['titular' => 'GRUPO JRZ', 'archivos' => [$excel()]]);
+        $otra->assertOk()->assertSee('Ya se cargó antes')->assertDontSee('Confirmar y cargar');
+        $this->assertSame(5, ConciliacionLinea::query()->count());
+
+        // Al registrar el 308 en Tesorería, su LIQ se concilia sola.
         $l308 = $this->lote('2026-10-01', '308', 508771.49);
         $this->assertSame(1, $this->servicio()->conciliarAutomatico('2026-10-01', '2026-10-31')['conciliados']);
         $this->assertTrue((bool) $l308->fresh()->es_conciliado);
-        $this->assertSame('conciliado', $descuento->fresh()->estado);
-        $this->assertSame((int) $l368->id, (int) $descuento->fresh()->tesoreria_ingreso_id);
+        $this->assertSame('conciliado', $liq308->fresh()->estado);
+        $this->assertSame((int) $l308->id, (int) $liq308->fresh()->tesoreria_ingreso_id);
     }
 
     public function test_lectura_del_excel_valida_las_cuentas(): void

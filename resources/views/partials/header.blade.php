@@ -392,6 +392,10 @@
         }
     }
 
+    if ($u->role !== 'admin' && $u->canAccess('sincronizadores')) {
+        $nav[] = $link('Sincronizadores', route('admin.sync.index'), request()->routeIs('admin.sync.*'));
+    }
+
     $nav = app(\App\Services\AccesosService::class)->filtrarMenu($u, $nav);
 
     $roleLabels = [

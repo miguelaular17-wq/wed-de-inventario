@@ -54,6 +54,7 @@ return [
         'servicio.inventario' => 'Inventario de repuestos (servicio técnico)',
         'servicio.transferir' => 'Transferir celulares / órdenes entre sedes',
         'nfc' => 'Tarjetas NFC (asignar y fichas de cliente)',
+        'sincronizadores' => 'Control de sincronizadores (ver estado y enviar sincronizaciones)',
     ],
 
     /*
@@ -86,6 +87,7 @@ return [
         'Gerencial' => ['gerencial', 'gerencial.devoluciones', 'gerencial.valorizados', 'gerencial.ajustes', 'gerencial.rentabilidad', 'gerencial.clientes', 'incentivos', 'incentivos.call_center'],
         'Servicio técnico' => ['servicio', 'servicio.inventario', 'servicio.transferir'],
         'Tarjetas NFC' => ['nfc'],
+        'Sistema' => ['sincronizadores'],
     ],
 
     'roles' => [

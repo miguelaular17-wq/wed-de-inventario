@@ -806,11 +806,10 @@
             </div>
             <div class="modal-body">
                 <p class="file-hint" style="margin-top:0;">
-                    Sube el Excel del <strong>Balance de Transacciones en el período</strong> de cada cierre: columnas Lote,
-                    Importe Bruto y Total Abonado, una fila por lote y el Total General. Se comprueba con el «DESCUENTO TARJETA»
-                    del extracto (bruto − abonado) y se concilian los lotes que están en Tesorería; el que falte no se crea:
-                    se concilia solo cuando lo registres. Un archivo por cierre; puedes subir varios. Primero verás el resultado;
-                    no se guarda nada hasta que confirmes.
+                    Sube el Excel del <strong>Balance de Transacciones</strong>: columnas Lote, Importe Bruto y Total Abonado,
+                    una fila por lote (un cierre o el mes completo). Cada lote entra como LIQ del banco: el que está en Tesorería
+                    con el mismo número y monto queda conciliado, y el que no, va a «LIQ del banco sin lote» en Lotes.
+                    Primero verás el resultado; no se guarda nada hasta que confirmes.
                 </p>
                 <label class="form-label">Cuenta Mercantil:</label>
                 <select name="titular" class="form-control" required>

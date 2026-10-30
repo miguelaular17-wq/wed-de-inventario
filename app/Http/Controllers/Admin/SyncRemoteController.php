@@ -56,6 +56,10 @@ class SyncRemoteController extends Controller
             'sede'    => ['required', 'string', 'max:20'],
             'comando' => ['required', 'string', 'in:' . implode(',', array_keys(SyncCommand::LABELS))],
         ]);
+        // Separar códigos compuestos cambia datos en la sede: solo admin.
+        if ($request->comando === 'separar_codigos_compuestos' && ! auth()->user()?->isAdmin()) {
+            return back()->withErrors(['comando' => 'Separar códigos compuestos solo lo puede enviar un administrador.']);
+        }
 
         SyncCommand::create([
             'sede'           => strtoupper(trim($request->sede)),

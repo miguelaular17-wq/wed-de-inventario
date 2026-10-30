@@ -39,6 +39,7 @@ class MercantilLotesConciliador
         $descuentos = $this->marcarDescuentos($abonos);
         // Cierres aplicados a medias (por su abono o su «DESCUENTO TARJETA»): se completan con los lotes que se registren.
         $conciliados = $this->completarParciales($this->lineasConParcial($desde, $hasta));
+        $conciliados += app(MercantilLiqBalance::class)->conciliarPendientes($desde, $hasta, $titularFiltro);
         // Los que ya tienen un balance aplicado a medias solo se completan con sus lotes faltantes.
         $conParcial = $this->parciales($abonos->pluck('id')->all())->keys()->all();
         $abonos = $abonos->reject(fn ($l) => in_array($l->id, $conParcial, true))->values();

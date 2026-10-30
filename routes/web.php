@@ -253,12 +253,16 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::post('/catalogo-auto/{id}/generar', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'generate'])->name('catalogo-auto.generate');
     Route::delete('/catalogo-auto/{id}', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'destroy'])->name('catalogo-auto.destroy');
 
-    // ── Control Remoto de Sincronizadores ─────────────────────────────
+    // Publicar el .exe que instalan todas las sedes: solo admin.
+    Route::post('/sincronizadores/version', [SyncDesktopController::class, 'publish'])->name('sync.publish');
+});
+
+// ── Control Remoto de Sincronizadores: admin y quien tenga el permiso «sincronizadores» ──
+Route::middleware(['auth', 'permission:sincronizadores'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/sincronizadores', [SyncRemoteController::class, 'index'])->name('sync.index');
     Route::post('/sincronizadores/comando', [SyncRemoteController::class, 'sendCommand'])->name('sync.command');
     Route::get('/sincronizadores/status', [SyncRemoteController::class, 'status'])->name('sync.status');
     Route::get('/sincronizadores/codigos-compuestos', [SyncRemoteController::class, 'codigosCompuestos'])->name('sync.codigos_compuestos');
-    Route::post('/sincronizadores/version', [SyncDesktopController::class, 'publish'])->name('sync.publish');
 });
 
 // API del sincronizador de escritorio (token en header/query)
