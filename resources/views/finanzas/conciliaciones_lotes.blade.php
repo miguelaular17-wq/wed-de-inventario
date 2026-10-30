@@ -62,6 +62,8 @@
     .bank-card.is-expanded .section-scroll { height: calc(100vh - 230px); }
     .bank-card.is-expanded .mini-table { font-size: .92rem; }
     body.hay-ampliado { overflow: hidden; }
+    .btn-registrar-lote { display: block; margin-top: 3px; font-size: .68rem; padding: 1px 6px; border: 1px solid #a7f3d0; border-radius: 4px; background: #ecfdf5; color: #047857; cursor: pointer; font-weight: 700; }
+    .row-pick.en-grupo .btn-registrar-lote { display: none; }
     .btn-conciliar { background: #0f766e; color: white; border: none; padding: 10px 16px; border-radius: 9px; font-weight: 800; cursor: pointer; }
     .btn-conciliar:disabled { opacity: .45; cursor: not-allowed; }
     .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1050; align-items: center; justify-content: center; padding: 20px; }
@@ -157,22 +159,48 @@
                         <div class="section-header"><span class="section-title">Lotes conciliados</span><span class="section-count">{{ $tarjeta['conciliados']->count() }}</span></div>
                         <div class="section-scroll">
                         <table class="mini-table">
-                            <thead><tr><th>Fecha</th><th>Lote</th><th>Neto</th></tr></thead>
+                            <thead><tr><th>Fecha</th><th>Lote</th><th>Neto</th><th style="text-align:right;">Comisión</th></tr></thead>
                             <tbody>
                                 @forelse($tarjeta['conciliados'] as $lote)
+                                    @php $com = $tarjeta['comisiones'][$lote->id] ?? null; @endphp
                                     <tr>
                                         <td>{{ \Carbon\Carbon::parse($lote->fecha)->format('d/m/Y') }}</td>
                                         <td>{{ $lote->lote_referencia ?: '—' }}</td>
-                                        <td>Bs. {{ number_format((float) $lote->monto, 2) }}</td>
+                                        <td>Bs. {{ number_format((float) $lote->monto, 2) }}
+                                            @if($com && $com['abonado'] !== null && $com['nota'] === null)
+                                                <div style="font-size:.7rem; color:#64748b;">Banco: Bs. {{ number_format($com['abonado'], 2) }}</div>
+                                            @endif
+                                        </td>
+                                        <td style="text-align:right; white-space:nowrap;">
+                                            @if(! $com || $com['nota'])
+                                                <span style="font-size:.72rem; color:#94a3b8;">{{ $com['nota'] ?? '—' }}</span>
+                                            @elseif(abs($com['comision']) < 0.01)
+                                                <span style="color:#94a3b8;">—</span>
+                                            @else
+                                                <span style="font-weight:700; color:{{ $com['comision'] > 0 ? '#b45309' : '#1d4ed8' }};"
+                                                      title="{{ $com['comision'] > 0 ? 'Lo que descontó el banco' : 'El banco abonó de más' }}">
+                                                    {{ $com['comision'] > 0 ? '' : '+' }}Bs. {{ number_format(abs($com['comision']), 2) }}
+                                                </span>
+                                                <div style="font-size:.7rem; color:#64748b;">{{ number_format(abs($com['pct']), 2, ',', '.') }} %{{ $com['comision'] < 0 ? ' de más' : '' }}</div>
+                                            @endif
+                                        </td>
                                     </tr>
                                 @empty
-                                    <tr class="empty-row"><td colspan="3">Sin lotes conciliados</td></tr>
+                                    <tr class="empty-row"><td colspan="4">Sin lotes conciliados</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
                         </div>
                         @if($tarjeta['conciliados']->count() > 0)
-                            <div class="section-footer">Bs. {{ number_format($tarjeta['total_conciliado'], 2) }}</div>
+                            <div class="section-footer">
+                                Bs. {{ number_format($tarjeta['total_conciliado'], 2) }}
+                                @if(abs($tarjeta['total_comision']) >= 0.01)
+                                    <div style="font-size:.74rem; font-weight:700; color:#b45309;">
+                                        Comisiones: Bs. {{ number_format($tarjeta['total_comision'], 2) }}
+                                        @if($tarjeta['total_conciliado'] > 0)({{ number_format($tarjeta['total_comision'] / $tarjeta['total_conciliado'] * 100, 2, ',', '.') }} %)@endif
+                                    </div>
+                                @endif
+                            </div>
                         @endif
                     </div>
                     <div class="section-block">
@@ -275,7 +303,17 @@
                                                 </div>
                                             @endif
                                         </td>
-                                        <td>Bs. {{ number_format($parcial ? $parcial['pendiente'] : (float) $linea->monto, 2) }}</td>
+                                        <td>Bs. {{ number_format($parcial ? $parcial['pendiente'] : (float) $linea->monto, 2) }}
+                                            @unless($parcial)
+                                                <button type="button" class="btn-registrar-lote"
+                                                        onclick="event.stopPropagation(); abrirRegistrarLote(this);"
+                                                        data-linea="{{ $linea->id }}" data-fecha="{{ \Carbon\Carbon::parse($linea->fecha)->format('Y-m-d') }}"
+                                                        data-fecha-txt="{{ \Carbon\Carbon::parse($linea->fecha)->format('d/m/Y') }}"
+                                                        data-monto="{{ round(abs((float) $linea->monto), 2) }}" data-desc="{{ $linea->descripcion }}"
+                                                        data-cuenta="{{ $tarjeta['banco'] }} · {{ $tarjeta['titular'] }}"
+                                                        title="Esta LIQ no tiene su lote en Tesorería: regístralo y queda conciliado">+ Registrar lote</button>
+                                            @endunless
+                                        </td>
                                     </tr>
                                 @empty
                                     <tr class="empty-row"><td colspan="4">Sin liquidaciones pendientes</td></tr>
@@ -304,6 +342,41 @@
     @empty
         <div class="bank-card" style="padding:28px;color:#64748b;">No hay lotes ni liquidaciones en ese rango. Sube el Excel de medios de pago o carga primero el extracto en Conciliación de egresos.</div>
     @endforelse
+</div>
+
+<div id="registrarLoteModal" class="modal-overlay">
+    <div class="modal-box">
+        <form action="{{ route('finanzas.conciliaciones.lotes.registrar_lote') }}" method="POST"
+              onsubmit="const b = this.querySelector('.btn-submit'); b.disabled = true; b.innerText = 'Registrando…';">
+            @csrf
+            <input type="hidden" name="linea_id" id="rlLinea">
+            <div class="modal-head">
+                <h3 style="margin:0;">Registrar el lote que falta</h3>
+                <button type="button" class="btn-cancel" onclick="document.getElementById('registrarLoteModal').style.display='none'">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px 12px; margin-bottom:14px; font-size:.86rem;">
+                    <div style="font-weight:800;" id="rlDesc"></div>
+                    <div style="color:#64748b;"><span id="rlCuenta"></span> · LIQ del <span id="rlFechaLiq"></span> · <strong id="rlMontoLiq"></strong></div>
+                </div>
+                <label class="form-label">Número de lote</label>
+                <input type="text" name="lote_referencia" class="form-control" required maxlength="40" placeholder="Ej. 204">
+                <label class="form-label">Fecha del lote (cierre)</label>
+                <input type="date" name="fecha" id="rlFecha" class="form-control" required>
+                <label class="form-label">Neto del lote (Bs.)</label>
+                <input type="number" name="monto" id="rlMonto" class="form-control" required step="0.01" min="0.01" oninput="rlComision()">
+                <div id="rlComision" style="font-size:.8rem; color:#b45309; font-weight:700; margin:-8px 0 12px;"></div>
+                <label class="form-label">Sede / descripción</label>
+                <input type="text" name="descripcion" class="form-control" list="rlSedes" maxlength="255" placeholder="Ej. SEDE DORAL">
+                <datalist id="rlSedes">@foreach(($descripcionesLote ?? []) as $d)<option value="{{ $d }}">@endforeach</datalist>
+                <p style="color:#64748b; font-size:.8rem; margin:0;">El lote se guarda en Tesorería y queda conciliado con esta LIQ. Si el neto es mayor que lo que abonó el banco, la diferencia sale como comisión.</p>
+            </div>
+            <div class="modal-foot">
+                <button type="button" class="btn-cancel" onclick="document.getElementById('registrarLoteModal').style.display='none'">Cancelar</button>
+                <button type="submit" class="btn-submit">Registrar y conciliar</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <div id="mercantilLotesModal" class="modal-overlay">
@@ -484,6 +557,32 @@ function quitarGrupo(form, indice) {
         inputs.forEach(input => marcarFila(input, g, i + 1));
     });
     actualizarManualBar(form);
+}
+// LIQ sin lote: se abre el formulario con los datos de la liquidación (el lote suele ser del día anterior).
+function abrirRegistrarLote(boton) {
+    const d = boton.dataset;
+    const fecha = new Date(d.fecha + 'T12:00:00');
+    fecha.setDate(fecha.getDate() - 1);
+    document.getElementById('rlLinea').value = d.linea;
+    document.getElementById('rlDesc').textContent = d.desc;
+    document.getElementById('rlCuenta').textContent = d.cuenta;
+    document.getElementById('rlFechaLiq').textContent = d.fechaTxt;
+    document.getElementById('rlMontoLiq').textContent = fmtBs(d.monto);
+    document.getElementById('rlMontoLiq').dataset.monto = d.monto;
+    document.getElementById('rlFecha').value = fecha.toISOString().slice(0, 10);
+    document.getElementById('rlMonto').value = d.monto;
+    rlComision();
+    const modal = document.getElementById('registrarLoteModal');
+    modal.querySelector('[name=lote_referencia]').value = '';
+    modal.style.display = 'flex';
+    modal.querySelector('[name=lote_referencia]').focus();
+}
+function rlComision() {
+    const liq = parseFloat(document.getElementById('rlMontoLiq').dataset.monto || '0');
+    const neto = parseFloat(document.getElementById('rlMonto').value || '0');
+    const dif = neto - liq;
+    document.getElementById('rlComision').textContent = Math.abs(dif) < 0.01 ? ''
+        : (dif > 0 ? 'Comisión del banco: ' : 'El banco abonó de más: ') + fmtBs(Math.abs(dif)) + ' (' + pct(dif, neto) + ')';
 }
 function ampliarBanco(boton) {
     const card = boton.closest('.bank-card');

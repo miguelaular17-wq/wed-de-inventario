@@ -2876,6 +2876,29 @@ class FinanzasController extends Controller
         // Lotes registrados dos veces: la copia no se concilia nunca; se marca para quitarla.
         $copiasLotes = app(\App\Services\Conciliacion\LotesRepetidos::class)->copias($lotes);
 
+        // Lo que abonó el banco por cada lote conciliado: la diferencia con el neto es la comisión que descontó.
+        $idsConciliados = $lotes->where('es_conciliado', true)->pluck('id')->all();
+        $abonadoPorLote = $idsConciliados === [] ? collect() : \App\Models\ConciliacionLinea::query()
+            ->whereIn('tesoreria_ingreso_id', $idsConciliados)
+            ->where('estado', 'conciliado')
+            ->get(['tesoreria_ingreso_id', 'monto'])
+            ->groupBy('tesoreria_ingreso_id')
+            ->map(fn ($l) => round((float) $l->sum(fn ($x) => abs((float) $x->monto)), 2));
+        $comisionLote = function ($lote) use ($abonadoPorLote) {
+            $neto = round(abs((float) $lote->monto), 2);
+            $abonado = $abonadoPorLote[$lote->id] ?? null;
+            if ($abonado === null) {
+                return ['abonado' => null, 'comision' => null, 'pct' => null, 'nota' => 'Sin LIQ propia'];
+            }
+            // Un abono que cubre varios lotes (cierre de Mercantil) no tiene comisión por lote.
+            if ($abonado > $neto * 1.05) {
+                return ['abonado' => $abonado, 'comision' => null, 'pct' => null, 'nota' => 'Abono de varios lotes'];
+            }
+            $comision = round($neto - $abonado, 2);
+
+            return ['abonado' => $abonado, 'comision' => $comision, 'pct' => $neto > 0 ? round($comision / $neto * 100, 2) : 0.0, 'nota' => null];
+        };
+
         $tarjetas = [];
         foreach ($grupos as $meta) {
             $bancoCard = $meta['banco'];
@@ -2887,7 +2910,10 @@ class FinanzasController extends Controller
             $liqBanco = $liquidaciones->filter($mismo)->values();
             $todosBanco = $lotes->filter($mismo)->values();
             $lotesBanco = $todosBanco->reject($esDiferido)->values();
+            $comisiones = $lotesBanco->where('es_conciliado', true)->mapWithKeys(fn ($l) => [$l->id => $comisionLote($l)]);
             $tarjetas[] = [
+                'comisiones' => $comisiones,
+                'total_comision' => round((float) $comisiones->sum(fn ($c) => (float) ($c['comision'] ?? 0)), 2),
                 'banco' => $bancoCard,
                 'titular' => $titularCard,
                 'conciliados' => $lotesBanco->where('es_conciliado', true)->values(),
@@ -2916,6 +2942,7 @@ class FinanzasController extends Controller
             'parcialesLiq' => $parcialesLiq,
             'copiasLotes' => $copiasLotes,
             'lotesPorId' => $lotes->keyBy('id'),
+            'descripcionesLote' => $lotes->pluck('descripcion')->filter()->map(fn ($d) => trim((string) $d))->unique()->sort()->values(),
         ]);
     }
 
@@ -2946,6 +2973,65 @@ class FinanzasController extends Controller
         $lote->update(['conciliar_en' => null]);
 
         return back()->with('success', 'Lote '.$lote->lote_referencia.' devuelto a su mes.');
+    }
+
+    /**
+     * Liquidación del banco que no tiene su lote en Tesorería: se registra el lote desde aquí y queda conciliado con ella.
+     */
+    public function registrarLoteDesdeLiq(Request $request)
+    {
+        $data = $request->validate([
+            'linea_id' => ['required', 'integer'],
+            'lote_referencia' => ['required', 'string', 'max:40'],
+            'fecha' => ['required', 'date'],
+            'monto' => ['required', 'numeric', 'gt:0'],
+            'descripcion' => ['nullable', 'string', 'max:255'],
+        ], [
+            'lote_referencia.required' => 'Escribe el número del lote.',
+            'monto.gt' => 'El monto neto del lote debe ser mayor a cero.',
+        ]);
+        $matcher = app(\App\Services\BankReconciliationMatcher::class);
+        $linea = \App\Models\ConciliacionLinea::query()->findOrFail($data['linea_id']);
+        if ($linea->estado === 'conciliado' || $linea->tesoreria_ingreso_id || $linea->flujo_caja_id) {
+            return back()->with('error', 'Esa liquidación ya está conciliada.');
+        }
+        if ($linea->esCargo() || ! $matcher->esAbonoLotePuntoVenta($linea->descripcion, $linea->referencia)) {
+            return back()->with('error', 'Ese movimiento no es una liquidación de punto de venta.');
+        }
+
+        [$banco, $titular] = $matcher->partesCuenta($linea->banco, $linea->titular);
+        $neto = round((float) $data['monto'], 2);
+        $abonado = round(abs((float) $linea->monto), 2);
+        $lote = null;
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($data, $linea, $banco, $titular, $neto, &$lote) {
+            $lote = \App\Models\TesoreriaIngreso::create([
+                'tipo' => 'punto_venta',
+                'banco' => $banco,
+                'titular' => $titular !== '' ? $titular : null,
+                'fecha' => $data['fecha'],
+                'monto' => $neto,
+                'lote_referencia' => trim($data['lote_referencia']),
+                'descripcion' => $data['descripcion'] ?? null,
+                'user_id' => auth()->id(),
+                'es_conciliado' => true,
+            ]);
+            $ok = \Illuminate\Support\Facades\DB::table('conciliacion_lineas')->where('id', $linea->id)
+                ->where('estado', '!=', 'conciliado')->whereNull('tesoreria_ingreso_id')->whereNull('flujo_caja_id')
+                ->update(['estado' => 'conciliado', 'tesoreria_ingreso_id' => $lote->id, 'updated_at' => now()]);
+            if ($ok !== 1) {
+                throw new \RuntimeException('La liquidación ya la tomó otro proceso.');
+            }
+            });
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage().' Recarga la página.');
+        }
+
+        $comision = round($neto - $abonado, 2);
+
+        return back()->with('success', 'Lote '.$lote->lote_referencia.' registrado en Tesorería y conciliado con la liquidación del '
+            .$linea->fecha->format('d/m/Y').' (Bs. '.number_format($abonado, 2, ',', '.').')'
+            .(abs($comision) >= 0.01 ? '. Comisión del banco: Bs. '.number_format($comision, 2, ',', '.').' ('.number_format(abs($comision) / $neto * 100, 2, ',', '.').' %)' : '').'.');
     }
 
     /** Quita de Tesorería las copias de lotes registrados dos veces (las sin conciliar ni ligar). */

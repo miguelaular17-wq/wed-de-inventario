@@ -183,6 +183,58 @@ class ConciliacionLoteManualTest extends TestCase
         $this->assertTrue((bool) $l204->fresh()->es_conciliado);
         $this->assertTrue((bool) $l205->fresh()->es_conciliado);
         $this->assertSame((int) $l204->id, (int) $a->fresh()->tesoreria_ingreso_id);
+
+        // En «Lotes conciliados» la diferencia sale como la comisión que descontó el banco.
+        if (! Schema::hasTable('cuentas_bancarias')) {
+            Schema::create('cuentas_bancarias', function (Blueprint $t) {
+                $t->id();
+                $t->string('banco');
+                $t->string('titular');
+                $t->string('categoria_reporte')->nullable();
+                $t->boolean('mostrar_en_principal')->default(true);
+                $t->integer('orden')->default(0);
+                $t->timestamps();
+            });
+        }
+        $vista = $this->actingAs($user)->get(route('finanzas.conciliaciones.lotes', ['fecha_desde' => '2026-10-01', 'fecha_hasta' => '2026-10-31']))
+            ->assertOk()->assertSee('Comisiones:');
+        $comisiones = collect($vista->viewData('tarjetas'))->first()['comisiones'];
+        $this->assertSame(['abonado' => 32382.57, 'comision' => 493.13, 'pct' => 1.5, 'nota' => null], $comisiones[$l204->id]);
+        $this->assertSame(0.0, $comisiones[$l185->id]['comision']);
+    }
+
+    public function test_registra_el_lote_que_falta_desde_la_liq_y_queda_conciliado(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $liq = ConciliacionLinea::create([
+            'banco' => 'VENEZUELA', 'titular' => 'LNACEH', 'fecha' => '2026-10-06', 'descripcion' => 'LIQUIDACION T/CREDITO VS/MC BD',
+            'referencia' => '777', 'monto' => 3994.78, 'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+        $ruta = route('finanzas.conciliaciones.lotes.registrar_lote');
+
+        $this->actingAs($user)->post($ruta, [
+            'linea_id' => $liq->id, 'lote_referencia' => ' 190 ', 'fecha' => '2026-10-05', 'monto' => 4055.62, 'descripcion' => 'SEDE DORAL',
+        ])->assertSessionHas('success', fn ($m) => str_contains($m, 'Lote 190 registrado') && str_contains($m, 'Comisión del banco: Bs. 60,84 (1,50 %)'));
+
+        $lote = TesoreriaIngreso::query()->sole();
+        $this->assertSame(['punto_venta', 'VENEZUELA', 'LNACEH', '190', 'SEDE DORAL'], [$lote->tipo, $lote->banco, $lote->titular, $lote->lote_referencia, $lote->descripcion]);
+        $this->assertTrue((bool) $lote->es_conciliado);
+        $this->assertEquals(4055.62, (float) $lote->monto);
+        $this->assertSame('conciliado', $liq->fresh()->estado);
+        $this->assertSame((int) $lote->id, (int) $liq->fresh()->tesoreria_ingreso_id);
+
+        // La misma LIQ no se usa dos veces.
+        $this->actingAs($user)->post($ruta, ['linea_id' => $liq->id, 'lote_referencia' => '191', 'fecha' => '2026-10-05', 'monto' => 10])
+            ->assertSessionHas('error', fn ($m) => str_contains($m, 'ya está conciliada'));
+        $this->assertSame(1, TesoreriaIngreso::query()->count());
+
+        // Un movimiento que no es liquidación de punto de venta no sirve.
+        $otro = ConciliacionLinea::create([
+            'banco' => 'VENEZUELA', 'titular' => 'LNACEH', 'fecha' => '2026-10-06', 'descripcion' => 'TRANSFERENCIA RECIBIDA',
+            'referencia' => '9', 'monto' => 100, 'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+        $this->actingAs($user)->post($ruta, ['linea_id' => $otro->id, 'lote_referencia' => '1', 'fecha' => '2026-10-05', 'monto' => 100])
+            ->assertSessionHas('error', fn ($m) => str_contains($m, 'no es una liquidación'));
     }
 
     private function makeUser(string $role): User

@@ -646,6 +646,7 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
     Route::get('/conciliaciones/lotes', [FinanzasController::class, 'lotesPuntoVenta'])->name('finanzas.conciliaciones.lotes');
     Route::post('/conciliaciones/lotes/manual', [FinanzasController::class, 'conciliarLoteManual'])->name('finanzas.conciliaciones.lotes.manual');
+    Route::post('/conciliaciones/lotes/registrar-lote', [FinanzasController::class, 'registrarLoteDesdeLiq'])->name('finanzas.conciliaciones.lotes.registrar_lote');
     Route::post('/conciliaciones/lotes/diferir', [FinanzasController::class, 'diferirLote'])->name('finanzas.conciliaciones.lotes.diferir');
     Route::post('/conciliaciones/lotes/quitar-repetidos', [FinanzasController::class, 'quitarLotesRepetidos'])->name('finanzas.conciliaciones.lotes.quitar_repetidos');
     Route::post('/conciliaciones/upload', [FinanzasController::class, 'uploadConciliacion'])->name('finanzas.conciliaciones.upload');
