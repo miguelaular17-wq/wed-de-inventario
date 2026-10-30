@@ -474,7 +474,8 @@ class FinanzasController extends Controller
         $fecha_hasta = request('fecha_hasta', request('fecha_filtro', date('Y-m-d')));
         $fecha_filtro = $fecha_hasta;
 
-        $movimientos = FlujoCaja::whereBetween('fecha', [$fecha_desde, $fecha_hasta])->where('oculto', false)->vigentes()->orderBy('fecha', 'desc')->get();
+        // Dentro del mismo día, en el orden en que se registraron (sin el id, al recargar salían salteados).
+        $movimientos = FlujoCaja::whereBetween('fecha', [$fecha_desde, $fecha_hasta])->where('oculto', false)->vigentes()->orderBy('fecha', 'desc')->orderBy('id')->get();
         Profiler::stop('FinanzasController::flujoCaja query');
         $ingresos = $movimientos->where('tipo', 'ingreso')->values();
         $movimientos = $movimientos->where('tipo', '!=', 'ingreso');
@@ -483,7 +484,7 @@ class FinanzasController extends Controller
         $traslados = $movimientos->where('categoria_egreso', 'traslados');
         $egresos_divisas = $movimientos->where('categoria_egreso', 'egreso_divisas');
         $compras_divisas = \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')
-            ? \App\Models\CompraDivisa::whereBetween('fecha', [$fecha_desde, $fecha_hasta])->orderByDesc('fecha')->get()
+            ? \App\Models\CompraDivisa::whereBetween('fecha', [$fecha_desde, $fecha_hasta])->orderByDesc('fecha')->orderBy('id')->get()
             : collect();
         
         $cuentas = $this->getCuentas(); // Mantenemos para el dropdown si es necesario o usamos las nuevas
@@ -3228,25 +3229,66 @@ class FinanzasController extends Controller
      * Conciliación manual POS: 1 lote sin liquidar + N liquidaciones del extracto.
      * La suma de las LIQ debe coincidir con el neto del lote (±0.05).
      */
+    /**
+     * Uno o varios grupos (1 lote + N LIQ cada uno). Con varios llegan en «grupos» como JSON:
+     * [{"lote": 12, "lineas": [3, 4]}, …]; se concilian uno por uno y se informa cada resultado.
+     */
     public function conciliarLoteManual(Request $request)
     {
         $data = $request->validate([
-            'tesoreria_ingreso_id' => 'required|integer',
-            'linea_ids' => 'required|array|min:1',
+            'grupos' => 'nullable|string|max:20000',
+            'tesoreria_ingreso_id' => 'required_without:grupos|nullable|integer',
+            'linea_ids' => 'required_without:grupos|nullable|array|min:1',
             'linea_ids.*' => 'integer',
             'aceptar_diferencia' => 'nullable|boolean',
         ]);
+        $aceptar = $request->boolean('aceptar_diferencia');
 
-        $lote = \App\Models\TesoreriaIngreso::query()
-            ->where('tipo', 'punto_venta')
-            ->whereKey($data['tesoreria_ingreso_id'])
-            ->firstOrFail();
-
-        if ($lote->es_conciliado) {
-            return back()->with('error', 'Ese lote ya está conciliado.');
+        $grupos = [];
+        if (! empty($data['grupos'])) {
+            foreach ((array) json_decode($data['grupos'], true) as $g) {
+                if (isset($g['lote'], $g['lineas']) && is_array($g['lineas']) && $g['lineas'] !== []) {
+                    $grupos[] = [(int) $g['lote'], array_map('intval', $g['lineas'])];
+                }
+            }
+            if ($grupos === []) {
+                return back()->with('error', 'No llegó ningún grupo para conciliar.');
+            }
+        } else {
+            $grupos[] = [(int) $data['tesoreria_ingreso_id'], array_map('intval', $data['linea_ids'])];
         }
 
-        $ids = array_values(array_unique(array_map('intval', $data['linea_ids'])));
+        $bien = [];
+        $mal = [];
+        foreach ($grupos as [$loteId, $ids]) {
+            [$ok, $mensaje] = $this->conciliarGrupoLote($loteId, $ids, $aceptar);
+            $ok ? $bien[] = $mensaje : $mal[] = $mensaje;
+        }
+
+        if (count($grupos) === 1) {
+            return back()->with($bien ? 'success' : 'error', $bien[0] ?? $mal[0]);
+        }
+        $texto = count($bien).' de '.count($grupos).' grupo(s) conciliados. '.implode(' ', $bien);
+        if ($mal) {
+            $texto .= ' No se pudo: '.implode(' ', $mal);
+        }
+
+        return back()->with($bien ? 'success' : 'error', $texto);
+    }
+
+    /** @return array{0: bool, 1: string} */
+    private function conciliarGrupoLote(int $loteId, array $ids, bool $aceptarDiferencia): array
+    {
+        $lote = \App\Models\TesoreriaIngreso::query()->where('tipo', 'punto_venta')->whereKey($loteId)->first();
+        if (! $lote) {
+            return [false, 'El lote #'.$loteId.' no existe.'];
+        }
+        $ref = $lote->lote_referencia ?: ('#'.$lote->id);
+        if ($lote->es_conciliado) {
+            return [false, 'El lote '.$ref.' ya está conciliado.'];
+        }
+
+        $ids = array_values(array_unique($ids));
         $matcher = app(\App\Services\BankReconciliationMatcher::class);
 
         $lineas = \App\Models\ConciliacionLinea::query()
@@ -3256,18 +3298,18 @@ class FinanzasController extends Controller
             ->get();
 
         if ($lineas->count() !== count($ids)) {
-            return back()->with('error', 'Una o más liquidaciones ya no están disponibles.');
+            return [false, 'Lote '.$ref.': una o más liquidaciones ya no están disponibles.'];
         }
 
         foreach ($lineas as $linea) {
             if (! $matcher->esAbonoLotePuntoVenta($linea->descripcion, $linea->referencia)) {
-                return back()->with('error', 'Hay un movimiento que no es liquidación de punto de venta.');
+                return [false, 'Lote '.$ref.': hay un movimiento que no es liquidación de punto de venta.'];
             }
             if (! $matcher->mismoBanco($linea->banco, $lote->banco)) {
-                return back()->with('error', 'El banco del lote y de la liquidación no coinciden.');
+                return [false, 'Lote '.$ref.': el banco del lote y de la liquidación no coinciden.'];
             }
             if (! $matcher->mismoTitular($linea->titular, $lote->titular, $linea->banco, $lote->banco)) {
-                return back()->with('error', 'El titular del lote y de la liquidación no coinciden.');
+                return [false, 'Lote '.$ref.': el titular del lote y de la liquidación no coinciden.'];
             }
         }
 
@@ -3275,19 +3317,16 @@ class FinanzasController extends Controller
         $mercantil = app(\App\Services\Conciliacion\MercantilLotesConciliador::class);
         if ($lineas->count() === 1 && $mercantil->parciales([$lineas->first()->id])->isNotEmpty()) {
             return $mercantil->completarConLote($lineas->first(), $lote)
-                ? back()->with('success', 'Lote '.$lote->lote_referencia.' ligado al abono del '.$lineas->first()->fecha->format('d/m/Y').': completa lo que faltaba del cierre.')
-                : back()->with('error', 'El monto del lote no es el que falta en ese abono (mira el detalle en «LIQ del banco sin lote»).');
+                ? [true, 'Lote '.$ref.' ligado al abono del '.$lineas->first()->fecha->format('d/m/Y').': completa lo que faltaba del cierre.']
+                : [false, 'Lote '.$ref.': el monto no es el que falta en ese abono (mira el detalle en «LIQ del banco sin lote»).'];
         }
 
         $suma = round((float) $lineas->sum(fn ($l) => abs((float) $l->monto)), 2);
         $netoLote = round(abs((float) $lote->monto), 2);
         $diferencia = round($suma - $netoLote, 2);
         $conDiferencia = abs($diferencia) > 0.05;
-        if ($conDiferencia && ! $request->boolean('aceptar_diferencia')) {
-            return back()->with(
-                'error',
-                'La suma de LIQ (Bs. '.number_format($suma, 2, ',', '.').') no coincide con el lote (Bs. '.number_format($netoLote, 2, ',', '.').').'
-            );
+        if ($conDiferencia && ! $aceptarDiferencia) {
+            return [false, 'Lote '.$ref.': la suma de LIQ (Bs. '.number_format($suma, 2, ',', '.').') no coincide con el lote (Bs. '.number_format($netoLote, 2, ',', '.').').'];
         }
         if ($conDiferencia) {
             \Log::info('Lote punto de venta conciliado con diferencia', [
@@ -3312,13 +3351,10 @@ class FinanzasController extends Controller
             $lote->save();
         });
 
-        $ref = $lote->lote_referencia ?: ('#'.$lote->id);
+        $pct = $netoLote > 0 ? abs($diferencia) / $netoLote * 100 : 0;
 
-        return back()->with(
-            'success',
-            'Lote '.$ref.' conciliado manualmente con '.$lineas->count().' liquidación(es)'
-            .($conDiferencia ? ', con diferencia de Bs. '.number_format($diferencia, 2, ',', '.') : '').'.'
-        );
+        return [true, 'Lote '.$ref.' conciliado manualmente con '.$lineas->count().' liquidación(es)'
+            .($conDiferencia ? ', con diferencia de Bs. '.number_format($diferencia, 2, ',', '.').' ('.number_format($pct, 2, ',', '.').' %)' : '').'.'];
     }
 
     public function reporteConciliacion(Request $request) {
@@ -4672,7 +4708,8 @@ class FinanzasController extends Controller
                                 ->where('oculto', false)
                                 ->vigentes()
                                 ->when($catsFlujo !== [], fn ($q) => $q->whereIn('categoria_egreso', $catsFlujo), fn ($q) => $q->whereRaw('1 = 0'))
-                                ->orderBy('fecha', 'desc');
+                                ->orderBy('fecha', 'desc')
+                                ->orderBy('id');
 
         $movimientos = $movimientos_query->get();
 
@@ -4803,6 +4840,7 @@ class FinanzasController extends Controller
         $compras = \App\Models\CompraDivisa::query()
             ->whereBetween('fecha', [$desde, $hasta])
             ->orderByDesc('fecha')
+            ->orderBy('id')
             ->get();
 
         if ($q === '') {

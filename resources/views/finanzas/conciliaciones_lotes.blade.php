@@ -44,6 +44,24 @@
     .manual-bar .hint { color: #115e59; font-size: 0.88rem; font-weight: 600; }
     .manual-bar .diff-ok { color: #166534; font-weight: 800; }
     .manual-bar .diff-bad { color: #991b1b; font-weight: 800; }
+    /* Grupos armados antes de conciliar: cada uno con su color. */
+    .row-pick.en-grupo { pointer-events: none; }
+    .row-pick.en-grupo td:first-child { box-shadow: inset 4px 0 0 var(--g); }
+    .row-pick.en-grupo { background: var(--gbg) !important; }
+    .g-0 { --g: #2563eb; --gbg: #dbeafe; } .g-1 { --g: #d97706; --gbg: #fef3c7; } .g-2 { --g: #7c3aed; --gbg: #ede9fe; }
+    .g-3 { --g: #db2777; --gbg: #fce7f3; } .g-4 { --g: #059669; --gbg: #d1fae5; } .g-5 { --g: #dc2626; --gbg: #fee2e2; }
+    .grupo-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 10px; font-size: .68rem; font-weight: 800; color: white; background: var(--g); }
+    .manual-grupos { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+    .grupo-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border-radius: 20px; font-size: .76rem; font-weight: 700; background: var(--gbg); color: #0f172a; border: 2px solid var(--g); }
+    .grupo-chip button { border: 0; background: rgba(0,0,0,.08); border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-weight: 800; line-height: 1; }
+    .btn-agregar { background: transparent; color: white; border: 1.5px solid rgba(255,255,255,.7); padding: 9px 12px; border-radius: 9px; font-weight: 800; cursor: pointer; }
+    .btn-agregar:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-ampliar { background: rgba(255,255,255,.15); color: white; border: 1px solid rgba(255,255,255,.35); padding: 4px 10px; border-radius: 7px; font-size: .78rem; font-weight: 700; cursor: pointer; margin-top: 6px; }
+    /* Banco ampliado a pantalla completa para conciliar más cómodo. */
+    .bank-card.is-expanded { position: fixed; inset: 12px; z-index: 1040; margin: 0; overflow: auto; box-shadow: 0 0 0 100vmax rgba(15,23,42,.55); }
+    .bank-card.is-expanded .section-scroll { height: calc(100vh - 230px); }
+    .bank-card.is-expanded .mini-table { font-size: .92rem; }
+    body.hay-ampliado { overflow: hidden; }
     .btn-conciliar { background: #0f766e; color: white; border: none; padding: 10px 16px; border-radius: 9px; font-weight: 800; cursor: pointer; }
     .btn-conciliar:disabled { opacity: .45; cursor: not-allowed; }
     .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1050; align-items: center; justify-content: center; padding: 20px; }
@@ -114,18 +132,23 @@
             <form action="{{ route('finanzas.conciliaciones.lotes.manual') }}" method="POST" class="manual-lote-form" data-card="{{ $idx }}">
                 @csrf
                 <input type="hidden" name="aceptar_diferencia" value="0">
+                <input type="hidden" name="grupos" value="">
                 <div class="bank-card-header">
                     <div>
                         <strong>{{ $tarjeta['banco'] }}</strong>
                         @if($tarjeta['titular'])
                             <div style="opacity:.8;font-size:.85rem;">Titular: {{ $tarjeta['titular'] }}</div>
                         @endif
+                        <button type="button" class="btn-ampliar" onclick="ampliarBanco(this)" title="Ver este banco a pantalla completa (Esc para cerrar)">⛶ Ampliar</button>
                     </div>
                     @if($tarjeta['pendientes']->count() > 0 && $tarjeta['liq_pendientes']->count() > 0)
                         <div class="header-manual">
                             <span class="manual-resumen">Marca 1 lote y una o varias LIQ</span>
                             <span class="manual-diff"></span>
+                            <button type="button" class="btn-agregar" disabled onclick="agregarGrupo(this.closest('form'))"
+                                    title="Guarda esta selección como un grupo (con su color) y sigue marcando otro lote">+ Agregar</button>
                             <button type="submit" class="btn-conciliar" disabled>Conciliar manualmente</button>
+                            <div class="manual-grupos"></div>
                         </div>
                     @endif
                 </div>
@@ -359,65 +382,145 @@
 function fmtBs(n) {
     return 'Bs. ' + Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+const COLORES_GRUPO = 6;
+function pct(delta, base) {
+    return base > 0 ? (Math.abs(delta) / base * 100).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' %' : '—';
+}
+// Selección en curso: el lote marcado y sus LIQ (sin las que ya están en un grupo).
+function seleccionActual(form) {
+    const radio = form.querySelector('input[name="tesoreria_ingreso_id"]:checked:not(:disabled)');
+    const checks = [...form.querySelectorAll('input[name="linea_ids[]"]:checked:not(:disabled)')];
+    return {
+        radio, checks,
+        loteId: radio ? radio.value : null,
+        loteRef: radio ? (radio.dataset.lote || '—') : '—',
+        loteMonto: radio ? parseFloat(radio.dataset.monto || '0') : 0,
+        suma: checks.reduce((acc, el) => acc + parseFloat(el.dataset.monto || '0'), 0),
+        lista: !!radio && checks.length > 0,
+    };
+}
+function textoDiferencia(loteMonto, suma) {
+    const delta = suma - loteMonto;
+    return Math.abs(delta) <= 0.05 ? 'Coincide' : 'Diferencia ' + fmtBs(Math.abs(delta)) + ' (' + pct(delta, loteMonto) + ')';
+}
 function actualizarManualBar(form) {
     if (!form) return;
-    const radio = form.querySelector('input[name="tesoreria_ingreso_id"]:checked');
-    const checks = [...form.querySelectorAll('input[name="linea_ids[]"]:checked')];
-    const loteMonto = radio ? parseFloat(radio.dataset.monto || '0') : 0;
-    const loteRef = radio ? (radio.dataset.lote || '—') : '—';
-    const sumaLiq = checks.reduce((acc, el) => acc + parseFloat(el.dataset.monto || '0'), 0);
-    const seleccion = !!radio && checks.length > 0;
-    const ok = seleccion && Math.abs(sumaLiq - loteMonto) <= 0.05;
+    const grupos = form._grupos || [];
+    const s = seleccionActual(form);
 
-    form.querySelectorAll('tr[data-role="lote"]').forEach(tr => {
-        tr.classList.toggle('is-selected', !!(tr.querySelector('input[type=radio]')?.checked));
-    });
-    form.querySelectorAll('tr[data-role="liq"]').forEach(tr => {
-        tr.classList.toggle('is-selected', !!(tr.querySelector('input[type=checkbox]')?.checked));
+    form.querySelectorAll('tr[data-role="lote"], tr[data-role="liq"]').forEach(tr => {
+        const input = tr.querySelector('input[type=radio], input[type=checkbox]');
+        tr.classList.toggle('is-selected', !!(input && input.checked && !input.disabled));
     });
 
     const resumen = form.querySelector('.manual-resumen');
     const diff = form.querySelector('.manual-diff');
     const btn = form.querySelector('.btn-conciliar');
+    const btnAgregar = form.querySelector('.btn-agregar');
     if (resumen) {
-        resumen.textContent = 'Lote ' + loteRef + ': ' + fmtBs(loteMonto) + ' · LIQ seleccionadas: ' + fmtBs(sumaLiq);
+        resumen.textContent = s.radio || s.checks.length
+            ? 'Lote ' + s.loteRef + ': ' + fmtBs(s.loteMonto) + ' · LIQ seleccionadas: ' + fmtBs(s.suma)
+            : (grupos.length ? 'Marca otro lote y sus LIQ, o concilia los grupos' : 'Marca 1 lote y una o varias LIQ');
     }
     if (diff) {
-        if (!radio || checks.length === 0) {
+        if (!s.lista) {
             diff.textContent = '';
             diff.className = 'manual-diff';
-        } else if (ok) {
-            diff.textContent = ' · Coincide';
-            diff.className = 'manual-diff diff-ok';
         } else {
-            const delta = Math.abs(sumaLiq - loteMonto);
-            diff.textContent = ' · Diferencia ' + fmtBs(delta);
-            diff.className = 'manual-diff diff-bad';
+            const ok = Math.abs(s.suma - s.loteMonto) <= 0.05;
+            diff.textContent = ' · ' + textoDiferencia(s.loteMonto, s.suma);
+            diff.className = 'manual-diff ' + (ok ? 'diff-ok' : 'diff-bad');
         }
     }
-    if (btn) btn.disabled = !seleccion;
+    if (btnAgregar) btnAgregar.disabled = !s.lista;
+    if (btn) {
+        const total = grupos.length + (s.lista ? 1 : 0);
+        btn.disabled = total === 0;
+        btn.textContent = total > 1 ? 'Conciliar ' + total + ' grupos' : 'Conciliar manualmente';
+    }
+
+    const caja = form.querySelector('.manual-grupos');
+    if (caja) {
+        caja.innerHTML = grupos.map((g, i) => '<span class="grupo-chip g-' + g.color + '">G' + (i + 1) + ' · Lote ' + g.loteRef
+            + ' · ' + fmtBs(g.loteMonto) + ' · ' + textoDiferencia(g.loteMonto, g.suma)
+            + ' <button type="button" title="Quitar este grupo" onclick="quitarGrupo(this.closest(\'form\'), ' + i + ')">×</button></span>').join('');
+    }
 }
+// Guarda la selección como un grupo con su color y deja las filas marcadas y bloqueadas.
+function agregarGrupo(form) {
+    const s = seleccionActual(form);
+    if (!s.lista) return;
+    form._grupos = form._grupos || [];
+    const usados = form._grupos.map(g => g.color);
+    let color = 0;
+    while (usados.includes(color) && color < COLORES_GRUPO - 1) color++;
+    const grupo = { lote: s.loteId, loteRef: s.loteRef, loteMonto: s.loteMonto, suma: s.suma, lineas: s.checks.map(c => c.value), color: color % COLORES_GRUPO };
+    form._grupos.push(grupo);
+    [s.radio, ...s.checks].forEach(input => marcarFila(input, grupo, form._grupos.length));
+    actualizarManualBar(form);
+}
+function marcarFila(input, grupo, numero) {
+    input.checked = false;
+    input.disabled = true;
+    const tr = input.closest('tr');
+    tr.classList.add('en-grupo', 'g-' + grupo.color);
+    tr.classList.remove('is-selected');
+    const celda = tr.querySelector('td:last-child');
+    celda.insertAdjacentHTML('beforeend', '<span class="grupo-tag" data-grupo-tag>G' + numero + '</span>');
+}
+function quitarGrupo(form, indice) {
+    const grupos = form._grupos || [];
+    grupos.splice(indice, 1);
+    form.querySelectorAll('tr.en-grupo').forEach(tr => {
+        tr.className = tr.className.replace(/\ben-grupo\b|\bg-\d\b/g, '').trim();
+        tr.querySelectorAll('[data-grupo-tag]').forEach(el => el.remove());
+        const input = tr.querySelector('input[type=radio], input[type=checkbox]');
+        if (input) input.disabled = false;
+    });
+    // Se vuelven a pintar los que quedan (la numeración se corre).
+    grupos.forEach((g, i) => {
+        const inputs = [form.querySelector('input[name="tesoreria_ingreso_id"][value="' + g.lote + '"]'),
+            ...g.lineas.map(id => form.querySelector('input[name="linea_ids[]"][value="' + id + '"]'))].filter(Boolean);
+        inputs.forEach(input => marcarFila(input, g, i + 1));
+    });
+    actualizarManualBar(form);
+}
+function ampliarBanco(boton) {
+    const card = boton.closest('.bank-card');
+    const abierta = card.classList.toggle('is-expanded');
+    document.body.classList.toggle('hay-ampliado', abierta);
+    boton.textContent = abierta ? '✕ Cerrar' : '⛶ Ampliar';
+}
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const card = document.querySelector('.bank-card.is-expanded');
+    if (card) ampliarBanco(card.querySelector('.btn-ampliar'));
+});
 document.querySelectorAll('form.manual-lote-form').forEach(function (form) {
     actualizarManualBar(form);
     form.addEventListener('submit', function (e) {
-        const radio = form.querySelector('input[name="tesoreria_ingreso_id"]:checked');
-        const checks = [...form.querySelectorAll('input[name="linea_ids[]"]:checked')];
-        const loteMonto = radio ? parseFloat(radio.dataset.monto || '0') : 0;
-        const sumaLiq = checks.reduce((acc, el) => acc + parseFloat(el.dataset.monto || '0'), 0);
-        const delta = sumaLiq - loteMonto;
+        // «→ Mes sig.» / «devolver» usan formaction propio: no pasan por la conciliación.
+        if (e.submitter && e.submitter.hasAttribute('formaction')) return;
+        const s = seleccionActual(form);
+        const grupos = [...(form._grupos || [])];
+        if (s.lista) grupos.push({ lote: s.loteId, loteRef: s.loteRef, loteMonto: s.loteMonto, suma: s.suma, lineas: s.checks.map(c => c.value) });
+        if (!grupos.length) { e.preventDefault(); return; }
+
         const aceptar = form.querySelector('input[name="aceptar_diferencia"]');
         aceptar.value = '0';
-        if (Math.abs(delta) > 0.05) {
-            const msg = 'El lote ' + (radio.dataset.lote || '') + ' es ' + fmtBs(loteMonto)
-                + ' y las LIQ marcadas suman ' + fmtBs(sumaLiq)
-                + '.\nDiferencia: ' + fmtBs(Math.abs(delta)) + (delta > 0 ? ' de más' : ' de menos')
-                + '.\n\n¿Deseas conciliarlo con esa diferencia?';
-            if (!confirm(msg)) {
+        const conDiferencia = grupos.filter(g => Math.abs(g.suma - g.loteMonto) > 0.05);
+        if (conDiferencia.length) {
+            const lineas = conDiferencia.map(g => '• Lote ' + g.loteRef + ': ' + fmtBs(g.loteMonto) + ' vs LIQ ' + fmtBs(g.suma)
+                + ' → ' + fmtBs(Math.abs(g.suma - g.loteMonto)) + ' (' + pct(g.suma - g.loteMonto, g.loteMonto) + ')' + (g.suma > g.loteMonto ? ' de más' : ' de menos'));
+            if (!confirm((conDiferencia.length === 1 ? 'Este grupo tiene diferencia:' : 'Estos grupos tienen diferencia:') + '\n\n' + lineas.join('\n') + '\n\n¿Conciliar con esa diferencia?')) {
                 e.preventDefault();
                 return;
             }
             aceptar.value = '1';
         }
+        form.querySelector('input[name="grupos"]').value = JSON.stringify(grupos.map(g => ({ lote: Number(g.lote), lineas: g.lineas.map(Number) })));
+        // Las filas bloqueadas no viajan en el formulario: todo va en «grupos».
+        form.querySelectorAll('input[name="tesoreria_ingreso_id"], input[name="linea_ids[]"]').forEach(i => i.disabled = true);
     });
 });
 </script>

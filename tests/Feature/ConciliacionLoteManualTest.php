@@ -146,6 +146,45 @@ class ConciliacionLoteManualTest extends TestCase
         $this->assertSame('pendiente', $l1->fresh()->estado);
     }
 
+    public function test_concilia_varios_grupos_de_una_vez_y_reporta_los_que_fallan(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $lote = fn (string $n, float $m) => TesoreriaIngreso::create([
+            'tipo' => 'punto_venta', 'banco' => 'VENEZUELA', 'titular' => 'LNACEH', 'fecha' => '2026-10-01',
+            'monto' => $m, 'lote_referencia' => $n, 'es_conciliado' => false, 'user_id' => $user->id,
+        ]);
+        $liq = fn (float $m) => ConciliacionLinea::create([
+            'banco' => 'VENEZUELA', 'titular' => 'LNACEH', 'fecha' => '2026-10-02', 'descripcion' => 'LIQ.TARJETA DEBITO MAESTRO BDV',
+            'referencia' => (string) random_int(1000, 9999), 'monto' => $m, 'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+        $l204 = $lote('204', 32875.70);
+        $l185 = $lote('185', 49786.64);
+        $l205 = $lote('205', 66560.46);
+        $a = $liq(32382.57);
+        $b = $liq(49786.64);
+        $c = $liq(1000.00);
+
+        $grupos = json_encode([
+            ['lote' => $l204->id, 'lineas' => [$a->id]],
+            ['lote' => $l185->id, 'lineas' => [$b->id]],
+            ['lote' => $l205->id, 'lineas' => [$c->id]],
+        ]);
+
+        // Sin aceptar diferencias: solo el que cuadra.
+        $this->actingAs($user)->post(route('finanzas.conciliaciones.lotes.manual'), ['grupos' => $grupos])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, '1 de 3 grupo(s) conciliados') && str_contains($m, 'Lote 204: la suma de LIQ'));
+        $this->assertTrue((bool) $l185->fresh()->es_conciliado);
+        $this->assertFalse((bool) $l204->fresh()->es_conciliado);
+
+        // Aceptando la diferencia: el resto, con el porcentaje en el mensaje.
+        $resto = json_encode([['lote' => $l204->id, 'lineas' => [$a->id]], ['lote' => $l205->id, 'lineas' => [$c->id]]]);
+        $this->actingAs($user)->post(route('finanzas.conciliaciones.lotes.manual'), ['grupos' => $resto, 'aceptar_diferencia' => 1])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, '2 de 2 grupo(s)') && str_contains($m, '(1,50 %)'));
+        $this->assertTrue((bool) $l204->fresh()->es_conciliado);
+        $this->assertTrue((bool) $l205->fresh()->es_conciliado);
+        $this->assertSame((int) $l204->id, (int) $a->fresh()->tesoreria_ingreso_id);
+    }
+
     private function makeUser(string $role): User
     {
         return User::create([
