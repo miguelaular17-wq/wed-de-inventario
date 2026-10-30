@@ -647,7 +647,28 @@ class BankReconciliationMatcher
             }
         }
 
-        return false;
+        return $this->liquidacionBanescoTd($descripcion) !== null;
+    }
+
+    /**
+     * Banesco: "TD 0001298250 000114 011026 0052320997" = débito (TT crédito) del afiliado, lote, fecha del cierre (ddmmaa)
+     * y terminal. Cada terminal numera sus lotes.
+     *
+     * @return array{afiliado: string, lote: string, fecha: string, terminal: string}|null
+     */
+    public function liquidacionBanescoTd(?string $descripcion): ?array
+    {
+        if (preg_match('#^\s*T[DTC]\s+(\d{8,12})\s+(\d{3,6})\s+(\d{2})/?(\d{2})/?(\d{2})\s+(\d{6,12})\s*$#i', (string) $descripcion, $m) !== 1) {
+            return null;
+        }
+        if (! checkdate((int) $m[4], (int) $m[3], 2000 + (int) $m[5])) {
+            return null;
+        }
+        $lote = ltrim($m[2], '0');
+
+        return $lote === '' ? null : [
+            'afiliado' => $m[1], 'lote' => $lote, 'fecha' => sprintf('20%s-%s-%s', $m[5], $m[4], $m[3]), 'terminal' => $m[6],
+        ];
     }
 
     /**

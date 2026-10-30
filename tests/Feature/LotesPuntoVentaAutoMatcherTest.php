@@ -109,12 +109,19 @@ class LotesPuntoVentaAutoMatcherTest extends TestCase
 
     public function test_no_cruza_si_hay_dos_lotes_posibles(): void
     {
-        $this->lote('NUNES', '2026-08-01', '000683', 5000);
+        $del01 = $this->lote('NUNES', '2026-08-01', '000683', 5000);
         $this->lote('NUNES', '2026-08-05', '000683', 5000);
-        $linea = $this->linea('NUNES', '2026-08-06', 'TMD 0037638504 L683 20260801 683', 4925);
+        // Sin fecha de cierre en la descripción no se sabe cuál es.
+        $linea = $this->linea('NUNES', '2026-08-06', 'TDB CAPIT 0037638504 L000683 30687', 4925);
 
         $this->assertSame(0, $this->servicio()->conciliar('2026-08-01', '2026-08-31'));
         $this->assertSame('pendiente', $linea->fresh()->estado);
+
+        // Con la fecha del cierre (20260801) sí: es el del 01/08.
+        $linea->delete();
+        $conFecha = $this->linea('NUNES', '2026-08-06', 'TMD 0037638504 L683 20260801 683', 4925);
+        $this->assertSame(1, $this->servicio()->conciliar('2026-08-01', '2026-08-31'));
+        $this->assertSame((int) $del01->id, (int) $conFecha->fresh()->tesoreria_ingreso_id);
     }
 
     public function test_la_pantalla_de_lotes_concilia_al_abrirla(): void
@@ -214,6 +221,57 @@ class LotesPuntoVentaAutoMatcherTest extends TestCase
         $this->assertSame((int) $loteA->id, (int) $a1->fresh()->tesoreria_ingreso_id);
         $this->assertSame((int) $loteA->id, (int) $a2->fresh()->tesoreria_ingreso_id);
         $this->assertSame('pendiente', $otroPunto->fresh()->estado);
+    }
+
+    public function test_banesco_td_y_tt_cruzan_por_el_lote_de_su_terminal(): void
+    {
+        $matcher = app(\App\Services\BankReconciliationMatcher::class);
+        $this->assertSame(
+            ['afiliado' => '0001298250', 'lote' => '114', 'fecha' => '2026-10-01', 'terminal' => '0052320997'],
+            $matcher->liquidacionBanescoTd('TD 0001298250 000114 011026 0052320997'),
+        );
+        $this->assertTrue($matcher->esAbonoLotePuntoVenta('TT 0001298250 000084 300826 0052320997'));
+        $this->assertFalse($matcher->esAbonoLotePuntoVenta('TD 0001298250 000114 321326 0052320997'));
+
+        // Débito y crédito del lote 114 de la terminal 0052320997; el lote 114 de otra terminal es otro cierre.
+        $debito = $this->lote('DORAL', '2026-10-01', '000114', 50000.00);
+        $credito = $this->lote('DORAL', '2026-10-01', '000114', 76873.95);
+        $td = $this->linea('DORAL', '2026-10-02', 'TD 0001298250 000114 011026 0052320997', 49250.00);
+        $tt = $this->linea('DORAL', '2026-10-02', 'TT 0001298250 000114 011026 0052320997', 75720.84);
+        $otraTerminal = $this->linea('DORAL', '2026-10-02', 'TD 0001298250 000114 011026 0037623987', 1000.00);
+
+        $this->assertSame(1, $this->servicio()->conciliar('2026-10-01', '2026-10-31'));
+
+        $this->assertSame((int) $debito->id, (int) $td->fresh()->tesoreria_ingreso_id);
+        $this->assertSame((int) $credito->id, (int) $tt->fresh()->tesoreria_ingreso_id);
+        $this->assertTrue((bool) $debito->fresh()->es_conciliado);
+        $this->assertTrue((bool) $credito->fresh()->es_conciliado);
+        $this->assertSame('pendiente', $otraTerminal->fresh()->estado);
+    }
+
+    public function test_banesco_lote_en_varios_formatos_se_junta_por_terminal_y_toma_el_del_cierre(): void
+    {
+        // Caso DORAL del 02/10: el lote 114 de la terminal 0052320997 llega en cuatro abonos y hay otro «114» el día antes.
+        $otro114 = $this->lote('DORAL', '2026-09-30', '000114', 79097.77);
+        $lote = $this->lote('DORAL', '2026-10-01', '000114', 126873.95);
+        $l148 = $this->lote('DORAL', '2026-10-01', '000148', 500.00);
+        $lineas = [
+            $this->linea('DORAL', '2026-10-02', 'TD 0001298250 000114 011026 0052320997', 33788.20),
+            $this->linea('DORAL', '2026-10-02', 'TMD 0052320997 L114 20261001 114', 2528.93),
+            $this->linea('DORAL', '2026-10-02', 'TDC 0052320997 L000114 20261001 000114', 6973.06),
+            $this->linea('DORAL', '2026-10-02', 'TDB CAPIT 0052320997 L000114 30687', 80442.45),
+        ];
+        // Otra terminal con su propio lote 148: no se mezcla con el 114.
+        $otraTerminal = $this->linea('DORAL', '2026-10-02', 'TMD 0052020582 L148 20261001 148', 490.00);
+
+        $this->assertSame(2, $this->servicio()->conciliar('2026-10-01', '2026-10-31'));
+
+        foreach ($lineas as $l) {
+            $this->assertSame((int) $lote->id, (int) $l->fresh()->tesoreria_ingreso_id);
+        }
+        $this->assertTrue((bool) $lote->fresh()->es_conciliado);
+        $this->assertFalse((bool) $otro114->fresh()->es_conciliado);
+        $this->assertSame((int) $l148->id, (int) $otraTerminal->fresh()->tesoreria_ingreso_id);
     }
 
     public function test_no_cruza_si_el_extracto_trae_la_misma_liquidacion_dos_veces(): void

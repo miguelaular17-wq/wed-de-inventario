@@ -3003,6 +3003,50 @@ class FinanzasController extends Controller
         [$banco, $titular] = $matcher->partesCuenta($linea->banco, $linea->titular);
         $neto = round((float) $data['monto'], 2);
         $abonado = round(\App\Services\Conciliacion\MercantilLiqBalance::abonado($linea->descripcion) ?? abs((float) $linea->monto), 2);
+
+        // El mismo lote ya registrado en Tesorería (±10 días): no se crea otro encima.
+        $numero = fn ($v) => ltrim(preg_replace('/\D/', '', (string) $v) ?? '', '0');
+        $dia = \Carbon\Carbon::parse($data['fecha']);
+        $existentes = \App\Models\TesoreriaIngreso::query()->where('tipo', 'punto_venta')
+            ->whereBetween('fecha', [$dia->copy()->subDays(10)->toDateString(), $dia->copy()->addDays(10)->toDateString()])
+            ->orderBy('es_conciliado')->orderBy('fecha')->orderBy('id')->get()
+            ->filter(fn ($i) => $numero($i->lote_referencia) === $numero($data['lote_referencia'])
+                && $matcher->mismoBanco($i->banco, $linea->banco)
+                && $matcher->mismoTitular($i->titular, $linea->titular, $i->banco, $linea->banco));
+        $igual = $existentes->first(fn ($i) => abs(abs((float) $i->monto) - $neto) <= 0.05);
+        if ($igual && $igual->es_conciliado) {
+            return back()->with('error', 'El lote '.$igual->lote_referencia.' del '.\Carbon\Carbon::parse($igual->fecha)->format('d/m/Y')
+                .' ya está en Tesorería y conciliado: no se registra otra vez.');
+        }
+        if ($igual) {
+            try {
+                \Illuminate\Support\Facades\DB::transaction(function () use ($linea, $igual) {
+                    $ahora = now();
+                    $ok = \Illuminate\Support\Facades\DB::table('tesoreria_ingresos')->where('id', $igual->id)->where('es_conciliado', false)
+                        ->update(['es_conciliado' => true, 'updated_at' => $ahora]) === 1
+                        && \Illuminate\Support\Facades\DB::table('conciliacion_lineas')->where('id', $linea->id)
+                            ->where('estado', '!=', 'conciliado')->whereNull('tesoreria_ingreso_id')->whereNull('flujo_caja_id')
+                            ->update(['estado' => 'conciliado', 'tesoreria_ingreso_id' => $igual->id, 'updated_at' => $ahora]) === 1;
+                    if (! $ok) {
+                        throw new \RuntimeException('La liquidación o el lote ya los tomó otro proceso.');
+                    }
+                });
+            } catch (\RuntimeException $e) {
+                return back()->with('error', $e->getMessage().' Recarga la página.');
+            }
+            $comision = round($neto - $abonado, 2);
+
+            return back()->with('success', 'El lote '.$igual->lote_referencia.' ya estaba en Tesorería (del '.\Carbon\Carbon::parse($igual->fecha)->format('d/m/Y')
+                .'): no se creó otro, se concilió ese con la liquidación'
+                .(abs($comision) >= 0.01 ? '. Comisión del banco: Bs. '.number_format($comision, 2, ',', '.') : '').'.');
+        }
+        if ($existentes->isNotEmpty()) {
+            $e = $existentes->first();
+
+            return back()->with('error', 'El lote '.$e->lote_referencia.' ya está en Tesorería del '.\Carbon\Carbon::parse($e->fecha)->format('d/m/Y')
+                .' por Bs. '.number_format((float) $e->monto, 2, ',', '.').' (y escribiste Bs. '.number_format($neto, 2, ',', '.')
+                .'). Corrige el monto de ese lote en Tesorería en vez de registrar otro: después se concilia solo o con «Conciliar manualmente».');
+        }
         $lote = null;
         try {
             \Illuminate\Support\Facades\DB::transaction(function () use ($data, $linea, $banco, $titular, $neto, &$lote) {

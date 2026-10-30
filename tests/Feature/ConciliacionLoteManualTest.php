@@ -237,6 +237,41 @@ class ConciliacionLoteManualTest extends TestCase
             ->assertSessionHas('error', fn ($m) => str_contains($m, 'no es una liquidación'));
     }
 
+    public function test_registrar_lote_que_ya_esta_en_tesoreria_no_crea_otro(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $ruta = route('finanzas.conciliaciones.lotes.registrar_lote');
+        $existente = TesoreriaIngreso::create([
+            'tipo' => 'punto_venta', 'banco' => 'MERCANTIL', 'titular' => 'JRZ', 'fecha' => '2026-10-03',
+            'monto' => 809167.35, 'lote_referencia' => '370', 'descripcion' => 'SEDE DORAL', 'es_conciliado' => false,
+        ]);
+        $liq = ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-10-03', 'referencia' => '370', 'monto' => 809167.35,
+            'descripcion' => \App\Services\Conciliacion\MercantilLiqBalance::descripcion('370', 792983.98), 'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+
+        // Mismo número y monto (aunque se escriba otra fecha): se concilia el que ya estaba.
+        $this->actingAs($user)->post($ruta, ['linea_id' => $liq->id, 'lote_referencia' => '370', 'fecha' => '2026-10-02', 'monto' => 809167.35])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, 'ya estaba en Tesorería') && str_contains($m, 'Bs. 16.183,37'));
+        $this->assertSame(1, TesoreriaIngreso::query()->count());
+        $this->assertTrue((bool) $existente->fresh()->es_conciliado);
+        $this->assertSame((int) $existente->id, (int) $liq->fresh()->tesoreria_ingreso_id);
+
+        // Mismo número con otro monto: hay que corregir el de Tesorería, no registrar otro.
+        TesoreriaIngreso::create([
+            'tipo' => 'punto_venta', 'banco' => 'MERCANTIL', 'titular' => 'JRZ', 'fecha' => '2026-10-08',
+            'monto' => 900000.00, 'lote_referencia' => '314', 'es_conciliado' => false,
+        ]);
+        $liq314 = ConciliacionLinea::create([
+            'banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-10-08', 'referencia' => '314', 'monto' => 901463.83,
+            'descripcion' => \App\Services\Conciliacion\MercantilLiqBalance::descripcion('314', 883158.97), 'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+        $this->actingAs($user)->post($ruta, ['linea_id' => $liq314->id, 'lote_referencia' => '314', 'fecha' => '2026-10-07', 'monto' => 901463.83])
+            ->assertSessionHas('error', fn ($m) => str_contains($m, 'ya está en Tesorería del 08/10/2026 por Bs. 900.000,00'));
+        $this->assertSame(2, TesoreriaIngreso::query()->count());
+        $this->assertSame('pendiente', $liq314->fresh()->estado);
+    }
+
     private function makeUser(string $role): User
     {
         return User::create([

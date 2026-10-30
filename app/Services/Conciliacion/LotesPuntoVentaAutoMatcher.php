@@ -114,10 +114,13 @@ class LotesPuntoVentaAutoMatcher
     }
 
     /**
-     * Número de lote en la descripción: BNC "LOTE:000068"; Banesco "L683", "L000685", "L.58".
+     * Número de lote en la descripción: BNC "LOTE:000068"; Banesco "L683", "L000685", "L.58" o "TD 0001298250 000114 011026 0052320997".
      */
     public function numeroLote(?string $descripcion): ?string
     {
+        if ($td = $this->matcher->liquidacionBanescoTd($descripcion)) {
+            return $td['lote'];
+        }
         $d = (string) $descripcion;
         if (preg_match('/\bLOTE\s*:?\s*0*(\d+)/i', $d, $m) === 1 || preg_match('/(?:^|[^0-9A-Z])L\.?\s*0*(\d{1,})(?![0-9])/i', $d, $m) === 1) {
             return $m[1] === '' ? null : $m[1];
@@ -126,10 +129,33 @@ class LotesPuntoVentaAutoMatcher
         return null;
     }
 
-    /** Punto de venta BNC ("POS: 860982552"): cada uno numera sus lotes por separado. Vacío en Banesco. */
+    /**
+     * Punto de venta: cada uno numera sus lotes por separado. BNC "POS: 860982552"; Banesco la terminal, que viene
+     * de primera en "TMD 0052320997 L114 …" / "TDB CAPIT 0052320997 L000114 …" y de última en "TD 0001298250 000114 011026 0052320997".
+     */
     private function puntoDeVenta(?string $descripcion): string
     {
+        if ($td = $this->matcher->liquidacionBanescoTd($descripcion)) {
+            return $td['terminal'];
+        }
+        if (preg_match('/^\s*T[A-Z]{1,3}(?:\s+[A-Z]+)?\s+(\d{8,12})\s+L\.?\s*\d/i', (string) $descripcion, $m) === 1) {
+            return $m[1];
+        }
+
         return preg_match('/\bPOS\s*:\s*(\d+)/i', (string) $descripcion, $m) === 1 ? $m[1] : '';
+    }
+
+    /** Fecha del cierre que trae Banesco: "TD … 011026 …" o "TMD … L114 20261001 …". */
+    private function fechaCierre(?string $descripcion): ?string
+    {
+        if ($td = $this->matcher->liquidacionBanescoTd($descripcion)) {
+            return $td['fecha'];
+        }
+        if (preg_match('/\bL\.?\s*0*\d+\s+(20\d{2})(\d{2})(\d{2})\b/i', (string) $descripcion, $m) === 1 && checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
+            return $m[1].'-'.$m[2].'-'.$m[3];
+        }
+
+        return null;
     }
 
     /**
@@ -160,6 +186,14 @@ class LotesPuntoVentaAutoMatcher
 
         if ($filas->isEmpty()) {
             return null;
+        }
+        // Dos lotes con el mismo número en días seguidos: manda la fecha del cierre que trae el banco.
+        $cierres = $grupo->map(fn ($l) => $this->fechaCierre($l->descripcion))->filter()->unique();
+        if ($cierres->count() === 1) {
+            $delCierre = $filas->filter(fn ($i) => substr((string) $i->fecha, 0, 10) === $cierres->first())->values();
+            if ($delCierre->isNotEmpty()) {
+                $filas = $delCierre;
+            }
         }
         $dias = $filas->map(fn ($i) => $this->dia($i->fecha));
         if ($dias->max() - $dias->min() > 1) {
