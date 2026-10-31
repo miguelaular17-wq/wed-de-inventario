@@ -4833,6 +4833,9 @@ class FinanzasController extends Controller
         $ref = $this->normalizarReferenciaBusqueda((string) $request->query('ref', ''));
         $cats_str = $request->query('cats', '');
         $selected_cats = $cats_str ? explode(',', $cats_str) : ['egreso_realizado', 'otros_egresos', 'traslados', 'egreso_divisas', 'compra_divisas'];
+        if ($request->user()?->soloAvances()) {
+            $selected_cats = ['otros_egresos'];
+        }
         $catsFlujo = array_values(array_intersect($selected_cats, ['egreso_realizado', 'otros_egresos', 'traslados', 'egreso_divisas']));
 
         $movimientos_query = \App\Models\FlujoCaja::whereBetween('fecha', [$fecha_desde, $fecha_hasta])

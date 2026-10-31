@@ -163,6 +163,52 @@ class FlujoCajaReporteExcelTest extends TestCase
         $this->assertFalse(collect($nombres)->contains(fn ($n) => str_ends_with((string) $n, '_traslados_divisas.pdf')));
     }
 
+    public function test_usuario_de_avances_descarga_solo_sus_otros_egresos(): void
+    {
+        $avances = User::create([
+            'name' => 'Avances',
+            'email' => 'avances-reporte@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_AVANCES,
+        ]);
+
+        foreach ([['otros_egresos', 'Avance a tienda'], ['egreso_realizado', 'Pago proveedor secreto']] as [$categoria, $motivo]) {
+            FlujoCaja::query()->create([
+                'fecha' => '2026-08-27',
+                'tipo' => 'egreso',
+                'categoria_egreso' => $categoria,
+                'banco' => 'Banesco',
+                'titular' => 'Grupo JRZ',
+                'motivo' => $motivo,
+                'monto_usd' => 10,
+                'monto_bs' => 1000,
+                'oculto' => false,
+            ]);
+        }
+
+        $params = ['desde' => '2026-08-27', 'hasta' => '2026-08-27', 'cats' => 'egreso_realizado,otros_egresos'];
+
+        $this->actingAs($avances)->get(route('finanzas.flujo_caja.reporte', $params))->assertOk();
+
+        $xlsx = $this->actingAs($avances)->get(route('finanzas.flujo_caja.reporte', $params + ['formato' => 'xlsx']));
+        $xlsx->assertOk();
+
+        $tmp = tempnam(sys_get_temp_dir(), 'repavances');
+        file_put_contents($tmp, $xlsx->getContent());
+        $libro = new \ZipArchive;
+        $this->assertTrue($libro->open($tmp) === true);
+        $xml = '';
+        for ($i = 0; $i < $libro->numFiles; $i++) {
+            $xml .= $libro->getFromIndex($i);
+        }
+        $libro->close();
+        @unlink($tmp);
+
+        $this->assertStringContainsString('Avance a tienda', $xml);
+        $this->assertStringNotContainsString('Pago proveedor secreto', $xml);
+        $this->assertStringNotContainsString('Egresos Realizados', $xml);
+    }
+
     private function ensureFlujoCajaColumns(): void
     {
         $columns = [

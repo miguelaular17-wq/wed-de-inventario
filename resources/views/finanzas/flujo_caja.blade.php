@@ -210,10 +210,12 @@
         <div style="display: flex; gap: 10px; align-items: center;">
             <form method="GET" action="{{ route('finanzas.flujo_caja') }}" style="display: flex; gap: 8px; align-items: center; margin: 0;">
                 <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Desde:</label>
-                <input type="date" name="fecha_desde" value="{{ $fecha_desde }}" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px;" onchange="this.form.submit()">
+                <input type="date" id="fecha_desde_avances" name="fecha_desde" value="{{ $fecha_desde }}" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px;" onchange="this.form.submit()">
                 <label style="font-weight: 600; color: #4b5563; font-size: 0.9rem;">Hasta:</label>
-                <input type="date" name="fecha_hasta" value="{{ $fecha_hasta }}" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px;" onchange="this.form.submit()">
+                <input type="date" id="fecha_hasta_avances" name="fecha_hasta" value="{{ $fecha_hasta }}" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px;" onchange="this.form.submit()">
             </form>
+            <button type="button" onclick="descargarReporteAvances('pdf')" title="Descargar mis movimientos del período" style="background: #7c3aed; color: #fff; border: 1px solid #6d28d9; border-radius: 6px; padding: 8px 14px; font-weight: 600; cursor: pointer;">PDF</button>
+            <button type="button" onclick="descargarReporteAvances('xlsx')" title="Descargar mis movimientos del período" style="background: #059669; color: #fff; border: 1px solid #047857; border-radius: 6px; padding: 8px 14px; font-weight: 600; cursor: pointer;">Excel</button>
             <button class="btn btn-primary" style="background-color: #1a4273; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px;" onclick="openNuevoEgresoModal()">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 Nuevo Egreso
@@ -1520,6 +1522,13 @@ function selectedTablasReporte() {
     if(document.getElementById('rep_compra')?.checked) selected.push('compra_divisas');
     if(document.getElementById('rep_traslados')?.checked) selected.push('traslados');
     return selected;
+}
+function descargarReporteAvances(formato) {
+    const fDesde = document.getElementById('fecha_desde_avances')?.value || '';
+    const fHasta = document.getElementById('fecha_hasta_avances')?.value || '';
+    let url = '{{ route("finanzas.flujo_caja.reporte") }}?desde=' + encodeURIComponent(fDesde) + '&hasta=' + encodeURIComponent(fHasta);
+    url += '&cats=otros_egresos&formato=' + encodeURIComponent(formato);
+    window.open(url, '_blank');
 }
 function descargarReporteBusqueda(formato) {
     const esPdf = formato === 'pdf';

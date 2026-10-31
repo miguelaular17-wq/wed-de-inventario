@@ -605,6 +605,7 @@ Route::middleware('auth')->prefix('finanzas')->group(function () {
     Route::get('/flujo-caja', [FinanzasController::class, 'flujoCaja'])->middleware('permission:finanzas.ver,finanzas.avances')->name('finanzas.flujo_caja');
     Route::post('/flujo-caja/parse-desglose', [FinanzasController::class, 'parseArchivoDesglose'])->middleware('permission:finanzas.ver,finanzas.avances')->name('finanzas.parse_desglose');
     Route::get('/flujo-caja/api/bcv', [FinanzasController::class, 'fetchBcvApi'])->middleware('permission:finanzas.ver,finanzas.avances')->name('finanzas.api_bcv');
+    Route::get('/flujo-caja/reporte', [FinanzasController::class, 'reporteFlujoCajaBusqueda'])->middleware('permission:finanzas.ver,finanzas.avances')->name('finanzas.flujo_caja.reporte');
     Route::post('/flujo-caja/egreso', [FinanzasController::class, 'storeEgreso'])->middleware('permission:finanzas.editar,finanzas.avances')->name('finanzas.store_egreso');
     Route::post('/flujo-caja/egreso/{id}', [FinanzasController::class, 'updateEgreso'])->middleware('permission:finanzas.editar,finanzas.avances')->name('finanzas.update_egreso');
     Route::post('/flujo-caja/ocr-receipt', [FinanzasController::class, 'ocrReceipt'])->middleware('permission:finanzas.editar,finanzas.avances')->name('finanzas.ocr_receipt');
@@ -613,7 +614,6 @@ Route::middleware('auth')->prefix('finanzas')->group(function () {
 
 // Finanzas routes
 Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->group(function () {
-    Route::get('/flujo-caja/reporte', [FinanzasController::class, 'reporteFlujoCajaBusqueda'])->name('finanzas.flujo_caja.reporte');
     Route::get('/cuentas-por-pagar', [\App\Http\Controllers\CuentaPorPagarController::class, 'index'])->name('finanzas.cuentas_por_pagar');
     Route::get('/my-delivery', [\App\Http\Controllers\MyDeliveryController::class, 'index'])->name('finanzas.my_delivery');
     Route::get('/gasto-directivos', [\App\Http\Controllers\GastoDirectivosController::class, 'index'])->name('finanzas.gasto_directivos');
