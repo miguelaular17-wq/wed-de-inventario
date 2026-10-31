@@ -19,6 +19,21 @@
 .vd-extra { display:flex; flex-wrap:wrap; gap:12px; margin-top:16px; }
 .vd-cajas-wrap { overflow-x:auto; }
 .vd-cajas th { font-size:.7rem; text-transform:uppercase; color:#64748b; white-space:nowrap; }
+.vd-cajas th.is-bs { color:#1d4ed8; }
+.vd-cajas th.is-usd { color:#047857; }
+.vd-cajas input.vd-nombre { width:150px; min-width:150px; }
+.vd-cajas input.vd-monto {
+    width:130px; min-width:130px; text-align:right; font-size:.95rem;
+    font-variant-numeric:tabular-nums; -moz-appearance:textfield; appearance:textfield;
+}
+.vd-cajas input.vd-monto::-webkit-outer-spin-button,
+.vd-cajas input.vd-monto::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+.vd-cajas input.vd-monto.is-bs { background:#eff6ff; border-color:#bfdbfe; }
+.vd-cajas input.vd-monto.is-usd { background:#f0fdf4; border-color:#bbf7d0; }
+.vd-cajas input.vd-monto.is-cero { color:#94a3b8; font-weight:500; }
+.vd-cajas input.vd-monto:focus, .vd-cajas input.vd-nombre:focus { outline:2px solid #2563eb; outline-offset:0; background:#fff; color:#0f172a; }
+.vd-cajas tbody tr:hover td { background:#f8fafc; }
+.vd-cajas th:first-child, .vd-cajas td:first-child { position:sticky; left:0; z-index:1; background:#fff; box-shadow:2px 0 0 #e2e8f0; }
 .vd-actions { margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; }
 .vd-modal-back {
     display:none; position:fixed; inset:0; z-index:2000;
@@ -47,6 +62,9 @@
 @endpush
 
 @section('content')
+@php
+    $monedaCol = fn (string $etiqueta) => str_ends_with(trim($etiqueta), '$') ? 'is-usd' : (preg_match('/\bBS$/i', trim($etiqueta)) ? 'is-bs' : '');
+@endphp
 <div class="vd-wrap">
     <form method="POST" action="{{ $reporte ? route('ventas_diarias.update', $reporte) : route('ventas_diarias.store') }}" id="vd-form">
         @csrf
@@ -110,7 +128,7 @@
                             <tr>
                                 <th>CAJA</th>
                                 @foreach($columnasCaja as $etiqueta)
-                                    <th>{{ $etiqueta }}</th>
+                                    <th class="{{ $monedaCol($etiqueta) }}">{{ $etiqueta }}</th>
                                 @endforeach
                                 <th></th>
                             </tr>
@@ -118,9 +136,10 @@
                         <tbody>
                             @foreach($cajas as $i => $c)
                                 <tr>
-                                    <td><input name="cajas[{{ $i }}][nombre]" value="{{ old('cajas.'.$i.'.nombre', $c->nombre ?? '') }}" placeholder="Nombre"></td>
+                                    <td><input class="vd-nombre" name="cajas[{{ $i }}][nombre]" value="{{ old('cajas.'.$i.'.nombre', $c->nombre ?? '') }}" placeholder="Nombre"></td>
                                     @foreach($columnasCaja as $campo => $etiqueta)
-                                        <td><input type="number" step="0.01" name="cajas[{{ $i }}][{{ $campo }}]" value="{{ old('cajas.'.$i.'.'.$campo, $c->{$campo} ?? 0) }}"></td>
+                                        <td><input type="number" step="0.01" inputmode="decimal" class="vd-monto {{ $monedaCol($etiqueta) }}" title="{{ $etiqueta }}"
+                                                   name="cajas[{{ $i }}][{{ $campo }}]" value="{{ old('cajas.'.$i.'.'.$campo, $c->{$campo} ?? 0) }}"></td>
                                     @endforeach
                                     <td><button type="button" class="btn vd-del-caja" title="Quitar">×</button></td>
                                 </tr>
@@ -210,6 +229,8 @@
     const metaVenta = {{ json_encode((float) $metaCtx['meta_venta']) }};
     const metaProd = {{ json_encode((float) $metaCtx['meta_productos']) }};
     const columnas = @json(array_keys($columnasCaja));
+    const etiquetas = @json($columnasCaja);
+    const monedas = @json(array_map($monedaCol, $columnasCaja));
     const grupo = (n, dec) => (Number(n) || 0).toLocaleString('es-VE', {minimumFractionDigits: dec, maximumFractionDigits: dec});
     const money = (n) => '$' + grupo(n, 2);
     const pctTxt = (v) => (v === null || Number.isNaN(v)) ? '—' : grupo(v * 100, 1) + '%';
@@ -285,13 +306,29 @@
         const tb = document.querySelector('#vd-cajas-table tbody');
         const tr = document.createElement('tr');
         const celdas = columnas.map((campo) =>
-            `<td><input type="number" step="0.01" name="cajas[${cajaIdx}][${campo}]" value="0"></td>`
+            `<td><input type="number" step="0.01" inputmode="decimal" class="vd-monto ${monedas[campo] || ''}" title="${etiquetas[campo]}" name="cajas[${cajaIdx}][${campo}]" value="0"></td>`
         ).join('');
-        tr.innerHTML = `<td><input name="cajas[${cajaIdx}][nombre]" placeholder="Nombre"></td>${celdas}<td><button type="button" class="btn vd-del-caja">×</button></td>`;
+        tr.innerHTML = `<td><input class="vd-nombre" name="cajas[${cajaIdx}][nombre]" placeholder="Nombre"></td>${celdas}<td><button type="button" class="btn vd-del-caja">×</button></td>`;
         tb.appendChild(tr);
         cajaIdx++;
+        marcarCeros();
         recalc();
     });
+
+    // Los ceros en gris; al entrar al cuadro se selecciona el valor para escribir encima.
+    function marcarCeros() {
+        document.querySelectorAll('#vd-cajas-table input.vd-monto').forEach((el) => {
+            el.classList.toggle('is-cero', (parseFloat(el.value) || 0) === 0);
+        });
+    }
+    const tablaCajas = document.getElementById('vd-cajas-table');
+    tablaCajas?.addEventListener('input', (e) => {
+        if (e.target.matches('input.vd-monto')) e.target.classList.toggle('is-cero', (parseFloat(e.target.value) || 0) === 0);
+    });
+    tablaCajas?.addEventListener('focusin', (e) => {
+        if (e.target.matches('input.vd-monto')) e.target.select();
+    });
+    marcarCeros();
     document.getElementById('vd-cajas-table')?.addEventListener('click', (e) => {
         if (e.target.classList.contains('vd-del-caja')) {
             e.target.closest('tr')?.remove();

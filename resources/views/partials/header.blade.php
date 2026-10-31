@@ -165,6 +165,7 @@
             $link('Productos', route('admin.productos.index'), request()->routeIs('admin.productos.*')),
             $link('Sync Logs', route('admin.sync_logs.index'), request()->routeIs('admin.sync_logs.*')),
             $link('Sincronizadores', route('admin.sync.index'), request()->routeIs('admin.sync.*')),
+            $link('Ajuste de facturas', route('admin.facturas.index'), request()->routeIs('admin.facturas.*')),
             $link('Usuarios', route('admin.users.index'), request()->routeIs('admin.users.*')),
             $link('Accesos y funciones', route('admin.accesos.index'), request()->routeIs('admin.accesos.*')),
         ]);

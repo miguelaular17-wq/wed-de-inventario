@@ -253,6 +253,12 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     Route::post('/catalogo-auto/{id}/generar', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'generate'])->name('catalogo-auto.generate');
     Route::delete('/catalogo-auto/{id}', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'destroy'])->name('catalogo-auto.destroy');
 
+    // Ajuste de facturas (solo rol admin)
+    Route::get('/facturas', [\App\Http\Controllers\Admin\FacturaAjusteController::class, 'index'])->name('facturas.index');
+    Route::get('/facturas/{factura}', [\App\Http\Controllers\Admin\FacturaAjusteController::class, 'edit'])->whereNumber('factura')->name('facturas.edit');
+    Route::put('/facturas/{factura}', [\App\Http\Controllers\Admin\FacturaAjusteController::class, 'update'])->whereNumber('factura')->name('facturas.update');
+    Route::post('/facturas/{factura}/liberar', [\App\Http\Controllers\Admin\FacturaAjusteController::class, 'liberar'])->whereNumber('factura')->name('facturas.liberar');
+
     // Publicar el .exe que instalan todas las sedes: solo admin.
     Route::post('/sincronizadores/version', [SyncDesktopController::class, 'publish'])->name('sync.publish');
 });
