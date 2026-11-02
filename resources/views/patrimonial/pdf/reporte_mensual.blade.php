@@ -104,6 +104,12 @@
         $ingresosPorPropiedad = $ingresosPorPropiedad ?? [];
         $gastosPorCategoria = $gastosPorCategoria ?? [];
         $comisionesPorCategoria = $comisionesPorCategoria ?? [];
+        // La comisión es un concepto de gasto más.
+        $gastosYComisiones = collect($gastosPorCategoria)
+            ->concat($comisionesPorCategoria)
+            ->sortByDesc('monto')
+            ->values()
+            ->all();
     @endphp
 
     <div class="section-title">Ingresos por alquileres</div>
@@ -129,29 +135,22 @@
             <tr>
                 <th>Gastos por concepto</th>
                 <th class="text-right">Monto</th>
-                <th>Comisiones</th>
-                <th class="text-right">Monto</th>
             </tr>
         </thead>
         <tbody>
-            @php
-                $maxRows = max(count($gastosPorCategoria), count($comisionesPorCategoria), 1);
-            @endphp
-            @for($i = 0; $i < $maxRows; $i++)
+            @forelse($gastosYComisiones as $linea)
                 <tr>
-                    <td>{{ $gastosPorCategoria[$i]['categoria'] ?? ($i === 0 && empty($gastosPorCategoria) ? 'Sin gastos registrados' : '') }}</td>
-                    <td class="text-right red">{{ isset($gastosPorCategoria[$i]) ? '$'.number_format($gastosPorCategoria[$i]['monto'], 2) : '' }}</td>
-                    <td>{{ $comisionesPorCategoria[$i]['categoria'] ?? ($i === 0 && empty($comisionesPorCategoria) ? 'Sin comisiones registradas' : '') }}</td>
-                    <td class="text-right orange">{{ isset($comisionesPorCategoria[$i]) ? '$'.number_format($comisionesPorCategoria[$i]['monto'], 2) : '' }}</td>
+                    <td>{{ $linea['categoria'] }}</td>
+                    <td class="text-right red">${{ number_format($linea['monto'], 2) }}</td>
                 </tr>
-            @endfor
+            @empty
+                <tr><td colspan="2" class="text-center" style="color:#94a3b8;">Sin gastos registrados</td></tr>
+            @endforelse
         </tbody>
         <tfoot>
             <tr>
                 <td>Total gastos</td>
-                <td class="text-right">${{ number_format($totales['gastos'], 2) }}</td>
-                <td>Total comisiones</td>
-                <td class="text-right">${{ number_format($totales['comisiones'], 2) }}</td>
+                <td class="text-right">${{ number_format($totales['gastos'] + $totales['comisiones'], 2) }}</td>
             </tr>
         </tfoot>
     </table>
@@ -226,8 +225,7 @@
                         <th>Tipo</th>
                         <th>Categoría</th>
                         <th>Descripción</th>
-                        <th style="text-align:right;">Monto</th>
-                        <th style="text-align:right;">Neto reserva</th>
+                        <th style="text-align:right;">Movimiento</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -237,15 +235,8 @@
                             <td class="tx-{{ $tx->tipo }}">{{ ucfirst($tx->tipo) }}</td>
                             <td>{{ $tx->categoria }}</td>
                             <td style="color:#64748b;">{{ $tx->descripcion ?: '—' }}</td>
-                            <td class="tx-{{ $tx->tipo }}" style="text-align:right;">
+                            <td style="text-align:right; font-weight:600; color:{{ $tx->tipo === 'ingreso' ? '#059669' : '#dc2626' }};">
                                 {{ $tx->tipo === 'ingreso' ? '+' : '-' }}${{ number_format($tx->monto, 2) }}
-                            </td>
-                            <td style="text-align:right; font-weight:600; color:#059669;">
-                                @if($tx->tipo === 'ingreso')
-                                    ${{ number_format((float) ($tx->neto_reserva ?? $tx->monto), 2) }}
-                                @else
-                                    —
-                                @endif
                             </td>
                         </tr>
                     @endforeach
@@ -254,16 +245,13 @@
                     @php $t = $row['totalesTx'] ?? $row; @endphp
                     <tr>
                         <td colspan="4" style="background:#dbeafe; font-weight:bold; color:#1e3a8a;">
-                            TOTALES
+                            TOTAL
                             <span style="font-weight:600; font-size:9px; color:#475569;">
-                                (gastos ${{ number_format($t['gastos'] ?? 0, 2) }} · comisiones ${{ number_format($t['comisiones'] ?? 0, 2) }})
+                                (ingresos ${{ number_format($t['ingresos'] ?? 0, 2) }} · gastos ${{ number_format(($t['gastos'] ?? 0) + ($t['comisiones'] ?? 0), 2) }})
                             </span>
                         </td>
-                        <td style="background:#dbeafe; text-align:right; font-weight:bold; color:#059669;">
-                            ${{ number_format($t['ingresos'] ?? 0, 2) }}
-                        </td>
                         <td style="background:#dbeafe; text-align:right; font-weight:bold; color:{{ ($t['balance'] ?? 0) >= 0 ? '#059669' : '#dc2626' }};">
-                            ${{ number_format($t['balance'] ?? 0, 2) }}
+                            {{ ($t['balance'] ?? 0) >= 0 ? '+' : '-' }}${{ number_format(abs($t['balance'] ?? 0), 2) }}
                         </td>
                     </tr>
                 </tfoot>

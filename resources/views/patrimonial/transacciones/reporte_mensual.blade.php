@@ -9,6 +9,12 @@
     $ingresosPorPropiedad = $ingresosPorPropiedad ?? [];
     $gastosPorCategoria = $gastosPorCategoria ?? [];
     $comisionesPorCategoria = $comisionesPorCategoria ?? [];
+    // La comisión es un concepto de gasto más.
+    $gastosYComisiones = collect($gastosPorCategoria)
+        ->concat($comisionesPorCategoria)
+        ->sortByDesc('monto')
+        ->values()
+        ->all();
 @endphp
 
 <div style="max-width:980px; margin:0 auto; padding:32px 20px;">
@@ -84,52 +90,27 @@
             </table>
         </div>
 
-        <div style="display:flex; flex-direction:column; gap:16px;">
-            {{-- GASTOS --}}
-            <div style="background:#fff; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
-                <div style="padding:12px 16px; background:#fef2f2; color:#b91c1c; font-weight:700; font-size:0.85rem; text-transform:uppercase;">Gastos por concepto</div>
-                <table style="width:100%; border-collapse:collapse; font-size:13px;">
-                    <tbody>
-                        @forelse($gastosPorCategoria as $linea)
-                            <tr>
-                                <td style="padding:9px 16px; border-bottom:1px solid #f1f5f9;">{{ $linea['categoria'] }}</td>
-                                <td style="padding:9px 16px; border-bottom:1px solid #f1f5f9; text-align:right; color:#dc2626; font-weight:600;">${{ number_format($linea['monto'], 2) }}</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="2" style="padding:16px; color:#94a3b8;">Sin gastos registrados.</td></tr>
-                        @endforelse
-                    </tbody>
-                    <tfoot>
-                        <tr style="background:#fef2f2;">
-                            <td style="padding:10px 16px; font-weight:700;">Total gastos</td>
-                            <td style="padding:10px 16px; text-align:right; font-weight:700; color:#dc2626;">${{ number_format($totales['gastos'], 2) }}</td>
+        {{-- GASTOS (las comisiones son un concepto más) --}}
+        <div style="background:#fff; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+            <div style="padding:12px 16px; background:#fef2f2; color:#b91c1c; font-weight:700; font-size:0.85rem; text-transform:uppercase;">Gastos por concepto</div>
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <tbody>
+                    @forelse($gastosYComisiones as $linea)
+                        <tr>
+                            <td style="padding:9px 16px; border-bottom:1px solid #f1f5f9;">{{ $linea['categoria'] }}</td>
+                            <td style="padding:9px 16px; border-bottom:1px solid #f1f5f9; text-align:right; color:#dc2626; font-weight:600;">${{ number_format($linea['monto'], 2) }}</td>
                         </tr>
-                    </tfoot>
-                </table>
-            </div>
-
-            {{-- COMISIONES --}}
-            <div style="background:#fff; border:1px solid #e2e8f0; border-radius:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
-                <div style="padding:12px 16px; background:#fffbeb; color:#b45309; font-weight:700; font-size:0.85rem; text-transform:uppercase;">Comisiones</div>
-                <table style="width:100%; border-collapse:collapse; font-size:13px;">
-                    <tbody>
-                        @forelse($comisionesPorCategoria as $linea)
-                            <tr>
-                                <td style="padding:9px 16px; border-bottom:1px solid #f1f5f9;">{{ $linea['categoria'] }}</td>
-                                <td style="padding:9px 16px; border-bottom:1px solid #f1f5f9; text-align:right; color:#d97706; font-weight:600;">${{ number_format($linea['monto'], 2) }}</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="2" style="padding:16px; color:#94a3b8;">Sin comisiones registradas.</td></tr>
-                        @endforelse
-                    </tbody>
-                    <tfoot>
-                        <tr style="background:#fffbeb;">
-                            <td style="padding:10px 16px; font-weight:700;">Total comisiones</td>
-                            <td style="padding:10px 16px; text-align:right; font-weight:700; color:#d97706;">${{ number_format($totales['comisiones'], 2) }}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
+                    @empty
+                        <tr><td colspan="2" style="padding:16px; color:#94a3b8;">Sin gastos registrados.</td></tr>
+                    @endforelse
+                </tbody>
+                <tfoot>
+                    <tr style="background:#fef2f2;">
+                        <td style="padding:10px 16px; font-weight:700;">Total gastos</td>
+                        <td style="padding:10px 16px; text-align:right; font-weight:700; color:#dc2626;">${{ number_format($totales['gastos'] + $totales['comisiones'], 2) }}</td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
     </div>
 
