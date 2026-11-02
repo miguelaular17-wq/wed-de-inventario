@@ -46,6 +46,12 @@
 .cal-dias { display: flex; gap: 2px; flex-wrap: wrap; max-width: 280px; }
 .cal-dot { width: 8px; height: 8px; border-radius: 2px; background: #e2e8f0; }
 .cal-dot.on { background: #10b981; }
+.cal-movs { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+.cal-mov { font-size: 0.74rem; font-weight: 700; border-radius: 7px; padding: 3px 8px; border: 1px solid; text-decoration: none; }
+.cal-mov.ok { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+.cal-mov.falta { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+.cal-mov.transito { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+.cal-mov.vacio { background: #f8fafc; color: #64748b; border-color: #e2e8f0; }
 .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; padding: 14px 18px; border-radius: 10px; margin-bottom: 22px; font-weight: 500; }
 .alert-info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; padding: 14px 18px; border-radius: 10px; margin-bottom: 22px; font-weight: 500; text-align: center; }
 </style>
@@ -165,6 +171,14 @@
                                     </span>
                                 @endforeach
                             </div>
+                            <div class="cal-movs" data-clave="{{ $fila['clave'] }}" data-url="{{ route('finanzas.conciliaciones', [
+                                    'fecha_desde' => $cal['inicio'],
+                                    'fecha_hasta' => $cal['fin'],
+                                    'banco_filtro' => $fila['banco'],
+                                    'titular_filtro' => $fila['titular'],
+                                ]) }}">
+                                <span class="cal-mov vacio">Contando movimientos…</span>
+                            </div>
                         </div>
                         <div class="cal-dias" title="Días conciliados del mes">
                             @foreach($fila['dias'] as $cubierto)
@@ -196,6 +210,49 @@
     </div>
 </div>
 <script>
+// Movimientos del banco por conciliar y egresos en tránsito de cada cuenta (se piden aparte porque tardan).
+(function () {
+    const cajas = document.querySelectorAll('.cal-movs[data-clave]');
+    if (!cajas.length) return;
+    const bs = n => 'Bs. ' + Number(n || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const entero = n => Number(n || 0).toLocaleString('es-VE');
+    const chip = (clase, texto, titulo, url) => {
+        const el = document.createElement(url ? 'a' : 'span');
+        el.className = 'cal-mov ' + clase;
+        el.textContent = texto;
+        el.title = titulo;
+        if (url) el.href = url;
+        return el;
+    };
+
+    fetch(@json(route('finanzas.calendario_conciliaciones.movimientos', ['cal_mes' => $cal['mes']])), {
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+    })
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(datos => {
+            cajas.forEach(caja => {
+                const m = datos[caja.dataset.clave] || { banco_total: 0, banco_pendientes: 0, banco_pendientes_bs: 0, transito: 0, transito_bs: 0 };
+                const url = caja.dataset.url;
+                caja.innerHTML = '';
+                if (!m.banco_total) {
+                    caja.appendChild(chip('vacio', 'Banco: sin extracto', 'No hay extracto del banco cargado para este mes'));
+                } else if (!m.banco_pendientes) {
+                    caja.appendChild(chip('ok', '✓ Banco en 0 · ' + entero(m.banco_total) + ' conciliados', 'Todos los movimientos del banco del mes están conciliados', url));
+                } else {
+                    caja.appendChild(chip('falta', 'Banco: faltan ' + entero(m.banco_pendientes) + ' de ' + entero(m.banco_total) + ' · ' + bs(m.banco_pendientes_bs), 'Movimientos del extracto del banco que todavía no se concilian', url));
+                }
+                if (!m.transito) {
+                    caja.appendChild(chip('ok', '✓ Tránsito en 0', 'No hay egresos registrados esperando que aparezcan en el banco'));
+                } else {
+                    caja.appendChild(chip('transito', 'En tránsito: ' + entero(m.transito) + ' · ' + bs(m.transito_bs), 'Egresos registrados que el banco todavía no refleja', url));
+                }
+            });
+        })
+        .catch(() => {
+            cajas.forEach(caja => { caja.innerHTML = '<span class="cal-mov vacio">No se pudieron contar los movimientos</span>'; });
+        });
+})();
+
 const titularesPorBanco = @json($titularesPorBanco);
 
 function filtrarTitularesCalendario(banco) {

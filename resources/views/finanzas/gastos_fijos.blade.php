@@ -396,7 +396,9 @@
     /* ── Table ── */
     .gf-table {
         width: 100%;
-        border-collapse: collapse;
+        /* separate: con collapse los bordes de las columnas fijas dejan ver lo que pasa por debajo */
+        border-collapse: separate;
+        border-spacing: 0;
         font-size: 0.845rem;
         min-width: 900px;
     }
@@ -617,6 +619,7 @@
     .gf-table .total-row td {
         color: #e0eaff !important;
         font-weight: 700 !important;
+        white-space: nowrap;
         padding: 13px 12px;
         border-color: #2a4a7f !important;
         font-size: 0.86rem;
@@ -656,7 +659,56 @@
     /* (sede group separator moved to col-sede styles above) */
 
     /* Delete button */
-    .col-accion { text-align: center; width: 36px; padding: 4px !important; }
+    .col-accion { text-align: center; width: 110px; padding: 4px !important; }
+    .gf-acciones { display: flex; align-items: center; justify-content: center; gap: 3px; }
+    .gf-btn-config {
+        border: 1px solid #dbe3f0;
+        background: #fff;
+        border-radius: 6px;
+        padding: 2px 6px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        cursor: pointer;
+        line-height: 1.4;
+        color: #64748b;
+    }
+    .gf-btn-config.on { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+    .gf-btn-config.off { opacity: .55; }
+    .gf-btn-atraso.on { background: #fef3c7; border-color: #fcd34d; color: #92400e; opacity: 1; }
+    .gf-btn-config:disabled { opacity: .4; cursor: wait; }
+    .gf-table tr.gf-inactivo td { color: #94a3b8 !important; }
+    .gf-table tr.gf-inactivo .col-servicio::before {
+        content: 'SIN AVISOS';
+        display: inline-block;
+        margin-right: 6px;
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: #e2e8f0;
+        color: #64748b;
+        font-size: 0.6rem;
+        font-weight: 800;
+        letter-spacing: .3px;
+        vertical-align: middle;
+    }
+    .gf-notif-atraso { font-size: 0.68rem; color: #92400e; margin-top: 3px; font-weight: 600; }
+
+    /* ── Primeras columnas fijas al desplazar los meses ── */
+    /* !important: las celdas editables usan position: relative y no deben correrse con "left". */
+    .gf-table td.gf-fixed,
+    .gf-table th.gf-fixed { position: sticky !important; }
+    .gf-table .gf-fixed { z-index: 2; background-color: #fff; }
+    .gf-table td.editable.gf-fixed:hover,
+    .gf-table td.editable.gf-fixed.editing { z-index: 3; }
+    .gf-table tbody tr:nth-child(even) td.gf-fixed { background-color: #f7f9fd; }
+    .gf-table tbody tr:hover td.gf-fixed { background-color: #eff4ff; }
+    .gf-table tbody td.col-costo.gf-fixed { background-color: #f3f6fd; }
+    .gf-table tbody td.col-sede.gf-fixed { background-color: #eef3ff; }
+    .gf-table thead th.gf-fixed { z-index: 4; background: #1b386a; }
+    .gf-table tbody .total-row td.gf-fixed { background: #14294d !important; }
+    .gf-table .total-row td[colspan] { white-space: normal; }
+    .gf-table .tr-add-sede td.gf-fixed { background: #f7f9fd !important; }
+    .gf-table .tr-add-sede .btn-add-sede { position: sticky; left: 10px; }
+    .gf-table .gf-fixed-last { box-shadow: 4px 0 6px -3px rgba(15, 23, 42, 0.25); }
     .btn-del-row {
         background: none;
         border: none;
@@ -828,6 +880,9 @@
                                 @else🔄 {{ $notif['fecha'] }}
                                 @endif
                             </span>
+                            @if(($notif['meses_atraso'] ?? 0) > 0)
+                                <div class="gf-notif-atraso">Cuota de {{ ucfirst(strtolower($notif['mes_nombre'])) }}{{ ($notif['anio'] ?? date('Y')) != date('Y') ? ' '.$notif['anio'] : '' }}</div>
+                            @endif
                         </td>
                         <td class="notif-servicio">{{ $notif['servicio'] }}</td>
                         <td class="notif-empresa">{{ $notif['empresa'] }}</td>
@@ -836,7 +891,7 @@
                         <td>
                             <button type="button" class="btn-notif-pagar"
                                 data-costo="{{ $notif['costo'] }}"
-                                onclick="marcarPagado({{ (int) $notif['tabla_idx'] }}, {{ (int) $notif['gasto_fijo_id'] }}, this, {{ (int) ($notif['mes_idx'] ?? ($mesActual - 1)) }})">
+                                onclick="marcarPagado({{ (int) $notif['tabla_idx'] }}, {{ (int) $notif['gasto_fijo_id'] }}, this, {{ (int) ($notif['mes_idx'] ?? ($mesActual - 1)) }}, {{ (int) ($notif['anio'] ?? date('Y')) }})">
                                 ✓ Pagar
                             </button>
                         </td>
@@ -895,12 +950,12 @@
                 <thead>
                     <tr>
                         @if($tabla['tiene_sede'])
-                            <th class="th-sede">SEDE</th>
+                            <th class="th-sede th-fijo">SEDE</th>
                         @endif
-                        <th>SERVICIO</th>
-                        <th>FECHA</th>
-                        <th>EMPRESA</th>
-                        <th>COSTO ESTIMADO</th>
+                        <th class="th-fijo">SERVICIO</th>
+                        <th class="th-fijo">FECHA</th>
+                        <th class="th-fijo">EMPRESA</th>
+                        <th class="th-fijo">COSTO ESTIMADO</th>
                         @for($m = 0; $m < $mesActual; $m++)
                             <th>{{ $nombresMeses[$m] }}</th>
                         @endfor
@@ -914,7 +969,7 @@
                             $isSedeFirst = $tabla['tiene_sede'] && !empty($fila['sede']) && $fila['sede'] !== $lastSede;
                             if ($isSedeFirst) $lastSede = $fila['sede'];
                         @endphp
-                        <tr class="gasto-row {{ $isSedeFirst ? 'sede-first' : '' }}" 
+                        <tr class="gasto-row {{ $isSedeFirst ? 'sede-first' : '' }} {{ $fila['activo'] ? '' : 'gf-inactivo' }}" 
                             data-sede="{{ $lastSede }}"
                             data-costo="{{ $fila['costo'] ?? 0 }}"
                             @for($m = 0; $m < $mesActual; $m++)
@@ -954,7 +1009,19 @@
                                 </td>
                             @endfor
                             <td class="col-accion">
-                                <button class="btn-del-row" onclick="deleteRow({{ $fila['id'] }}, this)" title="Eliminar fila">✖</button>
+                                <div class="gf-acciones">
+                                    <button type="button" class="gf-btn-config {{ $fila['activo'] ? 'on' : 'off' }}"
+                                        onclick="toggleActivoGasto({{ $fila['id'] }}, this)"
+                                        title="{{ $fila['activo'] ? 'Activo: avisa en notificaciones. Clic para desactivar' : 'Desactivado: sigue en la tabla pero no avisa. Clic para activar' }}">
+                                        {{ $fila['activo'] ? '🔔' : '🔕' }}
+                                    </button>
+                                    <button type="button" class="gf-btn-config gf-btn-atraso {{ $fila['meses_atraso'] > 0 ? 'on' : 'off' }}"
+                                        onclick="toggleAtrasoGasto({{ $fila['id'] }}, this)"
+                                        title="{{ $fila['meses_atraso'] > 0 ? 'Se paga con 1 mes de atraso (ej. octubre se paga en noviembre). Clic para quitar' : 'Clic si este gasto se paga con 1 mes de atraso' }}">
+                                        +1m
+                                    </button>
+                                    <button class="btn-del-row" onclick="deleteRow({{ $fila['id'] }}, this)" title="Eliminar fila">✖</button>
+                                </div>
                             </td>
                         </tr>
                     @endforeach
@@ -1113,6 +1180,83 @@
 <script>
 const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
+// Deja fijas las columnas de la izquierda (sede, servicio, fecha, empresa y costo estimado)
+// mientras se desplazan los meses. Se recalcula al cambiar de pestaña, filtrar sede o redimensionar.
+function fijarColumnas(wrapper) {
+    const table = wrapper?.querySelector('.gf-table');
+    if (!table || wrapper.style.display === 'none') return;
+
+    table.querySelectorAll('.gf-fixed').forEach(c => {
+        c.classList.remove('gf-fixed', 'gf-fixed-last');
+        c.style.left = '';
+    });
+
+    const visible = el => el.style.display !== 'none' && getComputedStyle(el).display !== 'none';
+    const headers = [...table.querySelectorAll('thead tr:first-child th')].filter(visible);
+    const fijas = headers.filter(th => th.classList.contains('th-fijo')).length;
+    const offsets = [];
+    let left = 0;
+    for (let i = 0; i < fijas; i++) {
+        offsets.push(left);
+        left += headers[i].getBoundingClientRect().width;
+    }
+
+    table.querySelectorAll('tr').forEach(tr => {
+        let col = 0;
+        [...tr.children].filter(visible).forEach(cell => {
+            const span = cell.colSpan || 1;
+            if (col < fijas && col + span <= fijas) {
+                cell.classList.add('gf-fixed');
+                cell.style.left = offsets[col] + 'px';
+                if (col + span === fijas) cell.classList.add('gf-fixed-last');
+            }
+            col += span;
+        });
+    });
+}
+
+function fijarColumnasVisibles() {
+    document.querySelectorAll('.gf-table-wrapper').forEach(fijarColumnas);
+}
+document.addEventListener('DOMContentLoaded', fijarColumnasVisibles);
+window.addEventListener('resize', fijarColumnasVisibles);
+
+function guardarConfigGasto(gastoId, cambios) {
+    return fetch("{{ route('finanzas.gastos_fijos.config') }}", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+        body: JSON.stringify(Object.assign({ gasto_fijo_id: gastoId }, cambios))
+    }).then(async res => {
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+    });
+}
+
+function toggleActivoGasto(gastoId, btn) {
+    const activar = !btn.classList.contains('on');
+    btn.disabled = true;
+    guardarConfigGasto(gastoId, { activo: activar }).then(data => {
+        // Recargar: el gasto entra o sale de las notificaciones.
+        window.location.reload();
+    }).catch(err => {
+        console.error(err);
+        alert('No se pudo cambiar el estado del gasto.');
+        btn.disabled = false;
+    });
+}
+
+function toggleAtrasoGasto(gastoId, btn) {
+    const conAtraso = !btn.classList.contains('on');
+    btn.disabled = true;
+    guardarConfigGasto(gastoId, { meses_atraso: conAtraso ? 1 : 0 }).then(() => {
+        window.location.reload();
+    }).catch(err => {
+        console.error(err);
+        alert('No se pudo cambiar el atraso del gasto.');
+        btn.disabled = false;
+    });
+}
+
 function showTab(index, btn) {
     document.querySelectorAll('.gf-table-wrapper').forEach(el => el.style.display = 'none');
     document.querySelectorAll('.gf-tab').forEach(el => el.classList.remove('active'));
@@ -1123,6 +1267,7 @@ function showTab(index, btn) {
         target.style.animation = 'none';
         target.offsetHeight; 
         target.style.animation = 'fadeIn 0.3s ease';
+        fijarColumnas(target);
     }
     if (btn) btn.classList.add('active');
 }
@@ -1192,6 +1337,8 @@ function showSubTab(tIdx, sedeName, btn) {
             if (totalMes) totalMes.innerText = formatMoney(sumMeses[m]);
         }
     }
+
+    fijarColumnas(wrapper);
 }
 
 // ── Editable cells: doble clic → input inline → Enter/blur guarda ──
@@ -1463,7 +1610,7 @@ function commitInlineTextEdit(cell, input) {
 }
 
 // Marcar Pagado logic
-function marcarPagado(tIdx, fIdx, btn, mesIdx) {
+function marcarPagado(tIdx, fIdx, btn, mesIdx, anio) {
     btn.disabled = true;
     btn.style.opacity = '0.5';
     btn.innerText = '⏳';
@@ -1473,7 +1620,7 @@ function marcarPagado(tIdx, fIdx, btn, mesIdx) {
     fetch("{{ route('finanzas.gastos_fijos.pagado') }}", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-        body: JSON.stringify({ gasto_fijo_id: fIdx, costo: costo, mes_idx: mesIdx })
+        body: JSON.stringify({ gasto_fijo_id: fIdx, costo: costo, mes_idx: mesIdx, anio: anio })
     }).then(async res => {
         if (!res.ok) throw new Error(await res.text());
         return res.json();

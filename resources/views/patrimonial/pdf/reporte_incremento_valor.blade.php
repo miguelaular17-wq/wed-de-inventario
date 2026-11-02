@@ -34,20 +34,27 @@
             <td style="width:100px;"><img src="{{ public_path('logo.png') }}" alt="Logo"></td>
             <td>
                 <h1>Incremento de Valor de las Propiedades</h1>
-                <div class="subtitle">Remodelaciones acumuladas hasta {{ $fecha_corte->translatedFormat('F Y') }}</div>
+                @php $soloMes = ($vista ?? 'acumulado') === 'mes'; @endphp
+                <div class="subtitle">
+                    {{ $soloMes ? 'Remodelaciones de '.$fecha_corte->translatedFormat('F Y') : 'Remodelaciones acumuladas hasta '.$fecha_corte->translatedFormat('F Y') }}
+                </div>
             </td>
             <td style="width:100px; text-align:right; color:#64748b;">{{ now()->format('d/m/Y H:i') }}</td>
         </tr>
     </table>
 
     <div class="note">
-        Estimación contable: valor anterior + remodelaciones registradas. Este resultado no sustituye un avalúo comercial.
+        @if($soloMes)
+            Solo remodelaciones del mes. Valor anterior = valor con el que la propiedad llegó al mes (incluye lo invertido antes); valor aproximado = valor al cierre del mes. No sustituye un avalúo comercial.
+        @else
+            Estimación contable: valor anterior + remodelaciones registradas. Este resultado no sustituye un avalúo comercial.
+        @endif
     </div>
 
     <table class="summary">
         <tr>
             <td><div class="label">Valor anterior</div><div class="value">${{ number_format($totales['valor_anterior'], 2) }}</div></td>
-            <td><div class="label">Remodelaciones</div><div class="value orange">${{ number_format($totales['inversion_remodelaciones'], 2) }}</div></td>
+            <td><div class="label">{{ $soloMes ? 'Remodelaciones del mes' : 'Remodelaciones' }}</div><div class="value orange">${{ number_format($totales['inversion_remodelaciones'], 2) }}</div></td>
             <td><div class="label">Valor aproximado</div><div class="value green">${{ number_format($totales['valor_aproximado'], 2) }}</div></td>
         </tr>
     </table>
@@ -78,7 +85,7 @@
             </tbody>
         </table>
     @empty
-        <p style="text-align:center; color:#64748b;">No hay remodelaciones registradas hasta este período.</p>
+        <p style="text-align:center; color:#64748b;">{{ $soloMes ? 'No hay remodelaciones registradas en este mes.' : 'No hay remodelaciones registradas hasta este período.' }}</p>
     @endforelse
 
     <div class="footer">Gestión Patrimonial — Incremento de valor — Confidencial</div>

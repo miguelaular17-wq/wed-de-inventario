@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\GastoFijo;
 use App\Models\GastoFijoPago;
 use Carbon\CarbonInterface;
 
@@ -60,26 +61,33 @@ class GastoFijoPendienteService
 
     /**
      * Periodos del año que siguen pendientes (el gasto no sale de la lista hasta pagarse).
+     * Con $mesesAtraso = 1 el mes se paga en el siguiente: la cuota de octubre se avisa el día de pago de noviembre.
      *
-     * @param  iterable<GastoFijoPago>  $pagosDelAnio
-     * @return list<array{mes_idx: int, tipo: string, dia: int|null, urgente: bool, mes_nombre: string}>
+     * @param  iterable<GastoFijoPago>  $pagosDelAnio  Pagos del año; si traen "anio" se usan solo los del año del periodo.
+     * @return list<array{mes_idx: int, anio: int, tipo: string, dia: int|null, urgente: bool, mes_nombre: string}>
      */
-    public function periodosPendientes(string $fecha, float $costo, iterable $pagosDelAnio, ?CarbonInterface $now = null): array
+    public function periodosPendientes(string $fecha, float $costo, iterable $pagosDelAnio, ?CarbonInterface $now = null, int $mesesAtraso = 0): array
     {
         if ($costo <= 0 || trim($fecha) === '') {
             return [];
         }
 
-        $now = $now ?? now();
-        $mesActual = (int) $now->month;
-        $diaActual = (int) $now->day;
         $diasPago = $this->parseDiasPago($fecha);
         if ($diasPago === []) {
             return [];
         }
 
         $isWeekly = in_array(-1, $diasPago, true);
-        $pagos = collect($pagosDelAnio)->keyBy('mes_idx');
+        $now = $now ?? now();
+        if (! $isWeekly && $mesesAtraso > 0) {
+            $now = $now->copy()->subMonthsNoOverflow($mesesAtraso);
+        }
+        $anio = (int) $now->year;
+        $mesActual = (int) $now->month;
+        $diaActual = (int) $now->day;
+        $pagos = collect($pagosDelAnio)
+            ->filter(fn ($p) => ! isset($p->anio) || (int) $p->anio === $anio)
+            ->keyBy('mes_idx');
         $pendientes = [];
         $mesDesde = $isWeekly ? $mesActual - 1 : max(0, $mesActual - 2);
 
@@ -95,6 +103,7 @@ class GastoFijoPendienteService
                 }
                 $pendientes[] = [
                     'mes_idx' => $mesIdx,
+                    'anio' => $anio,
                     'tipo' => 'semanal',
                     'dia' => null,
                     'urgente' => false,
@@ -128,6 +137,7 @@ class GastoFijoPendienteService
 
             $pendientes[] = [
                 'mes_idx' => $mesIdx,
+                'anio' => $anio,
                 'tipo' => $tipo,
                 'dia' => $dia,
                 'urgente' => $urgente,
@@ -136,6 +146,26 @@ class GastoFijoPendienteService
         }
 
         return $pendientes;
+    }
+
+    /**
+     * Pendientes de un gasto fijo. Un gasto desactivado nunca queda pendiente (no avisa ni se ofrece para vincular).
+     *
+     * @return list<array{mes_idx: int, anio: int, tipo: string, dia: int|null, urgente: bool, mes_nombre: string}>
+     */
+    public function pendientesDeGasto(GastoFijo $gasto, ?CarbonInterface $now = null): array
+    {
+        if ($gasto->activo === false) {
+            return [];
+        }
+
+        return $this->periodosPendientes(
+            (string) $gasto->fecha,
+            (float) $gasto->costo,
+            $gasto->pagos,
+            $now,
+            (int) ($gasto->meses_atraso ?? 0)
+        );
     }
 
     private function estaPagadoEnPeriodo(mixed $pago, bool $isWeekly, CarbonInterface $now, bool $esMesActual): bool

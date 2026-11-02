@@ -15,6 +15,8 @@ return [
     'sedes_gerencial' => ['DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'NUNES', 'JRZ', 'MOVISTAR', 'TECNOHOUSE'],
 
     /** Áreas de nómina cuyas ventas se muestran en el dashboard gerencial (por vendedor). */
+    // Estaciones del sistema de facturación que no son cajas (patrón LIKE). Efectividad de caja no las cuenta.
+    'estaciones_fuera_de_caja' => ['TESORER%'],
     // Áreas sin tienda que pueden recibir producto meta de quincena (cantidad a vender por sus empleados).
     'metas_areas' => ['CALL CENTER'],
     'areas_gerencial' => [

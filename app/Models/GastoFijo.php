@@ -17,11 +17,20 @@ class GastoFijo extends Model
         'costo',
         'orden',
         'visible',
+        'activo',
+        'meses_atraso',
+    ];
+
+    protected $attributes = [
+        'activo' => true,
+        'meses_atraso' => 0,
     ];
 
     protected $casts = [
         'costo' => 'float',
         'visible' => 'boolean',
+        'activo' => 'boolean',
+        'meses_atraso' => 'integer',
         'orden' => 'integer',
         'grupo_id' => 'integer',
     ];

@@ -109,7 +109,20 @@ class CatalogoController extends Controller
 
         $productos = $query->paginate($perPage)->withQueryString();
 
+        // Desglose por sede de las unidades (al pasar el mouse); solo para los productos de esta página.
+        // Catálogo interno (también el acceso rápido sin sesión de las tiendas); el enlace para clientes no lo muestra.
+        $verDesglose = ! $modoCliente;
+        if ($verDesglose) {
+            $filtrarSede = $this->filtroSede($request);
+            $productos->getCollection()->load(['stock' => function ($q) use ($filtrarSede) {
+                $filtrarSede($q);
+                $q->where('existencia', '>', 0)->orderByDesc('existencia');
+            }]);
+        }
+
         return view('catalogo.index', [
+            'verDesgloseStock' => $verDesglose,
+            'nombresSede' => ['JRZ' => 'JRZ', 'TECNOHOUSE' => 'Tecno House'],
             'productos' => $productos,
             'categorias' => $categorias,
             'subcategorias' => $subcategorias,
@@ -333,19 +346,7 @@ class CatalogoController extends Controller
             });
         }
 
-        $sede = $request->input('sede');
-        if ($this->sedeOcultaEnCatalogo((string) $sede)) {
-            $sede = null;
-        }
-        $excluidas = $this->sedesExcluidas($request);
-
-        $filtrarSede = function ($q) use ($sede, $excluidas) {
-            if ($sede && $sede !== 'todas') {
-                $q->where('sede', $sede);
-            } elseif ($excluidas !== []) {
-                $q->whereNotIn('sede', $excluidas);
-            }
-        };
+        $filtrarSede = $this->filtroSede($request);
 
         $query->withSum(['stock as existencia' => $filtrarSede], 'existencia');
 
@@ -360,6 +361,26 @@ class CatalogoController extends Controller
         $query->orderBy('nombre', 'asc');
 
         return $query;
+    }
+
+    /**
+     * Sedes que suman en las unidades del catálogo: la sede elegida, o todas menos las excluidas.
+     */
+    private function filtroSede(Request $request): \Closure
+    {
+        $sede = $request->input('sede');
+        if ($this->sedeOcultaEnCatalogo((string) $sede)) {
+            $sede = null;
+        }
+        $excluidas = $this->sedesExcluidas($request);
+
+        return function ($q) use ($sede, $excluidas) {
+            if ($sede && $sede !== 'todas') {
+                $q->where('sede', $sede);
+            } elseif ($excluidas !== []) {
+                $q->whereNotIn('sede', $excluidas);
+            }
+        };
     }
 
     /**

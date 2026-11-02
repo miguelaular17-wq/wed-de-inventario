@@ -3,18 +3,28 @@
 namespace App\Services;
 
 use App\Models\ConciliacionCierre;
+use App\Models\ConciliacionLinea;
+use App\Models\FlujoCaja;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class ConciliacionCalendarioService
 {
-    public function __construct(private BankReconciliationMatcher $matcher) {}
+    private BankMovementClassifier $classifier;
+
+    public function __construct(
+        private BankReconciliationMatcher $matcher,
+        ?BankMovementClassifier $classifier = null,
+    ) {
+        $this->classifier = $classifier ?? new BankMovementClassifier;
+    }
 
     /**
      * @param  array<string, list<string>>  $titularesPorBanco
      * @return array<string, mixed>
      */
-    public function armar(string $mes, array $titularesPorBanco): array
+    public function armar(string $mes, array $titularesPorBanco, bool $conMovimientos = false): array
     {
         $inicio = Carbon::createFromFormat('Y-m-d', $mes.'-01')->startOfMonth();
         $fin = $inicio->copy()->endOfMonth();
@@ -54,6 +64,9 @@ class ConciliacionCalendarioService
                 'titular' => $titularCanon,
             ];
         }
+
+        // Tarda (hay cuentas con decenas de miles de movimientos): la página los pide aparte.
+        $pendientes = $conMovimientos ? $this->pendientesPorCuenta($inicio, $fin) : null;
 
         $filas = [];
         $sinMovimientos = [];
@@ -108,6 +121,10 @@ class ConciliacionCalendarioService
                 'rangos' => $rangos,
                 'cubiertos' => $cubiertos,
                 'completo' => $cubiertos === $diasMes,
+                'clave' => $this->matcher->claveCuenta($cuenta['banco'], $cuenta['titular']),
+                'movimientos' => $pendientes === null
+                    ? null
+                    : ($pendientes[$this->matcher->claveCuenta($cuenta['banco'], $cuenta['titular'])] ?? $this->movimientosVacios()),
             ];
         }
 
@@ -154,6 +171,111 @@ class ConciliacionCalendarioService
             'completas' => count(array_filter($filas, fn (array $fila) => $fila['completo'])),
             'total' => count($filas),
         ];
+    }
+
+    /**
+     * Por cuenta y mes, con el mismo criterio que el PDF de conciliación del banco:
+     * - banco_*: movimientos del extracto (sin comisiones, compras de divisas, pagos de crédito,
+     *   lotes de punto de venta ni cargos anulados por devolución) y cuántos siguen sin conciliar.
+     * - transito*: egresos registrados que el banco todavía no refleja.
+     *
+     * @return array<string, array{banco_total:int, banco_pendientes:int, banco_pendientes_bs:float, transito:int, transito_bs:float}>
+     */
+    public function pendientesPorCuenta(Carbon $inicio, Carbon $fin): array
+    {
+        $out = [];
+        $desde = $inicio->toDateString();
+        $hasta = $fin->toDateString();
+
+        if (Schema::hasTable('conciliacion_lineas')) {
+            $conDevolucion = Schema::hasColumn('conciliacion_lineas', 'devolucion_linea_id');
+            $conForzar = Schema::hasColumn('conciliacion_lineas', 'forzar_comision');
+            $columnas = array_merge(
+                ['id', 'banco', 'titular', 'fecha', 'descripcion', 'referencia', 'monto', 'estado', 'tipo'],
+                $conDevolucion ? ['devolucion_linea_id'] : [],
+                $conForzar ? ['forzar_comision'] : [],
+            );
+
+            // Fila por fila y sin modelos: algunas cuentas (Cashea) traen decenas de miles de movimientos al mes.
+            $lineas = DB::table((new ConciliacionLinea)->getTable())
+                ->whereDate('fecha', '>=', $desde)
+                ->whereDate('fecha', '<=', $hasta)
+                ->orderByRaw("CASE WHEN estado = 'conciliado' THEN 0 ELSE 1 END")
+                ->orderBy('id')
+                ->select($columnas)
+                ->cursor();
+
+            // Si el extracto se subió varias veces, cada movimiento cuenta una sola vez (y vale la copia conciliada).
+            $vistos = [];
+            foreach ($lineas as $linea) {
+                $copia = implode('|', [
+                    strtoupper(trim((string) $linea->banco)),
+                    strtoupper(trim((string) ($linea->titular ?? ''))),
+                    substr((string) $linea->fecha, 0, 10),
+                    number_format(round((float) $linea->monto, 2), 2, '.', ''),
+                    (string) ($linea->referencia ?? ''),
+                    (string) ($linea->descripcion ?? ''),
+                    (string) ($linea->tipo ?? ''),
+                ]);
+                if (isset($vistos[$copia])) {
+                    continue;
+                }
+                $vistos[$copia] = true;
+
+                if ($conDevolucion && $linea->devolucion_linea_id) {
+                    continue;
+                }
+                $descripcion = (string) $linea->descripcion;
+                if (($conForzar && $linea->forzar_comision)
+                    || $this->classifier->esComision($descripcion, (string) $linea->banco)
+                    || $this->classifier->esCompraDivisas($descripcion)
+                    || $this->classifier->esPagoCredito($descripcion)
+                    || $this->matcher->esAbonoLotePuntoVenta($descripcion, $linea->referencia)) {
+                    continue;
+                }
+
+                $clave = $this->matcher->claveCuenta($linea->banco, $linea->titular);
+                $out[$clave] ??= $this->movimientosVacios();
+                $out[$clave]['banco_total']++;
+                if ($linea->estado === 'pendiente') {
+                    $out[$clave]['banco_pendientes']++;
+                    $out[$clave]['banco_pendientes_bs'] += abs((float) $linea->monto);
+                }
+            }
+        }
+
+        if (Schema::hasTable('flujo_cajas')) {
+            $egresos = FlujoCaja::query()
+                ->where('tipo', 'egreso')
+                ->where('es_conciliado', false)
+                ->when(Schema::hasColumn('flujo_cajas', 'anulado'), fn ($q) => $q->where('anulado', false))
+                ->whereDate('fecha', '>=', $desde)
+                ->whereDate('fecha', '<=', $hasta)
+                ->get(['id', 'banco', 'titular', 'monto_bs']);
+
+            foreach ($egresos as $egreso) {
+                $clave = $this->matcher->claveCuenta($egreso->banco, $egreso->titular);
+                $out[$clave] ??= $this->movimientosVacios();
+                $out[$clave]['transito']++;
+                $out[$clave]['transito_bs'] += abs((float) $egreso->monto_bs);
+            }
+        }
+
+        foreach ($out as &$fila) {
+            $fila['banco_pendientes_bs'] = round($fila['banco_pendientes_bs'], 2);
+            $fila['transito_bs'] = round($fila['transito_bs'], 2);
+        }
+        unset($fila);
+
+        return $out;
+    }
+
+    /**
+     * @return array{banco_total:int, banco_pendientes:int, banco_pendientes_bs:float, transito:int, transito_bs:float}
+     */
+    private function movimientosVacios(): array
+    {
+        return ['banco_total' => 0, 'banco_pendientes' => 0, 'banco_pendientes_bs' => 0.0, 'transito' => 0, 'transito_bs' => 0.0];
     }
 
     /**

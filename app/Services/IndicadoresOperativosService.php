@@ -121,6 +121,17 @@ class IndicadoresOperativosService
 
         $tienda = $this->totalesPorSede($inicio, $fin, $sede);
         $grupos = $this->ventasPorCajera($inicio, $fin, $sede);
+
+        // Las facturas a crédito no se cobran en caja: se restan con el "Fact. crédito" de Ventas diarias.
+        $creditos = $this->creditosVentasDiarias($inicio, $fin, $sede);
+        foreach ($creditos as $credito) {
+            if (isset($tienda[$credito['sede']])) {
+                $tienda[$credito['sede']]['monto'] -= $credito['monto'];
+            }
+        }
+        foreach ($this->asignarCreditos($creditos, $grupos) as $credito) {
+            $grupos[$credito['clave']]['sedes'][$credito['sede']]['monto'] -= $credito['monto'];
+        }
         $faltantes = $this->faltantesDelMes($inicio, $fin);
         $totalFaltante = round((float) array_sum($faltantes), 2);
         $productosMeta = $this->incentivos->productosMetaAsignados();
@@ -185,7 +196,10 @@ class IndicadoresOperativosService
                 $productosMeta[$empleado->id] ?? ['cumplidas' => null, 'total' => null, 'estado' => null],
                 (float) ($faltantes[$empleado->id] ?? 0),
                 $totalFaltante,
-            );
+            ) + [
+                'cajera_pos' => $grupo['nombre'] ?? null,
+                'sede_codigo' => $sedeCodigo,
+            ];
         }
 
         foreach ($grupos as $clave => $grupo) {
@@ -202,7 +216,10 @@ class IndicadoresOperativosService
                 ['cumplidas' => null, 'total' => null, 'estado' => null],
                 0.0,
                 $totalFaltante,
-            );
+            ) + [
+                'cajera_pos' => $grupo['nombre'],
+                'sede_codigo' => $sedeCodigo,
+            ];
         }
 
         usort($filas, function (array $a, array $b) {
@@ -327,16 +344,18 @@ class IndicadoresOperativosService
      */
     private function ventasPorCajera(Carbon $inicio, Carbon $fin, ?string $sede): array
     {
-        $rows = $this->ventasCaja($inicio, $fin, $sede)
-            ->whereRaw("NULLIF(TRIM(vd.cajera), '') IS NOT NULL")
-            ->whereRaw("UPPER(TRIM(vd.cajera)) <> 'SIN CAJERA'")
+        $query = $this->ventasCaja($inicio, $fin, $sede);
+        $cajera = $this->expresionCajera($query);
+        $rows = $query
+            ->whereRaw("NULLIF({$cajera}, '') IS NOT NULL")
+            ->whereRaw("{$cajera} <> 'SIN CAJERA'")
             ->selectRaw('UPPER(TRIM(vd.sede)) as sede')
-            ->selectRaw('UPPER(TRIM(vd.cajera)) as cajera')
+            ->selectRaw("{$cajera} as cajera")
             ->selectRaw("SUM(CASE WHEN vd.tipo_documento = 'DEV' THEN -ABS(COALESCE(vd.cantidad, 0)) ELSE COALESCE(vd.cantidad, 0) END) as unidades")
             ->selectRaw("SUM(CASE WHEN vd.tipo_documento = 'DEV' THEN -ABS(COALESCE(vd.cantidad, 0) * COALESCE(vd.precio_neto, vd.precio_venta, 0)) ELSE COALESCE(vd.cantidad, 0) * COALESCE(vd.precio_neto, vd.precio_venta, 0) END) as monto")
             ->selectRaw("COUNT(DISTINCT CASE WHEN vd.tipo_documento = 'FAC' AND NULLIF(TRIM(vd.cliente), '') IS NOT NULL THEN UPPER(TRIM(vd.cliente)) END) as clientes")
             ->groupByRaw('UPPER(TRIM(vd.sede))')
-            ->groupByRaw('UPPER(TRIM(vd.cajera))')
+            ->groupByRaw($cajera)
             ->get();
 
         $out = [];
@@ -358,11 +377,240 @@ class IndicadoresOperativosService
         return $out;
     }
 
+    /**
+     * Cajera de cada renglón. Una devolución sin cajera en el sistema de facturación se le cuenta
+     * a la cajera de la factura original; si no, la tienda la resta y la cajera no.
+     */
+    private function expresionCajera($query): string
+    {
+        $propia = "NULLIF(UPPER(TRIM(COALESCE(vd.cajera, ''))), '')";
+        if (! Schema::hasTable('ventas_documentos')
+            || ! Schema::hasColumn('ventas_documentos', 'cajera')
+            || ! Schema::hasColumn('ventas_detalle', 'factura_origen')) {
+            return "COALESCE({$propia}, '')";
+        }
+
+        $query->leftJoin('ventas_documentos as fo', function ($join) {
+            $join->on('fo.sede', '=', 'vd.sede')
+                ->where('vd.tipo_documento', '=', 'DEV')
+                ->where('fo.tipo_documento', '=', 'FAC')
+                ->on(DB::raw('TRIM(fo.numero_documento)'), '=', DB::raw('TRIM(vd.factura_origen)'));
+        });
+
+        return "COALESCE(CASE WHEN {$propia} = 'SIN CAJERA' THEN NULL ELSE {$propia} END, NULLIF(UPPER(TRIM(COALESCE(fo.cajera, ''))), ''), '')";
+    }
+
+    /**
+     * "Fact. crédito" que cada cajera anotó en el reporte de Ventas diarias (USD).
+     *
+     * @return list<array{sede:string, fecha:string, nombre:string, monto:float}>
+     */
+    private function creditosVentasDiarias(Carbon $inicio, Carbon $fin, ?string $sede): array
+    {
+        if (! Schema::hasTable('venta_diaria_cajas')
+            || ! Schema::hasTable('venta_diaria_reportes')
+            || ! Schema::hasColumn('venta_diaria_cajas', 'fact_credito')) {
+            return [];
+        }
+
+        $query = DB::table('venta_diaria_cajas as c')
+            ->join('venta_diaria_reportes as r', 'r.id', '=', 'c.reporte_id')
+            ->whereBetween('r.fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->where('c.fact_credito', '>', 0);
+        if ($sede) {
+            $query->whereRaw('UPPER(TRIM(r.sede)) = ?', [strtoupper(trim($sede))]);
+        }
+
+        return $query->get(['r.sede', 'r.fecha', 'c.nombre', 'c.fact_credito'])
+            ->map(fn ($row) => [
+                'sede' => strtoupper(trim((string) $row->sede)),
+                'fecha' => Carbon::parse($row->fecha)->toDateString(),
+                'nombre' => (string) $row->nombre,
+                'monto' => round((float) $row->fact_credito, 2),
+            ])
+            ->all();
+    }
+
+    /**
+     * En Ventas diarias la cajera se anota a mano ("ariamna"); se busca la cajera del sistema de
+     * facturación de esa sede cuyo nombre contiene esas palabras. Si hay dos posibles, no se asigna.
+     *
+     * @param  list<array{sede:string, fecha:string, nombre:string, monto:float}>  $creditos
+     * @param  array<string, array{nombre:string, tokens:list<string>, sedes:array<string, array>}>  $grupos
+     * @return list<array{sede:string, fecha:string, nombre:string, monto:float, clave:string}>
+     */
+    private function asignarCreditos(array $creditos, array $grupos): array
+    {
+        $cache = [];
+        $out = [];
+        foreach ($creditos as $credito) {
+            $llave = $credito['sede'].'|'.mb_strtoupper(trim($credito['nombre']), 'UTF-8');
+            if (! array_key_exists($llave, $cache)) {
+                $cache[$llave] = $this->cajeraDeNombreDiario($credito['nombre'], $credito['sede'], $grupos);
+            }
+            if ($cache[$llave] !== null) {
+                $out[] = $credito + ['clave' => $cache[$llave]];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<string, array{nombre:string, tokens:list<string>, sedes:array<string, array>}>  $grupos
+     */
+    private function cajeraDeNombreDiario(string $nombre, string $sede, array $grupos): ?string
+    {
+        $tokens = $this->tokensNombre($nombre);
+        if ($tokens === []) {
+            return null;
+        }
+
+        $mejor = null;
+        $mejorPuntos = 0;
+        $empate = false;
+        foreach ($grupos as $clave => $grupo) {
+            if (! isset($grupo['sedes'][$sede])) {
+                continue;
+            }
+            $puntos = $this->puntajeNombre($grupo['tokens'], $tokens);
+            // Cada palabra anotada en Ventas diarias tiene que aparecer en el nombre de la cajera.
+            if ($puntos < count($tokens)) {
+                continue;
+            }
+            if ($puntos > $mejorPuntos) {
+                $mejor = (string) $clave;
+                $mejorPuntos = $puntos;
+                $empate = false;
+            } elseif ($puntos === $mejorPuntos) {
+                $empate = true;
+            }
+        }
+
+        return $empate ? null : $mejor;
+    }
+
+    /**
+     * Facturas y devoluciones que se le cuentan a una cajera, una fila por documento.
+     *
+     * @return array{documentos:list<array<string, mixed>>, dias:list<array<string, mixed>>, total:array<string, float|int>}
+     */
+    public function documentosCajera(Carbon $inicio, Carbon $fin, string $cajera, ?string $sede): array
+    {
+        $vacio = ['documentos' => [], 'dias' => [], 'total' => ['facturas' => 0, 'devoluciones' => 0, 'credito' => 0.0, 'monto' => 0.0]];
+        if (! Schema::hasTable('ventas_detalle') || ! Schema::hasColumn('ventas_detalle', 'cajera')) {
+            return $vacio;
+        }
+
+        $query = $this->ventasCaja($inicio, $fin, $sede);
+        $expr = $this->expresionCajera($query);
+        $propiaVacia = "NULLIF(UPPER(TRIM(COALESCE(vd.cajera, ''))), '') IS NULL OR UPPER(TRIM(vd.cajera)) = 'SIN CAJERA'";
+        $rows = $query
+            ->whereRaw("{$expr} = ?", [mb_strtoupper(trim($cajera), 'UTF-8')])
+            ->selectRaw('vd.fecha, vd.tipo_documento, vd.numero_documento')
+            ->selectRaw('MAX(vd.cliente) as cliente')
+            ->selectRaw('MAX(vd.factura_origen) as factura_origen')
+            ->selectRaw("MAX(CASE WHEN vd.tipo_documento = 'DEV' AND ({$propiaVacia}) THEN 1 ELSE 0 END) as cajera_de_origen")
+            ->selectRaw("SUM(CASE WHEN vd.tipo_documento = 'DEV' THEN -ABS(COALESCE(vd.cantidad, 0)) ELSE COALESCE(vd.cantidad, 0) END) as unidades")
+            ->selectRaw("SUM(CASE WHEN vd.tipo_documento = 'DEV' THEN -ABS(COALESCE(vd.cantidad, 0) * COALESCE(vd.precio_neto, vd.precio_venta, 0)) ELSE COALESCE(vd.cantidad, 0) * COALESCE(vd.precio_neto, vd.precio_venta, 0) END) as monto")
+            ->groupBy('vd.fecha', 'vd.tipo_documento', 'vd.numero_documento')
+            ->orderBy('vd.fecha')
+            ->orderBy('vd.numero_documento')
+            ->get();
+
+        $documentos = [];
+        $dias = [];
+        $total = ['facturas' => 0, 'devoluciones' => 0, 'monto' => 0.0];
+        foreach ($rows as $row) {
+            $fecha = Carbon::parse($row->fecha)->toDateString();
+            $esDev = $row->tipo_documento === 'DEV';
+            $monto = round((float) $row->monto, 2);
+            $documentos[] = [
+                'fecha' => $fecha,
+                'tipo' => $row->tipo_documento,
+                'numero' => $row->numero_documento,
+                'cliente' => $row->cliente,
+                'factura_origen' => $row->factura_origen,
+                'cajera_de_origen' => (bool) $row->cajera_de_origen,
+                'unidades' => (float) $row->unidades,
+                'monto' => $monto,
+            ];
+            $dias[$fecha] ??= $this->diaVacio($fecha);
+            $dias[$fecha][$esDev ? 'devoluciones' : 'facturas']++;
+            $dias[$fecha][$esDev ? 'monto_devoluciones' : 'monto_facturas'] += $monto;
+            $dias[$fecha]['monto'] += $monto;
+            $total[$esDev ? 'devoluciones' : 'facturas']++;
+            $total['monto'] += $monto;
+        }
+
+        $clave = mb_strtoupper(trim($cajera), 'UTF-8');
+        $total['credito'] = 0.0;
+        $creditos = $this->asignarCreditos(
+            $this->creditosVentasDiarias($inicio, $fin, $sede),
+            $this->ventasPorCajera($inicio, $fin, $sede)
+        );
+        foreach ($creditos as $credito) {
+            if ($credito['clave'] !== $clave) {
+                continue;
+            }
+            $dias[$credito['fecha']] ??= $this->diaVacio($credito['fecha']);
+            $dias[$credito['fecha']]['credito'] += $credito['monto'];
+            $dias[$credito['fecha']]['monto'] -= $credito['monto'];
+            $total['credito'] += $credito['monto'];
+            $total['monto'] -= $credito['monto'];
+        }
+        ksort($dias);
+
+        return [
+            'documentos' => $documentos,
+            'dias' => array_values(array_map(function (array $d) {
+                foreach (['monto_facturas', 'monto_devoluciones', 'credito', 'monto'] as $k) {
+                    $d[$k] = round($d[$k], 2);
+                }
+
+                return $d;
+            }, $dias)),
+            'total' => [
+                'facturas' => $total['facturas'],
+                'devoluciones' => $total['devoluciones'],
+                'credito' => round($total['credito'], 2),
+                'monto' => round($total['monto'], 2),
+            ],
+        ];
+    }
+
+    /**
+     * @return array{fecha:string, facturas:int, devoluciones:int, monto_facturas:float, monto_devoluciones:float, credito:float, monto:float}
+     */
+    private function diaVacio(string $fecha): array
+    {
+        return ['fecha' => $fecha, 'facturas' => 0, 'devoluciones' => 0, 'monto_facturas' => 0.0, 'monto_devoluciones' => 0.0, 'credito' => 0.0, 'monto' => 0.0];
+    }
+
     private function ventasCaja(Carbon $inicio, Carbon $fin, ?string $sede)
     {
         $query = DB::table('ventas_detalle as vd')
             ->whereBetween('vd.fecha', [$inicio->toDateString(), $fin->toDateString()])
             ->whereIn('vd.tipo_documento', ['FAC', 'DEV']);
+
+        // Solo lo cobrado en las cajas: lo facturado desde Tesorería (aunque sea con el usuario
+        // de una cajera) no entra en su cuadre de caja.
+        $estacionesFuera = array_values(array_filter(array_map(
+            fn ($e) => mb_strtoupper(trim((string) $e), 'UTF-8'),
+            config('inventario.estaciones_fuera_de_caja', ['TESORER%'])
+        )));
+        if ($estacionesFuera !== []
+            && Schema::hasTable('ventas_documentos')
+            && Schema::hasColumn('ventas_documentos', 'estacion')) {
+            $query->leftJoin('ventas_documentos as vdoc', function ($join) {
+                $join->on('vdoc.sede', '=', 'vd.sede')
+                    ->on('vdoc.tipo_documento', '=', 'vd.tipo_documento')
+                    ->on('vdoc.numero_documento', '=', 'vd.numero_documento');
+            });
+            foreach ($estacionesFuera as $patron) {
+                $query->whereRaw("UPPER(TRIM(COALESCE(vdoc.estacion, ''))) NOT LIKE ?", [$patron]);
+            }
+        }
         if ($sede) {
             $query->whereRaw('UPPER(TRIM(vd.sede)) = ?', [strtoupper(trim($sede))]);
         }

@@ -173,12 +173,14 @@ class TransaccionController extends Controller
     {
         $mes = (int) $request->get('mes', now()->month);
         $anio = (int) $request->get('anio', now()->year);
-        $data = $this->reportes->incrementoValor($mes, $anio);
+        $vista = $request->get('vista') === 'mes' ? 'mes' : 'acumulado';
+        $data = $this->reportes->incrementoValor($mes, $anio, $vista === 'mes');
 
         return view('patrimonial.transacciones.reporte_incremento_valor', [
             ...$data,
             'mes' => $mes,
             'anio' => $anio,
+            'vista' => $vista,
         ]);
     }
 
@@ -186,17 +188,20 @@ class TransaccionController extends Controller
     {
         $mes = (int) $request->get('mes', now()->month);
         $anio = (int) $request->get('anio', now()->year);
-        $data = $this->reportes->incrementoValor($mes, $anio);
+        $vista = $request->get('vista') === 'mes' ? 'mes' : 'acumulado';
+        $data = $this->reportes->incrementoValor($mes, $anio, $vista === 'mes');
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('patrimonial.pdf.reporte_incremento_valor', [
             ...$data,
             'mes' => $mes,
             'anio' => $anio,
+            'vista' => $vista,
         ]);
         $pdf->setPaper('a4', 'portrait');
         $nombreMes = Carbon::create($anio, $mes)->translatedFormat('F_Y');
+        $prefijo = $vista === 'mes' ? 'incremento_valor_mes_' : 'incremento_valor_propiedades_';
 
-        return $pdf->stream("incremento_valor_propiedades_{$nombreMes}.pdf");
+        return $pdf->stream("{$prefijo}{$nombreMes}.pdf");
     }
 
     public function reportePropiedadPdf(Request $request, Propiedad $propiedad)

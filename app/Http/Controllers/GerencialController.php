@@ -170,6 +170,23 @@ class GerencialController extends Controller
         ]);
     }
 
+    public function cajasDetalle(Request $request, IndicadoresOperativosService $indicadores, IncentivoEvaluacionService $evaluacion): View
+    {
+        $data = $request->validate([
+            'cajera' => ['required', 'string', 'max:255'],
+            'sede' => ['nullable', 'string', 'max:32'],
+        ]);
+        $periodo = $evaluacion->periodo($request);
+        $sede = isset($data['sede']) && trim($data['sede']) !== '' ? $data['sede'] : null;
+
+        return view('gerencial.cajas_detalle', $indicadores->documentosCajera($periodo['inicio'], $periodo['fin'], $data['cajera'], $sede) + [
+            'periodo' => $periodo,
+            'cajera' => $data['cajera'],
+            'sede' => $sede,
+            'nombre' => (string) $request->query('nombre', $data['cajera']),
+        ]);
+    }
+
     public function traslados(Request $request, GerencialDashboardService $gerencial, IndicadoresOperativosService $indicadores): View
     {
         $ctx = $this->contexto($request, $gerencial);

@@ -212,6 +212,9 @@ Route::middleware(['auth'])->prefix('gerencial')->group(function () {
     Route::get('/cajas', [GerencialController::class, 'cajas'])
         ->middleware('permission:incentivos,gerencial')
         ->name('gerencial.cajas');
+    Route::get('/cajas/detalle', [GerencialController::class, 'cajasDetalle'])
+        ->middleware('permission:incentivos,gerencial')
+        ->name('gerencial.cajas.detalle');
     Route::get('/traslados', [GerencialController::class, 'traslados'])
         ->middleware('permission:gerencial.valorizados')
         ->name('gerencial.traslados');
@@ -643,6 +646,7 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
         Route::post('/gastos-fijos/fecha', [FinanzasController::class, 'updateGastoFijoFecha'])->name('finanzas.gastos_fijos.fecha');
         Route::post('/gastos-fijos/costo', [FinanzasController::class, 'updateGastoFijoCosto'])->name('finanzas.gastos_fijos.costo');
         Route::post('/gastos-fijos/campo', [FinanzasController::class, 'updateGastoFijoCampo'])->name('finanzas.gastos_fijos.campo');
+        Route::post('/gastos-fijos/config', [FinanzasController::class, 'updateGastoFijoConfig'])->name('finanzas.gastos_fijos.config');
         Route::post('/gastos-fijos/agregar', [FinanzasController::class, 'agregarGastoFijo'])->name('finanzas.gastos_fijos.agregar');
         Route::post('/gastos-fijos/eliminar', [FinanzasController::class, 'eliminarGastoFijoFila'])->name('finanzas.gastos_fijos.eliminar');
     });
@@ -656,6 +660,7 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
 Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->group(function () {
     Route::get('/calendario-conciliaciones', [FinanzasController::class, 'calendarioConciliaciones'])->name('finanzas.calendario_conciliaciones');
     Route::get('/calendario-conciliaciones/pdf', [FinanzasController::class, 'calendarioConciliacionesPdf'])->name('finanzas.calendario_conciliaciones.pdf');
+    Route::get('/calendario-conciliaciones/movimientos', [FinanzasController::class, 'calendarioConciliacionesMovimientos'])->name('finanzas.calendario_conciliaciones.movimientos');
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
     Route::get('/conciliaciones/lotes', [FinanzasController::class, 'lotesPuntoVenta'])->name('finanzas.conciliaciones.lotes');
     Route::post('/conciliaciones/lotes/manual', [FinanzasController::class, 'conciliarLoteManual'])->name('finanzas.conciliaciones.lotes.manual');

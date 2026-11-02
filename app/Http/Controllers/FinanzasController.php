@@ -688,6 +688,11 @@ class FinanzasController extends Controller
                 'desglose_tipo_gasto' => 'nullable|array',
                 'gasto_fijo_id' => 'nullable|integer|exists:gastos_fijos,id',
                 'monto_pagado_gf' => 'nullable|numeric|min:0',
+                'gf_items' => 'nullable|array|max:30',
+                'gf_items.*.id' => 'required_with:gf_items|integer|exists:gastos_fijos,id',
+                'gf_items.*.mes_idx' => 'nullable|integer|min:0|max:11',
+                'gf_items.*.anio' => 'nullable|integer|min:2020|max:2100',
+                'gf_items.*.monto' => 'nullable|numeric|min:0',
                 'es_todoticket' => 'nullable|boolean',
                 'tt_recarga' => 'nullable|numeric',
                 'tt_comision' => 'nullable|numeric',
@@ -949,36 +954,16 @@ class FinanzasController extends Controller
                     CuentaPorPagar::query()->find($cuentaPorPagarId)?->recalcular();
                 }
 
-                if (!empty($data['gasto_fijo_id'])) {
-                    $gastoFijo = \App\Models\GastoFijo::query()
-                        ->with(['pagos' => function ($q) {
-                            $q->where('anio', (int) date('Y'));
-                        }])
-                        ->find((int) $data['gasto_fijo_id']);
-                    $mesIdx = (int) date('n') - 1;
-                    if ($gastoFijo) {
-                        $periodos = $this->gastosFijosPendientes->periodosPendientes(
-                            (string) $gastoFijo->fecha,
-                            (float) $gastoFijo->costo,
-                            $gastoFijo->pagos
-                        );
-                        if ($periodos !== []) {
-                            $mesIdx = (int) $periodos[0]['mes_idx'];
-                        }
-                    }
-                    $montoPagado = !empty($data['monto_pagado_gf']) ? (float) $data['monto_pagado_gf'] : ($calc_usd ?? 0);
-                    GastoFijoPago::updateOrCreate(
-                        [
-                            'gasto_fijo_id' => (int) $data['gasto_fijo_id'],
-                            'mes_idx'       => $mesIdx,
-                            'anio'          => (int) date('Y'),
-                        ],
-                        [
-                            'monto'     => $montoPagado,
-                            'pagado'    => true,
-                            'pagado_at' => now(),
-                        ]
-                    );
+                // Uno o varios gastos fijos (una misma factura puede pagar varios), cada uno en su mes.
+                $itemsGf = array_values(array_filter($data['gf_items'] ?? [], fn ($i) => ! empty($i['id'])));
+                if ($itemsGf === [] && ! empty($data['gasto_fijo_id'])) {
+                    $itemsGf = [[
+                        'id' => (int) $data['gasto_fijo_id'],
+                        'monto' => ! empty($data['monto_pagado_gf']) ? (float) $data['monto_pagado_gf'] : ($calc_usd ?? 0),
+                    ]];
+                }
+                foreach ($itemsGf as $itemGf) {
+                    $this->registrarPagoGastoFijo($itemGf, count($itemsGf) === 1 ? (float) ($calc_usd ?? 0) : null);
                 }
             });
 
@@ -2096,6 +2081,21 @@ class FinanzasController extends Controller
         ));
     }
 
+    /** Movimientos del banco pendientes y en tránsito por cuenta; la página los pide aparte porque tardan. */
+    public function calendarioConciliacionesMovimientos(Request $request)
+    {
+        $calMes = $request->input('cal_mes');
+        if (! is_string($calMes) || ! preg_match('/^\d{4}-\d{2}$/', $calMes)) {
+            $calMes = now()->format('Y-m');
+        }
+        $inicio = \Carbon\Carbon::createFromFormat('Y-m-d', $calMes.'-01')->startOfMonth();
+
+        return response()->json(
+            app(\App\Services\ConciliacionCalendarioService::class)
+                ->pendientesPorCuenta($inicio, $inicio->copy()->endOfMonth())
+        );
+    }
+
     public function calendarioConciliacionesPdf(Request $request)
     {
         [, , $titularesPorBanco] = $this->cuentasConciliacion();
@@ -2105,7 +2105,7 @@ class FinanzasController extends Controller
             $calMes = now()->format('Y-m');
         }
 
-        $cal = app(\App\Services\ConciliacionCalendarioService::class)->armar($calMes, $titularesPorBanco);
+        $cal = app(\App\Services\ConciliacionCalendarioService::class)->armar($calMes, $titularesPorBanco, true);
 
         $logo = null;
         $logoRaw = is_file(public_path('logo.png')) ? @file_get_contents(public_path('logo.png')) : false;
@@ -4511,12 +4511,14 @@ class FinanzasController extends Controller
             ],
         ];
 
+        $anioActual = (int) date('Y');
         $gastos = \App\Models\GastoFijo::where('visible', true)
             ->orderBy('grupo_id')
             ->orderBy('orden')
             ->orderBy('id')
-            ->with(['pagos' => function($q) {
-                $q->where('anio', (int) date('Y'));
+            ->with(['pagos' => function($q) use ($anioActual) {
+                // El año anterior hace falta para los que se pagan con un mes de atraso (diciembre se paga en enero).
+                $q->whereIn('anio', [$anioActual - 1, $anioActual]);
             }])
             ->get();
 
@@ -4524,7 +4526,7 @@ class FinanzasController extends Controller
             if (!isset($tablas[$gasto->grupo_id])) continue;
 
             $meses = array_fill(0, 12, null);
-            $pagosMap = $gasto->pagos->keyBy('mes_idx');
+            $pagosMap = $gasto->pagos->where('anio', $anioActual)->keyBy('mes_idx');
 
             for ($m = 0; $m < 12; $m++) {
                 if (isset($pagosMap[$m]) && $pagosMap[$m]->monto !== null) {
@@ -4540,7 +4542,9 @@ class FinanzasController extends Controller
                 'empresa' => $gasto->empresa,
                 'costo' => (float) $gasto->costo,
                 'meses' => $meses,
-                'pagos_models' => $gasto->pagos // Pass the actual models for notifications
+                'activo' => $gasto->activo !== false,
+                'meses_atraso' => (int) ($gasto->meses_atraso ?? 0),
+                'modelo' => $gasto,
             ];
         }
 
@@ -4550,8 +4554,10 @@ class FinanzasController extends Controller
 
         foreach ($tablas as $tIdx => $tabla) {
             foreach ($tabla['filas'] as $fila) {
-                foreach ($this->gastosFijosPendientes->periodosPendientes((string) $fila['fecha'], (float) $fila['costo'], $fila['pagos_models']) as $periodo) {
+                foreach ($this->gastosFijosPendientes->pendientesDeGasto($fila['modelo']) as $periodo) {
                     $notificaciones[] = [
+                        'anio' => $periodo['anio'],
+                        'meses_atraso' => $fila['meses_atraso'],
                         'tipo' => $periodo['tipo'],
                         'servicio' => $fila['servicio'],
                         'empresa' => $fila['empresa'],
@@ -4594,23 +4600,37 @@ class FinanzasController extends Controller
             2 => 'Directivo',
         ];
 
+        $anioActual = (int) date('Y');
         $gastos = \App\Models\GastoFijo::where('visible', true)
+            ->where(fn ($q) => $q->where('activo', true)->orWhereNull('activo'))
             ->orderBy('grupo_id')->orderBy('orden')->orderBy('id')
-            ->with(['pagos' => function ($q) {
-                $q->where('anio', (int) date('Y'));
+            ->with(['pagos' => function ($q) use ($anioActual) {
+                $q->whereIn('anio', [$anioActual - 1, $anioActual]);
             }])
             ->get();
 
+        // Todos los activos: los pendientes primero. Una factura compartida o un pago adelantado
+        // puede tocar un gasto que todavía no avisa.
         $pendientes = [];
         foreach ($gastos as $gasto) {
-            $periodos = $this->gastosFijosPendientes->periodosPendientes((string) $gasto->fecha, (float) $gasto->costo, $gasto->pagos);
-            if ($periodos === []) {
-                continue;
-            }
-
+            $periodos = $this->gastosFijosPendientes->pendientesDeGasto($gasto);
             $masUrgente = collect($periodos)->sortByDesc('urgente')->first();
+            $pagadosEsteAnio = $gasto->pagos
+                ->where('anio', $anioActual)
+                ->filter(fn ($p) => $p->pagado)
+                ->pluck('mes_idx')
+                ->map(fn ($m) => (int) $m)
+                ->values()
+                ->all();
 
             $pendientes[] = [
+                'periodos'     => array_map(fn ($p) => [
+                    'mes_idx' => $p['mes_idx'],
+                    'anio' => $p['anio'],
+                    'mes_nombre' => $p['mes_nombre'],
+                ], $periodos),
+                'meses_pagados' => $pagadosEsteAnio,
+                'meses_atraso' => (int) ($gasto->meses_atraso ?? 0),
                 'id'           => $gasto->id,
                 'servicio'     => $gasto->servicio,
                 'empresa'      => $gasto->empresa,
@@ -4619,12 +4639,83 @@ class FinanzasController extends Controller
                 'grupo_id'     => $gasto->grupo_id,
                 'tabla_label'  => $tablaLabels[$gasto->grupo_id] ?? 'Otro',
                 'fecha'        => $gasto->fecha,
+                'pendiente'    => $periodos !== [],
                 'urgente'      => (bool) ($masUrgente['urgente'] ?? false),
-                'mes_idx'      => $masUrgente['mes_idx'] ?? ((int) date('n') - 1),
+                'mes_idx'      => $periodos[0]['mes_idx'] ?? ((int) date('n') - 1),
+                'anio'         => $periodos[0]['anio'] ?? $anioActual,
             ];
         }
 
+        usort($pendientes, fn ($a, $b) => [$b['pendiente'], $b['urgente']] <=> [$a['pendiente'], $a['urgente']]);
+
         return response()->json($pendientes);
+    }
+
+    /**
+     * Marca pagado un mes de un gasto fijo desde un egreso. Si no se indica el mes, se usa el pendiente más viejo.
+     *
+     * @param  array{id:int|string, mes_idx?:int|string|null, anio?:int|string|null, monto?:float|string|null}  $item
+     */
+    private function registrarPagoGastoFijo(array $item, ?float $montoPorDefecto): void
+    {
+        $anioActual = (int) date('Y');
+        $gastoFijo = \App\Models\GastoFijo::query()
+            ->with(['pagos' => fn ($q) => $q->whereIn('anio', [$anioActual - 1, $anioActual])])
+            ->find((int) $item['id']);
+        if (! $gastoFijo) {
+            return;
+        }
+
+        if (isset($item['mes_idx']) && $item['mes_idx'] !== '' && $item['mes_idx'] !== null) {
+            $mesIdx = (int) $item['mes_idx'];
+            $anio = ! empty($item['anio']) ? (int) $item['anio'] : $anioActual;
+        } else {
+            $periodos = $this->gastosFijosPendientes->pendientesDeGasto($gastoFijo);
+            $mesIdx = $periodos[0]['mes_idx'] ?? ((int) date('n') - 1);
+            $anio = $periodos[0]['anio'] ?? $anioActual;
+        }
+
+        $monto = isset($item['monto']) && $item['monto'] !== '' && $item['monto'] !== null
+            ? (float) $item['monto']
+            : ($montoPorDefecto ?? (float) $gastoFijo->costo);
+
+        GastoFijoPago::updateOrCreate(
+            [
+                'gasto_fijo_id' => $gastoFijo->id,
+                'mes_idx' => $mesIdx,
+                'anio' => $anio,
+            ],
+            [
+                'monto' => $monto,
+                'pagado' => true,
+                'pagado_at' => now(),
+            ]
+        );
+    }
+
+    /** Activar/desactivar avisos y pago con atraso de un gasto fijo. */
+    public function updateGastoFijoConfig(Request $request)
+    {
+        $data = $request->validate([
+            'gasto_fijo_id' => 'required|integer|exists:gastos_fijos,id',
+            'activo' => 'nullable|boolean',
+            'meses_atraso' => 'nullable|integer|min:0|max:3',
+        ]);
+
+        $gasto = \App\Models\GastoFijo::findOrFail($data['gasto_fijo_id']);
+        if (array_key_exists('activo', $data) && $data['activo'] !== null) {
+            $gasto->activo = (bool) $data['activo'];
+        }
+        if (array_key_exists('meses_atraso', $data) && $data['meses_atraso'] !== null) {
+            $gasto->meses_atraso = (int) $data['meses_atraso'];
+        }
+        $gasto->save();
+
+        return response()->json([
+            'ok' => true,
+            'activo' => (bool) $gasto->activo,
+            'meses_atraso' => (int) $gasto->meses_atraso,
+        ]);
     }
 
     public function agregarGastoFijo(Request $request)
@@ -4706,6 +4797,7 @@ class FinanzasController extends Controller
             'gasto_fijo_id' => 'required|integer',
             'costo' => 'nullable|numeric|min:0',
             'mes_idx' => 'nullable|integer|min:0|max:11',
+            'anio' => 'nullable|integer|min:2020|max:2100',
         ]);
 
         $mesActual = (int) date('n');
@@ -4715,7 +4807,7 @@ class FinanzasController extends Controller
             [
                 'gasto_fijo_id' => $request->gasto_fijo_id,
                 'mes_idx' => $mesIdx,
-                'anio' => (int) date('Y'),
+                'anio' => $request->filled('anio') ? (int) $request->anio : (int) date('Y'),
             ],
             [
                 'pagado' => true,

@@ -61,10 +61,12 @@
     <table class="data-table">
         <thead>
             <tr>
-                <th style="width:18%;">Banco</th>
-                <th style="width:20%;">Titular</th>
-                <th style="width:12%;">Estado</th>
-                <th style="width:10%;">Días</th>
+                <th style="width:13%;">Banco</th>
+                <th style="width:15%;">Titular</th>
+                <th style="width:10%;">Estado</th>
+                <th style="width:8%;">Días</th>
+                <th style="width:14%;">Banco por conciliar</th>
+                <th style="width:12%;">En tránsito</th>
                 <th>Períodos marcados</th>
             </tr>
         </thead>
@@ -79,6 +81,25 @@
                     <td>{{ $fila['titular'] }}</td>
                     <td class="estado {{ $estado }}">{{ $estadoTexto }}</td>
                     <td>{{ $fila['cubiertos'] }} / {{ $diasMes }}</td>
+                    @php $mov = $fila['movimientos'] ?? null; @endphp
+                    <td>
+                        @if(! $mov || $mov['banco_total'] === 0)
+                            <span class="muted">Sin extracto</span>
+                        @elseif($mov['banco_pendientes'] === 0)
+                            <span style="color:#166534; font-weight:bold;">0 de {{ $mov['banco_total'] }}</span>
+                        @else
+                            <span style="color:#b91c1c; font-weight:bold;">{{ $mov['banco_pendientes'] }} de {{ $mov['banco_total'] }}</span>
+                            <div class="muted">Bs. {{ number_format($mov['banco_pendientes_bs'], 2, ',', '.') }}</div>
+                        @endif
+                    </td>
+                    <td>
+                        @if(! $mov || $mov['transito'] === 0)
+                            <span style="color:#166534; font-weight:bold;">0</span>
+                        @else
+                            <span style="color:#92400e; font-weight:bold;">{{ $mov['transito'] }}</span>
+                            <div class="muted">Bs. {{ number_format($mov['transito_bs'], 2, ',', '.') }}</div>
+                        @endif
+                    </td>
                     <td>
                         @forelse($fila['rangos'] as $rango)
                             <div>
@@ -93,7 +114,7 @@
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="5" class="empty-row">No hay cuentas para este mes</td></tr>
+                <tr><td colspan="7" class="empty-row">No hay cuentas para este mes</td></tr>
             @endforelse
         </tbody>
     </table>

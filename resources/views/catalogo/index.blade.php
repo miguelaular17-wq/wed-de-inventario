@@ -269,6 +269,29 @@
         box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
     }
     .stock-green { background: #dcfce7; color: #166534; }
+    .stock-badge.con-desglose { cursor: help; z-index: 3; }
+    .stock-desglose {
+        display: none;
+        position: absolute;
+        left: 0;
+        bottom: calc(100% + 6px);
+        min-width: 150px;
+        background: #0f172a;
+        color: #fff;
+        border-radius: 8px;
+        padding: 8px 10px;
+        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.3);
+        font-size: 0.74rem;
+        font-weight: 600;
+        line-height: 1.5;
+        white-space: nowrap;
+        z-index: 20;
+    }
+    .stock-badge.con-desglose:hover .stock-desglose,
+    .stock-badge.con-desglose:focus .stock-desglose { display: block; }
+    .stock-desglose-titulo { display: block; color: #94a3b8; font-size: 0.66rem; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px; }
+    .stock-desglose-fila { display: flex; justify-content: space-between; gap: 14px; }
+    .stock-desglose-fila strong { color: #86efac; }
     .stock-red { background: #fee2e2; color: #991b1b; }
 
     .catalogo-grid {
@@ -718,7 +741,21 @@
                          loading="lazy"
                          onerror="if(this.dataset.triedPng !== 'true') { this.dataset.triedPng = 'true'; this.src='{{ $png_url }}'; } else { this.src='{{ $no_image_url }}'; this.onerror=null; }">
                     @if($prod->existencia > 0)
-                        <span class="stock-badge stock-green">{{ number_format($prod->existencia, 0) }} unds</span>
+                        <span class="stock-badge stock-green {{ !empty($verDesgloseStock) ? 'con-desglose' : '' }}" tabindex="0" onclick="event.stopPropagation()">
+                            {{ number_format($prod->existencia, 0) }} unds
+                            @if(!empty($verDesgloseStock) && $prod->relationLoaded('stock') && $prod->stock->isNotEmpty())
+                                <span class="stock-desglose" role="tooltip">
+                                    <span class="stock-desglose-titulo">¿Dónde están?</span>
+                                    @foreach($prod->stock as $st)
+                                        @php $codSede = strtoupper(trim((string) $st->sede)); @endphp
+                                        <span class="stock-desglose-fila">
+                                            <span>{{ $nombresSede[$codSede] ?? mb_convert_case($codSede, MB_CASE_TITLE, 'UTF-8') }}{{ $codSede === strtoupper((string) config('inventario.sede_central', 'JRZ')) ? ' (almacén)' : '' }}</span>
+                                            <strong>{{ number_format($st->existencia, 0) }}</strong>
+                                        </span>
+                                    @endforeach
+                                </span>
+                            @endif
+                        </span>
                     @else
                         <span class="stock-badge stock-red">Agotado</span>
                     @endif

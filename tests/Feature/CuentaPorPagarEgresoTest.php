@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\CuentaPorPagar;
 use App\Models\FlujoCaja;
+use App\Models\GastoFijo;
+use App\Models\GastoFijoPago;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -93,6 +95,79 @@ class CuentaPorPagarEgresoTest extends TestCase
         $this->assertEquals(0, (float) $cuenta->saldo);
         $this->assertSame('pagada', $cuenta->estado);
         $this->assertSame(2, $cuenta->pagos()->count());
+    }
+
+    public function test_un_egreso_paga_varios_gastos_fijos_cada_uno_en_su_mes(): void
+    {
+        $this->ensureGastosFijosTables();
+        $terranova = GastoFijo::create(['grupo_id' => 0, 'servicio' => 'CONDOMINIO', 'empresa' => 'TERRANOVA', 'fecha' => '8-15 de cada mes', 'costo' => 65]);
+        $balcones = GastoFijo::create(['grupo_id' => 0, 'servicio' => 'CONDOMINIO', 'empresa' => 'BALCONES', 'fecha' => '8-15 de cada mes', 'costo' => 10]);
+
+        $this->actingAs($this->finanzasUser())->post(route('finanzas.store_egreso'), $this->egresoPayload([
+            'monto_usd' => 75,
+            'motivo' => 'Factura condominios',
+            'gf_items' => [
+                ['id' => $terranova->id, 'mes_idx' => 8, 'anio' => 2026, 'monto' => 65],
+                ['id' => $balcones->id, 'mes_idx' => 9, 'anio' => 2026, 'monto' => 10],
+            ],
+        ]))->assertRedirect();
+
+        $this->assertDatabaseHas('gasto_fijo_pagos', ['gasto_fijo_id' => $terranova->id, 'mes_idx' => 8, 'anio' => 2026, 'pagado' => true]);
+        $this->assertDatabaseHas('gasto_fijo_pagos', ['gasto_fijo_id' => $balcones->id, 'mes_idx' => 9, 'anio' => 2026, 'pagado' => true]);
+        $this->assertEquals(10, (float) GastoFijoPago::query()->where('gasto_fijo_id', $balcones->id)->value('monto'));
+    }
+
+    public function test_desactivar_gasto_fijo_lo_saca_de_la_lista_para_vincular(): void
+    {
+        $this->ensureGastosFijosTables();
+        $gasto = GastoFijo::create(['grupo_id' => 0, 'servicio' => 'CONDOMINIO', 'empresa' => 'SALAMAR', 'fecha' => '8', 'costo' => 100]);
+        $user = $this->finanzasUser();
+
+        $this->actingAs($user)->postJson(route('finanzas.gastos_fijos.config'), [
+            'gasto_fijo_id' => $gasto->id,
+            'activo' => false,
+            'meses_atraso' => 1,
+        ])->assertOk()->assertJson(['activo' => false, 'meses_atraso' => 1]);
+
+        $lista = $this->actingAs($user)->getJson(route('finanzas.gastos_fijos.pendientes'))->assertOk()->json();
+        $this->assertNotContains($gasto->id, array_column($lista, 'id'));
+    }
+
+    private function ensureGastosFijosTables(): void
+    {
+        if (! Schema::hasTable('gastos_fijos')) {
+            Schema::create('gastos_fijos', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedTinyInteger('grupo_id');
+                $table->string('sede', 200)->default('');
+                $table->string('servicio', 200);
+                $table->string('fecha', 100)->default('');
+                $table->string('empresa', 200)->default('');
+                $table->decimal('costo', 10, 2)->default(0);
+                $table->integer('orden')->default(0);
+                $table->boolean('visible')->default(true);
+                $table->timestamps();
+            });
+        }
+        foreach (['activo' => fn (Blueprint $t) => $t->boolean('activo')->default(true), 'meses_atraso' => fn (Blueprint $t) => $t->unsignedTinyInteger('meses_atraso')->default(0)] as $col => $def) {
+            if (! Schema::hasColumn('gastos_fijos', $col)) {
+                Schema::table('gastos_fijos', $def);
+            }
+        }
+        if (! Schema::hasTable('gasto_fijo_pagos')) {
+            Schema::create('gasto_fijo_pagos', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('gasto_fijo_id')->nullable();
+                $table->integer('tabla_idx')->nullable();
+                $table->integer('fila_idx')->nullable();
+                $table->integer('mes_idx');
+                $table->integer('anio');
+                $table->decimal('monto', 10, 2)->nullable();
+                $table->boolean('pagado')->default(false);
+                $table->timestamp('pagado_at')->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     private function finanzasUser(): User

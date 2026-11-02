@@ -72,7 +72,7 @@ class PatrimonioReporteService
     }
 
     /**
-     * Reporte acumulado hasta el cierre del mes indicado.
+     * Reporte acumulado hasta el cierre del mes indicado, o solo las remodelaciones de ese mes ($soloMes).
      *
      * @return array{
      *     filas: Collection<int, array{
@@ -80,12 +80,14 @@ class PatrimonioReporteService
      *         valor_aproximado:float,remodelaciones:Collection<int,PatTransaccion>
      *     }>,
      *     totales: array{valor_anterior:float,inversion_remodelaciones:float,valor_aproximado:float},
-     *     fecha_corte: Carbon
+     *     fecha_corte: Carbon,
+     *     solo_mes: bool
      * }
      */
-    public function incrementoValor(int $mes, int $anio): array
+    public function incrementoValor(int $mes, int $anio, bool $soloMes = false): array
     {
-        $fechaCorte = Carbon::create($anio, $mes, 1)->endOfMonth();
+        $inicioMes = Carbon::create($anio, $mes, 1)->startOfDay();
+        $fechaCorte = $inicioMes->copy()->endOfMonth();
 
         $filas = Propiedad::query()
             ->with(['transacciones' => function ($query) use ($fechaCorte) {
@@ -97,11 +99,20 @@ class PatrimonioReporteService
             }])
             ->orderBy('nombre')
             ->get()
-            ->map(function (Propiedad $propiedad) {
+            ->map(function (Propiedad $propiedad) use ($soloMes, $inicioMes) {
                 $remodelaciones = $propiedad->transacciones
                     ->filter(fn (PatTransaccion $tx) => $this->esRemodelacion($tx))
                     ->values();
                 $valorAnterior = round((float) ($propiedad->valor_inversion ?? 0), 2);
+
+                // Solo el mes: lo invertido antes ya forma parte del valor con el que la propiedad llega al mes.
+                if ($soloMes) {
+                    $previas = $remodelaciones->filter(fn (PatTransaccion $tx) => $tx->fecha && $tx->fecha->lt($inicioMes));
+                    $valorAnterior = round($valorAnterior + (float) $previas->sum('monto'), 2);
+                    $remodelaciones = $remodelaciones
+                        ->reject(fn (PatTransaccion $tx) => $tx->fecha && $tx->fecha->lt($inicioMes))
+                        ->values();
+                }
                 $invertido = round((float) $remodelaciones->sum('monto'), 2);
 
                 return [
@@ -123,6 +134,7 @@ class PatrimonioReporteService
                 'valor_aproximado' => round((float) $filas->sum('valor_aproximado'), 2),
             ],
             'fecha_corte' => $fechaCorte,
+            'solo_mes' => $soloMes,
         ];
     }
 

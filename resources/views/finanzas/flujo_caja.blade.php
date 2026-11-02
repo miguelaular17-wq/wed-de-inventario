@@ -1345,58 +1345,20 @@
             <div id="panel_gasto_fijo" style="display:none; background: linear-gradient(135deg,#eff6ff,#dbeafe); border: 1.5px solid #93c5fd; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;">
                 <div style="margin-bottom: 10px;">
                     <label style="display:block; font-size:0.8rem; font-weight:700; color:#1e40af; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:5px;">
-                        Gasto Fijo Pendiente
+                        Agregar gasto fijo
                     </label>
                     <select id="sel_gasto_fijo" onchange="onGastoFijoSelected()" style="width:100%; padding:8px 10px; border:1.5px solid #93c5fd; border-radius:7px; font-size:0.88rem; background:white; color:#0f172a;">
                         <option value="">-- Cargando gastos pendientes... --</option>
                     </select>
-                </div>
-
-                {{-- Info card del gasto seleccionado --}}
-                <div id="gf_info_card" style="display:none; background:white; border-radius:8px; padding:12px 14px; border:1px solid #bfdbfe; margin-bottom:10px;">
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; font-size:0.83rem;">
-                        <div>
-                            <span style="color:#64748b; font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; display:block;">Servicio / Tipo</span>
-                            <span id="gf_info_servicio" style="font-weight:700; color:#0f172a;"></span>
-                        </div>
-                        <div>
-                            <span style="color:#64748b; font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; display:block;">Empresa</span>
-                            <span id="gf_info_empresa" style="font-weight:600; color:#334155;"></span>
-                        </div>
-                        <div id="gf_info_sede_row">
-                            <span style="color:#64748b; font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; display:block;">Sede</span>
-                            <span id="gf_info_sede" style="font-weight:600; color:#1d4ed8;"></span>
-                        </div>
-                        <div>
-                            <span style="color:#64748b; font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; display:block;">Grupo</span>
-                            <span id="gf_info_grupo" style="font-weight:600; color:#334155;"></span>
-                        </div>
-                        <div>
-                            <span style="color:#64748b; font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; display:block;">Fecha pago</span>
-                            <span id="gf_info_fecha" style="font-weight:600; color:#334155;"></span>
-                        </div>
-                        <div>
-                            <span style="color:#64748b; font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.4px; display:block;">Costo estimado</span>
-                            <span id="gf_info_costo" style="font-weight:800; color:#059669; font-size:1rem;"></span>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="gf_monto_row" style="display:none;">
-                    <label style="display:block; font-size:0.8rem; font-weight:700; color:#1e40af; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px;">
-                        Monto real pagado (USD)
-                    </label>
-                    <input type="number" id="inp_monto_gf" step="0.01" min="0" placeholder="0.00"
-                        style="width:100%; padding:8px 10px; border:1.5px solid #93c5fd; border-radius:7px; font-size:0.9rem; font-weight:700; color:#0f172a; box-sizing:border-box;"
-                        oninput="syncGFMontoToForm()">
-                    <p style="font-size:0.75rem; color:#3b82f6; margin:4px 0 0; font-style:italic;">
-                        💡 Este monto se registrará en la tabla de Gastos Fijos del mes actual.
+                    <p style="font-size:0.75rem; color:#3b82f6; margin:4px 0 0;">
+                        Si la factura cubre varios gastos (ej. varios condominios), agrégalos todos. Elige el mes que paga cada uno: si se paga con atraso, es el mes anterior.
                     </p>
                 </div>
+                <div id="gf_items" style="display:flex; flex-direction:column; gap:8px;"></div>
+                <div id="gf_items_total" style="display:none; margin-top:8px; text-align:right; font-size:0.85rem; color:#1e40af; font-weight:700;"></div>
+                <div id="gf_items_inputs"></div>
+
             </div>
-            {{-- Hidden fields enviados con el form --}}
-            <input type="hidden" id="hid_gasto_fijo_id" name="gasto_fijo_id" value="">
-            <input type="hidden" id="hid_monto_pagado_gf" name="monto_pagado_gf" value="">
 
             <div id="container_desglose" style="display: none; background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px;">
                 <h4 style="margin-top: 0; font-size: 0.95rem; color: var(--blue); display: flex; justify-content: space-between; align-items: center;">
@@ -1716,19 +1678,25 @@ function toggleTodoTicket() {
 
 // ── Gasto Fijo Linking Functions ──
 let _gfPendientes = null; // cached list
+let _gfItems = [];        // gastos fijos que paga este egreso: {gf, mes, anio, monto}
+const _gfMeses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const escGf = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function limpiarGastosFijosEgreso() {
+    _gfItems = [];
+    renderGastoFijoItems();
+    const panel = document.getElementById('panel_gasto_fijo');
+    if (panel) panel.style.display = 'none';
+}
 
 async function toggleGastoFijoPanel() {
     const chk = document.getElementById('chk_gasto_fijo');
     const panel = document.getElementById('panel_gasto_fijo');
-    const hidId = document.getElementById('hid_gasto_fijo_id');
-    const hidMonto = document.getElementById('hid_monto_pagado_gf');
 
     if (!chk.checked) {
         panel.style.display = 'none';
-        hidId.value = '';
-        hidMonto.value = '';
-        document.getElementById('gf_info_card').style.display = 'none';
-        document.getElementById('gf_monto_row').style.display = 'none';
+        _gfItems = [];
+        renderGastoFijoItems();
         return;
     }
 
@@ -1754,66 +1722,124 @@ async function toggleGastoFijoPanel() {
 
 function buildGastoFijoSelect() {
     const sel = document.getElementById('sel_gasto_fijo');
-    sel.innerHTML = '<option value="">-- Selecciona un gasto fijo --</option>';
+    sel.innerHTML = '<option value="">-- Selecciona un gasto fijo para agregar --</option>';
     if (!_gfPendientes || _gfPendientes.length === 0) {
-        sel.innerHTML = '<option value="">Sin gastos pendientes esta semana</option>';
+        sel.innerHTML = '<option value="">Sin gastos fijos activos</option>';
         return;
     }
+    const grupos = { pend: null, resto: null };
     _gfPendientes.forEach(gf => {
+        if (_gfItems.some(it => it.gf.id === gf.id)) return;
+        const clave = gf.pendiente ? 'pend' : 'resto';
+        if (!grupos[clave]) {
+            grupos[clave] = document.createElement('optgroup');
+            grupos[clave].label = gf.pendiente ? 'Pendientes' : 'Otros gastos fijos';
+            sel.appendChild(grupos[clave]);
+        }
         const opt = document.createElement('option');
         opt.value = gf.id;
         const sedeStr = gf.sede ? ` · ${gf.sede.substring(0, 25)}` : '';
+        const empresaStr = gf.empresa ? ` · ${gf.empresa.substring(0, 30)}` : '';
         const urgente = gf.urgente ? '⚡ ' : '';
-        opt.textContent = `${urgente}${gf.servicio}${sedeStr} — $${parseFloat(gf.costo).toFixed(2)}`;
-        sel.appendChild(opt);
+        opt.textContent = `${urgente}${gf.servicio}${empresaStr}${sedeStr} — $${parseFloat(gf.costo).toFixed(2)}`;
+        grupos[clave].appendChild(opt);
     });
 }
 
 function onGastoFijoSelected() {
     const sel = document.getElementById('sel_gasto_fijo');
     const id = parseInt(sel.value);
-    const hidId = document.getElementById('hid_gasto_fijo_id');
-    const card = document.getElementById('gf_info_card');
-    const montoRow = document.getElementById('gf_monto_row');
-
-    if (!id || !_gfPendientes) {
-        card.style.display = 'none';
-        montoRow.style.display = 'none';
-        hidId.value = '';
-        return;
-    }
+    sel.value = '';
+    if (!id || !_gfPendientes) return;
 
     const gf = _gfPendientes.find(g => g.id === id);
-    if (!gf) return;
+    if (!gf || _gfItems.some(it => it.gf.id === id)) return;
 
-    hidId.value = gf.id;
-
-    document.getElementById('gf_info_servicio').textContent = gf.servicio;
-    document.getElementById('gf_info_empresa').textContent  = gf.empresa || '—';
-    document.getElementById('gf_info_grupo').textContent    = gf.tabla_label;
-    document.getElementById('gf_info_fecha').textContent    = gf.fecha;
-    document.getElementById('gf_info_costo').textContent    = `$ ${parseFloat(gf.costo).toFixed(2)}`;
-
-    const sedeRow = document.getElementById('gf_info_sede_row');
-    if (gf.sede) {
-        document.getElementById('gf_info_sede').textContent = gf.sede;
-        sedeRow.style.display = 'block';
-    } else {
-        sedeRow.style.display = 'none';
-    }
-
-    // Pre-fill monto real with costo estimado
-    const montoInp = document.getElementById('inp_monto_gf');
-    montoInp.value = parseFloat(gf.costo).toFixed(2);
-    document.getElementById('hid_monto_pagado_gf').value = montoInp.value;
-
-    card.style.display = 'block';
-    montoRow.style.display = 'block';
+    // Mes por defecto: el pendiente más viejo (con atraso es el mes anterior); si no, el mes actual.
+    const hoy = new Date();
+    const periodo = (gf.periodos && gf.periodos[0]) || { mes_idx: hoy.getMonth(), anio: hoy.getFullYear() };
+    _gfItems.push({ gf, mes: periodo.mes_idx, anio: periodo.anio, monto: parseFloat(gf.costo || 0).toFixed(2) });
+    buildGastoFijoSelect();
+    renderGastoFijoItems();
 }
 
-function syncGFMontoToForm() {
-    const val = document.getElementById('inp_monto_gf').value;
-    document.getElementById('hid_monto_pagado_gf').value = val;
+function opcionesMesGastoFijo(item) {
+    const hoy = new Date();
+    const anioActual = hoy.getFullYear();
+    const opciones = [];
+    const vistos = new Set();
+    (item.gf.periodos || []).forEach(p => {
+        const key = p.mes_idx + '|' + p.anio;
+        vistos.add(key);
+        opciones.push({ key, texto: `${_gfMeses[p.mes_idx]}${p.anio !== anioActual ? ' ' + p.anio : ''} (pendiente)` });
+    });
+    const pagados = new Set(item.gf.meses_pagados || []);
+    for (let m = 0; m <= Math.min(11, hoy.getMonth() + 1); m++) {
+        const key = m + '|' + anioActual;
+        if (vistos.has(key)) continue;
+        opciones.push({ key, texto: `${_gfMeses[m]}${pagados.has(m) ? ' (ya pagado)' : ''}` });
+    }
+    const actual = item.mes + '|' + item.anio;
+    return opciones.map(o => `<option value="${o.key}" ${o.key === actual ? 'selected' : ''}>${o.texto}</option>`).join('');
+}
+
+function renderGastoFijoItems() {
+    const box = document.getElementById('gf_items');
+    const inputs = document.getElementById('gf_items_inputs');
+    const totalBox = document.getElementById('gf_items_total');
+    if (!box || !inputs) return;
+
+    box.innerHTML = '';
+    inputs.innerHTML = '';
+    let total = 0;
+
+    _gfItems.forEach((item, idx) => {
+        const gf = item.gf;
+        total += parseFloat(item.monto) || 0;
+        const fila = document.createElement('div');
+        fila.style.cssText = 'background:white; border:1px solid #bfdbfe; border-radius:8px; padding:10px 12px; display:grid; grid-template-columns: 1fr 150px 110px 28px; gap:8px; align-items:center;';
+        const detalle = escGf([gf.empresa, gf.sede, gf.tabla_label].filter(Boolean).join(' · '));
+        fila.innerHTML = `
+            <div style="min-width:0;">
+                <div style="font-weight:700; color:#0f172a; font-size:0.85rem;">${escGf(gf.servicio)}</div>
+                <div style="font-size:0.72rem; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${detalle}">${detalle}</div>
+                <div style="font-size:0.7rem; color:#64748b;">Estimado $${parseFloat(gf.costo).toFixed(2)} · ${escGf(gf.fecha)}${gf.meses_atraso > 0 ? ' · paga mes siguiente' : ''}</div>
+            </div>
+            <select data-gf-mes="${idx}" style="padding:6px; border:1px solid #93c5fd; border-radius:6px; font-size:0.8rem;">${opcionesMesGastoFijo(item)}</select>
+            <input type="number" data-gf-monto="${idx}" step="0.01" min="0" value="${escGf(item.monto)}" placeholder="USD" style="padding:6px; border:1px solid #93c5fd; border-radius:6px; font-size:0.85rem; font-weight:700; text-align:right;">
+            <button type="button" data-gf-quitar="${idx}" title="Quitar" style="border:none; background:#fee2e2; color:#b91c1c; border-radius:6px; cursor:pointer; height:28px;">✖</button>`;
+        box.appendChild(fila);
+
+        [['id', gf.id], ['mes_idx', item.mes], ['anio', item.anio], ['monto', item.monto]].forEach(([campo, valor]) => {
+            const h = document.createElement('input');
+            h.type = 'hidden';
+            h.name = `gf_items[${idx}][${campo}]`;
+            h.value = valor;
+            inputs.appendChild(h);
+        });
+    });
+
+    box.querySelectorAll('[data-gf-mes]').forEach(el => el.addEventListener('change', () => {
+        const [mes, anio] = el.value.split('|').map(Number);
+        const item = _gfItems[Number(el.dataset.gfMes)];
+        item.mes = mes;
+        item.anio = anio;
+        renderGastoFijoItems();
+    }));
+    box.querySelectorAll('[data-gf-monto]').forEach(el => el.addEventListener('change', () => {
+        _gfItems[Number(el.dataset.gfMonto)].monto = el.value;
+        renderGastoFijoItems();
+    }));
+    box.querySelectorAll('[data-gf-quitar]').forEach(el => el.addEventListener('click', () => {
+        _gfItems.splice(Number(el.dataset.gfQuitar), 1);
+        buildGastoFijoSelect();
+        renderGastoFijoItems();
+    }));
+
+    if (totalBox) {
+        totalBox.style.display = _gfItems.length > 1 ? 'block' : 'none';
+        totalBox.textContent = `Total de los ${_gfItems.length} gastos fijos: $${total.toFixed(2)}`;
+    }
 }
 
 const proveedoresBeneficiario = @json($proveedores->values()->map(fn ($nombre) => ['value' => $nombre, 'text' => $nombre]));
@@ -1968,6 +1994,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     window.resetNuevoEgresoCuenta = function() {
+        const chkGf = document.getElementById('chk_gasto_fijo');
+        if (chkGf) chkGf.checked = false;
+        if (typeof limpiarGastosFijosEgreso === 'function') limpiarGastosFijosEgreso();
         const idInput = document.getElementById('cuenta_por_pagar_id');
         const banner = document.getElementById('banner_pago_cuenta');
         const titulo = document.getElementById('nuevoEgresoModalTitulo');

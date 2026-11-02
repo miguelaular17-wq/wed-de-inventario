@@ -83,7 +83,13 @@
                         };
                     @endphp
                     <tr>
-                        <td class="inc-persona">{{ $fila['nombre'] }}</td>
+                        <td class="inc-persona">
+                            @if(!empty($fila['cajera_pos']))
+                                <a href="{{ route('gerencial.cajas.detalle', ['cajera' => $fila['cajera_pos'], 'sede' => $fila['sede_codigo'] ?? null, 'nombre' => $fila['nombre'], 'desde' => $periodo['desde'], 'hasta' => $periodo['hasta']]) }}" title="Ver facturas y devoluciones">{{ $fila['nombre'] }}</a>
+                            @else
+                                {{ $fila['nombre'] }}
+                            @endif
+                        </td>
                         <td>{{ $fila['sede'] }}</td>
                         <td class="inc-num inc-group g-venta">{{ $dinero($fila['monto']) }}</td>
                         <td class="inc-num g-venta">{{ $dinero($fila['meta_venta']) }}</td>
@@ -114,7 +120,8 @@
             </tbody>
         </table>
     </div>
-    <p class="muted" style="margin:10px 0 0;">El porcentaje de venta, productos y clientes es lo que facturó cada cajera dividido entre lo que vendió su tienda. Ese piso vale 70% y el producto meta 30%. El faltante se mide contra el total del período: un faltante da porcentaje negativo y se resta de la nota; un monto positivo se suma.</p>
+    <p class="muted" style="margin:10px 0 0;">Haz clic en el nombre para ver sus facturas y devoluciones día por día. Una devolución sin cajera se le resta a quien hizo la factura original. No cuenta lo facturado desde Tesorería ni el "Fact. crédito" que cada cajera anota en Ventas diarias.</p>
+    <p class="muted" style="margin:6px 0 0;">El porcentaje de venta, productos y clientes es lo que facturó cada cajera dividido entre lo que vendió su tienda. Ese piso vale 70% y el producto meta 30%. El faltante se mide contra el total del período: un faltante da porcentaje negativo y se resta de la nota; un monto positivo se suma.</p>
 </div>
 
 <style>
