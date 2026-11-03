@@ -152,6 +152,31 @@ class OrdenController extends Controller
             $query->where('tipo_gestion', $tipoFiltro);
         }
 
+        $empresaEnvioFiltro = '';
+        $empresasEnvio = StOrden::EMPRESAS_ENVIO_GARANTIA;
+        if (Schema::hasColumn('st_ordenes', 'empresa_envio_garantia')) {
+            StOrden::query()
+                ->whereNotNull('empresa_envio_garantia')
+                ->where('empresa_envio_garantia', '<>', '')
+                ->distinct()
+                ->pluck('empresa_envio_garantia')
+                ->each(function ($empresa) use (&$empresasEnvio) {
+                    $clave = strtoupper(trim((string) $empresa));
+                    $empresasEnvio[$clave] ??= $clave;
+                });
+            asort($empresasEnvio, SORT_NATURAL | SORT_FLAG_CASE);
+        }
+        if ($tipoFiltro === StOrden::TIPO_GARANTIA && Schema::hasColumn('st_ordenes', 'empresa_envio_garantia')) {
+            $empresaEnvioFiltro = strtoupper(trim((string) $request->query('empresa_envio', '')));
+            if ($empresaEnvioFiltro === 'SIN_EMPRESA') {
+                $query->where(fn ($q) => $q->whereNull('empresa_envio_garantia')->orWhere('empresa_envio_garantia', ''));
+            } elseif (isset($empresasEnvio[$empresaEnvioFiltro])) {
+                $query->where('empresa_envio_garantia', $empresaEnvioFiltro);
+            } else {
+                $empresaEnvioFiltro = '';
+            }
+        }
+
         $ordenes = $query->get();
         $porMarca = [];
         $totales = [
@@ -206,6 +231,8 @@ class OrdenController extends Controller
             'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
             'sedes' => config('inventario.sedes_locales'),
             'tiposGestion' => StOrden::TIPOS_GESTION,
+            'empresasEnvio' => $empresasEnvio,
+            'empresaEnvioFiltro' => $empresaEnvioFiltro,
             'generadoPor' => $user->name,
         ];
 
@@ -223,6 +250,9 @@ class OrdenController extends Controller
             if ($tipoFiltro !== '') {
                 $titulo = (StOrden::TIPOS_GESTION[$tipoFiltro] ?? $tipoFiltro).' por marca';
             }
+            if ($empresaEnvioFiltro !== '') {
+                $titulo .= ' · '.($empresasEnvio[$empresaEnvioFiltro] ?? 'Sin empresa de envío');
+            }
 
             $pdf = Pdf::loadView('servicio.ordenes.pdf-por-marca', $payload + [
                 'titulo' => $titulo,
@@ -230,6 +260,9 @@ class OrdenController extends Controller
             ])->setPaper('a4', 'landscape');
 
             $slug = $tipoFiltro !== '' ? strtolower($tipoFiltro) : 'todas';
+            if ($empresaEnvioFiltro !== '') {
+                $slug .= '_'.str_replace(' ', '_', strtolower($empresaEnvioFiltro));
+            }
             $nombre = 'ordenes_por_marca_'.$slug.'_'.$desde.'_'.$hasta.'.pdf';
 
             return $pdf->download($nombre);

@@ -6,7 +6,7 @@ use Illuminate\Support\Collection;
 
 class VentasCalculator
 {
-    private const STOCK_ORDER = ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL'];
+    private const STOCK_ORDER = ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'TECNOHOUSE'];
 
     public function calcular(Collection $products, string $sedeLocal, float $tiempoPronostico, bool $soloCompararDeposito = false): Collection
     {

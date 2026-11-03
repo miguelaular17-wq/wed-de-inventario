@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 class RequisicionPersonalizadaService
 {
-    private const STOCK_ORDER = ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL'];
+    private const STOCK_ORDER = ['JRZ', 'DORAL', 'VIRTUDES', 'ZAMORA', 'CENTRO', 'SAMBIL', 'TECNOHOUSE'];
 
     /**
      * Build inventory rows enriched with any pending/exported manual requisitions.

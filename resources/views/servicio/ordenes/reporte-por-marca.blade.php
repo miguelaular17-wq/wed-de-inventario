@@ -9,6 +9,7 @@
         'fecha_hasta' => $hasta,
         'sede' => $filtroSede,
         'tipo_gestion' => $tipoFiltro ?: null,
+        'empresa_envio' => $empresaEnvioFiltro ?: null,
         'formato' => 'pdf',
     ], fn ($v) => $v !== null && $v !== '');
 @endphp
@@ -48,11 +49,21 @@
         @endif
         <div class="field">
             <label>Tipo</label>
-            <select name="tipo_gestion">
+            <select name="tipo_gestion" id="rm-tipo-gestion">
                 <option value="">Todos</option>
                 @foreach($tiposGestion as $key => $label)
                     <option value="{{ $key }}" @selected($tipoFiltro === $key)>{{ $label }}</option>
                 @endforeach
+            </select>
+        </div>
+        <div class="field" id="rm-empresa-envio" @if($tipoFiltro !== \App\Models\StOrden::TIPO_GARANTIA) style="display:none;" @endif>
+            <label>Empresa de envío</label>
+            <select name="empresa_envio" @disabled($tipoFiltro !== \App\Models\StOrden::TIPO_GARANTIA)>
+                <option value="">Todas</option>
+                @foreach($empresasEnvio as $key => $label)
+                    <option value="{{ $key }}" @selected($empresaEnvioFiltro === $key)>{{ $label }}</option>
+                @endforeach
+                <option value="SIN_EMPRESA" @selected($empresaEnvioFiltro === 'SIN_EMPRESA')>Sin empresa asignada</option>
             </select>
         </div>
         <div class="field" style="display:flex;align-items:flex-end;">
@@ -158,4 +169,18 @@
         </div>
     @endforeach
 </div>
+<script>
+    (function () {
+        const tipo = document.getElementById('rm-tipo-gestion');
+        const campo = document.getElementById('rm-empresa-envio');
+        if (!tipo || !campo) return;
+        const select = campo.querySelector('select');
+        tipo.addEventListener('change', function () {
+            const esGarantia = tipo.value === @json(\App\Models\StOrden::TIPO_GARANTIA);
+            campo.style.display = esGarantia ? '' : 'none';
+            select.disabled = !esGarantia;
+            if (!esGarantia) select.value = '';
+        });
+    })();
+</script>
 @endsection
