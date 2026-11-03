@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from psycopg2.extras import execute_batch
 from database.sqlserver import SQLServerConnection
 from database.postgres import PostgresConnection
 from config.config_manager import ConfigManager
@@ -182,6 +183,13 @@ class CobranzasService:
 
             today = datetime.now().strftime("%Y-%m-%d")
 
+            # Dos sincronizaciones de la misma sede a la vez duplicaban el corte:
+            # el lock serializa y todo (borrado + carga) va en una sola transacción.
+            wc.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(%s));",
+                (f"historial_cobranzas:{sede}:{today}",)
+            )
+
             # Reemplazar snapshot completo de la sede para hoy
             wc.execute(
                 "DELETE FROM inventario_v2.historial_cobranzas "
@@ -274,16 +282,14 @@ class CobranzasService:
                     saldo_pendiente,  # saldo_pendiente
                 ))
 
-            # Insertar en lotes de 500 filas con commit intermedio
             chunk_size = 500
             total_insertados = 0
             for i in range(0, len(batch), chunk_size):
                 chunk = batch[i:i + chunk_size]
-                for record in chunk:
-                    wc.execute(INSERT_QUERY, record)
-                web_conn.commit()
+                execute_batch(wc, INSERT_QUERY, chunk, page_size=chunk_size)
                 total_insertados += len(chunk)
                 logger.info(f"[Cobranzas]   → {total_insertados}/{len(batch)} renglones subidos...")
+            web_conn.commit()
 
             logger.info(f"[Cobranzas] ✓ {total_insertados} renglones subidos correctamente.")
             return True
