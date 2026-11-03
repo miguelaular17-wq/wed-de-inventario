@@ -310,6 +310,7 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'permission:operacion'])->
 Route::middleware(['auth', 'permission:compras,compras.distribucion,compras.necesidad,compras.proveedores,compras.sobrestock,compras.qpedir,compras.existencias,compras.publicidad'])->prefix('compras')->group(function () {
     Route::get('/', [CompradorController::class, 'index'])->name('comprador.dashboard');
     Route::get('/exportar', [CompradorController::class, 'export'])->name('comprador.export');
+    Route::get('/sobrestock/exportar', [CompradorController::class, 'exportSobrestock'])->name('comprador.sobrestock.export');
     Route::get('/quiebre-inventario/exportar', [CompradorController::class, 'exportInventoryBreak'])->name('comprador.quiebre.export');
     Route::post('/notificar', [CompradorController::class, 'notifyRedistribution'])->name('comprador.notify');
     Route::post('/publicidad/toggle', [CompradorController::class, 'togglePublicidad'])->name('comprador.publicidad.toggle');

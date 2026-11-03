@@ -11,12 +11,16 @@
                 saldo de cobranza pendiente, y egresos de directivos (093, 047, 041, 040, 039, 034, 016).
             </p>
         </div>
-        <a
-            class="btn primary"
-            href="{{ route('finanzas.gasto_directivos.reporte', ['desde' => $desde, 'hasta' => $hasta]) }}"
-        >
-            Descargar PDF
-        </a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            @foreach($personas as $p)
+                <a class="btn primary" href="{{ route('finanzas.gasto_directivos.reporte', ['desde' => $desde, 'hasta' => $hasta, 'persona' => $p['codigo']]) }}">
+                    PDF {{ \Illuminate\Support\Str::title($p['nombre']) }}
+                </a>
+            @endforeach
+            <a class="btn secondary" href="{{ route('finanzas.gasto_directivos.reporte', ['desde' => $desde, 'hasta' => $hasta]) }}" title="Los dos PDF en un archivo .zip">
+                Ambos (ZIP)
+            </a>
+        </div>
     </div>
 </div>
 
@@ -64,8 +68,9 @@
                         <td class="col-number" style="text-align:right;">{{ $p['documentos'] }}</td>
                         <td class="col-number" style="text-align:right;font-weight:600;">${{ number_format($p['monto'] ?? 0, 2) }}</td>
                         <td class="col-number" style="text-align:right;font-weight:700;color:#c2410c;">${{ number_format($p['saldo'], 2) }}</td>
-                        <td>
+                        <td style="white-space:nowrap;">
                             <a class="btn secondary" href="{{ route('cobranza.index', ['buscar_cliente' => $p['nombre'], 'mostrar_clientes' => 'personales']) }}">Ver en cobranza</a>
+                            <a class="btn primary" href="{{ route('finanzas.gasto_directivos.reporte', ['desde' => $desde, 'hasta' => $hasta, 'persona' => $p['codigo']]) }}">PDF</a>
                         </td>
                     </tr>
                 @endforeach
@@ -232,22 +237,25 @@
                     <th>Fecha</th>
                     <th>Concepto</th>
                     <th>Motivo</th>
+                    <th>Persona</th>
                     <th class="col-number" style="text-align:right;">USD</th>
                     <th class="col-number" style="text-align:right;">Bs</th>
                 </tr>
             </thead>
             <tbody>
+                @php $nombrePorCodigo = $personas->pluck('nombre', 'codigo'); @endphp
                 @forelse($egresos as $mov)
                     <tr>
                         <td>{{ $mov->fecha ? \Carbon\Carbon::parse($mov->fecha)->format('d/m/Y') : '—' }}</td>
                         <td>{{ $mov->tipo_gasto ?: '—' }}</td>
                         <td>{{ $mov->motivo ?: '—' }}</td>
+                        <td style="font-size:.85rem;">{{ $nombrePorCodigo[$personaDeEgreso[$mov->id] ?? ''] ?? '—' }}</td>
                         <td class="col-number" style="text-align:right;font-weight:600;">${{ number_format((float) $mov->monto_usd, 2) }}</td>
                         <td class="col-number" style="text-align:right;">Bs {{ number_format((float) $mov->monto_bs, 2) }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="muted" style="text-align:center;padding:24px;">
+                        <td colspan="6" class="muted" style="text-align:center;padding:24px;">
                             No hay egresos de directivos en el rango seleccionado.
                         </td>
                     </tr>

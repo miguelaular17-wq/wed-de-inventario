@@ -888,13 +888,22 @@ table.data-table tbody tr.row-mala-distribucion:hover {
             <span style="font-size: 0.9rem; color: var(--muted);">
                 Mostrando <strong>{{ $sobreStock->count() }}</strong> de <strong>{{ number_format($sobreStock->total()) }}</strong> productos
             </span>
-            @if(!empty($puedePublicitar))
-                <div id="pub-bulk-bar" style="display: none; align-items: center; gap: 10px;">
-                    <span style="font-size: 0.85rem; color: var(--muted);"><strong id="pub-bulk-count">0</strong> seleccionado(s)</span>
-                    <button type="button" class="btn secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="limpiarSeleccionPublicidad()">Quitar selección</button>
-                    <button type="button" id="pub-bulk-btn" class="btn primary" style="padding: 6px 12px; font-size: 0.8rem; font-weight: 600;" onclick="publicitarSeleccionados()">📢 Publicitar seleccionados</button>
-                </div>
-            @endif
+            <div style="display: flex; align-items: center; gap: 10px;">
+                @if(!empty($puedePublicitar))
+                    <div id="pub-bulk-bar" style="display: none; align-items: center; gap: 10px;">
+                        <span style="font-size: 0.85rem; color: var(--muted);"><strong id="pub-bulk-count">0</strong> seleccionado(s)</span>
+                        <button type="button" class="btn secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="limpiarSeleccionPublicidad()">Quitar selección</button>
+                        <button type="button" id="pub-bulk-btn" class="btn primary" style="padding: 6px 12px; font-size: 0.8rem; font-weight: 600;" onclick="publicitarSeleccionados()">📢 Publicitar seleccionados</button>
+                    </div>
+                @endif
+                @if($sobreStock->total() > 0)
+                    <a href="{{ route('comprador.sobrestock.export', \Illuminate\Support\Arr::except(request()->query(), ['page', 'page_sobre_stock'])) }}"
+                       class="btn secondary" style="padding: 6px 12px; font-size: 0.8rem; font-weight: 600; text-decoration: none;"
+                       title="Descarga los {{ number_format($sobreStock->total()) }} productos filtrados">
+                        ⬇ Descargar Excel
+                    </a>
+                @endif
+            </div>
         </div>
         <div class="table-wrap">
             <table class="data-table" style="font-size: 0.85rem;">

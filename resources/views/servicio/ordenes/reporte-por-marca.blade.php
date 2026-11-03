@@ -118,6 +118,8 @@
                             <th>Equipo</th>
                             <th>Sede</th>
                             <th>Estado</th>
+                            <th>Empresa de envío</th>
+                            <th>Fecha de envío</th>
                             <th>Cliente / Motivo</th>
                         </tr>
                     </thead>
@@ -137,6 +139,16 @@
                                 </td>
                                 <td>{{ $orden->sede }}</td>
                                 <td>{{ $orden->etiquetaEstado() }}</td>
+                                <td>{{ $orden->etiquetaEmpresaEnvioGarantia() ?: '—' }}</td>
+                                <td>
+                                    @if($orden->garantia_enviado_at)
+                                        {{ $orden->garantia_enviado_at->format('d/m/Y') }}
+                                    @elseif($orden->esGarantia())
+                                        <span class="muted">{{ $orden->etiquetaEstadoGarantiaExterna() }}</span>
+                                    @else
+                                        —
+                                    @endif
+                                </td>
                                 <td>{{ $orden->esReparacionInterna() ? ($orden->falla ?: '—') : ($orden->cliente_nombre ?: '—') }}</td>
                             </tr>
                         @endforeach

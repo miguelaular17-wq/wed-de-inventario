@@ -60,8 +60,48 @@ class GastoDirectivosService
      */
     public function resumen(string $desde, string $hasta): array
     {
-        $personas = $this->personasConFacturas($desde, $hasta);
-        $egresos = $this->egresosEnRango($desde, $hasta);
+        return $this->armarResumen(
+            $desde,
+            $hasta,
+            $this->personasConFacturas($desde, $hasta),
+            $this->egresosEnRango($desde, $hasta)
+        );
+    }
+
+    /**
+     * Mismo resumen pero solo con las facturas y los egresos atribuidos a una persona.
+     */
+    public function resumenPersona(string $desde, string $hasta, string $codigo): ?array
+    {
+        $personas = $this->personasConFacturas($desde, $hasta)->where('codigo', $codigo)->values();
+        if ($personas->isEmpty()) {
+            return null;
+        }
+
+        $egresos = $this->egresosEnRango($desde, $hasta)
+            ->filter(fn (FlujoCaja $m) => $this->codigoPersonaDeEgreso($m) === $codigo)
+            ->values();
+
+        return $this->armarResumen($desde, $hasta, $personas, $egresos) + ['persona' => $personas->first()];
+    }
+
+    /**
+     * Los egresos de María Núñez van en su concepto (041) o la nombran en el motivo;
+     * el resto de conceptos "directivo" son de José Leonardo Jerez.
+     */
+    public function codigoPersonaDeEgreso(FlujoCaja $m): string
+    {
+        $tipo = strtoupper(trim((string) $m->tipo_gasto));
+        $motivo = $this->normalizarNombre((string) $m->motivo);
+        if (str_starts_with($tipo, '041') || preg_match('/\bMARIA\b|\bNUNE[ZS]\b/', $motivo)) {
+            return 'V24525502';
+        }
+
+        return 'V24703210';
+    }
+
+    private function armarResumen(string $desde, string $hasta, Collection $personas, Collection $egresos): array
+    {
         $egresosPorConcepto = $this->agruparEgresosPorConcepto($egresos);
 
         $totUsd = round((float) $egresos->sum(fn (FlujoCaja $m) => (float) $m->monto_usd), 2);

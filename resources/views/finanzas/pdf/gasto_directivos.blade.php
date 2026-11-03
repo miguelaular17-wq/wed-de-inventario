@@ -37,8 +37,8 @@
         </td>
         <td>
             <h2>Palacio de los Detalles — Gasto Directivos</h2>
+            <p style="font-size: 12px; color: #1a4273; font-weight: bold;">{{ $persona['nombre'] }} ({{ $persona['codigo'] }})</p>
             <p>Desde {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }} hasta {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }}</p>
-            <p>José Leonardo Jerez (V24703210) · María Isabel Núñez (V24525502)</p>
         </td>
         <td style="width: 130px; text-align: right; color: #64748b; font-size: 9px;">
             Generado<br>{{ $generado ?? now()->format('d/m/Y H:i') }}
@@ -55,38 +55,8 @@
     </tr>
 </table>
 
-<div class="section-title">Resumen — Directivos</div>
-<table class="mov">
-    <thead>
-        <tr>
-            <th style="width:16%">Código</th>
-            <th>Nombre</th>
-            <th style="width:12%" class="text-right">Facturas</th>
-            <th style="width:16%" class="text-right">Monto USD</th>
-            <th style="width:16%" class="text-right">Saldo cobranza</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach($personas as $p)
-            <tr>
-                <td>{{ $p['codigo'] }}</td>
-                <td>{{ $p['nombre'] }}</td>
-                <td class="text-right">{{ $p['documentos'] }}</td>
-                <td class="text-right">${{ number_format($p['monto'] ?? 0, 2) }}</td>
-                <td class="text-right">${{ number_format($p['saldo'], 2) }}</td>
-            </tr>
-        @endforeach
-        <tr class="total-row">
-            <td colspan="2">Total</td>
-            <td class="text-right">{{ number_format($totales['facturas'] ?? 0) }}</td>
-            <td class="text-right">${{ number_format($totales['facturas_monto'] ?? 0, 2) }}</td>
-            <td class="text-right">${{ number_format($totales['cobranza_saldo'], 2) }}</td>
-        </tr>
-    </tbody>
-</table>
-
 @foreach($personas as $p)
-    <div class="section-title">Facturas — {{ $p['nombre'] }} ({{ $p['codigo'] }})</div>
+    <div class="section-title">Facturas a nombre de {{ $p['nombre'] }}</div>
     @if($p['facturas']->isEmpty())
         <p class="muted" style="padding:10px; border:1px solid #cbd5e1; margin:0 0 8px;">Sin facturas en el rango.</p>
     @else
@@ -192,6 +162,6 @@
     </table>
 @endif
 
-<div class="footer">Documento generado desde Nexo PD · Gasto Directivos</div>
+<div class="footer">Documento generado desde Nexo PD · Gasto Directivos · {{ $persona['nombre'] }}</div>
 </body>
 </html>

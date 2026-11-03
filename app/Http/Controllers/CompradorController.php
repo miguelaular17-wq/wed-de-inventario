@@ -77,20 +77,7 @@ class CompradorController extends Controller
         $sedeDestinoFilter = (string) $request->query('sede_destino', 'Todas');
         $sortFirst = (string) $request->query('sort_first', 'codigo');
         $dirFirst = (string) $request->query('dir_first', 'asc');
-        $ssFilters = [
-            'categoria' => (string) $request->query('ss_categoria', 'Ninguno'),
-            'subcategoria' => (string) $request->query('ss_subcategoria', 'Ninguno'),
-            'proveedor' => (string) $request->query('ss_proveedor', 'Ninguno'),
-            'sede' => (string) $request->query('ss_sede', 'Todas'),
-            'rotacion_filter' => (string) $request->query('ss_rotacion', 'Todos'),
-            'sobrestock_filter' => (string) $request->query('ss_sobrestock', 'Todos'),
-            'estado_filter' => (string) $request->query('ss_estado', 'Todos'),
-            'semaforo_filter' => (string) $request->query('ss_semaforo', 'Todos'),
-            'min_dias_sin_venta' => $request->query('ss_min_dias'),
-            'min_existencia' => $request->query('ss_min_stock'),
-            'buscar' => $this->resolveBuscarFilter($request),
-            'incluir_sin_stock' => $this->incluirSinStock($request),
-        ];
+        $ssFilters = $this->filtrosSobrestock($request);
         $sortBy = (string) $request->query('ss_sort', 'prioridad');
         $sortDir = (string) $request->query('ss_dir', 'desc');
         $resumenRiesgo = [
@@ -456,36 +443,13 @@ class CompradorController extends Controller
             }
 
             if ($needsAnalysis) {
-            // Tab 3 filters setting
-            $ssFilters = [
-                'categoria' => (string) $request->query('ss_categoria', 'Ninguno'),
-                'subcategoria' => (string) $request->query('ss_subcategoria', 'Ninguno'),
-                'proveedor' => (string) $request->query('ss_proveedor', 'Ninguno'),
-                'sede' => (string) $request->query('ss_sede', 'Todas'),
-                'rotacion_filter' => (string) $request->query('ss_rotacion', 'Todos'),
-                'sobrestock_filter' => (string) $request->query('ss_sobrestock', 'Todos'),
-                'estado_filter' => (string) $request->query('ss_estado', 'Todos'),
-                'semaforo_filter' => (string) $request->query('ss_semaforo', 'Todos'),
-                'min_dias_sin_venta' => $request->query('ss_min_dias'),
-                'min_existencia' => $request->query('ss_min_stock'),
-                'buscar' => $this->resolveBuscarFilter($request),
-                'incluir_sin_stock' => $this->incluirSinStock($request),
-            ];
+            $ssFilters = $this->filtrosSobrestock($request);
 
             Profiler::start('AnalisisInventarioService::getAnalysis');
             $analysisItems = $this->analisis->getAnalysis($ssFilters);
             Profiler::stop('AnalisisInventarioService::getAnalysis');
 
-            $sortBy = (string) $request->query('ss_sort', 'prioridad');
-            $sortDir = (string) $request->query('ss_dir', 'desc');
-            $validSorts = ['prioridad', 'dias_sin_venta', 'total_stock', 'meses_inventario', 'codigo', 'producto'];
-            if (!in_array($sortBy, $validSorts)) $sortBy = 'prioridad';
-
-            if ($sortDir === 'asc') {
-                $analysisItems = $analysisItems->sortBy($sortBy)->values();
-            } else {
-                $analysisItems = $analysisItems->sortByDesc($sortBy)->values();
-            }
+            [$analysisItems, $sortBy, $sortDir] = $this->ordenarSobrestock($analysisItems, $request);
 
             $resumenRiesgo = $this->analisis->getResumenRiesgo($analysisItems);
             $resumenPorSede = $this->analisis->getResumenPorSede($analysisItems, $ssFilters);
@@ -725,36 +689,13 @@ class CompradorController extends Controller
 
             if ($needsAnalysis) {
             // ── Tab 3: Análisis de Inventario (Sobre Stock / Sin Rotación) ──
-            $ssFilters = [
-                'categoria' => (string) $request->query('ss_categoria', 'Ninguno'),
-                'subcategoria' => (string) $request->query('ss_subcategoria', 'Ninguno'),
-                'proveedor' => (string) $request->query('ss_proveedor', 'Ninguno'),
-                'sede' => (string) $request->query('ss_sede', 'Todas'),
-                'rotacion_filter' => (string) $request->query('ss_rotacion', 'Todos'),
-                'sobrestock_filter' => (string) $request->query('ss_sobrestock', 'Todos'),
-                'estado_filter' => (string) $request->query('ss_estado', 'Todos'),
-                'semaforo_filter' => (string) $request->query('ss_semaforo', 'Todos'),
-                'min_dias_sin_venta' => $request->query('ss_min_dias'),
-                'min_existencia' => $request->query('ss_min_stock'),
-                'buscar' => $this->resolveBuscarFilter($request),
-                'incluir_sin_stock' => $this->incluirSinStock($request),
-            ];
+            $ssFilters = $this->filtrosSobrestock($request);
 
             Profiler::start('AnalisisInventarioService::getAnalysis');
             $analysisItems = $this->analisis->getAnalysis($ssFilters);
             Profiler::stop('AnalisisInventarioService::getAnalysis');
 
-            // Sort
-            $sortBy = (string) $request->query('ss_sort', 'prioridad');
-            $sortDir = (string) $request->query('ss_dir', 'desc');
-            $validSorts = ['prioridad', 'dias_sin_venta', 'total_stock', 'meses_inventario', 'codigo', 'producto'];
-            if (!in_array($sortBy, $validSorts)) $sortBy = 'prioridad';
-
-            if ($sortDir === 'asc') {
-                $analysisItems = $analysisItems->sortBy($sortBy)->values();
-            } else {
-                $analysisItems = $analysisItems->sortByDesc($sortBy)->values();
-            }
+            [$analysisItems, $sortBy, $sortDir] = $this->ordenarSobrestock($analysisItems, $request);
 
             // Compute risk summaries BEFORE pagination
             $resumenRiesgo = $this->analisis->getResumenRiesgo($analysisItems);
@@ -1011,6 +952,43 @@ class CompradorController extends Controller
         }
 
         return (bool) $request->user()?->isMarketing();
+    }
+
+    private function filtrosSobrestock(Request $request): array
+    {
+        return [
+            'categoria' => (string) $request->query('ss_categoria', 'Ninguno'),
+            'subcategoria' => (string) $request->query('ss_subcategoria', 'Ninguno'),
+            'proveedor' => (string) $request->query('ss_proveedor', 'Ninguno'),
+            'sede' => (string) $request->query('ss_sede', 'Todas'),
+            'rotacion_filter' => (string) $request->query('ss_rotacion', 'Todos'),
+            'sobrestock_filter' => (string) $request->query('ss_sobrestock', 'Todos'),
+            'estado_filter' => (string) $request->query('ss_estado', 'Todos'),
+            'semaforo_filter' => (string) $request->query('ss_semaforo', 'Todos'),
+            'min_dias_sin_venta' => $request->query('ss_min_dias'),
+            'min_existencia' => $request->query('ss_min_stock'),
+            'buscar' => $this->resolveBuscarFilter($request),
+            'incluir_sin_stock' => $this->incluirSinStock($request),
+        ];
+    }
+
+    /**
+     * @return array{0: Collection, 1: string, 2: string}
+     */
+    private function ordenarSobrestock(Collection $items, Request $request): array
+    {
+        $sortBy = (string) $request->query('ss_sort', 'prioridad');
+        $sortDir = (string) $request->query('ss_dir', 'desc');
+        $validSorts = ['prioridad', 'dias_sin_venta', 'total_stock', 'meses_inventario', 'codigo', 'producto'];
+        if (! in_array($sortBy, $validSorts, true)) {
+            $sortBy = 'prioridad';
+        }
+
+        $items = $sortDir === 'asc'
+            ? $items->sortBy($sortBy)->values()
+            : $items->sortByDesc($sortBy)->values();
+
+        return [$items, $sortBy, $sortDir];
     }
 
     private function resolveBuscarFilter(Request $request): string
@@ -1490,6 +1468,87 @@ class CompradorController extends Controller
         return response($out, 200, [
             'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    /**
+     * Excel con todos los productos del análisis de sobrestock que cumplen los filtros (no solo la página visible).
+     */
+    public function exportSobrestock(Request $request): \Symfony\Component\HttpFoundation\Response
+    {
+        $this->denyUnlessComprasTab('sobrestock');
+        ini_set('memory_limit', '512M');
+
+        $items = collect();
+        if (config('database.default') === 'pgsql') {
+            [$items] = $this->ordenarSobrestock($this->analisis->getAnalysis($this->filtrosSobrestock($request)), $request);
+        }
+
+        $sedes = config('inventario.sedes_stock', []);
+        $display = config('inventario.display', []);
+
+        $stockPorProducto = [];
+        foreach ($items->pluck('id')->chunk(2000) as $ids) {
+            $filas = DB::connection('pgsql')
+                ->table('stock_actual')
+                ->whereIn('producto_id', $ids->all())
+                ->get(['producto_id', 'sede', 'existencia']);
+            foreach ($filas as $fila) {
+                $stockPorProducto[(int) $fila->producto_id][$fila->sede] = (int) $fila->existencia;
+            }
+        }
+
+        $semaforos = ['verde' => 'Verde', 'amarillo' => 'Amarillo', 'naranja' => 'Naranja', 'rojo' => 'Rojo'];
+        $encabezado = ['Semáforo', 'Código', 'Producto', 'Proveedor', 'Categoría', 'Subcategoría', 'Stock total'];
+        foreach ($sedes as $sede) {
+            $encabezado[] = 'Stock '.($display[$sede] ?? $sede);
+        }
+        array_push(
+            $encabezado,
+            'Costo unit.', 'Cant. compra', 'Costo en tienda', 'Días sin venta', 'Rotación', 'Meses inv',
+            'Sobrestock', 'Acción recomendada', 'Valor inmovilizado', 'Últ. venta', 'Últ. compra'
+        );
+
+        $filas = [$encabezado];
+        foreach ($items as $item) {
+            $fila = [
+                $semaforos[$item['semaforo']] ?? '',
+                (string) $item['codigo'],
+                (string) $item['producto'],
+                (string) $item['proveedor'],
+                (string) $item['categoria'],
+                (string) $item['subcategoria'],
+                (int) $item['total_stock'],
+            ];
+            foreach ($sedes as $sede) {
+                $fila[] = $stockPorProducto[$item['id']][$sede] ?? 0;
+            }
+            $meses = $item['meses_inventario'];
+            array_push(
+                $fila,
+                round((float) $item['ultimo_costo_compra'], 2),
+                (int) $item['ultima_cantidad_compra'],
+                round((float) $item['precio_unidad'], 2),
+                $item['dias_sin_venta'] >= 999 ? '' : (int) $item['dias_sin_venta'],
+                (string) $item['rotacion'],
+                $meses !== null && $meses < 999 ? (float) $meses : '∞',
+                (string) $item['sobrestock'],
+                (string) $item['accion_recomendada'],
+                round((float) $item['valor_inmovilizado'], 2),
+                $item['ultima_venta'] ?? '',
+                $item['ultima_compra'] ?? '',
+            );
+            $filas[] = $fila;
+        }
+        if (count($filas) === 1) {
+            $filas[] = ['Sin productos con los filtros seleccionados'];
+        }
+
+        $nombre = 'analisis_inventario_'.now()->format('Y-m-d_His').'.xlsx';
+
+        return response(\App\Support\SimpleXlsxWriter::toString(['Análisis inventario' => $filas]), 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$nombre.'"',
         ]);
     }
 
