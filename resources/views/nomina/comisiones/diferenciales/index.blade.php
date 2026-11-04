@@ -53,6 +53,7 @@
                         </td>
                         <td style="text-align:right;">
                             <a class="btn" href="{{ route('nomina.comisiones.diferenciales.show', [$periodo, $diferencial]) }}">Ver y TXT</a>
+                            <a class="btn" href="{{ route('nomina.comisiones.diferenciales.reporte', [$periodo, $diferencial]) }}">PDF</a>
                         </td>
                     </tr>
                 @empty

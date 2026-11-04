@@ -17,7 +17,9 @@
                 {{ $diferencial->motivo }} · Pago el {{ $diferencial->fecha_pago?->format('d/m/Y') }} · Tasa BCV {{ number_format($tasa, 2) }}
             </p>
         </div>
-        <div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:flex-start;">
+            <a class="btn primary" href="{{ route('nomina.comisiones.diferenciales.reporte', [$periodo, $diferencial]) }}">Descargar reporte PDF</a>
+            <a class="btn" href="{{ route('nomina.comisiones.diferenciales.reporte', [$periodo, $diferencial, 'formato' => 'xlsx']) }}">Descargar Excel</a>
             <form method="POST" action="{{ route('nomina.comisiones.diferenciales.destroy', [$periodo, $diferencial]) }}" onsubmit="return confirm('¿Eliminar este diferencial? Los TXT ya descargados no se anulan en el banco.')">
                 @csrf
                 @method('DELETE')

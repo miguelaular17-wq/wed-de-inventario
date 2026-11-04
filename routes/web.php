@@ -472,6 +472,7 @@ Route::middleware(['auth', 'permission:nomina,nomina.comisiones'])->prefix('nomi
     Route::post('/comisiones/{periodo}/diferenciales', [ComisionDiferencialController::class, 'store'])->name('comisiones.diferenciales.store');
     Route::get('/comisiones/{periodo}/diferenciales/{diferencial}', [ComisionDiferencialController::class, 'show'])->name('comisiones.diferenciales.show');
     Route::delete('/comisiones/{periodo}/diferenciales/{diferencial}', [ComisionDiferencialController::class, 'destroy'])->name('comisiones.diferenciales.destroy');
+    Route::get('/comisiones/{periodo}/diferenciales/{diferencial}/reporte', [ComisionDiferencialController::class, 'reporte'])->name('comisiones.diferenciales.reporte');
     Route::get('/comisiones/{periodo}/diferenciales/{diferencial}/banco/{empresa}', [ComisionDiferencialController::class, 'banco'])->name('comisiones.diferenciales.banco');
 
     Route::get('/retenciones', [RetencionController::class, 'index'])->name('retenciones.index');

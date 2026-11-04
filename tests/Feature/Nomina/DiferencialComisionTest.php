@@ -113,6 +113,17 @@ class DiferencialComisionTest extends TestCase
             ->assertSee('Ana Vendedora')
             ->assertSee('Descargar TXT');
 
+        $pdf = $this->actingAs($user)
+            ->get(route('nomina.comisiones.diferenciales.reporte', [$periodo, $diferencial]))
+            ->assertOk();
+        $this->assertStringContainsString('.pdf', (string) $pdf->headers->get('content-disposition'));
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        $xlsx = $this->actingAs($user)
+            ->get(route('nomina.comisiones.diferenciales.reporte', [$periodo, $diferencial, 'formato' => 'xlsx']))
+            ->assertOk();
+        $this->assertStringContainsString('.xlsx', (string) $xlsx->headers->get('content-disposition'));
+
         $txt = $this->actingAs($user)
             ->get(route('nomina.comisiones.diferenciales.banco', [$periodo, $diferencial, $empresa]))
             ->assertOk()
