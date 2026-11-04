@@ -485,6 +485,42 @@ trait CreatesNominaSchema
             });
         }
 
+        if (! Schema::hasTable('nomina_comision_diferenciales')) {
+            Schema::create('nomina_comision_diferenciales', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('periodo_id');
+                $table->string('motivo', 255);
+                $table->json('config');
+                $table->date('fecha_pago');
+                $table->decimal('tasa_bcv', 12, 4)->default(0);
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasTable('nomina_comision_diferencial_lineas')) {
+            Schema::create('nomina_comision_diferencial_lineas', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('diferencial_id');
+                $table->unsignedBigInteger('empleado_id');
+                $table->string('modo', 32);
+                $table->boolean('no_pagado')->default(true);
+                $table->decimal('comision_original', 14, 2)->default(0);
+                $table->decimal('comision_ajustada', 14, 2)->default(0);
+                $table->decimal('abonos', 14, 2)->default(0);
+                $table->decimal('retencion_original', 14, 2)->default(0);
+                $table->decimal('retencion_ajustada', 14, 2)->default(0);
+                $table->decimal('descuentos', 14, 2)->default(0);
+                $table->decimal('total_original', 14, 2)->default(0);
+                $table->decimal('total_ajustado', 14, 2)->default(0);
+                $table->decimal('pagado', 14, 2)->default(0);
+                $table->decimal('diferencia', 14, 2)->default(0);
+                $table->json('detalle')->nullable();
+                $table->timestamps();
+                $table->unique(['diferencial_id', 'empleado_id']);
+            });
+        }
+
         if (! Schema::hasTable('nomina_comision_abonos')) {
             Schema::create('nomina_comision_abonos', function (Blueprint $table) {
                 $table->id();
@@ -655,6 +691,8 @@ trait CreatesNominaSchema
         }
 
         foreach ([
+            'nomina_comision_diferencial_lineas',
+            'nomina_comision_diferenciales',
             'nomina_comision_descuentos',
             'nomina_comision_abonos',
             'nomina_liquidaciones_comision',

@@ -96,6 +96,7 @@
         <button class="btn" type="button" data-abrir-modal="modal-sedes">Totales por sede y área</button>
         @if($periodo->estado !== 'ABIERTO')
             <button class="btn" type="button" data-abrir-modal="modal-txt">TXT del banco</button>
+            <a class="btn" href="{{ route('nomina.comisiones.diferenciales.index', $periodo) }}">Diferencial de comisiones</a>
         @endif
     </div>
 

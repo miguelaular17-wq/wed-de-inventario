@@ -37,6 +37,7 @@ use App\Http\Controllers\Nomina\AttendanceController;
 use App\Http\Controllers\Nomina\CargoController;
 use App\Http\Controllers\Nomina\ComisionAjusteController;
 use App\Http\Controllers\Nomina\ComisionController;
+use App\Http\Controllers\Nomina\ComisionDiferencialController;
 use App\Http\Controllers\Nomina\ComisionMarcaController;
 use App\Http\Controllers\Nomina\ConfiguracionController;
 use App\Http\Controllers\Nomina\DeduccionController;
@@ -466,6 +467,12 @@ Route::middleware(['auth', 'permission:nomina,nomina.comisiones'])->prefix('nomi
     Route::post('/comisiones/{periodo}/empleados/{empleado}/egresos-st', [ComisionController::class, 'registrarEgresoSt'])->name('comisiones.egresos_st.store');
     Route::delete('/comisiones/{periodo}/egresos-st/{ajuste}', [ComisionController::class, 'quitarEgresoSt'])->name('comisiones.egresos_st.destroy');
     Route::get('/comisiones/{periodo}/banco/{empresa}', [ComisionController::class, 'exportarBanco'])->name('comisiones.banco');
+    Route::get('/comisiones/{periodo}/diferenciales', [ComisionDiferencialController::class, 'index'])->name('comisiones.diferenciales.index');
+    Route::get('/comisiones/{periodo}/diferenciales/nuevo', [ComisionDiferencialController::class, 'create'])->name('comisiones.diferenciales.create');
+    Route::post('/comisiones/{periodo}/diferenciales', [ComisionDiferencialController::class, 'store'])->name('comisiones.diferenciales.store');
+    Route::get('/comisiones/{periodo}/diferenciales/{diferencial}', [ComisionDiferencialController::class, 'show'])->name('comisiones.diferenciales.show');
+    Route::delete('/comisiones/{periodo}/diferenciales/{diferencial}', [ComisionDiferencialController::class, 'destroy'])->name('comisiones.diferenciales.destroy');
+    Route::get('/comisiones/{periodo}/diferenciales/{diferencial}/banco/{empresa}', [ComisionDiferencialController::class, 'banco'])->name('comisiones.diferenciales.banco');
 
     Route::get('/retenciones', [RetencionController::class, 'index'])->name('retenciones.index');
 
