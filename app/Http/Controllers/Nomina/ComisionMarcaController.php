@@ -81,15 +81,22 @@ class ComisionMarcaController extends Controller
             'fecha' => ['required', 'date'],
             'monto_bs' => ['required', 'numeric', 'min:0.01'],
             'nota' => ['nullable', 'string', 'max:255'],
+            'tasa_manual' => ['nullable', 'numeric', 'gt:0'],
+        ], [
+            'tasa_manual.gt' => 'La tasa debe ser mayor a cero.',
         ]);
 
         $tasa = $this->service->tasaDelDia($data['fecha']);
+        $tasaManual = $tasa === null && isset($data['tasa_manual']);
+        if ($tasaManual) {
+            $tasa = round((float) $data['tasa_manual'], 4);
+        }
         $usd = $this->service->aUsd((float) $data['monto_bs'], $tasa);
         if ($tasa === null || $usd === null) {
             return back()
                 ->withInput()
                 ->withErrors([
-                    'fecha' => 'Ese día no tiene tasa de egreso en flujo de caja. Registra la tasa y vuelve a guardar.',
+                    'tasa_manual' => 'Ese día no tiene tasa de egreso en flujo de caja. Escribe la tasa para poder guardar.',
                 ]);
         }
 
@@ -107,7 +114,7 @@ class ComisionMarcaController extends Controller
 
         return redirect()
             ->route('nomina.comisiones_marca.index', $request->only(['desde', 'hasta', 'marca_filtro', 'empleado_id']))
-            ->with('status', 'Comisión de '.NominaComisionMarca::MARCAS[$data['marca']].' guardada para '.$empleado->nombre().': Bs '.number_format((float) $data['monto_bs'], 2, ',', '.').' = $'.number_format($usd, 2).'.');
+            ->with('status', 'Comisión de '.NominaComisionMarca::MARCAS[$data['marca']].' guardada para '.$empleado->nombre().': Bs '.number_format((float) $data['monto_bs'], 2, ',', '.').' = $'.number_format($usd, 2).($tasaManual ? ' (tasa manual '.number_format($tasa, 4, ',', '.').')' : '').'.');
     }
 
     public function destroy(Request $request, NominaComisionMarca $comision): RedirectResponse

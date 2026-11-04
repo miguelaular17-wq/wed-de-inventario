@@ -47,6 +47,10 @@
                 <label>Monto Bs</label>
                 <input type="number" name="monto_bs" id="cm-bs" step="0.01" min="0.01" value="{{ old('monto_bs') }}" required>
             </div>
+            <div class="field" id="cm-tasa-manual-campo" hidden>
+                <label>Tasa del día</label>
+                <input type="number" name="tasa_manual" id="cm-tasa-manual" step="0.0001" min="0.0001" value="{{ old('tasa_manual') }}" placeholder="Ej.: 236,45" disabled>
+            </div>
             <div class="field field-wide">
                 <label>Nota</label>
                 <input type="text" name="nota" maxlength="255" value="{{ old('nota') }}">
@@ -142,8 +146,16 @@
     const fecha = document.getElementById('cm-fecha');
     const monto = document.getElementById('cm-bs');
     const caja = document.getElementById('cm-tasa');
+    const campoManual = document.getElementById('cm-tasa-manual-campo');
+    const manual = document.getElementById('cm-tasa-manual');
     const url = @json(route('nomina.comisiones_marca.tasa'));
     let tasa = null;
+
+    function pedirTasaManual(pedir) {
+        campoManual.hidden = !pedir;
+        manual.disabled = !pedir;
+        manual.required = pedir;
+    }
 
     function pintar() {
         const bs = parseFloat(monto.value || '0') || 0;
@@ -152,7 +164,14 @@
             return;
         }
         if (tasa === null) {
-            caja.textContent = 'Ese día no tiene tasa de egreso en flujo de caja.';
+            const tasaManual = parseFloat(manual.value || '0') || 0;
+            if (tasaManual > 0) {
+                caja.textContent = 'Ese día no tiene tasa en flujo de caja. Tasa manual: '
+                    + tasaManual.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})
+                    + (bs > 0 ? ' · USD ' + (bs / tasaManual).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '');
+            } else {
+                caja.textContent = 'Ese día no tiene tasa de egreso en flujo de caja. Escribe la tasa del día para poder guardar.';
+            }
             return;
         }
         const usd = bs > 0 ? (bs / tasa) : 0;
@@ -166,11 +185,13 @@
         const res = await fetch(url + '?fecha=' + encodeURIComponent(fecha.value), {headers: {'Accept': 'application/json'}});
         const data = await res.json();
         tasa = data.tasa === null ? null : Number(data.tasa);
+        pedirTasaManual(tasa === null);
         pintar();
     }
 
     fecha.addEventListener('change', cargar);
     monto.addEventListener('input', pintar);
+    manual.addEventListener('input', pintar);
     cargar();
 })();
 </script>
