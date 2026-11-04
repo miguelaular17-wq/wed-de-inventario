@@ -15,14 +15,28 @@ class InventarioV2Repository
     /** Caché de instancia: evita N queries MAX(updated_at) dentro del mismo request */
     private ?string $lastStockUpdateCache = null;
 
+    private ?string $lastProductsUpdateCache = null;
+
     public function isActive(): bool
     {
         return config('database.default') === 'pgsql';
     }
 
+    /**
+     * Versión del catálogo: cambia cuando el sincronizador toca precios, nombres o categorías.
+     */
+    private function lastProductsUpdate(): string
+    {
+        return $this->lastProductsUpdateCache ??= (string) Cache::remember(
+            'inventario_v2.productos_updated_at',
+            30,
+            fn () => (string) (DB::connection('pgsql')->table('productos')->max('updated_at') ?? '')
+        );
+    }
+
     private function getGlobalProducts(): array
     {
-        $cacheKey = 'inventario_v2.global_products_v2';
+        $cacheKey = 'inventario_v2.global_products_v3.' . md5($this->lastProductsUpdate());
 
         // ── Medir Cache::get (lectura cruda) ──────────────────────────
         \App\Services\Profiler::start('InvV2::getGlobalProducts Cache::get');
@@ -52,7 +66,7 @@ class InventarioV2Repository
         \App\Services\Profiler::stop('InvV2::getGlobalProducts SQL fetch', count($rows));
 
         \App\Services\Profiler::start('InvV2::getGlobalProducts Cache::put');
-        Cache::put($cacheKey, $rows, 86400);
+        Cache::put($cacheKey, $rows, 3600);
         \App\Services\Profiler::stop('InvV2::getGlobalProducts Cache::put', count($rows));
 
         return $rows;
@@ -145,10 +159,10 @@ class InventarioV2Repository
 
         // ── OPTIMIZACIÓN FASE 3: Caché de resultado final por sede ──
         // Evita el foreach de 392ms en requests con caché caliente.
-        // Key: sede + hash del timestamp de stock (se invalida automáticamente).
+        // Key: sede + hash de los timestamps de stock y de productos (se invalida automáticamente).
         // TTL: 1800s (mismo que global_stock_ventas).
         $stockTs  = $this->lastStockUpdate();
-        $sedeCacheKey = 'produtos_sede_' . strtoupper($sedeLocal) . '_v3_' . md5((string) $stockTs);
+        $sedeCacheKey = 'produtos_sede_' . strtoupper($sedeLocal) . '_v4_' . md5((string) $stockTs . '|' . $this->lastProductsUpdate());
 
         \App\Services\Profiler::start('InvV2::loadForSede Cache::get sede');
         $memB0 = memory_get_usage(true);

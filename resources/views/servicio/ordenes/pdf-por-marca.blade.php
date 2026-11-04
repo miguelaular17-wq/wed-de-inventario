@@ -103,14 +103,15 @@
             <table>
                 <thead>
                     <tr>
-                        <th style="width:9%;">Orden</th>
-                        <th style="width:8%;">Fecha</th>
-                        <th style="width:11%;">Tipo</th>
-                        <th style="width:19%;">Equipo</th>
-                        <th style="width:7%;">Sede</th>
-                        <th style="width:10%;">Estado</th>
-                        <th style="width:10%;">Empresa de envío</th>
-                        <th style="width:9%;">Fecha de envío</th>
+                        <th style="width:8%;">Orden</th>
+                        <th style="width:7%;">Fecha</th>
+                        <th style="width:9%;">Tipo</th>
+                        <th style="width:15%;">Equipo</th>
+                        <th style="width:7%;">Sede origen</th>
+                        <th style="width:10%;">Creada por</th>
+                        <th style="width:9%;">Estado</th>
+                        <th style="width:9%;">Empresa de envío</th>
+                        <th style="width:8%;">Fecha de envío</th>
                         <th>Cliente / Motivo</th>
                     </tr>
                 </thead>
@@ -126,7 +127,13 @@
                                     <div class="muted">{{ $orden->serial ?: $orden->imei }}</div>
                                 @endif
                             </td>
-                            <td>{{ $orden->sede }}</td>
+                            <td>
+                                {{ $orden->sedeOrigen() }}
+                                @if($orden->sedeOrigen() !== strtoupper((string) $orden->sede))
+                                    <div class="muted">Ahora en {{ $orden->sede }}</div>
+                                @endif
+                            </td>
+                            <td>{{ $orden->creador?->name ?: '—' }}</td>
                             <td>{{ $orden->etiquetaEstado() }}</td>
                             <td>{{ $orden->etiquetaEmpresaEnvioGarantia() ?: '—' }}</td>
                             <td>

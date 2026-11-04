@@ -15,6 +15,7 @@ use App\Services\ServicioTecnico\StEquipoService;
 use App\Services\ServicioTecnico\StEvidenciaStorage;
 use App\Services\ServicioTecnico\StOrdenService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -136,7 +137,7 @@ class OrdenController extends Controller
 
         $query = StOrden::query()
             ->visiblePara($user)
-            ->with(['equipoCelular', 'tecnico'])
+            ->with(['equipoCelular', 'tecnico', 'creador'])
             ->whereDate('fecha_ingreso', '>=', $desde)
             ->whereDate('fecha_ingreso', '<=', $hasta)
             ->orderBy('fecha_ingreso')
@@ -150,6 +151,11 @@ class OrdenController extends Controller
 
         if ($tipoFiltro !== '' && Schema::hasColumn('st_ordenes', 'tipo_gestion')) {
             $query->where('tipo_gestion', $tipoFiltro);
+        }
+
+        $conEstadoEmpresa = Schema::hasColumn('st_ordenes', 'estado_empresa_garantia');
+        if ($conEstadoEmpresa) {
+            $query->where(fn ($q) => $q->whereNull('estado_empresa_garantia')->orWhere('estado_empresa_garantia', ''));
         }
 
         $empresaEnvioFiltro = '';
@@ -234,6 +240,7 @@ class OrdenController extends Controller
             'empresasEnvio' => $empresasEnvio,
             'empresaEnvioFiltro' => $empresaEnvioFiltro,
             'generadoPor' => $user->name,
+            'conEstadoEmpresa' => $conEstadoEmpresa,
         ];
 
         if ($request->query('formato') === 'pdf') {
@@ -269,6 +276,102 @@ class OrdenController extends Controller
         }
 
         return view('servicio.ordenes.reporte-por-marca', $payload);
+    }
+
+    public function garantiasReconocidas(Request $request): View|Response
+    {
+        $user = $request->user();
+        $conEstadoEmpresa = Schema::hasColumn('st_ordenes', 'estado_empresa_garantia');
+
+        $empresaFiltro = strtoupper(trim((string) $request->query('empresa', '')));
+        $motivoFiltro = strtoupper(trim((string) $request->query('motivo', '')));
+        if (! isset(StOrden::MOTIVOS_RECONOCIMIENTO_GARANTIA[$motivoFiltro])) {
+            $motivoFiltro = '';
+        }
+
+        $ordenes = collect();
+        if ($conEstadoEmpresa) {
+            $query = StOrden::query()
+                ->visiblePara($user)
+                ->with(['equipoCelular', 'creador'])
+                ->where('tipo_gestion', StOrden::TIPO_GARANTIA)
+                ->whereNotNull('estado_empresa_garantia')
+                ->where('estado_empresa_garantia', '<>', '')
+                ->orderBy('fecha_ingreso')
+                ->orderBy('numero');
+
+            if (! $user->scopesServicioToOwnSede() && $request->filled('sede')) {
+                $query->where('sede', strtoupper((string) $request->query('sede')));
+            } elseif ($user->scopesServicioToOwnSede()) {
+                $query->where('sede', strtoupper((string) $user->sede));
+            }
+            if ($motivoFiltro !== '') {
+                $query->where('estado_empresa_garantia', $motivoFiltro);
+            }
+            if ($empresaFiltro === 'SIN_EMPRESA') {
+                $query->where(fn ($q) => $q->whereNull('empresa_envio_garantia')->orWhere('empresa_envio_garantia', ''));
+            } elseif ($empresaFiltro !== '') {
+                $query->where('empresa_envio_garantia', $empresaFiltro);
+            }
+
+            $ordenes = $query->get();
+        }
+
+        $porMotivo = array_fill_keys(array_keys(StOrden::MOTIVOS_RECONOCIMIENTO_GARANTIA), 0);
+        $porEmpresa = [];
+        foreach ($ordenes as $orden) {
+            $motivo = $orden->estado_empresa_garantia;
+            $porMotivo[$motivo] = ($porMotivo[$motivo] ?? 0) + 1;
+            $empresa = $orden->etiquetaEmpresaEnvioGarantia() ?? 'Sin empresa de envío';
+            $porEmpresa[$empresa] ??= ['empresa' => $empresa, 'ordenes' => [], 'motivos' => []];
+            $porEmpresa[$empresa]['ordenes'][] = $orden;
+            $porEmpresa[$empresa]['motivos'][$motivo] = ($porEmpresa[$empresa]['motivos'][$motivo] ?? 0) + 1;
+            $orden->setAttribute('marca_reporte', $this->marcaParaReporte($orden));
+        }
+        ksort($porEmpresa, SORT_NATURAL | SORT_FLAG_CASE);
+
+        $empresasEnvio = StOrden::EMPRESAS_ENVIO_GARANTIA;
+        StOrden::query()
+            ->whereNotNull('empresa_envio_garantia')
+            ->where('empresa_envio_garantia', '<>', '')
+            ->distinct()
+            ->pluck('empresa_envio_garantia')
+            ->each(function ($empresa) use (&$empresasEnvio) {
+                $clave = strtoupper(trim((string) $empresa));
+                $empresasEnvio[$clave] ??= $clave;
+            });
+        asort($empresasEnvio, SORT_NATURAL | SORT_FLAG_CASE);
+
+        $filtroSede = $user->scopesServicioToOwnSede()
+            ? strtoupper((string) $user->sede)
+            : ($request->query('sede') ? strtoupper((string) $request->query('sede')) : null);
+
+        $payload = [
+            'porEmpresa' => array_values($porEmpresa),
+            'porMotivo' => $porMotivo,
+            'total' => $ordenes->count(),
+            'empresasEnvio' => $empresasEnvio,
+            'empresaFiltro' => $empresaFiltro,
+            'motivoFiltro' => $motivoFiltro,
+            'filtroSede' => $filtroSede,
+            'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
+            'sedes' => config('inventario.sedes_locales'),
+            'generadoPor' => $user->name,
+        ];
+
+        if ($request->query('formato') === 'pdf') {
+            $logoPath = null;
+            $logoFile = public_path('logo.png');
+            if (is_file($logoFile) && ($raw = @file_get_contents($logoFile))) {
+                $logoPath = 'data:image/png;base64,'.base64_encode($raw);
+            }
+
+            return Pdf::loadView('servicio.ordenes.pdf-garantias-reconocidas', $payload + ['logoPath' => $logoPath])
+                ->setPaper('a4', 'landscape')
+                ->download('garantias_reconocidas_'.now()->toDateString().'.pdf');
+        }
+
+        return view('servicio.ordenes.garantias-reconocidas', $payload);
     }
 
     private function marcaParaReporte(StOrden $orden): string
@@ -774,6 +877,45 @@ class OrdenController extends Controller
         }
 
         return back()->with('status', 'Estado de garantía actualizado.');
+    }
+
+    public function actualizarReconocimientoGarantia(Request $request, StOrden $orden): RedirectResponse|JsonResponse
+    {
+        $this->authorizeOrden($request->user(), $orden);
+        abort_unless($orden->esGarantia() && Schema::hasColumn('st_ordenes', 'estado_empresa_garantia'), 422);
+
+        $data = $request->validate([
+            'motivo' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::MOTIVOS_RECONOCIMIENTO_GARANTIA))],
+        ]);
+        $nuevo = $data['motivo'] ?? null;
+        $anterior = $orden->estado_empresa_garantia;
+
+        if ($nuevo !== $anterior) {
+            $etiquetaAnterior = $orden->etiquetaMotivoReconocimiento();
+            $orden->estado_empresa_garantia = $nuevo;
+            $orden->updated_by = $request->user()->id;
+            $orden->save();
+
+            $etiquetaNueva = $orden->etiquetaMotivoReconocimiento();
+            $descripcion = match (true) {
+                $etiquetaNueva === null => 'Se quitó el reconocimiento de la marca (era: '.$etiquetaAnterior.')',
+                $etiquetaAnterior === null => 'Reconocido por la marca. Motivo: '.$etiquetaNueva,
+                default => 'Reconocido por la marca. Motivo: '.$etiquetaAnterior.' → '.$etiquetaNueva,
+            };
+            $this->ordenService->registrarEvento($orden, $request->user(), StOrdenEvento::TIPO_GARANTIA_EXTERNA, $descripcion, [
+                'de' => $anterior,
+                'a' => $nuevo,
+            ]);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'motivo' => $orden->estado_empresa_garantia,
+                'etiqueta' => $orden->etiquetaMotivoReconocimiento(),
+            ]);
+        }
+
+        return back()->with('status', 'Reconocimiento de la marca actualizado.');
     }
 
     public function iniciarProcesoGarantiaExterna(Request $request, StOrden $orden): RedirectResponse

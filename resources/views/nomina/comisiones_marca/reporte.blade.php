@@ -43,7 +43,7 @@
             <td><span>Total Bs</span><strong>Bs {{ number_format($totales['bs'], 2, ',', '.') }}</strong></td>
             <td><span>Total USD</span><strong>${{ number_format($totales['usd'], 2) }}</strong></td>
             <td><span>Samsung</span><strong>${{ number_format($totales['por_marca']['SAMSUNG']['usd'], 2) }}</strong></td>
-            <td><span>Honor</span><strong>${{ number_format($totales['por_marca']['HONOR']['usd'], 2) }}</strong></td>
+            <td><span>Honor (USDT)</span><strong>{{ number_format($totales['por_marca']['HONOR']['usd'], 2) }} USDT</strong></td>
         </tr>
     </table>
 
@@ -55,7 +55,7 @@
                 <th>Marca</th>
                 <th class="num">Bs</th>
                 <th class="num">Tasa</th>
-                <th class="num">USD</th>
+                <th class="num">USD / USDT</th>
                 <th>Nota</th>
             </tr>
         </thead>
@@ -65,9 +65,15 @@
                     <td>{{ $fila->fecha->format('d/m/Y') }}</td>
                     <td>{{ $fila->empleado?->nombre() ?? '—' }}</td>
                     <td>{{ $fila->nombreMarca() }}</td>
-                    <td class="num">{{ number_format($fila->monto_bs, 2, ',', '.') }}</td>
-                    <td class="num">{{ number_format($fila->tasa, 4, ',', '.') }}</td>
-                    <td class="num">{{ number_format($fila->monto_usd, 2) }}</td>
+                    @if($fila->esUsdt())
+                        <td class="num">—</td>
+                        <td class="num">USDT</td>
+                        <td class="num">{{ number_format($fila->monto_usd, 2) }} USDT</td>
+                    @else
+                        <td class="num">{{ number_format($fila->monto_bs, 2, ',', '.') }}</td>
+                        <td class="num">{{ number_format($fila->tasa, 4, ',', '.') }}</td>
+                        <td class="num">{{ number_format($fila->monto_usd, 2) }}</td>
+                    @endif
                     <td>{{ $fila->nota }}</td>
                 </tr>
             @empty

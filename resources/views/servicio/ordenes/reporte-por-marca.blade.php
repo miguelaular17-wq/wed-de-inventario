@@ -23,6 +23,9 @@
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <a class="btn secondary" href="{{ route('servicio.ordenes.index') }}">Órdenes</a>
+            @if($conEstadoEmpresa)
+                <a class="btn secondary" href="{{ route('servicio.ordenes.garantias_reconocidas') }}">Garantías reconocidas</a>
+            @endif
             <a class="btn primary" href="{{ route('servicio.ordenes.reporte_marca', $queryPdf) }}">Descargar PDF</a>
         </div>
     </div>
@@ -127,10 +130,14 @@
                             <th>Fecha</th>
                             <th>Tipo</th>
                             <th>Equipo</th>
-                            <th>Sede</th>
+                            <th>Sede origen</th>
+                            <th>Creada por</th>
                             <th>Estado</th>
                             <th>Empresa de envío</th>
                             <th>Fecha de envío</th>
+                            @if($conEstadoEmpresa)
+                                <th>Reconocimiento</th>
+                            @endif
                             <th>Cliente / Motivo</th>
                         </tr>
                     </thead>
@@ -148,7 +155,13 @@
                                         <div class="muted" style="font-size:.75rem;">{{ $orden->serial ?: $orden->imei }}</div>
                                     @endif
                                 </td>
-                                <td>{{ $orden->sede }}</td>
+                                <td>
+                                    {{ $orden->sedeOrigen() }}
+                                    @if($orden->sedeOrigen() !== strtoupper((string) $orden->sede))
+                                        <div class="muted" style="font-size:.75rem;">Ahora en {{ $orden->sede }}</div>
+                                    @endif
+                                </td>
+                                <td>{{ $orden->creador?->name ?: '—' }}</td>
                                 <td>{{ $orden->etiquetaEstado() }}</td>
                                 <td>{{ $orden->etiquetaEmpresaEnvioGarantia() ?: '—' }}</td>
                                 <td>
@@ -160,6 +173,15 @@
                                         —
                                     @endif
                                 </td>
+                                @if($conEstadoEmpresa)
+                                    <td>
+                                        @if($orden->esGarantia())
+                                            @include('servicio.ordenes._reconocimiento-select', ['modo' => 'marca'])
+                                        @else
+                                            —
+                                        @endif
+                                    </td>
+                                @endif
                                 <td>{{ $orden->esReparacionInterna() ? ($orden->falla ?: '—') : ($orden->cliente_nombre ?: '—') }}</td>
                             </tr>
                         @endforeach
@@ -169,6 +191,7 @@
         </div>
     @endforeach
 </div>
+@include('servicio.ordenes._reconocimiento-script')
 <script>
     (function () {
         const tipo = document.getElementById('rm-tipo-gestion');

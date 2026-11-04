@@ -133,12 +133,29 @@
     .bg-light-blue { background-color: #d9e1f2 !important; color: #002060 !important; }
     .bg-green { background-color: #e2efda !important; color: #000 !important; }
     
+    /* Al imprimir: cada cuadro se ajusta a su contenido y el reporte se escala para llenar la hoja. */
+    .report-container.modo-impresion { min-width: 0; padding: 0; display: flex; justify-content: center; }
+    .modo-impresion .report-escala { width: max-content; }
+    .modo-impresion .btn-container { display: none !important; }
+    .modo-impresion .report-header { margin-bottom: 6px; }
+    .modo-impresion .tasa-box { margin-bottom: 6px; }
+    .modo-impresion .grid-cuadros { grid-template-columns: repeat(3, max-content) !important; gap: 6px !important; justify-content: space-between; }
+    .modo-impresion .report-table { margin-bottom: 0; }
+    .modo-impresion .report-table th,
+    .modo-impresion .report-table td { padding: 2px 4px; white-space: nowrap; overflow-wrap: normal; }
+    .modo-impresion .report-table th { width: auto !important; }
+    .modo-impresion .report-input { field-sizing: content; width: auto !important; min-width: 3ch; }
+    .modo-impresion .currency-input { flex-grow: 0; }
+    .modo-impresion .currency-wrap { justify-content: flex-end; gap: 3px; }
+    .modo-impresion .currency-symbol { margin-right: 0; }
+
     @media print {
-        @page { size: landscape; margin: 5mm; }
+        @page { size: letter landscape; margin: 3mm; }
         html, body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         body * { visibility: hidden; }
         .report-container, .report-container * { visibility: visible; }
-        .report-container { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; zoom: 0.52; }
+        .report-container { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; }
+        .report-escala { zoom: 0.52; }
         .btn { display: none !important; }
     }
 </style>
@@ -157,6 +174,7 @@
         </button>
     </div>
 
+    <div class="report-escala">
     <div class="report-header">
         <div>
             <img src="{{ asset('images/logo_izq.png') }}" alt="Logos Izquierda" style="height: 60px; object-fit: contain;">
@@ -194,7 +212,7 @@
         $noOperativos = $noOpIntl->concat($noOpNac)->sortBy('orden')->values();
     @endphp
 
-    <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; align-items: start;">
+    <div class="grid-cuadros" style="display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; align-items: start;">
         <table class="report-table" id="table-nacional">
             <thead>
                 <tr><th colspan="4">BANCA NACIONAL</th></tr>
@@ -298,7 +316,7 @@
         </table>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 8px; margin-top: 8px; align-items: start;">
+    <div class="grid-cuadros" style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 8px; margin-top: 8px; align-items: start;">
         <table class="report-table">
             <thead>
                 <tr><th colspan="2">DISPONIBILIDAD BOLIVARES</th></tr>
@@ -417,6 +435,7 @@
                 </tr>
             </tbody>
         </table>
+    </div>
     </div>
 </div>
 
@@ -666,6 +685,27 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     calculateTotals();
+
+    // Carta horizontal (11 × 8,5 in a 96 px/in) menos 3 mm de margen por lado.
+    const MARGEN_PX = 3 / 25.4 * 96;
+    const HOJA = { ancho: 11 * 96 - 2 * MARGEN_PX, alto: 8.5 * 96 - 2 * MARGEN_PX };
+    const contenedor = document.querySelector('.report-container');
+    const escalable = document.querySelector('.report-escala');
+
+    function ajustarAHoja() {
+        contenedor.classList.add('modo-impresion');
+        escalable.style.zoom = 1;
+        const escala = Math.min(HOJA.ancho / escalable.scrollWidth, HOJA.alto / escalable.scrollHeight);
+        escalable.style.zoom = escala.toFixed(4);
+    }
+
+    function restaurarPantalla() {
+        contenedor.classList.remove('modo-impresion');
+        escalable.style.zoom = '';
+    }
+
+    window.addEventListener('beforeprint', ajustarAHoja);
+    window.addEventListener('afterprint', restaurarPantalla);
 });
 </script>
 @endsection

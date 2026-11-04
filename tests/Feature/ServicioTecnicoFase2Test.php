@@ -189,6 +189,73 @@ class ServicioTecnicoFase2Test extends TestCase
         ]);
     }
 
+    public function test_garantia_reconocida_por_la_marca_pasa_al_reporte_de_reconocidas(): void
+    {
+        $tecnico = $this->makeTecnico();
+        $orden = StOrden::crearEnSede([
+            'sede' => 'DORAL',
+            'tipo_gestion' => StOrden::TIPO_GARANTIA,
+            'cliente_nombre' => 'Cliente garantía',
+            'equipo' => 'Samsung A07',
+            'prioridad' => 'normal',
+            'fecha_ingreso' => now()->toDateString(),
+            'estado' => StOrden::ESTADO_PENDIENTE,
+            'empresa_envio_garantia' => 'GLOBAL FIT',
+        ], $tecnico);
+
+        $this->actingAs($tecnico)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->get(route('servicio.ordenes.reporte_marca', ['tipo_gestion' => StOrden::TIPO_GARANTIA]))
+            ->assertOk()
+            ->assertSee('Reconocido por la marca')
+            ->assertSee('Disponible para la venta')
+            ->assertSee(route('servicio.ordenes.garantia.reconocimiento', $orden), false);
+
+        $url = route('servicio.ordenes.garantia.reconocimiento', $orden);
+        $this->postJson($url, ['motivo' => 'NO_EXISTE'])->assertStatus(422);
+
+        $this->postJson($url, ['motivo' => 'ENTREGADO_CLIENTE'])
+            ->assertOk()
+            ->assertJson(['motivo' => 'ENTREGADO_CLIENTE', 'etiqueta' => 'Entregado al cliente']);
+
+        $this->assertSame('ENTREGADO_CLIENTE', $orden->fresh()->estado_empresa_garantia);
+        $this->assertDatabaseHas('st_orden_eventos', [
+            'orden_id' => $orden->id,
+            'descripcion' => 'Reconocido por la marca. Motivo: Entregado al cliente',
+        ]);
+
+        $this->get(route('servicio.ordenes.reporte_marca', ['tipo_gestion' => StOrden::TIPO_GARANTIA]))
+            ->assertOk()
+            ->assertDontSee($url, false);
+        $this->get(route('servicio.ordenes.garantias_reconocidas'))
+            ->assertOk()
+            ->assertSee('Global Fit')
+            ->assertSee($url, false);
+        $this->get(route('servicio.ordenes.garantias_reconocidas', ['motivo' => 'ENTREGADO_NC']))
+            ->assertOk()
+            ->assertDontSee($url, false);
+        $this->get(route('servicio.ordenes.garantias_reconocidas', ['formato' => 'pdf']))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $this->postJson($url, ['motivo' => 'DISPONIBLE_VENTA'])->assertOk();
+        $this->assertDatabaseHas('st_orden_eventos', [
+            'orden_id' => $orden->id,
+            'descripcion' => 'Reconocido por la marca. Motivo: Entregado al cliente → Disponible para la venta',
+        ]);
+
+        $this->postJson($url, ['motivo' => null])->assertOk();
+        $this->assertNull($orden->fresh()->estado_empresa_garantia);
+        $this->assertDatabaseHas('st_orden_eventos', [
+            'orden_id' => $orden->id,
+            'descripcion' => 'Se quitó el reconocimiento de la marca (era: Disponible para la venta)',
+        ]);
+        $this->get(route('servicio.ordenes.reporte_marca', ['tipo_gestion' => StOrden::TIPO_GARANTIA]))
+            ->assertSee($url, false);
+        $this->get(route('servicio.ordenes.garantias_reconocidas'))
+            ->assertDontSee($url, false);
+    }
+
     public function test_supervisor_puede_transferir_y_tecnico_destino_confirma(): void
     {
         $supervisor = User::create([
@@ -313,6 +380,12 @@ class ServicioTecnicoFase2Test extends TestCase
                 $table->timestamp('repuestos_descontados_at')->nullable();
                 $table->timestamps();
                 $table->unique(['sede', 'numero']);
+            });
+        }
+
+        if (! Schema::hasColumn('st_ordenes', 'estado_empresa_garantia')) {
+            Schema::table('st_ordenes', function (Blueprint $table) {
+                $table->string('estado_empresa_garantia', 32)->nullable();
             });
         }
 

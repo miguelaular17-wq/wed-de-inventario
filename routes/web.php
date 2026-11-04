@@ -823,12 +823,14 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'permission:servicio'])
             Route::get('/', [OrdenController::class, 'index'])->name('index');
             Route::get('/reparaciones-internas', [OrdenController::class, 'internas'])->name('internas');
             Route::get('/reporte-por-marca', [OrdenController::class, 'reportePorMarca'])->name('reporte_marca');
+            Route::get('/garantias-reconocidas', [OrdenController::class, 'garantiasReconocidas'])->name('garantias_reconocidas');
             Route::get('/{orden}/pdf/conformidad', [OrdenController::class, 'pdfConformidad'])->whereNumber('orden')->name('conformidad_pdf');
             Route::post('/{orden}/conformidad', [OrdenController::class, 'guardarConformidad'])->whereNumber('orden')->name('conformidad');
             Route::post('/{orden}/estado', [OrdenController::class, 'cambiarEstado'])->whereNumber('orden')->name('cambiar_estado');
             Route::post('/{orden}/garantia/enviar', [OrdenController::class, 'enviarGarantiaExterna'])->whereNumber('orden')->name('garantia.enviar');
             Route::post('/{orden}/garantia/actualizacion', [OrdenController::class, 'actualizarGarantiaExterna'])->whereNumber('orden')->name('garantia.actualizacion');
             Route::post('/{orden}/garantia/estado', [OrdenController::class, 'gestionarEstadoGarantiaExterna'])->whereNumber('orden')->name('garantia.estado');
+            Route::post('/{orden}/garantia/reconocimiento', [OrdenController::class, 'actualizarReconocimientoGarantia'])->whereNumber('orden')->name('garantia.reconocimiento');
             Route::post('/{orden}/garantia/en-proceso', [OrdenController::class, 'iniciarProcesoGarantiaExterna'])->whereNumber('orden')->name('garantia.en_proceso');
             Route::post('/{orden}/garantia/recibir', [OrdenController::class, 'recibirGarantiaExterna'])->whereNumber('orden')->name('garantia.recibir');
             Route::post('/{orden}/confirmar-recepcion', [OrdenController::class, 'confirmarRecepcion'])->whereNumber('orden')->name('confirmar_recepcion');

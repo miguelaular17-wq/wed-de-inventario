@@ -58,6 +58,19 @@ class StOrden extends Model
         self::GARANTIA_RECIBIDO => 'Recibido',
     ];
 
+    /** Motivos con los que la marca reconoce una garantía; se guardan en estado_empresa_garantia. */
+    public const MOTIVOS_RECONOCIMIENTO_GARANTIA = [
+        'ENTREGADO_NC' => 'Entregado NC',
+        'ENTREGADO_CLIENTE' => 'Entregado al cliente',
+        'DISPONIBLE_VENTA' => 'Disponible para la venta',
+    ];
+
+    public const COLORES_RECONOCIMIENTO_GARANTIA = [
+        'ENTREGADO_NC' => ['#f0abfc', '#701a75'],
+        'ENTREGADO_CLIENTE' => ['#86efac', '#14532d'],
+        'DISPONIBLE_VENTA' => ['#bfdbfe', '#1e3a8a'],
+    ];
+
     public const ESTADOS = [
         self::ESTADO_PENDIENTE => 'Pendiente',
         self::ESTADO_EN_PROCESO => 'En proceso',
@@ -83,6 +96,7 @@ class StOrden extends Model
         'tipo_dispositivo',
         'rango_garantia',
         'empresa_envio_garantia',
+        'estado_empresa_garantia',
         'estado_garantia_externa',
         'motivo_envio_garantia',
         'observacion_envio_garantia',
@@ -260,6 +274,13 @@ class StOrden extends Model
         return self::EMPRESAS_ENVIO_GARANTIA[$empresa] ?? $empresa;
     }
 
+    public function etiquetaMotivoReconocimiento(): ?string
+    {
+        $motivo = (string) ($this->estado_empresa_garantia ?? '');
+
+        return $motivo !== '' ? (self::MOTIVOS_RECONOCIMIENTO_GARANTIA[$motivo] ?? $motivo) : null;
+    }
+
     public function garantiaExternaBloqueada(): bool
     {
         return $this->esGarantia() && in_array($this->estadoGarantiaExternaActual(), [
@@ -385,6 +406,11 @@ class StOrden extends Model
     public function codigo(): string
     {
         return sprintf('%s-%04d', strtoupper((string) $this->sede), (int) $this->numero);
+    }
+
+    public function sedeOrigen(): string
+    {
+        return strtoupper((string) ($this->sede_origen_transfer ?: $this->sede));
     }
 
     public function costoTotal(): float

@@ -47,8 +47,22 @@ class NominaComisionMarca extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    /** Marcas que pagan la comisión directo en USDT (sin conversión desde bolívares). */
+    public const MARCAS_USDT = [self::MARCA_HONOR];
+
+    public static function pagaEnUsdt(string $marca): bool
+    {
+        return in_array($marca, self::MARCAS_USDT, true);
+    }
+
     public function nombreMarca(): string
     {
         return self::MARCAS[$this->marca] ?? $this->marca;
+    }
+
+    /** Registro cargado en USDT: se guarda sin tasa ni bolívares. */
+    public function esUsdt(): bool
+    {
+        return (float) $this->tasa <= 0;
     }
 }

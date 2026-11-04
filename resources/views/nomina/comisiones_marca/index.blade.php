@@ -7,7 +7,7 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">Comisiones de marca</h1>
-            <p class="muted" style="margin:4px 0 0;">Samsung y Honor. El monto se carga en bolívares y se convierte con la tasa de los egresos de flujo de caja de ese día.</p>
+            <p class="muted" style="margin:4px 0 0;">Samsung se carga en bolívares y se convierte con la tasa de los egresos de flujo de caja de ese día. Honor se paga en USDT y se carga directo en USDT.</p>
         </div>
         <a class="btn" href="{{ route('nomina.comisiones_marca.reporte', request()->query()) }}">Reporte PDF</a>
     </div>
@@ -33,9 +33,9 @@
             </div>
             <div class="field">
                 <label>Marca</label>
-                <select name="marca" required>
+                <select name="marca" id="cm-marca" required>
                     @foreach($marcas as $codigo => $nombre)
-                        <option value="{{ $codigo }}" @selected(old('marca') === $codigo)>{{ $nombre }}</option>
+                        <option value="{{ $codigo }}" data-usdt="{{ \App\Models\Nomina\NominaComisionMarca::pagaEnUsdt($codigo) ? '1' : '0' }}" @selected(old('marca') === $codigo)>{{ $nombre }}</option>
                     @endforeach
                 </select>
             </div>
@@ -44,8 +44,8 @@
                 <input type="date" name="fecha" id="cm-fecha" value="{{ old('fecha', now()->toDateString()) }}" required>
             </div>
             <div class="field">
-                <label>Monto Bs</label>
-                <input type="number" name="monto_bs" id="cm-bs" step="0.01" min="0.01" value="{{ old('monto_bs') }}" required>
+                <label id="cm-monto-label">Monto Bs</label>
+                <input type="number" name="monto" id="cm-bs" step="0.01" min="0.01" value="{{ old('monto') }}" required>
             </div>
             <div class="field" id="cm-tasa-manual-campo" hidden>
                 <label>Tasa del día</label>
@@ -96,7 +96,7 @@
         <div class="nomina-kpi"><span>Total Bs</span><strong>Bs {{ number_format($totales['bs'], 2, ',', '.') }}</strong></div>
         <div class="nomina-kpi"><span>Total USD</span><strong>${{ number_format($totales['usd'], 2) }}</strong></div>
         <div class="nomina-kpi"><span>Samsung</span><strong>${{ number_format($totales['por_marca']['SAMSUNG']['usd'], 2) }}</strong></div>
-        <div class="nomina-kpi"><span>Honor</span><strong>${{ number_format($totales['por_marca']['HONOR']['usd'], 2) }}</strong></div>
+        <div class="nomina-kpi"><span>Honor (USDT)</span><strong>{{ number_format($totales['por_marca']['HONOR']['usd'], 2) }} USDT</strong></div>
     </div>
 
     <div class="nomina-card" style="margin-top:16px;">
@@ -108,7 +108,7 @@
                     <th>Marca</th>
                     <th>Bs</th>
                     <th>Tasa</th>
-                    <th>USD</th>
+                    <th>USD / USDT</th>
                     <th>Nota</th>
                     <th></th>
                 </tr>
@@ -119,9 +119,15 @@
                         <td>{{ $fila->fecha->format('d/m/Y') }}</td>
                         <td>{{ $fila->empleado?->nombre() ?? '—' }}</td>
                         <td>{{ $fila->nombreMarca() }}</td>
-                        <td>Bs {{ number_format($fila->monto_bs, 2, ',', '.') }}</td>
-                        <td>{{ number_format($fila->tasa, 4, ',', '.') }}</td>
-                        <td><strong>${{ number_format($fila->monto_usd, 2) }}</strong></td>
+                        @if($fila->esUsdt())
+                            <td class="muted">—</td>
+                            <td class="muted">Pago en USDT</td>
+                            <td><strong>{{ number_format($fila->monto_usd, 2) }} USDT</strong></td>
+                        @else
+                            <td>Bs {{ number_format($fila->monto_bs, 2, ',', '.') }}</td>
+                            <td>{{ number_format($fila->tasa, 4, ',', '.') }}</td>
+                            <td><strong>${{ number_format($fila->monto_usd, 2) }}</strong></td>
+                        @endif
                         <td>{{ $fila->nota ?: '—' }}</td>
                         <td>
                             <form method="POST" action="{{ route('nomina.comisiones_marca.destroy', $fila) }}" onsubmit="return confirm('¿Eliminar esta comisión?');">
@@ -148,10 +154,17 @@
     const caja = document.getElementById('cm-tasa');
     const campoManual = document.getElementById('cm-tasa-manual-campo');
     const manual = document.getElementById('cm-tasa-manual');
+    const marca = document.getElementById('cm-marca');
+    const etiquetaMonto = document.getElementById('cm-monto-label');
     const url = @json(route('nomina.comisiones_marca.tasa'));
     let tasa = null;
 
+    function enUsdt() {
+        return marca.selectedOptions[0]?.dataset.usdt === '1';
+    }
+
     function pedirTasaManual(pedir) {
+        pedir = pedir && !enUsdt();
         campoManual.hidden = !pedir;
         manual.disabled = !pedir;
         manual.required = pedir;
@@ -159,6 +172,12 @@
 
     function pintar() {
         const bs = parseFloat(monto.value || '0') || 0;
+        etiquetaMonto.textContent = enUsdt() ? 'Monto USDT' : 'Monto Bs';
+        if (enUsdt()) {
+            caja.textContent = marca.selectedOptions[0].textContent.trim() + ' se paga en USDT: no usa tasa.'
+                + (bs > 0 ? ' · ' + bs.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' USDT' : '');
+            return;
+        }
         if (!fecha.value) {
             caja.textContent = 'Elige la fecha para tomar la tasa.';
             return;
@@ -192,6 +211,10 @@
     fecha.addEventListener('change', cargar);
     monto.addEventListener('input', pintar);
     manual.addEventListener('input', pintar);
+    marca.addEventListener('change', function () {
+        pedirTasaManual(tasa === null);
+        pintar();
+    });
     cargar();
 })();
 </script>

@@ -79,13 +79,36 @@ class ComisionMarcaController extends Controller
             'nomina_empleado_id' => ['required', 'integer', 'exists:nomina_empleados,id'],
             'marca' => ['required', 'in:SAMSUNG,HONOR'],
             'fecha' => ['required', 'date'],
-            'monto_bs' => ['required', 'numeric', 'min:0.01'],
+            'monto' => ['required', 'numeric', 'min:0.01'],
             'nota' => ['nullable', 'string', 'max:255'],
             'tasa_manual' => ['nullable', 'numeric', 'gt:0'],
         ], [
             'tasa_manual.gt' => 'La tasa debe ser mayor a cero.',
         ]);
 
+        $empleado = NominaEmpleado::query()->findOrFail($data['nomina_empleado_id']);
+        $filtrosVuelta = $request->only(['desde', 'hasta', 'marca_filtro', 'empleado_id']);
+        $nombreMarca = NominaComisionMarca::MARCAS[$data['marca']];
+
+        if (NominaComisionMarca::pagaEnUsdt($data['marca'])) {
+            $usdt = round((float) $data['monto'], 2);
+            NominaComisionMarca::query()->create([
+                'nomina_empleado_id' => $empleado->id,
+                'marca' => $data['marca'],
+                'fecha' => $data['fecha'],
+                'monto_bs' => 0,
+                'tasa' => 0,
+                'monto_usd' => $usdt,
+                'nota' => $data['nota'] ?? null,
+                'user_id' => $request->user()?->id,
+            ]);
+
+            return redirect()
+                ->route('nomina.comisiones_marca.index', $filtrosVuelta)
+                ->with('status', 'Comisión de '.$nombreMarca.' guardada para '.$empleado->nombre().': '.number_format($usdt, 2).' USDT.');
+        }
+
+        $data['monto_bs'] = $data['monto'];
         $tasa = $this->service->tasaDelDia($data['fecha']);
         $tasaManual = $tasa === null && isset($data['tasa_manual']);
         if ($tasaManual) {
@@ -100,7 +123,6 @@ class ComisionMarcaController extends Controller
                 ]);
         }
 
-        $empleado = NominaEmpleado::query()->findOrFail($data['nomina_empleado_id']);
         NominaComisionMarca::query()->create([
             'nomina_empleado_id' => $empleado->id,
             'marca' => $data['marca'],
@@ -113,8 +135,8 @@ class ComisionMarcaController extends Controller
         ]);
 
         return redirect()
-            ->route('nomina.comisiones_marca.index', $request->only(['desde', 'hasta', 'marca_filtro', 'empleado_id']))
-            ->with('status', 'Comisión de '.NominaComisionMarca::MARCAS[$data['marca']].' guardada para '.$empleado->nombre().': Bs '.number_format((float) $data['monto_bs'], 2, ',', '.').' = $'.number_format($usd, 2).($tasaManual ? ' (tasa manual '.number_format($tasa, 4, ',', '.').')' : '').'.');
+            ->route('nomina.comisiones_marca.index', $filtrosVuelta)
+            ->with('status', 'Comisión de '.$nombreMarca.' guardada para '.$empleado->nombre().': Bs '.number_format((float) $data['monto_bs'], 2, ',', '.').' = $'.number_format($usd, 2).($tasaManual ? ' (tasa manual '.number_format($tasa, 4, ',', '.').')' : '').'.');
     }
 
     public function destroy(Request $request, NominaComisionMarca $comision): RedirectResponse

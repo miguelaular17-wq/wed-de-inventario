@@ -12,13 +12,14 @@ from utils.product_matcher import buscar_producto_web
 from services.snapshot_service import SnapshotService
 from services.heartbeat_service import HeartbeatService
 from services.command_poller import CommandPoller
+from services.periodicos import modulos_vencidos
 
 class SyncService:
     def __init__(self):
         self.stop_event = None
         self.is_syncing = False
         self.last_detalle_run = None
-        self.last_detalle = {"ventas": None, "ajustes": None}
+        self.last_detalle = {}
 
     def start(self, stop_event):
         self.stop_event = stop_event
@@ -55,6 +56,7 @@ class SyncService:
                 if config.get("sync_stock", True):
                     logger.info("[Apertura] ▶ Módulo: Stock / Inventario")
                     success = SnapshotService.execute()
+                    self.last_detalle["stock"] = time.time()
                 else:
                     logger.info("[Apertura] ⏭ Módulo Stock/Inventario desactivado. Saltando.")
 
@@ -64,6 +66,7 @@ class SyncService:
                     try:
                         from services.price_service import PriceService
                         PriceService.execute()
+                        self.last_detalle["precios"] = time.time()
                     except Exception as e:
                         logger.error(f"[Apertura] Error en PriceService: {e}")
                 else:
@@ -75,6 +78,7 @@ class SyncService:
                     try:
                         from services.cobranzas_service import CobranzasService
                         CobranzasService.execute()
+                        self.last_detalle["cobranzas"] = time.time()
                     except Exception as e:
                         logger.error(f"[Apertura] Error en CobranzasService: {e}")
                 else:
@@ -86,6 +90,7 @@ class SyncService:
                     try:
                         from services.compras_service import ComprasService
                         ComprasService.execute()
+                        self.last_detalle["compras"] = time.time()
                     except Exception as e:
                         logger.error(f"[Apertura] Error en ComprasService: {e}")
                 else:
@@ -131,26 +136,14 @@ class SyncService:
 
                 # Cada módulo periódico usa su propio intervalo (horas).
                 try:
-                    now_ts = time.time()
-                    fallback_h = max(1, int(config.get("interval_detalle", 10800) / 3600))
-                    plan = (
-                        ("ventas", "sync_ventas_detalle", "interval_ventas_horas", "Ventas Detalladas", "services.ventas_detalle_service", "VentasDetalleService"),
-                        ("ajustes", "sync_ajustes", "interval_ajustes_horas", "Ajustes", "services.ajustes_service", "AjustesService"),
-                    )
-                    for clave, flag, horas_key, etiqueta, modulo, clase in plan:
-                        if not config.get(flag, False):
-                            continue
-                        horas = int(config.get(horas_key, fallback_h) or fallback_h)
-                        if horas < 1:
-                            horas = fallback_h
-                        ultimo = self.last_detalle.get(clave)
-                        if ultimo is not None and (now_ts - ultimo) < horas * 3600:
-                            continue
+                    for clave, etiqueta, modulo, clase, horas in modulos_vencidos(config, self.last_detalle, time.time()):
+                        if self.stop_event.is_set():
+                            break
                         logger.info(f"[Timer2] ▶ {etiqueta} (cada {horas} h)...")
                         try:
                             mod = __import__(modulo, fromlist=[clase])
                             getattr(mod, clase).execute()
-                            self.last_detalle[clave] = now_ts
+                            self.last_detalle[clave] = time.time()
                         except Exception as e:
                             logger.error(f"[Timer2] Error en {etiqueta}: {e}")
                 except Exception as t2_err:
