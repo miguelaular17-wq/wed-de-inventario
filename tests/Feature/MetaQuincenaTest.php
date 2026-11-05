@@ -68,11 +68,22 @@ class MetaQuincenaTest extends TestCase
         $this->assertSame($this->ana->id, (int) $this->deAna->fresh()->responsable_empleado_id);
     }
 
-    public function test_sin_metas_asignadas_telefonia_no_entra(): void
+    public function test_sin_metas_asignadas_el_personal_de_tienda_igual_entra_y_no_ve_las_de_otros(): void
     {
-        $user = $this->usuario(User::ROLE_TELEFONIA, 'ZAMORA');
+        foreach ([User::ROLE_TELEFONIA, User::ROLE_VENDEDOR] as $rol) {
+            $this->actingAs($this->usuario($rol, 'ZAMORA'))->get(route('metas.index'))
+                ->assertOk()
+                ->assertDontSee('PERFUME DE ANA')
+                ->assertDontSee('RELOJ DE LUIS')
+                ->assertSee('Aún no tienes productos meta asignados');
+        }
+    }
 
-        $this->actingAs($user)->get(route('metas.index'))->assertForbidden();
+    public function test_sin_metas_asignadas_otro_rol_sin_permiso_no_entra(): void
+    {
+        $this->actingAs($this->usuario(User::ROLE_TECNICO, 'ZAMORA'))
+            ->get(route('metas.index'))
+            ->assertForbidden();
     }
 
     public function test_el_supervisor_ve_todas_las_metas_de_su_sede(): void

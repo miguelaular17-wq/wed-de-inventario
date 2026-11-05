@@ -489,6 +489,11 @@ class MetaQuincenaService
             return true;
         }
 
+        // Personal de tienda ve sus metas por defecto, aunque aún no tenga ninguna asignada.
+        if ($user->isTelefonia() || $user->isSupervisor() || $user->isVendedor()) {
+            return true;
+        }
+
         // Sin permiso de metas: entra quien tiene ficha de nómina y es responsable de alguna meta.
         $yo = Schema::hasTable('meta_quincena_productos') ? $this->org->empleadoDelUsuario($user) : null;
 

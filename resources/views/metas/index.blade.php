@@ -196,6 +196,8 @@
                         <td colspan="{{ $puedeMarcar ? 9 : 8 }}" class="muted" style="text-align:center;padding:28px;">
                             @if($sedeFiltro !== '')
                                 No hay productos meta de {{ $sedeFiltro }} en esta quincena.
+                            @elseif($soloSusMetas)
+                                Aún no tienes productos meta asignados en esta quincena.
                             @else
                                 No hay productos marcados como meta en esta quincena.
                             @endif
