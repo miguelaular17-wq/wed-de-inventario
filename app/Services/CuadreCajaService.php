@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Cliente;
 use App\Models\CuadreCaja;
 use App\Models\CuadreCajaConteo;
 use App\Models\CuadreCajaPago;
@@ -37,7 +38,11 @@ class CuadreCajaService
         $cajera = trim((string) $cajera);
         if ($cajera !== '') {
             $like = '%'.mb_strtoupper($cajera, 'UTF-8').'%';
-            $query->where(fn ($q) => $q->whereRaw('UPPER(usuario_nombre) LIKE ?', [$like])->orWhereRaw('UPPER(usuario) LIKE ?', [$like]));
+            $cedulas = Cliente::query()->whereRaw('UPPER(nombre) LIKE ?', [$like])->pluck('cedula')
+                ->flatMap(fn ($c) => [$c, 'V'.$c, 'E'.$c])->all();
+            $query->where(fn ($q) => $q->whereRaw('UPPER(usuario_nombre) LIKE ?', [$like])
+                ->orWhereRaw('UPPER(usuario) LIKE ?', [$like])
+                ->orWhereIn('usuario', $cedulas));
         }
         if ($estado === 'pendiente') {
             $query->whereNull('conciliado_at');
@@ -45,7 +50,9 @@ class CuadreCajaService
             $query->whereNotNull('conciliado_at');
         }
 
-        $filas = $query->orderBy('fecha_cierre')->orderBy('sede')->orderBy('codigo_caja')->orderBy('id_cierre')->get()
+        $cierres = $query->orderBy('fecha_cierre')->orderBy('sede')->orderBy('codigo_caja')->orderBy('id_cierre')->get();
+        $this->completarNombres($cierres);
+        $filas = $cierres
             ->map(fn (CuadreCaja $c) => ['cierre' => $c] + $this->resumen($c))
             ->all();
 
@@ -54,6 +61,31 @@ class CuadreCajaService
             'totales' => $this->totales($filas),
             'ultimaCarga' => $this->ultimaCarga(),
         ];
+    }
+
+    /**
+     * Suite no siempre manda el nombre de la cajera, solo su cédula (a veces con "V"):
+     * se toma el de su ficha de empleado. No se guarda; el sincronizador puede traerlo después.
+     *
+     * @param  iterable<CuadreCaja>  $cierres
+     */
+    public function completarNombres(iterable $cierres): void
+    {
+        $sinNombre = collect($cierres)->filter(fn (CuadreCaja $c) => ! $c->usuario_nombre && $c->usuario);
+        if ($sinNombre->isEmpty()) {
+            return;
+        }
+
+        $nombres = Cliente::query()
+            ->whereIn('cedula', $sinNombre->map(fn (CuadreCaja $c) => $this->cedula($c->usuario))->unique()->values())
+            ->pluck('nombre', 'cedula');
+
+        foreach ($sinNombre as $cierre) {
+            $nombre = $nombres[$this->cedula($cierre->usuario)] ?? null;
+            if ($nombre) {
+                $cierre->usuario_nombre = $nombre;
+            }
+        }
     }
 
     /**
@@ -215,6 +247,11 @@ class CuadreCajaService
     public function clave(?string $metodo, ?string $cuenta): string
     {
         return strtoupper(trim((string) $metodo)).'|'.strtoupper(trim((string) $cuenta));
+    }
+
+    private function cedula(string $usuario): string
+    {
+        return (string) preg_replace('/\D/', '', $usuario);
     }
 
     /** @return array<string, mixed> */

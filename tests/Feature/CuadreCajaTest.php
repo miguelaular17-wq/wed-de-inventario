@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Cliente;
 use App\Models\CuadreCaja;
 use App\Models\CuadreCajaPago;
 use App\Models\User;
@@ -95,6 +96,25 @@ class CuadreCajaTest extends TestCase
 
         $resumen = app(CuadreCajaService::class)->resumen($this->cierre->fresh()->load(['pagos', 'conteos']));
         $this->assertSame(-5.0, $resumen['diferencia_usd']);
+    }
+
+    public function test_sin_nombre_de_suite_muestra_el_de_la_ficha_del_empleado_por_cedula(): void
+    {
+        Cliente::create(['cedula' => '28369458', 'nombre' => 'MARIA PEREZ']);
+        $sinNombre = CuadreCaja::create([
+            'sede' => 'DORAL', 'id_cierre' => 49930, 'fecha_cierre' => '2026-10-31', 'codigo_caja' => 'CJA03',
+            'usuario' => 'V28369458', 'factor_cambio' => 889.26,
+        ]);
+        $tesoreria = $this->usuario('tesoreria');
+
+        $this->actingAs($tesoreria)
+            ->get(route('cuadre_caja.index', ['desde' => '2026-10-31', 'hasta' => '2026-10-31', 'cajera' => 'maria']))
+            ->assertOk()
+            ->assertSee('MARIA PEREZ')
+            ->assertSee('V28369458');
+
+        $this->actingAs($tesoreria)->get(route('cuadre_caja.show', $sinNombre))->assertOk()->assertSee('MARIA PEREZ');
+        $this->assertNull($sinNombre->fresh()->usuario_nombre);
     }
 
     public function test_ver_no_deja_conciliar_y_sin_permiso_no_entra(): void

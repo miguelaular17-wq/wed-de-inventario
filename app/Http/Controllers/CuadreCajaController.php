@@ -43,6 +43,7 @@ class CuadreCajaController extends Controller
     public function show(Request $request, CuadreCaja $cuadre): View
     {
         $cuadre->load(['pagos', 'conteos', 'conciliador']);
+        $this->cuadres->completarNombres([$cuadre]);
         $resumen = $this->cuadres->resumen($cuadre);
         $enCierre = array_column($resumen['lineas'], 'clave');
 
