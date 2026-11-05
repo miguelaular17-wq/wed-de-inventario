@@ -19,12 +19,15 @@ class MetaQuincenaController extends Controller
 
         $quincenas = $metas->quincenasParaSelector(null, $user);
         $quincena = $metas->resolverQuincenaListado($request->query('inicio'), null, $user);
-        $filas = $metas->listarParaUsuario($user, $quincena['inicio']);
-        $puedeMarcar = $user->canAccess('meta')
+        $todas = $metas->listarParaUsuario($user, $quincena['inicio']);
+        $sedeFiltro = mb_strtoupper(trim((string) $request->query('sede', '')), 'UTF-8');
+        $filas = $sedeFiltro !== '' ? $todas->where('sede', $sedeFiltro)->values() : $todas;
+        $soloSusMetas = $metas->soloSusMetas($user);
+        $puedeMarcar = ! $soloSusMetas && $user->canAccess('meta')
             && ($metas->veTodasLasSedes($user) || $metas->areaDelUsuario($user) !== null);
         $equiposPorSede = [];
 
-        foreach ($filas->pluck('sede')->unique() as $sede) {
+        foreach ($soloSusMetas ? [] : $filas->pluck('sede')->unique() as $sede) {
             $equiposPorSede[$sede] = $metas->responsablesDisponibles($user, $sede)
                 ->map(fn ($e) => [
                     'id' => $e->id,
@@ -39,6 +42,9 @@ class MetaQuincenaController extends Controller
             'quincena' => $quincena,
             'quincenas' => $quincenas,
             'filas' => $filas,
+            'todas' => $todas,
+            'sedeFiltro' => $sedeFiltro,
+            'soloSusMetas' => $soloSusMetas,
             'puedeMarcar' => $puedeMarcar,
             'equiposPorSede' => $equiposPorSede,
             'sedesDisponibles' => $metas->veTodasLasSedes($user)
@@ -56,9 +62,18 @@ class MetaQuincenaController extends Controller
             'producto_id' => ['required', 'integer'],
             'sede' => ['required', 'string', 'max:32'],
             'cantidad' => ['nullable', 'numeric', 'min:0.01', 'max:1000000'],
+            'responsable_empleado_id' => ['nullable', 'integer'],
         ]);
 
         abort_unless($metas->puedeOperarSede($request->user(), $data['sede']), 403);
+
+        $responsable = isset($data['responsable_empleado_id']) ? (int) $data['responsable_empleado_id'] : null;
+        if ($responsable !== null) {
+            $deLaSede = collect($metas->vendedoresPorSede([$data['sede']]))->flatten(1)->pluck('id');
+            if (! $deLaSede->contains($responsable)) {
+                return response()->json(['success' => false, 'message' => 'El vendedor no es de '.mb_strtoupper($data['sede'], 'UTF-8').'.'], 422);
+            }
+        }
 
         try {
             $meta = $metas->marcar(
@@ -67,6 +82,9 @@ class MetaQuincenaController extends Controller
                 $request->user(),
                 isset($data['cantidad']) ? (float) $data['cantidad'] : null
             );
+            if ($responsable !== null) {
+                $meta->forceFill(['responsable_empleado_id' => $responsable])->save();
+            }
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
@@ -79,6 +97,7 @@ class MetaQuincenaController extends Controller
             'status' => 'added',
             'message' => 'Producto marcado como meta de la quincena en '.$meta->sede.'.',
             'cantidad' => (float) $meta->cantidad_inicial,
+            'responsable_nombre' => $meta->fresh('responsable.cliente')->responsable?->nombre(),
             'meta' => [
                 'id' => $meta->id,
                 'producto_id' => $meta->producto_id,
@@ -114,6 +133,7 @@ class MetaQuincenaController extends Controller
     {
         $user = $request->user();
         abort_unless($metas->puedeVerMetas($user), 403);
+        abort_if($metas->soloSusMetas($user), 403);
 
         abort_unless($metas->puedeOperarSede($user, (string) $meta->sede), 403);
 
@@ -154,6 +174,8 @@ class MetaQuincenaController extends Controller
         $stock = $metas->stockPorSedes($producto);
         $operables = $metas->sedesOperables($request->user());
         $activas = array_values(array_intersect($metas->sedesMetaPorProducto()[$producto] ?? [], $operables));
+        $marcables = array_values(array_intersect($metas->sedesMarcables(), $operables));
+        $areas = array_values(array_intersect($metas->areasDisponibles(), $operables));
 
         return response()->json([
             'success' => true,
@@ -161,8 +183,10 @@ class MetaQuincenaController extends Controller
             'stock' => $stock,
             'total' => round(array_sum($stock), 2),
             'sedes_meta' => array_values($activas),
-            'sedes_marcables' => array_values(array_intersect($metas->sedesMarcables(), $operables)),
-            'areas' => array_values(array_intersect($metas->areasDisponibles(), $operables)),
+            'sedes_marcables' => $marcables,
+            'areas' => $areas,
+            'vendedores' => $metas->vendedoresPorSede(array_merge($marcables, $areas)),
+            'responsables' => $metas->responsablesDelProducto($producto),
             'areas_cantidad' => $metas->cantidadesAreaDelProducto($producto),
             'sede_central' => mb_strtoupper(trim((string) config('inventario.sede_central', 'JRZ')), 'UTF-8'),
         ]);
@@ -178,7 +202,8 @@ class MetaQuincenaController extends Controller
 
         $sedeFiltro = mb_strtoupper(trim((string) $request->query('sede', '')), 'UTF-8');
         if ($sedeFiltro !== '') {
-            abort_unless($metas->puedeOperarSede($user, $sedeFiltro), 403);
+            // Quien solo ve sus metas ya tiene las filas limitadas; filtrar por sede no le abre nada más.
+            abort_unless($metas->soloSusMetas($user) || $metas->puedeOperarSede($user, $sedeFiltro), 403);
             $filas = $filas->where('sede', $sedeFiltro)->values();
         }
 

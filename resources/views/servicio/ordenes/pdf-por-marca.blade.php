@@ -5,6 +5,9 @@
     <title>{{ $titulo }}</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        /* Dompdf toma el margen de html como margen de cada hoja; el * de arriba lo dejaría en 0. */
+        @page { margin: 14mm 12mm; }
+        html { margin: 14mm 12mm; }
         body { font-family: Helvetica, Arial, sans-serif; font-size: 10px; color: #1e293b; }
         .header { display: table; width: 100%; margin-bottom: 12px; border-bottom: 2px solid #1a4480; padding-bottom: 10px; }
         .header-logo { display: table-cell; vertical-align: middle; width: 90px; }
@@ -22,14 +25,17 @@
         table { width: 100%; border-collapse: collapse; }
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; }
-        th { background: #eef4fc; color: #1a4480; font-size: 8px; text-transform: uppercase; padding: 5px 4px; border: 1px solid #bfdbfe; text-align: left; }
-        td { padding: 4px; border: 1px solid #e2e8f0; font-size: 9px; vertical-align: top; }
+        th { background: #eef4fc; color: #1a4480; font-size: 8px; text-transform: uppercase; padding: 5px 8px; border: 1px solid #bfdbfe; text-align: left; white-space: nowrap; }
+        td { padding: 4px 8px; border: 1px solid #e2e8f0; font-size: 9px; vertical-align: top; white-space: nowrap; }
+        /* La columna de texto largo toma el espacio que sobra; las demás miden lo que su contenido. */
+        .col-libre { width: 100%; white-space: normal; }
         .num { text-align: right; white-space: nowrap; }
         .muted { color: #64748b; font-size: 8px; }
         .tot td { font-weight: bold; background: #f8fafc; }
         .note { margin-top: 12px; color: #64748b; font-size: 8px; }
         .empty { text-align: center; padding: 20px; color: #64748b; }
         .resumen { margin-bottom: 10px; }
+        .resumen table { width: auto; }
     </style>
 </head>
 <body>
@@ -103,16 +109,16 @@
             <table>
                 <thead>
                     <tr>
-                        <th style="width:8%;">Orden</th>
-                        <th style="width:7%;">Fecha</th>
-                        <th style="width:9%;">Tipo</th>
-                        <th style="width:15%;">Equipo</th>
-                        <th style="width:7%;">Sede origen</th>
-                        <th style="width:10%;">Creada por</th>
-                        <th style="width:9%;">Estado</th>
-                        <th style="width:9%;">Empresa de envío</th>
-                        <th style="width:8%;">Fecha de envío</th>
-                        <th>Cliente / Motivo</th>
+                        <th>Orden</th>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Equipo</th>
+                        <th>Sede origen</th>
+                        <th>Creada por</th>
+                        <th>Estado</th>
+                        <th>Empresa de envío</th>
+                        <th>Fecha de envío</th>
+                        <th class="col-libre">Cliente / Motivo</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -145,7 +151,7 @@
                                     —
                                 @endif
                             </td>
-                            <td>{{ $orden->esReparacionInterna() ? ($orden->falla ?: '—') : ($orden->cliente_nombre ?: '—') }}</td>
+                            <td class="col-libre">{{ $orden->esReparacionInterna() ? ($orden->falla ?: '—') : ($orden->cliente_nombre ?: '—') }}</td>
                         </tr>
                     @endforeach
                 </tbody>

@@ -353,9 +353,11 @@ document.addEventListener("DOMContentLoaded", function() {
         return num.toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     };
 
-    // Attach global focus/blur listeners for all formatted inputs
+    // Attach global focus/blur listeners for all formatted inputs. Los campos .input-texto se dejan como texto.
+    const INPUTS_NUMERICOS = ':is(input.editable-input, input.report-input, input.currency-input, input[data-field="bs_tc"], input[data-field="bs_disponibles"], input[data-field="usd_tc"], input[data-field="usd_disp"]):not(.input-texto)';
+
     document.addEventListener('focus', function(e) {
-        if (e.target.matches('input.editable-input, input.report-input, input.currency-input, input[data-field="bs_tc"], input[data-field="bs_disponibles"], input[data-field="usd_tc"], input[data-field="usd_disp"]')) {
+        if (e.target.matches(INPUTS_NUMERICOS)) {
             if (e.target.type === 'text') {
                 let val = window.parseLocalNumber(e.target.value);
                 // On focus, show decimal as comma without thousands separator to ease editing
@@ -365,7 +367,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }, true);
 
     document.addEventListener('blur', function(e) {
-        if (e.target.matches('input.editable-input, input.report-input, input.currency-input, input[data-field="bs_tc"], input[data-field="bs_disponibles"], input[data-field="usd_tc"], input[data-field="usd_disp"]')) {
+        if (e.target.matches(INPUTS_NUMERICOS)) {
             if (e.target.type === 'text') {
                 let val = window.parseLocalNumber(e.target.value);
                 e.target.value = window.formatLocalNumber(val);
@@ -374,7 +376,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }, true);
 
     document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('input.editable-input, input.report-input, input.currency-input, input[data-field="bs_tc"], input[data-field="bs_disponibles"], input[data-field="usd_tc"], input[data-field="usd_disp"]').forEach(input => {
+        document.querySelectorAll(INPUTS_NUMERICOS).forEach(input => {
             if(input.type === 'text') {
                 let val = window.parseLocalNumber(input.value);
                 input.value = window.formatLocalNumber(val);

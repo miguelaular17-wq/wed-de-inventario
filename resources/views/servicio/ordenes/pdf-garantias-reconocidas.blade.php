@@ -5,6 +5,9 @@
     <title>Garantías reconocidas por la marca</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        /* Dompdf toma el margen de html como margen de cada hoja; el * de arriba lo dejaría en 0. */
+        @page { margin: 14mm 12mm; }
+        html { margin: 14mm 12mm; }
         body { font-family: Helvetica, Arial, sans-serif; font-size: 10px; color: #1e293b; }
         .header { display: table; width: 100%; margin-bottom: 12px; border-bottom: 2px solid #1a4480; padding-bottom: 10px; }
         .header-logo { display: table-cell; vertical-align: middle; width: 90px; }
@@ -22,8 +25,10 @@
         table { width: 100%; border-collapse: collapse; }
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; }
-        th { background: #eef4fc; color: #1a4480; font-size: 8px; text-transform: uppercase; padding: 5px 4px; border: 1px solid #bfdbfe; text-align: left; }
-        td { padding: 4px; border: 1px solid #e2e8f0; font-size: 9px; vertical-align: top; }
+        th { background: #eef4fc; color: #1a4480; font-size: 8px; text-transform: uppercase; padding: 5px 8px; border: 1px solid #bfdbfe; text-align: left; white-space: nowrap; }
+        td { padding: 4px 8px; border: 1px solid #e2e8f0; font-size: 9px; vertical-align: top; white-space: nowrap; }
+        /* La columna de texto largo toma el espacio que sobra; las demás miden lo que su contenido. */
+        .col-libre { width: 100%; white-space: normal; }
         .muted { color: #64748b; font-size: 8px; }
         .motivo { display: inline-block; padding: 2px 6px; border-radius: 8px; font-size: 8px; font-weight: 700; text-transform: uppercase; }
         .note { margin-top: 12px; color: #64748b; font-size: 8px; }
@@ -66,15 +71,15 @@
             <table>
                 <thead>
                     <tr>
-                        <th style="width:9%;">Orden</th>
-                        <th style="width:7%;">Fecha</th>
-                        <th style="width:9%;">Marca</th>
-                        <th style="width:19%;">Equipo</th>
-                        <th style="width:8%;">Sede origen</th>
-                        <th style="width:11%;">Creada por</th>
-                        <th style="width:8%;">Fecha de envío</th>
-                        <th style="width:13%;">Motivo</th>
-                        <th>Cliente / Motivo</th>
+                        <th>Orden</th>
+                        <th>Fecha</th>
+                        <th>Marca</th>
+                        <th>Equipo</th>
+                        <th>Sede origen</th>
+                        <th>Creada por</th>
+                        <th>Fecha de envío</th>
+                        <th>Motivo</th>
+                        <th class="col-libre">Cliente / Motivo</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -99,7 +104,7 @@
                             <td>{{ $orden->creador?->name ?: '—' }}</td>
                             <td>{{ $orden->garantia_enviado_at?->format('d/m/Y') ?: '—' }}</td>
                             <td><span class="motivo" style="background:{{ $fondo }};color:{{ $texto }};">{{ $orden->etiquetaMotivoReconocimiento() }}</span></td>
-                            <td>{{ $orden->cliente_nombre ?: '—' }}</td>
+                            <td class="col-libre">{{ $orden->cliente_nombre ?: '—' }}</td>
                         </tr>
                     @endforeach
                 </tbody>

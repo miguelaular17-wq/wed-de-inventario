@@ -489,7 +489,9 @@ class FinanzasController extends Controller
         
         $cuentas = $this->getCuentas(); // Mantenemos para el dropdown si es necesario o usamos las nuevas
         Profiler::start('FinanzasController::flujoCaja cuentas');
-        $cuentasBancarias = \App\Models\CuentaBancaria::where('mostrar_en_principal', true)->orderBy('orden')->get();
+        $cuentasBancarias = \App\Models\CuentaBancaria::where('mostrar_en_principal', true)->orderBy('orden')->get()
+            ->sortByDesc(fn ($c) => (float) $c->usd_disp)
+            ->values();
         Profiler::stop('FinanzasController::flujoCaja cuentas');
         Profiler::start('FinanzasController::flujoCaja resumen');
         $resumen = \App\Models\FinanzasResumen::firstOrCreate(

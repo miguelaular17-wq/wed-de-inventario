@@ -5,10 +5,17 @@
 @section('content')
 @php
     $fmt = fn ($n, $d = 0) => number_format((float) $n, $d);
-    $conteoPorSede = $filas->groupBy('sede')->map->count();
+    $conteoPorSede = $todas->groupBy('sede')->map->count();
     $sedesMarcador = $puedeMarcar
         ? collect($sedesDisponibles ?? [])
         : $conteoPorSede->keys()->sort()->values();
+    $inicioQ = $quincena['inicio']->toDateString();
+    $chip = fn (bool $activo, bool $conDatos) => 'display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:.78rem;font-weight:600;text-decoration:none;border:1px solid '
+        .($activo ? '#1a4480' : ($conDatos ? '#bfdbfe' : 'var(--border)')).';background:'
+        .($activo ? '#1a4480' : ($conDatos ? '#eff6ff' : '#f8fafc')).';color:'
+        .($activo ? '#fff' : ($conDatos ? '#1a4480' : 'var(--muted)')).';';
+    $burbuja = fn (bool $activo, bool $conDatos) => 'min-width:1.35rem;height:1.35rem;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;font-size:.72rem;line-height:1;background:'
+        .($activo ? '#fff' : ($conDatos ? '#1a4480' : '#cbd5e1')).';color:'.($activo ? '#1a4480' : '#fff').';';
 @endphp
 <div class="panel nomina-page">
     <div class="panel-header-flex">
@@ -16,7 +23,9 @@
             <h1 style="margin:0;">Metas de la quincena</h1>
             <p class="muted" style="margin:4px 0 0;">
                 {{ $quincena['etiqueta'] }}
-                @if(!empty($soloSuSede))
+                @if($soloSusMetas)
+                    · Productos meta donde eres el responsable.
+                @elseif(!empty($soloSuSede))
                     · Solo las metas de tu sede. Asigna el responsable de cada producto.
                 @elseif($puedeMarcar)
                     · Marca productos desde Marketing → Sobre Stock
@@ -27,6 +36,9 @@
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
             <form method="get" action="{{ route('metas.index') }}" style="display:flex;gap:8px;align-items:center;margin:0;">
+                @if($sedeFiltro !== '')
+                    <input type="hidden" name="sede" value="{{ $sedeFiltro }}">
+                @endif
                 <label for="meta-quincena" class="muted" style="font-size:.8rem;font-weight:600;">Quincena</label>
                 <select
                     id="meta-quincena"
@@ -46,17 +58,6 @@
                     @endforeach
                 </select>
             </form>
-            <a
-                class="btn primary"
-                href="{{ route('metas.reporte_avances', ['inicio' => $quincena['inicio']->toDateString()]) }}"
-            >PDF avances</a>
-            <a
-                class="btn secondary"
-                href="{{ route('metas.reporte_avances', ['inicio' => $quincena['inicio']->toDateString(), 'completados' => 1]) }}"
-            >PDF completados</a>
-            @if($puedeMarcar && auth()->user()->canAccess('compras'))
-                <a class="btn secondary" href="{{ route('comprador.dashboard', ['tab' => 'sobrestock']) }}">Ir a Sobre Stock</a>
-            @endif
         </div>
     </div>
 
@@ -71,27 +72,26 @@
         </div>
     @endif
 
-    <div class="nomina-kpis" style="margin-top:16px;">
-        <div class="nomina-kpi"><span>Productos meta</span><strong>{{ $filas->count() }}</strong></div>
-        <div class="nomina-kpi"><span>Stock inicial</span><strong>{{ $fmt($filas->sum('cantidad_inicial')) }} u.</strong></div>
-        <div class="nomina-kpi"><span>Stock actual</span><strong>{{ $fmt($filas->sum('cantidad_actual')) }} u.</strong></div>
-        <div class="nomina-kpi"><span>Vendido (facturas)</span><strong>{{ $fmt($filas->sum('vendido')) }} u.</strong></div>
-    </div>
-
     @if($sedesMarcador->isNotEmpty())
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center;">
-            <span class="muted" style="font-size:.78rem;font-weight:600;margin-right:4px;">Por sede</span>
+            <span class="muted" style="font-size:.78rem;font-weight:600;margin-right:4px;">Sede</span>
+            @php $activo = $sedeFiltro === ''; @endphp
+            <a href="{{ route('metas.index', ['inicio' => $inicioQ]) }}" style="{{ $chip($activo, true) }}">
+                Todas
+                <span style="{{ $burbuja($activo, true) }}">{{ $todas->count() }}</span>
+            </a>
             @foreach($sedesMarcador as $sede)
-                @php $n = (int) ($conteoPorSede[$sede] ?? 0); @endphp
-                <a
-                    href="{{ route('metas.reporte_avances', ['inicio' => $quincena['inicio']->toDateString(), 'sede' => $sede]) }}"
-                    title="Descargar PDF de avances · {{ $sede }}"
-                    style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;border:1px solid {{ $n > 0 ? '#bfdbfe' : 'var(--border)' }};background:{{ $n > 0 ? '#eff6ff' : '#f8fafc' }};font-size:.78rem;font-weight:600;color:{{ $n > 0 ? '#1a4480' : 'var(--muted)' }};text-decoration:none;"
-                >
-                    {{ $sede }}
-                    <span style="min-width:1.35rem;height:1.35rem;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:{{ $n > 0 ? '#1a4480' : '#cbd5e1' }};color:#fff;font-size:.72rem;line-height:1;">{{ $n }}</span>
-                    <span style="font-size:.68rem;opacity:.85;">PDF</span>
-                </a>
+                @php
+                    $n = (int) ($conteoPorSede[$sede] ?? 0);
+                    $activo = $sedeFiltro === $sede;
+                @endphp
+                <span style="{{ $chip($activo, $n > 0) }}">
+                    <a href="{{ route('metas.index', ['inicio' => $inicioQ, 'sede' => $sede]) }}" title="Ver solo {{ $sede }}" style="display:inline-flex;align-items:center;gap:6px;color:inherit;text-decoration:none;">
+                        {{ $sede }}
+                        <span style="{{ $burbuja($activo, $n > 0) }}">{{ $n }}</span>
+                    </a>
+                    <a href="{{ route('metas.reporte_avances', ['inicio' => $inicioQ, 'sede' => $sede]) }}" title="Descargar PDF de avances · {{ $sede }}" style="font-size:.68rem;opacity:.85;color:inherit;">PDF</a>
+                </span>
             @endforeach
         </div>
     @endif
@@ -151,21 +151,32 @@
                             </div>
                         </td>
                         <td>
-                            @php $opts = $equiposPorSede[$fila['sede']] ?? []; @endphp
+                            @if($soloSusMetas)
+                                {{ $fila['responsable_nombre'] ?: '—' }}
+                            @else
+                            @php
+                                $opts = $equiposPorSede[$fila['sede']] ?? [];
+                                $asignado = $fila['responsable_empleado_id'] ? (int) $fila['responsable_empleado_id'] : null;
+                            @endphp
+                            <div class="meta-resp-nombre" style="display:{{ $asignado ? 'flex' : 'none' }};align-items:center;gap:8px;">
+                                <strong class="meta-resp-texto" style="font-size:.82rem;">{{ $fila['responsable_nombre'] }}</strong>
+                                <button type="button" class="btn secondary meta-resp-cambiar" style="padding:2px 8px;font-size:.72rem;">Cambiar</button>
+                            </div>
                             <select
                                 class="meta-responsable"
                                 data-meta-id="{{ $fila['id'] }}"
-                                style="min-width:180px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);"
+                                style="display:{{ $asignado ? 'none' : 'block' }};min-width:180px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);"
                             >
                                 <option value="">Sin asignar</option>
+                                @if($asignado && ! collect($opts)->contains('id', $asignado))
+                                    <option value="{{ $asignado }}" selected>{{ $fila['responsable_nombre'] }}</option>
+                                @endif
                                 @foreach($opts as $emp)
-                                    <option value="{{ $emp['id'] }}" @selected((int) $fila['responsable_empleado_id'] === (int) $emp['id'])>
+                                    <option value="{{ $emp['id'] }}" @selected($asignado === (int) $emp['id'])>
                                         {{ $emp['nombre'] }}@if($emp['cargo']) — {{ $emp['cargo'] }}@endif
                                     </option>
                                 @endforeach
                             </select>
-                            @if($opts === [] && $fila['responsable_nombre'])
-                                <div class="muted" style="font-size:.75rem;margin-top:4px;">{{ $fila['responsable_nombre'] }}</div>
                             @endif
                         </td>
                         @if($puedeMarcar)
@@ -183,7 +194,11 @@
                 @empty
                     <tr>
                         <td colspan="{{ $puedeMarcar ? 9 : 8 }}" class="muted" style="text-align:center;padding:28px;">
-                            No hay productos marcados como meta en esta quincena.
+                            @if($sedeFiltro !== '')
+                                No hay productos meta de {{ $sedeFiltro }} en esta quincena.
+                            @else
+                                No hay productos marcados como meta en esta quincena.
+                            @endif
                         </td>
                     </tr>
                 @endforelse
@@ -213,10 +228,27 @@ document.querySelectorAll('.meta-responsable').forEach(sel => {
             const data = await res.json();
             if (!res.ok || !data.success) {
                 alert(data.message || 'No se pudo asignar el responsable.');
+                return;
+            }
+            const nombre = sel.parentElement.querySelector('.meta-resp-nombre');
+            if (data.responsable_empleado_id) {
+                nombre.querySelector('.meta-resp-texto').textContent = data.responsable_nombre || '';
+                nombre.style.display = 'flex';
+                sel.style.display = 'none';
             }
         } catch (e) {
             alert('Error de red al asignar responsable.');
         }
+    });
+});
+
+document.querySelectorAll('.meta-resp-cambiar').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const nombre = btn.closest('.meta-resp-nombre');
+        const sel = nombre.parentElement.querySelector('.meta-responsable');
+        nombre.style.display = 'none';
+        sel.style.display = 'block';
+        sel.focus();
     });
 });
 

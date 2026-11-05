@@ -56,6 +56,27 @@ class MetaQuincenaService
         return mb_strtoupper(trim(str_replace('_', ' ', $valor)), 'UTF-8');
     }
 
+    /** Nómina escribe las sedes a mano ("Tecno House", "CALL_CENTER"): se comparan sin espacios, guiones ni mayúsculas. */
+    private function claveSede(string $valor): string
+    {
+        return (string) preg_replace('/[\s_\-]+/u', '', mb_strtoupper(trim($valor), 'UTF-8'));
+    }
+
+    private const SQL_CLAVE_SEDE = "UPPER(REPLACE(REPLACE(REPLACE(TRIM(%s), ' ', ''), '_', ''), '-', ''))";
+
+    /** Sede o área de metas que corresponde a un código de nómina, o el código en mayúsculas si no hay ninguna. */
+    private function sedeDeNomina(string $codigo): string
+    {
+        $clave = $this->claveSede($codigo);
+        foreach (array_merge($this->sedesDisponibles(), $this->areasDisponibles()) as $sede) {
+            if ($this->claveSede($sede) === $clave) {
+                return $sede;
+            }
+        }
+
+        return mb_strtoupper(trim($codigo), 'UTF-8');
+    }
+
     /**
      * @return array{inicio:Carbon,fin:Carbon,etiqueta:string}
      */
@@ -80,7 +101,9 @@ class MetaQuincenaService
                 ->selectRaw('quincena_inicio, quincena_fin, COUNT(*) as total')
                 ->groupBy('quincena_inicio', 'quincena_fin')
                 ->orderByDesc('quincena_inicio');
-            if ($user && ! $this->veTodasLasSedes($user)) {
+            if ($user && $this->soloSusMetas($user)) {
+                $conteo->where('responsable_empleado_id', $this->org->empleadoDelUsuario($user)?->id ?? 0);
+            } elseif ($user && ! $this->veTodasLasSedes($user)) {
                 $sedes = $this->sedesDelSupervisor($user);
                 if ($sedes === []) {
                     $conteo->whereRaw('1 = 0');
@@ -284,7 +307,13 @@ class MetaQuincenaService
             ->orderBy('sede')
             ->orderBy('id');
 
-        if (! $this->veTodasLasSedes($user)) {
+        if ($this->soloSusMetas($user)) {
+            $yo = $this->org->empleadoDelUsuario($user);
+            if (! $yo) {
+                return collect();
+            }
+            $query->where('responsable_empleado_id', $yo->id);
+        } elseif (! $this->veTodasLasSedes($user)) {
             $sedes = $this->sedesDelSupervisor($user);
             if ($sedes === []) {
                 return collect();
@@ -310,14 +339,11 @@ class MetaQuincenaService
             $ids[] = (int) $yo->id;
         }
 
-        // Un área se guarda como "CALL CENTER" y en nómina puede estar como código "CALL_CENTER" o nombre "Call Center".
-        $esDeLaSede = function ($sq) use ($sede) {
-            $sq->where(function ($w) use ($sede) {
-                $w->whereRaw('UPPER(TRIM(codigo)) = ?', [$sede]);
-                if ($this->esArea($sede)) {
-                    $w->orWhereRaw("UPPER(REPLACE(TRIM(codigo), '_', ' ')) = ?", [$sede])
-                        ->orWhereRaw('UPPER(TRIM(nombre)) = ?', [$sede]);
-                }
+        $clave = $this->claveSede($sede);
+        $esDeLaSede = function ($sq) use ($clave) {
+            $sq->where(function ($w) use ($clave) {
+                $w->whereRaw(sprintf(self::SQL_CLAVE_SEDE, 'codigo').' = ?', [$clave])
+                    ->orWhereRaw(sprintf(self::SQL_CLAVE_SEDE, 'nombre').' = ?', [$clave]);
             });
         };
 
@@ -338,12 +364,77 @@ class MetaQuincenaService
             ->with(['cliente', 'cargoCatalogo', 'sedeCatalogo'])
             ->whereIn('id', $ids)
             ->where('estado', 'ACTIVO')
-            ->where(function ($q) use ($sede, $esDeLaSede) {
+            ->where(function ($q) use ($clave, $esDeLaSede) {
                 $q->whereHas('sedeCatalogo', $esDeLaSede)
-                    ->orWhereRaw('UPPER(TRIM(COALESCE(sede, \'\'))) = ?', [$sede]);
+                    ->orWhereRaw(sprintf(self::SQL_CLAVE_SEDE, "COALESCE(sede, '')").' = ?', [$clave]);
             })
             ->orderBy('id')
             ->get();
+    }
+
+    /**
+     * Empleados activos de cada sede o área, para elegir el vendedor al marcar la meta.
+     *
+     * @param  list<string>  $sedes
+     * @return array<string, list<array{id:int,nombre:string,cargo:?string}>>
+     */
+    public function vendedoresPorSede(array $sedes): array
+    {
+        $claves = [];
+        foreach ($sedes as $sede) {
+            $claves[$this->claveSede($sede)] = $this->esArea($sede) ? $this->normalizarArea($sede) : mb_strtoupper(trim($sede), 'UTF-8');
+        }
+        $out = array_fill_keys(array_values($claves), []);
+        if ($claves === []) {
+            return $out;
+        }
+
+        $empleados = NominaEmpleado::query()
+            ->with(['cliente', 'cargoCatalogo', 'sedeCatalogo'])
+            ->where('estado', 'ACTIVO')
+            ->get();
+
+        foreach ($empleados as $emp) {
+            $candidatas = array_filter([
+                $emp->sedeCatalogo?->codigo,
+                $emp->sedeCatalogo?->nombre,
+                $emp->sede,
+            ], fn ($v) => trim((string) $v) !== '');
+            foreach (array_unique(array_map(fn ($v) => $this->claveSede((string) $v), $candidatas)) as $clave) {
+                if (isset($claves[$clave])) {
+                    $out[$claves[$clave]][] = ['id' => (int) $emp->id, 'nombre' => $emp->nombre(), 'cargo' => $emp->nombreCargo()];
+                    break;
+                }
+            }
+        }
+
+        foreach ($out as &$lista) {
+            usort($lista, fn ($a, $b) => strcmp($a['nombre'], $b['nombre']));
+        }
+
+        return $out;
+    }
+
+    /**
+     * Responsable de la meta del producto en cada sede (quincena actual).
+     *
+     * @return array<string, string>
+     */
+    public function responsablesDelProducto(int $productoId, ?Carbon $fecha = null): array
+    {
+        if (! Schema::hasTable('meta_quincena_productos')) {
+            return [];
+        }
+
+        return MetaQuincenaProducto::query()
+            ->with('responsable.cliente')
+            ->where('producto_id', $productoId)
+            ->whereDate('quincena_inicio', $this->quincenaActual($fecha)['inicio']->toDateString())
+            ->whereNotNull('responsable_empleado_id')
+            ->get()
+            ->mapWithKeys(fn (MetaQuincenaProducto $m) => [mb_strtoupper(trim($m->sede), 'UTF-8') => (string) $m->responsable?->nombre()])
+            ->filter()
+            ->all();
     }
 
     public function asignarResponsable(MetaQuincenaProducto $meta, ?int $empleadoId, User $user): MetaQuincenaProducto
@@ -375,10 +466,7 @@ class MetaQuincenaService
     {
         $yo = $this->org->empleadoDelUsuario($user);
         if ($yo) {
-            $codigo = mb_strtoupper(trim((string) ($yo->sedeCatalogo?->codigo ?? $yo->sede)), 'UTF-8');
-            if ($this->esArea($codigo)) {
-                return [$this->normalizarArea($codigo)];
-            }
+            $codigo = $this->sedeDeNomina((string) ($yo->sedeCatalogo?->codigo ?? $yo->sede));
             if ($codigo !== '' && $codigo !== 'GERENCIA') {
                 return [$codigo];
             }
@@ -398,7 +486,22 @@ class MetaQuincenaService
             return false;
         }
 
-        return $user->canAccess('meta.ver') || $user->canAccess('meta');
+        if (! $this->soloSusMetas($user)) {
+            return true;
+        }
+
+        // Sin permiso de metas: entra quien tiene ficha de nómina y es responsable de alguna meta.
+        $yo = Schema::hasTable('meta_quincena_productos') ? $this->org->empleadoDelUsuario($user) : null;
+
+        return $yo !== null && MetaQuincenaProducto::query()->where('responsable_empleado_id', $yo->id)->exists();
+    }
+
+    /**
+     * Telefonía, y quien no tiene permiso de metas, solo ve las metas donde es el responsable y no las reasigna.
+     */
+    public function soloSusMetas(User $user): bool
+    {
+        return $user->isTelefonia() || ! ($user->canAccess('meta.ver') || $user->canAccess('meta'));
     }
 
     /**
@@ -428,9 +531,9 @@ class MetaQuincenaService
         if (! $yo) {
             return null;
         }
-        $codigo = (string) ($yo->sedeCatalogo?->codigo ?? $yo->sede);
+        $codigo = $this->sedeDeNomina((string) ($yo->sedeCatalogo?->codigo ?? $yo->sede));
 
-        return $this->esArea($codigo) ? $this->normalizarArea($codigo) : null;
+        return $this->esArea($codigo) ? $codigo : null;
     }
 
     /**

@@ -1539,6 +1539,55 @@ let metaSedesMarcables = sedesMetaFallback.slice();
 let metaSedeCentral = 'JRZ';
 let metaAreas = [];
 let metaAreasCantidad = {};
+let metaVendedores = {};
+let metaResponsables = {};
+
+function escMeta(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function lineaResponsableMeta(sede) {
+    return metaResponsables[sede]
+        ? `<div class="muted" style="font-size:.78rem;">Vendedor: <strong style="color:var(--text);">${escMeta(metaResponsables[sede])}</strong></div>`
+        : '';
+}
+
+// Antes de marcar, pide el vendedor responsable de esa sede o área.
+function pedirVendedorMeta(row, sede, onOk) {
+    row.querySelector('.meta-picker')?.remove();
+    const disparador = row.querySelector('button[data-sede], button[data-area]');
+    const lista = metaVendedores[sede] || [];
+    const picker = document.createElement('div');
+    picker.className = 'meta-picker';
+    picker.style.cssText = 'flex-basis:100%;min-width:0;display:flex;flex-direction:column;gap:6px;';
+    const selector = lista.length
+        ? `<select style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:.8rem;">
+                <option value="">¿Qué vendedor de ${escMeta(sede)}?</option>
+                ${lista.map(v => `<option value="${v.id}">${escMeta(v.nombre)}${v.cargo ? ' — ' + escMeta(v.cargo) : ''}</option>`).join('')}
+           </select>`
+        : `<span class="muted" style="font-size:.75rem;">No hay vendedores activos de ${escMeta(sede)} en nómina; se marca sin responsable.</span>`;
+    picker.innerHTML = selector
+        + '<div style="display:flex;gap:6px;justify-content:flex-end;">'
+        + '<button type="button" class="btn secondary" data-cancel style="padding:4px 10px;font-size:.75rem;">Cancelar</button>'
+        + '<button type="button" class="btn primary" data-ok style="padding:4px 10px;font-size:.75rem;">Marcar</button>'
+        + '</div>';
+    row.appendChild(picker);
+    if (disparador) disparador.style.display = 'none';
+    const select = picker.querySelector('select');
+    select?.focus();
+    picker.querySelector('[data-cancel]').addEventListener('click', () => {
+        picker.remove();
+        if (disparador) disparador.style.display = '';
+    });
+    picker.querySelector('[data-ok]').addEventListener('click', (ev) => {
+        const id = select ? Number(select.value) : null;
+        if (select && !id) {
+            alert('Elige el vendedor de ' + sede + '.');
+            return;
+        }
+        onOk(id || null, ev.currentTarget);
+    });
+}
 
 function pintarAreasMeta(sedesActivas) {
     const box = document.getElementById('meta-modal-areas');
@@ -1559,18 +1608,29 @@ function pintarAreasMeta(sedesActivas) {
                         <input type="number" min="1" step="1" placeholder="Unid." data-area-cantidad="${area}" style="width:72px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:.8rem;">
                         <button type="button" class="btn secondary" style="padding:4px 10px;font-size:.75rem;" data-area="${area}">Marcar meta</button>
                    </div>`;
-            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:${activa ? '#eff6ff' : '#fff'};">
+            return `<div class="meta-fila" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:${activa ? '#eff6ff' : '#fff'};">
                 <div>
                     <div style="font-weight:600;">${area}</div>
                     <div class="muted" style="font-size:.78rem;">${detalle}</div>
+                    ${activa ? lineaResponsableMeta(area) : ''}
                 </div>
                 ${accion}
             </div>`;
         }).join('');
     box.querySelectorAll('button[data-area]').forEach(b => {
         b.addEventListener('click', () => {
-            const input = box.querySelector(`input[data-area-cantidad="${b.dataset.area}"]`);
-            toggleMetaSede(b.dataset.area, b, input ? Number(input.value) : null);
+            const area = b.dataset.area;
+            if (sedesActivas.includes(area)) {
+                toggleMetaSede(area, b);
+                return;
+            }
+            const input = box.querySelector(`input[data-area-cantidad="${area}"]`);
+            const cantidad = input ? Number(input.value) : null;
+            if (!(cantidad > 0)) {
+                alert('Indica cuántas unidades debe vender ' + area + '.');
+                return;
+            }
+            pedirVendedorMeta(b.closest('.meta-fila'), area, (responsableId, okBtn) => toggleMetaSede(area, okBtn, cantidad, responsableId));
         });
     });
 }
@@ -1606,16 +1666,24 @@ function pintarSedesMeta(list, sedesActivas) {
         const accion = row.marcable
             ? `<button type="button" class="btn ${row.activa ? 'primary' : 'secondary'}" style="padding:4px 10px;font-size:.75rem;" data-sede="${row.sede}">${row.activa ? 'Quitar meta' : 'Marcar meta'}</button>`
             : '<span class="muted" style="font-size:.75rem;">No se marca meta</span>';
-        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:${row.activa ? '#eff6ff' : '#fff'};">
+        return `<div class="meta-fila" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:${row.activa ? '#eff6ff' : '#fff'};">
             <div>
                 <div style="font-weight:600;">${etiqueta}</div>
                 <div class="muted" style="font-size:.78rem;">Stock: <strong style="color:var(--text);">${fmtStock(row.stock)} u.</strong></div>
+                ${row.activa ? lineaResponsableMeta(row.sede) : ''}
             </div>
             ${accion}
         </div>`;
     }).join('');
     list.querySelectorAll('button[data-sede]').forEach(b => {
-        b.addEventListener('click', () => toggleMetaSede(b.dataset.sede, b));
+        b.addEventListener('click', () => {
+            const sede = b.dataset.sede;
+            if (sedesActivas.includes(sede)) {
+                toggleMetaSede(sede, b);
+                return;
+            }
+            pedirVendedorMeta(b.closest('.meta-fila'), sede, (responsableId, okBtn) => toggleMetaSede(sede, okBtn, null, responsableId));
+        });
     });
 }
 
@@ -1666,6 +1734,8 @@ async function abrirMetaProducto(btn) {
         }
         metaAreas = Array.isArray(res.areas) ? res.areas : [];
         metaAreasCantidad = res.areas_cantidad || {};
+        metaVendedores = res.vendedores || {};
+        metaResponsables = res.responsables || {};
         pintarSedesMeta(list, sedesActivas);
         pintarAreasMeta(sedesActivas);
     } catch (e) {
@@ -1685,11 +1755,13 @@ function cerrarMetaModal() {
     metaStockPorSede = {};
     metaAreas = [];
     metaAreasCantidad = {};
+    metaVendedores = {};
+    metaResponsables = {};
     const areasBox = document.getElementById('meta-modal-areas');
     if (areasBox) areasBox.innerHTML = '';
 }
 
-async function toggleMetaSede(sede, btn, cantidad = null) {
+async function toggleMetaSede(sede, btn, cantidad = null, responsableId = null) {
     if (!metaProductoActual || !metaBtnActual) return;
     let sedesActivas = [];
     try {
@@ -1718,9 +1790,9 @@ async function toggleMetaSede(sede, btn, cantidad = null) {
                 'X-CSRF-TOKEN': '{{ csrf_token() }}',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            body: JSON.stringify(esArea && !quitar
-                ? { producto_id: metaProductoActual, sede, cantidad }
-                : { producto_id: metaProductoActual, sede })
+            body: JSON.stringify(quitar
+                ? { producto_id: metaProductoActual, sede }
+                : { producto_id: metaProductoActual, sede, cantidad: esArea ? cantidad : null, responsable_empleado_id: responsableId })
         });
         const res = await response.json();
         if (!response.ok || !res.success) {
@@ -1736,6 +1808,11 @@ async function toggleMetaSede(sede, btn, cantidad = null) {
         }
         if (esArea && !quitar) {
             metaAreasCantidad[sede] = Number(res.cantidad ?? cantidad);
+        }
+        if (quitar || !res.responsable_nombre) {
+            delete metaResponsables[sede];
+        } else {
+            metaResponsables[sede] = res.responsable_nombre;
         }
         metaBtnActual.setAttribute('data-sedes-meta', JSON.stringify(next));
         metaBtnActual.innerText = next.length ? ('🎯 Meta (' + next.length + ')') : '➕ Meta';

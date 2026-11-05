@@ -140,6 +140,7 @@
     .modo-impresion .report-header { margin-bottom: 6px; }
     .modo-impresion .tasa-box { margin-bottom: 6px; }
     .modo-impresion .grid-cuadros { grid-template-columns: repeat(3, max-content) !important; gap: 6px !important; justify-content: space-between; }
+    .modo-impresion .grid-cuadros-2 { grid-template-columns: repeat(2, max-content) !important; }
     .modo-impresion .report-table { margin-bottom: 0; }
     .modo-impresion .report-table th,
     .modo-impresion .report-table td { padding: 2px 4px; white-space: nowrap; overflow-wrap: normal; }
@@ -295,12 +296,12 @@
             <tbody>
                 @foreach($planificacion as $p)
                 <tr>
-                    <td><input type="text" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="razon_social" value="{{ $p->razon_social }}" style="text-align: left !important;"></td>
+                    <td><input type="text" class="report-input input-texto save-plan text-center" data-id="{{ $p->id }}" data-field="razon_social" value="{{ $p->razon_social }}" style="text-align: left !important;"></td>
                     <td class="bg-light-blue"><div class="currency-wrap"><span class="currency-symbol">Bs.</span><input type="text" inputmode="decimal" class="report-input save-plan calc-plan-bs currency-input" data-id="{{ $p->id }}" data-field="total_bs" value="{{ $p->total_bs }}"></div></td>
                     <td class="text-center"><input type="text" inputmode="decimal" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="tasa" value="{{ $p->tasa }}"></td>
                     <td class="bg-light-blue"><div class="currency-wrap"><span class="currency-symbol">$</span><input type="text" inputmode="decimal" class="report-input save-plan calc-plan-usd currency-input" data-id="{{ $p->id }}" data-field="total_usd" value="{{ $p->total_usd }}"></div></td>
-                    <td><input type="text" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="factura" value="{{ $p->factura }}"></td>
-                    <td><input type="text" class="report-input save-plan text-center" data-id="{{ $p->id }}" data-field="concepto" value="{{ $p->concepto }}" style="text-align: left !important;"></td>
+                    <td><input type="text" class="report-input input-texto save-plan text-center" data-id="{{ $p->id }}" data-field="factura" value="{{ $p->factura }}"></td>
+                    <td><input type="text" class="report-input input-texto save-plan text-center" data-id="{{ $p->id }}" data-field="concepto" value="{{ $p->concepto }}" style="text-align: left !important;"></td>
                 </tr>
                 @endforeach
             </tbody>
@@ -316,7 +317,7 @@
         </table>
     </div>
 
-    <div class="grid-cuadros" style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 8px; margin-top: 8px; align-items: start;">
+    <div class="grid-cuadros grid-cuadros-2" style="display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; margin-top: 8px; align-items: start;">
         <table class="report-table">
             <thead>
                 <tr><th colspan="2">DISPONIBILIDAD BOLIVARES</th></tr>
@@ -377,6 +378,7 @@
             </tbody>
         </table>
 
+        <div style="display: flex; flex-direction: column; gap: 8px;">
         <table class="report-table" style="height: fit-content;">
             <thead>
                 <tr><th colspan="2">DISPONIBILIDAD USD</th></tr>
@@ -435,6 +437,7 @@
                 </tr>
             </tbody>
         </table>
+        </div>
     </div>
     </div>
 </div>
