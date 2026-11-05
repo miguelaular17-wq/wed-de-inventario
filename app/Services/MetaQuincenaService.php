@@ -331,14 +331,6 @@ class MetaQuincenaService
      */
     public function responsablesDisponibles(User $user, string $sede): Collection
     {
-        $sede = mb_strtoupper(trim($sede), 'UTF-8');
-        $yo = $this->org->empleadoDelUsuario($user);
-        $ids = $this->org->idsPersonalACargo($user);
-
-        if ($yo && ! in_array((int) $yo->id, $ids, true)) {
-            $ids[] = (int) $yo->id;
-        }
-
         $clave = $this->claveSede($sede);
         $esDeLaSede = function ($sq) use ($clave) {
             $sq->where(function ($w) use ($clave) {
@@ -347,13 +339,20 @@ class MetaQuincenaService
             });
         };
 
-        if ($ids === [] && ($user->isAdmin() || $user->isGerente())) {
+        // Gerencia y quien ve todas las sedes elige entre todo el personal de la sede, esté o no en su organigrama.
+        if ($user->isAdmin() || $user->isGerente() || $this->veTodasLasSedes($user)) {
             return NominaEmpleado::query()
                 ->with(['cliente', 'cargoCatalogo', 'sedeCatalogo'])
                 ->where('estado', 'ACTIVO')
                 ->whereHas('sedeCatalogo', $esDeLaSede)
                 ->orderBy('id')
                 ->get();
+        }
+
+        $yo = $this->org->empleadoDelUsuario($user);
+        $ids = $this->org->idsPersonalACargo($user);
+        if ($yo && ! in_array((int) $yo->id, $ids, true)) {
+            $ids[] = (int) $yo->id;
         }
 
         if ($ids === []) {

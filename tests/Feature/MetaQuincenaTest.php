@@ -160,7 +160,14 @@ class MetaQuincenaTest extends TestCase
         $vendedores = app(MetaQuincenaService::class)->vendedoresPorSede(['TECNOHOUSE']);
         $this->assertSame([$kleiver->id], array_column($vendedores['TECNOHOUSE'], 'id'));
 
-        $this->actingAs($this->usuario(User::ROLE_GERENTE, null))
+        // Gerente con ficha de nómina y su propio equipo: igual ve a todo el personal de la sede.
+        $gerente = $this->usuario(User::ROLE_GERENTE, null);
+        $admon = DB::table('nomina_sedes')->insertGetId(['nombre' => 'Administración', 'codigo' => 'ADMINISTRACION']);
+        $fichaGerente = $this->empleado('MIGUEL GERENTE', '44444444', $admon);
+        $fichaGerente->update(['user_id' => $gerente->id]);
+        $this->empleado('ASISTENTE ADMON', '55555555', $admon)->update(['supervisor_id' => $fichaGerente->id]);
+
+        $this->actingAs($gerente)
             ->get(route('metas.index', ['sede' => 'TECNOHOUSE']))
             ->assertOk()
             ->assertSee('<option value="'.$kleiver->id.'"', false);
