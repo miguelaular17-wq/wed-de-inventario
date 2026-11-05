@@ -44,6 +44,7 @@ return [
             'traslados' => ['label' => 'Traslados', 'rutas' => ['gerencial.traslados']],
             'ajustes_inventario' => ['label' => 'Ajustes de inventario', 'rutas' => ['gerencial.ajustes*']],
             'efectividad_caja' => ['label' => 'Efectividad de caja', 'rutas' => ['gerencial.cajas']],
+            'cuadre_caja' => ['label' => 'Cuadre de caja', 'rutas' => ['cuadre_caja.*']],
             'incentivos' => ['label' => 'Indicadores de incentivo', 'rutas' => ['incentivos.*']],
         ],
         'Finanzas' => [

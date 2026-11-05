@@ -16,6 +16,8 @@
         });
         return ['type' => 'drop', 'label' => $label, 'active' => $active, 'items' => $items, 'icon' => $label];
     };
+    // Varias opciones de un mismo módulo van en su grupo plegable; si es una sola, queda suelta.
+    $agrupar = fn (string $label, array $items) => count($items) === 1 ? $items[0] : $drop($label, $items);
     $group = function (string $label, array $items) {
         $active = collect($items)->contains(fn ($item) => ! empty($item['active']));
 
@@ -137,13 +139,17 @@
         $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*')),
         $link('Cuentas bancarias', route('finanzas.cuentas'), request()->routeIs('finanzas.cuentas*')),
         $link('Configuración', route('finanzas.configuracion'), request()->routeIs('finanzas.configuracion*')),
+    ];
+    $conciliacionItems = fn () => [
         $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones')),
         $link('Conciliación en divisas', route('finanzas.conciliacion_usd.index'), request()->routeIs('finanzas.conciliacion_usd.*')),
         $link('Lotes punto de venta', route('finanzas.conciliaciones.lotes'), request()->routeIs('finanzas.conciliaciones.lotes')),
         $link('Calendario conciliaciones', route('finanzas.calendario_conciliaciones'), request()->routeIs('finanzas.calendario_conciliaciones')),
-        $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*')),
-        $link('Ventas diarias', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*')),
     ];
+    $tesoreriaLink = fn () => $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*'));
+    $ventasDiariasLink = fn () => $link('Ventas diarias', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*'));
+    $cuadreCajaLink = fn () => $link('Cuadre de caja', route('cuadre_caja.index'), request()->routeIs('cuadre_caja.*'));
+    $tesoreriaItems = [...$conciliacionItems(), $tesoreriaLink(), $ventasDiariasLink(), $cuadreCajaLink()];
     $cobranzaItems = [
         $link('Cobranza', route('cobranza.index'), request()->routeIs('cobranza.*')),
         $link('Contratos', route('contratos.index'), request()->routeIs('contratos.*')),
@@ -180,6 +186,7 @@
             $link('Análisis de categorías', route('analisis_categorias.index'), request()->routeIs('analisis_categorias.*')),
         ]);
         $nav[] = $drop('Finanzas', $finanzasItems);
+        $nav[] = $drop('Tesorería', $tesoreriaItems);
         $nav[] = $drop('Cobranza', $cobranzaItems);
     }
 
@@ -261,6 +268,7 @@
             $link('Análisis de categorías', route('analisis_categorias.index'), request()->routeIs('analisis_categorias.*')),
         ]);
         $nav[] = $drop('Finanzas', $finanzasItems);
+        $nav[] = $drop('Tesorería', $tesoreriaItems);
         $nav[] = $drop('Cobranza', $cobranzaItems);
     } elseif ($u->role !== 'admin') {
         if ($u->canEnterCompras()) {
@@ -283,34 +291,31 @@
             $nav[] = $link('Avances y cambios', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*'));
         }
         if ($u->canAccess('finanzas.ver')) {
-            $nav[] = $link('Flujo de Caja', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*'));
-            $nav[] = $link('Cuentas por Pagar', route('finanzas.cuentas_por_pagar'), request()->routeIs('finanzas.cuentas_por_pagar'));
-            $nav[] = $link('My Delivery', route('finanzas.my_delivery'), request()->routeIs('finanzas.my_delivery'));
-            $nav[] = $link('Gasto Directivos', route('finanzas.gasto_directivos'), request()->routeIs('finanzas.gasto_directivos*'));
-            $nav[] = $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*'));
-            $nav[] = $link('Cuentas bancarias', route('finanzas.cuentas'), request()->routeIs('finanzas.cuentas*'));
-            $nav[] = $link('Configuración', route('finanzas.configuracion'), request()->routeIs('finanzas.configuracion*'));
+            $nav[] = $agrupar('Finanzas', $finanzasItems);
         }
+        $tesoreriaUsuario = [];
         if ($u->canAccess('conciliaciones')) {
-            $nav[] = $link('Conciliaciones', route('finanzas.conciliaciones'), request()->routeIs('finanzas.conciliaciones'));
-            $nav[] = $link('Conciliación en divisas', route('finanzas.conciliacion_usd.index'), request()->routeIs('finanzas.conciliacion_usd.*'));
-            $nav[] = $link('Lotes punto de venta', route('finanzas.conciliaciones.lotes'), request()->routeIs('finanzas.conciliaciones.lotes'));
-            $nav[] = $link('Calendario conciliaciones', route('finanzas.calendario_conciliaciones'), request()->routeIs('finanzas.calendario_conciliaciones'));
-        }
-        if ($u->canAccess('cobranza')) {
-            $nav[] = $link('Cobranza', route('cobranza.index'), request()->routeIs('cobranza.*'));
-        }
-        if ($u->canAccess('contratos')) {
-            $nav[] = $link('Contratos', route('contratos.index'), request()->routeIs('contratos.*'));
-        }
-        if ($u->canAccess('patrimonial')) {
-            $nav[] = $link('Patrimonial', route('patrimonial.dashboard'), request()->routeIs('patrimonial.*'));
+            array_push($tesoreriaUsuario, ...$conciliacionItems());
         }
         if ($u->canAccess('tesoreria')) {
-            $nav[] = $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*'));
+            $tesoreriaUsuario[] = $tesoreriaLink();
         }
         if ($u->canAccess('ventas.diarias') || $u->canAccess('tesoreria')) {
-            $nav[] = $link('Ventas diarias', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*'));
+            $tesoreriaUsuario[] = $ventasDiariasLink();
+        }
+        if ($u->canAccess('cuadre_caja')) {
+            $tesoreriaUsuario[] = $cuadreCajaLink();
+        }
+        if ($tesoreriaUsuario) {
+            $nav[] = $agrupar('Tesorería', $tesoreriaUsuario);
+        }
+        $cobranzaUsuario = array_values(array_filter([
+            $u->canAccess('cobranza') ? $cobranzaItems[0] : null,
+            $u->canAccess('contratos') ? $cobranzaItems[1] : null,
+            $u->canAccess('patrimonial') ? $cobranzaItems[2] : null,
+        ]));
+        if ($cobranzaUsuario) {
+            $nav[] = $agrupar('Cobranza', $cobranzaUsuario);
         }
         if ($u->canAccess('ventas.diarias') && ! $u->canAccess('gerencial')) {
             $nav[] = $link('Metas de tienda', route('metas_tienda.index'), request()->routeIs('metas_tienda.*'));
@@ -321,16 +326,15 @@
         $nav[] = $link('Tarjetas NFC', route('nfc.index'), request()->routeIs('nfc.*'));
     }
 
-    if ($u->role !== 'admin' && ! $u->canAccess('nomina') && $u->canAccess('nomina.equipo')) {
-        $nav[] = $link('Nómina del equipo', route('nomina.equipo.index'), request()->routeIs('nomina.equipo.*'));
-    }
-
-    if ($u->role !== 'admin' && ! $u->canAccess('nomina') && $u->canAccess('nomina.dias_libres')) {
-        $nav[] = $link('Días libres', route('nomina.dias_libres.index'), request()->routeIs('nomina.dias_libres.*'));
-    }
-
-    if ($u->role !== 'admin' && ! $u->canAccess('nomina') && $u->canAccess('nomina.deudas')) {
-        $nav[] = $link('Deudas del Personal', route('nomina.deudas.index'), request()->routeIs('nomina.deudas.*'));
+    if ($u->role !== 'admin' && ! $u->canAccess('nomina')) {
+        $nominaUsuario = array_values(array_filter([
+            $u->canAccess('nomina.equipo') ? $link('Nómina del equipo', route('nomina.equipo.index'), request()->routeIs('nomina.equipo.*')) : null,
+            $u->canAccess('nomina.dias_libres') ? $link('Días libres', route('nomina.dias_libres.index'), request()->routeIs('nomina.dias_libres.*')) : null,
+            $u->canAccess('nomina.deudas') ? $link('Deudas del Personal', route('nomina.deudas.index'), request()->routeIs('nomina.deudas.*')) : null,
+        ]));
+        if ($nominaUsuario) {
+            $nav[] = $agrupar('Nómina', $nominaUsuario);
+        }
     }
 
     if ($u->role !== 'admin' && app(\App\Services\MetaQuincenaService::class)->puedeVerMetas($u)) {

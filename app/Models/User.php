@@ -478,6 +478,14 @@ class User extends Authenticatable
             return true;
         }
 
+        if (in_array($permission, ['cuadre_caja', 'cuadre_caja.conciliar'], true) && in_array('tesoreria', $owned, true)) {
+            return true;
+        }
+
+        if ($permission === 'cuadre_caja' && in_array('cuadre_caja.conciliar', $owned, true)) {
+            return true;
+        }
+
         if ($permission === 'incentivos' && in_array('gerencial', $owned, true)) {
             return true;
         }

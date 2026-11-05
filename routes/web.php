@@ -399,6 +399,15 @@ Route::middleware(['auth', 'permission:tesoreria'])->prefix('tesoreria')->name('
     Route::delete('/lote-punto-venta/{id}', [\App\Http\Controllers\TesoreriaController::class, 'destroyLotePuntoVenta'])->name('lote_pos.destroy');
 });
 
+Route::middleware(['auth', 'permission:cuadre_caja'])->prefix('cuadre-caja')->name('cuadre_caja.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\CuadreCajaController::class, 'index'])->name('index');
+    Route::get('/{cuadre}', [\App\Http\Controllers\CuadreCajaController::class, 'show'])->whereNumber('cuadre')->name('show');
+    Route::post('/{cuadre}', [\App\Http\Controllers\CuadreCajaController::class, 'conciliar'])
+        ->whereNumber('cuadre')
+        ->middleware('permission:cuadre_caja.conciliar')
+        ->name('conciliar');
+});
+
 Route::middleware(['auth', 'permission:ventas.diarias,tesoreria'])->prefix('ventas-diarias')->name('ventas_diarias.')->group(function () {
     Route::get('/', [\App\Http\Controllers\VentasDiariasController::class, 'index'])->name('index');
     Route::get('/nuevo', [\App\Http\Controllers\VentasDiariasController::class, 'create'])->name('create');

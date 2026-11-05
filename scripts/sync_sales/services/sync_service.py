@@ -96,6 +96,15 @@ class SyncService:
                 else:
                     logger.info("[Apertura] ⏭ Módulo Compras desactivado. Saltando.")
 
+                if config.get("sync_cuadres_caja", True):
+                    logger.info("[Apertura] ▶ Módulo: Cuadres de caja (ingresos)")
+                    try:
+                        from services.cuadres_caja_service import CuadresCajaService
+                        CuadresCajaService.execute()
+                        self.last_detalle["cuadres"] = time.time()
+                    except Exception as e:
+                        logger.error(f"[Apertura] Error en CuadresCajaService: {e}")
+
                 logger.info("[Apertura] ▶ Módulo: Clientes y teléfonos")
                 try:
                     from services.clientes_service import ClientesService
