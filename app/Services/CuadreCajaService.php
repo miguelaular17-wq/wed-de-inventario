@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Cuadre de caja: los ingresos que la cajera declaró en el cierre de Suite contra lo que
+ * Cuadre de caja: lo que cobró cada caja en el día según Suite contra lo que
  * Tesorería contó a mano de cada forma de pago. Diferencia = Tesorería − Suite (en USD).
  */
 class CuadreCajaService

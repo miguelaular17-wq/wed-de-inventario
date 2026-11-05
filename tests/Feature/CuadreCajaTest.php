@@ -22,6 +22,7 @@ class CuadreCajaTest extends TestCase
         parent::setUp();
         $this->setUpNominaSchema();
         (require database_path('migrations/2026_11_05_090000_create_cuadres_caja_tables.php'))->up();
+        (require database_path('migrations/2026_11_05_130000_cuadres_caja_por_dia_de_caja.php'))->up();
 
         $this->cierre = CuadreCaja::create([
             'sede' => 'DORAL', 'id_cierre' => 49929, 'fecha_cierre' => '2026-10-30', 'codigo_caja' => 'CJA02',
@@ -102,7 +103,7 @@ class CuadreCajaTest extends TestCase
     {
         Cliente::create(['cedula' => '28369458', 'nombre' => 'MARIA PEREZ']);
         $sinNombre = CuadreCaja::create([
-            'sede' => 'DORAL', 'id_cierre' => 49930, 'fecha_cierre' => '2026-10-31', 'codigo_caja' => 'CJA03',
+            'sede' => 'DORAL', 'fecha_cierre' => '2026-10-31', 'codigo_caja' => 'CJA03',
             'usuario' => 'V28369458', 'factor_cambio' => 889.26,
         ]);
         $tesoreria = $this->usuario('tesoreria');
@@ -113,7 +114,10 @@ class CuadreCajaTest extends TestCase
             ->assertSee('MARIA PEREZ')
             ->assertSee('V28369458');
 
-        $this->actingAs($tesoreria)->get(route('cuadre_caja.show', $sinNombre))->assertOk()->assertSee('MARIA PEREZ');
+        $this->actingAs($tesoreria)->get(route('cuadre_caja.show', $sinNombre))
+            ->assertOk()
+            ->assertSee('MARIA PEREZ')
+            ->assertSee('sin cierre en Suite todavía');
         $this->assertNull($sinNombre->fresh()->usuario_nombre);
     }
 

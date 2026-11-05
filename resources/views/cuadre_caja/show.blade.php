@@ -17,9 +17,9 @@
     <h1>{{ $cuadre->usuario_nombre ?: $cuadre->usuario }}</h1>
     <p class="lead">
         {{ $etiquetas[$cuadre->sede] ?? $cuadre->sede }} · {{ $cuadre->descripcion_caja ?: $cuadre->codigo_caja }}
-        · cierre del {{ $cuadre->fecha_cierre->format('d/m/Y') }}
+        · {{ $cuadre->fecha_cierre->format('d/m/Y') }}
         · tasa {{ number_format($cuadre->factor_cambio, 2, ',', '.') }}
-        · N.º {{ $cuadre->id_cierre }} en Suite
+        · {{ $cuadre->id_cierre ? 'cierre N.º '.$cuadre->id_cierre.' en Suite' : 'sin cierre en Suite todavía' }}
     </p>
     @if($cuadre->conciliado())
         <p class="muted" style="font-size:.82rem;margin:4px 0 0;">
@@ -128,7 +128,7 @@
 
     @if($editable)
         <p class="muted" style="font-size:.78rem;margin:6px 0 10px;">
-            Anota cada monto en la moneda de la forma de pago (los Bs se pasan a USD con la tasa del cierre).
+            Anota cada monto en la moneda de la forma de pago (los Bs se pasan a USD con la tasa del día).
             Al guardar, una forma de pago vacía cuenta como $0 recibido.
         </p>
         <button type="submit" class="btn primary">{{ $cuadre->conciliado() ? 'Guardar cambios' : 'Guardar cuadre' }}</button>

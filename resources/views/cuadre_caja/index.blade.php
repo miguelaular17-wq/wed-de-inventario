@@ -13,7 +13,8 @@
 <div class="page-header">
     <h1>Cuadre de caja</h1>
     <p class="lead">
-        Ingresos que cada cajera declaró en el cierre de Suite contra lo que contó Tesorería.
+        Lo que cobró cada caja en el día según Suite, por forma de pago, contra lo que contó Tesorería.
+        Cada día aparece a partir del día siguiente, sin esperar el cierre de Suite.
         Diferencia = Tesorería − Suite: negativa es faltante, positiva es sobrante.
     </p>
     @if($ultimaCarga)
@@ -65,7 +66,7 @@
 </form>
 
 <div class="nomina-kpis" style="margin-bottom:14px;">
-    <div class="nomina-kpi"><span>Cierres</span><strong>{{ $totales['cierres'] }}</strong></div>
+    <div class="nomina-kpi"><span>Días de caja</span><strong>{{ $totales['cierres'] }}</strong></div>
     <div class="nomina-kpi"><span>Por conciliar</span><strong style="color:{{ $totales['pendientes'] ? '#b45309' : 'inherit' }};">{{ $totales['pendientes'] }}</strong></div>
     <div class="nomina-kpi"><span>Ingresos en Suite</span><strong>{{ $dinero($totales['ingresos_usd']) }}</strong></div>
     <div class="nomina-kpi"><span>Faltantes</span><strong style="color:#b91c1c;">{{ $dinero($totales['faltantes_usd']) }}</strong></div>
@@ -124,7 +125,7 @@
                 @empty
                     <tr>
                         <td colspan="10" class="muted" style="text-align:center;padding:24px;">
-                            No hay cierres de caja en el período. Los sube el sincronizador de cada sede.
+                            No hay días de caja con estos filtros. El sincronizador de cada sede sube los cobros del día anterior.
                         </td>
                     </tr>
                 @endforelse

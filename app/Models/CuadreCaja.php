@@ -6,7 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/** Cierre de caja de Suite con sus ingresos por forma de pago, subido por el sincronizador de la sede. */
+/**
+ * Un día de una caja con una cajera y lo que cobró por forma de pago, subido por el sincronizador de la sede.
+ * id_cierre es el cierre de Suite; es nulo mientras Suite no lo registra.
+ */
 class CuadreCaja extends Model
 {
     public const ESTADO_APROBADO = 2;
