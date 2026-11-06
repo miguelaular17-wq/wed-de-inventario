@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 class StOrden extends Model
 {
+    use Concerns\Auditable;
+
     public const ESTADO_PENDIENTE = 'pendiente';
     public const ESTADO_EN_PROCESO = 'en_proceso';
     public const ESTADO_UBICANDO_REPUESTO = 'ubicando_repuesto';
@@ -435,6 +437,13 @@ class StOrden extends Model
     {
         return $this->transferenciaPendiente()
             && strtoupper((string) $this->sede) === strtoupper((string) $user->sede);
+    }
+
+    /** Para reportes: un equipo en camino a otra sede no cuenta hasta que lo reciban. */
+    public function scopeSinRecepcionPendiente(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $q) => $q->whereNull('transfer_estado')
+            ->orWhere('transfer_estado', '<>', self::TRANSFER_PENDIENTE));
     }
 
     public function scopeVisiblePara(Builder $query, User $user): Builder

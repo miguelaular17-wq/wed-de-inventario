@@ -137,6 +137,7 @@ class OrdenController extends Controller
 
         $query = StOrden::query()
             ->visiblePara($user)
+            ->sinRecepcionPendiente()
             ->with(['equipoCelular', 'tecnico', 'creador'])
             ->whereDate('fecha_ingreso', '>=', $desde)
             ->whereDate('fecha_ingreso', '<=', $hasta)
@@ -293,6 +294,7 @@ class OrdenController extends Controller
         if ($conEstadoEmpresa) {
             $query = StOrden::query()
                 ->visiblePara($user)
+                ->sinRecepcionPendiente()
                 ->with(['equipoCelular', 'creador'])
                 ->where('tipo_gestion', StOrden::TIPO_GARANTIA)
                 ->whereNotNull('estado_empresa_garantia')
@@ -653,9 +655,93 @@ class OrdenController extends Controller
             'created_at' => now(),
         ]);
 
+        if ($request->boolean('ver_pdf')) {
+            return redirect()->route('servicio.ordenes.conformidad_pdf', $orden);
+        }
+
         return redirect()
             ->route('servicio.ordenes.show', $orden)
             ->with('status', 'Conformidad registrada. Ya puedes imprimir la segunda hoja.');
+    }
+
+    /**
+     * Pasa la orden a otro tipo de gestión (servicio técnico, garantía o reparación interna) con las mismas
+     * reglas que al crearla. El motivo queda en la auditoría y en los eventos de la orden.
+     * Si una garantía con el equipo fuera pasa a otro tipo, primero se registra el equipo como recibido en la sede.
+     */
+    public function cambiarTipoGestion(Request $request, StOrden $orden): RedirectResponse
+    {
+        $user = $request->user();
+        $this->authorizeOrden($user, $orden);
+
+        $data = $request->validate([
+            'tipo_gestion' => ['required', 'string', 'in:'.implode(',', array_keys(StOrden::TIPOS_GESTION))],
+            'rango_garantia' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::RANGOS_GARANTIA))],
+            'empresa_envio_garantia' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::EMPRESAS_ENVIO_GARANTIA))],
+            'cliente_nombre' => ['nullable', 'string', 'max:255'],
+            'cliente_telefono' => ['nullable', 'string', 'max:40'],
+            'cliente_cedula' => ['nullable', 'string', 'max:40'],
+            'motivo_cambio' => ['required', 'string', 'min:3', 'max:1000'],
+        ], [
+            'motivo_cambio.required' => 'Escribe el motivo del cambio de tipo.',
+        ]);
+
+        $nuevoTipo = $data['tipo_gestion'];
+        $nuevoRango = $nuevoTipo === StOrden::TIPO_GARANTIA ? ($data['rango_garantia'] ?? null) : null;
+        $tipoAntes = $orden->etiquetaTipoGestion().($orden->etiquetaRangoGarantia() ? ' · '.$orden->etiquetaRangoGarantia() : '');
+        if ($nuevoTipo === ($orden->tipo_gestion ?? StOrden::TIPO_ST) && $nuevoRango === ($orden->esGarantia() ? $orden->rango_garantia : null)) {
+            return back()->withInput()->withErrors(['tipo_gestion' => 'La orden ya es de ese tipo.']);
+        }
+        $recibirAntes = $orden->garantiaExternaBloqueada() && $nuevoTipo !== StOrden::TIPO_GARANTIA;
+
+        $cambios = [
+            'tipo_gestion' => $nuevoTipo,
+            'rango_garantia' => $nuevoRango,
+            'empresa_envio_garantia' => $data['empresa_envio_garantia'] ?? ($nuevoTipo === StOrden::TIPO_GARANTIA ? $orden->empresa_envio_garantia : null),
+            'cliente_nombre' => $data['cliente_nombre'] ?? null,
+            'cliente_telefono' => $data['cliente_telefono'] ?? null,
+            'cliente_cedula' => $data['cliente_cedula'] ?? null,
+            'fecha_prometida' => $orden->fecha_prometida?->toDateString(),
+        ];
+        $this->aplicarReglasGarantia($cambios);
+
+        if ($nuevoTipo !== StOrden::TIPO_GARANTIA) {
+            $cambios['empresa_envio_garantia'] = null;
+            $cambios['estado_garantia_externa'] = null;
+        } elseif (! $orden->esGarantia()) {
+            $cambios['estado_garantia_externa'] = StOrden::GARANTIA_PENDIENTE_ENVIO;
+        }
+        foreach (['rango_garantia', 'empresa_envio_garantia', 'estado_garantia_externa', 'cliente_cedula'] as $columna) {
+            if (array_key_exists($columna, $cambios) && ! Schema::hasColumn('st_ordenes', $columna)) {
+                unset($cambios[$columna]);
+            }
+        }
+        $cambios['updated_by'] = $user->id;
+        $motivo = trim($data['motivo_cambio']);
+
+        \App\Models\Auditoria::conMotivo('Cambio de tipo: '.$motivo, function () use ($orden, $cambios, $user, $tipoAntes, $motivo, $recibirAntes) {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($orden, $cambios, $user, $tipoAntes, $motivo, $recibirAntes) {
+                if ($recibirAntes) {
+                    $this->ordenService->recibirGarantiaExterna($orden, 'Recibido al cambiar el tipo de gestión. '.$motivo, $user);
+                    $orden->refresh();
+                }
+                $orden->update($cambios);
+                $orden->refresh();
+                $tipoDespues = $orden->etiquetaTipoGestion().($orden->etiquetaRangoGarantia() ? ' · '.$orden->etiquetaRangoGarantia() : '');
+                StOrdenEvento::create([
+                    'orden_id' => $orden->id,
+                    'user_id' => $user->id,
+                    'tipo' => StOrdenEvento::TIPO_NOTA,
+                    'descripcion' => "Tipo de gestión cambiado: {$tipoAntes} → {$tipoDespues}. Motivo: {$motivo}",
+                    'meta' => ['antes' => $tipoAntes, 'despues' => $tipoDespues, 'motivo' => $motivo],
+                    'created_at' => now(),
+                ]);
+            });
+        });
+
+        return redirect()
+            ->route('servicio.ordenes.show', $orden)
+            ->with('status', 'Tipo de gestión cambiado a '.$orden->fresh()->etiquetaTipoGestion().'.');
     }
 
     public function edit(Request $request, StOrden $orden): View

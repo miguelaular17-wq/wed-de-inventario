@@ -840,6 +840,7 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'permission:servicio'])
             Route::get('/garantias-reconocidas', [OrdenController::class, 'garantiasReconocidas'])->name('garantias_reconocidas');
             Route::get('/{orden}/pdf/conformidad', [OrdenController::class, 'pdfConformidad'])->whereNumber('orden')->name('conformidad_pdf');
             Route::post('/{orden}/conformidad', [OrdenController::class, 'guardarConformidad'])->whereNumber('orden')->name('conformidad');
+            Route::post('/{orden}/tipo-gestion', [OrdenController::class, 'cambiarTipoGestion'])->whereNumber('orden')->name('tipo_gestion');
             Route::post('/{orden}/estado', [OrdenController::class, 'cambiarEstado'])->whereNumber('orden')->name('cambiar_estado');
             Route::post('/{orden}/garantia/enviar', [OrdenController::class, 'enviarGarantiaExterna'])->whereNumber('orden')->name('garantia.enviar');
             Route::post('/{orden}/garantia/actualizacion', [OrdenController::class, 'actualizarGarantiaExterna'])->whereNumber('orden')->name('garantia.actualizacion');

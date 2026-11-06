@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class StBackup extends Model
 {
+    use Concerns\Auditable;
+
     public const ESTADO_ENTREGADO = 'entregado';
     public const ESTADO_DEVUELTO = 'devuelto';
 

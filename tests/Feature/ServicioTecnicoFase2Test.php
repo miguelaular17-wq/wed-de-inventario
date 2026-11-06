@@ -99,6 +99,75 @@ class ServicioTecnicoFase2Test extends TestCase
         ]);
     }
 
+    public function test_un_equipo_pendiente_por_recibir_no_sale_en_los_reportes(): void
+    {
+        $tecnico = $this->makeTecnico();
+        $base = ['sede' => 'DORAL', 'tipo_gestion' => StOrden::TIPO_ST, 'prioridad' => 'normal',
+            'fecha_ingreso' => now()->toDateString(), 'estado' => StOrden::ESTADO_PENDIENTE, 'equipo' => 'Samsung A15'];
+        StOrden::crearEnSede($base + ['cliente_nombre' => 'Cliente recibido'], $tecnico);
+        $enCamino = StOrden::crearEnSede($base + ['cliente_nombre' => 'Cliente en camino'], $tecnico);
+        $enCamino->forceFill(['transfer_estado' => StOrden::TRANSFER_PENDIENTE, 'sede_origen_transfer' => 'CENTRO'])->save();
+
+        $this->actingAs($tecnico)->withSession(['sede_local' => 'DORAL'])
+            ->get(route('servicio.ordenes.reporte_marca'))
+            ->assertOk()
+            ->assertSee('Cliente recibido')
+            ->assertDontSee('Cliente en camino');
+
+        $this->assertSame(['Cliente recibido'], StOrden::query()->sinRecepcionPendiente()->pluck('cliente_nombre')->all());
+
+        $enCamino->forceFill(['transfer_estado' => StOrden::TRANSFER_ACEPTADA])->save();
+        $this->get(route('servicio.ordenes.reporte_marca'))->assertOk()->assertSee('Cliente en camino');
+    }
+
+    public function test_una_garantia_enviada_permite_cambiar_el_tipo_y_la_auditoria_solo_la_ve_el_gerente(): void
+    {
+        (require database_path('migrations/2026_11_06_180000_create_auditorias_table.php'))->up();
+        $tecnico = $this->makeTecnico();
+        $equipo = \App\Models\StEquipo::create([
+            'imei' => '359999999999992', 'marca' => 'itel', 'modelo' => 'A50Cs',
+            'estado_actual' => \App\Models\StEquipo::ESTADO_EN_TALLER, 'sede_actual' => 'DORAL',
+        ]);
+        $orden = StOrden::crearEnSede([
+            'sede' => 'DORAL', 'equipo_id' => $equipo->id, 'tipo_gestion' => StOrden::TIPO_GARANTIA,
+            'rango_garantia' => StOrden::RANGO_DENTRO, 'cliente_nombre' => 'Cambio en rango (empresa)', 'prioridad' => 'normal',
+            'fecha_ingreso' => now()->toDateString(), 'estado' => StOrden::ESTADO_PENDIENTE,
+            'estado_garantia_externa' => StOrden::GARANTIA_PENDIENTE_ENVIO,
+        ], $tecnico);
+        $this->actingAs($tecnico)->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.garantia.estado', $orden), [
+                'estado_garantia' => StOrden::GARANTIA_ENVIADO, 'empresa' => 'ORANGE STORE', 'motivo' => 'Reparación', 'comentario_garantia' => 'No enciende',
+            ])->assertRedirect();
+        $this->assertTrue($orden->fresh()->garantiaExternaBloqueada());
+
+        $this->get(route('servicio.ordenes.show', $orden))->assertOk()
+            ->assertSee('Cambiar tipo')
+            ->assertDontSee('Auditoría de cambios');
+
+        // Sigue en garantía, ahora fuera de rango: el equipo sigue fuera.
+        $this->post(route('servicio.ordenes.tipo_gestion', $orden), [
+            'tipo_gestion' => StOrden::TIPO_GARANTIA, 'rango_garantia' => StOrden::RANGO_FUERA,
+            'cliente_nombre' => 'Ana', 'cliente_telefono' => '0414', 'cliente_cedula' => 'V1', 'motivo_cambio' => 'Pasó el plazo de cambio',
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $orden->refresh();
+        $this->assertSame(StOrden::RANGO_FUERA, $orden->rango_garantia);
+        $this->assertSame(StOrden::GARANTIA_ENVIADO, $orden->estado_garantia_externa);
+
+        // Deja de ser garantía con el equipo fuera: se registra como recibido.
+        $this->post(route('servicio.ordenes.tipo_gestion', $orden), [
+            'tipo_gestion' => StOrden::TIPO_ST, 'cliente_nombre' => 'Ana', 'cliente_telefono' => '0414', 'motivo_cambio' => 'No aplica garantía',
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $orden->refresh();
+        $this->assertSame(StOrden::TIPO_ST, $orden->tipo_gestion);
+        $this->assertNotNull($orden->garantia_recibido_at);
+        $this->assertSame(\App\Models\StEquipo::ESTADO_EN_TALLER, $equipo->fresh()->estado_actual);
+
+        $gerente = User::create(['name' => 'Gerente', 'email' => 'ger-'.uniqid().'@test.local', 'password' => 'password123', 'role' => User::ROLE_GERENTE]);
+        $this->actingAs($gerente)->get(route('servicio.ordenes.show', $orden))->assertOk()
+            ->assertSee('Auditoría de cambios')
+            ->assertSee('No aplica garantía');
+    }
+
     public function test_flujo_externo_de_garantia_bloquea_edicion_y_registra_bitacora(): void
     {
         $tecnico = $this->makeTecnico();

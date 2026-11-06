@@ -39,7 +39,7 @@ class StDashboardService
             $hastaQ = Carbon::parse($hastaQ)->toDateString();
         }
 
-        $ordenesQuery = StOrden::query()->visiblePara($user);
+        $ordenesQuery = StOrden::query()->visiblePara($user)->sinRecepcionPendiente();
         $facturasQuery = StFactura::query()->visiblePara($user);
         $repuestosQuery = StRepuesto::query()->visiblePara($user)->activos();
 

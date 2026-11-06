@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class StEquipo extends Model
 {
+    use Concerns\Auditable;
+
     public const ESTADO_DISPONIBLE = 'disponible';
     public const ESTADO_EN_TALLER = 'en_taller';
     public const ESTADO_EN_TRANSITO = 'en_transito';

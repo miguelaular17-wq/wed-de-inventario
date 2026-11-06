@@ -209,6 +209,17 @@ class StCelularesBitacoraTest extends TestCase
 
         $this->get(route('servicio.ordenes.conformidad_pdf', $orden))->assertOk();
         $this->get(route('servicio.ordenes.recepcion_pdf', $orden))->assertOk();
+
+        // Desde la ventana de la ficha: guarda y abre la hoja.
+        $this->post(route('servicio.ordenes.conformidad', $orden), [
+            'conformidad_trabajo' => 'Se cambió el pin de carga y la batería.',
+            'ver_pdf' => '1',
+        ])->assertRedirect(route('servicio.ordenes.conformidad_pdf', $orden));
+        $this->assertSame('Se cambió el pin de carga y la batería.', $orden->fresh()->conformidad_trabajo);
+        $this->assertStringStartsWith('data:image/png', (string) $orden->fresh()->firma_conformidad_cliente);
+        $this->get(route('servicio.ordenes.show', $orden))->assertOk()
+            ->assertSee('data-abrir-conformidad', false)
+            ->assertDontSee('Guardar conformidad');
     }
 
     public function test_envio_entre_sedes_aparece_en_por_recibir(): void
@@ -562,6 +573,80 @@ class StCelularesBitacoraTest extends TestCase
             'role' => User::ROLE_TECNICO,
             'sede' => 'DORAL',
         ]);
+    }
+
+    public function test_cambiar_el_tipo_de_gestion_pide_motivo_y_queda_en_la_auditoria(): void
+    {
+        (require database_path('migrations/2026_11_06_180000_create_auditorias_table.php'))->up();
+        $user = $this->makeTecnico();
+        $this->actingAs($user)->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.store'), [
+                'cliente_nombre' => 'Cliente Tipo', 'cliente_telefono' => '0414', 'prioridad' => 'normal',
+                'tipo_gestion' => 'ST', 'tipo_dispositivo' => 'celular', 'imei' => '350099988877766',
+                'marca' => 'Xiaomi', 'modelo' => 'Redmi 13', 'color' => 'Negro', 'almacenamiento' => '128 GB', 'falla' => 'No enciende',
+            ])->assertSessionHasNoErrors()->assertRedirect();
+        $orden = StOrden::query()->where('cliente_nombre', 'Cliente Tipo')->firstOrFail();
+
+        $creada = \App\Models\Auditoria::query()->where('auditable_type', 'StOrden')->where('auditable_id', $orden->id)->sole();
+        $this->assertSame('creado', $creada->accion);
+        $this->assertSame($user->id, (int) $creada->user_id);
+
+        $this->post(route('servicio.ordenes.tipo_gestion', $orden), ['tipo_gestion' => 'GARANTIA', 'rango_garantia' => 'fuera'])
+            ->assertSessionHasErrors('motivo_cambio');
+        $this->post(route('servicio.ordenes.tipo_gestion', $orden), [
+            'tipo_gestion' => 'GARANTIA', 'rango_garantia' => 'fuera', 'cliente_nombre' => 'Cliente Tipo',
+            'cliente_telefono' => '0414', 'motivo_cambio' => 'Falta la cédula',
+        ])->assertSessionHasErrors('cliente_cedula');
+        $this->assertSame('ST', $orden->fresh()->tipo_gestion);
+
+        $this->post(route('servicio.ordenes.tipo_gestion', $orden), [
+            'tipo_gestion' => 'GARANTIA', 'rango_garantia' => 'fuera', 'empresa_envio_garantia' => 'GLOBAL FIT',
+            'cliente_nombre' => 'Cliente Tipo', 'cliente_telefono' => '0414', 'cliente_cedula' => 'V9',
+            'motivo_cambio' => 'Se registró como ST pero está en garantía',
+        ])->assertRedirect(route('servicio.ordenes.show', $orden));
+
+        $orden->refresh();
+        $this->assertSame('GARANTIA', $orden->tipo_gestion);
+        $this->assertSame('fuera', $orden->rango_garantia);
+        $this->assertSame('GLOBAL FIT', $orden->empresa_envio_garantia);
+
+        $cambio = \App\Models\Auditoria::query()->where('auditable_type', 'StOrden')->where('auditable_id', $orden->id)
+            ->where('accion', 'actualizado')->latest('id')->firstOrFail();
+        $this->assertSame(['ST', 'GARANTIA'], $cambio->cambios['tipo_gestion']);
+        $this->assertSame([null, 'fuera'], $cambio->cambios['rango_garantia']);
+        $this->assertStringContainsString('Se registró como ST pero está en garantía', (string) $cambio->motivo);
+        $this->assertSame($user->id, (int) $cambio->user_id);
+        $this->assertDatabaseHas('st_orden_eventos', ['orden_id' => $orden->id, 'tipo' => 'nota']);
+
+        // A reparación interna: se quitan los datos del cliente.
+        $this->post(route('servicio.ordenes.tipo_gestion', $orden), [
+            'tipo_gestion' => 'REPARACION_INTERNA', 'motivo_cambio' => 'Es un equipo de la tienda',
+        ])->assertRedirect();
+        $orden->refresh();
+        $this->assertSame('REPARACION_INTERNA', $orden->tipo_gestion);
+        $this->assertSame('Reparación interna', $orden->cliente_nombre);
+        $this->assertNull($orden->rango_garantia);
+        $this->assertNull($orden->cliente_cedula);
+
+        $this->post(route('servicio.ordenes.tipo_gestion', $orden), [
+            'tipo_gestion' => 'REPARACION_INTERNA', 'motivo_cambio' => 'Otra vez',
+        ])->assertSessionHasErrors('tipo_gestion');
+    }
+
+    public function test_los_cambios_de_la_ficha_y_las_firmas_quedan_auditados(): void
+    {
+        (require database_path('migrations/2026_11_06_180000_create_auditorias_table.php'))->up();
+        $user = $this->makeTecnico();
+        $this->actingAs($user);
+        $equipo = StEquipo::create(['imei' => '350055544433322', 'marca' => 'Apple', 'modelo' => 'iPhone 12', 'sede_actual' => 'DORAL']);
+        $equipo->update(['sede_actual' => 'CENTRO']);
+
+        $cambio = \App\Models\Auditoria::query()->where('auditable_type', 'StEquipo')->where('accion', 'actualizado')->sole();
+        $this->assertSame(['DORAL', 'CENTRO'], $cambio->cambios['sede_actual']);
+        $this->assertArrayNotHasKey('updated_at', $cambio->cambios);
+
+        $equipo->delete();
+        $this->assertSame(1, \App\Models\Auditoria::query()->where('auditable_type', 'StEquipo')->where('accion', 'eliminado')->count());
     }
 
     private function ensureTables(): void
