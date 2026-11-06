@@ -51,6 +51,19 @@ class SnapshotService:
             logger.info(f"[Snapshot] La web tiene {len(prod_map)} productos registrados. Consultando SQL Server...")
             
             billing_conn = SQLServerConnection.get_connection()
+
+            # Un fallo con los alternos no debe frenar el stock.
+            try:
+                from services.codigos_alternos_service import CodigosAlternosService
+                alt_updates, _ = CodigosAlternosService.sincronizar(billing_conn.cursor(), wc, web_conn, logger)
+                for _, alt_pid, agregados in alt_updates:
+                    for alterno in agregados:
+                        prod_map[alterno] = alt_pid
+            except Exception as e:
+                logger.error(f"[Snapshot] No se pudieron subir los códigos alternos: {e}")
+                try: web_conn.rollback()
+                except Exception: pass
+
             snapshot_query = get_sql_query("snapshot.sql")
             
             cursor = billing_conn.cursor()

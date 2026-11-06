@@ -406,6 +406,10 @@ Route::middleware(['auth', 'permission:cuadre_caja'])->prefix('cuadre-caja')->na
         ->whereNumber('cuadre')
         ->middleware('permission:cuadre_caja.conciliar')
         ->name('conciliar');
+    Route::post('/{cuadre}/reabrir', [\App\Http\Controllers\CuadreCajaController::class, 'reabrir'])
+        ->whereNumber('cuadre')
+        ->middleware('permission:cuadre_caja.conciliar')
+        ->name('reabrir');
 });
 
 Route::middleware(['auth', 'permission:ventas.diarias,tesoreria'])->prefix('ventas-diarias')->name('ventas_diarias.')->group(function () {

@@ -34,6 +34,7 @@
                     <th>Orden</th>
                     <th>Desde</th>
                     <th>Cliente</th>
+                    <th>Creada por</th>
                     <th></th>
                 </tr>
             </thead>
@@ -48,6 +49,12 @@
                         <td>{{ $orden->sede_origen_transfer ?: '—' }}</td>
                         <td>{{ $orden->cliente_nombre }}</td>
                         <td>
+                            <div>{{ $orden->creador?->name ?? '—' }}</div>
+                            <div class="muted" style="font-size:.75rem;white-space:nowrap;">
+                                {{ $orden->created_at?->format('d/m/Y H:i') ?? $orden->fecha_ingreso?->format('d/m/Y') ?? '' }}
+                            </div>
+                        </td>
+                        <td>
                             @if($orden->puedeConfirmarRecepcion(auth()->user()))
                                 <form method="POST" action="{{ route('servicio.ordenes.confirmar_recepcion', $orden) }}">
                                     @csrf
@@ -59,7 +66,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="muted">No hay celulares pendientes de recepción.</td></tr>
+                    <tr><td colspan="6" class="muted">No hay celulares pendientes de recepción.</td></tr>
                 @endforelse
             </tbody>
         </table>

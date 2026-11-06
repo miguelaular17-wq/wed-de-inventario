@@ -7,6 +7,11 @@
     $tasa = fn ($n) => number_format((float) $n, 2, ',', '.');
     $colorDif = fn ($d) => $d === null ? 'inherit' : ($d < -0.004 ? '#b91c1c' : ($d > 0.004 ? '#15803d' : '#334155'));
     $volver = request()->fullUrl();
+    $estilosEstado = [
+        'pendiente' => ['Pendiente', 'background:#fef3c7;color:#92400e;'],
+        'procesado' => ['Procesado', 'background:#dbeafe;color:#1e40af;'],
+        'cerrado' => ['🔒 Cerrado', 'background:#1e293b;color:#fff;'],
+    ];
 @endphp
 
 @section('content')
@@ -67,7 +72,7 @@
 
 <div class="nomina-kpis" style="margin-bottom:14px;">
     <div class="nomina-kpi"><span>Días de caja</span><strong>{{ $totales['cierres'] }}</strong></div>
-    <div class="nomina-kpi"><span>Por conciliar</span><strong style="color:{{ $totales['pendientes'] ? '#b45309' : 'inherit' }};">{{ $totales['pendientes'] }}</strong></div>
+    <div class="nomina-kpi"><span>Pendientes</span><strong style="color:{{ $totales['pendientes'] ? '#b45309' : 'inherit' }};">{{ $totales['pendientes'] }}</strong></div>
     <div class="nomina-kpi"><span>Ingresos en Suite</span><strong>{{ $dinero($totales['ingresos_usd']) }}</strong></div>
     <div class="nomina-kpi"><span>Faltantes</span><strong style="color:#b91c1c;">{{ $dinero($totales['faltantes_usd']) }}</strong></div>
     <div class="nomina-kpi"><span>Sobrantes</span><strong style="color:#15803d;">{{ $dinero($totales['sobrantes_usd']) }}</strong></div>
@@ -109,16 +114,14 @@
                         <td style="text-align:right;">{{ $dinero($fila['tesoreria_usd']) }}</td>
                         <td style="text-align:right;font-weight:700;color:{{ $colorDif($fila['diferencia_usd']) }};">{{ $dinero($fila['diferencia_usd']) }}</td>
                         <td>
-                            @if($c->conciliado())
-                                <span style="background:#dcfce7;color:#166534;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px;">Conciliado</span>
-                            @else
-                                <span style="background:#fef3c7;color:#92400e;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px;">Pendiente</span>
-                            @endif
+                            @php [$etiquetaEstado, $estiloEstado] = $estilosEstado[$c->estadoTesoreria()]; @endphp
+                            <span style="{{ $estiloEstado }}font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;"
+                                  @if($c->motivoCierreTexto()) title="{{ $c->motivoCierreTexto() }}" @endif>{{ $etiquetaEstado }}</span>
                         </td>
                         <td style="text-align:right;">
-                            <a class="btn {{ $c->conciliado() || ! $puedeConciliar ? 'secondary' : 'primary' }}" style="padding:4px 10px;font-size:.78rem;"
+                            <a class="btn {{ ! $c->pendiente() || ! $puedeConciliar ? 'secondary' : 'primary' }}" style="padding:4px 10px;font-size:.78rem;"
                                href="{{ route('cuadre_caja.show', ['cuadre' => $c->id, 'volver' => $volver]) }}">
-                                {{ $c->conciliado() || ! $puedeConciliar ? 'Ver' : 'Conciliar' }}
+                                {{ ! $c->pendiente() || ! $puedeConciliar ? 'Ver' : 'Revisar' }}
                             </a>
                         </td>
                     </tr>

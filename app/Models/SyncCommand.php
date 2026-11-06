@@ -23,6 +23,7 @@ class SyncCommand extends Model
         'sync_compras'                 => 'Compras',
         'verificar_codigos_compuestos' => 'Verificar códigos compuestos',
         'separar_codigos_compuestos'   => 'Separar códigos compuestos',
+        'sync_codigos_alternos'        => 'Subir códigos alternos',
     ];
 
     const ESTADO_COLORS = [

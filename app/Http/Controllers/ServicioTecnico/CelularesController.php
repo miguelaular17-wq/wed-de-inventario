@@ -53,7 +53,7 @@ class CelularesController extends Controller
     {
         $user = $request->user();
         $query = StOrden::query()
-            ->with(['equipoCelular'])
+            ->with(['equipoCelular', 'creador'])
             ->where('transfer_estado', StOrden::TRANSFER_PENDIENTE)
             ->orderByDesc('updated_at');
 
