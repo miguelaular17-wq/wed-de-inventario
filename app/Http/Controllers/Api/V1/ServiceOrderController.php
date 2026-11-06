@@ -145,7 +145,7 @@ class ServiceOrderController extends Controller
         $user = $request->user();
         $enviar = (bool) ($data['enviar_otra_sede'] ?? false);
         $tecnicoDestino = null;
-        $sede = $user->scopesServicioToOwnSede()
+        $sede = $user->scopesServicioToOwnSede() || $user->creaServicioEnSuSede()
             ? strtoupper((string) $user->sede)
             : strtoupper((string) ($data['sede'] ?? $user->sede ?? ''));
         if ($sede === '' || ! in_array($sede, config('inventario.sedes_locales', []), true)) {
@@ -266,6 +266,9 @@ class ServiceOrderController extends Controller
     public function uploadEvidence(Request $request, StOrden $orden): JsonResponse
     {
         $this->authorizeOrder($request->user(), $orden);
+        if ($orden->entregada()) {
+            throw ValidationException::withMessages(['orden' => 'La orden ya se entregó al cliente: queda cerrada.']);
+        }
 
         if (! Schema::hasColumn('st_ordenes', 'evidencias')) {
             throw ValidationException::withMessages([

@@ -425,6 +425,9 @@ class OrdenController extends Controller
         } elseif ($request->filled('sede_local') && ! $user->scopesServicioToOwnSede()) {
             $data['sede'] = strtoupper((string) $request->input('sede_local'));
         }
+        if ($user->creaServicioEnSuSede()) {
+            $data['sede'] = strtoupper((string) $user->sede);
+        }
 
         $imeiNoAplica = $request->boolean('imei_no_aplica');
         $serialNoAplica = $request->boolean('serial_no_aplica');
@@ -626,10 +629,34 @@ class OrdenController extends Controller
         return $pdf->stream('conformidad-'.$orden->codigo().'.pdf');
     }
 
+    /** Entrega al cliente con o sin hoja de conformidad firmada; después la orden queda cerrada. */
+    public function entregar(Request $request, StOrden $orden): RedirectResponse
+    {
+        $user = $request->user();
+        $this->authorizeOrden($user, $orden);
+        $this->asegurarNoEntregada($orden);
+        $data = $request->validate([
+            'comentario_entrega' => ['nullable', 'string', 'max:1000'],
+            'confirmar_exceso' => ['nullable', 'boolean'],
+        ]);
+        if ($orden->excedePresupuesto() && ! $request->boolean('confirmar_exceso')) {
+            throw ValidationException::withMessages([
+                'confirmar_exceso' => 'Los costos superan el presupuesto: confirma que el cliente aceptó el monto adicional.',
+            ]);
+        }
+
+        $this->ordenService->entregarAlCliente($orden, $user, $data['comentario_entrega'] ?? null);
+
+        return redirect()
+            ->route('servicio.ordenes.show', $orden)
+            ->with('status', 'Orden '.$orden->codigo().' entregada al cliente. Quedó cerrada.');
+    }
+
     public function guardarConformidad(Request $request, StOrden $orden): RedirectResponse
     {
         $user = $request->user();
         $this->authorizeOrden($user, $orden);
+        $this->asegurarNoEntregada($orden);
         $this->asegurarGarantiaEditable($orden);
 
         $data = $request->validate([
@@ -673,6 +700,7 @@ class OrdenController extends Controller
     {
         $user = $request->user();
         $this->authorizeOrden($user, $orden);
+        $this->asegurarNoEntregada($orden);
 
         $data = $request->validate([
             'tipo_gestion' => ['required', 'string', 'in:'.implode(',', array_keys(StOrden::TIPOS_GESTION))],
@@ -748,6 +776,7 @@ class OrdenController extends Controller
     {
         $user = $request->user();
         $this->authorizeOrden($user, $orden);
+        $this->asegurarNoEntregada($orden);
         $this->asegurarGarantiaEditable($orden);
 
         $repuestosDisponibles = StRepuesto::query()
@@ -768,6 +797,7 @@ class OrdenController extends Controller
     {
         $user = $request->user();
         $this->authorizeOrden($user, $orden);
+        $this->asegurarNoEntregada($orden);
         $this->asegurarGarantiaEditable($orden);
         $data = $this->validated($request, $user, $orden);
         $comentarioEstado = null;
@@ -809,6 +839,7 @@ class OrdenController extends Controller
     public function actualizarEvidencias(Request $request, StOrden $orden): RedirectResponse
     {
         $this->authorizeOrden($request->user(), $orden);
+        $this->asegurarNoEntregada($orden);
         $this->asegurarGarantiaEditable($orden);
         $this->guardarEvidencias($request, $orden, fusionar: true);
 
@@ -884,6 +915,7 @@ class OrdenController extends Controller
     public function cambiarEstado(Request $request, StOrden $orden): RedirectResponse
     {
         $this->authorizeOrden($request->user(), $orden);
+        $this->asegurarNoEntregada($orden);
         $this->asegurarGarantiaEditable($orden);
         $data = $request->validate([
             'estado' => ['required', 'string', 'in:'.implode(',', array_keys($orden->estadosPermitidos()))],
@@ -910,6 +942,7 @@ class OrdenController extends Controller
     public function enviarGarantiaExterna(Request $request, StOrden $orden): RedirectResponse
     {
         $this->authorizeOrden($request->user(), $orden);
+        $this->asegurarNoEntregada($orden);
         $data = $request->validate([
             'empresa' => ['required', 'string', 'in:'.implode(',', array_keys(StOrden::EMPRESAS_ENVIO_GARANTIA))],
             'motivo' => ['required', 'string', 'max:255'],
@@ -923,6 +956,7 @@ class OrdenController extends Controller
     public function actualizarGarantiaExterna(Request $request, StOrden $orden): RedirectResponse
     {
         $this->authorizeOrden($request->user(), $orden);
+        $this->asegurarNoEntregada($orden);
         $data = $request->validate([
             'tipo' => ['required', 'string', 'in:comentario,avance'],
             'comentario' => ['required', 'string', 'min:3', 'max:2000'],
@@ -935,6 +969,7 @@ class OrdenController extends Controller
     public function gestionarEstadoGarantiaExterna(Request $request, StOrden $orden): RedirectResponse
     {
         $this->authorizeOrden($request->user(), $orden);
+        $this->asegurarNoEntregada($orden);
         $data = $request->validate([
             'estado_garantia' => ['required', 'string', 'in:'.implode(',', [
                 StOrden::GARANTIA_ENVIADO,
@@ -1007,6 +1042,7 @@ class OrdenController extends Controller
     public function iniciarProcesoGarantiaExterna(Request $request, StOrden $orden): RedirectResponse
     {
         $this->authorizeOrden($request->user(), $orden);
+        $this->asegurarNoEntregada($orden);
         $data = $request->validate([
             'comentario' => ['required', 'string', 'min:3', 'max:1000'],
         ]);
@@ -1018,6 +1054,7 @@ class OrdenController extends Controller
     public function recibirGarantiaExterna(Request $request, StOrden $orden): RedirectResponse
     {
         $this->authorizeOrden($request->user(), $orden);
+        $this->asegurarNoEntregada($orden);
         $data = $request->validate([
             'comentario' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -1030,6 +1067,7 @@ class OrdenController extends Controller
     {
         $user = $request->user();
         $this->authorizeOrden($user, $orden);
+        $this->asegurarNoEntregada($orden);
 
         if (! $orden->puedeConfirmarRecepcion($user)) {
             abort(403, 'No puedes confirmar la recepción de esta orden.');
@@ -1045,6 +1083,7 @@ class OrdenController extends Controller
     public function destroy(Request $request, StOrden $orden): RedirectResponse
     {
         $this->authorizeOrden($request->user(), $orden);
+        $this->asegurarNoEntregada($orden);
         $this->asegurarGarantiaEditable($orden);
 
         if ($orden->repuestos_descontados_at) {
@@ -1359,6 +1398,15 @@ class OrdenController extends Controller
         }
 
         abort(403, 'No tienes permiso para ver esta orden.');
+    }
+
+    private function asegurarNoEntregada(StOrden $orden): void
+    {
+        if ($orden->entregada()) {
+            throw ValidationException::withMessages([
+                'entregada' => 'La orden '.$orden->codigo().' ya se entregó al cliente: queda cerrada y no se puede modificar.',
+            ]);
+        }
     }
 
     private function asegurarGarantiaEditable(StOrden $orden): void

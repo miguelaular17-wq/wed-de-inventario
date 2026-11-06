@@ -439,6 +439,12 @@ class StOrden extends Model
             && strtoupper((string) $this->sede) === strtoupper((string) $user->sede);
     }
 
+    /** Entregada al cliente: la orden queda cerrada y ya no se modifica. */
+    public function entregada(): bool
+    {
+        return $this->estado === self::ESTADO_ENTREGADO;
+    }
+
     /** Para reportes: un equipo en camino a otra sede no cuenta hasta que lo reciban. */
     public function scopeSinRecepcionPendiente(Builder $query): Builder
     {

@@ -138,6 +138,59 @@ class StOrdenService
         $orden->save();
     }
 
+    /**
+     * Entrega al cliente, con o sin hoja de conformidad firmada. Si la orden no estaba lista pasa antes por «Listo»
+     * (ahí se descuentan los repuestos). Si venía en camino de otra sede se da por recibida. Después queda cerrada.
+     */
+    public function entregarAlCliente(StOrden $orden, User $user, ?string $comentario = null): StOrden
+    {
+        if ($orden->entregada()) {
+            throw ValidationException::withMessages(['entrega' => 'Esta orden ya fue entregada al cliente.']);
+        }
+        if ($orden->estado === StOrden::ESTADO_CANCELADO) {
+            throw ValidationException::withMessages(['entrega' => 'Una orden cancelada no se entrega.']);
+        }
+        if ($orden->garantiaExternaBloqueada()) {
+            throw ValidationException::withMessages(['entrega' => 'El equipo está fuera por garantía: registra primero que volvió a la sede.']);
+        }
+
+        $comentario = trim((string) $comentario);
+        $sinHoja = ! $orden->tieneConformidad();
+        $nota = $sinHoja ? 'Entregado al cliente sin hoja de conformidad firmada' : 'Entregado al cliente';
+        if ($comentario !== '') {
+            $nota .= '. '.$comentario;
+        }
+
+        return DB::transaction(function () use ($orden, $user, $nota, $sinHoja) {
+            if ($orden->transferenciaPendiente()) {
+                $orden->transfer_estado = StOrden::TRANSFER_ACEPTADA;
+                $orden->updated_by = $user->id;
+                $orden->save();
+                $this->registrarEvento($orden, $user, StOrdenEvento::TIPO_TRANSFERENCIA, 'Recepción confirmada al entregar en '.$orden->sede);
+            }
+            if ($orden->estado !== StOrden::ESTADO_LISTO) {
+                $orden = $this->actualizarOrden($orden, ['estado' => StOrden::ESTADO_LISTO], $user, [], 'Listo para entregar');
+            }
+            $orden = $this->actualizarOrden($orden, ['estado' => StOrden::ESTADO_ENTREGADO], $user, [], $nota);
+
+            if ($orden->equipo_id && ($equipo = \App\Models\StEquipo::query()->find($orden->equipo_id))) {
+                $equipo->update(['estado_actual' => \App\Models\StEquipo::ESTADO_ENTREGADO]);
+                app(StEquipoService::class)->registrarEvento(
+                    $equipo,
+                    $user,
+                    \App\Models\StEquipoEvento::TIPO_ENTREGA,
+                    'Entregado al cliente',
+                    $nota,
+                    $orden,
+                    (string) $orden->sede,
+                    ['sin_hoja_conformidad' => $sinHoja]
+                );
+            }
+
+            return $orden->fresh();
+        });
+    }
+
     public function confirmarRecepcion(StOrden $orden, User $user): StOrden
     {
         if ($orden->transfer_estado !== StOrden::TRANSFER_PENDIENTE) {

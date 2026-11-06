@@ -7,6 +7,7 @@
     $equipoPrefill = $equipoPrefill ?? null;
     $usarExistente = $usarExistente ?? false;
     $puedeTransferir = $puedeTransferir ?? false;
+    $sedeFija = auth()->user()->creaServicioEnSuSede() ? strtoupper((string) auth()->user()->sede) : null;
     $tiposGestion = $tiposGestion ?? \App\Models\StOrden::TIPOS_GESTION;
     $tiposDispositivo = $tiposDispositivo ?? config('servicio_tecnico.tipos_dispositivo', []);
     $tiposImpresora = $tiposImpresora ?? config('servicio_tecnico.tipos_impresora', []);
@@ -98,11 +99,17 @@
                 <div id="bloque-envio" style="{{ old('enviar_otra_sede') == '1' ? '' : 'display:none;' }}display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                     <div>
                         <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Sede de origen *</label>
-                        <select name="sede" id="sede-origen" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">
-                            @foreach($sedes as $sede)
-                                <option value="{{ $sede }}" @selected(old('sede', session('sede_local') ?: auth()->user()->sede) === $sede)>{{ $sede }}</option>
-                            @endforeach
-                        </select>
+                        @if($sedeFija)
+                            <input type="hidden" name="sede" id="sede-origen" value="{{ $sedeFija }}">
+                            <div style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;font-weight:700;">{{ $sedeFija }}</div>
+                            <div class="muted" style="font-size:.75rem;margin-top:4px;">Tus órdenes salen siempre de tu sede.</div>
+                        @else
+                            <select name="sede" id="sede-origen" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">
+                                @foreach($sedes as $sede)
+                                    <option value="{{ $sede }}" @selected(old('sede', session('sede_local') ?: auth()->user()->sede) === $sede)>{{ $sede }}</option>
+                                @endforeach
+                            </select>
+                        @endif
                     </div>
                     <div>
                         <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Enviar a *</label>
@@ -120,7 +127,9 @@
                     </div>
                 </div>
                 <div id="bloque-sede-local" style="{{ old('enviar_otra_sede') == '1' ? 'display:none;' : '' }}">
-                    @if(! auth()->user()->scopesServicioToOwnSede())
+                    @if($sedeFija)
+                        <p class="muted" style="margin:0;">Sede: <strong>{{ $sedeFija }}</strong></p>
+                    @elseif(! auth()->user()->scopesServicioToOwnSede())
                         <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Sede *</label>
                         <select name="sede_local" style="width:100%;max-width:280px;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">
                             @foreach($sedes as $sede)
@@ -134,11 +143,13 @@
             @else
                 <input type="hidden" name="enviar_otra_sede" value="0">
                 <p class="muted" style="margin:0;">Solo usuarios autorizados pueden iniciar envíos. Esta orden quedará en tu sede.
-                    @if(auth()->user()->scopesServicioToOwnSede())
-                        (<strong>{{ strtoupper((string) auth()->user()->sede) }}</strong>)
+                    @if(auth()->user()->scopesServicioToOwnSede() || $sedeFija)
+                        (<strong>{{ $sedeFija ?: strtoupper((string) auth()->user()->sede) }}</strong>)
                     @endif
                 </p>
-                @if(! auth()->user()->scopesServicioToOwnSede())
+                @if($sedeFija)
+                    <input type="hidden" name="sede" value="{{ $sedeFija }}">
+                @elseif(! auth()->user()->scopesServicioToOwnSede())
                     <div style="margin-top:12px;">
                         <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Sede *</label>
                         <select name="sede" required style="width:100%;max-width:280px;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">

@@ -575,6 +575,71 @@ class StCelularesBitacoraTest extends TestCase
         ]);
     }
 
+    public function test_se_entrega_sin_hoja_y_despues_la_orden_queda_cerrada(): void
+    {
+        $user = $this->makeTecnico();
+        $this->actingAs($user)->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.store'), [
+                'cliente_nombre' => 'Cliente Entrega', 'cliente_telefono' => '0414', 'prioridad' => 'normal',
+                'tipo_gestion' => 'ST', 'tipo_dispositivo' => 'celular', 'imei' => '350066655544433',
+                'marca' => 'Tecno', 'modelo' => 'Spark 20', 'color' => 'Azul', 'almacenamiento' => '128 GB', 'falla' => 'Pantalla',
+            ])->assertSessionHasNoErrors();
+        $orden = StOrden::query()->where('cliente_nombre', 'Cliente Entrega')->firstOrFail();
+        $this->assertFalse($orden->tieneConformidad());
+
+        $this->post(route('servicio.ordenes.entregar', $orden))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('servicio.ordenes.show', $orden));
+        $orden->refresh();
+        $this->assertSame(StOrden::ESTADO_ENTREGADO, $orden->estado);
+        $this->assertTrue($orden->entregada());
+        $this->assertSame(StEquipo::ESTADO_ENTREGADO, StEquipo::query()->find($orden->equipo_id)?->estado_actual);
+        $this->assertDatabaseHas('st_orden_eventos', ['orden_id' => $orden->id, 'tipo' => 'estado']);
+
+        $this->get(route('servicio.ordenes.show', $orden))->assertOk()
+            ->assertSee('orden cerrada')
+            ->assertSee('Se entregó sin hoja de conformidad firmada')
+            ->assertDontSee('Cambiar tipo')
+            ->assertDontSee(route('servicio.ordenes.edit', $orden), false)
+            ->assertDontSee('Entregar al cliente');
+
+        $this->post(route('servicio.ordenes.entregar', $orden))->assertSessionHasErrors('entregada');
+        $this->get(route('servicio.ordenes.edit', $orden))->assertSessionHasErrors('entregada');
+        $this->put(route('servicio.ordenes.update', $orden), ['cliente_nombre' => 'Otro', 'prioridad' => 'normal'])->assertSessionHasErrors('entregada');
+        $this->post(route('servicio.ordenes.conformidad', $orden), ['conformidad_trabajo' => 'x'])->assertSessionHasErrors('entregada');
+        $this->post(route('servicio.ordenes.tipo_gestion', $orden), ['tipo_gestion' => 'REPARACION_INTERNA', 'motivo_cambio' => 'Prueba'])->assertSessionHasErrors('entregada');
+        $this->post(route('servicio.ordenes.cambiar_estado', $orden), ['estado' => 'en_proceso', 'comentario_estado' => 'Volver'])->assertSessionHasErrors('entregada');
+        $this->delete(route('servicio.ordenes.destroy', $orden))->assertSessionHasErrors('entregada');
+
+        $orden->refresh();
+        $this->assertSame('Cliente Entrega', $orden->cliente_nombre);
+        $this->assertSame(StOrden::ESTADO_ENTREGADO, $orden->estado);
+        $this->assertNull($orden->conformidad_trabajo);
+    }
+
+    public function test_quien_tiene_sede_fija_crea_la_orden_en_su_sede_aunque_elija_otra(): void
+    {
+        $telefonia = User::create([
+            'name' => 'Telefonía Doral', 'email' => 'tel-'.uniqid().'@test.local', 'password' => 'password123',
+            'role' => User::ROLE_TELEFONIA, 'sede' => 'DORAL',
+        ]);
+        \App\Models\UserPermission::create(['user_id' => $telefonia->id, 'permission' => 'servicio']);
+        $telefonia = $telefonia->fresh();
+        $this->assertTrue($telefonia->creaServicioEnSuSede());
+
+        $this->actingAs($telefonia)->withSession(['sede_local' => 'CENTRO'])
+            ->post(route('servicio.ordenes.store'), [
+                'sede' => 'CENTRO', 'sede_local' => 'CENTRO', 'enviar_otra_sede' => '0',
+                'cliente_nombre' => 'Cliente Sede Fija', 'cliente_telefono' => '0414', 'prioridad' => 'normal',
+                'tipo_gestion' => 'ST', 'tipo_dispositivo' => 'celular', 'imei' => '350077766655544',
+                'marca' => 'Honor', 'modelo' => 'Play 20a', 'color' => 'Negro', 'almacenamiento' => '64 GB', 'falla' => 'No carga',
+            ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $orden = StOrden::query()->where('cliente_nombre', 'Cliente Sede Fija')->firstOrFail();
+        $this->assertSame('DORAL', $orden->sede);
+        $this->assertSame('DORAL', $orden->sedeOrigen());
+    }
+
     public function test_cambiar_el_tipo_de_gestion_pide_motivo_y_queda_en_la_auditoria(): void
     {
         (require database_path('migrations/2026_11_06_180000_create_auditorias_table.php'))->up();

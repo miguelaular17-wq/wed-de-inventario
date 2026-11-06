@@ -260,6 +260,14 @@ class User extends Authenticatable
         return $this->isTecnico() && ! $this->veTodoServicio();
     }
 
+    /** Sus órdenes de servicio técnico nacen siempre en su sede: no elige otra sede de origen. */
+    public function creaServicioEnSuSede(): bool
+    {
+        return trim((string) $this->sede) !== ''
+            && ($this->tieneSedeFija() || $this->isVendedor())
+            && ! $this->veTodoServicio();
+    }
+
     /** Servicio técnico completo, como el gerente: todas las sedes, órdenes, facturas y transferencias. */
     public function veTodoServicio(): bool
     {

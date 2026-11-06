@@ -16,10 +16,13 @@
         'foto' => '<rect x="3" y="5" width="18" height="15" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 5l1.5-2h5L16 5"/>',
         'cambiar' => '<path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
         'auditoria' => '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+        'entregado' => '<path d="M20 6 9 17l-5-5"/>',
     ];
-    $tipoEditable = true;
+    $cerrada = $orden->entregada();
+    $puedeEntregar = ! $cerrada && $orden->estado !== \App\Models\StOrden::ESTADO_CANCELADO && ! $orden->garantiaExternaBloqueada();
+    $tipoEditable = ! $cerrada;
     $verAuditoria = (bool) (auth()->user()?->isGerente() || auth()->user()?->isAdmin());
-    $conformidadEditable = ! $orden->garantiaExternaBloqueada();
+    $conformidadEditable = ! $orden->garantiaExternaBloqueada() && ! $cerrada;
     $icono = fn (string $n, int $s = 16) => '<svg width="'.$s.'" height="'.$s.'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'.$ico[$n].'</svg>';
 @endphp
 
@@ -83,6 +86,10 @@
 .st-check--dano { border-color:#fecaca; background:#fef2f2; }
 .st-check--dano .st-check-icono { background:#dc2626; color:#fff; }
 .st-check--dano .st-check-estado { color:#b91c1c; }
+
+.st-cerrada { display:flex; gap:12px; align-items:flex-start; background:#f0fdf4; border:1px solid #bbf7d0; border-left:4px solid #15803d; border-radius:12px; padding:12px 16px; margin-bottom:16px; font-size:.86rem; color:#14532d; }
+.st-cerrada strong { display:block; font-size:.95rem; margin-bottom:2px; }
+.st-cerrada-icono { width:32px; height:32px; border-radius:50%; background:#15803d; color:#fff; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
 
 .st-plegable { background:#fff; border:1px solid #e2e8f0; border-radius:14px; margin-bottom:16px; overflow:hidden; }
 .st-plegable > summary { list-style:none; display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:14px 22px; cursor:pointer; user-select:none; }
@@ -174,13 +181,13 @@
                     {!! $icono('conformidad') !!} Hoja de conformidad
                 </a>
             @endif
-            @if($orden->puedeConfirmarRecepcion(auth()->user()))
+            @if(! $cerrada && $orden->puedeConfirmarRecepcion(auth()->user()))
                 <form method="POST" action="{{ route('servicio.ordenes.confirmar_recepcion', $orden) }}">
                     @csrf
                     <button class="st-btn st-btn--ok" type="submit">{!! $icono('recibido') !!} Marcar recibido</button>
                 </form>
             @endif
-            @unless($orden->garantiaExternaBloqueada())
+            @unless($orden->garantiaExternaBloqueada() || $cerrada)
                 <a class="st-btn st-btn--primario" href="{{ route('servicio.ordenes.edit', $orden) }}">{!! $icono('editar') !!} Editar</a>
             @endunless
             @if($tipoEditable)
@@ -188,7 +195,7 @@
                     {!! $icono('cambiar') !!} Cambiar tipo
                 </button>
             @endif
-            @unless($orden->garantiaExternaBloqueada() || $orden->repuestos_descontados_at)
+            @unless($orden->garantiaExternaBloqueada() || $orden->repuestos_descontados_at || $cerrada)
                 <form method="POST" action="{{ route('servicio.ordenes.destroy', $orden) }}"
                     onsubmit="return confirm('¿Eliminar {{ $orden->esGarantia() ? 'esta garantía' : 'este ST' }} {{ $orden->codigo() }}? Esta acción no se puede deshacer.');">
                     @csrf
@@ -200,6 +207,30 @@
             @endunless
         </div>
     </div>
+
+    @if($puedeEntregar)
+        <form method="POST" action="{{ route('servicio.ordenes.entregar', $orden) }}" id="st-form-entregar" style="display:none;"
+              onsubmit="return confirm(@js('¿Marcar '.$orden->codigo().' como entregada al cliente?'
+                  .($orden->tieneConformidad() ? '' : ' Se entrega sin hoja de conformidad firmada.')
+                  .($orden->excedePresupuesto() ? ' Los costos superan el presupuesto: confirmas que el cliente aceptó el monto.' : '')
+                  .' Después la orden queda cerrada y no se podrá modificar.'));">
+            @csrf
+            @if($orden->excedePresupuesto())<input type="hidden" name="confirmar_exceso" value="1">@endif
+        </form>
+    @endif
+
+    @if($cerrada)
+        <div class="st-cerrada">
+            <span class="st-cerrada-icono">{!! $icono('entregado', 18) !!}</span>
+            <div>
+                <strong>Entregada al cliente · orden cerrada</strong>
+                <div>
+                    {{ $orden->tieneConformidad() ? 'Con hoja de conformidad firmada el '.$orden->conformidad_at?->format('d/m/Y H:i').'.' : 'Se entregó sin hoja de conformidad firmada.' }}
+                    Ya no se puede editar, cambiar de tipo, transferir ni eliminar.
+                </div>
+            </div>
+        </div>
+    @endif
 
     @if($orden->excedePresupuesto())
         <div style="background:#fffbeb;border:1px solid #fcd34d;padding:12px 16px;border-radius:8px;margin-bottom:16px;color:#92400e;">
@@ -229,7 +260,9 @@
                 </p>
             @endif
 
-            @if($estadoGarantia === \App\Models\StOrden::GARANTIA_PENDIENTE_ENVIO)
+            @if($cerrada)
+                <div class="muted">La orden ya se entregó al cliente: el flujo de garantía queda cerrado.</div>
+            @elseif($estadoGarantia === \App\Models\StOrden::GARANTIA_PENDIENTE_ENVIO)
                 <form method="POST" action="{{ route('servicio.ordenes.garantia.enviar', $orden) }}">
                     @csrf
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
@@ -397,7 +430,7 @@
         <div class="st-evidencias">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
                 <h3 style="margin:0;font-size:1rem;display:flex;align-items:center;gap:7px;">{!! $icono('foto', 16) !!} Evidencias</h3>
-                @unless($orden->garantiaExternaBloqueada())
+                @unless($orden->garantiaExternaBloqueada() || $cerrada)
                     <a class="st-btn st-btn--suave st-btn--chico" href="{{ route('servicio.ordenes.edit', $orden) }}#st-evidencias-edit">{!! $icono('foto', 14) !!} Editar fotos / video</a>
                 @endunless
             </div>
@@ -430,7 +463,7 @@
                 <p class="muted" style="margin:0 0 10px;">Sin fotos ni video todavía.</p>
             @endif
 
-            @unless($orden->garantiaExternaBloqueada())
+            @unless($orden->garantiaExternaBloqueada() || $cerrada)
                 <form method="POST" action="{{ route('servicio.ordenes.evidencias', $orden) }}" enctype="multipart/form-data" style="margin-top:14px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
                     @csrf
                     <p style="margin:0 0 8px;font-size:.88rem;font-weight:600;">Agregar o reemplazar evidencias</p>
@@ -657,6 +690,12 @@
                     </div>
                 </div>
                 <div class="st-modal-pie">
+                    @if($puedeEntregar)
+                        <button type="submit" form="st-form-entregar" class="st-btn st-btn--ok" style="margin-right:auto;"
+                                title="Marca la orden como entregada sin llenar la hoja. La orden queda cerrada.">
+                            {!! $icono('entregado') !!} {{ $orden->tieneConformidad() ? 'Entregado al cliente' : 'Entregado sin hoja' }}
+                        </button>
+                    @endif
                     @if($orden->tieneConformidad())
                         <a class="st-btn st-btn--suave" target="_blank" href="{{ route('servicio.ordenes.conformidad_pdf', $orden) }}">Ver la hoja sin cambios</a>
                     @endif
