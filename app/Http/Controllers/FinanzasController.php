@@ -1180,6 +1180,7 @@ class FinanzasController extends Controller
         }
 
         $data = $request->validate([
+            'categoria_egreso'       => 'nullable|in:egreso_realizado,otros_egresos,traslados,egreso_divisas',
             'banco_titular'          => 'required|string',
             'banco_titular_receptor' => 'nullable|string',
             'referencia'             => 'nullable|string|max:255',
@@ -1201,6 +1202,21 @@ class FinanzasController extends Controller
             'comprobantes_eliminar'  => 'nullable|array',
             'diferencial_cambiario'  => 'nullable|numeric',
         ]);
+
+        $categoriaAnterior = $egreso->categoria_egreso;
+        $categoria = ($data['categoria_egreso'] ?? null) ?: $categoriaAnterior;
+        $cambiaCategoria = $categoria !== $categoriaAnterior;
+        if ($cambiaCategoria) {
+            if ($request->user()?->soloAvances()) {
+                return back()->withInput()->with('error', 'Solo puedes registrar «Otros egresos (avances y cambios)».');
+            }
+            if (! in_array($categoriaAnterior, ['egreso_realizado', 'otros_egresos', 'traslados', 'egreso_divisas', null], true)) {
+                return back()->withInput()->with('error', 'Este movimiento no se puede pasar a otro tipo de egreso.');
+            }
+        }
+        if ($categoria === 'traslados' && empty($data['banco_titular_receptor'])) {
+            return back()->withInput()->with('error', 'El Banco Receptor es obligatorio para los traslados.');
+        }
 
         $cuentaInfo = explode('|', $data['banco_titular']);
         $banco = $cuentaInfo[0] ?? null;
@@ -1225,7 +1241,7 @@ class FinanzasController extends Controller
                 return back()->withInput()->with('error', 'Selecciona el empleado de Servicio Técnico al que corresponde este egreso.');
             }
             $titular_receptor = $empleadoServicioTecnico->nombre();
-        } elseif ($egreso->categoria_egreso !== 'traslados') {
+        } elseif ($categoria !== 'traslados') {
             $banco_receptor = null;
             $titular_receptor = trim((string) ($data['beneficiario'] ?? '')) ?: null;
         }
@@ -1238,6 +1254,9 @@ class FinanzasController extends Controller
         $diferencial_cambiario = array_key_exists('diferencial_cambiario', $data) && $data['diferencial_cambiario'] !== null 
                                  ? $data['diferencial_cambiario'] 
                                  : $egreso->diferencial_cambiario;
+        if ($cambiaCategoria && $categoria === 'traslados') {
+            $diferencial_cambiario = 0;
+        }
 
         $calc_usd = $monto_usd > 0 ? $monto_usd : (isset($data['tasa_cambio']) && $data['tasa_cambio'] > 0 ? round($monto_bs / $data['tasa_cambio'], 2) : null);
         if ($empleadoServicioTecnico && (! $calc_usd || $calc_usd <= 0)) {
@@ -1292,6 +1311,7 @@ class FinanzasController extends Controller
 
         $egreso->update([
             'fecha'                 => $data['fecha'],
+            'categoria_egreso'      => $categoria,
             'banco'                 => $banco,
             'titular'               => $titular,
             'categoria_cuenta'      => $categoria_cuenta,
@@ -1323,7 +1343,16 @@ class FinanzasController extends Controller
             $this->syncTotalesSalidas($old_fecha);
         }
 
-        return redirect()->back()->with('success', 'Egreso actualizado correctamente.');
+        $nombres = [
+            'egreso_realizado' => 'Egresos realizados',
+            'otros_egresos' => 'Otros egresos (avances y cambios)',
+            'traslados' => 'Traslados',
+            'egreso_divisas' => 'Egresos en divisas',
+        ];
+
+        return redirect()->back()->with('success', $cambiaCategoria
+            ? 'Egreso actualizado y pasado a «'.($nombres[$categoria] ?? $categoria).'».'
+            : 'Egreso actualizado correctamente.');
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Error actualizando egreso: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Error al guardar (Es posible que la imagen sea muy pesada o el servidor haya fallado): ' . $e->getMessage());
@@ -1582,11 +1611,10 @@ class FinanzasController extends Controller
         // 4. Clasificar comisiones bancarias y compras de divisas del extracto
         $classifier = app(\App\Services\BankMovementClassifier::class);
 
-        // 5. Egresos del sistema (en tránsito)
+        // 5. Egresos del sistema (en tránsito). Los pasados al mes siguiente se listan aparte.
         $egresos_query = \App\Models\FlujoCaja::where('tipo', 'egreso')
             ->where('es_conciliado', false)
-            ->where('fecha', '>=', $fecha_desde)
-            ->where('fecha', '<=', $fecha_hasta);
+            ->paraConciliarEntre($fecha_desde, $fecha_hasta);
         if (\Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'anulado')) {
             $egresos_query->where('anulado', false);
         }
@@ -1594,6 +1622,22 @@ class FinanzasController extends Controller
         $this->filtrarPorBanco($egresos_query, $banco_filtro);
         $this->filtrarPorTitular($egresos_query, $titular_filtro);
         $egresos_ayer = $egresos_query->orderBy('id')->get();
+
+        $egresos_pasados_query = \App\Models\FlujoCaja::where('tipo', 'egreso')
+            ->where('es_conciliado', false)
+            ->where('fecha', '>=', $fecha_desde)
+            ->where('fecha', '<=', $fecha_hasta);
+        if (\App\Models\FlujoCaja::tieneConciliarEn()) {
+            $egresos_pasados_query->whereNotNull('conciliar_en')->where('conciliar_en', '>', $fecha_hasta);
+        } else {
+            $egresos_pasados_query->whereRaw('1 = 0');
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'anulado')) {
+            $egresos_pasados_query->where('anulado', false);
+        }
+        $this->filtrarPorBanco($egresos_pasados_query, $banco_filtro);
+        $this->filtrarPorTitular($egresos_pasados_query, $titular_filtro);
+        $egresos_pasados = $egresos_pasados_query->orderBy('fecha')->orderBy('id')->get();
 
         // Egresos ya conciliados (incl. manuales) para listarlos en Consolidados
         // cuando no hay línea del extracto vinculada.
@@ -1914,6 +1958,20 @@ class FinanzasController extends Controller
                     'flujo_id'   => $e->id,
                     'compra_id'  => null,
                     'duplicado_de' => $duplicadosTransito[$e->id] ?? null,
+                    'conciliar_en' => $e->conciliar_en ?? null,
+                ])->values();
+
+            $pasados_mes_siguiente = $egresos_pasados
+                ->filter($mismaCuenta)
+                ->map(fn ($e) => [
+                    'fecha'        => $e->fecha,
+                    'referencia'   => $e->referencia,
+                    'concepto'     => $e->concepto,
+                    'motivo'       => $e->motivo,
+                    'tipo_gasto'   => $e->tipo_gasto ?: $e->categoria_egreso,
+                    'monto_bs'     => $e->monto_bs,
+                    'flujo_id'     => $e->id,
+                    'conciliar_en' => $e->conciliar_en,
                 ])->values();
 
             $compras_transito = $comprasTransito
@@ -1975,6 +2033,7 @@ class FinanzasController extends Controller
                 compact(
                     'conciliados',
                     'en_transito',
+                    'pasados_mes_siguiente',
                     'sin_registrar',
                     'comisiones',
                     'compras_divisas_banco',
@@ -2950,6 +3009,38 @@ class FinanzasController extends Controller
     }
 
     /**
+     * Egreso del cierre de mes que el banco registra el mes siguiente (p. ej. el día 1 cayó domingo y lo pasó el lunes 2):
+     * se concilia en ese mes. También se devuelve a su mes.
+     */
+    public function diferirEgresoTransito(Request $request)
+    {
+        $data = $request->validate([
+            'flujo_id' => ['required', 'integer'],
+            'volver' => ['nullable', 'boolean'],
+        ]);
+        if (! \App\Models\FlujoCaja::tieneConciliarEn()) {
+            return back()->with('error', 'Falta la columna conciliar_en: ejecuta php artisan migrate.');
+        }
+        $egreso = \App\Models\FlujoCaja::query()->where('tipo', 'egreso')->findOrFail($data['flujo_id']);
+        $quien = trim(($egreso->referencia ? 'Ref. '.$egreso->referencia.' · ' : '').($egreso->motivo ?: $egreso->concepto ?: 'Egreso #'.$egreso->id));
+        if ($egreso->es_conciliado) {
+            return back()->with('error', 'El egreso '.$quien.' ya está conciliado.');
+        }
+
+        if (! empty($data['volver'])) {
+            $egreso->update(['conciliar_en' => null]);
+
+            return back()->with('success', 'Egreso '.$quien.' devuelto a su mes.');
+        }
+
+        $mes = \Carbon\Carbon::parse($egreso->fecha)->addMonthNoOverflow()->startOfMonth();
+        $egreso->update(['conciliar_en' => $mes->toDateString()]);
+
+        return back()->with('success', 'Egreso '.$quien.' del '.\Carbon\Carbon::parse($egreso->fecha)->format('d/m/Y')
+            .' pasado a '.$mes->locale('es')->translatedFormat('F Y').': se concilia ahí con el movimiento del banco.');
+    }
+
+    /**
      * Lote del cierre de mes que el banco abona el día 1: se pasa al mes siguiente (o se devuelve a su mes).
      */
     public function diferirLote(Request $request)
@@ -3639,14 +3730,10 @@ class FinanzasController extends Controller
             $egresos_query->where('anulado', false);
         }
         $this->filtrarPorBanco($egresos_query, $bk_req);
-        if ($fecha_desde_filtro) {
-            $egresos_query->whereDate('fecha', '>=', $fecha_desde_filtro);
-        } else {
-            $egresos_query->whereDate('fecha', '>=', now()->subDay()->format('Y-m-d'));
-        }
-        if ($fecha_hasta_filtro) {
-            $egresos_query->whereDate('fecha', '<=', $fecha_hasta_filtro);
-        }
+        $egresos_query->paraConciliarEntre(
+            $fecha_desde_filtro ?: now()->subDay()->format('Y-m-d'),
+            $fecha_hasta_filtro ?: null
+        );
         $egresos_ayer = $egresos_query->orderBy('id')->get();
 
         $classifier = app(\App\Services\BankMovementClassifier::class);

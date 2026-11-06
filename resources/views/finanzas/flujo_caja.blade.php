@@ -2881,6 +2881,40 @@ function cerrarGaleria() {
 }
 
 // ===== EDITAR EGRESO =====
+function aplicarCategoriaEdit(categoria, cambioManual) {
+    const isTraslado = (categoria === 'traslados');
+
+    document.getElementById('row_receptor_edit').style.display = isTraslado ? 'flex' : 'none';
+    document.getElementById('banco_titular_receptor_edit').required = isTraslado;
+
+    document.getElementById('lbl_banco_titular_edit').innerText = isTraslado ? 'Banco Emisor y Titular Emisor' : 'Banco y Titular';
+    document.getElementById('lbl_monto_bs_edit').innerText = isTraslado ? 'Monto' : 'Monto BS';
+
+    document.getElementById('col_monto_usd_edit').style.display = isTraslado ? 'none' : 'block';
+    document.getElementById('col_tasa_cambio_edit').style.display = isTraslado ? 'none' : 'block';
+    const rowDifEdit = document.getElementById('row_diferencial_edit');
+    if (rowDifEdit) rowDifEdit.style.display = isTraslado ? 'none' : 'block';
+
+    document.getElementById('row_tipo_gasto_edit').style.display = isTraslado ? 'none' : 'block';
+    // Para no dar error con TomSelect requerimos el elemento base
+    const dstTG = document.getElementById('edit_tipo_gasto');
+    if (dstTG) dstTG.required = !isTraslado;
+
+    const sel = document.getElementById('categoria_egreso_edit');
+    const aviso = document.getElementById('aviso_categoria_edit');
+    if (!aviso || !sel) return;
+    const original = sel.dataset.original || '';
+    if (cambioManual && categoria !== original) {
+        const nombre = sel.options[sel.selectedIndex]?.text || categoria;
+        aviso.textContent = 'Al guardar, este movimiento pasa a «' + nombre + '».'
+            + (isTraslado ? ' Elige el banco receptor.' : '');
+        aviso.style.display = 'block';
+        if (isTraslado) document.getElementById('banco_titular_receptor_edit').focus();
+    } else {
+        aviso.style.display = 'none';
+    }
+}
+
 function abrirEditarEgreso(mov) {
     const m = document.getElementById('modalEditarEgreso');
     const f = document.getElementById('formEditarEgreso');
@@ -2927,24 +2961,18 @@ function abrirEditarEgreso(mov) {
         }
     }
 
-    // Lógica para Traslados
-    const isTraslado = (mov.categoria_egreso === 'traslados');
-    
-    document.getElementById('row_receptor_edit').style.display = isTraslado ? 'flex' : 'none';
-    document.getElementById('banco_titular_receptor_edit').required = isTraslado;
-    
-    document.getElementById('lbl_banco_titular_edit').innerText = isTraslado ? 'Banco Emisor y Titular Emisor' : 'Banco y Titular';
-    document.getElementById('lbl_monto_bs_edit').innerText = isTraslado ? 'Monto' : 'Monto BS';
-    
-    document.getElementById('col_monto_usd_edit').style.display = isTraslado ? 'none' : 'block';
-    document.getElementById('col_tasa_cambio_edit').style.display = isTraslado ? 'none' : 'block';
-    const rowDifEdit = document.getElementById('row_diferencial_edit');
-    if (rowDifEdit) rowDifEdit.style.display = isTraslado ? 'none' : 'block';
-    
-    document.getElementById('row_tipo_gasto_edit').style.display = isTraslado ? 'none' : 'block';
-    // Para no dar error con TomSelect requerimos el elemento base
-    const dstTG = document.getElementById('edit_tipo_gasto');
-    if (dstTG) dstTG.required = !isTraslado;
+    const categoriaSel = document.getElementById('categoria_egreso_edit');
+    const categoriaMov = mov.categoria_egreso || 'egreso_realizado';
+    categoriaSel.dataset.original = categoriaMov;
+    categoriaSel.value = categoriaMov;
+    if (categoriaSel.value !== categoriaMov) {
+        // Categoría que no se cambia desde aquí: se manda tal cual y no se ofrece el selector.
+        categoriaSel.disabled = true;
+    } else {
+        categoriaSel.disabled = false;
+    }
+    aplicarCategoriaEdit(categoriaMov, false);
+    const isTraslado = (categoriaMov === 'traslados');
 
     // Banco receptor
     if (isTraslado && mov.banco_receptor) {
@@ -3305,6 +3333,18 @@ function limpiarFiltros() {
 
         <form id="formEditarEgreso" method="POST" action="" enctype="multipart/form-data" onsubmit="return validarDesgloseEdit(event)">
             @csrf
+
+            <!-- Tipo de egreso -->
+            <div id="row_categoria_edit" style="margin-bottom: 12px; padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; {{ ($soloAvances ?? false) ? 'display:none;' : '' }}">
+                <label for="categoria_egreso_edit" style="display: block; margin-bottom: 3px; font-weight: 600; font-size: 0.9rem;">Tipo de Egreso</label>
+                <select name="categoria_egreso" id="categoria_egreso_edit" onchange="aplicarCategoriaEdit(this.value, true)" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-weight: 600;">
+                    <option value="egreso_realizado">EGRESOS REALIZADOS</option>
+                    <option value="egreso_divisas">EGRESOS EN DIVISAS</option>
+                    <option value="otros_egresos">OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
+                    <option value="traslados">TRASLADOS</option>
+                </select>
+                <div id="aviso_categoria_edit" style="display: none; margin-top: 6px; font-size: 0.8rem; color: #92400e;"></div>
+            </div>
 
             <!-- Banco + Referencia -->
             <div style="display: flex; gap: 15px; margin-bottom: 10px;">

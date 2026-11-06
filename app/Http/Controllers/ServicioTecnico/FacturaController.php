@@ -160,7 +160,7 @@ class FacturaController extends Controller
 
     private function puedeGestionar(User $user): bool
     {
-        return $user->isAdmin() || $user->isGerente();
+        return $user->veTodoServicio();
     }
 
     private function validated(Request $request, User $user, ?StFactura $factura = null): array

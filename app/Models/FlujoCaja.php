@@ -15,7 +15,7 @@ class FlujoCaja extends Model
         'es_todoticket', 'detalle_todoticket',
         'sede', 'placa_vehiculo', 'oculto', 'comprobante_url',
         'desglose', 'comprobantes', 'cuenta_por_pagar_id',
-        'anulado', 'anulado_motivo', 'anulado_at',
+        'anulado', 'anulado_motivo', 'anulado_at', 'conciliar_en',
     ];
 
     /** Sin los anulados (duplicados, devoluciones): no cuentan en listados ni totales. */
@@ -26,6 +26,35 @@ class FlujoCaja extends Model
         }
 
         return $query;
+    }
+
+    /**
+     * Egresos que se concilian en el período: los de su fecha, salvo los pasados a otro mes,
+     * más los de meses anteriores pasados a este.
+     */
+    public function scopeParaConciliarEntre($query, ?string $desde, ?string $hasta)
+    {
+        if (! self::tieneConciliarEn()) {
+            return $query->when($desde, fn ($q) => $q->where('fecha', '>=', $desde))
+                ->when($hasta, fn ($q) => $q->where('fecha', '<=', $hasta));
+        }
+
+        return $query->where(function ($q) use ($desde, $hasta) {
+            $q->where(function ($propios) use ($desde, $hasta) {
+                $propios->whereNull('conciliar_en')
+                    ->when($desde, fn ($x) => $x->where('fecha', '>=', $desde))
+                    ->when($hasta, fn ($x) => $x->where('fecha', '<=', $hasta));
+            })->orWhere(function ($pasados) use ($desde, $hasta) {
+                $pasados->whereNotNull('conciliar_en')
+                    ->when($desde, fn ($x) => $x->where('conciliar_en', '>=', $desde))
+                    ->when($hasta, fn ($x) => $x->where('conciliar_en', '<=', $hasta));
+            });
+        });
+    }
+
+    public static function tieneConciliarEn(): bool
+    {
+        return \Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'conciliar_en');
     }
 
     public function cuentaPorPagar()

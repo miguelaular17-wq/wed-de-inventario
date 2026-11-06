@@ -116,6 +116,32 @@ class ServicioTecnicoAccessTest extends TestCase
         $this->assertSame('alta', $orden->prioridad);
     }
 
+    public function test_el_permiso_ver_todo_da_servicio_tecnico_como_el_gerente(): void
+    {
+        $tecnico = $this->makeTecnico();
+        $this->assertTrue($tecnico->scopesServicioToOwnSede());
+        $this->assertTrue($tecnico->veSoloSusFacturasTaller());
+        $this->assertFalse($tecnico->veTodoServicio());
+
+        \App\Models\UserPermission::create(['user_id' => $tecnico->id, 'permission' => 'servicio.todo']);
+        $tecnico = $tecnico->fresh();
+        $this->assertTrue($tecnico->veTodoServicio());
+        $this->assertFalse($tecnico->scopesServicioToOwnSede());
+        $this->assertFalse($tecnico->veSoloSusFacturasTaller());
+        $this->assertTrue($tecnico->puedeTransferirServicio());
+
+        $supervisor = User::create([
+            'name' => 'Supervisor ST', 'email' => 'sup-st-'.uniqid().'@test.local', 'password' => 'password123',
+            'role' => User::ROLE_SUPERVISOR, 'sede' => 'DORAL',
+        ]);
+        $this->assertFalse($supervisor->canAccess('servicio'));
+        \App\Models\UserPermission::create(['user_id' => $supervisor->id, 'permission' => 'servicio.todo']);
+        $supervisor = $supervisor->fresh();
+        $this->assertTrue($supervisor->canAccess('servicio'));
+        $this->assertTrue($supervisor->canAccess('servicio.transferir'));
+        $this->assertTrue($supervisor->veTodoServicio());
+    }
+
     private function makeTecnico(): User
     {
         return User::create([

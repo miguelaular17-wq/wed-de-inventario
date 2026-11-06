@@ -32,6 +32,13 @@ class FlujoCajaIngresoTest extends TestCase
             'oculto' => fn (Blueprint $t) => $t->boolean('oculto')->default(false),
             'comprobante_url' => fn (Blueprint $t) => $t->string('comprobante_url')->nullable(),
             'comprobantes' => fn (Blueprint $t) => $t->text('comprobantes')->nullable(),
+            'placa_vehiculo' => fn (Blueprint $t) => $t->string('placa_vehiculo')->nullable(),
+            'desglose' => fn (Blueprint $t) => $t->text('desglose')->nullable(),
+            'tipo_gasto' => fn (Blueprint $t) => $t->string('tipo_gasto')->nullable(),
+            'tasa_cambio' => fn (Blueprint $t) => $t->decimal('tasa_cambio', 14, 4)->nullable(),
+            'monto_usd' => fn (Blueprint $t) => $t->decimal('monto_usd', 14, 2)->nullable(),
+            'nomina_empleado_id' => fn (Blueprint $t) => $t->unsignedBigInteger('nomina_empleado_id')->nullable(),
+            'cuenta_por_pagar_id' => fn (Blueprint $t) => $t->unsignedBigInteger('cuenta_por_pagar_id')->nullable(),
         ] as $col => $def) {
             if (! Schema::hasColumn('flujo_cajas', $col)) {
                 Schema::table('flujo_cajas', $def);
@@ -120,6 +127,54 @@ class FlujoCajaIngresoTest extends TestCase
         $this->assertNotNull(FlujoCaja::find($realizado->id));
         $this->actingAs($avances)->delete(route('finanzas.destroy_egreso', $avance->id))->assertRedirect();
         $this->assertNull(FlujoCaja::find($avance->id));
+    }
+
+    public function test_un_egreso_se_puede_pasar_a_otro_tipo_de_egreso(): void
+    {
+        $mov = FlujoCaja::create([
+            'tipo' => 'egreso', 'categoria_egreso' => 'egreso_realizado', 'banco' => 'Mercantil', 'titular' => 'JRZ',
+            'fecha' => '2026-09-05', 'monto_bs' => 313211.50, 'monto_usd' => 350, 'tasa_cambio' => 894.89,
+            'motivo' => 'MATERIAL PARA TRABAJOS', 'es_conciliado' => false, 'oculto' => false,
+        ]);
+        $base = [
+            'banco_titular' => 'Mercantil|JRZ|BANCA NACIONAL', 'fecha' => '2026-09-05', 'monto_usd' => '350',
+            'tasa_cambio' => '894.89', 'monto_bs' => '313211.50', 'motivo' => 'MATERIAL PARA TRABAJOS',
+        ];
+        $usuario = $this->usuario();
+
+        $this->actingAs($usuario)->post(route('finanzas.update_egreso', $mov->id), $base + ['categoria_egreso' => 'otros_egresos'])
+            ->assertRedirect()->assertSessionHas('success', fn ($m) => str_contains($m, 'Otros egresos'));
+        $this->assertSame('otros_egresos', $mov->fresh()->categoria_egreso);
+
+        $this->actingAs($usuario)->post(route('finanzas.update_egreso', $mov->id), $base + ['categoria_egreso' => 'traslados'])
+            ->assertSessionHas('error', 'El Banco Receptor es obligatorio para los traslados.');
+        $this->assertSame('otros_egresos', $mov->fresh()->categoria_egreso);
+
+        $this->actingAs($usuario)->post(route('finanzas.update_egreso', $mov->id), $base + [
+            'categoria_egreso' => 'traslados', 'banco_titular_receptor' => 'Banesco|JRZ|BANCA NACIONAL',
+        ])->assertSessionHas('success');
+        $traslado = $mov->fresh();
+        $this->assertSame('traslados', $traslado->categoria_egreso);
+        $this->assertSame(['Banesco', 'JRZ'], [$traslado->banco_receptor, $traslado->titular_receptor]);
+
+        // Sin el campo se queda en su tipo actual.
+        $this->actingAs($usuario)->post(route('finanzas.update_egreso', $mov->id), $base + ['banco_titular_receptor' => 'Banesco|JRZ|X'])
+            ->assertSessionHas('success', 'Egreso actualizado correctamente.');
+        $this->assertSame('traslados', $mov->fresh()->categoria_egreso);
+    }
+
+    public function test_rol_avances_no_cambia_el_tipo_de_un_egreso(): void
+    {
+        $avances = User::create(['name' => 'Avances', 'email' => 'avances-cat-'.uniqid().'@test.local', 'password' => 'password123', 'role' => User::ROLE_AVANCES]);
+        $avance = FlujoCaja::create([
+            'tipo' => 'egreso', 'categoria_egreso' => 'otros_egresos', 'banco' => 'Binance', 'titular' => 'Grupo JENU',
+            'fecha' => '2026-09-05', 'monto_bs' => 100, 'motivo' => 'CAMBIO', 'es_conciliado' => false, 'oculto' => false,
+        ]);
+
+        $this->actingAs($avances)->post(route('finanzas.update_egreso', $avance->id), [
+            'categoria_egreso' => 'egreso_realizado', 'banco_titular' => 'Binance|Grupo JENU|X', 'fecha' => '2026-09-05', 'monto_bs' => '100',
+        ])->assertSessionHas('error', fn ($m) => str_contains($m, 'Solo puedes registrar'));
+        $this->assertSame('otros_egresos', $avance->fresh()->categoria_egreso);
     }
 
     public function test_se_puede_eliminar_un_ingreso(): void

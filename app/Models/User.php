@@ -237,7 +237,7 @@ class User extends Authenticatable
      */
     public function veSoloSusFacturasTaller(): bool
     {
-        if ($this->isAdmin() || $this->isGerente()) {
+        if ($this->veTodoServicio()) {
             return false;
         }
 
@@ -257,12 +257,18 @@ class User extends Authenticatable
 
     public function scopesServicioToOwnSede(): bool
     {
-        return $this->isTecnico();
+        return $this->isTecnico() && ! $this->veTodoServicio();
+    }
+
+    /** Servicio técnico completo, como el gerente: todas las sedes, órdenes, facturas y transferencias. */
+    public function veTodoServicio(): bool
+    {
+        return $this->isAdmin() || $this->isGerente() || $this->canAccess('servicio.todo');
     }
 
     public function puedeTransferirServicio(): bool
     {
-        if ($this->isAdmin() || $this->isGerente()) {
+        if ($this->veTodoServicio()) {
             return true;
         }
 
@@ -451,6 +457,10 @@ class User extends Authenticatable
         $owned = array_merge($this->rolePermissionKeys(), $this->extraPermissionKeys());
 
         if ($permission === 'finanzas.ver' && in_array('finanzas.editar', $owned, true)) {
+            return true;
+        }
+
+        if (in_array($permission, ['servicio', 'servicio.inventario', 'servicio.transferir'], true) && in_array('servicio.todo', $owned, true)) {
             return true;
         }
 

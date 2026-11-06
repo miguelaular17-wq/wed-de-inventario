@@ -520,12 +520,18 @@
                                     <br><span class="tipo-chip" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;margin-top:4px;display:inline-block;"
                                               title="{{ $row['duplicado_de']['motivo'] }}">Posible duplicado del #{{ $row['duplicado_de']['id'] }} (ya conciliado)</span>
                                 @endif
+                                @if(!empty($row['conciliar_en']))
+                                    <br><span class="tipo-chip" style="background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;margin-top:4px;display:inline-block;">
+                                        Del mes anterior · se concilia en {{ \Carbon\Carbon::parse($row['conciliar_en'])->locale('es')->translatedFormat('F Y') }}
+                                    </span>
+                                @endif
                             </td>
                             <td class="monto-cell monto-yellow">{{ number_format($row['monto_bs'], 2) }}</td>
                             <td style="text-align:center;">
                                 @if(!empty($row['flujo_id']) || !empty($row['compra_id']))
                                 <button type="button" class="btn-dash-action btn-dash-menu" title="Opciones"
                                         data-flujo="{{ $row['flujo_id'] ?? '' }}" data-compra="{{ $row['compra_id'] ?? '' }}"
+                                        data-diferido="{{ !empty($row['conciliar_en']) ? 1 : 0 }}"
                                         onclick="abrirMenuTransito(event, this)">⋮</button>
                                 @endif
                             </td>
@@ -533,6 +539,29 @@
                         @empty
                         <tr class="empty-row"><td colspan="5">Sin movimientos en tránsito</td></tr>
                         @endforelse
+                        @foreach(($d['pasados_mes_siguiente'] ?? collect()) as $row)
+                        @if($loop->first)
+                        <tr><td colspan="5" style="padding:10px 8px 4px;font-size:0.72rem;font-weight:700;color:#4338ca;text-transform:uppercase;letter-spacing:.04em;border-top:1px dashed #c7d2fe;">
+                            Pasan al mes siguiente · no cuentan en el total de este mes
+                        </td></tr>
+                        @endif
+                        <tr style="opacity:.75;">
+                            <td>{{ ($row['fecha'] instanceof \DateTimeInterface ? $row['fecha']->format('d/m/Y') : substr((string) $row['fecha'], 8, 2).'/'.substr((string) $row['fecha'], 5, 2).'/'.substr((string) $row['fecha'], 0, 4)) }}</td>
+                            <td><span class="ref-chip">{{ $row['referencia'] ?: '—' }}</span></td>
+                            <td style="max-width:200px;font-size:0.82rem;">
+                                {{ Str::limit($row['concepto'] ?: $row['motivo'], 50) }}
+                                <br><span class="tipo-chip" style="background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;margin-top:4px;display:inline-block;">
+                                    → {{ \Carbon\Carbon::parse($row['conciliar_en'])->locale('es')->translatedFormat('F Y') }}
+                                </span>
+                            </td>
+                            <td class="monto-cell" style="color:#64748b;">{{ number_format($row['monto_bs'], 2) }}</td>
+                            <td style="text-align:center;">
+                                <button type="button" class="btn-dash-action btn-dash-menu" title="Opciones"
+                                        data-flujo="{{ $row['flujo_id'] }}" data-compra="" data-diferido="1"
+                                        onclick="abrirMenuTransito(event, this)">⋮</button>
+                            </td>
+                        </tr>
+                        @endforeach
                     </tbody>
                 </table>
                 @if($d['en_transito']->count() > 0)
@@ -1045,7 +1074,21 @@
         Buscar el error
         <small>Busca el pago por monto y referencia en todos los bancos</small>
     </button>
+    <button type="button" class="mov-menu-item" id="transitoMenuDiferir" onclick="transitoMesSiguiente(false)">
+        Conciliar el mes siguiente
+        <small>El banco lo registró en el mes siguiente (p. ej. el día 1 cayó domingo y salió el lunes 2)</small>
+    </button>
+    <button type="button" class="mov-menu-item" id="transitoMenuVolver" onclick="transitoMesSiguiente(true)" hidden>
+        Devolver a su mes
+        <small>Vuelve a conciliarse en el mes de su fecha</small>
+    </button>
 </div>
+
+<form id="form-transito-diferir" action="{{ route('finanzas.conciliaciones.transito.diferir') }}" method="POST" style="display:none;">
+    @csrf
+    <input type="hidden" name="flujo_id" value="">
+    <input type="hidden" name="volver" value="">
+</form>
 
 <form id="form-transito-auto" action="{{ route('finanzas.conciliaciones.transito_conciliar') }}" method="POST" style="display:none;">
     @csrf
@@ -1277,6 +1320,10 @@ function abrirMenuTransito(ev, boton) {
     menu.hidden = true;
     if (mismo) return;
     menuTransito = { flujo: boton.dataset.flujo, compra: boton.dataset.compra };
+    const diferir = document.getElementById('transitoMenuDiferir');
+    const volver = document.getElementById('transitoMenuVolver');
+    if (diferir) diferir.hidden = !boton.dataset.flujo || boton.dataset.diferido === '1';
+    if (volver) volver.hidden = !boton.dataset.flujo || boton.dataset.diferido !== '1';
     menu.hidden = false;
     const r = boton.getBoundingClientRect();
     menu.style.left = Math.max(8, r.right - menu.offsetWidth) + 'px';
@@ -1285,6 +1332,14 @@ function abrirMenuTransito(ev, boton) {
 function cerrarMenuTransito() { document.getElementById('transitoMenu').hidden = true; }
 document.addEventListener('click', e => { if (!e.target.closest('#transitoMenu')) cerrarMenuTransito(); });
 window.addEventListener('scroll', cerrarMenuTransito, true);
+
+function transitoMesSiguiente(volver) {
+    cerrarMenuTransito();
+    const form = document.getElementById('form-transito-diferir');
+    form.querySelector('[name=flujo_id]').value = menuTransito.flujo;
+    form.querySelector('[name=volver]').value = volver ? '1' : '';
+    form.submit();
+}
 
 function transitoAutomatico() {
     cerrarMenuTransito();

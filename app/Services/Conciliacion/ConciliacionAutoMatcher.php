@@ -53,8 +53,7 @@ class ConciliacionAutoMatcher
                 ->orWhere('categoria_egreso', 'traslados');
         })
             ->where('tipo', 'egreso')
-            ->where('fecha', '>=', $fecha_minima)
-            ->where('fecha', '<=', $fecha_maxima);
+            ->paraConciliarEntre($fecha_minima, $fecha_maxima);
         if (Schema::hasColumn('flujo_cajas', 'anulado')) {
             $flujos_posibles->where('anulado', false);
         }
