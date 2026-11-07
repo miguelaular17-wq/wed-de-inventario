@@ -114,12 +114,17 @@ echo [6/6] Creando archivo ZIP para distribucion...
 set "ZIP_PATH=%BASE_DIR%WinSyncService_Instalador.zip"
 if exist "%ZIP_PATH%" del /q "%ZIP_PATH%"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Compress-Archive -Path '%DIST_DIR%\*' -DestinationPath '%ZIP_PATH%' -Force"
+REM Solo lo que va en el paquete: el .exe que corre desde aqui escribe sync.log y state.json y los deja bloqueados.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$archivos = Get-ChildItem -Path '%DIST_DIR%' -File | Where-Object { $_.Extension -ne '.log' -and $_.Name -notlike '*.log.*' -and $_.Name -ne 'state.json' }; Compress-Archive -Path $archivos.FullName -DestinationPath '%ZIP_PATH%' -Force"
 
 if exist "%ZIP_PATH%" (
     echo OK: ZIP creado exitosamente.
 ) else (
-    echo [ADVERTENCIA] No se pudo crear el ZIP automaticamente.
+    echo.
+    echo [ERROR] No se pudo crear el ZIP.
+    echo Cierra el sincronizador si esta abierto desde la carpeta dist_instalador y vuelve a correr este archivo.
+    pause
+    exit /b 1
 )
 
 REM Limpiar

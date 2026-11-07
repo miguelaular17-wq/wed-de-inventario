@@ -58,6 +58,7 @@ return [
             'lotes_pos' => ['label' => 'Lotes punto de venta', 'rutas' => ['finanzas.conciliaciones.lotes*']],
             'calendario_conciliaciones' => ['label' => 'Calendario de conciliaciones', 'rutas' => ['finanzas.calendario_conciliaciones*']],
             'tesoreria' => ['label' => 'Tesorería', 'rutas' => ['tesoreria.*']],
+            'reportes_suite' => ['label' => 'Reportes de Suite (facturas, pagos, descuentos, créditos, cuadre)', 'rutas' => ['reportes_suite*']],
             'ventas_diarias' => ['label' => 'Ventas diarias', 'rutas' => ['ventas_diarias.*']],
             'cobranza' => ['label' => 'Cobranza', 'rutas' => ['cobranza.*']],
             'contratos' => ['label' => 'Contratos', 'rutas' => ['contratos.*']],

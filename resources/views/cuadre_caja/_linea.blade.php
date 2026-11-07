@@ -6,7 +6,7 @@
     $lotesGuardados = $l['lotes'] ?? [];
     $lotesIniciales = session()->hasOldInput() ? array_values(old('lotes.'.$clave, [])) : $lotesGuardados;
     $lotesIniciales = array_values(array_filter($lotesIniciales, fn ($x) => trim((string) ($x['lote'] ?? '')) !== '' || trim((string) ($x['monto'] ?? '')) !== ''));
-    $conciliados = collect($lotesGuardados)->where('conciliado', true)->map(fn ($x) => ($x['banco'] ?? '').'|'.mb_strtoupper($x['lote'], 'UTF-8'))->all();
+    $conciliados = collect($lotesGuardados)->where('conciliado', true)->map(fn ($x) => ($x['banco'] ?? '').'|'.($x['titular'] ?? '').'|'.mb_strtoupper($x['lote'], 'UTF-8'))->all();
     $sumaLotes = round(array_sum(array_map(fn ($x) => (float) ($x['monto'] ?? 0), $lotesIniciales)), 2);
     $montoPos = $lotesIniciales ? number_format($sumaLotes, 2, '.', '') : '';
     $cantidad = $editable ? count($lotesIniciales) : count($lotesGuardados);
@@ -14,6 +14,7 @@
     if ($pos) {
         [$bancoPos, $titularPos] = app(\App\Services\CuadreCajaService::class)->bancoTitularPuntoVenta($l['cuenta'], (string) $cuadre->sede);
         $bancosLote = array_values(array_unique(array_merge([$bancoPos], $bancosPos ?? [])));
+        $titularesLote = array_values(array_unique(array_merge([$titularPos], $titularesPos ?? [])));
     }
 @endphp
 <tr class="cc-linea {{ $pos ? 'cc-pos' : '' }} {{ $abierto ? 'is-abierto' : '' }} {{ $extra ? 'cc-extra' : '' }} {{ $filaDif($l['diferencia_usd']) }}"
@@ -65,17 +66,27 @@
             <div class="cc-lotes">
                 <div class="cc-lotes-cab">
                     <strong>🧾 Lotes del punto</strong>
-                    <span>Van a Tesorería como lote POS de titular <b>{{ $titularPos }}</b> del {{ $cuadre->fecha_cierre->format('d/m/Y') }}</span>
+                    <span>Van a Tesorería como lote POS del {{ $cuadre->fecha_cierre->format('d/m/Y') }}, con el banco y el titular de cada lote</span>
                 </div>
                 @if($editable)
                     <div class="cc-lotes-lista" data-siguiente="{{ count($lotesIniciales) }}">
                         @foreach($lotesIniciales as $i => $lt)
-                            @php $bancoLt = strtoupper((string) ($lt['banco'] ?? '')) ?: $bancoPos; @endphp
+                            @php
+                                $bancoLt = strtoupper((string) ($lt['banco'] ?? '')) ?: $bancoPos;
+                                $titularLt = strtoupper((string) ($lt['titular'] ?? '')) ?: $titularPos;
+                            @endphp
                             <div class="cc-lote">
                                 <label class="cc-input cc-lote-banco"><span>Banco</span>
                                     <select name="lotes[{{ $clave }}][{{ $i }}][banco]">
                                         @foreach($bancosLote as $b)
                                             <option value="{{ $b }}" @selected($b === $bancoLt)>{{ $b }}</option>
+                                        @endforeach
+                                    </select>
+                                </label>
+                                <label class="cc-input cc-lote-banco"><span>Titular</span>
+                                    <select name="lotes[{{ $clave }}][{{ $i }}][titular]">
+                                        @foreach($titularesLote as $tt)
+                                            <option value="{{ $tt }}" @selected($tt === $titularLt)>{{ $tt }}</option>
                                         @endforeach
                                     </select>
                                 </label>
@@ -86,7 +97,7 @@
                                     <input type="number" step="0.01" min="0" name="lotes[{{ $clave }}][{{ $i }}][monto]" value="{{ $lt['monto'] ?? '' }}" class="cc-lote-monto" placeholder="0,00" inputmode="decimal">
                                 </label>
                                 <button type="button" class="cc-lote-quitar" title="Quitar lote">✕</button>
-                                @if(in_array($bancoLt.'|'.mb_strtoupper((string) ($lt['lote'] ?? ''), 'UTF-8'), $conciliados, true))
+                                @if(in_array($bancoLt.'|'.$titularLt.'|'.mb_strtoupper((string) ($lt['lote'] ?? ''), 'UTF-8'), $conciliados, true))
                                     <span class="cc-moneda is-usd" title="El banco ya concilió este lote">Conciliado</span>
                                 @endif
                             </div>
@@ -105,6 +116,13 @@
                                     @endforeach
                                 </select>
                             </label>
+                            <label class="cc-input cc-lote-banco"><span>Titular</span>
+                                <select name="lotes[{{ $clave }}][__I__][titular]">
+                                    @foreach($titularesLote as $tt)
+                                        <option value="{{ $tt }}" @selected($tt === $titularPos)>{{ $tt }}</option>
+                                    @endforeach
+                                </select>
+                            </label>
                             <label class="cc-input cc-lote-num"><span>Lote</span>
                                 <input type="text" name="lotes[{{ $clave }}][__I__][lote]" maxlength="64" placeholder="N.º" autocomplete="off">
                             </label>
@@ -118,7 +136,7 @@
                     <div class="cc-lotes-chips">
                         @foreach($lotesGuardados as $lt)
                             <span class="cc-lote-chip">
-                                {{ $lt['banco'] ?: $bancoPos }} · Lote <b>{{ $lt['lote'] }}</b> · Bs {{ number_format($lt['monto'], 2, ',', '.') }}
+                                {{ $lt['banco'] ?: $bancoPos }} · {{ ($lt['titular'] ?? '') ?: $titularPos }} · Lote <b>{{ $lt['lote'] }}</b> · Bs {{ number_format($lt['monto'], 2, ',', '.') }}
                                 @if($lt['conciliado'])<span class="cc-moneda is-usd">Conciliado</span>@endif
                             </span>
                         @endforeach

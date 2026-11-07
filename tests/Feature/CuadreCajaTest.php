@@ -30,6 +30,7 @@ class CuadreCajaTest extends TestCase
         (require database_path('migrations/2026_11_06_100000_add_estado_tesoreria_to_cuadres_caja.php'))->up();
         (require database_path('migrations/2026_11_06_120000_create_cuadre_caja_lotes_table.php'))->up();
         (require database_path('migrations/2026_11_06_140000_add_banco_to_cuadre_caja_lotes.php'))->up();
+        (require database_path('migrations/2026_11_07_100000_add_titular_to_cuadre_caja_lotes.php'))->up();
         if (! Schema::hasTable('tesoreria_ingresos')) {
             Schema::create('tesoreria_ingresos', function (Blueprint $t) {
                 $t->id();
@@ -325,7 +326,7 @@ class CuadreCajaTest extends TestCase
             'accion' => 'procesar', 'montos' => ['02|' => '815'],
             'lotes' => ['TDD|BAN02' => [
                 ['banco' => 'BANESCO', 'lote' => '9', 'monto' => '500000'],
-                ['banco' => 'BNC', 'lote' => '9', 'monto' => '231536.94'],
+                ['banco' => 'BNC', 'titular' => 'LNACEH', 'lote' => '9', 'monto' => '231536.94'],
             ]],
             'observacion' => 'Dos puntos',
         ])->assertSessionHasNoErrors()->assertSessionMissing('error');
@@ -334,11 +335,14 @@ class CuadreCajaTest extends TestCase
             ['BANESCO' => 500000.0, 'BNC' => 231536.94],
             TesoreriaIngreso::query()->orderBy('banco')->get()->mapWithKeys(fn ($i) => [$i->banco => (float) $i->monto])->all()
         );
-        $this->assertSame(['DORAL'], TesoreriaIngreso::query()->pluck('titular')->unique()->values()->all());
+        $this->assertSame(
+            ['BANESCO' => 'DORAL', 'BNC' => 'LNACEH'],
+            TesoreriaIngreso::query()->orderBy('banco')->pluck('titular', 'banco')->all()
+        );
 
         $this->actingAs($tesoreria)->get(route('cuadre_caja.show', $this->cierre))
             ->assertOk()
-            ->assertSee('BNC · Lote <b>9</b>', false);
+            ->assertSee('BNC · LNACEH · Lote <b>9</b>', false);
 
         $this->actingAs($tesoreria)->post(route('cuadre_caja.reabrir', $this->cierre));
         $this->actingAs($tesoreria)->post(route('cuadre_caja.conciliar', $this->cierre), [

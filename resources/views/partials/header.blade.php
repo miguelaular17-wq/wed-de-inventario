@@ -149,7 +149,8 @@
     $tesoreriaLink = fn () => $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*'));
     $ventasDiariasLink = fn () => $link('Ventas diarias', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*'));
     $cuadreCajaLink = fn () => $link('Cuadre de caja', route('cuadre_caja.index'), request()->routeIs('cuadre_caja.*'));
-    $tesoreriaItems = [...$conciliacionItems(), $tesoreriaLink(), $ventasDiariasLink(), $cuadreCajaLink()];
+    $reportesSuiteLink = fn () => $link('Reportes de Suite', route('reportes_suite', 'facturas'), request()->routeIs('reportes_suite*'));
+    $tesoreriaItems = [...$conciliacionItems(), $tesoreriaLink(), $ventasDiariasLink(), $cuadreCajaLink(), $reportesSuiteLink()];
     $cobranzaItems = [
         $link('Cobranza', route('cobranza.index'), request()->routeIs('cobranza.*')),
         $link('Contratos', route('contratos.index'), request()->routeIs('contratos.*')),
@@ -305,6 +306,9 @@
         }
         if ($u->canAccess('cuadre_caja')) {
             $tesoreriaUsuario[] = $cuadreCajaLink();
+        }
+        if ($u->canAccess('tesoreria')) {
+            $tesoreriaUsuario[] = $reportesSuiteLink();
         }
         if ($tesoreriaUsuario) {
             $nav[] = $agrupar('Tesorería', $tesoreriaUsuario);

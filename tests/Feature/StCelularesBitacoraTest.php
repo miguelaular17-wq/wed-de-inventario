@@ -575,6 +575,42 @@ class StCelularesBitacoraTest extends TestCase
         ]);
     }
 
+    public function test_la_reparacion_interna_registra_su_resultado_y_el_tecnico_que_la_reparo(): void
+    {
+        (require database_path('migrations/2026_11_06_200000_add_resultado_interna_to_st_ordenes.php'))->up();
+        $user = $this->makeTecnico();
+        $this->actingAs($user)->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.store'), [
+                'prioridad' => 'normal', 'tipo_gestion' => 'REPARACION_INTERNA', 'tipo_dispositivo' => 'celular',
+                'imei' => '350044433322211', 'marca' => 'Cubot', 'modelo' => 'A50', 'color' => 'Negro', 'almacenamiento' => '64 GB',
+                'falla' => 'Pantalla en negro',
+            ])->assertSessionHasNoErrors();
+        $orden = StOrden::query()->where('imei', '350044433322211')->firstOrFail();
+        $this->assertTrue($orden->esReparacionInterna());
+
+        $this->postJson(route('servicio.ordenes.resultado_interna', $orden), ['resultado' => 'REPARADO'])
+            ->assertStatus(422)->assertJsonValidationErrors('tecnico_id');
+
+        $this->postJson(route('servicio.ordenes.resultado_interna', $orden), ['resultado' => 'REPARADO', 'tecnico_id' => $user->id])
+            ->assertOk()
+            ->assertJsonPath('resultado', 'REPARADO')
+            ->assertJsonPath('tecnico', $user->name);
+        $orden->refresh();
+        $this->assertSame((int) $user->id, (int) $orden->reparado_por);
+        $this->assertSame('Reparado · '.$user->name, $orden->etiquetaResultadoInterna());
+
+        $this->postJson(route('servicio.ordenes.resultado_interna', $orden), ['resultado' => 'PARA_REPUESTO'])->assertOk();
+        $orden->refresh();
+        $this->assertSame('PARA_REPUESTO', $orden->resultado_interna);
+        $this->assertNull($orden->reparado_por);
+
+        $this->get(route('servicio.ordenes.reporte_marca', ['tipo_gestion' => 'REPARACION_INTERNA']))
+            ->assertOk()
+            ->assertSee('Reparado (técnico)')
+            ->assertSee('ri-resultado', false);
+        $this->get(route('servicio.ordenes.show', $orden))->assertOk()->assertSee('Para repuesto');
+    }
+
     public function test_se_entrega_sin_hoja_y_despues_la_orden_queda_cerrada(): void
     {
         $user = $this->makeTecnico();

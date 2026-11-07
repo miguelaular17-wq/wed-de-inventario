@@ -67,6 +67,24 @@ class StOrden extends Model
         'DISPONIBLE_VENTA' => 'Disponible para la venta',
     ];
 
+    public const RESULTADO_SIN_REPARACION = 'SIN_REPARACION';
+
+    public const RESULTADO_PARA_REPUESTO = 'PARA_REPUESTO';
+
+    public const RESULTADO_REPARADO = 'REPARADO';
+
+    public const RESULTADOS_INTERNA = [
+        self::RESULTADO_SIN_REPARACION => 'Sin reparación',
+        self::RESULTADO_PARA_REPUESTO => 'Para repuesto',
+        self::RESULTADO_REPARADO => 'Reparado',
+    ];
+
+    public const COLORES_RESULTADO_INTERNA = [
+        self::RESULTADO_SIN_REPARACION => ['#fecaca', '#7f1d1d'],
+        self::RESULTADO_PARA_REPUESTO => ['#fde68a', '#78350f'],
+        self::RESULTADO_REPARADO => ['#86efac', '#14532d'],
+    ];
+
     public const COLORES_RECONOCIMIENTO_GARANTIA = [
         'ENTREGADO_NC' => ['#f0abfc', '#701a75'],
         'ENTREGADO_CLIENTE' => ['#86efac', '#14532d'],
@@ -99,6 +117,8 @@ class StOrden extends Model
         'rango_garantia',
         'empresa_envio_garantia',
         'estado_empresa_garantia',
+        'resultado_interna',
+        'reparado_por',
         'estado_garantia_externa',
         'motivo_envio_garantia',
         'observacion_envio_garantia',
@@ -437,6 +457,26 @@ class StOrden extends Model
     {
         return $this->transferenciaPendiente()
             && strtoupper((string) $this->sede) === strtoupper((string) $user->sede);
+    }
+
+    public function reparador(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reparado_por');
+    }
+
+    /** «Reparado · Jorge Díaz», «Para repuesto»… o null si la reparación interna no tiene resultado. */
+    public function etiquetaResultadoInterna(): ?string
+    {
+        $resultado = (string) ($this->resultado_interna ?? '');
+        if ($resultado === '' || ! isset(self::RESULTADOS_INTERNA[$resultado])) {
+            return null;
+        }
+        $etiqueta = self::RESULTADOS_INTERNA[$resultado];
+        if ($resultado === self::RESULTADO_REPARADO && $this->reparador) {
+            $etiqueta .= ' · '.$this->reparador->name;
+        }
+
+        return $etiqueta;
     }
 
     /** Entregada al cliente: la orden queda cerrada y ya no se modifica. */

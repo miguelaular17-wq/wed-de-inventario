@@ -135,7 +135,7 @@
                             <th>Estado</th>
                             <th>Empresa de envío</th>
                             <th>Fecha de envío</th>
-                            @if($conEstadoEmpresa)
+                            @if($conEstadoEmpresa || $conResultadoInterna)
                                 <th>Reconocimiento</th>
                             @endif
                             <th>Cliente / Motivo</th>
@@ -173,10 +173,12 @@
                                         —
                                     @endif
                                 </td>
-                                @if($conEstadoEmpresa)
+                                @if($conEstadoEmpresa || $conResultadoInterna)
                                     <td>
-                                        @if($orden->esGarantia())
+                                        @if($orden->esGarantia() && $conEstadoEmpresa)
                                             @include('servicio.ordenes._reconocimiento-select', ['modo' => 'marca'])
+                                        @elseif($orden->esReparacionInterna() && $conResultadoInterna)
+                                            @include('servicio.ordenes._resultado-interna-select')
                                         @else
                                             —
                                         @endif
@@ -192,6 +194,9 @@
     @endforeach
 </div>
 @include('servicio.ordenes._reconocimiento-script')
+@if($conResultadoInterna)
+    @include('servicio.ordenes._resultado-interna-script')
+@endif
 <script>
     (function () {
         const tipo = document.getElementById('rm-tipo-gestion');

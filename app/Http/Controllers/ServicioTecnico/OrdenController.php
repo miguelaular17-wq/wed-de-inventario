@@ -138,7 +138,7 @@ class OrdenController extends Controller
         $query = StOrden::query()
             ->visiblePara($user)
             ->sinRecepcionPendiente()
-            ->with(['equipoCelular', 'tecnico', 'creador'])
+            ->with(['equipoCelular', 'tecnico', 'creador', 'reparador'])
             ->whereDate('fecha_ingreso', '>=', $desde)
             ->whereDate('fecha_ingreso', '<=', $hasta)
             ->orderBy('fecha_ingreso')
@@ -242,6 +242,10 @@ class OrdenController extends Controller
             'empresaEnvioFiltro' => $empresaEnvioFiltro,
             'generadoPor' => $user->name,
             'conEstadoEmpresa' => $conEstadoEmpresa,
+            'conResultadoInterna' => Schema::hasColumn('st_ordenes', 'resultado_interna'),
+            'tecnicosReparacion' => $this->tecnicosServicio(incluirmeAMi: true)
+                ->map(fn ($t) => ['id' => $t['id'], 'nombre' => $t['nombre'], 'sede' => $t['sede']])
+                ->values(),
         ];
 
         if ($request->query('formato') === 'pdf') {
@@ -1039,6 +1043,56 @@ class OrdenController extends Controller
         return back()->with('status', 'Reconocimiento de la marca actualizado.');
     }
 
+    /** Resultado de una reparación interna: sin reparación, para repuesto o reparado (con el técnico que la reparó). */
+    public function actualizarResultadoInterna(Request $request, StOrden $orden): RedirectResponse|JsonResponse
+    {
+        $user = $request->user();
+        $this->authorizeOrden($user, $orden);
+        abort_unless($orden->esReparacionInterna() && Schema::hasColumn('st_ordenes', 'resultado_interna'), 422);
+
+        $data = $request->validate([
+            'resultado' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::RESULTADOS_INTERNA))],
+            'tecnico_id' => ['nullable', 'integer', 'required_if:resultado,'.StOrden::RESULTADO_REPARADO],
+        ], [
+            'tecnico_id.required_if' => 'Elige el técnico que lo reparó.',
+        ]);
+        $resultado = $data['resultado'] ?? null;
+        $tecnicoId = null;
+        if ($resultado === StOrden::RESULTADO_REPARADO) {
+            $tecnico = $this->tecnicosServicio(incluirmeAMi: true)->firstWhere('id', (int) $data['tecnico_id']);
+            if (! $tecnico) {
+                throw ValidationException::withMessages(['tecnico_id' => 'Elige una persona registrada en Servicio técnico.']);
+            }
+            $tecnicoId = $tecnico['id'];
+        }
+
+        $anterior = $orden->etiquetaResultadoInterna();
+        if ($resultado !== $orden->resultado_interna || $tecnicoId !== ($orden->reparado_por ? (int) $orden->reparado_por : null)) {
+            $orden->forceFill([
+                'resultado_interna' => $resultado,
+                'reparado_por' => $tecnicoId,
+                'updated_by' => $user->id,
+            ])->save();
+            $orden->unsetRelation('reparador');
+            $nuevo = $orden->etiquetaResultadoInterna();
+            $this->ordenService->registrarEvento($orden, $user, StOrdenEvento::TIPO_NOTA, match (true) {
+                $nuevo === null => 'Se quitó el resultado de la reparación interna (era: '.$anterior.')',
+                $anterior === null => 'Resultado de la reparación interna: '.$nuevo,
+                default => 'Resultado de la reparación interna: '.$anterior.' → '.$nuevo,
+            }, ['resultado' => $resultado, 'reparado_por' => $tecnicoId]);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'resultado' => $orden->resultado_interna,
+                'etiqueta' => $orden->etiquetaResultadoInterna(),
+                'tecnico' => $orden->reparador?->name,
+            ]);
+        }
+
+        return back()->with('status', 'Resultado de la reparación interna actualizado.');
+    }
+
     public function iniciarProcesoGarantiaExterna(Request $request, StOrden $orden): RedirectResponse
     {
         $this->authorizeOrden($request->user(), $orden);
@@ -1153,7 +1207,7 @@ class OrdenController extends Controller
     /**
      * @return \Illuminate\Support\Collection<int, array{user:User,id:int,nombre:string,sede:string}>
      */
-    private function tecnicosServicio()
+    private function tecnicosServicio(bool $incluirmeAMi = false)
     {
         $empleadosPorUsuario = collect();
         if (Schema::hasTable('nomina_empleados')) {
@@ -1177,7 +1231,7 @@ class OrdenController extends Controller
             })
             ->orderBy('name')
             ->get()
-            ->reject(fn (User $tecnico) => (int) $tecnico->id === (int) auth()->id())
+            ->reject(fn (User $tecnico) => ! $incluirmeAMi && (int) $tecnico->id === (int) auth()->id())
             ->map(function (User $tecnico) use ($empleadosPorUsuario) {
                 $empleado = $empleadosPorUsuario->get($tecnico->id);
                 $sede = strtoupper(trim((string) (

@@ -7,6 +7,11 @@ return [
     'bancos_punto_venta' => ['BANESCO', 'MERCANTIL', 'VENEZUELA', 'TESORO', 'BNC', 'BBVA', 'PROVINCIAL', 'BANCAMIGA', 'BANCARIBE'],
 
     /*
+     * Titulares que Tesorería elige para un lote de punto de venta (los mismos del registro de lotes POS).
+     */
+    'titulares_punto_venta' => ['JRZ', 'DORAL', 'LNACEH', 'NUNES', 'EURONISSI'],
+
+    /*
      * Motivos para cerrar una caja (cierre definitivo). La clave se guarda en cuadres_caja.motivo_cierre:
      * no cambiar una clave que ya se usó, solo su texto.
      */

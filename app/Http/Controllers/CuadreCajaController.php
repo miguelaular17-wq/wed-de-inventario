@@ -51,6 +51,7 @@ class CuadreCajaController extends Controller
             'etiquetas' => config('inventario.display', []),
             'motivos' => config('cuadre_caja.motivos_cierre', []),
             'bancosPos' => config('cuadre_caja.bancos_punto_venta', []),
+            'titularesPos' => config('cuadre_caja.titulares_punto_venta', []),
             'puedeConciliar' => (bool) $request->user()?->canAccess('cuadre_caja.conciliar'),
             'volver' => $request->query('volver'),
         ]);
@@ -66,6 +67,7 @@ class CuadreCajaController extends Controller
             'lotes' => ['nullable', 'array'],
             'lotes.*' => ['array'],
             'lotes.*.*.banco' => ['nullable', 'string', 'max:32'],
+            'lotes.*.*.titular' => ['nullable', 'string', 'max:32'],
             'lotes.*.*.lote' => ['nullable', 'string', 'max:64'],
             'lotes.*.*.monto' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
             'observacion' => ['required', 'string', 'max:2000'],

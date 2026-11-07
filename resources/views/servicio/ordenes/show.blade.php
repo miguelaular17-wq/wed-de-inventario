@@ -410,6 +410,9 @@
                 @if($orden->esGarantia())
                     <div class="st-dato"><span>Empresa responsable del envío</span><div>{{ $orden->etiquetaEmpresaEnvioGarantia() ?: '—' }}</div></div>
                 @endif
+                @if($orden->esReparacionInterna())
+                    <div class="st-dato"><span>Resultado de la reparación</span><div>{{ $orden->etiquetaResultadoInterna() ?: 'Sin estado' }}</div></div>
+                @endif
                 <div class="st-dato"><span>Repuestos descontados</span><div>{{ $orden->repuestos_descontados_at ? $orden->repuestos_descontados_at->format('d/m/Y H:i') : 'No' }}</div></div>
                 <div class="st-dato"><span>Conformidad</span>
                     <div>

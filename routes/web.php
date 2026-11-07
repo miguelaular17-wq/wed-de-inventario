@@ -348,6 +348,13 @@ Route::middleware(['auth', \App\Http\Middleware\EnsureReportesAccess::class])->p
     Route::get('/ventas-por-proveedor/excel', [ReportesController::class, 'proveedorExcel'])->name('proveedor.excel');
 });
 
+// Reportes de la facturadora (Suite) en Tesorería: facturas, pagos, descuentos, créditos y cuadre de caja.
+Route::middleware(['auth', 'permission:tesoreria'])->prefix('tesoreria/reportes')->name('reportes_suite')->group(function () {
+    Route::get('/{reporte}', [\App\Http\Controllers\ReportesSuiteController::class, 'show'])
+        ->where('reporte', 'facturas|pagos|descuentos|creditos|cuadre')->name('');
+    Route::get('/factura/{sede}/{numero}', [\App\Http\Controllers\ReportesSuiteController::class, 'detalleFactura'])->name('.factura');
+});
+
 Route::middleware(['auth', \App\Http\Middleware\EnsureReportesAccess::class.':inventario'])->prefix('analisis-categorias')->name('analisis_categorias.')->group(function () {
     Route::get('/', [App\Http\Controllers\AnalisisCategoriasController::class, 'index'])->name('index');
     Route::post('/toggle', [App\Http\Controllers\AnalisisCategoriasController::class, 'toggle'])->name('toggle');
@@ -842,6 +849,7 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'permission:servicio'])
             Route::post('/{orden}/conformidad', [OrdenController::class, 'guardarConformidad'])->whereNumber('orden')->name('conformidad');
             Route::post('/{orden}/tipo-gestion', [OrdenController::class, 'cambiarTipoGestion'])->whereNumber('orden')->name('tipo_gestion');
             Route::post('/{orden}/entregar', [OrdenController::class, 'entregar'])->whereNumber('orden')->name('entregar');
+            Route::post('/{orden}/resultado-interna', [OrdenController::class, 'actualizarResultadoInterna'])->whereNumber('orden')->name('resultado_interna');
             Route::post('/{orden}/estado', [OrdenController::class, 'cambiarEstado'])->whereNumber('orden')->name('cambiar_estado');
             Route::post('/{orden}/garantia/enviar', [OrdenController::class, 'enviarGarantiaExterna'])->whereNumber('orden')->name('garantia.enviar');
             Route::post('/{orden}/garantia/actualizacion', [OrdenController::class, 'actualizarGarantiaExterna'])->whereNumber('orden')->name('garantia.actualizacion');

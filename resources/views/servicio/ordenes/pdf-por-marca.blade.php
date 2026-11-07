@@ -118,6 +118,7 @@
                         <th>Estado</th>
                         <th>Empresa de envío</th>
                         <th>Fecha de envío</th>
+                        <th>Reconocimiento</th>
                         <th class="col-libre">Cliente / Motivo</th>
                     </tr>
                 </thead>
@@ -151,6 +152,7 @@
                                     —
                                 @endif
                             </td>
+                            <td>{{ ($orden->esReparacionInterna() ? $orden->etiquetaResultadoInterna() : ($orden->esGarantia() ? $orden->etiquetaMotivoReconocimiento() : null)) ?: '—' }}</td>
                             <td class="col-libre">{{ $orden->esReparacionInterna() ? ($orden->falla ?: '—') : ($orden->cliente_nombre ?: '—') }}</td>
                         </tr>
                     @endforeach

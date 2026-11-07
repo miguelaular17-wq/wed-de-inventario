@@ -127,6 +127,7 @@ class CuadreCajaService
             if (isset($lineas[$clave])) {
                 $lineas[$clave]['lotes'][] = [
                     'banco' => $lote->banco,
+                    'titular' => $lote->titular,
                     'lote' => $lote->lote,
                     'monto' => round((float) $lote->monto, 2),
                     'conciliado' => (bool) $lote->ingreso?->es_conciliado,
@@ -337,8 +338,9 @@ class CuadreCajaService
      */
     private function normalizarLotes(array $lotes, array $linea, string $sede): array
     {
-        [$bancoCuenta] = $this->bancoTitularPuntoVenta($linea['cuenta'], $sede);
+        [$bancoCuenta, $titularCuenta] = $this->bancoTitularPuntoVenta($linea['cuenta'], $sede);
         $bancos = config('cuadre_caja.bancos_punto_venta', []);
+        $titulares = config('cuadre_caja.titulares_punto_venta', []);
         $out = [];
         foreach ($lotes as $l) {
             $numero = trim((string) ($l['lote'] ?? ''));
@@ -356,11 +358,15 @@ class CuadreCajaService
             if (! in_array($banco, $bancos, true) && $banco !== $bancoCuenta) {
                 throw new \DomainException("Elige el banco del lote {$numero}.");
             }
-            $llave = $banco.'|'.mb_strtoupper($numero, 'UTF-8');
-            if (isset($out[$llave])) {
-                throw new \DomainException("El lote {$numero} de {$banco} está repetido en ".($linea['cuenta'] ?: $linea['forma_pago']).'.');
+            $titular = strtoupper(trim((string) ($l['titular'] ?? ''))) ?: $titularCuenta;
+            if (! in_array($titular, $titulares, true) && $titular !== $titularCuenta) {
+                throw new \DomainException("Elige el titular del lote {$numero}.");
             }
-            $out[$llave] = ['banco' => $banco, 'lote' => $numero, 'monto' => round((float) $monto, 2)];
+            $llave = $banco.'|'.$titular.'|'.mb_strtoupper($numero, 'UTF-8');
+            if (isset($out[$llave])) {
+                throw new \DomainException("El lote {$numero} de {$banco} · {$titular} está repetido en ".($linea['cuenta'] ?: $linea['forma_pago']).'.');
+            }
+            $out[$llave] = ['banco' => $banco, 'titular' => $titular, 'lote' => $numero, 'monto' => round((float) $monto, 2)];
         }
 
         return array_values($out);
@@ -371,11 +377,11 @@ class CuadreCajaService
      * concilió no se quita ni cambia de monto. Si Tesorería ya lo había cargado a mano, se enlaza ese.
      *
      * @param  array<string, mixed>  $linea
-     * @param  list<array{banco: string, lote: string, monto: float}>  $lista
+     * @param  list<array{banco: string, titular: string, lote: string, monto: float}>  $lista
      */
     private function sincronizarLotes(CuadreCaja $cuadre, array $linea, array $lista, User $user): void
     {
-        [$bancoCuenta, $titular] = $this->bancoTitularPuntoVenta($linea['cuenta'], (string) $cuadre->sede);
+        [$bancoCuenta, $titularCuenta] = $this->bancoTitularPuntoVenta($linea['cuenta'], (string) $cuadre->sede);
         $fecha = $cuadre->fecha_cierre->toDateString();
         $descripcion = trim('Cuadre de caja '.$cuadre->sede.' · '.($cuadre->descripcion_caja ?: $cuadre->codigo_caja)
             .' · '.($cuadre->usuario_nombre ?: $cuadre->usuario));
@@ -386,8 +392,8 @@ class CuadreCajaService
             ->where('codigo_metodo', (string) $linea['codigo_metodo'])
             ->where('codigo_cuenta', (string) ($linea['codigo_cuenta'] ?? ''))
             ->get()
-            ->keyBy(fn (CuadreCajaLote $l) => ($l->banco ?: $bancoCuenta).'|'.mb_strtoupper($l->lote, 'UTF-8'));
-        $nuevos = collect($lista)->keyBy(fn ($l) => $l['banco'].'|'.mb_strtoupper($l['lote'], 'UTF-8'));
+            ->keyBy(fn (CuadreCajaLote $l) => ($l->banco ?: $bancoCuenta).'|'.($l->titular ?: $titularCuenta).'|'.mb_strtoupper($l->lote, 'UTF-8'));
+        $nuevos = collect($lista)->keyBy(fn ($l) => $l['banco'].'|'.$l['titular'].'|'.mb_strtoupper($l['lote'], 'UTF-8'));
 
         foreach ($existentes as $llave => $existente) {
             if ($nuevos->has($llave)) {
@@ -407,6 +413,7 @@ class CuadreCajaService
                 'codigo_cuenta' => (string) ($linea['codigo_cuenta'] ?? ''),
             ]);
             $banco = $nuevo['banco'];
+            $titular = $nuevo['titular'];
             $ingreso = $registro->ingreso ?? $this->loteTesoreriaSinEnlazar($banco, $titular, $fecha, $nuevo['lote']);
 
             if ($ingreso && $ingreso->es_conciliado && abs((float) $ingreso->monto - $nuevo['monto']) > 0.004) {
@@ -430,6 +437,7 @@ class CuadreCajaService
 
             $registro->fill([
                 'banco' => $banco,
+                'titular' => $titular,
                 'lote' => $nuevo['lote'],
                 'monto' => $nuevo['monto'],
                 'tesoreria_ingreso_id' => $ingreso->id,
