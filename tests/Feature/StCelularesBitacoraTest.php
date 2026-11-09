@@ -606,6 +606,24 @@ class StCelularesBitacoraTest extends TestCase
         $this->get(route('servicio.ordenes.create'))->assertSee('<option value="NUEVA MARCA"', false);
     }
 
+    public function test_buscar_por_imei_encuentra_la_orden_sea_del_tipo_que_sea(): void
+    {
+        $user = $this->makeTecnico();
+        $this->actingAs($user)->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.store'), [
+                'prioridad' => 'normal', 'tipo_gestion' => StOrden::TIPO_REPARACION_INTERNA, 'tipo_dispositivo' => 'celular',
+                'imei' => '353791683504556', 'marca' => 'Hotwav', 'modelo' => 'A17 Pro Max', 'color' => 'Negro',
+                'almacenamiento' => '128 GB', 'falla' => 'Pantalla',
+            ])->assertSessionHasNoErrors();
+        $orden = StOrden::query()->where('imei', '353791683504556')->firstOrFail();
+
+        $sinBuscar = fn ($ordenes) => ! collect($ordenes->items())->contains('id', $orden->id);
+        $encontrada = fn ($ordenes) => collect($ordenes->items())->contains('id', $orden->id);
+        $this->get(route('servicio.ordenes.index'))->assertOk()->assertViewHas('ordenes', $sinBuscar);
+        $this->get(route('servicio.ordenes.index', ['q' => '504556']))->assertOk()->assertViewHas('ordenes', $encontrada);
+        $this->get(route('servicio.ordenes.index', ['q' => '353791683504556']))->assertOk()->assertViewHas('ordenes', $encontrada);
+    }
+
     private function makeTecnico(): User
     {
         return User::create([

@@ -111,6 +111,9 @@
                             <dt>Gestión</dt>
                             <dd>
                                 {{ $orden->etiquetaTipoGestion() }}
+                                @if($orden->realizado())
+                                    <span style="color:#15803d;font-weight:600;">· Realizado</span>
+                                @endif
                                 @if($orden->etiquetaRangoGarantia())
                                     <span class="muted">{{ $orden->etiquetaRangoGarantia() }}</span>
                                 @endif

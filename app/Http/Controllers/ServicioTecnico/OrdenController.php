@@ -61,7 +61,9 @@ class OrdenController extends Controller
 
         $soloInternas = $request->routeIs('servicio.ordenes.internas')
             || $request->query('tipo_gestion') === StOrden::TIPO_REPARACION_INTERNA;
-        if (Schema::hasColumn('st_ordenes', 'tipo_gestion')) {
+        // Al buscar (IMEI, cliente, N°…) se encuentra la orden sea del tipo que sea y aunque ya esté realizada.
+        $buscando = trim((string) $request->query('q', '')) !== '';
+        if (! $buscando && Schema::hasColumn('st_ordenes', 'tipo_gestion')) {
             if ($soloInternas) {
                 $query->where('tipo_gestion', StOrden::TIPO_REPARACION_INTERNA);
             } else {
@@ -72,7 +74,7 @@ class OrdenController extends Controller
             }
         }
 
-        if (Schema::hasColumn('st_ordenes', 'realizado_at')) {
+        if (! $buscando && Schema::hasColumn('st_ordenes', 'realizado_at')) {
             $query->sinRealizar();
         }
 
