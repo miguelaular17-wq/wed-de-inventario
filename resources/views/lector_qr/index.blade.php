@@ -776,6 +776,7 @@
 
     <script>
 (function () {
+    const skuPrincipal = c => { const s = String(c ?? '').trim(); return s.includes(' / ') ? (s.split(' / ').map(x => x.trim()).find(Boolean) || s) : s; };
     const LOOKUP_URL = @json(route('lector_qr.lookup'));
     const UNLOCK_URL = @json(route('lector_qr.unlock'));
     const CSRF = document.querySelector('meta[name="csrf-token"]').content;
@@ -964,7 +965,7 @@
                 `<div class="ec-code"></div>` +
                 `<div class="ec-name"></div>` +
                 `<div class="ec-precio"></div>`;
-            btn.querySelector('.ec-code').textContent = p.codigo || '';
+            btn.querySelector('.ec-code').textContent = skuPrincipal(p.codigo);
             btn.querySelector('.ec-name').textContent = p.nombre || '';
             btn.querySelector('.ec-precio').textContent = money(p.precio_unidad);
             setImgWithFallback(btn.querySelector('img'), p);
@@ -980,7 +981,7 @@
 
     function renderProducto(p) {
         document.getElementById('prod-sede-label').textContent = p.sede_label || sedeLabel;
-        document.getElementById('prod-codigo').textContent = p.codigo;
+        document.getElementById('prod-codigo').textContent = skuPrincipal(p.codigo);
         document.getElementById('prod-nombre').textContent = p.nombre;
         const meta = [p.categoria, p.subcategoria].filter(Boolean).join(' · ');
         document.getElementById('prod-meta').textContent = meta || '—';

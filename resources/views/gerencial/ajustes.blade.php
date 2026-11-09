@@ -160,7 +160,7 @@
                                     {{ $fila->nombre ?: $fila->usuario }}
                                 </button>
                                 @if(!empty($fila->codigo) && $fila->codigo !== 'Sin usuario' && ($fila->nombre ?? '') !== '')
-                                    <div class="muted" style="font-size:.75rem;">{{ $fila->codigo }}</div>
+                                    <div class="muted" style="font-size:.75rem;">{{ \App\Support\Sku::principal($fila->codigo) }}</div>
                                 @endif
                             </td>
                             <td>{{ number_format($fila->movimientos) }}</td>

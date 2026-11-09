@@ -196,7 +196,7 @@
                 data-code="{{ $row['codigo'] }}"
                 @endif
                 style="{{ $isExcluded ? 'opacity:.5;border-color:#fca5a5;background:#fef2f2;' : '' }}">
-                <div class="code">{{ $row['codigo'] }}</div>
+                <div class="code">{{ \App\Support\Sku::principal($row['codigo']) }}</div>
                 <div class="name">{{ $row['producto'] }}</div>
                 <div class="stock-pills">
                     <span class="stock-pill">Origen <strong>{{ $row['opc'] }}</strong></span>

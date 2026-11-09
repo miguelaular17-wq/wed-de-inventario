@@ -229,6 +229,46 @@ class PeriodoFlowTest extends TestCase
         $this->assertCount(0, $prestamoUno->cuotas);
     }
 
+    public function test_reporte_de_faltantes_por_cobrar_suma_lo_pendiente_y_no_lo_cobrado(): void
+    {
+        (require database_path('migrations/2026_09_16_200000_add_decision_to_nomina_comision_descuentos.php'))->up();
+        (require database_path('migrations/2026_09_16_210000_add_destino_to_nomina_comision_descuentos.php'))->up();
+        $this->actingAs($this->rrhh);
+        $cargoId = DB::table('nomina_cargos')->insertGetId([
+            'nombre' => 'Cajero', 'descripcion' => 'Caja', 'estado' => 'ACTIVO', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->empleado->update(['cargo_id' => $cargoId, 'modo_comision' => NominaEmpleado::COMISION_NINGUNA]);
+
+        $this->post(route('nomina.faltante_caja.store'), [
+            'empleado_id' => $this->empleado->id, 'fecha' => '2026-11-03', 'monto' => 40, 'motivo' => 'Cierre corto',
+        ])->assertRedirect();
+        $this->post(route('nomina.faltante_caja.cuenta'), [
+            'empleado_id' => $this->empleado->id, 'monto' => 15, 'accion' => 'NOMINA', 'fecha' => '2026-11-03',
+        ])->assertRedirect();
+        $this->post(route('nomina.faltante_caja.cuenta'), [
+            'empleado_id' => $this->empleado->id, 'monto' => 5, 'accion' => 'NO_DESCONTAR', 'fecha' => '2026-11-03', 'motivo' => 'Perdonado',
+        ])->assertRedirect();
+        DB::table('nomina_comision_descuentos')->insert([
+            'empleado_id' => $this->empleado->id, 'fecha' => '2026-10-01', 'tipo' => 'FALTANTE', 'monto' => 100,
+            'motivo' => 'Ya cobrado', 'estado' => 'APLICADO', 'decision' => 'DESCONTAR', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->get(route('nomina.faltante_caja.por_cobrar'))
+            ->assertOk()
+            ->assertSee('Empleado Quincena')
+            ->assertSee('$35.00')
+            ->assertDontSee('Ya cobrado')
+            ->assertViewHas('totales', fn ($t) => $t['personas'] === 1 && $t['en_cuenta'] === 20.0
+                && $t['descontar_nomina'] === 15.0 && $t['total'] === 35.0);
+
+        $this->get(route('nomina.faltante_caja.por_cobrar', ['estado' => 'a_descontar']))
+            ->assertOk()->assertViewHas('totales', fn ($t) => $t['total'] === 15.0);
+
+        $pdf = $this->get(route('nomina.faltante_caja.por_cobrar', ['formato' => 'pdf']));
+        $pdf->assertOk();
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+    }
+
     public function test_descuenta_faltante_caja_del_sueldo_si_no_tiene_comision(): void
     {
         $this->actingAs($this->rrhh);

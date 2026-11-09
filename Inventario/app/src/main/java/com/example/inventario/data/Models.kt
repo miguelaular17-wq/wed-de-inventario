@@ -198,6 +198,7 @@ data class ServiceEventDto(
 @Serializable
 data class ServiceOrderDto(
     val id: Long = 0,
+    @SerialName("puede_gestionar") val canManage: Boolean = true,
     val codigo: String = "",
     val sede: String = "",
     @SerialName("tipo_gestion") val managementType: String = "ST",

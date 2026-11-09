@@ -117,7 +117,7 @@
                 @forelse($filas as $fila)
                     <tr>
                         <td>
-                            <div style="font-family:monospace;font-size:.82rem;color:var(--blue);">{{ $fila['codigo'] }}</div>
+                            <div style="font-family:monospace;font-size:.82rem;color:var(--blue);">{{ \App\Support\Sku::principal($fila['codigo']) }}</div>
                             <strong>{{ $fila['producto'] }}</strong>
                             @if($fila['categoria'])
                                 <div class="muted" style="font-size:.75rem;">{{ $fila['categoria'] }}</div>

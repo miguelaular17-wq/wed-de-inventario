@@ -183,7 +183,7 @@
             <tbody>
                 @forelse($pivoted as $row)
                     <tr>
-                        <td>{{ $row['codigo'] }}</td>
+                        <td>{{ \App\Support\Sku::principal($row['codigo']) }}</td>
                         <td>{{ $row['producto'] }}</td>
                         <td>{{ $row['categoria'] }}</td>
                         <td>{{ $row['proveedor'] }}</td>

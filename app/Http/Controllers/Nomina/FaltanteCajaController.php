@@ -44,6 +44,40 @@ class FaltanteCajaController extends Controller
         ]);
     }
 
+    /** Reporte de faltantes por cobrar: en cuenta sin decidir y marcados para descontar que aún no se aplican. */
+    public function porCobrar(Request $request): View|Response
+    {
+        $filtros = [
+            'q' => trim((string) $request->query('q', '')),
+            'sede' => trim((string) $request->query('sede', '')),
+            'hasta' => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->query('hasta')) ? $request->query('hasta') : null,
+            'estado' => in_array($request->query('estado'), ['en_cuenta', 'a_descontar'], true) ? $request->query('estado') : 'todos',
+        ];
+        $filas = $this->faltantes->porCobrar($filtros);
+        $totales = [
+            'personas' => $filas->count(),
+            'en_cuenta' => round($filas->sum('en_cuenta'), 2),
+            'descontar_nomina' => round($filas->sum('descontar_nomina'), 2),
+            'descontar_comision' => round($filas->sum('descontar_comision'), 2),
+            'total' => round($filas->sum('total'), 2),
+        ];
+        $payload = [
+            'filas' => $filas,
+            'totales' => $totales,
+            'filtros' => $filtros,
+            'sedes' => $this->faltantes->cajeras()->map(fn (NominaEmpleado $e) => $e->nombreSede())
+                ->filter(fn ($s) => $s && $s !== '—')->unique()->sort()->values(),
+        ];
+
+        if ($request->query('formato') === 'pdf') {
+            return \Barryvdh\DomPDF\Facade\Pdf::loadView('nomina.faltante_caja.por_cobrar_pdf', $payload + [
+                'logo' => public_path('logo.png'),
+            ])->setPaper('letter')->stream('faltantes-por-cobrar-'.now()->format('Y-m-d').'.pdf');
+        }
+
+        return view('nomina.faltante_caja.por_cobrar', $payload);
+    }
+
     public function exportarExcel(Request $request): Response
     {
         $quincena = $this->excelQuincena->resolverDesdeRequest(

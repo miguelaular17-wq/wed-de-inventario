@@ -76,7 +76,10 @@ class ServiceOrderController extends Controller
             ->orderByDesc('fecha_ingreso')
             ->orderByDesc('id');
 
-        $this->scopeOrders($query, $user);
+        // Buscando (IMEI, cliente, N°) se ve la bitácora de cualquier equipo, esté en la sede que esté.
+        if (trim((string) ($data['q'] ?? '')) === '') {
+            $this->scopeOrders($query, $user);
+        }
 
         if (! empty($data['estado'])) {
             $query->where('estado', $data['estado']);
@@ -323,7 +326,6 @@ class ServiceOrderController extends Controller
 
     public function receptionPdf(Request $request, StOrden $orden): Response
     {
-        $this->authorizeOrder($request->user(), $orden);
         $orden->load(['equipoCelular', 'backups', 'creador']);
 
         return Pdf::loadView('servicio.ordenes.pdf-recepcion', [
@@ -333,17 +335,16 @@ class ServiceOrderController extends Controller
         ])->setPaper('letter')->stream('recepcion-'.$orden->codigo().'.pdf');
     }
 
+    /** Ver la orden y su bitácora no depende de la sede; cambiarla sí (ver authorizeOrder). */
     public function show(Request $request, StOrden $orden): JsonResponse
     {
-        $this->authorizeOrder($request->user(), $orden);
-
         return response()->json([
             'data' => $this->orderPayload($orden->load([
                 'equipoCelular',
                 'creador',
                 'tecnico',
                 'eventos.usuario',
-            ])),
+            ]), $request->user()),
         ]);
     }
 
@@ -431,26 +432,34 @@ class ServiceOrderController extends Controller
 
     private function authorizeOrder(User $user, StOrden $order): void
     {
-        if ((int) $order->created_by === (int) $user->id) {
-            return;
+        if (! $this->puedeGestionar($user, $order)) {
+            abort(403, 'No tienes permiso para gestionar esta orden.');
         }
-        if ($user->canAccess('servicio')) {
-            if (! $user->scopesServicioToOwnSede()
-                || strtoupper((string) $order->sede) === strtoupper((string) $user->sede)
-                || strtoupper((string) $order->sede_origen_transfer) === strtoupper((string) $user->sede)) {
-                return;
-            }
-        }
-
-        abort(403, 'No tienes permiso para gestionar esta orden.');
     }
 
-    private function orderPayload(StOrden $order): array
+    private function puedeGestionar(?User $user, StOrden $order): bool
+    {
+        if (! $user) {
+            return false;
+        }
+        if ((int) $order->created_by === (int) $user->id) {
+            return true;
+        }
+
+        return $user->canAccess('servicio')
+            && (! $user->scopesServicioToOwnSede()
+                || strtoupper((string) $order->sede) === strtoupper((string) $user->sede)
+                || strtoupper((string) $order->sede_origen_transfer) === strtoupper((string) $user->sede));
+    }
+
+    private function orderPayload(StOrden $order, ?User $user = null): array
     {
         $order->loadMissing(['equipoCelular', 'creador']);
+        $user ??= auth()->user();
 
         return [
             'id' => $order->id,
+            'puede_gestionar' => $this->puedeGestionar($user, $order),
             'codigo' => $order->codigo(),
             'sede' => $order->sede,
             'tipo_gestion' => $order->tipo_gestion,

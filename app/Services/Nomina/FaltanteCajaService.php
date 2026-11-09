@@ -255,6 +255,78 @@ class FaltanteCajaService
     }
 
     /**
+     * Faltantes por cobrar: lo que sigue pendiente (en cuenta sin decidir o marcado para descontar y aún no
+     * aplicado en una quincena). Lo cobrado (APLICADO), cancelado o marcado «no descontar» no entra.
+     *
+     * @param  array{q?:?string, sede?:?string, hasta?:?string, estado?:?string}  $f  estado: todos|en_cuenta|a_descontar
+     * @return Collection<int, array<string, mixed>> una fila por persona con su detalle, de mayor a menor deuda
+     */
+    public function porCobrar(array $f = []): Collection
+    {
+        if (! $this->disponible()) {
+            return collect();
+        }
+
+        $query = NominaComisionDescuento::query()
+            ->with(['empleado.cliente', 'empleado.sedeCatalogo', 'empleado.cargoCatalogo', 'creador'])
+            ->where('tipo', 'FALTANTE')
+            ->where('estado', 'PENDIENTE')
+            ->orderBy('fecha')->orderBy('id');
+        if ($this->tieneDecision()) {
+            $estado = $f['estado'] ?? 'todos';
+            $query->where(function ($q) use ($estado) {
+                if ($estado !== 'a_descontar') {
+                    $q->where('decision', NominaComisionDescuento::DECISION_PENDIENTE)->orWhereNull('decision');
+                }
+                if ($estado !== 'en_cuenta') {
+                    $q->orWhere('decision', NominaComisionDescuento::DECISION_DESCONTAR);
+                }
+            });
+        }
+        if (! empty($f['hasta'])) {
+            $query->whereDate('fecha', '<=', $f['hasta']);
+        }
+        if (! empty($f['q'])) {
+            $query->whereHas('empleado', fn ($e) => $e->buscar(trim((string) $f['q'])));
+        }
+
+        $sede = mb_strtoupper(trim((string) ($f['sede'] ?? '')), 'UTF-8');
+
+        return $query->get()
+            ->filter(fn (NominaComisionDescuento $d) => $d->empleado !== null
+                && ($sede === '' || mb_strtoupper((string) $d->empleado->nombreSede(), 'UTF-8') === $sede))
+            ->groupBy('empleado_id')
+            ->map(function (Collection $registros) {
+                $empleado = $registros->first()->empleado;
+                $enCuenta = 0.0;
+                $nomina = 0.0;
+                $comision = 0.0;
+                foreach ($registros as $r) {
+                    $monto = (float) $r->monto;
+                    if ($r->decision === NominaComisionDescuento::DECISION_DESCONTAR) {
+                        $r->destino === NominaComisionDescuento::DESTINO_NOMINA ? $nomina += $monto : $comision += $monto;
+                    } else {
+                        $enCuenta += $monto;
+                    }
+                }
+
+                return [
+                    'empleado' => $empleado,
+                    'en_cuenta' => round($enCuenta, 2),
+                    'descontar_nomina' => round($nomina, 2),
+                    'descontar_comision' => round($comision, 2),
+                    'total' => round($enCuenta + $nomina + $comision, 2),
+                    'desde' => $registros->min('fecha'),
+                    'ultimo' => $registros->max('fecha'),
+                    'registros' => $registros->values(),
+                ];
+            })
+            ->filter(fn ($fila) => abs($fila['total']) >= 0.005)
+            ->sortByDesc('total')
+            ->values();
+    }
+
+    /**
      * @param  Collection<int, NominaEmpleado>  $empleados
      * @return Collection<int, array{cuenta:float,a_descontar:float,salto:float}>
      */

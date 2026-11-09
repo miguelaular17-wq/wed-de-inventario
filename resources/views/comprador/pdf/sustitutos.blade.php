@@ -80,7 +80,7 @@
                 <tbody>
                     @foreach($group['productos'] as $prod)
                     <tr>
-                        <td>{{ $prod->codigo }}</td>
+                        <td>{{ \App\Support\Sku::principal($prod->codigo) }}</td>
                         <td>{{ $prod->nombre }}</td>
                         <td>{{ $prod->proveedor ?: 'N/A' }}</td>
                         <td class="text-right {{ $prod->stock_total == 0 ? 'text-danger' : 'text-success' }}">

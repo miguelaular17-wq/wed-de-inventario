@@ -1105,7 +1105,7 @@
                         : (stock !== null
                             ? '<span class="q-pedir-stock ' + (stock === 0 ? 'zero' : 'ok') + '">Stock: ' + stock + '</span>'
                             : '');
-                    div.innerHTML = '<strong>' + escapeHtml(p.producto) + stockBadge + '</strong><span>' + escapeHtml(p.codigo) + (p.categoria ? ' · ' + escapeHtml(p.categoria) : '') + '</span>';
+                    div.innerHTML = '<strong>' + escapeHtml(p.producto) + stockBadge + '</strong><span>' + escapeHtml(skuPrincipal(p.codigo)) + (p.categoria ? ' · ' + escapeHtml(p.categoria) : '') + '</span>';
                     div.addEventListener('click', function() {
                         const existencias = Array.isArray(p.existencias) ? p.existencias : [];
                         const tieneStock = existencias.length > 0 || (stock !== null && stock > 0);
@@ -1127,7 +1127,7 @@
                         selectedProduct = p;
                         selectedInfo.textContent = p.manual
                             ? p.producto + ' (MANUAL)'
-                            : p.producto + ' (' + p.codigo + ') — Sin existencia';
+                            : p.producto + ' (' + skuPrincipal(p.codigo) + ') — Sin existencia';
                         selectedPanel.hidden = false;
                         document.getElementById('q-pedir-manual-fields').hidden = true;
                         resultsEl.innerHTML = '';
@@ -1199,6 +1199,11 @@
         const d = document.createElement('div');
         d.textContent = str || '';
         return d.innerHTML;
+    }
+
+    function skuPrincipal(c) {
+        const s = String(c ?? '').trim();
+        return s.includes(' / ') ? (s.split(' / ').map(x => x.trim()).find(Boolean) || s) : s;
     }
 })();
 </script>

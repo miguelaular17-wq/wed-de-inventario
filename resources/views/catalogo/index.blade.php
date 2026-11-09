@@ -770,7 +770,7 @@
                     <div class="product-info">
                         <div class="product-meta">
                             <div class="product-category">{{ $prod->categoria ?? 'Sin Categoría' }}</div>
-                            <div class="product-code">{{ $prod->codigo }}</div>
+                            <div class="product-code">{{ \App\Support\Sku::principal($prod->codigo) }}</div>
                         </div>
                         <h3 class="product-title" title="{{ $prod->descripcion }}">{{ ltrim((string) $prod->descripcion, "/ \t") }}</h3>
                         <div class="price-box">
@@ -878,7 +878,7 @@ window.openCasheaFromCard = function (card) {
         return;
     }
 
-    document.getElementById('cashea-nombre').textContent = nombre + ' — ' + codigo;
+    document.getElementById('cashea-nombre').textContent = nombre + ' — ' + String(codigo || '').split(' / ')[0].trim();
     document.getElementById('cashea-punit').textContent = precioUnit > 0 ? fmt(precioUnit) : '—';
     document.getElementById('cashea-pmayor').textContent = precioMayor > 0 ? fmt(precioMayor) : '—';
     document.getElementById('cashea-descuento').textContent = precioUnit > 0

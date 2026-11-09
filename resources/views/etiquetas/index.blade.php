@@ -450,6 +450,7 @@ sup.etq-dec { font-size: .5em; vertical-align: top; position: relative; top: .12
     let ultimoAgregado = null;
 
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const skuPrincipal = c => { const s = String(c ?? '').trim(); return s.includes(' / ') ? (s.split(' / ').map(x => x.trim()).find(Boolean) || s) : s; };
     const ceilPrecio = v => { const n = Number(v); return n > 0 ? Math.ceil(Math.round(n * 100) / 100) : 0; };
     // Igual que EtiquetasPrecioService::formatoPrecio: decimales con punto y miles con coma (1,450.75).
     const fmt = v => { const n = Number(v); return n > 0 ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'; };
@@ -565,7 +566,7 @@ sup.etq-dec { font-size: .5em; vertical-align: top; position: relative; top: .12
             <div class="etq-res">
                 <div>
                     <div class="etq-res-name">${esc(p.nombre)}</div>
-                    <div class="etq-res-meta"><code>${esc(p.codigo)}</code> · 1 pza <b>REF ${fmt(pu(p))}</b>${tieneMayor(p) ? ` · mayor <b>REF ${fmt(pm(p))}</b>` : ''}</div>
+                    <div class="etq-res-meta"><code>${esc(skuPrincipal(p.codigo))}</code> · 1 pza <b>REF ${fmt(pu(p))}</b>${tieneMayor(p) ? ` · mayor <b>REF ${fmt(pm(p))}</b>` : ''}</div>
                 </div>
                 <button type="button" class="btn primary etq-btn-sm" data-add="${p.id}">➕ Agregar</button>
             </div>`).join('');
@@ -613,7 +614,7 @@ sup.etq-dec { font-size: .5em; vertical-align: top; position: relative; top: .12
         } else {
             $body.innerHTML = lista.map((p, i) => `
                 <tr class="${p.id === ultimoAgregado ? 'etq-row-new' : ''}">
-                    <td><div style="font-weight:600;">${esc(p.nombre)}</div><div style="font-size:.74rem; color:#64748b;">${esc(p.codigo)}</div></td>
+                    <td><div style="font-weight:600;">${esc(p.nombre)}</div><div style="font-size:.74rem; color:#64748b;">${esc(skuPrincipal(p.codigo))}</div></td>
                     <td style="text-align:right;">
                         <input type="text" class="etq-texto-u ${p.texto_unidad ? 'editado' : ''}" maxlength="${TEXTO_UNIDAD_MAX}" value="${esc(p.texto_unidad || '')}" placeholder="${TEXTO_UNIDAD}" data-texto="${i}"
                             title="Lo que dice la caja del primer precio (COMPRA 1 PZA). Escribe un número (2 → 2 PZAS) o un texto: PAR, DOCENA, CAJA…">
@@ -728,7 +729,7 @@ sup.etq-dec { font-size: .5em; vertical-align: top; position: relative; top: .12
                     <div class="etq-lz-loc">LOCURA</div>
                     <div class="etq-lz-cinta">PRECIOS BAJOS TODO EL AÑO</div>
                     ${caja}
-                    <div class="etq-lz-cod">Cód. ${esc(p.codigo)}</div>
+                    <div class="etq-lz-cod">Cód. ${esc(skuPrincipal(p.codigo))}</div>
                 </div>
                 <div class="etq-lz-der">
                     <span class="etq-lz-pill">PRECIO</span>
@@ -760,7 +761,7 @@ sup.etq-dec { font-size: .5em; vertical-align: top; position: relative; top: .12
                 </div>
                 <div class="etq-pc-der">
                     ${lk ? `<img src="${LOGOS[lk]}" alt="${esc(marca)}" style="height:${['dell', 'apple', 'victus', 'hp', 'xiaomi', 'poco'].includes(lk) ? 30 : 24}px; max-width:120px; object-fit:contain; align-self:center;">` : `<div class="etq-pc-marca" style="text-align:center;">${esc(marca)}</div>`}
-                    <div class="etq-pc-cod">COD: ${esc(p.codigo)}</div>
+                    <div class="etq-pc-cod">COD: ${esc(skuPrincipal(p.codigo))}</div>
                     <div class="etq-pc-grid">${specs || '<span style="font-size:10px; color:#94a3b8;">Completa la ficha técnica en la lista.</span>'}</div>
                     <div class="etq-pc-web">${esc(WEB)}</div>
                 </div>
@@ -814,7 +815,7 @@ sup.etq-dec { font-size: .5em; vertical-align: top; position: relative; top: .12
                 ${marcaHtml ? thCaja(base, 64.4, 23.8, 19.8, 7, 'blanco marca', 'color:#0b1f4d;', marcaHtml) : ''}
                 ${thCaja(base, 8.2, 35, 76, 38.7, 'blanco filas', `font-size:${thFs(base, filas.length > 5 ? 8 : 9)}; border-radius:10px; overflow:visible; padding:0 2.5cqw 0 0;`, filasHtml)}
                 ${thLema(base, 74.9, 10.5)}
-                ${thCaja(base, 0, 79.4, base.ancho, 2.4, 'lema', `font-size:${thFs(base, 4.6)}; color:#bae6fd;`, 'COD: ' + esc(p.codigo))}
+                ${thCaja(base, 0, 79.4, base.ancho, 2.4, 'lema', `font-size:${thFs(base, 4.6)}; color:#bae6fd;`, 'COD: ' + esc(skuPrincipal(p.codigo)))}
             </div>`;
     }
 
@@ -841,7 +842,7 @@ sup.etq-dec { font-size: .5em; vertical-align: top; position: relative; top: .12
         return `
             <div class="etq-th" style="${tamanoPreview('th_clasica')}">
                 ${thLogo(base, 2.2, 5.4)}
-                ${thCaja(base, 3, 8.8, 64, 11.6, 'blanco nombre', `font-size:${thFs(base, nomPt)};`, `<small style="position:absolute; left:3%; top:5%; font-size:${thFs(base, 4.4)}; color:#64748b; text-transform:none;">Cód. ${esc(p.codigo)}</small>${esc(p.nombre)}`)}
+                ${thCaja(base, 3, 8.8, 64, 11.6, 'blanco nombre', `font-size:${thFs(base, nomPt)};`, `<small style="position:absolute; left:3%; top:5%; font-size:${thFs(base, 4.4)}; color:#64748b; text-transform:none;">Cód. ${esc(skuPrincipal(p.codigo))}</small>${esc(p.nombre)}`)}
                 ${precios}
                 ${thLema(base, 45.8, 7)}
             </div>`;
@@ -908,7 +909,7 @@ sup.etq-dec { font-size: .5em; vertical-align: top; position: relative; top: .12
                     <div class="etq-card-name"><small>PRODUCTO</small><b style="font-size:${p.nombre.length <= 26 ? 15 : (p.nombre.length <= 46 ? 13 : (p.nombre.length <= 75 ? 11 : 9.5))}px;">${esc(p.nombre)}</b></div>
                 </div>
                 <div class="etq-card-prices">${precios}</div>
-                <div class="etq-card-foot"><span>Cód. ${esc(p.codigo)}</span><span>Precios en REF · {{ now()->format('d/m/Y') }}</span></div>
+                <div class="etq-card-foot"><span>Cód. ${esc(skuPrincipal(p.codigo))}</span><span>Precios en REF · {{ now()->format('d/m/Y') }}</span></div>
             </div>`;
     }
 

@@ -37,7 +37,7 @@
                         };
                     @endphp
                     <tr class="{{ $rowClass }}">
-                        <td class="col-code">{{ $row['cod_centro'] }}</td>
+                        <td class="col-code">{{ \App\Support\Sku::principal($row['cod_centro']) }}</td>
                         <td>{{ $row['producto'] }}</td>
                         <td class="col-number">{{ $row['existencia'] }}</td>
                         <td>{{ $row['categoria'] }}</td>

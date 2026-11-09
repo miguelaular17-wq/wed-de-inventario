@@ -426,7 +426,7 @@ private fun GuestPedidoScreen(state: AppUiState, viewModel: AppViewModel) {
                                 }
                                 Text(
                                     listOfNotNull(
-                                        product.codigo.takeIf { it.isNotBlank() },
+                                        skuPrincipal(product.codigo).takeIf { it.isNotBlank() },
                                         product.categoria?.takeIf { it.isNotBlank() },
                                     ).joinToString(" · "),
                                     style = MaterialTheme.typography.bodySmall,
@@ -467,7 +467,7 @@ private fun GuestPedidoScreen(state: AppUiState, viewModel: AppViewModel) {
                             if (state.guestPedidoManual) {
                                 "${selected.producto} (MANUAL)"
                             } else {
-                                "${selected.producto} (${selected.codigo}) — Stock: ${selected.stock}"
+                                "${selected.producto} (${skuPrincipal(selected.codigo)}) — Stock: ${selected.stock}"
                             },
                             fontWeight = FontWeight.SemiBold,
                             color = NexoBlueDark,
@@ -746,7 +746,7 @@ private fun GuestStockRow(item: InventarioItemDto) {
                 color = NexoBlueDark,
             )
             Text(
-                item.codigo,
+                skuPrincipal(item.codigo),
                 style = MaterialTheme.typography.labelMedium,
                 color = NexoBlue,
             )
@@ -1125,7 +1125,7 @@ private fun InventoryRow(item: InventarioItemDto, activeSite: SedeDto?, onReques
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                item.codigo,
+                skuPrincipal(item.codigo),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

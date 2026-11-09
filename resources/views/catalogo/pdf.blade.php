@@ -316,7 +316,7 @@
                 @else
                     <div class="product-title">{{ Str::limit($prod->descripcion, 40) }}</div>
                 @endif
-                <div class="product-code">Cód: {{ $prod->codigo }}</div>
+                <div class="product-code">Cód: {{ \App\Support\Sku::principal($prod->codigo) }}</div>
 
                 @if($specs)
                     <table class="specs" cellspacing="0" cellpadding="0">

@@ -395,7 +395,7 @@
                         $badgeClass = $g === 0 ? 'zero' : ($g >= 10 ? 'high' : ($g >= 4 ? 'mid' : 'low'));
                     @endphp
                     <tr class="product-row" data-id="{{ $row['id'] }}">
-                        <td class="td-code">{{ $row['codigo'] }}</td>
+                        <td class="td-code">{{ \App\Support\Sku::principal($row['codigo']) }}</td>
                         <td>
                             <div class="td-name" title="{{ $row['nombre'] }}">{{ $row['nombre'] }}</div>
                             @if($row['proveedor'])

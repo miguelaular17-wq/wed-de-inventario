@@ -110,7 +110,7 @@
                         @endphp
                         <tr>
                             <td>
-                                <div class="codigo">{{ $fila['codigo'] ?? '' }}</div>
+                                <div class="codigo">{{ \App\Support\Sku::principal($fila['codigo'] ?? '') }}</div>
                                 <strong>{{ $fila['producto'] ?? '—' }}</strong>
                                 @if(!empty($fila['categoria']))
                                     <div class="muted">{{ $fila['categoria'] }}</div>

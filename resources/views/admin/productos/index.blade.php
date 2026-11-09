@@ -300,7 +300,7 @@ document.getElementById('export-modal').addEventListener('click', function(e) {
                 @forelse($rows as $row)
                     <tr style="{{ !empty($row['oculto']) ? 'opacity: 0.6; background: #f8fafc;' : '' }}">
                         <td style="font-family: ui-monospace, monospace; font-size: .85rem;">
-                            {{ $row['codigo'] ?? '—' }}
+                            {{ \App\Support\Sku::principal($row['codigo'] ?? '') ?: '—' }}
                             @if(!empty($row['oculto']))
                                 <span style="display:inline-block; margin-left:4px; padding:2px 4px; background:#64748b; color:white; font-size:0.65rem; border-radius:4px; font-weight:bold;">OCULTO</span>
                             @endif

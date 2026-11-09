@@ -958,6 +958,7 @@ private fun ServiceOrderDetailScreen(
                                     }
                                 }
                             }
+                            if (order.canManage) {
                             Spacer(Modifier.height(12.dp))
                             Text(
                                 "Agregar o reemplazar (máx. 3 fotos + 1 video)",
@@ -1019,6 +1020,7 @@ private fun ServiceOrderDetailScreen(
                                     Text(if (submitting) "Subiendo…" else "Guardar evidencias")
                                 }
                             }
+                            }
                         }
                     }
                     item {
@@ -1041,7 +1043,16 @@ private fun ServiceOrderDetailScreen(
                             }
                         }
                     }
-                    if (statusChoices.isNotEmpty()) {
+                    if (!order.canManage) {
+                        item {
+                            Text(
+                                "Orden de ${order.sede}: solo puedes consultarla. Los cambios los hace esa sede.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NexoMuted,
+                            )
+                        }
+                    }
+                    if (order.canManage && statusChoices.isNotEmpty()) {
                         item {
                             SectionCard("Cambiar estado") {
                                 ChoiceSelector("Nuevo estado", status, statusChoices) {

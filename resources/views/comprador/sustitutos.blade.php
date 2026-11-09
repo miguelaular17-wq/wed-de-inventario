@@ -158,7 +158,7 @@
                             $textStyle = $isExcluded ? 'text-decoration: line-through; color: var(--muted);' : '';
                         @endphp
                         <tr style="{{ $rowStyle }}" ondblclick="toggleExclude(this, {{ $prod->id }})" title="Doble clic para excluir/incluir de compras">
-                            <td style="{{ $textStyle }}">{{ $prod->codigo }}</td>
+                            <td style="{{ $textStyle }}">{{ \App\Support\Sku::principal($prod->codigo) }}</td>
                             <td style="font-weight:500; {{ $textStyle }}">{{ $prod->nombre }}</td>
                             <td style="{{ $textStyle }}">{{ $prod->proveedor ?: 'Sin proveedor' }}</td>
                             <td class="text-right {{ $prod->stock_total == 0 ? 'text-danger' : 'text-success' }}" style="{{ $textStyle }}">

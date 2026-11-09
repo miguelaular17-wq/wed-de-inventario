@@ -923,6 +923,13 @@ fun mergeInventoryPages(
     if (reset) incoming else (current + incoming).distinctBy { it.codigo }
 
 /** Productos con varios códigos ("A / B / C") → enviar solo el primero. */
+/** La web guarda todos los códigos del producto separados por " / ": en pantalla va solo el principal. */
+internal fun skuPrincipal(raw: String?): String {
+    val trimmed = raw?.trim().orEmpty()
+    if (!trimmed.contains(" / ")) return trimmed
+    return trimmed.split(" / ").map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: trimmed
+}
+
 internal fun primaryPedidoCodigo(raw: String?): String {
     val trimmed = raw?.trim().orEmpty()
     if (trimmed.isBlank()) return "MANUAL"

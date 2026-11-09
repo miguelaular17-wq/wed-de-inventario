@@ -192,7 +192,7 @@
                 <tbody>
                     @forelse($abc_pareto as $fila)
                         <tr>
-                            <td>{{ $fila->nombre ?: $fila->codigo }}</td>
+                            <td>{{ $fila->nombre ?: \App\Support\Sku::principal($fila->codigo) }}</td>
                             <td>{{ $fmt($fila->unidades, 0) }}</td>
                             <td>{{ $fmt($fila->pct, 1) }}%</td>
                             <td>{{ $fmt($fila->pct_acum, 1) }}%</td>
@@ -293,7 +293,7 @@
                 <tbody>
                     @forelse($rotacion as $item)
                         <tr>
-                            <td>{{ $item['nombre'] ?: $item['codigo'] }}</td>
+                            <td>{{ $item['nombre'] ?: \App\Support\Sku::principal($item['codigo']) }}</td>
                             <td>{{ $fmt($item['unidades'], 0) }} · ${{ $fmt($item['valor']) }}</td>
                             <td>{{ $fmt($item['ventas_30d'], 0) }}</td>
                             <td>{{ $fmt($item['ventas_60d'], 0) }}</td>

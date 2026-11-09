@@ -45,7 +45,7 @@
             <tbody>
                 @forelse($filas as $fila)
                     <tr>
-                        <td><strong>{{ $fila->codigo }}</strong></td>
+                        <td><strong>{{ \App\Support\Sku::principal($fila->codigo) }}</strong></td>
                         <td>{{ $fila->producto }}</td>
                         <td>{{ $fila->categoria ?: '—' }}</td>
                         <td>{{ $fila->subcategoria ?: '—' }}</td>

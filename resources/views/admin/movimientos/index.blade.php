@@ -54,7 +54,7 @@
                 @forelse ($rows as $row)
                     <tr>
                         <td class="cell-nowrap">{{ $row['created_at'] }}</td>
-                        <td class="cell-code">{{ $row['codigo'] }}</td>
+                        <td class="cell-code">{{ \App\Support\Sku::principal($row['codigo']) }}</td>
                         <td class="cell-product" title="{{ $row['producto'] }}">{{ $row['producto'] }}</td>
                         <td class="cell-route">
                             <span class="route-pill">{{ config('inventario.display.'.$row['origen'], $row['origen']) }}</span>

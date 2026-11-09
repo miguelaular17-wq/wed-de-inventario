@@ -580,6 +580,7 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
 Route::middleware(['auth', 'permission:nomina,nomina.faltante_caja'])->prefix('nomina')->name('nomina.')->group(function () {
     Route::get('/faltante-caja', [FaltanteCajaController::class, 'index'])->name('faltante_caja.index');
     Route::get('/faltante-caja/excel', [FaltanteCajaController::class, 'exportarExcel'])->name('faltante_caja.excel');
+    Route::get('/faltante-caja/por-cobrar', [FaltanteCajaController::class, 'porCobrar'])->name('faltante_caja.por_cobrar');
     Route::post('/faltante-caja', [FaltanteCajaController::class, 'store'])->name('faltante_caja.store');
     Route::post('/faltante-caja/cuenta', [FaltanteCajaController::class, 'descontarCuenta'])->name('faltante_caja.cuenta');
     Route::post('/faltante-caja/{descuento}/decidir', [FaltanteCajaController::class, 'decidir'])->name('faltante_caja.decidir');

@@ -31,7 +31,7 @@
                 data-origen-manual="{{ $row['origen_manual'] ?? '' }}"
                 data-cantidad-manual="{{ $row['cantidad_manual'] ?? 0 }}"
                 data-manuales-list="{{ e(json_encode($manualesList)) }}">
-                <div class="code">{{ $row['cod_centro'] }}</div>
+                <div class="code">{{ \App\Support\Sku::principal($row['cod_centro']) }}</div>
                 <div class="name">{{ $row['producto'] }}</div>
                 <div class="stock-pills">
                     <span class="stock-pill">Local <strong>{{ $row['existencia'] }}</strong></span>

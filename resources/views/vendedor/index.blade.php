@@ -6,7 +6,6 @@
 @php
     use App\Support\VentaDescuento;
     $descPct = VentaDescuento::porcentaje();
-    $descFactor = VentaDescuento::factorDescuento();
     $netoFactor = VentaDescuento::factorNeto();
     $descEtiqueta = VentaDescuento::etiqueta();
     $modoJrz = !empty($modoJrz);
@@ -118,7 +117,7 @@
                     >
                         <td>
                             <div class="cat-product">
-                                <code class="cat-code">{{ $row['cod_centro'] }}</code>
+                                <code class="cat-code">{{ \App\Support\Sku::principal($row['cod_centro']) }}</code>
                                 <div class="cat-name">{{ $row['producto'] }}</div>
                                 @if(!empty($row['categoria']))
                                     <span class="cat-tag">{{ $row['categoria'] }}</span>
@@ -180,10 +179,9 @@
                                     <strong class="price-unit">{{ $precioUnidad > 0 ? '$'.number_format($precioUnidad, 2) : '—' }}</strong>
                                 </div>
                                 <div>
-                                    <span>Desc. {{ $descEtiqueta }}</span>
+                                    <span>Neto -{{ $descEtiqueta }}</span>
                                     @if($precioUnidad > 0)
-                                        <strong class="price-desc">${{ number_format($precioUnidad * $descFactor, 2) }}</strong>
-                                        <em>neto ${{ number_format($precioUnidad * $netoFactor, 2) }}</em>
+                                        <strong class="price-desc">${{ number_format($precioUnidad * $netoFactor, 2) }}</strong>
                                     @else
                                         <strong class="price-empty">—</strong>
                                     @endif
@@ -640,7 +638,7 @@ main:has(.cat-page) {
             return;
         }
 
-        document.getElementById('cashea-nombre').textContent  = `${nombre} — ${codigo}`;
+        document.getElementById('cashea-nombre').textContent  = `${nombre} — ${String(codigo || '').split(' / ')[0].trim()}`;
         document.getElementById('cashea-punit').textContent   = precioUnit  > 0 ? fmt(precioUnit)  : '—';
         document.getElementById('cashea-pmayor').textContent  = precioMayor > 0 ? fmt(precioMayor) : '—';
 

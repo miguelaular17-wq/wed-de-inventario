@@ -235,7 +235,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                     @php $conStock = (int) ($pedido->stock_global ?? 0) > 0; @endphp
                     <tr class="qpedir-row" data-grupo="{{ $grupo['key'] }}" data-filter="{{ strtolower($pedido->producto.' '.$pedido->codigo.' '.$pedido->categoria) }}" data-stock="{{ $conStock ? 'con' : 'sin' }}"
                         style="{{ $conStock ? 'background:#ecfdf5;' : '' }}">
-                        <td class="col-code">{{ $pedido->codigo }}</td>
+                        <td class="col-code">{{ \App\Support\Sku::principal($pedido->codigo) }}</td>
                         <td style="font-weight: 600;">{{ $pedido->producto }}</td>
                         <td style="color: var(--muted);">{{ $pedido->categoria ?: '—' }}</td>
                         <td class="col-number">
@@ -555,7 +555,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                             $isComprar = $row['status'] === 'COMPRAR';
                         @endphp
                         <tr class="@if($isComprar) row-comprar @else row-mala-distribucion @endif">
-                            <td class="col-code">{{ $row['cod_centro'] }}</td>
+                            <td class="col-code">{{ \App\Support\Sku::principal($row['cod_centro']) }}</td>
                             <td>
                                 <div style="font-weight: 600;">{{ $row['producto'] }}</div>
                             </td>
@@ -987,7 +987,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                         @endphp
                         <tr style="{{ $rowBg ? "background-color: {$rowBg};" : '' }}">
                             <td style="text-align: center; font-size: 1rem;">{{ $semaforoEmoji }}</td>
-                            <td style="font-family: monospace; font-size: 0.85rem; color: var(--blue);">{{ $item['codigo'] }}</td>
+                            <td style="font-family: monospace; font-size: 0.85rem; color: var(--blue);">{{ \App\Support\Sku::principal($item['codigo']) }}</td>
                             <td>
                                 <div style="font-weight: 500;">{{ $item['producto'] }}</div>
                                 <div style="font-size: 0.75rem; color: var(--muted);">{{ $item['proveedor'] }}</div>
@@ -1169,7 +1169,7 @@ table.data-table tbody tr.row-mala-distribucion:hover {
                             data-producto="{{ strtolower($p['producto'] ?? '') }}"
                             data-vendido="{{ !empty($p['tuvo_ventas']) ? '1' : '0' }}"
                             data-fecha-pub="{{ $p['fecha_publicidad_iso'] ?? '' }}">
-                            <td style="font-family: monospace; font-size: 0.85rem; color: var(--blue);">{{ $p['codigo'] }}</td>
+                            <td style="font-family: monospace; font-size: 0.85rem; color: var(--blue);">{{ \App\Support\Sku::principal($p['codigo']) }}</td>
                             <td style="font-weight: 500;">
                                 {{ $p['producto'] }}
                                 <div style="font-size: 0.75rem; color: var(--muted);">{{ $p['proveedor'] }}</div>

@@ -606,6 +606,34 @@ class StCelularesBitacoraTest extends TestCase
         $this->get(route('servicio.ordenes.create'))->assertSee('<option value="NUEVA MARCA"', false);
     }
 
+    public function test_api_ve_la_bitacora_de_otra_sede_pero_no_la_cambia(): void
+    {
+        $doral = $this->makeTecnico();
+        Sanctum::actingAs($doral, ['mobile']);
+        $orderId = $this->postJson('/api/v1/servicio/celulares/ordenes', [
+            'sede' => 'DORAL', 'cliente_nombre' => 'Cliente Doral', 'imei' => '351234567890123',
+            'marca' => 'Tecno', 'modelo' => 'Spark 20', 'color' => 'Negro', 'almacenamiento' => '128 GB',
+            'falla' => 'No carga', 'prioridad' => 'normal',
+        ])->assertCreated()->json('data.id');
+
+        $centro = User::create(['name' => 'Técnico Centro', 'email' => 'tec-centro-'.uniqid().'@test.local',
+            'password' => 'password123', 'role' => User::ROLE_TECNICO, 'sede' => 'CENTRO']);
+        Sanctum::actingAs($centro, ['mobile']);
+
+        $this->getJson('/api/v1/servicio/celulares/ordenes')->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson('/api/v1/servicio/celulares/ordenes?q=567890123')->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.sede', 'DORAL');
+        $this->getJson("/api/v1/servicio/celulares/ordenes/{$orderId}")->assertOk()
+            ->assertJsonPath('data.puede_gestionar', false)
+            ->assertJsonPath('data.cliente_nombre', 'Cliente Doral');
+        $this->get("/api/v1/servicio/celulares/ordenes/{$orderId}/pdf/recepcion")->assertOk();
+        $this->postJson("/api/v1/servicio/celulares/ordenes/{$orderId}/estado", ['estado' => 'en_proceso', 'comentario' => 'Probando'])
+            ->assertForbidden();
+
+        Sanctum::actingAs($doral, ['mobile']);
+        $this->getJson("/api/v1/servicio/celulares/ordenes/{$orderId}")->assertOk()->assertJsonPath('data.puede_gestionar', true);
+    }
+
     public function test_buscar_por_imei_encuentra_la_orden_sea_del_tipo_que_sea(): void
     {
         $user = $this->makeTecnico();

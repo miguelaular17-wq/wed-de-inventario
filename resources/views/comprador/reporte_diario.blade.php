@@ -27,7 +27,7 @@
             @foreach($pedidos as $pedido)
             <tr>
                 <td>{{ $pedido->producto }}</td>
-                <td>{{ $pedido->codigo }}</td>
+                <td>{{ \App\Support\Sku::principal($pedido->codigo) }}</td>
                 <td>{{ $pedido->categoria }}</td>
                 <td>{{ $pedido->frecuencia }}</td>
             </tr>
