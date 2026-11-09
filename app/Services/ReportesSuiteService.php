@@ -217,36 +217,89 @@ class ReportesSuiteService
         ];
     }
 
+    /**
+     * Consolidado de cuadres como se cuadró cada caja en la web: el cuadre es lo que contó Tesorería menos lo
+     * declarado en Suite (solo cuando ya se procesó o cerró). Facturas y venta salen del cierre de Suite y, si
+     * todavía no llegaron, de los cobros de la caja.
+     */
     private function cuadre(array $f): array
     {
-        $q = $this->cuadresBase($f);
+        $q = \App\Models\CuadreCaja::query()
+            ->with(['pagos', 'conteos', 'lotes.ingreso'])
+            ->when(! empty($f['sede']), fn ($q) => $q->where('sede', $f['sede']))
+            ->whereBetween('fecha_cierre', [$f['desde'], $f['hasta']]);
         if (! empty($f['usuario'])) {
             $q->where('usuario', $f['usuario']);
         }
         $cuadres = $q->orderBy('fecha_cierre')->orderBy('codigo_caja')->get();
+        $servicio = app(CuadreCajaService::class);
+        $servicio->completarNombres($cuadres);
+        $faltan = $cuadres->filter(fn ($c) => ! $c->usuario_nombre && $c->usuario)->pluck('usuario')->unique()->all();
+        if ($faltan) {
+            $nombres = $this->nombresPorCedula($faltan);
+            $cuadres->each(function ($c) use ($nombres) {
+                $c->usuario_nombre = $c->usuario_nombre ?: ($nombres[$c->usuario] ?? null);
+            });
+        }
         $conTotal = ($f['mostrar_total'] ?? '1') === '1';
-        $tieneSuite = $this->hayColumna('cuadres_caja', 'diferencia_suite_usd');
+        $facturasPorCaja = $this->facturasPorCaja($f);
+        $estados = CuadreCajaService::ESTADOS;
 
-        $filas = $cuadres->map(fn ($c) => ['celdas' => array_values(array_filter([
-            $this->fecha($c->fecha_cierre), $c->usuario, $c->usuario_nombre ?: '—',
-            $tieneSuite ? ($c->observacion_suite ?: '') : '', $c->codigo_caja ?: '—', $this->num($c->factor_cambio),
-            $tieneSuite && $c->facturas_suite !== null ? (string) $c->facturas_suite : '—',
-            $conTotal ? ($tieneSuite && $c->total_venta_usd !== null ? $this->num($c->total_venta_usd) : '—') : null,
-            $tieneSuite && $c->diferencia_suite_usd !== null ? $this->num($c->diferencia_suite_usd) : '—',
-        ], fn ($v) => $v !== null)), 'negativo' => $tieneSuite && (float) ($c->diferencia_suite_usd ?? 0) < -0.004])->all();
+        $sumFacturas = 0;
+        $sumVenta = 0.0;
+        $sumCuadre = 0.0;
+        $filas = [];
+        foreach ($cuadres as $c) {
+            $resumen = $servicio->resumen($c);
+            $clave = $c->sede.'|'.$c->fecha_cierre?->toDateString().'|'.$c->codigo_caja.'|'.$c->usuario;
+            $facturas = $c->facturas_suite ?? ($facturasPorCaja[$clave] ?? null);
+            $venta = $c->total_venta_usd !== null ? (float) $c->total_venta_usd : $resumen['ingresos_usd'];
+            $diferencia = $resumen['diferencia_usd'];
+            $sumFacturas += (int) $facturas;
+            $sumVenta += $venta;
+            $sumCuadre += (float) $diferencia;
+
+            $filas[] = ['celdas' => array_values(array_filter([
+                $this->fecha($c->fecha_cierre), $c->usuario ?: '—', $c->usuario_nombre ?: '—',
+                $c->observacion_tesoreria ?: ($c->observacion_suite ?? ''), $c->codigo_caja ?: '—', $this->num($c->factor_cambio),
+                $facturas !== null ? (string) $facturas : '—',
+                $conTotal ? $this->num($venta) : null,
+                $estados[$c->estadoTesoreria()] ?? $c->estadoTesoreria(),
+                $diferencia !== null ? $this->num($diferencia) : '—',
+            ], fn ($v) => $v !== null)), 'negativo' => $diferencia !== null && $diferencia < -0.004];
+        }
 
         $columnas = [['Fecha', 'l'], ['Usuario', 'l'], ['Descripción', 'l'], ['Observación', 'l'], ['Caja', 'l'], ['Tasa', 'r'], ['N° facturas', 'r']];
         if ($conTotal) {
             $columnas[] = ['Total venta', 'r'];
         }
+        $columnas[] = ['Estado', 'l'];
         $columnas[] = ['Cuadre de caja', 'r'];
-        $totales = ['Total', count($filas).' cierres', '', '', '', '', $tieneSuite ? (string) $cuadres->sum('facturas_suite') : ''];
+        $totales = ['Total', count($filas).' cierres', '', '', '', '', (string) $sumFacturas];
         if ($conTotal) {
-            $totales[] = $tieneSuite ? $this->num($cuadres->sum('total_venta_usd')) : '';
+            $totales[] = $this->num($sumVenta);
         }
-        $totales[] = $tieneSuite ? $this->num($cuadres->sum('diferencia_suite_usd')) : '';
+        $totales[] = '';
+        $totales[] = $this->num($sumCuadre);
 
         return ['columnas' => $columnas, 'filas' => $filas, 'totales' => $totales, 'total_filas' => count($filas)];
+    }
+
+    /** @return array<string, int> «sede|fecha|caja|usuario» => facturas cobradas en esa caja ese día */
+    private function facturasPorCaja(array $f): array
+    {
+        if (! Schema::hasTable('ventas_pagos')) {
+            return [];
+        }
+
+        return $this->pagosBase($f)
+            ->where('p.origen', 'FACVEN')
+            ->whereNotNull('p.numero_documento')
+            ->selectRaw('p.sede, DATE(p.fecha) as dia, p.codigo_caja, p.usuario, COUNT(DISTINCT p.numero_documento) as n')
+            ->groupBy('p.sede', DB::raw('DATE(p.fecha)'), 'p.codigo_caja', 'p.usuario')
+            ->get()
+            ->mapWithKeys(fn ($r) => [$r->sede.'|'.substr((string) $r->dia, 0, 10).'|'.$r->codigo_caja.'|'.$r->usuario => (int) $r->n])
+            ->all();
     }
 
     /** Renglones de una factura para el botón «Detalle». */

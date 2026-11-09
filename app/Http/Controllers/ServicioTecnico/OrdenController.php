@@ -95,7 +95,7 @@ class OrdenController extends Controller
                     ->orWhere('serial', $like, '%'.$q.'%')
                     ->orWhere('imei', $like, '%'.$q.'%');
 
-                if (ctype_digit($q)) {
+                if (ctype_digit($q) && strlen($q) <= 9) {
                     $inner->orWhere('numero', (int) $q);
                 }
             });
@@ -164,7 +164,7 @@ class OrdenController extends Controller
                     ->orWhere('equipo', $like, '%'.$q.'%')
                     ->orWhere('imei', $like, '%'.$q.'%')
                     ->orWhere('serial', $like, '%'.$q.'%');
-                if (ctype_digit($q)) {
+                if (ctype_digit($q) && strlen($q) <= 9) {
                     $inner->orWhere('numero', (int) $q);
                 }
             });

@@ -278,6 +278,9 @@
                     $fila = compact('editable', 'cuadre', 'monto', 'dinero', 'valor', 'pildoraDif', 'filaDif', 'bancosPos', 'titularesPos');
                     $posLineas = array_values(array_filter($lineas, fn ($l) => $l['punto_venta']));
                     $otrasLineas = array_values(array_filter($lineas, fn ($l) => ! $l['punto_venta']));
+                    $primerPos = collect($lineas)->search(fn ($l) => $l['punto_venta']);
+                    $antesLineas = $primerPos === false ? [] : array_values(array_filter(array_slice($lineas, 0, $primerPos), fn ($l) => ! $l['punto_venta']));
+                    $otrasLineas = array_values(array_udiff($otrasLineas, $antesLineas, fn ($a, $b) => strcmp($a['clave'], $b['clave'])));
                     $posSuiteBs = array_sum(array_map(fn ($l) => $l['en_dolares'] ? 0 : $l['suite'], $posLineas));
                     $posSuiteUsd = round(array_sum(array_column($posLineas, 'suite_usd')), 2);
                     $posContados = array_filter($posLineas, fn ($l) => $l['tesoreria_usd'] !== null);
@@ -285,6 +288,10 @@
                     $posTesUsd = $posContados ? round(array_sum(array_column($posContados, 'tesoreria_usd')), 2) : null;
                     $posDif = $posTesUsd !== null ? round($posTesUsd - $posSuiteUsd, 2) : null;
                 @endphp
+
+                @foreach($antesLineas as $l)
+                    @include('cuadre_caja._linea', $fila + ['l' => $l])
+                @endforeach
 
                 @if($posLineas)
                     <tr class="cc-seccion"><td colspan="6">💳 Puntos de venta <span>El monto de cada punto es la suma de sus lotes. Toca «Lotes» para verlos o anotarlos.</span></td></tr>

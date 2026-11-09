@@ -26,6 +26,9 @@ class CuadreCajaService
         CuadreCaja::CERRADO => 'Cerrado',
     ];
 
+    /** @var array<string, list<array<string, mixed>>> */
+    private array $formasPorSede = [];
+
     /**
      * @return array{filas: list<array<string, mixed>>, totales: array<string, float|int>, ultimaCarga: array<string, string>}
      */
@@ -121,6 +124,11 @@ class CuadreCajaService
             $lineas[$clave]['tesoreria'] = $conteo->monto;
         }
 
+        // Las formas de pago de la pantalla de cierre de Suite, aunque la cajera no haya declarado nada en ellas.
+        foreach ($this->formasDelCuadre((string) $cuadre->sede) as $forma) {
+            $lineas[$forma['clave']] ??= $this->lineaVacia($forma['clave'], $forma['codigo_metodo'], $forma['codigo_cuenta'], $forma['forma_pago'], $forma['cuenta'], $forma['en_dolares']);
+        }
+
         foreach ($cuadre->lotes as $lote) {
             /** @var CuadreCajaLote $lote */
             $clave = $this->clave($lote->codigo_metodo, $lote->codigo_cuenta);
@@ -150,7 +158,60 @@ class CuadreCajaService
         }
         unset($linea);
 
-        return array_values($lineas);
+        return $this->ordenarComoSuite(array_values($lineas), (string) $cuadre->sede);
+    }
+
+    /**
+     * Formas de pago fijas del cuadre de una sede (las de la pantalla de cierre de Suite).
+     *
+     * @return list<array{clave:string, codigo_metodo:string, codigo_cuenta:string, forma_pago:?string, cuenta:?string, en_dolares:bool, punto_venta:bool, lotes:array}>
+     */
+    public function formasDelCuadre(string $sede): array
+    {
+        $lista = config('cuadre_caja.formas_cuadre.'.strtoupper($sede));
+        if (is_array($lista) && $lista !== []) {
+            $formas = [];
+            foreach ($lista as $clave => [$forma, $cuenta, $enDolares]) {
+                [$metodo, $codigoCuenta] = array_pad(explode('|', $clave, 2), 2, '');
+                $formas[] = [
+                    'clave' => $clave,
+                    'codigo_metodo' => $metodo,
+                    'codigo_cuenta' => $codigoCuenta,
+                    'forma_pago' => $forma,
+                    'cuenta' => $cuenta,
+                    'en_dolares' => (bool) $enDolares,
+                    'punto_venta' => $this->esPuntoDeVenta($metodo, $forma, $cuenta),
+                    'lotes' => [],
+                ];
+            }
+
+            return $formas;
+        }
+
+        $metodos = config('cuadre_caja.metodos_cuadre', []);
+
+        return array_values(array_filter($this->formasDePago($sede), fn ($f) => in_array($f['codigo_metodo'], $metodos, true)));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $lineas
+     * @return list<array<string, mixed>>
+     */
+    private function ordenarComoSuite(array $lineas, string $sede = ''): array
+    {
+        $fijas = array_flip(array_keys(config('cuadre_caja.formas_cuadre.'.strtoupper($sede), [])));
+        $metodos = array_flip(config('cuadre_caja.orden_metodos', []));
+        $cuentas = array_flip(config('cuadre_caja.orden_cuentas', []));
+        $fuera = PHP_INT_MAX;
+        $orden = fn ($l) => [
+            $fijas[$l['clave']] ?? $fuera,
+            $metodos[$l['codigo_metodo']] ?? $fuera, mb_strtoupper((string) $l['forma_pago']),
+            $cuentas[$l['codigo_cuenta'] ?? ''] ?? (($l['codigo_cuenta'] ?? '') === '' ? -1 : $fuera), (string) $l['cuenta'],
+        ];
+
+        usort($lineas, fn ($a, $b) => $orden($a) <=> $orden($b));
+
+        return $lineas;
     }
 
     /** @return array{ingresos_usd: float, tesoreria_usd: float|null, diferencia_usd: float|null, lineas: list<array<string, mixed>>} */
@@ -179,7 +240,7 @@ class CuadreCajaService
      */
     public function formasDePago(string $sede): array
     {
-        return CuadreCajaPago::query()
+        return $this->formasPorSede[$sede] ??= CuadreCajaPago::query()
             ->join('cuadres_caja as c', 'c.id', '=', 'cuadre_caja_pagos.cuadre_caja_id')
             ->where('c.sede', $sede)
             ->whereNotNull('cuadre_caja_pagos.codigo_metodo')
@@ -288,6 +349,7 @@ class CuadreCajaService
     private function guardarConteos(CuadreCaja $cuadre, array $montos, array $lotes, User $user): void
     {
         $conocidas = collect($this->lineas($cuadre))->keyBy('clave')
+            ->union(collect($this->formasDelCuadre((string) $cuadre->sede))->keyBy('clave'))
             ->union(collect($this->formasDePago($cuadre->sede))->keyBy('clave'));
 
         $lotesPorLinea = [];
@@ -514,7 +576,9 @@ class CuadreCajaService
      */
     public function esPuntoDeVenta(?string $metodo, ?string $formaPago, ?string $cuenta): bool
     {
-        if (! preg_match('/\bP\s*\.\s*V\b\.?|\bPUNTO DE VENTA\b/iu', (string) $cuenta)) {
+        $extra = array_map(fn ($c) => mb_strtoupper(trim((string) $c), 'UTF-8'), config('cuadre_caja.cuentas_punto_venta', []));
+        if (! preg_match('/\bP\s*\.\s*V\b\.?|\bPUNTO DE VENTA\b/iu', (string) $cuenta)
+            && ! in_array(mb_strtoupper(trim((string) $cuenta), 'UTF-8'), $extra, true)) {
             return false;
         }
         $forma = mb_strtoupper((string) $formaPago, 'UTF-8');

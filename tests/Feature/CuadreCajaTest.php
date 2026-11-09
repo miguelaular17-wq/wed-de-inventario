@@ -374,12 +374,42 @@ class CuadreCajaTest extends TestCase
         $this->assertTrue($s->esPuntoDeVenta('TDD', 'TARJ. DÉBITO', 'BANESCO P.V. JRZ'));
         $this->assertTrue($s->esPuntoDeVenta('TDD', 'TARJ. DÉBITO', 'BNC P.V. JRZ'));
         $this->assertFalse($s->esPuntoDeVenta('TRFBS', 'TRANSFERENCIA BS', 'BANESCO P.V. JRZ'));
-        $this->assertFalse($s->esPuntoDeVenta('TDD', 'TARJ. DÉBITO', 'BANESCO INV. DORAL (4025)'));
+        $this->assertTrue($s->esPuntoDeVenta('TDD', 'TARJ. DÉBITO', 'BANESCO INV. DORAL (4025)'));
+        $this->assertFalse($s->esPuntoDeVenta('TRFBS', 'TRANSFERENCIA BS', 'BANESCO INV. DORAL (4025)'));
+        $this->assertFalse($s->esPuntoDeVenta('TDD', 'TARJ. DÉBITO', 'BANESCO DORAL'));
         $this->assertSame(['BNC', 'JRZ'], $s->bancoTitularPuntoVenta('BNC P.V. JRZ', 'DORAL'));
         $this->assertSame(['BANESCO', 'DORAL'], $s->bancoTitularPuntoVenta('BANESCO P.V. DORAL', 'JRZ'));
     }
 
     /** @return list<array{lote: string, monto: string}> */
+    public function test_muestra_las_formas_de_pago_de_la_pantalla_de_suite_aunque_esten_en_cero(): void
+    {
+        $otro = CuadreCaja::query()->where('codigo_caja', 'CJA01')->firstOrFail();
+        CuadreCajaPago::create([
+            'cuadre_caja_id' => $otro->id, 'codigo_metodo' => '03', 'forma_pago' => 'NOMINA',
+            'en_dolares' => true, 'ingresos' => 10, 'ingresos_usd' => 10,
+        ]);
+
+        $lineas = collect(app(CuadreCajaService::class)->lineas($this->cierre->load(['pagos', 'conteos', 'lotes'])))->keyBy('clave');
+
+        $this->assertSame(array_keys(config('cuadre_caja.formas_cuadre.DORAL')), $lineas->keys()->all());
+        $this->assertSame(815.0, $lineas['02|']['suite']);
+        $this->assertSame(0.0, $lineas['TRF|BINANCE']['suite']);
+        $this->assertTrue($lineas['TDD|BNC02']['punto_venta']);
+        $this->assertTrue($lineas['TDD|4025']['punto_venta']);
+        $this->assertFalse($lineas['TRFBS|4025']['punto_venta']);
+        $this->assertSame(['NDC|', 'NDC1|', 'IGTF|'], $lineas->keys()->slice(-3)->values()->all());
+        $this->assertSame('EFECTIVO DEVOLUCION', $lineas['NDC1|']['forma_pago']);
+        $this->assertFalse($lineas->has('03|'));
+        $this->assertSame('BANESCO', app(CuadreCajaService::class)->bancoTitularPuntoVenta('BANESCO INV. DORAL (4025)', 'DORAL')[0]);
+
+        $this->actingAs($this->usuario('tesoreria'))
+            ->get(route('cuadre_caja.show', $this->cierre))
+            ->assertOk()
+            ->assertSee('TRANSF. $')
+            ->assertSee('BINANCE');
+    }
+
     private function lotesCompletos(): array
     {
         return [['lote' => '101', 'monto' => '500000'], ['lote' => '102', 'monto' => '231536.94']];

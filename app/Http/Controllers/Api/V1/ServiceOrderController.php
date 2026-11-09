@@ -91,7 +91,7 @@ class ServiceOrderController extends Controller
                     ->orWhere('cliente_telefono', $like, '%'.$q.'%')
                     ->orWhere('imei', $like, '%'.$q.'%')
                     ->orWhere('equipo', $like, '%'.$q.'%');
-                if (ctype_digit($q)) {
+                if (ctype_digit($q) && strlen($q) <= 9) {
                     $inner->orWhere('numero', (int) $q);
                 }
             });

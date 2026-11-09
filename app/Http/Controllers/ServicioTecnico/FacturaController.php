@@ -51,7 +51,7 @@ class FacturaController extends Controller
             $query->where(function ($inner) use ($q, $like) {
                 $inner->where('cliente_nombre', $like, '%'.$q.'%')
                     ->orWhere('descripcion', $like, '%'.$q.'%');
-                if (ctype_digit($q)) {
+                if (ctype_digit($q) && strlen($q) <= 9) {
                     $inner->orWhere('numero', (int) $q);
                 }
             });

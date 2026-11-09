@@ -54,6 +54,10 @@ class ReportesSuiteTest extends TestCase
         }
         (require database_path('migrations/2026_11_05_090000_create_cuadres_caja_tables.php'))->up();
         (require database_path('migrations/2026_11_05_130000_cuadres_caja_por_dia_de_caja.php'))->up();
+        (require database_path('migrations/2026_11_06_100000_add_estado_tesoreria_to_cuadres_caja.php'))->up();
+        (require database_path('migrations/2026_11_06_120000_create_cuadre_caja_lotes_table.php'))->up();
+        (require database_path('migrations/2026_11_06_140000_add_banco_to_cuadre_caja_lotes.php'))->up();
+        (require database_path('migrations/2026_11_07_100000_add_titular_to_cuadre_caja_lotes.php'))->up();
         (require database_path('migrations/2026_11_07_120000_reportes_suite_ventas_pagos.php'))->up();
 
         $this->gerente = User::create(['name' => 'Gerente', 'email' => 'ger-'.uniqid().'@test.local', 'password' => 'password123', 'role' => User::ROLE_GERENTE]);
@@ -108,7 +112,17 @@ class ReportesSuiteTest extends TestCase
         $this->get(route('reportes_suite', ['reporte' => 'pagos'] + $filtros))
             ->assertOk()->assertSee('TARJ. DÉBITO BANESCO P.V. JRZ')->assertSee('V32365100');
         $this->get(route('reportes_suite', ['reporte' => 'cuadre'] + $filtros))
-            ->assertOk()->assertSee('JAIR AVILA')->assertSee('FALTANTE -2,44$ EN EFECTIVO')->assertSee('380,86')->assertSee('-2,44');
+            ->assertOk()->assertSee('JAIR AVILA')->assertSee('FALTANTE -2,44$ EN EFECTIVO')->assertSee('380,86')->assertSee('Pendiente');
+
+        $cuadreId = DB::table('cuadres_caja')->where('codigo_caja', 'CJA09')->value('id');
+        DB::table('cuadre_caja_pagos')->insert(['cuadre_caja_id' => $cuadreId, 'codigo_metodo' => 'EFE$', 'forma_pago' => 'EFECTIVO $',
+            'codigo_cuenta' => '', 'en_dolares' => true, 'ingresos' => 100, 'ingresos_usd' => 100]);
+        DB::table('cuadre_caja_conteos')->insert(['cuadre_caja_id' => $cuadreId, 'codigo_metodo' => 'EFE$', 'codigo_cuenta' => '',
+            'forma_pago' => 'EFECTIVO $', 'en_dolares' => true, 'monto' => 95, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('cuadres_caja')->where('id', $cuadreId)->update(['conciliado_at' => now(), 'estado_tesoreria' => 'procesado',
+            'observacion_tesoreria' => 'Faltan 5 en efectivo']);
+        $this->get(route('reportes_suite', ['reporte' => 'cuadre'] + $filtros))
+            ->assertOk()->assertSee('Faltan 5 en efectivo')->assertSee('Procesado')->assertSee('-5,00');
         $this->get(route('reportes_suite', ['reporte' => 'cuadre', 'mostrar_total' => '0'] + $filtros))
             ->assertOk()->assertDontSee('380,86');
 
