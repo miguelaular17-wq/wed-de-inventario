@@ -22,7 +22,7 @@
 <div style="padding:20px;max-width:920px;margin:0 auto;">
     <a href="{{ route('servicio.celulares.hub') }}" style="color:#64748b;text-decoration:none;font-size:0.85rem;">← Gestión de equipos</a>
     <h2 style="font-weight:700;margin:10px 0 8px;">Registrar equipo</h2>
-    <p class="muted" style="margin:0 0 20px;">Servicio técnico, garantía o reparación interna · campos y checklist según el tipo de dispositivo.</p>
+    <p class="muted" style="margin:0 0 20px;">Campos y checklist según el tipo de dispositivo. El tipo de gestión se define después en la ficha.</p>
 
     @if($errors->any())
         <div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px 14px;border-radius:8px;margin-bottom:16px;">
@@ -60,37 +60,7 @@
         </div>
 
         <div class="panel" style="padding:20px;margin-bottom:16px;">
-            <h3 style="margin:0 0 14px;">2. Tipo de gestión</h3>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;">
-                @foreach($tiposGestion as $key => $label)
-                    <label style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;cursor:pointer;display:block;">
-                        <input type="radio" name="tipo_gestion" value="{{ $key }}" required class="st-tipo-gestion"
-                            @checked(old('tipo_gestion', request('tipo_gestion', \App\Models\StOrden::TIPO_ST)) === $key)>
-                        <strong style="margin-left:6px;">{{ $label }}</strong>
-                    </label>
-                @endforeach
-            </div>
-            <div id="panel-rango-garantia" style="margin-top:14px;{{ old('tipo_gestion', request('tipo_gestion')) === 'GARANTIA' ? '' : 'display:none;' }}">
-                <p style="margin:0 0 10px;font-size:.88rem;font-weight:600;">Rango de cambio *</p>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                    <label style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;cursor:pointer;display:block;">
-                        <input type="radio" name="rango_garantia" value="dentro" class="st-rango-garantia"
-                            @checked(old('rango_garantia') === 'dentro')>
-                        <strong style="margin-left:6px;">Dentro del rango de cambio</strong>
-                        <div class="muted" style="margin:6px 0 0 22px;font-size:.78rem;font-weight:400;">Se cambia el celular. El equipo queda de la empresa y se manda a garantía a nombre de Palacio.</div>
-                    </label>
-                    <label style="border:1px solid #e2e8f0;border-radius:10px;padding:14px;cursor:pointer;display:block;">
-                        <input type="radio" name="rango_garantia" value="fuera" class="st-rango-garantia"
-                            @checked(old('rango_garantia') === 'fuera')>
-                        <strong style="margin-left:6px;">Fuera del rango de cambio</strong>
-                        <div class="muted" style="margin:6px 0 0 22px;font-size:.78rem;font-weight:400;">La empresa es intermediaria. El equipo sigue del cliente y se manda a garantía con la marca.</div>
-                    </label>
-                </div>
-            </div>
-        </div>
-
-        <div class="panel" style="padding:20px;margin-bottom:16px;">
-            <h3 style="margin:0 0 14px;">3. ¿Se envía a otra sede?</h3>
+            <h3 style="margin:0 0 14px;">2. ¿Se envía a otra sede?</h3>
             @if($puedeTransferir)
                 <div style="display:flex;gap:16px;margin-bottom:14px;">
                     <label><input type="radio" name="enviar_otra_sede" value="0" id="enviar-no" @checked(! old('enviar_otra_sede'))> No · trabajo local</label>
@@ -163,11 +133,12 @@
         </div>
 
         <div class="panel" style="padding:20px;margin-bottom:16px;">
-            <h3 style="margin:0 0 14px;">4. Equipo, cliente y falla</h3>
+            <h3 style="margin:0 0 6px;">3. Equipo, cliente y falla</h3>
+            <p class="muted" style="margin:0 0 14px;font-size:.82rem;">Llena solo lo que aplique. El tipo de gestión (servicio técnico, garantía o reparación interna) se define después en la ficha.</p>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div class="st-datos-cliente">
-                    <label id="st-label-cliente" style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Cliente *</label>
-                    <input type="text" name="cliente_nombre" id="st-cliente-nombre" required value="{{ old('cliente_nombre') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+                    <label id="st-label-cliente" style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Cliente</label>
+                    <input type="text" name="cliente_nombre" id="st-cliente-nombre" value="{{ old('cliente_nombre') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
                 </div>
                 <div class="st-datos-cliente">
                     <label id="st-label-telefono" style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Teléfono</label>
@@ -209,8 +180,23 @@
                     <div id="st-serial-hint" class="muted" style="font-size:.78rem;margin-top:4px;display:none;">Si el IMEI no aplica, indica serial o marca que tampoco se puede acceder.</div>
                 </div>
                 <div>
+                    @php
+                        $marcas = $marcas ?? [];
+                        $marcaSel = (string) old('marca', $equipoPrefill?->marca ? \App\Support\MarcasServicio::normalizar($equipoPrefill->marca, null)[0] : '');
+                        if ($marcaSel !== '' && $marcaSel !== \App\Support\MarcasServicio::OTRA && ! in_array($marcaSel, $marcas, true)) {
+                            $marcas[] = $marcaSel;
+                        }
+                    @endphp
                     <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Marca *</label>
-                    <input type="text" name="marca" value="{{ old('marca', $equipoPrefill->marca ?? '') }}" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+                    <select name="marca" id="st-marca" required style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">
+                        <option value="">Seleccione la marca…</option>
+                        @foreach($marcas as $marca)
+                            <option value="{{ $marca }}" @selected($marcaSel === $marca)>{{ $marca }}</option>
+                        @endforeach
+                        <option value="{{ \App\Support\MarcasServicio::OTRA }}" @selected($marcaSel === \App\Support\MarcasServicio::OTRA)>Otra (escribirla)…</option>
+                    </select>
+                    <input type="text" name="marca_otra" id="st-marca-otra" value="{{ old('marca_otra') }}" placeholder="Escribe la marca"
+                        style="width:100%;margin-top:6px;padding:8px;border:1px solid #ccc;border-radius:6px;text-transform:uppercase;{{ $marcaSel === \App\Support\MarcasServicio::OTRA ? '' : 'display:none;' }}">
                 </div>
                 <div>
                     <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Modelo *</label>
@@ -305,8 +291,8 @@
             </div>
         </div>
 
-        <div class="panel" id="panel-backup" style="padding:20px;margin-bottom:16px;{{ old('tipo_gestion', request('tipo_gestion')) === 'GARANTIA' ? '' : 'display:none;' }}">
-            <h3 style="margin:0 0 14px;">5. ¿Se entregará celular de backup?</h3>
+        <div class="panel" id="panel-backup" style="padding:20px;margin-bottom:16px;">
+            <h3 style="margin:0 0 14px;">4. ¿Se entregará celular de backup?</h3>
             <div style="display:flex;gap:16px;margin-bottom:14px;">
                 <label><input type="radio" name="entrega_backup" value="0" id="backup-no" @checked(! old('entrega_backup'))> No</label>
                 <label><input type="radio" name="entrega_backup" value="1" id="backup-si" @checked(old('entrega_backup') == '1')> Sí</label>
@@ -339,7 +325,7 @@
                         <input type="text" name="backup_accesorios" value="{{ old('backup_accesorios') }}" placeholder="Cargador, cable…" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
                     </div>
                 </div>
-                <p class="muted" style="margin:12px 0 0;font-size:.8rem;">La firma de esta hoja es la del paso 4. En el PDF de recepción sale cómo llegó el equipo y los datos del backup, en una sola hoja.</p>
+                <p class="muted" style="margin:12px 0 0;font-size:.8rem;">La firma de esta hoja es la del paso 3. En el PDF de recepción sale cómo llegó el equipo y los datos del backup, en una sola hoja.</p>
             </div>
         </div>
 
@@ -405,7 +391,6 @@
     const backupSi = document.getElementById('backup-si');
     const backupNo = document.getElementById('backup-no');
     const bloqueBackup = document.getElementById('bloque-backup');
-    const panelBackup = document.getElementById('panel-backup');
     function syncBackup() {
         if (!bloqueBackup) return;
         bloqueBackup.style.display = (backupSi && backupSi.checked) ? '' : 'none';
@@ -413,60 +398,25 @@
     backupSi?.addEventListener('change', syncBackup);
     backupNo?.addEventListener('change', syncBackup);
 
-    function tipoGestion() {
-        const el = document.querySelector('input.st-tipo-gestion:checked');
-        return el ? el.value : 'ST';
-    }
     function tipoDispositivo() {
         const el = document.querySelector('input.st-tipo-dispositivo:checked');
         return el ? el.value : 'celular';
     }
-    function rangoGarantia() {
-        const el = document.querySelector('input.st-rango-garantia:checked');
-        return el ? el.value : '';
+
+    const marcaSel = document.getElementById('st-marca');
+    const marcaOtra = document.getElementById('st-marca-otra');
+    function syncMarca() {
+        const otra = marcaSel && marcaSel.value === @json(\App\Support\MarcasServicio::OTRA);
+        if (!marcaOtra) return;
+        marcaOtra.style.display = otra ? '' : 'none';
+        marcaOtra.required = otra;
+        marcaOtra.disabled = !otra;
     }
-    function syncGarantiaBackup() {
-        const garantia = tipoGestion() === 'GARANTIA';
-        const panelRango = document.getElementById('panel-rango-garantia');
-        if (panelRango) panelRango.style.display = garantia ? '' : 'none';
-        document.querySelectorAll('.st-rango-garantia').forEach((el) => {
-            el.disabled = !garantia;
-            el.required = garantia;
-            if (!garantia) el.checked = false;
-        });
-        if (panelBackup) panelBackup.style.display = garantia ? '' : 'none';
-        if (!garantia && backupNo) {
-            backupNo.checked = true;
-            if (backupSi) backupSi.checked = false;
-            syncBackup();
-        }
-        syncClienteDatos();
-    }
-    function syncClienteDatos() {
-        const garantia = tipoGestion() === 'GARANTIA';
-        const interna = tipoGestion() === 'REPARACION_INTERNA';
-        const dentro = garantia && rangoGarantia() === 'dentro';
-        const fuera = garantia && rangoGarantia() === 'fuera';
-        const ocultarCliente = dentro || interna;
-        const nombre = document.getElementById('st-cliente-nombre');
-        const tel = document.getElementById('st-cliente-telefono');
-        const ced = document.getElementById('st-cliente-cedula');
-        const fecha = document.getElementById('st-fecha-prometida');
-        const labelT = document.getElementById('st-label-telefono');
-        const labelC = document.getElementById('st-label-cedula');
-        document.querySelectorAll('.st-datos-cliente').forEach((el) => {
-            el.style.display = ocultarCliente ? 'none' : '';
-            el.querySelectorAll('input, select, textarea').forEach((input) => { input.disabled = ocultarCliente; });
-        });
-        if (nombre) nombre.required = !ocultarCliente;
-        if (tel) tel.required = fuera;
-        if (ced) ced.required = fuera;
-        if (fecha) fecha.required = false;
-        if (labelT) labelT.textContent = fuera ? 'Teléfono *' : 'Teléfono';
-        if (labelC) labelC.textContent = fuera ? 'Cédula *' : 'Cédula';
-    }
-    document.querySelectorAll('.st-tipo-gestion').forEach((el) => el.addEventListener('change', syncGarantiaBackup));
-    document.querySelectorAll('.st-rango-garantia').forEach((el) => el.addEventListener('change', syncClienteDatos));
+    marcaSel?.addEventListener('change', () => {
+        syncMarca();
+        if (marcaOtra && !marcaOtra.disabled) marcaOtra.focus();
+    });
+    syncMarca();
 
     const serialLabels = {
         impresora: 'Serial *',
@@ -571,7 +521,6 @@
     }
     document.querySelectorAll('.st-acc-lente').forEach((el) => el.addEventListener('change', syncLente));
 
-    syncGarantiaBackup();
     syncTipoDispositivo();
     syncBackup();
 

@@ -164,6 +164,7 @@ data class ServiceOptionsDto(
     @SerialName("sede_activa") val activeSite: String? = null,
     @SerialName("sede_bloqueada") val siteLocked: Boolean = false,
     @SerialName("tipos_gestion") val managementTypes: List<ChoiceDto> = emptyList(),
+    val marcas: List<String> = emptyList(),
     @SerialName("tipos_dispositivo") val deviceTypes: List<ChoiceDto> = emptyList(),
     @SerialName("rangos_garantia") val warrantyRanges: List<ChoiceDto> = emptyList(),
     @SerialName("prioridades") val priorities: List<ChoiceDto> = emptyList(),
@@ -253,11 +254,9 @@ data class ServiceOrderResponse(
 @Serializable
 data class CreateServiceOrderRequest(
     val sede: String,
-    @SerialName("tipo_gestion") val managementType: String,
     @SerialName("tipo_dispositivo") val deviceType: String = "celular",
     @SerialName("enviar_otra_sede") val sendToOtherSite: Boolean = false,
     @SerialName("tecnico_destino_id") val destinationTechnicianId: Long? = null,
-    @SerialName("rango_garantia") val warrantyRange: String? = null,
     @SerialName("valor_dispositivo") val deviceValue: Double? = null,
     @SerialName("cliente_nombre") val clientName: String? = null,
     @SerialName("cliente_telefono") val clientPhone: String? = null,

@@ -59,6 +59,7 @@
         <div class="kpi"><span>Servicio técnico</span><strong>{{ $totales['st'] }}</strong></div>
         <div class="kpi"><span>Garantías</span><strong>{{ $totales['garantia'] }}</strong></div>
         <div class="kpi"><span>Reparaciones internas</span><strong>{{ $totales['interna'] }}</strong></div>
+        <div class="kpi"><span>Sin tipo</span><strong>{{ $totales['sin_tipo'] ?? 0 }}</strong></div>
     </div>
 
     <div class="resumen">
@@ -70,6 +71,7 @@
                     <th class="num">Servicio técnico</th>
                     <th class="num">Garantías</th>
                     <th class="num">Internas</th>
+                    <th class="num">Sin tipo</th>
                 </tr>
             </thead>
             <tbody>
@@ -80,9 +82,10 @@
                         <td class="num">{{ $bloque['st'] }}</td>
                         <td class="num">{{ $bloque['garantia'] }}</td>
                         <td class="num">{{ $bloque['interna'] }}</td>
+                        <td class="num">{{ $bloque['sin_tipo'] ?? 0 }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="empty">No hay órdenes en el período.</td></tr>
+                    <tr><td colspan="6" class="empty">No hay órdenes en el período.</td></tr>
                 @endforelse
                 @if(count($porMarca) > 0)
                     <tr class="tot">
@@ -91,6 +94,7 @@
                         <td class="num">{{ $totales['st'] }}</td>
                         <td class="num">{{ $totales['garantia'] }}</td>
                         <td class="num">{{ $totales['interna'] }}</td>
+                        <td class="num">{{ $totales['sin_tipo'] ?? 0 }}</td>
                     </tr>
                 @endif
             </tbody>
@@ -105,6 +109,7 @@
                 · ST {{ $bloque['st'] }}
                 · Garantía {{ $bloque['garantia'] }}
                 · Interna {{ $bloque['interna'] }}
+                · Sin tipo {{ $bloque['sin_tipo'] ?? 0 }}
             </div>
             <table>
                 <thead>

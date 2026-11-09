@@ -23,6 +23,8 @@ class StCelularesBitacoraTest extends TestCase
         parent::setUp();
         $this->setUpNominaSchema();
         $this->ensureTables();
+        (require database_path('migrations/2026_11_06_200000_add_resultado_interna_to_st_ordenes.php'))->up();
+        (require database_path('migrations/2026_11_09_100000_add_realizado_at_to_st_ordenes.php'))->up();
     }
 
     public function test_imei_unico_exige_confirmacion_para_reutilizar(): void
@@ -87,9 +89,10 @@ class StCelularesBitacoraTest extends TestCase
 
         $this->assertSame(1, StEquipoEvento::query()->where('equipo_id', $equipo->id)->count());
 
+        $this->assertSame('SAMSUNG', $equipo->marca);
         $this->get(route('servicio.celulares.bitacora', ['q' => '359998887776665']))
             ->assertOk()
-            ->assertSee('Samsung S23');
+            ->assertSee('SAMSUNG S23');
 
         $this->get(route('servicio.celulares.show', $equipo))
             ->assertOk()
@@ -159,7 +162,7 @@ class StCelularesBitacoraTest extends TestCase
             'backup' => $backup,
             'logo' => public_path('logo.png'),
         ])->render();
-        $this->assertStringContainsString('La garantía es con la marca del equipo (Apple)', $html);
+        $this->assertStringContainsString('La garantía es con la marca del equipo (APPLE)', $html);
     }
 
     public function test_checklist_y_conformidad_quedan_en_la_orden(): void
@@ -201,11 +204,19 @@ class StCelularesBitacoraTest extends TestCase
                 'conformidad_trabajo' => 'Se cambió el pin de carga.',
                 'firma_conformidad_cliente' => $firma,
             ])
-            ->assertRedirect(route('servicio.ordenes.show', $orden));
+            ->assertSessionHasErrors('reparado_por');
+
+        $this->post(route('servicio.ordenes.conformidad', $orden), [
+            'conformidad_trabajo' => 'Se cambió el pin de carga.',
+            'firma_conformidad_cliente' => $firma,
+            'reparado_por' => $user->id,
+        ])->assertRedirect(route('servicio.ordenes.show', $orden));
 
         $orden->refresh();
         $this->assertSame('Se cambió el pin de carga.', $orden->conformidad_trabajo);
         $this->assertNotNull($orden->conformidad_at);
+        $this->assertSame((int) $user->id, (int) $orden->reparado_por);
+        $this->assertNotNull($orden->realizado_at);
 
         $this->get(route('servicio.ordenes.conformidad_pdf', $orden))->assertOk();
         $this->get(route('servicio.ordenes.recepcion_pdf', $orden))->assertOk();
@@ -275,13 +286,13 @@ class StCelularesBitacoraTest extends TestCase
             ->withSession(['sede_local' => 'VIRTUDES'])
             ->get(route('servicio.celulares.por_recibir'))
             ->assertOk()
-            ->assertDontSee('Motorola Edge');
+            ->assertDontSee('MOTOROLA Edge');
 
         $this->actingAs($tecnicoDestino)
             ->withSession(['sede_local' => 'VIRTUDES'])
             ->get(route('servicio.celulares.por_recibir'))
             ->assertOk()
-            ->assertSee('Motorola Edge')
+            ->assertSee('MOTOROLA Edge')
             ->assertSee($orden->codigo());
 
         $this->actingAs($otroTecnico)
@@ -480,7 +491,7 @@ class StCelularesBitacoraTest extends TestCase
             ->withSession(['sede_local' => 'DORAL'])
             ->get(route('servicio.ordenes.create'))
             ->assertOk()
-            ->assertSee('Reparación interna')
+            ->assertDontSee('name="tipo_gestion"', false)
             ->assertSee('Valor del dispositivo');
 
         $this->post(route('servicio.ordenes.store'), [
@@ -536,7 +547,12 @@ class StCelularesBitacoraTest extends TestCase
         ])->assertCreated()
             ->assertJsonPath('data.cliente_nombre', 'Cliente Android')
             ->assertJsonPath('data.imei', '350099988877766')
-            ->assertJsonPath('data.estado', 'pendiente');
+            ->assertJsonPath('data.estado', 'pendiente')
+            ->assertJsonPath('data.tipo_gestion', StOrden::TIPO_SIN_TIPO)
+            ->assertJsonPath('data.marca', 'SAMSUNG');
+
+        $this->getJson('/api/v1/servicio/celulares/opciones')->assertOk()
+            ->assertJsonFragment(['marcas' => ['SAMSUNG']]);
 
         $orderId = $created->json('data.id');
         $this->assertDatabaseHas('st_ordenes', [
@@ -562,6 +578,32 @@ class StCelularesBitacoraTest extends TestCase
         $this->getJson("/api/v1/servicio/celulares/ordenes/{$orderId}")
             ->assertOk()
             ->assertJsonFragment(['tipo' => 'estado']);
+    }
+
+    public function test_registro_sin_tipo_de_gestion_y_marca_de_la_lista_u_otra(): void
+    {
+        $user = $this->makeTecnico();
+        StEquipo::query()->create(['imei' => '350000000000099', 'marca' => 'redmi', 'estado_actual' => StEquipo::ESTADO_DISPONIBLE]);
+
+        $this->actingAs($user)->withSession(['sede_local' => 'DORAL'])
+            ->get(route('servicio.ordenes.create'))
+            ->assertOk()
+            ->assertDontSee('name="tipo_gestion"', false)
+            ->assertSee('<option value="REDMI"', false)
+            ->assertSee('Otra (escribirla)');
+
+        $this->post(route('servicio.ordenes.store'), [
+            'prioridad' => 'normal', 'tipo_dispositivo' => 'celular', 'imei' => '350077766655544',
+            'marca' => \App\Support\MarcasServicio::OTRA, 'marca_otra' => '  nueva   marca ',
+            'modelo' => 'X1', 'color' => 'Negro', 'almacenamiento' => '64 GB', 'falla' => 'No enciende',
+        ])->assertSessionHasNoErrors();
+
+        $orden = StOrden::query()->where('imei', '350077766655544')->firstOrFail();
+        $this->assertSame(StOrden::TIPO_SIN_TIPO, $orden->tipo_gestion);
+        $this->assertSame('Sin tipo', $orden->etiquetaTipoGestion());
+        $this->assertSame('Sin datos del cliente', $orden->cliente_nombre);
+        $this->assertSame('NUEVA MARCA', $orden->equipoCelular->marca);
+        $this->get(route('servicio.ordenes.create'))->assertSee('<option value="NUEVA MARCA"', false);
     }
 
     private function makeTecnico(): User
@@ -623,11 +665,20 @@ class StCelularesBitacoraTest extends TestCase
         $orden = StOrden::query()->where('cliente_nombre', 'Cliente Entrega')->firstOrFail();
         $this->assertFalse($orden->tieneConformidad());
 
-        $this->post(route('servicio.ordenes.entregar', $orden))
+        $this->post(route('servicio.ordenes.entregar', $orden))->assertSessionHasErrors('reparado_por');
+        $this->post(route('servicio.ordenes.entregar', $orden), ['reparado_por' => $user->id])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('servicio.ordenes.show', $orden));
         $orden->refresh();
         $this->assertSame(StOrden::ESTADO_ENTREGADO, $orden->estado);
+        $this->assertSame((int) $user->id, (int) $orden->reparado_por);
+        $this->assertNotNull($orden->realizado_at);
+
+        $this->get(route('servicio.ordenes.index'))->assertOk()
+            ->assertViewHas('ordenes', fn ($ordenes) => ! collect($ordenes->items())->contains('id', $orden->id));
+        $this->get(route('servicio.ordenes.realizados'))->assertOk()
+            ->assertSee($orden->codigo())
+            ->assertSee($user->name);
         $this->assertTrue($orden->entregada());
         $this->assertSame(StEquipo::ESTADO_ENTREGADO, StEquipo::query()->find($orden->equipo_id)?->estado_actual);
         $this->assertDatabaseHas('st_orden_eventos', ['orden_id' => $orden->id, 'tipo' => 'estado']);

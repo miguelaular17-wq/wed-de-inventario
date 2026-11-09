@@ -1,0 +1,1070 @@
+{
+    "equipos": [
+        {
+            "id": 17,
+            "marca": "IPHONE S\/NUEVOS",
+            "modelo": "IPHONE 15 128GB PINK DS"
+        },
+        {
+            "id": 18,
+            "marca": "IPHONE S\/NUEVOS",
+            "modelo": "IPHONE 16 PRO MAX 256GB DESERT TITANIUM ESIM"
+        },
+        {
+            "id": 23,
+            "marca": "TECNO SPARK",
+            "modelo": "TECNO SPARK GO 3 4\/128GB BLACK"
+        },
+        {
+            "id": 26,
+            "marca": "IPHONE S\/NUEVOS",
+            "modelo": "IPHONE 14 128GB CLASE A AZUL"
+        },
+        {
+            "id": 27,
+            "marca": "IPHONE S\/NUEVOS",
+            "modelo": "IPHONE 13 PRO 256GB CLASE A GRIS"
+        },
+        {
+            "id": 28,
+            "marca": "IPHONE S\/NUEVOS",
+            "modelo": "IPHONE 15 PRO MAX 256GB WHITE TITANIUM ESIM"
+        },
+        {
+            "id": 40,
+            "marca": "TECNO SPARK",
+            "modelo": "TECNO SPARK 40 PRO+ 8\/256GB NEBULA BLACK"
+        },
+        {
+            "id": 41,
+            "marca": "TECNO SPARK",
+            "modelo": "TECNO SPARK 40 PRO+ 8\/256GB NEBULA BLACK"
+        },
+        {
+            "id": 48,
+            "marca": "Xiaomi",
+            "modelo": "Redmi Note 15"
+        },
+        {
+            "id": 49,
+            "marca": "itel",
+            "modelo": "a100cs"
+        },
+        {
+            "id": 50,
+            "marca": "Redmi",
+            "modelo": "Note 12 4G"
+        },
+        {
+            "id": 51,
+            "marca": "Tecno",
+            "modelo": "Poa neo 2"
+        },
+        {
+            "id": 52,
+            "marca": "Samsung",
+            "modelo": "A07"
+        },
+        {
+            "id": 53,
+            "marca": "Redmi",
+            "modelo": "10C"
+        },
+        {
+            "id": 54,
+            "marca": "Xiaomi",
+            "modelo": "10C"
+        },
+        {
+            "id": 55,
+            "marca": "Tecno",
+            "modelo": "Spark 10 Pro"
+        },
+        {
+            "id": 56,
+            "marca": "meizu",
+            "modelo": "note21 pro"
+        },
+        {
+            "id": 57,
+            "marca": "Redmi",
+            "modelo": "9"
+        },
+        {
+            "id": 58,
+            "marca": "Cubot",
+            "modelo": "Kingkong 11"
+        },
+        {
+            "id": 59,
+            "marca": "Tecno",
+            "modelo": "Pop 6"
+        },
+        {
+            "id": 60,
+            "marca": "Epson",
+            "modelo": "3150\/3250"
+        },
+        {
+            "id": 61,
+            "marca": "Samsung",
+            "modelo": "A07"
+        },
+        {
+            "id": 62,
+            "marca": "Tecno",
+            "modelo": "10C"
+        },
+        {
+            "id": 63,
+            "marca": "Samsung",
+            "modelo": "a07"
+        },
+        {
+            "id": 64,
+            "marca": "Samsung",
+            "modelo": "A27 5G"
+        },
+        {
+            "id": 65,
+            "marca": "Itel",
+            "modelo": "A50CS"
+        },
+        {
+            "id": 66,
+            "marca": "Samsung",
+            "modelo": "A17"
+        },
+        {
+            "id": 67,
+            "marca": "olax",
+            "modelo": "Q8pro"
+        },
+        {
+            "id": 68,
+            "marca": "Samsung",
+            "modelo": "A06"
+        },
+        {
+            "id": 69,
+            "marca": "Headset",
+            "modelo": "xy-234"
+        },
+        {
+            "id": 70,
+            "marca": "powerbeats pro",
+            "modelo": "powerbeats pro"
+        },
+        {
+            "id": 71,
+            "marca": "Amazon",
+            "modelo": "fire 8"
+        },
+        {
+            "id": 72,
+            "marca": "Amazon",
+            "modelo": "fire 8"
+        },
+        {
+            "id": 73,
+            "marca": "Amazon",
+            "modelo": "fire 8"
+        },
+        {
+            "id": 74,
+            "marca": "Amazon",
+            "modelo": "fire 8"
+        },
+        {
+            "id": 75,
+            "marca": "Amazon",
+            "modelo": "fire 8"
+        },
+        {
+            "id": 76,
+            "marca": "Amazon",
+            "modelo": "fire 8"
+        },
+        {
+            "id": 77,
+            "marca": "Amazon",
+            "modelo": "fire 8"
+        },
+        {
+            "id": 78,
+            "marca": "Amazon",
+            "modelo": "fire 8"
+        },
+        {
+            "id": 79,
+            "marca": "itel",
+            "modelo": "A50Cs"
+        },
+        {
+            "id": 80,
+            "marca": "itel",
+            "modelo": "A50cS"
+        },
+        {
+            "id": 81,
+            "marca": "itel",
+            "modelo": "A50cS"
+        },
+        {
+            "id": 82,
+            "marca": "Samsung",
+            "modelo": "A17"
+        },
+        {
+            "id": 83,
+            "marca": "tecno",
+            "modelo": "Go 2024"
+        },
+        {
+            "id": 84,
+            "marca": "Honor",
+            "modelo": "X5C"
+        },
+        {
+            "id": 85,
+            "marca": "mercusys",
+            "modelo": "ac1900"
+        },
+        {
+            "id": 86,
+            "marca": "iPhone",
+            "modelo": "13 pro"
+        },
+        {
+            "id": 87,
+            "marca": "v-men",
+            "modelo": "v-bt55"
+        },
+        {
+            "id": 88,
+            "marca": "Tecno",
+            "modelo": "SPARK 30 Pro KL7"
+        },
+        {
+            "id": 89,
+            "marca": "sony",
+            "modelo": "ps5"
+        },
+        {
+            "id": 90,
+            "marca": "redmi",
+            "modelo": "note 15"
+        },
+        {
+            "id": 91,
+            "marca": "Redmi",
+            "modelo": "10 2022"
+        },
+        {
+            "id": 92,
+            "marca": "Xiaomi",
+            "modelo": "Redmi 17"
+        },
+        {
+            "id": 93,
+            "marca": "Smartwatch",
+            "modelo": "N\/A"
+        },
+        {
+            "id": 94,
+            "marca": "Poco",
+            "modelo": "X3 NFC"
+        },
+        {
+            "id": 95,
+            "marca": "Tecno",
+            "modelo": "Spark 10"
+        },
+        {
+            "id": 96,
+            "marca": "Tecno",
+            "modelo": "Spark 10c"
+        },
+        {
+            "id": 97,
+            "marca": "Redmi",
+            "modelo": "15C"
+        },
+        {
+            "id": 98,
+            "marca": "Infinix",
+            "modelo": "Smart 8"
+        },
+        {
+            "id": 99,
+            "marca": "Honor",
+            "modelo": "Play 10 3\/64"
+        },
+        {
+            "id": 100,
+            "marca": "itel",
+            "modelo": "A100Cs"
+        },
+        {
+            "id": 102,
+            "marca": "redmi",
+            "modelo": "a5"
+        },
+        {
+            "id": 103,
+            "marca": "Infinix",
+            "modelo": "hot 5"
+        },
+        {
+            "id": 104,
+            "marca": "Hp",
+            "modelo": "inspirion"
+        },
+        {
+            "id": 105,
+            "marca": "Motorola",
+            "modelo": "G24 Power"
+        },
+        {
+            "id": 106,
+            "marca": "tecno",
+            "modelo": "go 2024"
+        },
+        {
+            "id": 107,
+            "marca": "tecno",
+            "modelo": "go 2024"
+        },
+        {
+            "id": 108,
+            "marca": "tecno",
+            "modelo": "go 2024"
+        },
+        {
+            "id": 109,
+            "marca": "tecno",
+            "modelo": "go 2024"
+        },
+        {
+            "id": 110,
+            "marca": "tecno",
+            "modelo": "go 2024"
+        },
+        {
+            "id": 111,
+            "marca": "tecno",
+            "modelo": "go 2024"
+        },
+        {
+            "id": 112,
+            "marca": "tecno",
+            "modelo": "go 2024"
+        },
+        {
+            "id": 113,
+            "marca": "tecno",
+            "modelo": "go 2024"
+        },
+        {
+            "id": 114,
+            "marca": "tecno",
+            "modelo": "go 2024"
+        },
+        {
+            "id": 115,
+            "marca": "Tecno",
+            "modelo": "Camon 50 Pro"
+        },
+        {
+            "id": 116,
+            "marca": "Xiaomi",
+            "modelo": "15t"
+        },
+        {
+            "id": 117,
+            "marca": "Samsung",
+            "modelo": "A23"
+        },
+        {
+            "id": 118,
+            "marca": "Xiaomi",
+            "modelo": "Redmi Note 9"
+        },
+        {
+            "id": 119,
+            "marca": "itel",
+            "modelo": "A50Cs"
+        },
+        {
+            "id": 120,
+            "marca": "itel",
+            "modelo": "A100c"
+        },
+        {
+            "id": 121,
+            "marca": "itel",
+            "modelo": "A100c"
+        },
+        {
+            "id": 122,
+            "marca": "itel",
+            "modelo": "A100c"
+        },
+        {
+            "id": 123,
+            "marca": "itel",
+            "modelo": "A100c"
+        },
+        {
+            "id": 124,
+            "marca": "redmi",
+            "modelo": "A10"
+        },
+        {
+            "id": 125,
+            "marca": "tecno",
+            "modelo": "Spark go 2024"
+        },
+        {
+            "id": 126,
+            "marca": "Havit",
+            "modelo": "GAMENOTE H2043U"
+        },
+        {
+            "id": 127,
+            "marca": "olax",
+            "modelo": "Magic Q8 pro plus"
+        },
+        {
+            "id": 128,
+            "marca": "iPhone",
+            "modelo": "17 Pro Max"
+        },
+        {
+            "id": 129,
+            "marca": "cubot",
+            "modelo": "A50"
+        },
+        {
+            "id": 130,
+            "marca": "lenovo",
+            "modelo": "km-860"
+        },
+        {
+            "id": 131,
+            "marca": "m9",
+            "modelo": "Smart band 9"
+        },
+        {
+            "id": 132,
+            "marca": "iPhone",
+            "modelo": "iPhone 14"
+        },
+        {
+            "id": 133,
+            "marca": "samsung",
+            "modelo": "A16"
+        },
+        {
+            "id": 134,
+            "marca": "redmi",
+            "modelo": "9"
+        },
+        {
+            "id": 135,
+            "marca": "redmi",
+            "modelo": "note 9 S"
+        },
+        {
+            "id": 136,
+            "marca": "blu",
+            "modelo": "g45"
+        },
+        {
+            "id": 137,
+            "marca": "honor",
+            "modelo": "play20a"
+        },
+        {
+            "id": 138,
+            "marca": "honor",
+            "modelo": "x5b"
+        },
+        {
+            "id": 139,
+            "marca": "Redmi",
+            "modelo": "15C"
+        },
+        {
+            "id": 140,
+            "marca": "poco",
+            "modelo": "x4 pro"
+        },
+        {
+            "id": 141,
+            "marca": "Blu",
+            "modelo": "k2"
+        },
+        {
+            "id": 142,
+            "marca": "samsung",
+            "modelo": "a06"
+        },
+        {
+            "id": 143,
+            "marca": "tecno",
+            "modelo": "Spark 7"
+        },
+        {
+            "id": 144,
+            "marca": "Olax",
+            "modelo": "Mini UPS POE D9"
+        },
+        {
+            "id": 145,
+            "marca": "generico",
+            "modelo": "audífonos tipo c apple"
+        },
+        {
+            "id": 146,
+            "marca": "Infinix",
+            "modelo": "Smart 8"
+        },
+        {
+            "id": 147,
+            "marca": "N\/A",
+            "modelo": "N\/A"
+        },
+        {
+            "id": 148,
+            "marca": "samsung",
+            "modelo": "s26 fe"
+        },
+        {
+            "id": 149,
+            "marca": "cubott",
+            "modelo": "kingKong 11"
+        },
+        {
+            "id": 150,
+            "marca": "Infinix",
+            "modelo": "Smart 6 plus"
+        },
+        {
+            "id": 151,
+            "marca": "Blu",
+            "modelo": "G45"
+        },
+        {
+            "id": 152,
+            "marca": "Apple",
+            "modelo": "16 Pro max"
+        },
+        {
+            "id": 153,
+            "marca": "Redmi",
+            "modelo": "9A"
+        },
+        {
+            "id": 154,
+            "marca": "Epson",
+            "modelo": "L3250"
+        },
+        {
+            "id": 155,
+            "marca": "apple",
+            "modelo": "cargador 20w original"
+        },
+        {
+            "id": 156,
+            "marca": "alexa",
+            "modelo": "echo dot kids"
+        },
+        {
+            "id": 157,
+            "marca": "iPhone",
+            "modelo": "13 pro max"
+        },
+        {
+            "id": 158,
+            "marca": "Infinix",
+            "modelo": "Hot 60"
+        },
+        {
+            "id": 159,
+            "marca": "iphone",
+            "modelo": "14 pro max"
+        },
+        {
+            "id": 160,
+            "marca": "Olax",
+            "modelo": "q8 Pro Plus"
+        },
+        {
+            "id": 161,
+            "marca": "cubot",
+            "modelo": "king Kong 11"
+        },
+        {
+            "id": 162,
+            "marca": "xiaomi",
+            "modelo": "Redmi 15C"
+        },
+        {
+            "id": 163,
+            "marca": "Tecno",
+            "modelo": "Pop 7"
+        },
+        {
+            "id": 164,
+            "marca": "Tecno",
+            "modelo": "Camon 18\/18p"
+        },
+        {
+            "id": 165,
+            "marca": "Samsung",
+            "modelo": "S24 Ultra"
+        },
+        {
+            "id": 166,
+            "marca": "Infinix",
+            "modelo": "Hot 12"
+        },
+        {
+            "id": 167,
+            "marca": "Tecno",
+            "modelo": "Camón 20"
+        },
+        {
+            "id": 168,
+            "marca": "Honor",
+            "modelo": "X5D"
+        },
+        {
+            "id": 169,
+            "marca": "Olax",
+            "modelo": "Q8 Pro Plus"
+        },
+        {
+            "id": 170,
+            "marca": "N\/A",
+            "modelo": "Car15w"
+        },
+        {
+            "id": 171,
+            "marca": "Cubot",
+            "modelo": "a40"
+        },
+        {
+            "id": 172,
+            "marca": "honor",
+            "modelo": "x7c"
+        },
+        {
+            "id": 173,
+            "marca": "Itel",
+            "modelo": "A100C"
+        },
+        {
+            "id": 174,
+            "marca": "Apple",
+            "modelo": "Watch Ultra 3"
+        },
+        {
+            "id": 175,
+            "marca": "Tecno",
+            "modelo": "Spark 10 Pro"
+        },
+        {
+            "id": 176,
+            "marca": "Infinix",
+            "modelo": "Note 60 Pro"
+        },
+        {
+            "id": 177,
+            "marca": "cubot",
+            "modelo": "king Kong 11"
+        },
+        {
+            "id": 178,
+            "marca": "Redmi",
+            "modelo": "9a"
+        },
+        {
+            "id": 179,
+            "marca": "Generico",
+            "modelo": "Max with Smart Case"
+        },
+        {
+            "id": 180,
+            "marca": "Blu",
+            "modelo": "K2"
+        },
+        {
+            "id": 181,
+            "marca": "tecno",
+            "modelo": "pop 6 pro"
+        },
+        {
+            "id": 182,
+            "marca": "vivo",
+            "modelo": "y21"
+        },
+        {
+            "id": 183,
+            "marca": "Redmi",
+            "modelo": "17"
+        },
+        {
+            "id": 184,
+            "marca": "Tecno",
+            "modelo": "Go 2023"
+        },
+        {
+            "id": 185,
+            "marca": "Blu",
+            "modelo": "K2"
+        },
+        {
+            "id": 186,
+            "marca": "Apple",
+            "modelo": "iPhone Xs"
+        },
+        {
+            "id": 187,
+            "marca": "Tecno",
+            "modelo": "Spark 8C"
+        },
+        {
+            "id": 188,
+            "marca": "cubot",
+            "modelo": "a40"
+        },
+        {
+            "id": 189,
+            "marca": "oukitel",
+            "modelo": "c86"
+        },
+        {
+            "id": 190,
+            "marca": "Tecno",
+            "modelo": "Go 2023"
+        },
+        {
+            "id": 191,
+            "marca": "redmi",
+            "modelo": "9"
+        },
+        {
+            "id": 192,
+            "marca": "redmi",
+            "modelo": "15c"
+        },
+        {
+            "id": 193,
+            "marca": "infinix",
+            "modelo": "Smart 8"
+        },
+        {
+            "id": 194,
+            "marca": "Samsung y Inifnix",
+            "modelo": "A22 y Smart 10"
+        },
+        {
+            "id": 195,
+            "marca": "honor",
+            "modelo": "play 10"
+        },
+        {
+            "id": 196,
+            "marca": "Honor",
+            "modelo": "Play 10"
+        },
+        {
+            "id": 197,
+            "marca": "Itel",
+            "modelo": "A50cs"
+        },
+        {
+            "id": 198,
+            "marca": "Tecno",
+            "modelo": "Go1s"
+        },
+        {
+            "id": 199,
+            "marca": "Infinix",
+            "modelo": "Smart20"
+        },
+        {
+            "id": 200,
+            "marca": "Motorola",
+            "modelo": "G04"
+        },
+        {
+            "id": 201,
+            "marca": "Samsung",
+            "modelo": "A06"
+        },
+        {
+            "id": 202,
+            "marca": "Google",
+            "modelo": "Google"
+        },
+        {
+            "id": 203,
+            "marca": "Tecno",
+            "modelo": "Spark 10"
+        },
+        {
+            "id": 204,
+            "marca": "Honor",
+            "modelo": "x5b"
+        },
+        {
+            "id": 205,
+            "marca": "Honor",
+            "modelo": "X5B"
+        },
+        {
+            "id": 206,
+            "marca": "twolf",
+            "modelo": "tf500"
+        },
+        {
+            "id": 207,
+            "marca": "Tecno",
+            "modelo": "Pop 6"
+        },
+        {
+            "id": 208,
+            "marca": "Pioneer",
+            "modelo": "DEH-920"
+        },
+        {
+            "id": 209,
+            "marca": "Olax",
+            "modelo": "Smart mini UPS pro"
+        },
+        {
+            "id": 211,
+            "marca": "Redmi",
+            "modelo": "Note 11"
+        },
+        {
+            "id": 212,
+            "marca": "Motorola",
+            "modelo": "G14"
+        },
+        {
+            "id": 213,
+            "marca": "Epson",
+            "modelo": "L3250"
+        },
+        {
+            "id": 214,
+            "marca": "Samsung",
+            "modelo": "A02"
+        },
+        {
+            "id": 215,
+            "marca": "lenovo",
+            "modelo": "Ideapad 1"
+        },
+        {
+            "id": 216,
+            "marca": "Hotwav",
+            "modelo": "A17 Pro Max"
+        },
+        {
+            "id": 217,
+            "marca": "Tapo",
+            "modelo": "C310"
+        },
+        {
+            "id": 218,
+            "marca": "Samsung",
+            "modelo": "A25"
+        },
+        {
+            "id": 219,
+            "marca": "honor",
+            "modelo": "play 20a"
+        },
+        {
+            "id": 220,
+            "marca": "EaaySMX",
+            "modelo": "D05"
+        },
+        {
+            "id": 221,
+            "marca": "Tecno",
+            "modelo": "Spark Go 3"
+        },
+        {
+            "id": 222,
+            "marca": "Honor",
+            "modelo": "Play 10"
+        },
+        {
+            "id": 223,
+            "marca": "Tecno",
+            "modelo": "Spark go 3"
+        },
+        {
+            "id": 224,
+            "marca": "Hotwav",
+            "modelo": "x100se"
+        },
+        {
+            "id": 225,
+            "marca": "hotpepper",
+            "modelo": "puya"
+        },
+        {
+            "id": 226,
+            "marca": "Samsung",
+            "modelo": "A07"
+        },
+        {
+            "id": 227,
+            "marca": "redmi",
+            "modelo": "15c"
+        },
+        {
+            "id": 228,
+            "marca": "Redmi",
+            "modelo": "15c"
+        },
+        {
+            "id": 229,
+            "marca": "Hotwav",
+            "modelo": "A17 pro max"
+        },
+        {
+            "id": 230,
+            "marca": "Cubot",
+            "modelo": "A50"
+        },
+        {
+            "id": 231,
+            "marca": "honor",
+            "modelo": "t10"
+        },
+        {
+            "id": 232,
+            "marca": "Realme",
+            "modelo": "C51"
+        },
+        {
+            "id": 233,
+            "marca": "Olax",
+            "modelo": "poe-D9"
+        },
+        {
+            "id": 234,
+            "marca": "hotwav",
+            "modelo": "a17 pro max"
+        },
+        {
+            "id": 235,
+            "marca": "Iphone",
+            "modelo": "16 pro max"
+        },
+        {
+            "id": 236,
+            "marca": "x10 ultra",
+            "modelo": "2 gs"
+        },
+        {
+            "id": 237,
+            "marca": "x10 ultra",
+            "modelo": "2 gs"
+        },
+        {
+            "id": 238,
+            "marca": "Generico",
+            "modelo": "Ultra HD"
+        },
+        {
+            "id": 239,
+            "marca": "redmi",
+            "modelo": "15c"
+        },
+        {
+            "id": 240,
+            "marca": "redmi",
+            "modelo": "15c"
+        },
+        {
+            "id": 241,
+            "marca": "motorola",
+            "modelo": "g86"
+        },
+        {
+            "id": 242,
+            "marca": "itel",
+            "modelo": "A50CS"
+        },
+        {
+            "id": 243,
+            "marca": "itel",
+            "modelo": "A50Cs"
+        },
+        {
+            "id": 244,
+            "marca": "Baofeng",
+            "modelo": "Bf-888s"
+        },
+        {
+            "id": 245,
+            "marca": "redmi",
+            "modelo": "a7pro"
+        },
+        {
+            "id": 246,
+            "marca": "Iphone",
+            "modelo": "14"
+        },
+        {
+            "id": 248,
+            "marca": "redmi",
+            "modelo": "15c"
+        },
+        {
+            "id": 249,
+            "marca": "redmi",
+            "modelo": "15c"
+        },
+        {
+            "id": 250,
+            "marca": "blackview",
+            "modelo": "Tab a6 kids"
+        },
+        {
+            "id": 251,
+            "marca": "redmi",
+            "modelo": "note 17 pro max"
+        },
+        {
+            "id": 252,
+            "marca": "cubitt",
+            "modelo": "aura pro 2"
+        },
+        {
+            "id": 253,
+            "marca": "olax",
+            "modelo": "ocean k11 pro plus"
+        },
+        {
+            "id": 254,
+            "marca": "Infinix",
+            "modelo": "Hot 10 Lite"
+        },
+        {
+            "id": 256,
+            "marca": "samsung",
+            "modelo": "j7 prime"
+        }
+    ],
+    "ordenes": []
+}

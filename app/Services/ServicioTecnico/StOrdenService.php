@@ -142,7 +142,7 @@ class StOrdenService
      * Entrega al cliente, con o sin hoja de conformidad firmada. Si la orden no estaba lista pasa antes por «Listo»
      * (ahí se descuentan los repuestos). Si venía en camino de otra sede se da por recibida. Después queda cerrada.
      */
-    public function entregarAlCliente(StOrden $orden, User $user, ?string $comentario = null): StOrden
+    public function entregarAlCliente(StOrden $orden, User $user, ?string $comentario = null, ?int $reparadoPor = null): StOrden
     {
         if ($orden->entregada()) {
             throw ValidationException::withMessages(['entrega' => 'Esta orden ya fue entregada al cliente.']);
@@ -161,7 +161,15 @@ class StOrdenService
             $nota .= '. '.$comentario;
         }
 
-        return DB::transaction(function () use ($orden, $user, $nota, $sinHoja) {
+        $realizado = array_filter([
+            'reparado_por' => $reparadoPor && \Illuminate\Support\Facades\Schema::hasColumn('st_ordenes', 'reparado_por') ? $reparadoPor : null,
+            'realizado_at' => \Illuminate\Support\Facades\Schema::hasColumn('st_ordenes', 'realizado_at') && ! $orden->realizado_at ? now() : null,
+        ]);
+
+        return DB::transaction(function () use ($orden, $user, $nota, $sinHoja, $realizado) {
+            if ($realizado !== []) {
+                $orden->forceFill($realizado)->save();
+            }
             if ($orden->transferenciaPendiente()) {
                 $orden->transfer_estado = StOrden::TRANSFER_ACEPTADA;
                 $orden->updated_by = $user->id;

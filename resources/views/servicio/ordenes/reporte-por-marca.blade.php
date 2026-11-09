@@ -79,6 +79,7 @@
         <div class="nomina-kpi"><span>Servicio técnico</span><strong>{{ $totales['st'] }}</strong></div>
         <div class="nomina-kpi"><span>Garantías</span><strong>{{ $totales['garantia'] }}</strong></div>
         <div class="nomina-kpi"><span>Reparaciones internas</span><strong>{{ $totales['interna'] }}</strong></div>
+        <div class="nomina-kpi"><span>Sin tipo</span><strong>{{ $totales['sin_tipo'] ?? 0 }}</strong></div>
     </div>
 
     <div class="table-wrap" style="margin-top:16px;">
@@ -90,6 +91,7 @@
                     <th style="text-align:right;">Servicio técnico</th>
                     <th style="text-align:right;">Garantías</th>
                     <th style="text-align:right;">Internas</th>
+                    <th style="text-align:right;">Sin tipo</th>
                 </tr>
             </thead>
             <tbody>
@@ -100,10 +102,11 @@
                         <td style="text-align:right;">{{ $bloque['st'] }}</td>
                         <td style="text-align:right;">{{ $bloque['garantia'] }}</td>
                         <td style="text-align:right;">{{ $bloque['interna'] }}</td>
+                        <td style="text-align:right;">{{ $bloque['sin_tipo'] ?? 0 }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="muted" style="text-align:center;padding:28px;">
+                        <td colspan="6" class="muted" style="text-align:center;padding:28px;">
                             No hay órdenes en el período seleccionado.
                         </td>
                     </tr>
@@ -120,6 +123,7 @@
                     · ST {{ $bloque['st'] }}
                     · Garantía {{ $bloque['garantia'] }}
                     · Interna {{ $bloque['interna'] }}
+                    · Sin tipo {{ $bloque['sin_tipo'] ?? 0 }}
                 </span>
             </h3>
             <div class="table-wrap">

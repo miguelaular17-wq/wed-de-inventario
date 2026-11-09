@@ -72,6 +72,10 @@ class OrdenController extends Controller
             }
         }
 
+        if (Schema::hasColumn('st_ordenes', 'realizado_at')) {
+            $query->sinRealizar();
+        }
+
         if ($request->query('transfer') === 'pendiente') {
             $query->where('transfer_estado', StOrden::TRANSFER_PENDIENTE);
             if ($user->veSoloSusFacturasTaller()) {
@@ -115,6 +119,82 @@ class OrdenController extends Controller
     public function internas(Request $request): View
     {
         return $this->index($request);
+    }
+
+    /** Órdenes ya realizadas (con hoja de conformidad o entregadas), con el técnico que hizo la reparación. */
+    public function realizados(Request $request): View
+    {
+        $user = $request->user();
+        $desde = $request->query('fecha_desde');
+        $hasta = $request->query('fecha_hasta');
+        if (! is_string($desde) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) {
+            $desde = now()->startOfMonth()->toDateString();
+        }
+        if (! is_string($hasta) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) {
+            $hasta = now()->toDateString();
+        }
+
+        $query = StOrden::query()->visiblePara($user)
+            ->with(['equipoCelular', 'reparador', 'tecnico'])
+            ->orderByDesc('realizado_at')->orderByDesc('id');
+        if (Schema::hasColumn('st_ordenes', 'realizado_at')) {
+            $query->realizados()->whereBetween('realizado_at', [$desde.' 00:00:00', $hasta.' 23:59:59']);
+        } else {
+            $query->whereRaw('1 = 0');
+        }
+
+        $filtroSede = $user->scopesServicioToOwnSede()
+            ? strtoupper((string) $user->sede)
+            : ($request->query('sede') ? strtoupper((string) $request->query('sede')) : null);
+        if ($filtroSede) {
+            $query->where('sede', $filtroSede);
+        }
+        $filtroTecnico = (int) $request->query('reparado_por');
+        if ($filtroTecnico > 0) {
+            $query->where('reparado_por', $filtroTecnico);
+        }
+        $filtroTipo = strtoupper(trim((string) $request->query('tipo_gestion', '')));
+        if ($filtroTipo !== '') {
+            $query->where('tipo_gestion', $filtroTipo);
+        }
+        if ($q = trim((string) $request->query('q', ''))) {
+            $like = $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where(function ($inner) use ($q, $like) {
+                $inner->where('cliente_nombre', $like, '%'.$q.'%')
+                    ->orWhere('equipo', $like, '%'.$q.'%')
+                    ->orWhere('imei', $like, '%'.$q.'%')
+                    ->orWhere('serial', $like, '%'.$q.'%');
+                if (ctype_digit($q)) {
+                    $inner->orWhere('numero', (int) $q);
+                }
+            });
+        }
+
+        $porTecnico = (clone $query)->reorder()->toBase()
+            ->selectRaw('reparado_por, COUNT(*) as n')
+            ->groupBy('reparado_por')
+            ->pluck('n', 'reparado_por');
+        $nombres = User::query()->whereIn('id', $porTecnico->keys()->filter()->all())->pluck('name', 'id');
+
+        return view('servicio.ordenes.realizados', [
+            'ordenes' => $query->paginate(50)->withQueryString(),
+            'resumenTecnicos' => $porTecnico->map(fn ($n, $id) => [
+                'nombre' => $id ? ($nombres[$id] ?? 'Usuario #'.$id) : 'Sin técnico indicado',
+                'n' => (int) $n,
+            ])->sortByDesc('n')->values(),
+            'tecnicos' => $this->tecnicosServicio(incluirmeAMi: true),
+            'tiposGestion' => StOrden::TIPOS_GESTION + [StOrden::TIPO_SIN_TIPO => 'Sin tipo'],
+            'sedes' => config('inventario.sedes_locales'),
+            'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
+            'filtros' => [
+                'fecha_desde' => $desde,
+                'fecha_hasta' => $hasta,
+                'sede' => $filtroSede,
+                'reparado_por' => $filtroTecnico ?: null,
+                'tipo_gestion' => $filtroTipo ?: null,
+                'q' => $q,
+            ],
+        ]);
     }
 
     public function reportePorMarca(Request $request): View|Response
@@ -191,6 +271,7 @@ class OrdenController extends Controller
             'st' => 0,
             'garantia' => 0,
             'interna' => 0,
+            'sin_tipo' => 0,
         ];
 
         foreach ($ordenes as $orden) {
@@ -203,6 +284,7 @@ class OrdenController extends Controller
                     'st' => 0,
                     'garantia' => 0,
                     'interna' => 0,
+                    'sin_tipo' => 0,
                 ];
             }
             $tipo = strtoupper((string) ($orden->tipo_gestion ?? StOrden::TIPO_ST));
@@ -212,6 +294,9 @@ class OrdenController extends Controller
             } elseif ($tipo === StOrden::TIPO_REPARACION_INTERNA) {
                 $porMarca[$marca]['interna']++;
                 $totales['interna']++;
+            } elseif ($tipo === StOrden::TIPO_SIN_TIPO) {
+                $porMarca[$marca]['sin_tipo']++;
+                $totales['sin_tipo']++;
             } else {
                 $porMarca[$marca]['st']++;
                 $totales['st']++;
@@ -558,8 +643,8 @@ class OrdenController extends Controller
         }
 
         $backup = null;
-        $esGarantia = ($data['tipo_gestion'] ?? StOrden::TIPO_ST) === StOrden::TIPO_GARANTIA;
-        if ($esGarantia && $request->boolean('entrega_backup')) {
+        $admiteBackup = in_array($data['tipo_gestion'] ?? null, [StOrden::TIPO_GARANTIA, StOrden::TIPO_SIN_TIPO], true);
+        if ($admiteBackup && $request->boolean('entrega_backup')) {
             $request->validate([
                 'backup_marca' => ['required', 'string', 'max:64'],
                 'backup_modelo' => ['required', 'string', 'max:128'],
@@ -599,8 +684,9 @@ class OrdenController extends Controller
         $this->authorizeOrden($request->user(), $orden);
 
         return view('servicio.ordenes.show', [
-            'orden' => $orden->load(['creador', 'editor', 'tecnico', 'enviadoPorGarantia', 'recibidoPorGarantia', 'repuestosLineas.repuesto', 'eventos.usuario', 'equipoCelular', 'backups']),
+            'orden' => $orden->load(['creador', 'editor', 'tecnico', 'reparador', 'enviadoPorGarantia', 'recibidoPorGarantia', 'repuestosLineas.repuesto', 'eventos.usuario', 'equipoCelular', 'backups']),
             'estados' => StOrden::ESTADOS,
+            'tecnicosReparacion' => $this->tecnicosServicio(incluirmeAMi: true),
         ]);
     }
 
@@ -642,14 +728,20 @@ class OrdenController extends Controller
         $data = $request->validate([
             'comentario_entrega' => ['nullable', 'string', 'max:1000'],
             'confirmar_exceso' => ['nullable', 'boolean'],
+            'reparado_por' => [$orden->reparado_por ? 'nullable' : 'required', 'integer'],
+        ], [
+            'reparado_por.required' => 'Elige el técnico que hizo la reparación.',
         ]);
         if ($orden->excedePresupuesto() && ! $request->boolean('confirmar_exceso')) {
             throw ValidationException::withMessages([
                 'confirmar_exceso' => 'Los costos superan el presupuesto: confirma que el cliente aceptó el monto adicional.',
             ]);
         }
+        $reparadoPor = filled($data['reparado_por'] ?? null)
+            ? $this->tecnicoReparacion((int) $data['reparado_por'])['id']
+            : (int) $orden->reparado_por;
 
-        $this->ordenService->entregarAlCliente($orden, $user, $data['comentario_entrega'] ?? null);
+        $this->ordenService->entregarAlCliente($orden, $user, $data['comentario_entrega'] ?? null, $reparadoPor);
 
         return redirect()
             ->route('servicio.ordenes.show', $orden)
@@ -667,22 +759,37 @@ class OrdenController extends Controller
             'conformidad_trabajo' => ['required', 'string'],
             'firma_conformidad_cliente' => ['nullable', 'string'],
             'firma_conformidad_empleado' => ['nullable', 'string'],
+            'reparado_por' => [$orden->reparado_por ? 'nullable' : 'required', 'integer'],
+        ], [
+            'reparado_por.required' => 'Elige el técnico que hizo la reparación.',
         ]);
+        $tecnico = filled($data['reparado_por'] ?? null)
+            ? $this->tecnicoReparacion((int) $data['reparado_por'])
+            : ['id' => (int) $orden->reparado_por, 'nombre' => (string) $orden->reparador?->name];
 
-        $orden->update([
+        $cambios = [
             'conformidad_trabajo' => $data['conformidad_trabajo'],
             'firma_conformidad_cliente' => $this->parseFirma($data['firma_conformidad_cliente'] ?? null) ?: $orden->firma_conformidad_cliente,
             'firma_conformidad_empleado' => $this->parseFirma($data['firma_conformidad_empleado'] ?? null) ?: $orden->firma_conformidad_empleado,
             'conformidad_at' => now(),
+            'reparado_por' => $tecnico['id'],
             'updated_by' => $user->id,
             'diagnostico' => $orden->diagnostico ?: $data['conformidad_trabajo'],
-        ]);
+        ];
+        if (Schema::hasColumn('st_ordenes', 'realizado_at')) {
+            $cambios['realizado_at'] = $orden->realizado_at ?? now();
+        }
+        if (! Schema::hasColumn('st_ordenes', 'reparado_por')) {
+            unset($cambios['reparado_por']);
+        }
+        $orden->update($cambios);
 
         StOrdenEvento::create([
             'orden_id' => $orden->id,
             'user_id' => $user->id,
             'tipo' => StOrdenEvento::TIPO_NOTA,
-            'descripcion' => 'Hoja de conformidad firmada',
+            'descripcion' => 'Hoja de conformidad firmada. Reparó: '.$tecnico['nombre'],
+            'meta' => ['reparado_por' => $tecnico['id']],
             'created_at' => now(),
         ]);
 
@@ -1159,6 +1266,7 @@ class OrdenController extends Controller
             'estados' => StOrden::ESTADOS,
             'prioridades' => StOrden::PRIORIDADES,
             'tiposGestion' => StOrden::TIPOS_GESTION,
+            'marcas' => \App\Support\MarcasServicio::disponibles(),
             'sedes' => config('inventario.sedes_locales'),
             'tecnicosServicio' => $this->tecnicosServicio(),
             'tiposDispositivo' => config('servicio_tecnico.tipos_dispositivo'),
@@ -1202,6 +1310,19 @@ class OrdenController extends Controller
                 'nombre' => $u->name,
             ])
             ->values();
+    }
+
+    /**
+     * @return array{user:User,id:int,nombre:string,sede:string}
+     */
+    private function tecnicoReparacion(int $id): array
+    {
+        $tecnico = $this->tecnicosServicio(incluirmeAMi: true)->firstWhere('id', $id);
+        if (! $tecnico) {
+            throw ValidationException::withMessages(['reparado_por' => 'Elige una persona registrada en Servicio técnico.']);
+        }
+
+        return $tecnico;
     }
 
     /**
@@ -1370,6 +1491,7 @@ class OrdenController extends Controller
             'cliente_cedula' => ['nullable', 'string', 'max:40'],
             'equipo' => ['nullable', 'string', 'max:255'],
             'marca' => ['nullable', 'string', 'max:64'],
+            'marca_otra' => ['nullable', 'string', 'max:64', 'required_if:marca,'.\App\Support\MarcasServicio::OTRA],
             'modelo' => ['nullable', 'string', 'max:128'],
             'color' => ['nullable', 'string', 'max:64'],
             'almacenamiento' => ['nullable', 'string', 'max:32'],
@@ -1415,10 +1537,18 @@ class OrdenController extends Controller
 
         unset($data['sede_local']);
 
+        if (($data['marca'] ?? null) === \App\Support\MarcasServicio::OTRA) {
+            $data['marca'] = $data['marca_otra'] ?? null;
+        }
+        unset($data['marca_otra']);
+        if (trim((string) ($data['marca'] ?? '')) !== '') {
+            [$data['marca'], $data['modelo']] = \App\Support\MarcasServicio::normalizar($data['marca'], $data['modelo'] ?? null);
+        }
+
         if (! $orden) {
             $data['fecha_ingreso'] = now()->toDateString();
             $data['estado'] = $data['estado'] ?? StOrden::ESTADO_PENDIENTE;
-            $data['tipo_gestion'] = strtoupper((string) ($data['tipo_gestion'] ?? StOrden::TIPO_ST));
+            $data['tipo_gestion'] = strtoupper((string) ($data['tipo_gestion'] ?? StOrden::TIPO_SIN_TIPO));
             $data['tipo_dispositivo'] = (string) ($data['tipo_dispositivo'] ?? 'celular');
             $this->aplicarReglasGarantia($data);
             $this->aplicarReglasDispositivo($request, $data);
@@ -1484,6 +1614,16 @@ class OrdenController extends Controller
             $data['cliente_telefono'] = null;
             $data['cliente_cedula'] = null;
             $data['fecha_prometida'] = null;
+
+            return;
+        }
+
+        if (($data['tipo_gestion'] ?? null) === StOrden::TIPO_SIN_TIPO) {
+            $data['rango_garantia'] = null;
+            $data['empresa_envio_garantia'] = null;
+            if (trim((string) ($data['cliente_nombre'] ?? '')) === '') {
+                $data['cliente_nombre'] = 'Sin datos del cliente';
+            }
 
             return;
         }

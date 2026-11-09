@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,6 +52,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -391,13 +394,6 @@ private fun CreatePhoneOrderForm(
     val siteChoices = state.serviceOptions.sedes.ifEmpty {
         listOf("DORAL", "CENTRO", "ZAMORA", "SAMBIL", "VIRTUDES")
     }
-    val managementChoices = state.serviceOptions.managementTypes.ifEmpty {
-        listOf(
-            ChoiceDto("ST", "Servicio técnico"),
-            ChoiceDto("GARANTIA", "Garantía"),
-            ChoiceDto("REPARACION_INTERNA", "Reparación interna"),
-        )
-    }
     val deviceChoices = buildList {
         val remote = state.serviceOptions.deviceTypes
         if (remote.isEmpty()) {
@@ -423,12 +419,6 @@ private fun CreatePhoneOrderForm(
         ChoiceDto("elec_alimentacion", "Carga o alimentación"),
         ChoiceDto("elec_humedad", "Sin indicios de humedad"),
     )
-    val warrantyChoices = state.serviceOptions.warrantyRanges.ifEmpty {
-        listOf(
-            ChoiceDto("dentro", "Dentro del rango"),
-            ChoiceDto("fuera", "Fuera del rango"),
-        )
-    }
     val priorityChoices = state.serviceOptions.priorities.ifEmpty {
         listOf(
             ChoiceDto("baja", "Baja"),
@@ -440,11 +430,9 @@ private fun CreatePhoneOrderForm(
     var site by remember(siteChoices, state.serviceSite) {
         mutableStateOf(state.serviceSite.ifBlank { siteChoices.first() })
     }
-    var managementType by remember { mutableStateOf("ST") }
     var deviceType by remember { mutableStateOf("celular") }
     var sendToOtherSite by remember { mutableStateOf(false) }
     var destinationTechnicianId by remember { mutableStateOf<Long?>(null) }
-    var warrantyRange by remember { mutableStateOf("") }
     var clientName by remember { mutableStateOf("") }
     var clientPhone by remember { mutableStateOf("") }
     var clientId by remember { mutableStateOf("") }
@@ -453,6 +441,7 @@ private fun CreatePhoneOrderForm(
     var serial by remember { mutableStateOf("") }
     var deviceDescription by remember { mutableStateOf("") }
     var brand by remember { mutableStateOf("") }
+    var otherBrand by remember { mutableStateOf("") }
     var model by remember { mutableStateOf("") }
     var color by remember { mutableStateOf("") }
     var storage by remember { mutableStateOf("") }
@@ -506,7 +495,7 @@ private fun CreatePhoneOrderForm(
             }
             .addOnCanceledListener { /* usuario canceló */ }
     }
-    val needsClient = managementType == "ST" || (managementType == "GARANTIA" && warrantyRange == "fuera")
+    val finalBrand = (if (brand == OTHER_BRAND) otherBrand else brand).trim()
     val isPhone = deviceType == "celular"
     val isElectronics = deviceType == "electronica"
     val checklist = state.serviceOptions.checklists[deviceType]
@@ -546,11 +535,6 @@ private fun CreatePhoneOrderForm(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
 
-            SectionCard("Tipo de gestión") {
-                ChoiceSelector("", managementType, managementChoices) {
-                    managementType = it
-                }
-            }
             SectionCard("Tipo de dispositivo") {
                 ChoiceSelector("", deviceType, deviceChoices, wrap = true) {
                     deviceType = it
@@ -558,13 +542,6 @@ private fun CreatePhoneOrderForm(
                     if (it != "celular") {
                         imeiNotApplicable = true
                         imei = ""
-                    }
-                }
-            }
-            if (managementType == "GARANTIA") {
-                SectionCard("Rango de garantía") {
-                    ChoiceSelector("", warrantyRange, warrantyChoices) {
-                        warrantyRange = it
                     }
                 }
             }
@@ -608,14 +585,18 @@ private fun CreatePhoneOrderForm(
                     StringSelector("", site, siteChoices) { site = it }
                 }
             }
-            if (needsClient) {
-                SectionCard("Cliente") {
-                    PhoneField(clientName, { clientName = it }, "Cliente *")
-                    Spacer(Modifier.height(8.dp))
-                    PhoneField(clientPhone, { clientPhone = it }, "Teléfono")
-                    Spacer(Modifier.height(8.dp))
-                    PhoneField(clientId, { clientId = it }, "Cédula")
-                }
+            SectionCard("Cliente") {
+                Text(
+                    "Llena solo lo que aplique. El tipo de gestión se define después en la ficha.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NexoMuted,
+                )
+                Spacer(Modifier.height(8.dp))
+                PhoneField(clientName, { clientName = it }, "Cliente")
+                Spacer(Modifier.height(8.dp))
+                PhoneField(clientPhone, { clientPhone = it }, "Teléfono")
+                Spacer(Modifier.height(8.dp))
+                PhoneField(clientId, { clientId = it }, "Cédula")
             }
             SectionCard("Equipo") {
                 if (isPhone) {
@@ -660,7 +641,15 @@ private fun CreatePhoneOrderForm(
                     PhoneField(deviceDescription, { deviceDescription = it }, "Qué equipo es *")
                 }
                 Spacer(Modifier.height(8.dp))
-                PhoneField(brand, { brand = it }, "Marca *")
+                BrandSelector(
+                    selected = brand,
+                    brands = state.serviceOptions.marcas,
+                    onSelected = { brand = it },
+                )
+                if (brand == OTHER_BRAND) {
+                    Spacer(Modifier.height(8.dp))
+                    PhoneField(otherBrand, { otherBrand = it.uppercase() }, "Escribe la marca *")
+                }
                 Spacer(Modifier.height(8.dp))
                 PhoneField(model, { model = it }, "Modelo *")
                 Spacer(Modifier.height(8.dp))
@@ -712,13 +701,11 @@ private fun CreatePhoneOrderForm(
                 ChoiceSelector("Prioridad", priority, priorityChoices) {
                     priority = it
                 }
-                if (needsClient) {
-                    Spacer(Modifier.height(8.dp))
-                    PromisedDateField(
-                        value = promisedDate,
-                        onValueChange = { promisedDate = it },
-                    )
-                }
+                Spacer(Modifier.height(8.dp))
+                PromisedDateField(
+                    value = promisedDate,
+                    onValueChange = { promisedDate = it },
+                )
                 Spacer(Modifier.height(8.dp))
                 PhoneField(notes, { notes = it }, "Observaciones", singleLine = false)
             }
@@ -744,14 +731,12 @@ private fun CreatePhoneOrderForm(
                     }
                 }
             }
-            if (needsClient) {
-                SectionCard("Firma") {
-                    SignaturePad(
-                        strokes = signatureStrokes,
-                        onSizeChanged = { signatureSize = it },
-                        onClear = { signatureStrokes.clear() },
-                    )
-                }
+            SectionCard("Firma") {
+                SignaturePad(
+                    strokes = signatureStrokes,
+                    onSizeChanged = { signatureSize = it },
+                    onClear = { signatureStrokes.clear() },
+                )
             }
             if (isPhone && !imeiNotApplicable) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -766,16 +751,15 @@ private fun CreatePhoneOrderForm(
         ) {
             Button(
                 enabled = !state.submitting &&
+                    finalBrand.isNotBlank() &&
                     (!sendToOtherSite || destinationTechnicianId != null),
                 onClick = {
                     onSubmit(
                         CreateServiceOrderRequest(
                             sede = site,
-                            managementType = managementType,
                             deviceType = deviceType,
                             sendToOtherSite = sendToOtherSite,
                             destinationTechnicianId = destinationTechnicianId,
-                            warrantyRange = warrantyRange.ifBlank { null },
                             deviceValue = deviceValue.replace(',', '.').toDoubleOrNull(),
                             clientName = clientName.ifBlank { null },
                             clientPhone = clientPhone.ifBlank { null },
@@ -783,7 +767,7 @@ private fun CreatePhoneOrderForm(
                             imei = imei.ifBlank { null },
                             imeiNotApplicable = imeiNotApplicable || !isPhone,
                             serial = serial.ifBlank { null },
-                            marca = brand,
+                            marca = finalBrand,
                             modelo = model,
                             color = color,
                             almacenamiento = storage,
@@ -1316,6 +1300,54 @@ private fun ChoiceSelector(
                     )
                 }
             }
+        }
+    }
+}
+
+private const val OTHER_BRAND = "__OTRA__"
+
+@Composable
+private fun BrandSelector(
+    selected: String,
+    brands: List<String>,
+    onSelected: (String) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val label = when {
+        selected == OTHER_BRAND -> "Otra (escribirla)"
+        selected.isBlank() -> "Seleccione la marca…"
+        else -> selected
+    }
+    Box(Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { open = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
+        ) {
+            Text("Marca *: $label", modifier = Modifier.weight(1f))
+            Text("▾")
+        }
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            modifier = Modifier.heightIn(max = 360.dp),
+        ) {
+            brands.forEach { brand ->
+                DropdownMenuItem(
+                    text = { Text(brand) },
+                    onClick = {
+                        onSelected(brand)
+                        open = false
+                    },
+                )
+            }
+            DropdownMenuItem(
+                text = { Text("Otra (escribirla)…", fontWeight = FontWeight.SemiBold) },
+                onClick = {
+                    onSelected(OTHER_BRAND)
+                    open = false
+                },
+            )
         }
     }
 }

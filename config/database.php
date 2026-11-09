@@ -26,6 +26,8 @@ return [
             'prefix_indexes' => true,
             'search_path' => env('DB_SCHEMA', 'inventario_v2,public'),
             'sslmode' => 'prefer',
+            // El pooler de Supabase en modo transacción (puerto 6543) no conserva sentencias preparadas.
+            'options' => extension_loaded('pdo_pgsql') ? [PDO::ATTR_EMULATE_PREPARES => (bool) env('DB_EMULATE_PREPARES', false)] : [],
         ],
     ],
 

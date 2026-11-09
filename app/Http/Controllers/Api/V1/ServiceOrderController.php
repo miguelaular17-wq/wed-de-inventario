@@ -44,6 +44,7 @@ class ServiceOrderController extends Controller
                 'sede_activa' => $user->sede ? strtoupper((string) $user->sede) : ($sedes[0] ?? null),
                 'sede_bloqueada' => $user->scopesServicioToOwnSede(),
                 'tipos_gestion' => $this->choices(StOrden::TIPOS_GESTION),
+                'marcas' => \App\Support\MarcasServicio::disponibles(),
                 'tipos_dispositivo' => $this->choices($tiposDispositivo),
                 'rangos_garantia' => $this->choices(StOrden::RANGOS_GARANTIA),
                 'prioridades' => $this->choices(StOrden::PRIORIDADES),
@@ -113,7 +114,7 @@ class ServiceOrderController extends Controller
         $tiposDispositivo = array_keys(config('servicio_tecnico.tipos_dispositivo', ['celular' => 'Celular']));
         $data = $request->validate([
             'sede' => ['nullable', 'string', Rule::in(config('inventario.sedes_locales', []))],
-            'tipo_gestion' => ['required', 'string', Rule::in(array_keys(StOrden::TIPOS_GESTION))],
+            'tipo_gestion' => ['nullable', 'string'],
             'tipo_dispositivo' => ['nullable', 'string', Rule::in($tiposDispositivo)],
             'enviar_otra_sede' => ['nullable', 'boolean'],
             'tecnico_destino_id' => ['nullable', 'integer', 'exists:users,id'],
@@ -155,7 +156,10 @@ class ServiceOrderController extends Controller
             $tecnicoDestino = $this->resolverTecnicoDestino((int) ($data['tecnico_destino_id'] ?? 0), $user);
         }
 
-        $tipoGestion = strtoupper($data['tipo_gestion']);
+        // Al registrar no se elige el tipo (aunque una versión vieja de la app lo mande): se define después en la ficha.
+        $tipoGestion = StOrden::TIPO_SIN_TIPO;
+        [$data['marca'], $data['modelo']] = \App\Support\MarcasServicio::normalizar($data['marca'], $data['modelo']);
+        $data['modelo'] = (string) $data['modelo'];
         $tipoDispositivo = (string) ($data['tipo_dispositivo'] ?? 'celular');
         $this->applyClientRules($data, $tipoGestion);
         $imeiNoAplica = (bool) ($data['imei_no_aplica'] ?? false) || $tipoDispositivo !== 'celular';
@@ -367,6 +371,15 @@ class ServiceOrderController extends Controller
 
     private function applyClientRules(array &$data, string $tipoGestion): void
     {
+        if ($tipoGestion === StOrden::TIPO_SIN_TIPO) {
+            $data['rango_garantia'] = null;
+            if (blank($data['cliente_nombre'] ?? null)) {
+                $data['cliente_nombre'] = 'Sin datos del cliente';
+            }
+
+            return;
+        }
+
         if ($tipoGestion === StOrden::TIPO_REPARACION_INTERNA) {
             $data['cliente_nombre'] = 'Reparación interna';
             $data['cliente_telefono'] = null;

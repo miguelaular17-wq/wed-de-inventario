@@ -216,6 +216,7 @@
                   .' Después la orden queda cerrada y no se podrá modificar.'));">
             @csrf
             @if($orden->excedePresupuesto())<input type="hidden" name="confirmar_exceso" value="1">@endif
+            <input type="hidden" name="reparado_por" id="st-entregar-reparador" value="{{ $orden->reparado_por }}">
         </form>
     @endif
 
@@ -423,6 +424,9 @@
                         @endif
                     </div>
                 </div>
+                @if($orden->reparador)
+                    <div class="st-dato"><span>Reparó</span><div>{{ $orden->reparador->name }}</div></div>
+                @endif
             </div>
         </div>
         @php
@@ -664,7 +668,7 @@
 
     @if($conformidadEditable)
     <div class="st-modal-fondo" id="st-modal-conformidad" role="dialog" aria-modal="true" aria-labelledby="st-conf-titulo"
-         @if($errors->has('conformidad_trabajo')) data-abrir="1" @endif>
+         @if($errors->has('conformidad_trabajo') || $errors->has('reparado_por')) data-abrir="1" @endif>
         <div class="st-modal">
             <div class="st-modal-cab">
                 <div>
@@ -682,6 +686,22 @@
                             Ya registrada el {{ $orden->conformidad_at?->format('d/m/Y H:i') ?: '—' }}. Si guardas de nuevo, se actualiza; las firmas que no vuelvas a dibujar se conservan.
                         </div>
                     @endif
+                    @php
+                        $tecnicosReparacion = $tecnicosReparacion ?? collect();
+                        $reparadorSel = (int) old('reparado_por', $orden->reparado_por ?: ($orden->tecnico_id ?: auth()->id()));
+                        if ($orden->reparado_por && ! $tecnicosReparacion->contains('id', (int) $orden->reparado_por) && $orden->reparador) {
+                            $tecnicosReparacion = $tecnicosReparacion->push(['id' => (int) $orden->reparado_por, 'nombre' => $orden->reparador->name, 'sede' => '']);
+                        }
+                    @endphp
+                    <label for="st-conf-reparador" style="display:block;font-weight:600;margin-bottom:4px;font-size:.88rem;">Técnico que hizo la reparación *</label>
+                    <select id="st-conf-reparador" name="reparado_por" required
+                            style="width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;margin-bottom:12px;">
+                        <option value="">Seleccione el técnico…</option>
+                        @foreach($tecnicosReparacion as $tecnico)
+                            <option value="{{ $tecnico['id'] }}" @selected($reparadorSel === $tecnico['id'])>{{ $tecnico['nombre'] }}{{ $tecnico['sede'] ? ' · '.$tecnico['sede'] : '' }}</option>
+                        @endforeach
+                    </select>
+                    @error('reparado_por')<div style="color:#b91c1c;font-size:.8rem;margin:-8px 0 10px;">{{ $message }}</div>@enderror
                     <label for="st-conf-trabajo" style="display:block;font-weight:600;margin-bottom:4px;font-size:.88rem;">Trabajo realizado *</label>
                     <textarea id="st-conf-trabajo" name="conformidad_trabajo" rows="3" required
                               style="width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;">{{ old('conformidad_trabajo', $orden->conformidad_trabajo ?: $orden->diagnostico) }}</textarea>
@@ -766,6 +786,20 @@
     modal.querySelectorAll('[data-cerrar-conformidad]').forEach(b => b.addEventListener('click', cerrar));
     modal.addEventListener('click', e => { if (e.target === modal) cerrar(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.classList.contains('abierto')) cerrar(); });
+    // «Entregado sin hoja» va en otro formulario: lleva el técnico elegido aquí.
+    const reparador = document.getElementById('st-conf-reparador');
+    const reparadorEntrega = document.getElementById('st-entregar-reparador');
+    const copiarReparador = () => { if (reparador && reparadorEntrega) reparadorEntrega.value = reparador.value; };
+    reparador?.addEventListener('change', copiarReparador);
+    copiarReparador();
+    document.getElementById('st-form-entregar')?.addEventListener('submit', (e) => {
+        if (reparador && !reparador.value) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            alert('Elige el técnico que hizo la reparación.');
+            reparador.focus();
+        }
+    }, true);
     // La hoja se abre en otra pestaña; esta se recarga para mostrar la conformidad guardada.
     document.getElementById('st-form-conformidad')?.addEventListener('submit', () => {
         cerrar();

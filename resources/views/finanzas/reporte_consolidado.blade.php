@@ -204,13 +204,14 @@
     @php
         $alto = isset($cuentas['BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO']) ? $cuentas['BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO'] : collect();
         $bajo = isset($cuentas['BANCA NACIONAL - BAJO MOVIMIENTO']) ? $cuentas['BANCA NACIONAL - BAJO MOVIMIENTO'] : collect();
-        $nacional = collect($alto)->concat($bajo)->sortBy('orden')->values();
+        $mayorAMenor = fn ($a, $b) => [(float) $b->reporte_usd, (float) $b->reporte_bs, (int) $a->orden] <=> [(float) $a->reporte_usd, (float) $a->reporte_bs, (int) $b->orden];
+        $nacional = collect($alto)->concat($bajo)->sort($mayorAMenor)->values();
         $billeteras = collect($cuentas['BANCA INTERNACIONAL / BILLETERAS'] ?? []);
         $opNac = collect($cuentas['BANCA NACIONAL MONEDA EXTRANJERA - FONDOS OPERATIVOS'] ?? []);
-        $operativos = $billeteras->concat($opNac)->sortBy('orden')->values();
+        $operativos = $billeteras->concat($opNac)->sort($mayorAMenor)->values();
         $noOpIntl = collect($cuentas['BANCA INTERNACIONAL - CUENTAS NO OPERATIVAS'] ?? []);
         $noOpNac = collect($cuentas['BANCA NACIONAL MONEDA EXTRANJERA - FONDOS NO OPERATIVOS'] ?? []);
-        $noOperativos = $noOpIntl->concat($noOpNac)->sortBy('orden')->values();
+        $noOperativos = $noOpIntl->concat($noOpNac)->sort($mayorAMenor)->values();
     @endphp
 
     <div class="grid-cuadros" style="display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; align-items: start;">

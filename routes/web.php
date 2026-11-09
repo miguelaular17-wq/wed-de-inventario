@@ -843,6 +843,7 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'permission:servicio'])
         Route::name('servicio.ordenes.')->group(function () {
             Route::get('/', [OrdenController::class, 'index'])->name('index');
             Route::get('/reparaciones-internas', [OrdenController::class, 'internas'])->name('internas');
+            Route::get('/servicios-realizados', [OrdenController::class, 'realizados'])->name('realizados');
             Route::get('/reporte-por-marca', [OrdenController::class, 'reportePorMarca'])->name('reporte_marca');
             Route::get('/garantias-reconocidas', [OrdenController::class, 'garantiasReconocidas'])->name('garantias_reconocidas');
             Route::get('/{orden}/pdf/conformidad', [OrdenController::class, 'pdfConformidad'])->whereNumber('orden')->name('conformidad_pdf');

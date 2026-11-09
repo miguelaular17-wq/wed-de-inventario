@@ -25,6 +25,8 @@ class StOrden extends Model
     public const TIPO_ST = 'ST';
     public const TIPO_GARANTIA = 'GARANTIA';
     public const TIPO_REPARACION_INTERNA = 'REPARACION_INTERNA';
+    /** Al registrar ya no se elige el tipo: se define después con «Cambiar tipo de gestión». */
+    public const TIPO_SIN_TIPO = 'SIN_TIPO';
 
     public const RANGO_DENTRO = 'dentro';
     public const RANGO_FUERA = 'fuera';
@@ -149,6 +151,7 @@ class StOrden extends Model
         'firma_conformidad_cliente',
         'firma_conformidad_empleado',
         'conformidad_at',
+        'realizado_at',
         'presupuesto',
         'costo_mano_obra',
         'costo_refacciones',
@@ -179,7 +182,34 @@ class StOrden extends Model
             'atributos' => 'array',
             'evidencias' => 'array',
             'conformidad_at' => 'datetime',
+            'realizado_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $orden) {
+            if ($orden->isDirty('estado') && $orden->estado === self::ESTADO_ENTREGADO && $orden->realizado_at === null
+                && \Illuminate\Support\Facades\Schema::hasColumn('st_ordenes', 'realizado_at')) {
+                $orden->realizado_at = now();
+            }
+        });
+    }
+
+    /** Servicio realizado: con hoja de conformidad o entregado. Sale del listado y va a «Servicios realizados». */
+    public function realizado(): bool
+    {
+        return $this->realizado_at !== null;
+    }
+
+    public function scopeRealizados(Builder $query): Builder
+    {
+        return $query->whereNotNull('realizado_at');
+    }
+
+    public function scopeSinRealizar(Builder $query): Builder
+    {
+        return $query->whereNull('realizado_at');
     }
 
     /**
@@ -262,7 +292,16 @@ class StOrden extends Model
 
     public function etiquetaTipoGestion(): string
     {
+        if ($this->sinTipo()) {
+            return 'Sin tipo';
+        }
+
         return self::TIPOS_GESTION[$this->tipo_gestion ?? self::TIPO_ST] ?? (string) $this->tipo_gestion;
+    }
+
+    public function sinTipo(): bool
+    {
+        return $this->tipo_gestion === self::TIPO_SIN_TIPO;
     }
 
     public function esGarantia(): bool
