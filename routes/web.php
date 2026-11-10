@@ -771,6 +771,7 @@ Route::middleware(['auth', 'permission:contratos'])->prefix('contratos')->group(
     Route::post('/{id}/liquidar', [App\Http\Controllers\ContratoController::class, 'liquidarStore'])->name('contratos.liquidar.store');
     Route::post('/cuota/{id}/pagar', [App\Http\Controllers\ContratoController::class, 'registrarPago'])->name('contratos.pagar');
     Route::put('/cuota/{id}/pagar', [App\Http\Controllers\ContratoController::class, 'actualizarPagoCuota'])->name('contratos.actualizar_pago');
+    Route::delete('/cuota/{id}', [App\Http\Controllers\ContratoController::class, 'eliminarCuota'])->name('contratos.eliminar_cuota');
     Route::post('/{id}/generar-cuota', [App\Http\Controllers\ContratoController::class, 'generarSiguienteCuota'])->name('contratos.generarCuota');
     Route::post('/{id}/aumentar-capital', [App\Http\Controllers\ContratoController::class, 'aumentarCapital'])->name('contratos.aumentarCapital');
     Route::post('/{id}/ajustar-cuota-fija', [App\Http\Controllers\ContratoController::class, 'ajustarCuotaFija'])->name('contratos.ajustarCuotaFija');

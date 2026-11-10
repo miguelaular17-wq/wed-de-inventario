@@ -662,6 +662,42 @@ class ContratoController extends Controller
         return redirect()->back()->with('success', 'Pago actualizado y saldos recalculados correctamente.');
     }
 
+    /**
+     * Elimina una cuota sin pagos. Una cuota con pagos ya movió el capital del contrato: primero se deja su
+     * pago en 0 con «Editar» y luego se elimina. Los aumentos de capital no se eliminan aquí.
+     */
+    public function eliminarCuota($cuotaId)
+    {
+        $cuota = ContratoCuota::findOrFail($cuotaId);
+        $contrato = $cuota->contrato;
+
+        if ($contrato->estado === 'liquidado') {
+            return redirect()->back()->with('error', 'El contrato está liquidado: no se pueden eliminar cuotas.');
+        }
+        if (in_array($cuota->estatus, ['prestamo', 'acumulado'], true)) {
+            return redirect()->back()->with('error', 'Esta fila es un movimiento de capital, no una cuota: no se elimina.');
+        }
+        if ((float) $cuota->monto_pagado > 0 || (float) $cuota->abono_capital > 0) {
+            return redirect()->back()->with('error', 'La cuota #'.$cuota->numero_cuota.' tiene pagos. Primero deja su pago en 0 con ✏️ y luego elimínala.');
+        }
+
+        $detalle = 'Cuota #'.$cuota->numero_cuota.' eliminada (vencía '.($cuota->fecha_vencimiento?->format('d/m/Y') ?? '—')
+            .', monto $'.number_format((float) $cuota->monto, 2).').';
+        DB::transaction(function () use ($cuota, $contrato, $detalle) {
+            $cuota->delete();
+            ContratoSeguimiento::create([
+                'contrato_id' => $contrato->id,
+                'usuario_id' => Auth::id(),
+                'fecha_hora' => now(),
+                'resultado' => 'CUOTA_ELIMINADA',
+                'comentarios' => $detalle,
+                'contactado' => false,
+            ]);
+        });
+
+        return redirect()->back()->with('success', $detalle);
+    }
+
     public function generarSiguienteCuota($id)
     {
         $contrato = Contrato::findOrFail($id);

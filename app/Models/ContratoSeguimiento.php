@@ -35,6 +35,7 @@ class ContratoSeguimiento extends Model
         'RENEGOCIACION'   => 'Solicita renegociación',
         'ACUMULADO'       => 'Cuota acumulada al total',
         'EDICION_PAGO'    => 'Edición de Pago',
+        'CUOTA_ELIMINADA' => 'Cuota eliminada',
     ];
 
     public function contrato(): BelongsTo

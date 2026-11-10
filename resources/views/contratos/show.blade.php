@@ -236,6 +236,16 @@
                                         <button type="button" onclick="abrirEditarPago({{ $cuota->id }}, {{ $cuota->numero_cuota }}, {{ (float)$cuota->monto_pagado }}, {{ (float)$cuota->abono_capital ?? 0 }})"
                                             style="padding: 4px 10px; background: #f59e0b; color: white; border: none; border-radius: 4px; font-size: 0.8rem; cursor: pointer;" title="Editar Montos Pagados">✏️</button>
                                     @endif
+
+                                    @if(! in_array($cuota->estatus, ['prestamo', 'acumulado']) && (float) $cuota->monto_pagado <= 0 && (float) $cuota->abono_capital <= 0)
+                                        <form method="POST" action="{{ route('contratos.eliminar_cuota', $cuota->id) }}" style="margin:0;"
+                                              onsubmit="return confirm('¿Eliminar la cuota #{{ $cuota->numero_cuota }} ({{ $cuota->fecha_vencimiento?->format('d/m/Y') ?? 'sin fecha' }})? Queda anotado en el seguimiento.');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" title="Eliminar cuota"
+                                                style="padding: 4px 10px; background: #fff; color: #dc2626; border: 1px solid #fecaca; border-radius: 4px; font-size: 0.8rem; cursor: pointer;">🗑</button>
+                                        </form>
+                                    @endif
                                 @endif
                             </td>
                         </tr>
