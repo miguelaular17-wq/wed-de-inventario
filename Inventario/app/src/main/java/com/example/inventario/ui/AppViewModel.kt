@@ -1,7 +1,13 @@
 package com.example.inventario.ui
 
 import android.content.ContentResolver
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import android.webkit.MimeTypeMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -320,16 +326,51 @@ class AppViewModel(private val repository: InventoryRepository) : ViewModel() {
         }
 
     private fun Uri.toMultipart(resolver: ContentResolver, formName: String): MultipartBody.Part? {
-        val bytes = resolver.openInputStream(this)?.use { it.readBytes() } ?: return null
-        val mime = resolver.getType(this)
+        var bytes = resolver.openInputStream(this)?.use { it.readBytes() } ?: return null
+        var mime = resolver.getType(this)
             ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(
                 MimeTypeMap.getFileExtensionFromUrl(toString()),
             )
             ?: "application/octet-stream"
-        val fileName = lastPathSegment?.substringAfterLast('/') ?: "evidencia"
+        var fileName = lastPathSegment?.substringAfterLast('/') ?: "evidencia"
+        // El servidor acepta hasta 5 MB por imagen y una foto de cámara suele pasarse.
+        if (mime.startsWith("image/") && bytes.size > 1_000_000) {
+            reducirFoto(bytes)?.let {
+                bytes = it
+                mime = "image/jpeg"
+                fileName = fileName.substringBeforeLast('.') + ".jpg"
+            }
+        }
         val body = bytes.toRequestBody(mime.toMediaTypeOrNull())
         return MultipartBody.Part.createFormData(formName, fileName, body)
     }
+
+    /** Lado mayor a 1600 px, JPEG al 80 % y derecha según el EXIF de la cámara. Null si no se pudo leer. */
+    private fun reducirFoto(bytes: ByteArray, ladoMax: Int = 1600): ByteArray? = runCatching {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= ladoMax) sample *= 2
+        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: return null
+        val escala = minOf(1f, ladoMax.toFloat() / maxOf(decoded.width, decoded.height))
+        val grados = when (ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> 0f
+        }
+        val matriz = Matrix().apply {
+            postScale(escala, escala)
+            if (grados != 0f) postRotate(grados)
+        }
+        val final = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matriz, true)
+        ByteArrayOutputStream().use { out ->
+            final.compress(Bitmap.CompressFormat.JPEG, 80, out)
+            out.toByteArray()
+        }
+    }.getOrNull()
 
     fun changeServiceOrderStatus(order: ServiceOrderDto, status: String, comment: String) =
         viewModelScope.launch {

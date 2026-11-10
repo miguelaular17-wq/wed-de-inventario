@@ -389,6 +389,7 @@ Route::prefix('vendedor')->group(function () {
 });
 Route::middleware(['auth', 'permission:vendedor.jrz'])->group(function () {
     Route::get('/vendedor/jrz', [\App\Http\Controllers\VendedorController::class, 'jrz'])->name('vendedor.jrz');
+    Route::get('/vendedor/jrz/reporte-proveedor', [\App\Http\Controllers\VendedorController::class, 'reporteProveedor'])->name('vendedor.jrz.reporte_proveedor');
 });
 // Etiquetas de precio: públicas como el catálogo de existencias (las tiendas imprimen sin iniciar sesión).
 Route::prefix('etiquetas')->name('etiquetas.')->group(function () {
@@ -759,6 +760,7 @@ Route::get('/finanzas/reporte-consolidado', [App\Http\Controllers\FinanzasContro
 Route::middleware(['auth', 'permission:contratos'])->prefix('contratos')->group(function () {
     Route::get('/', [App\Http\Controllers\ContratoController::class, 'index'])->name('contratos.index');
     Route::get('/lista', [App\Http\Controllers\ContratoController::class, 'listar'])->name('contratos.lista');
+    Route::get('/lista/pdf', [App\Http\Controllers\ContratoController::class, 'listaPdf'])->name('contratos.lista.pdf');
     Route::get('/calendario', [App\Http\Controllers\ContratoController::class, 'calendario'])->name('contratos.calendario');
     Route::get('/crear', [App\Http\Controllers\ContratoController::class, 'create'])->name('contratos.create');
     Route::post('/', [App\Http\Controllers\ContratoController::class, 'store'])->name('contratos.store');

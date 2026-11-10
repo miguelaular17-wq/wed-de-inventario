@@ -524,6 +524,13 @@ class User extends Authenticatable
             return true;
         }
 
+        // El personal de compras ve el catálogo JRZ (stock y ventas por sede) y su reporte por proveedor.
+        if ($permission === 'vendedor.jrz' && ! $this->isMarketing()
+            && ($this->role === self::ROLE_COMPRADOR || in_array('compras', $owned, true)
+                || collect($owned)->contains(fn ($p) => str_starts_with((string) $p, 'compras.')))) {
+            return true;
+        }
+
         return in_array($permission, $owned, true);
     }
 

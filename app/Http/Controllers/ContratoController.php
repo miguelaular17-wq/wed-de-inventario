@@ -91,6 +91,48 @@ class ContratoController extends Controller
         // Asegurarnos de que las cuotas vencidas estén actualizadas en DB
         \App\Models\ContratoCuota::actualizarVencidasGlobal();
 
+        $contratos = $this->consultaLista($request)->paginate(50)->withQueryString();
+        $contratos->getCollection()->transform(fn (Contrato $c) => $this->conIndicadores($c));
+
+        $asesores = User::orderBy('name')->get(['id', 'name']);
+        $sedes    = Contrato::distinct()->pluck('sede')->filter()->sort()->values();
+
+        return view('contratos.lista', compact('contratos', 'asesores', 'sedes'));
+    }
+
+    /** PDF con todos los contratos que cumplen los filtros de la lista (no solo la página visible). */
+    public function listaPdf(Request $request)
+    {
+        \App\Models\ContratoCuota::actualizarVencidasGlobal();
+
+        $contratos = $this->consultaLista($request)->get()->map(fn (Contrato $c) => $this->conIndicadores($c));
+
+        $filtros = array_filter([
+            'Búsqueda' => $request->filled('q') ? (string) $request->q : null,
+            'Sede' => $request->filled('sede') ? (string) $request->sede : null,
+        ]);
+
+        $totales = [
+            'contratos' => $contratos->count(),
+            'capital' => (float) $contratos->sum(fn ($c) => (float) $c->capital),
+            'saldo' => (float) $contratos->sum('_saldo_pendiente'),
+            'vencidos' => $contratos->where('_estatus_general', 'VENCIDO')->count(),
+            'saldo_vencido' => (float) $contratos->where('_estatus_general', 'VENCIDO')->sum('_saldo_pendiente'),
+            'activos' => $contratos->where('_estatus_general', 'ACTIVO')->count(),
+        ];
+
+        $logo = is_file(public_path('logo.png'))
+            ? 'data:image/png;base64,'.base64_encode((string) file_get_contents(public_path('logo.png')))
+            : null;
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('contratos.lista_pdf', compact('contratos', 'filtros', 'totales', 'logo'))
+            ->setPaper('letter', 'landscape');
+
+        return $pdf->download('contratos_'.now()->format('Y-m-d').'.pdf');
+    }
+
+    private function consultaLista(Request $request)
+    {
         $query = Contrato::with(['responsable', 'cuotas'])
             ->where('activo', true);
 
@@ -111,21 +153,17 @@ class ContratoController extends Controller
             $query->where('responsable_id', $request->responsable_id);
         }
 
-        $contratos = $query->orderBy('cliente')->paginate(50)->withQueryString();
+        return $query->orderBy('cliente');
+    }
 
-        // Enriquecer con KPIs calculados
-        $contratos->getCollection()->transform(function (Contrato $c) {
-            $c->_saldo_pendiente   = $c->totalDeuda();
-            $c->_dias_atraso       = $c->diasAtraso();
-            $c->_estatus_general   = $c->estatusGeneral();
-            $c->_proxima_cuota     = $c->proximaCuota();
-            return $c;
-        });
+    private function conIndicadores(Contrato $c): Contrato
+    {
+        $c->_saldo_pendiente   = $c->totalDeuda();
+        $c->_dias_atraso       = $c->diasAtraso();
+        $c->_estatus_general   = $c->estatusGeneral();
+        $c->_proxima_cuota     = $c->proximaCuota();
 
-        $asesores = User::orderBy('name')->get(['id', 'name']);
-        $sedes    = Contrato::distinct()->pluck('sede')->filter()->sort()->values();
-
-        return view('contratos.lista', compact('contratos', 'asesores', 'sedes'));
+        return $c;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -313,6 +351,12 @@ class ContratoController extends Controller
         }
 
         $viejaCuotaFija = $contrato->cuota_fija;
+
+        // total_a_pagar es el capital que falta: corregir el capital lo mueve en la misma diferencia.
+        $diferenciaCapital = round((float) $data['capital'] - (float) $contrato->capital, 2);
+        if (abs($diferenciaCapital) > 0.001) {
+            $data['total_a_pagar'] = max(0, round((float) $contrato->getRawOriginal('total_a_pagar') + $diferenciaCapital, 2));
+        }
 
         $contrato->update($data);
 

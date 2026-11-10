@@ -64,6 +64,19 @@ class ContratoEliminarCuotaTest extends TestCase
         $this->assertDatabaseHas('contrato_cuotas', ['id' => $cuota->id]);
     }
 
+    public function test_corregir_el_capital_al_editar_ajusta_el_total_a_pagar(): void
+    {
+        $this->actingAs($this->admin())
+            ->post(route('contratos.update', $this->contrato->id), [
+                'cliente' => 'Cliente Prueba', 'capital' => 100, 'interes_porcentaje' => 0, 'cuota_fija' => 0,
+            ])
+            ->assertRedirect();
+
+        $contrato = $this->contrato->fresh();
+        $this->assertSame(100.0, (float) $contrato->capital);
+        $this->assertSame(100.0, (float) $contrato->getRawOriginal('total_a_pagar'));
+    }
+
     private function admin(): User
     {
         return User::create([

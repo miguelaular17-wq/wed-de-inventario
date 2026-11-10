@@ -226,10 +226,21 @@
                         <th>Categoría</th>
                         <th>Descripción</th>
                         <th style="text-align:right;">Movimiento</th>
+                        <th style="text-align:right;">Saldo</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($row['transacciones'] as $tx)
+                    @php
+                        $saldo = 0.0;
+                        // Mismo día: primero lo que entra, luego lo que sale, para que el saldo no baje de más.
+                        $movimientos = $row['transacciones']->sortBy(fn ($tx) => [
+                            $tx->fecha ? \Carbon\Carbon::parse($tx->fecha)->format('Y-m-d') : '',
+                            $tx->tipo === 'ingreso' ? 0 : 1,
+                            (int) ($tx->id ?? 0),
+                        ]);
+                    @endphp
+                    @foreach($movimientos as $tx)
+                        @php $saldo += $tx->tipo === 'ingreso' ? (float) $tx->monto : -(float) $tx->monto; @endphp
                         <tr>
                             <td>{{ $tx->fecha ? \Carbon\Carbon::parse($tx->fecha)->format('d/m/Y') : '—' }}</td>
                             <td class="tx-{{ $tx->tipo }}">{{ ucfirst($tx->tipo) }}</td>
@@ -237,6 +248,9 @@
                             <td style="color:#64748b;">{{ $tx->descripcion ?: '—' }}</td>
                             <td style="text-align:right; font-weight:600; color:{{ $tx->tipo === 'ingreso' ? '#059669' : '#dc2626' }};">
                                 {{ $tx->tipo === 'ingreso' ? '+' : '-' }}${{ number_format($tx->monto, 2) }}
+                            </td>
+                            <td style="text-align:right; font-weight:700; color:{{ $saldo >= 0 ? '#1e3a8a' : '#dc2626' }};">
+                                {{ $saldo < 0 ? '-' : '' }}${{ number_format(abs($saldo), 2) }}
                             </td>
                         </tr>
                     @endforeach
@@ -252,6 +266,9 @@
                         </td>
                         <td style="background:#dbeafe; text-align:right; font-weight:bold; color:{{ ($t['balance'] ?? 0) >= 0 ? '#059669' : '#dc2626' }};">
                             {{ ($t['balance'] ?? 0) >= 0 ? '+' : '-' }}${{ number_format(abs($t['balance'] ?? 0), 2) }}
+                        </td>
+                        <td style="background:#dbeafe; text-align:right; font-weight:bold; color:{{ $saldo >= 0 ? '#1e3a8a' : '#dc2626' }};">
+                            {{ $saldo < 0 ? '-' : '' }}${{ number_format(abs($saldo), 2) }}
                         </td>
                     </tr>
                 </tfoot>

@@ -40,11 +40,50 @@
         @if(! $modoJrz && $verPrecios)
             <a href="{{ route('etiquetas.index') }}" class="btn secondary" style="padding:10px 14px; border-radius:8px; text-decoration:none; font-weight:600;">🏷️ Sacar etiquetas</a>
         @endif
+        @if($modoJrz)
+            <button type="button" class="btn secondary" style="padding:10px 14px; border-radius:8px; font-weight:600;"
+                    onclick="document.getElementById('rep-proveedor').style.display='flex'">📊 Reporte por proveedor</button>
+        @endif
         <a href="{{ route('catalogo.index') }}" class="btn btn-primary" style="background-color: var(--blue); color: white; padding: 10px 16px; border-radius: 8px; text-decoration: none; font-weight: 500; display: flex; align-items: center; gap: 8px;">
             <i class="fas fa-images"></i> Ver Catálogo Gráfico / PDF
         </a>
     </div>
 </div>
+
+@if($modoJrz)
+<div id="rep-proveedor" style="display:none; position:fixed; inset:0; z-index:90; background:rgba(15,23,42,.55); align-items:center; justify-content:center; padding:16px;"
+     onclick="if (event.target === this) this.style.display='none'">
+    <form method="GET" action="{{ route('vendedor.jrz.reporte_proveedor') }}"
+          style="background:#fff; border-radius:12px; padding:20px 22px; width:100%; max-width:440px; box-shadow:0 20px 40px rgba(15,23,42,.25);"
+          onsubmit="setTimeout(() => document.getElementById('rep-proveedor').style.display='none', 300)">
+        <h3 style="margin:0 0 4px;">Reporte por proveedor</h3>
+        <p class="muted" style="margin:0 0 14px; font-size:.85rem;">Excel con lo vendido de cada producto en cada sede, el total vendido y la existencia total.</p>
+        <label style="display:block; font-weight:600; font-size:.85rem; margin-bottom:4px;">Proveedor *</label>
+        <input type="text" name="proveedor" list="rep-proveedores" required placeholder="Escribe o elige el proveedor"
+               style="width:100%; padding:9px 10px; border:1px solid #cbd5e1; border-radius:8px; margin-bottom:12px;">
+        <datalist id="rep-proveedores">
+            @foreach($proveedores as $prov)
+                <option value="{{ $prov }}">
+            @endforeach
+        </datalist>
+        <label style="display:block; font-weight:600; font-size:.85rem; margin-bottom:4px;">Días de ventas *</label>
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <select onchange="if (this.value) this.form.dias.value = this.value" style="flex:1; padding:9px 10px; border:1px solid #cbd5e1; border-radius:8px;">
+                <option value="">Elegir…</option>
+                @foreach($diasOpciones as $d)
+                    <option value="{{ $d }}" @selected($d === $diasVentas)>Últimos {{ $d }} días</option>
+                @endforeach
+            </select>
+            <input type="number" name="dias" min="1" max="730" required value="{{ $diasVentas }}" title="O escribe la cantidad de días"
+                   style="width:110px; padding:9px 10px; border:1px solid #cbd5e1; border-radius:8px;">
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <button type="button" class="btn secondary" onclick="document.getElementById('rep-proveedor').style.display='none'">Cancelar</button>
+            <button type="submit" class="btn primary">Descargar Excel</button>
+        </div>
+    </form>
+</div>
+@endif
 
 {{-- Barra de búsqueda (+ filtros JRZ) --}}
 <form method="GET" action="{{ $formAction }}" class="cat-search" id="vendedor-filtros">

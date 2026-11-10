@@ -52,6 +52,9 @@
             if ($u->canAccessComprasTab('existencias')) {
                 $items[] = $link('Existencias Globales', route('comprador.existencias'), request()->routeIs('comprador.existencias'));
             }
+            if ($u->canAccess('vendedor.jrz')) {
+                $items[] = $link('Catálogo JRZ (stock y ventas)', route('vendedor.jrz', ['dias' => 30]), request()->routeIs('vendedor.jrz*'));
+            }
         } elseif ($u->canAccessComprasTab('sobrestock')) {
             $items[] = $link('Sobre Stock / Sin Rotación', $dash('sobrestock'), $onDash && $tab === 'sobrestock');
         }

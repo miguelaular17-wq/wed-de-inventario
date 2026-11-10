@@ -1,6 +1,8 @@
 package com.example.inventario.ui
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Paint as AndroidPaint
@@ -73,6 +75,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,6 +97,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import android.widget.Toast
 import com.example.inventario.data.ChoiceDto
@@ -463,6 +467,9 @@ private fun CreatePhoneOrderForm(
         evidenceImages.clear()
         evidenceImages.addAll(uris.take(3))
     }
+    val takePhoto = rememberCameraPhoto { uri ->
+        if (evidenceImages.size < 3) evidenceImages.add(uri)
+    }
     val pickVideo = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri -> evidenceVideo = uri }
@@ -679,10 +686,17 @@ private fun CreatePhoneOrderForm(
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CompactOutlinedButton(onClick = {
+                        if (evidenceImages.size >= 3) {
+                            Toast.makeText(context, "Ya tienes 3 fotos.", Toast.LENGTH_SHORT).show()
+                        } else {
+                            takePhoto()
+                        }
+                    }) { Text("📷 Foto", style = MaterialTheme.typography.labelMedium) }
+                    CompactOutlinedButton(onClick = {
                         pickImages.launch(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                         )
-                    }) { Text("Fotos (${evidenceImages.size}/3)", style = MaterialTheme.typography.labelMedium) }
+                    }) { Text("Galería (${evidenceImages.size}/3)", style = MaterialTheme.typography.labelMedium) }
                     CompactOutlinedButton(onClick = {
                         pickVideo.launch(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly),
@@ -830,6 +844,9 @@ private fun ServiceOrderDetailScreen(
         pendingImages.addAll(uris.take(3))
         if (uris.isNotEmpty()) replaceImages = order.evidencias.imagenes.isNotEmpty()
     }
+    val takePhoto = rememberCameraPhoto { uri ->
+        if (pendingImages.size < 3) pendingImages.add(uri)
+    }
     val pickVideo = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
@@ -968,12 +985,21 @@ private fun ServiceOrderDetailScreen(
                             Spacer(Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 CompactOutlinedButton(onClick = {
+                                    if (pendingImages.size >= 3) {
+                                        Toast.makeText(context, "Ya tienes 3 fotos.", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        takePhoto()
+                                    }
+                                }) {
+                                    Text("📷 Foto", style = MaterialTheme.typography.labelMedium)
+                                }
+                                CompactOutlinedButton(onClick = {
                                     pickImages.launch(
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                                     )
                                 }) {
                                     Text(
-                                        "Fotos (${pendingImages.size}/3)",
+                                        "Galería (${pendingImages.size}/3)",
                                         style = MaterialTheme.typography.labelMedium,
                                     )
                                 }
@@ -1638,4 +1664,44 @@ private fun statusChoicesForOrder(order: ServiceOrderDto): List<ChoiceDto> {
         mapped.add(ChoiceDto(value = "listo", label = "Completado"))
     }
     return mapped
+}
+
+/**
+ * Abre la cámara para tomar una foto de evidencia y devuelve su Uri. El manifiesto declara CAMERA,
+ * así que el permiso se pide antes de abrirla (sin él, la cámara del sistema no arranca).
+ */
+@Composable
+private fun rememberCameraPhoto(onPhoto: (Uri) -> Unit): () -> Unit {
+    val context = LocalContext.current
+    var pendingUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val uri = pendingUri
+        pendingUri = null
+        if (ok && uri != null) onPhoto(uri)
+    }
+    val openCamera = {
+        val dir = File(context.cacheDir, "fotos").apply { mkdirs() }
+        val file = File(dir, "evidencia-${System.currentTimeMillis()}.jpg")
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        pendingUri = uri
+        runCatching { takePicture.launch(uri) }.onFailure {
+            pendingUri = null
+            Toast.makeText(context, "No se pudo abrir la cámara.", Toast.LENGTH_LONG).show()
+        }
+    }
+    val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            openCamera()
+        } else {
+            Toast.makeText(context, "Activa el permiso de cámara para tomar la foto.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    return {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            openCamera()
+        } else {
+            askPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
 }
