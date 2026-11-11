@@ -406,6 +406,30 @@ class ConciliacionExtractoImportTest extends TestCase
             ->assertSessionHas('error', fn ($m) => str_contains($m, 'ya no está pendiente'));
     }
 
+    public function test_recalcular_la_cuenta_que_recibe_concilia_la_entrada_de_un_traslado_de_otro_titular(): void
+    {
+        $traslado = FlujoCaja::create([
+            'tipo' => 'egreso', 'categoria_egreso' => 'traslados', 'banco' => 'BNC', 'titular' => 'L.S. Cashea',
+            'banco_receptor' => 'Banesco', 'titular_receptor' => 'LNACEH', 'fecha' => '2026-08-15',
+            'monto_bs' => 3862700, 'referencia' => '86369', 'motivo' => 'TRASLADO DE BNC LNACEH CASHEA A BANESCO LNACEH',
+            'oculto' => false, 'es_conciliado' => true,
+        ]);
+        $entrada = ConciliacionLinea::create([
+            'banco' => 'BANESCO', 'titular' => 'LNACEH', 'fecha' => '2026-08-17',
+            'descripcion' => 'TRF CR INM 0191 J409254852 LNACEH SPORT CA', 'referencia' => '86369',
+            'monto' => 3862700, 'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+
+        $this->actingAs($this->makeUser(User::ROLE_CONTABILIDAD))
+            ->post(route('finanzas.conciliaciones.recalcular'), [
+                'banco' => 'BANESCO', 'titular' => 'LNACEH', 'fecha_desde' => '2026-08-01', 'fecha_hasta' => '2026-08-31', 'banco_filtro' => 'BANESCO',
+            ])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, '1 movimientos conciliados'));
+
+        $this->assertSame('conciliado', $entrada->fresh()->estado);
+        $this->assertSame((int) $traslado->id, (int) $entrada->fresh()->flujo_caja_id);
+    }
+
     public function test_recalcular_cruza_el_pago_movil_de_tesoreria_abonado_dias_despues(): void
     {
         if (! Schema::hasTable('tesoreria_ingresos')) {

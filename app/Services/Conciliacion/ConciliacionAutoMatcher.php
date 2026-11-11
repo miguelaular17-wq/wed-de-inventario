@@ -57,21 +57,14 @@ class ConciliacionAutoMatcher
         if (Schema::hasColumn('flujo_cajas', 'anulado')) {
             $flujos_posibles->where('anulado', false);
         }
-        if ($banco_filtro) {
-            $variantesMatch = array_map('strtolower', $this->matcher->variantesBanco($banco_filtro));
-            $flujos_posibles->where(function ($q) use ($variantesMatch) {
-                $q->where(function ($banco) use ($variantesMatch) {
-                    foreach ($variantesMatch as $v) {
-                        $banco->orWhereRaw('LOWER(TRIM(banco)) = ?', [$v]);
-                    }
-                })->orWhere(function ($receptor) use ($variantesMatch) {
-                    foreach ($variantesMatch as $v) {
-                        $receptor->orWhereRaw('LOWER(TRIM(banco_receptor)) = ?', [$v]);
-                    }
-                });
+        // La cuenta puede ser el origen (banco + titular) o el destino de un traslado (banco + titular receptor):
+        // al recalcular la cuenta que recibe, el traslado sale de otro titular.
+        if ($banco_filtro || trim((string) $titular_filtro) !== '') {
+            $flujos_posibles->where(function ($q) use ($banco_filtro, $titular_filtro) {
+                $q->where(fn ($origen) => $this->filtrarPorTitular($this->filtrarPorBanco($origen, $banco_filtro, 'banco'), $titular_filtro, 'titular'))
+                    ->orWhere(fn ($destino) => $this->filtrarPorTitular($this->filtrarPorBanco($destino, $banco_filtro, 'banco_receptor'), $titular_filtro, 'titular_receptor'));
             });
         }
-        $this->filtrarPorTitular($flujos_posibles, $titular_filtro);
         $flujos_posibles = $flujos_posibles->limit(5000)->get();
 
         // Ingresos registrados en flujo de caja: se emparejan con los abonos del extracto.
