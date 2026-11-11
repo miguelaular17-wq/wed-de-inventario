@@ -118,9 +118,10 @@ class ConciliacionExtractoImportTest extends TestCase
         ];
         $path = $this->xlsxBanesco($filas);
 
+        // Dos filas idénticas en el mismo extracto son dos movimientos.
         $imp1 = $this->importar($path);
-        $this->assertSame(1, $imp1->filas_importadas);
-        $this->assertSame(1, $imp1->filas_duplicadas);
+        $this->assertSame(2, $imp1->filas_importadas);
+        $this->assertSame(0, $imp1->filas_duplicadas);
 
         // Primera importación borra el archivo; regeneramos para la re-subida.
         $path2 = $this->xlsxBanesco($filas, 'dup2.xlsx');
@@ -135,7 +136,36 @@ class ConciliacionExtractoImportTest extends TestCase
         $imp2 = app(ExtractoImporter::class)->importarArchivo($imp2);
         $this->assertSame(0, $imp2->filas_importadas);
         $this->assertSame(2, $imp2->filas_duplicadas);
-        $this->assertSame(1, ConciliacionLinea::query()->count());
+        $this->assertSame(2, ConciliacionLinea::query()->count());
+    }
+
+    public function test_extracto_en_otro_formato_solo_agrega_lo_que_falta(): void
+    {
+        $imp = fn () => ConciliacionImportacion::create([
+            'banco' => 'BANESCO', 'titular' => 'GRUPO JRZ', 'archivo_nombre' => 'edocta.xls',
+            'extension' => 'xls', 'estado' => ConciliacionImportacion::PENDIENTE,
+        ]);
+        $fila = fn (int $n, string $desc, string $ref, float $monto) => ['fila' => $n, 'tipo' => 'linea', 'datos' => [
+            'fecha' => '2026-08-14', 'descripcion' => $desc, 'referencia' => $ref, 'monto' => $monto, 'tipo' => 'cargo',
+        ]];
+
+        app(ExtractoImporter::class)->importarFilas($imp(), [
+            $fila(2, 'TDB CAPIT 0037416967 L000997 30687', '997', 140866.16),
+            $fila(3, 'COMPRA POS CTACTE DIST DE QUMICOS LA P', '22787080012', 10282.67),
+            $fila(4, 'CONTRAPRESTACION PAGO PROVEEDORES', '44702108', 14744.39),
+        ]);
+        $r = app(ExtractoImporter::class)->importarFilas($imp(), [
+            $fila(2, 'TDB CAPIT. 0037416967 L.000997 30687', '00000000997', 140866.16),
+            $fila(3, 'COMPRA POS CTA/CTE DIST DE QUÍMICOS LA P', '22787080012', 10282.67),
+            $fila(4, 'CONTRAPRESTACION PAGO PROVEEDORES', '44702108', 14744.39),
+            $fila(5, 'CONTRAPRESTACION PAGO PROVEEDORES', '44702108', 14744.39),
+            $fila(6, 'PAGO PROVE /EDI 00000003', '00000000003', 80100.00),
+        ]);
+
+        $this->assertSame(2, $r->filas_importadas);
+        $this->assertSame(3, $r->filas_duplicadas);
+        $this->assertSame(2, ConciliacionLinea::query()->where('referencia', '44702108')->count());
+        $this->assertSame(1, ConciliacionLinea::query()->where('descripcion', 'PAGO PROVE /EDI 00000003')->count());
     }
 
     public function test_rechaza_montos_y_fechas_invalidas(): void

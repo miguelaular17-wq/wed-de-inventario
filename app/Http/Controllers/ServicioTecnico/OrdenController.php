@@ -1255,7 +1255,15 @@ class OrdenController extends Controller
 
         $codigo = $orden->codigo();
         $tipo = $orden->esGarantia() ? 'Garantía' : 'ST';
-        $orden->delete();
+        \Illuminate\Support\Facades\DB::transaction(function () use ($orden) {
+            $equipoId = $orden->equipo_id;
+            $orden->delete();
+            // Un equipo sin órdenes solo existía por esta: si no, queda en la bitácora como "en taller" para siempre.
+            if ($equipoId && ! StOrden::query()->where('equipo_id', $equipoId)->exists()) {
+                \App\Models\StEquipoEvento::query()->where('equipo_id', $equipoId)->delete();
+                StEquipo::query()->whereKey($equipoId)->delete();
+            }
+        });
 
         return redirect()
             ->route('servicio.ordenes.index')

@@ -57,6 +57,32 @@ class ExtractoParserTest extends TestCase
         $this->assertSame('Descripción', iterator_to_array($this->parser->filasCrudas($this->html(), 'xls'), false)[0][2]);
     }
 
+    public function test_lee_el_excel_xml_de_banesco_en_linea_con_el_signo_del_tipo_o_del_saldo(): void
+    {
+        $celda = fn (string $v) => '<Cell ss:StyleID="StringLiteral"><Data ss:Type="String">'.$v.'</Data></Cell>';
+        $fila = fn (array $vs) => '<Row>'.implode('', array_map($celda, $vs)).'</Row>';
+        $tmp = tempnam(sys_get_temp_dir(), 'bx') . '.xls';
+        file_put_contents($tmp, "<xml version=\"1.0\">\n<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\">"
+            .'<Styles><Style ss:ID="Default"/></Styles><Worksheet ss:Name="Movimientos"><Table>'
+            .$fila(['Fecha', 'Referencia', 'Descripción', 'Monto', 'Saldo', 'Tipo de Movimiento'])
+            .$fila(['3 de agosto de 2026', '21517002254', 'COMPRA POS CTA/CTE', '59.486,27', '2.302.615,89', ''])
+            .$fila(['3 de agosto de 2026', '21518860015', 'COMPRA POS CTA/CTE BAJO CERO', '19.391,61', '2.283.224,28', ''])
+            .$fila(['3 de agosto de 2026', '00000000915', 'TD 0001425125 000915', '6.761,24', '2.289.985,52', ''])
+            .$fila(['31 de agosto de 2026', '01569450551', 'Com. Banesco Pago Movil', '141,44', '2.289.844,08', 'Nota de Débito'])
+            .$fila(['31 de agosto de 2026', '01037135392', 'Banesco Pago Movil', '5.009,00', '2.294.853,08', 'Nota de Crédito'])
+            .'</Table></Worksheet></Workbook>');
+
+        $filas = iterator_to_array($this->parser->filas($tmp, 'xls', 'BANESCO'), false);
+        @unlink($tmp);
+
+        // La primera fila no trae tipo ni saldo anterior: no se adivina el signo.
+        $this->assertSame(['tipo' => 'rechazo', 'fila' => 2, 'motivo' => 'Sin monto'], $filas[0]);
+        $this->assertSame(['2026-08-03', 'COMPRA POS CTA/CTE BAJO CERO', '21518860015', '19391.61', 'cargo'], array_values($filas[1]['datos']));
+        $this->assertSame(['abono', '6761.24'], [$filas[2]['datos']['tipo'], $filas[2]['datos']['monto']]);
+        $this->assertSame(['2026-08-31', 'cargo', '141.44'], [$filas[3]['datos']['fecha'], $filas[3]['datos']['tipo'], $filas[3]['datos']['monto']]);
+        $this->assertSame('abono', $filas[4]['datos']['tipo']);
+    }
+
     private function html(): string
     {
         $tmp = tempnam(sys_get_temp_dir(), 'bh') . '.xls';
@@ -71,6 +97,9 @@ class ExtractoParserTest extends TestCase
         $this->assertSame('2026-08-03', $this->parser->normalizarFecha('03-08-2026'));
         $this->assertSame('2026-08-03', $this->parser->normalizarFecha('2026-08-03 00:00:00'));
         $this->assertSame('2026-08-03', $this->parser->normalizarFecha('46237'));
+        $this->assertSame('2026-08-03', $this->parser->normalizarFecha('3 de agosto de 2026'));
+        $this->assertSame('2026-12-31', $this->parser->normalizarFecha('31 de Diciembre de 2026'));
+        $this->assertNull($this->parser->normalizarFecha('31 de febrero de 2026'));
         $this->assertNull($this->parser->normalizarFecha('fecha'));
         $this->assertNull($this->parser->normalizarFecha('01/01/1890'));
         $this->assertNull($this->parser->normalizarFecha(''));

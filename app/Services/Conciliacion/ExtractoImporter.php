@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 /**
  * Guarda líneas del extracto por bloques con inserción masiva.
  *
- * Duplicados: misma regla que antes (banco, titular, fecha, monto, referencia, descripción, tipo).
+ * Duplicados: (banco, titular, fecha, monto, referencia, descripción, tipo), contando ocurrencias (ver clave()).
  * Reintentos: cada bloque se confirma junto con `ultima_fila`, así un reintento continúa
  * donde quedó sin volver a insertar ni a contar filas.
  */
@@ -70,9 +70,20 @@ class ExtractoImporter
         $ultimaFilaBloque = $desde;
         $vistas = 0;
         $this->ignoradas = 0;
+        // Cuántas veces va apareciendo cada movimiento en el archivo (también en filas ya guardadas por un
+        // intento anterior): dos cargos idénticos el mismo día son dos movimientos, no un duplicado.
+        $ocurrencias = [];
+        $banco = strtoupper(trim((string) $imp->banco));
+        $titular = strtoupper(trim((string) $imp->titular));
 
         foreach ($filas as $fila) {
             $n = (int) ($fila['fila'] ?? 0);
+            $ocurrencia = 0;
+            if (($fila['tipo'] ?? '') === 'linea' && ! self::seIgnora((string) $imp->banco, $fila['datos']['descripcion'] ?? null)) {
+                $d = $fila['datos'];
+                $clave = $this->clave($banco, $titular, $d['fecha'], $d['monto'], $d['referencia'], $d['descripcion'], $d['tipo']);
+                $ocurrencia = $ocurrencias[$clave] = ($ocurrencias[$clave] ?? 0) + 1;
+            }
             if ($n <= $desde) {
                 continue;
             }
@@ -86,7 +97,7 @@ class ExtractoImporter
             } elseif (self::seIgnora((string) $imp->banco, $fila['datos']['descripcion'] ?? null)) {
                 $this->ignoradas++;
             } else {
-                $bloque[] = ['fila' => $n] + $fila['datos'];
+                $bloque[] = ['fila' => $n, 'ocurrencia' => $ocurrencia] + $fila['datos'];
             }
 
             if (count($bloque) + count($rechazosBloque) >= $chunk) {
@@ -198,7 +209,8 @@ class ExtractoImporter
             ->select(['fecha', 'monto', 'referencia', 'descripcion', 'tipo'])
             ->get()
             ->each(function ($fila) use (&$existentes, $banco, $titular) {
-                $existentes[$this->clave($banco, $titular, $fila->fecha, $fila->monto, $fila->referencia, $fila->descripcion, $fila->tipo)] = true;
+                $clave = $this->clave($banco, $titular, $fila->fecha, $fila->monto, $fila->referencia, $fila->descripcion, $fila->tipo);
+                $existentes[$clave] = ($existentes[$clave] ?? 0) + 1;
             });
 
         $conTrazabilidad = $this->tieneTrazabilidad();
@@ -207,12 +219,13 @@ class ExtractoImporter
         $duplicadas = 0;
         foreach ($bloque as $linea) {
             $clave = $this->clave($banco, $titular, $linea['fecha'], $linea['monto'], $linea['referencia'], $linea['descripcion'], $linea['tipo']);
-            if (isset($existentes[$clave])) {
+            // La n-ésima vez que aparece en el archivo es repetida si la web ya tiene n o más iguales.
+            if (max(1, (int) ($linea['ocurrencia'] ?? 1)) <= ($existentes[$clave] ?? 0)) {
                 $duplicadas++;
 
                 continue;
             }
-            $existentes[$clave] = true;
+            $existentes[$clave] = ($existentes[$clave] ?? 0) + 1;
 
             $fila = [
                 'session_id' => $imp->session_id ?? null,
@@ -237,18 +250,26 @@ class ExtractoImporter
         return [$nuevas, $duplicadas];
     }
 
-    /** Misma clave que FinanzasController::claveExtracto para no cambiar qué se considera repetido. */
+    /**
+     * Clave de movimiento repetido. Referencia sin ceros a la izquierda y descripción sin puntuación: el mismo
+     * movimiento llega distinto según el formato que exporte el banco ("L.000997" vs "L000997", "13/08/26" vs "130826",
+     * "QUÍMICOS" vs "QUMICOS"): de la descripción solo cuentan letras y dígitos ASCII.
+     */
     public function clave($banco, $titular, $fecha, $monto, $referencia, $descripcion, $tipo): string
     {
         $dia = $fecha instanceof \DateTimeInterface ? $fecha->format('Y-m-d') : substr((string) $fecha, 0, 10);
+        $ref = trim((string) $referencia);
+        if (ctype_digit($ref)) {
+            $ref = ltrim($ref, '0') ?: '0';
+        }
 
         return implode('|', [
             strtoupper(trim((string) $banco)),
             strtoupper(trim((string) $titular)),
             $dia,
             number_format(round((float) $monto, 2), 2, '.', ''),
-            trim((string) $referencia),
-            trim((string) $descripcion),
+            $ref,
+            preg_replace('/[^A-Z0-9]+/', '', strtoupper((string) $descripcion)),
             trim((string) $tipo),
         ]);
     }

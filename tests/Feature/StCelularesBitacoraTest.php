@@ -101,6 +101,43 @@ class StCelularesBitacoraTest extends TestCase
             ->assertSee($orden->codigo());
     }
 
+    public function test_eliminar_la_unica_orden_saca_el_equipo_de_la_bitacora(): void
+    {
+        $user = $this->makeTecnico();
+        $crear = fn (string $imei, bool $existente = false) => $this->actingAs($user)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->post(route('servicio.ordenes.store'), [
+                'cliente_nombre' => 'Cliente Borrar',
+                'prioridad' => 'normal',
+                'tipo_gestion' => 'ST',
+                'tipo_dispositivo' => 'celular',
+                'imei' => $imei,
+                'marca' => 'Honor',
+                'modelo' => 'Play 10',
+                'color' => 'Negro',
+                'almacenamiento' => '128 GB',
+                'falla' => 'Pantalla',
+                'usar_equipo_existente' => $existente ? '1' : '0',
+            ])->assertSessionHasNoErrors();
+
+        $crear('86465087139675');
+        $equipo = StEquipo::query()->where('imei', '86465087139675')->firstOrFail();
+        $orden = StOrden::query()->where('equipo_id', $equipo->id)->firstOrFail();
+
+        $this->delete(route('servicio.ordenes.destroy', $orden))->assertSessionHasNoErrors();
+        $this->assertNull(StEquipo::query()->find($equipo->id));
+        $this->assertSame(0, StEquipoEvento::query()->where('equipo_id', $equipo->id)->count());
+        $this->get(route('servicio.celulares.bitacora', ['q' => '9675']))->assertOk()->assertDontSee('86465087139675');
+
+        // Con otra orden del mismo equipo, el equipo se queda.
+        $crear('864656087139675');
+        $crear('864656087139675', true);
+        $equipo = StEquipo::query()->where('imei', '864656087139675')->firstOrFail();
+        $this->assertSame(2, StOrden::query()->where('equipo_id', $equipo->id)->count());
+        $this->delete(route('servicio.ordenes.destroy', StOrden::query()->where('equipo_id', $equipo->id)->firstOrFail()))->assertSessionHasNoErrors();
+        $this->assertNotNull(StEquipo::query()->find($equipo->id));
+    }
+
     public function test_hub_y_login_chip_ruta_existen(): void
     {
         $user = $this->makeTecnico();

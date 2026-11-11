@@ -20,6 +20,8 @@ class ExtractoParser
     /** Filas que se revisan para ubicar la cabecera en bancos con detect_header. */
     private const FILAS_BUSCAR_CABECERA = 100;
 
+    private const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
     /**
      * Mapeo fijo de columnas por banco (0-based). Basado en los archivos reales de cada banco.
      * col_monto: columna Ãºnica (negativo = cargo); col_cargo / col_abono: Debe / Haber.
@@ -264,6 +266,14 @@ class ExtractoParser
         if ($raw === '') {
             return null;
         }
+        // "3 de agosto de 2026" (Banesco en línea).
+        if (preg_match('/^(\d{1,2}) de (\p{L}+) de (\d{4})$/u', $raw, $m)) {
+            $mes = array_search(mb_strtolower($m[2], 'UTF-8'), self::MESES, true);
+
+            return $mes === false || ! checkdate($mes + 1, (int) $m[1], (int) $m[3])
+                ? null
+                : sprintf('%04d-%02d-%02d', $m[3], $mes + 1, $m[1]);
+        }
         $solo = explode(' ', str_replace('/', '-', $raw))[0];
         try {
             if (is_numeric($solo) && $solo > 20000) {
@@ -312,6 +322,10 @@ class ExtractoParser
     private function leerFilas(string $path, string $ext, bool $csvSemicolon): iterable
     {
         // Banesco (y otros portales) exportan una tabla HTML con extensión .xls: Excel la abre igual.
+        // Banesco en línea también exporta "Excel XML 2003" (SpreadsheetML), cuyo <Table> no es HTML.
+        if ($ext !== 'xlsx' && $this->esSpreadsheetMl($path)) {
+            return $this->leerSpreadsheetMl($path);
+        }
         if ($ext !== 'xlsx' && $this->esTablaHtml($path)) {
             return $this->leerTablaHtml($path);
         }
@@ -425,6 +439,126 @@ class ExtractoParser
         }
 
         return $filas;
+    }
+
+    private function esSpreadsheetMl(string $path): bool
+    {
+        $inicio = (string) @file_get_contents($path, false, null, 0, 4096);
+
+        return str_contains($inicio, 'urn:schemas-microsoft-com:office:spreadsheet') && str_contains($inicio, '<Workbook');
+    }
+
+    /**
+     * Filas de un libro SpreadsheetML (primera hoja). Si trae "Monto" sin signo + "Saldo" + "Tipo de Movimiento"
+     * (Banesco en línea), el monto se devuelve con signo: Nota de Débito = negativo; sin tipo, por la variación
+     * del saldo respecto a la fila anterior. Si no se puede deducir, el monto queda vacío y la fila se rechaza.
+     *
+     * @return list<list<string>>
+     */
+    private function leerSpreadsheetMl(string $path): array
+    {
+        $xml = (string) file_get_contents($path);
+        // Banesco escribe "<xml version=...>" en lugar de una declaración XML válida.
+        $xml = preg_replace('/^\s*(?:\xEF\xBB\xBF)?<xml\b[^>]*>/', '', $xml, 1) ?? $xml;
+
+        $dom = new \DOMDocument();
+        $previo = libxml_use_internal_errors(true);
+        try {
+            $ok = $dom->loadXML($xml, LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_PARSEHUGE | LIBXML_NONET);
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previo);
+        }
+        if (! $ok) {
+            throw new FormatoExtractoException('El archivo (.xls) es un Excel XML que no se pudo leer.');
+        }
+
+        $ns = 'urn:schemas-microsoft-com:office:spreadsheet';
+        $hoja = $dom->getElementsByTagNameNS($ns, 'Worksheet')->item(0);
+        if ($hoja === null) {
+            return [];
+        }
+
+        $filas = [];
+        foreach ($hoja->getElementsByTagNameNS($ns, 'Row') as $row) {
+            $fila = [];
+            foreach ($row->childNodes as $celda) {
+                if (! $celda instanceof \DOMElement || $celda->localName !== 'Cell') {
+                    continue;
+                }
+                $indice = (int) $celda->getAttributeNS($ns, 'Index');
+                while ($indice > 0 && count($fila) < $indice - 1) {
+                    $fila[] = '';
+                }
+                $fila[] = trim(preg_replace('/[\s\x{00A0}]+/u', ' ', $celda->textContent) ?? '');
+            }
+            $filas[] = $fila;
+        }
+
+        return $this->firmarMontoPorTipo($filas);
+    }
+
+    /**
+     * @param  list<list<string>>  $filas
+     * @return list<list<string>>
+     */
+    private function firmarMontoPorTipo(array $filas): array
+    {
+        $cols = null;
+        foreach ($filas as $i => $fila) {
+            $etiquetas = array_map(fn ($c) => mb_strtoupper((string) $c, 'UTF-8'), $fila);
+            $monto = array_search('MONTO', $etiquetas, true);
+            $saldo = array_search('SALDO', $etiquetas, true);
+            $tipo = array_search('TIPO DE MOVIMIENTO', $etiquetas, true);
+            if ($monto !== false && $saldo !== false && $tipo !== false) {
+                $cols = [$i, $monto, $saldo, $tipo];
+                break;
+            }
+        }
+        if ($cols === null) {
+            return $filas;
+        }
+
+        [$cabecera, $cMonto, $cSaldo, $cTipo] = $cols;
+        $saldoAnterior = null;
+        foreach ($filas as $i => $fila) {
+            if ($i <= $cabecera || ! isset($fila[$cMonto]) || trim($fila[$cMonto]) === '') {
+                continue;
+            }
+            $monto = $this->normalizarMonto($fila[$cMonto]);
+            $saldo = $this->normalizarMonto($fila[$cSaldo] ?? null);
+            if ($monto === null || str_starts_with($monto, '-')) {
+                $saldoAnterior = $saldo;
+
+                continue;
+            }
+
+            $tipo = mb_strtoupper((string) ($fila[$cTipo] ?? ''), 'UTF-8');
+            $esCargo = null;
+            if (str_contains($tipo, 'DÉBITO') || str_contains($tipo, 'DEBITO')) {
+                $esCargo = true;
+            } elseif (str_contains($tipo, 'CRÉDITO') || str_contains($tipo, 'CREDITO')) {
+                $esCargo = false;
+            } elseif ($saldo !== null && $saldoAnterior !== null) {
+                $delta = $this->aCentavos($saldo) - $this->aCentavos($saldoAnterior);
+                $cent = $this->aCentavos($monto);
+                $esCargo = $delta === -$cent ? true : ($delta === $cent ? false : null);
+            }
+
+            $filas[$i][$cMonto] = $esCargo === null ? '' : ($esCargo ? '-' : '').$monto;
+            $saldoAnterior = $saldo;
+        }
+
+        return $filas;
+    }
+
+    private function aCentavos(string $monto): int
+    {
+        $negativo = str_starts_with($monto, '-');
+        [$entero, $dec] = explode('.', ltrim($monto, '-')) + [1 => '00'];
+        $cent = ((int) $entero) * 100 + (int) $dec;
+
+        return $negativo ? -$cent : $cent;
     }
 
     /**
