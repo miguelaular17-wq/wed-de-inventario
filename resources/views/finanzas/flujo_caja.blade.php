@@ -785,6 +785,13 @@
                                         <button type="button" onclick='abrirGaleria(@json($allComprobantesIng))' title="Ver comprobantes ({{ count($allComprobantesIng) }})"
                                             style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer; margin-right: 2px;">📎 {{ count($allComprobantesIng) }}</button>
                                     @endif
+                                    @if(auth()->user()->isAuditor())
+                                    <button type="button" onclick='abrirVerEgreso(@json($mov))' title="Ver detalle"
+                                        style="background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">👁️</button>
+                                    @elseif(auth()->user()->canAccess('finanzas.editar'))
+                                    <button type="button" onclick='abrirEditarEgreso(@json($mov))' title="Editar ingreso"
+                                        style="background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; border-radius: 4px; padding: 3px 7px; font-size: 0.8rem; cursor: pointer;">✏️</button>
+                                    @endif
                                     @if(auth()->user()->canAccess('finanzas.eliminar'))
                                     <form method="POST" action="{{ route('finanzas.destroy_egreso', $mov->id) }}" style="display:inline;" onsubmit="return confirm('¿Seguro que deseas eliminar este ingreso? Esta acción no se puede deshacer.');">
                                         @csrf
@@ -2883,6 +2890,12 @@ function cerrarGaleria() {
 // ===== EDITAR EGRESO =====
 function aplicarCategoriaEdit(categoria, cambioManual) {
     const isTraslado = (categoria === 'traslados');
+    const isIngreso = (categoria === 'ingresos');
+    document.getElementById('titulo_editar_egreso').innerText = isIngreso ? '✏️ Editar Ingreso' : '✏️ Editar Egreso';
+    const rowCategoria = document.getElementById('row_categoria_edit');
+    if (rowCategoria && !@json($soloAvances ?? false)) rowCategoria.style.display = isIngreso ? 'none' : 'block';
+    const lblBenef = document.getElementById('lbl_beneficiario_edit');
+    if (lblBenef) lblBenef.innerText = isIngreso ? 'Origen (quién pagó)' : 'Beneficiario';
 
     document.getElementById('row_receptor_edit').style.display = isTraslado ? 'flex' : 'none';
     document.getElementById('banco_titular_receptor_edit').required = isTraslado;
@@ -2895,10 +2908,10 @@ function aplicarCategoriaEdit(categoria, cambioManual) {
     const rowDifEdit = document.getElementById('row_diferencial_edit');
     if (rowDifEdit) rowDifEdit.style.display = isTraslado ? 'none' : 'block';
 
-    document.getElementById('row_tipo_gasto_edit').style.display = isTraslado ? 'none' : 'block';
+    document.getElementById('row_tipo_gasto_edit').style.display = (isTraslado || isIngreso) ? 'none' : 'block';
     // Para no dar error con TomSelect requerimos el elemento base
     const dstTG = document.getElementById('edit_tipo_gasto');
-    if (dstTG) dstTG.required = !isTraslado;
+    if (dstTG) dstTG.required = !isTraslado && !isIngreso;
 
     const sel = document.getElementById('categoria_egreso_edit');
     const aviso = document.getElementById('aviso_categoria_edit');
@@ -3329,7 +3342,7 @@ function limpiarFiltros() {
 <div id="modalEditarEgreso" class="modal-overlay" style="display: none; z-index: 1300; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
     <div class="panel modal-box" style="width: 95%; max-width: 650px; position: relative; padding: 20px; border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); max-height: 92vh; overflow-y: auto; background: white;">
         <button type="button" onclick="cerrarEditarEgreso()" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 22px; cursor: pointer;">&times;</button>
-        <h3 style="margin-top: 0; color: var(--blue);">✏️ Editar Egreso</h3>
+        <h3 id="titulo_editar_egreso" style="margin-top: 0; color: var(--blue);">✏️ Editar Egreso</h3>
 
         <form id="formEditarEgreso" method="POST" action="" enctype="multipart/form-data" onsubmit="return validarDesgloseEdit(event)">
             @csrf
@@ -3441,7 +3454,7 @@ function limpiarFiltros() {
             </div>
 
             <div id="row_beneficiario_edit" style="margin-bottom: 10px;">
-                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Beneficiario</label>
+                <label id="lbl_beneficiario_edit" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Beneficiario</label>
                 <select id="beneficiario_edit" name="beneficiario" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
                     <option value="">-- Seleccione un beneficiario --</option>
                     @foreach($proveedores as $prov)

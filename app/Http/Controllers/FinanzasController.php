@@ -1350,7 +1350,7 @@ class FinanzasController extends Controller
 
         return redirect()->back()->with('success', $cambiaCategoria
             ? 'Egreso actualizado y pasado a «'.($nombres[$categoria] ?? $categoria).'».'
-            : 'Egreso actualizado correctamente.');
+            : ($egreso->tipo === 'ingreso' ? 'Ingreso actualizado correctamente.' : 'Egreso actualizado correctamente.'));
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Error actualizando egreso: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Error al guardar (Es posible que la imagen sea muy pesada o el servidor haya fallado): ' . $e->getMessage());

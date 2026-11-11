@@ -177,6 +177,26 @@ class FlujoCajaIngresoTest extends TestCase
         $this->assertSame('otros_egresos', $avance->fresh()->categoria_egreso);
     }
 
+    public function test_se_puede_editar_la_cuenta_de_un_ingreso_y_sigue_siendo_ingreso(): void
+    {
+        $ing = FlujoCaja::create([
+            'tipo' => 'ingreso', 'categoria_egreso' => 'ingresos', 'banco' => 'Mercantil', 'titular' => 'JRZ',
+            'fecha' => '2026-08-08', 'monto_bs' => 22686, 'monto_usd' => 29.95, 'referencia' => '622051388896',
+            'titular_receptor' => 'AURILES LUGO', 'motivo' => 'REEMBOLSO COMBUSTIBLE', 'es_conciliado' => false, 'oculto' => false,
+        ]);
+
+        // El formulario no manda la categoría de un ingreso (el selector solo tiene tipos de egreso).
+        $this->actingAs($this->usuario())->post(route('finanzas.update_egreso', $ing->id), [
+            'banco_titular' => 'Tesoro|Doral|BANCA NACIONAL', 'fecha' => '2026-08-08', 'referencia' => '622051388896',
+            'monto_bs' => '22686', 'monto_usd' => '29.95', 'beneficiario' => 'AURILES LUGO', 'motivo' => 'REEMBOLSO COMBUSTIBLE',
+        ])->assertRedirect()->assertSessionHas('success', 'Ingreso actualizado correctamente.');
+
+        $ing->refresh();
+        $this->assertSame(['ingreso', 'ingresos'], [$ing->tipo, $ing->categoria_egreso]);
+        $this->assertSame(['Tesoro', 'Doral'], [$ing->banco, $ing->titular]);
+        $this->assertSame('AURILES LUGO', $ing->titular_receptor);
+    }
+
     public function test_se_puede_eliminar_un_ingreso(): void
     {
         $ing = FlujoCaja::create([
