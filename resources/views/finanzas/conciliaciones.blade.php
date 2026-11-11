@@ -1221,8 +1221,11 @@ const titularesPorBanco = @json($titularesPorBanco);
 @php
     // Solo lo que se ve en la tabla y todos los cargos (contraparte de una devolución de abono): con miles de abonos el JSON no cabe.
     $limiteMovimientosBanco ??= 600;
+    // Un cargo clasificado como compra de divisas también puede ser la otra mitad de una devolución
+    // (Bancaribe: "MECANISMO INTERVENCION CAMBIARIA" y su "REV.MECANISMO..." el mismo día).
     $movimientosPendientesJs = collect($data_por_banco ?? [])->map(fn ($d) => $d['sin_registrar']->take($limiteMovimientosBanco)
         ->concat($d['sin_registrar']->slice($limiteMovimientosBanco)->filter(fn ($r) => ($r['tipo'] ?? 'cargo') !== 'abono'))
+        ->concat(($d['compras_divisas_banco'] ?? collect())->filter(fn ($r) => ($r['tipo'] ?? 'cargo') !== 'abono'))
         ->map(fn ($r) => [
         'id' => $r['id'],
         'fecha' => $r['fecha'] instanceof \DateTimeInterface ? $r['fecha']->format('d/m/Y') : \Carbon\Carbon::parse($r['fecha'])->format('d/m/Y'),

@@ -623,6 +623,8 @@ class BankReconciliationMatcher
         $needles = [
             'liq.tarjeta',
             'liq tarjeta',
+            // BDV: "ABONO BDV BDV LIQ LINEA LOTES" = liquidación de los lotes del punto.
+            'liq linea lote',
             'liquidacion t/',
             'liquidación t/',
             'liquidacion t.',

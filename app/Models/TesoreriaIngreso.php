@@ -27,4 +27,10 @@ class TesoreriaIngreso extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /** Movimiento del extracto bancario con el que se concilió. */
+    public function lineaBanco()
+    {
+        return $this->hasOne(ConciliacionLinea::class, 'tesoreria_ingreso_id');
+    }
 }

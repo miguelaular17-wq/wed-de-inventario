@@ -141,32 +141,23 @@ class CobranzaController extends Controller
             $queryClientes->whereIn('codigo_cliente', $personalCodes);
         }
 
-        if ($filtro_sede) {
-            $queryClientes->where('sede_nombre', $filtro_sede);
-        }
-        
-        if ($buscar_cliente) {
-            $queryClientes->whereRaw('LOWER(nombre_cliente) LIKE ?', ['%' . strtolower($buscar_cliente) . '%']);
-        }
-        
-        if ($fecha_desde) {
-            $queryClientes->whereDate('fecha_emision', '>=', $fecha_desde);
-        }
-        
-        if ($fecha_hasta) {
-            $queryClientes->whereDate('fecha_emision', '<=', $fecha_hasta);
-        }
-
-        if ($filtro_estatus) {
-            $queryClientes->where('estatus', strtoupper($filtro_estatus));
-        }
+        $this->aplicarFiltrosLista($queryClientes, request());
         
         // Solo se cargan las columnas que usa la vista y usamos alias para compatibilidad
         $clientes_lista = $queryClientes;
         $this->excludePagadasManualmente($clientes_lista);
         $this->joinNotas($clientes_lista);
+        $conIntermediarios = \Illuminate\Support\Facades\Schema::connection('pgsql')->hasTable('cobranza_intermediarios');
+        if ($conIntermediarios) {
+            $clientes_lista->leftJoin('cobranza_intermediarios', function ($join) {
+                $join->whereRaw('cobranza_intermediarios.id_documento IN (historial_cobranzas.numero_documento, historial_cobranzas.id_documento, historial_cobranzas.factura_padre)');
+            })->addSelect([
+                'cobranza_intermediarios.codigo_intermediario',
+                'cobranza_intermediarios.nombre_intermediario',
+            ]);
+        }
         $clientes_lista = $clientes_lista
-            ->select([
+            ->addSelect([
                 'historial_cobranzas.codigo_cliente as codigo', 
                 'historial_cobranzas.nombre_cliente as cliente', 
                 'historial_cobranzas.monto_neto',
@@ -187,8 +178,17 @@ class CobranzaController extends Controller
             \Log::info(sprintf('Clientes => %d registros', $clientes_lista->count()));
         }
 
+        // Para elegir al intermediario entre los clientes de cobranza (se puede escribir otro).
+        $clientesConocidos = $historialActual
+            ->filter(fn ($r) => trim((string) $r->codigo_cliente) !== '')
+            ->map(fn ($r) => ['codigo' => trim((string) $r->codigo_cliente), 'nombre' => trim((string) $r->nombre_cliente)])
+            ->unique('codigo')
+            ->sortBy('nombre')
+            ->values();
+
         $t = microtime(true);
         $view = view('cobranza.index', compact(
+            'clientesConocidos',
             'porSede',
             'porEstatus',
             'gran_total_saldo',
@@ -239,6 +239,48 @@ class CobranzaController extends Controller
         }
 
         return response()->json(['success' => true]);
+    }
+
+    /** Marca (o quita, si viene vacío) a la persona que intermedia la factura de otro cliente. */
+    public function guardarIntermediario(Request $request)
+    {
+        $data = $request->validate([
+            'id_documento' => 'required|string|max:255',
+            'codigo_cliente' => 'nullable|string|max:255',
+            'codigo_intermediario' => 'nullable|string|max:255',
+            'nombre_intermediario' => 'nullable|string|max:255',
+        ]);
+        $clave = $this->claveDocumento($data['id_documento']);
+        $codigo = strtoupper(trim((string) ($data['codigo_intermediario'] ?? '')));
+        $nombre = trim((string) ($data['nombre_intermediario'] ?? ''));
+
+        if ($codigo === '' && $nombre === '') {
+            \App\Models\CobranzaIntermediario::where('id_documento', $clave)->delete();
+
+            return response()->json(['success' => true, 'message' => 'Intermediario quitado.']);
+        }
+        if ($codigo === '') {
+            return response()->json(['success' => false, 'message' => 'Indica la cédula o el código del intermediario.'], 422);
+        }
+        if ($codigo === strtoupper(trim((string) ($data['codigo_cliente'] ?? '')))) {
+            return response()->json(['success' => false, 'message' => 'El intermediario no puede ser el mismo cliente de la factura.'], 422);
+        }
+        if ($nombre === '') {
+            $nombre = (string) (\App\Models\HistorialCobranza::query()->where('codigo_cliente', $codigo)
+                ->orderByDesc('fecha_registro')->value('nombre_cliente') ?? $codigo);
+        }
+
+        \App\Models\CobranzaIntermediario::updateOrCreate(
+            ['id_documento' => $clave],
+            [
+                'codigo_cliente' => trim((string) ($data['codigo_cliente'] ?? '')) ?: null,
+                'codigo_intermediario' => $codigo,
+                'nombre_intermediario' => mb_strtoupper($nombre, 'UTF-8'),
+                'user_id' => auth()->id(),
+            ]
+        );
+
+        return response()->json(['success' => true, 'message' => 'Intermediario guardado.']);
     }
 
     public function importarExcel(Request $request) {
@@ -525,6 +567,7 @@ class CobranzaController extends Controller
             } elseif ($mostrar_clientes === 'personales') {
                 $query->whereIn('historial_cobranzas.codigo_cliente', $personalCodes);
             }
+            $this->aplicarFiltrosLista($query, $request);
             $historial = $query
                 ->select([
                     'historial_cobranzas.*',
@@ -548,6 +591,7 @@ class CobranzaController extends Controller
             'ultimaFecha' => $ultimaFecha,
             'mostrar_clientes' => $mostrar_clientes,
             'alcanceLabel' => $alcanceLabel,
+            'filtros' => $this->etiquetasFiltros($request),
         ]);
         $pdf->setPaper('A4', 'portrait');
 
@@ -637,13 +681,35 @@ class CobranzaController extends Controller
 
     public function estadoCuentaCliente(string $codigo_cliente)
     {
-        $codigo = trim($codigo_cliente);
+        $data = $this->datosEstadoCuentaCliente(trim($codigo_cliente));
+
+        return response()->json($data, ($data['ok'] ?? true) === false ? 422 : 200);
+    }
+
+    /** Estado de cuenta del cliente en PDF (mismos datos que la pantalla, con las facturas que intermedia). */
+    public function estadoCuentaClientePdf(string $codigo_cliente)
+    {
+        $data = $this->datosEstadoCuentaCliente(trim($codigo_cliente));
+        abort_if(($data['ok'] ?? true) === false, 422, $data['message'] ?? 'No se pudo armar el estado de cuenta.');
+
+        $logo = is_file(public_path('logo.png'))
+            ? 'data:image/png;base64,'.base64_encode((string) file_get_contents(public_path('logo.png')))
+            : null;
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('cobranza.pdf_estado_cuenta', $data + ['logo' => $logo])
+            ->setPaper('letter', 'landscape');
+        $nombre = preg_replace('/[^A-Za-z0-9]+/', '_', \Illuminate\Support\Str::ascii((string) ($data['cliente'] ?: $data['codigo_cliente'])));
+
+        return $pdf->download('Estado_de_cuenta_'.trim($nombre, '_').'_'.date('Y_m_d').'.pdf');
+    }
+
+    private function datosEstadoCuentaCliente(string $codigo): array
+    {
         if ($codigo === '') {
-            return response()->json([
+            return [
                 'ok' => false,
                 'message' => 'Falta el código de cliente.',
                 'lineas' => [],
-            ], 422);
+            ];
         }
 
         $queryFecha = \App\Models\HistorialCobranza::query()
@@ -651,21 +717,55 @@ class CobranzaController extends Controller
         $this->excludePagadasManualmente($queryFecha);
         $ultimaFechaSync = $queryFecha->max('fecha_registro');
 
+        // Intermediarios: las facturas que esta persona lleva de otros y quién lleva las suyas.
+        $intermediarios = \Illuminate\Support\Facades\Schema::connection('pgsql')->hasTable('cobranza_intermediarios')
+            ? \App\Models\CobranzaIntermediario::query()
+                ->where('codigo_intermediario', strtoupper($codigo))
+                ->orWhere('codigo_cliente', $codigo)
+                ->get()
+            : collect();
+        $quienLleva = $intermediarios->filter(fn ($i) => $i->codigo_intermediario !== strtoupper($codigo))
+            ->mapWithKeys(fn ($i) => [trim((string) $i->id_documento) => $i->nombre_intermediario]);
+        $facturasQueLleva = $intermediarios->filter(fn ($i) => $i->codigo_intermediario === strtoupper($codigo))
+            ->pluck('id_documento')->map(fn ($d) => trim((string) $d))->filter()->values()->all();
+
+        $detallesAjenos = collect();
+        if ($facturasQueLleva !== []) {
+            $scopeAjenas = fn ($q) => $q->where(fn ($w) => $w->whereIn('numero_documento', $facturasQueLleva)
+                ->orWhereIn('factura_padre', $facturasQueLleva)
+                ->orWhereIn('id_documento', $facturasQueLleva));
+            $fechaAjenas = \App\Models\HistorialCobranza::query()->where($scopeAjenas)->max('fecha_registro');
+            if ($fechaAjenas) {
+                $q = \App\Models\HistorialCobranza::query()->where($scopeAjenas)
+                    ->where('fecha_registro', $fechaAjenas)
+                    ->where('codigo_cliente', '!=', $codigo);
+                $this->excludePagadasManualmente($q);
+                $detallesAjenos = app(CobranzaHeaderHydrator::class)->anexar($q->get(), $fechaAjenas);
+                $ultimaFechaSync ??= $fechaAjenas;
+            }
+        }
+
         if (! $ultimaFechaSync) {
-            return response()->json([
+            return [
                 'ok' => true,
                 'codigo_cliente' => $codigo,
                 'cliente' => null,
+                'fecha_sync' => null,
                 'lineas' => [],
+                'grupos' => [],
                 'por_sede' => [],
+                'intermedia_de' => [],
+                'intermediado_por' => [],
                 'totales' => [
                     'cargos' => 0,
                     'abonos' => 0,
                     'saldo' => 0,
+                    'saldo_propio' => 0,
+                    'saldo_intermediado' => 0,
                     'saldo_bs' => 0,
                     'tasa_bcv' => 0,
                 ],
-            ]);
+            ];
         }
 
         $detalles = \App\Models\HistorialCobranza::query()
@@ -679,6 +779,7 @@ class CobranzaController extends Controller
             ->orderBy('id')
             ->get();
         $detalles = app(CobranzaHeaderHydrator::class)->anexar($detalles, $ultimaFechaSync)
+            ->concat($detallesAjenos)
             ->sortBy([
                 ['fecha_emision', 'asc'],
                 ['factura_padre', 'asc'],
@@ -693,6 +794,7 @@ class CobranzaController extends Controller
         $cargos = 0.0;
         $abonos = 0.0;
         $saldoAcumulado = 0.0;
+        $saldoIntermediado = 0.0;
 
         foreach ($detalles as $row) {
             $tipoFila = (int) $row->tipo_fila;
@@ -710,7 +812,8 @@ class CobranzaController extends Controller
                 continue;
             }
 
-            $claveFactura = $factura !== '' ? $factura : ('row-'.$row->id);
+            $ajena = trim((string) $row->codigo_cliente) !== $codigo;
+            $claveFactura = trim((string) $row->codigo_cliente).'|'.($factura !== '' ? $factura : ('row-'.$row->id));
             $esCabecera = ! $esAbono && ! array_key_exists($claveFactura, $facturasConSaldo)
                 && ((float) $row->saldo_pendiente > 0 || (float) $row->total_factura > 0 || (float) $row->monto_neto > 0);
 
@@ -719,6 +822,9 @@ class CobranzaController extends Controller
 
             if ($esCabecera) {
                 $facturasConSaldo[$claveFactura] = $saldoFactura;
+                if ($ajena) {
+                    $saldoIntermediado = round($saldoIntermediado + $saldoFactura, 2);
+                }
                 $saldoAcumulado = round($saldoAcumulado + $saldoFactura, 2);
             }
 
@@ -759,6 +865,10 @@ class CobranzaController extends Controller
                 'saldo_factura' => $saldoFactura,
                 'saldo_acumulado' => $esCabecera || $esAbono ? $saldoAcumulado : null,
                 'tipo' => $esAbono ? 'abono' : 'cargo',
+                'a_nombre_de' => $ajena ? trim((string) $row->nombre_cliente) : null,
+                'intermediario' => $ajena ? null : ($quienLleva[$factura] ?? $quienLleva[(string) $row->numero_documento] ?? null),
+                'grupo' => $ajena ? trim((string) $row->codigo_cliente) : $codigo,
+                'grupo_nombre' => trim((string) $row->nombre_cliente),
             ];
         }
 
@@ -770,23 +880,29 @@ class CobranzaController extends Controller
         }
 
         $saldo = round(array_sum($facturasConSaldo), 2);
-        $cliente = $detalles->first()?->nombre_cliente;
+        $cliente = $detalles->first(fn ($r) => trim((string) $r->codigo_cliente) === $codigo)?->nombre_cliente
+            ?? $intermediarios->firstWhere('codigo_intermediario', strtoupper($codigo))?->nombre_intermediario;
 
-        return response()->json([
+        return [
             'ok' => true,
             'codigo_cliente' => $codigo,
             'cliente' => $cliente,
             'fecha_sync' => \Carbon\Carbon::parse($ultimaFechaSync)->format('d/m/Y'),
             'lineas' => $lineas,
+            'grupos' => $this->gruposEstadoCuenta($lineas, $codigo, $cliente),
             'por_sede' => array_values($porSede),
+            'intermedia_de' => $detallesAjenos->pluck('nombre_cliente')->map(fn ($n) => trim((string) $n))->filter()->unique()->values()->all(),
+            'intermediado_por' => $quienLleva->values()->unique()->values()->all(),
             'totales' => [
                 'cargos' => round($cargos, 2),
                 'abonos' => round($abonos, 2),
                 'saldo' => $saldo,
+                'saldo_propio' => round($saldo - $saldoIntermediado, 2),
+                'saldo_intermediado' => $saldoIntermediado,
                 'tasa_bcv' => $tasaBcv,
                 'saldo_bs' => $tasaBcv > 1 ? round($saldo * $tasaBcv, 2) : 0,
             ],
-        ]);
+        ];
     }
 
     public function estadoCuenta($numero_documento)
@@ -997,6 +1113,86 @@ class CobranzaController extends Controller
     private function claveDocumento(?string $valor): string
     {
         return trim((string) $valor);
+    }
+
+    /**
+     * Estado de cuenta por bloques: primero las facturas propias y luego las de cada cliente que la persona
+     * intermedia. Cada bloque lleva su saldo acumulado y sus totales.
+     *
+     * @param  list<array<string, mixed>>  $lineas
+     * @return list<array{codigo: string, titulo: string, propio: bool, lineas: list<array<string, mixed>>, totales: array{cargos: float, abonos: float, saldo: float}}>
+     */
+    private function gruposEstadoCuenta(array $lineas, string $codigo, ?string $cliente): array
+    {
+        $grupos = [];
+        foreach ($lineas as $linea) {
+            $clave = (string) ($linea['grupo'] ?? $codigo);
+            $grupos[$clave] ??= [
+                'codigo' => $clave,
+                'titulo' => $clave === $codigo ? ($cliente ?: $codigo) : (string) ($linea['grupo_nombre'] ?: $clave),
+                'propio' => $clave === $codigo,
+                'lineas' => [],
+                'totales' => ['cargos' => 0.0, 'abonos' => 0.0, 'saldo' => 0.0],
+            ];
+            $g = &$grupos[$clave];
+            if ($linea['total_factura'] !== null) {
+                $g['totales']['saldo'] = round($g['totales']['saldo'] + (float) $linea['saldo_factura'], 2);
+            }
+            $g['totales']['cargos'] = round($g['totales']['cargos'] + (float) ($linea['total'] ?? 0), 2);
+            $g['totales']['abonos'] = round($g['totales']['abonos'] + (float) ($linea['pagado'] ?? 0), 2);
+            if ($linea['saldo_acumulado'] !== null) {
+                $linea['saldo_acumulado'] = $g['totales']['saldo'];
+            }
+            $g['lineas'][] = $linea;
+            unset($g);
+        }
+
+        return collect($grupos)
+            ->sortBy(fn ($g) => [$g['propio'] ? 0 : 1, $g['titulo']])
+            ->values()
+            ->all();
+    }
+
+    /** Filtros de la tabla de clientes (sede, búsqueda, fechas de emisión y estatus). */
+    private function aplicarFiltrosLista($query, Request $request): void
+    {
+        if ($sede = trim((string) $request->input('filtro_sede', ''))) {
+            $query->where('historial_cobranzas.sede_nombre', $sede);
+        }
+        if ($buscar = trim((string) $request->input('buscar_cliente', ''))) {
+            $like = '%'.mb_strtolower($buscar, 'UTF-8').'%';
+            $query->where(function ($q) use ($like) {
+                $q->whereRaw('LOWER(historial_cobranzas.nombre_cliente) LIKE ?', [$like]);
+                // Buscar al intermediario también trae las facturas que lleva de otras personas.
+                if (\Illuminate\Support\Facades\Schema::connection('pgsql')->hasTable('cobranza_intermediarios')) {
+                    $q->orWhereExists(fn ($e) => $e->selectRaw('1')
+                        ->from('cobranza_intermediarios as ci')
+                        ->whereRaw('ci.id_documento IN (historial_cobranzas.numero_documento, historial_cobranzas.id_documento, historial_cobranzas.factura_padre)')
+                        ->whereRaw('LOWER(ci.nombre_intermediario) LIKE ?', [$like]));
+                }
+            });
+        }
+        if ($desde = $request->input('fecha_desde')) {
+            $query->whereDate('historial_cobranzas.fecha_emision', '>=', $desde);
+        }
+        if ($hasta = $request->input('fecha_hasta')) {
+            $query->whereDate('historial_cobranzas.fecha_emision', '<=', $hasta);
+        }
+        if ($estatus = trim((string) $request->input('filtro_estatus', ''))) {
+            $query->where('historial_cobranzas.estatus', strtoupper($estatus));
+        }
+    }
+
+    /** @return list<string> filtros aplicados, para mostrarlos en los reportes */
+    private function etiquetasFiltros(Request $request): array
+    {
+        return array_values(array_filter([
+            $request->filled('filtro_sede') ? 'Sede: '.$request->input('filtro_sede') : null,
+            $request->filled('buscar_cliente') ? 'Búsqueda: '.$request->input('buscar_cliente') : null,
+            $request->filled('fecha_desde') ? 'Desde: '.\Carbon\Carbon::parse($request->input('fecha_desde'))->format('d/m/Y') : null,
+            $request->filled('fecha_hasta') ? 'Hasta: '.\Carbon\Carbon::parse($request->input('fecha_hasta'))->format('d/m/Y') : null,
+            $request->filled('filtro_estatus') ? 'Estatus: '.strtoupper((string) $request->input('filtro_estatus')) : null,
+        ]));
     }
 
     private function fechasComparativaSemanal(): array

@@ -14,11 +14,19 @@ class TesoreriaController extends Controller
         $desde = $this->fechaFiltro($request->query('desde'));
         $hasta = $this->fechaFiltro($request->query('hasta'));
         $ref = mb_substr(trim((string) $request->query('ref', '')), 0, 60);
+        $estado = in_array($request->query('estado'), ['conciliados', 'pendientes'], true) ? $request->query('estado') : '';
 
-        $ingresosBancos = TesoreriaIngreso::where('tipo', 'banco')
-            ->when($desde, fn ($q) => $q->whereDate('fecha', '>=', $desde))
-            ->when($hasta, fn ($q) => $q->whereDate('fecha', '<=', $hasta))
-            ->when($ref !== '', fn ($q) => $this->filtrarReferencia($q, $ref))
+        $baseBancos = fn () => $this->ingresosBanco($desde, $hasta, $ref);
+
+        $conteoBancos = [
+            'conciliados' => $baseBancos()->where('es_conciliado', true)->count(),
+            'pendientes' => $baseBancos()->where(fn ($q) => $q->where('es_conciliado', false)->orWhereNull('es_conciliado'))->count(),
+        ];
+
+        $ingresosBancos = $baseBancos()
+            ->when(\Illuminate\Support\Facades\Schema::hasTable('conciliacion_lineas'), fn ($q) => $q->with('lineaBanco'))
+            ->when($estado === 'conciliados', fn ($q) => $q->where('es_conciliado', true))
+            ->when($estado === 'pendientes', fn ($q) => $q->where(fn ($w) => $w->where('es_conciliado', false)->orWhereNull('es_conciliado')))
             ->latest('fecha')
             ->latest('id')
             ->get();
@@ -31,7 +39,55 @@ class TesoreriaController extends Controller
             ->latest('id')
             ->get();
 
-        return view('tesoreria.dashboard', compact('ingresosBancos', 'lotesPuntos', 'desde', 'hasta', 'ref'));
+        return view('tesoreria.dashboard', compact('ingresosBancos', 'lotesPuntos', 'desde', 'hasta', 'ref', 'estado', 'conteoBancos'));
+    }
+
+    /** Excel de los ingresos de banco sin conciliar (con los filtros de fecha y referencia del panel). */
+    public function exportarSinConciliar(Request $request)
+    {
+        $desde = $this->fechaFiltro($request->query('desde'));
+        $hasta = $this->fechaFiltro($request->query('hasta'));
+        $ref = mb_substr(trim((string) $request->query('ref', '')), 0, 60);
+
+        $ingresos = $this->ingresosBanco($desde, $hasta, $ref)
+            ->where(fn ($q) => $q->where('es_conciliado', false)->orWhereNull('es_conciliado'))
+            ->with('user:id,name')
+            ->orderBy('fecha')
+            ->orderBy('id')
+            ->get();
+
+        $filas = [['Fecha', 'Banco', 'Moneda', 'Monto', 'Referencia', 'Descripción', 'Registrado por', 'Registrado el']];
+        foreach ($ingresos as $ingreso) {
+            $enBs = stripos((string) $ingreso->banco, 'movil') !== false || stripos((string) $ingreso->banco, 'móvil') !== false;
+            $filas[] = [
+                \Carbon\Carbon::parse($ingreso->fecha)->format('d/m/Y'),
+                (string) $ingreso->banco,
+                $enBs ? 'Bs' : 'USD',
+                round((float) $ingreso->monto, 2),
+                (string) ($ingreso->lote_referencia ?? ''),
+                (string) ($ingreso->descripcion ?? ''),
+                (string) ($ingreso->user?->name ?? ''),
+                $ingreso->created_at?->format('d/m/Y H:i') ?? '',
+            ];
+        }
+        if (count($filas) === 1) {
+            $filas[] = ['No hay ingresos sin conciliar con esos filtros'];
+        }
+
+        $nombre = 'ingresos_sin_conciliar_'.($desde ?: 'inicio').'_'.($hasta ?: now()->toDateString()).'.xlsx';
+
+        return response(\App\Support\SimpleXlsxWriter::toString(['Sin conciliar' => $filas]), 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$nombre.'"',
+        ]);
+    }
+
+    private function ingresosBanco(?string $desde, ?string $hasta, string $ref)
+    {
+        return TesoreriaIngreso::where('tipo', 'banco')
+            ->when($desde, fn ($q) => $q->whereDate('fecha', '>=', $desde))
+            ->when($hasta, fn ($q) => $q->whereDate('fecha', '<=', $hasta))
+            ->when($ref !== '', fn ($q) => $this->filtrarReferencia($q, $ref));
     }
 
     /**

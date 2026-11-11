@@ -72,6 +72,9 @@
     <div class="header-titles">
         <h1>Deudores únicos</h1>
         <h2>{{ $alcanceLabel ?? 'Todos' }} · Cada cliente una sola vez · Saldo total e indicadores</h2>
+        @if(! empty($filtros))
+            <h2 style="margin-top:2px;">Filtro: {{ implode(' · ', $filtros) }}</h2>
+        @endif
     </div>
     <div class="header-right">
         {{ $fechaLabel }}<br>

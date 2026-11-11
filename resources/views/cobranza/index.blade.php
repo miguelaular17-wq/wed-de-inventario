@@ -11,7 +11,7 @@
             <a href="{{ route('cobranza.pdf', ['mostrar_clientes' => $mostrar_clientes ?? 'todos']) }}" target="_blank" class="btn" style="background-color: #dc3545; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px; text-decoration: none;">
                 📄 Descargar PDF
             </a>
-            <a href="{{ route('cobranza.pdf_deudores_unicos', ['mostrar_clientes' => $mostrar_clientes ?? 'todos']) }}" target="_blank" class="btn" style="background-color: #1e3a8a; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px; text-decoration: none;">
+            <a href="{{ route('cobranza.pdf_deudores_unicos', array_filter(['mostrar_clientes' => $mostrar_clientes ?? 'todos', 'filtro_sede' => $filtro_sede ?? null, 'buscar_cliente' => $buscar_cliente ?? null, 'fecha_desde' => $fecha_desde ?? null, 'fecha_hasta' => $fecha_hasta ?? null, 'filtro_estatus' => $filtro_estatus ?? null])) }}" target="_blank" class="btn" style="background-color: #1e3a8a; border: none; padding: 10px 20px; font-weight: 600; cursor: pointer; color: white; border-radius: 6px; text-decoration: none;">
                 👥 Deudores únicos
             </a>
             <form action="{{ route('cobranza.guardar_resumen') }}" method="POST">
@@ -431,6 +431,13 @@
                                         📌 {{ $c->nota_anclada ? $c->nota_anclada : 'Añadir nota...' }}
                                     </span>
                                 </div>
+                                <div style="margin-top: 2px; font-size: 0.75rem;">
+                                    <span style="cursor: pointer; {{ $c->nombre_intermediario ? 'color: #7c3aed; font-weight: 600;' : 'color: #9ca3af;' }}"
+                                          title="Persona que lleva esta factura de otro cliente"
+                                          onclick='event.stopPropagation(); abrirModalIntermediario(@json($claveNota), @json($c->codigo), @json($c->cliente), @json($c->codigo_intermediario ?? ""), @json($c->nombre_intermediario ?? ""))'>
+                                        🤝 {{ $c->nombre_intermediario ? 'Intermediario: '.$c->nombre_intermediario : 'Intermediario...' }}
+                                    </span>
+                                </div>
                             </td>
                             <td>{{ $c->sede ?? '-' }}</td>
                             <td style="text-align: right; font-weight: 500; color: #4b5563;">$ {{ number_format($c->monto_neto, 2, ',', '.') }}</td>
@@ -493,6 +500,41 @@
     </div>
 </div>
 
+<!-- Modal Intermediario -->
+<div id="modal-intermediario" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;">
+    <div class="panel modal-box" style="width: 95%; max-width: 440px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); position: relative;">
+        <div style="background-color: #7c3aed; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;">🤝 Intermediario de la factura</h3>
+            <button type="button" onclick="cerrarModalIntermediario()" style="background: transparent; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+        </div>
+        <div style="padding: 20px; background: #f8fafc;">
+            <form onsubmit="guardarIntermediario(event)">
+                <input type="hidden" id="inter_id_documento">
+                <input type="hidden" id="inter_codigo_cliente">
+                <p id="inter_factura" style="margin: 0 0 12px; font-size: .85rem; color: #475569;"></p>
+                <label style="display:block; font-size:.8rem; font-weight:600; color:#475569; margin-bottom:4px;">Intermediario (cédula · nombre)</label>
+                <input type="text" id="inter_buscar" list="inter_clientes" placeholder="Escribe la cédula o el nombre..." autocomplete="off"
+                       oninput="elegirIntermediario(this.value)"
+                       style="width: 100%; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; margin-bottom: 10px;">
+                <datalist id="inter_clientes">
+                    @foreach($clientesConocidos ?? [] as $cc)
+                        <option value="{{ $cc['codigo'] }} · {{ $cc['nombre'] }}"></option>
+                    @endforeach
+                </datalist>
+                <div style="display:flex; gap:8px; margin-bottom: 12px;">
+                    <input type="text" id="inter_codigo" placeholder="Cédula / código" style="flex: 0 0 38%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                    <input type="text" id="inter_nombre" placeholder="Nombre" style="flex: 1; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                </div>
+                <p style="margin: 0 0 14px; font-size: .75rem; color: #64748b;">El estado de cuenta del intermediario traerá también esta factura, y el del cliente dirá quién la intermedia. Deja los campos vacíos y guarda para quitarlo.</p>
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" onclick="cerrarModalIntermediario()" style="padding: 8px 16px; background: #e2e8f0; color: #475569; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Cancelar</button>
+                    <button type="submit" style="padding: 8px 16px; background: #7c3aed; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Modal Llamadas -->
 <div id="modal-llamadas" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;">
     <div class="panel modal-box" style="width: 95%; max-width: 640px; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px -10px rgba(0,0,0,0.3); position: relative; max-height: 90vh; display: flex; flex-direction: column;">
@@ -536,6 +578,7 @@
         <div style="background-color: #d97706; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
             <h3 id="modalEstadoCuentaTitle" style="margin: 0; font-size: 1.1rem; font-weight: 600;">Estado de Cuenta</h3>
             <div style="display:flex; gap:8px; align-items:center;">
+                <button type="button" onclick="descargarEstadoCuentaPdf()" style="background: white; border: 0; color: #b45309; padding: 6px 10px; border-radius: 6px; font-weight: 700; cursor: pointer;">⬇ Descargar PDF</button>
                 <button type="button" onclick="imprimirEstadoCuenta()" style="background: rgba(255,255,255,.18); border: 0; color: white; padding: 6px 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">Imprimir</button>
                 <button type="button" onclick="cerrarModalEstadoCuenta()" style="background: transparent; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
             </div>
@@ -665,6 +708,60 @@
         }
     }
 
+    function abrirModalIntermediario(idDocumento, codigoCliente, cliente, codigo, nombre) {
+        document.getElementById('inter_id_documento').value = idDocumento;
+        document.getElementById('inter_codigo_cliente').value = codigoCliente;
+        document.getElementById('inter_factura').textContent = 'Factura ' + idDocumento + ' de ' + cliente;
+        document.getElementById('inter_buscar').value = '';
+        document.getElementById('inter_codigo').value = codigo || '';
+        document.getElementById('inter_nombre').value = nombre || '';
+        document.getElementById('modal-intermediario').style.display = 'flex';
+        setTimeout(() => document.getElementById('inter_buscar').focus(), 100);
+    }
+
+    function cerrarModalIntermediario() {
+        document.getElementById('modal-intermediario').style.display = 'none';
+    }
+
+    function elegirIntermediario(valor) {
+        const partes = String(valor || '').split(' · ');
+        if (partes.length >= 2) {
+            document.getElementById('inter_codigo').value = partes[0].trim();
+            document.getElementById('inter_nombre').value = partes.slice(1).join(' · ').trim();
+        }
+    }
+
+    async function guardarIntermediario(e) {
+        e.preventDefault();
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        try {
+            const res = await fetch(`{{ route('cobranza.guardar_intermediario') }}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    id_documento: document.getElementById('inter_id_documento').value,
+                    codigo_cliente: document.getElementById('inter_codigo_cliente').value,
+                    codigo_intermediario: document.getElementById('inter_codigo').value,
+                    nombre_intermediario: document.getElementById('inter_nombre').value,
+                })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success) {
+                window.location.reload();
+                return;
+            }
+            alert(data.message || 'No se pudo guardar el intermediario.');
+        } catch (err) {
+            alert('Error de conexión');
+        }
+        btn.disabled = false;
+    }
+
     async function cargarLlamadas(codigo) {
         const list = document.getElementById('historialLlamadasList');
         const countEl = document.getElementById('llamadas-count');
@@ -770,7 +867,15 @@
         }
     }
 
+    let estadoCuentaCodigo = null;
+
+    function descargarEstadoCuentaPdf() {
+        if (!estadoCuentaCodigo) return;
+        window.location.href = `/cobranza/cliente/${encodeURIComponent(estadoCuentaCodigo)}/estado-cuenta/pdf`;
+    }
+
     async function abrirModalEstadoCuenta(codigoCliente, cliente) {
+        estadoCuentaCodigo = codigoCliente;
         document.getElementById('modal-estado-cuenta').style.display = 'flex';
         document.getElementById('modalEstadoCuentaTitle').innerText = 'Estado de Cuenta: ' + cliente;
         const list = document.getElementById('estadoCuentaList');
@@ -810,6 +915,8 @@
                         <div style="font-size:.75rem; color:#64748b; text-transform:uppercase; letter-spacing:.04em;">Cliente</div>
                         <div style="font-weight:700; font-size:1.02rem;">${esc(data.cliente || cliente)}</div>
                         <div style="color:#475569; font-family:ui-monospace,monospace;">${esc(data.codigo_cliente || codigoCliente)}</div>
+                        ${(data.intermedia_de || []).length ? `<div style="margin-top:4px; font-size:.8rem; color:#7c3aed; font-weight:600;">🤝 Intermediario de: ${(data.intermedia_de || []).map(esc).join(', ')}</div>` : ''}
+                        ${(data.intermediado_por || []).length ? `<div style="margin-top:4px; font-size:.8rem; color:#7c3aed; font-weight:600;">🤝 Facturas llevadas por: ${(data.intermediado_por || []).map(esc).join(', ')}</div>` : ''}
                     </div>
                     <div style="text-align:right;">
                         <div style="font-size:.75rem; color:#64748b;">Corte sync</div>
@@ -837,8 +944,23 @@
                     <tbody>
             `;
 
-            lineas.forEach((mov) => {
+            const grupos = (data.grupos && data.grupos.length) ? data.grupos : [{ propio: true, titulo: data.cliente || cliente, lineas, totales }];
+            const varios = grupos.length > 1;
+            grupos.forEach((g) => {
+            if (varios) {
+                html += `
+                    <tr style="background:${g.propio ? '#fff7ed' : '#f5f3ff'};">
+                        <td colspan="12" style="padding: 8px; font-weight: 800; color:${g.propio ? '#9a3412' : '#6d28d9'}; border-bottom: 2px solid ${g.propio ? '#fdba74' : '#c4b5fd'};">
+                            ${g.propio ? 'Facturas propias' : '🤝 Como intermediario · a nombre de'} — ${esc(g.titulo)}
+                        </td>
+                    </tr>`;
+            }
+            g.lineas.forEach((mov) => {
                 const esAbono = mov.tipo === 'abono';
+                const esCabecera = mov.total_factura != null;
+                const relacion = !varios && esCabecera && mov.a_nombre_de
+                    ? `<div style="margin-top:2px; font-size:.7rem; font-weight:700; color:#7c3aed;">🤝 A nombre de ${esc(mov.a_nombre_de)}</div>`
+                    : (esCabecera && mov.intermediario ? `<div style="margin-top:2px; font-size:.7rem; font-weight:700; color:#7c3aed;">🤝 Intermediario: ${esc(mov.intermediario)}</div>` : '');
                 html += `
                     <tr style="${esAbono ? 'background-color: #f0fdf4;' : ''}">
                         <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; white-space:nowrap; color:#64748b;">${esc(mov.antiguedad || '')}</td>
@@ -846,7 +968,7 @@
                         <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${esc(mov.sede || '')}</td>
                         <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; font-weight:700;">${esc(mov.tipo_doc || '')}</td>
                         <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${esc(mov.numero_documento || '')}</td>
-                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${esc(mov.descripcion || '')}</td>
+                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${esc(mov.descripcion || '')}${relacion}</td>
                         <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right;">${qty(mov.cantidad)}</td>
                         <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right;">${money(mov.precio)}</td>
                         <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right; color:#b45309;">${money(mov.total)}</td>
@@ -856,12 +978,24 @@
                     </tr>
                 `;
             });
+            if (varios) {
+                html += `
+                    <tr style="background:${g.propio ? '#fff7ed' : '#f5f3ff'};">
+                        <td colspan="8" style="padding: 8px; font-weight: 700;">Subtotal ${esc(g.titulo)}</td>
+                        <td style="padding: 8px; text-align: right; font-weight: 700; color: #b45309;">${money(g.totales.cargos)}</td>
+                        <td style="padding: 8px; text-align: right; font-weight: 700; color: #16a34a;">${money(g.totales.abonos)}</td>
+                        <td></td>
+                        <td style="padding: 8px; text-align: right; font-weight: 800;">${money(g.totales.saldo)}</td>
+                    </tr>
+                    <tr><td colspan="12" style="padding: 6px; border: 0;"></td></tr>`;
+            }
+            });
 
             html += `
                     </tbody>
                     <tfoot>
                         <tr style="background: #f8fafc;">
-                            <td colspan="8" style="padding: 8px; font-weight: 600; border-top: 1px solid #cbd5e1;">Totales Profit</td>
+                            <td colspan="8" style="padding: 8px; font-weight: 600; border-top: 1px solid #cbd5e1;">${varios ? 'Total general' : 'Totales Profit'}</td>
                             <td style="padding: 8px; text-align: right; font-weight: 600; color: #b45309; border-top: 1px solid #cbd5e1;">${money(totales.cargos)}</td>
                             <td style="padding: 8px; text-align: right; font-weight: 600; color: #16a34a; border-top: 1px solid #cbd5e1;">${money(totales.abonos)}</td>
                             <td style="padding: 8px; border-top: 1px solid #cbd5e1;"></td>
@@ -874,6 +1008,7 @@
                     <div style="font-size:.8rem; color:#475569;">Por sede: ${sedeTxt}</div>
                     <div style="text-align:right;">
                         ${totales.tasa_bcv > 1 ? `<div style="font-size:.8rem; color:#64748b;">BCV ${Number(totales.tasa_bcv).toLocaleString('es-VE', { maximumFractionDigits: 4 })} · Bs ${Number(totales.saldo_bs).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
+                        ${Number(totales.saldo_intermediado || 0) > 0 ? `<div style="font-size:.82rem; color:#475569;">Propio ${money(totales.saldo_propio)} · Como intermediario ${money(totales.saldo_intermediado)}</div>` : ''}
                         <div style="font-size:1.05rem; font-weight:800;">Saldo a pagar ${money(totales.saldo)}</div>
                     </div>
                 </div>

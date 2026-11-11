@@ -145,15 +145,42 @@
             Referencia / lote
             <input type="search" name="ref" value="{{ $ref ?? '' }}" placeholder="Ej. 000916 o 916" autocomplete="off">
         </label>
+        <label>
+            Conciliación
+            <select name="estado">
+                <option value="">Todos</option>
+                <option value="conciliados" @selected(($estado ?? '') === 'conciliados')>Conciliados</option>
+                <option value="pendientes" @selected(($estado ?? '') === 'pendientes')>Sin conciliar</option>
+            </select>
+        </label>
         <button type="submit">Filtrar</button>
-        @if(($desde ?? '') || ($hasta ?? '') || ($ref ?? '') !== '')
+        @if(($desde ?? '') || ($hasta ?? '') || ($ref ?? '') !== '' || ($estado ?? '') !== '')
             <a href="{{ route('tesoreria.dashboard') }}" style="font-size: 0.85rem; font-weight: 600; color: #2563eb; text-decoration: none; padding-bottom: 8px;">Quitar filtro</a>
         @endif
     </form>
 
     <div class="tesoreria-grid">
         <div class="tesoreria-card">
-            <h2>Últimos Ingresos (Bancos)</h2>
+            @php
+                $filtroEstado = fn ($e) => route('tesoreria.dashboard', array_filter(['desde' => $desde, 'hasta' => $hasta, 'ref' => $ref, 'estado' => $e]));
+            @endphp
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+                <h2>Últimos Ingresos (Bancos)</h2>
+                <div style="display:flex;gap:6px;font-size:.78rem;font-weight:700;">
+                    <a href="{{ $filtroEstado('conciliados') }}" style="text-decoration:none;padding:3px 10px;border-radius:999px;background:#dcfce7;color:#166534;{{ ($estado ?? '') === 'conciliados' ? 'outline:2px solid #16a34a;' : '' }}">
+                        ✓ Conciliados: {{ number_format($conteoBancos['conciliados']) }}
+                    </a>
+                    <a href="{{ $filtroEstado('pendientes') }}" style="text-decoration:none;padding:3px 10px;border-radius:999px;background:#fef3c7;color:#92400e;{{ ($estado ?? '') === 'pendientes' ? 'outline:2px solid #d97706;' : '' }}">
+                        Sin conciliar: {{ number_format($conteoBancos['pendientes']) }}
+                    </a>
+                    @if($conteoBancos['pendientes'] > 0)
+                        <a href="{{ route('tesoreria.ingresos.sin_conciliar', array_filter(['desde' => $desde, 'hasta' => $hasta, 'ref' => $ref])) }}"
+                           style="text-decoration:none;padding:3px 10px;border-radius:999px;background:#1d4ed8;color:#fff;" title="Excel con los ingresos sin conciliar de este filtro">
+                            ⬇ Excel sin conciliar
+                        </a>
+                    @endif
+                </div>
+            </div>
             <div class="tesoreria-table-wrap">
                 <table class="tesoreria-table">
                     <thead>
@@ -162,19 +189,35 @@
                             <th>Banco</th>
                             <th class="col-monto">Monto</th>
                             <th>Referencia</th>
+                            <th>Conciliación</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($ingresosBancos as $ingreso)
+                        @php
+                            $enBs = stripos((string) $ingreso->banco, 'movil') !== false || stripos((string) $ingreso->banco, 'móvil') !== false;
+                            $linea = $ingreso->relationLoaded('lineaBanco') ? $ingreso->lineaBanco : null;
+                        @endphp
                         <tr>
                             <td class="col-date">{{ \Carbon\Carbon::parse($ingreso->fecha)->format('d/m/Y') }}</td>
                             <td>{{ $ingreso->banco }}</td>
-                            <td class="col-monto">${{ number_format($ingreso->monto, 2) }}</td>
+                            <td class="col-monto">{{ $enBs ? 'Bs. ' : '$' }}{{ number_format($ingreso->monto, 2) }}</td>
                             <td title="{{ $ingreso->lote_referencia }}">{{ $ingreso->lote_referencia ?? '-' }}</td>
+                            <td>
+                                @if($ingreso->es_conciliado)
+                                    <span style="background:#dcfce7;color:#166534;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px;"
+                                          title="{{ $linea ? trim(($linea->banco ? $linea->banco.' · ' : '').$linea->fecha?->format('d/m/Y').' · '.$linea->descripcion.' · ref '.$linea->referencia) : 'Conciliado' }}">✓ Conciliado</span>
+                                    @if($linea)
+                                        <div style="font-size:.7rem;color:#64748b;margin-top:2px;">{{ $linea->banco }} · ref {{ $linea->referencia }}</div>
+                                    @endif
+                                @else
+                                    <span style="background:#fef3c7;color:#92400e;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px;">Sin conciliar</span>
+                                @endif
+                            </td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="4" class="tesoreria-empty">No hay ingresos registrados</td>
+                            <td colspan="5" class="tesoreria-empty">No hay ingresos registrados</td>
                         </tr>
                         @endforelse
                     </tbody>
