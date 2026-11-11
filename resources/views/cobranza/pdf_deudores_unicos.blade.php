@@ -138,13 +138,14 @@
 <table class="data-table">
     <thead>
         <tr>
-            <th style="width:12%;">Código</th>
-            <th style="width:28%;">Cliente</th>
-            <th style="width:16%;">Sede(s)</th>
-            <th style="width:8%;">Docs</th>
+            <th style="width:11%;">Código</th>
+            <th style="width:26%;">Cliente</th>
+            <th style="width:15%;">Sede(s)</th>
+            <th style="width:6%;">Docs</th>
+            <th style="width:8%;" title="Días de la factura más vieja que todavía debe">Días</th>
             <th style="width:14%;">Saldo (falta pagar)</th>
-            <th style="width:12%;">Estatus</th>
-            <th style="width:10%;">Tipo</th>
+            <th style="width:11%;">Estatus</th>
+            <th style="width:9%;">Tipo</th>
         </tr>
     </thead>
     <tbody>
@@ -162,6 +163,7 @@
                 </td>
                 <td>{{ $d->sedes ?: '—' }}</td>
                 <td class="text-center">{{ $d->documentos }}</td>
+                <td class="text-center" style="font-weight:bold;">{{ number_format($d->dias ?? 0, 0, ',', '.') }}</td>
                 <td class="text-right saldo">${{ number_format($d->saldo, 2, ',', '.') }}</td>
                 <td class="text-center">
                     <span class="badge {{ $badgeEstatus[$d->estatus] ?? 'badge-reciente' }}">{{ $d->estatus }}</span>
@@ -170,7 +172,7 @@
             </tr>
         @empty
             <tr>
-                <td colspan="7" class="text-center">No hay deudores con saldo pendiente.</td>
+                <td colspan="8" class="text-center">No hay deudores con saldo pendiente.</td>
             </tr>
         @endforelse
     </tbody>

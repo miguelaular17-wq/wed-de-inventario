@@ -403,6 +403,7 @@ Route::middleware(['auth', 'permission:tesoreria'])->prefix('tesoreria')->name('
     Route::get('/', [\App\Http\Controllers\TesoreriaController::class, 'dashboard'])->name('dashboard');
     Route::post('/ingreso-banco', [\App\Http\Controllers\TesoreriaController::class, 'storeIngresoBanco'])->name('ingreso_banco.store');
     Route::get('/ingresos/sin-conciliar.xlsx', [\App\Http\Controllers\TesoreriaController::class, 'exportarSinConciliar'])->name('ingresos.sin_conciliar');
+    Route::post('/ingresos/reconciliar', [\App\Http\Controllers\TesoreriaController::class, 'reconciliarPendientes'])->name('ingresos.reconciliar');
     Route::post('/lote-punto-venta', [\App\Http\Controllers\TesoreriaController::class, 'storeLotePuntoVenta'])->name('lote_pos.store');
     Route::put('/lote-punto-venta/{id}', [\App\Http\Controllers\TesoreriaController::class, 'updateLotePuntoVenta'])->name('lote_pos.update');
     Route::delete('/lote-punto-venta/{id}', [\App\Http\Controllers\TesoreriaController::class, 'destroyLotePuntoVenta'])->name('lote_pos.destroy');

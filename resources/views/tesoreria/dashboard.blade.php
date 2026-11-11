@@ -178,6 +178,17 @@
                            style="text-decoration:none;padding:3px 10px;border-radius:999px;background:#1d4ed8;color:#fff;" title="Excel con los ingresos sin conciliar de este filtro">
                             ⬇ Excel sin conciliar
                         </a>
+                        <form method="POST" action="{{ route('tesoreria.ingresos.reconciliar') }}" style="display:inline;"
+                              onsubmit="const b = this.querySelector('button'); b.disabled = true; b.textContent = 'Buscando en el extracto…';">
+                            @csrf
+                            <input type="hidden" name="desde" value="{{ $desde }}">
+                            <input type="hidden" name="hasta" value="{{ $hasta }}">
+                            <input type="hidden" name="ref" value="{{ $ref }}">
+                            <button type="submit" style="border:0;cursor:pointer;padding:3px 10px;border-radius:999px;background:#0f766e;color:#fff;font-weight:700;font-size:.78rem;"
+                                    title="Busca otra vez en el extracto los pagos sin conciliar (el abono puede llegar hasta {{ 4 }} días después)">
+                                ↻ Volver a conciliar
+                            </button>
+                        </form>
                     @endif
                 </div>
             </div>

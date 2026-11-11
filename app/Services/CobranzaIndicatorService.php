@@ -145,6 +145,12 @@ class CobranzaIndicatorService
                     'es_personal' => $esPersonal,
                     'sedes' => $sedes->implode(', '),
                     'documentos' => $rows->count(),
+                    // Días de la factura más vieja que todavía debe.
+                    'dias' => (int) $rows->filter(fn ($r) => (float) ($r->saldo ?? 0) > 0.009)
+                        ->map(fn ($r) => $r->fecha_emision
+                            ? (int) \Carbon\Carbon::parse($r->fecha_emision)->startOfDay()->diffInDays(now()->startOfDay())
+                            : (int) ($r->dias_deuda ?? 0))
+                        ->max(),
                     'nota' => $rows->pluck('nota_anclada')->filter()->unique()->implode(' | '),
                 ];
             })

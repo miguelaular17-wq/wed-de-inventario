@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\Storage;
 
 class TesoreriaController extends Controller
 {
+    /** Días que puede tardar el banco en abonar un pago móvil (fin de semana o feriado). */
+    private const DIAS_ABONO = 4;
+
     public function dashboard(Request $request)
     {
         $desde = $this->fechaFiltro($request->query('desde'));
@@ -158,8 +161,7 @@ class TesoreriaController extends Controller
 
         $insertedCount = 0;
         $skippedCount = 0;
-        $conciliadosCount = 0;
-        $lineasUsadas = [];
+        $porConciliar = [];
         $matcher = app(BankReconciliationMatcher::class);
 
         for ($i = $headerRowIdx + 1; $i < count($rows); $i++) {
@@ -213,8 +215,8 @@ class TesoreriaController extends Controller
                     ->orderByDesc('id')
                     ->first();
                 if ($yaExiste) {
-                    if (! $yaExiste->es_conciliado && $this->conciliarPagoMovil($yaExiste, $matcher, $lineasUsadas)) {
-                        $conciliadosCount++;
+                    if (! $yaExiste->es_conciliado) {
+                        $porConciliar[] = $yaExiste;
                     }
                     $skippedCount++;
                     continue;
@@ -230,10 +232,10 @@ class TesoreriaController extends Controller
                 'user_id' => auth()->id()
             ]);
             $insertedCount++;
-            if ($this->conciliarPagoMovil($ingreso, $matcher, $lineasUsadas)) {
-                $conciliadosCount++;
-            }
+            $porConciliar[] = $ingreso;
         }
+
+        $conciliadosCount = $this->conciliarPagosMoviles(collect($porConciliar), $matcher);
 
         $msg = "Se registraron {$insertedCount} ingresos de banco.";
         if ($conciliadosCount > 0) {
@@ -361,51 +363,82 @@ class TesoreriaController extends Controller
         return $texto;
     }
 
-    /**
-     * Cruza el pago del Excel (referencia corta) con el abono PAGOMOVIL del extracto.
-     *
-     * @param  array<int, true>  $lineasUsadas
-     */
-    private function conciliarPagoMovil(TesoreriaIngreso $ingreso, BankReconciliationMatcher $matcher, array &$lineasUsadas): bool
+    /** Vuelve a buscar en el extracto los ingresos de banco que quedaron sin conciliar (con los filtros del panel). */
+    public function reconciliarPendientes(Request $request)
     {
-        if ($ingreso->fecha === null || (float) $ingreso->monto < 0.01) {
-            return false;
-        }
+        $desde = $this->fechaFiltro($request->input('desde'));
+        $hasta = $this->fechaFiltro($request->input('hasta'));
+        $ref = mb_substr(trim((string) $request->input('ref', '')), 0, 60);
 
-        $lineas = \App\Models\ConciliacionLinea::query()
-            ->where('estado', 'pendiente')
-            ->whereDate('fecha', $ingreso->fecha)
-            ->whereNull('tesoreria_ingreso_id')
+        $pendientes = $this->ingresosBanco($desde, $hasta, $ref)
+            ->where(fn ($q) => $q->where('es_conciliado', false)->orWhereNull('es_conciliado'))
             ->get();
+        $conciliados = $this->conciliarPagosMoviles($pendientes, app(BankReconciliationMatcher::class));
 
-        foreach ($lineas as $linea) {
-            if (isset($lineasUsadas[$linea->id])) {
+        return back()->with('success', "Se revisaron {$pendientes->count()} ingresos sin conciliar: se conciliaron {$conciliados} con el extracto.");
+    }
+
+    /**
+     * Cruza los pagos del Excel (referencia corta) con los abonos de pago móvil del extracto:
+     * mismo monto, referencia que coincide, y el abono el mismo día o hasta DIAS_ABONO después
+     * (el pago del sábado lo abona el banco el lunes). Entre varios, el día más cercano.
+     *
+     * @param  \Illuminate\Support\Collection<int, TesoreriaIngreso>  $ingresos
+     */
+    private function conciliarPagosMoviles(\Illuminate\Support\Collection $ingresos, BankReconciliationMatcher $matcher): int
+    {
+        $ingresos = $ingresos->filter(fn ($i) => $i->fecha !== null && (float) $i->monto >= 0.01 && ! $i->es_conciliado)->values();
+        if ($ingresos->isEmpty()) {
+            return 0;
+        }
+        $dias = self::DIAS_ABONO;
+        $fechas = $ingresos->map(fn ($i) => \Carbon\Carbon::parse($i->fecha)->toDateString());
+
+        $porMonto = \App\Models\ConciliacionLinea::query()
+            ->where('estado', 'pendiente')
+            ->whereNull('tesoreria_ingreso_id')
+            ->whereBetween('fecha', [$fechas->min(), \Carbon\Carbon::parse($fechas->max())->addDays($dias)->toDateString()])
+            ->get()
+            ->filter(fn ($l) => $l->esAbono() && $matcher->esPagoMovil($l->descripcion))
+            ->groupBy(fn ($l) => number_format(abs((float) $l->monto), 2, '.', ''));
+
+        $usadas = [];
+        $conciliados = 0;
+        foreach ($ingresos->sortBy('fecha') as $ingreso) {
+            $dia = \Carbon\Carbon::parse($ingreso->fecha)->startOfDay();
+            $linea = collect($porMonto->get(number_format(abs((float) $ingreso->monto), 2, '.', ''), []))
+                ->filter(function ($l) use ($ingreso, $matcher, $dia, $dias, $usadas) {
+                    $diferencia = $dia->diffInDays($l->fecha->copy()->startOfDay(), false);
+
+                    return ! isset($usadas[$l->id])
+                        && $diferencia >= 0 && $diferencia <= $dias
+                        && $matcher->mismosMontos($l->monto, $ingreso->monto)
+                        && ($matcher->referenciasCruzan($l->referencia, $ingreso->lote_referencia)
+                            || $matcher->referenciaPagoContenida($l->referencia, $ingreso->lote_referencia));
+                })
+                ->sortBy(fn ($l) => [$l->fecha->timestamp, $l->id])
+                ->first();
+            if (! $linea) {
                 continue;
             }
-            if (! $matcher->esPagoMovil($linea->descripcion)) {
-                continue;
-            }
-            if (! $matcher->mismosMontos($linea->monto, $ingreso->monto)) {
-                continue;
-            }
-            if (! $matcher->referenciasCruzan($linea->referencia, $ingreso->lote_referencia)
-                && ! $matcher->referenciaPagoContenida($linea->referencia, $ingreso->lote_referencia)) {
-                continue;
-            }
 
-            $linea->estado = 'conciliado';
-            $linea->tesoreria_ingreso_id = $ingreso->id;
-            $linea->flujo_caja_id = null;
-            $linea->save();
-
-            $ingreso->es_conciliado = true;
-            $ingreso->save();
-            $lineasUsadas[$linea->id] = true;
-
-            return true;
+            \Illuminate\Support\Facades\DB::transaction(function () use ($linea, $ingreso) {
+                $ok = \App\Models\ConciliacionLinea::query()
+                    ->where('id', $linea->id)
+                    ->where('estado', 'pendiente')
+                    ->whereNull('tesoreria_ingreso_id')
+                    ->update(['estado' => 'conciliado', 'tesoreria_ingreso_id' => $ingreso->id, 'flujo_caja_id' => null, 'updated_at' => now()]);
+                if ($ok === 1) {
+                    $ingreso->forceFill(['es_conciliado' => true])->save();
+                }
+            });
+            if ($ingreso->es_conciliado) {
+                $usadas[$linea->id] = true;
+                $conciliados++;
+            }
         }
 
-        return false;
+        return $conciliados;
     }
 
     /**
