@@ -994,6 +994,114 @@ class ConciliacionExtractoImportTest extends TestCase
         $this->assertFalse((bool) $otraCuenta->fresh()->anulado);
     }
 
+    public function test_devolucion_de_un_cargo_ya_conciliado_con_compra_de_divisas_pregunta_si_anular_el_pago(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $base = ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JENU', 'fecha' => '2026-08-28', 'monto' => 178400.00];
+        $crear = function (string $sufijo) use ($base) {
+            $compra = \App\Models\CompraDivisa::create([
+                'fecha' => '2026-08-28', 'banco' => 'MERCANTIL', 'titular' => 'GRUPO JENU', 'referencia' => '204'.$sufijo,
+                'concepto' => 'COMPRA DE DIVISAS', 'motivo' => 'Transferencia WELLSFARGO · GERALDO COELLO · $200.00 x 892 (ref 280826)',
+                'monto_bs' => 178400, 'es_conciliado' => true,
+            ]);
+            $cargo = ConciliacionLinea::create($base + [
+                'descripcion' => 'CREDITO INMEDIATO CAMARA DE COMPENSACION', 'referencia' => '204'.$sufijo,
+                'estado' => 'conciliado', 'tipo' => 'cargo', 'compra_divisa_id' => $compra->id,
+            ]);
+            $abono = ConciliacionLinea::create($base + [
+                'descripcion' => 'DEVOLUCION CREDITO INMEDIATO', 'referencia' => '171'.$sufijo,
+                'estado' => 'pendiente', 'tipo' => 'abono',
+            ]);
+
+            return [$compra, $cargo, $abono];
+        };
+
+        // Dejar el pago pendiente: la compra vuelve a tránsito para conciliarla con el pago real.
+        [$compra, $cargo, $abono] = $crear('08168810');
+        $this->actingAs($user)
+            ->getJson(route('finanzas.conciliaciones.devolucion.egresos', ['linea_id' => $abono->id, 'contraparte_id' => $cargo->id]))
+            ->assertOk()
+            ->assertJsonPath('vinculo.tipo', 'compra_divisa')
+            ->assertJsonPath('vinculo.id', $compra->id)
+            ->assertJsonPath('vinculo.puede_anular', true);
+
+        $this->actingAs($user)
+            ->post(route('finanzas.conciliaciones.devolucion'), ['linea_id' => $abono->id, 'contraparte_id' => $cargo->id])
+            ->assertSessionHasErrors('devolucion');
+        $this->assertSame((int) $compra->id, (int) $cargo->fresh()->compra_divisa_id);
+
+        $this->actingAs($user)
+            ->post(route('finanzas.conciliaciones.devolucion'), [
+                'linea_id' => $abono->id, 'contraparte_id' => $cargo->id, 'pago_vinculado' => 'liberar',
+            ])
+            ->assertSessionHas('success');
+        $cargo->refresh();
+        $this->assertSame((int) $abono->id, (int) $cargo->devolucion_linea_id);
+        $this->assertNull($cargo->compra_divisa_id);
+        if (Schema::hasColumn('conciliacion_lineas', 'conciliacion_nota')) {
+            $this->assertStringContainsString('#'.$compra->id, (string) $cargo->conciliacion_nota);
+        }
+        $this->assertSame((int) $cargo->id, (int) $abono->fresh()->devolucion_linea_id);
+        $this->assertFalse((bool) $compra->fresh()->es_conciliado);
+
+        // Anular el pago: la compra se elimina.
+        [$compra2, $cargo2, $abono2] = $crear('09999999');
+        $this->actingAs($user)
+            ->post(route('finanzas.conciliaciones.devolucion'), [
+                'linea_id' => $abono2->id, 'contraparte_id' => $cargo2->id, 'pago_vinculado' => 'anular',
+            ])
+            ->assertSessionHas('success');
+        $this->assertNull(\App\Models\CompraDivisa::query()->find($compra2->id));
+        $this->assertSame((int) $abono2->id, (int) $cargo2->fresh()->devolucion_linea_id);
+    }
+
+    public function test_devolucion_de_un_cargo_conciliado_con_egreso_puede_anularlo_salvo_si_esta_en_otros_debitos(): void
+    {
+        $user = $this->makeUser(User::ROLE_CONTABILIDAD);
+        $base = ['banco' => 'MERCANTIL', 'titular' => 'GRUPO JRZ', 'fecha' => '2026-08-05', 'monto' => 50000.00];
+        $egreso = FlujoCaja::create([
+            'tipo' => 'egreso', 'banco' => 'Mercantil', 'titular' => 'JRZ', 'fecha' => '2026-08-05',
+            'monto_bs' => 50000, 'referencia' => '20411112222', 'motivo' => 'PAGO PROVEEDOR', 'oculto' => false,
+        ]);
+        $egreso->forceFill(['es_conciliado' => true])->save();
+        $cargo = ConciliacionLinea::create($base + [
+            'descripcion' => 'CREDITO INMEDIATO CAMARA DE COMPENSACION', 'referencia' => '20411112222',
+            'estado' => 'conciliado', 'tipo' => 'cargo', 'flujo_caja_id' => $egreso->id,
+        ]);
+        $abono = ConciliacionLinea::create($base + [
+            'descripcion' => 'DEVOLUCION CREDITO INMEDIATO', 'referencia' => '17111112222',
+            'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+        $otroDebito = ConciliacionLinea::create($base + [
+            'descripcion' => 'CREDITO INMEDIATO CAMARA DE COMPENSACION', 'referencia' => '20433334444', 'monto' => 1000,
+            'estado' => 'conciliado', 'tipo' => 'cargo', 'flujo_caja_id' => $egreso->id,
+        ]);
+
+        // El egreso está en otro débito: no se puede anular.
+        $this->actingAs($user)
+            ->getJson(route('finanzas.conciliaciones.devolucion.egresos', ['linea_id' => $abono->id, 'contraparte_id' => $cargo->id]))
+            ->assertOk()
+            ->assertJsonPath('vinculo.tipo', 'egreso')
+            ->assertJsonPath('vinculo.puede_anular', false)
+            ->assertJsonCount(0, 'egresos');
+        $this->actingAs($user)
+            ->post(route('finanzas.conciliaciones.devolucion'), [
+                'linea_id' => $abono->id, 'contraparte_id' => $cargo->id, 'pago_vinculado' => 'anular',
+            ])
+            ->assertSessionHasErrors('devolucion');
+        $this->assertFalse((bool) $egreso->fresh()->anulado);
+
+        $otroDebito->delete();
+        $this->actingAs($user)
+            ->post(route('finanzas.conciliaciones.devolucion'), [
+                'linea_id' => $abono->id, 'contraparte_id' => $cargo->id, 'pago_vinculado' => 'anular',
+            ])
+            ->assertSessionHas('success');
+        $this->assertTrue((bool) $egreso->fresh()->anulado);
+        $this->assertNull($cargo->fresh()->flujo_caja_id);
+        $this->assertSame((int) $abono->id, (int) $cargo->fresh()->devolucion_linea_id);
+    }
+
     public function test_cargo_y_devolucion_no_aparecen_en_el_pdf(): void
     {
         $user = $this->makeUser(User::ROLE_CONTABILIDAD);

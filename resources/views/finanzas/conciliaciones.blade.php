@@ -1163,6 +1163,11 @@
                 <div class="dev-paso" id="devPasoContraparte"></div>
                 <div id="devContrapartes"></div>
 
+                <div id="devBloqueVinculo" hidden>
+                    <div class="dev-paso">Este cargo ya estaba conciliado con un pago. ¿Quieres anular ese pago?</div>
+                    <div id="devVinculo"></div>
+                </div>
+
                 <div id="devBloqueEgresos" hidden>
                     <div class="dev-paso">Egresos del sistema con la misma referencia del cargo</div>
                     <div id="devEgresos"></div>
@@ -1226,6 +1231,7 @@ const titularesPorBanco = @json($titularesPorBanco);
     $movimientosPendientesJs = collect($data_por_banco ?? [])->map(fn ($d) => $d['sin_registrar']->take($limiteMovimientosBanco)
         ->concat($d['sin_registrar']->slice($limiteMovimientosBanco)->filter(fn ($r) => ($r['tipo'] ?? 'cargo') !== 'abono'))
         ->concat(($d['compras_divisas_banco'] ?? collect())->filter(fn ($r) => ($r['tipo'] ?? 'cargo') !== 'abono'))
+        ->concat($d['cargos_con_pago'] ?? collect())
         ->map(fn ($r) => [
         'id' => $r['id'],
         'fecha' => $r['fecha'] instanceof \DateTimeInterface ? $r['fecha']->format('d/m/Y') : \Carbon\Carbon::parse($r['fecha'])->format('d/m/Y'),
@@ -1233,6 +1239,7 @@ const titularesPorBanco = @json($titularesPorBanco);
         'descripcion' => $r['descripcion'],
         'monto' => round(abs((float) $r['monto']), 2),
         'tipo' => ($r['tipo'] ?? 'cargo') === 'abono' ? 'abono' : 'cargo',
+        'vinculo' => $r['vinculo'] ?? null,
     ])->values());
     $urlEgresosDevolucion = route('finanzas.conciliaciones.devolucion.egresos');
 @endphp
@@ -1492,12 +1499,16 @@ function abrirDevolucionDesdeMenu() {
         .map(m => ({ ...m, mismaRef: referenciasCoinciden(m.referencia, origen.referencia) }))
         .sort((a, b) => Number(b.mismaRef) - Number(a.mismaRef));
     const conRef = candidatos.filter(m => m.mismaRef);
+    const chipsCandidato = m => (m.mismaRef ? '<span class="tipo-chip" style="background:#ecfdf5;color:#059669;margin-top:4px;display:inline-block;">Misma referencia</span> ' : '')
+        + (m.vinculo ? `<span class="tipo-chip" style="background:#fffbeb;color:#b45309;margin-top:4px;display:inline-block;">Ya conciliado con: ${esc(m.vinculo)}</span>` : '');
     document.getElementById('devContrapartes').innerHTML = candidatos.length
-        ? candidatos.map(m => `<label class="dev-mov"><input type="radio" name="contraparte_id" value="${m.id}" onchange="buscarEgresosDevolucion()"${conRef.length === 1 && m.mismaRef ? ' checked' : ''}>${htmlMovimiento(m, m.mismaRef ? '<span class="tipo-chip" style="background:#ecfdf5;color:#059669;margin-top:4px;display:inline-block;">Misma referencia</span>' : '')}</label>`).join('')
+        ? candidatos.map(m => `<label class="dev-mov"><input type="radio" name="contraparte_id" value="${m.id}" onchange="buscarEgresosDevolucion()"${conRef.length === 1 && m.mismaRef ? ' checked' : ''}>${htmlMovimiento(m, chipsCandidato(m))}</label>`).join('')
         : `<p class="dev-vacio">No hay ${buscado === 'cargo' ? 'un cargo' : 'un abono'} pendiente de Bs. ${fmtBs(origen.monto)} en esta cuenta y período.</p>`;
 
     document.getElementById('devBloqueEgresos').hidden = true;
     document.getElementById('devEgresos').innerHTML = '';
+    document.getElementById('devBloqueVinculo').hidden = true;
+    document.getElementById('devVinculo').innerHTML = '';
     document.getElementById('devGuardar').disabled = true;
     document.getElementById('devolucionModal').style.display = 'flex';
     if (conRef.length === 1) buscarEgresosDevolucion();
@@ -1523,6 +1534,10 @@ async function buscarEgresosDevolucion() {
     caja.innerHTML = '<p class="dev-vacio">Buscando egresos…</p>';
 
     const params = new URLSearchParams({ linea_id: document.getElementById('devLineaId').value, contraparte_id: elegido.value });
+    const bloqueVinculo = document.getElementById('devBloqueVinculo');
+    const cajaVinculo = document.getElementById('devVinculo');
+    bloqueVinculo.hidden = true;
+    cajaVinculo.innerHTML = '';
     try {
         const r = await fetch(urlEgresosDevolucion + '?' + params, { headers: { 'Accept': 'application/json' } });
         const d = await r.json();
@@ -1530,6 +1545,26 @@ async function buscarEgresosDevolucion() {
             caja.innerHTML = `<p class="dev-vacio" style="color:#b91c1c;">${esc(d.message || 'No se pudo buscar los egresos.')}</p>`;
             document.getElementById('devGuardar').disabled = true;
             return;
+        }
+        if (d.vinculo) {
+            const v = d.vinculo;
+            const esEgreso = v.tipo === 'egreso';
+            const anular = v.puede_anular
+                ? `<label class="dev-mov" style="cursor:pointer;"><input type="radio" name="pago_vinculado" value="anular" required>
+                    <div class="dev-mov-info"><strong>Sí, anularlo</strong><div class="dev-mov-meta">${esEgreso
+                        ? 'El egreso queda NULO y deja de contar en el flujo de caja.'
+                        : 'La compra de divisas se elimina. Si vuelves a importar el reporte de divisas podría crearse otra vez.'}</div></div></label>`
+                : '<p class="dev-vacio">Este pago también está en otros débitos del banco: no se puede anular, solo dejarlo pendiente.</p>';
+            cajaVinculo.innerHTML = `
+                <div class="dev-mov">
+                    <div class="dev-mov-info"><strong>${esc(v.descripcion)}</strong>
+                        <div class="dev-mov-meta">${esEgreso ? 'Egreso' : 'Compra de divisas'} #${v.id} · ${esc(v.fecha)}</div></div>
+                    <div class="dev-mov-monto" style="color:#dc2626;">Bs. ${fmtBs(v.monto_bs)}</div>
+                </div>
+                ${anular}
+                <label class="dev-mov" style="cursor:pointer;"><input type="radio" name="pago_vinculado" value="liberar" required${v.puede_anular ? '' : ' checked'}>
+                    <div class="dev-mov-info"><strong>No, dejarlo pendiente</strong><div class="dev-mov-meta">Se le pagó de otra forma: queda en tránsito para conciliarlo con el pago real.</div></div></label>`;
+            bloqueVinculo.hidden = false;
         }
         if (!d.egresos.length) {
             caja.innerHTML = '<p class="dev-vacio">Ningún egreso del sistema tiene la referencia del cargo. Solo se unirán los dos movimientos del banco.</p>';
@@ -1556,9 +1591,13 @@ async function buscarEgresosDevolucion() {
 
 function confirmarDevolucion() {
     const nulos = document.querySelectorAll('#devEgresos input[name="anular[]"]:checked').length;
-    return confirm(nulos
-        ? `Se unirán los dos movimientos del banco como devolución y ${nulos} egreso(s) quedarán NULOS (dejan de contar en el flujo de caja). ¿Continuar?`
-        : 'Se unirán los dos movimientos del banco como devolución. ¿Continuar?');
+    const pago = document.querySelector('#devVinculo input[name="pago_vinculado"]:checked');
+    const textoPago = !pago ? ''
+        : pago.value === 'anular' ? ' El pago con el que estaba conciliado el cargo se ANULARÁ.'
+        : ' El pago con el que estaba conciliado el cargo quedará pendiente.';
+    return confirm((nulos
+        ? `Se unirán los dos movimientos del banco como devolución y ${nulos} egreso(s) quedarán NULOS (dejan de contar en el flujo de caja).`
+        : 'Se unirán los dos movimientos del banco como devolución.') + textoPago + ' ¿Continuar?');
 }
 
 function filtrarTitulares(banco) {

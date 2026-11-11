@@ -1930,6 +1930,27 @@ class FinanzasController extends Controller
                     'linea_id'    => $l->id,
                 ])->values();
 
+            // Cargos ya conciliados con un pago que pueden ser la otra mitad de una devolución pendiente.
+            $claveMonto = fn ($l) => number_format(abs((float) $l->monto), 2, '.', '');
+            $montosAbonosPendientes = $lineas_banco
+                ->filter(fn ($l) => $l->estado === 'pendiente' && $l->esAbono())
+                ->mapWithKeys(fn ($l) => [$claveMonto($l) => true]);
+            $cargos_con_pago = $lineas_banco
+                ->filter(fn ($l) => $l->estado === 'conciliado' && $l->esCargo() && ! $l->tesoreria_ingreso_id
+                    && (bool) $l->flujo_caja_id !== (bool) $l->compra_divisa_id
+                    && isset($montosAbonosPendientes[$claveMonto($l)]))
+                ->map(fn ($l) => [
+                    'id'          => $l->id,
+                    'fecha'       => $l->fecha,
+                    'referencia'  => $l->referencia,
+                    'descripcion' => $l->descripcion,
+                    'monto'       => $l->monto,
+                    'tipo'        => 'cargo',
+                    'vinculo'     => $l->flujo_caja_id
+                        ? ($l->flujoCaja?->motivo ?: 'Egreso #'.$l->flujo_caja_id)
+                        : ($l->compraDivisa?->motivo ?: 'Compra de divisas #'.$l->compra_divisa_id),
+                ])->values();
+
             $pagos_credito = $lineas_pago_credito
                 ->map(fn ($l) => [
                     'id'          => $l->id,
@@ -2035,6 +2056,7 @@ class FinanzasController extends Controller
                     'sin_registrar',
                     'comisiones',
                     'compras_divisas_banco',
+                    'cargos_con_pago',
                     'pagos_credito',
                     'total_conciliados',
                     'total_transito',
@@ -3239,6 +3261,7 @@ class FinanzasController extends Controller
 
         $candidatos = $query->limit(500)->get()
             ->filter(fn ($f) => $this->egresoCoincideConCargo($matcher, $cargo, $f))
+            ->reject(fn ($f) => (int) $f->id === (int) $cargo->flujo_caja_id)
             ->values();
         $vinculados = \App\Models\ConciliacionLinea::query()
             ->whereIn('flujo_caja_id', $candidatos->pluck('id'))
@@ -3270,7 +3293,44 @@ class FinanzasController extends Controller
             })
             ->values();
 
-        return response()->json(['egresos' => $egresos]);
+        return response()->json(['egresos' => $egresos, 'vinculo' => $this->pagoConciliadoDelCargo($cargo)]);
+    }
+
+    /**
+     * Pago (egreso o compra de divisas) con el que ya estaba conciliado el cargo devuelto.
+     *
+     * @return array{tipo: string, id: int, descripcion: string, monto_bs: float, fecha: string, puede_anular: bool}|null
+     */
+    private function pagoConciliadoDelCargo(\App\Models\ConciliacionLinea $cargo): ?array
+    {
+        if ($cargo->estado !== 'conciliado') {
+            return null;
+        }
+        $columna = $cargo->flujo_caja_id ? 'flujo_caja_id' : ($cargo->compra_divisa_id ? 'compra_divisa_id' : null);
+        $pago = match ($columna) {
+            'flujo_caja_id' => $cargo->flujoCaja,
+            'compra_divisa_id' => $cargo->compraDivisa,
+            default => null,
+        };
+        if (! $pago) {
+            return null;
+        }
+
+        // Si el pago también está en otros débitos (pagado en partes), solo se suelta este cargo.
+        $otrasLineas = \App\Models\ConciliacionLinea::query()
+            ->where($columna, $pago->id)
+            ->where('id', '!=', $cargo->id)
+            ->where('estado', 'conciliado')
+            ->exists();
+
+        return [
+            'tipo' => $columna === 'flujo_caja_id' ? 'egreso' : 'compra_divisa',
+            'id' => (int) $pago->id,
+            'descripcion' => (string) ($pago->motivo ?: ($pago->concepto ?? '') ?: ($columna === 'flujo_caja_id' ? 'Egreso' : 'Compra de divisas')),
+            'monto_bs' => (float) $pago->monto_bs,
+            'fecha' => \Carbon\Carbon::parse($pago->fecha)->format('d/m/Y'),
+            'puede_anular' => ! $otrasLineas,
+        ];
     }
 
     /**
@@ -3284,6 +3344,7 @@ class FinanzasController extends Controller
             'contraparte_id' => ['required', 'integer'],
             'anular' => ['nullable', 'array'],
             'anular.*' => ['integer'],
+            'pago_vinculado' => ['nullable', 'in:anular,liberar'],
         ]);
         if (! \Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'devolucion_linea_id')) {
             return back()->with('error', 'Falta migrar las columnas de devolución. Ejecuta: php artisan migrate');
@@ -3291,30 +3352,64 @@ class FinanzasController extends Controller
 
         $matcher = app(\App\Services\BankReconciliationMatcher::class);
         $anulados = 0;
+        $pagoResuelto = null;
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($data, $matcher, &$anulados) {
+        \Illuminate\Support\Facades\DB::transaction(function () use ($data, $matcher, &$anulados, &$pagoResuelto) {
             [$cargo, $abono] = $this->lineasDevolucion((int) $data['linea_id'], (int) $data['contraparte_id'], true);
             $ahora = now();
+            $motivo = mb_substr('Devuelto por el banco: cargo ref. '.($cargo->referencia ?: '—').' del '.$cargo->fecha->format('d/m/Y')
+                .', devolución ref. '.($abono->referencia ?: '—').' del '.$abono->fecha->format('d/m/Y'), 0, 255);
+
+            $vinculo = $this->pagoConciliadoDelCargo($cargo);
+            $accion = $data['pago_vinculado'] ?? null;
+            if ($vinculo && ! in_array($accion, ['anular', 'liberar'], true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'devolucion' => 'El cargo ya estaba conciliado con un pago: indica si quieres anular ese pago o dejarlo pendiente.',
+                ]);
+            }
+            if ($vinculo && $accion === 'anular' && ! $vinculo['puede_anular']) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'devolucion' => 'Ese pago también está en otros débitos del banco: no se puede anular, solo dejarlo pendiente.',
+                ]);
+            }
 
             foreach ([[$cargo, $abono], [$abono, $cargo]] as [$linea, $otra]) {
-                $ok = \Illuminate\Support\Facades\DB::table('conciliacion_lineas')
+                $cambios = ['estado' => 'conciliado', 'devolucion_linea_id' => $otra->id, 'updated_at' => $ahora];
+                $query = \Illuminate\Support\Facades\DB::table('conciliacion_lineas')
                     ->where('id', $linea->id)
-                    ->where('estado', 'pendiente')
                     ->whereNull('devolucion_linea_id')
-                    ->update(['estado' => 'conciliado', 'devolucion_linea_id' => $otra->id, 'updated_at' => $ahora]);
-                if ($ok !== 1) {
+                    ->where('estado', $linea->estado);
+                foreach (['flujo_caja_id', 'compra_divisa_id'] as $col) {
+                    $linea->{$col} ? $query->where($col, $linea->{$col}) : $query->whereNull($col);
+                }
+                if ($linea->id === $cargo->id && $vinculo) {
+                    $cambios['flujo_caja_id'] = null;
+                    $cambios['compra_divisa_id'] = null;
+                    if (\Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'conciliacion_nota')) {
+                        $cambios['conciliacion_nota'] = mb_substr(sprintf(
+                            'Devuelto por el banco. Estaba conciliado con %s #%d (%s) · %s',
+                            $vinculo['tipo'] === 'egreso' ? 'el egreso' : 'la compra de divisas',
+                            $vinculo['id'],
+                            $vinculo['descripcion'],
+                            $accion === 'anular' ? ($vinculo['tipo'] === 'egreso' ? 'egreso anulado' : 'compra eliminada') : 'quedó pendiente',
+                        ), 0, 255);
+                    }
+                }
+                if ($query->update($cambios) !== 1) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
                         'devolucion' => 'Otro usuario ya concilió uno de los movimientos. Recarga la página.',
                     ]);
                 }
             }
 
+            if ($vinculo) {
+                $pagoResuelto = $this->resolverPagoDelCargoDevuelto($vinculo, $accion, $motivo, $ahora);
+            }
+
             $ids = array_values(array_unique(array_map('intval', $data['anular'] ?? [])));
             if ($ids === []) {
                 return;
             }
-            $motivo = mb_substr('Devuelto por el banco: cargo ref. '.($cargo->referencia ?: '—').' del '.$cargo->fecha->format('d/m/Y')
-                .', devolución ref. '.($abono->referencia ?: '—').' del '.$abono->fecha->format('d/m/Y'), 0, 255);
 
             foreach (\App\Models\FlujoCaja::query()->whereIn('id', $ids)->lockForUpdate()->get() as $flujo) {
                 $conciliadoConLinea = \App\Models\ConciliacionLinea::query()
@@ -3341,11 +3436,66 @@ class FinanzasController extends Controller
         });
 
         $mensaje = 'Devolución registrada: el cargo y su devolución quedaron conciliados entre sí.';
+        if ($pagoResuelto) {
+            $mensaje .= ' '.$pagoResuelto;
+        }
         if ($anulados > 0) {
             $mensaje .= ' '.$anulados.' egreso(s) marcados como nulos.';
         }
 
         return $this->redirectConciliacionesConFiltros($request)->with('success', $mensaje);
+    }
+
+    /**
+     * Anula o deja pendiente el pago con el que estaba conciliado un cargo que el banco devolvió.
+     *
+     * @param  array{tipo: string, id: int, descripcion: string, puede_anular: bool}  $vinculo
+     */
+    private function resolverPagoDelCargoDevuelto(array $vinculo, string $accion, string $motivo, \Carbon\CarbonInterface $ahora): string
+    {
+        $columna = $vinculo['tipo'] === 'egreso' ? 'flujo_caja_id' : 'compra_divisa_id';
+        $sigueEnOtroDebito = \App\Models\ConciliacionLinea::query()
+            ->where($columna, $vinculo['id'])
+            ->where('estado', 'conciliado')
+            ->exists();
+
+        if ($vinculo['tipo'] === 'egreso') {
+            $flujo = \App\Models\FlujoCaja::query()->lockForUpdate()->find($vinculo['id']);
+            if (! $flujo) {
+                return '';
+            }
+            if ($accion === 'anular') {
+                $flujo->forceFill([
+                    'anulado' => true,
+                    'anulado_motivo' => $motivo,
+                    'anulado_at' => $ahora,
+                    'oculto' => true,
+                    'es_conciliado' => true,
+                ])->save();
+
+                return 'El egreso #'.$flujo->id.' con el que estaba conciliado quedó NULO.';
+            }
+            if (! $sigueEnOtroDebito) {
+                $flujo->forceFill(['es_conciliado' => false])->save();
+            }
+
+            return 'El egreso #'.$flujo->id.' quedó pendiente para conciliarlo con el pago real.';
+        }
+
+        $compra = \App\Models\CompraDivisa::query()->lockForUpdate()->find($vinculo['id']);
+        if (! $compra) {
+            return '';
+        }
+        if ($accion === 'anular') {
+            $compra->delete();
+
+            return 'La compra de divisas #'.$vinculo['id'].' con la que estaba conciliado se eliminó.';
+        }
+        if (! $sigueEnOtroDebito) {
+            $compra->forceFill(['es_conciliado' => false])->save();
+        }
+
+        return 'La compra de divisas #'.$compra->id.' quedó pendiente para conciliarla con el pago real.';
     }
 
     /**
@@ -3373,9 +3523,12 @@ class FinanzasController extends Controller
 
         $tieneDevolucion = \Illuminate\Support\Facades\Schema::hasColumn('conciliacion_lineas', 'devolucion_linea_id');
         foreach ([$a, $b] as $l) {
-            if ($l->estado !== 'pendiente' || $l->flujo_caja_id || $l->tesoreria_ingreso_id || $l->compra_divisa_id
-                || ($tieneDevolucion && $l->devolucion_linea_id)) {
-                throw $error('Los dos movimientos deben estar pendientes en "Movimientos en el banco".');
+            $libre = $l->estado === 'pendiente' && ! $l->flujo_caja_id && ! $l->compra_divisa_id;
+            // El cargo devuelto pudo conciliarse antes con su pago (egreso o compra de divisas).
+            $cargoConPago = $l->esCargo() && $l->estado === 'conciliado'
+                && (bool) $l->flujo_caja_id !== (bool) $l->compra_divisa_id;
+            if ((! $libre && ! $cargoConPago) || $l->tesoreria_ingreso_id || ($tieneDevolucion && $l->devolucion_linea_id)) {
+                throw $error('El abono debe estar pendiente en "Movimientos en el banco" y el cargo, pendiente o conciliado con un pago.');
             }
         }
 
