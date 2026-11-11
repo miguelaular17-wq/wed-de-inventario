@@ -131,14 +131,14 @@ class CobranzaController extends Controller
         if ($idsLista->isNotEmpty()) {
             $queryClientes->whereIn('historial_cobranzas.id', $idsLista);
         } else {
-            $queryClientes->where('id', '<', 0);
+            $queryClientes->where('historial_cobranzas.id', '<', 0);
         }
 
-
+        // Columnas con la tabla: la lista cruza con notas e intermediarios, que también tienen id y codigo_cliente.
         if ($mostrar_clientes === 'regulares') {
-            $queryClientes->whereNotIn('codigo_cliente', $personalCodes);
+            $queryClientes->whereNotIn('historial_cobranzas.codigo_cliente', $personalCodes);
         } elseif ($mostrar_clientes === 'personales') {
-            $queryClientes->whereIn('codigo_cliente', $personalCodes);
+            $queryClientes->whereIn('historial_cobranzas.codigo_cliente', $personalCodes);
         }
 
         $this->aplicarFiltrosLista($queryClientes, request());
@@ -170,7 +170,7 @@ class CobranzaController extends Controller
                 'cobranza_notas.nota as nota_anclada'
             ])
             ->selectRaw('EXISTS(SELECT 1 FROM cliente_personals WHERE cliente_personals.codigo_cliente = historial_cobranzas.codigo_cliente) as es_personal')
-            ->orderBy('nombre_cliente', 'asc')
+            ->orderBy('historial_cobranzas.nombre_cliente', 'asc')
             ->get();
         $this->anexarTelefonos($clientes_lista);
 
@@ -1161,14 +1161,26 @@ class CobranzaController extends Controller
         }
         if ($buscar = trim((string) $request->input('buscar_cliente', ''))) {
             $like = '%'.mb_strtolower($buscar, 'UTF-8').'%';
-            $query->where(function ($q) use ($like) {
+            // Cédula o código sin guiones, puntos ni espacios: "V-4.521.771" encuentra "V4521771".
+            $codigo = preg_replace('/[^A-Z0-9]/', '', mb_strtoupper($buscar, 'UTF-8'));
+            $codigoSql = fn (string $col) => "UPPER(REPLACE(REPLACE(REPLACE(COALESCE({$col}, ''), '-', ''), '.', ''), ' ', ''))";
+            $query->where(function ($q) use ($like, $codigo, $buscar, $codigoSql) {
                 $q->whereRaw('LOWER(historial_cobranzas.nombre_cliente) LIKE ?', [$like]);
+                if ($codigo !== '') {
+                    $q->orWhereRaw($codigoSql('historial_cobranzas.codigo_cliente').' LIKE ?', ['%'.$codigo.'%']);
+                }
+                $q->orWhere('historial_cobranzas.numero_documento', $buscar);
                 // Buscar al intermediario también trae las facturas que lleva de otras personas.
                 if (\Illuminate\Support\Facades\Schema::connection('pgsql')->hasTable('cobranza_intermediarios')) {
                     $q->orWhereExists(fn ($e) => $e->selectRaw('1')
                         ->from('cobranza_intermediarios as ci')
                         ->whereRaw('ci.id_documento IN (historial_cobranzas.numero_documento, historial_cobranzas.id_documento, historial_cobranzas.factura_padre)')
-                        ->whereRaw('LOWER(ci.nombre_intermediario) LIKE ?', [$like]));
+                        ->where(function ($w) use ($like, $codigo, $codigoSql) {
+                            $w->whereRaw('LOWER(ci.nombre_intermediario) LIKE ?', [$like]);
+                            if ($codigo !== '') {
+                                $w->orWhereRaw($codigoSql('ci.codigo_intermediario').' LIKE ?', ['%'.$codigo.'%']);
+                            }
+                        }));
                 }
             });
         }
