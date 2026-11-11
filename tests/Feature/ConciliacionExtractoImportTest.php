@@ -406,6 +406,47 @@ class ConciliacionExtractoImportTest extends TestCase
             ->assertSessionHas('error', fn ($m) => str_contains($m, 'ya no está pendiente'));
     }
 
+    public function test_recalcular_cruza_el_pago_movil_de_tesoreria_abonado_dias_despues(): void
+    {
+        if (! Schema::hasTable('tesoreria_ingresos')) {
+            Schema::create('tesoreria_ingresos', function (\Illuminate\Database\Schema\Blueprint $t) {
+                $t->id();
+                $t->string('tipo', 32);
+                $t->string('banco')->nullable();
+                $t->string('titular')->nullable();
+                $t->date('fecha');
+                $t->decimal('monto', 15, 2);
+                $t->string('lote_referencia')->nullable();
+                $t->boolean('es_conciliado')->default(false);
+                $t->text('descripcion')->nullable();
+                $t->string('comprobante_path')->nullable();
+                $t->unsignedBigInteger('user_id')->nullable();
+                $t->timestamps();
+            });
+        }
+        $ingreso = \App\Models\TesoreriaIngreso::create([
+            'tipo' => 'banco', 'banco' => 'Pago Movil', 'fecha' => '2026-08-01', 'monto' => 2022, 'lote_referencia' => '119104',
+        ]);
+        $linea = ConciliacionLinea::create([
+            'banco' => 'BANESCO', 'titular' => 'JRZ', 'fecha' => '2026-08-03', 'descripcion' => 'Banesco Pago Movil',
+            'referencia' => '119104', 'monto' => 2022, 'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+        $otraCuenta = ConciliacionLinea::create([
+            'banco' => 'BANESCO', 'titular' => 'DORAL', 'fecha' => '2026-08-03', 'descripcion' => 'Banesco Pago Movil',
+            'referencia' => '119104', 'monto' => 2022, 'estado' => 'pendiente', 'tipo' => 'abono',
+        ]);
+
+        $this->actingAs($this->makeUser(User::ROLE_CONTABILIDAD))
+            ->post(route('finanzas.conciliaciones.recalcular'), [
+                'banco' => 'BANESCO', 'titular' => 'JRZ', 'fecha_desde' => '2026-08-01', 'fecha_hasta' => '2026-08-31', 'banco_filtro' => 'BANESCO',
+            ])
+            ->assertSessionHas('success', fn ($m) => str_contains($m, '1 pagos móviles de Tesorería'));
+
+        $this->assertSame($ingreso->id, (int) $linea->fresh()->tesoreria_ingreso_id);
+        $this->assertTrue((bool) $ingreso->fresh()->es_conciliado);
+        $this->assertSame('pendiente', $otraCuenta->fresh()->estado);
+    }
+
     public function test_recalcular_una_cuenta_concilia_lo_que_se_habia_quedado_pendiente(): void
     {
         $user = $this->makeUser(User::ROLE_CONTABILIDAD);

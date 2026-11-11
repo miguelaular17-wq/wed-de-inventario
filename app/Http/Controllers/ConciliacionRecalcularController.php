@@ -69,6 +69,9 @@ class ConciliacionRecalcularController extends Controller
             }
         }
         $nLotes = $lotes->conciliar($desde, $hasta, $data['banco'], $data['titular']);
+        // Pagos móviles que Tesorería cargó del reporte de Cloud (el abono puede llegar días después).
+        $nPagosMoviles = app(\App\Services\Conciliacion\PagosMovilesTesoreriaConciliador::class)
+            ->conciliarPeriodo($desde, $hasta, fn ($l) => $matcher->claveCuenta($l->banco, $l->titular) === $cuenta);
         if (stripos($data['banco'], 'MERCANTIL') !== false) {
             $mercantil = app(\App\Services\Conciliacion\MercantilLotesConciliador::class)->conciliarAutomatico($desde, $hasta, $data['titular']);
             $nLotes += $mercantil['conciliados'];
@@ -84,6 +87,9 @@ class ConciliacionRecalcularController extends Controller
         }
         if ($nLotes > 0) {
             $partes[] = $nLotes.' lotes de punto de venta';
+        }
+        if ($nPagosMoviles > 0) {
+            $partes[] = $nPagosMoviles.' pagos móviles de Tesorería';
         }
         if ($nComisiones > 0) {
             $partes[] = $nComisiones.' cargos pasados a comisiones';
