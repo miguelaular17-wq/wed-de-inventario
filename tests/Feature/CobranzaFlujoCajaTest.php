@@ -248,6 +248,19 @@ class CobranzaFlujoCajaTest extends TestCase
         $pdf = $this->get(route('cobranza.flujo.recibo', $mov));
         $pdf->assertOk();
         $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        $excel = $this->get(route('cobranza.flujo.excel', ['desde' => '2026-11-01', 'hasta' => '2026-11-30']));
+        $excel->assertOk()->assertHeader('Content-Disposition', 'attachment; filename="flujo_caja_cobranza_2026-11-01_2026-11-30.xlsx"');
+        $hojas = \Shuchkin\SimpleXLSX::parseData($excel->getContent());
+        $this->assertNotFalse($hojas);
+        $movs = $hojas->rows(0);
+        $this->assertSame('Ingreso', $movs[1][1]);
+        $this->assertSame('Cliente Deudor (C-1)', $movs[1][6]);
+        $this->assertStringContainsString('155564', $movs[1][7]);
+        $this->assertSame('Abono 155564', $movs[1][8]);
+        $this->assertEquals(50, $movs[1][14]);
+        $this->assertSame('Ingresos', $hojas->rows(1)[6][0]);
+        $this->assertEquals(50, $hojas->rows(1)[6][1]);
     }
 
     public function test_pago_de_cuota_desde_el_flujo_y_desde_contratos(): void

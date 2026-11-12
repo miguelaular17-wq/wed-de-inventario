@@ -29,33 +29,9 @@ class FlujoCajaCobranzaController extends Controller
 
     public function index(Request $request): View
     {
-        $desde = $this->fecha($request->query('desde'), now()->startOfMonth()->toDateString());
-        $hasta = $this->fecha($request->query('hasta'), now()->toDateString());
-        $filtros = [
-            'desde' => $desde,
-            'hasta' => $hasta,
-            'tipo' => in_array($request->query('tipo'), ['ingreso', 'egreso'], true) ? $request->query('tipo') : '',
-            'ambito' => array_key_exists((string) $request->query('ambito'), CobranzaMovimiento::AMBITOS) ? (string) $request->query('ambito') : '',
-            'cuenta' => (string) $request->query('cuenta', ''),
-            'solo_cruces' => $request->boolean('solo_cruces'),
-        ];
-
-        $movimientos = CobranzaMovimiento::query()
-            ->with(['usuario', 'flujoCaja'])
-            ->whereBetween('fecha', [$desde, $hasta])
-            ->when($filtros['tipo'], fn ($q, $t) => $q->where('tipo', $t))
-            ->when($filtros['ambito'], fn ($q, $a) => $q->where('ambito', $a))
-            ->when($filtros['solo_cruces'], fn ($q) => $q->whereNotNull('cruce_id'))
-            ->when($filtros['cuenta'] !== '', function ($q) use ($filtros) {
-                [$banco, $titular] = array_pad(explode('|', $filtros['cuenta'], 2), 2, '');
-                $q->whereRaw('UPPER(TRIM(banco)) = ?', [mb_strtoupper(trim($banco), 'UTF-8')]);
-                if (trim($titular) !== '') {
-                    $q->whereRaw("UPPER(TRIM(COALESCE(titular, ''))) = ?", [mb_strtoupper(trim($titular), 'UTF-8')]);
-                }
-            })
-            ->orderByDesc('fecha')
-            ->orderByDesc('id')
-            ->get();
+        $filtros = $this->filtros($request);
+        [$desde, $hasta] = [$filtros['desde'], $filtros['hasta']];
+        $movimientos = $this->movimientos($filtros);
 
         $asientos = Schema::hasTable('cobranza_asientos')
             ? CobranzaAsiento::query()->with(['lineas', 'usuario'])
@@ -368,6 +344,109 @@ class FlujoCajaCobranzaController extends Controller
             'por_ambito' => $porAmbito,
             'cruces' => $movimientos->whereNotNull('cruce_id')->pluck('cruce_id')->unique()->count(),
         ];
+    }
+
+    /** Reporte en Excel del flujo de caja con los mismos filtros de la pantalla. */
+    public function excel(Request $request): \Symfony\Component\HttpFoundation\Response
+    {
+        $filtros = $this->filtros($request);
+        $movimientos = $this->movimientos($filtros)->sortBy([['fecha', 'asc'], ['id', 'asc']])->values();
+        $pagos = $this->vinculos->describir($movimientos);
+        $totales = $this->totales($movimientos);
+
+        $filas = [['Fecha', 'Tipo', 'Apartado', 'Cruce', 'Cuenta', 'Titular', 'Qué se paga', 'Detalle', 'Concepto',
+            'Quién paga / A quién', 'Tipo de gasto', 'Forma de pago', 'Ref.', 'Monto Bs', 'Monto USD', 'Tasa', 'Banco', 'Registrado por', 'Observaciones']];
+        foreach ($movimientos as $m) {
+            $pago = $pagos[$m->id] ?? null;
+            $filas[] = [
+                $m->fecha->format('d/m/Y'),
+                $m->esIngreso() ? 'Ingreso' : 'Egreso',
+                $m->nombreAmbito(),
+                $m->esCruce() ? 'Sí' : '',
+                (string) $m->banco,
+                (string) $m->titular,
+                $pago['titulo'] ?? '',
+                $pago['detalle'] ?? '',
+                (string) $m->concepto,
+                (string) $m->contraparte,
+                $m->esIngreso() ? '' : (string) $m->tipo_gasto,
+                str_replace('_', ' ', (string) $m->forma_pago),
+                (string) $m->referencia,
+                round((float) $m->monto_bs, 2),
+                round((float) $m->monto_usd, 2),
+                (float) $m->tasa_cambio > 0 ? round((float) $m->tasa_cambio, 4) : '',
+                match (true) {
+                    CobranzaMovimiento::esBancoCruce($m->banco) => 'Cruce',
+                    ! $m->flujo_caja_id => 'Sin banco',
+                    $m->estaConciliado() => 'En el banco',
+                    default => 'En tránsito',
+                },
+                (string) $m->usuario?->name,
+                (string) $m->observaciones,
+            ];
+        }
+
+        $resumen = [
+            ['Flujo de caja · Cobranza'],
+            ['Desde', \Carbon\Carbon::parse($filtros['desde'])->format('d/m/Y'), 'Hasta', \Carbon\Carbon::parse($filtros['hasta'])->format('d/m/Y')],
+            ['Apartado', $filtros['ambito'] !== '' ? CobranzaMovimiento::AMBITOS[$filtros['ambito']] : 'Todos'],
+            ['Cuenta', $filtros['cuenta'] !== '' ? str_replace('|', ' - ', $filtros['cuenta']) : 'Todas'],
+            [],
+            ['', 'USD', 'Bs'],
+            ['Ingresos', $totales['ingresos_usd'], $totales['ingresos_bs']],
+            ['Egresos', $totales['egresos_usd'], $totales['egresos_bs']],
+            ['Neto', round($totales['ingresos_usd'] - $totales['egresos_usd'], 2), round($totales['ingresos_bs'] - $totales['egresos_bs'], 2)],
+            [],
+            ['Por apartado', 'Ingresos $', 'Egresos $', 'Neto $'],
+        ];
+        foreach (CobranzaMovimiento::AMBITOS as $clave => $nombre) {
+            $a = $totales['por_ambito'][$clave];
+            $resumen[] = [$nombre, $a['ingresos_usd'], $a['egresos_usd'], round($a['ingresos_usd'] - $a['egresos_usd'], 2)];
+        }
+        $resumen[] = [];
+        $resumen[] = ['Cruces del período', $totales['cruces']];
+        $resumen[] = ['Movimientos', $movimientos->count()];
+
+        $archivo = 'flujo_caja_cobranza_'.$filtros['desde'].'_'.$filtros['hasta'].'.xlsx';
+
+        return response(\App\Support\SimpleXlsxWriter::toString(['Movimientos' => $filas, 'Resumen' => $resumen]), 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$archivo.'"',
+        ]);
+    }
+
+    /** @return array{desde: string, hasta: string, tipo: string, ambito: string, cuenta: string, solo_cruces: bool} */
+    private function filtros(Request $request): array
+    {
+        return [
+            'desde' => $this->fecha($request->query('desde'), now()->startOfMonth()->toDateString()),
+            'hasta' => $this->fecha($request->query('hasta'), now()->toDateString()),
+            'tipo' => in_array($request->query('tipo'), ['ingreso', 'egreso'], true) ? $request->query('tipo') : '',
+            'ambito' => array_key_exists((string) $request->query('ambito'), CobranzaMovimiento::AMBITOS) ? (string) $request->query('ambito') : '',
+            'cuenta' => (string) $request->query('cuenta', ''),
+            'solo_cruces' => $request->boolean('solo_cruces'),
+        ];
+    }
+
+    /** @param  array{desde: string, hasta: string, tipo: string, ambito: string, cuenta: string, solo_cruces: bool}  $filtros */
+    private function movimientos(array $filtros): \Illuminate\Support\Collection
+    {
+        return CobranzaMovimiento::query()
+            ->with(['usuario', 'flujoCaja'])
+            ->whereBetween('fecha', [$filtros['desde'], $filtros['hasta']])
+            ->when($filtros['tipo'], fn ($q, $t) => $q->where('tipo', $t))
+            ->when($filtros['ambito'], fn ($q, $a) => $q->where('ambito', $a))
+            ->when($filtros['solo_cruces'], fn ($q) => $q->whereNotNull('cruce_id'))
+            ->when($filtros['cuenta'] !== '', function ($q) use ($filtros) {
+                [$banco, $titular] = array_pad(explode('|', $filtros['cuenta'], 2), 2, '');
+                $q->whereRaw('UPPER(TRIM(banco)) = ?', [mb_strtoupper(trim($banco), 'UTF-8')]);
+                if (trim($titular) !== '') {
+                    $q->whereRaw("UPPER(TRIM(COALESCE(titular, ''))) = ?", [mb_strtoupper(trim($titular), 'UTF-8')]);
+                }
+            })
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->get();
     }
 
     private function fecha($valor, string $porDefecto): string

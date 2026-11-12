@@ -160,6 +160,8 @@
         <label style="font-weight:500;font-size:.88rem;display:flex;gap:6px;align-items:center;padding-bottom:8px;">
             <input type="checkbox" name="solo_cruces" value="1" @checked($filtros['solo_cruces']) onchange="this.form.submit()"> Solo cruces
         </label>
+        <a href="{{ route('cobranza.flujo.excel', array_filter($filtros, fn ($v) => $v !== '' && $v !== false)) }}" class="cf-btn cf-btn-gris"
+           style="text-decoration:none;margin-left:auto;">📊 Exportar Excel</a>
     </form>
 
     <div class="custom-row">
