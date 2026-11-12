@@ -58,6 +58,8 @@
     .cf-modal.abierto { display: flex; }
     .cf-modal-box { background: #fff; width: 100%; max-width: 720px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,.15); padding: 18px 22px; position: relative; }
     .cf-modal-box h3 { margin: 0 0 14px; font-size: 1.1rem; color: var(--blue); }
+    .cf-modal .ts-wrapper { width: 100%; }
+    .ts-dropdown { z-index: 1200 !important; }
     .cf-cerrar { position: absolute; right: 15px; top: 12px; background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
     .cf-row { display: flex; gap: 14px; margin-bottom: 10px; flex-wrap: wrap; }
     .cf-row > div { flex: 1; min-width: 150px; }
@@ -520,8 +522,8 @@
                     <label>Forma de pago</label>
                     <select name="forma_pago">
                         <option value="">Según la cuenta</option>
-                        @foreach(['ZELLE', 'EFECTIVO', 'TRANSFERENCIA_DIVISAS', 'TRANSFERENCIA_BCV', 'PAGO_MOVIL', 'DEPOSITO', 'BINANCE', 'CRUCE'] as $fp)
-                            <option value="{{ $fp }}" @selected(old('forma_pago') === $fp)>{{ str_replace('_', ' ', $fp) }}</option>
+                        @foreach(\App\Models\CobranzaMovimiento::FORMAS_PAGO as $fp)
+                            <option value="{{ $fp }}" @selected(old('forma_pago') === $fp)>{{ $fp === 'DESCUENTO_DIVISAS' ? 'DESCUENTO EN DIVISAS' : str_replace('_', ' ', $fp) }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -732,6 +734,8 @@
         </form>
     </div>
 </div>
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.default.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 <script>
 (function () {
     const contratos = @json($contratos);
@@ -745,6 +749,29 @@
     const $ = id => document.getElementById(id);
 
     const estado = { tipo: $('cf-tipo').value || 'ingreso', ambito: $('cf-ambito').value || 'cobranza' };
+
+    const tsSettings = {
+        create: false,
+        sortField: { field: 'text', direction: 'asc' },
+        placeholder: '-- Seleccione un tipo de gasto --',
+        maxOptions: null,
+        allowEmptyOption: true,
+    };
+    const tsTipoGasto = document.getElementById('cf-tipo-gasto')
+        ? new TomSelect('#cf-tipo-gasto', tsSettings) : null;
+    const tsCruceTipoGasto = document.getElementById('cf-cruce-tipo-gasto')
+        ? new TomSelect('#cf-cruce-tipo-gasto', tsSettings) : null;
+    const tsEditTipoGasto = document.getElementById('cfe-tipo-gasto')
+        ? new TomSelect('#cfe-tipo-gasto', Object.assign({}, tsSettings)) : null;
+
+    function setTipoGasto(ts, value) {
+        if (!ts) return;
+        ts.setValue(value ?? '', true);
+    }
+    function enableTipoGasto(ts, on) {
+        if (!ts) return;
+        if (on) ts.enable(); else ts.disable();
+    }
 
     // ── Montos Bs ↔ divisas con la tasa ─────────────────────────────
     function enlazarMontos(usd, tasa, bs) {
@@ -1066,7 +1093,8 @@
         $('cf-bloque-cruce').style.display = ingreso ? '' : 'none';
         if (!ingreso) $('cf-cruce').checked = false;
         $('cf-tipo-gasto').required = !ingreso;
-        $('cf-tipo-gasto').disabled = ingreso;
+        enableTipoGasto(tsTipoGasto, !ingreso);
+        if (ingreso) setTipoGasto(tsTipoGasto, '');
         sincronizarCruce();
     }
     function sincronizarCruce() {
@@ -1074,6 +1102,8 @@
         $('cf-campos-cruce').style.display = on ? '' : 'none';
         $('cf-cruce-destino').required = on;
         $('cf-cruce-tipo-gasto').required = on;
+        enableTipoGasto(tsCruceTipoGasto, on);
+        if (!on) setTipoGasto(tsCruceTipoGasto, '');
         const cuenta = $('cf-cuenta');
         if (on && !cuenta.value.toUpperCase().startsWith(bancoCruce + '|')) {
             const op = [...cuenta.options].find(o => o.value.toUpperCase().startsWith(bancoCruce + '|'));
@@ -1128,9 +1158,9 @@
         $('cfe-titulo').textContent = m.tipo === 'ingreso' ? 'Editar ingreso' : 'Editar egreso';
         const esEgreso = m.tipo !== 'ingreso';
         $('cfe-tipo-gasto-wrap').style.display = esEgreso ? '' : 'none';
-        $('cfe-tipo-gasto').disabled = !esEgreso;
         $('cfe-tipo-gasto').required = esEgreso;
-        set('cfe-tipo-gasto', m.tipo_gasto);
+        enableTipoGasto(tsEditTipoGasto, esEgreso);
+        setTipoGasto(tsEditTipoGasto, esEgreso ? (m.tipo_gasto || '') : '');
         $('cfe-comprobantes').innerHTML = (m.comprobantes || []).map(url => `
             <label style="display:flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.8rem;">
                 <a href="${esc(url)}" target="_blank" rel="noopener">${/\.pdf(\?|$)/i.test(url) ? '📄 PDF' : '🖼️ Imagen'}</a>

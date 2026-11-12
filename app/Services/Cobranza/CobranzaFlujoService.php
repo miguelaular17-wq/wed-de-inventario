@@ -574,6 +574,9 @@ class CobranzaFlujoService
         if (strtoupper((string) $mov->banco) === 'EFECTIVO') {
             return 'EFECTIVO';
         }
+        if (mb_strtoupper((string) $mov->banco, 'UTF-8') === CobranzaMovimiento::CUENTA_DESCUENTO_DIVISAS) {
+            return 'DESCUENTO_DIVISAS';
+        }
 
         return (float) $mov->monto_bs > 0 ? 'TRANSFERENCIA_BCV' : 'TRANSFERENCIA_DIVISAS';
     }
@@ -591,6 +594,9 @@ class CobranzaFlujoService
         }
         if ($formaPago === 'EFECTIVO') {
             return ['EFECTIVO', 'COBRANZA', CobranzaMovimiento::GRUPO_SIN_BANCO];
+        }
+        if ($formaPago === 'DESCUENTO_DIVISAS') {
+            return [CobranzaMovimiento::CUENTA_DESCUENTO_DIVISAS, 'COBRANZA', CobranzaMovimiento::GRUPO_SIN_BANCO];
         }
         $bancoDestino = trim((string) $bancoDestino);
         if ($bancoDestino !== '' && str_contains($bancoDestino, ' - ')) {

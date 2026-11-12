@@ -971,8 +971,8 @@ class SyncApp:
                                     SET activo = true,
                                         precio_unidad = GREATEST(inventario_v2.productos.precio_unidad, EXCLUDED.precio_unidad),
                                         precio_mayor  = GREATEST(inventario_v2.productos.precio_mayor,  EXCLUDED.precio_mayor),
-                                        categoria     = CASE WHEN inventario_v2.productos.categoria = 'Sin categoría' OR inventario_v2.productos.categoria IS NULL OR inventario_v2.productos.categoria = '' THEN EXCLUDED.categoria ELSE inventario_v2.productos.categoria END,
-                                        subcategoria  = CASE WHEN inventario_v2.productos.subcategoria IS NULL OR inventario_v2.productos.subcategoria = '' THEN EXCLUDED.subcategoria ELSE inventario_v2.productos.subcategoria END,
+                                        categoria     = EXCLUDED.categoria,
+                                        subcategoria  = EXCLUDED.subcategoria,
                                         updated_at = NOW()
                                 RETURNING id;
                                 """,
@@ -1059,14 +1059,14 @@ class SyncApp:
                     UPDATE inventario_v2.productos
                     SET precio_unidad = CASE WHEN precio_unidad IS NULL OR precio_unidad <= 0 THEN %s ELSE precio_unidad END,
                         precio_mayor  = CASE WHEN precio_mayor  IS NULL OR precio_mayor  <= 0 THEN %s ELSE precio_mayor  END,
-                        categoria     = CASE WHEN categoria = 'Sin categoría' OR categoria IS NULL OR categoria = '' THEN %s ELSE categoria END,
-                        subcategoria  = CASE WHEN subcategoria IS NULL OR subcategoria = '' THEN %s ELSE subcategoria END,
+                        categoria     = %s,
+                        subcategoria  = %s,
                         updated_at = NOW()
                     WHERE id = %s AND (
                         (%s > 0 AND (precio_unidad IS NULL OR precio_unidad <= 0)) OR
                         (%s > 0 AND (precio_mayor  IS NULL OR precio_mayor  <= 0)) OR
-                        (%s != 'Sin categoría' AND (categoria = 'Sin categoría' OR categoria IS NULL OR categoria = '')) OR
-                        (%s != '' AND (subcategoria IS NULL OR subcategoria = ''))
+                        (categoria IS DISTINCT FROM %s) OR
+                        (subcategoria IS DISTINCT FROM %s)
                     );
                 """
                 batch_execute_and_commit(batch_update_query, updates_tuples)

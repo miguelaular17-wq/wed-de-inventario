@@ -22,6 +22,7 @@ class CobranzaReciboService
         'DEPOSITO' => 'DEPÓSITO',
         'BINANCE' => 'BINANCE',
         'CRUCE' => 'CRUCE',
+        'DESCUENTO_DIVISAS' => 'DESCUENTO EN DIVISAS',
     ];
 
     /**
@@ -143,6 +144,9 @@ class CobranzaReciboService
         }
         if (strtoupper((string) $mov->banco) === 'EFECTIVO') {
             return (float) $mov->monto_bs > 0 ? 'EFECTIVO BS' : 'EFECTIVO $';
+        }
+        if (mb_strtoupper((string) $mov->banco, 'UTF-8') === CobranzaMovimiento::CUENTA_DESCUENTO_DIVISAS) {
+            return 'DESCUENTO EN DIVISAS';
         }
 
         return trim('TRANSFERENCIA '.$mov->banco);

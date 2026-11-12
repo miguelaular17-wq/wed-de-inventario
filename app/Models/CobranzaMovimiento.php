@@ -33,7 +33,11 @@ class CobranzaMovimiento extends Model
     /** Dinero que no pasa por un banco (no va a la conciliación). */
     public const CUENTA_POR_IDENTIFICAR = 'POR IDENTIFICAR';
 
-    public const CUENTAS_SIN_BANCO = ['EFECTIVO', 'REGALÍA', self::CUENTA_POR_IDENTIFICAR];
+    public const CUENTA_DESCUENTO_DIVISAS = 'DESCUENTO EN DIVISAS';
+
+    public const CUENTAS_SIN_BANCO = ['EFECTIVO', 'REGALÍA', self::CUENTA_DESCUENTO_DIVISAS, self::CUENTA_POR_IDENTIFICAR];
+
+    public const FORMAS_PAGO = ['ZELLE', 'EFECTIVO', 'TRANSFERENCIA_DIVISAS', 'TRANSFERENCIA_BCV', 'PAGO_MOVIL', 'DEPOSITO', 'BINANCE', 'CRUCE', 'DESCUENTO_DIVISAS'];
 
     public const GRUPO_SIN_BANCO = 'SIN BANCO';
 
