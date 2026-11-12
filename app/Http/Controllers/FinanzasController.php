@@ -681,11 +681,6 @@ class FinanzasController extends Controller
                 'nomina_empleado_id' => 'nullable|integer|exists:nomina_empleados,id',
                 'placa_vehiculo' => 'nullable|string',
                 'fecha' => 'required|date|before_or_equal:today',
-                'desglose_cedula' => 'nullable|array',
-                'desglose_monto' => 'nullable|array',
-                'desglose_monto_usd' => 'nullable|array',
-                'desglose_sede' => 'nullable|array',
-                'desglose_tipo_gasto' => 'nullable|array',
                 'gasto_fijo_id' => 'nullable|integer|exists:gastos_fijos,id',
                 'monto_pagado_gf' => 'nullable|numeric|min:0',
                 'gf_items' => 'nullable|array|max:30',
@@ -871,25 +866,9 @@ class FinanzasController extends Controller
                 if ($comprobante_url) $comprobantes_arr[] = $comprobante_url;
             }
 
-            $desglose = null;
-            if (!empty($data['desglose_monto'])) {
-                $desglose = [];
-                foreach ($data['desglose_monto'] as $index => $monto_val) {
-                    $cedula = $data['desglose_cedula'][$index] ?? '';
-                    $monto_desglose = $monto_val ?? 0;
-                    if ($cedula || $monto_desglose) {
-                        $desglose[] = [
-                            'cedula' => $cedula,
-                            'sede' => $data['desglose_sede'][$index] ?? '',
-                            'tipo_gasto' => $data['desglose_tipo_gasto'][$index] ?? '',
-                            'monto' => (float)$monto_desglose,
-                            'monto_usd' => (float)($data['desglose_monto_usd'][$index] ?? 0),
-                        ];
-                    }
-                }
-                if (empty($desglose)) {
-                    $desglose = null;
-                }
+            [$asiento, $errorAsiento] = $this->asientoDelEgreso($request, (float) ($calc_usd ?? 0), $banco, $titular, $data['motivo'] ?? null);
+            if ($errorAsiento) {
+                return redirect()->back()->withInput()->with('error', $errorAsiento);
             }
 
             $cuentaPorPagarId = null;
@@ -910,7 +889,7 @@ class FinanzasController extends Controller
                 $data, $banco, $titular, $categoria_cuenta, $banco_receptor, $titular_receptor,
                 $calc_usd, $tasa_cambio, $diferencial_cambiario, $monto_bs, $comision,
                 $empleadoServicioTecnico, $esTodoticket, $detalleTodoticket,
-                $comprobante_url, $comprobantes_arr, $desglose, &$cuentaPorPagarId
+                $comprobante_url, $comprobantes_arr, $asiento, &$cuentaPorPagarId
             ) {
                 if ($cuentaPorPagarId === 0) {
                     $nueva = $this->crearCuentaPorPagar($data, (float) ($calc_usd ?? 0), (float) ($monto_bs ?? 0), $titular_receptor);
@@ -941,8 +920,10 @@ class FinanzasController extends Controller
                     'placa_vehiculo'        => $data['placa_vehiculo'] ?? null,
                     'comprobante_url'       => $comprobante_url,
                     'comprobantes'          => !empty($comprobantes_arr) ? $comprobantes_arr : null,
-                    'desglose'              => $desglose,
                 ];
+                if ($asiento && \Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'asiento')) {
+                    $payload['asiento'] = $asiento;
+                }
 
                 if ($cuentaPorPagarId && \Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'cuenta_por_pagar_id')) {
                     $payload['cuenta_por_pagar_id'] = $cuentaPorPagarId;
@@ -1029,6 +1010,57 @@ class FinanzasController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Ingreso registrado correctamente.');
+    }
+
+    /**
+     * Asiento contable del egreso, en $: el debe es la cuenta (banco · titular), el motivo y el monto
+     * del egreso; se reparte en uno o varios haber de detalle y monto.
+     *
+     * @return array{0: ?array{debe: array{cuenta: string, detalle: ?string, monto: float}, haber: list<array{detalle: string, monto: float}>}, 1: ?string}
+     */
+    private function asientoDelEgreso(Request $request, float $montoUsd, ?string $banco, ?string $titular, ?string $motivo): array
+    {
+        if (! $request->boolean('asiento_activo')) {
+            return [null, null];
+        }
+        $detalle = fn ($v) => trim((string) $v) !== '' ? mb_substr(trim((string) $v), 0, 255) : null;
+        $monto = fn ($v) => round((float) str_replace(',', '.', (string) $v), 2);
+
+        $debe = [
+            'cuenta' => mb_strtoupper(trim(trim((string) $banco).' · '.trim((string) $titular), ' ·'), 'UTF-8'),
+            'detalle' => $detalle($motivo),
+            'monto' => round($montoUsd, 2),
+        ];
+        if ($debe['monto'] <= 0) {
+            return [null, 'Asiento contable: el egreso necesita su monto en $ (o Bs con tasa) para el debe.'];
+        }
+        if ($debe['cuenta'] === '') {
+            return [null, 'Asiento contable: elige el Banco y Titular del egreso, es la cuenta del debe.'];
+        }
+
+        $haber = [];
+        foreach ((array) $request->input('asiento_haber', []) as $fila) {
+            if (! is_array($fila)) {
+                continue;
+            }
+            $linea = ['detalle' => $detalle($fila['detalle'] ?? ''), 'monto' => $monto($fila['monto'] ?? 0)];
+            if ($linea['detalle'] === null && $linea['monto'] <= 0) {
+                continue;
+            }
+            if ($linea['detalle'] === null || $linea['monto'] <= 0) {
+                return [null, 'Asiento contable: cada haber necesita su detalle y su monto en $.'];
+            }
+            $haber[] = $linea;
+        }
+        if ($haber === []) {
+            return [null, 'Asiento contable: agrega al menos un haber.'];
+        }
+        $totalHaber = round(array_sum(array_column($haber, 'monto')), 2);
+        if (abs($totalHaber - $debe['monto']) > 0.01) {
+            return [null, 'Asiento contable: el haber ($'.number_format($totalHaber, 2, ',', '.').') no cuadra con el debe ($'.number_format($debe['monto'], 2, ',', '.').').'];
+        }
+
+        return [['debe' => $debe, 'haber' => $haber], null];
     }
 
     /**
@@ -1193,10 +1225,6 @@ class FinanzasController extends Controller
             'sede'                   => 'nullable|string',
             'placa_vehiculo'         => 'nullable|string',
             'fecha'                  => 'required|date|before_or_equal:today',
-            'desglose_beneficiario'  => 'nullable|array',
-            'desglose_cedula'        => 'nullable|array',
-            'desglose_monto'         => 'nullable|array',
-            'desglose_monto_usd'     => 'nullable|array',
             'comprobantes_eliminar'  => 'nullable|array',
             'diferencial_cambiario'  => 'nullable|numeric',
         ]);
@@ -1286,28 +1314,19 @@ class FinanzasController extends Controller
             }
         }
 
-        // Desglose
-        $desglose = null;
-        if (!empty($data['desglose_beneficiario'])) {
-            $desglose = [];
-            foreach ($data['desglose_beneficiario'] as $index => $beneficiario) {
-                $cedula = $data['desglose_cedula'][$index] ?? '';
-                $monto_desglose = $data['desglose_monto'][$index] ?? 0;
-                if ($beneficiario || $cedula || $monto_desglose) {
-                    $desglose[] = [
-                        'beneficiario' => $beneficiario,
-                        'cedula'       => $cedula,
-                        'monto'        => (float) $monto_desglose,
-                        'monto_usd'    => (float) ($data['desglose_monto_usd'][$index] ?? 0),
-                    ];
-                }
-            }
-            if (empty($desglose)) $desglose = null;
+        [$asiento, $errorAsiento] = $this->asientoDelEgreso($request, (float) ($calc_usd ?? 0), $banco, $titular, $data['motivo'] ?? null);
+        if ($errorAsiento) {
+            return back()->withInput()->with('error', $errorAsiento);
         }
 
         $old_fecha = $egreso->fecha;
 
-        $egreso->update([
+        $cambios = [];
+        if (\Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'asiento')) {
+            $cambios['asiento'] = $asiento;
+        }
+
+        $egreso->update($cambios + [
             'fecha'                 => $data['fecha'],
             'categoria_egreso'      => $categoria,
             'banco'                 => $banco,
@@ -1328,7 +1347,6 @@ class FinanzasController extends Controller
             'placa_vehiculo'        => $data['placa_vehiculo'] ?? null,
             'comprobante_url'       => $comprobantes[0] ?? $egreso->comprobante_url,
             'comprobantes'          => empty($comprobantes) ? null : array_values($comprobantes),
-            'desglose'              => $desglose,
         ]);
 
         if (!empty($egreso->cuenta_por_pagar_id)) {
@@ -1655,8 +1673,11 @@ class FinanzasController extends Controller
         // El archivo bancario solo se usa para conciliar.
         $periodo_desde = $fecha_desde;
         $periodo_hasta = $fecha_hasta;
+        $conOrigen = \Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'origen');
         $movimientos_sistema_query = \App\Models\FlujoCaja::query()
-            ->where('oculto', false)
+            // Los de Cobranza están ocultos en el flujo de Finanzas pero sí mueven el banco.
+            ->where(fn ($q) => $q->where('oculto', false)
+                ->when($conOrigen, fn ($o) => $o->orWhere('origen', \App\Models\FlujoCaja::ORIGEN_COBRANZA)))
             ->vigentes()
             ->select([
                 'id', 'tipo', 'fecha', 'banco', 'titular', 'banco_receptor', 'titular_receptor',
@@ -5337,6 +5358,7 @@ class FinanzasController extends Controller
             'Sede', 'Placa', 'USD', 'Tasa cambio', 'Dif. cambiario', 'Bs', 'Comisión',
             'TodoTicket recarga', 'TodoTicket comisión', 'TodoTicket IVA', 'TodoTicket total real',
             'Línea', 'Cédula desglose', 'Sede desglose', 'Tipo gasto desglose', 'USD desglose', 'Bs desglose',
+            'Cuenta asiento', 'Detalle asiento', 'Debe $', 'Haber $',
         ]];
 
         foreach ($rows as $mov) {
@@ -5362,7 +5384,36 @@ class FinanzasController extends Controller
                 round((float) ($tt['total_real'] ?? 0), 2),
                 'Movimiento',
                 '', '', '', '', '',
+                '', '', '', '',
             ];
+
+            $asiento = is_array($mov->asiento ?? null) ? $mov->asiento : (is_string($mov->asiento ?? null) ? json_decode($mov->asiento, true) : null);
+            if (is_array($asiento) && ! empty($asiento['debe'])) {
+                $lineas = [['Asiento debe', $asiento['debe'], true]];
+                foreach ($asiento['haber'] ?? [] as $h) {
+                    $lineas[] = ['Asiento haber', $h, false];
+                }
+                foreach ($lineas as [$tipoLinea, $l, $alDebe]) {
+                    $cuerpo[] = [
+                        $this->fechaExcel($mov->fecha ?? null),
+                        $mov->banco ?: '',
+                        $mov->titular ?: '',
+                        $mov->titular_receptor ?: '',
+                        $mov->tipo_gasto ?: '',
+                        $mov->motivo ?: '',
+                        $mov->referencia ?: '',
+                        $mov->sede ?: '',
+                        $mov->placa_vehiculo ?: '',
+                        '', '', '', '', '', '', '', '', '',
+                        $tipoLinea,
+                        '', '', '', '', '',
+                        $l['cuenta'] ?? '',
+                        $l['detalle'] ?? '',
+                        $alDebe ? round((float) ($l['monto'] ?? 0), 2) : '',
+                        $alDebe ? '' : round((float) ($l['monto'] ?? 0), 2),
+                    ];
+                }
+            }
 
             foreach (is_array($mov->desglose ?? null) ? $mov->desglose : [] as $item) {
                 $cuerpo[] = [
@@ -5382,6 +5433,7 @@ class FinanzasController extends Controller
                     $item['tipo_gasto'] ?? '',
                     round((float) ($item['monto_usd'] ?? 0), 2),
                     round((float) ($item['monto'] ?? 0), 2),
+                    '', '', '', '',
                 ];
             }
         }

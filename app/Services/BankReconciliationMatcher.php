@@ -1118,7 +1118,11 @@ class BankReconciliationMatcher
             return true;
         }
 
-        return $this->fechaCercana($linea->fecha, $flujo->fecha, 0);
+        // Sin ref: el banco receptor puede acreditarlo hasta 3 días después (traslado de un sábado o feriado),
+        // nunca antes. Entre varios del mismo monto, el puntaje prefiere el del mismo día.
+        $dias = $this->diaNumero($linea->fecha) - $this->diaNumero($flujo->fecha);
+
+        return $dias >= 0 && $dias <= 3;
     }
 
     public function referenciaTrasladoCompletaCoincide(?string $referenciaBanco, ?string $referenciaTraslado): bool

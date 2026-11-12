@@ -441,7 +441,12 @@
                             </td>
                             <td>{{ $c->sede ?? '-' }}</td>
                             <td style="text-align: right; font-weight: 500; color: #4b5563;">$ {{ number_format($c->monto_neto, 2, ',', '.') }}</td>
-                            <td style="text-align: right; font-weight: 600; color: #198754;">$ {{ number_format($c->saldo_usd, 2, ',', '.') }}</td>
+                            <td style="text-align: right; font-weight: 600; color: #198754;">
+                                $ {{ number_format($c->saldo_usd, 2, ',', '.') }}
+                                @if(! empty($c->abonado_web))
+                                    <div style="font-size: 0.72rem; font-weight: 500; color: #1d4ed8;">Abonado en web: $ {{ number_format($c->abonado_web, 2, ',', '.') }}</div>
+                                @endif
+                            </td>
                             <td style="text-align: center; color: #6b7280;">{{ $c->fecha_emision ? date('d/m/Y', strtotime($c->fecha_emision)) : '-' }}</td>
                             <td style="text-align: center; color: #4b5563; font-weight: 500;">{{ $dias }}</td>
                             <td style="text-align: center;">
@@ -456,6 +461,11 @@
                                 @endif
                             </td>
                             <td style="text-align: center;" onclick="event.stopPropagation();">
+                                @if($c->id_documento && $c->sede)
+                                    <a class="btn secondary" href="{{ route('cobranza.flujo.index', ['factura_sede' => $c->sede, 'factura_doc' => $c->id_documento]) }}" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #86efac; background-color: #f0fdf4; color: #166534; text-decoration: none; margin-right: 4px;" title="Registrar el pago en el flujo de caja de Cobranza">
+                                        💵 Abonar
+                                    </a>
+                                @endif
                                 <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 4px; border: 1px solid #ccc; background-color: #f8f9fa; cursor: pointer; color: #333;" onclick='marcarPagado(@json($claveNota), this)'>
                                     Pagado
                                 </button>

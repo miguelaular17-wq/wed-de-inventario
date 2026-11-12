@@ -8,6 +8,9 @@
     #ri-dialog-tecnico h3 { margin: 0 0 4px; font-size: 1rem; }
     #ri-dialog-tecnico select { width: 100%; margin-top: 10px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: .9rem; }
     #ri-dialog-tecnico .ri-botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    tr.ri-movida td { opacity: .45; transition: opacity .3s; }
+    tr.ri-movida td:has(.ri-resultado) { opacity: 1; }
+    .ri-sale { font-size: .7rem; color: #64748b; margin-top: 2px; max-width: 200px; }
 </style>
 
 <dialog id="ri-dialog-tecnico">
@@ -78,6 +81,13 @@
                     select.dataset.actual = select.value;
                     select.dataset.tecnico = tecnico || '';
                     if (aviso) aviso.textContent = data.tecnico ? 'Por ' + data.tecnico : '';
+                    // Con resultado sale del reporte por marca; en el de resueltas, «Sin estado» lo devuelve.
+                    const enMarca = (select.dataset.modo || 'marca') === 'marca';
+                    const sale = enMarca ? resultado !== null : resultado === null;
+                    select.closest('tr')?.classList.toggle('ri-movida', sale);
+                    let nota = select.parentElement.querySelector('.ri-sale');
+                    if (!nota) { nota = document.createElement('div'); nota.className = 'ri-sale'; select.parentElement.appendChild(nota); }
+                    nota.textContent = !sale ? '' : (enMarca ? 'Pasa a Reparaciones internas resueltas al recargar.' : 'Vuelve al reporte por marca al recargar.');
                 } catch (e) {
                     select.value = anterior;
                     pintar(select, anterior);

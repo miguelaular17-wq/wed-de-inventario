@@ -198,12 +198,20 @@
                             $claseMeta = match ($estadoMeta) {
                                 'Cumplida', 'Cumplió' => 'es-on',
                                 'No cumplió' => 'es-no',
+                                'Parcial' => 'es-parcial',
                                 'Desactivado', 'Sin meta' => 'es-off',
                                 default => '',
                             };
                         @endphp
-                        <td class="inc-num inc-group g-pmeta">
-                            {{ $estadoMeta === 'Desactivado' || $fila['meta_prod_total'] === null ? '—' : $fila['meta_prod_cumplidas'].'/'.$fila['meta_prod_total'] }}
+                        <td class="inc-num inc-group g-pmeta" @if(! empty($fila['meta_prod_proporcional'])) title="{{ $fila['meta_prod_cumplidas'] }} de {{ $fila['meta_prod_total'] }} productos completos. El avance es el promedio de lo vendido de cada producto." @endif>
+                            @if($estadoMeta === 'Desactivado' || $fila['meta_prod_total'] === null)
+                                —
+                            @elseif(! empty($fila['meta_prod_proporcional']))
+                                {{ $pct($fila['meta_prod_pct']) }}
+                                <div class="muted" style="font-size:.72rem;">{{ $numero($fila['meta_prod_vendidas']) }}/{{ $numero($fila['meta_prod_unidades']) }} u.</div>
+                            @else
+                                {{ $fila['meta_prod_cumplidas'].'/'.$fila['meta_prod_total'] }}
+                            @endif
                         </td>
                         <td class="g-pmeta">
                             <span class="inc-estado {{ $claseMeta }}">{{ $estadoMeta ?? '—' }}</span>
@@ -231,7 +239,7 @@
     @if($clave === 'telefonia')
         <p class="muted" style="margin:10px 0 0;">Hay tres categorías. Cada una tiene Cruce, Estado y %, nueve columnas en total. Activa las que faltan en el botón. El porcentaje es la parte de ese trabajador en esa categoría dentro de su tienda, y el promedio de las activas vale el 50% de la nota.</p>
     @elseif($porEquipo)
-        <p class="muted" style="margin:10px 0 0;">El porcentaje es la venta de cada trabajador dividida entre lo que vendió todo el call center en el período. Esa efectividad vale 70% de la nota y el producto meta vale 30%.</p>
+        <p class="muted" style="margin:10px 0 0;">El porcentaje es la venta de cada trabajador dividida entre lo que vendió todo el call center en el período. Esa efectividad vale 70% de la nota y el producto meta vale 30%. El producto meta cuenta por lo que se lleva vendido de cada producto (3 de 6 = 50%), promediado entre sus productos.</p>
     @elseif($efectividad)
         <p class="muted" style="margin:10px 0 0;">El porcentaje es la venta de cada trabajador dividida entre lo que vendió la tienda en el período. Ese piso vale 70% de la nota y el producto meta vale 30%.</p>
     @elseif($porSede)
@@ -327,6 +335,7 @@
     .inc-estado.es-on { background: #dcfce7; color: #166534; }
     .inc-estado.es-off { background: #e2e8f0; color: #475569; }
     .inc-estado.es-no { background: #fee2e2; color: #b91c1c; }
+    .inc-estado.es-parcial { background: #fef3c7; color: #92400e; }
     #modal-cruce .modal-box { max-width: 640px; width: 100%; max-height: 86vh; display: flex; flex-direction: column; }
     .inc-tabs { display: flex; gap: 8px; margin: 12px 0; }
     .inc-tab { border: 1px solid var(--border); background: #fff; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-weight: 600; }

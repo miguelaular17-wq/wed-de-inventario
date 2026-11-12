@@ -73,8 +73,8 @@ class CuadreCajaTest extends TestCase
         $this->actingAs($tesoreria)
             ->post(route('cuadre_caja.conciliar', $this->cierre), [
                 'accion' => 'procesar',
-                'montos' => ['02|' => '810', 'TDD|BAN02' => '', 'TRF|BINANCE' => '22.50'],
-                'lotes' => ['TDD|BAN02' => $this->lotesCompletos()],
+                'montos' => ['02|' => '810', 'TDD|PUNTOS' => '', 'TRF|BINANCE' => '22.50'],
+                'lotes' => ['TDD|PUNTOS' => $this->lotesCompletos()],
                 'observacion' => 'Faltan 5 en efectivo',
             ])
             ->assertRedirect();
@@ -86,7 +86,7 @@ class CuadreCajaTest extends TestCase
         $this->assertSame(17.5, $resumen['diferencia_usd']);
         $lineas = collect($resumen['lineas'])->keyBy('clave');
         $this->assertSame(-5.0, $lineas['02|']['diferencia_usd']);
-        $this->assertSame(0.0, $lineas['TDD|BAN02']['diferencia_usd']);
+        $this->assertSame(0.0, $lineas['TDD|PUNTOS']['diferencia_usd']);
         $this->assertSame(22.5, $lineas['TRF|BINANCE']['diferencia_usd']);
         $this->assertSame('Faltan 5 en efectivo', $this->cierre->fresh()->observacion_tesoreria);
         $this->assertSame($tesoreria->id, $this->cierre->fresh()->conciliado_por);
@@ -144,8 +144,8 @@ class CuadreCajaTest extends TestCase
         $this->assertTrue($this->cierre->fresh()->pendiente());
 
         $this->actingAs($tesoreria)->post(route('cuadre_caja.conciliar', $this->cierre), [
-            'accion' => 'cerrar', 'montos' => ['02|' => '815', 'TDD|BAN02' => ''],
-            'lotes' => ['TDD|BAN02' => $this->lotesCompletos()],
+            'accion' => 'cerrar', 'montos' => ['02|' => '815', 'TDD|PUNTOS' => ''],
+            'lotes' => ['TDD|PUNTOS' => $this->lotesCompletos()],
             'motivo' => 'cuadrada', 'observacion' => 'Cuadró exacto',
         ])->assertSessionHasNoErrors();
 
@@ -190,7 +190,7 @@ class CuadreCajaTest extends TestCase
     {
         $this->actingAs($this->usuario('tesoreria'))
             ->post(route('cuadre_caja.conciliar', $this->cierre), [
-                'accion' => 'procesar', 'montos' => ['02|' => '815', 'TDD|BAN02' => ''], 'observacion' => 'Sin punto',
+                'accion' => 'procesar', 'montos' => ['02|' => '815', 'TDD|PUNTOS' => ''], 'observacion' => 'Sin punto',
             ]);
 
         $resumen = app(CuadreCajaService::class)->resumen($this->cierre->fresh()->load(['pagos', 'conteos']));
@@ -202,8 +202,8 @@ class CuadreCajaTest extends TestCase
     {
         $this->actingAs($this->usuario('tesoreria'))
             ->post(route('cuadre_caja.conciliar', $this->cierre), [
-                'accion' => 'procesar', 'montos' => ['02|' => '810', 'TDD|BAN02' => ''],
-                'lotes' => ['TDD|BAN02' => $this->lotesCompletos()], 'observacion' => 'Faltan 5',
+                'accion' => 'procesar', 'montos' => ['02|' => '810', 'TDD|PUNTOS' => ''],
+                'lotes' => ['TDD|PUNTOS' => $this->lotesCompletos()], 'observacion' => 'Faltan 5',
             ]);
 
         CuadreCajaPago::query()->where('cuadre_caja_id', $this->cierre->id)->delete();
@@ -257,13 +257,13 @@ class CuadreCajaTest extends TestCase
     {
         $tesoreria = $this->usuario('tesoreria');
         $this->actingAs($tesoreria)->post(route('cuadre_caja.conciliar', $this->cierre), [
-            'accion' => 'procesar', 'montos' => ['02|' => '815', 'TDD|BAN02' => '1'],
-            'lotes' => ['TDD|BAN02' => [['lote' => '101', 'monto' => '500000'], ['lote' => '102', 'monto' => '200000']]],
+            'accion' => 'procesar', 'montos' => ['02|' => '815', 'TDD|PUNTOS' => '1'],
+            'lotes' => ['TDD|PUNTOS' => [['lote' => '101', 'monto' => '500000'], ['lote' => '102', 'monto' => '200000']]],
             'observacion' => 'Falta un lote',
         ])->assertSessionHasNoErrors()->assertSessionHas('status');
 
         $resumen = app(CuadreCajaService::class)->resumen($this->cierre->fresh()->load(['pagos', 'conteos', 'lotes']));
-        $pos = collect($resumen['lineas'])->keyBy('clave')['TDD|BAN02'];
+        $pos = collect($resumen['lineas'])->keyBy('clave')['TDD|PUNTOS'];
         $this->assertSame(700000.0, (float) $pos['tesoreria']);
         $this->assertSame(['101', '102'], array_column($pos['lotes'], 'lote'));
 
@@ -284,7 +284,7 @@ class CuadreCajaTest extends TestCase
     {
         $tesoreria = $this->usuario('tesoreria');
         $procesar = fn (array $lotes) => $this->actingAs($tesoreria)->post(route('cuadre_caja.conciliar', $this->cierre), [
-            'accion' => 'procesar', 'montos' => ['02|' => '815'], 'lotes' => ['TDD|BAN02' => $lotes], 'observacion' => 'ok',
+            'accion' => 'procesar', 'montos' => ['02|' => '815'], 'lotes' => ['TDD|PUNTOS' => $lotes], 'observacion' => 'ok',
         ]);
 
         $procesar([['lote' => '101', 'monto' => '500000'], ['lote' => '102', 'monto' => '200000']]);
@@ -312,7 +312,7 @@ class CuadreCajaTest extends TestCase
 
         $this->actingAs($this->usuario('tesoreria'))->post(route('cuadre_caja.conciliar', $this->cierre), [
             'accion' => 'procesar', 'montos' => ['02|' => '815'],
-            'lotes' => ['TDD|BAN02' => [['lote' => '777', 'monto' => '731536.94']]], 'observacion' => 'ok',
+            'lotes' => ['TDD|PUNTOS' => [['lote' => '777', 'monto' => '731536.94']]], 'observacion' => 'ok',
         ])->assertSessionHasNoErrors();
 
         $this->assertSame(1, TesoreriaIngreso::query()->count());
@@ -324,7 +324,7 @@ class CuadreCajaTest extends TestCase
         $tesoreria = $this->usuario('tesoreria');
         $this->actingAs($tesoreria)->post(route('cuadre_caja.conciliar', $this->cierre), [
             'accion' => 'procesar', 'montos' => ['02|' => '815'],
-            'lotes' => ['TDD|BAN02' => [
+            'lotes' => ['TDD|PUNTOS' => [
                 ['banco' => 'BANESCO', 'lote' => '9', 'monto' => '500000'],
                 ['banco' => 'BNC', 'titular' => 'LNACEH', 'lote' => '9', 'monto' => '231536.94'],
             ]],
@@ -347,8 +347,37 @@ class CuadreCajaTest extends TestCase
         $this->actingAs($tesoreria)->post(route('cuadre_caja.reabrir', $this->cierre));
         $this->actingAs($tesoreria)->post(route('cuadre_caja.conciliar', $this->cierre), [
             'accion' => 'procesar', 'montos' => ['02|' => '815'],
-            'lotes' => ['TDD|BAN02' => [['banco' => 'BOGUS', 'lote' => '1', 'monto' => '5']]], 'observacion' => 'x',
+            'lotes' => ['TDD|PUNTOS' => [['banco' => 'BOGUS', 'lote' => '1', 'monto' => '5']]], 'observacion' => 'x',
         ])->assertSessionHas('error');
+    }
+
+    public function test_lo_contado_antes_punto_por_punto_se_junta_en_una_linea_y_al_reprocesar_no_se_duplica(): void
+    {
+        $tesoreria = $this->usuario('tesoreria');
+        foreach (['BAN02' => 500000, 'BNC02' => 231536.94] as $cuenta => $monto) {
+            \App\Models\CuadreCajaConteo::create(['cuadre_caja_id' => $this->cierre->id, 'codigo_metodo' => 'TDD', 'codigo_cuenta' => $cuenta,
+                'forma_pago' => 'TARJ. DÉBITO', 'cuenta' => config('cuadre_caja.formas_cuadre.DORAL')['TDD|'.$cuenta][1],
+                'en_dolares' => false, 'monto' => $monto, 'user_id' => $tesoreria->id]);
+        }
+        $ingreso = TesoreriaIngreso::create(['tipo' => 'punto_venta', 'banco' => 'BNC', 'titular' => 'DORAL', 'fecha' => '2026-10-30', 'monto' => 231536.94, 'lote_referencia' => '55']);
+        CuadreCajaLote::create(['cuadre_caja_id' => $this->cierre->id, 'codigo_metodo' => 'TDD', 'codigo_cuenta' => 'BNC02', 'banco' => 'BNC',
+            'titular' => 'DORAL', 'lote' => '55', 'monto' => 231536.94, 'tesoreria_ingreso_id' => $ingreso->id, 'user_id' => $tesoreria->id]);
+
+        $pos = collect(app(CuadreCajaService::class)->lineas($this->cierre->fresh()->load(['pagos', 'conteos', 'lotes'])))->keyBy('clave')['TDD|PUNTOS'];
+        $this->assertSame(731536.94, round((float) $pos['tesoreria'], 2));
+        $this->assertSame(['55'], array_column($pos['lotes'], 'lote'));
+
+        $this->actingAs($tesoreria)->post(route('cuadre_caja.conciliar', $this->cierre), [
+            'accion' => 'procesar', 'montos' => ['02|' => '815'],
+            'lotes' => ['TDD|PUNTOS' => [['banco' => 'BNC', 'titular' => 'DORAL', 'lote' => '55', 'monto' => '231536.94'], ['banco' => 'BANESCO', 'lote' => '9', 'monto' => '500000']]],
+            'observacion' => 'ok',
+        ])->assertSessionHasNoErrors()->assertSessionMissing('error');
+
+        $this->assertSame(['PUNTOS'], \App\Models\CuadreCajaConteo::query()->where('codigo_metodo', 'TDD')->pluck('codigo_cuenta')->all());
+        $this->assertSame(731536.94, (float) \App\Models\CuadreCajaConteo::query()->where('codigo_metodo', 'TDD')->value('monto'));
+        $this->assertSame(2, CuadreCajaLote::query()->count());
+        $this->assertSame(['PUNTOS'], CuadreCajaLote::query()->distinct()->pluck('codigo_cuenta')->all());
+        $this->assertSame(2, TesoreriaIngreso::query()->count());
     }
 
     public function test_un_lote_sin_numero_o_repetido_no_se_guarda(): void
@@ -359,7 +388,7 @@ class CuadreCajaTest extends TestCase
             [['lote' => '5', 'monto' => '10'], ['lote' => '5', 'monto' => '20']],
         ] as $lotes) {
             $this->actingAs($tesoreria)->post(route('cuadre_caja.conciliar', $this->cierre), [
-                'accion' => 'procesar', 'montos' => ['02|' => '815'], 'lotes' => ['TDD|BAN02' => $lotes], 'observacion' => 'ok',
+                'accion' => 'procesar', 'montos' => ['02|' => '815'], 'lotes' => ['TDD|PUNTOS' => $lotes], 'observacion' => 'ok',
             ])->assertSessionHas('error');
         }
 
@@ -392,11 +421,20 @@ class CuadreCajaTest extends TestCase
 
         $lineas = collect(app(CuadreCajaService::class)->lineas($this->cierre->load(['pagos', 'conteos', 'lotes'])))->keyBy('clave');
 
-        $this->assertSame(array_keys(config('cuadre_caja.formas_cuadre.DORAL')), $lineas->keys()->all());
+        // Los puntos de venta (Banesco, BNC, Inv. Doral…) van en una sola línea TARJ. DÉBITO.
+        $s = app(CuadreCajaService::class);
+        $sinPuntos = array_values(array_filter(array_keys(config('cuadre_caja.formas_cuadre.DORAL')), function ($clave) use ($s) {
+            [$forma, $cuenta, $usd] = config('cuadre_caja.formas_cuadre.DORAL')[$clave];
+
+            return $usd || ! $s->esPuntoDeVenta(explode('|', $clave)[0], $forma, $cuenta);
+        }));
+        $this->assertSame($sinPuntos, $lineas->keys()->reject(fn ($k) => $k === 'TDD|PUNTOS')->values()->all());
         $this->assertSame(815.0, $lineas['02|']['suite']);
         $this->assertSame(0.0, $lineas['TRF|BINANCE']['suite']);
-        $this->assertTrue($lineas['TDD|BNC02']['punto_venta']);
-        $this->assertTrue($lineas['TDD|4025']['punto_venta']);
+        $this->assertTrue($lineas['TDD|PUNTOS']['punto_venta']);
+        $this->assertSame('TARJ. DÉBITO', $lineas['TDD|PUNTOS']['forma_pago']);
+        $this->assertFalse($lineas->has('TDD|BNC02'));
+        $this->assertFalse($lineas->has('TDD|4025'));
         $this->assertFalse($lineas['TRFBS|4025']['punto_venta']);
         $this->assertSame(['NDC|', 'NDC1|', 'IGTF|'], $lineas->keys()->slice(-3)->values()->all());
         $this->assertSame('EFECTIVO DEVOLUCION', $lineas['NDC1|']['forma_pago']);

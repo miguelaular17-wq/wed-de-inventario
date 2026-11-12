@@ -330,9 +330,10 @@ class ConciliacionUsdController extends Controller
     {
         $data = $request->validate([
             'linea_id' => ['required', 'integer'],
-            'accion' => ['required', Rule::in(['vincular', 'vincular_pago', 'desvincular', 'comision', 'ignorar', 'restaurar'])],
+            'accion' => ['required', Rule::in(['vincular', 'vincular_pago', 'desvincular', 'comision', 'ignorar', 'restaurar', 'justificar'])],
             'flujo_caja_id' => ['nullable', 'required_if:accion,vincular', 'integer'],
             'pago_id' => ['nullable', 'required_if:accion,vincular_pago', 'integer'],
+            'nota' => ['nullable', 'required_if:accion,justificar', 'string', 'max:1000'],
         ]);
 
         match ($data['accion']) {
@@ -344,9 +345,11 @@ class ConciliacionUsdController extends Controller
             'comision' => $this->servicio->marcar((int) $data['linea_id'], 'comision'),
             'ignorar' => $this->servicio->marcar((int) $data['linea_id'], 'ignorado'),
             'restaurar' => $this->servicio->marcar((int) $data['linea_id'], 'pendiente'),
+            'justificar' => $this->servicio->justificar((int) $data['linea_id'], (string) $data['nota'], $request->user()?->id)
+                ?: throw \Illuminate\Validation\ValidationException::withMessages(['nota' => 'Ese movimiento ya no está pendiente.']),
         };
 
-        return back()->with('success', 'Listo.');
+        return back()->with('success', $data['accion'] === 'justificar' ? 'Movimiento justificado.' : 'Listo.');
     }
 
     /** @return array{0: string, 1: string, 2: string, 3: string} */

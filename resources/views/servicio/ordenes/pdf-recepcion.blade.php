@@ -62,7 +62,7 @@
     <div class="box">
         <strong>Equipo recibido</strong>
         <table class="grid" style="margin-top:4px;">
-            <tr><td class="label">Equipo</td><td>{{ $orden->equipoCelular?->etiqueta() ?: ($orden->equipo ?: '—') }}</td></tr>
+            <tr><td class="label">Equipo</td><td>{{ $orden->equipoCelular?->etiqueta() ?: ($orden->equipo ?: '—') }}@if($orden->esLote()) · Lote de {{ $orden->unidades() }} unidades @endif</td></tr>
             <tr><td class="label">IMEI / serial</td><td>{{ $orden->imei ?: '—' }} / {{ $orden->serial ?: '—' }}</td></tr>
             <tr><td class="label">Valor del dispositivo</td><td>{{ $orden->valor_dispositivo !== null ? '$'.number_format((float) $orden->valor_dispositivo, 2) : '—' }}</td></tr>
             @if($orden->atributo('descripcion_equipo'))

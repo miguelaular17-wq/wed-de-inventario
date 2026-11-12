@@ -148,6 +148,10 @@ class AuthController extends Controller
             return redirect()->intended(route('tesoreria.dashboard'));
         }
 
+        if ($user->isMayor()) {
+            return redirect()->intended(route('ventas_mayor.stock'));
+        }
+
         if ($user->isRrhh()) {
             return redirect()->intended(route('nomina.empleados.index'));
         }

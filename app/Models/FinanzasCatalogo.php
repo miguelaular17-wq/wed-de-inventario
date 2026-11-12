@@ -24,7 +24,11 @@ class FinanzasCatalogo extends Model
         'BANCA NACIONAL / TARJETAS MONEDA EXTRANJERA',
         'BANCA INTERNACIONAL / BILLETERAS',
         'TARJETAS INTERNACIONALES DE TERCEROS',
+        self::CATEGORIA_CRUCE,
     ];
+
+    /** Cuentas sin banco real: el dinero se cruza (entra y sale a la vez) y no pasa por la conciliación. */
+    public const CATEGORIA_CRUCE = 'CUENTAS DE CRUCE';
 
     /** Secciones de cuentas_bancarias que usan Disponibilidad (las dos nacionales) y el reporte consolidado. */
     public const SECCIONES_REPORTE = [

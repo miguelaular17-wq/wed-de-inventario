@@ -135,6 +135,9 @@
                             <dt>Equipo</dt>
                             <dd>
                                 {{ $orden->equipo ?: '—' }}
+                                @if($orden->esLote())
+                                    <strong style="color:#1d4ed8;">× {{ $orden->unidades() }} unidades</strong>
+                                @endif
                                 @if($orden->serial)
                                     <span class="muted">{{ $orden->serial }}</span>
                                 @endif

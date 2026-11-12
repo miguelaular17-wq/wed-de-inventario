@@ -93,10 +93,10 @@
                         <td style="white-space:nowrap;">{{ $orden->realizado_at?->format('d/m/Y H:i') ?: '—' }}</td>
                         <td>{{ $orden->sede }}</td>
                         <td>{{ $orden->etiquetaTipoGestion() }}</td>
-                        <td>{{ $orden->equipo ?: ($orden->equipoCelular?->etiqueta() ?? '—') }}</td>
+                        <td>{{ $orden->equipo ?: ($orden->equipoCelular?->etiqueta() ?? '—') }}@if($orden->esLote()) <strong>× {{ $orden->unidades() }}</strong>@endif</td>
                         <td>{{ $orden->cliente_nombre ?: '—' }}</td>
                         <td style="max-width:280px;">{{ \Illuminate\Support\Str::limit((string) ($orden->conformidad_trabajo ?: $orden->diagnostico), 120) ?: '—' }}</td>
-                        <td>{{ $orden->reparador?->name ?? '—' }}</td>
+                        <td>{{ $orden->nombreReparador() ?? '—' }}</td>
                         <td>
                             @if($orden->entregada())
                                 <span style="color:#15803d;font-weight:600;">Entregado</span>

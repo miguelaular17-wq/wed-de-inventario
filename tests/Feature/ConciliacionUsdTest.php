@@ -39,6 +39,7 @@ class ConciliacionUsdTest extends TestCase
         });
         (require database_path('migrations/2026_10_23_200000_create_conciliacion_divisas_tables.php'))->up();
         (require database_path('migrations/2026_10_24_130000_add_pagos_to_conciliacion_divisas.php'))->up();
+        (require database_path('migrations/2026_11_12_140000_add_justificacion_to_conciliacion_divisas_lineas.php'))->up();
         $this->user = User::create([
             'name' => 'Contabilidad', 'email' => 'contab-usd@test.local', 'password' => 'password123', 'role' => User::ROLE_CONTABILIDAD,
         ]);
@@ -77,6 +78,59 @@ class ConciliacionUsdTest extends TestCase
             'token' => $token, 'fila_cabecera' => 0, 'col_fecha' => 0, 'col_descripcion' => [1], 'col_referencia' => 3,
             'modo_monto' => 'una', 'col_monto' => 2, 'formato_fecha' => 'auto',
         ]);
+    }
+
+    public function test_retiro_con_fee_incluido_no_es_comision(): void
+    {
+        $servicio = app(\App\Services\Conciliacion\ConciliacionDivisasService::class);
+        $this->assertFalse($servicio->esComision('Spot · Withdraw · Withdraw fee is included'));
+        $this->assertTrue($servicio->esComision('Network Fee'));
+        $this->assertTrue($servicio->esComision('Monthly service fee'));
+
+        // Los que ya se apartaron como comisión vuelven a pendientes al conciliar y se cruzan con su egreso.
+        $egreso = $this->egreso(['fecha' => '2026-08-03', 'referencia' => null, 'monto_usd' => 11520, 'motivo' => 'Retiro a Go Global']);
+        $linea = ConciliacionDivisaLinea::query()->create([
+            'banco' => 'Binance', 'titular' => 'Grupo JENU', 'fecha' => '2026-08-03', 'descripcion' => 'Spot · Withdraw · Withdraw fee is included',
+            'monto' => -11520, 'tipo' => 'cargo', 'estado' => 'comision', 'huella' => 'fee-incluido-1',
+        ]);
+        $servicio->conciliar('Binance', 'Grupo JENU', '2026-08-01', '2026-08-31');
+        $linea->refresh();
+        $this->assertSame('conciliado', $linea->estado);
+        $this->assertSame($egreso, (int) $linea->flujo_caja_id);
+    }
+
+    public function test_justifica_un_ingreso_o_egreso_sin_pareja_con_su_nota(): void
+    {
+        $this->subirEImportar()->assertRedirect();
+        $deposito = ConciliacionDivisaLinea::query()->where('monto', 500)->firstOrFail();
+        $retiro = ConciliacionDivisaLinea::query()->where('monto', -294)->firstOrFail();
+        $accion = fn (array $datos) => $this->actingAs($this->user)->post(route('finanzas.conciliacion_usd.accion'), $datos);
+
+        $accion(['linea_id' => $deposito->id, 'accion' => 'justificar', 'nota' => ''])->assertSessionHasErrors('nota');
+        $this->assertSame('pendiente', $deposito->fresh()->estado);
+
+        $accion(['linea_id' => $deposito->id, 'accion' => 'justificar', 'nota' => 'Aporte del socio, sin cobro en caja'])->assertSessionHas('success');
+        $deposito->refresh();
+        $this->assertSame('justificado', $deposito->estado);
+        $this->assertSame('Aporte del socio, sin cobro en caja', $deposito->nota);
+        $this->assertSame($this->user->id, (int) $deposito->justificado_por);
+
+        // Un egreso también: ya no está pendiente ni se puede justificar dos veces.
+        $accion(['linea_id' => $retiro->id, 'accion' => 'desvincular']);
+        $accion(['linea_id' => $retiro->id, 'accion' => 'justificar', 'nota' => 'Pago a proveedor en efectivo'])->assertSessionHas('success');
+        $this->assertSame('justificado', $retiro->fresh()->estado);
+        $accion(['linea_id' => $retiro->id, 'accion' => 'justificar', 'nota' => 'Otra vez la misma'])->assertSessionHasErrors('nota');
+
+        $this->actingAs($this->user)
+            ->get(route('finanzas.conciliacion_usd.index', ['cuenta' => 'Binance|Grupo JENU', 'fecha_desde' => '2026-10-01', 'fecha_hasta' => '2026-10-31']))
+            ->assertOk()
+            ->assertSee('Justificados (2)')
+            ->assertSee('Aporte del socio, sin cobro en caja');
+
+        $accion(['linea_id' => $deposito->id, 'accion' => 'restaurar']);
+        $deposito->refresh();
+        $this->assertSame('pendiente', $deposito->estado);
+        $this->assertNull($deposito->nota);
     }
 
     public function test_importa_extracto_generico_y_concilia_en_usd(): void

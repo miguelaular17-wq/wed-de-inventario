@@ -73,7 +73,7 @@ class ReportesSuiteService
                 ->pluck('d.motivo_descuento', 'd.motivo_descuento')->all();
         }
         if ($reporte === 'cuadre' && Schema::hasTable('cuadres_caja')) {
-            $opciones['usuario'] = $this->cuadresBase($f)
+            $opciones['usuario'] = $this->cuadresBase($f)->whereNotNull('conciliado_at')
                 ->selectRaw('usuario, MAX(usuario_nombre) as nombre')->groupBy('usuario')->orderBy('nombre')
                 ->pluck('nombre', 'usuario')->map(fn ($n, $u) => $n ?: $u)->all();
         }
@@ -218,16 +218,17 @@ class ReportesSuiteService
     }
 
     /**
-     * Consolidado de cuadres como se cuadró cada caja en la web: el cuadre es lo que contó Tesorería menos lo
-     * declarado en Suite (solo cuando ya se procesó o cerró). Facturas y venta salen del cierre de Suite y, si
-     * todavía no llegaron, de los cobros de la caja.
+     * Consolidado de cuadres como se cuadró cada caja en la web: solo los cierres que Tesorería ya procesó
+     * (o cerró); el cuadre es lo que contó menos lo declarado en Suite. Facturas y venta salen del cierre de
+     * Suite y, si todavía no llegaron, de los cobros de la caja.
      */
     private function cuadre(array $f): array
     {
         $q = \App\Models\CuadreCaja::query()
             ->with(['pagos', 'conteos', 'lotes.ingreso'])
             ->when(! empty($f['sede']), fn ($q) => $q->where('sede', $f['sede']))
-            ->whereBetween('fecha_cierre', [$f['desde'], $f['hasta']]);
+            ->whereBetween('fecha_cierre', [$f['desde'], $f['hasta']])
+            ->whereNotNull('conciliado_at');
         if (! empty($f['usuario'])) {
             $q->where('usuario', $f['usuario']);
         }

@@ -56,6 +56,9 @@
 
     <div class="kpis">
         <div class="kpi"><span>Total órdenes</span><strong>{{ $totales['total'] }}</strong></div>
+        @if($totales['unidades'] !== $totales['total'])
+            <div class="kpi"><span>Unidades (con lotes)</span><strong>{{ $totales['unidades'] }}</strong></div>
+        @endif
         <div class="kpi"><span>Servicio técnico</span><strong>{{ $totales['st'] }}</strong></div>
         <div class="kpi"><span>Garantías</span><strong>{{ $totales['garantia'] }}</strong></div>
         <div class="kpi"><span>Reparaciones internas</span><strong>{{ $totales['interna'] }}</strong></div>
@@ -106,6 +109,7 @@
             <div class="marca-title">{{ $bloque['marca'] }}</div>
             <div class="marca-summary">
                 {{ $bloque['total'] }} órdenes
+                @if($bloque['unidades'] !== $bloque['total']) ({{ $bloque['unidades'] }} unidades) @endif
                 · ST {{ $bloque['st'] }}
                 · Garantía {{ $bloque['garantia'] }}
                 · Interna {{ $bloque['interna'] }}
@@ -134,7 +138,7 @@
                             <td>{{ optional($orden->fecha_ingreso)->format('d/m/Y') ?: '—' }}</td>
                             <td>{{ $orden->etiquetaTipoGestion() }}</td>
                             <td>
-                                {{ $orden->equipo ?: '—' }}
+                                {{ $orden->equipo ?: '—' }}@if($orden->esLote()) <strong>× {{ $orden->unidades() }}</strong>@endif
                                 @if($orden->serial || $orden->imei)
                                     <div class="muted">{{ $orden->serial ?: $orden->imei }}</div>
                                 @endif

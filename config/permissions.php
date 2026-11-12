@@ -58,6 +58,7 @@ return [
         'servicio.transferir' => 'Transferir celulares / órdenes entre sedes',
         'nfc' => 'Tarjetas NFC (asignar y fichas de cliente)',
         'sincronizadores' => 'Control de sincronizadores (ver estado y enviar sincronizaciones)',
+        'ventas_mayor' => 'Ventas al mayor (stock de todas las sedes, facturar del stock de JRZ)',
     ],
 
     /*
@@ -65,7 +66,7 @@ return [
      * Las claves deben existir en "assignable".
      */
     'groups' => [
-        'Operaciones' => ['operacion', 'catalogo.existencias', 'catalogo.precios', 'catalogo.exportar_precios', 'vendedor.jrz', 'sede.cambiar'],
+        'Operaciones' => ['operacion', 'catalogo.existencias', 'catalogo.precios', 'catalogo.exportar_precios', 'vendedor.jrz', 'sede.cambiar', 'ventas_mayor'],
         'Compras y Marketing' => [
             'compras',
             'compras.distribucion',
@@ -110,5 +111,6 @@ return [
         'rrhh' => ['nomina'],
         'tecnico' => ['servicio'],
         'vendedor' => [],
+        'mayor' => ['ventas_mayor'],
     ],
 ];

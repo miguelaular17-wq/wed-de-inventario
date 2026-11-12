@@ -79,6 +79,17 @@ class IncentivoEvaluacionService
             }
         }
         $productosMeta = $this->productosMetaPorEmpleado($filtroMeta, $clave === 'arreglos');
+        if ($clave === 'call_center') {
+            // En call center el producto meta cuenta por lo que se lleva vendido, no solo los completos.
+            foreach ($productosMeta as $id => $dato) {
+                $productosMeta[$id]['proporcional'] = true;
+                $productosMeta[$id]['estado'] = match (true) {
+                    $dato['total'] > 0 && $dato['cumplidas'] === $dato['total'] => 'Cumplida',
+                    ($dato['avance_pct'] ?? 0) > 0 => 'Parcial',
+                    default => 'No cumplió',
+                };
+            }
+        }
 
         $filas = [];
         foreach ($personas as $persona) {
@@ -1047,9 +1058,11 @@ class IncentivoEvaluacionService
             }
             $pisoPct = round((($pctVenta ?? 0) + ($pctProductos ?? 0) + ($pctClientes ?? 0)) / 3, 1);
             $totalMeta = (int) ($productosMeta['total'] ?? 0);
-            $metaProdPct = $totalMeta > 0
-                ? round(((int) $productosMeta['cumplidas'] / $totalMeta) * 100, 1)
-                : 0.0;
+            $metaProdPct = match (true) {
+                $totalMeta <= 0 => 0.0,
+                ! empty($productosMeta['proporcional']) => (float) ($productosMeta['avance_pct'] ?? 0),
+                default => round(((int) $productosMeta['cumplidas'] / $totalMeta) * 100, 1),
+            };
             if ($formula === 'piso') {
                 $puntuacion = round(
                     $this->acotarCien($pisoPct) * 0.70
@@ -1104,6 +1117,9 @@ class IncentivoEvaluacionService
             'meta_prod_cumplidas' => $productosMeta['cumplidas'],
             'meta_prod_total' => $productosMeta['total'],
             'meta_prod_estado' => $productosMeta['estado'],
+            'meta_prod_proporcional' => ! empty($productosMeta['proporcional']),
+            'meta_prod_vendidas' => $productosMeta['vendidas'] ?? null,
+            'meta_prod_unidades' => $productosMeta['unidades_meta'] ?? null,
         ];
     }
 
@@ -1181,14 +1197,21 @@ class IncentivoEvaluacionService
                 ? $this->metasQuincena->unidadesVendidas((int) $meta->producto_id, $sede, $inicio, $fin)
                 : ($vendido[(int) $meta->producto_id.'|'.$sede] ?? 0.0);
             $cumplida = $inicial > 0 ? $unidades >= $inicial : $unidades > 0;
+            $avance = $inicial > 0 ? min(1.0, max(0.0, $unidades) / $inicial) : ($unidades > 0 ? 1.0 : 0.0);
             $porEmpleado[$empleadoId]['cumplidas'] = ($porEmpleado[$empleadoId]['cumplidas'] ?? 0) + ($cumplida ? 1 : 0);
             $porEmpleado[$empleadoId]['total'] = ($porEmpleado[$empleadoId]['total'] ?? 0) + 1;
+            $porEmpleado[$empleadoId]['suma_avance'] = ($porEmpleado[$empleadoId]['suma_avance'] ?? 0.0) + $avance;
+            $porEmpleado[$empleadoId]['vendidas'] = ($porEmpleado[$empleadoId]['vendidas'] ?? 0.0) + max(0.0, min($unidades, $inicial > 0 ? $inicial : $unidades));
+            $porEmpleado[$empleadoId]['unidades_meta'] = ($porEmpleado[$empleadoId]['unidades_meta'] ?? 0.0) + $inicial;
         }
 
         foreach ($porEmpleado as $empleadoId => $dato) {
             $porEmpleado[$empleadoId]['estado'] = $dato['total'] > 0 && $dato['cumplidas'] === $dato['total']
                 ? 'Cumplida'
                 : 'No cumplió';
+            // Promedio del avance de cada producto (3 de 6 vendidos = 50%), tope 100% por producto.
+            $porEmpleado[$empleadoId]['avance_pct'] = $dato['total'] > 0 ? round($dato['suma_avance'] / $dato['total'] * 100, 1) : 0.0;
+            unset($porEmpleado[$empleadoId]['suma_avance']);
         }
 
         return $porEmpleado;

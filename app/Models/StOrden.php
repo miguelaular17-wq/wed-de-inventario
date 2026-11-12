@@ -129,6 +129,7 @@ class StOrden extends Model
         'garantia_recibido_at',
         'garantia_recibido_por',
         'valor_dispositivo',
+        'cantidad',
         'equipo_id',
         'cliente_nombre',
         'cliente_telefono',
@@ -174,6 +175,7 @@ class StOrden extends Model
             'garantia_enviado_at' => 'datetime',
             'garantia_recibido_at' => 'datetime',
             'valor_dispositivo' => 'decimal:2',
+            'cantidad' => 'integer',
             'presupuesto' => 'decimal:2',
             'costo_mano_obra' => 'decimal:2',
             'costo_refacciones' => 'decimal:2',
@@ -350,6 +352,16 @@ class StOrden extends Model
         ], true);
     }
 
+    public function unidades(): int
+    {
+        return max(1, (int) ($this->cantidad ?? 1));
+    }
+
+    public function esLote(): bool
+    {
+        return $this->unidades() > 1;
+    }
+
     public function esReparacionInterna(): bool
     {
         return ($this->tipo_gestion ?? self::TIPO_ST) === self::TIPO_REPARACION_INTERNA;
@@ -503,6 +515,14 @@ class StOrden extends Model
         return $this->belongsTo(User::class, 'reparado_por');
     }
 
+    /** Quién reparó: su usuario o, si ya se borró, el nombre que quedó guardado en la orden. */
+    public function nombreReparador(): ?string
+    {
+        $atributos = is_array($this->atributos) ? $this->atributos : [];
+
+        return $this->reparador?->name ?? (($atributos['reparado_por_nombre'] ?? null) ?: null);
+    }
+
     /** «Reparado · Jorge Díaz», «Para repuesto»… o null si la reparación interna no tiene resultado. */
     public function etiquetaResultadoInterna(): ?string
     {
@@ -511,8 +531,8 @@ class StOrden extends Model
             return null;
         }
         $etiqueta = self::RESULTADOS_INTERNA[$resultado];
-        if ($resultado === self::RESULTADO_REPARADO && $this->reparador) {
-            $etiqueta .= ' · '.$this->reparador->name;
+        if ($resultado === self::RESULTADO_REPARADO && $this->nombreReparador()) {
+            $etiqueta .= ' · '.$this->nombreReparador();
         }
 
         return $etiqueta;

@@ -183,9 +183,29 @@ class AlquilerController extends Controller
             }
             PatTransaccion::create($ingreso);
             $this->comisionSync->syncPago($alquiler, $pago->fresh(), $data['fecha_pago'], 0);
+            $this->alFlujoDeCobranza($pago->fresh(), (float) $data['monto'], $data['fecha_pago'], []);
         }
 
         return back()->with('status', '✅ Pago registrado y actualizado en el balance.');
+    }
+
+    /** El pago de alquiler entra al flujo de caja de Cobranza (y a la conciliación si llegó a un banco). */
+    private function alFlujoDeCobranza(AlquilerPago $pago, float $monto, string $fecha, array $data): void
+    {
+        $alquiler = $pago->alquiler;
+        app(\App\Services\Cobranza\CobranzaFlujoService::class)->registrarDesdeModulo([
+            'ambito' => 'patrimonial',
+            'fecha' => $fecha,
+            'monto_usd' => $monto,
+            'tasa_cambio' => $data['tasa_cambio'] ?? null,
+            'forma_pago' => $data['forma_pago'] ?? null,
+            'banco_destino' => $data['banco_destino'] ?? null,
+            'referencia' => $data['referencia'] ?? null,
+            'concepto' => 'Alquiler '.$pago->periodo.' · '.($alquiler?->propiedad?->nombre ?? ''),
+            'contraparte' => $alquiler?->inquilino_nombre,
+            'vinculo_tipo' => \App\Models\CobranzaMovimiento::VINCULO_ALQUILER,
+            'vinculo_id' => $pago->id,
+        ], auth()->user());
     }
 
     public function actualizarPago(Request $request, AlquilerPago $pago)
@@ -209,47 +229,15 @@ class AlquilerController extends Controller
             ? min($restanteComision, round((float) $request->input('comision_abono', 0), 2))
             : 0;
         
-        $montoAbonado = $data['monto'] ?? 0;
+        $montoAbonado = (float) ($data['monto'] ?? 0);
         unset($data['monto'], $data['pago_parte_comision'], $data['comision_abono']);
-        
-        if ($montoAbonado > 0) {
-            $pago->monto_pagado += $montoAbonado;
-        }
-        
-        if ($pago->monto_pagado >= $pago->monto) {
-            $data['estado'] = 'pagado';
-        } elseif ($pago->fecha_vencimiento < now()->startOfDay()) {
-            $data['estado'] = 'vencido';
-        } else {
-            $data['estado'] = 'pendiente';
-        }
 
-        $data['user_id'] = auth()->id();
-        $pago->update($data);
-
-        if ($montoAbonado > 0 && !empty($data['fecha_pago'])) {
-            $alquiler = $pago->alquiler;
-            $ingreso = [
-                'propiedad_id'  => $alquiler->propiedad_id,
-                'tipo'          => 'ingreso',
-                'categoria'     => 'Alquiler',
-                'descripcion'   => "Pago de alquiler {$pago->periodo} - {$alquiler->inquilino_nombre}",
-                'monto'         => $montoAbonado,
-                'moneda'        => 'usd',
-                'fecha'         => $data['fecha_pago'],
-                'mes'           => Carbon::parse($data['fecha_pago'])->month,
-                'anio'          => Carbon::parse($data['fecha_pago'])->year,
-                'observaciones' => $data['comentario'] ?? null,
-            ];
-            if (Schema::hasColumn('pat_transacciones', 'alquiler_id')) {
-                $ingreso['alquiler_id'] = $alquiler->id;
+        \Illuminate\Support\Facades\DB::transaction(function () use ($pago, $montoAbonado, $data, $comisionAbono) {
+            app(\App\Services\Cobranza\PagosModulosService::class)->abonarAlquiler($pago, $montoAbonado, $data, $comisionAbono, auth()->id());
+            if ($montoAbonado > 0 && ! empty($data['fecha_pago'])) {
+                $this->alFlujoDeCobranza($pago->fresh(), $montoAbonado, $data['fecha_pago'], $data);
             }
-            if (Schema::hasColumn('pat_transacciones', 'alquiler_pago_id')) {
-                $ingreso['alquiler_pago_id'] = $pago->id;
-            }
-            PatTransaccion::create($ingreso);
-            $this->comisionSync->syncPago($alquiler, $pago->fresh(), $data['fecha_pago'], $comisionAbono);
-        }
+        });
 
         return back()->with('status', '✅ Pago registrado y actualizado en el balance.');
     }

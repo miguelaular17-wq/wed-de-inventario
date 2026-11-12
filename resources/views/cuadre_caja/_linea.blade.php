@@ -26,7 +26,11 @@
             <span class="cc-moneda {{ $usd ? 'is-usd' : 'is-bs' }}">{{ $usd ? 'USD' : 'Bs' }}</span>
             @if($extra)<span class="cc-moneda is-extra">No declarada</span>@endif
         </div>
-        @if($l['cuenta'])<div class="cc-cuenta">{{ $l['cuenta'] }}</div>@endif
+        @if($l['agrupada'] ?? false)
+            <div class="cc-cuenta">Todos los puntos de venta</div>
+        @elseif($l['cuenta'])
+            <div class="cc-cuenta">{{ $l['cuenta'] }}</div>
+        @endif
     </td>
     <td class="cc-num cc-suite">{{ $extra ? '—' : ($monto($l['suite'], $usd) ?: '—') }}</td>
     <td class="cc-num cc-suite-usd">{{ $dinero($l['suite_usd']) }}</td>

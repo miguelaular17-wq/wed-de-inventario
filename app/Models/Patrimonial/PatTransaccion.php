@@ -10,7 +10,7 @@ class PatTransaccion extends Model
     protected $fillable = [
         'propiedad_id', 'reserva_id', 'alquiler_id', 'alquiler_pago_id',
         'tipo', 'categoria', 'descripcion',
-        'monto', 'moneda', 'mes', 'anio', 'fecha', 'observaciones',
+        'monto', 'moneda', 'mes', 'anio', 'fecha', 'observaciones', 'cobranza_movimiento_id',
     ];
 
     protected $casts = [

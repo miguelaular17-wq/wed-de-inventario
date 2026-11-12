@@ -117,6 +117,45 @@ class CuentaPorPagarEgresoTest extends TestCase
         $this->assertEquals(10, (float) GastoFijoPago::query()->where('gasto_fijo_id', $balcones->id)->value('monto'));
     }
 
+    public function test_egreso_con_asiento_contable_un_debe_y_varios_haber(): void
+    {
+        $user = $this->finanzasUser();
+        // El debe sale del egreso (Banesco · Grupo JRZ, el motivo y los $100); el haber es detalle y monto.
+        $asiento = [
+            'asiento_activo' => 1,
+            'motivo' => 'Mantenimiento aire',
+            'asiento_haber' => [
+                ['detalle' => 'Repuestos', 'monto' => 60],
+                ['detalle' => 'Mano de obra', 'monto' => 40],
+            ],
+        ];
+
+        // No cuadra: no se guarda.
+        $this->actingAs($user)->post(route('finanzas.store_egreso'), $this->egresoPayload(array_replace_recursive($asiento, [
+            'asiento_haber' => [1 => ['monto' => 30]],
+        ])))->assertSessionHas('error');
+        $this->assertDatabaseCount('flujo_cajas', 0);
+
+        $this->actingAs($user)->post(route('finanzas.store_egreso'), $this->egresoPayload($asiento))->assertSessionMissing('error');
+
+        $mov = FlujoCaja::query()->firstOrFail();
+        $this->assertSame(['cuenta' => 'BANESCO · GRUPO JRZ', 'detalle' => 'Mantenimiento aire', 'monto' => 100], $mov->asiento['debe']);
+        $this->assertSame([['detalle' => 'Repuestos', 'monto' => 60], ['detalle' => 'Mano de obra', 'monto' => 40]], $mov->asiento['haber']);
+
+        // Un haber sin detalle no se guarda.
+        $this->actingAs($user)->post(route('finanzas.store_egreso'), $this->egresoPayload(array_replace_recursive($asiento, [
+            'asiento_haber' => [1 => ['detalle' => '']],
+        ])))->assertSessionHas('error');
+        $this->assertDatabaseCount('flujo_cajas', 1);
+
+        // Al editar sin asiento se quita; el desglose viejo se conserva.
+        $mov->forceFill(['desglose' => [['cedula' => 'V-1', 'monto' => 10, 'monto_usd' => 1]]])->save();
+        $this->actingAs($user)->post(route('finanzas.update_egreso', $mov->id), $this->egresoPayload())->assertSessionMissing('error');
+        $mov->refresh();
+        $this->assertNull($mov->asiento);
+        $this->assertSame('V-1', $mov->desglose[0]['cedula']);
+    }
+
     public function test_desactivar_gasto_fijo_lo_saca_de_la_lista_para_vincular(): void
     {
         $this->ensureGastosFijosTables();
@@ -213,6 +252,7 @@ class CuentaPorPagarEgresoTest extends TestCase
             'comprobante_url' => fn (Blueprint $table) => $table->string('comprobante_url')->nullable(),
             'comprobantes' => fn (Blueprint $table) => $table->text('comprobantes')->nullable(),
             'desglose' => fn (Blueprint $table) => $table->text('desglose')->nullable(),
+            'asiento' => fn (Blueprint $table) => $table->text('asiento')->nullable(),
             'es_todoticket' => fn (Blueprint $table) => $table->boolean('es_todoticket')->default(false),
             'detalle_todoticket' => fn (Blueprint $table) => $table->text('detalle_todoticket')->nullable(),
             'cuenta_por_pagar_id' => fn (Blueprint $table) => $table->unsignedBigInteger('cuenta_por_pagar_id')->nullable(),

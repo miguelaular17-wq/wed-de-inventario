@@ -155,7 +155,8 @@
     $reportesSuiteLink = fn () => $link('Reportes de Suite', route('reportes_suite', 'facturas'), request()->routeIs('reportes_suite*'));
     $tesoreriaItems = [...$conciliacionItems(), $tesoreriaLink(), $ventasDiariasLink(), $cuadreCajaLink(), $reportesSuiteLink()];
     $cobranzaItems = [
-        $link('Cobranza', route('cobranza.index'), request()->routeIs('cobranza.*')),
+        $link('Cobranza', route('cobranza.index'), request()->routeIs('cobranza.*') && ! request()->routeIs('cobranza.flujo.*')),
+        $link('Flujo de caja', route('cobranza.flujo.index'), request()->routeIs('cobranza.flujo.*')),
         $link('Contratos', route('contratos.index'), request()->routeIs('contratos.*')),
         $link('Patrimonial', route('patrimonial.dashboard'), request()->routeIs('patrimonial.*')),
     ];
@@ -319,8 +320,9 @@
         }
         $cobranzaUsuario = array_values(array_filter([
             $u->canAccess('cobranza') ? $cobranzaItems[0] : null,
-            $u->canAccess('contratos') ? $cobranzaItems[1] : null,
-            $u->canAccess('patrimonial') ? $cobranzaItems[2] : null,
+            $u->canAccess('cobranza') ? $cobranzaItems[1] : null,
+            $u->canAccess('contratos') ? $cobranzaItems[2] : null,
+            $u->canAccess('patrimonial') ? $cobranzaItems[3] : null,
         ]));
         if ($cobranzaUsuario) {
             $nav[] = $agrupar('Cobranza', $cobranzaUsuario);
@@ -406,6 +408,15 @@
         }
     }
 
+    if ($u->canAccess('ventas_mayor')) {
+        $nav[] = $drop('Ventas al mayor', [
+            $link('Stock (JRZ y sedes)', route('ventas_mayor.stock'), request()->routeIs('ventas_mayor.stock')),
+            $link('Nueva factura', route('ventas_mayor.create'), request()->routeIs('ventas_mayor.create')),
+            $link('Facturas', route('ventas_mayor.facturas'), request()->routeIs('ventas_mayor.facturas', 'ventas_mayor.show')),
+            $link('Hoja de ruta', route('ventas_mayor.visitas.index'), request()->routeIs('ventas_mayor.visitas.*')),
+        ]);
+    }
+
     if ($u->role !== 'admin' && $u->canAccess('sincronizadores')) {
         $nav[] = $link('Sincronizadores', route('admin.sync.index'), request()->routeIs('admin.sync.*'));
     }
@@ -429,6 +440,7 @@
         'rrhh' => 'RRHH',
         'tecnico' => 'Técnico',
         'avances' => 'Avances',
+        'mayor' => 'Ventas al mayor',
     ];
     $roleLabel = $roleLabels[$u->role] ?? ucfirst($u->role);
     $nameParts = preg_split('/\s+/', trim($u->name)) ?: [];

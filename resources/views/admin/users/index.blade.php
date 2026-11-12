@@ -104,6 +104,7 @@
                                         <option value="gerente" @selected($user->role === 'gerente')>Gerente</option>
                                         <option value="rrhh" @selected($user->role === 'rrhh')>RRHH</option>
                                         <option value="avances" @selected($user->role === 'avances')>Avances</option>
+                                        <option value="mayor" @selected($user->role === 'mayor')>Ventas al mayor</option>
                                     </select>
                                 </div>
                                 <div class="field" style="margin:0;">

@@ -26,6 +26,9 @@
             @if($conEstadoEmpresa)
                 <a class="btn secondary" href="{{ route('servicio.ordenes.garantias_reconocidas') }}">Garantías reconocidas</a>
             @endif
+            @if($conResultadoInterna)
+                <a class="btn secondary" href="{{ route('servicio.ordenes.internas_resueltas') }}">Reparaciones internas resueltas</a>
+            @endif
             <a class="btn primary" href="{{ route('servicio.ordenes.reporte_marca', $queryPdf) }}">Descargar PDF</a>
         </div>
     </div>
@@ -76,6 +79,9 @@
 
     <div class="nomina-kpis" style="margin-top:16px;">
         <div class="nomina-kpi"><span>Total órdenes</span><strong>{{ $totales['total'] }}</strong></div>
+        @if($totales['unidades'] !== $totales['total'])
+            <div class="nomina-kpi"><span>Unidades (con lotes)</span><strong>{{ $totales['unidades'] }}</strong></div>
+        @endif
         <div class="nomina-kpi"><span>Servicio técnico</span><strong>{{ $totales['st'] }}</strong></div>
         <div class="nomina-kpi"><span>Garantías</span><strong>{{ $totales['garantia'] }}</strong></div>
         <div class="nomina-kpi"><span>Reparaciones internas</span><strong>{{ $totales['interna'] }}</strong></div>
@@ -120,6 +126,7 @@
             <h3 style="margin:0 0 8px;">{{ $bloque['marca'] }}
                 <span class="muted" style="font-size:.85rem;font-weight:500;">
                     · {{ $bloque['total'] }} órdenes
+                    @if($bloque['unidades'] !== $bloque['total']) ({{ $bloque['unidades'] }} unidades) @endif
                     · ST {{ $bloque['st'] }}
                     · Garantía {{ $bloque['garantia'] }}
                     · Interna {{ $bloque['interna'] }}
@@ -155,6 +162,9 @@
                                 <td>{{ $orden->etiquetaTipoGestion() }}</td>
                                 <td>
                                     <strong>{{ $orden->equipo ?: '—' }}</strong>
+                                    @if($orden->esLote())
+                                        <strong style="color:#1d4ed8;">× {{ $orden->unidades() }}</strong>
+                                    @endif
                                     @if($orden->serial || $orden->imei)
                                         <div class="muted" style="font-size:.75rem;">{{ $orden->serial ?: $orden->imei }}</div>
                                     @endif

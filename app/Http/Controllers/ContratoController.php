@@ -517,110 +517,27 @@ class ContratoController extends Controller
         if ($montoPagado <= 0 && $abonoCapital <= 0) {
             return redirect()->back()->withErrors(['monto_pagado' => 'Debe ingresar un monto o un abono a capital mayor a 0.']);
         }
-        
-        // Si el interés es 0, todo lo ingresado en monto_pagado se suma directamente al abono a capital
-        if ((float) $cuota->contrato->interes_porcentaje == 0) {
-            $abonoCapital += $montoPagado;
-        }
 
-        $montoTotal  = (float) $cuota->monto;
-        $saldoPrevio = (float) $cuota->saldo > 0 ? (float) $cuota->saldo : $montoTotal;
-        $nuevoSaldo  = max(0, $saldoPrevio - $montoPagado);
+        DB::transaction(function () use ($cuota, $data, $montoPagado, $abonoCapital) {
+            app(\App\Services\Cobranza\PagosModulosService::class)->pagarCuota($cuota, $data, Auth::id());
 
-        $montoPagadoAcumulado = $cuota->monto_pagado + $montoPagado;
-        $saldoRealCuota = max(0, $montoTotal - $montoPagadoAcumulado);
-
-        if ($saldoRealCuota <= 0) {
-            $estatus = 'pagado';
-            $nuevoSaldo = 0;
-        } elseif ($montoPagadoAcumulado > 0) {
-            $estatus = 'parcial';
-        } else {
-            $estatus = $cuota->estatus;
-        }
-
-        $estadoAnterior = $cuota->estatus;
-
-        $cuota->update([
-            'monto_pagado'  => $cuota->monto_pagado + $montoPagado,
-            'abono_capital' => $cuota->abono_capital + $abonoCapital,
-            'saldo'         => $nuevoSaldo,
-            'estatus'       => $estatus,
-            'fecha_pago'    => $data['fecha_pago'],
-            'forma_pago'    => $data['forma_pago'],
-            'tasa_cambio'   => $data['tasa_cambio'] ?? null,
-            'banco_destino' => $data['banco_destino'] ?? null,
-            'banco_origen'  => $data['banco_origen'] ?? null,
-            'referencia'    => $data['referencia'] ?? null,
-        ]);
-
-        $contrato = $cuota->contrato;
-
-        // total_a_pagar representa SOLO el capital restante del contrato.
-        // El pago de interés de una cuota (monto_pagado) NO debe reducir el capital.
-        // SOLO el abono_capital debe reducir total_a_pagar.
-        $totalRaw = (float) $contrato->getRawOriginal('total_a_pagar');
-
-        if ($abonoCapital > 0) {
-            $totalRaw = max(0, $totalRaw - $abonoCapital);
-        }
-
-        // Persistir y recalcular cuota fija solo si hubo abono a capital
-        if ($abonoCapital > 0) {
-            $nuevaCuotaFija = (float) $contrato->getRawOriginal('interes_porcentaje') > 0
-                ? round($totalRaw * (float) $contrato->getRawOriginal('interes_porcentaje'), 2)
-                : (float) $contrato->getRawOriginal('cuota_fija');
-
-            $contrato->update([
-                'total_a_pagar' => $totalRaw,
-                'cuota_fija'    => $nuevaCuotaFija,
-            ]);
-
-            // Recalcular monto/saldo de cuotas pendientes, parciales y vencidas.
-            // IMPORTANTE: incluir 'vencido' porque si el pago llega con meses de retraso,
-            // las cuotas futuras ya están vencidas y quedarían sin recalcular.
-            if ($nuevaCuotaFija > 0) {
-                $contrato->cuotas()
-                    ->whereIn('estatus', ['pendiente', 'parcial', 'vencido'])
-                    ->where('id', '!=', $cuota->id)
-                    ->update(['monto' => $nuevaCuotaFija, 'saldo' => $nuevaCuotaFija]);
-            }
-        }
-
-        $formaPagoStr = str_replace('_', ' ', $data['forma_pago']);
-        $detallePago = "Pago registrado: \${$montoPagado} via {$formaPagoStr}.";
-        
-        if (in_array($data['forma_pago'], ['TRANSFERENCIA_BCV', 'PAGO_MOVIL', 'DEPOSITO'])) {
-            $tasa = $data['tasa_cambio'] ?? '';
-            $bancoDest = $data['banco_destino'] ?? '';
-            $bancoOrig = $data['banco_origen'] ?? '';
-            $ref = $data['referencia'] ?? '';
-            $detallePago .= " Tasa: {$tasa} | De: {$bancoOrig} | Para: {$bancoDest} | Ref: {$ref}";
-        } elseif (in_array($data['forma_pago'], ['ZELLE', 'BINANCE', 'TRANSFERENCIA_DIVISAS'])) {
-            $ref = $data['referencia'] ?? '';
-            $detallePago .= " Ref: {$ref}";
-        }
-
-        if (!empty($data['comentario'])) {
-            $detallePago .= " | Nota: " . $data['comentario'];
-        }
-
-        // Registrar seguimiento automático
-        ContratoSeguimiento::create([
-            'contrato_id' => $cuota->contrato_id,
-            'cuota_id'    => $cuota->id,
-            'usuario_id'  => Auth::id(),
-            'fecha_hora'  => now(),
-            'resultado'   => $estatus === 'pagado' ? 'PAGO_COMPLETO' : 'PAGO_PARCIAL',
-            'comentarios' => $detallePago,
-            'contactado'  => true,
-            'detalles_pago' => [
-                'tasa_cambio'   => $data['tasa_cambio'] ?? null,
+            // Entra al flujo de caja de Cobranza (y a la conciliación si llegó a un banco).
+            $contrato = $cuota->contrato;
+            app(\App\Services\Cobranza\CobranzaFlujoService::class)->registrarDesdeModulo([
+                'ambito' => 'contratos',
+                'fecha' => $data['fecha_pago'],
+                'monto_usd' => $montoPagado + $abonoCapital,
+                'tasa_cambio' => $data['tasa_cambio'] ?? null,
+                'forma_pago' => $data['forma_pago'],
                 'banco_destino' => $data['banco_destino'] ?? null,
-                'banco_origen'  => $data['banco_origen'] ?? null,
-                'referencia'    => $data['referencia'] ?? null,
-            ],
-        ]);
+                'referencia' => $data['referencia'] ?? null,
+                'concepto' => 'Cuota #'.$cuota->numero_cuota.' contrato '.$contrato->numero_contrato
+                    .($abonoCapital > 0 ? ' (abono a capital $'.number_format($abonoCapital, 2).')' : ''),
+                'contraparte' => $contrato->cliente,
+                'vinculo_tipo' => \App\Models\CobranzaMovimiento::VINCULO_CUOTA,
+                'vinculo_id' => $cuota->id,
+            ], Auth::user());
+        });
 
         return redirect()->back()->with('success', 'Pago registrado correctamente.');
     }

@@ -86,6 +86,10 @@
         <input type="number" name="valor_dispositivo" value="{{ old('valor_dispositivo', $orden->valor_dispositivo ?? '') }}" min="0" step="0.01" placeholder="Ej: 450.00" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
     </div>
     <div>
+        <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">Cantidad (unidades)</label>
+        <input type="number" name="cantidad" value="{{ old('cantidad', $orden->cantidad ?? 1) }}" min="1" max="9999" step="1" required style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+    </div>
+    <div>
         <label style="display:block;font-weight:500;margin-bottom:4px;font-size:0.9rem;">Prioridad *</label>
         <select name="prioridad" required style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;background:white;">
             @foreach($prioridades as $key => $label)

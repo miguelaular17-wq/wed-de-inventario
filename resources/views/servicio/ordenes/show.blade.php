@@ -334,7 +334,7 @@
             <div class="st-ficha-equipo">
                 <div class="st-avatar">{!! $icono('equipo', 22) !!}</div>
                 <div>
-                    <h3>{{ $orden->equipo ?: ($orden->atributo('descripcion_equipo') ?: 'Equipo') }}</h3>
+                    <h3>{{ $orden->equipo ?: ($orden->atributo('descripcion_equipo') ?: 'Equipo') }}@if($orden->esLote()) <span style="color:#1d4ed8;">× {{ $orden->unidades() }}</span>@endif</h3>
                     <p>{{ $identificador }}</p>
                 </div>
             </div>
@@ -372,6 +372,9 @@
             <div class="st-bloque">
                 <h4>{!! $icono('equipo', 14) !!} Equipo</h4>
                 <div class="st-dato"><span>Equipo</span><div>{{ $orden->equipo ?: '—' }}</div></div>
+                @if($orden->esLote())
+                    <div class="st-dato"><span>Cantidad</span><div><strong>Lote de {{ $orden->unidades() }} unidades</strong></div></div>
+                @endif
                 @if($orden->atributo('descripcion_equipo'))
                     <div class="st-dato"><span>Descripción</span><div>{{ $orden->atributo('descripcion_equipo') }}</div></div>
                 @endif
@@ -424,8 +427,8 @@
                         @endif
                     </div>
                 </div>
-                @if($orden->reparador)
-                    <div class="st-dato"><span>Reparó</span><div>{{ $orden->reparador->name }}</div></div>
+                @if($orden->nombreReparador())
+                    <div class="st-dato"><span>Reparó</span><div>{{ $orden->nombreReparador() }}</div></div>
                 @endif
             </div>
         </div>

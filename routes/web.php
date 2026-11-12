@@ -391,6 +391,28 @@ Route::middleware(['auth', 'permission:vendedor.jrz'])->group(function () {
     Route::get('/vendedor/jrz', [\App\Http\Controllers\VendedorController::class, 'jrz'])->name('vendedor.jrz');
     Route::get('/vendedor/jrz/reporte-proveedor', [\App\Http\Controllers\VendedorController::class, 'reporteProveedor'])->name('vendedor.jrz.reporte_proveedor');
 });
+
+// Ventas al mayor: stock de todas las sedes; se factura solo del de JRZ.
+Route::middleware(['auth', 'permission:ventas_mayor'])->prefix('ventas-mayor')->name('ventas_mayor.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\VentasMayorController::class, 'stock'])->name('stock');
+    Route::get('/facturas', [\App\Http\Controllers\VentasMayorController::class, 'facturas'])->name('facturas');
+    Route::get('/facturas/nueva', [\App\Http\Controllers\VentasMayorController::class, 'create'])->name('create');
+    Route::post('/facturas', [\App\Http\Controllers\VentasMayorController::class, 'store'])->name('store');
+    Route::get('/productos/buscar', [\App\Http\Controllers\VentasMayorController::class, 'buscarProductos'])->name('productos.buscar');
+    Route::get('/clientes/buscar', [\App\Http\Controllers\VentasMayorController::class, 'buscarClientes'])->name('clientes.buscar');
+    Route::get('/facturas/{factura}', [\App\Http\Controllers\VentasMayorController::class, 'show'])->whereNumber('factura')->name('show');
+    Route::get('/facturas/{factura}/pdf', [\App\Http\Controllers\VentasMayorController::class, 'pdf'])->whereNumber('factura')->name('pdf');
+    Route::post('/facturas/{factura}/comprobantes', [\App\Http\Controllers\VentasMayorController::class, 'subirComprobante'])->whereNumber('factura')->name('comprobantes.store');
+    Route::delete('/facturas/{factura}/comprobantes/{pago}', [\App\Http\Controllers\VentasMayorController::class, 'borrarComprobante'])->whereNumber('factura')->whereNumber('pago')->name('comprobantes.destroy');
+    Route::post('/facturas/{factura}/profit', [\App\Http\Controllers\VentasMayorController::class, 'marcarProfit'])->whereNumber('factura')->name('profit');
+    Route::post('/facturas/{factura}/anular', [\App\Http\Controllers\VentasMayorController::class, 'anular'])->whereNumber('factura')->name('anular');
+
+    Route::get('/hoja-de-ruta', [\App\Http\Controllers\VisitasMayorController::class, 'index'])->name('visitas.index');
+    Route::get('/hoja-de-ruta/nueva', [\App\Http\Controllers\VisitasMayorController::class, 'create'])->name('visitas.create');
+    Route::post('/hoja-de-ruta', [\App\Http\Controllers\VisitasMayorController::class, 'store'])->name('visitas.store');
+    Route::get('/hoja-de-ruta/{visita}', [\App\Http\Controllers\VisitasMayorController::class, 'show'])->whereNumber('visita')->name('visitas.show');
+    Route::post('/hoja-de-ruta/{visita}/cliente', [\App\Http\Controllers\VisitasMayorController::class, 'registrarCliente'])->whereNumber('visita')->name('visitas.cliente');
+});
 // Etiquetas de precio: públicas como el catálogo de existencias (las tiendas imprimen sin iniciar sesión).
 Route::prefix('etiquetas')->name('etiquetas.')->group(function () {
     Route::get('/', [\App\Http\Controllers\EtiquetasController::class, 'index'])->name('index');
@@ -751,6 +773,14 @@ Route::middleware(['auth', 'permission:cobranza'])->prefix('cobranza')->group(fu
     Route::post('/marcar-pagado-manualmente', [CobranzaController::class, 'marcarPagadoManualmente'])->name('cobranza.marcar_pagado');
     Route::post('/guardar-nota', [CobranzaController::class, 'guardarNota'])->name('cobranza.guardar_nota');
     Route::post('/guardar-intermediario', [CobranzaController::class, 'guardarIntermediario'])->name('cobranza.guardar_intermediario');
+    Route::get('/flujo-caja', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'index'])->name('cobranza.flujo.index');
+    Route::post('/flujo-caja', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'store'])->name('cobranza.flujo.store');
+    Route::put('/flujo-caja/{movimiento}', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'update'])->whereNumber('movimiento')->name('cobranza.flujo.update');
+    Route::delete('/flujo-caja/{movimiento}', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'destroy'])->whereNumber('movimiento')->name('cobranza.flujo.destroy');
+    Route::get('/flujo-caja/facturas', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'buscarFacturas'])->name('cobranza.flujo.facturas');
+    Route::get('/flujo-caja/{movimiento}/recibo', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'recibo'])->whereNumber('movimiento')->name('cobranza.flujo.recibo');
+    Route::post('/flujo-caja/asientos', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'storeAsiento'])->name('cobranza.flujo.asientos.store');
+    Route::delete('/flujo-caja/asientos/{asiento}', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'destroyAsiento'])->whereNumber('asiento')->name('cobranza.flujo.asientos.destroy');
     Route::get('/cliente/{codigo_cliente}/estado-cuenta', [CobranzaController::class, 'estadoCuentaCliente'])->name('cobranza.estado_cuenta.cliente');
     Route::get('/cliente/{codigo_cliente}/estado-cuenta/pdf', [CobranzaController::class, 'estadoCuentaClientePdf'])->name('cobranza.estado_cuenta.cliente.pdf');
     Route::get('/{codigo_cliente}/llamadas', [CobranzaController::class, 'obtenerLlamadas'])->name('cobranza.llamadas.get');
@@ -854,6 +884,7 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'permission:servicio'])
             Route::get('/servicios-realizados', [OrdenController::class, 'realizados'])->name('realizados');
             Route::get('/reporte-por-marca', [OrdenController::class, 'reportePorMarca'])->name('reporte_marca');
             Route::get('/garantias-reconocidas', [OrdenController::class, 'garantiasReconocidas'])->name('garantias_reconocidas');
+            Route::get('/reparaciones-internas-resueltas', [OrdenController::class, 'internasResueltas'])->name('internas_resueltas');
             Route::get('/{orden}/pdf/conformidad', [OrdenController::class, 'pdfConformidad'])->whereNumber('orden')->name('conformidad_pdf');
             Route::post('/{orden}/conformidad', [OrdenController::class, 'guardarConformidad'])->whereNumber('orden')->name('conformidad');
             Route::post('/{orden}/tipo-gestion', [OrdenController::class, 'cambiarTipoGestion'])->whereNumber('orden')->name('tipo_gestion');

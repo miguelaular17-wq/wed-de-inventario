@@ -90,7 +90,7 @@
                             <td>{{ optional($orden->fecha_ingreso)->format('d/m/Y') ?: '—' }}</td>
                             <td>{{ $orden->marca_reporte }}</td>
                             <td>
-                                {{ $orden->equipo ?: '—' }}
+                                {{ $orden->equipo ?: '—' }}@if($orden->esLote()) <strong>× {{ $orden->unidades() }}</strong>@endif
                                 @if($orden->serial || $orden->imei)
                                     <div class="muted">{{ $orden->serial ?: $orden->imei }}</div>
                                 @endif

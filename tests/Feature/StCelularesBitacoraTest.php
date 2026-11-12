@@ -556,6 +556,58 @@ class StCelularesBitacoraTest extends TestCase
         $this->assertSame('650.50', $orden->valor_dispositivo);
     }
 
+    public function test_lote_registra_varias_unidades_en_una_orden_sin_imei_ni_ficha_de_equipo(): void
+    {
+        $user = $this->makeTecnico();
+
+        $this->actingAs($user)
+            ->withSession(['sede_local' => 'DORAL'])
+            ->get(route('servicio.ordenes.create'))
+            ->assertOk()
+            ->assertSee('name="cantidad"', false);
+
+        $equiposAntes = StEquipo::query()->count();
+        $this->post(route('servicio.ordenes.store'), [
+            'tipo_gestion' => StOrden::TIPO_REPARACION_INTERNA,
+            'tipo_dispositivo' => 'celular',
+            'prioridad' => 'normal',
+            'falla' => 'Lote de exhibición con pantalla rayada',
+            'cantidad' => 20,
+            'serial' => 'LOTE-A15-0925',
+            'marca' => 'Samsung',
+            'modelo' => 'A15',
+            'color' => 'Negro',
+            'almacenamiento' => '128 GB',
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $orden = StOrden::query()->latest('id')->firstOrFail();
+        $this->assertSame(20, $orden->cantidad);
+        $this->assertTrue($orden->esLote());
+        $this->assertNull($orden->equipo_id);
+        $this->assertNull($orden->imei);
+        $this->assertSame('LOTE-A15-0925', $orden->serial);
+        $this->assertStringContainsString('A15', (string) $orden->equipo);
+        $this->assertSame($equiposAntes, StEquipo::query()->count());
+
+        $this->get(route('servicio.ordenes.show', $orden))->assertOk()->assertSee('Lote de 20 unidades');
+        $this->get(route('servicio.ordenes.reporte_marca', [
+            'fecha_desde' => now()->toDateString(), 'fecha_hasta' => now()->toDateString(),
+        ]))->assertOk()->assertSee('20 unidades');
+
+        // Una sola unidad sigue exigiendo IMEI.
+        $this->post(route('servicio.ordenes.store'), [
+            'tipo_dispositivo' => 'celular',
+            'prioridad' => 'normal',
+            'falla' => 'No enciende',
+            'cantidad' => 1,
+            'marca' => 'Samsung',
+            'modelo' => 'A15',
+            'color' => 'Negro',
+            'almacenamiento' => '128 GB',
+            'cliente_nombre' => 'Cliente',
+        ])->assertSessionHasErrors('imei');
+    }
+
     public function test_api_android_registra_lista_y_cambia_estado_de_celular(): void
     {
         $user = $this->makeTecnico();
@@ -729,11 +781,28 @@ class StCelularesBitacoraTest extends TestCase
         $this->assertSame('PARA_REPUESTO', $orden->resultado_interna);
         $this->assertNull($orden->reparado_por);
 
-        $this->get(route('servicio.ordenes.reporte_marca', ['tipo_gestion' => 'REPARACION_INTERNA']))
-            ->assertOk()
-            ->assertSee('Reparado (técnico)')
-            ->assertSee('ri-resultado', false);
+        // Con resultado sale del reporte por marca y queda en «Reparaciones internas resueltas», en su pestaña.
+        $desde = ['fecha_desde' => now()->subMonth()->toDateString(), 'fecha_hasta' => now()->toDateString()];
+        $this->get(route('servicio.ordenes.reporte_marca', ['tipo_gestion' => 'REPARACION_INTERNA'] + $desde))
+            ->assertOk()->assertDontSee($orden->codigo());
+        $this->get(route('servicio.ordenes.internas_resueltas'))
+            ->assertOk()->assertSee($orden->codigo())->assertSee('Para repuesto · 1')->assertSee('ri-resultado', false);
+        $this->get(route('servicio.ordenes.internas_resueltas', ['resultado' => 'REPARADO']))
+            ->assertOk()->assertDontSee($orden->codigo());
+        $pdf = $this->get(route('servicio.ordenes.internas_resueltas', ['formato' => 'pdf']));
+        $pdf->assertOk();
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
         $this->get(route('servicio.ordenes.show', $orden))->assertOk()->assertSee('Para repuesto');
+
+        // «Sin estado» la devuelve al reporte por marca.
+        $this->postJson(route('servicio.ordenes.resultado_interna', $orden), ['resultado' => null])->assertOk();
+        $this->get(route('servicio.ordenes.reporte_marca', ['tipo_gestion' => 'REPARACION_INTERNA'] + $desde))
+            ->assertOk()->assertSee($orden->codigo())->assertSee('Reparado (técnico)');
+        $this->get(route('servicio.ordenes.internas_resueltas'))->assertOk()->assertDontSee($orden->codigo());
+
+        // Si el usuario del técnico se borra, se ve el nombre guardado en la orden.
+        $orden->forceFill(['resultado_interna' => 'REPARADO', 'reparado_por' => null, 'atributos' => ['reparado_por_nombre' => 'deybe zambrano']])->save();
+        $this->assertSame('Reparado · deybe zambrano', $orden->fresh()->etiquetaResultadoInterna());
     }
 
     public function test_se_entrega_sin_hoja_y_despues_la_orden_queda_cerrada(): void
@@ -897,6 +966,7 @@ class StCelularesBitacoraTest extends TestCase
                 $table->string('rango_garantia', 16)->nullable();
                 $table->string('empresa_envio_garantia', 40)->nullable();
                 $table->decimal('valor_dispositivo', 14, 2)->nullable();
+                $table->unsignedInteger('cantidad')->default(1);
                 $table->unsignedBigInteger('equipo_id')->nullable();
                 $table->string('cliente_nombre');
                 $table->string('cliente_telefono', 40)->nullable();
@@ -981,6 +1051,9 @@ class StCelularesBitacoraTest extends TestCase
                 }
                 if (! Schema::hasColumn('st_ordenes', 'empresa_envio_garantia')) {
                     $table->string('empresa_envio_garantia', 40)->nullable();
+                }
+                if (! Schema::hasColumn('st_ordenes', 'cantidad')) {
+                    $table->unsignedInteger('cantidad')->default(1);
                 }
             });
         }

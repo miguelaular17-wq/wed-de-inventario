@@ -528,6 +528,13 @@
                                         </span>
                                     </div>
                                 @endif
+                                @if(!empty($mov->asiento['debe']))
+                                    <div style="margin-top: 5px;">
+                                        <button type="button" onclick='verAsiento(@json($mov->asiento))' style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; cursor: pointer;">
+                                            📒 Ver asiento
+                                        </button>
+                                    </div>
+                                @endif
                             </td>
                             <td class="col-number" style="text-align: right; font-weight: 500;">{{ $mov->monto_usd ? '$'.number_format($mov->monto_usd, 2) : '-' }}</td>
                             <td class="col-number" style="text-align: right;">{{ $mov->tasa_cambio ? number_format($mov->tasa_cambio, 2) : '-' }}</td>
@@ -1291,8 +1298,8 @@
 
             <div id="row_opciones_egreso" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 12px 0 10px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem; white-space: nowrap;">
-                    <input type="checkbox" id="chk_desglose" onchange="toggleDesglose()" style="width: 16px; height: 16px;">
-                    Desglose
+                    <input type="checkbox" id="chk_asiento" onchange="faToggleAsiento('')" style="width: 16px; height: 16px; accent-color: #f59e0b;">
+                    Asiento contable
                 </label>
                 <label id="row_cuenta_por_pagar" style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem; color: #9a3412; white-space: nowrap;">
                     <input type="checkbox" id="chk_cuenta_por_pagar" name="es_cuenta_por_pagar" value="1" style="width: 16px; height: 16px; accent-color: #ea580c;">
@@ -1367,22 +1374,7 @@
 
             </div>
 
-            <div id="container_desglose" style="display: none; background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px;">
-                <h4 style="margin-top: 0; font-size: 0.95rem; color: var(--blue); display: flex; justify-content: space-between; align-items: center;">
-                    Desglose del Pago
-                    <div style="font-size: 0.85rem; font-weight: normal;">
-                        <input type="file" id="archivo_desglose" accept=".xlsx, .xls, .csv, .xlsm, .txt" style="display: none;" onchange="cargarArchivoDesglose(this)">
-                        <button type="button" onclick="document.getElementById('archivo_desglose').click()" style="padding: 4px 10px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                            Cargar archivo (Excel/TXT)
-                        </button>
-                    </div>
-                </h4>
-                <div id="lista_desglose">
-                    <!-- Filas de desglose se generarán en JS -->
-                </div>
-                <button type="button" onclick="agregarDesglose()" style="margin-top: 5px; padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">+ Añadir persona</button>
-            </div>
+            @include('finanzas.partials.asiento_egreso', ['sufijo' => ''])
 
             <div style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem;">
@@ -1602,7 +1594,7 @@ function aplicarModoIngreso(isIngreso) {
     if (isIngreso) {
         document.getElementById('row_diferencial').style.display = 'none';
         set('comision', el => el.disabled = true);
-        ['chk_desglose', 'chk_cuenta_por_pagar', 'chk_todoticket', 'chk_gasto_fijo'].forEach(id => set(id, el => {
+        ['chk_asiento', 'chk_cuenta_por_pagar', 'chk_todoticket', 'chk_gasto_fijo'].forEach(id => set(id, el => {
             if (el.checked) { el.checked = false; el.dispatchEvent(new Event('change')); }
         }));
         set('tipo_gasto', el => el.required = false);
@@ -2548,259 +2540,125 @@ function validarDesglose(event) {
             return false;
         }
     }
-    const chk = document.getElementById('chk_desglose');
-    if (chk && chk.checked) {
-        const montoBsInput = document.getElementById('monto_bs');
-        const montoTotal = window.parseLocalNumber(montoBsInput.value) || 0;
-        
-        const montosDesglose = document.querySelectorAll('input[name="desglose_monto[]"]');
-        let sumaDesglose = 0;
-        montosDesglose.forEach(input => {
-            sumaDesglose += window.parseLocalNumber(input.value) || 0;
-        });
+    return faValidarAsiento('', event);
+}
 
-        if (Math.abs(montoTotal - sumaDesglose) > 0.05) {
-            alert(`Error: La suma del desglose (Bs. ${sumaDesglose.toLocaleString('es-VE', {minimumFractionDigits:2})}) no coincide con el Monto Bs total (Bs. ${montoTotal.toLocaleString('es-VE', {minimumFractionDigits:2})}).`);
-            event.preventDefault();
-            return false;
-        }
+// ── Asiento contable del egreso: un debe y uno o varios haber en $ que suman lo mismo ──
+function faCaja(s) { return document.getElementById('container_asiento' + s); }
+function faNum(v) { return Math.round((parseFloat(String(v ?? '').replace(',', '.')) || 0) * 100) / 100; }
+function faFmt(n) { return '$' + n.toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+
+// Monto en $ del egreso: el USD escrito o el Bs entre la tasa.
+function faMontoEgreso(s) {
+    const form = faCaja(s).closest('form');
+    const usd = window.parseLocalNumber(form.querySelector('[name="monto_usd"]')?.value) || 0;
+    if (usd > 0) return Math.round(usd * 100) / 100;
+    const bs = window.parseLocalNumber(form.querySelector('[name="monto_bs"]')?.value) || 0;
+    const tasa = window.parseLocalNumber(form.querySelector('[name="tasa_cambio"]')?.value) || 0;
+    return bs > 0 && tasa > 0 ? Math.round(bs / tasa * 100) / 100 : 0;
+}
+
+function faToggleAsiento(s) {
+    const on = document.getElementById('chk_asiento' + s).checked;
+    const caja = faCaja(s);
+    caja.style.display = on ? 'block' : 'none';
+    document.getElementById('asiento_activo' + s).value = on ? '1' : '0';
+    caja.querySelectorAll('input:not([type="hidden"])').forEach(i => { i.disabled = !on; });
+    if (on && !document.getElementById('haberes_asiento' + s).children.length) faAgregarHaber(s);
+    faTotalesAsiento(s);
+}
+
+// El debe es siempre el monto en $ del egreso: se sigue al USD, Bs o tasa de arriba.
+document.addEventListener('DOMContentLoaded', () => ['', '_edit'].forEach(s => {
+    const form = faCaja(s)?.closest('form');
+    if (!form) return;
+    const seguir = e => {
+        if (e.target.closest('#container_asiento' + s)) return;
+        if (document.getElementById('chk_asiento' + s)?.checked) faTotalesAsiento(s);
+    };
+    form.addEventListener('input', seguir);
+    form.addEventListener('change', seguir);
+}));
+
+function faAgregarHaber(s, linea = {}) {
+    const lista = document.getElementById('haberes_asiento' + s);
+    const i = Date.now() + Math.floor(Math.random() * 1000);
+    const fila = document.createElement('div');
+    fila.className = 'fa-haber';
+    fila.style.cssText = 'display:flex; gap:8px; margin-bottom:6px; background:white; padding:8px; border:1px solid #fde68a; border-radius:6px;';
+    const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    fila.innerHTML = `
+        <input type="text" name="asiento_haber[${i}][detalle]" class="fa-haber-detalle" maxlength="255" placeholder="Detalle" value="${esc(linea.detalle)}" style="flex:6; min-width:0; padding:6px; border:1px solid #ccc; border-radius:4px;">
+        <input type="number" step="0.01" min="0" name="asiento_haber[${i}][monto]" class="fa-haber-monto" placeholder="Monto $" value="${linea.monto ?? ''}" style="flex:1.4; min-width:0; padding:6px; border:1px solid #ccc; border-radius:4px;">
+        <button type="button" title="Quitar" style="padding:6px 10px; background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer; flex-shrink:0;">&times;</button>`;
+    fila.querySelector('button').addEventListener('click', () => {
+        if (lista.children.length > 1) { fila.remove(); faTotalesAsiento(s); }
+    });
+    fila.querySelector('.fa-haber-monto').addEventListener('input', () => faTotalesAsiento(s));
+    lista.appendChild(fila);
+    faTotalesAsiento(s);
+}
+
+function faPartesIguales(s) {
+    const debe = faMontoEgreso(s);
+    const montos = [...document.querySelectorAll('#haberes_asiento' + s + ' .fa-haber-monto')];
+    if (debe <= 0 || !montos.length) return;
+    const parte = Math.floor(debe / montos.length * 100) / 100;
+    montos.forEach((inp, k) => {
+        inp.value = (k === montos.length - 1 ? Math.round((debe - parte * (montos.length - 1)) * 100) / 100 : parte).toFixed(2);
+    });
+    faTotalesAsiento(s);
+}
+
+// Cuenta del debe: el Banco y Titular elegido arriba.
+function faCuentaEgreso(s) {
+    const [banco, titular] = String(faCaja(s).closest('form').querySelector('[name="banco_titular"]')?.value || '').split('|');
+    return [banco, titular].map(v => (v || '').trim()).filter(Boolean).join(' · ').toUpperCase();
+}
+
+function faTotalesAsiento(s) {
+    const debe = faMontoEgreso(s);
+    const caja = faCaja(s);
+    caja.querySelector('.fa-debe-cuenta').value = faCuentaEgreso(s);
+    caja.querySelector('.fa-debe-detalle').value = caja.closest('form').querySelector('[name="motivo"]')?.value.trim() || '';
+    caja.querySelector('.fa-debe-monto').value = debe > 0 ? debe.toFixed(2) : '';
+    let haber = 0;
+    document.querySelectorAll('#haberes_asiento' + s + ' .fa-haber-monto').forEach(inp => { haber += faNum(inp.value); });
+    haber = Math.round(haber * 100) / 100;
+    const cuadra = debe > 0 && Math.abs(debe - haber) < 0.01;
+    const el = document.getElementById('estado_asiento' + s);
+    el.textContent = `Debe ${faFmt(debe)} · Haber ${faFmt(haber)}` + (cuadra ? ' ✓ Cuadra' : (haber > debe ? ' · sobra ' + faFmt(haber - debe) : ' · falta ' + faFmt(debe - haber)));
+    el.style.color = cuadra ? '#059669' : '#dc2626';
+    return cuadra;
+}
+
+function faValidarAsiento(s, event) {
+    const chk = document.getElementById('chk_asiento' + s);
+    if (!chk || !chk.checked) return true;
+    const caja = faCaja(s);
+    const fallar = msg => { alert('Asiento contable: ' + msg); event.preventDefault(); return false; };
+    if (faMontoEgreso(s) <= 0) return fallar('primero pon el monto del egreso.');
+    if (!faCuentaEgreso(s)) return fallar('elige el Banco y Titular del egreso: es la cuenta del debe.');
+    const filas = [...caja.querySelectorAll('.fa-haber')];
+    if (filas.some(f => !f.querySelector('.fa-haber-detalle').value.trim() || faNum(f.querySelector('.fa-haber-monto').value) <= 0)) {
+        return fallar('cada haber necesita su detalle y su monto en $.');
     }
+    if (!faTotalesAsiento(s)) return fallar('el debe y el haber no cuadran.');
     return true;
 }
 
-function toggleDesglose() {
-    const chk = document.getElementById('chk_desglose');
-    const container = document.getElementById('container_desglose');
-    container.style.display = chk.checked ? 'block' : 'none';
-    
-    if (chk.checked && document.getElementById('lista_desglose').children.length === 0) {
-        agregarDesglose();
+// Al editar: vacía el asiento y, si el egreso tiene uno, lo carga.
+function faCargarAsiento(s, asiento) {
+    const caja = faCaja(s);
+    document.getElementById('haberes_asiento' + s).innerHTML = '';
+    const tiene = asiento && asiento.debe;
+    if (tiene) {
+        (asiento.haber || []).forEach(h => faAgregarHaber(s, h));
     }
+    document.getElementById('chk_asiento' + s).checked = !!tiene;
+    faToggleAsiento(s);
 }
 
-const proveedoresList = @json($proveedores);
-// Variables para Desglose
-const sedesList = @json($sedesFinanzas);
-
-function buildOptions(list, selectedValue) {
-    // "Nunes", "TECNO HOUSE" o "Depósito" guardados antes coinciden con NUNES, TECNOHOUSE y DEPÓSITO.
-    const clave = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f\s]/g, '').toUpperCase();
-    const sel = clave(selectedValue);
-    let options = '<option value="">-- Seleccione --</option>';
-    list.forEach(item => {
-        options += `<option value="${item}" ${sel !== '' && clave(item) === sel ? 'selected' : ''}>${item}</option>`;
-    });
-    return options;
-}
-
-const tiposGastoList = @json($tiposGasto);
-
-function buildTipoGastoOptions(selectedValue) {
-    let options = '<option value="">-- Tipo Gasto --</option>';
-    tiposGastoList.forEach(item => {
-        options += `<option value="${item}" ${item === selectedValue ? 'selected' : ''}>${item}</option>`;
-    });
-    return options;
-}
-
-window.cargarArchivoDesglose = async function(input) {
-    if (!input.files || input.files.length === 0) return;
-    
-    const file = input.files[0];
-    const formData = new FormData();
-    formData.append('archivo', file);
-    formData.append('_token', document.querySelector('input[name="_token"]').value);
-
-    // native alert as fallback to ensure it fires
-    // console.log("Procesando archivo...");
-    Swal.fire({
-        title: 'Procesando archivo',
-        text: 'Leyendo datos y buscando clientes...',
-        allowOutsideClick: false,
-        didOpen: () => Swal.showLoading()
-    });
-
-    try {
-        const response = await fetch('{{ route("finanzas.parse_desglose") }}', {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json'
-            },
-            body: formData
-        });
-        
-        const res = await response.json();
-        
-        if (!res.ok) {
-            Swal.fire('Error', res.error || 'Ocurrió un error al procesar el archivo', 'error');
-            input.value = '';
-            return;
-        }
-
-        const data = res.data;
-        if (data.length === 0) {
-            Swal.fire('Atención', 'No se encontraron registros válidos en el archivo', 'warning');
-            input.value = '';
-            return;
-        }
-
-        const inputForm = input.closest('form');
-        let inputTasa = null;
-        if (inputForm) {
-            inputTasa = inputForm.querySelector('input[name="tasa_cambio"]') || inputForm.querySelector('#tasa_cambio');
-        }
-        if (!inputTasa) {
-            inputTasa = document.getElementById('tasa_cambio') || document.querySelector('input[name="tasa_cambio"]');
-        }
-        
-        let tasa = window.parseLocalNumber(inputTasa ? inputTasa.value : '0') || 0;
-        if (tasa <= 0) {
-            const bcvGlobal = document.getElementById('tasa-bcv-input') || document.querySelector('input[data-field="tasa_bcv_usd"]');
-            tasa = window.parseLocalNumber(bcvGlobal ? bcvGlobal.value : '0') || 0;
-        }
-
-        const catEl = document.getElementById('categoria_egreso');
-        const isDivisas = catEl && catEl.value === 'egreso_divisas';
-
-        // Preguntar por sede, tipo de gasto, moneda y tasa
-        const { value: formValues } = await Swal.fire({
-            title: 'Configurar Archivo',
-            html: `
-                <p style="font-size: 14px; color: #475569; margin-bottom: 15px;">Se encontraron <b>${data.length}</b> registros. Configura los detalles:</p>
-                <div style="text-align: left; display: flex; flex-direction: column; gap: 10px;">
-                    <label>Sede (opcional)</label>
-                    <select id="swal_sede" class="swal2-select" style="margin: 0; width: 100%; font-size: 14px; padding: 6px;">
-                        <option value="">-- Ninguna --</option>
-                        ${sedesList.map(s => `<option value="${s}">${s}</option>`).join('')}
-                    </select>
-                    
-                    <label style="margin-top: 10px;">Tipo de Gasto (opcional)</label>
-                    <select id="swal_tg" class="swal2-select" style="margin: 0; width: 100%; font-size: 14px; padding: 6px;">
-                        <option value="">-- Ninguno --</option>
-                        ${tiposGastoList.map(t => `<option value="${t}">${t}</option>`).join('')}
-                    </select>
-                    
-                    <div style="display: flex; gap: 10px; margin-top: 10px;">
-                        <div style="flex: 1;">
-                            <label>Moneda del archivo</label>
-                            <select id="swal_currency" class="swal2-select" style="margin: 0; width: 100%; font-size: 14px; padding: 6px;">
-                                <option value="BS" ${!isDivisas ? 'selected' : ''}>Bolívares (Bs)</option>
-                                <option value="USD" ${isDivisas ? 'selected' : ''}>Dólares (USD)</option>
-                            </select>
-                        </div>
-                        <div style="flex: 1;">
-                            <label>Tasa de Cambio</label>
-                            <input type="text" id="swal_tasa" class="swal2-input" placeholder="Ej. 41,50" value="${tasa > 0 ? tasa.toString().replace('.', ',') : ''}" style="margin: 0; width: 100%; font-size: 14px; padding: 6px; box-sizing: border-box;">
-                        </div>
-                    </div>
-                    <small style="color: #64748b; font-size: 12px; margin-top: 5px;">* La tasa de cambio es necesaria para calcular el monto equivalente.</small>
-                </div>
-            `,
-            focusConfirm: false,
-            showCancelButton: true,
-            confirmButtonText: 'Aplicar y añadir',
-            cancelButtonText: 'Cancelar',
-            preConfirm: () => {
-                return {
-                    sede: document.getElementById('swal_sede').value,
-                    tg: document.getElementById('swal_tg').value,
-                    currency: document.getElementById('swal_currency').value,
-                    tasaVal: document.getElementById('swal_tasa').value
-                }
-            }
-        });
-
-        if (formValues) {
-            let tgSelected = formValues.tg === 'OTROS' ? '' : formValues.tg;
-            
-            tasa = window.parseLocalNumber(formValues.tasaVal) || 0;
-            if (inputTasa && tasa > 0) {
-                inputTasa.value = formValues.tasaVal;
-            }
-
-            data.forEach(row => {
-                let montoUsd = '';
-                let montoBsFormateado = '';
-                let valNumerico = parseFloat(row.monto) || 0;
-
-                if (formValues.currency === 'USD') {
-                    // El archivo tiene montos en USD
-                    montoUsd = valNumerico.toFixed(2).replace('.', ',');
-                    if (tasa > 0) {
-                        montoBsFormateado = (valNumerico * tasa).toFixed(2).replace('.', ',');
-                    }
-                } else {
-                    // El archivo tiene montos en BS
-                    montoBsFormateado = valNumerico.toFixed(2).replace('.', ',');
-                    if (tasa > 0) {
-                        montoUsd = (valNumerico / tasa).toFixed(2).replace('.', ',');
-                    }
-                }
-
-                agregarDesglose(row.cedula, montoUsd, montoBsFormateado, formValues.sede, tgSelected);
-            });
-            
-            Swal.fire('Éxito', `Se agregaron ${data.length} personas al desglose.`, 'success');
-        }
-
-    } catch (err) {
-        console.error(err);
-        Swal.fire('Error', 'No se pudo conectar con el servidor', 'error');
-    }
-    
-    // Limpiar input
-    input.value = '';
-}
-
-function agregarDesglose(ced = '', usd = '', bs = '', sede = '', tipoGasto = '') {
-    const lista = document.getElementById('lista_desglose');
-    const sedeOptions = buildOptions(sedesList, sede);
-    const tgOptions = buildTipoGastoOptions(tipoGasto);
-    
-    // Generar un ID único para los selects
-    const uid = Date.now() + Math.floor(Math.random() * 1000);
-
-    const html = `
-        <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; background: white; padding: 10px; border-radius: 6px; border: 1px solid #ccc;">
-            <div style="flex: 1 1 100%; display: flex; gap: 8px;">
-                <select id="sel_sede_${uid}" name="desglose_sede[]" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                    ${sedeOptions}
-                </select>
-                <select id="sel_tg_${uid}" name="desglose_tipo_gasto[]" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                    ${tgOptions}
-                </select>
-            </div>
-            <div style="flex: 1 1 100%; display: flex; gap: 8px; margin-top: 4px; box-sizing: border-box;">
-                <input type="text" name="desglose_cedula[]" placeholder="Cédula/RIF" value="${ced}" style="flex: 2 1 0%; min-width: 0; width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                <input type="text" inputmode="decimal" name="desglose_monto_usd[]" placeholder="Monto USD" value="${usd}" oninput="calcDesgloseRow(this, 'usd')" style="flex: 1 1 0%; min-width: 0; width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" value="${bs}" oninput="calcDesgloseRow(this, 'bs')" style="flex: 1 1 0%; min-width: 0; width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                <button type="button" onclick="this.closest('.row-desglose').remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0; box-sizing: border-box;">&times;</button>
-            </div>
-        </div>
-    `;
-    lista.insertAdjacentHTML('beforeend', html);
-    
-    // Inicializar TomSelect en los nuevos selects
-    new TomSelect(`#sel_tg_${uid}`, { create: false, sortField: { field: "text", direction: "asc" }, placeholder: '-- Tipo Gasto --' });
-}
-
-function calcDesgloseRow(input, source) {
-    const row = input.closest('.row-desglose');
-    const inputBs = row.querySelector('input[name="desglose_monto[]"]');
-    const inputUsd = row.querySelector('input[name="desglose_monto_usd[]"]');
-    const inputTasa = document.getElementById('tasa_cambio') || document.querySelector('input[name="tasa_cambio"]');
-    
-    let tasa = window.parseLocalNumber(inputTasa.value) || 0;
-    if (tasa <= 0) return;
-    
-    if (source === 'usd') {
-        const usd = window.parseLocalNumber(inputUsd.value) || 0;
-        inputBs.value = (usd * tasa).toFixed(2).replace('.', ',');
-    } else {
-        const bs = window.parseLocalNumber(inputBs.value) || 0;
-        inputUsd.value = (bs / tasa).toFixed(2).replace('.', ',');
-    }
-}
 function verDesglose(desglose) {
     let tbodyHtml = '';
     let totalBs = 0;
@@ -2853,6 +2711,28 @@ function verDesglose(desglose) {
 
 function closeDesgloseModal() {
     document.getElementById('modalDesglose').style.display = 'none';
+}
+
+function tablaAsiento(asiento) {
+    const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const td = 'padding: 7px 8px; border-bottom: 1px solid #fde68a;';
+    const fila = (l, alDebe) => `<tr>
+        <td style="${td}${alDebe ? '' : ' padding-left: 24px;'}">${l.cuenta ? `<strong>${esc(l.cuenta)}</strong>` : ''}${l.detalle ? `<div style="${l.cuenta ? 'font-size: 0.78rem; color: #64748b;' : ''}">${esc(l.detalle)}</div>` : ''}</td>
+        <td style="${td} text-align: right;">${alDebe ? faFmt(faNum(l.monto)) : ''}</td>
+        <td style="${td} text-align: right;">${alDebe ? '' : faFmt(faNum(l.monto))}</td>
+    </tr>`;
+    const haber = asiento.haber || [];
+    const total = haber.reduce((t, h) => t + faNum(h.monto), 0);
+    return `<table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
+        <thead><tr style="color: #92400e; text-align: left;"><th style="padding: 6px 8px;">Cuenta / detalle</th><th style="padding: 6px 8px; text-align: right;">Debe</th><th style="padding: 6px 8px; text-align: right;">Haber</th></tr></thead>
+        <tbody>${fila(asiento.debe, true)}${haber.map(h => fila(h, false)).join('')}</tbody>
+        <tfoot><tr style="font-weight: 700;"><td style="padding: 7px 8px;">Total</td><td style="padding: 7px 8px; text-align: right;">${faFmt(faNum(asiento.debe.monto))}</td><td style="padding: 7px 8px; text-align: right;">${faFmt(total)}</td></tr></tfoot>
+    </table>`;
+}
+
+function verAsiento(asiento) {
+    document.getElementById('modalAsientoTabla').innerHTML = tablaAsiento(asiento);
+    document.getElementById('modalAsiento').style.display = 'flex';
 }
 
 // ===== GALERÍA DE COMPROBANTES =====
@@ -3035,21 +2915,7 @@ function abrirEditarEgreso(mov) {
         compSection.innerHTML = '<p style="color:#94a3b8;font-size:0.85rem;">Sin comprobantes adjuntos</p>';
     }
 
-    // Desglose
-    const chk = document.getElementById('chk_desglose_edit');
-    const listaDes = document.getElementById('lista_desglose_edit');
-    const containerDes = document.getElementById('container_desglose_edit');
-    listaDes.innerHTML = '';
-    if (mov.desglose && mov.desglose.length) {
-        chk.checked = true;
-        containerDes.style.display = 'block';
-        mov.desglose.forEach(item => {
-            agregarDesgloseEdit(item.cedula, item.monto_usd, item.monto, item.sede, item.tipo_gasto);
-        });
-    } else {
-        chk.checked = false;
-        containerDes.style.display = 'none';
-    }
+    faCargarAsiento('_edit', mov.asiento);
 
     m.style.display = 'flex';
 }
@@ -3058,58 +2924,10 @@ function cerrarEditarEgreso() {
     document.getElementById('modalEditarEgreso').style.display = 'none';
 }
 
-function toggleDesgloseEdit() {
-    const chk = document.getElementById('chk_desglose_edit');
-    document.getElementById('container_desglose_edit').style.display = chk.checked ? 'block' : 'none';
-}
-
-function agregarDesgloseEdit(ced, monto_usd, monto, sede = '', tipoGasto = '') {
-    const lista = document.getElementById('lista_desglose_edit');
-    const sedeOptions = buildOptions(sedesList, sede);
-    const tgOptions = buildTipoGastoOptions(tipoGasto);
-
-    const uid = Date.now() + Math.floor(Math.random() * 1000);
-
-    const html = `
-        <div class="row-desglose" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; background: white; padding: 10px; border-radius: 6px; border: 1px solid #ccc;">
-            <div style="flex: 1 1 100%; display: flex; gap: 8px;">
-                <select id="sel_sede_edit_${uid}" name="desglose_sede[]" style="flex: 1; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                    ${sedeOptions}
-                </select>
-                <select id="sel_tg_edit_${uid}" name="desglose_tipo_gasto[]" style="flex: 2; min-width: 0; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                    ${tgOptions}
-                </select>
-            </div>
-            <div style="flex: 1 1 100%; display: flex; gap: 8px; margin-top: 4px; box-sizing: border-box;">
-                <input type="text" name="desglose_cedula[]" placeholder="Cédula" value="${ced || ''}" style="flex: 2 1 0%; min-width: 0; width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                <input type="text" inputmode="decimal" name="desglose_monto_usd[]" placeholder="Monto USD" value="${monto_usd || ''}" oninput="calcDesgloseRow(this, 'usd')" style="flex: 1 1 0%; min-width: 0; width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                <input type="text" inputmode="decimal" name="desglose_monto[]" placeholder="Monto Bs" value="${monto || ''}" oninput="calcDesgloseRow(this, 'bs')" style="flex: 1 1 0%; min-width: 0; width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                <button type="button" onclick="this.closest('.row-desglose').remove()" style="padding: 6px 10px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; flex-shrink: 0; box-sizing: border-box;">&times;</button>
-            </div>
-        </div>`;
-    lista.insertAdjacentHTML('beforeend', html);
-    
-    // Inicializar TomSelect en los nuevos selects
-    new TomSelect(`#sel_tg_edit_${uid}`, { create: false, sortField: { field: "text", direction: "asc" }, placeholder: '-- Tipo Gasto --' });
-}
-
 function validarDesgloseEdit(event) {
-    const chk = document.getElementById('chk_desglose_edit');
-    if (chk && chk.checked) {
-        const montoBsInput = document.querySelector('#formEditarEgreso [name="monto_bs"]');
-        const montoTotal = window.parseLocalNumber(montoBsInput ? montoBsInput.value : 0) || 0;
-        let sumaDesglose = 0;
-        document.querySelectorAll('#lista_desglose_edit input[name="desglose_monto[]"]').forEach(inp => {
-            sumaDesglose += window.parseLocalNumber(inp.value) || 0;
-        });
-        if (Math.abs(montoTotal - sumaDesglose) > 0.05) {
-            alert(`Error: La suma del desglose (Bs. ${sumaDesglose.toFixed(2).replace(".", ",")}) no coincide con el Monto Bs (Bs. ${montoTotal.toFixed(2).replace(".", ",")}).`);
-            event.preventDefault();
-            return false;
-        }
-    }
-    return true;
+    return faValidarAsiento('_edit', event);
 }
+
 
 function abrirVerEgreso(mov) {
     document.getElementById('modalVerEgreso').style.display = 'flex';
@@ -3154,6 +2972,14 @@ function abrirVerEgreso(mov) {
         });
     } else {
         dgCont.style.display = 'none';
+    }
+
+    const asCont = document.getElementById('ver_asiento_container');
+    if (mov.asiento && mov.asiento.debe) {
+        document.getElementById('ver_asiento_tabla').innerHTML = tablaAsiento(mov.asiento);
+        asCont.style.display = 'block';
+    } else {
+        asCont.style.display = 'none';
     }
 
     // Comprobantes
@@ -3246,6 +3072,14 @@ function limpiarFiltros() {
 
 </script>
 
+<div id="modalAsiento" class="modal-overlay" style="display: none; z-index: 1200; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;" onclick="if (event.target === this) this.style.display = 'none'">
+    <div class="panel" style="width: 95%; max-width: 560px; position: relative; padding: 20px; border-radius: 12px; background: white;">
+        <button type="button" onclick="document.getElementById('modalAsiento').style.display = 'none'" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
+        <h3 style="margin-top: 0; color: #b45309;">📒 Asiento contable</h3>
+        <div id="modalAsientoTabla"></div>
+    </div>
+</div>
+
 <!-- Modal Ver Desglose -->
 <div id="modalDesglose" class="modal-overlay" style="display: none; z-index: 1200; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
     <div class="modal-box" style="background: white; width: 95%; max-width: 500px; max-height: 90vh; overflow-y: auto; padding: 20px; border-radius: 12px; position: relative;">
@@ -3326,6 +3160,11 @@ function limpiarFiltros() {
         <div id="ver_desglose_container" style="display: none; background: #f0f9ff; padding: 15px; border-radius: 8px; border: 1px solid #bae6fd; margin-bottom: 20px;">
             <h4 style="margin: 0 0 10px 0; color: #0284c7; font-size: 0.95rem;">Desglose por Beneficiarios</h4>
             <div id="ver_desglose_lista"></div>
+        </div>
+
+        <div id="ver_asiento_container" style="display: none; background: #fffbeb; padding: 15px; border-radius: 8px; border: 1px solid #fde68a; margin-bottom: 20px;">
+            <h4 style="margin: 0 0 10px 0; color: #b45309; font-size: 0.95rem;">📒 Asiento contable</h4>
+            <div id="ver_asiento_tabla"></div>
         </div>
 
         <div style="margin-bottom: 15px; border-top: 1px dashed #cbd5e1; padding-top: 15px;">
@@ -3483,18 +3322,13 @@ function limpiarFiltros() {
                 <p style="margin: 4px 0 0; font-size: 0.8rem; color: #94a3b8;">Puedes seleccionar varias imágenes a la vez</p>
             </div>
 
-            <!-- Desglose -->
             <div style="margin-bottom: 15px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; font-size: 0.95rem;">
-                    <input type="checkbox" id="chk_desglose_edit" onchange="toggleDesgloseEdit()" style="width: 16px; height: 16px;">
-                    Desglose
+                    <input type="checkbox" id="chk_asiento_edit" onchange="faToggleAsiento('_edit')" style="width: 16px; height: 16px; accent-color: #f59e0b;">
+                    Asiento contable
                 </label>
             </div>
-            <div id="container_desglose_edit" style="display: none; background: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 15px;">
-                <h4 style="margin-top: 0; font-size: 0.95rem; color: var(--blue);">Desglose del Pago</h4>
-                <div id="lista_desglose_edit"></div>
-                <button type="button" onclick="agregarDesgloseEdit('','','','','')" style="margin-top: 5px; padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">+ Añadir persona</button>
-            </div>
+            @include('finanzas.partials.asiento_egreso', ['sufijo' => '_edit'])
 
             <!-- Buttons -->
             <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid #e2e8f0; padding-top: 15px;">

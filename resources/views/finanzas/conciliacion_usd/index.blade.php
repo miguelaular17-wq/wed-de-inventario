@@ -124,6 +124,7 @@
                 ['Consolidados', $datos['consolidados'], '#16a34a'],
                 ['Movimientos en el banco', $datos['pendientes'], '#dc2626'],
                 ['Comisiones', $datos['comisiones'], '#7c3aed'],
+                ['Justificados', $datos['justificados'] ?? collect(), '#0ea5e9'],
             ] as [$t, $c, $color])
                 <div class="panel" style="padding:12px; border-left:4px solid {{ $color }};">
                     <div class="muted" style="font-size:.75rem; text-transform:uppercase; font-weight:700;">{{ $t }} ({{ $c->count() }})</div>
@@ -262,7 +263,16 @@
                                     <span class="muted" style="font-size:.78rem;">Sin egresos libres</span>
                                 @endif
                             </td>
-                            <td style="white-space:nowrap;">{!! $accion($l->id, 'comision', 'Comisión') !!} {!! $accion($l->id, 'ignorar', 'Ignorar') !!}</td>
+                            <td style="white-space:nowrap;">
+                                <form method="POST" action="{{ route('finanzas.conciliacion_usd.accion') }}" style="display:inline;" onsubmit="return pedirJustificacion(this, @js(($l->monto < 0 ? 'Egreso' : 'Ingreso') . ' de ' . $usd($l->monto) . ' del ' . $l->fecha->format('d/m/Y')))">
+                                    @csrf
+                                    <input type="hidden" name="linea_id" value="{{ $l->id }}">
+                                    <input type="hidden" name="accion" value="justificar">
+                                    <input type="hidden" name="nota" value="">
+                                    <button type="submit" class="btn" style="padding:3px 8px; font-size:.75rem; background:#0ea5e9; color:white; border:none;">Justificar</button>
+                                </form>
+                                {!! $accion($l->id, 'comision', 'Comisión') !!} {!! $accion($l->id, 'ignorar', 'Ignorar') !!}
+                            </td>
                         </tr>
                     @empty
                         <tr><td colspan="6" class="muted" style="text-align:center;">Todo conciliado 🎉</td></tr>
@@ -318,6 +328,31 @@
             </table>
         </div>
 
+        @if(($datos['justificados'] ?? collect())->isNotEmpty())
+            <h3 style="margin:20px 0 6px;">Justificados ({{ $datos['justificados']->count() }}) · {{ $usd($tot($datos['justificados'])) }}</h3>
+            <p class="muted" style="margin:0 0 6px; font-size:.78rem;">Movimientos del banco sin pareja que se dieron por buenos con una explicación.</p>
+            <div class="table-wrap">
+                <table class="data-table" style="font-size:.82rem;">
+                    <thead><tr><th>Fecha</th><th>Referencia</th><th>Descripción</th><th style="text-align:right;">Monto</th><th>Justificación</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach($datos['justificados'] as $l)
+                            <tr>
+                                <td style="white-space:nowrap;">{{ $l->fecha->format('d/m/Y') }}</td>
+                                <td><code>{{ $l->referencia }}</code></td>
+                                <td style="max-width:280px;">{{ \Illuminate\Support\Str::limit($l->descripcion, 70) }}</td>
+                                <td style="text-align:right; font-weight:700; color:{{ $l->monto < 0 ? '#dc2626' : '#16a34a' }};">{{ $usd($l->monto) }}</td>
+                                <td style="max-width:320px;">
+                                    {{ $l->nota }}
+                                    <div class="muted" style="font-size:.72rem;">{{ $l->justificadoPor?->name ?? '—' }}{{ $l->justificado_at ? ' · ' . $l->justificado_at->format('d/m/Y h:i A') : '' }}</div>
+                                </td>
+                                <td>{!! $accion($l->id, 'restaurar', 'Quitar justificación') !!}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+
         @foreach([['Comisiones', $datos['comisiones'], 'Quitar de comisiones'], ['Ignorados', $datos['ignorados'], 'Restaurar']] as [$titulo, $lista, $boton])
             @if($lista->isNotEmpty())
                 <h3 style="margin:20px 0 6px;">{{ $titulo }} ({{ $lista->count() }}) · {{ $usd($tot($lista)) }}</h3>
@@ -341,4 +376,15 @@
         @endforeach
     @endif
 </div>
+<script>
+    function pedirJustificacion(form, que) {
+        const nota = (window.prompt(que + '\n\n¿Por qué se justifica? (queda guardado con tu nombre)') || '').trim();
+        if (nota.length < 5) {
+            if (nota !== '') alert('Escribe una explicación un poco más larga (mínimo 5 letras).');
+            return false;
+        }
+        form.querySelector('[name="nota"]').value = nota;
+        return true;
+    }
+</script>
 @endsection

@@ -48,6 +48,7 @@ class CobranzaController extends Controller
                 $query->whereIn('codigo_cliente', $personalCodes);
             }
             $historialActual = $encabezados->anexar($query->get(), $ultimaFecha);
+            $this->abonosWeb()->aplicar($historialActual);
         }
 
         $resumenIndicadores = $indicadores->calcular($historialActual, $personalCodes);
@@ -172,6 +173,7 @@ class CobranzaController extends Controller
             ->selectRaw('EXISTS(SELECT 1 FROM cliente_personals WHERE cliente_personals.codigo_cliente = historial_cobranzas.codigo_cliente) as es_personal')
             ->orderBy('historial_cobranzas.nombre_cliente', 'asc')
             ->get();
+        $this->abonosWeb()->aplicar($clientes_lista, 'saldo_usd', 'sede');
         $this->anexarTelefonos($clientes_lista);
 
         if (config('app.debug')) {
@@ -495,6 +497,7 @@ class CobranzaController extends Controller
                 $query->whereIn('codigo_cliente', $personalCodes);
             }
             $historialActual = $encabezados->anexar($query->get(), $ultimaFecha);
+            $this->abonosWeb()->aplicar($historialActual);
         }
 
         $resumenIndicadores = $indicadores->calcular($historialActual, $personalCodes);
@@ -523,6 +526,7 @@ class CobranzaController extends Controller
         $historialConNotas = $encabezados->anexar($historialConNotas, $ultimaFecha)
             ->filter(fn ($r) => (float) $r->monto_neto > 0 || (float) $r->saldo > 0)
             ->values();
+        $this->abonosWeb()->aplicar($historialConNotas);
         $this->anexarTelefonos($historialConNotas);
 
         $agrupadoConNotas = $historialConNotas->groupBy('sede_nombre');
@@ -576,6 +580,7 @@ class CobranzaController extends Controller
                 ->selectRaw('EXISTS(SELECT 1 FROM cliente_personals WHERE cliente_personals.codigo_cliente = historial_cobranzas.codigo_cliente) as es_personal')
                 ->get();
             $historial = $encabezados->anexar($historial, $ultimaFecha);
+            $this->abonosWeb()->aplicar($historial);
         }
 
         $resumen = $indicadores->deudoresUnicos($historial, $personalCodes);
@@ -789,6 +794,7 @@ class CobranzaController extends Controller
             ->values();
 
         $facturasConSaldo = [];
+        $documentosCabecera = [];
         $lineas = [];
         $porSede = [];
         $cargos = 0.0;
@@ -822,6 +828,11 @@ class CobranzaController extends Controller
 
             if ($esCabecera) {
                 $facturasConSaldo[$claveFactura] = $saldoFactura;
+                $documentosCabecera[$claveFactura] = [
+                    'sede' => trim((string) ($row->sede_nombre ?? '')), 'id_documento' => trim((string) $row->id_documento),
+                    'factura' => $factura, 'ajena' => $ajena, 'codigo' => trim((string) $row->codigo_cliente),
+                    'nombre' => trim((string) $row->nombre_cliente),
+                ];
                 if ($ajena) {
                     $saldoIntermediado = round($saldoIntermediado + $saldoFactura, 2);
                 }
@@ -870,6 +881,60 @@ class CobranzaController extends Controller
                 'grupo' => $ajena ? trim((string) $row->codigo_cliente) : $codigo,
                 'grupo_nombre' => trim((string) $row->nombre_cliente),
             ];
+        }
+
+        // Abonos registrados en el flujo de caja de Cobranza (Profit ya no los trae).
+        $servicioAbonos = $this->abonosWeb();
+        if ($documentosCabecera !== [] && $servicioAbonos->disponible()) {
+            foreach ($documentosCabecera as $claveFactura => $doc) {
+                $facturaWeb = \App\Models\CobranzaFactura::query()
+                    ->where('sede_nombre', $doc['sede'])->where('id_documento', $doc['id_documento'])->first();
+                if (! $facturaWeb) {
+                    continue;
+                }
+                $movs = \App\Models\CobranzaMovimiento::query()
+                    ->where('vinculo_tipo', \App\Models\CobranzaFactura::VINCULO)->where('vinculo_id', $facturaWeb->id)
+                    ->where('tipo', \App\Models\CobranzaMovimiento::TIPO_INGRESO)->orderBy('fecha')->orderBy('id')->get();
+                if ($movs->isEmpty()) {
+                    continue;
+                }
+                $antes = $facturasConSaldo[$claveFactura];
+                $despues = min($antes, $servicioAbonos->saldo($facturaWeb));
+                $baja = round($antes - $despues, 2);
+                $facturasConSaldo[$claveFactura] = $despues;
+                $saldoAcumulado = round($saldoAcumulado - $baja, 2);
+                if ($doc['ajena']) {
+                    $saldoIntermediado = round($saldoIntermediado - $baja, 2);
+                }
+                $sedeDoc = strtoupper($doc['sede']);
+                if (isset($porSede[$sedeDoc])) {
+                    $porSede[$sedeDoc]['saldo'] = round($porSede[$sedeDoc]['saldo'] - $baja, 2);
+                }
+                foreach ($movs as $mov) {
+                    $abonos += (float) $mov->monto_usd;
+                    $lineas[] = [
+                        'antiguedad' => '',
+                        'fecha' => $mov->fecha->format('d/m/Y'),
+                        'sede' => $sedeDoc,
+                        'tipo_doc' => 'PAG',
+                        'numero_documento' => (string) ($mov->referencia ?? ''),
+                        'factura_padre' => $doc['factura'],
+                        'descripcion' => 'Abono registrado en la web · '.$mov->concepto,
+                        'cantidad' => null,
+                        'precio' => null,
+                        'total' => null,
+                        'pagado' => round((float) $mov->monto_usd, 2),
+                        'total_factura' => null,
+                        'saldo_factura' => null,
+                        'saldo_acumulado' => $saldoAcumulado,
+                        'tipo' => 'abono',
+                        'a_nombre_de' => $doc['ajena'] ? $doc['nombre'] : null,
+                        'intermediario' => null,
+                        'grupo' => $doc['ajena'] ? $doc['codigo'] : $codigo,
+                        'grupo_nombre' => $doc['nombre'],
+                    ];
+                }
+            }
         }
 
         $tasaBcv = 0.0;
@@ -1286,6 +1351,12 @@ class CobranzaController extends Controller
         }
 
         return $encabezados->anexar($query->get(), $snap);
+    }
+
+    /** Abonos registrados en el flujo de caja de Cobranza: bajan el saldo que trae Profit. */
+    private function abonosWeb(): \App\Services\Cobranza\CobranzaFacturaService
+    {
+        return app(\App\Services\Cobranza\CobranzaFacturaService::class);
     }
 
     private function excludePagadasManualmente($query)

@@ -240,6 +240,13 @@ class OrdenController extends Controller
         if ($conEstadoEmpresa) {
             $query->where(fn ($q) => $q->whereNull('estado_empresa_garantia')->orWhere('estado_empresa_garantia', ''));
         }
+        // Una reparación interna con resultado (reparado, para repuesto…) pasa a «Reparaciones internas resueltas».
+        if (Schema::hasColumn('st_ordenes', 'resultado_interna')) {
+            $query->where(fn ($q) => $q->whereNull('tipo_gestion')
+                ->orWhere('tipo_gestion', '<>', StOrden::TIPO_REPARACION_INTERNA)
+                ->orWhereNull('resultado_interna')
+                ->orWhere('resultado_interna', ''));
+        }
 
         $empresaEnvioFiltro = '';
         $empresasEnvio = StOrden::EMPRESAS_ENVIO_GARANTIA;
@@ -274,6 +281,7 @@ class OrdenController extends Controller
             'garantia' => 0,
             'interna' => 0,
             'sin_tipo' => 0,
+            'unidades' => 0,
         ];
 
         foreach ($ordenes as $orden) {
@@ -287,8 +295,11 @@ class OrdenController extends Controller
                     'garantia' => 0,
                     'interna' => 0,
                     'sin_tipo' => 0,
+                    'unidades' => 0,
                 ];
             }
+            $porMarca[$marca]['unidades'] += $orden->unidades();
+            $totales['unidades'] += $orden->unidades();
             $tipo = strtoupper((string) ($orden->tipo_gestion ?? StOrden::TIPO_ST));
             if ($tipo === StOrden::TIPO_GARANTIA) {
                 $porMarca[$marca]['garantia']++;
@@ -467,6 +478,83 @@ class OrdenController extends Controller
         return view('servicio.ordenes.garantias-reconocidas', $payload);
     }
 
+    /**
+     * Reparaciones internas que ya tienen resultado, una pestaña por resultado (Reparado por el técnico,
+     * Para repuesto, Sin reparación). Si se pasan a «Sin estado» vuelven al reporte por marca.
+     */
+    public function internasResueltas(Request $request): View|Response
+    {
+        $user = $request->user();
+        $conResultado = Schema::hasColumn('st_ordenes', 'resultado_interna');
+        $resultadoFiltro = strtoupper(trim((string) $request->query('resultado', '')));
+        if (! isset(StOrden::RESULTADOS_INTERNA[$resultadoFiltro])) {
+            $resultadoFiltro = '';
+        }
+        $desde = $request->query('fecha_desde');
+        $hasta = $request->query('fecha_hasta');
+        $desde = is_string($desde) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde) ? $desde : null;
+        $hasta = is_string($hasta) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta) ? $hasta : null;
+
+        $base = StOrden::query()
+            ->visiblePara($user)
+            ->sinRecepcionPendiente()
+            ->where('tipo_gestion', StOrden::TIPO_REPARACION_INTERNA)
+            ->when(! $conResultado, fn ($q) => $q->whereRaw('1 = 0'))
+            ->when($conResultado, fn ($q) => $q->whereNotNull('resultado_interna')->where('resultado_interna', '<>', ''))
+            ->when($desde, fn ($q) => $q->whereDate('fecha_ingreso', '>=', $desde))
+            ->when($hasta, fn ($q) => $q->whereDate('fecha_ingreso', '<=', $hasta));
+        if (! $user->scopesServicioToOwnSede() && $request->filled('sede')) {
+            $base->where('sede', strtoupper((string) $request->query('sede')));
+        } elseif ($user->scopesServicioToOwnSede()) {
+            $base->where('sede', strtoupper((string) $user->sede));
+        }
+
+        $porResultado = array_fill_keys(array_keys(StOrden::RESULTADOS_INTERNA), 0);
+        foreach ((clone $base)->selectRaw('resultado_interna, COUNT(*) as n')->groupBy('resultado_interna')->pluck('n', 'resultado_interna') as $r => $n) {
+            $porResultado[$r] = (int) $n;
+        }
+        $ordenes = (clone $base)
+            ->with(['equipoCelular', 'creador', 'reparador'])
+            ->when($resultadoFiltro !== '', fn ($q) => $q->where('resultado_interna', $resultadoFiltro))
+            ->orderBy('fecha_ingreso')->orderBy('numero')
+            ->get()
+            ->each(fn (StOrden $o) => $o->setAttribute('marca_reporte', $this->marcaParaReporte($o)));
+
+        $filtroSede = $user->scopesServicioToOwnSede()
+            ? strtoupper((string) $user->sede)
+            : ($request->query('sede') ? strtoupper((string) $request->query('sede')) : null);
+
+        $payload = [
+            'grupos' => $ordenes->groupBy('resultado_interna'),
+            'porResultado' => $porResultado,
+            'total' => array_sum($porResultado),
+            'resultadoFiltro' => $resultadoFiltro,
+            'desde' => $desde,
+            'hasta' => $hasta,
+            'filtroSede' => $filtroSede,
+            'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
+            'sedes' => config('inventario.sedes_locales'),
+            'generadoPor' => $user->name,
+            'tecnicosReparacion' => $this->tecnicosServicio(incluirmeAMi: true)
+                ->map(fn ($t) => ['id' => $t['id'], 'nombre' => $t['nombre'], 'sede' => $t['sede']])
+                ->values(),
+        ];
+
+        if ($request->query('formato') === 'pdf') {
+            $logoPath = null;
+            $logoFile = public_path('logo.png');
+            if (is_file($logoFile) && ($raw = @file_get_contents($logoFile))) {
+                $logoPath = 'data:image/png;base64,'.base64_encode($raw);
+            }
+
+            return Pdf::loadView('servicio.ordenes.pdf-internas-resueltas', $payload + ['logoPath' => $logoPath])
+                ->setPaper('a4', 'landscape')
+                ->download('reparaciones_internas_'.strtolower($resultadoFiltro ?: 'resueltas').'_'.now()->toDateString().'.pdf');
+        }
+
+        return view('servicio.ordenes.internas-resueltas', $payload);
+    }
+
     private function marcaParaReporte(StOrden $orden): string
     {
         $marca = trim((string) ($orden->equipoCelular?->marca ?? ''));
@@ -527,8 +615,16 @@ class OrdenController extends Controller
         $usarExistente = $request->boolean('usar_equipo_existente') || $request->filled('equipo_id');
         $tipoDispositivo = $data['tipo_dispositivo'] ?? 'celular';
         $sinIdentidad = false;
+        $esLote = (int) ($data['cantidad'] ?? 1) > 1;
 
-        if ($tipoDispositivo === 'celular') {
+        if ($esLote) {
+            // Un lote no es un equipo: no lleva IMEI ni ficha en la bitácora; el serial puede ser el código de lote.
+            $data['imei'] = null;
+            $data['serial'] = $serial;
+            $queEs = is_array($data['atributos'] ?? null) ? trim((string) ($data['atributos']['descripcion_equipo'] ?? '')) : '';
+            $data['equipo'] = trim($queEs.' '.trim(($data['marca'] ?? '').' '.($data['modelo'] ?? ''))) ?: ($data['equipo'] ?? null);
+            unset($data['equipo_id']);
+        } elseif ($tipoDispositivo === 'celular') {
             if ($imeiNoAplica) {
                 if (! $serial && ! $serialNoAplica && ! $request->filled('equipo_id')) {
                     throw ValidationException::withMessages([
@@ -562,7 +658,7 @@ class OrdenController extends Controller
             $data['atributos'] = $atributos;
         }
 
-        if ($imei || $serial || $sinIdentidad || $request->filled('equipo_id')) {
+        if (! $esLote && ($imei || $serial || $sinIdentidad || $request->filled('equipo_id'))) {
             if ($request->filled('equipo_id') && $usarExistente) {
                 $equipo = StEquipo::query()->findOrFail((int) $request->input('equipo_id'));
                 $equipo->fill(array_filter([
@@ -1496,6 +1592,7 @@ class OrdenController extends Controller
             'rango_garantia' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::RANGOS_GARANTIA))],
             'empresa_envio_garantia' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::EMPRESAS_ENVIO_GARANTIA))],
             'valor_dispositivo' => ['nullable', 'numeric', 'min:0', 'max:999999999999.99'],
+            'cantidad' => ['nullable', 'integer', 'min:1', 'max:9999'],
             'cliente_nombre' => ['nullable', 'string', 'max:255'],
             'cliente_telefono' => ['nullable', 'string', 'max:40'],
             'cliente_cedula' => ['nullable', 'string', 'max:40'],
@@ -1546,6 +1643,12 @@ class OrdenController extends Controller
         }
 
         unset($data['sede_local']);
+
+        if (! Schema::hasColumn('st_ordenes', 'cantidad')) {
+            unset($data['cantidad']);
+        } elseif (array_key_exists('cantidad', $data) || ! $orden) {
+            $data['cantidad'] = max(1, (int) ($data['cantidad'] ?? 1));
+        }
 
         if (($data['marca'] ?? null) === \App\Support\MarcasServicio::OTRA) {
             $data['marca'] = $data['marca_otra'] ?? null;

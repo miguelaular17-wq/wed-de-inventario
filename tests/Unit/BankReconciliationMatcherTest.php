@@ -244,6 +244,36 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertFalse($this->matcher->coincideTraslado($otraFecha, $traslado));
     }
 
+    public function test_entrada_de_traslado_puede_acreditarse_dias_despues_pero_no_antes(): void
+    {
+        // Traslado hecho el sábado 01/08 desde BNC; Mercantil lo acredita el lunes 03/08 con otra referencia.
+        $traslado = (object) [
+            'id' => 382,
+            'categoria_egreso' => 'traslados',
+            'banco' => 'BNC',
+            'titular' => 'L.S. Cashea',
+            'banco_receptor' => 'Mercantil',
+            'titular_receptor' => 'Grupo JENU',
+            'fecha' => '2026-08-01',
+            'monto_bs' => 3743950.00,
+            'referencia' => '95901002',
+        ];
+        $mismoDia = (object) array_merge((array) $traslado, ['id' => 406, 'fecha' => '2026-08-03', 'referencia' => '95950208']);
+        $entrada = fn (string $fecha) => new ConciliacionLinea([
+            'banco' => 'MERCANTIL',
+            'titular' => 'GRUPO JENU',
+            'fecha' => $fecha,
+            'referencia' => '20400350798',
+            'monto' => 3743950.00,
+            'tipo' => 'abono',
+        ]);
+
+        $this->assertTrue($this->matcher->coincideTraslado($entrada('2026-08-03'), $traslado));
+        $this->assertFalse($this->matcher->coincideTraslado($entrada('2026-07-31'), $traslado));
+        $this->assertFalse($this->matcher->coincideTraslado($entrada('2026-08-05'), $traslado));
+        $this->assertSame(406, $this->matcher->mejorEgreso($entrada('2026-08-03'), [$traslado, $mismoDia])->id);
+    }
+
     public function test_venezuela_egreso_concilia_monto_neto_comision_2_porciento(): void
     {
         // BDD: bruto 100000; extracto BDV: 98000 (neto −2%)

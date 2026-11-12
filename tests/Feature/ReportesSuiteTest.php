@@ -111,8 +111,9 @@ class ReportesSuiteTest extends TestCase
             ->assertOk()->assertSee('CARLOS COLINA')->assertSee('V32365100')->assertSee('8236')->assertSee('4.447,90');
         $this->get(route('reportes_suite', ['reporte' => 'pagos'] + $filtros))
             ->assertOk()->assertSee('TARJ. DÉBITO BANESCO P.V. JRZ')->assertSee('V32365100');
+        // Solo salen los cierres que ya se procesaron en la web.
         $this->get(route('reportes_suite', ['reporte' => 'cuadre'] + $filtros))
-            ->assertOk()->assertSee('JAIR AVILA')->assertSee('FALTANTE -2,44$ EN EFECTIVO')->assertSee('380,86')->assertSee('Pendiente');
+            ->assertOk()->assertDontSee('JAIR AVILA')->assertDontSee('380,86');
 
         $cuadreId = DB::table('cuadres_caja')->where('codigo_caja', 'CJA09')->value('id');
         DB::table('cuadre_caja_pagos')->insert(['cuadre_caja_id' => $cuadreId, 'codigo_metodo' => 'EFE$', 'forma_pago' => 'EFECTIVO $',
@@ -122,7 +123,7 @@ class ReportesSuiteTest extends TestCase
         DB::table('cuadres_caja')->where('id', $cuadreId)->update(['conciliado_at' => now(), 'estado_tesoreria' => 'procesado',
             'observacion_tesoreria' => 'Faltan 5 en efectivo']);
         $this->get(route('reportes_suite', ['reporte' => 'cuadre'] + $filtros))
-            ->assertOk()->assertSee('Faltan 5 en efectivo')->assertSee('Procesado')->assertSee('-5,00');
+            ->assertOk()->assertSee('JAIR AVILA')->assertSee('Faltan 5 en efectivo')->assertSee('380,86')->assertSee('Procesado')->assertSee('-5,00')->assertSee('1 cierres');
         $this->get(route('reportes_suite', ['reporte' => 'cuadre', 'mostrar_total' => '0'] + $filtros))
             ->assertOk()->assertDontSee('380,86');
 

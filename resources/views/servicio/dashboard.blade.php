@@ -52,7 +52,7 @@
                     <tbody>
                         @foreach($metricas['por_recibir'] as $orden)
                             <tr>
-                                <td>{{ $orden->equipoCelular?->etiqueta() ?: ($orden->equipo ?: '—') }}</td>
+                                <td>{{ $orden->equipoCelular?->etiqueta() ?: ($orden->equipo ?: '—') }}@if($orden->esLote()) <strong>× {{ $orden->unidades() }}</strong>@endif</td>
                                 <td><a href="{{ route('servicio.ordenes.show', $orden) }}">{{ $orden->codigo() }}</a></td>
                                 <td>{{ $orden->sede_origen_transfer ?: '—' }}</td>
                                 <td>

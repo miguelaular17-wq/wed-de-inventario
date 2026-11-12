@@ -166,27 +166,24 @@ class ReservaController extends Controller
             'comentario'    => 'nullable|string',
         ]);
 
-        $data['user_id'] = auth()->id();
-        $reserva->pagos()->create($data);
+        DB::transaction(function () use ($reserva, $data) {
+            app(\App\Services\Cobranza\PagosModulosService::class)->pagarReserva($reserva, $data, auth()->id());
 
-        // Registrar ingreso en el balance (PatTransaccion)
-        $pagoTx = [
-            'propiedad_id'  => $reserva->propiedad_id,
-            'tipo'          => 'ingreso',
-            'categoria'     => 'Reserva temporal',
-            'descripcion'   => "Pago de reserva - {$reserva->cliente_nombre} (" . $data['forma_pago'] . ")",
-            'monto'         => $data['monto_pagado'],
-            'moneda'        => $reserva->moneda,
-            'fecha'         => $data['fecha_pago'],
-            'mes'           => Carbon::parse($data['fecha_pago'])->month,
-            'anio'          => Carbon::parse($data['fecha_pago'])->year,
-            'observaciones' => $data['comentario'] ?? null,
-        ];
-        if (Schema::hasColumn('pat_transacciones', 'reserva_id')) {
-            $pagoTx['reserva_id'] = $reserva->id;
-        }
-        PatTransaccion::create($pagoTx);
-        $this->comisionSync->sync($reserva->fresh(), $data['fecha_pago']);
+            // Entra al flujo de caja de Cobranza (y a la conciliación si llegó a un banco).
+            app(\App\Services\Cobranza\CobranzaFlujoService::class)->registrarDesdeModulo([
+                'ambito' => 'patrimonial',
+                'fecha' => $data['fecha_pago'],
+                'monto_usd' => (float) $data['monto_pagado'],
+                'tasa_cambio' => $data['tasa_cambio'] ?? null,
+                'forma_pago' => $data['forma_pago'],
+                'banco_destino' => $data['banco_destino'] ?? null,
+                'referencia' => $data['referencia'] ?? null,
+                'concepto' => 'Reserva '.($reserva->propiedad?->nombre ?? '').' · '.$reserva->cliente_nombre,
+                'contraparte' => $reserva->cliente_nombre,
+                'vinculo_tipo' => \App\Models\CobranzaMovimiento::VINCULO_RESERVA,
+                'vinculo_id' => $reserva->id,
+            ], auth()->user());
+        });
 
         return back()->with('status', '💰 Pago registrado exitosamente y añadido al balance.');
     }

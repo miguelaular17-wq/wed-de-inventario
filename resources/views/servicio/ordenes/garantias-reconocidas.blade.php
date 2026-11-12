@@ -101,6 +101,9 @@
                                 <td>{{ $orden->marca_reporte }}</td>
                                 <td>
                                     <strong>{{ $orden->equipo ?: '—' }}</strong>
+                                    @if($orden->esLote())
+                                        <strong style="color:#1d4ed8;">× {{ $orden->unidades() }}</strong>
+                                    @endif
                                     @if($orden->serial || $orden->imei)
                                         <div class="muted" style="font-size:.75rem;">{{ $orden->serial ?: $orden->imei }}</div>
                                     @endif

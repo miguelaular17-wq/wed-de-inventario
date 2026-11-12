@@ -14,9 +14,12 @@ class FlujoCaja extends Model
         'comision', 'motivo', 'categoria_egreso', 'tipo_gasto', 'nomina_empleado_id',
         'es_todoticket', 'detalle_todoticket',
         'sede', 'placa_vehiculo', 'oculto', 'comprobante_url',
-        'desglose', 'comprobantes', 'cuenta_por_pagar_id',
-        'anulado', 'anulado_motivo', 'anulado_at', 'conciliar_en',
+        'desglose', 'asiento', 'comprobantes', 'cuenta_por_pagar_id',
+        'anulado', 'anulado_motivo', 'anulado_at', 'conciliar_en', 'origen',
     ];
+
+    /** Copia oculta de un movimiento del flujo de caja de Cobranza: solo existe para la conciliación. */
+    public const ORIGEN_COBRANZA = 'cobranza';
 
     /** Sin los anulados (duplicados, devoluciones): no cuentan en listados ni totales. */
     public function scopeVigentes($query)
@@ -64,6 +67,7 @@ class FlujoCaja extends Model
 
     protected $casts = [
         'desglose' => 'array',
+        'asiento' => 'array',
         'comprobantes' => 'array',
         'detalle_todoticket' => 'array',
         'es_todoticket' => 'boolean',

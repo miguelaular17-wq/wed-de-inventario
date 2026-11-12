@@ -294,11 +294,11 @@
                 @endforeach
 
                 @if($posLineas)
-                    <tr class="cc-seccion"><td colspan="6">💳 Puntos de venta <span>El monto de cada punto es la suma de sus lotes. Toca «Lotes» para verlos o anotarlos.</span></td></tr>
+                    <tr class="cc-seccion"><td colspan="6">💳 Puntos de venta <span>Todos los bancos en una sola línea: el monto es la suma de los lotes. Toca «Lotes» para verlos o anotarlos con su banco.</span></td></tr>
                     @foreach($posLineas as $l)
                         @include('cuadre_caja._linea', $fila + ['l' => $l])
                     @endforeach
-                    <tr class="cc-subtotal" id="cc-pos-subtotal">
+                    <tr class="cc-subtotal" id="cc-pos-subtotal" @if(count($posLineas) < 2) style="display:none;" @endif>
                         <td class="cc-col-forma">Total puntos de venta</td>
                         <td class="cc-num">{{ $posSuiteBs > 0 ? 'Bs '.number_format($posSuiteBs, 2, ',', '.') : '—' }}</td>
                         <td class="cc-num">{{ $dinero($posSuiteUsd) }}</td>

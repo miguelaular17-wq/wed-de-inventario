@@ -206,6 +206,11 @@
                     <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Valor del dispositivo</label>
                     <input type="number" name="valor_dispositivo" value="{{ old('valor_dispositivo') }}" min="0" step="0.01" placeholder="Ej: 450.00" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
                 </div>
+                <div>
+                    <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Cantidad (unidades)</label>
+                    <input type="number" name="cantidad" id="st-cantidad" value="{{ old('cantidad', 1) }}" min="1" max="9999" step="1" required style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
+                    <div class="muted" style="font-size:.78rem;margin-top:4px;">Varias unidades del mismo producto se registran como un lote en una sola orden.</div>
+                </div>
                 <div class="st-campo" data-tipos="electronica">
                     <label style="display:block;font-weight:500;margin-bottom:4px;font-size:.9rem;">Qué equipo es *</label>
                     <input type="text" name="descripcion_equipo" value="{{ old('descripcion_equipo') }}" placeholder="Tablet, router, TV, consola, reloj…" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
@@ -483,6 +488,28 @@
         } else if (serialHint) {
             serialHint.style.display = 'none';
         }
+
+        // Lote: varias unidades no tienen un IMEI único; el serial puede llevar el código de lote.
+        const cantidad = document.getElementById('st-cantidad');
+        if (cantidad && Number(cantidad.value) > 1) {
+            if (imeiLabel) imeiLabel.textContent = 'IMEI (no se pide en un lote)';
+            if (imei) {
+                imei.disabled = true;
+                imei.value = '';
+                imei.placeholder = 'Lote de varias unidades';
+            }
+            if (hint) hint.textContent = '';
+            if (usarWrap) usarWrap.style.display = 'none';
+            if (usarCheck) usarCheck.checked = false;
+            if (serialWrap) serialWrap.style.display = '';
+            if (serial) {
+                serial.disabled = false;
+                serial.placeholder = 'Código de lote (opcional)';
+            }
+            if (serialLabel) serialLabel.textContent = 'Serial o código de lote';
+            if (serialNaWrap) serialNaWrap.style.display = 'none';
+            if (serialHint) serialHint.style.display = 'none';
+        }
     }
     function syncSerialNoAplica() {
         syncImeiNoAplica();
@@ -510,6 +537,7 @@
     document.querySelectorAll('.st-tipo-dispositivo').forEach((el) => el.addEventListener('change', syncTipoDispositivo));
     document.getElementById('st-imei-na')?.addEventListener('change', syncImeiNoAplica);
     document.getElementById('st-serial-na')?.addEventListener('change', syncSerialNoAplica);
+    document.getElementById('st-cantidad')?.addEventListener('input', syncImeiNoAplica);
 
     function syncLente() {
         const wrap = document.getElementById('st-serial-lente-wrap');

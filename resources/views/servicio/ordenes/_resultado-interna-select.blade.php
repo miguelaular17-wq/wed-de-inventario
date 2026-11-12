@@ -6,10 +6,11 @@
     data-url="{{ route('servicio.ordenes.resultado_interna', $orden) }}"
     data-actual="{{ $resultadoActual }}"
     data-tecnico="{{ $orden->reparado_por }}"
+    data-modo="{{ $modo ?? 'marca' }}"
     style="background:{{ $fondo }};color:{{ $texto }};">
     <option value="">Sin estado</option>
     @foreach(\App\Models\StOrden::RESULTADOS_INTERNA as $clave => $etiqueta)
         <option value="{{ $clave }}" @selected($resultadoActual === $clave)>{{ $clave === \App\Models\StOrden::RESULTADO_REPARADO ? 'Reparado (técnico)' : $etiqueta }}</option>
     @endforeach
 </select>
-<div class="ri-aviso">{{ $resultadoActual === \App\Models\StOrden::RESULTADO_REPARADO && $orden->reparador ? 'Por '.$orden->reparador->name : '' }}</div>
+<div class="ri-aviso">{{ $resultadoActual === \App\Models\StOrden::RESULTADO_REPARADO && $orden->nombreReparador() ? 'Por '.$orden->nombreReparador() : '' }}</div>

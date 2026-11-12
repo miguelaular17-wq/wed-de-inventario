@@ -20,6 +20,9 @@ use Illuminate\Support\Facades\Schema;
  */
 class CuadreCajaService
 {
+    /** Código de cuenta de la línea que junta todos los puntos de venta de una forma de pago. */
+    public const CUENTA_PUNTOS = 'PUNTOS';
+
     public const ESTADOS = [
         CuadreCaja::PENDIENTE => 'Pendiente',
         CuadreCaja::PROCESADO => 'Procesado',
@@ -132,6 +135,9 @@ class CuadreCajaService
         foreach ($cuadre->lotes as $lote) {
             /** @var CuadreCajaLote $lote */
             $clave = $this->clave($lote->codigo_metodo, $lote->codigo_cuenta);
+            if ($lote->codigo_cuenta === self::CUENTA_PUNTOS) {
+                $lineas[$clave] ??= $this->lineaVacia($clave, $lote->codigo_metodo, self::CUENTA_PUNTOS, null, null, false);
+            }
             if (isset($lineas[$clave])) {
                 $lineas[$clave]['lotes'][] = [
                     'banco' => $lote->banco,
@@ -142,6 +148,7 @@ class CuadreCajaService
                 ];
             }
         }
+        $lineas = $this->agruparPuntosDeVenta($lineas);
 
         foreach ($lineas as &$linea) {
             $linea['suite'] = round($linea['suite'], 2);
@@ -159,6 +166,55 @@ class CuadreCajaService
         unset($linea);
 
         return $this->ordenarComoSuite(array_values($lineas), (string) $cuadre->sede);
+    }
+
+    /**
+     * Todos los puntos de venta en Bs de una misma forma de pago (TARJ. DÉBITO) van en una sola línea,
+     * sea cual sea el banco: se suman lo de Suite, lo contado y los lotes. Cada lote conserva su banco y
+     * titular, que es con lo que se concilia. La cuenta de la línea es la del punto principal (banco por defecto).
+     *
+     * @param  array<string, array<string, mixed>>  $lineas
+     * @return array<string, array<string, mixed>>
+     */
+    private function agruparPuntosDeVenta(array $lineas): array
+    {
+        $grupos = [];
+        foreach ($lineas as $clave => $l) {
+            if ($l['punto_venta'] && ! $l['en_dolares']) {
+                $grupos[$l['codigo_metodo']][$clave] = $l;
+            }
+        }
+        foreach ($grupos as $metodo => $grupo) {
+            $reales = array_filter($grupo, fn ($l) => $l['codigo_cuenta'] !== self::CUENTA_PUNTOS);
+            $principal = collect($reales ?: $grupo)->sortByDesc(fn ($l) => $l['suite'])->first();
+            $contados = array_filter($grupo, fn ($l) => $l['tesoreria'] !== null);
+            $claveGrupo = $this->clave((string) $metodo, self::CUENTA_PUNTOS);
+            $forma = collect($grupo)->pluck('forma_pago')->first(fn ($f) => $f && $f !== $metodo) ?? $principal['forma_pago'];
+
+            foreach (array_keys($grupo) as $c) {
+                unset($lineas[$c]);
+            }
+            $lineas[$claveGrupo] = [
+                'clave' => $claveGrupo,
+                'codigo_metodo' => (string) $metodo,
+                'codigo_cuenta' => self::CUENTA_PUNTOS,
+                'forma_pago' => $forma,
+                'cuenta' => $principal['cuenta'],
+                'en_dolares' => false,
+                'suite' => array_sum(array_column($grupo, 'suite')),
+                'suite_usd' => array_sum(array_column($grupo, 'suite_usd')),
+                'tesoreria' => $contados ? array_sum(array_column($contados, 'tesoreria')) : null,
+                'tesoreria_usd' => null,
+                'diferencia_usd' => null,
+                'punto_venta' => true,
+                'agrupada' => true,
+                'origenes' => array_values(array_map(fn ($l) => $l['codigo_cuenta'], $reales)),
+                'orden_clave' => $principal['clave'],
+                'lotes' => array_merge(...array_values(array_map(fn ($l) => $l['lotes'], $grupo))),
+            ];
+        }
+
+        return $lineas;
     }
 
     /**
@@ -204,7 +260,7 @@ class CuadreCajaService
         $cuentas = array_flip(config('cuadre_caja.orden_cuentas', []));
         $fuera = PHP_INT_MAX;
         $orden = fn ($l) => [
-            $fijas[$l['clave']] ?? $fuera,
+            $fijas[$l['orden_clave'] ?? $l['clave']] ?? $fuera,
             $metodos[$l['codigo_metodo']] ?? $fuera, mb_strtoupper((string) $l['forma_pago']),
             $cuentas[$l['codigo_cuenta'] ?? ''] ?? (($l['codigo_cuenta'] ?? '') === '' ? -1 : $fuera), (string) $l['cuenta'],
         ];
@@ -373,6 +429,12 @@ class CuadreCajaService
                 'codigo_metodo' => (string) $linea['codigo_metodo'],
                 'codigo_cuenta' => (string) ($linea['codigo_cuenta'] ?? ''),
             ];
+            // La línea que junta los puntos reemplaza lo que se había contado punto por punto.
+            if (! empty($linea['origenes'])) {
+                CuadreCajaConteo::query()->where('cuadre_caja_id', $cuadre->id)
+                    ->where('codigo_metodo', (string) $linea['codigo_metodo'])
+                    ->whereIn('codigo_cuenta', $linea['origenes'])->delete();
+            }
             if ($monto === null || trim((string) $monto) === '') {
                 CuadreCajaConteo::query()->where($buscar)->delete();
 
@@ -380,7 +442,7 @@ class CuadreCajaService
             }
             CuadreCajaConteo::query()->updateOrCreate($buscar, [
                 'forma_pago' => $linea['forma_pago'],
-                'cuenta' => $linea['cuenta'],
+                'cuenta' => ($linea['agrupada'] ?? false) ? 'PUNTOS DE VENTA' : $linea['cuenta'],
                 'en_dolares' => (bool) $linea['en_dolares'],
                 'monto' => round((float) $monto, 2),
                 'user_id' => $user->id,
@@ -411,7 +473,7 @@ class CuadreCajaService
                 continue;
             }
             if ($numero === '') {
-                throw new \DomainException('Falta el número de un lote de '.$linea['forma_pago'].($linea['cuenta'] ? ' · '.$linea['cuenta'] : '').'.');
+                throw new \DomainException('Falta el número de un lote de '.$linea['forma_pago'].($linea['cuenta'] && empty($linea['agrupada']) ? ' · '.$linea['cuenta'] : '').'.');
             }
             if (! is_numeric($monto) || (float) $monto <= 0) {
                 throw new \DomainException("El lote {$numero} necesita un monto mayor que cero.");
@@ -426,7 +488,7 @@ class CuadreCajaService
             }
             $llave = $banco.'|'.$titular.'|'.mb_strtoupper($numero, 'UTF-8');
             if (isset($out[$llave])) {
-                throw new \DomainException("El lote {$numero} de {$banco} · {$titular} está repetido en ".($linea['cuenta'] ?: $linea['forma_pago']).'.');
+                throw new \DomainException("El lote {$numero} de {$banco} · {$titular} está repetido en ".(empty($linea['agrupada']) && $linea['cuenta'] ? $linea['cuenta'] : $linea['forma_pago']).'.');
             }
             $out[$llave] = ['banco' => $banco, 'titular' => $titular, 'lote' => $numero, 'monto' => round((float) $monto, 2)];
         }
@@ -448,11 +510,12 @@ class CuadreCajaService
         $descripcion = trim('Cuadre de caja '.$cuadre->sede.' · '.($cuadre->descripcion_caja ?: $cuadre->codigo_caja)
             .' · '.($cuadre->usuario_nombre ?: $cuadre->usuario));
 
+        $cuentas = array_values(array_unique(array_merge([(string) ($linea['codigo_cuenta'] ?? '')], $linea['origenes'] ?? [])));
         $existentes = CuadreCajaLote::query()
             ->with('ingreso')
             ->where('cuadre_caja_id', $cuadre->id)
             ->where('codigo_metodo', (string) $linea['codigo_metodo'])
-            ->where('codigo_cuenta', (string) ($linea['codigo_cuenta'] ?? ''))
+            ->whereIn('codigo_cuenta', $cuentas)
             ->get()
             ->keyBy(fn (CuadreCajaLote $l) => ($l->banco ?: $bancoCuenta).'|'.($l->titular ?: $titularCuenta).'|'.mb_strtoupper($l->lote, 'UTF-8'));
         $nuevos = collect($lista)->keyBy(fn ($l) => $l['banco'].'|'.$l['titular'].'|'.mb_strtoupper($l['lote'], 'UTF-8'));
@@ -498,6 +561,7 @@ class CuadreCajaService
             }
 
             $registro->fill([
+                'codigo_cuenta' => (string) ($linea['codigo_cuenta'] ?? ''),
                 'banco' => $banco,
                 'titular' => $titular,
                 'lote' => $nuevo['lote'],
@@ -565,7 +629,7 @@ class CuadreCajaService
             'tesoreria' => null,
             'tesoreria_usd' => null,
             'diferencia_usd' => null,
-            'punto_venta' => $this->esPuntoDeVenta($metodo, $forma, $nombreCuenta),
+            'punto_venta' => $cuenta === self::CUENTA_PUNTOS || $this->esPuntoDeVenta($metodo, $forma, $nombreCuenta),
             'lotes' => [],
         ];
     }
