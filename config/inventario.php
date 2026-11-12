@@ -81,7 +81,7 @@ return [
     'catalogo_cliente_token' => env('CATALOGO_CLIENTE_TOKEN', ''),
 
     /** Sedes que no se ofrecen en el filtro del catálogo. */
-    'catalogo_sedes_ocultas' => ['NUNES', 'MOVISTAR', 'JRZ'],
+    'catalogo_sedes_ocultas' => ['NUNES', 'MOVISTAR'],
 
     /**
      * Categorías visibles para el rol telefonía (Ventas / Inventario),

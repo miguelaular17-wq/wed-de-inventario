@@ -149,10 +149,23 @@ class CuadreCajaService
             }
         }
         $lineas = $this->agruparPuntosDeVenta($lineas);
+        $lineas = $this->aplicarReglasSuite($lineas, $cuadre, $factor);
 
         foreach ($lineas as &$linea) {
             $linea['suite'] = round($linea['suite'], 2);
             $linea['suite_usd'] = round($linea['suite_usd'], 2);
+            $regla = $linea['regla'] ?? null;
+            if ($regla === 'devolucion') {
+                // Solo lectura: lo contado es lo devuelto, y entra entero a la diferencia.
+                $linea['tesoreria'] = $linea['suite'];
+                $linea['tesoreria_usd'] = $linea['suite_usd'];
+                $linea['diferencia_usd'] = $linea['suite_usd'];
+
+                continue;
+            }
+            if ($regla === 'no_suma') {
+                continue;
+            }
             if ($linea['tesoreria'] !== null) {
                 $usd = $linea['en_dolares'] ? $linea['tesoreria'] : ($factor ? $linea['tesoreria'] / $factor : 0.0);
                 $linea['tesoreria_usd'] = round($usd, 2);
@@ -166,6 +179,69 @@ class CuadreCajaService
         unset($linea);
 
         return $this->ordenarComoSuite(array_values($lineas), (string) $cuadre->sede);
+    }
+
+    /**
+     * Reglas de las formas de pago de Suite (config cuadre_caja): la nota de crédito no suma y el efectivo
+     * devuelto se calcula de las devoluciones de la cajera y suma a lo contado.
+     *
+     * @param  array<string, array<string, mixed>>  $lineas
+     * @return array<string, array<string, mixed>>
+     */
+    private function aplicarReglasSuite(array $lineas, CuadreCaja $cuadre, ?float $factor): array
+    {
+        $noSuman = array_map('strtoupper', config('cuadre_caja.metodos_no_suman', []));
+        $metodoDevolucion = strtoupper((string) config('cuadre_caja.metodo_devolucion_efectivo', ''));
+
+        $notaCreditoBs = 0.0;
+        foreach ($lineas as &$l) {
+            $metodo = strtoupper((string) $l['codigo_metodo']);
+            if (in_array($metodo, $noSuman, true)) {
+                $l['regla'] = 'no_suma';
+                $notaCreditoBs += $l['en_dolares'] ? $l['suite'] * (float) $factor : $l['suite'];
+            }
+        }
+        unset($l);
+
+        if ($metodoDevolucion === '') {
+            return $lineas;
+        }
+        $clave = $this->clave($metodoDevolucion, '');
+        $devueltoBs = $this->devolucionesBs($cuadre);
+        if ($devueltoBs !== null && ! isset($lineas[$clave]) && $devueltoBs - $notaCreditoBs > 0.009) {
+            $lineas[$clave] = $this->lineaVacia($clave, $metodoDevolucion, '', 'EFECTIVO DEVOLUCION', null, false);
+        }
+        if (isset($lineas[$clave])) {
+            $linea = &$lineas[$clave];
+            $linea['regla'] = 'devolucion';
+            // Si Suite no lo mandó como cobro: devoluciones del día − lo que se pagó con nota de crédito.
+            if (abs($linea['suite']) < 0.009 && $devueltoBs !== null) {
+                $bs = max(0.0, round($devueltoBs - $notaCreditoBs, 2));
+                $linea['suite'] = $bs;
+                $linea['suite_usd'] = $factor ? round($bs / $factor, 2) : 0.0;
+            }
+            unset($linea);
+        }
+
+        return $lineas;
+    }
+
+    /** Total en Bs de las devoluciones registradas por la cajera de la caja ese día (ventas_documentos DEV). */
+    private function devolucionesBs(CuadreCaja $cuadre): ?float
+    {
+        if (! Schema::hasTable('ventas_documentos') || ! Schema::hasColumn('ventas_documentos', 'usuario') || ! $cuadre->usuario || ! $cuadre->fecha_cierre) {
+            return null;
+        }
+        $cedula = $this->cedula((string) $cuadre->usuario);
+        $usuarios = array_values(array_unique(array_filter([(string) $cuadre->usuario, $cedula, 'V'.$cedula, 'E'.$cedula])));
+
+        return (float) DB::table('ventas_documentos')
+            ->where('sede', $cuadre->sede)
+            ->whereDate('fecha', $cuadre->fecha_cierre->toDateString())
+            ->where('tipo_documento', 'DEV')
+            ->where(fn ($q) => $q->whereNull('estado')->orWhereRaw("LOWER(estado) = 'registrado'"))
+            ->whereIn('usuario', $usuarios)
+            ->sum('total_neto_bs');
     }
 
     /**
@@ -207,6 +283,7 @@ class CuadreCajaService
                 'tesoreria_usd' => null,
                 'diferencia_usd' => null,
                 'punto_venta' => true,
+                'regla' => null,
                 'agrupada' => true,
                 'origenes' => array_values(array_map(fn ($l) => $l['codigo_cuenta'], $reales)),
                 'orden_clave' => $principal['clave'],
@@ -274,11 +351,14 @@ class CuadreCajaService
     public function resumen(CuadreCaja $cuadre): array
     {
         $lineas = $this->lineas($cuadre);
-        $ingresos = round(array_sum(array_column($lineas, 'suite_usd')), 2);
+        // La nota de crédito no suma; el efectivo devuelto solo suma a lo contado (no a lo declarado).
+        $declaradas = array_filter($lineas, fn ($l) => ($l['regla'] ?? null) === null);
+        $contadas = array_filter($lineas, fn ($l) => ($l['regla'] ?? null) !== 'no_suma');
+        $ingresos = round(array_sum(array_column($declaradas, 'suite_usd')), 2);
         if (! $cuadre->conciliado()) {
             return ['lineas' => $lineas, 'ingresos_usd' => $ingresos, 'tesoreria_usd' => null, 'diferencia_usd' => null];
         }
-        $tesoreria = round(array_sum(array_map(fn ($l) => $l['tesoreria_usd'] ?? 0.0, $lineas)), 2);
+        $tesoreria = round(array_sum(array_map(fn ($l) => $l['tesoreria_usd'] ?? 0.0, $contadas)), 2);
 
         return [
             'lineas' => $lineas,
@@ -631,6 +711,7 @@ class CuadreCajaService
             'diferencia_usd' => null,
             'punto_venta' => $cuenta === self::CUENTA_PUNTOS || $this->esPuntoDeVenta($metodo, $forma, $nombreCuenta),
             'lotes' => [],
+            'regla' => null,
         ];
     }
 

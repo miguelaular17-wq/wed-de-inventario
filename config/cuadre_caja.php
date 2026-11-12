@@ -51,6 +51,16 @@ return [
     'metodos_cuadre' => ['01', '02', 'TDD', 'TRFBS', 'TRF', '10', '11', 'CASHEA', 'GIFTCARD', 'NDC', 'NDC1', 'IGTF'],
 
     /*
+     * Como en la configuración de las formas de pago de Suite:
+     * - «No tomar en cuenta para totalizar» (Nota de crédito): se ve, pero no suma al cuadre ni a la diferencia.
+     * - «Procesar en negativo (diferencia)» (Efectivo devolución): el efectivo que se le devolvió al cliente; Suite
+     *   no lo manda como cobro, sale de las devoluciones de la cajera ese día menos lo que se pagó con nota de crédito,
+     *   y se carga solo en lo contado: compensa el efectivo que falta en la caja.
+     */
+    'metodos_no_suman' => ['NDC'],
+    'metodo_devolucion_efectivo' => 'NDC1',
+
+    /*
      * Cuentas que también son punto de venta aunque su nombre no diga «P.V.» (solo para tarjetas;
      * una transferencia a esa cuenta no es un lote del punto).
      */

@@ -11,6 +11,7 @@
     $montoPos = $lotesIniciales ? number_format($sumaLotes, 2, '.', '') : '';
     $cantidad = $editable ? count($lotesIniciales) : count($lotesGuardados);
     $abierto = $editable && session()->hasOldInput() && $pos && ! $extra;
+    $regla = $l['regla'] ?? null;
     if ($pos) {
         [$bancoPos, $titularPos] = app(\App\Services\CuadreCajaService::class)->bancoTitularPuntoVenta($l['cuenta'], (string) $cuadre->sede);
         $bancosLote = array_values(array_unique(array_merge([$bancoPos], $bancosPos ?? [])));
@@ -19,7 +20,8 @@
 @endphp
 <tr class="cc-linea {{ $pos ? 'cc-pos' : '' }} {{ $abierto ? 'is-abierto' : '' }} {{ $extra ? 'cc-extra' : '' }} {{ $filaDif($l['diferencia_usd']) }}"
     data-clave="{{ $clave }}" data-pos="{{ $pos ? 1 : 0 }}" data-usd="{{ $usd ? 1 : 0 }}"
-    data-suite="{{ $l['suite'] }}" data-suite-usd="{{ $l['suite_usd'] }}" @if($extra) style="display:none;" @endif>
+    data-suite="{{ $l['suite'] }}" data-suite-usd="{{ $l['suite_usd'] }}"
+    data-regla="{{ $regla }}" data-tes-usd="{{ $l['tesoreria_usd'] ?? 0 }}" @if($extra) style="display:none;" @endif>
     <td class="cc-col-forma">
         <div class="cc-forma">
             <strong>{{ $l['forma_pago'] ?: $l['codigo_metodo'] }}</strong>
@@ -30,6 +32,11 @@
             <div class="cc-cuenta">Todos los puntos de venta</div>
         @elseif($l['cuenta'])
             <div class="cc-cuenta">{{ $l['cuenta'] }}</div>
+        @endif
+        @if($regla === 'no_suma')
+            <div class="cc-cuenta" style="color:#64748b;">No suma al cuadre (como en Suite)</div>
+        @elseif($regla === 'devolucion')
+            <div class="cc-cuenta" style="color:#b45309;">Devuelto en efectivo al cliente · compensa el efectivo que falta</div>
         @endif
     </td>
     <td class="cc-num cc-suite">{{ $extra ? '—' : ($monto($l['suite'], $usd) ?: '—') }}</td>
@@ -46,6 +53,8 @@
                     <span class="cc-flecha">▾</span>
                 </button>
             </div>
+        @elseif($regla)
+            <span class="muted">{{ $regla === 'devolucion' ? ($monto($l['tesoreria'], $usd) ?: '—') : 'No suma' }}</span>
         @elseif($editable)
             <div class="cc-input-fila">
                 <label class="cc-input {{ $usd ? 'is-usd' : 'is-bs' }}">

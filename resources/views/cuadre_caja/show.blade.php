@@ -421,6 +421,9 @@
         let totalTes = 0, totalSuite = 0, posTes = 0, posTesBs = 0, posSuite = 0, posContado = false;
         document.querySelectorAll('#cc-tabla .cc-linea').forEach(function (fila) {
             if (fila.style.display === 'none') return;
+            // Nota de crédito: no suma. Efectivo devuelto: solo suma a lo contado (ya calculado).
+            if (fila.dataset.regla === 'no_suma') return;
+            if (fila.dataset.regla === 'devolucion') { totalTes += parseFloat(fila.dataset.tesUsd || '0'); return; }
             const input = fila.querySelector('.cc-monto');
             const suiteUsd = parseFloat(fila.dataset.suiteUsd || '0');
             const valor = input && input.value !== '' ? parseFloat(input.value) : null;

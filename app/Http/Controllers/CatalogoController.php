@@ -401,7 +401,7 @@ class CatalogoController extends Controller
 
     private function sedeOcultaEnCatalogo(string $sede): bool
     {
-        $ocultas = array_map('strtoupper', config('inventario.catalogo_sedes_ocultas', ['NUNES', 'MOVISTAR', 'JRZ']));
+        $ocultas = array_map('strtoupper', config('inventario.catalogo_sedes_ocultas', ['NUNES', 'MOVISTAR']));
 
         return in_array(strtoupper(trim($sede)), $ocultas, true);
     }

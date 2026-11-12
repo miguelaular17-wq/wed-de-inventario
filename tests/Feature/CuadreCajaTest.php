@@ -351,6 +351,45 @@ class CuadreCajaTest extends TestCase
         ])->assertSessionHas('error');
     }
 
+    public function test_nota_de_credito_no_suma_y_el_efectivo_devuelto_compensa_la_diferencia(): void
+    {
+        if (! Schema::hasColumn('ventas_documentos', 'usuario')) {
+            Schema::table('ventas_documentos', fn (Blueprint $t) => $t->string('usuario')->nullable());
+        }
+        // Caja 04 de Jorgelis (10/11): dos devoluciones, una en efectivo (91.949,82) y otra con nota de crédito (6.717,55).
+        $caja = CuadreCaja::create([
+            'sede' => 'DORAL', 'fecha_cierre' => '2026-11-10', 'codigo_caja' => 'CJA04', 'descripcion_caja' => 'CAJA 04',
+            'usuario' => '31234681', 'usuario_nombre' => 'JORGELIS VELAZQUEZ', 'factor_cambio' => 899.27,
+        ]);
+        foreach ([['02', 'EFECTIVO $', true, 535, 535], ['CASHEA', 'CASHEA', true, 1084.04, 1084.04], ['NDC', 'NOTA DE CRÉDITO', false, 6717.55, 7.47]] as [$m, $f, $usd, $bs, $u]) {
+            CuadreCajaPago::create(['cuadre_caja_id' => $caja->id, 'codigo_metodo' => $m, 'forma_pago' => $f, 'en_dolares' => $usd, 'ingresos' => $bs, 'ingresos_usd' => $u]);
+        }
+        foreach ([['1699', 91949.82], ['1700', 6717.55]] as [$doc, $bs]) {
+            \Illuminate\Support\Facades\DB::table('ventas_documentos')->insert([
+                'sede' => 'DORAL', 'tipo_documento' => 'DEV', 'numero_documento' => $doc, 'fecha' => '2026-11-10', 'estado' => 'registrado',
+                'total_neto_bs' => $bs, 'total_neto_usd' => 0, 'usuario' => '31234681', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        $lineas = collect(app(CuadreCajaService::class)->lineas($caja->load(['pagos', 'conteos', 'lotes'])))->keyBy('clave');
+        $this->assertSame('no_suma', $lineas['NDC|']['regla']);
+        $this->assertSame('devolucion', $lineas['NDC1|']['regla']);
+        $this->assertSame(91949.82, $lineas['NDC1|']['suite']);
+        $this->assertSame(102.25, $lineas['NDC1|']['suite_usd']);
+
+        // La cajera le dio $102,25 al cliente del efectivo y le faltan 2,75: contó 430.
+        $this->actingAs($this->usuario('tesoreria'))->post(route('cuadre_caja.conciliar', $caja), [
+            'accion' => 'procesar', 'montos' => ['02|' => '430', 'CASHEA|' => '1084.04'], 'observacion' => 'Faltante por tasa en devolución',
+        ])->assertSessionHasNoErrors();
+        $resumen = app(CuadreCajaService::class)->resumen($caja->fresh()->load(['pagos', 'conteos', 'lotes']));
+        $this->assertSame(1619.04, $resumen['ingresos_usd']);
+        $this->assertSame(1616.29, $resumen['tesoreria_usd']);
+        $this->assertSame(-2.75, $resumen['diferencia_usd']);
+
+        $this->get(route('cuadre_caja.show', $caja))->assertOk()
+            ->assertSee('No suma al cuadre')->assertSee('Devuelto en efectivo')->assertSee('-$2,75', false);
+    }
+
     public function test_lo_contado_antes_punto_por_punto_se_junta_en_una_linea_y_al_reprocesar_no_se_duplica(): void
     {
         $tesoreria = $this->usuario('tesoreria');
