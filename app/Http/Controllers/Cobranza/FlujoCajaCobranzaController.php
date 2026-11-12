@@ -375,12 +375,7 @@ class FlujoCajaCobranzaController extends Controller
                 round((float) $m->monto_bs, 2),
                 round((float) $m->monto_usd, 2),
                 (float) $m->tasa_cambio > 0 ? round((float) $m->tasa_cambio, 4) : '',
-                match (true) {
-                    CobranzaMovimiento::esBancoCruce($m->banco) => 'Cruce',
-                    ! $m->flujo_caja_id => 'Sin banco',
-                    $m->estaConciliado() => 'En el banco',
-                    default => 'En tránsito',
-                },
+                $this->estadoBanco($m),
                 (string) $m->usuario?->name,
                 (string) $m->observaciones,
             ];
@@ -413,6 +408,36 @@ class FlujoCajaCobranzaController extends Controller
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'Content-Disposition' => 'attachment; filename="'.$archivo.'"',
         ]);
+    }
+
+    /** Reporte en PDF del flujo de caja con los mismos filtros de la pantalla. */
+    public function pdf(Request $request): \Symfony\Component\HttpFoundation\Response
+    {
+        $filtros = $this->filtros($request);
+        $movimientos = $this->movimientos($filtros)->sortBy([['fecha', 'asc'], ['id', 'asc']])->values();
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('cobranza.flujo.reporte', [
+            'filtros' => $filtros,
+            'ingresos' => $movimientos->where('tipo', 'ingreso')->values(),
+            'egresos' => $movimientos->where('tipo', 'egreso')->values(),
+            'pagos' => $this->vinculos->describir($movimientos),
+            'totales' => $this->totales($movimientos),
+            'cantidad' => $movimientos->count(),
+            'ambitos' => CobranzaMovimiento::AMBITOS,
+            'estadoBanco' => fn (CobranzaMovimiento $m) => $this->estadoBanco($m),
+            'generadoPor' => $request->user()?->name,
+        ])->setPaper('letter', 'landscape')
+            ->stream('flujo_caja_cobranza_'.$filtros['desde'].'_'.$filtros['hasta'].'.pdf');
+    }
+
+    private function estadoBanco(CobranzaMovimiento $m): string
+    {
+        return match (true) {
+            CobranzaMovimiento::esBancoCruce($m->banco) => 'Cruce',
+            ! $m->flujo_caja_id => 'Sin banco',
+            $m->estaConciliado() => 'En el banco',
+            default => 'En tránsito',
+        };
     }
 
     /** @return array{desde: string, hasta: string, tipo: string, ambito: string, cuenta: string, solo_cruces: bool} */

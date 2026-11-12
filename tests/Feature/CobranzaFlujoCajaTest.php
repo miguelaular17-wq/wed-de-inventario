@@ -261,6 +261,10 @@ class CobranzaFlujoCajaTest extends TestCase
         $this->assertEquals(50, $movs[1][14]);
         $this->assertSame('Ingresos', $hojas->rows(1)[6][0]);
         $this->assertEquals(50, $hojas->rows(1)[6][1]);
+
+        $reporte = $this->get(route('cobranza.flujo.pdf', ['desde' => '2026-11-01', 'hasta' => '2026-11-30']));
+        $reporte->assertOk();
+        $this->assertStringStartsWith('%PDF', $reporte->getContent());
     }
 
     public function test_pago_de_cuota_desde_el_flujo_y_desde_contratos(): void

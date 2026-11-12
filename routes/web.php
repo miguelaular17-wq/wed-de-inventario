@@ -779,6 +779,7 @@ Route::middleware(['auth', 'permission:cobranza'])->prefix('cobranza')->group(fu
     Route::delete('/flujo-caja/{movimiento}', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'destroy'])->whereNumber('movimiento')->name('cobranza.flujo.destroy');
     Route::get('/flujo-caja/facturas', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'buscarFacturas'])->name('cobranza.flujo.facturas');
     Route::get('/flujo-caja/excel', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'excel'])->name('cobranza.flujo.excel');
+    Route::get('/flujo-caja/pdf', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'pdf'])->name('cobranza.flujo.pdf');
     Route::get('/flujo-caja/{movimiento}/recibo', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'recibo'])->whereNumber('movimiento')->name('cobranza.flujo.recibo');
     Route::post('/flujo-caja/asientos', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'storeAsiento'])->name('cobranza.flujo.asientos.store');
     Route::delete('/flujo-caja/asientos/{asiento}', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'destroyAsiento'])->whereNumber('asiento')->name('cobranza.flujo.asientos.destroy');
