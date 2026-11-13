@@ -12,6 +12,11 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 class CatalogoController extends Controller
 {
+    /** Escalones de las barras de stock y precio: el último tope de la barra es «sin límite». */
+    public const PASOS_STOCK = [0, 1, 2, 3, 5, 10, 20, 30, 50, 100, 200, 500, 1000];
+
+    public const PASOS_PRECIO = [0, 1, 2, 5, 10, 15, 20, 30, 50, 75, 100, 150, 200, 300, 500, 1000];
+
     public function index(Request $request)
     {
         return $this->renderCatalogo($request, false);
@@ -134,6 +139,10 @@ class CatalogoController extends Controller
             'clienteToken' => $token,
             'casheaLevels' => $this->casheaLevels(),
             'enlaceCliente' => url('/catalogo/cliente/' . $this->clienteToken()),
+            'rangos' => [
+                'stock' => ['titulo' => 'Stock (unidades)', 'pasos' => self::PASOS_STOCK, 'prefijo' => ''],
+                'precio' => ['titulo' => 'Precio unidad', 'pasos' => self::PASOS_PRECIO, 'prefijo' => '$'],
+            ],
         ]);
     }
 
@@ -358,9 +367,54 @@ class CatalogoController extends Controller
             });
         }
 
+        [$stockMin, $stockMax] = $this->rango($request, 'stock');
+        if ($stockMin !== null || $stockMax !== null) {
+            $suma = StockActual::query()->selectRaw('COALESCE(SUM(existencia), 0)')
+                ->whereColumn('stock_actual.producto_id', 'productos.id');
+            $filtrarSede($suma);
+            if ($stockMin !== null) {
+                $query->where(clone $suma, '>=', $stockMin);
+            }
+            if ($stockMax !== null) {
+                $query->where(clone $suma, '<=', $stockMax);
+            }
+        }
+
+        [$precioMin, $precioMax] = $this->rango($request, 'precio');
+        if ($precioMin !== null) {
+            $query->where('precio_unidad', '>=', $precioMin);
+        }
+        if ($precioMax !== null) {
+            $query->where('precio_unidad', '<=', $precioMax);
+        }
+
         $query->orderBy('nombre', 'asc');
 
         return $query;
+    }
+
+    /**
+     * Desde/hasta de una barra (?stock_min=&stock_max=, ?precio_min=&precio_max=); vacío o 0 en «desde» no filtra.
+     *
+     * @return array{0: ?float, 1: ?float}
+     */
+    private function rango(Request $request, string $clave): array
+    {
+        $leer = function (string $campo) use ($request): ?float {
+            $valor = $request->input($campo);
+
+            return is_numeric($valor) && (float) $valor >= 0 ? (float) $valor : null;
+        };
+        $min = $leer($clave.'_min');
+        $max = $leer($clave.'_max');
+        if ($min !== null && $min <= 0) {
+            $min = null;
+        }
+        if ($min !== null && $max !== null && $max < $min) {
+            [$min, $max] = [$max, $min];
+        }
+
+        return [$min, $max];
     }
 
     /**

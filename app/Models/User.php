@@ -483,6 +483,10 @@ class User extends Authenticatable
             return true;
         }
 
+        if ($permission === 'ventas_mayor' && in_array('ventas_mayor.catalogo', $owned, true)) {
+            return true;
+        }
+
         if ($permission === 'nomina.comisiones' && in_array('nomina', $owned, true)) {
             return true;
         }

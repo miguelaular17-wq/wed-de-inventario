@@ -30,6 +30,7 @@ class VentasMayorController extends Controller
             'q' => $q,
             'ver' => $ver,
             'limite' => $limite,
+            'puedeEditarCatalogo' => (bool) $request->user()?->canAccess('ventas_mayor.catalogo'),
         ]);
     }
 
@@ -68,10 +69,7 @@ class VentasMayorController extends Controller
         $ids = array_values(array_filter(array_map('intval', explode(',', (string) $request->query('productos', '')))));
         $iniciales = $ids === [] ? collect() : $this->servicio->conStock(
             \Illuminate\Support\Facades\DB::table('productos')->whereIn('id', array_slice($ids, 0, 50))->get(['id', 'codigo', 'nombre', 'categoria', 'precio_unidad', 'precio_mayor'])
-        )->filter(fn ($p) => $p->disponible_jrz > 0)->map(fn ($p) => [
-            'id' => (int) $p->id, 'codigo' => $p->codigo, 'nombre' => $p->nombre,
-            'precio_mayor' => $p->precio_mayor, 'disponible_jrz' => $p->disponible_jrz,
-        ])->values();
+        )->filter(fn ($p) => $p->disponible_presentaciones > 0)->map(fn ($p) => $this->paraFactura($p))->values();
 
         return view('ventas_mayor.create', [
             'vendedoras' => $this->servicio->vendedoras(),
@@ -85,17 +83,79 @@ class VentasMayorController extends Controller
     {
         $productos = $this->servicio->productos((string) $request->query('q', ''), 25);
 
-        return response()->json(['productos' => $productos->map(fn ($p) => [
+        return response()->json(['productos' => $productos->map(fn ($p) => $this->paraFactura($p) + [
+            'precio_unidad' => $p->precio_unidad,
+            'otras_sedes' => collect($p->stocks)->except(VentasMayorService::SEDE_FACTURA)->filter()->all(),
+        ])->values()]);
+    }
+
+    /** Lo que necesita la factura de un producto: se vende por su presentación (unidad, caja o paquete). */
+    private function paraFactura(object $p): array
+    {
+        return [
             'id' => (int) $p->id,
             'codigo' => $p->codigo,
             'nombre' => $p->nombre,
-            'precio_mayor' => $p->precio_mayor,
-            'precio_unidad' => $p->precio_unidad,
-            'stock_jrz' => $p->stocks[VentasMayorService::SEDE_FACTURA],
-            'apartado_jrz' => $p->apartado_jrz,
+            'precio_mayor' => $p->precio_presentacion,
             'disponible_jrz' => $p->disponible_jrz,
-            'otras_sedes' => collect($p->stocks)->except(VentasMayorService::SEDE_FACTURA)->filter()->all(),
-        ])->values()]);
+            'disponible_pres' => $p->disponible_presentaciones,
+            'presentacion' => $p->presentacion,
+            'presentacion_texto' => $p->presentacion_texto,
+            'unidades_por' => $p->unidades_por,
+        ];
+    }
+
+    /** Catálogo para clientes al mayor: lo que hay en JRZ con la presentación y el precio que puso la regente. */
+    public function catalogo(Request $request): View
+    {
+        $q = trim((string) $request->query('q', ''));
+        $categoria = trim((string) $request->query('categoria', ''));
+        $limite = 240;
+
+        return view('ventas_mayor.catalogo', [
+            'productos' => $this->servicio->catalogoClientes($q, $categoria, $limite),
+            'categorias' => $this->servicio->categoriasJrz(),
+            'q' => $q,
+            'categoria' => $categoria,
+            'limite' => $limite,
+        ]);
+    }
+
+    public function catalogoPdf(Request $request): Response
+    {
+        ini_set('memory_limit', '768M');
+        set_time_limit(300);
+        $q = trim((string) $request->query('q', ''));
+        $categoria = trim((string) $request->query('categoria', ''));
+        $productos = $this->servicio->catalogoClientes($q, $categoria, 300);
+        $fotos = \App\Support\FotoProducto::embebidas($productos->mapWithKeys(fn ($p) => [(int) $p->id => (string) $p->codigo])->all());
+        $logo = is_file(public_path('logo.png'))
+            ? 'data:image/png;base64,'.base64_encode((string) file_get_contents(public_path('logo.png')))
+            : null;
+
+        return Pdf::loadView('ventas_mayor.catalogo_pdf', [
+            'productos' => $productos,
+            'fotos' => $fotos,
+            'logo' => $logo,
+            'categoria' => $categoria,
+            'q' => $q,
+        ])->setPaper('letter')
+            ->stream('catalogo_al_mayor_'.now()->format('Ymd').'.pdf');
+    }
+
+    /** Cómo se vende el producto al mayor: presentación, unidades por caja/paquete, precio y costo. */
+    public function guardarCatalogo(Request $request, int $producto): RedirectResponse
+    {
+        abort_unless(\Illuminate\Support\Facades\DB::table('productos')->where('id', $producto)->exists(), 404);
+        $data = $request->validate([
+            'presentacion' => ['required', \Illuminate\Validation\Rule::in(array_keys(\App\Models\Mayor\MayorCatalogo::PRESENTACIONES))],
+            'unidades' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'precio_usd' => ['nullable', 'numeric', 'min:0.01', 'max:10000000'],
+            'costo_usd' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
+        ]);
+        $this->servicio->guardarCatalogo($producto, $data, $request->user()?->id);
+
+        return back()->with('success', 'Se guardó cómo se vende al mayor.');
     }
 
     public function buscarClientes(Request $request): JsonResponse
@@ -169,7 +229,7 @@ class VentasMayorController extends Controller
 
         return redirect()->route('ventas_mayor.show', $factura)->with('success', 'Factura '.$factura->numeroFormateado().' emitida'
             .($saldo >= 0.01 ? ' a crédito: queda por cobrar $'.number_format($saldo, 2).'.' : ' y pagada.')
-            .' Las unidades quedaron apartadas del stock de JRZ.');
+            .' Las unidades se restaron del stock de JRZ.');
     }
 
     public function show(MayorFactura $factura): View
@@ -182,16 +242,25 @@ class VentasMayorController extends Controller
     public function pdf(MayorFactura $factura): Response
     {
         $factura->load(['cliente', 'items', 'pagos', 'usuario']);
+        $logo = is_file(public_path('logo.png'))
+            ? 'data:image/png;base64,'.base64_encode((string) file_get_contents(public_path('logo.png')))
+            : null;
 
-        return Pdf::loadView('ventas_mayor.pdf', ['factura' => $factura])
-            ->setPaper('letter')
-            ->download('factura_'.$factura->numeroFormateado().'.pdf');
+        return Pdf::loadView('ventas_mayor.pdf', [
+            'factura' => $factura,
+            'logo' => $logo,
+            'empresa' => config('recibos.empresas.'.VentasMayorService::SEDE_FACTURA, []),
+        ])->setPaper('letter')
+            ->stream('factura_'.$factura->numeroFormateado().'.pdf');
     }
 
     /** Pago o abono (una factura a crédito se va pagando por partes), con o sin comprobante. */
     public function subirComprobante(Request $request, MayorFactura $factura): RedirectResponse
     {
         abort_if($factura->estaAnulada(), 422, 'La factura está anulada.');
+        if ($factura->loadMissing('pagos')->saldoUsd() < 0.01) {
+            return back()->withErrors(['monto_usd' => 'La factura ya está pagada: no hace falta otro comprobante.']);
+        }
         $data = $request->validate([
             'fecha' => ['nullable', 'date', 'before_or_equal:today'],
             'comprobantes' => ['nullable', 'array', 'max:6'],
@@ -229,8 +298,8 @@ class VentasMayorController extends Controller
         $factura->update(['en_profit' => ! $factura->en_profit]);
 
         return back()->with('success', $factura->en_profit
-            ? 'Marcada como cargada en Profit: ya no aparta stock de JRZ.'
-            : 'Vuelve a apartar sus unidades del stock de JRZ.');
+            ? 'Marcada como cargada en Profit: desde ahora Profit descuenta sus unidades del stock de JRZ.'
+            : 'Marcada como no cargada en Profit: sus unidades se vuelven a restar del stock de JRZ.');
     }
 
     public function anular(Request $request, MayorFactura $factura): RedirectResponse

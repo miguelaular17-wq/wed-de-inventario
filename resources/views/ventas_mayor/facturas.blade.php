@@ -7,7 +7,7 @@
     <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
         <div>
             <h1 style="margin:0;">Facturas al mayor</h1>
-            <p class="muted" style="margin:4px 0 0;">Mientras una factura no esté «cargada en Profit», sus unidades quedan apartadas del stock de JRZ.</p>
+            <p class="muted" style="margin:4px 0 0;">Lo facturado se resta del stock de JRZ hasta que la factura se marca «cargada en Profit» (desde ahí lo descuenta Profit).</p>
         </div>
         <div style="display:flex; gap:8px;">
             <a href="{{ route('ventas_mayor.stock') }}" class="btn secondary">Stock</a>

@@ -164,6 +164,19 @@
     .filters-grid.is-cliente {
         grid-template-columns: repeat(4, minmax(130px, 1fr)) 88px auto;
     }
+    .filters-rangos { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 10px 24px; margin-top: 12px; }
+    .rango-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+    .rango-top label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: #64748b; }
+    .rango-valor { font-size: 0.82rem; font-weight: 700; color: #1e3a8a; white-space: nowrap; }
+    .rango-barra { position: relative; height: 26px; }
+    .rango-barra::before { content: ''; position: absolute; left: 0; right: 0; top: 11px; height: 4px; border-radius: 999px; background: #e2e8f0; }
+    .rango-relleno { position: absolute; top: 11px; height: 4px; border-radius: 999px; background: #2563eb; }
+    .rango-barra input[type=range] { position: absolute; inset: 0; width: 100%; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; height: 26px; }
+    .rango-barra input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid #2563eb; cursor: pointer; box-shadow: 0 1px 3px rgba(15,23,42,.25); }
+    .rango-barra input[type=range]::-moz-range-thumb { pointer-events: auto; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 3px solid #2563eb; cursor: pointer; }
+    .rango-barra input[type=range]::-webkit-slider-runnable-track { background: none; }
+    .rango-barra input[type=range]::-moz-range-track { background: none; }
+    @media (max-width: 700px) { .filters-rangos { grid-template-columns: 1fr; } }
     .product-card {
         background: #fff;
         border: 1px solid #000;
@@ -641,6 +654,24 @@
                     @endunless
                 </div>
             </div>
+
+            <div class="filters-rangos">
+                @foreach($rangos ?? [] as $clave => $r)
+                    <div class="rango" data-pasos='@json($r['pasos'])' data-prefijo="{{ $r['prefijo'] }}">
+                        <div class="rango-top">
+                            <label>{{ $r['titulo'] }}</label>
+                            <span class="rango-valor"></span>
+                        </div>
+                        <div class="rango-barra">
+                            <div class="rango-relleno"></div>
+                            <input type="range" class="rango-min" min="0" max="{{ count($r['pasos']) }}" step="1" aria-label="{{ $r['titulo'] }} desde">
+                            <input type="range" class="rango-max" min="0" max="{{ count($r['pasos']) }}" step="1" aria-label="{{ $r['titulo'] }} hasta">
+                        </div>
+                        <input type="hidden" class="rango-input-min" name="{{ $clave }}_min" value="{{ request($clave.'_min') }}">
+                        <input type="hidden" class="rango-input-max" name="{{ $clave }}_max" value="{{ request($clave.'_max') }}">
+                    </div>
+                @endforeach
+            </div>
             
             @unless($modoCliente)
             <!-- Panel PDF (Oculto por defecto en lugar de modal Bootstrap) -->
@@ -926,7 +957,7 @@ document.addEventListener('keydown', function (e) {
 
 <script>
     const catSubcatMap = @json($catSubcatMap);
-    const allSubcategorias = @json($subcategorias);
+    const allSubcategorias = @json(collect($subcategorias)->values());
     // Varias subcategorías: casillas subcategoria[]; ninguna marcada = todas.
     let selectedSubcats = new Set(@json($subcategoriasElegidas));
 
@@ -1227,6 +1258,52 @@ document.addEventListener('keydown', function (e) {
         let btn = document.getElementById('btn-buscar');
         btn.innerHTML = 'Buscando...';
         btn.disabled = true;
+    });
+
+    // Barras de stock y precio: dos manijas (desde / hasta). El tope derecho es «sin límite».
+    document.querySelectorAll('.rango').forEach(function (rango) {
+        const pasos = JSON.parse(rango.dataset.pasos);
+        const prefijo = rango.dataset.prefijo || '';
+        const tope = pasos.length;
+        const deslizMin = rango.querySelector('.rango-min');
+        const deslizMax = rango.querySelector('.rango-max');
+        const campoMin = rango.querySelector('.rango-input-min');
+        const campoMax = rango.querySelector('.rango-input-max');
+        const relleno = rango.querySelector('.rango-relleno');
+        const etiqueta = rango.querySelector('.rango-valor');
+        const fmt = v => prefijo + Number(v).toLocaleString('es-VE');
+        const indice = valor => {
+            if (valor === '' || valor === null) return null;
+            const n = parseFloat(valor);
+            let i = pasos.findIndex(p => p >= n);
+            return i === -1 ? tope - 1 : i;
+        };
+
+        deslizMin.value = indice(campoMin.value) ?? 0;
+        deslizMax.value = indice(campoMax.value) ?? tope;
+
+        function pintar() {
+            let a = parseInt(deslizMin.value, 10), b = parseInt(deslizMax.value, 10);
+            if (a > b) { [a, b] = [b, a]; }
+            relleno.style.left = (a / tope * 100) + '%';
+            relleno.style.width = ((b - a) / tope * 100) + '%';
+            const desde = a === 0 ? null : pasos[a];
+            const hasta = b >= tope ? null : pasos[b];
+            etiqueta.textContent = desde === null && hasta === null ? 'Todos'
+                : desde === null ? 'Hasta ' + fmt(hasta)
+                : hasta === null ? 'Desde ' + fmt(desde)
+                : fmt(desde) + ' – ' + fmt(hasta);
+            campoMin.value = desde === null ? '' : desde;
+            campoMax.value = hasta === null ? '' : hasta;
+            campoMin.disabled = campoMin.value === '';
+            campoMax.disabled = campoMax.value === '';
+            deslizMin.style.zIndex = parseInt(deslizMin.value, 10) >= tope - 1 ? 3 : 1;
+        }
+        [deslizMin, deslizMax].forEach(d => {
+            d.addEventListener('input', pintar);
+            d.addEventListener('change', () => { pintar(); document.getElementById('form-filtros').requestSubmit(); });
+        });
+        pintar();
     });
 </script>
 @endsection

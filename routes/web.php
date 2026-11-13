@@ -399,6 +399,9 @@ Route::middleware(['auth', 'permission:ventas_mayor'])->prefix('ventas-mayor')->
     Route::get('/facturas/nueva', [\App\Http\Controllers\VentasMayorController::class, 'create'])->name('create');
     Route::post('/facturas', [\App\Http\Controllers\VentasMayorController::class, 'store'])->name('store');
     Route::get('/productos/buscar', [\App\Http\Controllers\VentasMayorController::class, 'buscarProductos'])->name('productos.buscar');
+    Route::get('/catalogo', [\App\Http\Controllers\VentasMayorController::class, 'catalogo'])->name('catalogo');
+    Route::get('/catalogo/pdf', [\App\Http\Controllers\VentasMayorController::class, 'catalogoPdf'])->name('catalogo.pdf');
+    Route::post('/catalogo/{producto}', [\App\Http\Controllers\VentasMayorController::class, 'guardarCatalogo'])->whereNumber('producto')->middleware('permission:ventas_mayor.catalogo')->name('catalogo.guardar');
     Route::get('/clientes/buscar', [\App\Http\Controllers\VentasMayorController::class, 'buscarClientes'])->name('clientes.buscar');
     Route::get('/facturas/{factura}', [\App\Http\Controllers\VentasMayorController::class, 'show'])->whereNumber('factura')->name('show');
     Route::get('/facturas/{factura}/pdf', [\App\Http\Controllers\VentasMayorController::class, 'pdf'])->whereNumber('factura')->name('pdf');

@@ -59,6 +59,7 @@ return [
         'nfc' => 'Tarjetas NFC (asignar y fichas de cliente)',
         'sincronizadores' => 'Control de sincronizadores (ver estado y enviar sincronizaciones)',
         'ventas_mayor' => 'Ventas al mayor (stock de todas las sedes, facturar del stock de JRZ)',
+        'ventas_mayor.catalogo' => 'Ventas al mayor: editar el catálogo (presentación, precio y costo) — regente',
     ],
 
     /*
@@ -66,7 +67,7 @@ return [
      * Las claves deben existir en "assignable".
      */
     'groups' => [
-        'Operaciones' => ['operacion', 'catalogo.existencias', 'catalogo.precios', 'catalogo.exportar_precios', 'vendedor.jrz', 'sede.cambiar', 'ventas_mayor'],
+        'Operaciones' => ['operacion', 'catalogo.existencias', 'catalogo.precios', 'catalogo.exportar_precios', 'vendedor.jrz', 'sede.cambiar', 'ventas_mayor', 'ventas_mayor.catalogo'],
         'Compras y Marketing' => [
             'compras',
             'compras.distribucion',

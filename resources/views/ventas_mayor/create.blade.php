@@ -243,11 +243,11 @@
             const precio = parseFloat(tr.querySelector('.vm-precio').value) || 0;
             const disp = parseInt(tr.dataset.disponible, 10) || 0;
             const t = Math.round(cant * precio * 100) / 100;
-            total += t; unidades += cant; n++;
+            total += t; unidades += cant * (parseInt(tr.dataset.unidadesPor, 10) || 1); n++;
             tr.querySelector('.vm-tot').textContent = usd(t);
             const pasa = cant > disp;
             tr.querySelector('.vm-cant').style.borderColor = pasa ? '#dc2626' : '';
-            tr.querySelector('.vm-aviso').textContent = pasa ? `Solo hay ${disp} en JRZ` : '';
+            tr.querySelector('.vm-aviso').textContent = pasa ? `Solo hay ${cantidadTexto(disp, tr.dataset.presentacion)} en JRZ` : '';
         });
         total = Math.round(total * 100) / 100;
         const tasa = parseFloat($('vm-tasa').value) || 0;
@@ -261,21 +261,37 @@
         $('vm-saldo').textContent = usd(Math.round((total - paga) * 100) / 100);
         $('vm-sin-items').style.display = n ? 'none' : '';
     }
+    function cantidadTexto(n, presentacion) {
+        if (presentacion === 'caja') return `${n} ${n === 1 ? 'caja' : 'cajas'}`;
+        if (presentacion === 'paquete') return `${n} ${n === 1 ? 'paquete' : 'paquetes'}`;
+        return `${n}`;
+    }
     function agregar(p, cantidad = 1, precio = null) {
         const existente = document.querySelector(`#vm-items tr[data-producto="${p.id}"]`);
         if (existente) { const c = existente.querySelector('.vm-cant'); c.value = (parseInt(c.value, 10) || 0) + 1; c.focus(); c.select(); totales(); return; }
         const i = fila++;
+        const pres = p.presentacion || 'unidad';
+        const por = parseInt(p.unidades_por, 10) || 1;
+        const disp = p.disponible_pres ?? p.disponible_jrz;
         const tr = document.createElement('tr');
-        tr.dataset.item = '1'; tr.dataset.producto = p.id; tr.dataset.disponible = p.disponible_jrz;
+        tr.dataset.item = '1'; tr.dataset.producto = p.id; tr.dataset.disponible = disp;
+        tr.dataset.presentacion = pres; tr.dataset.unidadesPor = por;
+        const etiqueta = pres !== 'unidad' ? `<span class="vm-chip" style="background:#ede9fe; color:#6d28d9;">${esc(p.presentacion_texto || pres)}</span> ` : '';
         tr.innerHTML = `
-            <td><strong>${esc(p.nombre)}</strong><div class="muted" style="font-size:.72rem;">${esc(p.codigo)} <span class="vm-aviso" style="color:#dc2626; font-weight:700;"></span></div>
+            <td><strong>${esc(p.nombre)}</strong><div class="muted" style="font-size:.72rem;">${etiqueta}${esc(p.codigo)} <span class="vm-aviso" style="color:#dc2626; font-weight:700;"></span></div>
                 <input type="hidden" name="items[${i}][producto_id]" value="${p.id}">
                 <input type="hidden" name="items[${i}][codigo]" value="${esc(p.codigo)}">
                 <input type="hidden" name="items[${i}][nombre]" value="${esc(p.nombre)}">
-                <input type="hidden" name="items[${i}][disponible_jrz]" value="${p.disponible_jrz}"></td>
-            <td class="vm-num" style="font-weight:700; color:#15803d;">${p.disponible_jrz}</td>
-            <td class="vm-num"><input type="number" class="vm-cant" name="items[${i}][cantidad]" min="1" max="${p.disponible_jrz}" step="1" value="${cantidad}" required style="width:84px;"></td>
-            <td class="vm-num"><input type="number" class="vm-precio" name="items[${i}][precio_usd]" min="0.01" step="0.01" value="${precio ?? (p.precio_mayor || '')}" required style="width:100px;"></td>
+                <input type="hidden" name="items[${i}][disponible_jrz]" value="${p.disponible_jrz}">
+                <input type="hidden" name="items[${i}][disponible_pres]" value="${disp}">
+                <input type="hidden" name="items[${i}][presentacion]" value="${esc(pres)}">
+                <input type="hidden" name="items[${i}][presentacion_texto]" value="${esc(p.presentacion_texto || '')}">
+                <input type="hidden" name="items[${i}][unidades_por]" value="${por}"></td>
+            <td class="vm-num" style="font-weight:700; color:#15803d;">${cantidadTexto(disp, pres)}${por > 1 ? `<div class="muted" style="font-size:.7rem; font-weight:400;">${p.disponible_jrz} und.</div>` : ''}</td>
+            <td class="vm-num"><input type="number" class="vm-cant" name="items[${i}][cantidad]" min="1" max="${disp}" step="1" value="${cantidad}" required style="width:84px;"></td>
+            <td class="vm-num"><input type="hidden" class="vm-precio" name="items[${i}][precio_usd]" value="${p.precio_mayor || 0}">${p.precio_mayor > 0
+                ? `<strong>${usd(p.precio_mayor)}</strong>`
+                : `<span style="color:#dc2626; font-weight:700;" title="Hay que ponerle precio en su ficha">Sin precio</span>`}</td>
             <td class="vm-num vm-tot" style="font-weight:700;">$0.00</td>
             <td><button type="button" style="padding:4px 9px; background:#fee2e2; color:#b91c1c; border:0; border-radius:6px; cursor:pointer; font-weight:700;" title="Quitar">&times;</button></td>`;
         tr.querySelector('button').addEventListener('click', () => { tr.remove(); totales(); });
@@ -305,12 +321,13 @@
         cajaProd.innerHTML = resultados.length ? orden.map(k => {
             const p = resultados[k];
             const otras = Object.entries(p.otras_sedes || {}).map(([s, n]) => `${s} ${n}`).join(' · ');
-            const hay = p.disponible_jrz > 0;
+            const hay = p.disponible_pres > 0;
+            const porPres = p.presentacion && p.presentacion !== 'unidad' ? ` por ${esc(p.presentacion_texto).toLowerCase()}` : '';
             return `<button type="button" class="vm-op" data-k="${k}" ${hay ? '' : 'disabled'}>
                 <span><strong>${esc(p.nombre)}</strong><br>
-                    <small class="muted">${esc(p.codigo)} · ${usd(p.precio_mayor)} al mayor${otras ? ' · otras sedes: ' + esc(otras) : ''}</small></span>
+                    <small class="muted">${esc(p.codigo)} · ${usd(p.precio_mayor)} al mayor${porPres}${otras ? ' · otras sedes: ' + esc(otras) : ''}</small></span>
                 <span style="display:flex; align-items:center; gap:8px;">
-                    <span class="vm-chip" style="background:${hay ? '#dcfce7; color:#166534' : '#fee2e2; color:#991b1b'};">JRZ ${p.disponible_jrz}${p.apartado_jrz ? ' (' + p.apartado_jrz + ' apart.)' : ''}</span>
+                    <span class="vm-chip" style="background:${hay ? '#dcfce7; color:#166534' : '#fee2e2; color:#991b1b'};">JRZ ${cantidadTexto(p.disponible_pres, p.presentacion)}</span>
                     <span class="vm-agregar">${hay ? '+ Agregar' : 'Sin stock JRZ'}</span>
                 </span></button>`;
         }).join('') : '<div style="padding:12px;" class="muted">Sin resultados.</div>';
@@ -319,7 +336,7 @@
     $('vm-prod-q').addEventListener('keydown', e => {
         if (e.key !== 'Enter') return;
         e.preventDefault();
-        const p = resultados.find(x => x.disponible_jrz > 0);
+        const p = resultados.find(x => x.disponible_pres > 0);
         if (p) { agregar(p); cerrarProductos(); }
     });
     cerrarAlClicFuera($('vm-prod-q'), cajaProd);
@@ -328,6 +345,8 @@
     // Si la validación devolvió el formulario, se recuperan los productos.
     (@json(array_values(old('items', [])))).forEach(it => agregar({
         id: it.producto_id, codigo: it.codigo, nombre: it.nombre, disponible_jrz: parseInt(it.disponible_jrz, 10) || 0, precio_mayor: it.precio_usd,
+        disponible_pres: parseInt(it.disponible_pres ?? it.disponible_jrz, 10) || 0, presentacion: it.presentacion || 'unidad',
+        presentacion_texto: it.presentacion_texto || '', unidades_por: parseInt(it.unidades_por, 10) || 1,
     }, it.cantidad, it.precio_usd));
     if (!document.querySelector('#vm-items tr[data-item]')) (@json($iniciales ?? [])).forEach(p => agregar(p));
     pintarCondicion();
@@ -338,6 +357,8 @@
         if (!document.querySelector('#vm-items tr[data-item]')) return fallar('Agrega al menos un producto.');
         const pasados = [...document.querySelectorAll('#vm-items tr[data-item]')].filter(tr => (parseInt(tr.querySelector('.vm-cant').value, 10) || 0) > (parseInt(tr.dataset.disponible, 10) || 0));
         if (pasados.length) return fallar('Hay cantidades mayores a lo disponible en JRZ (marcadas en rojo).');
+        const sinPrecio = [...document.querySelectorAll('#vm-items .vm-precio')].some(inp => !(parseFloat(inp.value) > 0));
+        if (sinPrecio) return fallar('Hay productos sin precio al mayor: hay que ponerle precio en su ficha.');
         totales();
     });
 })();

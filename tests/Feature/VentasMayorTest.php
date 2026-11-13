@@ -45,6 +45,10 @@ class VentasMayorTest extends TestCase
             });
         }
         (require database_path('migrations/2026_11_12_150000_create_ventas_mayor_tables.php'))->up();
+        (require database_path('migrations/2026_11_12_200000_create_mayor_catalogo_y_presentaciones.php'))->up();
+        if (! Schema::hasColumn('productos', 'costo_actual')) {
+            Schema::table('productos', fn (Blueprint $t) => $t->decimal('costo_actual', 12, 2)->default(0));
+        }
         DB::table('finanzas_resumen')->insert(['fecha' => now()->toDateString(), 'tasa_bcv_usd' => 40, 'created_at' => now(), 'updated_at' => now()]);
 
         $this->user = User::create(['name' => 'Mayorista', 'email' => 'mayor-'.uniqid().'@test.local', 'password' => 'password123', 'role' => User::ROLE_MAYOR]);
@@ -112,7 +116,8 @@ class VentasMayorTest extends TestCase
     {
         $this->actingAs($this->user)->get(route('ventas_mayor.stock', ['q' => 'parlante']))
             ->assertOk()
-            ->assertSee('JRZ · se factura de aquí')
+            ->assertSee('solo se factura del de JRZ', false)
+            ->assertSee(route('ventas_mayor.catalogo'), false)
             ->assertSee('Parlante Bluetooth')
             ->assertSee('$12.50')
             ->assertSee(route('ventas_mayor.create', ['productos' => $this->parlante]), false);
@@ -124,6 +129,50 @@ class VentasMayorTest extends TestCase
         $this->actingAs($vendedor)->get(route('ventas_mayor.stock'))->assertRedirect();
         $this->actingAs($vendedor)->post(route('ventas_mayor.store'), [])->assertRedirect();
         $this->assertSame(0, MayorFactura::query()->count());
+    }
+
+    public function test_catalogo_al_mayor_vende_por_caja_con_su_precio_y_costo(): void
+    {
+        DB::table('productos')->where('id', $this->parlante)->update(['costo_actual' => 9]);
+
+        // El usuario de ventas al mayor ve la ficha pero no la edita; la regente sí.
+        $this->actingAs($this->user)->post(route('ventas_mayor.catalogo.guardar', $this->parlante), ['presentacion' => 'caja', 'unidades' => 5])->assertRedirect();
+        $this->assertSame(0, \App\Models\Mayor\MayorCatalogo::query()->count());
+        $this->actingAs($this->user)->get(route('ventas_mayor.stock', ['q' => 'parlante']))->assertOk()
+            ->assertSee('Ver ficha')->assertSee('Solo la regente puede')->assertDontSee('Ficha / editar');
+        $regente = User::create(['name' => 'Regente', 'email' => 'regente-'.uniqid().'@test.local', 'password' => 'password123', 'role' => User::ROLE_SEDE]);
+        $regente->extraPermissions()->create(['permission' => 'ventas_mayor.catalogo']);
+        $guardar = fn (array $datos) => $this->actingAs($regente)->post(route('ventas_mayor.catalogo.guardar', $this->parlante), $datos);
+
+        $guardar(['presentacion' => 'caja'])->assertSessionHasErrors('unidades');
+        $guardar(['presentacion' => 'caja', 'unidades' => 5, 'precio_usd' => 55, 'costo_usd' => 8])->assertSessionHasNoErrors();
+        $this->actingAs($regente)->get(route('ventas_mayor.stock', ['q' => 'parlante']))->assertOk()
+            ->assertSee('Ficha / editar')
+            ->assertSee('Caja x5')->assertSee('$55.00')->assertSee('$11.00 c/u')->assertSee('$40.00')->assertSee('+37.5% ganancia');
+
+        // El catálogo al mayor (para clientes) muestra lo que puso la regente, sin el costo.
+        $this->actingAs($this->user)->get(route('ventas_mayor.catalogo'))->assertOk()
+            ->assertSee('Parlante Bluetooth')->assertSee('Caja x5')->assertSee('$55.00')->assertSee('por caja')->assertSee('2 cajas')
+            ->assertDontSee('$40.00')->assertDontSee('Audífono');
+        Http::fake(['*' => Http::response('', 404)]);
+        $pdf = $this->actingAs($this->user)->get(route('ventas_mayor.catalogo.pdf'));
+        $pdf->assertOk();
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        // 3 cajas son 15 unidades y en JRZ hay 10: no alcanza. 2 cajas sí y sacan las 10.
+        // El usuario de ventas al mayor no cambia el precio: aunque mande 1, se cobra el del catálogo.
+        $this->factura([['producto_id' => $this->parlante, 'cantidad' => 3, 'precio_usd' => 55]])->assertSessionHasErrors('items');
+        $this->factura([['producto_id' => $this->parlante, 'cantidad' => 2, 'precio_usd' => 1]])->assertSessionHasNoErrors();
+        $item = MayorFactura::query()->with('items')->firstOrFail()->items->first();
+        $this->assertSame(['caja', 5, 10, 110.0], [$item->presentacion, $item->unidades_por, $item->unidades, $item->total_usd]);
+        $this->assertSame('2 cajas (x5)', $item->cantidadTexto());
+        $p = app(\App\Services\Mayor\VentasMayorService::class)->conStock(DB::table('productos')->where('id', $this->parlante)->get())->first();
+        $this->assertSame([0, 0], [$p->disponible_jrz, $p->disponible_presentaciones]);
+
+        // Precio y costo vacíos vuelven a los de Suite.
+        $guardar(['presentacion' => 'unidad', 'precio_usd' => '', 'costo_usd' => ''])->assertSessionHasNoErrors();
+        $c = app(\App\Services\Mayor\VentasMayorService::class)->catalogo([$this->parlante])[$this->parlante];
+        $this->assertSame(['unidad', 1, 12.5, 9.0, false], [$c['presentacion'], $c['unidades'], $c['precio'], $c['costo_unidad'], $c['precio_editado']]);
     }
 
     public function test_factura_solo_del_stock_de_jrz_y_lo_aparta_hasta_cargarla_en_profit(): void
@@ -170,13 +219,15 @@ class VentasMayorTest extends TestCase
         $this->assertSame(1, $f->pagos()->count());
         $this->assertEquals(25, $f->pagos()->first()->monto_usd);
 
+        // Pagada de contado: ya no pide más comprobantes.
         $this->actingAs($this->user)->post(route('ventas_mayor.comprobantes.store', $f), [
             'comprobantes' => [UploadedFile::fake()->create('transferencia.pdf', 50, 'application/pdf')],
             'forma_pago' => 'Transferencia',
-        ])->assertSessionHasNoErrors();
-        $this->assertSame(2, $f->pagos()->count());
+        ])->assertSessionHasErrors('monto_usd');
+        $this->assertSame(1, $f->pagos()->count());
 
-        $this->actingAs($this->user)->get(route('ventas_mayor.show', $f))->assertOk()->assertSee('MAY-000001')->assertSee('Ref 998877');
+        $this->actingAs($this->user)->get(route('ventas_mayor.show', $f))->assertOk()->assertSee('MAY-000001')->assertSee('Ref 998877')
+            ->assertSee('Pagada completa')->assertDontSee('Agregar comprobante');
         $pdf = $this->actingAs($this->user)->get(route('ventas_mayor.pdf', $f));
         $pdf->assertOk();
         $this->assertStringStartsWith('%PDF', $pdf->getContent());
