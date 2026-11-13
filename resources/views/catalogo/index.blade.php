@@ -207,6 +207,18 @@
         padding: 8px;
         box-sizing: border-box;
     }
+    .foto-nav {
+        position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
+        width: 28px; height: 28px; border-radius: 50%; border: 1px solid #cbd5e1;
+        background: rgba(255,255,255,.92); color: #1e3a8a; font-size: 1.2rem; font-weight: 700; line-height: 1;
+        cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;
+    }
+    .foto-prev { left: 6px; }
+    .foto-next { right: 6px; }
+    .foto-contador {
+        position: absolute; top: 8px; left: 8px; z-index: 2; background: rgba(15,23,42,.7); color: #fff;
+        font-size: .7rem; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+    }
     .product-info {
         padding: 10px 12px 12px;
         display: flex;
@@ -765,8 +777,14 @@
                         $jpg_url = $base_url . rawurlencode($primary_code) . ".jpg";
                         $png_url = $base_url . rawurlencode($primary_code) . ".png";
                         $no_image_url = "https://hbhqbmzixgcvxkilwsau.supabase.co/storage/v1/object/public/imagenes_producto/imagenes/no-image.jpg";
+                        $extrasFoto = $fotosExtra[$primary_code] ?? [];
                     @endphp
-                    <img src="{{ $jpg_url }}" 
+                    @if($extrasFoto !== [])
+                        <button type="button" class="foto-nav foto-prev" onclick="event.stopPropagation(); cambiarFoto(this, -1)" aria-label="Foto anterior">‹</button>
+                        <button type="button" class="foto-nav foto-next" onclick="event.stopPropagation(); cambiarFoto(this, 1)" aria-label="Foto siguiente">›</button>
+                        <span class="foto-contador">1/{{ count($extrasFoto) + 1 }}</span>
+                    @endif
+                    <img data-fotos='@json(array_column($extrasFoto, 'url'))' data-indice="0" src="{{ $jpg_url }}" 
                          alt="{{ $prod->descripcion }}" 
                          class="product-img"
                          loading="lazy"
@@ -790,11 +808,11 @@
                     @else
                         <span class="stock-badge stock-red">Agotado</span>
                     @endif
-                    @if(!$modoCliente && auth()->check() && auth()->user()->role === 'vendedor')
-                        <button type="button" 
-                                onclick="event.stopPropagation(); pedirUrlImagen('{{ $primary_code }}', this.closest('.product-card').dataset.producto)"
-                                style="position: absolute; top: 6px; right: 6px; background: rgba(255,255,255,0.94); border: 1px solid #cbd5e1; border-radius: 6px; padding: 2px 6px; font-size: 0.72rem; cursor: pointer; color: #1e3a8a;">
-                            🔗
+                    @if(! empty($puedeCambiarImagenes))
+                        <button type="button" title="Cambiar o agregar fotos"
+                                onclick='event.stopPropagation(); pedirUrlImagen(@json($primary_code), this.closest(".product-card").dataset.producto, @json($extrasFoto), @json($jpg_url))'
+                                style="position: absolute; top: 6px; right: 6px; z-index: 3; background: rgba(255,255,255,0.94); border: 1px solid #cbd5e1; border-radius: 6px; padding: 2px 6px; font-size: 0.8rem; cursor: pointer; color: #1e3a8a;">
+                            📷
                         </button>
                     @endif
                 </div>
@@ -1151,36 +1169,65 @@ document.addEventListener('keydown', function (e) {
     }
     @endunless
 
-    // --- LÓGICA PARA ACTUALIZAR IMAGEN VÍA URL ---
+    // --- FOTOS DEL PRODUCTO: cambiar la principal o agregar otras (archivo del equipo/teléfono o enlace) ---
     // Ventana propia (no prompt()): sigue abierta al cambiar de pestaña y el nombre
     // solo se copia al pulsar el botón, para no pisar el enlace que el usuario copió.
+    const MAX_FOTOS_EXTRA = {{ \App\Models\ProductoImagen::MAXIMO_EXTRA }};
+
+    function cambiarFoto(btn, paso) {
+        const wrap = btn.closest('.product-img-wrapper');
+        const img = wrap.querySelector('.product-img');
+        if (!img.dataset.principal) img.dataset.principal = img.src;
+        const lista = [img.dataset.principal, ...JSON.parse(img.dataset.fotos || '[]')];
+        const i = ((parseInt(img.dataset.indice, 10) || 0) + paso + lista.length) % lista.length;
+        img.dataset.indice = i;
+        img.onerror = null;
+        img.src = lista[i];
+        const contador = wrap.querySelector('.foto-contador');
+        if (contador) contador.textContent = (i + 1) + '/' + lista.length;
+    }
+
     function modalImagenUrl() {
         let wrap = document.getElementById('img-url-modal');
         if (wrap) return wrap;
+        const etiqueta = 'font-size:.75rem;color:#64748b;text-transform:uppercase;font-weight:700;';
         wrap = document.createElement('div');
         wrap.id = 'img-url-modal';
-        wrap.style.cssText = 'display:none;position:fixed;inset:0;z-index:2000;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:16px;';
+        wrap.style.cssText = 'display:none;position:fixed;inset:0;z-index:2000;background:rgba(15,23,42,.55);align-items:center;justify-content:center;padding:16px;overflow-y:auto;';
         wrap.innerHTML = ''
-            + '<div style="background:#fff;border-radius:12px;width:min(480px,100%);padding:18px 20px;box-shadow:0 20px 40px rgba(0,0,0,.25);font-family:inherit;">'
-            + '  <h3 style="margin:0 0 10px;font-size:1.05rem;color:#1e3a8a;">Cambiar imagen</h3>'
-            + '  <div style="font-size:.75rem;color:#64748b;text-transform:uppercase;font-weight:700;">Producto</div>'
+            + '<div style="background:#fff;border-radius:12px;width:min(520px,100%);padding:18px 20px;box-shadow:0 20px 40px rgba(0,0,0,.25);font-family:inherit;">'
+            + '  <h3 style="margin:0 0 10px;font-size:1.05rem;color:#1e3a8a;">Fotos del producto</h3>'
+            + '  <div style="' + etiqueta + '">Producto</div>'
             + '  <div style="display:flex;gap:8px;align-items:center;margin:4px 0 14px;">'
             + '    <input type="text" readonly data-campo="nombre" style="flex:1;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;font-size:.9rem;">'
             + '    <button type="button" data-accion="copiar" style="padding:8px 12px;border:1px solid #1e3a8a;border-radius:8px;background:#fff;color:#1e3a8a;font-weight:700;cursor:pointer;white-space:nowrap;">Copiar nombre</button>'
             + '  </div>'
-            + '  <div style="font-size:.75rem;color:#64748b;text-transform:uppercase;font-weight:700;">Enlace de la nueva imagen (.jpg o .png)</div>'
-            + '  <input type="url" data-campo="url" placeholder="Pega aquí la dirección de la imagen" style="width:100%;box-sizing:border-box;margin:4px 0 16px;padding:9px 10px;border:1.5px solid #93c5fd;border-radius:8px;font-size:.9rem;">'
+            + '  <div style="' + etiqueta + '">Fotos actuales</div>'
+            + '  <div data-campo="fotos" style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px;"></div>'
+            + '  <div style="' + etiqueta + '">¿Qué quieres hacer?</div>'
+            + '  <div style="display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 14px;font-size:.9rem;">'
+            + '    <label style="display:flex;gap:6px;align-items:center;cursor:pointer;"><input type="radio" name="img-modo" value="principal" checked> Cambiar la foto principal</label>'
+            + '    <label style="display:flex;gap:6px;align-items:center;cursor:pointer;" data-campo="op-extra"><input type="radio" name="img-modo" value="extra"> Añadir otra foto</label>'
+            + '  </div>'
+            + '  <div style="' + etiqueta + '">Desde tu equipo o teléfono</div>'
+            + '  <input type="file" accept="image/*" data-campo="archivo" style="width:100%;margin:4px 0 12px;font-size:.88rem;">'
+            + '  <div style="' + etiqueta + '">O pega el enlace de la imagen</div>'
+            + '  <input type="url" data-campo="url" placeholder="https://…" style="width:100%;box-sizing:border-box;margin:4px 0 16px;padding:9px 10px;border:1.5px solid #93c5fd;border-radius:8px;font-size:.9rem;">'
+            + '  <div data-campo="estado" style="font-size:.85rem;color:#1e3a8a;font-weight:600;min-height:1.2em;margin-bottom:8px;"></div>'
             + '  <div style="display:flex;justify-content:flex-end;gap:8px;">'
-            + '    <button type="button" data-accion="cancelar" style="padding:9px 14px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-weight:700;cursor:pointer;">Cancelar</button>'
-            + '    <button type="button" data-accion="guardar" style="padding:9px 14px;border:0;border-radius:8px;background:#1e3a8a;color:#fff;font-weight:700;cursor:pointer;">Guardar imagen</button>'
+            + '    <button type="button" data-accion="cancelar" style="padding:9px 14px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-weight:700;cursor:pointer;">Cerrar</button>'
+            + '    <button type="button" data-accion="guardar" style="padding:9px 14px;border:0;border-radius:8px;background:#1e3a8a;color:#fff;font-weight:700;cursor:pointer;">Guardar foto</button>'
             + '  </div>'
             + '</div>';
         document.body.appendChild(wrap);
 
         const campoNombre = wrap.querySelector('[data-campo="nombre"]');
         const campoUrl = wrap.querySelector('[data-campo="url"]');
+        const campoArchivo = wrap.querySelector('[data-campo="archivo"]');
         const btnCopiar = wrap.querySelector('[data-accion="copiar"]');
-        const cerrar = () => { wrap.style.display = 'none'; };
+        const btnGuardar = wrap.querySelector('[data-accion="guardar"]');
+        const estado = wrap.querySelector('[data-campo="estado"]');
+        const cerrar = () => { wrap.style.display = 'none'; if (wrap.dataset.cambio === '1') window.location.reload(); };
 
         wrap.addEventListener('click', e => { if (e.target === wrap) cerrar(); });
         wrap.querySelector('[data-accion="cancelar"]').addEventListener('click', cerrar);
@@ -1196,59 +1243,82 @@ document.addEventListener('keydown', function (e) {
             btnCopiar.textContent = ok ? '¡Copiado!' : 'Selecciónalo y copia';
             setTimeout(() => { btnCopiar.textContent = 'Copiar nombre'; }, 1800);
         });
-        wrap.querySelector('[data-accion="guardar"]').addEventListener('click', () => {
+        btnGuardar.addEventListener('click', async () => {
             const url = campoUrl.value.trim();
-            if (!url) { campoUrl.focus(); return; }
-            cerrar();
-            subirImagenUrl(wrap.dataset.codigo, url);
+            const archivo = campoArchivo.files[0];
+            if (!archivo && !url) { estado.textContent = 'Elige una foto de tu equipo o pega un enlace.'; return; }
+            const datos = new FormData();
+            datos.append('codigo', wrap.dataset.codigo);
+            datos.append('modo', wrap.querySelector('input[name="img-modo"]:checked').value);
+            if (archivo) datos.append('archivo', archivo); else datos.append('imagen_url', url);
+            btnGuardar.disabled = true;
+            estado.textContent = 'Subiendo foto…';
+            try {
+                const r = await fetch(@json(route('catalogo.upload_image')), {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': @json(csrf_token()) },
+                    body: datos,
+                });
+                const data = await r.json().catch(() => ({}));
+                if (r.ok && data.success) {
+                    estado.textContent = '✅ Foto guardada.';
+                    wrap.dataset.cambio = '1';
+                    setTimeout(cerrar, 600);
+                } else {
+                    estado.textContent = '⚠️ ' + (data.error || data.message || 'No se pudo guardar la foto.');
+                }
+            } catch (e) {
+                estado.textContent = '⚠️ No se pudo conectar con el servidor.';
+            }
+            btnGuardar.disabled = false;
         });
         campoUrl.addEventListener('keydown', e => {
-            if (e.key === 'Enter') wrap.querySelector('[data-accion="guardar"]').click();
+            if (e.key === 'Enter') btnGuardar.click();
             if (e.key === 'Escape') cerrar();
         });
 
         return wrap;
     }
 
-    function pedirUrlImagen(codigo, nombre) {
-        const wrap = modalImagenUrl();
-        wrap.dataset.codigo = codigo;
-        wrap.querySelector('[data-campo="nombre"]').value = String(nombre || '').replace(/^[\/\s.]+/, '').trim();
-        wrap.querySelector('[data-campo="url"]').value = '';
-        wrap.style.display = 'flex';
-        wrap.querySelector('[data-campo="url"]').focus();
+    function pintarFotosModal(wrap, principal, extras) {
+        const caja = wrap.querySelector('[data-campo="fotos"]');
+        const miniatura = (src, texto, id) => `
+            <div style="position:relative;width:78px;text-align:center;font-size:.68rem;color:#64748b;">
+                <img src="${src}" style="width:78px;height:78px;object-fit:contain;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;" onerror="this.style.opacity=.3">
+                <div>${texto}</div>
+                ${id ? `<button type="button" data-borrar="${id}" title="Borrar esta foto" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:0;background:#ef4444;color:#fff;font-weight:700;cursor:pointer;line-height:1;">×</button>` : ''}
+            </div>`;
+        caja.innerHTML = miniatura(principal, 'Principal', null) + extras.map((f, n) => miniatura(f.url, 'Foto ' + (n + 2), f.id)).join('');
+        const opExtra = wrap.querySelector('[data-campo="op-extra"]');
+        const lleno = extras.length >= MAX_FOTOS_EXTRA;
+        opExtra.querySelector('input').disabled = lleno;
+        opExtra.title = lleno ? 'Ya tiene ' + MAX_FOTOS_EXTRA + ' fotos adicionales: borra una para agregar otra.' : '';
+        caja.querySelectorAll('[data-borrar]').forEach(b => b.addEventListener('click', async () => {
+            if (!confirm('¿Borrar esta foto?')) return;
+            const r = await fetch(@json(url('/catalogo/imagenes')) + '/' + b.dataset.borrar, {
+                method: 'DELETE',
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': @json(csrf_token()) },
+            });
+            if (r.ok) {
+                wrap.dataset.cambio = '1';
+                pintarFotosModal(wrap, principal, extras.filter(f => String(f.id) !== b.dataset.borrar));
+            } else {
+                alert('No se pudo borrar la foto.');
+            }
+        }));
     }
 
-    async function subirImagenUrl(codigo, nuevaUrl) {
-        try {
-            // Mostrar estado de carga usando un toast o alert temporal
-            window.showStatusMessage ? window.showStatusMessage('Descargando y subiendo imagen...', false) : console.log('Subiendo...');
-            
-            const response = await fetch("{{ route('catalogo.upload_image') }}", {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({
-                    codigo: codigo,
-                    imagen_url: nuevaUrl
-                })
-            });
-            
-            const data = await response.json();
-            
-            if (response.ok && data.success) {
-                alert('¡Imagen actualizada exitosamente!');
-                window.location.reload(); // Recargar para ver la nueva imagen
-            } else {
-                alert('Error al actualizar: ' + (data.error || 'Error desconocido'));
-            }
-        } catch (error) {
-            console.error('Fetch error:', error);
-            alert('Ocurrió un error al intentar conectarse con el servidor.');
-        }
+    function pedirUrlImagen(codigo, nombre, extras = [], principal = '') {
+        const wrap = modalImagenUrl();
+        wrap.dataset.codigo = codigo;
+        wrap.dataset.cambio = '';
+        wrap.querySelector('[data-campo="nombre"]').value = String(nombre || '').replace(/^[\/\s.]+/, '').trim();
+        wrap.querySelector('[data-campo="url"]').value = '';
+        wrap.querySelector('[data-campo="archivo"]').value = '';
+        wrap.querySelector('[data-campo="estado"]').textContent = '';
+        wrap.querySelector('input[name="img-modo"][value="principal"]').checked = true;
+        pintarFotosModal(wrap, principal, extras || []);
+        wrap.style.display = 'flex';
     }
 
     document.getElementById('form-filtros').addEventListener('submit', function(e) {

@@ -139,6 +139,8 @@ class CatalogoController extends Controller
             'clienteToken' => $token,
             'casheaLevels' => $this->casheaLevels(),
             'enlaceCliente' => url('/catalogo/cliente/' . $this->clienteToken()),
+            'fotosExtra' => \App\Support\FotoProducto::extras($productos->getCollection()->pluck('codigo')),
+            'puedeCambiarImagenes' => ! $modoCliente && $this->puedeCambiarImagenes(),
             'rangos' => [
                 'stock' => ['titulo' => 'Stock (unidades)', 'pasos' => self::PASOS_STOCK, 'prefijo' => ''],
                 'precio' => ['titulo' => 'Precio unidad', 'pasos' => self::PASOS_PRECIO, 'prefijo' => '$'],
@@ -213,108 +215,151 @@ class CatalogoController extends Controller
         }
     }
 
+    /**
+     * Cambia la foto principal del producto o le agrega otra, desde un archivo (equipo o teléfono) o un enlace.
+     * Principal: imagenes/{código principal}.jpg. Adicionales: imagenes/{código}_{n}.jpg, registradas en producto_imagenes.
+     */
     public function uploadImageByUrl(Request $request)
     {
-        // Solo permitir vendedores o administradores según la vista (asumiendo vendedor, admin, supervisor)
-        if (!auth()->check() || auth()->user()->role !== 'vendedor' && !in_array(auth()->user()->role, ['admin', 'supervisor'])) {
+        if (! $this->puedeCambiarImagenes()) {
             return response()->json(['success' => false, 'error' => 'No tienes permiso para actualizar imágenes.'], 403);
         }
 
         $request->validate([
-            'codigo' => 'required|string',
-            'imagen_url' => 'required|url'
+            'codigo' => 'required|string|max:120',
+            'modo' => 'nullable|in:principal,extra',
+            'imagen_url' => 'nullable|required_without:archivo|url',
+            'archivo' => 'nullable|required_without:imagen_url|file|image|max:10240',
         ]);
 
-        $codigo = $request->input('codigo');
-        $imageUrl = $request->input('imagen_url');
-
-        // 1. Intentar usar wsrv.nl como conversor en la nube (soporta WebP, AVIF, HEIC, etc.)
-        $wsrvUrl = 'https://wsrv.nl/?url=' . urlencode($imageUrl) . '&output=jpg&bg=white&q=85';
-        $imageResponse = \Illuminate\Support\Facades\Http::withoutVerifying()->get($wsrvUrl);
-        $imageContent = null;
-        $isConverted = false;
-
-        if ($imageResponse->successful()) {
-            $imageContent = $imageResponse->body();
-            $isConverted = true;
-        } else {
-            // Fallback: descarga directa si el proxy es bloqueado por el servidor origen
-            $imageResponse = \Illuminate\Support\Facades\Http::withoutVerifying()->get($imageUrl);
-            if (!$imageResponse->successful()) {
-                return response()->json(['success' => false, 'error' => 'No se pudo descargar la imagen de la URL proporcionada. Asegúrate de que el enlace sea público.'], 400);
-            }
-            $imageContent = $imageResponse->body();
+        $codigo = \App\Support\FotoProducto::codigoPrincipal($request->input('codigo'));
+        if ($codigo === '') {
+            return response()->json(['success' => false, 'error' => 'El producto no tiene código.'], 422);
+        }
+        $extra = $request->input('modo') === 'extra';
+        if ($extra && \App\Models\ProductoImagen::query()->where('codigo', $codigo)->count() >= \App\Models\ProductoImagen::MAXIMO_EXTRA) {
+            return response()->json(['success' => false, 'error' => 'Este producto ya tiene '.\App\Models\ProductoImagen::MAXIMO_EXTRA.' fotos adicionales. Borra una para agregar otra.'], 422);
         }
 
-        // 2. Si no pasó por el proxy (descarga directa), intentar convertir usando PHP GD
-        if (!$isConverted) {
-            $gdImage = @imagecreatefromstring($imageContent);
-            if (!$gdImage) {
-                return response()->json(['success' => false, 'error' => 'El enlace proporcionado no contiene una imagen válida o es un formato WebP no soportado por este servidor.'], 400);
-            }
-
-            // Crear una imagen blanca de fondo en caso de que sea un PNG transparente
-            $width = imagesx($gdImage);
-            $height = imagesy($gdImage);
-            $bg = imagecreatetruecolor($width, $height);
-            imagefill($bg, 0, 0, imagecolorallocate($bg, 255, 255, 255));
-            imagecopy($bg, $gdImage, 0, 0, 0, 0, $width, $height);
-
-            // Capturar el JPEG en memoria (calidad 85 para reducir peso)
-            ob_start();
-            imagejpeg($bg, null, 85);
-            $imageContent = ob_get_clean();
-            
-            imagedestroy($gdImage);
-            imagedestroy($bg);
+        $imageContent = $request->hasFile('archivo')
+            ? $this->jpegDesdeContenido((string) file_get_contents($request->file('archivo')->getRealPath()))
+            : $this->jpegDesdeUrl((string) $request->input('imagen_url'));
+        if (is_string($imageContent) && str_starts_with($imageContent, 'ERROR:')) {
+            return response()->json(['success' => false, 'error' => substr($imageContent, 6)], 400);
         }
 
-        $contentType = 'image/jpeg';
-        $extension = '.jpg';
-
-        // 3. Subir a Supabase
-        $fileName = rawurlencode($codigo) . $extension;
-        $supabaseUrl = env('SUPABASE_URL');
-        $supabaseKey = env('SUPABASE_KEY');
-
-        if (!$supabaseUrl || !$supabaseKey) {
+        $supabaseUrl = rtrim((string) env('SUPABASE_URL'), '/');
+        $supabaseKey = (string) env('SUPABASE_KEY');
+        if ($supabaseUrl === '' || $supabaseKey === '') {
             return response()->json(['success' => false, 'error' => 'Credenciales de Supabase no configuradas en el servidor.'], 500);
         }
 
-        $supabaseUrl = rtrim($supabaseUrl, '/');
-        // Usamos el endpoint para subir a 'imagenes_producto' dentro de 'imagenes'
-        $uploadUrl = "{$supabaseUrl}/storage/v1/object/imagenes_producto/imagenes/{$fileName}";
-
-        // En Supabase, para sobreescribir un archivo existente usamos un header especial o PUT
-        // Pero el método de subir por defecto es POST, si existe fallará a menos que usemos upsert=true en el header
+        $archivo = $extra ? $codigo.'_'.\Illuminate\Support\Str::lower(\Illuminate\Support\Str::random(6)).'.jpg' : $codigo.'.jpg';
+        $ruta = 'imagenes/'.rawurlencode($archivo);
         $supabaseResponse = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
             'Authorization' => "Bearer {$supabaseKey}",
-            'Content-Type' => $contentType,
-            'x-upsert' => 'true'
-        ])->withBody($imageContent, $contentType)->post($uploadUrl);
+            'Content-Type' => 'image/jpeg',
+            'x-upsert' => 'true',
+            'cache-control' => 'max-age=60',
+        ])->withBody($imageContent, 'image/jpeg')->post("{$supabaseUrl}/storage/v1/object/imagenes_producto/{$ruta}");
 
-        if ($supabaseResponse->successful()) {
-            // Limpiar caché de la imagen para que el PDF se actualice de inmediato
-            \Illuminate\Support\Facades\Cache::forget('img_base64_' . $codigo);
-            
-            // Actualizar la base de datos con la nueva URL
-            $publicUrl = "{$supabaseUrl}/storage/v1/object/public/imagenes_producto/imagenes/{$fileName}";
-            if (config('database.default') === 'pgsql') {
-                \Illuminate\Support\Facades\DB::connection('pgsql')->table('inventario_v2.productos')
-                    ->where('codigo', 'like', $codigo . '%')
-                    ->update(['url_imagen' => $publicUrl]);
-            } else {
-                \App\Models\Product::where('cod_centro', 'like', $codigo . '%')
-                    ->update(['url_imagen' => $publicUrl]);
-            }
-
-            return response()->json(['success' => true]);
+        if (! $supabaseResponse->successful()) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al guardar la imagen en Supabase: '.$supabaseResponse->body(),
+            ], 500);
         }
 
-        return response()->json([
-            'success' => false, 
-            'error' => 'Error al guardar la imagen en Supabase: ' . $supabaseResponse->body()
-        ], 500);
+        $publicUrl = "{$supabaseUrl}/storage/v1/object/public/imagenes_producto/{$ruta}";
+        if ($extra) {
+            \App\Models\ProductoImagen::create([
+                'codigo' => $codigo,
+                'archivo' => $archivo,
+                'url' => $publicUrl,
+                'orden' => ((int) \App\Models\ProductoImagen::query()->where('codigo', $codigo)->max('orden')) + 1,
+                'user_id' => auth()->id(),
+            ]);
+
+            return response()->json(['success' => true, 'url' => $publicUrl]);
+        }
+
+        \Illuminate\Support\Facades\Cache::forget('img_base64_'.$codigo);
+        // Solo este producto: «1775» o «1775 / …», no los códigos que empiezan igual (17751…).
+        $mismoProducto = fn ($w, string $columna) => $w->where($columna, $codigo)->orWhere($columna, 'like', $codigo.' / %');
+        if (config('database.default') === 'pgsql') {
+            \Illuminate\Support\Facades\DB::connection('pgsql')->table('inventario_v2.productos')
+                ->where(fn ($w) => $mismoProducto($w, 'codigo'))
+                ->update(['url_imagen' => $publicUrl]);
+        } else {
+            \App\Models\Product::where(fn ($w) => $mismoProducto($w, 'cod_centro'))
+                ->update(['url_imagen' => $publicUrl]);
+        }
+
+        return response()->json(['success' => true, 'url' => $publicUrl]);
+    }
+
+    /** Borra una foto adicional del producto. */
+    public function borrarImagen(\App\Models\ProductoImagen $imagen)
+    {
+        if (! $this->puedeCambiarImagenes()) {
+            return response()->json(['success' => false, 'error' => 'No tienes permiso para actualizar imágenes.'], 403);
+        }
+        $supabaseUrl = rtrim((string) env('SUPABASE_URL'), '/');
+        $supabaseKey = (string) env('SUPABASE_KEY');
+        if ($supabaseUrl !== '' && $supabaseKey !== '') {
+            \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders(['Authorization' => "Bearer {$supabaseKey}"])
+                ->delete("{$supabaseUrl}/storage/v1/object/imagenes_producto/imagenes/".rawurlencode($imagen->archivo));
+        }
+        $imagen->delete();
+
+        return response()->json(['success' => true]);
+    }
+
+    private function puedeCambiarImagenes(): bool
+    {
+        $rol = auth()->user()?->role;
+
+        return in_array($rol, ['vendedor', 'admin', 'supervisor'], true);
+    }
+
+    /** La imagen del enlace en JPEG (wsrv.nl convierte WebP, AVIF, HEIC…); «ERROR:…» si no se pudo. */
+    private function jpegDesdeUrl(string $imageUrl): string
+    {
+        $wsrv = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(30)
+            ->get('https://wsrv.nl/?url='.urlencode($imageUrl).'&output=jpg&bg=white&q=85&w=1200&h=1200&fit=inside&we');
+        if ($wsrv->successful() && str_starts_with((string) $wsrv->header('Content-Type'), 'image/')) {
+            return $wsrv->body();
+        }
+        $directa = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(30)->get($imageUrl);
+        if (! $directa->successful()) {
+            return 'ERROR:No se pudo descargar la imagen del enlace. Asegúrate de que el enlace sea público.';
+        }
+
+        return $this->jpegDesdeContenido($directa->body());
+    }
+
+    /** JPEG con fondo blanco y como máximo 1200 px por lado; «ERROR:…» si no es una imagen que el servidor entienda. */
+    private function jpegDesdeContenido(string $contenido): string
+    {
+        $gd = @imagecreatefromstring($contenido);
+        if (! $gd) {
+            return 'ERROR:El archivo no es una imagen válida (usa JPG, PNG o WEBP).';
+        }
+        $ancho = imagesx($gd);
+        $alto = imagesy($gd);
+        $escala = min(1, 1200 / max($ancho, $alto));
+        $nuevoAncho = max(1, (int) round($ancho * $escala));
+        $nuevoAlto = max(1, (int) round($alto * $escala));
+        $lienzo = imagecreatetruecolor($nuevoAncho, $nuevoAlto);
+        imagefill($lienzo, 0, 0, imagecolorallocate($lienzo, 255, 255, 255));
+        imagecopyresampled($lienzo, $gd, 0, 0, 0, 0, $nuevoAncho, $nuevoAlto, $ancho, $alto);
+        ob_start();
+        imagejpeg($lienzo, null, 85);
+        $jpeg = (string) ob_get_clean();
+        imagedestroy($gd);
+        imagedestroy($lienzo);
+
+        return $jpeg;
     }
 
     /**

@@ -14,12 +14,40 @@ class FotoProducto
     /** URL sin extensión: se le agrega «.jpg» o «.png». */
     public static function base(?string $codigo): string
     {
+        return self::BASE.rawurlencode(self::codigoPrincipal($codigo));
+    }
+
+    /** Primer tramo del código («A / B» o «A B» → «A»): el nombre de la foto en el bucket. */
+    public static function codigoPrincipal(?string $codigo): string
+    {
         $partes = explode('/', (string) $codigo);
         if (count($partes) === 1) {
             $partes = explode(' ', (string) $codigo);
         }
 
-        return self::BASE.rawurlencode(trim($partes[0]));
+        return trim($partes[0]);
+    }
+
+    /**
+     * Fotos adicionales por código principal.
+     *
+     * @param  iterable<string>  $codigos  códigos completos o principales
+     * @return array<string, list<array{id: int, url: string}>>
+     */
+    public static function extras(iterable $codigos): array
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('producto_imagenes')) {
+            return [];
+        }
+        $principales = collect($codigos)->map(fn ($c) => self::codigoPrincipal($c))->filter()->unique()->values()->all();
+        if ($principales === []) {
+            return [];
+        }
+
+        return \App\Models\ProductoImagen::query()->whereIn('codigo', $principales)->orderBy('orden')->orderBy('id')->get()
+            ->groupBy('codigo')
+            ->map(fn ($fotos) => $fotos->map(fn ($f) => ['id' => (int) $f->id, 'url' => $f->url])->values()->all())
+            ->all();
     }
 
     /**

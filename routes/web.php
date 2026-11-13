@@ -649,6 +649,7 @@ Route::middleware('auth')->group(function () {
         ->name('catalogo.precios.export');
     Route::get('/catalogo/ir-clientes', [\App\Http\Controllers\CatalogoController::class, 'irClientes'])->name('catalogo.ir_clientes');
     Route::post('/catalogo/upload-image', [\App\Http\Controllers\CatalogoController::class, 'uploadImageByUrl'])->name('catalogo.upload_image');
+    Route::delete('/catalogo/imagenes/{imagen}', [\App\Http\Controllers\CatalogoController::class, 'borrarImagen'])->whereNumber('imagen')->name('catalogo.imagen.destroy');
 
     Route::get('/notificaciones', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notificaciones/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
