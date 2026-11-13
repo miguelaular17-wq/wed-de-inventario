@@ -118,10 +118,22 @@ class ArchiveroImportarCommand extends Command
     private function subirLote(array $lote, ArchiveroStorage $storage, $db, callable $esquema, array &$existentes, array &$stats): void
     {
         $antes = intdiv($stats['subidos'], 50);
-        try {
-            $resultado = $storage->subirVarios(array_map(fn ($a) => ['ruta' => $a['ruta'], 'mime' => $a['mime']], $lote));
-        } catch (\Throwable $e) {
-            $resultado = array_fill_keys(array_keys($lote), $e->getMessage());
+        $subir = function (array $archivos) use ($storage) {
+            try {
+                return $storage->subirVarios(array_map(fn ($a) => ['ruta' => $a['ruta'], 'mime' => $a['mime']], $archivos));
+            } catch (\Throwable $e) {
+                return array_fill_keys(array_keys($archivos), $e->getMessage());
+            }
+        };
+        $resultado = $subir($lote);
+        // Los cortes de conexión son pasajeros: se reintentan hasta 2 veces, con una pausa.
+        for ($intento = 1; $intento <= 2; $intento++) {
+            $fallidos = array_intersect_key($lote, array_filter($resultado, fn ($r) => $r !== null));
+            if ($fallidos === []) {
+                break;
+            }
+            sleep(5 * $intento);
+            $resultado = array_merge($resultado, $subir($fallidos));
         }
 
         $ok = [];

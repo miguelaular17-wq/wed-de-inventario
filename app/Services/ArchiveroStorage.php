@@ -48,7 +48,7 @@ class ArchiveroStorage
             $peticiones = [];
             foreach ($archivos as $clave => $a) {
                 $abiertos[$clave] = fopen($a['ruta'], 'r');
-                $peticiones[] = $pool->as($clave)->withoutVerifying()->timeout(900)->withHeaders([
+                $peticiones[] = $pool->as($clave)->withoutVerifying()->connectTimeout(30)->timeout(900)->withHeaders([
                     'Authorization' => "Bearer {$key}",
                     'Content-Type' => $a['mime'],
                     'x-upsert' => 'true',
