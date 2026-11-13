@@ -13,7 +13,7 @@ class Contrato extends Model
         'numero_contrato', 'cliente', 'garantia', 'garantia_documento', 'garantia_aumento', 'contacto', 'telefono',
         'sede', 'capital', 'interes_porcentaje', 'cuota_fija', 'total_a_pagar',
         'fecha_inicio', 'frecuencia', 'responsable_id', 'observaciones', 'activo',
-        'estado', 'liquidado_en_contrato_id',
+        'estado', 'liquidado_en_contrato_id', 'intermediario_id',
     ];
 
     protected $casts = [
@@ -43,6 +43,11 @@ class Contrato extends Model
     public function responsable(): BelongsTo
     {
         return $this->belongsTo(User::class, 'responsable_id');
+    }
+
+    public function intermediario(): BelongsTo
+    {
+        return $this->belongsTo(ContratoIntermediario::class, 'intermediario_id');
     }
 
     // Cuotas pendientes o vencidas

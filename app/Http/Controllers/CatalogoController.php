@@ -247,6 +247,9 @@ class CatalogoController extends Controller
         if (is_string($imageContent) && str_starts_with($imageContent, 'ERROR:')) {
             return response()->json(['success' => false, 'error' => substr($imageContent, 6)], 400);
         }
+        if ($this->esColorPlano($imageContent)) {
+            return response()->json(['success' => false, 'error' => 'Esa imagen es un solo color: parece la muestra de color de la tienda, no la foto del producto. Copia el enlace de la foto grande (clic derecho › «Copiar dirección de imagen»).'], 422);
+        }
 
         $supabaseUrl = rtrim((string) env('SUPABASE_URL'), '/');
         $supabaseKey = (string) env('SUPABASE_KEY');
@@ -336,6 +339,37 @@ class CatalogoController extends Controller
         }
 
         return $this->jpegDesdeContenido($directa->body());
+    }
+
+    /** Una imagen casi de un solo color (la muestra de color de una tienda, no una foto). */
+    private function esColorPlano(string $contenido): bool
+    {
+        $gd = @imagecreatefromstring($contenido);
+        if (! $gd) {
+            return false;
+        }
+        $lado = 24;
+        $mini = imagecreatetruecolor($lado, $lado);
+        imagecopyresampled($mini, $gd, 0, 0, 0, 0, $lado, $lado, imagesx($gd), imagesy($gd));
+        $canales = [[], [], []];
+        for ($x = 0; $x < $lado; $x++) {
+            for ($y = 0; $y < $lado; $y++) {
+                $c = imagecolorat($mini, $x, $y);
+                $canales[0][] = ($c >> 16) & 0xFF;
+                $canales[1][] = ($c >> 8) & 0xFF;
+                $canales[2][] = $c & 0xFF;
+            }
+        }
+        imagedestroy($gd);
+        imagedestroy($mini);
+        $mayorDesvio = 0.0;
+        foreach ($canales as $valores) {
+            $media = array_sum($valores) / count($valores);
+            $varianza = array_sum(array_map(fn ($v) => ($v - $media) ** 2, $valores)) / count($valores);
+            $mayorDesvio = max($mayorDesvio, sqrt($varianza));
+        }
+
+        return $mayorDesvio < 6;
     }
 
     /** JPEG con fondo blanco y como máximo 1200 px por lado; «ERROR:…» si no es una imagen que el servidor entienda. */

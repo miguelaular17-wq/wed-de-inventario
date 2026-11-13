@@ -155,10 +155,11 @@
     $reportesSuiteLink = fn () => $link('Reportes de Suite', route('reportes_suite', 'facturas'), request()->routeIs('reportes_suite*'));
     $tesoreriaItems = [...$conciliacionItems(), $tesoreriaLink(), $ventasDiariasLink(), $cuadreCajaLink(), $reportesSuiteLink()];
     $cobranzaItems = [
-        $link('Cobranza', route('cobranza.index'), request()->routeIs('cobranza.*') && ! request()->routeIs('cobranza.flujo.*')),
+        $link('Cobranza', route('cobranza.index'), request()->routeIs('cobranza.*') && ! request()->routeIs('cobranza.flujo.*', 'cobranza.archivero.*')),
         $link('Flujo de caja', route('cobranza.flujo.index'), request()->routeIs('cobranza.flujo.*')),
         $link('Contratos', route('contratos.index'), request()->routeIs('contratos.*')),
         $link('Patrimonial', route('patrimonial.dashboard'), request()->routeIs('patrimonial.*')),
+        $link('Archivero', route('cobranza.archivero.index'), request()->routeIs('cobranza.archivero.*')),
     ];
 
     if ($u->role === 'admin') {
@@ -323,6 +324,7 @@
             $u->canAccess('cobranza') ? $cobranzaItems[1] : null,
             $u->canAccess('contratos') ? $cobranzaItems[2] : null,
             $u->canAccess('patrimonial') ? $cobranzaItems[3] : null,
+            $u->canAccess('cobranza') ? $cobranzaItems[4] : null,
         ]));
         if ($cobranzaUsuario) {
             $nav[] = $agrupar('Cobranza', $cobranzaUsuario);

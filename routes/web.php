@@ -784,6 +784,13 @@ Route::middleware(['auth', 'permission:cobranza'])->prefix('cobranza')->group(fu
     Route::get('/flujo-caja/facturas', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'buscarFacturas'])->name('cobranza.flujo.facturas');
     Route::get('/flujo-caja/excel', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'excel'])->name('cobranza.flujo.excel');
     Route::get('/flujo-caja/pdf', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'pdf'])->name('cobranza.flujo.pdf');
+    Route::prefix('archivero')->name('cobranza.archivero.')->controller(\App\Http\Controllers\Cobranza\ArchiveroController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/subir', 'subir')->name('subir');
+        Route::post('/carpeta', 'crearCarpeta')->name('carpeta');
+        Route::get('/archivo/{archivo}', 'ver')->whereNumber('archivo')->name('ver');
+        Route::delete('/archivo/{archivo}', 'borrar')->whereNumber('archivo')->name('borrar');
+    });
     Route::get('/flujo-caja/{movimiento}/recibo', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'recibo'])->whereNumber('movimiento')->name('cobranza.flujo.recibo');
     Route::post('/flujo-caja/asientos', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'storeAsiento'])->name('cobranza.flujo.asientos.store');
     Route::delete('/flujo-caja/asientos/{asiento}', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'destroyAsiento'])->whereNumber('asiento')->name('cobranza.flujo.asientos.destroy');
@@ -802,6 +809,16 @@ Route::middleware(['auth', 'permission:contratos'])->prefix('contratos')->group(
     Route::get('/lista', [App\Http\Controllers\ContratoController::class, 'listar'])->name('contratos.lista');
     Route::get('/lista/pdf', [App\Http\Controllers\ContratoController::class, 'listaPdf'])->name('contratos.lista.pdf');
     Route::get('/calendario', [App\Http\Controllers\ContratoController::class, 'calendario'])->name('contratos.calendario');
+    Route::prefix('estados-cuenta')->name('contratos.estados_cuenta.')->controller(App\Http\Controllers\ContratoEstadoCuentaController::class)->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::post('/', 'store')->name('store');
+        Route::get('/{intermediario}', 'show')->whereNumber('intermediario')->name('show');
+        Route::put('/{intermediario}', 'update')->whereNumber('intermediario')->name('update');
+        Route::delete('/{intermediario}', 'destroy')->whereNumber('intermediario')->name('destroy');
+        Route::get('/{intermediario}/pdf', 'pdf')->whereNumber('intermediario')->name('pdf');
+        Route::post('/{intermediario}/contratos', 'asignar')->whereNumber('intermediario')->name('asignar');
+        Route::delete('/{intermediario}/contratos/{contrato}', 'quitar')->whereNumber('intermediario')->whereNumber('contrato')->name('quitar');
+    });
     Route::get('/crear', [App\Http\Controllers\ContratoController::class, 'create'])->name('contratos.create');
     Route::post('/', [App\Http\Controllers\ContratoController::class, 'store'])->name('contratos.store');
     Route::post('/importar', [App\Http\Controllers\ContratoController::class, 'importarExcel'])->name('contratos.importar');

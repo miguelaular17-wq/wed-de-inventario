@@ -7,6 +7,7 @@
         <h2 style="color: var(--blue); font-weight: 700; margin: 0;">📋 Contratos</h2>
         <div style="display: flex; gap: 10px;">
             <a href="{{ route('contratos.index') }}" style="padding: 8px 16px; background: #e0f2fe; color: #0284c7; border-radius: 6px; text-decoration: none; font-weight: 500;">← Dashboard</a>
+            <a href="{{ route('contratos.estados_cuenta.index') }}" style="padding: 8px 16px; background: #fef3c7; color: #92400e; border-radius: 6px; text-decoration: none; font-weight: 600;" title="Estado de cuenta de una persona que responde por varios contratos">📑 Estados de cuenta</a>
             <a href="{{ route('contratos.lista.pdf', request()->only(['q', 'sede', 'responsable_id'])) }}" style="padding: 8px 16px; background: var(--blue); color: white; border-radius: 6px; text-decoration: none; font-weight: 600;" title="Descarga todos los contratos que cumplen los filtros">⬇ Descargar PDF</a>
             <a href="{{ route('contratos.create') }}" style="padding: 8px 16px; background: #059669; color: white; border-radius: 6px; text-decoration: none; font-weight: 600;">+ Nuevo</a>
         </div>

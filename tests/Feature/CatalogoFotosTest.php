@@ -25,6 +25,28 @@ class CatalogoFotosTest extends TestCase
         Http::fake(['*' => Http::response(['Key' => 'ok'], 200)]);
     }
 
+    /** Imagen con degradado (una foto de verdad, no un solo color). */
+    private function foto(string $nombre = 'foto.png', bool $plana = false): UploadedFile
+    {
+        $img = imagecreatetruecolor(400, 300);
+        for ($x = 0; $x < 400; $x++) {
+            imageline($img, $x, 0, $x, 299, imagecolorallocate($img, $plana ? 200 : (int) ($x * 255 / 400), $plana ? 30 : 120, $plana ? 120 : 255 - (int) ($x * 255 / 400)));
+        }
+        $ruta = tempnam(sys_get_temp_dir(), 'foto').'.png';
+        imagepng($img, $ruta);
+        imagedestroy($img);
+
+        return new UploadedFile($ruta, $nombre, 'image/png', null, true);
+    }
+
+    public function test_rechaza_una_imagen_de_un_solo_color(): void
+    {
+        $this->actingAs($this->usuario(User::ROLE_VENDEDOR))->post(route('catalogo.upload_image'), [
+            'codigo' => '1775', 'modo' => 'extra', 'archivo' => $this->foto('muestra.png', true),
+        ], ['Accept' => 'application/json'])->assertStatus(422)->assertJsonFragment(['success' => false]);
+        $this->assertSame(0, ProductoImagen::query()->count());
+    }
+
     private function usuario(string $rol): User
     {
         return User::create(['name' => ucfirst($rol), 'email' => $rol.'-'.uniqid().'@test.local', 'password' => 'password123', 'role' => $rol]);
@@ -36,7 +58,7 @@ class CatalogoFotosTest extends TestCase
         $subir = fn () => $this->actingAs($vendedor)->post(route('catalogo.upload_image'), [
             'codigo' => '1775 / MAXG1775',
             'modo' => 'extra',
-            'archivo' => UploadedFile::fake()->image('foto.png', 1600, 900),
+            'archivo' => $this->foto(),
         ], ['Accept' => 'application/json']);
 
         $subir()->assertOk()->assertJson(['success' => true]);
@@ -59,7 +81,7 @@ class CatalogoFotosTest extends TestCase
     public function test_sin_permiso_no_cambia_fotos_y_el_archivo_tiene_que_ser_imagen(): void
     {
         $this->actingAs($this->usuario(User::ROLE_COMPRADOR))->post(route('catalogo.upload_image'), [
-            'codigo' => '1775', 'modo' => 'extra', 'archivo' => UploadedFile::fake()->image('foto.jpg'),
+            'codigo' => '1775', 'modo' => 'extra', 'archivo' => $this->foto(),
         ], ['Accept' => 'application/json'])->assertForbidden();
 
         $this->actingAs($this->usuario(User::ROLE_ADMIN))->post(route('catalogo.upload_image'), [

@@ -29,6 +29,21 @@ return [
             // El pooler de Supabase en modo transacción (puerto 6543) no conserva sentencias preparadas.
             'options' => extension_loaded('pdo_pgsql') ? [PDO::ATTR_EMULATE_PREPARES => (bool) env('DB_EMULATE_PREPARES', false)] : [],
         ],
+        // Base de la web en producción vista desde esta PC (mismas credenciales del sincronizador); para cargas como el archivero.
+        'produccion' => [
+            'driver' => 'pgsql',
+            'host' => env('SYNC_DESKTOP_DB_HOST'),
+            'port' => env('SYNC_DESKTOP_DB_PORT', '6543'),
+            'database' => env('SYNC_DESKTOP_DB_DATABASE', 'postgres'),
+            'username' => env('SYNC_DESKTOP_DB_USER'),
+            'password' => env('SYNC_DESKTOP_DB_PASSWORD'),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'inventario_v2,public',
+            'sslmode' => 'require',
+            'options' => extension_loaded('pdo_pgsql') ? [PDO::ATTR_EMULATE_PREPARES => true] : [],
+        ],
     ],
 
     'migrations' => [
