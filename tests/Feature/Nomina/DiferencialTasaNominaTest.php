@@ -130,6 +130,58 @@ class DiferencialTasaNominaTest extends TestCase
         );
     }
 
+    public function test_zip_de_relacion_calcula_bs_con_la_tasa_del_diferencial(): void
+    {
+        $empresa = NominaEmpresa::create(['codigo' => 'E1', 'nombre' => 'Empresa Uno']);
+        $periodo = NominaPeriodo::create([
+            'fecha_inicio' => '2026-11-01',
+            'fecha_fin' => '2026-11-15',
+            'etiqueta' => '01/11/2026 al 15/11/2026',
+            'estado' => NominaPeriodo::CALCULADO,
+            'tasa_bcv' => 40,
+        ]);
+        $ana = $this->empleado('28300001', 'Ana Gasto', $empresa);
+        $luis = $this->empleado('28300002', 'Luis Gasto', $empresa);
+        $pedro = $this->empleado('28300003', 'Pedro Sin Diferencial', $empresa);
+        foreach ([[$ana, 100], [$luis, 50], [$pedro, 30]] as [$empleado, $monto]) {
+            NominaRegistro::create(['periodo_id' => $periodo->id, 'empleado_id' => $empleado->id, 'salario_base' => $monto, 'total_pagar' => $monto]);
+        }
+
+        $servicio = app(\App\Services\Nomina\PayrollRateDifferentialService::class);
+        $servicio->crear($periodo, 'Tasa vieja', '2026-11-18', 40, 50, [$ana->id => true, $luis->id => false], null);
+
+        $tasas = $servicio->tasaPorEmpleado($periodo);
+        $this->assertSame([$ana->id => 50.0, $luis->id => 50.0], $tasas->all());
+
+        $controlador = app(\App\Http\Controllers\Nomina\PeriodoController::class);
+        $aplicar = new \ReflectionMethod($controlador, 'aplicarTasaDiferencial');
+        $filas = $aplicar->invoke($controlador, [
+            ['empleado_id' => $ana->id, 'pagar_usd' => 100.0, 'pagar_bs' => 4000.0],
+            ['empleado_id' => $pedro->id, 'pagar_usd' => 30.0, 'pagar_bs' => 1200.0],
+        ], $tasas);
+        // El USD no cambia; el Bs se recalcula con la tasa del diferencial solo a quien entró en él.
+        $this->assertSame(100.0, $filas[0]['pagar_usd']);
+        $this->assertSame(5000.0, $filas[0]['pagar_bs']);
+        $this->assertSame(1200.0, $filas[1]['pagar_bs']);
+        $this->assertArrayNotHasKey('tasa_diferencial', $filas[1]);
+
+        $user = User::create([
+            'name' => 'RRHH Gastos',
+            'email' => 'rrhh-gastos@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_RRHH,
+        ]);
+        $pdf = $this->actingAs($user)
+            ->get(route('nomina.periodos.reporte_gastos_personal', $periodo))
+            ->assertOk();
+        $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        $zip = $this->actingAs($user)
+            ->get(route('nomina.periodos.relacion', ['periodo' => $periodo, 'formato' => 'zip']))
+            ->assertOk();
+        $this->assertSame('application/zip', $zip->headers->get('content-type'));
+    }
+
     public function test_quincena_abierta_no_permite_diferencial(): void
     {
         $user = User::create([

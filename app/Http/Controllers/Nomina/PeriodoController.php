@@ -24,6 +24,7 @@ use App\Services\Nomina\MerchandiseDeductionService;
 use App\Services\Nomina\OtherDeductionService;
 use App\Services\Nomina\PayrollBankFileService;
 use App\Services\Nomina\PayrollPeriodService;
+use App\Services\Nomina\PayrollRateDifferentialService;
 use App\Services\Nomina\PayrollSedeAreaTotals;
 use App\Services\Nomina\SalaryAdvanceService;
 use App\Support\SimpleXlsxWriter;
@@ -50,6 +51,7 @@ class PeriodoController extends Controller
         private MerchandiseDeductionService $mercancia,
         private FaltanteCajaService $faltantes,
         private OtherDeductionService $otrasDeducciones,
+        private PayrollRateDifferentialService $diferencialesTasa,
     ) {
     }
 
@@ -257,6 +259,8 @@ class PeriodoController extends Controller
         $nombreBase = 'relacion_nomina_'.$periodo->id.'_'.$periodo->fecha_inicio?->format('Ymd');
 
         if ($request->query('formato') === 'zip') {
+            $filas = $this->aplicarTasaDiferencial($filas, $this->diferencialesTasa->tasaPorEmpleado($periodo));
+
             return $this->descargarZipPorSedeYArea($periodo, $filas, $nombreBase, $tasaBcv);
         }
 
@@ -483,6 +487,7 @@ class PeriodoController extends Controller
             $horasExtras = round((float) ($desglose['horas_extras'] ?? 0), 2);
             $bonificaciones = $registro->montoBonificaciones();
             $fila = [
+                'empleado_id' => (int) $registro->empleado_id,
                 'cedula' => $registro->empleado?->cedula() ?? '',
                 'nombre' => $registro->empleado?->nombre() ?? 'Sin nombre',
                 'cargo' => $registro->empleado?->nombreCargo() ?? '—',
@@ -510,6 +515,29 @@ class PeriodoController extends Controller
         }
 
         return [$filas, $totales];
+    }
+
+    /**
+     * Quien entró en un diferencial por tasa lleva su total en Bs a la tasa de ese diferencial; el USD no cambia.
+     *
+     * @param  list<array<string, mixed>>  $filas
+     * @return list<array<string, mixed>>
+     */
+    private function aplicarTasaDiferencial(array $filas, \Illuminate\Support\Collection $tasas): array
+    {
+        if ($tasas->isEmpty()) {
+            return $filas;
+        }
+
+        return array_map(function (array $fila) use ($tasas) {
+            $tasa = $tasas->get((int) ($fila['empleado_id'] ?? 0));
+            if ($tasa) {
+                $fila['pagar_bs'] = round((float) $fila['pagar_usd'] * $tasa, 2);
+                $fila['tasa_diferencial'] = $tasa;
+            }
+
+            return $fila;
+        }, $filas);
     }
 
     /**

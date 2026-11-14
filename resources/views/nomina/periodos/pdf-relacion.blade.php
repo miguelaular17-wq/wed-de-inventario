@@ -33,7 +33,7 @@
             <div class="sub">
                 Quincena {{ $periodo->etiqueta }}
                 · Estado {{ $periodo->estado }}
-                · Tasa BCV {{ number_format($tasaBcv, 2) }}
+                · Tasa BCV {{ number_format((float) (collect($filas)->pluck('tasa_diferencial')->filter()->max() ?? $tasaBcv), 2) }}
                 · {{ now()->format('d/m/Y H:i') }}
             </div>
             <div class="sub">Solo sueldo (salario, horas extras y deducciones). No incluye comisiones.</div>

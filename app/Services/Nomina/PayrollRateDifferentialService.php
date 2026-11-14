@@ -6,8 +6,10 @@ use App\Models\Nomina\NominaEmpresa;
 use App\Models\Nomina\NominaPeriodo;
 use App\Models\Nomina\NominaRegistro;
 use App\Models\Nomina\NominaTasaDiferencial;
+use App\Models\Nomina\NominaTasaDiferencialLinea;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -109,6 +111,26 @@ class PayrollRateDifferentialService
 
             return $diferencial;
         });
+    }
+
+    /**
+     * Tasa nueva con la que terminó pagándose a cada empleado (la del último diferencial que lo incluye).
+     *
+     * @return Collection<int, float> empleado_id => tasa
+     */
+    public function tasaPorEmpleado(NominaPeriodo $periodo): Collection
+    {
+        if (! Schema::hasTable('nomina_tasa_diferencial_lineas')) {
+            return collect();
+        }
+
+        return NominaTasaDiferencialLinea::query()
+            ->whereHas('diferencial', fn ($q) => $q->where('periodo_id', $periodo->id))
+            ->with('diferencial')
+            ->orderBy('diferencial_id')
+            ->get()
+            ->filter(fn ($linea) => (float) $linea->diferencial?->tasa_nueva > 0)
+            ->mapWithKeys(fn ($linea) => [(int) $linea->empleado_id => round((float) $linea->diferencial->tasa_nueva, 4)]);
     }
 
     public function validarTasas(float $tasaPagada, float $tasaNueva): void
