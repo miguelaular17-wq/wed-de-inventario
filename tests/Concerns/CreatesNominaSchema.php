@@ -521,6 +521,34 @@ trait CreatesNominaSchema
             });
         }
 
+        if (! Schema::hasTable('nomina_tasa_diferenciales')) {
+            Schema::create('nomina_tasa_diferenciales', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('periodo_id');
+                $table->string('motivo', 255);
+                $table->date('fecha_pago');
+                $table->decimal('tasa_pagada', 12, 4);
+                $table->decimal('tasa_nueva', 12, 4);
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->timestamps();
+            });
+        }
+
+        if (! Schema::hasTable('nomina_tasa_diferencial_lineas')) {
+            Schema::create('nomina_tasa_diferencial_lineas', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('diferencial_id');
+                $table->unsignedBigInteger('empleado_id');
+                $table->boolean('no_pagado')->default(false);
+                $table->decimal('total_usd', 14, 2)->default(0);
+                $table->decimal('bs_pagado', 14, 2)->default(0);
+                $table->decimal('bs_nuevo', 14, 2)->default(0);
+                $table->decimal('diferencia_bs', 14, 2)->default(0);
+                $table->timestamps();
+                $table->unique(['diferencial_id', 'empleado_id']);
+            });
+        }
+
         if (! Schema::hasTable('nomina_comision_abonos')) {
             Schema::create('nomina_comision_abonos', function (Blueprint $table) {
                 $table->id();
@@ -691,6 +719,8 @@ trait CreatesNominaSchema
         }
 
         foreach ([
+            'nomina_tasa_diferencial_lineas',
+            'nomina_tasa_diferenciales',
             'nomina_comision_diferencial_lineas',
             'nomina_comision_diferenciales',
             'nomina_comision_descuentos',

@@ -76,6 +76,7 @@
                     <a class="btn primary" href="{{ route('nomina.periodos.relacion', $periodo) }}">Descargar relación PDF</a>
                     <a class="btn" href="{{ route('nomina.periodos.relacion', ['periodo' => $periodo, 'formato' => 'xlsx']) }}">Descargar Excel</a>
                     <a class="btn" href="{{ route('nomina.periodos.relacion', ['periodo' => $periodo, 'formato' => 'zip']) }}">ZIP PDF por sede y área</a>
+                    <a class="btn" href="{{ route('nomina.periodos.diferenciales_tasa.index', $periodo) }}">Diferencial por tasa</a>
                 </div>
             @endif
         </div>

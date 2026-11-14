@@ -38,6 +38,7 @@ use App\Http\Controllers\Nomina\CargoController;
 use App\Http\Controllers\Nomina\ComisionAjusteController;
 use App\Http\Controllers\Nomina\ComisionController;
 use App\Http\Controllers\Nomina\ComisionDiferencialController;
+use App\Http\Controllers\Nomina\PeriodoDiferencialTasaController;
 use App\Http\Controllers\Nomina\ComisionMarcaController;
 use App\Http\Controllers\Nomina\ConfiguracionController;
 use App\Http\Controllers\Nomina\DeduccionController;
@@ -499,6 +500,13 @@ Route::middleware(['auth', 'permission:nomina,nomina.periodos'])->prefix('nomina
     Route::get('/periodos/{periodo}/relacion', [PeriodoController::class, 'relacion'])->name('periodos.relacion');
     Route::get('/periodos/{periodo}/reporte-sedes.pdf', [PeriodoController::class, 'reporteSedesPdf'])->name('periodos.reporte_sedes');
     Route::get('/periodos/{periodo}/reporte-gastos-personal.pdf', [PeriodoController::class, 'reporteGastosPersonalPdf'])->name('periodos.reporte_gastos_personal');
+    Route::get('/periodos/{periodo}/diferenciales-tasa', [PeriodoDiferencialTasaController::class, 'index'])->name('periodos.diferenciales_tasa.index');
+    Route::get('/periodos/{periodo}/diferenciales-tasa/nuevo', [PeriodoDiferencialTasaController::class, 'create'])->name('periodos.diferenciales_tasa.create');
+    Route::post('/periodos/{periodo}/diferenciales-tasa', [PeriodoDiferencialTasaController::class, 'store'])->name('periodos.diferenciales_tasa.store');
+    Route::get('/periodos/{periodo}/diferenciales-tasa/{diferencial}', [PeriodoDiferencialTasaController::class, 'show'])->name('periodos.diferenciales_tasa.show');
+    Route::delete('/periodos/{periodo}/diferenciales-tasa/{diferencial}', [PeriodoDiferencialTasaController::class, 'destroy'])->name('periodos.diferenciales_tasa.destroy');
+    Route::get('/periodos/{periodo}/diferenciales-tasa/{diferencial}/reporte', [PeriodoDiferencialTasaController::class, 'reporte'])->name('periodos.diferenciales_tasa.reporte');
+    Route::get('/periodos/{periodo}/diferenciales-tasa/{diferencial}/banco/{empresa}', [PeriodoDiferencialTasaController::class, 'banco'])->name('periodos.diferenciales_tasa.banco');
 });
 
 Route::middleware(['auth', 'permission:nomina,nomina.comisiones'])->prefix('nomina')->name('nomina.')->group(function () {
