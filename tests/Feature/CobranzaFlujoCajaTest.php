@@ -103,6 +103,8 @@ class CobranzaFlujoCajaTest extends TestCase
         $this->assertSame('2000.00', $egreso->monto_bs);
         $this->assertNull($ingreso->flujo_caja_id);
         $this->assertSame(0, FlujoCaja::query()->count());
+        // En el estado de cuenta el abono dice cómo se pagó: en un cruce, en qué se fue el dinero.
+        $this->assertSame('Cruce · se fue en: Pago proveedor X (Proveedor X)', $ingreso->comoSePago());
 
         $this->get(route('cobranza.flujo.index', ['desde' => '2026-11-01', 'hasta' => '2026-11-30']))
             ->assertOk()->assertSee('Se fue en: Pago proveedor X')->assertSee('Vino de: Abono factura 777');
@@ -233,6 +235,7 @@ class CobranzaFlujoCajaTest extends TestCase
         ])->assertSessionHasNoErrors()->assertSessionHas('recibo_id');
         $mov = CobranzaMovimiento::query()->firstOrFail();
         $this->assertSame('EFECTIVO', $mov->forma_pago);
+        $this->assertSame('Efectivo', $mov->comoSePago());
 
         $datos = app(\App\Services\Cobranza\CobranzaReciboService::class)->datos($mov->load('usuario'));
         $this->assertSame('J-40172229-6', $datos['empresa']['rif']);

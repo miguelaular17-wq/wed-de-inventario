@@ -119,6 +119,37 @@ class CobranzaMovimiento extends Model
         return (bool) ($this->flujoCaja?->es_conciliado);
     }
 
+    /** «Efectivo», «Transferencia $ · Banesco Grupo JRZ» o «Cruce · se fue en: Pago proveedor X (Proveedor X)». */
+    public function comoSePago(): string
+    {
+        $formas = [
+            'ZELLE' => 'Zelle', 'EFECTIVO' => 'Efectivo', 'TRANSFERENCIA_DIVISAS' => 'Transferencia $', 'TRANSFERENCIA_BCV' => 'Transferencia Bs',
+            'PAGO_MOVIL' => 'Pago móvil', 'DEPOSITO' => 'Depósito', 'BINANCE' => 'Binance', 'CRUCE' => 'Cruce', 'DESCUENTO_DIVISAS' => 'Descuento en divisas',
+        ];
+        $banco = trim((string) $this->banco);
+        $bancoUpper = mb_strtoupper($banco, 'UTF-8');
+
+        if ($this->esCruce() || self::esBancoCruce($banco) || $this->forma_pago === 'CRUCE') {
+            $otra = $this->contraparteCruce();
+            if (! $otra) {
+                return 'Cruce';
+            }
+            $destino = trim((string) $otra->concepto);
+            $quien = trim((string) $otra->contraparte);
+
+            return 'Cruce · se fue en: '.($destino !== '' ? $destino : 'sin detalle').($quien !== '' && $quien !== $destino ? ' ('.$quien.')' : '');
+        }
+
+        $forma = $formas[strtoupper((string) $this->forma_pago)] ?? match (true) {
+            $bancoUpper === 'EFECTIVO' => 'Efectivo',
+            in_array($bancoUpper, self::CUENTAS_SIN_BANCO, true) => mb_convert_case($banco, MB_CASE_TITLE, 'UTF-8'),
+            default => (float) $this->monto_bs > 0 ? 'Transferencia Bs' : 'Transferencia $',
+        };
+        $cuenta = in_array($bancoUpper, self::CUENTAS_SIN_BANCO, true) ? '' : trim($banco.' '.trim((string) $this->titular));
+
+        return $cuenta !== '' && $forma !== 'Efectivo' ? $forma.' · '.$cuenta : $forma;
+    }
+
     /** A qué factura, cuota, alquiler, reserva o propiedad pertenece, en una línea. */
     public function descripcionVinculo(): ?string
     {

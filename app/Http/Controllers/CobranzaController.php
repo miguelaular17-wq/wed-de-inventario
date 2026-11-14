@@ -919,7 +919,7 @@ class CobranzaController extends Controller
                         'tipo_doc' => 'PAG',
                         'numero_documento' => (string) ($mov->referencia ?? ''),
                         'factura_padre' => $doc['factura'],
-                        'descripcion' => 'Abono registrado en la web · '.$mov->concepto,
+                        'descripcion' => $mov->comoSePago(),
                         'cantidad' => null,
                         'precio' => null,
                         'total' => null,
