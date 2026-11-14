@@ -124,9 +124,9 @@ class VentasDiariasService
     }
 
     /**
-     * Reparte la meta del mes: los domingos salen a la mitad de un día parejo
-     * y el resto se divide entre los días que no son domingo. El domingo de la
-     * tabla es la mitad de esa meta diaria.
+     * Reparte la meta del mes: el domingo vale medio día, así que la meta diaria (lunes a sábado)
+     * es meta ÷ (días lunes a sábado + domingos ÷ 2) y el domingo la mitad. Diaria × días L-S + domingo × domingos
+     * da exacto la meta del mes (Octubre 2026: 27 días L-S y 4 domingos → meta ÷ 29).
      *
      * @return array{diaria: float, domingo: float}
      */
@@ -139,9 +139,7 @@ class VentasDiariasService
             return ['diaria' => 0.0, 'domingo' => 0.0];
         }
 
-        $diaParejo = $ventaMetaMes / $dias;
-        $resto = $ventaMetaMes - ($domingos * ($diaParejo / 2));
-        $diaria = round($resto / $habiles, 4);
+        $diaria = round($ventaMetaMes / ($habiles + $domingos / 2), 4);
 
         return [
             'diaria' => $diaria,

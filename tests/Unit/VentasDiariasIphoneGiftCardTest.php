@@ -110,7 +110,17 @@ class VentasDiariasIphoneGiftCardTest extends TestCase
 
         $calc = $servicio->metaVentaDiaria(335477.623, $cal['dias'], $cal['domingos']);
 
-        $this->assertEqualsWithDelta(11623.4780, $calc['diaria'], 0.0001);
-        $this->assertEqualsWithDelta(5811.7390, $calc['domingo'], 0.0001);
+        // El domingo vale medio día: 335.477,62 ÷ (27 + 4/2) = 11.568,19 y el domingo 5.784,10.
+        $this->assertEqualsWithDelta(11568.1939, $calc['diaria'], 0.0001);
+        $this->assertEqualsWithDelta(5784.0970, $calc['domingo'], 0.0001);
+        // Lunes a sábado más domingos da exacto la meta del mes.
+        $this->assertEqualsWithDelta(335477.623, $calc['diaria'] * 27 + $calc['domingo'] * 4, 0.01);
+
+        // Un mes con 5 domingos (noviembre 2026 trae 30 días y 5 domingos): 25 + 2,5 = 27,5.
+        $nov = $servicio->calendarioDelPeriodo('META MES NOVIEMBRE 2026');
+        $calcNov = $servicio->metaVentaDiaria(27500, $nov['dias'], $nov['domingos']);
+        $this->assertSame([30, 5], [$nov['dias'], $nov['domingos']]);
+        $this->assertEqualsWithDelta(1000, $calcNov['diaria'], 0.0001);
+        $this->assertEqualsWithDelta(500, $calcNov['domingo'], 0.0001);
     }
 }
