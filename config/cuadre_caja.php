@@ -9,7 +9,7 @@ return [
     /*
      * Titulares que Tesorería elige para un lote de punto de venta (los mismos del registro de lotes POS).
      */
-    'titulares_punto_venta' => ['JRZ', 'DORAL', 'LNACEH', 'NUNES', 'EURONISSI'],
+    'titulares_punto_venta' => ['JRZ', 'DORAL', 'LNACEH', 'NUNES', 'EURONISSI', 'TECNO HOUSE'],
 
     /*
      * Orden de las formas de pago en el cuadre, igual que la pantalla de cierre de Suite: códigos de metodo_pago

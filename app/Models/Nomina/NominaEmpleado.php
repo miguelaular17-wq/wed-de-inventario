@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class NominaEmpleado extends Model
 {
     public const COMISION_VENTAS_PROPIAS = 'VENTAS_PROPIAS';
+    public const COMISION_VENTAS_PROPIAS_SIN_HS = 'VENTAS_PROPIAS_SIN_HS';
     public const COMISION_SUPERVISOR_SEDE = 'SUPERVISOR_SEDE';
     public const COMISION_ENCARGADO = 'ENCARGADO';
     public const COMISION_SUPERVISOR_EQUIPO = 'SUPERVISOR_EQUIPO';
@@ -235,6 +236,7 @@ class NominaEmpleado extends Model
     {
         return [
             self::COMISION_VENTAS_PROPIAS => 'Ventas propias: venta neta (telefonía 0,20% / resto 1%)',
+            self::COMISION_VENTAS_PROPIAS_SIN_HS => 'Ventas propias sin Honor/Samsung: venta neta (telefonía 0,20% / resto 1%; sin teléfonos Honor ni Samsung)',
             self::COMISION_SUPERVISOR_SEDE => 'Supervisor de sede: venta neta de la tienda (0,05%)',
             self::COMISION_ENCARGADO => 'Encargado de tienda: venta neta de la tienda (% propio en Configuración)',
             self::COMISION_SUPERVISOR_EQUIPO => 'Supervisor de equipo/Marketing: ventas de subordinados (0,10%)',

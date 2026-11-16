@@ -46,6 +46,7 @@ class VentasMayorTest extends TestCase
         }
         (require database_path('migrations/2026_11_12_150000_create_ventas_mayor_tables.php'))->up();
         (require database_path('migrations/2026_11_12_200000_create_mayor_catalogo_y_presentaciones.php'))->up();
+        (require database_path('migrations/2026_11_16_120000_mayor_descuento_divisa.php'))->up();
         if (! Schema::hasColumn('productos', 'costo_actual')) {
             Schema::table('productos', fn (Blueprint $t) => $t->decimal('costo_actual', 12, 2)->default(0));
         }
@@ -112,6 +113,43 @@ class VentasMayorTest extends TestCase
         $this->assertEquals(12.5, MayorFactura::query()->where('numero', 2)->firstOrFail()->saldoUsd());
     }
 
+    public function test_descuento_divisa_lo_ajusta_solo_la_gerente_y_baja_el_total(): void
+    {
+        \App\Models\Mayor\MayorConfig::put('descuento_divisa_pct', 10);
+        $this->actingAs($this->user)->get(route('ventas_mayor.configuracion'))->assertForbidden();
+
+        $gerente = User::create([
+            'name' => 'Gerente Mayor',
+            'email' => 'gerente-mayor-'.uniqid().'@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_GERENTE,
+        ]);
+        $this->actingAs($gerente)->get(route('ventas_mayor.configuracion'))
+            ->assertOk()
+            ->assertSee('Descuento por pago en divisas');
+        $this->actingAs($gerente)->post(route('ventas_mayor.configuracion.guardar'), [
+            'descuento_divisa_pct' => 5,
+        ])->assertRedirect(route('ventas_mayor.configuracion'));
+        $this->assertSame(5.0, app(\App\Services\Mayor\VentasMayorService::class)->descuentoDivisaPct());
+
+        // Sin forma en divisas: total completo. Con Zelle: 5% menos sobre el monto completo.
+        $this->factura([['producto_id' => $this->parlante, 'cantidad' => 2, 'precio_usd' => 12.5]], [
+            'pago_forma' => 'Transferencia',
+        ])->assertSessionHasNoErrors();
+        $sinDesc = MayorFactura::query()->latest('id')->firstOrFail();
+        $this->assertEquals(25.0, $sinDesc->total_usd);
+        $this->assertEquals(0.0, (float) $sinDesc->descuento_usd);
+
+        $this->factura([['producto_id' => $this->parlante, 'cantidad' => 2, 'precio_usd' => 12.5]], [
+            'pago_forma' => 'Zelle',
+        ])->assertSessionHasNoErrors();
+        $conDesc = MayorFactura::query()->latest('id')->firstOrFail();
+        $this->assertEquals(25.0, (float) $conDesc->subtotal_usd);
+        $this->assertEquals(1.25, (float) $conDesc->descuento_usd);
+        $this->assertEquals(23.75, (float) $conDesc->total_usd);
+        $this->assertEquals(23.75, $conDesc->totalPagadoUsd());
+    }
+
     public function test_ve_stock_de_todas_las_sedes_con_jrz_primero(): void
     {
         $this->actingAs($this->user)->get(route('ventas_mayor.stock', ['q' => 'parlante']))
@@ -139,7 +177,8 @@ class VentasMayorTest extends TestCase
         $this->actingAs($this->user)->post(route('ventas_mayor.catalogo.guardar', $this->parlante), ['presentacion' => 'caja', 'unidades' => 5])->assertRedirect();
         $this->assertSame(0, \App\Models\Mayor\MayorCatalogo::query()->count());
         $this->actingAs($this->user)->get(route('ventas_mayor.stock', ['q' => 'parlante']))->assertOk()
-            ->assertSee('Ver ficha')->assertSee('Solo la regente puede')->assertDontSee('Ficha / editar');
+            ->assertSee('Ver ficha')->assertSee('Solo la regente puede')->assertDontSee('Ficha / editar')
+            ->assertDontSee('$40.00')->assertDontSee('+37.5% ganancia');
         $regente = User::create(['name' => 'Regente', 'email' => 'regente-'.uniqid().'@test.local', 'password' => 'password123', 'role' => User::ROLE_SEDE]);
         $regente->extraPermissions()->create(['permission' => 'ventas_mayor.catalogo']);
         $guardar = fn (array $datos) => $this->actingAs($regente)->post(route('ventas_mayor.catalogo.guardar', $this->parlante), $datos);
@@ -149,6 +188,11 @@ class VentasMayorTest extends TestCase
         $this->actingAs($regente)->get(route('ventas_mayor.stock', ['q' => 'parlante']))->assertOk()
             ->assertSee('Ficha / editar')
             ->assertSee('Caja x5')->assertSee('$55.00')->assertSee('$11.00 c/u')->assertSee('$40.00')->assertSee('+37.5% ganancia');
+
+        // El usuario de ventas al mayor no ve costo ni ganancia en el stock.
+        $this->actingAs($this->user)->get(route('ventas_mayor.stock', ['q' => 'parlante']))->assertOk()
+            ->assertSee('Caja x5')->assertSee('$55.00')->assertSee('$11.00 c/u')
+            ->assertDontSee('$40.00')->assertDontSee('+37.5% ganancia')->assertDontSee('"costo_suite"', false);
 
         // El catálogo al mayor (para clientes) muestra lo que puso la regente, sin el costo.
         $this->actingAs($this->user)->get(route('ventas_mayor.catalogo'))->assertOk()
@@ -227,10 +271,31 @@ class VentasMayorTest extends TestCase
         $this->assertSame(1, $f->pagos()->count());
 
         $this->actingAs($this->user)->get(route('ventas_mayor.show', $f))->assertOk()->assertSee('MAY-000001')->assertSee('Ref 998877')
-            ->assertSee('Pagada completa')->assertDontSee('Agregar comprobante');
+            ->assertSee('Pagada completa')->assertDontSee('Agregar comprobante')
+            ->assertSee('Factura de pago');
         $pdf = $this->actingAs($this->user)->get(route('ventas_mayor.pdf', $f));
         $pdf->assertOk();
         $this->assertStringStartsWith('%PDF', $pdf->getContent());
+
+        $pago = $f->pagos()->firstOrFail();
+        $pagoPdf = $this->actingAs($this->user)->get(route('ventas_mayor.pagos.pdf', [$f, $pago]));
+        $pagoPdf->assertOk();
+        $this->assertStringStartsWith('%PDF', $pagoPdf->getContent());
+
+        // Abono a crédito: genera factura de pago automáticamente.
+        $this->factura([['producto_id' => $this->parlante, 'cantidad' => 2, 'precio_usd' => 12.5]], [
+            'condicion' => 'credito',
+            'pago_monto_usd' => 0,
+            'fecha_vencimiento' => now()->addDays(15)->toDateString(),
+        ])->assertSessionHasNoErrors();
+        $credito = MayorFactura::query()->where('condicion', 'credito')->latest('id')->firstOrFail();
+        $this->actingAs($this->user)->post(route('ventas_mayor.comprobantes.store', $credito), [
+            'monto_usd' => 10,
+            'forma_pago' => 'Zelle',
+            'referencia' => 'ABONO-1',
+        ])->assertRedirect()->assertSessionHas('pago_recibo_id');
+        $this->assertEquals(15.0, $credito->fresh()->load('pagos')->saldoUsd());
+
         $this->actingAs($this->user)->get(route('ventas_mayor.facturas'))->assertOk()->assertSee('Comercial Los Andes');
     }
 }

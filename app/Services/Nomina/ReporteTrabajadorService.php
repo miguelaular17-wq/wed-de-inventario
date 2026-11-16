@@ -150,9 +150,15 @@ class ReporteTrabajadorService
             ];
         }
 
+        $etiqueta = match ($modo) {
+            NominaEmpleado::COMISION_VENTAS_PROPIAS_SIN_HS => 'Ventas propias (sin teléfonos Honor/Samsung)',
+            NominaEmpleado::COMISION_MOVISTAR => 'Ventas propias (sin facturas ST)',
+            default => 'Ventas propias',
+        };
+
         return [
             'tipo' => 'propio',
-            'etiqueta' => 'Ventas propias',
+            'etiqueta' => $etiqueta,
             'claves' => $empleado ? $this->sales->claves($empleado) : [],
             'sedes' => [],
         ];

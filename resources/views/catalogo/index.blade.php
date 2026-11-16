@@ -168,6 +168,13 @@
     .rango-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
     .rango-top label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: #64748b; }
     .rango-valor { font-size: 0.82rem; font-weight: 700; color: #1e3a8a; white-space: nowrap; }
+    .rango-inputs { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; }
+    .rango-inputs span { font-size: 0.72rem; color: #64748b; font-weight: 600; }
+    .rango-inputs input[type=number] {
+        width: 88px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 7px;
+        font-size: 0.85rem; font-family: inherit; color: #0f172a;
+    }
+    .rango-inputs input[type=number]:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
     .rango-barra { position: relative; height: 26px; }
     .rango-barra::before { content: ''; position: absolute; left: 0; right: 0; top: 11px; height: 4px; border-radius: 999px; background: #e2e8f0; }
     .rango-relleno { position: absolute; top: 11px; height: 4px; border-radius: 999px; background: #2563eb; }
@@ -673,6 +680,13 @@
                         <div class="rango-top">
                             <label>{{ $r['titulo'] }}</label>
                             <span class="rango-valor"></span>
+                        </div>
+                        <div class="rango-inputs">
+                            <span>{{ $r['prefijo'] ?: '' }}</span>
+                            <input type="number" class="rango-num-min" min="0" step="{{ $clave === 'precio' ? '0.01' : '1' }}" inputmode="decimal" placeholder="Desde" aria-label="{{ $r['titulo'] }} desde (número)" value="{{ request($clave.'_min') }}">
+                            <span>hasta</span>
+                            <span>{{ $r['prefijo'] ?: '' }}</span>
+                            <input type="number" class="rango-num-max" min="0" step="{{ $clave === 'precio' ? '0.01' : '1' }}" inputmode="decimal" placeholder="Hasta" aria-label="{{ $r['titulo'] }} hasta (número)" value="{{ request($clave.'_max') }}">
                         </div>
                         <div class="rango-barra">
                             <div class="rango-relleno"></div>
@@ -1330,7 +1344,7 @@ document.addEventListener('keydown', function (e) {
         btn.disabled = true;
     });
 
-    // Barras de stock y precio: dos manijas (desde / hasta). El tope derecho es «sin límite».
+    // Barras de stock y precio: dos manijas o números escritos (desde / hasta). El tope derecho es «sin límite».
     document.querySelectorAll('.rango').forEach(function (rango) {
         const pasos = JSON.parse(rango.dataset.pasos);
         const prefijo = rango.dataset.prefijo || '';
@@ -1339,9 +1353,18 @@ document.addEventListener('keydown', function (e) {
         const deslizMax = rango.querySelector('.rango-max');
         const campoMin = rango.querySelector('.rango-input-min');
         const campoMax = rango.querySelector('.rango-input-max');
+        const numMin = rango.querySelector('.rango-num-min');
+        const numMax = rango.querySelector('.rango-num-max');
         const relleno = rango.querySelector('.rango-relleno');
         const etiqueta = rango.querySelector('.rango-valor');
+        let origen = 'slider'; // 'slider' | 'numero'
         const fmt = v => prefijo + Number(v).toLocaleString('es-VE');
+        const leerNum = el => {
+            const v = String(el.value ?? '').trim().replace(',', '.');
+            if (v === '') return null;
+            const n = parseFloat(v);
+            return Number.isFinite(n) && n >= 0 ? n : null;
+        };
         const indice = valor => {
             if (valor === '' || valor === null) return null;
             const n = parseFloat(valor);
@@ -1351,14 +1374,29 @@ document.addEventListener('keydown', function (e) {
 
         deslizMin.value = indice(campoMin.value) ?? 0;
         deslizMax.value = indice(campoMax.value) ?? tope;
+        if (campoMin.value !== '') numMin.value = campoMin.value;
+        if (campoMax.value !== '') numMax.value = campoMax.value;
 
         function pintar() {
+            let desde = null, hasta = null;
+            if (origen === 'numero') {
+                desde = leerNum(numMin);
+                hasta = leerNum(numMax);
+                if (desde !== null && hasta !== null && desde > hasta) [desde, hasta] = [hasta, desde];
+                deslizMin.value = desde === null ? 0 : (indice(desde) ?? 0);
+                deslizMax.value = hasta === null ? tope : (indice(hasta) ?? tope);
+            } else {
+                let a = parseInt(deslizMin.value, 10), b = parseInt(deslizMax.value, 10);
+                if (a > b) { [a, b] = [b, a]; }
+                desde = a === 0 ? null : pasos[a];
+                hasta = b >= tope ? null : pasos[b];
+                numMin.value = desde === null ? '' : desde;
+                numMax.value = hasta === null ? '' : hasta;
+            }
             let a = parseInt(deslizMin.value, 10), b = parseInt(deslizMax.value, 10);
             if (a > b) { [a, b] = [b, a]; }
             relleno.style.left = (a / tope * 100) + '%';
             relleno.style.width = ((b - a) / tope * 100) + '%';
-            const desde = a === 0 ? null : pasos[a];
-            const hasta = b >= tope ? null : pasos[b];
             etiqueta.textContent = desde === null && hasta === null ? 'Todos'
                 : desde === null ? 'Hasta ' + fmt(hasta)
                 : hasta === null ? 'Desde ' + fmt(desde)
@@ -1369,9 +1407,24 @@ document.addEventListener('keydown', function (e) {
             campoMax.disabled = campoMax.value === '';
             deslizMin.style.zIndex = parseInt(deslizMin.value, 10) >= tope - 1 ? 3 : 1;
         }
+        function aplicarYBuscar() {
+            pintar();
+            document.getElementById('form-filtros').requestSubmit();
+        }
         [deslizMin, deslizMax].forEach(d => {
-            d.addEventListener('input', pintar);
-            d.addEventListener('change', () => { pintar(); document.getElementById('form-filtros').requestSubmit(); });
+            d.addEventListener('input', () => { origen = 'slider'; pintar(); });
+            d.addEventListener('change', () => { origen = 'slider'; aplicarYBuscar(); });
+        });
+        [numMin, numMax].forEach(inp => {
+            inp.addEventListener('input', () => { origen = 'numero'; pintar(); });
+            inp.addEventListener('change', () => { origen = 'numero'; aplicarYBuscar(); });
+            inp.addEventListener('keydown', e => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    origen = 'numero';
+                    aplicarYBuscar();
+                }
+            });
         });
         pintar();
     });

@@ -353,6 +353,7 @@
                     <option value="LNACEH">LNACEH</option>
                     <option value="NUNES">NUNES</option>
                     <option value="EURONISSI">EURONISSI</option>
+                    <option value="TECNO HOUSE">TECNO HOUSE</option>
                 </select>
             </div>
             <div style="margin-bottom: 16px;">
@@ -412,6 +413,7 @@
                     <option value="LNACEH">LNACEH</option>
                     <option value="NUNES">NUNES</option>
                     <option value="EURONISSI">EURONISSI</option>
+                    <option value="TECNO HOUSE">TECNO HOUSE</option>
                 </select>
             </div>
             <div style="margin-bottom: 16px;">

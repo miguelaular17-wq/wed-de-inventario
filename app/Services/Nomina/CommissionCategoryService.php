@@ -42,6 +42,16 @@ class CommissionCategoryService
         return $this->grupo($categoria) === self::TELEFONIA;
     }
 
+    /** Teléfonos Honor/Samsung: categoría de telefonía con subcategoría exacta HONOR o SAMSUNG. */
+    public function esTelefonoHonorOSamsung(?string $categoria, ?string $subcategoria): bool
+    {
+        if (! $this->esTelefonia($categoria)) {
+            return false;
+        }
+
+        return in_array($this->normalizar($subcategoria), ['HONOR', 'SAMSUNG'], true);
+    }
+
     /**
      * @return array<string, string>
      */

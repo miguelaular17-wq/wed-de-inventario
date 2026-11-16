@@ -399,6 +399,8 @@ Route::middleware(['auth', 'permission:ventas_mayor'])->prefix('ventas-mayor')->
     Route::get('/facturas', [\App\Http\Controllers\VentasMayorController::class, 'facturas'])->name('facturas');
     Route::get('/facturas/nueva', [\App\Http\Controllers\VentasMayorController::class, 'create'])->name('create');
     Route::post('/facturas', [\App\Http\Controllers\VentasMayorController::class, 'store'])->name('store');
+    Route::get('/configuracion', [\App\Http\Controllers\VentasMayorController::class, 'configuracion'])->name('configuracion');
+    Route::post('/configuracion', [\App\Http\Controllers\VentasMayorController::class, 'guardarConfiguracion'])->name('configuracion.guardar');
     Route::get('/productos/buscar', [\App\Http\Controllers\VentasMayorController::class, 'buscarProductos'])->name('productos.buscar');
     Route::get('/catalogo', [\App\Http\Controllers\VentasMayorController::class, 'catalogo'])->name('catalogo');
     Route::get('/catalogo/pdf', [\App\Http\Controllers\VentasMayorController::class, 'catalogoPdf'])->name('catalogo.pdf');
@@ -406,6 +408,7 @@ Route::middleware(['auth', 'permission:ventas_mayor'])->prefix('ventas-mayor')->
     Route::get('/clientes/buscar', [\App\Http\Controllers\VentasMayorController::class, 'buscarClientes'])->name('clientes.buscar');
     Route::get('/facturas/{factura}', [\App\Http\Controllers\VentasMayorController::class, 'show'])->whereNumber('factura')->name('show');
     Route::get('/facturas/{factura}/pdf', [\App\Http\Controllers\VentasMayorController::class, 'pdf'])->whereNumber('factura')->name('pdf');
+    Route::get('/facturas/{factura}/pagos/{pago}/pdf', [\App\Http\Controllers\VentasMayorController::class, 'pagoPdf'])->whereNumber('factura')->whereNumber('pago')->name('pagos.pdf');
     Route::post('/facturas/{factura}/comprobantes', [\App\Http\Controllers\VentasMayorController::class, 'subirComprobante'])->whereNumber('factura')->name('comprobantes.store');
     Route::delete('/facturas/{factura}/comprobantes/{pago}', [\App\Http\Controllers\VentasMayorController::class, 'borrarComprobante'])->whereNumber('factura')->whereNumber('pago')->name('comprobantes.destroy');
     Route::post('/facturas/{factura}/profit', [\App\Http\Controllers\VentasMayorController::class, 'marcarProfit'])->whereNumber('factura')->name('profit');
@@ -427,6 +430,11 @@ Route::prefix('etiquetas')->name('etiquetas.')->group(function () {
 // Tesoreria routes
 Route::middleware(['auth', 'permission:tesoreria'])->prefix('tesoreria')->name('tesoreria.')->group(function () {
     Route::get('/', [\App\Http\Controllers\TesoreriaController::class, 'dashboard'])->name('dashboard');
+    Route::get('/dash', [\App\Http\Controllers\TesoreriaController::class, 'dash'])->name('dash');
+    Route::get('/dash.pdf', [\App\Http\Controllers\TesoreriaController::class, 'dashPdf'])->name('dash.pdf');
+    Route::get('/caja', [\App\Http\Controllers\TesoreriaCajaController::class, 'index'])->name('caja.index');
+    Route::post('/caja', [\App\Http\Controllers\TesoreriaCajaController::class, 'store'])->name('caja.store');
+    Route::delete('/caja/movimientos/{movimiento}', [\App\Http\Controllers\TesoreriaCajaController::class, 'destroy'])->whereNumber('movimiento')->name('caja.destroy');
     Route::post('/ingreso-banco', [\App\Http\Controllers\TesoreriaController::class, 'storeIngresoBanco'])->name('ingreso_banco.store');
     Route::get('/ingresos/sin-conciliar.xlsx', [\App\Http\Controllers\TesoreriaController::class, 'exportarSinConciliar'])->name('ingresos.sin_conciliar');
     Route::post('/ingresos/reconciliar', [\App\Http\Controllers\TesoreriaController::class, 'reconciliarPendientes'])->name('ingresos.reconciliar');

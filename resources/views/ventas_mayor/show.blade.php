@@ -52,6 +52,13 @@
     @if(session('success'))
         <div class="alert success" style="margin-top:12px;">✅ {{ session('success') }}</div>
     @endif
+    @if(session('pago_recibo_id'))
+        @php $urlRecibo = route('ventas_mayor.pagos.pdf', [$factura, session('pago_recibo_id')]); @endphp
+        <div class="alert success" style="margin-top:8px;">
+            🧾 <a href="{{ $urlRecibo }}" target="_blank" rel="noopener" style="font-weight:800; color:#166534;">Abrir factura de pago (PDF)</a>
+        </div>
+        <script>window.open(@json($urlRecibo), '_blank');</script>
+    @endif
     @if($errors->any())
         <div class="alert error" style="margin-top:12px;">⚠️ {{ $errors->first() }}</div>
     @endif
@@ -70,6 +77,13 @@
         <div class="vf-card" style="border-left:4px solid #1e3a8a;">
             <div class="t">Total de la factura</div>
             <div class="v">${{ number_format($factura->total_usd, 2) }}</div>
+            @if($factura->tieneDescuentoDivisa())
+                <div style="font-size:.82rem; color:#15803d; font-weight:700;">
+                    Subtotal ${{ number_format($factura->subtotal_usd ?? ($factura->total_usd + $factura->descuento_usd), 2) }}
+                    − descuento divisa {{ number_format($factura->descuento_divisa_pct, 2) }}%
+                    (−${{ number_format($factura->descuento_usd, 2) }})
+                </div>
+            @endif
             <div style="font-size:.85rem;">Bs {{ number_format($factura->total_bs, 2, ',', '.') }} <span class="muted">· tasa {{ number_format($factura->tasa_bcv, 4, ',', '.') }}</span></div>
         </div>
         <div class="vf-card" style="border-left:4px solid {{ $saldo < 0.01 ? '#16a34a' : ($factura->estaVencida() ? '#dc2626' : '#f59e0b') }};">
@@ -139,10 +153,15 @@
                 <div style="margin-top:4px; font-weight:700; font-size:.9rem;">{{ $p->monto_usd ? '$'.number_format($p->monto_usd, 2) : 'Soporte' }}</div>
                 <div>{{ collect([$p->fecha?->format('d/m/Y'), $p->forma_pago, $p->referencia ? 'Ref '.$p->referencia : null])->filter()->implode(' · ') ?: $p->nombre_archivo }}</div>
                 <div class="muted" style="font-size:.72rem;">{{ $p->usuario?->name }} · {{ $p->created_at?->format('d/m/Y h:i A') }}</div>
-                <form method="POST" action="{{ route('ventas_mayor.comprobantes.destroy', [$factura, $p]) }}" onsubmit="return confirm('¿Quitar este comprobante?');" style="margin-top:4px;">
-                    @csrf @method('DELETE')
-                    <button type="submit" class="btn secondary" style="padding:2px 8px; font-size:.72rem;">Quitar</button>
-                </form>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
+                    @if($p->monto_usd)
+                        <a href="{{ route('ventas_mayor.pagos.pdf', [$factura, $p]) }}" target="_blank" rel="noopener" class="btn primary" style="padding:2px 8px; font-size:.72rem;">Factura de pago</a>
+                    @endif
+                    <form method="POST" action="{{ route('ventas_mayor.comprobantes.destroy', [$factura, $p]) }}" onsubmit="return confirm('¿Quitar este comprobante?');">
+                        @csrf @method('DELETE')
+                        <button type="submit" class="btn secondary" style="padding:2px 8px; font-size:.72rem;">Quitar</button>
+                    </form>
+                </div>
             </div>
         @empty
             <p class="muted">Aún no hay pagos.</p>

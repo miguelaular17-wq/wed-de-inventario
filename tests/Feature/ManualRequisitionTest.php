@@ -110,6 +110,43 @@ class ManualRequisitionTest extends TestCase
         $this->assertCount(0, $dataDel['manuales_list']);
     }
 
+    public function test_store_manual_requisition_with_long_compound_code()
+    {
+        $user = User::create([
+            'name' => 'Admin Largo',
+            'email' => 'admin_largo@test.local',
+            'password' => 'password123',
+            'role' => 'admin',
+        ]);
+        $codigo = implode(' / ', array_fill(0, 12, 'COD-COMPUESTO-1234'));
+        $this->assertGreaterThan(64, strlen($codigo));
+
+        $product = Product::create([
+            'cod_centro' => $codigo,
+            'producto' => 'Producto con código compuesto largo',
+            'categoria' => 'Electrónica',
+            'subcategoria' => 'Accesorios',
+            'proveedor' => 'Proveedor A',
+        ]);
+        ProductSedeMetric::create(['product_id' => $product->id, 'sede' => 'JRZ', 'existencia' => 10]);
+
+        $this->actingAs($user)
+            ->withSession(['sede_local' => 'ZAMORA'])
+            ->postJson(route('inventario.manual.store'), [
+                'codigo' => $codigo,
+                'producto' => 'Producto con código compuesto largo',
+                'sede_origen' => 'JRZ',
+                'cantidad' => 2,
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('requisiciones_manuales', [
+            'sede_local' => 'ZAMORA',
+            'codigo' => $codigo,
+            'cantidad' => 2,
+        ]);
+    }
+
     public function test_store_batch_manual_requisitions()
     {
         $user = User::create([

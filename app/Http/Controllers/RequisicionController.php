@@ -100,6 +100,11 @@ class RequisicionController extends Controller
                 ->filter()->unique()->sort()->values()->all();
 
             \App\Services\Profiler::start('RequisicionController::form buildExport & map');
+            $excludeManualIds = array_values(array_unique(array_filter(array_map(
+                'intval',
+                (array) $request->query('exclude_manual_ids', [])
+            ))));
+
             $previewRows = $this->reqPersonalizada->buildExport(
                 $sede,
                 $sedeOrigenKey,
@@ -111,6 +116,7 @@ class RequisicionController extends Controller
                 $p = $products->get($r['codigo_completo'] ?? $r['codigo']);
 
                 return [
+                    'id' => (int) ($r['id'] ?? 0),
                     'codigo' => $r['codigo'],
                     'producto' => $r['producto'],
                     'categoria' => $p['categoria'] ?? '—',
@@ -137,6 +143,7 @@ class RequisicionController extends Controller
                 'excluirCategorias' => false,
                 'excludeCategories' => [],
                 'excludeCodes' => [],
+                'excludeManualIds' => $excludeManualIds,
                 'previewRows' => $previewRows,
                 'filteredCount' => $previewRows->count(),
             ]);
@@ -300,6 +307,14 @@ class RequisicionController extends Controller
                 true,
                 null,
             );
+
+            $excludeManualIds = array_values(array_unique(array_filter(array_map(
+                'intval',
+                (array) $request->input('exclude_manual_ids', [])
+            ))));
+            if ($excludeManualIds !== []) {
+                $lines = $lines->reject(fn (array $line) => in_array((int) ($line['id'] ?? 0), $excludeManualIds, true))->values();
+            }
 
             if ($lines->isEmpty()) {
                 return $this->errorExport('No hay requisiciones registradas pendientes para exportar.');

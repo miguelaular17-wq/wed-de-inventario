@@ -253,6 +253,7 @@ class RequisicionPersonalizadaService
         }
 
         return $rows->map(fn (RequisicionManual $m) => [
+            'id'              => (int) $m->id,
             'codigo_completo' => $m->codigo,
             'codigo'      => trim(explode('/', (string) $m->codigo)[0]),
             'unidad'      => 'UND',
@@ -278,8 +279,8 @@ class RequisicionPersonalizadaService
         DB::transaction(function () use ($lines, $sedeLocal, $stock, $usuario, &$applied) {
             foreach ($lines->groupBy('sede_origen') as $origen => $group) {
                 $origenKey = strtoupper((string) $origen);
-                // Usa codigo_completo para hacer match exacto en la BD
-                $codigos   = $group->map(fn($item) => $item['codigo_completo'] ?? $item['codigo'])->filter()->values()->all();
+                // Solo las filas exportadas (por id), no todas las pendientes del mismo código.
+                $ids = $group->map(fn ($item) => (int) ($item['id'] ?? 0))->filter()->values()->all();
 
                 $applied += $stock->applyRequisition(
                     $group->values(),
@@ -289,12 +290,13 @@ class RequisicionPersonalizadaService
                     'manual',
                 );
 
-                RequisicionManual::query()
-                    ->where('sede_local', strtoupper($sedeLocal))
-                    ->where('sede_origen', $origenKey)
-                    ->whereIn('codigo', $codigos)
-                    ->whereNull('aplicada_at')
-                    ->update(['aplicada_at' => now()]);
+                if ($ids !== []) {
+                    RequisicionManual::query()
+                        ->where('sede_local', strtoupper($sedeLocal))
+                        ->whereIn('id', $ids)
+                        ->whereNull('aplicada_at')
+                        ->update(['aplicada_at' => now()]);
+                }
             }
         });
 

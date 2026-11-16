@@ -4,11 +4,69 @@ namespace App\Http\Controllers;
 
 use App\Models\TesoreriaIngreso;
 use App\Services\BankReconciliationMatcher;
+use App\Services\CuadreCajaService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\View\View;
 
 class TesoreriaController extends Controller
 {
+    /** Matriz formas de pago × sedes (o cajas si eliges sede) + ingreso tesorería y diferencia. */
+    public function dash(Request $request, CuadreCajaService $cuadres): View
+    {
+        return view('tesoreria.dash', $this->payloadDash($request, $cuadres));
+    }
+
+    /** PDF de la matriz del dashboard (mismos filtros de fechas / sede). */
+    public function dashPdf(Request $request, CuadreCajaService $cuadres)
+    {
+        $data = $this->payloadDash($request, $cuadres);
+        $logoPath = null;
+        $logoFile = public_path('logo.png');
+        if (is_file($logoFile)) {
+            $logoPath = 'data:image/png;base64,'.base64_encode((string) file_get_contents($logoFile));
+        }
+
+        $nombre = 'Dashboard_Tesoreria_'.$data['desde'].'_'.$data['hasta'];
+        if ($data['sede'] !== '') {
+            $nombre .= '_'.$data['sede'];
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('tesoreria.dash_pdf', $data + [
+            'logoPath' => $logoPath,
+        ])->setPaper('a4', 'landscape')->download($nombre.'.pdf');
+    }
+
+    private function payloadDash(Request $request, CuadreCajaService $cuadres): array
+    {
+        $desde = $this->fechaDash($request->query('desde'), now()->startOfMonth());
+        $hasta = $this->fechaDash($request->query('hasta'), now());
+        if ($hasta->lt($desde)) {
+            [$desde, $hasta] = [$hasta, $desde];
+        }
+        $sede = strtoupper(trim((string) $request->query('sede', '')));
+        $matriz = $cuadres->matrizDashboard($desde, $hasta, $sede !== '' ? $sede : null);
+
+        return $matriz + [
+            'desde' => $desde->toDateString(),
+            'hasta' => $hasta->toDateString(),
+            'sede' => $sede,
+            'sedes' => config('inventario.sedes_gerencial', []),
+            'etiquetas' => config('inventario.display', []),
+        ];
+    }
+
+    private function fechaDash(mixed $valor, Carbon $default): Carbon
+    {
+        $valor = trim((string) $valor);
+        if ($valor !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $valor)) {
+            return Carbon::parse($valor)->startOfDay();
+        }
+
+        return $default->copy()->startOfDay();
+    }
+
     public function dashboard(Request $request)
     {
         $desde = $this->fechaFiltro($request->query('desde'));

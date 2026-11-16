@@ -149,11 +149,13 @@
         $link('Lotes punto de venta', route('finanzas.conciliaciones.lotes'), request()->routeIs('finanzas.conciliaciones.lotes')),
         $link('Calendario conciliaciones', route('finanzas.calendario_conciliaciones'), request()->routeIs('finanzas.calendario_conciliaciones')),
     ];
-    $tesoreriaLink = fn () => $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.*'));
+    $tesoreriaLink = fn () => $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.dashboard', 'tesoreria.ingreso_banco.*', 'tesoreria.ingresos.*', 'tesoreria.lote_pos.*'));
+    $tesoreriaDashLink = fn () => $link('Dashboard', route('tesoreria.dash'), request()->routeIs('tesoreria.dash', 'tesoreria.dash.pdf'));
+    $tesoreriaCajaLink = fn () => $link('Caja', route('tesoreria.caja.index'), request()->routeIs('tesoreria.caja.*'));
     $ventasDiariasLink = fn () => $link('Ventas diarias', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*'));
     $cuadreCajaLink = fn () => $link('Cuadre de caja', route('cuadre_caja.index'), request()->routeIs('cuadre_caja.*'));
     $reportesSuiteLink = fn () => $link('Reportes de Suite', route('reportes_suite', 'facturas'), request()->routeIs('reportes_suite*'));
-    $tesoreriaItems = [...$conciliacionItems(), $tesoreriaLink(), $ventasDiariasLink(), $cuadreCajaLink(), $reportesSuiteLink()];
+    $tesoreriaItems = [...$conciliacionItems(), $tesoreriaLink(), $tesoreriaDashLink(), $tesoreriaCajaLink(), $ventasDiariasLink(), $cuadreCajaLink(), $reportesSuiteLink()];
     $cobranzaItems = [
         $link('Cobranza', route('cobranza.index'), request()->routeIs('cobranza.*') && ! request()->routeIs('cobranza.flujo.*', 'cobranza.archivero.*')),
         $link('Flujo de caja', route('cobranza.flujo.index'), request()->routeIs('cobranza.flujo.*')),
@@ -306,6 +308,8 @@
         }
         if ($u->canAccess('tesoreria')) {
             $tesoreriaUsuario[] = $tesoreriaLink();
+            $tesoreriaUsuario[] = $tesoreriaDashLink();
+            $tesoreriaUsuario[] = $tesoreriaCajaLink();
         }
         if ($u->canAccess('ventas.diarias') || $u->canAccess('tesoreria')) {
             $tesoreriaUsuario[] = $ventasDiariasLink();
@@ -411,12 +415,16 @@
     }
 
     if ($u->canAccess('ventas_mayor')) {
-        $nav[] = $drop('Ventas al mayor', [
+        $mayorItems = [
             $link('Stock (JRZ y sedes)', route('ventas_mayor.stock'), request()->routeIs('ventas_mayor.stock')),
             $link('Nueva factura', route('ventas_mayor.create'), request()->routeIs('ventas_mayor.create')),
             $link('Facturas', route('ventas_mayor.facturas'), request()->routeIs('ventas_mayor.facturas', 'ventas_mayor.show')),
             $link('Hoja de ruta', route('ventas_mayor.visitas.index'), request()->routeIs('ventas_mayor.visitas.*')),
-        ]);
+        ];
+        if ($u->isGerente() || $u->isAdmin()) {
+            $mayorItems[] = $link('Configuración', route('ventas_mayor.configuracion'), request()->routeIs('ventas_mayor.configuracion'));
+        }
+        $nav[] = $drop('Ventas al mayor', $mayorItems);
     }
 
     if ($u->role !== 'admin' && $u->canAccess('sincronizadores')) {

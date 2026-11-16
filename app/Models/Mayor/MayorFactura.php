@@ -20,17 +20,26 @@ class MayorFactura extends Model
 
     protected $fillable = [
         'numero', 'fecha', 'cliente_id', 'vendedor_empleado_id', 'vendedor_nombre', 'user_id',
-        'tasa_bcv', 'total_usd', 'total_bs', 'estado', 'condicion', 'fecha_vencimiento', 'en_profit', 'observaciones', 'anulada_motivo',
+        'tasa_bcv', 'subtotal_usd', 'descuento_divisa_pct', 'descuento_usd', 'total_usd', 'total_bs',
+        'estado', 'condicion', 'fecha_vencimiento', 'en_profit', 'observaciones', 'anulada_motivo',
     ];
 
     protected $casts = [
         'fecha' => 'date',
         'fecha_vencimiento' => 'date',
         'tasa_bcv' => 'float',
+        'subtotal_usd' => 'float',
+        'descuento_divisa_pct' => 'float',
+        'descuento_usd' => 'float',
         'total_usd' => 'float',
         'total_bs' => 'float',
         'en_profit' => 'boolean',
     ];
+
+    public function tieneDescuentoDivisa(): bool
+    {
+        return round((float) ($this->descuento_usd ?? 0), 2) >= 0.01;
+    }
 
     public function cliente(): BelongsTo
     {

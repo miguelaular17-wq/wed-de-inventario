@@ -5,6 +5,7 @@ namespace App\Services\Mayor;
 use App\Models\FinanzasResumen;
 use App\Models\Mayor\MayorCatalogo;
 use App\Models\Mayor\MayorCliente;
+use App\Models\Mayor\MayorConfig;
 use App\Models\Mayor\MayorFactura;
 use App\Models\Mayor\MayorFacturaPago;
 use App\Models\Nomina\NominaEmpleado;
@@ -25,6 +26,49 @@ use Illuminate\Validation\ValidationException;
 class VentasMayorService
 {
     public const SEDE_FACTURA = 'JRZ';
+
+    /** Formas de pago en divisas: aplican el descuento configurado por la gerente. */
+    public const FORMAS_DIVISA = ['Zelle', 'Efectivo $', 'Binance'];
+
+    public const CLAVE_DESCUENTO_DIVISA = 'descuento_divisa_pct';
+
+    /** @return list<string> */
+    public function formasPago(): array
+    {
+        return ['Transferencia', 'Pago móvil', 'Zelle', 'Efectivo $', 'Efectivo Bs', 'Binance', 'Punto de venta'];
+    }
+
+    public function esFormaDivisa(?string $forma): bool
+    {
+        $forma = trim((string) $forma);
+
+        return $forma !== '' && in_array($forma, self::FORMAS_DIVISA, true);
+    }
+
+    public function descuentoDivisaPct(): float
+    {
+        return max(0, min(100, MayorConfig::getDecimal(self::CLAVE_DESCUENTO_DIVISA, 0)));
+    }
+
+    /**
+     * @return array{subtotal: float, pct: float, descuento: float, total: float, aplica: bool}
+     */
+    public function calcularTotalesConDescuento(float $subtotal, ?string $formaPago = null): array
+    {
+        $subtotal = round(max(0, $subtotal), 2);
+        $pct = $this->descuentoDivisaPct();
+        $aplica = $this->esFormaDivisa($formaPago) && $pct > 0 && $subtotal > 0;
+        $descuento = $aplica ? round($subtotal * $pct / 100, 2) : 0.0;
+        $total = round(max(0, $subtotal - $descuento), 2);
+
+        return [
+            'subtotal' => $subtotal,
+            'pct' => $aplica ? $pct : 0.0,
+            'descuento' => $descuento,
+            'total' => $total,
+            'aplica' => $aplica,
+        ];
+    }
 
     /** @return list<string> JRZ primero y luego el resto de sedes con stock. */
     public function sedes(): array
@@ -351,7 +395,7 @@ class VentasMayorService
      * Contado: se paga todo al emitir. Crédito: queda por cobrar todo o una parte, con fecha de vencimiento.
      *
      * @param  array{fecha: string, tasa_bcv: float, vendedor_empleado_id: ?int, observaciones: ?string,
-     *               condicion?: string, fecha_vencimiento?: ?string,
+     *               condicion?: string, fecha_vencimiento?: ?string, forma_pago?: ?string,
      *               items: list<array{producto_id: int, cantidad: int, precio_usd: float}>}  $datos
      */
     public function emitir(MayorCliente $cliente, array $datos, User $user, ?float $abonoInicial = null): MayorFactura
@@ -382,7 +426,9 @@ class VentasMayorService
             throw ValidationException::withMessages(['vendedor_empleado_id' => 'Elige la vendedora.']);
         }
 
-        $total = round($items->sum(fn ($i) => $i['cantidad'] * $i['precio_usd']), 2);
+        $subtotal = round($items->sum(fn ($i) => $i['cantidad'] * $i['precio_usd']), 2);
+        $totales = $this->calcularTotalesConDescuento($subtotal, $datos['forma_pago'] ?? null);
+        $total = $totales['total'];
         $condicion = ($datos['condicion'] ?? MayorFactura::CONTADO) === MayorFactura::CREDITO ? MayorFactura::CREDITO : MayorFactura::CONTADO;
         if ($abonoInicial !== null && $abonoInicial > $total + 0.009) {
             throw ValidationException::withMessages(['pago_monto_usd' => 'Lo pagado ($'.number_format($abonoInicial, 2).') es más que el total de la factura ($'.number_format($total, 2).').']);
@@ -398,7 +444,7 @@ class VentasMayorService
         $datos['fecha_vencimiento'] = $condicion === MayorFactura::CREDITO ? $vence : null;
 
         // Una factura a la vez: dos personas no pueden apartar las mismas unidades de JRZ.
-        return Cache::lock('ventas_mayor_emitir', 15)->block(10, function () use ($items, $tasa, $vendedor, $cliente, $datos, $user, $total) {
+        return Cache::lock('ventas_mayor_emitir', 15)->block(10, function () use ($items, $tasa, $vendedor, $cliente, $datos, $user, $total, $totales) {
             $ids = $items->pluck('producto_id')->all();
             $productos = DB::table('productos')->whereIn('id', $ids)->get(['id', 'codigo', 'nombre'])->keyBy('id');
             $stock = $this->stockPorSede($ids);
@@ -423,7 +469,13 @@ class VentasMayorService
                 throw ValidationException::withMessages(['items' => 'No alcanza el stock de JRZ. '.implode(' · ', $faltan).'.']);
             }
 
-            return DB::transaction(function () use ($items, $productos, $catalogo, $tasa, $vendedor, $cliente, $datos, $user, $total) {
+            return DB::transaction(function () use ($items, $productos, $catalogo, $tasa, $vendedor, $cliente, $datos, $user, $total, $totales) {
+                $extras = [];
+                if (Schema::hasColumn('mayor_facturas', 'subtotal_usd')) {
+                    $extras['subtotal_usd'] = $totales['subtotal'];
+                    $extras['descuento_divisa_pct'] = $totales['pct'];
+                    $extras['descuento_usd'] = $totales['descuento'];
+                }
                 $factura = MayorFactura::create([
                     'numero' => ((int) MayorFactura::query()->max('numero')) + 1,
                     'fecha' => $datos['fecha'],
@@ -438,7 +490,7 @@ class VentasMayorService
                     'condicion' => $datos['condicion'],
                     'fecha_vencimiento' => $datos['fecha_vencimiento'],
                     'observaciones' => $datos['observaciones'] ?? null,
-                ]);
+                ] + $extras);
                 $conPresentacion = Schema::hasColumn('mayor_factura_items', 'unidades');
                 foreach ($items as $i) {
                     $p = $productos->get($i['producto_id']);
@@ -465,11 +517,12 @@ class VentasMayorService
     /**
      * Pago o abono: el monto va en el primer comprobante; los demás comprobantes quedan como soporte.
      * Un abono en efectivo puede no tener comprobante.
+     * Devuelve el pago principal (con monto) para emitir la factura/recibo de pago.
      *
      * @param  list<UploadedFile>  $archivos
      * @param  array{fecha?: ?string, forma_pago?: ?string, referencia?: ?string}  $datos
      */
-    public function registrarPago(MayorFactura $factura, ?float $monto, array $archivos, array $datos, ?int $userId): void
+    public function registrarPago(MayorFactura $factura, ?float $monto, array $archivos, array $datos, ?int $userId): ?MayorFacturaPago
     {
         $monto = $monto !== null && $monto > 0 ? round($monto, 2) : null;
         if ($monto === null && $archivos === []) {
@@ -486,17 +539,21 @@ class VentasMayorService
             'user_id' => $userId,
         ];
         if ($archivos === []) {
-            $factura->pagos()->create($base + ['monto_usd' => $monto]);
-
-            return;
+            return $factura->pagos()->create($base + ['monto_usd' => $monto]);
         }
+        $principal = null;
         foreach (array_values($archivos) as $k => $archivo) {
-            $factura->pagos()->create($base + [
+            $pago = $factura->pagos()->create($base + [
                 'url' => $this->subirArchivo($archivo, $factura),
                 'nombre_archivo' => mb_substr($archivo->getClientOriginalName(), 0, 200),
                 'monto_usd' => $k === 0 ? $monto : null,
             ]);
+            if ($k === 0) {
+                $principal = $pago;
+            }
         }
+
+        return $principal;
     }
 
     private function subirArchivo(UploadedFile $archivo, MayorFactura $factura): string

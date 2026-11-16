@@ -33,6 +33,153 @@ class CuadreCajaService
     private array $formasPorSede = [];
 
     /**
+     * Dashboard Tesorería: filas = formas de pago; columnas = sedes (o cajas si hay sede);
+     * más «Ingreso tesorería» (global o de la sede) y «Diferencia» (tesorería − Suite).
+     *
+     * @return array{
+     *   modo: string,
+     *   columnas: list<array{clave:string,etiqueta:string}>,
+     *   filas: list<array<string,mixed>>,
+     *   totales: array<string,mixed>
+     * }
+     */
+    public function matrizDashboard(Carbon $desde, Carbon $hasta, ?string $sede = null): array
+    {
+        $vacio = [
+            'modo' => $sede ? 'cajas' : 'sedes',
+            'columnas' => [],
+            'filas' => [],
+            'totales' => ['por_columna' => [], 'suite' => 0.0, 'tesoreria' => 0.0, 'diferencia' => 0.0],
+        ];
+        if (! Schema::hasTable('cuadres_caja')) {
+            return $vacio;
+        }
+
+        $sede = $sede ? strtoupper(trim($sede)) : null;
+        $query = CuadreCaja::query()
+            ->with(['pagos', 'conteos', 'lotes'])
+            ->whereBetween('fecha_cierre', [$desde->toDateString(), $hasta->toDateString().' 23:59:59']);
+        if ($sede) {
+            $query->where('sede', $sede);
+        }
+        $cierres = $query->orderBy('sede')->orderBy('codigo_caja')->orderBy('id')->get();
+        if ($cierres->isEmpty()) {
+            return $vacio;
+        }
+
+        $modo = $sede ? 'cajas' : 'sedes';
+        $etiquetas = config('inventario.display', []);
+        $filas = [];
+        $clavesCol = [];
+
+        foreach ($cierres as $cierre) {
+            if ($modo === 'sedes') {
+                $col = strtoupper(trim((string) $cierre->sede));
+                $etiquetaCol = $etiquetas[$col] ?? $col;
+            } else {
+                $col = trim((string) ($cierre->codigo_caja ?: $cierre->descripcion_caja ?: 'SIN CAJA'));
+                $etiquetaCol = trim((string) ($cierre->descripcion_caja ?: $cierre->codigo_caja ?: 'Sin caja'));
+            }
+            if ($col === '') {
+                $col = 'SIN';
+                $etiquetaCol = 'Sin caja';
+            }
+            $clavesCol[$col] = $etiquetaCol;
+
+            foreach ($this->lineas($cierre) as $linea) {
+                if (($linea['regla'] ?? null) === 'no_suma') {
+                    continue;
+                }
+                $forma = mb_strtoupper(trim((string) ($linea['forma_pago'] ?: $linea['codigo_metodo'] ?: 'OTRO')), 'UTF-8');
+                $filas[$forma] ??= [
+                    'forma' => $forma,
+                    'por_columna' => [],
+                    'suite' => 0.0,
+                    'tesoreria' => 0.0,
+                ];
+                $suite = (float) ($linea['suite_usd'] ?? 0);
+                $tesoreria = $linea['tesoreria_usd'] !== null ? (float) $linea['tesoreria_usd'] : 0.0;
+                $filas[$forma]['por_columna'][$col] = round(($filas[$forma]['por_columna'][$col] ?? 0) + $suite, 2);
+                $filas[$forma]['suite'] = round($filas[$forma]['suite'] + $suite, 2);
+                $filas[$forma]['tesoreria'] = round($filas[$forma]['tesoreria'] + $tesoreria, 2);
+            }
+        }
+
+        $ordenFormas = [];
+        foreach (config('cuadre_caja.formas_cuadre.DORAL', []) as $def) {
+            $ordenFormas[] = mb_strtoupper(trim((string) ($def[0] ?? '')), 'UTF-8');
+        }
+        $ordenFormas = array_values(array_unique(array_filter($ordenFormas)));
+        uksort($filas, function (string $a, string $b) use ($ordenFormas) {
+            $ia = array_search($a, $ordenFormas, true);
+            $ib = array_search($b, $ordenFormas, true);
+            if ($ia === false && $ib === false) {
+                return strnatcasecmp($a, $b);
+            }
+            if ($ia === false) {
+                return 1;
+            }
+            if ($ib === false) {
+                return -1;
+            }
+
+            return $ia <=> $ib;
+        });
+
+        if ($modo === 'sedes') {
+            $preferidas = config('inventario.sedes_gerencial', []);
+            uksort($clavesCol, function (string $a, string $b) use ($preferidas) {
+                $ia = array_search($a, $preferidas, true);
+                $ib = array_search($b, $preferidas, true);
+                if ($ia === false && $ib === false) {
+                    return strnatcasecmp($a, $b);
+                }
+                if ($ia === false) {
+                    return 1;
+                }
+                if ($ib === false) {
+                    return -1;
+                }
+
+                return $ia <=> $ib;
+            });
+        } else {
+            ksort($clavesCol, SORT_NATURAL | SORT_FLAG_CASE);
+        }
+
+        $columnas = [];
+        foreach ($clavesCol as $clave => $etiqueta) {
+            $columnas[] = ['clave' => $clave, 'etiqueta' => $etiqueta];
+        }
+
+        $lista = [];
+        $totCol = array_fill_keys(array_keys($clavesCol), 0.0);
+        $totSuite = 0.0;
+        $totTesoreria = 0.0;
+        foreach ($filas as $fila) {
+            $dif = round($fila['tesoreria'] - $fila['suite'], 2);
+            $lista[] = $fila + ['diferencia' => $dif];
+            foreach ($fila['por_columna'] as $col => $monto) {
+                $totCol[$col] = round(($totCol[$col] ?? 0) + $monto, 2);
+            }
+            $totSuite = round($totSuite + $fila['suite'], 2);
+            $totTesoreria = round($totTesoreria + $fila['tesoreria'], 2);
+        }
+
+        return [
+            'modo' => $modo,
+            'columnas' => $columnas,
+            'filas' => $lista,
+            'totales' => [
+                'por_columna' => $totCol,
+                'suite' => $totSuite,
+                'tesoreria' => $totTesoreria,
+                'diferencia' => round($totTesoreria - $totSuite, 2),
+            ],
+        ];
+    }
+
+    /**
      * @return array{filas: list<array<string, mixed>>, totales: array<string, float|int>, ultimaCarga: array<string, string>}
      */
     public function consolidado(Carbon $desde, Carbon $hasta, ?string $sede = null, ?string $cajera = null, ?string $estado = null): array
@@ -419,6 +566,7 @@ class CuadreCajaService
         DB::transaction(function () use ($cuadre, $montos, $lotes, $observacion, $user) {
             $this->guardarConteos($cuadre, $montos, $lotes, $user);
             $this->marcar($cuadre, CuadreCaja::PROCESADO, null, $observacion, $user);
+            app(TesoreriaCajaEfectivoService::class)->sincronizarDesdeCuadre($cuadre->fresh(['conteos']), $user);
         });
     }
 
@@ -442,6 +590,7 @@ class CuadreCajaService
                 $this->guardarConteos($cuadre, $montos, $lotes, $user);
             }
             $this->marcar($cuadre, CuadreCaja::CERRADO, $motivo, $observacion, $user);
+            app(TesoreriaCajaEfectivoService::class)->sincronizarDesdeCuadre($cuadre->fresh(['conteos']), $user);
         });
     }
 
@@ -454,14 +603,17 @@ class CuadreCajaService
                 : 'Esta caja ya está abierta.');
         }
 
-        $cuadre->forceFill([
-            'estado_tesoreria' => CuadreCaja::PENDIENTE,
-            'motivo_cierre' => null,
-            'conciliado_at' => null,
-            'conciliado_por' => null,
-            'reabierto_at' => now(),
-            'reabierto_por' => $user->id,
-        ])->save();
+        DB::transaction(function () use ($cuadre, $user) {
+            app(TesoreriaCajaEfectivoService::class)->quitarDesdeCuadre($cuadre);
+            $cuadre->forceFill([
+                'estado_tesoreria' => CuadreCaja::PENDIENTE,
+                'motivo_cierre' => null,
+                'conciliado_at' => null,
+                'conciliado_por' => null,
+                'reabierto_at' => now(),
+                'reabierto_por' => $user->id,
+            ])->save();
+        });
     }
 
     private function marcar(CuadreCaja $cuadre, string $estado, ?string $motivo, string $observacion, User $user): void

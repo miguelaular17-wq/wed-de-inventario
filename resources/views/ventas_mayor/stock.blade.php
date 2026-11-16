@@ -108,13 +108,15 @@
                                     <strong class="price-mayor">{{ $p->precio_presentacion > 0 ? '$'.number_format($p->precio_presentacion, 2) : '—' }}</strong>
                                     @if($p->unidades_por > 1 && $p->precio_presentacion > 0)<em>${{ number_format($p->precio_presentacion / $p->unidades_por, 2) }} c/u</em>@endif
                                 </div>
-                                <div>
-                                    <span>Costo{{ $p->costo_editado ? ' ✎' : '' }}</span>
-                                    <strong style="color:#475569;">{{ $p->costo_presentacion > 0 ? '$'.number_format($p->costo_presentacion, 2) : '—' }}</strong>
-                                    @if($p->ganancia_pct !== null)
-                                        <em class="{{ $p->ganancia_pct < 0 ? 'vm-perdida' : 'vm-ganancia' }}">{{ $p->ganancia_pct >= 0 ? '+' : '' }}{{ number_format($p->ganancia_pct, 1) }}% ganancia</em>
-                                    @endif
-                                </div>
+                                @if($puedeEditarCatalogo)
+                                    <div>
+                                        <span>Costo{{ $p->costo_editado ? ' ✎' : '' }}</span>
+                                        <strong style="color:#475569;">{{ $p->costo_presentacion > 0 ? '$'.number_format($p->costo_presentacion, 2) : '—' }}</strong>
+                                        @if($p->ganancia_pct !== null)
+                                            <em class="{{ $p->ganancia_pct < 0 ? 'vm-perdida' : 'vm-ganancia' }}">{{ $p->ganancia_pct >= 0 ? '+' : '' }}{{ number_format($p->ganancia_pct, 1) }}% ganancia</em>
+                                        @endif
+                                    </div>
+                                @endif
                                 @php
                                     $ficha = [
                                         'url' => route('ventas_mayor.catalogo.guardar', $p->id),
@@ -125,17 +127,19 @@
                                         'proveedor' => $p->proveedor ?? null,
                                         'imagen' => \App\Support\FotoProducto::base($p->codigo),
                                         'precio_unidad' => $p->precio_unidad,
-                                        'ultima_compra' => isset($p->ultimo_costo_compra) && (float) $p->ultimo_costo_compra > 0
-                                            ? ['cantidad' => (float) ($p->ultima_cantidad_compra ?? 0), 'costo' => (float) $p->ultimo_costo_compra] : null,
                                         'stocks' => collect($p->stocks)->mapWithKeys(fn ($n, $s) => [$nombreSede($s).($s === $jrz ? ' · factura' : '') => $n])->all(),
                                         'stock_total' => $p->stock_total,
                                         'presentacion' => $p->presentacion,
                                         'unidades' => $p->unidades_por,
                                         'precio' => $p->precio_editado ? $p->precio_presentacion : null,
                                         'precio_mayor' => $p->precio_mayor,
-                                        'costo' => $p->costo_editado ? $p->costo_unidad : null,
-                                        'costo_suite' => $p->costo_suite,
                                     ];
+                                    if ($puedeEditarCatalogo) {
+                                        $ficha['ultima_compra'] = isset($p->ultimo_costo_compra) && (float) $p->ultimo_costo_compra > 0
+                                            ? ['cantidad' => (float) ($p->ultima_cantidad_compra ?? 0), 'costo' => (float) $p->ultimo_costo_compra] : null;
+                                        $ficha['costo'] = $p->costo_editado ? $p->costo_unidad : null;
+                                        $ficha['costo_suite'] = $p->costo_suite;
+                                    }
                                 @endphp
                                 <div class="vm-acciones">
                                     <button type="button" class="vm-editar" onclick='vmFicha(@json($ficha))'>{{ $puedeEditarCatalogo ? '✏️ Ficha / editar' : '📋 Ver ficha' }}</button>
@@ -198,10 +202,16 @@
                 <input type="number" name="precio_usd" id="vm-precio" min="0.01" step="0.01">
                 <small class="muted" id="vm-precio-ayuda"></small>
             </label>
-            <label>Costo por unidad $
-                <input type="number" name="costo_usd" id="vm-costo" min="0" step="0.0001">
-                <small class="muted" id="vm-costo-ayuda"></small>
+            <label id="vm-precio-unidad-wrap"><span>Precio por unidad $</span>
+                <input type="number" id="vm-precio-unidad" min="0.01" step="0.01" inputmode="decimal">
+                <small class="muted">Si pones el de la caja/paquete, sale el de unidad; y al revés.</small>
             </label>
+            @if($puedeEditarCatalogo)
+                <label>Costo por unidad $
+                    <input type="number" name="costo_usd" id="vm-costo" min="0" step="0.0001">
+                    <small class="muted" id="vm-costo-ayuda"></small>
+                </label>
+            @endif
         </div>
         <div id="vm-resultado" class="vm-resultado"></div>
         <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
@@ -219,7 +229,52 @@
 (function () {
     const $ = id => document.getElementById(id);
     const usd = n => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const puedeEditar = @json($puedeEditarCatalogo);
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const num = n => Number(n || 0).toLocaleString('en-US');
     let actual = null;
+    let origenPrecio = null; // 'caja' | 'unidad'
+
+    function unidadesActuales() {
+        const esUnidad = $('vm-presentacion').value === 'unidad';
+        return esUnidad ? 1 : Math.max(1, parseInt($('vm-unidades').value, 10) || 1);
+    }
+
+    function redondear2(n) {
+        return Math.round(Number(n || 0) * 100) / 100;
+    }
+
+    function sincronizarPrecios(desde) {
+        if (!actual) return;
+        const unidades = unidadesActuales();
+        const wrap = $('vm-precio-unidad-wrap');
+        wrap.style.display = unidades > 1 ? '' : 'none';
+        if (unidades <= 1) {
+            $('vm-precio-unidad').value = '';
+            origenPrecio = null;
+            return;
+        }
+        if (desde === 'unidad') {
+            const cu = parseFloat($('vm-precio-unidad').value);
+            if (!Number.isFinite(cu) || cu <= 0) return;
+            origenPrecio = 'unidad';
+            $('vm-precio').value = redondear2(cu * unidades).toFixed(2);
+            return;
+        }
+        if (desde === 'caja' || desde === 'unidades') {
+            const caja = parseFloat($('vm-precio').value);
+            if (Number.isFinite(caja) && caja > 0) {
+                origenPrecio = 'caja';
+                $('vm-precio-unidad').value = redondear2(caja / unidades).toFixed(2);
+                return;
+            }
+            const cu = parseFloat($('vm-precio-unidad').value);
+            if (Number.isFinite(cu) && cu > 0) {
+                origenPrecio = 'unidad';
+                $('vm-precio').value = redondear2(cu * unidades).toFixed(2);
+            }
+        }
+    }
 
     function calcular() {
         if (!actual) return;
@@ -230,26 +285,34 @@
         $('vm-unidades').required = !esUnidad;
         $('vm-unidades-de').textContent = nombre;
         $('vm-precio-de').textContent = esUnidad ? 'por unidad' : 'por ' + nombre;
-        const unidades = esUnidad ? 1 : Math.max(1, parseInt($('vm-unidades').value, 10) || 1);
-        const precioBase = Math.round(actual.precio_mayor * unidades * 100) / 100;
+        const unidades = unidadesActuales();
+        const precioBase = redondear2(actual.precio_mayor * unidades);
         $('vm-precio').placeholder = precioBase.toFixed(2);
         $('vm-precio-ayuda').textContent = 'Vacío = precio mayor de Suite' + (unidades > 1 ? ` × ${unidades} (${usd(precioBase)})` : ` (${usd(precioBase)})`);
-        $('vm-costo').placeholder = Number(actual.costo_suite || 0).toFixed(2);
-        $('vm-costo-ayuda').textContent = 'Vacío = costo de Suite (' + usd(actual.costo_suite) + ')';
+        if (puedeEditar && $('vm-costo')) {
+            $('vm-costo').placeholder = Number(actual.costo_suite || 0).toFixed(2);
+            $('vm-costo-ayuda').textContent = 'Vacío = costo de Suite (' + usd(actual.costo_suite) + ')';
+        }
 
         const precio = parseFloat($('vm-precio').value) || precioBase;
+        if (unidades > 1 && !$('vm-precio-unidad').value && precio > 0) {
+            $('vm-precio-unidad').value = redondear2(precio / unidades).toFixed(2);
+        }
+
+        if (!puedeEditar) {
+            $('vm-resultado').innerHTML = `Precio ${usd(precio)}`
+                + (unidades > 1 ? ` · ${usd(precio / unidades)} c/u` : '');
+            return;
+        }
+
         const costoUnidad = $('vm-costo').value !== '' ? (parseFloat($('vm-costo').value) || 0) : Number(actual.costo_suite || 0);
-        const costo = Math.round(costoUnidad * unidades * 100) / 100;
-        const ganancia = Math.round((precio - costo) * 100) / 100;
+        const costo = redondear2(costoUnidad * unidades);
+        const ganancia = redondear2(precio - costo);
         const pct = costo > 0 ? (ganancia / costo * 100) : null;
         $('vm-resultado').innerHTML = `Precio ${usd(precio)} · Costo ${usd(costo)} · `
             + `<strong style="color:${ganancia < 0 ? '#b91c1c' : '#15803d'};">Ganancia ${usd(ganancia)}${pct !== null ? ` (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)` : ''}</strong>`
             + (unidades > 1 ? ` · ${usd(precio / unidades)} c/u` : '');
     }
-
-    const puedeEditar = @json($puedeEditarCatalogo);
-    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const num = n => Number(n || 0).toLocaleString('en-US');
 
     function pintarFicha(p) {
         const img = $('vm-f-img');
@@ -270,9 +333,11 @@
         const datos = [
             ['Precio detal', p.precio_unidad > 0 ? usd(p.precio_unidad) : '—'],
             ['Precio mayor Suite', p.precio_mayor > 0 ? usd(p.precio_mayor) : '—'],
-            ['Costo Suite', p.costo_suite > 0 ? usd(p.costo_suite) : '—'],
-            ['Última compra', p.ultima_compra ? `${num(p.ultima_compra.cantidad)} a ${usd(p.ultima_compra.costo)}` : '—'],
         ];
+        if (puedeEditar) {
+            datos.push(['Costo Suite', p.costo_suite > 0 ? usd(p.costo_suite) : '—']);
+            datos.push(['Última compra', p.ultima_compra ? `${num(p.ultima_compra.cantidad)} a ${usd(p.ultima_compra.costo)}` : '—']);
+        }
         $('vm-f-datos').innerHTML = datos.map(([t, v]) => `<div><span>${t}</span><strong>${esc(v)}</strong></div>`).join('');
         $('vm-f-total').textContent = '· ' + num(p.stock_total) + ' en total';
         $('vm-f-stock').innerHTML = Object.entries(p.stocks || {}).map(([sede, n]) =>
@@ -281,20 +346,29 @@
 
     window.vmFicha = function (p) {
         actual = p;
+        origenPrecio = null;
         pintarFicha(p);
         $('vm-modal-form').action = p.url;
         $('vm-presentacion').value = p.presentacion;
         $('vm-unidades').value = p.unidades > 1 ? p.unidades : '';
         $('vm-precio').value = p.precio ?? '';
-        $('vm-costo').value = p.costo ?? '';
-        ['vm-presentacion', 'vm-unidades', 'vm-precio', 'vm-costo'].forEach(id => { $(id).disabled = !puedeEditar; });
-        ['vm-precio-ayuda', 'vm-costo-ayuda'].forEach(id => { $(id).style.display = puedeEditar ? '' : 'none'; });
+        $('vm-precio-unidad').value = '';
+        if (puedeEditar && $('vm-costo')) $('vm-costo').value = p.costo ?? '';
+        ['vm-presentacion', 'vm-unidades', 'vm-precio', 'vm-precio-unidad'].forEach(id => { $(id).disabled = !puedeEditar; });
+        if ($('vm-costo')) $('vm-costo').disabled = !puedeEditar;
+        $('vm-precio-ayuda').style.display = puedeEditar ? '' : 'none';
+        if ($('vm-costo-ayuda')) $('vm-costo-ayuda').style.display = puedeEditar ? '' : 'none';
+        sincronizarPrecios(p.precio ? 'caja' : null);
         calcular();
         $('vm-modal').classList.add('abierto');
         if (puedeEditar) $('vm-presentacion').focus();
     };
     window.vmCerrar = () => $('vm-modal').classList.remove('abierto');
-    ['vm-presentacion', 'vm-unidades', 'vm-precio', 'vm-costo'].forEach(id => $(id).addEventListener('input', calcular));
+    $('vm-presentacion').addEventListener('input', () => { sincronizarPrecios('unidades'); calcular(); });
+    $('vm-unidades').addEventListener('input', () => { sincronizarPrecios('unidades'); calcular(); });
+    $('vm-precio').addEventListener('input', () => { sincronizarPrecios('caja'); calcular(); });
+    $('vm-precio-unidad').addEventListener('input', () => { sincronizarPrecios('unidad'); calcular(); });
+    if ($('vm-costo')) $('vm-costo').addEventListener('input', calcular);
     document.addEventListener('keydown', e => { if (e.key === 'Escape') vmCerrar(); });
 })();
 </script>

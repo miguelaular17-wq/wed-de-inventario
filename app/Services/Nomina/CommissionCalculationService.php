@@ -67,6 +67,7 @@ class CommissionCalculationService
         try {
             return match ($empleado->modo_comision) {
                 NominaEmpleado::COMISION_VENTAS_PROPIAS => $this->ventasVendedor($periodo, $empleado),
+                NominaEmpleado::COMISION_VENTAS_PROPIAS_SIN_HS => $this->ventasVendedor($periodo, $empleado, false, true),
                 NominaEmpleado::COMISION_MOVISTAR => $this->ventasMovistar($periodo, $empleado),
                 NominaEmpleado::COMISION_SUPERVISOR_SEDE => $this->supervisorSede($periodo, $empleado),
                 NominaEmpleado::COMISION_ENCARGADO => $this->comisionEncargado($periodo, $empleado),
@@ -84,8 +85,12 @@ class CommissionCalculationService
         }
     }
 
-    private function ventasVendedor(NominaPeriodo $periodo, NominaEmpleado $empleado, bool $excluirFacturasSt = false): array
-    {
+    private function ventasVendedor(
+        NominaPeriodo $periodo,
+        NominaEmpleado $empleado,
+        bool $excluirFacturasSt = false,
+        bool $excluirTelefonosHonorSamsung = false
+    ): array {
         $claves = $this->sales->claves($empleado);
         if ($claves === []) {
             return $this->resultado($empleado, 0, 0, 0, 0);
@@ -96,14 +101,22 @@ class CommissionCalculationService
         if ($excluirFacturasSt) {
             $lineas = $this->excluirFacturasServicioTecnico($lineas);
         }
+        $lineasHonorSamsung = collect();
+        if ($excluirTelefonosHonorSamsung) {
+            $lineasHonorSamsung = $lineas
+                ->filter(fn ($linea) => $this->esTelefonoHonorOSamsung($linea))
+                ->values();
+            $lineas = $this->excluirTelefonosHonorSamsung($lineas);
+        }
 
         $propias = $this->aplicarVentasPropias($periodo, $empleado, $lineas);
         if ($this->flag('ventas_documentos') && $this->flag('ventas_documentos_vendedor')) {
             $lineasSt = $excluirFacturasSt
                 ? $todasLasLineas->filter(fn ($linea) => $this->esLineaServicioTecnico($linea))->values()
                 : collect();
-            $netoDocumentos = $excluirFacturasSt
-                ? $this->ventaNetaDocumentosDeLineas($periodo, $lineas, $lineasSt)
+            $lineasExcluidasDelNeto = $lineasSt->concat($lineasHonorSamsung)->values();
+            $netoDocumentos = ($excluirFacturasSt || $excluirTelefonosHonorSamsung)
+                ? $this->ventaNetaDocumentosDeLineas($periodo, $lineas, $lineasExcluidasDelNeto)
                 : $this->ventaNetaVendedor($periodo, $claves);
             if ($netoDocumentos > 0) {
                 $propias = $this->ajustarBasesAVentaDocumento($propias, $netoDocumentos);
@@ -381,6 +394,28 @@ class CommissionCalculationService
         return $lineas
             ->reject(fn ($linea) => $this->esLineaServicioTecnico($linea))
             ->values();
+    }
+
+    /**
+     * Quita teléfonos Honor/Samsung de la base de telefonía (modo ventas propias sin HS).
+     * Accesorios (forros, relojes, etc.) siguen entrando normalmente.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $lineas
+     * @return \Illuminate\Support\Collection<int, object>
+     */
+    private function excluirTelefonosHonorSamsung(Collection $lineas): Collection
+    {
+        return $lineas
+            ->reject(fn ($linea) => $this->esTelefonoHonorOSamsung($linea))
+            ->values();
+    }
+
+    private function esTelefonoHonorOSamsung(object $linea): bool
+    {
+        return $this->categorias->esTelefonoHonorOSamsung(
+            $linea->producto_categoria ?? null,
+            $linea->producto_subcategoria ?? null
+        );
     }
 
     /**
@@ -789,7 +824,7 @@ class CommissionCalculationService
             'monto_comision' => $comision,
             'regla_id' => null,
             'regla_snapshot' => [
-                'modo' => 'VENTAS_PROPIAS',
+                'modo' => $empleado->modo_comision ?: NominaEmpleado::COMISION_VENTAS_PROPIAS,
                 'grupo' => $grupo,
             ],
             'origen' => strtoupper((string) $linea->tipo_documento) === 'DEV' ? 'DEVOLUCION' : 'CALCULO',

@@ -3,7 +3,11 @@
 @section('title', 'Ventas al mayor · Nueva factura')
 
 @section('content')
-@php $formas = ['Transferencia', 'Pago móvil', 'Zelle', 'Efectivo $', 'Efectivo Bs', 'Binance', 'Punto de venta']; @endphp
+@php
+    $formas = $formas ?? ['Transferencia', 'Pago móvil', 'Zelle', 'Efectivo $', 'Efectivo Bs', 'Binance', 'Punto de venta'];
+    $formasDivisa = $formasDivisa ?? ['Zelle', 'Efectivo $', 'Binance'];
+    $descuentoDivisaPct = (float) ($descuentoDivisaPct ?? 0);
+@endphp
 <style>
     .vm-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
     @media (max-width: 1100px) { .vm-grid { grid-template-columns: 1fr; } .vm-lado { position: static !important; } }
@@ -40,7 +44,19 @@
             <h1 style="margin:0;">Nueva factura al mayor</h1>
             <p class="muted" style="margin:4px 0 0;">Las cantidades salen del stock de <strong>JRZ</strong>: no se puede facturar más de lo disponible.</p>
         </div>
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            @if($descuentoDivisaPct > 0)
+                <span style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; border-radius:999px; padding:4px 10px; font-size:.78rem; font-weight:700;">
+                    Descuento divisas {{ number_format($descuentoDivisaPct, 2) }}% · Zelle / Efectivo $ / Binance
+                </span>
+            @else
+                <span style="background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; border-radius:999px; padding:4px 10px; font-size:.78rem; font-weight:700;">
+                    Sin descuento en divisas configurado
+                </span>
+            @endif
+            @if(auth()->user()?->isGerente() || auth()->user()?->isAdmin())
+                <a href="{{ route('ventas_mayor.configuracion') }}" class="btn secondary">Config. descuento</a>
+            @endif
             <a href="{{ route('ventas_mayor.stock') }}" class="btn secondary">Stock</a>
             <a href="{{ route('ventas_mayor.facturas') }}" class="btn secondary">Facturas</a>
         </div>
@@ -149,10 +165,11 @@
                     <input type="hidden" name="pago_monto_usd" id="vm-pago-monto" value="{{ old('pago_monto_usd') }}">
                     <div class="vm-row">
                         <div><label>Forma de pago</label>
-                            <select name="pago_forma">
+                            <select name="pago_forma" id="vm-pago-forma">
                                 <option value="">--</option>
                                 @foreach($formas as $f)<option value="{{ $f }}" @selected(old('pago_forma') === $f)>{{ $f }}</option>@endforeach
                             </select>
+                            <small class="muted" id="vm-pago-ayuda" style="display:block; margin-top:4px;"></small>
                         </div>
                         <div><label>Referencia</label><input type="text" name="pago_referencia" maxlength="120" value="{{ old('pago_referencia') }}"></div>
                     </div>
@@ -164,6 +181,8 @@
 
                 <div class="vm-total">
                     <div class="fila"><span>Productos</span><span id="vm-n-items">0 · 0 u.</span></div>
+                    <div class="fila" style="opacity:.9;"><span>Subtotal</span><span id="vm-subtotal-usd">$0.00</span></div>
+                    <div class="fila" id="vm-descuento-fila" style="display:none; color:#bbf7d0;"><span>Descuento divisa <span id="vm-descuento-pct"></span></span><span id="vm-descuento-usd">−$0.00</span></div>
                     <div class="fila" style="font-size:1.5rem; font-weight:800; padding:6px 0;"><span>Total</span><span id="vm-total-usd">$0.00</span></div>
                     <div class="fila" style="opacity:.85;"><span>En Bs (tasa BCV)</span><span id="vm-total-bs">Bs 0,00</span></div>
                     <div class="fila" style="border-top:1px solid rgba(255,255,255,.25); margin-top:6px; padding-top:6px;"><span>Paga hoy</span><span id="vm-paga">$0.00</span></div>
@@ -232,29 +251,56 @@
         $('vm-vence').value = d.toISOString().slice(0, 10);
     }));
     $('vm-abono').addEventListener('input', totales);
+    $('vm-pago-forma')?.addEventListener('change', totales);
     if (condicion() === 'credito' && $('vm-pago-monto').value) $('vm-abono').value = $('vm-pago-monto').value;
 
     // ── Productos ──
     let fila = 0;
+    const formasDivisa = @json($formasDivisa);
+    const descuentoDivisaPct = @json($descuentoDivisaPct);
     function totales() {
-        let total = 0, unidades = 0, n = 0;
+        let subtotal = 0, unidades = 0, n = 0;
         document.querySelectorAll('#vm-items tr[data-item]').forEach(tr => {
             const cant = parseInt(tr.querySelector('.vm-cant').value, 10) || 0;
             const precio = parseFloat(tr.querySelector('.vm-precio').value) || 0;
             const disp = parseInt(tr.dataset.disponible, 10) || 0;
             const t = Math.round(cant * precio * 100) / 100;
-            total += t; unidades += cant * (parseInt(tr.dataset.unidadesPor, 10) || 1); n++;
+            subtotal += t; unidades += cant * (parseInt(tr.dataset.unidadesPor, 10) || 1); n++;
             tr.querySelector('.vm-tot').textContent = usd(t);
             const pasa = cant > disp;
             tr.querySelector('.vm-cant').style.borderColor = pasa ? '#dc2626' : '';
             tr.querySelector('.vm-aviso').textContent = pasa ? `Solo hay ${cantidadTexto(disp, tr.dataset.presentacion)} en JRZ` : '';
         });
-        total = Math.round(total * 100) / 100;
+        subtotal = Math.round(subtotal * 100) / 100;
+        const forma = ($('vm-pago-forma')?.value || '').trim();
+        const aplicaDivisa = descuentoDivisaPct > 0 && formasDivisa.includes(forma);
+        const descuento = aplicaDivisa ? Math.round(subtotal * descuentoDivisaPct / 100 * 100) / 100 : 0;
+        const total = Math.round((subtotal - descuento) * 100) / 100;
         const tasa = parseFloat($('vm-tasa').value) || 0;
         const credito = condicion() === 'credito';
         const paga = credito ? Math.min(total, Math.max(0, parseFloat($('vm-abono').value) || 0)) : total;
         $('vm-pago-monto').value = credito ? ($('vm-abono').value === '' ? '0' : paga.toFixed(2)) : '';
         $('vm-n-items').textContent = `${n} · ${unidades} u.`;
+        $('vm-subtotal-usd').textContent = usd(subtotal);
+        const filaDesc = $('vm-descuento-fila');
+        if (filaDesc) {
+            filaDesc.style.display = aplicaDivisa ? '' : 'none';
+            $('vm-descuento-pct').textContent = aplicaDivisa ? `(${descuentoDivisaPct}%)` : '';
+            $('vm-descuento-usd').textContent = '−' + usd(descuento);
+        }
+        const ayuda = $('vm-pago-ayuda');
+        if (ayuda) {
+            if (descuentoDivisaPct <= 0) {
+                ayuda.textContent = 'No hay % de descuento: la gerente lo define en Configuración.';
+                ayuda.style.color = '#9a3412';
+            } else if (aplicaDivisa) {
+                ayuda.textContent = `Descuento ${descuentoDivisaPct}% por pago en divisas: −${usd(descuento)}`;
+                ayuda.style.color = '#047857';
+            } else {
+                ayuda.textContent = `Elige Zelle, Efectivo $ o Binance para aplicar ${descuentoDivisaPct}% de descuento.`;
+                ayuda.style.color = '#64748b';
+            }
+        }
         $('vm-total-usd').textContent = usd(total);
         $('vm-total-bs').textContent = bs(Math.round(total * tasa * 100) / 100);
         $('vm-paga').textContent = usd(paga);

@@ -186,13 +186,20 @@
     @if(($tipoReporte ?? 'ventas') !== 'personalizada')
         <p class="muted" style="margin:0 0 12px;">Productos incluidos — clic para excluir</p>
     @else
-        <p class="muted" style="margin:0 0 12px;">Requisiciones manuales incluidas en el reporte</p>
+        <p class="muted" style="margin:0 0 12px;">Requisiciones manuales incluidas en el reporte — clic para excluir una</p>
     @endif
     <div class="product-grid" id="preview-list">
         @foreach ($previewRows as $row)
-            @php $isExcluded = in_array($row['codigo'], $excludeCodes ?? [], true); @endphp
-            <article class="product-card {{ $isExcluded ? 'excluded-item' : '' }} {{ ($tipoReporte ?? 'ventas') === 'personalizada' ? 'manual-preview' : '' }}"
-                @if(($tipoReporte ?? 'ventas') !== 'personalizada')
+            @php
+                $isPersonalizada = ($tipoReporte ?? 'ventas') === 'personalizada';
+                $isExcluded = $isPersonalizada
+                    ? in_array((int) ($row['id'] ?? 0), $excludeManualIds ?? [], true)
+                    : in_array($row['codigo'], $excludeCodes ?? [], true);
+            @endphp
+            <article class="product-card {{ $isExcluded ? 'excluded-item' : '' }} {{ $isPersonalizada ? 'manual-preview' : '' }}"
+                @if($isPersonalizada)
+                data-manual-id="{{ (int) ($row['id'] ?? 0) }}"
+                @else
                 data-code="{{ $row['codigo'] }}"
                 @endif
                 style="{{ $isExcluded ? 'opacity:.5;border-color:#fca5a5;background:#fef2f2;' : '' }}">
@@ -201,16 +208,16 @@
                 <div class="stock-pills">
                     <span class="stock-pill">Origen <strong>{{ $row['opc'] }}</strong></span>
                     <span class="stock-pill">Cant. <strong>{{ $row['cantidad'] }}</strong></span>
-                    @if(($tipoReporte ?? 'ventas') === 'personalizada' && ($row['categoria'] ?? '—') !== '—')
+                    @if($isPersonalizada && ($row['categoria'] ?? '—') !== '—')
                         <span class="stock-pill">{{ $row['categoria'] }}</span>
                     @endif
-                    @if(($tipoReporte ?? 'ventas') === 'personalizada' && !empty($row['usuario']))
+                    @if($isPersonalizada && !empty($row['usuario']))
                         <span class="stock-pill">{{ $row['usuario'] }}</span>
                     @endif
                 </div>
                 @if($isExcluded)
                     <span class="tag warn">Excluido</span>
-                @elseif(($tipoReporte ?? 'ventas') === 'personalizada')
+                @elseif($isPersonalizada)
                     <span class="tag manual">Manual</span>
                 @endif
             </article>
@@ -248,9 +255,7 @@
                 Exportar 2 CSV y aplicar movimiento
             @endif
         </button>
-        @if(($tipoReporte ?? 'ventas') !== 'personalizada')
-            <button type="button" id="clear-exclusions" class="btn secondary">Limpiar exclusiones</button>
-        @endif
+        <button type="button" id="clear-exclusions" class="btn secondary">Limpiar exclusiones</button>
     </div>
 </form>
 @endif
@@ -274,8 +279,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const excludedInputs = document.getElementById('exclude-codes-inputs');
     const excludedCount = document.getElementById('excluded-count');
     const filteredCount = document.getElementById('filtered-count');
-    const previewCards = document.querySelectorAll('#preview-list .product-card[data-code]');
+    const previewCards = document.querySelectorAll('#preview-list .product-card[data-code], #preview-list .product-card[data-manual-id]');
     const totalRows = previewCards.length;
+    const esPersonalizada = @json(($tipoReporte ?? 'ventas') === 'personalizada');
 
     function updateExcludeCatCount() {
         if (!excludeCatCount) return;
@@ -346,14 +352,21 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     updateExcludeCategoriesUi();
 
+    function excludeParamName() {
+        return esPersonalizada ? 'exclude_manual_ids[]' : 'exclude_codes[]';
+    }
+    function excludeValue(card) {
+        return esPersonalizada ? card.dataset.manualId : card.dataset.code;
+    }
+
     function syncExcludedInputs() {
         if (!excludedInputs) return;
         excludedInputs.innerHTML = '';
         document.querySelectorAll('#preview-list .product-card.excluded-item').forEach(function (card) {
             const input = document.createElement('input');
             input.type = 'hidden';
-            input.name = 'exclude_codes[]';
-            input.value = card.dataset.code;
+            input.name = excludeParamName();
+            input.value = excludeValue(card);
             excludedInputs.appendChild(input);
         });
         const excluded = document.querySelectorAll('#preview-list .product-card.excluded-item').length;
@@ -363,17 +376,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function copyExcludedToFilters() {
         if (!filtersForm) return;
-        filtersForm.querySelectorAll('input[name="exclude_codes[]"]').forEach(e => e.remove());
-        exportForm.querySelectorAll('input[name="exclude_codes[]"]').forEach(function (c) {
+        const name = excludeParamName();
+        filtersForm.querySelectorAll('input[name="' + name + '"]').forEach(e => e.remove());
+        exportForm.querySelectorAll('input[name="' + name + '"]').forEach(function (c) {
             const inp = document.createElement('input');
             inp.type = 'hidden';
-            inp.name = 'exclude_codes[]';
+            inp.name = name;
             inp.value = c.value;
             filtersForm.appendChild(inp);
         });
     }
 
     previewCards.forEach(function (card) {
+        card.style.cursor = 'pointer';
+        card.title = 'Clic para excluir / incluir en el export';
         card.addEventListener('click', function () {
             card.classList.toggle('excluded-item');
             if (card.classList.contains('excluded-item')) {
@@ -388,15 +404,12 @@ document.addEventListener('DOMContentLoaded', function () {
             syncExcludedInputs();
             if (filtersForm) {
                 copyExcludedToFilters();
-                
-                // Update URL search parameters dynamically without reloading the page
                 const url = new URL(window.location.href);
-                url.searchParams.delete('exclude_codes[]');
-                
+                const name = excludeParamName();
+                url.searchParams.delete(name);
                 document.querySelectorAll('#preview-list .product-card.excluded-item').forEach(function (c) {
-                    url.searchParams.append('exclude_codes[]', c.dataset.code);
+                    url.searchParams.append(name, excludeValue(c));
                 });
-                
                 history.replaceState(null, '', url.toString());
             }
         });
@@ -414,13 +427,10 @@ document.addEventListener('DOMContentLoaded', function () {
             syncExcludedInputs();
             if (excludedCount) excludedCount.textContent = '0';
             if (filteredCount) filteredCount.textContent = totalRows;
-            
             if (filtersForm) {
                 copyExcludedToFilters();
-                
-                // Remove exclude_codes from URL dynamically
                 const url = new URL(window.location.href);
-                url.searchParams.delete('exclude_codes[]');
+                url.searchParams.delete(excludeParamName());
                 history.replaceState(null, '', url.toString());
             }
         });

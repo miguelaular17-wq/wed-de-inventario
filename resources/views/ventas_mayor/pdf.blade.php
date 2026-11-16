@@ -153,6 +153,10 @@
         <td style="width:45%; vertical-align:top;">
             <table class="totales caja" style="padding:0;">
                 <tr><td>Unidades despachadas</td><td class="num">{{ number_format($unidades) }}</td></tr>
+                @if($factura->tieneDescuentoDivisa())
+                    <tr><td>Subtotal $</td><td class="num">{{ $usd($factura->subtotal_usd ?? ($factura->total_usd + $factura->descuento_usd)) }}</td></tr>
+                    <tr><td>Descuento divisa ({{ number_format($factura->descuento_divisa_pct, 2) }}%)</td><td class="num">−{{ $usd($factura->descuento_usd) }}</td></tr>
+                @endif
                 <tr class="grande"><td>TOTAL $</td><td class="num">{{ $usd($factura->total_usd) }}</td></tr>
                 <tr><td>Total en Bs (tasa BCV)</td><td class="num">Bs {{ number_format($factura->total_bs, 2, ',', '.') }}</td></tr>
                 <tr><td>Pagado</td><td class="num">{{ $usd($pagado) }}</td></tr>

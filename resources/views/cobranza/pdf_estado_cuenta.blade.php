@@ -49,8 +49,15 @@
             <h1>Estado de cuenta</h1>
             <p><strong>{{ $cliente ?: '—' }}</strong> · {{ $codigo_cliente }}</p>
         </td>
-        <td style="width:150px; text-align:right; color:#64748b;">
+        <td style="width:190px; text-align:right; color:#64748b;">
             Corte del sistema<br><strong style="color:#1e293b;">{{ $fecha_sync ?: '—' }}</strong>
+            @if(($totales['saldo_intermediado'] ?? 0) > 0)
+                <div style="margin-top:3px; font-size:8px; color:#475569;">Propio {{ $m($totales['saldo_propio']) }} · Intermed. {{ $m($totales['saldo_intermediado']) }}</div>
+            @endif
+            @if(($totales['tasa_bcv'] ?? 0) > 1)
+                <div style="margin-top:2px; font-size:8px;">BCV {{ number_format($totales['tasa_bcv'], 4, ',', '.') }} · Bs {{ number_format($totales['saldo_bs'], 2, ',', '.') }}</div>
+            @endif
+            <div class="saldo" style="margin-top:4px;">Saldo a pagar {{ $m($totales['saldo']) }}</div>
         </td>
     </tr>
 </table>

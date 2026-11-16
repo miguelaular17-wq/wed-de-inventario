@@ -920,7 +920,7 @@
 
             const sedeTxt = porSede.map((s) => `${esc(s.sede)}: ${money(s.saldo)}`).join(' · ') || '—';
             let html = `
-                <div style="display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; align-items:flex-start; margin-bottom:12px;">
                     <div>
                         <div style="font-size:.75rem; color:#64748b; text-transform:uppercase; letter-spacing:.04em;">Cliente</div>
                         <div style="font-weight:700; font-size:1.02rem;">${esc(data.cliente || cliente)}</div>
@@ -931,6 +931,9 @@
                     <div style="text-align:right;">
                         <div style="font-size:.75rem; color:#64748b;">Corte sync</div>
                         <div style="font-weight:600;">${esc(data.fecha_sync || '')}</div>
+                        ${Number(totales.saldo_intermediado || 0) > 0 ? `<div style="margin-top:4px; font-size:.78rem; color:#475569;">Propio ${money(totales.saldo_propio)} · Como intermediario ${money(totales.saldo_intermediado)}</div>` : ''}
+                        ${totales.tasa_bcv > 1 ? `<div style="margin-top:2px; font-size:.78rem; color:#64748b;">BCV ${Number(totales.tasa_bcv).toLocaleString('es-VE', { maximumFractionDigits: 4 })} · Bs ${Number(totales.saldo_bs).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
+                        <div style="margin-top:6px; font-size:1.2rem; font-weight:800; color:#b91c1c;">Saldo a pagar ${money(totales.saldo)}</div>
                     </div>
                 </div>
                 <div style="overflow-x:auto; background:white; border:1px solid #e2e8f0; border-radius:10px;">

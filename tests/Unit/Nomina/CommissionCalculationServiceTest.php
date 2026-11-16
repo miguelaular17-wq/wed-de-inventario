@@ -70,6 +70,69 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(1500.0, $resultado['base']);
     }
 
+    public function test_ventas_propias_sin_hs_excluye_telefonos_honor_y_samsung(): void
+    {
+        $empleado = $this->empleado(NominaEmpleado::COMISION_VENTAS_PROPIAS_SIN_HS, 'VEND-HS');
+        $periodo = $this->periodo();
+        $otraMarcaId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-HS-1',
+            'nombre' => 'Teléfono Xiaomi',
+            'categoria' => 'TELEFONIA',
+            'subcategoria' => 'XIAOMI',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $samsungId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-HS-2',
+            'nombre' => 'Teléfono Samsung',
+            'categoria' => 'TELEFONIA',
+            'subcategoria' => 'SAMSUNG',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $honorId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-HS-3',
+            'nombre' => 'Teléfono Honor',
+            'categoria' => 'TELEFONIA',
+            'subcategoria' => 'HONOR',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $forroId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-HS-4',
+            'nombre' => 'Forro Samsung',
+            'categoria' => 'FORROS',
+            'subcategoria' => 'FORROS SAMSUNG',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $perfumeId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-HS-5',
+            'nombre' => 'Perfume',
+            'categoria' => 'PERFUMERIA',
+            'subcategoria' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->venta('VEND-HS', 1000, ['producto_id' => $otraMarcaId]); // 0.20% = 2
+        $this->venta('VEND-HS', 2000, ['producto_id' => $samsungId]); // excluido
+        $this->venta('VEND-HS', 1500, ['producto_id' => $honorId]); // excluido
+        $this->venta('VEND-HS', 400, ['producto_id' => $forroId]); // resto 1% = 4
+        $this->venta('VEND-HS', 300, ['producto_id' => $perfumeId]); // resto 1% = 3
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(2.0, $resultado['comision_telefonia']);
+        $this->assertSame(7.0, $resultado['comision_otros']);
+        $this->assertSame(9.0, $resultado['total']);
+        $this->assertSame(1700.0, $resultado['base']);
+        $this->assertArrayHasKey(
+            NominaEmpleado::COMISION_VENTAS_PROPIAS_SIN_HS,
+            NominaEmpleado::modosComision()
+        );
+    }
+
     public function test_ignora_ventas_de_sede_excluida_de_comision(): void
     {
         $empleado = $this->empleado(NominaEmpleado::COMISION_VENTAS_PROPIAS, 'VEND-EXCL');

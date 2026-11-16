@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Mayor\MayorConfig;
 use App\Models\Mayor\MayorFactura;
 use App\Models\Mayor\MayorFacturaPago;
 use App\Services\Mayor\VentasMayorService;
@@ -76,7 +77,33 @@ class VentasMayorController extends Controller
             'tasa' => $this->servicio->tasaBcv(),
             'iniciales' => $iniciales,
             'clienteInicial' => $request->filled('cliente_id') ? \App\Models\Mayor\MayorCliente::query()->find((int) $request->query('cliente_id')) : null,
+            'formas' => $this->servicio->formasPago(),
+            'formasDivisa' => VentasMayorService::FORMAS_DIVISA,
+            'descuentoDivisaPct' => $this->servicio->descuentoDivisaPct(),
         ]);
+    }
+
+    /** Solo gerente (o admin): descuento por pago en divisas. */
+    public function configuracion(Request $request): View
+    {
+        abort_unless($request->user()?->isGerente() || $request->user()?->isAdmin(), 403);
+
+        return view('ventas_mayor.configuracion', [
+            'descuentoDivisaPct' => $this->servicio->descuentoDivisaPct(),
+            'formasDivisa' => VentasMayorService::FORMAS_DIVISA,
+        ]);
+    }
+
+    public function guardarConfiguracion(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()?->isGerente() || $request->user()?->isAdmin(), 403);
+        $data = $request->validate([
+            'descuento_divisa_pct' => ['required', 'numeric', 'min:0', 'max:100'],
+        ]);
+        MayorConfig::put(VentasMayorService::CLAVE_DESCUENTO_DIVISA, round((float) $data['descuento_divisa_pct'], 4));
+
+        return redirect()->route('ventas_mayor.configuracion')->with('success', 'Descuento en divisas guardado: '
+            .number_format((float) $data['descuento_divisa_pct'], 2).'%.');
     }
 
     public function buscarProductos(Request $request): JsonResponse
@@ -208,6 +235,7 @@ class VentasMayorController extends Controller
             'observaciones' => $data['observaciones'] ?? null,
             'condicion' => $data['condicion'],
             'fecha_vencimiento' => $data['fecha_vencimiento'] ?? null,
+            'forma_pago' => $data['pago_forma'] ?? null,
             'items' => array_values($data['items']),
         ], $user, $abono);
 
@@ -216,8 +244,9 @@ class VentasMayorController extends Controller
             $abono = $factura->total_usd;
         }
         $archivos = $request->file('comprobantes', []);
+        $pago = null;
         if (($abono !== null && $abono > 0) || $archivos !== []) {
-            $this->servicio->registrarPago($factura, $abono, $archivos, [
+            $pago = $this->servicio->registrarPago($factura, $abono, $archivos, [
                 'fecha' => $data['fecha'],
                 'forma_pago' => $data['pago_forma'] ?? null,
                 'referencia' => $data['pago_referencia'] ?? null,
@@ -226,10 +255,13 @@ class VentasMayorController extends Controller
 
         $factura->load('pagos');
         $saldo = $factura->saldoUsd();
-
-        return redirect()->route('ventas_mayor.show', $factura)->with('success', 'Factura '.$factura->numeroFormateado().' emitida'
+        $redir = redirect()->route('ventas_mayor.show', $factura)->with('success', 'Factura '.$factura->numeroFormateado().' emitida'
             .($saldo >= 0.01 ? ' a crédito: queda por cobrar $'.number_format($saldo, 2).'.' : ' y pagada.')
             .' Las unidades se restaron del stock de JRZ.');
+
+        return $pago && ($pago->monto_usd ?? 0) > 0
+            ? $redir->with('pago_recibo_id', $pago->id)
+            : $redir;
     }
 
     public function show(MayorFactura $factura): View
@@ -254,6 +286,33 @@ class VentasMayorController extends Controller
             ->stream('factura_'.$factura->numeroFormateado().'.pdf');
     }
 
+    /** Factura/recibo de pago al abonar (cualquier crédito o contado). */
+    public function pagoPdf(MayorFactura $factura, \App\Models\Mayor\MayorFacturaPago $pago): Response
+    {
+        abort_unless((int) $pago->factura_id === (int) $factura->id, 404);
+        abort_unless(($pago->monto_usd ?? 0) > 0, 404, 'Este registro no tiene monto de pago.');
+        $factura->load(['cliente', 'pagos', 'usuario']);
+        $pago->loadMissing('usuario');
+        $logo = is_file(public_path('logo.png'))
+            ? 'data:image/png;base64,'.base64_encode((string) file_get_contents(public_path('logo.png')))
+            : null;
+
+        // Saldo después de este pago (pagos con id <= este, por orden de registro).
+        $pagadoHasta = (float) $factura->pagos
+            ->filter(fn ($p) => (int) $p->id <= (int) $pago->id)
+            ->sum(fn ($p) => (float) ($p->monto_usd ?? 0));
+        $saldoRestante = max(0, round((float) $factura->total_usd - $pagadoHasta, 2));
+
+        return Pdf::loadView('ventas_mayor.pago_pdf', [
+            'factura' => $factura,
+            'pago' => $pago,
+            'saldoRestante' => $saldoRestante,
+            'logo' => $logo,
+            'empresa' => config('recibos.empresas.'.VentasMayorService::SEDE_FACTURA, []),
+        ])->setPaper('letter')
+            ->stream('pago_'.$factura->numeroFormateado().'_'.$pago->id.'.pdf');
+    }
+
     /** Pago o abono (una factura a crédito se va pagando por partes), con o sin comprobante. */
     public function subirComprobante(Request $request, MayorFactura $factura): RedirectResponse
     {
@@ -270,17 +329,20 @@ class VentasMayorController extends Controller
             'monto_usd' => ['nullable', 'numeric', 'min:0'],
         ]);
         $monto = isset($data['monto_usd']) && $data['monto_usd'] !== '' ? (float) $data['monto_usd'] : null;
-        $this->servicio->registrarPago($factura, $monto, $request->file('comprobantes', []), [
+        $pago = $this->servicio->registrarPago($factura, $monto, $request->file('comprobantes', []), [
             'fecha' => $data['fecha'] ?? null,
             'forma_pago' => $data['forma_pago'] ?? null,
             'referencia' => $data['referencia'] ?? null,
         ], $request->user()->id);
 
         $factura->load('pagos');
+        $redir = back()->with('success', $factura->saldoUsd() < 0.01
+            ? 'Pago registrado: la factura quedó pagada. Se generó la factura de pago.'
+            : 'Pago registrado. Queda por cobrar $'.number_format($factura->saldoUsd(), 2).'. Se generó la factura de pago.');
 
-        return back()->with('success', $factura->saldoUsd() < 0.01
-            ? 'Pago registrado: la factura quedó pagada.'
-            : 'Pago registrado. Queda por cobrar $'.number_format($factura->saldoUsd(), 2).'.');
+        return $pago && ($pago->monto_usd ?? 0) > 0
+            ? $redir->with('pago_recibo_id', $pago->id)
+            : $redir;
     }
 
     public function borrarComprobante(MayorFactura $factura, MayorFacturaPago $pago): RedirectResponse
