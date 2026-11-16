@@ -41,6 +41,11 @@ class NominaComisionDescuento extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function periodo(): BelongsTo
+    {
+        return $this->belongsTo(NominaPeriodo::class, 'periodo_id');
+    }
+
     public function etiquetaDecision(): string
     {
         if ($this->decision === self::DECISION_DESCONTAR) {

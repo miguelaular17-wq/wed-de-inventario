@@ -37,6 +37,7 @@
     <div style="margin-top:10px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
         @include('nomina.partials.excel-quincena', ['excelRoute' => route('nomina.faltante_caja.excel'), 'fecha' => $fecha])
         <a class="btn primary" href="{{ route('nomina.faltante_caja.por_cobrar') }}">Reporte por cobrar</a>
+        <a class="btn" href="{{ route('nomina.faltante_caja.historial') }}">Historial por persona</a>
     </div>
 
     <div class="nomina-card" style="margin-top:16px;">
@@ -51,6 +52,7 @@
                     <th>Cuenta</th>
                     <th>A descontar</th>
                     <th>Registrar (sumar / restar)</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -96,10 +98,13 @@
                                 >Restar</button>
                             </form>
                         </td>
+                        <td style="text-align:right;">
+                            <a class="btn secondary" href="{{ route('nomina.faltante_caja.historial', $empleado) }}">Historial</a>
+                        </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="muted">
+                        <td colspan="8" class="muted">
                             @if($q !== '')
                                 Nadie coincide con “{{ $q }}”.
                             @else

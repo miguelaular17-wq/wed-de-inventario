@@ -572,9 +572,21 @@ trait CreatesNominaSchema
                 $table->decimal('monto', 12, 2);
                 $table->string('motivo')->nullable();
                 $table->string('estado', 16)->default('PENDIENTE');
+                $table->string('decision', 24)->nullable();
+                $table->string('destino', 16)->nullable();
                 $table->unsignedBigInteger('periodo_id')->nullable();
                 $table->unsignedBigInteger('created_by')->nullable();
                 $table->timestamps();
+            });
+        }
+        if (Schema::hasTable('nomina_comision_descuentos') && ! Schema::hasColumn('nomina_comision_descuentos', 'decision')) {
+            Schema::table('nomina_comision_descuentos', function (Blueprint $table) {
+                $table->string('decision', 24)->nullable();
+            });
+        }
+        if (Schema::hasTable('nomina_comision_descuentos') && ! Schema::hasColumn('nomina_comision_descuentos', 'destino')) {
+            Schema::table('nomina_comision_descuentos', function (Blueprint $table) {
+                $table->string('destino', 16)->nullable();
             });
         }
 

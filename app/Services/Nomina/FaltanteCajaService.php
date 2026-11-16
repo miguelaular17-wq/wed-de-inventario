@@ -694,6 +694,80 @@ class FaltanteCajaService
     }
 
     /**
+     * Historial completo de faltantes de una persona (incluye cancelados y aplicados).
+     *
+     * @return array{
+     *   lineas:Collection<int, NominaComisionDescuento>,
+     *   totales:array{movimientos:int,sumado:float,restado:float,en_cuenta:float,a_descontar:float,no_descontar:float,aplicado:float,cancelado:float}
+     * }
+     */
+    public function historialEmpleado(
+        NominaEmpleado $empleado,
+        Carbon|string|null $desde = null,
+        Carbon|string|null $hasta = null
+    ): array {
+        $vacio = [
+            'movimientos' => 0,
+            'sumado' => 0.0,
+            'restado' => 0.0,
+            'en_cuenta' => 0.0,
+            'a_descontar' => 0.0,
+            'no_descontar' => 0.0,
+            'aplicado' => 0.0,
+            'cancelado' => 0.0,
+        ];
+        if (! $this->disponible()) {
+            return ['lineas' => collect(), 'totales' => $vacio];
+        }
+
+        $query = NominaComisionDescuento::query()
+            ->with(['creador', 'periodo'])
+            ->where('empleado_id', $empleado->id)
+            ->where('tipo', 'FALTANTE')
+            ->orderByDesc('fecha')
+            ->orderByDesc('id');
+
+        if ($desde) {
+            $query->whereDate('fecha', '>=', Carbon::parse($desde)->toDateString());
+        }
+        if ($hasta) {
+            $query->whereDate('fecha', '<=', Carbon::parse($hasta)->toDateString());
+        }
+
+        $lineas = $query->get();
+        $totales = $vacio;
+        $totales['movimientos'] = $lineas->count();
+        foreach ($lineas as $linea) {
+            $monto = (float) $linea->monto;
+            if ($monto >= 0) {
+                $totales['sumado'] += $monto;
+            } else {
+                $totales['restado'] += abs($monto);
+            }
+            if ($linea->estado === 'CANCELADO') {
+                $totales['cancelado'] += abs($monto);
+                continue;
+            }
+            if ($linea->estado === 'APLICADO') {
+                $totales['aplicado'] += $monto;
+                continue;
+            }
+            if ($linea->decision === NominaComisionDescuento::DECISION_DESCONTAR) {
+                $totales['a_descontar'] += $monto;
+            } elseif ($linea->decision === NominaComisionDescuento::DECISION_NO_DESCONTAR) {
+                $totales['no_descontar'] += $monto;
+            } else {
+                $totales['en_cuenta'] += $monto;
+            }
+        }
+        foreach (['sumado', 'restado', 'en_cuenta', 'a_descontar', 'no_descontar', 'aplicado', 'cancelado'] as $campo) {
+            $totales[$campo] = round($totales[$campo], 2);
+        }
+
+        return ['lineas' => $lineas, 'totales' => $totales];
+    }
+
+    /**
      * @return array{pendiente:float,por_decidir:float,del_dia:float,cajeras:int,personas_hoy:int}
      */
     public function kpis(Carbon|string $fecha): array

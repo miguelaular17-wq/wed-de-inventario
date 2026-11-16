@@ -44,6 +44,53 @@ class FaltanteCajaController extends Controller
         ]);
     }
 
+    /** Historial de faltantes de cualquier empleado. */
+    public function historial(Request $request, ?NominaEmpleado $empleado = null): View
+    {
+        $q = trim((string) $request->query('q', ''));
+        $desde = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->query('desde')) ? $request->query('desde') : null;
+        $hasta = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->query('hasta')) ? $request->query('hasta') : null;
+
+        if (! $empleado && $request->filled('empleado_id')) {
+            $empleado = NominaEmpleado::query()
+                ->with(['cliente', 'sedeCatalogo', 'cargoCatalogo'])
+                ->find((int) $request->query('empleado_id'));
+        }
+
+        $candidatos = collect();
+        if (! $empleado && $q !== '') {
+            $candidatos = NominaEmpleado::query()
+                ->with(['cliente', 'sedeCatalogo', 'cargoCatalogo'])
+                ->buscar($q)
+                ->join('clientes', 'clientes.id', '=', 'nomina_empleados.cliente_id')
+                ->select('nomina_empleados.*')
+                ->orderBy('clientes.nombre')
+                ->limit(30)
+                ->get();
+            if ($candidatos->count() === 1) {
+                $empleado = $candidatos->first();
+                $candidatos = collect();
+            }
+        }
+
+        $empleado?->loadMissing(['cliente', 'sedeCatalogo', 'cargoCatalogo']);
+        $historial = $empleado
+            ? $this->faltantes->historialEmpleado($empleado, $desde, $hasta)
+            : ['lineas' => collect(), 'totales' => null];
+        $cuenta = $empleado ? $this->faltantes->resumenCuenta($empleado) : null;
+
+        return view('nomina.faltante_caja.historial', [
+            'empleado' => $empleado,
+            'candidatos' => $candidatos,
+            'q' => $q,
+            'desde' => $desde,
+            'hasta' => $hasta,
+            'lineas' => $historial['lineas'],
+            'totales' => $historial['totales'],
+            'cuenta' => $cuenta,
+        ]);
+    }
+
     /** Reporte de faltantes por cobrar: en cuenta sin decidir y marcados para descontar que aún no se aplican. */
     public function porCobrar(Request $request): View|Response
     {
