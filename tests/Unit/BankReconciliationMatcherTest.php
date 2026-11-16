@@ -244,6 +244,33 @@ class BankReconciliationMatcherTest extends TestCase
         $this->assertFalse($this->matcher->coincideTraslado($otraFecha, $traslado));
     }
 
+    public function test_traslado_salida_bancaribe_cruza_ref_con_prefijo_aunque_caiga_dias_despues(): void
+    {
+        // Confirmación: 1521077468 el 07/11; extracto: 4281521077468 el 09/11.
+        $traslado = (object) [
+            'categoria_egreso' => 'traslados',
+            'banco' => 'BANCARIBE',
+            'titular' => 'DORAL',
+            'banco_receptor' => 'MERCANTIL',
+            'titular_receptor' => 'GRUPO JRZ',
+            'fecha' => '2026-11-07',
+            'monto_bs' => 1795080.00,
+            'referencia' => '1521077468',
+        ];
+        $salida = new ConciliacionLinea([
+            'banco' => 'BANCARIBE',
+            'titular' => 'DORAL',
+            'fecha' => '2026-11-09',
+            'referencia' => '4281521077468',
+            'monto' => -1795080.00,
+            'tipo' => 'cargo',
+            'descripcion' => 'Transferencia inmediata enviada',
+        ]);
+
+        $this->assertTrue($this->matcher->coincideTraslado($salida, $traslado));
+        $this->assertTrue($this->matcher->referenciasCruzan($salida->referencia, $traslado->referencia));
+    }
+
     public function test_entrada_de_traslado_puede_acreditarse_dias_despues_pero_no_antes(): void
     {
         // Traslado hecho el sábado 01/08 desde BNC; Mercantil lo acredita el lunes 03/08 con otra referencia.

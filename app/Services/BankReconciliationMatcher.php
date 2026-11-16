@@ -870,7 +870,7 @@ class BankReconciliationMatcher
         $puntos = 0;
         if ($this->esTraslado($flujo)) {
             $lado = $this->ladoTraslado($linea, $flujo);
-            if ($lado === 'salida' && $this->referenciaTrasladoCompletaCoincide($linea->referencia, $flujo->referencia ?? null)) {
+            if ($lado === 'salida' && $this->referenciasCruzan($linea->referencia, $flujo->referencia ?? null)) {
                 $puntos += 50;
             } elseif ($lado === 'entrada' && $this->referenciaTrasladoUltimosCuatroCoincide($linea->referencia, $flujo->referencia ?? null)) {
                 $puntos += 40;
@@ -1106,7 +1106,8 @@ class BankReconciliationMatcher
         }
 
         if ($lado === 'salida') {
-            if ($this->referenciaTrasladoCompletaCoincide($linea->referencia, $flujo->referencia ?? null)) {
+            // Exacta, o la cola/contenida (Bancaribe: 4281521077468 ↔ 1521077468).
+            if ($this->referenciasCruzan($linea->referencia, $flujo->referencia ?? null)) {
                 return true;
             }
             // BNC / otros: a veces solo cuadra el monto (la ref del extracto no es la misma).
