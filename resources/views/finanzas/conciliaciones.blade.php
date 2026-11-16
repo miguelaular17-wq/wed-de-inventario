@@ -812,7 +812,7 @@
                     </label>
                     <input type="text" id="csvFileName" placeholder="Ningún archivo seleccionado" readonly class="file-name">
                 </div>
-                <p class="file-hint">Formatos: CSV, TXT, Excel (.xlsx / .xls) o imagen (PNG / JPG). El sistema detecta el formato según el banco.</p>
+                <p class="file-hint">Formatos: CSV, TXT, Excel (.xlsx / .xls), imagen (PNG / JPG) o PDF de Bancaribe (estado de cuenta o Conexión Personas → Movimientos). El sistema detecta el formato según el banco.</p>
                 <p class="file-hint" style="color:#0f766e;">Los abonos LIQ.TARJETA / LIQUIDACION T/ no se concilian aquí. Van en <strong>Lotes punto de venta</strong>.</p>
             </div>
             <div class="modal-foot">

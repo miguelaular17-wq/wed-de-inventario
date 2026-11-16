@@ -2571,7 +2571,7 @@ class FinanzasController extends Controller
                 continue; // siguiente archivo
             }
 
-            // 2. PDF (solo Bancaribe: estado de cuenta con "Detalles de Movimientos")
+            // 2. PDF (solo Bancaribe: estado de cuenta o Conexión Personas → Movimientos)
             if ($ext === 'pdf') {
                 if ($banco_nombre !== 'BANCARIBE') {
                     return redirect()->back()->with('error', 'Por ahora solo se aceptan PDF de Bancaribe. Para '.$banco_nombre.' sube el Excel o CSV.');
