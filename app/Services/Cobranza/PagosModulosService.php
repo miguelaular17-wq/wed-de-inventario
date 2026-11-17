@@ -161,7 +161,29 @@ class PagosModulosService
                 ->update(['monto' => $nuevaCuotaFija, 'saldo' => $nuevaCuotaFija]);
         }
 
-        $formaPagoStr = str_replace('_', ' ', (string) ($data['forma_pago'] ?? ''));
+        $fechaPago = $data['fecha_pago'] ?? now()->toDateString();
+        $formaPago = (string) ($data['forma_pago'] ?? '');
+        $numeroCuota = ((int) $contrato->cuotas()->max('numero_cuota')) + 1;
+
+        // Fila en el plan de pagos / reporte (igual que un abono por cuota).
+        $cuota = ContratoCuota::create([
+            'contrato_id' => $contrato->id,
+            'numero_cuota' => $numeroCuota,
+            'fecha_vencimiento' => $fechaPago,
+            'monto' => 0,
+            'monto_pagado' => 0,
+            'abono_capital' => $abono,
+            'saldo' => 0,
+            'estatus' => 'pagado',
+            'fecha_pago' => $fechaPago,
+            'forma_pago' => $formaPago !== '' ? $formaPago : null,
+            'tasa_cambio' => $data['tasa_cambio'] ?? null,
+            'banco_destino' => $data['banco_destino'] ?? null,
+            'banco_origen' => $data['banco_origen'] ?? null,
+            'referencia' => $data['referencia'] ?? null,
+        ]);
+
+        $formaPagoStr = str_replace('_', ' ', $formaPago);
         $detalle = "Abono a capital: \${$abono} via {$formaPagoStr}. Capital restante: \${$nuevoTotal}.";
         if (! empty($data['comentario'])) {
             $detalle .= ' | Nota: '.$data['comentario'];
@@ -169,7 +191,7 @@ class PagosModulosService
 
         ContratoSeguimiento::create([
             'contrato_id' => $contrato->id,
-            'cuota_id' => null,
+            'cuota_id' => $cuota->id,
             'usuario_id' => $usuarioId,
             'fecha_hora' => now(),
             'resultado' => $nuevoTotal <= 0.009 ? 'PAGO_COMPLETO' : 'ABONO_CAPITAL',
@@ -181,7 +203,7 @@ class PagosModulosService
                 'banco_destino' => $data['banco_destino'] ?? null,
                 'banco_origen' => $data['banco_origen'] ?? null,
                 'referencia' => $data['referencia'] ?? null,
-                'fecha_pago' => $data['fecha_pago'] ?? null,
+                'fecha_pago' => $fechaPago,
             ],
         ]);
     }

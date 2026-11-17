@@ -191,11 +191,18 @@
                                 'acumulado' => 'background:#7c3aed; color:white;',
                                 default     => 'background:#e2e8f0; color:#475569;',
                             };
-                            $badgeLabel = match($cuota->estatus) {
-                                'prestamo'  => 'NUEVO PRÉSTAMO',
-                                'acumulado' => 'ACUMULADO',
-                                default     => strtoupper($cuota->estatus),
+                            $esAbonoCapital = $cuota->estatus === 'pagado'
+                                && (float) $cuota->monto <= 0
+                                && (float) ($cuota->abono_capital ?? 0) > 0;
+                            $badgeLabel = match(true) {
+                                $cuota->estatus === 'prestamo' => 'NUEVO PRÉSTAMO',
+                                $cuota->estatus === 'acumulado' => 'ACUMULADO',
+                                $esAbonoCapital => 'ABONO CAPITAL',
+                                default => strtoupper($cuota->estatus),
                             };
+                            if ($esAbonoCapital) {
+                                $badgeStyle = 'background:#7c3aed; color:white;';
+                            }
                         @endphp
                         <tr style="{{ $rowStyle }}">
                             <td style="font-weight: 600; color: #64748b; padding: 12px;">{{ $cuota->estatus === 'prestamo' ? '➕' : $cuota->numero_cuota }}</td>
@@ -271,11 +278,12 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse($contrato->seguimientos->whereIn('resultado', ['PAGO_COMPLETO', 'PAGO_PARCIAL', 'EDICION_PAGO']) as $seg)
+                    @forelse($contrato->seguimientos->whereIn('resultado', ['PAGO_COMPLETO', 'PAGO_PARCIAL', 'ABONO_CAPITAL', 'EDICION_PAGO']) as $seg)
                         @php
                             $resColor = match($seg->resultado) {
                                 'PAGO_COMPLETO'  => 'background:#059669; color:white;',
                                 'PAGO_PARCIAL'   => 'background:#10b981; color:white;',
+                                'ABONO_CAPITAL'  => 'background:#7c3aed; color:white;',
                                 'EDICION_PAGO'   => 'background:#f59e0b; color:white;',
                                 default          => 'background:#e2e8f0; color:#475569;',
                             };
@@ -316,7 +324,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse($contrato->seguimientos->whereNotIn('resultado', ['PAGO_COMPLETO', 'PAGO_PARCIAL', 'EDICION_PAGO']) as $seg)
+                    @forelse($contrato->seguimientos->whereNotIn('resultado', ['PAGO_COMPLETO', 'PAGO_PARCIAL', 'ABONO_CAPITAL', 'EDICION_PAGO']) as $seg)
                         @php
                             $resColor = match($seg->resultado) {
                                 'PROMESA_PAGO'   => 'background:#3b82f6; color:white;',

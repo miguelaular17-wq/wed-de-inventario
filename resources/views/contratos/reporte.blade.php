@@ -270,7 +270,11 @@
                     if (in_array($estLower, ['vencido', 'pendiente', 'parcial'])) {
                         $totalMontoPendiente += $cuota->monto;
                     }
+                    $esAbonoCapital = $estLower === 'pagado'
+                        && (float) $cuota->monto <= 0
+                        && (float) $cuota->abono_capital > 0;
                     $statusClass = 'status-' . $estLower;
+                    $estatusLabel = $esAbonoCapital ? 'ABONO CAPITAL' : strtoupper($cuota->estatus);
                 @endphp
                 <tr>
                     <td>{{ $cuota->numero_cuota }}</td>
@@ -281,7 +285,7 @@
                     <td class="text-right">${{ number_format($cuota->monto - $cuota->monto_pagado, 2) }}</td>
                     <td>{{ $cuota->forma_pago ?: '—' }}</td>
                     <td>{{ $cuota->fecha_pago?->format('d/m/Y') ?: '—' }}</td>
-                    <td><span class="status-badge {{ $statusClass }}">{{ strtoupper($cuota->estatus) }}</span></td>
+                    <td><span class="status-badge {{ $statusClass }}">{{ $estatusLabel }}</span></td>
                 </tr>
             @endforeach
         </tbody>
@@ -305,7 +309,7 @@
                 </tr>
                 <tr>
                     <td class="s-label">Capital Actual</td>
-                    <td class="s-value">${{ number_format($contrato->capital - $totalAbono, 2) }}</td>
+                    <td class="s-value">${{ number_format((float) $contrato->getRawOriginal('total_a_pagar'), 2) }}</td>
                 </tr>
                 <tr>
                     <td class="s-label">Intereses / Cuotas Pendientes</td>
