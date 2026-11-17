@@ -247,11 +247,6 @@ Route::middleware(['auth', EnsureAdmin::class])->prefix('admin')->name('admin.')
     // Sync Logs
     Route::get('/sync-logs', [\App\Http\Controllers\Admin\SyncLogController::class, 'index'])->name('sync_logs.index');
 
-    // Admin Products
-    Route::get('/productos', [\App\Http\Controllers\Admin\ProductController::class, 'index'])->name('productos.index');
-    Route::post('/productos/export-json', [\App\Http\Controllers\Admin\ProductController::class, 'exportJson'])->name('productos.export_json');
-    Route::post('/productos/{id}/toggle-oculto', [\App\Http\Controllers\Admin\ProductController::class, 'toggleOculto'])->name('productos.toggle_oculto');
-
     // Catalog Automator
     Route::get('/catalogo-auto', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'index'])->name('catalogo-auto.index');
     Route::post('/catalogo-auto/config', [\App\Http\Controllers\Admin\CatalogoAutoController::class, 'store'])->name('catalogo-auto.config');
@@ -274,6 +269,13 @@ Route::middleware(['auth', 'permission:sincronizadores'])->prefix('admin')->name
     Route::post('/sincronizadores/comando', [SyncRemoteController::class, 'sendCommand'])->name('sync.command');
     Route::get('/sincronizadores/status', [SyncRemoteController::class, 'status'])->name('sync.status');
     Route::get('/sincronizadores/codigos-compuestos', [SyncRemoteController::class, 'codigosCompuestos'])->name('sync.codigos_compuestos');
+});
+
+// ── Ocultar productos del catálogo (global, todas las sedes): permiso «productos.ocultar» ──
+Route::middleware(['auth', 'permission:productos.ocultar'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/productos', [\App\Http\Controllers\Admin\ProductController::class, 'index'])->name('productos.index');
+    Route::post('/productos/export-json', [\App\Http\Controllers\Admin\ProductController::class, 'exportJson'])->name('productos.export_json');
+    Route::post('/productos/{id}/toggle-oculto', [\App\Http\Controllers\Admin\ProductController::class, 'toggleOculto'])->whereNumber('id')->name('productos.toggle_oculto');
 });
 
 // API del sincronizador de escritorio (token en header/query)

@@ -400,6 +400,7 @@ class CompradorController extends Controller
                 return \Illuminate\Support\Facades\DB::connection('pgsql')
                     ->table('productos')
                     ->where('activo', true)
+                    ->where(fn ($q) => $q->where('oculto', false)->orWhereNull('oculto'))
                     ->whereNotNull('categoria')
                     ->where('categoria', '!=', '')
                     ->distinct()
@@ -412,6 +413,7 @@ class CompradorController extends Controller
                 return \Illuminate\Support\Facades\DB::connection('pgsql')
                     ->table('productos')
                     ->where('activo', true)
+                    ->where(fn ($q) => $q->where('oculto', false)->orWhereNull('oculto'))
                     ->whereNotNull('proveedor')
                     ->where('proveedor', '!=', '')
                     ->distinct()
@@ -424,6 +426,7 @@ class CompradorController extends Controller
                 return \Illuminate\Support\Facades\DB::connection('pgsql')
                     ->table('productos')
                     ->where('activo', true)
+                    ->where(fn ($q) => $q->where('oculto', false)->orWhereNull('oculto'))
                     ->whereNotNull('categoria')
                     ->where('categoria', '!=', '')
                     ->whereNotNull('subcategoria')
@@ -747,6 +750,7 @@ class CompradorController extends Controller
             $publicitadosQuery = \Illuminate\Support\Facades\DB::connection('pgsql')
                 ->table('publicidad_productos as pub')
                 ->join('productos as p', 'pub.producto_id', '=', 'p.id')
+                ->where(fn ($q) => $q->where('p.oculto', false)->orWhereNull('p.oculto'))
                 ->leftJoin(
                     \Illuminate\Support\Facades\DB::raw('(SELECT producto_id, SUM(existencia) as total_stock FROM stock_actual GROUP BY producto_id) sa'),
                     'p.id', '=', 'sa.producto_id'

@@ -431,6 +431,10 @@
         $nav[] = $link('Sincronizadores', route('admin.sync.index'), request()->routeIs('admin.sync.*'));
     }
 
+    if ($u->role !== 'admin' && $u->canAccess('productos.ocultar')) {
+        $nav[] = $link('Ocultar productos', route('admin.productos.index'), request()->routeIs('admin.productos.*'));
+    }
+
     $nav = app(\App\Services\AccesosService::class)->filtrarMenu($u, $nav);
 
     $roleLabels = [

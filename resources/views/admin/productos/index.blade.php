@@ -104,7 +104,7 @@
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
         <div>
             <h1>Catálogo de Productos</h1>
-            <p class="lead">Consulta de stock e histórico por sede</p>
+            <p class="lead">Ocultar un producto lo quita de <strong>todos</strong> los catálogos y vistas (cualquier sede). La sede solo sirve para consultar stock e histórico.</p>
         </div>
         <a href="{{ route('admin.productos.export_json') }}"
            id="btn-export-json"

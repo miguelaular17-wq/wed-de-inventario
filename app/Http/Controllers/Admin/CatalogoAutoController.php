@@ -15,14 +15,14 @@ class CatalogoAutoController extends Controller
     public function index()
     {
         // Load categories/subcategories available
-        $categorias = Producto::where('activo', true)
+        $categorias = Producto::visibles()
             ->whereNotNull('categoria')
             ->where('categoria', '!=', '')
             ->distinct()
             ->orderBy('categoria')
             ->pluck('categoria');
 
-        $catSubcatMap = Producto::where('activo', true)
+        $catSubcatMap = Producto::visibles()
             ->whereNotNull('categoria')->where('categoria', '!=', '')
             ->whereNotNull('subcategoria')->where('subcategoria', '!=', '')
             ->select('categoria', 'subcategoria')

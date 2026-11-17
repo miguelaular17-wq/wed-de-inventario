@@ -32,7 +32,7 @@ class ExistenciasController extends Controller
         $page    = (int) $request->query('page', 1);
         $perPage = 75;
 
-        $whereClauses = ['p.activo = true'];
+        $whereClauses = ['p.activo = true', \App\Models\V2\Producto::sqlNoOculto('p')];
         $bindings     = [];
 
         if ($filters['categoria'] !== 'Ninguno') {
@@ -153,6 +153,7 @@ class ExistenciasController extends Controller
             return DB::connection('pgsql')
                 ->table('inventario_v2.productos')
                 ->where('activo', true)
+                ->where(fn ($q) => $q->where('oculto', false)->orWhereNull('oculto'))
                 ->whereNotNull('categoria')
                 ->where('categoria', '!=', '')
                 ->distinct()
@@ -166,6 +167,7 @@ class ExistenciasController extends Controller
             $subcategorias = DB::connection('pgsql')
                 ->table('inventario_v2.productos')
                 ->where('activo', true)
+                ->where(fn ($q) => $q->where('oculto', false)->orWhereNull('oculto'))
                 ->where('categoria', $filters['categoria'])
                 ->whereNotNull('subcategoria')
                 ->where('subcategoria', '!=', '')
@@ -179,6 +181,7 @@ class ExistenciasController extends Controller
             return DB::connection('pgsql')
                 ->table('inventario_v2.productos')
                 ->where('activo', true)
+                ->where(fn ($q) => $q->where('oculto', false)->orWhereNull('oculto'))
                 ->whereNotNull('proveedor')
                 ->where('proveedor', '!=', '')
                 ->distinct()
@@ -212,6 +215,7 @@ class ExistenciasController extends Controller
         $subs = DB::connection('pgsql')
             ->table('inventario_v2.productos')
             ->where('activo', true)
+            ->where(fn ($q) => $q->where('oculto', false)->orWhereNull('oculto'))
             ->where('categoria', $categoria)
             ->whereNotNull('subcategoria')
             ->where('subcategoria', '!=', '')

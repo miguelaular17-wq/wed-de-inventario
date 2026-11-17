@@ -280,6 +280,7 @@ class InventarioV2Repository
         $productos = DB::connection('pgsql')
             ->table('productos')
             ->where('activo', true)
+            ->where(fn ($q) => $q->where('oculto', false)->orWhereNull('oculto'))
             ->whereIn('codigo', $codigos)
             ->get(['id', 'codigo', 'nombre', 'categoria', 'subcategoria', 'proveedor'])
             ->keyBy('id');

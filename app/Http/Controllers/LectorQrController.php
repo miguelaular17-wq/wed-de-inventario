@@ -251,6 +251,7 @@ class LectorQrController extends Controller
         $rows = DB::connection('pgsql')
             ->table('productos as p')
             ->where('p.activo', true)
+            ->whereRaw(\App\Models\V2\Producto::sqlNoOculto('p'))
             ->whereRaw(
                 <<<'SQL'
                 EXISTS (
@@ -306,6 +307,7 @@ class LectorQrController extends Controller
         $row = DB::connection('pgsql')
             ->table('productos as p')
             ->where('p.activo', true)
+            ->whereRaw(\App\Models\V2\Producto::sqlNoOculto('p'))
             ->where(function ($q) use ($codigo) {
                 $q->where('p.codigo', $codigo)
                     ->orWhereRaw('UPPER(TRIM(p.codigo)) = UPPER(?)', [$codigo])
@@ -359,6 +361,7 @@ class LectorQrController extends Controller
         $rows = DB::connection('pgsql')
             ->table('productos as p')
             ->where('p.activo', true)
+            ->whereRaw(\App\Models\V2\Producto::sqlNoOculto('p'))
             ->where(function ($q) use ($prefijo) {
                 $q->where('p.codigo', 'ilike', $prefijo.'%')
                     ->orWhereRaw(
@@ -410,6 +413,7 @@ class LectorQrController extends Controller
         $rows = DB::connection('pgsql')
             ->table('productos as p')
             ->where('p.activo', true)
+            ->whereRaw(\App\Models\V2\Producto::sqlNoOculto('p'))
             ->where(function ($q) use ($codigo, $sinGuionesExtremos, $nucleo) {
                 // Termina con el código escaneado: DL-9908A ← -9908A
                 $q->whereRaw('UPPER(TRIM(p.codigo)) LIKE UPPER(?)', ['%'.$codigo])

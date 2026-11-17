@@ -3,10 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use App\Models\V2\Producto;
 use App\Models\Product;
+use App\Models\V2\Producto;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
@@ -24,11 +25,11 @@ class ProductController extends Controller
             $query = DB::connection('pgsql')->table('inventario_v2.productos as p')
                 ->where('p.activo', true);
 
-            // Filtro oculto: '' = solo visibles (default), '1' = solo ocultos
+            // Filtro oculto: '' = solo visibles (default), '1' = solo ocultos (flag global, no por sede)
             if ($filtroOculto == 1) {
                 $query->where('p.oculto', true);
             } else {
-                $query->where('p.oculto', false);
+                $query->where(fn ($q) => $q->where('p.oculto', false)->orWhereNull('p.oculto'));
             }
 
             if ($search) {
@@ -115,6 +116,7 @@ class ProductController extends Controller
             $categoriasTree = DB::connection('pgsql')->table('inventario_v2.productos')
                 ->select('categoria', 'subcategoria')
                 ->where('activo', true)
+                ->where(fn ($q) => $q->where('oculto', false)->orWhereNull('oculto'))
                 ->whereNotNull('categoria')
                 ->where('categoria', '!=', '')
                 ->distinct()
@@ -143,20 +145,37 @@ class ProductController extends Controller
     }
 
     /**
-     * Toggle oculto status (hide/show) for a product.
+     * Oculta o restaura un producto en todas las sedes, catálogos y vistas.
      */
     public function toggleOculto($id)
     {
-        if (config('database.default') === 'pgsql') {
-            $producto = Producto::find($id);
-            if ($producto) {
-                $producto->oculto = ! $producto->oculto;
-                $producto->save();
-                $label = $producto->oculto ? 'ocultado' : 'restaurado';
-                return redirect()->back()->with('success', "Producto {$label} correctamente.");
-            }
+        if (config('database.default') !== 'pgsql') {
+            return redirect()->back()->with('error', 'Producto no encontrado.');
         }
-        return redirect()->back()->with('error', 'Producto no encontrado.');
+
+        $producto = Producto::find($id);
+        if (! $producto) {
+            return redirect()->back()->with('error', 'Producto no encontrado.');
+        }
+
+        $producto->oculto = ! (bool) $producto->oculto;
+        $producto->save();
+
+        // Invalida cachés de catálogo / inventario para que deje de verse de inmediato.
+        Cache::forget('inventario_v2.productos_updated_at');
+        Cache::forget('catalogo_categorias');
+        Cache::forget('catalogo_subcategorias');
+        Cache::forget('catalogo_cat_subcat_map');
+        Cache::forget('existencias_categorias');
+        Cache::forget('existencias_proveedores');
+        Cache::forget('vendedor_jrz_proveedores');
+        Cache::forget('dashboard.productos_activos');
+
+        $label = $producto->oculto
+            ? 'ocultado en todos los catálogos y vistas'
+            : 'restaurado (vuelve a verse en catálogos)';
+
+        return redirect()->back()->with('success', "Producto {$label}.");
     }
 
     public function exportJson(Request $request)
@@ -178,7 +197,7 @@ class ProductController extends Controller
                     'p.id', '=', 'sg.producto_id'
                 )
                 ->where('p.activo', true)
-                ->where('p.oculto', false); // Never export hidden products
+                ->where(fn ($q) => $q->where('p.oculto', false)->orWhereNull('p.oculto'));
 
             if (!empty($categorias)) {
                 $query->whereIn('p.categoria', $categorias);

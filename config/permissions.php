@@ -20,6 +20,7 @@ return [
         'catalogo.existencias' => 'Catálogo: tabla de stock (existencias por sede)',
         'catalogo.precios' => 'Catálogo: ver precios y Cashea',
         'catalogo.exportar_precios' => 'Catálogo: descargar Excel de precios con descuento',
+        'productos.ocultar' => 'Productos: ocultar/restaurar del catálogo (todas las sedes y vistas)',
         'vendedor.jrz' => 'Vendedor en JRZ (stock + ventas por sede)',
         'sede.cambiar' => 'Cambiar de sede de operación (supervisor / telefonía con sede fija)',
         'finanzas.ver' => 'Flujo de caja, cuentas por pagar y gastos fijos (ver)',
@@ -67,7 +68,7 @@ return [
      * Las claves deben existir en "assignable".
      */
     'groups' => [
-        'Operaciones' => ['operacion', 'catalogo.existencias', 'catalogo.precios', 'catalogo.exportar_precios', 'vendedor.jrz', 'sede.cambiar', 'ventas_mayor', 'ventas_mayor.catalogo'],
+        'Operaciones' => ['operacion', 'catalogo.existencias', 'catalogo.precios', 'catalogo.exportar_precios', 'productos.ocultar', 'vendedor.jrz', 'sede.cambiar', 'ventas_mayor', 'ventas_mayor.catalogo'],
         'Compras y Marketing' => [
             'compras',
             'compras.distribucion',

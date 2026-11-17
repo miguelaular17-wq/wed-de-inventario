@@ -193,6 +193,8 @@ class VendedorController extends Controller
         )));
 
         $productos = DB::table('productos')
+            ->where('activo', true)
+            ->where(fn ($q) => $q->where('oculto', false)->orWhereNull('oculto'))
             ->whereRaw('UPPER(TRIM(proveedor)) = ?', [mb_strtoupper($proveedor, 'UTF-8')])
             ->orderBy('nombre')
             ->get(['id', 'codigo', 'nombre', 'categoria', 'subcategoria']);
@@ -276,6 +278,8 @@ class VendedorController extends Controller
     private function proveedores()
     {
         return \Illuminate\Support\Facades\Cache::remember('vendedor_jrz_proveedores', 3600, fn () => DB::table('productos')
+            ->where('activo', true)
+            ->where(fn ($q) => $q->where('oculto', false)->orWhereNull('oculto'))
             ->whereNotNull('proveedor')->where('proveedor', '!=', '')
             ->distinct()->orderBy('proveedor')->pluck('proveedor'));
     }

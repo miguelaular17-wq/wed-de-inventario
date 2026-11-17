@@ -64,7 +64,7 @@ class CatalogoController extends Controller
     private function renderCatalogo(Request $request, bool $modoCliente, ?string $token = null)
     {
         $categorias = Cache::remember('catalogo_categorias', 3600, function () {
-            return Producto::where('activo', true)
+            return Producto::visibles()
                 ->whereNotNull('categoria')
                 ->where('categoria', '!=', '')
                 ->distinct()
@@ -73,7 +73,7 @@ class CatalogoController extends Controller
         });
 
         $subcategorias = Cache::remember('catalogo_subcategorias', 3600, function () {
-            return Producto::where('activo', true)
+            return Producto::visibles()
                 ->whereNotNull('subcategoria')
                 ->where('subcategoria', '!=', '')
                 ->distinct()
@@ -82,7 +82,7 @@ class CatalogoController extends Controller
         });
 
         $catSubcatMap = Cache::remember('catalogo_cat_subcat_map', 3600, function () {
-            $data = Producto::where('activo', true)
+            $data = Producto::visibles()
                 ->whereNotNull('categoria')
                 ->where('categoria', '!=', '')
                 ->whereNotNull('subcategoria')
@@ -414,8 +414,8 @@ class CatalogoController extends Controller
 
     private function buildQuery(Request $request, bool $modoCliente = false)
     {
-        $query = Producto::select('id', 'codigo', 'nombre as descripcion', 'categoria', 'subcategoria', 'precio_unidad', 'precio_mayor')
-            ->where('activo', true);
+        $query = Producto::visibles()
+            ->select('id', 'codigo', 'nombre as descripcion', 'categoria', 'subcategoria', 'precio_unidad', 'precio_mayor');
 
         if ($request->filled('categoria') && $request->categoria !== 'todas') {
             $query->where('categoria', $request->categoria);
