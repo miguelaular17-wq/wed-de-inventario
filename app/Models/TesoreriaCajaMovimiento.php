@@ -19,10 +19,32 @@ class TesoreriaCajaMovimiento extends Model
 
     public const DIVISA_EUR = 'EUR';
 
+    /** Misma nomenclatura que Flujo de Caja (Finanzas). */
+    public const CATEGORIA_EGRESO_REALIZADO = 'egreso_realizado';
+
+    public const CATEGORIA_EGRESO_DIVISAS = 'egreso_divisas';
+
+    public const CATEGORIA_COMPRA_DIVISAS = 'compra_divisas';
+
+    public const CATEGORIA_OTROS_EGRESOS = 'otros_egresos';
+
+    public const CATEGORIA_TRASLADOS = 'traslados';
+
+    public const CATEGORIA_INGRESOS = 'ingresos';
+
+    public const CATEGORIAS = [
+        self::CATEGORIA_EGRESO_REALIZADO => 'EGRESOS REALIZADOS',
+        self::CATEGORIA_EGRESO_DIVISAS => 'EGRESOS EN DIVISAS',
+        self::CATEGORIA_COMPRA_DIVISAS => 'COMPRA DE DIVISAS',
+        self::CATEGORIA_OTROS_EGRESOS => 'OTROS EGRESOS (AVANCES Y CAMBIOS)',
+        self::CATEGORIA_TRASLADOS => 'TRASLADOS',
+        self::CATEGORIA_INGRESOS => 'INGRESOS',
+    ];
+
     protected $table = 'tesoreria_caja_movimientos';
 
     protected $fillable = [
-        'caja_id', 'tipo', 'origen', 'fecha', 'monto', 'moneda_divisa', 'concepto', 'referencia', 'sede', 'user_id',
+        'caja_id', 'tipo', 'categoria', 'origen', 'fecha', 'monto', 'moneda_divisa', 'concepto', 'referencia', 'sede', 'user_id',
     ];
 
     protected $casts = [
@@ -48,6 +70,18 @@ class TesoreriaCajaMovimiento extends Model
     public function esIngreso(): bool
     {
         return $this->tipo === self::INGRESO;
+    }
+
+    public static function tipoDesdeCategoria(string $categoria): string
+    {
+        return $categoria === self::CATEGORIA_INGRESOS ? self::INGRESO : self::EGRESO;
+    }
+
+    public function etiquetaCategoria(): string
+    {
+        $clave = (string) ($this->categoria ?: ($this->esIngreso() ? self::CATEGORIA_INGRESOS : self::CATEGORIA_EGRESO_REALIZADO));
+
+        return self::CATEGORIAS[$clave] ?? strtoupper($clave);
     }
 
     public function esDeCuadre(): bool

@@ -596,6 +596,9 @@ class OrdenController extends Controller
             'puedeFiltrarSede' => true,
             'sedes' => config('inventario.sedes_locales'),
             'generadoPor' => $user->name,
+            'tecnicosReparacion' => $this->tecnicosNominaReparacion(incluirmeAMi: true)
+                ->map(fn ($t) => ['id' => $t['id'], 'nombre' => $t['nombre'], 'sede' => $t['sede']])
+                ->values(),
         ];
 
         if ($request->query('formato') === 'pdf') {
@@ -1381,27 +1384,57 @@ class OrdenController extends Controller
 
         $data = $request->validate([
             'resultado' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::RESULTADOS_ST))],
+            'tecnico_id' => ['nullable', 'integer', 'required_if:resultado,'.StOrden::RESULTADO_REPARADO],
+        ], [
+            'tecnico_id.required_if' => 'Elige el técnico que lo reparó.',
         ]);
         $resultado = $data['resultado'] ?? null;
+        $tecnicoUserId = null;
+        $tecnicoEmpleadoId = null;
+        $tecnicoNombre = null;
+        if ($resultado === StOrden::RESULTADO_REPARADO) {
+            $tecnico = $this->tecnicosNominaReparacion(incluirmeAMi: true)->firstWhere('id', (int) $data['tecnico_id']);
+            if (! $tecnico) {
+                throw ValidationException::withMessages(['tecnico_id' => 'Elige una persona registrada en nómina como Servicio técnico.']);
+            }
+            $tecnicoEmpleadoId = (int) $tecnico['id'];
+            $tecnicoUserId = $tecnico['user_id'] ?? null;
+            $tecnicoNombre = $tecnico['nombre'];
+        }
 
         $anterior = $orden->etiquetaResultadoSt();
-        if ($resultado !== $orden->resultado_interna) {
+        $attrs = is_array($orden->atributos) ? $orden->atributos : [];
+        $empleadoActual = (int) ($attrs['reparado_por_empleado_id'] ?? 0);
+        if ($resultado !== $orden->resultado_interna
+            || $tecnicoUserId !== ($orden->reparado_por ? (int) $orden->reparado_por : null)
+            || $tecnicoEmpleadoId !== ($empleadoActual ?: null)
+        ) {
+            if ($resultado === StOrden::RESULTADO_REPARADO) {
+                $attrs['reparado_por_empleado_id'] = $tecnicoEmpleadoId;
+                $attrs['reparado_por_nombre'] = $tecnicoNombre;
+            } else {
+                unset($attrs['reparado_por_empleado_id'], $attrs['reparado_por_nombre']);
+            }
             $orden->forceFill([
                 'resultado_interna' => $resultado,
+                'reparado_por' => $tecnicoUserId,
+                'atributos' => $attrs,
                 'updated_by' => $user->id,
             ])->save();
+            $orden->unsetRelation('reparador');
             $nuevo = $orden->etiquetaResultadoSt();
             $this->ordenService->registrarEvento($orden, $user, StOrdenEvento::TIPO_NOTA, match (true) {
                 $nuevo === null => 'Se quitó el reconocimiento ST (era: '.$anterior.')',
                 $anterior === null => 'Reconocimiento ST: '.$nuevo,
                 default => 'Reconocimiento ST: '.$anterior.' → '.$nuevo,
-            }, ['resultado' => $resultado]);
+            }, ['resultado' => $resultado, 'reparado_por' => $tecnicoUserId, 'reparado_por_empleado_id' => $tecnicoEmpleadoId]);
         }
 
         if ($request->expectsJson()) {
             return response()->json([
                 'resultado' => $orden->resultado_interna,
                 'etiqueta' => $orden->etiquetaResultadoSt(),
+                'tecnico' => $orden->nombreReparador(),
             ]);
         }
 

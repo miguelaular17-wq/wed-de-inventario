@@ -531,10 +531,6 @@
                         @endforeach
                     </select>
                 </div>
-                <div id="cf-abono-capital-wrap">
-                    <label>De eso, abono a capital ($)</label>
-                    <input type="number" name="abono_capital" step="0.01" min="0" value="{{ old('abono_capital') }}" placeholder="0.00">
-                </div>
             </div>
 
             <div class="cf-paso">3 · Dinero</div>
@@ -555,11 +551,34 @@
                 </div>
                 <div><label>Ref.</label><input type="text" name="referencia" maxlength="120" value="{{ old('referencia') }}" placeholder="# Referencia"></div>
             </div>
-            <div class="cf-row">
+            <div id="cf-destino-pago" class="cf-row" style="display:none;">
+                <div>
+                    <label>Aplicar a</label>
+                    <select name="destino_pago" id="cf-destino">
+                        <option value="capital" @selected(old('destino_pago', 'capital') === 'capital')>Capital</option>
+                        <option value="cuota" @selected(old('destino_pago') === 'cuota')>Cuota</option>
+                        <option value="ambas" @selected(old('destino_pago') === 'ambas')>Ambas</option>
+                    </select>
+                </div>
+                <div id="cf-destino-aviso" class="muted" style="align-self:end;font-size:.82rem;padding-bottom:6px;"></div>
+            </div>
+            <div class="cf-row" id="cf-montos-simples">
                 <div><label>Monto USD</label><input type="number" name="monto_usd" id="cf-usd" step="0.01" min="0" value="{{ old('monto_usd', $factura['saldo'] ?? '') }}"></div>
                 <div><label>Tasa de Cambio</label><input type="number" name="tasa_cambio" id="cf-tasa" step="0.0001" min="0" value="{{ old('tasa_cambio', $tasaHoy ?: '') }}"></div>
                 <div><label>Monto BS</label><input type="number" name="monto_bs" id="cf-bs" step="0.01" min="0" value="{{ old('monto_bs') }}"></div>
             </div>
+            <div id="cf-montos-ambas" style="display:none;">
+                <div class="cf-row">
+                    <div><label>Monto capital ($)</label><input type="number" id="cf-monto-capital" step="0.01" min="0" value="{{ old('monto_capital') }}" placeholder="0.00"></div>
+                    <div><label>Monto cuota ($)</label><input type="number" id="cf-monto-cuota" step="0.01" min="0" value="{{ old('monto_cuota') }}" placeholder="0.00"></div>
+                    <div><label>Total USD</label><input type="number" id="cf-usd-ambas" step="0.01" min="0" readonly tabindex="-1" style="background:#f8fafc;color:#475569;"></div>
+                </div>
+                <div class="cf-row">
+                    <div><label>Tasa de Cambio</label><input type="number" id="cf-tasa-ambas" step="0.0001" min="0" value="{{ old('tasa_cambio', $tasaHoy ?: '') }}"></div>
+                    <div><label>Monto BS</label><input type="number" id="cf-bs-ambas" step="0.01" min="0" readonly tabindex="-1" style="background:#f8fafc;color:#475569;"></div>
+                </div>
+            </div>
+            <input type="hidden" name="abono_capital" id="cf-abono-capital" value="{{ old('abono_capital', '0') }}">
 
             <div class="cf-paso">4 · Detalle</div>
             <div class="cf-row">
@@ -794,6 +813,74 @@
     const ponerUsd = enlazarMontos($('cf-usd'), $('cf-tasa'), $('cf-bs'));
     enlazarMontos($('cfe-usd'), $('cfe-tasa'), $('cfe-bs'));
 
+    // Destino del pago de cuota: capital / cuota / ambas
+    let contratoActual = null;
+    function syncDestinoPago() {
+        const on = !!contratoActual && estado.ambito === 'contratos' && ($('cf-vinculo').value || '').startsWith('contrato_cuota:');
+        $('cf-destino-pago').style.display = on ? '' : 'none';
+        if (!on) {
+            $('cf-montos-ambas').style.display = 'none';
+            $('cf-montos-simples').style.display = '';
+            $('cf-usd').disabled = false;
+            $('cf-tasa').disabled = false;
+            $('cf-bs').disabled = false;
+            $('cf-abono-capital').value = '0';
+            $('cf-destino-aviso').textContent = '';
+            return;
+        }
+        const modo = $('cf-destino').value || 'capital';
+        const ambas = modo === 'ambas';
+        $('cf-montos-ambas').style.display = ambas ? '' : 'none';
+        $('cf-montos-simples').style.display = ambas ? 'none' : '';
+        $('cf-usd').disabled = ambas;
+        $('cf-tasa').disabled = ambas;
+        $('cf-bs').disabled = ambas;
+        if (ambas) {
+            $('cf-tasa-ambas').value = $('cf-tasa').value || $('cf-tasa-ambas').value;
+            syncMontosAmbas();
+        } else {
+            syncAbonoCapitalSimple();
+        }
+        const interes0 = Number(contratoActual?.interes || 0) === 0;
+        $('cf-destino-aviso').textContent = interes0
+            ? 'Este contrato tiene interés 0%: por defecto se aplica a capital.'
+            : (modo === 'capital' ? 'Todo el monto reduce el capital del contrato.'
+                : (modo === 'cuota' ? 'Todo el monto se aplica a la cuota (interés).'
+                    : 'Indica cuánto va a capital y cuánto a la cuota.'));
+    }
+    function syncAbonoCapitalSimple() {
+        const usd = parseFloat($('cf-usd').value) || 0;
+        const modo = $('cf-destino').value || 'capital';
+        $('cf-abono-capital').value = (modo === 'capital' ? usd : 0).toFixed(2);
+    }
+    function syncMontosAmbas() {
+        const cap = Math.max(0, parseFloat($('cf-monto-capital').value) || 0);
+        const cuota = Math.max(0, parseFloat($('cf-monto-cuota').value) || 0);
+        const total = Math.round((cap + cuota) * 100) / 100;
+        const tasa = parseFloat($('cf-tasa-ambas').value) || 0;
+        $('cf-usd-ambas').value = total > 0 ? total.toFixed(2) : '';
+        $('cf-bs-ambas').value = total > 0 && tasa > 0 ? (total * tasa).toFixed(2) : '';
+        $('cf-usd').value = total > 0 ? total.toFixed(2) : '';
+        $('cf-tasa').value = $('cf-tasa-ambas').value || '';
+        $('cf-bs').value = $('cf-bs-ambas').value || '';
+        $('cf-abono-capital').value = cap.toFixed(2);
+    }
+    function activarDestinoCuota(contrato) {
+        contratoActual = contrato;
+        const interes0 = Number(contrato?.interes || 0) === 0;
+        $('cf-destino').value = interes0 ? 'capital' : 'cuota';
+        syncDestinoPago();
+    }
+    function desactivarDestinoCuota() {
+        contratoActual = null;
+        syncDestinoPago();
+    }
+    $('cf-destino').addEventListener('change', syncDestinoPago);
+    $('cf-usd').addEventListener('input', () => { if (contratoActual) syncAbonoCapitalSimple(); });
+    ['cf-monto-capital', 'cf-monto-cuota', 'cf-tasa-ambas'].forEach(id => {
+        $(id).addEventListener('input', syncMontosAmbas);
+    });
+
     // ── Lo que se paga ───────────────────────────────────────────────
     function resumen(html) {
         const r = $('cf-resumen');
@@ -809,6 +896,7 @@
         $('cf-prop-categoria-wrap').style.display = 'none';
         $('cf-prop-categoria').disabled = true;
         mostrarReservaNueva(false);
+        desactivarDestinoCuota();
         resumen('');
     }
 
@@ -930,9 +1018,10 @@
                 o.classList.add('activo');
                 $('cf-vinculo').value = q.valor;
                 $('cf-extra-pago').style.display = '';
-                $('cf-abono-capital-wrap').style.display = '';
+                activarDestinoCuota(c);
                 resumen(`pago de la <strong>cuota #${q.numero}</strong> del contrato <strong>${esc(c.numero)}</strong> de <strong>${esc(c.cliente)}</strong> · debe ${fmt(q.debe)}`);
                 autollenar(`Cuota #${q.numero} contrato ${c.numero}`, c.cliente, q.debe);
+                syncDestinoPago();
             });
             caja.appendChild(o);
         });
@@ -960,7 +1049,7 @@
                 () => {
                     $('cf-vinculo').value = a.valor;
                     $('cf-extra-pago').style.display = '';
-                    $('cf-abono-capital-wrap').style.display = 'none';
+                    desactivarDestinoCuota();
                     resumen(`pago del <strong>alquiler ${esc(a.periodo)}</strong> de <strong>${esc(p.nombre)}</strong> (${esc(a.inquilino || '')}) · debe ${fmt(a.debe)}`);
                     autollenar(`Alquiler ${a.periodo} · ${p.nombre}`, a.inquilino, a.debe);
                 }));
@@ -969,7 +1058,7 @@
                 () => {
                     $('cf-vinculo').value = r.valor;
                     $('cf-extra-pago').style.display = '';
-                    $('cf-abono-capital-wrap').style.display = 'none';
+                    desactivarDestinoCuota();
                     resumen(`pago de la <strong>reserva</strong> de <strong>${esc(r.cliente)}</strong> en <strong>${esc(p.nombre)}</strong> (${esc(r.fechas)}) · debe ${fmt(r.debe)}`);
                     autollenar(`Reserva ${p.nombre} · ${r.cliente}`, r.cliente, r.debe);
                 }));
@@ -981,7 +1070,7 @@
                 propiedadReserva = p;
                 mostrarReservaNueva(true);
                 $('cf-extra-pago').style.display = '';
-                $('cf-abono-capital-wrap').style.display = 'none';
+                desactivarDestinoCuota();
                 pintarReservaNueva();
             });
         }
@@ -1074,6 +1163,24 @@
     $('cf-modo-reparto').addEventListener('click', () => modoReparto(true));
     ['cf-usd', 'cf-bs', 'cf-tasa'].forEach(id => $(id).addEventListener('input', () => cfRepartoEstado()));
     $('cf-form').addEventListener('submit', e => {
+        if (contratoActual && ($('cf-vinculo').value || '').startsWith('contrato_cuota:')) {
+            if (($('cf-destino').value || 'capital') === 'ambas') {
+                syncMontosAmbas();
+                const cap = parseFloat($('cf-monto-capital').value) || 0;
+                const cuota = parseFloat($('cf-monto-cuota').value) || 0;
+                if (cap + cuota <= 0) {
+                    e.preventDefault();
+                    alert('Indica el monto a capital y/o a cuota.');
+                    return;
+                }
+            } else {
+                syncAbonoCapitalSimple();
+            }
+        } else {
+            $('cf-abono-capital').value = '0';
+        }
+        // Campos disabled no viajan en el POST.
+        ['cf-usd', 'cf-tasa', 'cf-bs'].forEach(id => { $(id).disabled = false; });
         if (!repartiendo || estado.ambito !== 'patrimonial') return;
         const total = parseFloat($('cf-usd').value) || 0;
         if (Math.abs(sumaReparto() - total) >= 0.01) {

@@ -24,6 +24,7 @@ class TesoreriaCajaTest extends TestCase
         (require database_path('migrations/2026_11_16_130000_create_tesoreria_caja_tables.php'))->up();
         (require database_path('migrations/2026_11_16_140000_tesoreria_caja_cuadre_efectivo.php'))->up();
         (require database_path('migrations/2026_11_16_150000_add_moneda_divisa_to_tesoreria_caja_movimientos.php'))->up();
+        (require database_path('migrations/2026_11_17_160000_add_categoria_to_tesoreria_caja_movimientos.php'))->up();
     }
 
     public function test_caja_con_ingresos_y_egresos_en_bolivares_y_divisas(): void
@@ -40,7 +41,11 @@ class TesoreriaCajaTest extends TestCase
             ->assertSee('DISPONIBILIDAD EN TIEMPO REAL')
             ->assertSee('Nuevo Egreso')
             ->assertDontSee('+ Ingreso')
-            ->assertSee('EGRESOS')
+            ->assertSee('EGRESOS REALIZADOS')
+            ->assertSee('EGRESOS EN DIVISAS')
+            ->assertSee('COMPRA DE DIVISAS')
+            ->assertSee('OTROS EGRESOS (AVANCES Y CAMBIOS)')
+            ->assertSee('TRASLADOS')
             ->assertSee('INGRESOS')
             ->assertSee('BOLÍVARES')
             ->assertSee('DIVISAS');
@@ -50,7 +55,7 @@ class TesoreriaCajaTest extends TestCase
 
         $this->actingAs($user)->post(route('tesoreria.caja.store'), [
             'caja_id' => $bs->id,
-            'tipo' => 'ingreso',
+            'categoria' => 'ingresos',
             'fecha' => now()->toDateString(),
             'monto_bs' => 1000,
             'concepto' => 'Apertura caja Bs',
@@ -58,7 +63,7 @@ class TesoreriaCajaTest extends TestCase
 
         $this->actingAs($user)->post(route('tesoreria.caja.store'), [
             'caja_id' => $usd->id,
-            'tipo' => 'ingreso',
+            'categoria' => 'ingresos',
             'fecha' => now()->toDateString(),
             'moneda_divisa' => 'USD',
             'monto_divisa' => 200,
@@ -67,7 +72,7 @@ class TesoreriaCajaTest extends TestCase
 
         $this->actingAs($user)->post(route('tesoreria.caja.store'), [
             'caja_id' => $usd->id,
-            'tipo' => 'ingreso',
+            'categoria' => 'ingresos',
             'fecha' => now()->toDateString(),
             'moneda_divisa' => 'EUR',
             'monto_divisa' => 50,
@@ -76,7 +81,7 @@ class TesoreriaCajaTest extends TestCase
 
         $this->actingAs($user)->post(route('tesoreria.caja.store'), [
             'caja_id' => $bs->id,
-            'tipo' => 'egreso',
+            'categoria' => 'egreso_realizado',
             'fecha' => now()->toDateString(),
             'monto_bs' => 250,
             'concepto' => 'Pago proveedor',
@@ -95,7 +100,7 @@ class TesoreriaCajaTest extends TestCase
 
         $this->actingAs($user)->post(route('tesoreria.caja.store'), [
             'caja_id' => $bs->id,
-            'tipo' => 'egreso',
+            'categoria' => 'otros_egresos',
             'fecha' => now()->toDateString(),
             'monto_bs' => 900,
             'concepto' => 'Demasiado',

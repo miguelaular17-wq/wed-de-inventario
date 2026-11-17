@@ -114,6 +114,7 @@ class CobranzaVinculos
                 'numero' => $c->numero_contrato,
                 'cliente' => $c->cliente,
                 'capital' => round((float) $c->total_a_pagar, 2),
+                'interes' => round((float) $c->getRawOriginal('interes_porcentaje'), 6),
                 'cuotas' => $cuotas->get($c->id)->map(fn (ContratoCuota $q) => [
                     'valor' => CobranzaMovimiento::VINCULO_CUOTA.':'.$q->id,
                     'numero' => $q->numero_cuota,

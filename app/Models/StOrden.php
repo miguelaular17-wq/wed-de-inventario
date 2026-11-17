@@ -558,15 +558,19 @@ class StOrden extends Model
         return $etiqueta;
     }
 
-    /** «Equipo Reparado», «No se Ubico repuesto»… o null si el ST no tiene reconocimiento. */
+    /** «Equipo Reparado · Jorge Díaz», «No se Ubico repuesto»… o null si el ST no tiene reconocimiento. */
     public function etiquetaResultadoSt(): ?string
     {
         $resultado = (string) ($this->resultado_interna ?? '');
         if ($resultado === '' || ! isset(self::RESULTADOS_ST[$resultado])) {
             return null;
         }
+        $etiqueta = self::RESULTADOS_ST[$resultado];
+        if ($resultado === self::RESULTADO_REPARADO && $this->nombreReparador()) {
+            $etiqueta .= ' · '.$this->nombreReparador();
+        }
 
-        return self::RESULTADOS_ST[$resultado];
+        return $etiqueta;
     }
 
     /** Entregada al cliente: la orden queda cerrada y ya no se modifica. */

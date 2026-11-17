@@ -309,10 +309,12 @@
             <div style="display:flex; gap:15px; margin-bottom:10px;">
                 <div style="flex:1;">
                     <label class="tc-lbl" id="tc-lbl-tipo">Tipo de Egreso</label>
-                    <select name="tipo" id="tc-tipo" required class="tc-inp" onchange="tcTitulo()">
-                        <option value="egreso">EGRESOS REALIZADOS</option>
-                        <option value="ingreso">INGRESOS</option>
+                    <select name="categoria" id="tc-categoria" required class="tc-inp" onchange="tcTitulo()">
+                        @foreach(\App\Models\TesoreriaCajaMovimiento::CATEGORIAS as $valor => $etiqueta)
+                            <option value="{{ $valor }}" @selected(old('categoria', 'egreso_realizado') === $valor)>{{ $etiqueta }}</option>
+                        @endforeach
                     </select>
+                    <input type="hidden" name="tipo" id="tc-tipo" value="egreso">
                 </div>
                 <div style="flex:1;">
                     <label class="tc-lbl">Fecha</label>
@@ -377,6 +379,7 @@
 <script>
 (function () {
     const modal = document.getElementById('tc-modal');
+    const categoria = document.getElementById('tc-categoria');
     const tipo = document.getElementById('tc-tipo');
     const titulo = document.getElementById('tc-modal-titulo');
     const submit = document.getElementById('tc-submit');
@@ -393,8 +396,13 @@
         return !opt || opt.value === '' || opt.dataset.bs === '1';
     }
 
+    function esIngreso() {
+        return categoria.value === 'ingresos';
+    }
+
     window.tcTitulo = function () {
-        const ingreso = tipo.value === 'ingreso';
+        const ingreso = esIngreso();
+        tipo.value = ingreso ? 'ingreso' : 'egreso';
         titulo.textContent = ingreso ? 'Nuevo Ingreso' : 'Nuevo Egreso';
         document.getElementById('tc-lbl-tipo').textContent = ingreso ? 'Tipo de Ingreso' : 'Tipo de Egreso';
         document.getElementById('tc-lbl-banco').textContent = ingreso ? 'Cuenta que recibe el dinero' : 'Banco y Titular';
@@ -418,7 +426,13 @@
     };
 
     window.tcAbrirModal = function (t) {
-        tipo.value = t === 'ingreso' ? 'ingreso' : 'egreso';
+        if (t === 'ingreso' || t === 'ingresos') {
+            categoria.value = 'ingresos';
+        } else if (t && [...categoria.options].some(o => o.value === t)) {
+            categoria.value = t;
+        } else {
+            categoria.value = 'egreso_realizado';
+        }
         tcTitulo();
         tcSyncMontos();
         modal.classList.add('abierto');
@@ -430,7 +444,7 @@
     monedaDivisa.addEventListener('change', actualizarLblDivisa);
     document.addEventListener('keydown', e => { if (e.key === 'Escape') tcCerrarModal(); });
     @if($errors->any())
-        tcAbrirModal(@json(old('tipo', 'egreso')));
+        tcAbrirModal(@json(old('categoria', old('tipo', 'egreso_realizado'))));
     @endif
 })();
 </script>

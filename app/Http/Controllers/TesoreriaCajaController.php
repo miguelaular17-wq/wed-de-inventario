@@ -71,9 +71,11 @@ class TesoreriaCajaController extends Controller
     {
         abort_unless(Schema::hasTable('tesoreria_caja_movimientos'), 503);
 
+        $categorias = array_keys(TesoreriaCajaMovimiento::CATEGORIAS);
         $data = $request->validate([
             'caja_id' => ['required', 'integer', 'exists:tesoreria_cajas,id'],
-            'tipo' => ['required', 'in:ingreso,egreso'],
+            'categoria' => ['required', 'in:'.implode(',', $categorias)],
+            'tipo' => ['nullable', 'in:ingreso,egreso'],
             'fecha' => ['required', 'date', 'before_or_equal:today'],
             'monto' => ['nullable', 'numeric', 'min:0.01'],
             'monto_usd' => ['nullable', 'numeric', 'min:0'],
@@ -83,6 +85,7 @@ class TesoreriaCajaController extends Controller
             'concepto' => ['required', 'string', 'min:3', 'max:300'],
             'referencia' => ['nullable', 'string', 'max:120'],
         ]);
+        $data['tipo'] = TesoreriaCajaMovimiento::tipoDesdeCategoria((string) $data['categoria']);
 
         /** @var TesoreriaCaja $cajaPreview */
         $cajaPreview = TesoreriaCaja::query()->findOrFail((int) $data['caja_id']);
@@ -137,7 +140,7 @@ class TesoreriaCajaController extends Controller
                 }
             }
 
-            TesoreriaCajaMovimiento::query()->create([
+            $payload = [
                 'caja_id' => $caja->id,
                 'tipo' => $data['tipo'],
                 'origen' => TesoreriaCajaMovimiento::ORIGEN_MANUAL,
@@ -147,11 +150,16 @@ class TesoreriaCajaController extends Controller
                 'concepto' => trim($data['concepto']),
                 'referencia' => ($data['referencia'] ?? null) ? trim($data['referencia']) : null,
                 'user_id' => $request->user()?->id,
-            ]);
+            ];
+            if (Schema::hasColumn('tesoreria_caja_movimientos', 'categoria')) {
+                $payload['categoria'] = $data['categoria'];
+            }
+            TesoreriaCajaMovimiento::query()->create($payload);
             $caja->update(['saldo' => round((float) $caja->saldo + $delta, 2)]);
         });
 
-        $etiqueta = $data['tipo'] === 'ingreso' ? 'Ingreso' : 'Egreso';
+        $etiqueta = TesoreriaCajaMovimiento::CATEGORIAS[$data['categoria']]
+            ?? ($data['tipo'] === 'ingreso' ? 'Ingreso' : 'Egreso');
 
         return redirect()->route('tesoreria.caja.index', array_filter([
             'desde' => $request->input('volver_desde'),

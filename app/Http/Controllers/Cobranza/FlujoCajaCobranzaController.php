@@ -223,6 +223,7 @@ class FlujoCajaCobranzaController extends Controller
             'factura_sede' => ['nullable', 'string', 'max:60'],
             'factura_doc' => ['nullable', 'string', 'max:60'],
             'forma_pago' => ['nullable', Rule::in(CobranzaMovimiento::FORMAS_PAGO)],
+            'destino_pago' => ['nullable', Rule::in(['capital', 'cuota', 'ambas'])],
             'abono_capital' => ['nullable', 'numeric', 'min:0'],
             'pat_categoria' => ['nullable', 'string', 'max:60'],
             'reserva_cliente' => ['nullable', 'string', 'max:256'],
