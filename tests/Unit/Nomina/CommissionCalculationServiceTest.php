@@ -129,6 +129,9 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(8.0, $resultado['total']);
         $this->assertSame(1700.0, $resultado['base']);
         $this->assertSame(0.1, $resultado['pct_telefonia']);
+        $this->assertSame(2000.0, $resultado['ventas_samsung_excluidas']);
+        $this->assertSame(1500.0, $resultado['ventas_honor_excluidas']);
+        $this->assertSame(3500.0, $resultado['ventas_honor_samsung_excluidas']);
         $this->assertStringContainsString('0,20%', NominaEmpleado::modosComision()[NominaEmpleado::COMISION_VENTAS_PROPIAS]);
         $this->assertStringContainsString('0,10%', NominaEmpleado::modosComision()[NominaEmpleado::COMISION_VENTAS_PROPIAS_SIN_HS]);
     }

@@ -160,6 +160,8 @@
                                 <div class="muted" style="font-size:.72rem;">Venta neta sede Nunes</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_MOVISTAR)
                                 <div class="muted" style="font-size:.72rem;">Sin facturas ST</div>
+                            @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_VENTAS_PROPIAS_SIN_HS)
+                                <div class="muted" style="font-size:.72rem;">Sin teléfonos Honor/Samsung</div>
                             @endif
                         </td>
                         @if($esAgregado)
@@ -173,6 +175,20 @@
                             <td>
                                 <strong>${{ number_format($ventaMostrada, 2) }}</strong>
                                 <div class="muted" style="font-size:.72rem;">{{ $esSt ? 'Otros productos (neto)' : 'Tel + otros (neto)' }}</div>
+                                @if($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_VENTAS_PROPIAS_SIN_HS && $liq->ventasHonorSamsungExcluidas() > 0)
+                                    <div class="muted" style="font-size:.72rem;color:#b45309;margin-top:2px;">
+                                        Sin comisión:
+                                        @if($liq->ventasSamsungExcluidas() > 0)
+                                            Samsung ${{ number_format($liq->ventasSamsungExcluidas(), 2) }}
+                                        @endif
+                                        @if($liq->ventasSamsungExcluidas() > 0 && $liq->ventasHonorExcluidas() > 0)
+                                            ·
+                                        @endif
+                                        @if($liq->ventasHonorExcluidas() > 0)
+                                            Honor ${{ number_format($liq->ventasHonorExcluidas(), 2) }}
+                                        @endif
+                                    </div>
+                                @endif
                             </td>
                             <td>${{ number_format($liq->base_telefonia, 2) }}</td>
                             <td>${{ number_format($liq->base_otros, 2) }}</td>

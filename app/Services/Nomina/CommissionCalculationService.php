@@ -102,10 +102,20 @@ class CommissionCalculationService
             $lineas = $this->excluirFacturasServicioTecnico($lineas);
         }
         $lineasHonorSamsung = collect();
+        $ventasSamsung = 0.0;
+        $ventasHonor = 0.0;
         if ($excluirTelefonosHonorSamsung) {
             $lineasHonorSamsung = $lineas
                 ->filter(fn ($linea) => $this->esTelefonoHonorOSamsung($linea))
                 ->values();
+            foreach ($lineasHonorSamsung as $linea) {
+                $monto = $this->baseVentaNeta($linea);
+                if ($this->categorias->normalizar($linea->producto_subcategoria ?? null) === 'SAMSUNG') {
+                    $ventasSamsung += $monto;
+                } else {
+                    $ventasHonor += $monto;
+                }
+            }
             $lineas = $this->excluirTelefonosHonorSamsung($lineas);
         }
 
@@ -126,7 +136,7 @@ class CommissionCalculationService
             }
         }
 
-        return $this->resultado(
+        $resultado = $this->resultado(
             $empleado,
             $propias['comision_telefonia'] + $propias['comision_otros'],
             $propias['base_telefonia'] + $propias['base_otros'],
@@ -139,6 +149,14 @@ class CommissionCalculationService
             $propias['pct_telefonia'],
             $propias['pct_otros']
         );
+
+        if ($excluirTelefonosHonorSamsung) {
+            $resultado['ventas_samsung_excluidas'] = round($ventasSamsung, 2);
+            $resultado['ventas_honor_excluidas'] = round($ventasHonor, 2);
+            $resultado['ventas_honor_samsung_excluidas'] = round($ventasSamsung + $ventasHonor, 2);
+        }
+
+        return $resultado;
     }
 
     private function ventasMovistar(NominaPeriodo $periodo, NominaEmpleado $empleado): array

@@ -106,6 +106,33 @@ class NominaLiquidacionComision extends Model
         return round((float) $this->base_telefonia + (float) $this->base_otros, 2);
     }
 
+    /** Venta neta de teléfonos Samsung excluida del modo sin Honor/Samsung. */
+    public function ventasSamsungExcluidas(): float
+    {
+        $snap = $this->snapshot ?? [];
+
+        return round((float) ($snap['ventas_samsung_excluidas'] ?? 0), 2);
+    }
+
+    /** Venta neta de teléfonos Honor excluida del modo sin Honor/Samsung. */
+    public function ventasHonorExcluidas(): float
+    {
+        $snap = $this->snapshot ?? [];
+
+        return round((float) ($snap['ventas_honor_excluidas'] ?? 0), 2);
+    }
+
+    /** Total Samsung + Honor quitado de la base de comisión. */
+    public function ventasHonorSamsungExcluidas(): float
+    {
+        $snap = $this->snapshot ?? [];
+        if (array_key_exists('ventas_honor_samsung_excluidas', $snap)) {
+            return round((float) $snap['ventas_honor_samsung_excluidas'], 2);
+        }
+
+        return round($this->ventasSamsungExcluidas() + $this->ventasHonorExcluidas(), 2);
+    }
+
     public function comisionOtrosProductos(): float
     {
         return round((float) $this->comision_telefonia + (float) $this->comision_otros, 2);
