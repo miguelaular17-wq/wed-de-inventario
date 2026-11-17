@@ -30,6 +30,7 @@ class ContratoSeguimiento extends Model
         'SIN_SEÑAL'       => 'Sin señal',
         'PAGO_PARCIAL'    => 'Pago parcial recibido',
         'PAGO_COMPLETO'   => 'Pago completo recibido',
+        'ABONO_CAPITAL'   => 'Abono a capital',
         'NUEVO_PRESTAMO'  => 'Nuevo préstamo agregado',
         'SIN_FONDOS'      => 'Sin fondos',
         'RENEGOCIACION'   => 'Solicita renegociación',

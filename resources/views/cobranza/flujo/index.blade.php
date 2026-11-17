@@ -453,7 +453,7 @@
             {{-- Contratos: contrato y cuota --}}
             <div class="cf-que" data-ambito="contratos">
                 <div data-solo="ingreso">
-                    <input type="text" id="cf-buscar-contrato" class="cf-input" placeholder="Buscar contrato o cliente…" autocomplete="off">
+                    <input type="text" id="cf-buscar-contrato" class="cf-input" placeholder="Nombre, apellido o número (ej. salas o CT-000054)…" autocomplete="off">
                     <div class="cf-lista" id="cf-contratos"></div>
                     <div id="cf-cuotas-wrap" style="display:none;">
                         <div class="cf-label" style="margin-top:10px;">Cuota que paga</div>
@@ -813,10 +813,15 @@
     const ponerUsd = enlazarMontos($('cf-usd'), $('cf-tasa'), $('cf-bs'));
     enlazarMontos($('cfe-usd'), $('cfe-tasa'), $('cfe-bs'));
 
-    // Destino del pago de cuota: capital / cuota / ambas
+    // Destino del pago de cuota: capital / cuota / ambas (o abono directo a capital sin cuota)
     let contratoActual = null;
+    function esAbonoCapitalDirecto() {
+        return ($('cf-vinculo').value || '').startsWith('contrato:');
+    }
     function syncDestinoPago() {
-        const on = !!contratoActual && estado.ambito === 'contratos' && ($('cf-vinculo').value || '').startsWith('contrato_cuota:');
+        const vinculoCuota = ($('cf-vinculo').value || '').startsWith('contrato_cuota:');
+        const vinculoCapital = esAbonoCapitalDirecto();
+        const on = !!contratoActual && estado.ambito === 'contratos' && (vinculoCuota || vinculoCapital);
         $('cf-destino-pago').style.display = on ? '' : 'none';
         if (!on) {
             $('cf-montos-ambas').style.display = 'none';
@@ -828,6 +833,19 @@
             $('cf-destino-aviso').textContent = '';
             return;
         }
+        if (vinculoCapital) {
+            $('cf-destino').value = 'capital';
+            $('cf-destino').disabled = true;
+            $('cf-montos-ambas').style.display = 'none';
+            $('cf-montos-simples').style.display = '';
+            $('cf-usd').disabled = false;
+            $('cf-tasa').disabled = false;
+            $('cf-bs').disabled = false;
+            syncAbonoCapitalSimple();
+            $('cf-destino-aviso').textContent = 'Abono directo al capital pendiente (sin cuota abierta).';
+            return;
+        }
+        $('cf-destino').disabled = false;
         const modo = $('cf-destino').value || 'capital';
         const ambas = modo === 'ambas';
         $('cf-montos-ambas').style.display = ambas ? '' : 'none';
@@ -850,7 +868,7 @@
     }
     function syncAbonoCapitalSimple() {
         const usd = parseFloat($('cf-usd').value) || 0;
-        const modo = $('cf-destino').value || 'capital';
+        const modo = esAbonoCapitalDirecto() ? 'capital' : ($('cf-destino').value || 'capital');
         $('cf-abono-capital').value = (modo === 'capital' ? usd : 0).toFixed(2);
     }
     function syncMontosAmbas() {
@@ -873,6 +891,7 @@
     }
     function desactivarDestinoCuota() {
         contratoActual = null;
+        $('cf-destino').disabled = false;
         syncDestinoPago();
     }
     $('cf-destino').addEventListener('change', syncDestinoPago);
@@ -984,21 +1003,44 @@
     }
     $('cf-buscar-factura').addEventListener('input', () => { clearTimeout(temporizador); temporizador = setTimeout(buscarFacturas, 300); });
 
-    // Contratos: contrato → cuota
+    // Contratos: contrato → cuota (cada palabra del buscador debe aparecer en número o cliente)
+    function normalizarBusqueda(t) {
+        return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+    function coincideContrato(c, q) {
+        const tokens = normalizarBusqueda(q).trim().split(/\s+/).filter(Boolean);
+        if (!tokens.length) return true;
+        const hay = normalizarBusqueda((c.numero || '') + ' ' + (c.cliente || ''));
+        return tokens.every(t => hay.includes(t));
+    }
     function pintarContratos() {
-        const q = $('cf-buscar-contrato').value.trim().toLowerCase();
+        const q = $('cf-buscar-contrato').value.trim();
         const caja = $('cf-contratos');
-        const lista = contratos.filter(c => !q || (c.numero + ' ' + c.cliente).toLowerCase().includes(q)).slice(0, 60);
-        if (!contratos.length) { caja.innerHTML = '<div class="cf-vacio">No hay contratos activos con cuotas por cobrar.</div>'; return; }
+        const lista = contratos.filter(c => coincideContrato(c, q)).slice(0, 60);
+        if (!contratos.length) { caja.innerHTML = '<div class="cf-vacio">No hay contratos con capital o cuotas por cobrar.</div>'; return; }
         caja.innerHTML = lista.length ? '' : '<div class="cf-vacio">Ningún contrato coincide.</div>';
         lista.forEach(c => {
-            const debe = c.cuotas.reduce((s, q) => s + q.debe, 0);
+            const debeCuotas = c.cuotas.reduce((s, q) => s + q.debe, 0);
+            const detalle = c.cuotas.length
+                ? `${c.cuotas.length} cuota(s) abierta(s) · capital pendiente ${fmt(c.capital)}`
+                : `Sin cuotas abiertas · puedes abonar capital ${fmt(c.capital)}`;
             const el = document.createElement('div');
             el.className = 'cf-opcion';
-            el.innerHTML = `<div><strong>${esc(c.numero)}</strong> · ${esc(c.cliente)}<small>${c.cuotas.length} cuota(s) abierta(s) · capital pendiente ${fmt(c.capital)}</small></div><div class="cf-debe">${fmt(debe)}</div>`;
+            el.innerHTML = `<div><strong>${esc(c.numero)}</strong> · ${esc(c.cliente)}<small>${detalle}</small></div><div class="cf-debe">${fmt(c.cuotas.length ? debeCuotas : c.capital)}</div>`;
             el.addEventListener('click', () => elegirContrato(c, el));
             caja.appendChild(el);
         });
+    }
+    function elegirAbonoCapital(c, caja) {
+        caja.querySelectorAll('.cf-opcion').forEach(x => x.classList.remove('activo'));
+        const o = caja.querySelector('[data-valor="' + CSS.escape(c.valor_capital) + '"]');
+        if (o) o.classList.add('activo');
+        $('cf-vinculo').value = c.valor_capital;
+        $('cf-extra-pago').style.display = '';
+        activarDestinoCuota(c);
+        resumen(`abono a <strong>capital</strong> del contrato <strong>${esc(c.numero)}</strong> de <strong>${esc(c.cliente)}</strong> · pendiente ${fmt(c.capital)}`);
+        autollenar(`Abono capital contrato ${c.numero}`, c.cliente, c.capital);
+        syncDestinoPago();
     }
     function elegirContrato(c, el) {
         limpiarSeleccion();
@@ -1007,6 +1049,19 @@
         $('cf-cuotas-wrap').style.display = '';
         const caja = $('cf-cuotas');
         caja.innerHTML = '';
+        const label = document.querySelector('#cf-cuotas-wrap .cf-label');
+        if (label) label.textContent = c.cuotas.length ? '¿Qué se paga?' : 'Abono a capital';
+
+        if (c.capital > 0.009 && c.valor_capital) {
+            const o = document.createElement('div');
+            o.className = 'cf-opcion';
+            o.dataset.valor = c.valor_capital;
+            o.innerHTML = `<div><strong>Abono a capital</strong> <span class="cf-badge" style="background:#ecfdf5;color:#047857;">capital</span>
+                <small>Reduce el capital pendiente del contrato</small></div><div class="cf-debe">${fmt(c.capital)}</div>`;
+            o.addEventListener('click', () => elegirAbonoCapital(c, caja));
+            caja.appendChild(o);
+        }
+
         c.cuotas.forEach(q => {
             const o = document.createElement('div');
             o.className = 'cf-opcion';
@@ -1018,6 +1073,7 @@
                 o.classList.add('activo');
                 $('cf-vinculo').value = q.valor;
                 $('cf-extra-pago').style.display = '';
+                $('cf-destino').disabled = false;
                 activarDestinoCuota(c);
                 resumen(`pago de la <strong>cuota #${q.numero}</strong> del contrato <strong>${esc(c.numero)}</strong> de <strong>${esc(c.cliente)}</strong> · debe ${fmt(q.debe)}`);
                 autollenar(`Cuota #${q.numero} contrato ${c.numero}`, c.cliente, q.debe);
@@ -1025,6 +1081,11 @@
             });
             caja.appendChild(o);
         });
+
+        // Sin cuotas abiertas: deja listo el abono a capital.
+        if (!c.cuotas.length && c.capital > 0.009) {
+            elegirAbonoCapital(c, caja);
+        }
     }
     $('cf-buscar-contrato').addEventListener('input', pintarContratos);
 

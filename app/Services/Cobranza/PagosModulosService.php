@@ -2,6 +2,7 @@
 
 namespace App\Services\Cobranza;
 
+use App\Models\Contrato;
 use App\Models\ContratoCuota;
 use App\Models\ContratoSeguimiento;
 use App\Models\Patrimonial\AlquilerPago;
@@ -11,6 +12,7 @@ use App\Services\Patrimonial\AlquilerComisionSync;
 use App\Services\Patrimonial\ReservaComisionSync;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Registro de pagos de Contratos (cuotas) y Patrimonial (alquileres y reservas). Lo usan sus pantallas y
@@ -121,6 +123,67 @@ class PagosModulosService
         ]);
 
         return $estatus;
+    }
+
+    /**
+     * Reduce el capital restante del contrato sin pasar por una cuota (cuotas ya pagadas o abono libre).
+     *
+     * @param  array{forma_pago: string, abono_capital: float|int|string, fecha_pago: string,
+     *               comentario?: ?string, tasa_cambio?: mixed, banco_destino?: ?string, banco_origen?: ?string, referencia?: ?string}  $data
+     */
+    public function abonarCapitalContrato(Contrato $contrato, array $data, ?int $usuarioId): void
+    {
+        $abono = round((float) ($data['abono_capital'] ?? 0), 2);
+        if ($abono <= 0) {
+            throw ValidationException::withMessages(['abono_capital' => 'Indica el monto a abonar al capital.']);
+        }
+
+        $totalRaw = (float) $contrato->getRawOriginal('total_a_pagar');
+        if ($abono - $totalRaw > 0.01) {
+            throw ValidationException::withMessages([
+                'monto_usd' => 'El abono supera el capital pendiente ($'.number_format($totalRaw, 2).').',
+            ]);
+        }
+
+        $nuevoTotal = max(0, round($totalRaw - $abono, 2));
+        $nuevaCuotaFija = (float) $contrato->getRawOriginal('interes_porcentaje') > 0
+            ? round($nuevoTotal * (float) $contrato->getRawOriginal('interes_porcentaje'), 2)
+            : (float) $contrato->getRawOriginal('cuota_fija');
+
+        $contrato->update([
+            'total_a_pagar' => $nuevoTotal,
+            'cuota_fija' => $nuevaCuotaFija,
+        ]);
+
+        if ($nuevaCuotaFija > 0) {
+            $contrato->cuotas()
+                ->whereIn('estatus', ['pendiente', 'parcial', 'vencido'])
+                ->update(['monto' => $nuevaCuotaFija, 'saldo' => $nuevaCuotaFija]);
+        }
+
+        $formaPagoStr = str_replace('_', ' ', (string) ($data['forma_pago'] ?? ''));
+        $detalle = "Abono a capital: \${$abono} via {$formaPagoStr}. Capital restante: \${$nuevoTotal}.";
+        if (! empty($data['comentario'])) {
+            $detalle .= ' | Nota: '.$data['comentario'];
+        }
+
+        ContratoSeguimiento::create([
+            'contrato_id' => $contrato->id,
+            'cuota_id' => null,
+            'usuario_id' => $usuarioId,
+            'fecha_hora' => now(),
+            'resultado' => $nuevoTotal <= 0.009 ? 'PAGO_COMPLETO' : 'ABONO_CAPITAL',
+            'comentarios' => $detalle,
+            'contactado' => true,
+            'detalles_pago' => [
+                'abono_capital' => $abono,
+                'tasa_cambio' => $data['tasa_cambio'] ?? null,
+                'banco_destino' => $data['banco_destino'] ?? null,
+                'banco_origen' => $data['banco_origen'] ?? null,
+                'referencia' => $data['referencia'] ?? null,
+                'fecha_pago' => $data['fecha_pago'] ?? null,
+            ],
+        ]);
     }
 
     /**

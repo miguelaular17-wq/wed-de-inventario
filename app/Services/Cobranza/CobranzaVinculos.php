@@ -33,6 +33,7 @@ class CobranzaVinculos
 
         $facturas = $cargar(CobranzaFactura::VINCULO, fn ($l) => CobranzaFactura::query()->whereIn('id', $l)->get());
         $cuotas = $cargar(CobranzaMovimiento::VINCULO_CUOTA, fn ($l) => ContratoCuota::query()->with('contrato')->whereIn('id', $l)->get());
+        $contratosCap = $cargar(CobranzaMovimiento::VINCULO_CONTRATO, fn ($l) => Contrato::query()->whereIn('id', $l)->get());
         $alquileres = $cargar(CobranzaMovimiento::VINCULO_ALQUILER, fn ($l) => AlquilerPago::query()->with('alquiler.propiedad')->whereIn('id', $l)->get());
         $reservas = $cargar(CobranzaMovimiento::VINCULO_RESERVA, fn ($l) => Reserva::query()->with('propiedad')->whereIn('id', $l)->get());
         $transacciones = $cargar(CobranzaMovimiento::VINCULO_PAT_TRANSACCION, fn ($l) => PatTransaccion::query()->with('propiedad')->whereIn('id', $l)->get());
@@ -56,6 +57,11 @@ class CobranzaVinculos
                     'titulo' => 'Contrato '.($c->contrato?->numero_contrato ?? '—').' · '.($c->contrato?->cliente ?? ''),
                     'detalle' => 'Cuota #'.$c->numero_cuota.($c->fecha_vencimiento ? ' · vence '.$c->fecha_vencimiento->format('d/m/Y') : '')
                         .' · cuota $'.number_format((float) $c->monto, 2),
+                ] : null,
+                CobranzaMovimiento::VINCULO_CONTRATO => ($ct = $contratosCap->get($id)) ? [
+                    'apartado' => 'Contratos',
+                    'titulo' => 'Contrato '.($ct->numero_contrato ?? '—').' · '.($ct->cliente ?? ''),
+                    'detalle' => 'Abono a capital · pendiente $'.number_format((float) $ct->getRawOriginal('total_a_pagar'), 2),
                 ] : null,
                 CobranzaMovimiento::VINCULO_ALQUILER => ($p = $alquileres->get($id)) ? [
                     'apartado' => 'Patrimonial',
@@ -89,42 +95,54 @@ class CobranzaVinculos
     }
 
     /**
-     * Contratos activos con sus cuotas abiertas, para elegir qué cuota se paga.
+     * Contratos vigentes con capital pendiente y/o cuotas abiertas (para pagar cuota o abonar capital).
      *
      * @return list<array<string, mixed>>
      */
     public function contratosConCuotas(): array
     {
-        if (! Schema::hasTable('contrato_cuotas')) {
-            return [];
-        }
-        $cuotas = ContratoCuota::query()
-            ->whereIn('estatus', ['pendiente', 'parcial', 'vencido'])
-            ->whereHas('contrato', fn ($q) => $q->where('activo', true))
-            ->orderBy('fecha_vencimiento')
-            ->get()
-            ->groupBy('contrato_id');
-        if ($cuotas->isEmpty()) {
+        if (! Schema::hasTable('contratos')) {
             return [];
         }
 
-        return Contrato::query()->whereIn('id', $cuotas->keys())->orderBy('cliente')->get()
-            ->map(fn (Contrato $c) => [
-                'id' => $c->id,
-                'numero' => $c->numero_contrato,
-                'cliente' => $c->cliente,
-                'capital' => round((float) $c->total_a_pagar, 2),
-                'interes' => round((float) $c->getRawOriginal('interes_porcentaje'), 6),
-                'cuotas' => $cuotas->get($c->id)->map(fn (ContratoCuota $q) => [
-                    'valor' => CobranzaMovimiento::VINCULO_CUOTA.':'.$q->id,
-                    'numero' => $q->numero_cuota,
-                    'vence' => optional($q->fecha_vencimiento)->format('d/m/Y'),
-                    'monto' => round((float) $q->monto, 2),
-                    'pagado' => round((float) $q->monto_pagado, 2),
-                    'debe' => round((float) $q->saldo > 0 ? (float) $q->saldo : max(0, (float) $q->monto - (float) $q->monto_pagado), 2),
-                    'estatus' => $q->estatus,
-                ])->values()->all(),
-            ])->values()->all();
+        $cuotas = Schema::hasTable('contrato_cuotas')
+            ? ContratoCuota::query()
+                ->whereIn('estatus', ['pendiente', 'parcial', 'vencido'])
+                ->whereHas('contrato', fn ($q) => $q->vigente())
+                ->orderBy('fecha_vencimiento')
+                ->get()
+                ->groupBy('contrato_id')
+            : collect();
+
+        // Incluye contratos con capital pendiente aunque todas las cuotas estén pagadas.
+        $contratos = Contrato::query()
+            ->vigente()
+            ->where(function ($q) use ($cuotas) {
+                $q->where('total_a_pagar', '>', 0.009);
+                if ($cuotas->isNotEmpty()) {
+                    $q->orWhereIn('id', $cuotas->keys());
+                }
+            })
+            ->orderBy('cliente')
+            ->get();
+
+        return $contratos->map(fn (Contrato $c) => [
+            'id' => $c->id,
+            'numero' => $c->numero_contrato,
+            'cliente' => $c->cliente,
+            'capital' => round((float) $c->getRawOriginal('total_a_pagar'), 2),
+            'interes' => round((float) $c->getRawOriginal('interes_porcentaje'), 6),
+            'valor_capital' => CobranzaMovimiento::VINCULO_CONTRATO.':'.$c->id,
+            'cuotas' => ($cuotas->get($c->id) ?? collect())->map(fn (ContratoCuota $q) => [
+                'valor' => CobranzaMovimiento::VINCULO_CUOTA.':'.$q->id,
+                'numero' => $q->numero_cuota,
+                'vence' => optional($q->fecha_vencimiento)->format('d/m/Y'),
+                'monto' => round((float) $q->monto, 2),
+                'pagado' => round((float) $q->monto_pagado, 2),
+                'debe' => round((float) $q->saldo > 0 ? (float) $q->saldo : max(0, (float) $q->monto - (float) $q->monto_pagado), 2),
+                'estatus' => $q->estatus,
+            ])->values()->all(),
+        ])->filter(fn (array $c) => $c['capital'] > 0.009 || $c['cuotas'] !== [])->values()->all();
     }
 
     /**

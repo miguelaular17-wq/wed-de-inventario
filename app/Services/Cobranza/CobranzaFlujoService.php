@@ -6,6 +6,7 @@ use App\Http\Controllers\FinanzasController;
 use App\Models\CobranzaFactura;
 use App\Models\CobranzaMovimiento;
 use App\Models\ConciliacionLinea;
+use App\Models\Contrato;
 use App\Models\ContratoCuota;
 use App\Models\FinanzasCatalogo;
 use App\Models\FlujoCaja;
@@ -24,6 +25,7 @@ class CobranzaFlujoService
     /** Pagos que viven en su módulo: el monto se corrige allá, no desde el flujo. */
     public const VINCULOS_MODULO = [
         CobranzaMovimiento::VINCULO_CUOTA => 'Contratos',
+        CobranzaMovimiento::VINCULO_CONTRATO => 'Contratos',
         CobranzaMovimiento::VINCULO_ALQUILER => 'Patrimonial',
         CobranzaMovimiento::VINCULO_RESERVA => 'Patrimonial',
     ];
@@ -439,16 +441,32 @@ class CobranzaFlujoService
 
         $existe = match ($tipo) {
             CobranzaMovimiento::VINCULO_CUOTA => ContratoCuota::query()->whereKey($datos['vinculo_id'] ?? 0)->exists(),
+            CobranzaMovimiento::VINCULO_CONTRATO => Contrato::query()->vigente()->whereKey($datos['vinculo_id'] ?? 0)->where('total_a_pagar', '>', 0)->exists(),
             CobranzaMovimiento::VINCULO_ALQUILER => AlquilerPago::query()->whereKey($datos['vinculo_id'] ?? 0)->exists(),
             CobranzaMovimiento::VINCULO_RESERVA => Reserva::query()->whereKey($datos['vinculo_id'] ?? 0)->exists(),
             default => false,
         };
         if (! $existe) {
-            throw ValidationException::withMessages(['vinculo' => 'No se encontró la cuota, el alquiler o la reserva elegida.']);
+            throw ValidationException::withMessages(['vinculo' => 'No se encontró el contrato, la cuota, el alquiler o la reserva elegida.']);
         }
-        $datos['ambito'] = $tipo === CobranzaMovimiento::VINCULO_CUOTA ? 'contratos' : 'patrimonial';
-        if ($tipo === CobranzaMovimiento::VINCULO_CUOTA && (float) ($datos['abono_capital'] ?? 0) - $datos['monto_usd'] > 0.009) {
+        $datos['ambito'] = in_array($tipo, [CobranzaMovimiento::VINCULO_CUOTA, CobranzaMovimiento::VINCULO_CONTRATO], true)
+            ? 'contratos'
+            : 'patrimonial';
+        if (in_array($tipo, [CobranzaMovimiento::VINCULO_CUOTA, CobranzaMovimiento::VINCULO_CONTRATO], true)
+            && (float) ($datos['abono_capital'] ?? 0) - $datos['monto_usd'] > 0.009) {
             throw ValidationException::withMessages(['abono_capital' => 'El abono a capital no puede ser mayor que el monto.']);
+        }
+        if ($tipo === CobranzaMovimiento::VINCULO_CONTRATO) {
+            // Abono directo: todo el monto va a capital.
+            $datos['abono_capital'] = round((float) $datos['monto_usd'], 2);
+            $contrato = Contrato::query()->findOrFail($datos['vinculo_id']);
+            $capital = (float) $contrato->getRawOriginal('total_a_pagar');
+            if ($datos['monto_usd'] - $capital > 0.01) {
+                throw ValidationException::withMessages([
+                    'monto_usd' => 'El abono supera el capital pendiente ($'.number_format($capital, 2).').',
+                ]);
+            }
+            $datos['contraparte'] = ($datos['contraparte'] ?? null) ?: $contrato->cliente;
         }
 
         return $datos;
@@ -529,6 +547,11 @@ class CobranzaFlujoService
                     'monto_pagado' => round($usd - (float) ($datos['abono_capital'] ?? 0), 2),
                     'abono_capital' => round((float) ($datos['abono_capital'] ?? 0), 2),
                 ],
+                $user->id
+            ),
+            CobranzaMovimiento::VINCULO_CONTRATO => $this->pagos->abonarCapitalContrato(
+                Contrato::query()->findOrFail($mov->vinculo_id),
+                $comun + ['abono_capital' => round((float) ($datos['abono_capital'] ?? $usd), 2)],
                 $user->id
             ),
             CobranzaMovimiento::VINCULO_ALQUILER => $this->pagos->abonarAlquiler(

@@ -261,7 +261,7 @@ class FlujoCajaCobranzaController extends Controller
             $data['vinculo_tipo'] = CobranzaFactura::VINCULO;
         } elseif ($nuevo && ! empty($data['vinculo']) && str_contains($data['vinculo'], ':')) {
             [$tipo, $id] = explode(':', $data['vinculo'], 2);
-            if (in_array($tipo, [CobranzaMovimiento::VINCULO_CUOTA, CobranzaMovimiento::VINCULO_ALQUILER, CobranzaMovimiento::VINCULO_RESERVA, 'pat_propiedad', 'pat_reserva_nueva', CobranzaMovimiento::VINCULO_PAT_REPARTO], true)) {
+            if (in_array($tipo, [CobranzaMovimiento::VINCULO_CUOTA, CobranzaMovimiento::VINCULO_CONTRATO, CobranzaMovimiento::VINCULO_ALQUILER, CobranzaMovimiento::VINCULO_RESERVA, 'pat_propiedad', 'pat_reserva_nueva', CobranzaMovimiento::VINCULO_PAT_REPARTO], true)) {
                 $data['vinculo_tipo'] = $tipo;
                 $data['vinculo_id'] = (int) $id;
             }

@@ -43,6 +43,9 @@ class CobranzaMovimiento extends Model
 
     public const VINCULO_CUOTA = 'contrato_cuota';
 
+    /** Abono directo al capital del contrato (sin cuota abierta). */
+    public const VINCULO_CONTRATO = 'contrato';
+
     public const VINCULO_ALQUILER = 'alquiler_pago';
 
     public const VINCULO_RESERVA = 'reserva';

@@ -68,6 +68,14 @@ class CobranzaReciboService
                     $porPagar = round((float) $c->saldo > 0 ? (float) $c->saldo : max(0, (float) $c->monto - (float) $c->monto_pagado), 2);
                 }
                 break;
+            case CobranzaMovimiento::VINCULO_CONTRATO:
+                if ($ct = \App\Models\Contrato::query()->find($mov->vinculo_id)) {
+                    $cliente = $ct->cliente ?: $cliente;
+                    $telefono = $ct->telefono;
+                    $afecta = 'Contrato '.($ct->numero_contrato ?? '—').' · abono a capital';
+                    $porPagar = round((float) $ct->getRawOriginal('total_a_pagar'), 2);
+                }
+                break;
             case CobranzaMovimiento::VINCULO_ALQUILER:
                 if ($p = AlquilerPago::query()->with('alquiler.propiedad')->find($mov->vinculo_id)) {
                     $cliente = $p->alquiler?->inquilino_nombre ?: $cliente;
