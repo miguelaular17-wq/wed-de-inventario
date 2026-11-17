@@ -109,7 +109,10 @@ class CommissionCalculationService
             $lineas = $this->excluirTelefonosHonorSamsung($lineas);
         }
 
-        $propias = $this->aplicarVentasPropias($periodo, $empleado, $lineas);
+        $pctTelefonia = $excluirTelefonosHonorSamsung
+            ? NominaConfig::getDecimal('comision_telefonia_sin_hs_pct', 0.10)
+            : null;
+        $propias = $this->aplicarVentasPropias($periodo, $empleado, $lineas, $pctTelefonia);
         if ($this->flag('ventas_documentos') && $this->flag('ventas_documentos_vendedor')) {
             $lineasSt = $excluirFacturasSt
                 ? $todasLasLineas->filter(fn ($linea) => $this->esLineaServicioTecnico($linea))->values()
@@ -591,6 +594,7 @@ class CommissionCalculationService
         [$lineasSt, $lineasVenta] = $this->separarLineasServicioTecnico($lineas);
 
         $ventasSt = round($lineasSt->sum(fn ($linea) => $this->baseLinea($linea, 'NETO')), 2);
+        $egresosExcluidos = $this->egresos058Excluidos($periodo, $empleado);
         $gastosFlujo = $this->gastosServicioTecnico($periodo, $empleado);
         $ajusteEgresos = $this->ajusteManualEgresosSt($periodo, $empleado);
         $gastos = max(0, round($gastosFlujo + $ajusteEgresos, 2));
@@ -598,12 +602,13 @@ class CommissionCalculationService
         $pctSt = NominaConfig::getDecimal('comision_servicio_tecnico_pct', 50);
         $comisionSt = round($baseSt * $pctSt / 100, 2);
 
-        if ($lineasSt->isNotEmpty() || $gastos > 0) {
+        if ($lineasSt->isNotEmpty() || $gastos > 0 || $egresosExcluidos !== []) {
             $this->registrarAgregado($periodo, $empleado, 'SERVICIO_TECNICO', $empleado->sede, $baseSt, $pctSt, $comisionSt, [
                 'ventas_usd' => $ventasSt,
                 'egresos_058_usd' => $gastos,
                 'egresos_058_flujo_usd' => $gastosFlujo,
                 'egresos_058_ajuste_usd' => $ajusteEgresos,
+                'egresos_058_excluidos_ids' => $egresosExcluidos,
                 'lineas_venta' => $lineasSt->count(),
                 'formula' => 'max(0, ventas_st - egresos_058_usd) * porcentaje_servicio_tecnico',
             ]);
@@ -648,9 +653,13 @@ class CommissionCalculationService
      *     pct_telefonia:float,pct_otros:float,lineas:int
      * }
      */
-    private function aplicarVentasPropias(NominaPeriodo $periodo, NominaEmpleado $empleado, Collection $lineas): array
-    {
-        $pctTelefonia = NominaConfig::getDecimal('comision_telefonia_pct', 0.20);
+    private function aplicarVentasPropias(
+        NominaPeriodo $periodo,
+        NominaEmpleado $empleado,
+        Collection $lineas,
+        ?float $pctTelefonia = null
+    ): array {
+        $pctTelefonia ??= NominaConfig::getDecimal('comision_telefonia_pct', 0.20);
         $pctOtros = NominaConfig::getDecimal('comision_otros_pct', 1);
         $baseTelefonia = 0.0;
         $baseOtros = 0.0;
@@ -703,11 +712,14 @@ class CommissionCalculationService
             return 0.0;
         }
 
+        $excluidos = $this->egresos058Excluidos($periodo, $empleado);
+
         $row = DB::table('flujo_cajas')
             ->where('nomina_empleado_id', $empleado->id)
             ->where('tipo_gasto', self::GASTO_SERVICIO_TECNICO)
             ->whereBetween('fecha', [$periodo->fecha_inicio->toDateString(), $periodo->fecha_fin->toDateString()])
             ->when(\Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'anulado'), fn ($q) => $q->where(fn ($w) => $w->where('anulado', false)->orWhereNull('anulado')))
+            ->when($excluidos !== [], fn ($q) => $q->whereNotIn('id', $excluidos))
             ->selectRaw('COALESCE(SUM(CASE
                 WHEN monto_usd IS NOT NULL AND monto_usd <> 0 THEN ABS(monto_usd)
                 WHEN tasa_cambio IS NOT NULL AND tasa_cambio > 0 THEN ABS(monto_bs) / tasa_cambio
@@ -715,6 +727,21 @@ class CommissionCalculationService
             ->first();
 
         return round((float) ($row->total ?? 0), 2);
+    }
+
+    /** @return list<int> */
+    private function egresos058Excluidos(NominaPeriodo $periodo, NominaEmpleado $empleado): array
+    {
+        if (! $this->flag('nomina_st_egreso_exclusiones')) {
+            return [];
+        }
+
+        return DB::table('nomina_st_egreso_exclusiones')
+            ->where('periodo_id', $periodo->id)
+            ->where('empleado_id', $empleado->id)
+            ->pluck('flujo_caja_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     private function ajusteManualEgresosSt(NominaPeriodo $periodo, NominaEmpleado $empleado): float
@@ -897,6 +924,7 @@ class CommissionCalculationService
             'nomina_empleado_supervisores' => Schema::hasTable('nomina_empleado_supervisores'),
             'flujo_cajas_st' => Schema::hasTable('flujo_cajas') && Schema::hasColumn('flujo_cajas', 'nomina_empleado_id'),
             'nomina_st_egreso_ajustes' => Schema::hasTable('nomina_st_egreso_ajustes'),
+            'nomina_st_egreso_exclusiones' => Schema::hasTable('nomina_st_egreso_exclusiones'),
             'nomina_sedes_excluir' => Schema::hasTable('nomina_sedes') && Schema::hasColumn('nomina_sedes', 'excluir_comision'),
         ];
 

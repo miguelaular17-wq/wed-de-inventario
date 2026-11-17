@@ -600,12 +600,25 @@ trait CreatesNominaSchema
                 $table->decimal('monto_usd', 12, 2)->default(0);
                 $table->decimal('monto_bs', 14, 2)->default(0);
                 $table->decimal('tasa_cambio', 14, 4)->default(0);
+                $table->string('motivo')->nullable();
                 $table->unsignedBigInteger('cuenta_por_pagar_id')->nullable();
                 $table->timestamps();
             });
         } elseif (! Schema::hasColumn('flujo_cajas', 'cuenta_por_pagar_id')) {
             Schema::table('flujo_cajas', function (Blueprint $table) {
                 $table->unsignedBigInteger('cuenta_por_pagar_id')->nullable();
+            });
+        }
+
+        if (! Schema::hasTable('nomina_st_egreso_exclusiones')) {
+            Schema::create('nomina_st_egreso_exclusiones', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('periodo_id');
+                $table->unsignedBigInteger('empleado_id');
+                $table->unsignedBigInteger('flujo_caja_id');
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->timestamps();
+                $table->unique(['periodo_id', 'flujo_caja_id']);
             });
         }
 

@@ -257,17 +257,59 @@
                                 <span class="muted">—</span>
                             @endif
                         </td>
-                        @php $manualesSt = ($egresosStManuales ?? collect())->get($liq->empleado_id, collect()); @endphp
+                        @php
+                            $manualesSt = ($egresosStManuales ?? collect())->get($liq->empleado_id, collect());
+                            $flujoSt = ($egresosStFlujo ?? collect())->get($liq->empleado_id, collect());
+                            $excluidosSt = ($egresosStExcluidos ?? collect())->get($liq->empleado_id, []);
+                            $puedeEgresosSt = $periodo->estado !== \App\Models\Nomina\NominaPeriodo::CERRADO;
+                        @endphp
                         <td>
                             @if($liq->egresos058() > 0)
                                 ${{ number_format($liq->egresos058(), 2) }}
                             @else
                                 <span class="muted">—</span>
                             @endif
+                            @if($flujoSt->isNotEmpty())
+                                @php $nExcluidos = count(array_intersect($excluidosSt, $flujoSt->pluck('id')->all())); @endphp
+                                <details style="margin-top:4px;">
+                                    <summary style="cursor:pointer;font-size:.72rem;color:#1d4ed8;">
+                                        Ver egresos ({{ $flujoSt->count() }})
+                                        @if($nExcluidos > 0)
+                                            · {{ $nExcluidos }} sin descontar
+                                        @endif
+                                    </summary>
+                                    <form method="POST" action="{{ route('nomina.comisiones.egresos_st.aplicar', [$periodo, $liq->empleado]) }}" style="margin-top:6px;min-width:240px;max-width:320px;">
+                                        @csrf
+                                        <p class="muted" style="margin:0 0 6px;font-size:.7rem;">Marca los que se descuentan de la comisión. Los desmarcados no se restan.</p>
+                                        <div style="display:grid;gap:4px;max-height:180px;overflow:auto;">
+                                            @foreach($flujoSt as $egreso)
+                                                <label style="display:flex;gap:6px;align-items:flex-start;font-size:.72rem;{{ in_array($egreso->id, $excluidosSt, true) ? 'opacity:.65;' : '' }}">
+                                                    <input
+                                                        type="checkbox"
+                                                        name="egreso_ids[]"
+                                                        value="{{ $egreso->id }}"
+                                                        @checked(! in_array($egreso->id, $excluidosSt, true))
+                                                        @disabled(! $puedeEgresosSt)
+                                                        style="margin-top:2px;"
+                                                    >
+                                                    <span>
+                                                        {{ \Illuminate\Support\Carbon::parse($egreso->fecha)->format('d/m') }}
+                                                        · <strong>${{ number_format((float) $egreso->monto_usd_calc, 2) }}</strong>
+                                                        <span class="muted">· {{ \Illuminate\Support\Str::limit((string) $egreso->detalle, 48) }}</span>
+                                                    </span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                        @if($puedeEgresosSt)
+                                            <button type="submit" class="btn" style="font-size:.75rem;padding:4px 8px;margin-top:6px;">Aplicar y recalcular</button>
+                                        @endif
+                                    </form>
+                                </details>
+                            @endif
                             @foreach($manualesSt as $manual)
                                 <div class="muted" style="font-size:.72rem;display:flex;gap:4px;align-items:center;">
                                     <span>{{ $manual->monto >= 0 ? '+' : '−' }}${{ number_format(abs((float) $manual->monto), 2) }} · {{ $manual->motivo }}</span>
-                                    @if($periodo->estado !== \App\Models\Nomina\NominaPeriodo::CERRADO)
+                                    @if($puedeEgresosSt)
                                         <form method="POST" action="{{ route('nomina.comisiones.egresos_st.destroy', [$periodo, $manual]) }}" onsubmit="return confirm('¿Quitar este egreso 058 manual y recalcular?')">
                                             @csrf
                                             @method('DELETE')
@@ -276,7 +318,7 @@
                                     @endif
                                 </div>
                             @endforeach
-                            @if($periodo->estado !== \App\Models\Nomina\NominaPeriodo::CERRADO)
+                            @if($puedeEgresosSt)
                                 <details style="margin-top:4px;">
                                     <summary style="cursor:pointer;font-size:.72rem;color:#1d4ed8;">+ Monto manual</summary>
                                     <form method="POST" action="{{ route('nomina.comisiones.egresos_st.store', [$periodo, $liq->empleado]) }}" style="display:grid;gap:4px;margin-top:4px;min-width:180px;">

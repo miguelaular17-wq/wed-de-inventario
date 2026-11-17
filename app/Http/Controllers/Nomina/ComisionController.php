@@ -12,6 +12,7 @@ use App\Models\Nomina\NominaComisionDescuento;
 use App\Models\Nomina\NominaEmpleadoAjuste;
 use App\Models\Nomina\NominaPrestamoPlan;
 use App\Models\Nomina\NominaStEgresoAjuste;
+use App\Models\Nomina\NominaStEgresoExclusion;
 use App\Services\Nomina\AjusteService;
 use App\Services\Nomina\FaltanteCajaService;
 use App\Services\Nomina\LoanDiscountPlanService;
@@ -25,6 +26,8 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -88,6 +91,14 @@ class ComisionController extends Controller
                     ->orderBy('id')
                     ->get()
                     ->groupBy('empleado_id')
+                : collect(),
+            'egresosStFlujo' => $this->egresosStFlujoDelPeriodo($periodo),
+            'egresosStExcluidos' => Schema::hasTable('nomina_st_egreso_exclusiones')
+                ? NominaStEgresoExclusion::query()
+                    ->where('periodo_id', $periodo->id)
+                    ->get()
+                    ->groupBy('empleado_id')
+                    ->map(fn (Collection $filas) => $filas->pluck('flujo_caja_id')->map(fn ($id) => (int) $id)->all())
                 : collect(),
         ]);
     }
@@ -412,6 +423,96 @@ class ComisionController extends Controller
         }
 
         return $volver()->with('status', $mensaje);
+    }
+
+    public function aplicarEgresosSt(Request $request, NominaPeriodo $periodo, NominaEmpleado $empleado): RedirectResponse
+    {
+        $volver = fn () => redirect()->route('nomina.comisiones.show', $periodo);
+
+        if ($periodo->estado === NominaPeriodo::CERRADO) {
+            return $volver()->withErrors(['estado' => 'La quincena está cerrada. Ya no se pueden cambiar los egresos 058.']);
+        }
+        if (! $empleado->es_servicio_tecnico) {
+            return $volver()->withErrors(['empleado' => $empleado->nombre().' no es de servicio técnico.']);
+        }
+        if (! Schema::hasTable('nomina_st_egreso_exclusiones')) {
+            return $volver()->withErrors(['estado' => 'Falta migrar la tabla de exclusiones de egresos 058.']);
+        }
+
+        $egresos = $this->egresosStFlujoDelPeriodo($periodo)->get($empleado->id, collect());
+        $idsDisponibles = $egresos->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $marcados = collect($request->input('egreso_ids', []))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => in_array($id, $idsDisponibles, true))
+            ->values()
+            ->all();
+        $excluir = array_values(array_diff($idsDisponibles, $marcados));
+
+        NominaStEgresoExclusion::query()
+            ->where('periodo_id', $periodo->id)
+            ->where('empleado_id', $empleado->id)
+            ->delete();
+
+        foreach ($excluir as $flujoId) {
+            NominaStEgresoExclusion::create([
+                'periodo_id' => $periodo->id,
+                'empleado_id' => $empleado->id,
+                'flujo_caja_id' => $flujoId,
+                'created_by' => auth()->id(),
+            ]);
+        }
+
+        $mensaje = $empleado->nombre().': '
+            .count($marcados).' egreso(s) 058 se descuentan'
+            .(count($excluir) > 0 ? ', '.count($excluir).' no' : '')
+            .'.';
+
+        if ($periodo->estado !== NominaPeriodo::ABIERTO) {
+            $this->periods->recalcularComisiones($periodo, auth()->id());
+            $mensaje .= ' Comisiones recalculadas.';
+        }
+
+        return $volver()->with('status', $mensaje);
+    }
+
+    /** @return Collection<int, Collection<int, object>> */
+    private function egresosStFlujoDelPeriodo(NominaPeriodo $periodo): Collection
+    {
+        if (! Schema::hasTable('flujo_cajas') || ! Schema::hasColumn('flujo_cajas', 'nomina_empleado_id')) {
+            return collect();
+        }
+
+        $detalleExpr = match (true) {
+            Schema::hasColumn('flujo_cajas', 'motivo') => "COALESCE(NULLIF(TRIM(motivo), ''), 'Sin detalle')",
+            Schema::hasColumn('flujo_cajas', 'descripcion') => "COALESCE(NULLIF(TRIM(descripcion), ''), 'Sin detalle')",
+            Schema::hasColumn('flujo_cajas', 'concepto') => "COALESCE(NULLIF(TRIM(concepto), ''), 'Sin detalle')",
+            default => "'Sin detalle'",
+        };
+
+        $rows = DB::table('flujo_cajas')
+            ->where('tipo_gasto', '058 - SERVICIO TECNICO (GARANTIAS)')
+            ->whereNotNull('nomina_empleado_id')
+            ->whereBetween('fecha', [$periodo->fecha_inicio->toDateString(), $periodo->fecha_fin->toDateString()])
+            ->when(Schema::hasColumn('flujo_cajas', 'anulado'), fn ($q) => $q->where(fn ($w) => $w->where('anulado', false)->orWhereNull('anulado')))
+            ->orderBy('fecha')
+            ->orderBy('id')
+            ->select('id', 'fecha', 'nomina_empleado_id', 'monto_usd', 'monto_bs', 'tasa_cambio')
+            ->selectRaw($detalleExpr.' as detalle')
+            ->selectRaw('CASE
+                WHEN monto_usd IS NOT NULL AND monto_usd <> 0 THEN ABS(monto_usd)
+                WHEN tasa_cambio IS NOT NULL AND tasa_cambio > 0 THEN ABS(monto_bs) / tasa_cambio
+                ELSE 0 END as monto_usd_calc')
+            ->get();
+
+        return $rows
+            ->map(function ($row) {
+                $row->monto_usd_calc = round((float) $row->monto_usd_calc, 2);
+                $row->id = (int) $row->id;
+                $row->nomina_empleado_id = (int) $row->nomina_empleado_id;
+
+                return $row;
+            })
+            ->groupBy('nomina_empleado_id');
     }
 
     public function recalcular(NominaPeriodo $periodo): RedirectResponse

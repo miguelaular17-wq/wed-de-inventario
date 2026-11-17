@@ -23,6 +23,7 @@ class CommissionDifferentialService
     /** @var array<string, array{0:string,1:float}> clave => [etiqueta, valor por defecto] */
     public const PORCENTAJES = [
         'comision_telefonia_pct' => ['Telefonía (%)', 0.20],
+        'comision_telefonia_sin_hs_pct' => ['Telefonía sin Honor/Samsung (%)', 0.10],
         'comision_otros_pct' => ['Resto de categorías (%)', 1],
         'comision_supervisor_pct' => ['Supervisor de sede (%)', 0.05],
         'comision_encargado_pct' => ['Encargado de tienda (%)', 0.0],

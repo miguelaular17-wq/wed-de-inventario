@@ -27,6 +27,7 @@ class CommissionCalculationServiceTest extends TestCase
         NominaConfig::put('comision_marketing_pct', 0.10);
         NominaConfig::put('comision_nunes_pct', 0.60);
         NominaConfig::put('comision_telefonia_pct', 0.20);
+        NominaConfig::put('comision_telefonia_sin_hs_pct', 0.10);
         NominaConfig::put('comision_otros_pct', 1);
         NominaConfig::put('comision_servicio_tecnico_pct', 50);
         NominaConfig::put('retencion_comision_pct', 10);
@@ -115,7 +116,7 @@ class CommissionCalculationServiceTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->venta('VEND-HS', 1000, ['producto_id' => $otraMarcaId]); // 0.20% = 2
+        $this->venta('VEND-HS', 1000, ['producto_id' => $otraMarcaId]); // 0.10% = 1
         $this->venta('VEND-HS', 2000, ['producto_id' => $samsungId]); // excluido
         $this->venta('VEND-HS', 1500, ['producto_id' => $honorId]); // excluido
         $this->venta('VEND-HS', 400, ['producto_id' => $forroId]); // resto 1% = 4
@@ -123,14 +124,13 @@ class CommissionCalculationServiceTest extends TestCase
 
         $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
 
-        $this->assertSame(2.0, $resultado['comision_telefonia']);
+        $this->assertSame(1.0, $resultado['comision_telefonia']);
         $this->assertSame(7.0, $resultado['comision_otros']);
-        $this->assertSame(9.0, $resultado['total']);
+        $this->assertSame(8.0, $resultado['total']);
         $this->assertSame(1700.0, $resultado['base']);
-        $this->assertArrayHasKey(
-            NominaEmpleado::COMISION_VENTAS_PROPIAS_SIN_HS,
-            NominaEmpleado::modosComision()
-        );
+        $this->assertSame(0.1, $resultado['pct_telefonia']);
+        $this->assertStringContainsString('0,20%', NominaEmpleado::modosComision()[NominaEmpleado::COMISION_VENTAS_PROPIAS]);
+        $this->assertStringContainsString('0,10%', NominaEmpleado::modosComision()[NominaEmpleado::COMISION_VENTAS_PROPIAS_SIN_HS]);
     }
 
     public function test_ignora_ventas_de_sede_excluida_de_comision(): void
@@ -393,6 +393,51 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(500.0, $resultado['base_st']);
         $this->assertSame(300.0, $resultado['gastos']);
         $this->assertSame(250.0, $resultado['total']);
+    }
+
+    public function test_servicio_tecnico_puede_excluir_algunos_egresos_058(): void
+    {
+        NominaConfig::put('descuento_venta_pct', 0);
+        $empleado = $this->empleado(NominaEmpleado::COMISION_SERVICIO_TECNICO, 'TEC-EXC', false, true);
+        $periodo = $this->periodo();
+        $this->venta('TEC-EXC', 1000, ['nombre_producto' => 'SERVICIO TECNICO', 'sede' => 'VIRTUDES']);
+        $incluido = DB::table('flujo_cajas')->insertGetId([
+            'fecha' => '2026-08-10',
+            'tipo' => 'egreso',
+            'tipo_gasto' => '058 - SERVICIO TECNICO (GARANTIAS)',
+            'nomina_empleado_id' => $empleado->id,
+            'monto_usd' => 200,
+            'monto_bs' => 0,
+            'tasa_cambio' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $excluido = DB::table('flujo_cajas')->insertGetId([
+            'fecha' => '2026-08-11',
+            'tipo' => 'egreso',
+            'tipo_gasto' => '058 - SERVICIO TECNICO (GARANTIAS)',
+            'nomina_empleado_id' => $empleado->id,
+            'monto_usd' => 150,
+            'monto_bs' => 0,
+            'tasa_cambio' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('nomina_st_egreso_exclusiones')->insert([
+            'periodo_id' => $periodo->id,
+            'empleado_id' => $empleado->id,
+            'flujo_caja_id' => $excluido,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(1000.0, $resultado['ventas_st']);
+        $this->assertSame(200.0, $resultado['gastos']);
+        $this->assertSame(800.0, $resultado['base_st']);
+        $this->assertSame(400.0, $resultado['comision_st']);
+        $this->assertNotSame($incluido, $excluido);
     }
 
     public function test_servicio_tecnico_aplica_058_solo_a_st_y_el_resto_como_vendedor(): void
