@@ -73,6 +73,8 @@ class StOrden extends Model
 
     public const RESULTADO_PARA_REPUESTO = 'PARA_REPUESTO';
 
+    public const RESULTADO_NO_UBICO_REPUESTO = 'NO_UBICO_REPUESTO';
+
     public const RESULTADO_REPARADO = 'REPARADO';
 
     public const RESULTADOS_INTERNA = [
@@ -81,10 +83,23 @@ class StOrden extends Model
         self::RESULTADO_REPARADO => 'Reparado',
     ];
 
+    /** Resultado / reconocimiento de una orden de servicio técnico (cliente). */
+    public const RESULTADOS_ST = [
+        self::RESULTADO_REPARADO => 'Equipo Reparado',
+        self::RESULTADO_SIN_REPARACION => 'Equipo sin reparacion',
+        self::RESULTADO_NO_UBICO_REPUESTO => 'No se Ubico repuesto',
+    ];
+
     public const COLORES_RESULTADO_INTERNA = [
         self::RESULTADO_SIN_REPARACION => ['#fecaca', '#7f1d1d'],
         self::RESULTADO_PARA_REPUESTO => ['#fde68a', '#78350f'],
         self::RESULTADO_REPARADO => ['#86efac', '#14532d'],
+    ];
+
+    public const COLORES_RESULTADO_ST = [
+        self::RESULTADO_REPARADO => ['#86efac', '#14532d'],
+        self::RESULTADO_SIN_REPARACION => ['#fecaca', '#7f1d1d'],
+        self::RESULTADO_NO_UBICO_REPUESTO => ['#fde68a', '#78350f'],
     ];
 
     public const COLORES_RECONOCIMIENTO_GARANTIA = [
@@ -367,6 +382,11 @@ class StOrden extends Model
         return ($this->tipo_gestion ?? self::TIPO_ST) === self::TIPO_REPARACION_INTERNA;
     }
 
+    public function esServicioTecnicoCliente(): bool
+    {
+        return ($this->tipo_gestion ?? self::TIPO_ST) === self::TIPO_ST;
+    }
+
     public function esCambioEnRango(): bool
     {
         return $this->esGarantia() && $this->rango_garantia === self::RANGO_DENTRO;
@@ -538,6 +558,17 @@ class StOrden extends Model
         return $etiqueta;
     }
 
+    /** «Equipo Reparado», «No se Ubico repuesto»… o null si el ST no tiene reconocimiento. */
+    public function etiquetaResultadoSt(): ?string
+    {
+        $resultado = (string) ($this->resultado_interna ?? '');
+        if ($resultado === '' || ! isset(self::RESULTADOS_ST[$resultado])) {
+            return null;
+        }
+
+        return self::RESULTADOS_ST[$resultado];
+    }
+
     /** Entregada al cliente: la orden queda cerrada y ya no se modifica. */
     public function entregada(): bool
     {
@@ -553,15 +584,8 @@ class StOrden extends Model
 
     public function scopeVisiblePara(Builder $query, User $user): Builder
     {
-        if ($user->scopesServicioToOwnSede()) {
-            $sede = strtoupper((string) $user->sede);
-
-            return $query->where(function (Builder $inner) use ($sede) {
-                $inner->where('sede', $sede)
-                    ->orWhere('sede_origen_transfer', $sede);
-            });
-        }
-
+        // El personal de servicio técnico ve órdenes de todas las sedes.
+        // La creación/edición de sede propia se controla aparte (creaServicioEnSuSede / scopesServicioToOwnSede).
         return $query;
     }
 

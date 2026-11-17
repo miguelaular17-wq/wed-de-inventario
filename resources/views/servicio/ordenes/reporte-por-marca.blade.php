@@ -28,6 +28,7 @@
             @endif
             @if($conResultadoInterna)
                 <a class="btn secondary" href="{{ route('servicio.ordenes.internas_resueltas') }}">Reparaciones internas resueltas</a>
+                <a class="btn secondary" href="{{ route('servicio.ordenes.st_resueltos') }}">ST resueltos</a>
             @endif
             <a class="btn primary" href="{{ route('servicio.ordenes.reporte_marca', $queryPdf) }}">Descargar PDF</a>
         </div>
@@ -193,6 +194,8 @@
                                             @include('servicio.ordenes._reconocimiento-select', ['modo' => 'marca'])
                                         @elseif($orden->esReparacionInterna() && $conResultadoInterna)
                                             @include('servicio.ordenes._resultado-interna-select')
+                                        @elseif($orden->esServicioTecnicoCliente() && $conResultadoInterna)
+                                            @include('servicio.ordenes._resultado-st-select', ['modo' => 'marca'])
                                         @else
                                             —
                                         @endif
@@ -210,6 +213,7 @@
 @include('servicio.ordenes._reconocimiento-script')
 @if($conResultadoInterna)
     @include('servicio.ordenes._resultado-interna-script')
+    @include('servicio.ordenes._resultado-st-script')
 @endif
 <script>
     (function () {

@@ -5,7 +5,7 @@
 <select class="ri-resultado"
     data-url="{{ route('servicio.ordenes.resultado_interna', $orden) }}"
     data-actual="{{ $resultadoActual }}"
-    data-tecnico="{{ $orden->reparado_por }}"
+    data-tecnico="{{ data_get($orden->atributos, 'reparado_por_empleado_id') ?: '' }}"
     data-modo="{{ $modo ?? 'marca' }}"
     style="background:{{ $fondo }};color:{{ $texto }};">
     <option value="">Sin estado</option>

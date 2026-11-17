@@ -926,11 +926,13 @@ Route::middleware(['auth', EnsureSedeSelected::class, 'permission:servicio'])
             Route::get('/reporte-por-marca', [OrdenController::class, 'reportePorMarca'])->name('reporte_marca');
             Route::get('/garantias-reconocidas', [OrdenController::class, 'garantiasReconocidas'])->name('garantias_reconocidas');
             Route::get('/reparaciones-internas-resueltas', [OrdenController::class, 'internasResueltas'])->name('internas_resueltas');
+            Route::get('/servicio-tecnico-resueltos', [OrdenController::class, 'stResueltos'])->name('st_resueltos');
             Route::get('/{orden}/pdf/conformidad', [OrdenController::class, 'pdfConformidad'])->whereNumber('orden')->name('conformidad_pdf');
             Route::post('/{orden}/conformidad', [OrdenController::class, 'guardarConformidad'])->whereNumber('orden')->name('conformidad');
             Route::post('/{orden}/tipo-gestion', [OrdenController::class, 'cambiarTipoGestion'])->whereNumber('orden')->name('tipo_gestion');
             Route::post('/{orden}/entregar', [OrdenController::class, 'entregar'])->whereNumber('orden')->name('entregar');
             Route::post('/{orden}/resultado-interna', [OrdenController::class, 'actualizarResultadoInterna'])->whereNumber('orden')->name('resultado_interna');
+            Route::post('/{orden}/resultado-st', [OrdenController::class, 'actualizarResultadoSt'])->whereNumber('orden')->name('resultado_st');
             Route::post('/{orden}/estado', [OrdenController::class, 'cambiarEstado'])->whereNumber('orden')->name('cambiar_estado');
             Route::post('/{orden}/garantia/enviar', [OrdenController::class, 'enviarGarantiaExterna'])->whereNumber('orden')->name('garantia.enviar');
             Route::post('/{orden}/garantia/actualizacion', [OrdenController::class, 'actualizarGarantiaExterna'])->whereNumber('orden')->name('garantia.actualizacion');

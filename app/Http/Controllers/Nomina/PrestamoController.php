@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Nomina;
 
 use App\Http\Controllers\Controller;
 use App\Models\Nomina\NominaEmpleado;
+use App\Models\Nomina\NominaPeriodo;
 use App\Models\Nomina\NominaPrestamo;
 use App\Models\Nomina\NominaPrestamoAbono;
 use App\Models\Nomina\NominaPrestamoPlan;
@@ -162,8 +163,8 @@ class PrestamoController extends Controller
             'q' => ['nullable', 'string'],
         ]);
 
-        $quincena = $this->quincenas->quincenaDe(now());
         $prestamoId = ! empty($data['prestamo_id']) ? (int) $data['prestamo_id'] : null;
+        $quincena = $this->quincenaParaCobro($data['modo'], $data['fecha']);
 
         if ($data['modo'] === 'PAGO') {
             $tipo = $data['tipo'] ?? NominaPrestamoAbono::TIPO_EFECTIVO;
@@ -309,5 +310,43 @@ class PrestamoController extends Controller
     {
         return redirect()->route('nomina.prestamos.index')
             ->with('status', 'Los préstamos son en modo libre. Usa el modal del deudor para programar el descuento.');
+    }
+
+    /**
+     * Descuento a comisión: prioriza el período de nómina abierto/calculado de esa fecha
+     * (o el último calculado si la fecha ya cayó en la quincena siguiente).
+     * Nómina/pago: usa la quincena calendario de la fecha del formulario.
+     *
+     * @return array{inicio:Carbon,fin:Carbon,etiqueta:string}
+     */
+    private function quincenaParaCobro(string $modo, string $fecha): array
+    {
+        if ($modo !== 'COMISION') {
+            return $this->quincenas->quincenaDe($fecha);
+        }
+
+        $periodo = NominaPeriodo::query()
+            ->whereDate('fecha_inicio', '<=', $fecha)
+            ->whereDate('fecha_fin', '>=', $fecha)
+            ->where('estado', '!=', NominaPeriodo::CERRADO)
+            ->orderByDesc('fecha_inicio')
+            ->first();
+
+        if (! $periodo) {
+            $periodo = NominaPeriodo::query()
+                ->whereIn('estado', [NominaPeriodo::CALCULADO, NominaPeriodo::APROBADO])
+                ->orderByDesc('fecha_inicio')
+                ->first();
+        }
+
+        if ($periodo) {
+            return [
+                'inicio' => $periodo->fecha_inicio->copy()->startOfDay(),
+                'fin' => $periodo->fecha_fin->copy()->startOfDay(),
+                'etiqueta' => (string) $periodo->etiqueta,
+            ];
+        }
+
+        return $this->quincenas->quincenaDe($fecha);
     }
 }

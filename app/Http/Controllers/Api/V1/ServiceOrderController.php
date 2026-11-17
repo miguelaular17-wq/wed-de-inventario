@@ -446,10 +446,8 @@ class ServiceOrderController extends Controller
             return true;
         }
 
-        return $user->canAccess('servicio')
-            && (! $user->scopesServicioToOwnSede()
-                || strtoupper((string) $order->sede) === strtoupper((string) $user->sede)
-                || strtoupper((string) $order->sede_origen_transfer) === strtoupper((string) $user->sede));
+        // Personal ST puede ver y gestionar órdenes de cualquier sede.
+        return $user->canAccess('servicio');
     }
 
     private function orderPayload(StOrden $order, ?User $user = null): array
@@ -521,53 +519,40 @@ class ServiceOrderController extends Controller
     }
 
     /**
+     * Personas de nómina marcadas como Servicio técnico (con usuario enlazado).
+     *
      * @return \Illuminate\Support\Collection<int, array{user:User,id:int,nombre:string,sede:string}>
      */
     private function tecnicosServicio(User $remitente)
     {
-        $empleadosPorUsuario = collect();
-        if (Schema::hasTable('nomina_empleados')) {
-            $empleadosPorUsuario = NominaEmpleado::query()
-                ->with(['user', 'sedeCatalogo'])
-                ->where('es_servicio_tecnico', true)
-                ->where('estado', 'ACTIVO')
-                ->whereNotNull('user_id')
-                ->get()
-                ->keyBy('user_id');
+        if (! Schema::hasTable('nomina_empleados')) {
+            return collect();
         }
 
-        $ids = $empleadosPorUsuario->keys()->map(fn ($id) => (int) $id)->all();
-
-        return User::query()
-            ->where(function ($query) use ($ids) {
-                $query->where('role', User::ROLE_TECNICO);
-                if ($ids !== []) {
-                    $query->orWhereIn('id', $ids);
-                }
-            })
-            ->orderBy('name')
+        return NominaEmpleado::query()
+            ->with(['user', 'sedeCatalogo', 'cliente'])
+            ->where('es_servicio_tecnico', true)
+            ->where('estado', 'ACTIVO')
+            ->whereNotNull('user_id')
             ->get()
-            ->reject(fn (User $tecnico) => (int) $tecnico->id === (int) $remitente->id)
-            ->map(function (User $tecnico) use ($empleadosPorUsuario) {
-                $empleado = $empleadosPorUsuario->get($tecnico->id);
+            ->reject(fn (NominaEmpleado $empleado) => ! $empleado->user)
+            ->reject(fn (NominaEmpleado $empleado) => (int) $empleado->user_id === (int) $remitente->id)
+            ->map(function (NominaEmpleado $empleado) {
                 $sede = strtoupper(trim((string) (
-                    $tecnico->sede
-                    ?: $empleado?->sedeCatalogo?->codigo
-                    ?: $empleado?->sedeCatalogo?->nombre
+                    $empleado->sedeCatalogo?->codigo
+                    ?: $empleado->sede
+                    ?: $empleado->user?->sede
+                    ?: ''
                 )));
 
-                if (! in_array($sede, config('inventario.sedes_locales', []), true)) {
-                    return null;
-                }
-
                 return [
-                    'user' => $tecnico,
-                    'id' => (int) $tecnico->id,
-                    'nombre' => $tecnico->name,
-                    'sede' => $sede,
+                    'user' => $empleado->user,
+                    'id' => (int) $empleado->user_id,
+                    'nombre' => $empleado->nombre(),
+                    'sede' => $sede !== '' ? $sede : '—',
                 ];
             })
-            ->filter()
+            ->sortBy(fn (array $fila) => mb_strtoupper($fila['nombre'], 'UTF-8'), SORT_NATURAL)
             ->values();
     }
 

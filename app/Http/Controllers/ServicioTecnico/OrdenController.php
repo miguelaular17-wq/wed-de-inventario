@@ -37,7 +37,7 @@ class OrdenController extends Controller
         $user = $request->user();
         $query = StOrden::query()->visiblePara($user)->orderByDesc('fecha_ingreso')->orderByDesc('numero');
 
-        if (! $user->scopesServicioToOwnSede() && $request->filled('sede')) {
+        if ($request->filled('sede')) {
             $query->where('sede', strtoupper((string) $request->query('sede')));
         }
 
@@ -83,9 +83,7 @@ class OrdenController extends Controller
             if ($user->veSoloSusFacturasTaller()) {
                 $query->where('tecnico_id', $user->id);
             }
-            if ($user->scopesServicioToOwnSede()) {
-                $query->where('sede', strtoupper((string) $user->sede));
-            }
+
         }
 
         if ($q = trim((string) $request->query('q', ''))) {
@@ -111,8 +109,8 @@ class OrdenController extends Controller
             'tecnicos' => $this->tecnicosParaFiltro(),
             'filtroTecnicoId' => $request->query('tecnico_id'),
             'sedes' => config('inventario.sedes_locales'),
-            'filtroSede' => $user->scopesServicioToOwnSede() ? strtoupper((string) $user->sede) : $request->query('sede'),
-            'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
+            'filtroSede' => $request->query('sede'),
+            'puedeFiltrarSede' => true,
             'filtroTransfer' => $request->query('transfer'),
             'soloInternas' => $soloInternas,
         ]);
@@ -145,9 +143,7 @@ class OrdenController extends Controller
             $query->whereRaw('1 = 0');
         }
 
-        $filtroSede = $user->scopesServicioToOwnSede()
-            ? strtoupper((string) $user->sede)
-            : ($request->query('sede') ? strtoupper((string) $request->query('sede')) : null);
+        $filtroSede = $request->query('sede') ? strtoupper((string) $request->query('sede')) : null;
         if ($filtroSede) {
             $query->where('sede', $filtroSede);
         }
@@ -187,7 +183,7 @@ class OrdenController extends Controller
             'tecnicos' => $this->tecnicosServicio(incluirmeAMi: true),
             'tiposGestion' => StOrden::TIPOS_GESTION + [StOrden::TIPO_SIN_TIPO => 'Sin tipo'],
             'sedes' => config('inventario.sedes_locales'),
-            'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
+            'puedeFiltrarSede' => true,
             'filtros' => [
                 'fecha_desde' => $desde,
                 'fecha_hasta' => $hasta,
@@ -226,10 +222,8 @@ class OrdenController extends Controller
             ->orderBy('fecha_ingreso')
             ->orderBy('numero');
 
-        if (! $user->scopesServicioToOwnSede() && $request->filled('sede')) {
+        if ($request->filled('sede')) {
             $query->where('sede', strtoupper((string) $request->query('sede')));
-        } elseif ($user->scopesServicioToOwnSede()) {
-            $query->where('sede', strtoupper((string) $user->sede));
         }
 
         if ($tipoFiltro !== '' && Schema::hasColumn('st_ordenes', 'tipo_gestion')) {
@@ -240,12 +234,9 @@ class OrdenController extends Controller
         if ($conEstadoEmpresa) {
             $query->where(fn ($q) => $q->whereNull('estado_empresa_garantia')->orWhere('estado_empresa_garantia', ''));
         }
-        // Una reparación interna con resultado (reparado, para repuesto…) pasa a «Reparaciones internas resueltas».
+        // ST o interna con resultado sale del reporte por marca (pasa a la lista de resueltos).
         if (Schema::hasColumn('st_ordenes', 'resultado_interna')) {
-            $query->where(fn ($q) => $q->whereNull('tipo_gestion')
-                ->orWhere('tipo_gestion', '<>', StOrden::TIPO_REPARACION_INTERNA)
-                ->orWhereNull('resultado_interna')
-                ->orWhere('resultado_interna', ''));
+            $query->where(fn ($q) => $q->whereNull('resultado_interna')->orWhere('resultado_interna', ''));
         }
 
         $empresaEnvioFiltro = '';
@@ -322,9 +313,7 @@ class OrdenController extends Controller
         ksort($porMarca, SORT_NATURAL | SORT_FLAG_CASE);
         $porMarca = array_values($porMarca);
 
-        $filtroSede = $user->scopesServicioToOwnSede()
-            ? strtoupper((string) $user->sede)
-            : ($request->query('sede') ? strtoupper((string) $request->query('sede')) : null);
+        $filtroSede = $request->query('sede') ? strtoupper((string) $request->query('sede')) : null;
 
         $payload = [
             'desde' => $desde,
@@ -333,7 +322,7 @@ class OrdenController extends Controller
             'totales' => $totales,
             'tipoFiltro' => $tipoFiltro,
             'filtroSede' => $filtroSede,
-            'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
+            'puedeFiltrarSede' => true,
             'sedes' => config('inventario.sedes_locales'),
             'tiposGestion' => StOrden::TIPOS_GESTION,
             'empresasEnvio' => $empresasEnvio,
@@ -341,7 +330,7 @@ class OrdenController extends Controller
             'generadoPor' => $user->name,
             'conEstadoEmpresa' => $conEstadoEmpresa,
             'conResultadoInterna' => Schema::hasColumn('st_ordenes', 'resultado_interna'),
-            'tecnicosReparacion' => $this->tecnicosServicio(incluirmeAMi: true)
+            'tecnicosReparacion' => $this->tecnicosNominaReparacion(incluirmeAMi: true)
                 ->map(fn ($t) => ['id' => $t['id'], 'nombre' => $t['nombre'], 'sede' => $t['sede']])
                 ->values(),
         ];
@@ -404,10 +393,8 @@ class OrdenController extends Controller
                 ->orderBy('fecha_ingreso')
                 ->orderBy('numero');
 
-            if (! $user->scopesServicioToOwnSede() && $request->filled('sede')) {
+            if ($request->filled('sede')) {
                 $query->where('sede', strtoupper((string) $request->query('sede')));
-            } elseif ($user->scopesServicioToOwnSede()) {
-                $query->where('sede', strtoupper((string) $user->sede));
             }
             if ($motivoFiltro !== '') {
                 $query->where('estado_empresa_garantia', $motivoFiltro);
@@ -446,9 +433,7 @@ class OrdenController extends Controller
             });
         asort($empresasEnvio, SORT_NATURAL | SORT_FLAG_CASE);
 
-        $filtroSede = $user->scopesServicioToOwnSede()
-            ? strtoupper((string) $user->sede)
-            : ($request->query('sede') ? strtoupper((string) $request->query('sede')) : null);
+        $filtroSede = $request->query('sede') ? strtoupper((string) $request->query('sede')) : null;
 
         $payload = [
             'porEmpresa' => array_values($porEmpresa),
@@ -458,7 +443,7 @@ class OrdenController extends Controller
             'empresaFiltro' => $empresaFiltro,
             'motivoFiltro' => $motivoFiltro,
             'filtroSede' => $filtroSede,
-            'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
+            'puedeFiltrarSede' => true,
             'sedes' => config('inventario.sedes_locales'),
             'generadoPor' => $user->name,
         ];
@@ -503,10 +488,8 @@ class OrdenController extends Controller
             ->when($conResultado, fn ($q) => $q->whereNotNull('resultado_interna')->where('resultado_interna', '<>', ''))
             ->when($desde, fn ($q) => $q->whereDate('fecha_ingreso', '>=', $desde))
             ->when($hasta, fn ($q) => $q->whereDate('fecha_ingreso', '<=', $hasta));
-        if (! $user->scopesServicioToOwnSede() && $request->filled('sede')) {
+        if ($request->filled('sede')) {
             $base->where('sede', strtoupper((string) $request->query('sede')));
-        } elseif ($user->scopesServicioToOwnSede()) {
-            $base->where('sede', strtoupper((string) $user->sede));
         }
 
         $porResultado = array_fill_keys(array_keys(StOrden::RESULTADOS_INTERNA), 0);
@@ -520,9 +503,7 @@ class OrdenController extends Controller
             ->get()
             ->each(fn (StOrden $o) => $o->setAttribute('marca_reporte', $this->marcaParaReporte($o)));
 
-        $filtroSede = $user->scopesServicioToOwnSede()
-            ? strtoupper((string) $user->sede)
-            : ($request->query('sede') ? strtoupper((string) $request->query('sede')) : null);
+        $filtroSede = $request->query('sede') ? strtoupper((string) $request->query('sede')) : null;
 
         $payload = [
             'grupos' => $ordenes->groupBy('resultado_interna'),
@@ -532,10 +513,10 @@ class OrdenController extends Controller
             'desde' => $desde,
             'hasta' => $hasta,
             'filtroSede' => $filtroSede,
-            'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
+            'puedeFiltrarSede' => true,
             'sedes' => config('inventario.sedes_locales'),
             'generadoPor' => $user->name,
-            'tecnicosReparacion' => $this->tecnicosServicio(incluirmeAMi: true)
+            'tecnicosReparacion' => $this->tecnicosNominaReparacion(incluirmeAMi: true)
                 ->map(fn ($t) => ['id' => $t['id'], 'nombre' => $t['nombre'], 'sede' => $t['sede']])
                 ->values(),
         ];
@@ -553,6 +534,83 @@ class OrdenController extends Controller
         }
 
         return view('servicio.ordenes.internas-resueltas', $payload);
+    }
+
+    /**
+     * Órdenes de servicio técnico (cliente) con reconocimiento: Equipo Reparado,
+     * Equipo sin reparacion o No se Ubico repuesto. Salen del reporte por marca.
+     */
+    public function stResueltos(Request $request): View|Response
+    {
+        $user = $request->user();
+        $conResultado = Schema::hasColumn('st_ordenes', 'resultado_interna');
+        $resultadoFiltro = strtoupper(trim((string) $request->query('resultado', '')));
+        if (! isset(StOrden::RESULTADOS_ST[$resultadoFiltro])) {
+            $resultadoFiltro = '';
+        }
+        $desde = $request->query('fecha_desde');
+        $hasta = $request->query('fecha_hasta');
+        $desde = is_string($desde) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde) ? $desde : null;
+        $hasta = is_string($hasta) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta) ? $hasta : null;
+
+        $base = StOrden::query()
+            ->visiblePara($user)
+            ->sinRecepcionPendiente()
+            ->where(function ($q) {
+                $q->where('tipo_gestion', StOrden::TIPO_ST)
+                    ->orWhereNull('tipo_gestion')
+                    ->orWhere('tipo_gestion', '');
+            })
+            ->when(! $conResultado, fn ($q) => $q->whereRaw('1 = 0'))
+            ->when($conResultado, fn ($q) => $q->whereNotNull('resultado_interna')->where('resultado_interna', '<>', ''))
+            ->when($desde, fn ($q) => $q->whereDate('fecha_ingreso', '>=', $desde))
+            ->when($hasta, fn ($q) => $q->whereDate('fecha_ingreso', '<=', $hasta));
+        if ($request->filled('sede')) {
+            $base->where('sede', strtoupper((string) $request->query('sede')));
+        }
+
+        $porResultado = array_fill_keys(array_keys(StOrden::RESULTADOS_ST), 0);
+        foreach ((clone $base)->selectRaw('resultado_interna, COUNT(*) as n')->groupBy('resultado_interna')->pluck('n', 'resultado_interna') as $r => $n) {
+            if (isset($porResultado[$r])) {
+                $porResultado[$r] = (int) $n;
+            }
+        }
+        $ordenes = (clone $base)
+            ->with(['equipoCelular', 'creador', 'reparador'])
+            ->when($resultadoFiltro !== '', fn ($q) => $q->where('resultado_interna', $resultadoFiltro))
+            ->whereIn('resultado_interna', array_keys(StOrden::RESULTADOS_ST))
+            ->orderBy('fecha_ingreso')->orderBy('numero')
+            ->get()
+            ->each(fn (StOrden $o) => $o->setAttribute('marca_reporte', $this->marcaParaReporte($o)));
+
+        $filtroSede = $request->query('sede') ? strtoupper((string) $request->query('sede')) : null;
+
+        $payload = [
+            'grupos' => $ordenes->groupBy('resultado_interna'),
+            'porResultado' => $porResultado,
+            'total' => array_sum($porResultado),
+            'resultadoFiltro' => $resultadoFiltro,
+            'desde' => $desde,
+            'hasta' => $hasta,
+            'filtroSede' => $filtroSede,
+            'puedeFiltrarSede' => true,
+            'sedes' => config('inventario.sedes_locales'),
+            'generadoPor' => $user->name,
+        ];
+
+        if ($request->query('formato') === 'pdf') {
+            $logoPath = null;
+            $logoFile = public_path('logo.png');
+            if (is_file($logoFile) && ($raw = @file_get_contents($logoFile))) {
+                $logoPath = 'data:image/png;base64,'.base64_encode($raw);
+            }
+
+            return Pdf::loadView('servicio.ordenes.pdf-st-resueltos', $payload + ['logoPath' => $logoPath])
+                ->setPaper('a4', 'landscape')
+                ->download('st_resueltos_'.strtolower($resultadoFiltro ?: 'todas').'_'.now()->toDateString().'.pdf');
+        }
+
+        return view('servicio.ordenes.st-resueltos', $payload);
     }
 
     private function marcaParaReporte(StOrden $orden): string
@@ -1262,20 +1320,36 @@ class OrdenController extends Controller
             'tecnico_id.required_if' => 'Elige el técnico que lo reparó.',
         ]);
         $resultado = $data['resultado'] ?? null;
-        $tecnicoId = null;
+        $tecnicoUserId = null;
+        $tecnicoEmpleadoId = null;
+        $tecnicoNombre = null;
         if ($resultado === StOrden::RESULTADO_REPARADO) {
-            $tecnico = $this->tecnicosServicio(incluirmeAMi: true)->firstWhere('id', (int) $data['tecnico_id']);
+            $tecnico = $this->tecnicosNominaReparacion(incluirmeAMi: true)->firstWhere('id', (int) $data['tecnico_id']);
             if (! $tecnico) {
-                throw ValidationException::withMessages(['tecnico_id' => 'Elige una persona registrada en Servicio técnico.']);
+                throw ValidationException::withMessages(['tecnico_id' => 'Elige una persona registrada en nómina como Servicio técnico.']);
             }
-            $tecnicoId = $tecnico['id'];
+            $tecnicoEmpleadoId = (int) $tecnico['id'];
+            $tecnicoUserId = $tecnico['user_id'] ?? null;
+            $tecnicoNombre = $tecnico['nombre'];
         }
 
         $anterior = $orden->etiquetaResultadoInterna();
-        if ($resultado !== $orden->resultado_interna || $tecnicoId !== ($orden->reparado_por ? (int) $orden->reparado_por : null)) {
+        $attrs = is_array($orden->atributos) ? $orden->atributos : [];
+        $empleadoActual = (int) ($attrs['reparado_por_empleado_id'] ?? 0);
+        if ($resultado !== $orden->resultado_interna
+            || $tecnicoUserId !== ($orden->reparado_por ? (int) $orden->reparado_por : null)
+            || $tecnicoEmpleadoId !== ($empleadoActual ?: null)
+        ) {
+            if ($resultado === StOrden::RESULTADO_REPARADO) {
+                $attrs['reparado_por_empleado_id'] = $tecnicoEmpleadoId;
+                $attrs['reparado_por_nombre'] = $tecnicoNombre;
+            } else {
+                unset($attrs['reparado_por_empleado_id'], $attrs['reparado_por_nombre']);
+            }
             $orden->forceFill([
                 'resultado_interna' => $resultado,
-                'reparado_por' => $tecnicoId,
+                'reparado_por' => $tecnicoUserId,
+                'atributos' => $attrs,
                 'updated_by' => $user->id,
             ])->save();
             $orden->unsetRelation('reparador');
@@ -1284,18 +1358,54 @@ class OrdenController extends Controller
                 $nuevo === null => 'Se quitó el resultado de la reparación interna (era: '.$anterior.')',
                 $anterior === null => 'Resultado de la reparación interna: '.$nuevo,
                 default => 'Resultado de la reparación interna: '.$anterior.' → '.$nuevo,
-            }, ['resultado' => $resultado, 'reparado_por' => $tecnicoId]);
+            }, ['resultado' => $resultado, 'reparado_por' => $tecnicoUserId, 'reparado_por_empleado_id' => $tecnicoEmpleadoId]);
         }
 
         if ($request->expectsJson()) {
             return response()->json([
                 'resultado' => $orden->resultado_interna,
                 'etiqueta' => $orden->etiquetaResultadoInterna(),
-                'tecnico' => $orden->reparador?->name,
+                'tecnico' => $orden->nombreReparador(),
             ]);
         }
 
         return back()->with('status', 'Resultado de la reparación interna actualizado.');
+    }
+
+    /** Reconocimiento de una orden ST: Equipo Reparado / sin reparación / No se Ubico repuesto. */
+    public function actualizarResultadoSt(Request $request, StOrden $orden): RedirectResponse|JsonResponse
+    {
+        $user = $request->user();
+        $this->authorizeOrden($user, $orden);
+        abort_unless($orden->esServicioTecnicoCliente() && Schema::hasColumn('st_ordenes', 'resultado_interna'), 422);
+
+        $data = $request->validate([
+            'resultado' => ['nullable', 'string', 'in:'.implode(',', array_keys(StOrden::RESULTADOS_ST))],
+        ]);
+        $resultado = $data['resultado'] ?? null;
+
+        $anterior = $orden->etiquetaResultadoSt();
+        if ($resultado !== $orden->resultado_interna) {
+            $orden->forceFill([
+                'resultado_interna' => $resultado,
+                'updated_by' => $user->id,
+            ])->save();
+            $nuevo = $orden->etiquetaResultadoSt();
+            $this->ordenService->registrarEvento($orden, $user, StOrdenEvento::TIPO_NOTA, match (true) {
+                $nuevo === null => 'Se quitó el reconocimiento ST (era: '.$anterior.')',
+                $anterior === null => 'Reconocimiento ST: '.$nuevo,
+                default => 'Reconocimiento ST: '.$anterior.' → '.$nuevo,
+            }, ['resultado' => $resultado]);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'resultado' => $orden->resultado_interna,
+                'etiqueta' => $orden->etiquetaResultadoSt(),
+            ]);
+        }
+
+        return back()->with('status', 'Reconocimiento de servicio técnico actualizado.');
     }
 
     public function iniciarProcesoGarantiaExterna(Request $request, StOrden $orden): RedirectResponse
@@ -1432,53 +1542,67 @@ class OrdenController extends Controller
     }
 
     /**
+     * Personas de nómina marcadas como Servicio técnico.
+     * El `id` es el de nomina_empleados (selector «¿Qué técnico lo reparó?»).
+     *
+     * @return \Illuminate\Support\Collection<int, array{user:?User,id:int,user_id:?int,nombre:string,sede:string}>
+     */
+    private function tecnicosNominaReparacion(bool $incluirmeAMi = false)
+    {
+        if (! Schema::hasTable('nomina_empleados')) {
+            return collect();
+        }
+
+        return NominaEmpleado::query()
+            ->with(['user', 'sedeCatalogo', 'cliente'])
+            ->where('es_servicio_tecnico', true)
+            ->where('estado', 'ACTIVO')
+            ->get()
+            ->reject(function (NominaEmpleado $empleado) use ($incluirmeAMi) {
+                if ($incluirmeAMi) {
+                    return false;
+                }
+                $authId = (int) auth()->id();
+
+                return ($empleado->user_id && (int) $empleado->user_id === $authId)
+                    || (int) $empleado->id === (int) (auth()->user()?->empleadoServicioTecnico()?->id);
+            })
+            ->map(function (NominaEmpleado $empleado) {
+                $sede = strtoupper(trim((string) (
+                    $empleado->sedeCatalogo?->codigo
+                    ?: $empleado->sede
+                    ?: $empleado->user?->sede
+                    ?: ''
+                )));
+
+                return [
+                    'user' => $empleado->user,
+                    'id' => (int) $empleado->id,
+                    'user_id' => $empleado->user_id ? (int) $empleado->user_id : null,
+                    'nombre' => $empleado->nombre(),
+                    'sede' => $sede !== '' ? $sede : '—',
+                ];
+            })
+            ->sortBy(fn (array $fila) => mb_strtoupper($fila['nombre'], 'UTF-8'), SORT_NATURAL)
+            ->values();
+    }
+
+    /**
+     * Personas de nómina ST con usuario enlazado (id = users.id).
+     * Traslados, create y conformidad.
+     *
      * @return \Illuminate\Support\Collection<int, array{user:User,id:int,nombre:string,sede:string}>
      */
     private function tecnicosServicio(bool $incluirmeAMi = false)
     {
-        $empleadosPorUsuario = collect();
-        if (Schema::hasTable('nomina_empleados')) {
-            $empleadosPorUsuario = NominaEmpleado::query()
-                ->with(['user', 'sedeCatalogo'])
-                ->where('es_servicio_tecnico', true)
-                ->where('estado', 'ACTIVO')
-                ->whereNotNull('user_id')
-                ->get()
-                ->keyBy('user_id');
-        }
-
-        $ids = $empleadosPorUsuario->keys()->map(fn ($id) => (int) $id)->all();
-
-        return User::query()
-            ->where(function ($query) use ($ids) {
-                $query->where('role', User::ROLE_TECNICO);
-                if ($ids !== []) {
-                    $query->orWhereIn('id', $ids);
-                }
-            })
-            ->orderBy('name')
-            ->get()
-            ->reject(fn (User $tecnico) => ! $incluirmeAMi && (int) $tecnico->id === (int) auth()->id())
-            ->map(function (User $tecnico) use ($empleadosPorUsuario) {
-                $empleado = $empleadosPorUsuario->get($tecnico->id);
-                $sede = strtoupper(trim((string) (
-                    $tecnico->sede
-                    ?: $empleado?->sedeCatalogo?->codigo
-                    ?: $empleado?->sedeCatalogo?->nombre
-                )));
-
-                if (! in_array($sede, config('inventario.sedes_locales', []), true)) {
-                    return null;
-                }
-
-                return [
-                    'user' => $tecnico,
-                    'id' => (int) $tecnico->id,
-                    'nombre' => $tecnico->name,
-                    'sede' => $sede,
-                ];
-            })
-            ->filter()
+        return $this->tecnicosNominaReparacion(incluirmeAMi: $incluirmeAMi)
+            ->filter(fn (array $fila) => $fila['user'] instanceof User && $fila['user_id'])
+            ->map(fn (array $fila) => [
+                'user' => $fila['user'],
+                'id' => (int) $fila['user_id'],
+                'nombre' => $fila['nombre'],
+                'sede' => $fila['sede'],
+            ])
             ->values();
     }
 
@@ -1675,18 +1799,7 @@ class OrdenController extends Controller
     private function authorizeOrden(User $user, StOrden $orden): void
     {
         if ($user->canAccess('servicio')) {
-            if (! $user->scopesServicioToOwnSede()) {
-                return;
-            }
-
-            $sede = strtoupper((string) $user->sede);
-            $enSede = strtoupper((string) $orden->sede) === $sede;
-            $origenTransfer = strtoupper((string) ($orden->sede_origen_transfer ?? '')) === $sede;
-
-            if (! $enSede && ! $origenTransfer) {
-                abort(403, 'Esta orden pertenece a otra sede.');
-            }
-
+            // Personal ST puede abrir órdenes de cualquier sede.
             return;
         }
 

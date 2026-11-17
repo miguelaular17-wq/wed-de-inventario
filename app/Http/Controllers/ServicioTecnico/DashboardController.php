@@ -27,7 +27,7 @@ class DashboardController extends Controller
         return view('servicio.dashboard', [
             'metricas' => $metricas,
             'sedes' => config('inventario.sedes_locales'),
-            'puedeFiltrarSede' => ! $user->scopesServicioToOwnSede(),
+            'puedeFiltrarSede' => true,
             'filtros' => [
                 'sede' => $request->query('sede'),
                 'desde' => $metricas['rango']['desde'] ?? $request->query('desde'),

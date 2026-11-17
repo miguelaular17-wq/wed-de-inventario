@@ -25,9 +25,7 @@ class StDashboardService
      */
     public function metricas(User $user, ?string $sede = null, ?string $desde = null, ?string $hasta = null): array
     {
-        $sedeFiltro = $user->scopesServicioToOwnSede()
-            ? strtoupper((string) $user->sede)
-            : ($sede ? strtoupper($sede) : null);
+        $sedeFiltro = $sede ? strtoupper($sede) : null;
 
         $quincena = $this->quincenas->quincenaActual();
         $desdeQ = $desde ?: ($quincena['inicio'] ?? null);
@@ -87,9 +85,7 @@ class StDashboardService
         if ($user->veSoloSusFacturasTaller()) {
             $porRecibirQuery->where('tecnico_id', $user->id);
         }
-        if ($user->scopesServicioToOwnSede()) {
-            $porRecibirQuery->where('sede', strtoupper((string) $user->sede));
-        } elseif ($sedeFiltro) {
+        if ($sedeFiltro) {
             $porRecibirQuery->where('sede', $sedeFiltro);
         }
         $porRecibir = $porRecibirQuery->orderByDesc('updated_at')->limit(10)->get();
@@ -98,7 +94,7 @@ class StDashboardService
             $user,
             $desdeQ,
             $hastaQ,
-            $user->scopesServicioToOwnSede() ? null : $sedeFiltro,
+            $sedeFiltro,
         );
         if ($facturasPorTrabajador === []) {
             $facturasPorTrabajador = $facturas
