@@ -825,6 +825,10 @@ class CobranzaController extends Controller
 
             $totalFactura = $esCabecera ? round((float) ($row->total_factura ?? $row->monto_neto ?? 0), 2) : null;
             $saldoFactura = $esCabecera ? round((float) ($row->saldo_pendiente ?? $row->saldo ?? 0), 2) : null;
+            // En la cabecera de la factura: lo cobrado = tot. fac. − saldo Profit (aunque falten filas PAG).
+            $pagadoFactura = ($esCabecera && $totalFactura !== null && $saldoFactura !== null)
+                ? round(max(0, $totalFactura - $saldoFactura), 2)
+                : null;
 
             if ($esCabecera) {
                 $facturasConSaldo[$claveFactura] = $saldoFactura;
@@ -871,7 +875,7 @@ class CobranzaController extends Controller
                 'cantidad' => $cantidad,
                 'precio' => $precio,
                 'total' => $esAbono ? null : $cargo,
-                'pagado' => $esAbono ? $pagado : null,
+                'pagado' => $esAbono ? $pagado : $pagadoFactura,
                 'total_factura' => $totalFactura,
                 'saldo_factura' => $saldoFactura,
                 'saldo_acumulado' => $esCabecera || $esAbono ? $saldoAcumulado : null,
@@ -909,6 +913,22 @@ class CobranzaController extends Controller
                 $sedeDoc = strtoupper($doc['sede']);
                 if (isset($porSede[$sedeDoc])) {
                     $porSede[$sedeDoc]['saldo'] = round($porSede[$sedeDoc]['saldo'] - $baja, 2);
+                }
+                // Actualiza cabecera FAC: saldo y pagado (tot − saldo) tras abonos de la web.
+                if ($baja > 0.009) {
+                    foreach ($lineas as $i => $linea) {
+                        if (($linea['factura_padre'] ?? '') !== $doc['factura'] || $linea['total_factura'] === null) {
+                            continue;
+                        }
+                        if (($linea['grupo'] ?? '') !== ($doc['ajena'] ? $doc['codigo'] : $codigo)) {
+                            continue;
+                        }
+                        $lineas[$i]['saldo_factura'] = $despues;
+                        $lineas[$i]['pagado'] = round(max(0, (float) $linea['total_factura'] - $despues), 2);
+                        if ($lineas[$i]['saldo_acumulado'] !== null) {
+                            $lineas[$i]['saldo_acumulado'] = round((float) $lineas[$i]['saldo_acumulado'] - $baja, 2);
+                        }
+                    }
                 }
                 foreach ($movs as $mov) {
                     $abonos += (float) $mov->monto_usd;
@@ -1204,7 +1224,10 @@ class CobranzaController extends Controller
                 $g['totales']['saldo'] = round($g['totales']['saldo'] + (float) $linea['saldo_factura'], 2);
             }
             $g['totales']['cargos'] = round($g['totales']['cargos'] + (float) ($linea['total'] ?? 0), 2);
-            $g['totales']['abonos'] = round($g['totales']['abonos'] + (float) ($linea['pagado'] ?? 0), 2);
+            // Solo filas PAG: el "pagado" de la cabecera FAC es informativo (tot − saldo) y no se suma otra vez.
+            if (($linea['tipo'] ?? '') === 'abono') {
+                $g['totales']['abonos'] = round($g['totales']['abonos'] + (float) ($linea['pagado'] ?? 0), 2);
+            }
             if ($linea['saldo_acumulado'] !== null) {
                 $linea['saldo_acumulado'] = $g['totales']['saldo'];
             }

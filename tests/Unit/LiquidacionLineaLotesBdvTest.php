@@ -15,4 +15,14 @@ class LiquidacionLineaLotesBdvTest extends TestCase
         $this->assertTrue($matcher->esAbonoLotePuntoVenta('ABONO BDV BDV LIQ LINEA LOTES', '0000123'));
         $this->assertFalse($matcher->esLiquidacionPuntoVenta('ABONO BDV PAGO MOVIL'));
     }
+
+    public function test_td_pos_comercio_es_lote_punto_de_venta(): void
+    {
+        $matcher = app(BankReconciliationMatcher::class);
+
+        $this->assertTrue($matcher->esLiquidacionPuntoVenta('TD POS J0409254852002'));
+        $this->assertTrue($matcher->esAbonoLotePuntoVenta('TD POS J0409254852002', '2815'));
+        $this->assertTrue($matcher->esAbonoLotePuntoVenta('TC POS J0409254852002', '2810'));
+        $this->assertFalse($matcher->esLiquidacionPuntoVenta('TRANSFERENCIA POSIBLE CLIENTE'));
+    }
 }

@@ -635,6 +635,10 @@ class BankReconciliationMatcher
             't/credito vs/mc',
             't/crédito vs/mc',
             'pos:',
+            // Banplus / similares: "TD POS J0409254852002" (abono del lote del punto de venta).
+            'td pos',
+            'tc pos',
+            'tdb pos',
             // Mercantil: "CANCELACION RESUMEN DE VENTAS Y RETENCIO" (el cargo "DESCUENTO TARJETA" es la comisión).
             'resumen de venta',
             // Tesoro: "LQ TDD 82258507 0008 0052" / LQ TDC / LQ ELE (el cargo "COM/LIQ/TDD" es la comisión).
