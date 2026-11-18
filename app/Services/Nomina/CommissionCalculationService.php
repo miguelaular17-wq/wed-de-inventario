@@ -17,6 +17,10 @@ class CommissionCalculationService
 
     private const SEDE_NUNES = 'NUNES';
 
+    private const SEDE_SAMBIL = 'SAMBIL';
+
+    private const SEDE_TECNOHOUSE = 'TECNOHOUSE';
+
     /** @var array<string, bool>|null */
     private ?array $flags = null;
 
@@ -59,6 +63,8 @@ class CommissionCalculationService
             && ! in_array($empleado->modo_comision, [
                 NominaEmpleado::COMISION_NUNES,
                 NominaEmpleado::COMISION_COLABORADOR,
+                NominaEmpleado::COMISION_SAMBIL_SIN_HS,
+                NominaEmpleado::COMISION_TECNOHOUSE_SIN_HS,
             ], true)
         ) {
             return $vacio;
@@ -75,6 +81,8 @@ class CommissionCalculationService
                 NominaEmpleado::COMISION_DIGITAL => $this->comisionDigital($periodo, $empleado),
                 NominaEmpleado::COMISION_PCP => $this->comisionPcp($periodo, $empleado),
                 NominaEmpleado::COMISION_SAMBIL => $this->comisionSambil($periodo, $empleado),
+                NominaEmpleado::COMISION_SAMBIL_SIN_HS => $this->comisionSambilSinHs($periodo, $empleado),
+                NominaEmpleado::COMISION_TECNOHOUSE_SIN_HS => $this->comisionTecnoHouseSinHs($periodo, $empleado),
                 NominaEmpleado::COMISION_COLABORADOR => $this->comisionColaborador($periodo, $empleado),
                 NominaEmpleado::COMISION_SERVICIO_TECNICO => $this->servicioTecnico($periodo, $empleado),
                 NominaEmpleado::COMISION_NUNES => $this->comisionNunes($periodo, $empleado),
@@ -237,6 +245,34 @@ class CommissionCalculationService
         );
     }
 
+    /** Venta neta de la tienda Sambil, sin teléfonos Honor ni Samsung. */
+    private function comisionSambilSinHs(NominaPeriodo $periodo, NominaEmpleado $empleado): array
+    {
+        return $this->comisionSobreSedeFijaSinHonorSamsung(
+            $periodo,
+            $empleado,
+            self::SEDE_SAMBIL,
+            'comision_sambil_sin_hs_pct',
+            0.20,
+            'SAMBIL_SIN_HS',
+            'venta_neta_sambil_sin_honor_samsung * porcentaje_sambil_sin_hs'
+        );
+    }
+
+    /** Venta neta de Tecno House, sin teléfonos Honor ni Samsung. */
+    private function comisionTecnoHouseSinHs(NominaPeriodo $periodo, NominaEmpleado $empleado): array
+    {
+        return $this->comisionSobreSedeFijaSinHonorSamsung(
+            $periodo,
+            $empleado,
+            self::SEDE_TECNOHOUSE,
+            'comision_tecnohouse_sin_hs_pct',
+            0.20,
+            'TECNOHOUSE_SIN_HS',
+            'venta_neta_tecnohouse_sin_honor_samsung * porcentaje_tecnohouse_sin_hs'
+        );
+    }
+
     /**
      * 0,25% de la venta neta sumada de Sambil, Doral, Zamora, Centro y Virtudes.
      */
@@ -314,6 +350,69 @@ class CommissionCalculationService
         }
 
         return $this->resultado($empleado, $total, $base, 0, $lineas->count());
+    }
+
+    /**
+     * Venta neta de una sede fija, quitando teléfonos Honor/Samsung de la base.
+     *
+     * @return array<string, mixed>
+     */
+    private function comisionSobreSedeFijaSinHonorSamsung(
+        NominaPeriodo $periodo,
+        NominaEmpleado $empleado,
+        string $codigoSede,
+        string $configKey,
+        float $defaultPct,
+        string $modoRegistro,
+        string $formula
+    ): array {
+        $codigoSede = mb_strtoupper(trim($codigoSede), 'UTF-8');
+        if ($codigoSede === '' || $this->codigoSedeExcluido($codigoSede)) {
+            return $this->resultado($empleado, 0, 0, 0, 0);
+        }
+
+        $lineas = $this->lineasVentas($periodo)
+            ->whereRaw('UPPER(TRIM(vd.sede)) = ?', [$codigoSede])
+            ->get();
+
+        $ventasSamsung = 0.0;
+        $ventasHonor = 0.0;
+        foreach ($lineas as $linea) {
+            if (! $this->esTelefonoHonorOSamsung($linea)) {
+                continue;
+            }
+            $monto = $this->baseVentaNeta($linea);
+            if ($this->categorias->normalizar($linea->producto_subcategoria ?? null) === 'SAMSUNG') {
+                $ventasSamsung += $monto;
+            } else {
+                $ventasHonor += $monto;
+            }
+        }
+        $excluidas = round($ventasSamsung + $ventasHonor, 2);
+        $lineasBase = $this->excluirTelefonosHonorSamsung($lineas);
+        $netoSede = $this->ventaNetaSede($periodo, $codigoSede, $lineas);
+        $base = round(max(0, $netoSede - $excluidas), 2);
+        $porcentaje = NominaConfig::getDecimal($configKey, $defaultPct);
+        $total = round($base * $porcentaje / 100, 2);
+
+        if ($base > 0 || $lineasBase->isNotEmpty() || $excluidas > 0) {
+            $this->registrarAgregado($periodo, $empleado, $modoRegistro, $codigoSede, $base, $porcentaje, $total, [
+                'lineas_venta' => $lineasBase->count(),
+                'formula' => $formula,
+                'fuente' => $this->flag('ventas_documentos') ? 'ventas_documentos' : 'ventas_detalle',
+                'venta_neta_sede' => $netoSede,
+                'ventas_samsung_excluidas' => round($ventasSamsung, 2),
+                'ventas_honor_excluidas' => round($ventasHonor, 2),
+                'ventas_honor_samsung_excluidas' => $excluidas,
+            ]);
+        }
+
+        $resultado = $this->resultado($empleado, $total, $base, 0, $lineasBase->count());
+        $resultado['ventas_samsung_excluidas'] = round($ventasSamsung, 2);
+        $resultado['ventas_honor_excluidas'] = round($ventasHonor, 2);
+        $resultado['ventas_honor_samsung_excluidas'] = $excluidas;
+
+        return $resultado;
     }
 
     /**

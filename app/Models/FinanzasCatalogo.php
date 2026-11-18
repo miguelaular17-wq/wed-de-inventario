@@ -30,6 +30,14 @@ class FinanzasCatalogo extends Model
     /** Cuentas sin banco real: el dinero se cruza (entra y sale a la vez) y no pasa por la conciliación. */
     public const CATEGORIA_CRUCE = 'CUENTAS DE CRUCE';
 
+    /** Banca en divisas (Panamá, Binance, Citizens…): sin tasa ni Bs; egreso → egreso_divisas. */
+    public static function esBancaInternacional(?string $categoria): bool
+    {
+        $c = mb_strtoupper(trim((string) $categoria), 'UTF-8');
+
+        return $c !== '' && str_contains($c, 'BANCA INTERNACIONAL');
+    }
+
     /** Secciones de cuentas_bancarias que usan Disponibilidad (las dos nacionales) y el reporte consolidado. */
     public const SECCIONES_REPORTE = [
         'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO' => 'Banca nacional (sale en Disponibilidad y en el reporte)',

@@ -700,6 +700,9 @@ class FinanzasController extends Controller
                 'monto_total_gasto' => 'nullable|numeric|min:0',
                 'es_cuenta_por_pagar' => 'nullable|boolean',
                 'cuenta_por_pagar_id' => 'nullable|integer',
+                'cobranza_factura_sede' => 'nullable|string|max:120',
+                'cobranza_factura_doc' => 'nullable|string|max:120',
+                'cobranza_monto' => 'nullable|numeric|min:0',
             ]);
 
             $empleadoServicioTecnico = null;
@@ -744,6 +747,17 @@ class FinanzasController extends Controller
             $banco = $cuentaInfo[0] ?? null;
             $titular = $cuentaInfo[1] ?? null;
             $categoria_cuenta = $cuentaInfo[2] ?? null;
+
+            // Banca internacional / billeteras: solo USD → viaja como egreso en divisas.
+            if (\App\Models\FinanzasCatalogo::esBancaInternacional($categoria_cuenta)
+                && ! in_array($data['categoria_egreso'], ['ingresos', 'traslados', 'compra_divisas'], true)) {
+                $data['categoria_egreso'] = 'egreso_divisas';
+                $data['tasa_cambio'] = 0;
+                $data['diferencial_cambiario'] = 0;
+                if ((float) ($data['monto_usd'] ?? 0) > 0) {
+                    $data['monto_bs'] = 0;
+                }
+            }
 
             if ($data['categoria_egreso'] === 'ingresos') {
                 return $this->guardarIngreso($request, $data, $banco, $titular, $categoria_cuenta);
@@ -929,7 +943,7 @@ class FinanzasController extends Controller
                     $payload['cuenta_por_pagar_id'] = $cuentaPorPagarId;
                 }
 
-                FlujoCaja::create($payload);
+                $flujo = FlujoCaja::create($payload);
 
                 if ($cuentaPorPagarId) {
                     CuentaPorPagar::query()->find($cuentaPorPagarId)?->recalcular();
@@ -946,6 +960,8 @@ class FinanzasController extends Controller
                 foreach ($itemsGf as $itemGf) {
                     $this->registrarPagoGastoFijo($itemGf, count($itemsGf) === 1 ? (float) ($calc_usd ?? 0) : null);
                 }
+
+                $this->aplicarDiferenciaGastoACobranza($flujo, $data, (float) ($calc_usd ?? 0), $itemsGf);
             });
 
             $this->syncTotalesSalidas($data['fecha']);
@@ -957,10 +973,69 @@ class FinanzasController extends Controller
             }
 
             return redirect()->back()->with('success', 'Egreso registrado correctamente.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Error registrando egreso: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Error del sistema: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Si el gasto fijo (o el total del gasto) es mayor que lo pagado en el banco, la diferencia
+     * se aplica como abono en Cobranza (sin segundo egreso bancario).
+     *
+     * @param  list<array{id?:int|string, monto?:float|string|null}>  $itemsGf
+     */
+    private function aplicarDiferenciaGastoACobranza(FlujoCaja $flujo, array $data, float $pagoUsd, array $itemsGf): void
+    {
+        $totalGasto = 0.0;
+        foreach ($itemsGf as $item) {
+            $totalGasto += (float) ($item['monto'] ?? 0);
+        }
+        if ($totalGasto <= 0.009) {
+            $totalGasto = (float) ($data['monto_total_gasto'] ?? 0);
+        }
+        $diferencia = round($totalGasto - $pagoUsd, 2);
+        $sede = trim((string) ($data['cobranza_factura_sede'] ?? ''));
+        $doc = trim((string) ($data['cobranza_factura_doc'] ?? ''));
+        $montoCobranza = round((float) ($data['cobranza_monto'] ?? 0), 2);
+        if ($montoCobranza <= 0 && $diferencia > 0.009) {
+            $montoCobranza = $diferencia;
+        }
+
+        if ($montoCobranza <= 0.009) {
+            return;
+        }
+        if ($sede === '' || $doc === '') {
+            if ($diferencia > 0.009 && $itemsGf !== []) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'cobranza_factura_doc' => 'El gasto ($'.number_format($totalGasto, 2).') es mayor que el pago ($'.number_format($pagoUsd, 2).'). Elige la factura de Cobranza donde se aplica la diferencia ($'.number_format($diferencia, 2).').',
+                ]);
+            }
+
+            return;
+        }
+
+        $cobranzaMov = app(\App\Services\Cobranza\CobranzaFlujoService::class)->registrarCompensacionDesdeFinanzas([
+            'fecha' => $flujo->fecha instanceof \DateTimeInterface
+                ? $flujo->fecha->format('Y-m-d')
+                : (string) $flujo->fecha,
+            'monto_usd' => $montoCobranza,
+            'factura_sede' => $sede,
+            'factura_doc' => $doc,
+            'referencia' => $flujo->referencia,
+            'concepto' => 'Abono (sobrante egreso Finanzas) · '.mb_substr((string) ($flujo->motivo ?: 'gasto'), 0, 160),
+            'contraparte' => $flujo->titular_receptor,
+            'observaciones' => 'Sobrante del egreso Finanzas #'.$flujo->id.': gasto $'.number_format($totalGasto, 2).' − pago $'.number_format($pagoUsd, 2).'.',
+        ], auth()->user());
+
+        $deuda = $cobranzaMov->descripcionVinculo() ?: trim($sede.' '.$doc);
+        $notaSobrante = 'Sobrante $'.number_format($montoCobranza, 2).' → abono Cobranza · '.$deuda;
+        $motivo = trim((string) $flujo->motivo);
+        $flujo->forceFill([
+            'motivo' => mb_substr($motivo !== '' ? $motivo.' · '.$notaSobrante : $notaSobrante, 0, 255),
+        ])->save();
     }
 
     /**
@@ -1014,9 +1089,9 @@ class FinanzasController extends Controller
 
     /**
      * Asiento contable del egreso, en $: el debe es la cuenta (banco · titular), el motivo y el monto
-     * del egreso; se reparte en uno o varios haber de detalle y monto.
+     * del egreso; se reparte en uno o varios haber (detalle, monto y opcionalmente sede / tipo de gasto).
      *
-     * @return array{0: ?array{debe: array{cuenta: string, detalle: ?string, monto: float}, haber: list<array{detalle: string, monto: float}>}, 1: ?string}
+     * @return array{0: ?array{debe: array{cuenta: string, detalle: ?string, monto: float}, haber: list<array{detalle: string, monto: float, sede?: string, tipo_gasto?: string}>}, 1: ?string}
      */
     private function asientoDelEgreso(Request $request, float $montoUsd, ?string $banco, ?string $titular, ?string $motivo): array
     {
@@ -1049,6 +1124,14 @@ class FinanzasController extends Controller
             }
             if ($linea['detalle'] === null || $linea['monto'] <= 0) {
                 return [null, 'Asiento contable: cada haber necesita su detalle y su monto en $.'];
+            }
+            $sede = $detalle($fila['sede'] ?? '');
+            $tipoGasto = $detalle($fila['tipo_gasto'] ?? '');
+            if ($sede !== null) {
+                $linea['sede'] = $sede;
+            }
+            if ($tipoGasto !== null) {
+                $linea['tipo_gasto'] = $tipoGasto;
             }
             $haber[] = $linea;
         }
@@ -1248,6 +1331,17 @@ class FinanzasController extends Controller
         $banco = $cuentaInfo[0] ?? null;
         $titular = $cuentaInfo[1] ?? null;
         $categoria_cuenta = $cuentaInfo[2] ?? null;
+
+        if (\App\Models\FinanzasCatalogo::esBancaInternacional($categoria_cuenta)
+            && ! in_array($categoria, ['ingresos', 'traslados', 'compra_divisas'], true)) {
+            $categoria = 'egreso_divisas';
+            $data['categoria_egreso'] = 'egreso_divisas';
+            $data['tasa_cambio'] = 0;
+            $data['diferencial_cambiario'] = 0;
+            if ((float) ($data['monto_usd'] ?? 0) > 0) {
+                $data['monto_bs'] = 0;
+            }
+        }
 
         $banco_receptor = null;
         $titular_receptor = null;
@@ -1675,7 +1769,8 @@ class FinanzasController extends Controller
         $periodo_hasta = $fecha_hasta;
         $conOrigen = \Illuminate\Support\Facades\Schema::hasColumn('flujo_cajas', 'origen');
         $movimientos_sistema_query = \App\Models\FlujoCaja::query()
-            // Los de Cobranza están ocultos en el flujo de Finanzas pero sí mueven el banco.
+            // Cobranza: egresos con banco real ya van visibles (oculto=false); ingresos siguen
+            // ocultos pero deben entrar a la conciliación bancaria.
             ->where(fn ($q) => $q->where('oculto', false)
                 ->when($conOrigen, fn ($o) => $o->orWhere('origen', \App\Models\FlujoCaja::ORIGEN_COBRANZA)))
             ->vigentes()
@@ -4849,6 +4944,15 @@ class FinanzasController extends Controller
         return view('finanzas.gastos_fijos', compact('tablas', 'mesActual', 'nombresMeses', 'notificaciones'));
     }
 
+    /** Facturas con saldo para aplicar la diferencia gasto−pago desde el egreso. */
+    public function buscarFacturasCobranza(Request $request)
+    {
+        return response()->json([
+            'facturas' => app(\App\Services\Cobranza\CobranzaVinculos::class)
+                ->buscarFacturas((string) $request->query('q', '')),
+        ]);
+    }
+
     /**
      * Returns the list of pending gastos fijos (those with active notifications)
      * for the egreso modal dropdown to link payments.
@@ -5399,10 +5503,10 @@ class FinanzasController extends Controller
                         $mov->banco ?: '',
                         $mov->titular ?: '',
                         $mov->titular_receptor ?: '',
-                        $mov->tipo_gasto ?: '',
+                        $alDebe ? ($mov->tipo_gasto ?: '') : (string) ($l['tipo_gasto'] ?? ($mov->tipo_gasto ?: '')),
                         $mov->motivo ?: '',
                         $mov->referencia ?: '',
-                        $mov->sede ?: '',
+                        $alDebe ? ($mov->sede ?: '') : (string) ($l['sede'] ?? ($mov->sede ?: '')),
                         $mov->placa_vehiculo ?: '',
                         '', '', '', '', '', '', '', '', '',
                         $tipoLinea,

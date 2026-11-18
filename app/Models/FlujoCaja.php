@@ -21,6 +21,9 @@ class FlujoCaja extends Model
     /** Copia oculta de un movimiento del flujo de caja de Cobranza: solo existe para la conciliación. */
     public const ORIGEN_COBRANZA = 'cobranza';
 
+    /** Copia visible de un movimiento manual de Caja de Tesorería. */
+    public const ORIGEN_TESORERIA_CAJA = 'tesoreria_caja';
+
     /** Sin los anulados (duplicados, devoluciones): no cuentan en listados ni totales. */
     public function scopeVigentes($query)
     {

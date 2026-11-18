@@ -127,7 +127,7 @@ class CobranzaMovimiento extends Model
     {
         $formas = [
             'ZELLE' => 'Zelle', 'EFECTIVO' => 'Efectivo', 'TRANSFERENCIA_DIVISAS' => 'Transferencia $', 'TRANSFERENCIA_BCV' => 'Transferencia Bs',
-            'PAGO_MOVIL' => 'Pago móvil', 'DEPOSITO' => 'Depósito', 'BINANCE' => 'Binance', 'CRUCE' => 'Cruce', 'DESCUENTO_DIVISAS' => 'Descuento en divisas',
+            'PAGO_MOVIL' => 'Pago móvil', 'DEPOSITO' => 'Depósito', 'BINANCE' => 'Binance', 'CRUCE' => 'Cruce', 'DESCUENTO_DIVISAS' => 'Abono',
         ];
         $banco = trim((string) $this->banco);
         $bancoUpper = mb_strtoupper($banco, 'UTF-8');
@@ -141,6 +141,11 @@ class CobranzaMovimiento extends Model
             $quien = trim((string) $otra->contraparte);
 
             return 'Cruce · se fue en: '.($destino !== '' ? $destino : 'sin detalle').($quien !== '' && $quien !== $destino ? ' ('.$quien.')' : '');
+        }
+
+        // Compensación / descuento en divisas aplicado a una deuda = abono, no «descuento».
+        if ($bancoUpper === self::CUENTA_DESCUENTO_DIVISAS || strtoupper((string) $this->forma_pago) === 'DESCUENTO_DIVISAS') {
+            return 'Abono';
         }
 
         $forma = $formas[strtoupper((string) $this->forma_pago)] ?? match (true) {

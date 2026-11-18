@@ -19,32 +19,27 @@ class TesoreriaCajaMovimiento extends Model
 
     public const DIVISA_EUR = 'EUR';
 
-    /** Misma nomenclatura que Flujo de Caja (Finanzas). */
+    /** Categoría interna al guardar (compat con reportes / histórico). */
     public const CATEGORIA_EGRESO_REALIZADO = 'egreso_realizado';
-
-    public const CATEGORIA_EGRESO_DIVISAS = 'egreso_divisas';
-
-    public const CATEGORIA_COMPRA_DIVISAS = 'compra_divisas';
-
-    public const CATEGORIA_OTROS_EGRESOS = 'otros_egresos';
-
-    public const CATEGORIA_TRASLADOS = 'traslados';
 
     public const CATEGORIA_INGRESOS = 'ingresos';
 
+    /** UI: solo dos tipos. */
+    public const TIPOS = [
+        self::EGRESO => 'Egreso',
+        self::INGRESO => 'Ingreso',
+    ];
+
+    /** @deprecated Las categorías detalladas ya no se eligen en el modal. */
     public const CATEGORIAS = [
-        self::CATEGORIA_EGRESO_REALIZADO => 'EGRESOS REALIZADOS',
-        self::CATEGORIA_EGRESO_DIVISAS => 'EGRESOS EN DIVISAS',
-        self::CATEGORIA_COMPRA_DIVISAS => 'COMPRA DE DIVISAS',
-        self::CATEGORIA_OTROS_EGRESOS => 'OTROS EGRESOS (AVANCES Y CAMBIOS)',
-        self::CATEGORIA_TRASLADOS => 'TRASLADOS',
-        self::CATEGORIA_INGRESOS => 'INGRESOS',
+        self::CATEGORIA_EGRESO_REALIZADO => 'Egreso',
+        self::CATEGORIA_INGRESOS => 'Ingreso',
     ];
 
     protected $table = 'tesoreria_caja_movimientos';
 
     protected $fillable = [
-        'caja_id', 'tipo', 'categoria', 'origen', 'fecha', 'monto', 'moneda_divisa', 'concepto', 'referencia', 'sede', 'user_id',
+        'caja_id', 'tipo', 'categoria', 'tipo_gasto', 'origen', 'fecha', 'monto', 'moneda_divisa', 'concepto', 'referencia', 'sede', 'user_id', 'flujo_caja_id',
     ];
 
     protected $casts = [
@@ -62,6 +57,11 @@ class TesoreriaCajaMovimiento extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    public function flujoCaja(): BelongsTo
+    {
+        return $this->belongsTo(FlujoCaja::class, 'flujo_caja_id');
+    }
+
     public function detalles(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(TesoreriaCajaMovimientoDetalle::class, 'movimiento_id')->orderBy('sede')->orderBy('id');
@@ -74,14 +74,19 @@ class TesoreriaCajaMovimiento extends Model
 
     public static function tipoDesdeCategoria(string $categoria): string
     {
-        return $categoria === self::CATEGORIA_INGRESOS ? self::INGRESO : self::EGRESO;
+        return $categoria === self::CATEGORIA_INGRESOS || $categoria === self::INGRESO
+            ? self::INGRESO
+            : self::EGRESO;
+    }
+
+    public static function categoriaDesdeTipo(string $tipo): string
+    {
+        return $tipo === self::INGRESO ? self::CATEGORIA_INGRESOS : self::CATEGORIA_EGRESO_REALIZADO;
     }
 
     public function etiquetaCategoria(): string
     {
-        $clave = (string) ($this->categoria ?: ($this->esIngreso() ? self::CATEGORIA_INGRESOS : self::CATEGORIA_EGRESO_REALIZADO));
-
-        return self::CATEGORIAS[$clave] ?? strtoupper($clave);
+        return $this->esIngreso() ? 'Ingreso' : 'Egreso';
     }
 
     public function esDeCuadre(): bool

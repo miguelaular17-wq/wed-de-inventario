@@ -124,6 +124,7 @@
                 <tr>
                     <th style="width:100px;">Fecha</th>
                     <th>Caja</th>
+                    <th>Tipo de gasto</th>
                     <th>Concepto</th>
                     <th>Referencia</th>
                     <th style="text-align:right;">Monto</th>
@@ -138,6 +139,7 @@
                             <strong style="color:var(--blue);">{{ $m->caja?->esBolivares() ? 'CAJA PRINCIPAL' : 'CAJA PRINCIPAL' }}</strong><br>
                             <span class="muted" style="font-size:.85rem;">{{ $m->caja?->esBolivares() ? 'BOLÍVARES' : 'DIVISAS' }}</span>
                         </td>
+                        <td>{{ $m->tipo_gasto ?: '—' }}</td>
                         <td>
                             {{ $m->concepto }}
                             <div class="muted" style="font-size:.72rem;">{{ $m->usuario?->name }} · {{ $m->created_at?->format('d/m/Y H:i') }}</div>
@@ -154,7 +156,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" style="text-align:center; padding:30px; color:var(--muted);">
+                        <td colspan="7" style="text-align:center; padding:30px; color:var(--muted);">
                             No hay egresos. Regístralos con «Nuevo Egreso».
                         </td>
                     </tr>
@@ -163,7 +165,7 @@
             @if($egresos->isNotEmpty())
                 <tfoot>
                     <tr>
-                        <td colspan="4" style="text-align:right;">TOTAL EGRESOS</td>
+                        <td colspan="5" style="text-align:right;">TOTAL EGRESOS</td>
                         <td class="tc-egreso" style="text-align:right;" colspan="2">
                             @foreach($totalesEgreso as $cajaId => $monto)
                                 @php $c = $cajas->firstWhere('id', $cajaId); @endphp
@@ -272,7 +274,7 @@
                 @empty
                     <tr>
                         <td colspan="6" style="text-align:center; padding:30px; color:var(--muted);">
-                            No hay ingresos. El efectivo del cuadre entra solo al procesar/cerrar; también puedes usar «Nuevo Egreso» → Tipo: INGRESOS.
+                            No hay ingresos. El efectivo del cuadre entra solo al procesar/cerrar; también puedes usar «Nuevo Egreso» → Tipo: Ingreso.
                         </td>
                     </tr>
                 @endforelse
@@ -308,18 +310,26 @@
 
             <div style="display:flex; gap:15px; margin-bottom:10px;">
                 <div style="flex:1;">
-                    <label class="tc-lbl" id="tc-lbl-tipo">Tipo de Egreso</label>
-                    <select name="categoria" id="tc-categoria" required class="tc-inp" onchange="tcTitulo()">
-                        @foreach(\App\Models\TesoreriaCajaMovimiento::CATEGORIAS as $valor => $etiqueta)
-                            <option value="{{ $valor }}" @selected(old('categoria', 'egreso_realizado') === $valor)>{{ $etiqueta }}</option>
-                        @endforeach
+                    <label class="tc-lbl">Tipo</label>
+                    <select name="tipo" id="tc-tipo" required class="tc-inp" onchange="tcTitulo()">
+                        <option value="egreso" @selected(old('tipo', 'egreso') === 'egreso')>Egreso</option>
+                        <option value="ingreso" @selected(old('tipo') === 'ingreso')>Ingreso</option>
                     </select>
-                    <input type="hidden" name="tipo" id="tc-tipo" value="egreso">
                 </div>
                 <div style="flex:1;">
                     <label class="tc-lbl">Fecha</label>
                     <input type="date" name="fecha" value="{{ old('fecha', now()->toDateString()) }}" max="{{ now()->toDateString() }}" required class="tc-inp">
                 </div>
+            </div>
+
+            <div id="tc-row-tipo-gasto" style="margin-bottom:10px;">
+                <label class="tc-lbl" id="tc-lbl-tipo-gasto">Tipo de gasto</label>
+                <select name="tipo_gasto" id="tc-tipo-gasto" class="tc-inp">
+                    <option value="">-- Seleccione --</option>
+                    @foreach(($tiposGasto ?? []) as $tg)
+                        <option value="{{ $tg }}" @selected(old('tipo_gasto') === $tg)>{{ $tg }}</option>
+                    @endforeach
+                </select>
             </div>
 
             <div style="display:flex; gap:15px; margin-bottom:10px;">
@@ -379,8 +389,9 @@
 <script>
 (function () {
     const modal = document.getElementById('tc-modal');
-    const categoria = document.getElementById('tc-categoria');
     const tipo = document.getElementById('tc-tipo');
+    const tipoGasto = document.getElementById('tc-tipo-gasto');
+    const rowTipoGasto = document.getElementById('tc-row-tipo-gasto');
     const titulo = document.getElementById('tc-modal-titulo');
     const submit = document.getElementById('tc-submit');
     const caja = document.getElementById('tc-caja');
@@ -397,18 +408,20 @@
     }
 
     function esIngreso() {
-        return categoria.value === 'ingresos';
+        return tipo.value === 'ingreso';
     }
 
     window.tcTitulo = function () {
         const ingreso = esIngreso();
-        tipo.value = ingreso ? 'ingreso' : 'egreso';
         titulo.textContent = ingreso ? 'Nuevo Ingreso' : 'Nuevo Egreso';
-        document.getElementById('tc-lbl-tipo').textContent = ingreso ? 'Tipo de Ingreso' : 'Tipo de Egreso';
         document.getElementById('tc-lbl-banco').textContent = ingreso ? 'Cuenta que recibe el dinero' : 'Banco y Titular';
+        document.getElementById('tc-lbl-tipo-gasto').textContent = ingreso ? 'Tipo de ingreso (opcional)' : 'Tipo de gasto';
         document.getElementById('tc-motivo').placeholder = ingreso ? 'Ej. Cobro de alquiler local 3...' : 'Ej. Pago de internet mensual...';
         submit.textContent = ingreso ? 'Guardar Ingreso' : 'Guardar Egreso';
         submit.style.backgroundColor = ingreso ? '#0f766e' : '#1a4273';
+        rowTipoGasto.style.display = 'block';
+        tipoGasto.required = !ingreso;
+        if (ingreso) tipoGasto.value = tipoGasto.value; // keep optional selection
     };
 
     function actualizarLblDivisa() {
@@ -426,13 +439,7 @@
     };
 
     window.tcAbrirModal = function (t) {
-        if (t === 'ingreso' || t === 'ingresos') {
-            categoria.value = 'ingresos';
-        } else if (t && [...categoria.options].some(o => o.value === t)) {
-            categoria.value = t;
-        } else {
-            categoria.value = 'egreso_realizado';
-        }
+        tipo.value = (t === 'ingreso' || t === 'ingresos') ? 'ingreso' : 'egreso';
         tcTitulo();
         tcSyncMontos();
         modal.classList.add('abierto');
@@ -444,7 +451,7 @@
     monedaDivisa.addEventListener('change', actualizarLblDivisa);
     document.addEventListener('keydown', e => { if (e.key === 'Escape') tcCerrarModal(); });
     @if($errors->any())
-        tcAbrirModal(@json(old('categoria', old('tipo', 'egreso_realizado'))));
+        tcAbrirModal(@json(old('tipo', 'egreso')));
     @endif
 })();
 </script>

@@ -130,11 +130,50 @@ class CobranzaFlujoCajaTest extends TestCase
             'monto_bs' => 800, 'tasa_cambio' => 40, 'concepto' => 'Reparación local 3',
         ])->assertSessionHasNoErrors();
         $mov = CobranzaMovimiento::query()->firstOrFail();
-        $this->assertSame('egreso_realizado', FlujoCaja::query()->find($mov->flujo_caja_id)->categoria_egreso);
+        $espejo = FlujoCaja::query()->findOrFail($mov->flujo_caja_id);
+        $this->assertSame('egreso_realizado', $espejo->categoria_egreso);
+        $this->assertFalse((bool) $espejo->oculto, 'Egreso Cobranza con banco real debe verse en Finanzas');
+        $this->assertSame(FlujoCaja::ORIGEN_COBRANZA, $espejo->origen);
 
         $this->delete(route('cobranza.flujo.destroy', $mov))->assertSessionHasNoErrors();
         $this->assertSame(0, FlujoCaja::query()->count());
         $this->assertSame(0, CobranzaMovimiento::query()->count());
+    }
+
+    public function test_egreso_sin_banco_no_crea_copia_en_finanzas(): void
+    {
+        $user = $this->makeUser();
+        $this->actingAs($user)->post(route('cobranza.flujo.store'), [
+            'tipo' => 'egreso', 'tipo_gasto' => '087 - PAGO PROVEEDORES', 'fecha' => '2026-11-10',
+            'ambito' => 'cobranza', 'cuenta' => 'EFECTIVO|COBRANZA|SIN BANCO',
+            'monto_usd' => 50, 'tasa_cambio' => 40, 'concepto' => 'Pago en efectivo',
+        ])->assertSessionHasNoErrors();
+
+        $mov = CobranzaMovimiento::query()->firstOrFail();
+        $this->assertNull($mov->flujo_caja_id);
+        $this->assertSame(0, FlujoCaja::query()->count());
+    }
+
+    public function test_egreso_banca_internacional_va_sin_tasa_como_egreso_divisas(): void
+    {
+        $user = $this->makeUser();
+        $cuenta = 'Mercantil Panamá|José Jerez|BANCA INTERNACIONAL / BILLETERAS';
+        $this->actingAs($user)->post(route('cobranza.flujo.store'), [
+            'tipo' => 'egreso', 'tipo_gasto' => '087 - PAGO PROVEEDORES', 'fecha' => '2026-11-10',
+            'ambito' => 'patrimonial', 'cuenta' => $cuenta,
+            'monto_usd' => 250, 'concepto' => 'Pago internacional',
+        ])->assertSessionHasNoErrors();
+
+        $mov = CobranzaMovimiento::query()->firstOrFail();
+        $this->assertSame('250.00', number_format((float) $mov->monto_usd, 2, '.', ''));
+        $this->assertSame(0.0, (float) $mov->tasa_cambio);
+        $this->assertSame(0.0, (float) $mov->monto_bs);
+
+        $espejo = FlujoCaja::query()->findOrFail($mov->flujo_caja_id);
+        $this->assertSame('egreso_divisas', $espejo->categoria_egreso);
+        $this->assertFalse((bool) $espejo->oculto);
+        $this->assertSame(0.0, (float) $espejo->tasa_cambio);
+        $this->assertSame(0.0, (float) $espejo->monto_bs);
     }
 
     public function test_abonos_desde_la_web_bajan_la_deuda_y_la_marcan_pagada(): void

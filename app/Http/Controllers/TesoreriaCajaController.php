@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FinanzasCatalogo;
+use App\Models\FlujoCaja;
 use App\Models\TesoreriaCaja;
 use App\Models\TesoreriaCajaMovimiento;
 use App\Services\BcvRateService;
@@ -37,9 +39,11 @@ class TesoreriaCajaController extends Controller
             ->whereDate('fecha', '<=', $hasta)
             ->when($q !== '', function ($query) use ($q) {
                 $like = $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
-                $query->where(function ($w) use ($q, $like) {
+                $conTipoGasto = Schema::hasColumn('tesoreria_caja_movimientos', 'tipo_gasto');
+                $query->where(function ($w) use ($q, $like, $conTipoGasto) {
                     $w->where('concepto', $like, '%'.$q.'%')
-                        ->orWhere('referencia', $like, '%'.$q.'%');
+                        ->orWhere('referencia', $like, '%'.$q.'%')
+                        ->when($conTipoGasto, fn ($x) => $x->orWhere('tipo_gasto', $like, '%'.$q.'%'));
                 });
             })
             ->orderByDesc('fecha')
@@ -56,6 +60,7 @@ class TesoreriaCajaController extends Controller
             'ingresos' => $ingresos,
             'totalesEgreso' => $egresos->groupBy('caja_id')->map(fn ($g) => round($g->sum('monto'), 2)),
             'totalesIngreso' => $ingresos->groupBy('caja_id')->map(fn ($g) => round($g->sum('monto'), 2)),
+            'tiposGasto' => FinanzasCatalogo::tiposGasto(),
             'tasa_bcv' => (float) $bcv->getRateForToday(),
             'etiquetas' => config('inventario.display', []),
             'filtros' => [
@@ -71,11 +76,10 @@ class TesoreriaCajaController extends Controller
     {
         abort_unless(Schema::hasTable('tesoreria_caja_movimientos'), 503);
 
-        $categorias = array_keys(TesoreriaCajaMovimiento::CATEGORIAS);
         $data = $request->validate([
             'caja_id' => ['required', 'integer', 'exists:tesoreria_cajas,id'],
-            'categoria' => ['required', 'in:'.implode(',', $categorias)],
-            'tipo' => ['nullable', 'in:ingreso,egreso'],
+            'tipo' => ['required', 'in:ingreso,egreso'],
+            'tipo_gasto' => ['nullable', 'string', 'max:120'],
             'fecha' => ['required', 'date', 'before_or_equal:today'],
             'monto' => ['nullable', 'numeric', 'min:0.01'],
             'monto_usd' => ['nullable', 'numeric', 'min:0'],
@@ -85,7 +89,17 @@ class TesoreriaCajaController extends Controller
             'concepto' => ['required', 'string', 'min:3', 'max:300'],
             'referencia' => ['nullable', 'string', 'max:120'],
         ]);
-        $data['tipo'] = TesoreriaCajaMovimiento::tipoDesdeCategoria((string) $data['categoria']);
+        $data['tipo'] = $data['tipo'] === TesoreriaCajaMovimiento::INGRESO
+            ? TesoreriaCajaMovimiento::INGRESO
+            : TesoreriaCajaMovimiento::EGRESO;
+        $data['categoria'] = TesoreriaCajaMovimiento::categoriaDesdeTipo($data['tipo']);
+        $tipoGasto = trim((string) ($data['tipo_gasto'] ?? ''));
+        if ($data['tipo'] === TesoreriaCajaMovimiento::EGRESO && $tipoGasto === '') {
+            throw ValidationException::withMessages([
+                'tipo_gasto' => 'Selecciona el tipo de gasto.',
+            ]);
+        }
+        $data['tipo_gasto'] = $tipoGasto !== '' ? $tipoGasto : null;
 
         /** @var TesoreriaCaja $cajaPreview */
         $cajaPreview = TesoreriaCaja::query()->findOrFail((int) $data['caja_id']);
@@ -154,12 +168,15 @@ class TesoreriaCajaController extends Controller
             if (Schema::hasColumn('tesoreria_caja_movimientos', 'categoria')) {
                 $payload['categoria'] = $data['categoria'];
             }
-            TesoreriaCajaMovimiento::query()->create($payload);
+            if (Schema::hasColumn('tesoreria_caja_movimientos', 'tipo_gasto')) {
+                $payload['tipo_gasto'] = $data['tipo_gasto'];
+            }
+            $mov = TesoreriaCajaMovimiento::query()->create($payload);
             $caja->update(['saldo' => round((float) $caja->saldo + $delta, 2)]);
+            $this->sincronizarEspejoFinanzas($mov->fresh(['caja']), app(BcvRateService::class));
         });
 
-        $etiqueta = TesoreriaCajaMovimiento::CATEGORIAS[$data['categoria']]
-            ?? ($data['tipo'] === 'ingreso' ? 'Ingreso' : 'Egreso');
+        $etiqueta = $data['tipo'] === TesoreriaCajaMovimiento::INGRESO ? 'Ingreso' : 'Egreso';
 
         return redirect()->route('tesoreria.caja.index', array_filter([
             'desde' => $request->input('volver_desde'),
@@ -181,11 +198,82 @@ class TesoreriaCajaController extends Controller
             $caja = TesoreriaCaja::query()->lockForUpdate()->findOrFail($movimiento->caja_id);
             $delta = $movimiento->esIngreso() ? -$movimiento->monto : $movimiento->monto;
             $nuevo = round((float) $caja->saldo + $delta, 2);
+            $this->borrarEspejoFinanzas($movimiento);
             $movimiento->delete();
             $caja->update(['saldo' => $nuevo]);
         });
 
         return redirect()->route('tesoreria.caja.index')->with('success', 'Movimiento eliminado y saldo actualizado.');
+    }
+
+    /**
+     * Egresos (e ingresos manuales) de Caja de Tesorería → copia visible en Flujo de Finanzas.
+     */
+    private function sincronizarEspejoFinanzas(TesoreriaCajaMovimiento $mov, BcvRateService $bcv): void
+    {
+        if (! Schema::hasTable('flujo_cajas') || ! Schema::hasColumn('flujo_cajas', 'origen')) {
+            return;
+        }
+        if (! Schema::hasColumn('tesoreria_caja_movimientos', 'flujo_caja_id')) {
+            return;
+        }
+        if ($mov->esDeCuadre()) {
+            return;
+        }
+
+        $caja = $mov->caja;
+        $tasa = max(0.0001, (float) $bcv->getRateForToday());
+        $esBs = $caja?->esBolivares() ?? true;
+        if ($esBs) {
+            $montoBs = round((float) $mov->monto, 2);
+            $montoUsd = round($montoBs / $tasa, 2);
+        } else {
+            $montoUsd = round((float) $mov->monto, 2);
+            $montoBs = round($montoUsd * $tasa, 2);
+        }
+
+        $titular = $esBs ? 'BOLÍVARES' : 'DIVISAS';
+        $datos = [
+            'fecha' => $mov->fecha->toDateString(),
+            'tipo' => $mov->tipo,
+            'categoria_egreso' => $mov->esIngreso() ? 'ingresos' : 'egreso_realizado',
+            'banco' => 'CAJA PRINCIPAL',
+            'titular' => $titular,
+            'categoria_cuenta' => 'TESORERÍA',
+            'referencia' => $mov->referencia,
+            'monto_usd' => $montoUsd,
+            'tasa_cambio' => $tasa,
+            'diferencial_cambiario' => 0,
+            'monto_bs' => $montoBs,
+            'comision' => 0,
+            'motivo' => mb_substr('Tesorería · Caja · '.$mov->concepto, 0, 255),
+            'oculto' => false,
+            'origen' => FlujoCaja::ORIGEN_TESORERIA_CAJA,
+        ];
+        if (Schema::hasColumn('flujo_cajas', 'tipo_gasto')) {
+            $datos['tipo_gasto'] = $mov->esIngreso() ? null : ($mov->tipo_gasto ?? null);
+        }
+
+        $espejo = $mov->flujo_caja_id ? FlujoCaja::query()->find($mov->flujo_caja_id) : null;
+        if ($espejo) {
+            $espejo->update($datos);
+        } else {
+            $espejo = FlujoCaja::query()->create($datos);
+            $espejo->forceFill(['es_conciliado' => false])->save();
+            $mov->forceFill(['flujo_caja_id' => $espejo->id])->saveQuietly();
+        }
+    }
+
+    private function borrarEspejoFinanzas(TesoreriaCajaMovimiento $mov): void
+    {
+        if (! $mov->flujo_caja_id || ! Schema::hasTable('flujo_cajas')) {
+            return;
+        }
+        FlujoCaja::query()
+            ->whereKey($mov->flujo_caja_id)
+            ->where('origen', FlujoCaja::ORIGEN_TESORERIA_CAJA)
+            ->delete();
+        $mov->forceFill(['flujo_caja_id' => null])->saveQuietly();
     }
 
     private function asegurarCajas(): void

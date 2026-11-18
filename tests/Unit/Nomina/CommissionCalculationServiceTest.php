@@ -264,6 +264,84 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(2.0, $resultado['total']);
     }
 
+    public function test_sambil_sin_hs_excluye_honor_y_samsung_de_tienda_sambil(): void
+    {
+        NominaConfig::put('comision_sambil_sin_hs_pct', 0.20);
+        $empleado = $this->empleado(NominaEmpleado::COMISION_SAMBIL_SIN_HS, 'SAM-HS');
+        $periodo = $this->periodo();
+
+        $xiaomiId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-XIA-SAM',
+            'nombre' => 'Xiaomi',
+            'categoria' => 'TELEFONIA',
+            'subcategoria' => 'XIAOMI',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $samsungId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-SAM-SAM',
+            'nombre' => 'Samsung',
+            'categoria' => 'TELEFONIA',
+            'subcategoria' => 'SAMSUNG',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $honorId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-HON-SAM',
+            'nombre' => 'Honor',
+            'categoria' => 'TELEFONIA',
+            'subcategoria' => 'HONOR',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->venta('SAM-HS', 1000, ['sede' => 'SAMBIL', 'producto_id' => $xiaomiId]);
+        $this->venta('SAM-HS', 2000, ['sede' => 'SAMBIL', 'producto_id' => $samsungId]);
+        $this->venta('SAM-HS', 500, ['sede' => 'SAMBIL', 'producto_id' => $honorId]);
+        $this->documento('SAMBIL', 3500);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(1000.0, $resultado['base']); // 3500 - 2000 - 500
+        $this->assertSame(2.0, $resultado['total']);
+        $this->assertSame(2000.0, $resultado['ventas_samsung_excluidas']);
+        $this->assertSame(500.0, $resultado['ventas_honor_excluidas']);
+    }
+
+    public function test_tecnohouse_sin_hs_excluye_honor_y_samsung(): void
+    {
+        NominaConfig::put('comision_tecnohouse_sin_hs_pct', 0.20);
+        $empleado = $this->empleado(NominaEmpleado::COMISION_TECNOHOUSE_SIN_HS, 'TH-HS');
+        $periodo = $this->periodo();
+
+        $otrosId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-ACC-TH',
+            'nombre' => 'Accesorio',
+            'categoria' => 'ACCESORIOS',
+            'subcategoria' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $samsungId = DB::table('productos')->insertGetId([
+            'codigo' => 'P-SAM-TH',
+            'nombre' => 'Samsung TH',
+            'categoria' => 'TELEFONIA',
+            'subcategoria' => 'SAMSUNG',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->venta('TH-HS', 800, ['sede' => 'TECNOHOUSE', 'producto_id' => $otrosId]);
+        $this->venta('TH-HS', 1200, ['sede' => 'TECNOHOUSE', 'producto_id' => $samsungId]);
+        $this->documento('TECNOHOUSE', 2000);
+
+        $resultado = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+
+        $this->assertSame(800.0, $resultado['base']);
+        $this->assertSame(1.6, $resultado['total']);
+        $this->assertSame(1200.0, $resultado['ventas_samsung_excluidas']);
+    }
+
     public function test_colaborador_cobra_cero_punto_veinticinco_sobre_cinco_tiendas(): void
     {
         NominaConfig::put('comision_colaborador_pct', 0.25);

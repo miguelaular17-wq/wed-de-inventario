@@ -702,6 +702,7 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
     Route::get('/gasto-directivos/reporte', [\App\Http\Controllers\GastoDirectivosController::class, 'reporte'])->name('finanzas.gasto_directivos.reporte');
     Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
     Route::get('/gastos-fijos/pendientes', [FinanzasController::class, 'getGastosFijosParaVincular'])->name('finanzas.gastos_fijos.pendientes');
+    Route::get('/flujo-caja/cobranza-facturas', [FinanzasController::class, 'buscarFacturasCobranza'])->name('finanzas.cobranza_facturas');
     Route::get('/configuracion', [\App\Http\Controllers\FinanzasConfiguracionController::class, 'index'])->name('finanzas.configuracion');
     Route::get('/cuentas', [\App\Http\Controllers\FinanzasCuentasController::class, 'index'])->name('finanzas.cuentas');
 

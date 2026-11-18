@@ -66,6 +66,14 @@
                     <input type="number" step="0.0001" min="0" max="100" name="comision_sambil_pct" value="{{ number_format($comisionSambilPct, 4, '.', '') }}" required>
                 </div>
                 <div class="field">
+                    <label>Sambil sin Honor/Samsung — venta neta tienda (%)</label>
+                    <input type="number" step="0.0001" min="0" max="100" name="comision_sambil_sin_hs_pct" value="{{ number_format($comisionSambilSinHsPct, 4, '.', '') }}" required>
+                </div>
+                <div class="field">
+                    <label>Tecno House sin Honor/Samsung — venta neta tienda (%)</label>
+                    <input type="number" step="0.0001" min="0" max="100" name="comision_tecnohouse_sin_hs_pct" value="{{ number_format($comisionTecnohouseSinHsPct, 4, '.', '') }}" required>
+                </div>
+                <div class="field">
                     <label>Colaborador — Sambil+Doral+Zamora+Centro+Virtudes (%)</label>
                     <input type="number" step="0.0001" min="0" max="100" name="comision_colaborador_pct" value="{{ number_format($comisionColaboradorPct, 4, '.', '') }}" required>
                 </div>

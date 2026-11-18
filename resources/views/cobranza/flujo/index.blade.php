@@ -538,7 +538,7 @@
                 <div><label>Fecha</label><input type="date" name="fecha" value="{{ old('fecha', now()->toDateString()) }}" max="{{ now()->toDateString() }}" required></div>
                 <div style="flex:2;">
                     <label id="cf-label-cuenta">Cuenta que recibe el dinero</label>
-                    <select name="cuenta" id="cf-cuenta" required>
+                    <select name="cuenta" id="cf-cuenta" required onchange="cfCuentaCambio()">
                         <option value="">-- Seleccione --</option>
                         @foreach($cuentas as $grupo => $lista)
                             <optgroup label="{{ $grupo }}">
@@ -564,8 +564,8 @@
             </div>
             <div class="cf-row" id="cf-montos-simples">
                 <div><label>Monto USD</label><input type="number" name="monto_usd" id="cf-usd" step="0.01" min="0" value="{{ old('monto_usd', $factura['saldo'] ?? '') }}"></div>
-                <div><label>Tasa de Cambio</label><input type="number" name="tasa_cambio" id="cf-tasa" step="0.0001" min="0" value="{{ old('tasa_cambio', $tasaHoy ?: '') }}"></div>
-                <div><label>Monto BS</label><input type="number" name="monto_bs" id="cf-bs" step="0.01" min="0" value="{{ old('monto_bs') }}"></div>
+                <div id="cf-col-tasa"><label>Tasa de Cambio</label><input type="number" name="tasa_cambio" id="cf-tasa" step="0.0001" min="0" value="{{ old('tasa_cambio', $tasaHoy ?: '') }}"></div>
+                <div id="cf-col-bs"><label>Monto BS</label><input type="number" name="monto_bs" id="cf-bs" step="0.01" min="0" value="{{ old('monto_bs') }}"></div>
             </div>
             <div id="cf-montos-ambas" style="display:none;">
                 <div class="cf-row">
@@ -573,7 +573,7 @@
                     <div><label>Monto cuota ($)</label><input type="number" id="cf-monto-cuota" step="0.01" min="0" value="{{ old('monto_cuota') }}" placeholder="0.00"></div>
                     <div><label>Total USD</label><input type="number" id="cf-usd-ambas" step="0.01" min="0" readonly tabindex="-1" style="background:#f8fafc;color:#475569;"></div>
                 </div>
-                <div class="cf-row">
+                <div class="cf-row" id="cf-ambas-tasa-bs">
                     <div><label>Tasa de Cambio</label><input type="number" id="cf-tasa-ambas" step="0.0001" min="0" value="{{ old('tasa_cambio', $tasaHoy ?: '') }}"></div>
                     <div><label>Monto BS</label><input type="number" id="cf-bs-ambas" step="0.01" min="0" readonly tabindex="-1" style="background:#f8fafc;color:#475569;"></div>
                 </div>
@@ -666,7 +666,7 @@
             <div class="cf-row">
                 <div>
                     <label>Cuenta</label>
-                    <select name="cuenta" id="cfe-cuenta" required>
+                    <select name="cuenta" id="cfe-cuenta" required onchange="cfCuentaCambioEdit()">
                         @foreach($cuentas as $grupo => $lista)
                             <optgroup label="{{ $grupo }}">
                                 @foreach($lista as $c)<option value="{{ $c['valor'] }}">{{ $c['banco'] }} - {{ $c['titular'] }}</option>@endforeach
@@ -677,8 +677,8 @@
             </div>
             <div class="cf-row">
                 <div><label>Monto USD</label><input type="number" step="0.01" min="0" name="monto_usd" id="cfe-usd"></div>
-                <div><label>Tasa</label><input type="number" step="0.0001" min="0" name="tasa_cambio" id="cfe-tasa"></div>
-                <div><label>Monto BS</label><input type="number" step="0.01" min="0" name="monto_bs" id="cfe-bs"></div>
+                <div id="cfe-col-tasa"><label>Tasa</label><input type="number" step="0.0001" min="0" name="tasa_cambio" id="cfe-tasa"></div>
+                <div id="cfe-col-bs"><label>Monto BS</label><input type="number" step="0.01" min="0" name="monto_bs" id="cfe-bs"></div>
             </div>
             <div class="cf-row">
                 <div style="flex:2;"><label>Concepto</label><input type="text" maxlength="255" name="concepto" id="cfe-concepto" required></div>
@@ -797,9 +797,38 @@
     }
 
     // ── Montos Bs ↔ divisas con la tasa ─────────────────────────────
+    function esBancaInternacionalValor(valor) {
+        const cat = String(valor || '').split('|')[2] || '';
+        return cat.toUpperCase().includes('BANCA INTERNACIONAL');
+    }
+    function cfAplicarCamposDivisas(intl, colTasa, colBs, tasa, bs) {
+        if (colTasa) colTasa.style.display = intl ? 'none' : '';
+        if (colBs) colBs.style.display = intl ? 'none' : '';
+        if (intl) {
+            if (tasa) tasa.value = '';
+            if (bs) bs.value = '';
+        }
+    }
+    window.cfCuentaCambio = function () {
+        const intl = esBancaInternacionalValor($('cf-cuenta').value);
+        cfAplicarCamposDivisas(intl, $('cf-col-tasa'), $('cf-col-bs'), $('cf-tasa'), $('cf-bs'));
+        const ambasTasa = $('cf-ambas-tasa-bs');
+        if (ambasTasa) ambasTasa.style.display = intl ? 'none' : '';
+        if (intl) {
+            $('cf-tasa-ambas').value = '';
+            $('cf-bs-ambas').value = '';
+        }
+    };
+    window.cfCuentaCambioEdit = function () {
+        const intl = esBancaInternacionalValor($('cfe-cuenta').value);
+        cfAplicarCamposDivisas(intl, $('cfe-col-tasa'), $('cfe-col-bs'), $('cfe-tasa'), $('cfe-bs'));
+    };
     function enlazarMontos(usd, tasa, bs) {
         let ultimo = null;
         const calcular = () => {
+            if (esBancaInternacionalValor(($('cf-cuenta') || {}).value) || esBancaInternacionalValor(($('cfe-cuenta') || {}).value)) {
+                return;
+            }
             const t = parseFloat(tasa.value) || 0;
             if (t <= 0) return;
             if (ultimo === 'bs') { const b = parseFloat(bs.value) || 0; usd.value = b > 0 ? (b / t).toFixed(2) : ''; }
@@ -812,6 +841,7 @@
     }
     const ponerUsd = enlazarMontos($('cf-usd'), $('cf-tasa'), $('cf-bs'));
     enlazarMontos($('cfe-usd'), $('cfe-tasa'), $('cfe-bs'));
+    cfCuentaCambio();
 
     // Destino del pago de cuota: capital / cuota / ambas (o abono directo a capital sin cuota)
     let contratoActual = null;
@@ -1327,6 +1357,7 @@
         set('cfe-fecha', m.fecha); set('cfe-ambito', m.ambito); set('cfe-cuenta', m.cuenta);
         set('cfe-usd', m.monto_usd || ''); set('cfe-tasa', m.tasa_cambio || ''); set('cfe-bs', m.monto_bs || '');
         set('cfe-referencia', m.referencia); set('cfe-concepto', m.concepto); set('cfe-contraparte', m.contraparte); set('cfe-observaciones', m.observaciones);
+        if (typeof cfCuentaCambioEdit === 'function') cfCuentaCambioEdit();
         $('cfe-titulo').textContent = m.tipo === 'ingreso' ? 'Editar ingreso' : 'Editar egreso';
         const esEgreso = m.tipo !== 'ingreso';
         $('cfe-tipo-gasto-wrap').style.display = esEgreso ? '' : 'none';

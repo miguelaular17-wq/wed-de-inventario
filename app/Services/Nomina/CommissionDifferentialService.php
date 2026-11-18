@@ -32,6 +32,8 @@ class CommissionDifferentialService
         'comision_nunes_pct' => ['Nunes (%)', 0.60],
         'comision_pcp_pct' => ['PCP (%)', 0.015],
         'comision_sambil_pct' => ['Sambil (%)', 0.20],
+        'comision_sambil_sin_hs_pct' => ['Sambil sin Honor/Samsung (%)', 0.20],
+        'comision_tecnohouse_sin_hs_pct' => ['Tecno House sin Honor/Samsung (%)', 0.20],
         'comision_colaborador_pct' => ['Colaborador (%)', 0.25],
         'comision_servicio_tecnico_pct' => ['Participación servicio técnico (%)', 50],
         'retencion_comision_pct' => ['Retención sobre comisión (%)', 10],
@@ -46,6 +48,8 @@ class CommissionDifferentialService
         NominaEmpleado::COMISION_NUNES => 'comision_nunes_pct',
         NominaEmpleado::COMISION_PCP => 'comision_pcp_pct',
         NominaEmpleado::COMISION_SAMBIL => 'comision_sambil_pct',
+        NominaEmpleado::COMISION_SAMBIL_SIN_HS => 'comision_sambil_sin_hs_pct',
+        NominaEmpleado::COMISION_TECNOHOUSE_SIN_HS => 'comision_tecnohouse_sin_hs_pct',
         NominaEmpleado::COMISION_COLABORADOR => 'comision_colaborador_pct',
     ];
 

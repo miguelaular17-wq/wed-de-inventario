@@ -8,6 +8,292 @@
         max-width: 1600px;
         margin: 0 auto;
     }
+    #nuevoEgresoModal .ne-box {
+        width: min(96vw, 980px);
+        max-width: 980px;
+        padding: 20px 24px 18px;
+        transition: max-width .18s ease, width .18s ease;
+    }
+    #nuevoEgresoModal .ne-box.ne-wide {
+        width: min(96vw, 1320px);
+        max-width: 1320px;
+    }
+    #nuevoEgresoModal .ne-body {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 16px;
+        align-items: start;
+    }
+    #nuevoEgresoModal .ne-box.ne-wide .ne-body {
+        grid-template-columns: minmax(0, 1fr) minmax(380px, 460px);
+    }
+    #nuevoEgresoModal .ne-side {
+        display: none;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+        max-height: calc(95vh - 120px);
+        overflow-y: auto;
+        padding-left: 4px;
+    }
+    #nuevoEgresoModal .ne-box.ne-wide .ne-side {
+        display: flex;
+        border-left: 1px solid #e2e8f0;
+        padding-left: 16px;
+    }
+    #nuevoEgresoModal .ne-side > [id^="panel_"],
+    #nuevoEgresoModal .ne-side > [id^="container_asiento"] {
+        margin-bottom: 0 !important;
+    }
+    #nuevoEgresoModal .ne-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px 20px;
+        align-items: start;
+    }
+    #nuevoEgresoModal .ne-col {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+    }
+    #nuevoEgresoModal .ne-row {
+        display: flex;
+        gap: 12px;
+    }
+    #nuevoEgresoModal .ne-row > * { flex: 1; min-width: 0; }
+    #nuevoEgresoModal .ne-full { grid-column: 1 / -1; }
+    #nuevoEgresoModal .ne-sec {
+        margin: 0 0 4px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #64748b;
+    }
+    #nuevoEgresoModal .ne-lbl {
+        display: block;
+        margin-bottom: 3px;
+        font-weight: 500;
+        font-size: 0.88rem;
+        color: #334155;
+    }
+    #nuevoEgresoModal .ne-inp,
+    #nuevoEgresoModal select.ne-inp,
+    #nuevoEgresoModal input.ne-inp {
+        width: 100%;
+        padding: 7px 9px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        background: #fff;
+        box-sizing: border-box;
+        font: inherit;
+    }
+    #nuevoEgresoModal .ne-opts {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 22px;
+        padding: 10px 14px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+    }
+    #nuevoEgresoModal .ne-opts label {
+        display: inline-flex !important;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 2px 0;
+        font-size: 0.88rem;
+        font-weight: 500;
+        line-height: 1.2;
+        white-space: nowrap;
+        cursor: pointer;
+        overflow: visible;
+    }
+    #nuevoEgresoModal .ne-opts input[type="checkbox"] {
+        flex-shrink: 0;
+        width: 16px;
+        height: 16px;
+        margin: 0;
+    }
+    #nuevoEgresoModal .gf-picker {
+        background: #fff;
+        border: 1.5px solid #93c5fd;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    #nuevoEgresoModal .gf-picker-search {
+        width: 100%;
+        border: none;
+        border-bottom: 1px solid #dbeafe;
+        padding: 9px 12px;
+        font-size: 0.85rem;
+        box-sizing: border-box;
+        outline: none;
+        background: #f8fbff;
+    }
+    #nuevoEgresoModal .gf-picker-search:focus { background: #fff; }
+    #nuevoEgresoModal .gf-picker-list {
+        max-height: 260px;
+        overflow-y: auto;
+        padding: 4px;
+    }
+    #nuevoEgresoModal .gf-picker-list::-webkit-scrollbar { width: 6px; }
+    #nuevoEgresoModal .gf-picker-list::-webkit-scrollbar-thumb {
+        background: #bfdbfe;
+        border-radius: 6px;
+    }
+    #nuevoEgresoModal .gf-picker-group {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #64748b;
+        padding: 8px 8px 4px;
+    }
+    #nuevoEgresoModal .gf-picker-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px 10px;
+        align-items: center;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background: transparent;
+        border-radius: 7px;
+        padding: 8px 10px;
+        cursor: pointer;
+        font: inherit;
+        color: inherit;
+    }
+    #nuevoEgresoModal .gf-picker-item:hover,
+    #nuevoEgresoModal .gf-picker-item:focus {
+        background: #eff6ff;
+        outline: none;
+    }
+    #nuevoEgresoModal .gf-picker-item.is-urgente { box-shadow: inset 3px 0 0 #f59e0b; }
+    #nuevoEgresoModal .gf-picker-title {
+        font-size: 0.84rem;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    #nuevoEgresoModal .gf-picker-sub {
+        font-size: 0.72rem;
+        color: #64748b;
+        line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    #nuevoEgresoModal .gf-picker-amt {
+        font-size: 0.84rem;
+        font-weight: 700;
+        color: #1d4ed8;
+        white-space: nowrap;
+    }
+    #nuevoEgresoModal .gf-picker-empty {
+        padding: 14px 12px;
+        font-size: 0.82rem;
+        color: #64748b;
+        text-align: center;
+    }
+    #nuevoEgresoModal #panel_gasto_fijo {
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    #nuevoEgresoModal .gf-item {
+        background: #fff;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    #nuevoEgresoModal .gf-item-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: flex-start;
+        min-width: 0;
+    }
+    #nuevoEgresoModal .gf-item-info {
+        min-width: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+    }
+    #nuevoEgresoModal .gf-item-title {
+        font-weight: 700;
+        color: #0f172a;
+        font-size: 0.86rem;
+        line-height: 1.3;
+        word-break: normal;
+        overflow-wrap: anywhere;
+    }
+    #nuevoEgresoModal .gf-item-sub,
+    #nuevoEgresoModal .gf-item-meta {
+        font-size: 0.72rem;
+        color: #64748b;
+        line-height: 1.3;
+        margin-top: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    #nuevoEgresoModal .gf-item-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 96px;
+        gap: 8px;
+        width: 100%;
+    }
+    #nuevoEgresoModal .gf-item-actions select,
+    #nuevoEgresoModal .gf-item-actions input {
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border: 1px solid #93c5fd;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        background: #fff;
+    }
+    #nuevoEgresoModal .gf-item-actions input {
+        font-weight: 700;
+        text-align: right;
+    }
+    #nuevoEgresoModal .gf-item-del {
+        border: none;
+        background: #fee2e2;
+        color: #b91c1c;
+        border-radius: 6px;
+        cursor: pointer;
+        width: 28px;
+        height: 28px;
+        flex-shrink: 0;
+        line-height: 1;
+    }
+    @media (max-width: 900px) {
+        #nuevoEgresoModal .ne-grid { grid-template-columns: 1fr; }
+        #nuevoEgresoModal .ne-box.ne-wide .ne-body { grid-template-columns: 1fr; }
+        #nuevoEgresoModal .ne-box.ne-wide .ne-side {
+            border-left: none;
+            padding-left: 0;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 12px;
+            max-height: none;
+        }
+    }
     .modern-table-container {
         background: #ffffff;
         border-radius: 12px;
@@ -507,7 +793,16 @@
                             </td>
                             <td>{{ $mov->tipo_gasto ?: '-' }}@if($mov->es_todoticket) <span style="display:inline-block;margin-left:4px;background:#d1fae5;color:#065f46;font-size:0.7rem;padding:1px 6px;border-radius:999px;">TodoTicket</span>@endif</td>
                             <td>
-                                {{ $mov->motivo ?: '-' }}
+                                @php
+                                    $motivoEr = (string) ($mov->motivo ?: '-');
+                                    $sobranteEr = str_contains($motivoEr, ' · Sobrante $') ? explode(' · Sobrante $', $motivoEr, 2) : null;
+                                @endphp
+                                @if($sobranteEr)
+                                    <div>{{ $sobranteEr[0] !== '' ? $sobranteEr[0] : '-' }}</div>
+                                    <div style="margin-top:3px; font-size:0.75rem; color:#9a3412; font-weight:600;">Sobrante ${{ $sobranteEr[1] }}</div>
+                                @else
+                                    {{ $motivoEr }}
+                                @endif
                                 @if(!empty($mov->detalle_todoticket) && is_array($mov->detalle_todoticket))
                                     <div style="margin-top:4px;font-size:0.75rem;color:#047857;">
                                         Recarga {{ number_format($mov->detalle_todoticket['recarga'] ?? 0, 2, ',', '.') }}
@@ -856,7 +1151,23 @@
                                     <span class="muted" style="font-size: 0.85rem;">{{ $mov->titular }}</span>
                                 </td>
                                 <td>{{ $mov->tipo_gasto ?: '-' }}</td>
-                                <td>{{ $mov->motivo ?: '-' }}</td>
+                                <td>
+                                    @php
+                                        $motivoDiv = (string) ($mov->motivo ?: '-');
+                                        $tieneSobrante = str_contains($motivoDiv, 'Sobrante $');
+                                    @endphp
+                                    @if($tieneSobrante)
+                                        @php
+                                            [$motivoBase, $sobranteTxt] = array_pad(explode(' · Sobrante $', $motivoDiv, 2), 2, null);
+                                        @endphp
+                                        <div>{{ $motivoBase !== '' ? $motivoBase : '-' }}</div>
+                                        @if($sobranteTxt)
+                                            <div style="margin-top:3px; font-size:0.75rem; color:#9a3412; font-weight:600;">Sobrante ${{ $sobranteTxt }}</div>
+                                        @endif
+                                    @else
+                                        {{ $motivoDiv }}
+                                    @endif
+                                </td>
                                 <td class="col-number" style="text-align: right; font-weight: 500;">
                                     {{ $mov->monto_usd ? '$'.number_format($mov->monto_usd, 2) : '-' }}
                                 </td>
@@ -1117,11 +1428,11 @@
 
 <!-- Modal Nuevo Egreso -->
 <div id="nuevoEgresoModal" class="modal-overlay" style="display: none; z-index: 1100;">
-    <div class="panel modal-box" style="width: 95%; max-width: 600px; position: relative; padding: 15px 20px; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); max-height: 95vh; overflow-y: auto;">
+    <div class="panel modal-box ne-box" style="position: relative; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); max-height: 95vh; overflow-y: auto;">
         <button type="button" class="modal-close" onclick="closeNuevoEgresoModal()" aria-label="Cerrar" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
-        <h3 style="margin: 0 0 15px; font-size: 1.1rem; color: var(--blue); display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0 40px 16px 0; font-size: 1.15rem; color: var(--blue); display: flex; justify-content: space-between; align-items: center; gap: 12px;">
             <span id="nuevoEgresoModalTitulo">Nuevo Egreso</span>
-            <button type="button" id="btn-ocr" onclick="document.getElementById('ocr-upload').click()" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+            <button type="button" id="btn-ocr" onclick="document.getElementById('ocr-upload').click()" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; padding: 5px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 5px; flex-shrink: 0;">
                 <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                 <span id="ocr-btn-text">Escanear Recibo</span>
             </button>
@@ -1132,258 +1443,284 @@
             @csrf
             <input type="hidden" name="cuenta_por_pagar_id" id="cuenta_por_pagar_id" value="">
             <div id="banner_pago_cuenta" style="display:none; margin-bottom: 12px; padding: 10px 12px; background: #fff7ed; border: 1px solid #fdba74; border-radius: 8px; color: #9a3412; font-size: 0.85rem;"></div>
-            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
-                <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tipo de Egreso</label>
-                    <select name="categoria_egreso" id="categoria_egreso" onchange="toggleTraslados()" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                        @if($soloAvances ?? false)
-                            <option value="otros_egresos" selected>OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
-                        @else
-                        <option value="egreso_realizado">EGRESOS REALIZADOS</option>
-                        <option value="egreso_divisas">EGRESOS EN DIVISAS</option>
-                        <option value="compra_divisas">COMPRA DE DIVISAS</option>
-                        <option value="otros_egresos">OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
-                        <option value="traslados">TRASLADOS</option>
-                        <option value="ingresos">INGRESOS</option>
-                        @endif
-                    </select>
-                </div>
-                <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Fecha</label>
-                    <input type="date" name="fecha" value="{{ $fecha_filtro }}" max="{{ date('Y-m-d') }}" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                </div>
-            </div>
 
-            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
-                <div style="flex: 2;">
-                    <label id="lbl_banco_titular" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Banco y Titular</label>
-                    <select id="banco_titular" name="banco_titular" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
-                        <option value="">-- Seleccione --</option>
-                        @php $cuentasAgrupadas = collect($cuentas)->groupBy('categoria'); @endphp
-                        @foreach($cuentasAgrupadas as $categoria => $listaCuentas)
-                            <optgroup label="{{ $categoria }}">
-                                @foreach($listaCuentas as $cuenta)
-                                    <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
-                                        {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
-                                    </option>
+            <div class="ne-body">
+            <div class="ne-main">
+            <div class="ne-grid">
+                <div class="ne-col">
+                    <div class="ne-sec">Movimiento</div>
+                    <div class="ne-row">
+                        <div>
+                            <label class="ne-lbl">Tipo de Egreso</label>
+                            <select name="categoria_egreso" id="categoria_egreso" class="ne-inp" onchange="toggleTraslados()" required>
+                                @if($soloAvances ?? false)
+                                    <option value="otros_egresos" selected>OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
+                                @else
+                                <option value="egreso_realizado">EGRESOS REALIZADOS</option>
+                                <option value="egreso_divisas">EGRESOS EN DIVISAS</option>
+                                <option value="compra_divisas">COMPRA DE DIVISAS</option>
+                                <option value="otros_egresos">OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
+                                <option value="traslados">TRASLADOS</option>
+                                <option value="ingresos">INGRESOS</option>
+                                @endif
+                            </select>
+                        </div>
+                        <div>
+                            <label class="ne-lbl">Fecha</label>
+                            <input type="date" name="fecha" class="ne-inp" value="{{ $fecha_filtro }}" max="{{ date('Y-m-d') }}" required>
+                        </div>
+                    </div>
+
+                    <div class="ne-row">
+                        <div style="flex: 2.2;">
+                            <label class="ne-lbl" id="lbl_banco_titular">Banco y Titular</label>
+                            <select id="banco_titular" name="banco_titular" class="ne-inp" required>
+                                <option value="">-- Seleccione --</option>
+                                @php $cuentasAgrupadas = collect($cuentas)->groupBy('categoria'); @endphp
+                                @foreach($cuentasAgrupadas as $categoria => $listaCuentas)
+                                    <optgroup label="{{ $categoria }}">
+                                        @foreach($listaCuentas as $cuenta)
+                                            <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
+                                                {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
+                                            </option>
+                                        @endforeach
+                                    </optgroup>
                                 @endforeach
-                            </optgroup>
-                        @endforeach
-                    </select>
-                </div>
-                <div style="flex: 1;" id="col_referencia">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Ref.</label>
-                    <input type="text" name="referencia" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;" placeholder="# Referencia">
-                </div>
-            </div>
+                            </select>
+                        </div>
+                        <div id="col_referencia" style="flex: 0.9;">
+                            <label class="ne-lbl">Ref.</label>
+                            <input type="text" name="referencia" class="ne-inp" placeholder="# Referencia">
+                        </div>
+                    </div>
 
-            <div id="row_receptor" style="display: none; gap: 15px; margin-bottom: 10px;">
-                <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Banco Receptor y Titular Receptor</label>
-                    <select name="banco_titular_receptor" id="banco_titular_receptor" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
-                        <option value="">-- Seleccione Receptor --</option>
-                        @foreach($cuentasAgrupadas as $categoria => $listaCuentas)
-                            <optgroup label="{{ $categoria }}">
-                                @foreach($listaCuentas as $cuenta)
-                                    <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
-                                        {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
-                                    </option>
+                    <div id="row_receptor" style="display: none;">
+                        <label class="ne-lbl">Banco Receptor y Titular Receptor</label>
+                        <select name="banco_titular_receptor" id="banco_titular_receptor" class="ne-inp">
+                            <option value="">-- Seleccione Receptor --</option>
+                            @foreach($cuentasAgrupadas as $categoria => $listaCuentas)
+                                <optgroup label="{{ $categoria }}">
+                                    @foreach($listaCuentas as $cuenta)
+                                        <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
+                                            {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
+                                        </option>
+                                    @endforeach
+                                </optgroup>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="ne-sec">Montos</div>
+                    <div class="ne-row">
+                        <div id="col_monto_usd">
+                            <label class="ne-lbl">Monto USD</label>
+                            <input type="text" inputmode="decimal" name="monto_usd" id="monto_usd" class="ne-inp">
+                        </div>
+                        <div id="col_tasa_cambio">
+                            <label class="ne-lbl">Tasa de Cambio</label>
+                            <input type="text" inputmode="decimal" name="tasa_cambio" id="tasa_cambio" class="ne-inp">
+                        </div>
+                        <div id="col_monto_bs">
+                            <label class="ne-lbl" id="lbl_monto_bs">Monto BS</label>
+                            <input type="text" inputmode="decimal" name="monto_bs" id="monto_bs" class="ne-inp">
+                        </div>
+                    </div>
+
+                    <div id="row_monto_total_gasto">
+                        <label class="ne-lbl">Monto total del gasto</label>
+                        <input type="text" inputmode="decimal" name="monto_total_gasto" id="monto_total_gasto" class="ne-inp" placeholder="Total de la cuenta (si hoy solo abonas una parte)">
+                    </div>
+
+                    <div id="row_diferencial" class="ne-row">
+                        <div>
+                            <label class="ne-lbl">Dif. Cambiario</label>
+                            <input type="text" inputmode="decimal" name="diferencial_cambiario" class="ne-inp">
+                        </div>
+                        <div>
+                            <label class="ne-lbl">Comisión</label>
+                            <input type="text" inputmode="decimal" name="comision" id="comision" class="ne-inp">
+                        </div>
+                    </div>
+
+                    <div id="row_traslado_extra" class="ne-row" style="display: none;">
+                        <div>
+                            <label class="ne-lbl">Comisión (Bs)</label>
+                            <input type="text" inputmode="decimal" name="comision" id="comision_traslado" class="ne-inp"
+                                oninput="calcTraslado()" placeholder="0,00" disabled>
+                        </div>
+                        <div>
+                            <label class="ne-lbl">Monto USD <small style="color:#64748b;">(calculado)</small></label>
+                            <input type="text" inputmode="decimal" name="monto_usd" id="monto_usd_traslado" class="ne-inp"
+                                readonly placeholder="Se calcula con la tasa del día"
+                                style="background:#f8fafc; color:#475569; cursor:default;">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ne-col">
+                    <div class="ne-sec">Detalle</div>
+                    <div id="row_tipo_gasto">
+                        <label class="ne-lbl" id="lbl_tipo_gasto">Tipo de Gasto</label>
+                        <select name="tipo_gasto" id="tipo_gasto" class="ne-inp" required>
+                            <option value="">-- Seleccione un tipo de gasto --</option>
+                            @foreach(array_diff($tiposGasto, ['001 - COMPRA DE MERCANCIA']) as $tipoGasto)
+                                <option value="{{ $tipoGasto }}">{{ $tipoGasto }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="ne-row">
+                        <div>
+                            <label class="ne-lbl">Sede (Opcional)</label>
+                            <select name="sede" class="ne-inp">
+                                <option value="">-- Seleccione una sede --</option>
+                                @php
+                                    $sedesFinanzas = array_values(array_unique(array_merge(config('inventario.sedes_locales', []), config('inventario.sedes_finanzas_extra', []))));
+                                @endphp
+                                @foreach($sedesFinanzas as $sedeLocal)
+                                    <option value="{{ $sedeLocal }}">{{ $sedeLocal }}</option>
                                 @endforeach
-                            </optgroup>
-                        @endforeach
-                    </select>
-                </div>
-            </div>
-            
-            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
-                <div style="flex: 1;" id="col_monto_usd">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto USD</label>
-                    <input type="text" inputmode="decimal" name="monto_usd" id="monto_usd" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                </div>
-                <div style="flex: 1;" id="col_tasa_cambio">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tasa de Cambio</label>
-                    <input type="text" inputmode="decimal" name="tasa_cambio" id="tasa_cambio" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                </div>
-                <div style="flex: 1;" id="col_monto_bs">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;" id="lbl_monto_bs">Monto BS</label>
-                    <input type="text" inputmode="decimal" name="monto_bs" id="monto_bs" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                </div>
-            </div>
-
-            <div id="row_monto_total_gasto" style="margin-bottom: 10px;">
-                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto total del gasto</label>
-                <input type="text" inputmode="decimal" name="monto_total_gasto" id="monto_total_gasto" placeholder="Total de la cuenta (si hoy solo abonas una parte)" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            </div>
-
-            <div id="row_diferencial" style="display: flex; gap: 15px; margin-bottom: 10px;">
-                <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Dif. Cambiario</label>
-                    <input type="text" inputmode="decimal" name="diferencial_cambiario" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                </div>
-                <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Comisión</label>
-                    <input type="text" inputmode="decimal" name="comision" id="comision" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                </div>
-            </div>
-
-            {{-- Fila exclusiva para TRASLADOS: Comisión + Monto USD calculado --}}
-            <div id="row_traslado_extra" style="display: none; gap: 15px; margin-bottom: 10px;">
-                <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Comisión (Bs)</label>
-                    <input type="text" inputmode="decimal" name="comision" id="comision_traslado"
-                        oninput="calcTraslado()"
-                        placeholder="0,00"
-                        disabled
-                        style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                </div>
-                <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto USD <small style="color:#64748b;">(calculado)</small></label>
-                    <input type="text" inputmode="decimal" name="monto_usd" id="monto_usd_traslado"
-                        readonly
-                        placeholder="Se calcula con la tasa del día"
-                        style="width: 100%; padding: 6px; border: 1px solid #e2e8f0; border-radius: 4px; background:#f8fafc; color:#475569; cursor:default;">
-                </div>
-            </div>
-
-            <div id="row_tipo_gasto" style="margin-bottom: 10px;">
-                <label id="lbl_tipo_gasto" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tipo de Gasto</label>
-                <select name="tipo_gasto" id="tipo_gasto" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
-                    <option value="">-- Seleccione un tipo de gasto --</option>
-                    @foreach(array_diff($tiposGasto, ['001 - COMPRA DE MERCANCIA']) as $tipoGasto)
-                        <option value="{{ $tipoGasto }}">{{ $tipoGasto }}</option>
-                    @endforeach
-                </select>
-            </div>
-            
-            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
-                <div style="flex: 1;">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Sede (Opcional)</label>
-                    <select name="sede" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
-                        <option value="">-- Seleccione una sede --</option>
-                        @php
-                            $sedesFinanzas = array_values(array_unique(array_merge(config('inventario.sedes_locales', []), config('inventario.sedes_finanzas_extra', []))));
-                        @endphp
-                        @foreach($sedesFinanzas as $sedeLocal)
-                            <option value="{{ $sedeLocal }}">{{ $sedeLocal }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div style="flex: 1;" id="col_placa">
-                    <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Placa del vehículo</label>
-                    <input type="text" name="placa_vehiculo" placeholder="Ej. ABC-123" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-                </div>
-            </div>
-
-            <div style="margin-bottom: 10px;">
-                <label id="beneficiario_label" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Beneficiario</label>
-                <select id="beneficiario" name="beneficiario" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; background: white;">
-                    <option value="">-- Seleccione un beneficiario --</option>
-                    @foreach($proveedores as $prov)
-                        <option value="{{ $prov }}">{{ $prov }}</option>
-                    @endforeach
-                </select>
-                <input type="hidden" id="nomina_empleado_id" name="nomina_empleado_id" value="">
-                <small id="beneficiario_ayuda" style="display:none; margin-top:4px; color:#047857;">
-                    Solo aparecen empleados activos marcados como Servicio Técnico en su ficha de Nómina.
-                </small>
-                <small id="beneficiario_ayuda_libre" style="display:block; margin-top:4px; color:#64748b;">
-                    Puedes elegir de la lista o escribir un nombre y pulsar Enter.
-                </small>
-            </div>
-
-            <div style="margin-bottom: 10px;">
-                <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Motivo (Breve descripción)</label>
-                <input type="text" name="motivo" id="motivo_egreso" placeholder="Ej. Pago de internet mensual..." style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
-            </div>
-
-            <div id="row_opciones_egreso" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 12px 0 10px; border-top: 1px dashed #cbd5e1; padding-top: 10px;">
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem; white-space: nowrap;">
-                    <input type="checkbox" id="chk_asiento" onchange="faToggleAsiento('')" style="width: 16px; height: 16px; accent-color: #f59e0b;">
-                    Asiento contable
-                </label>
-                <label id="row_cuenta_por_pagar" style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem; color: #9a3412; white-space: nowrap;">
-                    <input type="checkbox" id="chk_cuenta_por_pagar" name="es_cuenta_por_pagar" value="1" style="width: 16px; height: 16px; accent-color: #ea580c;">
-                    Cuenta por pagar
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem; color: #065f46; white-space: nowrap;">
-                    <input type="checkbox" id="chk_todoticket" name="es_todoticket" value="1" onchange="toggleTodoTicket()" style="width: 16px; height: 16px; accent-color: #059669;">
-                    TodoTicket
-                </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem; color: #1e40af; white-space: nowrap;">
-                    <input type="checkbox" id="chk_gasto_fijo" onchange="toggleGastoFijoPanel()" style="width: 16px; height: 16px; accent-color: #3b82f6;">
-                    Gasto fijo
-                </label>
-            </div>
-            <div id="panel_todoticket" style="display:none; background: #ecfdf5; border: 1.5px solid #6ee7b7; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;">
-                <p style="margin: 0 0 10px; font-size: 0.8rem; color: #047857;">Copia los montos del <strong>Detalle Monto a Pagar</strong>. El <strong>Total Real</strong> es lo que se guarda y concilia con el banco.</p>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div>
-                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Recarga Tarjeta Electrónica</label>
-                        <input type="text" inputmode="decimal" name="tt_recarga" id="tt_recarga" oninput="calcTodoTicket()" placeholder="903.127,29" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                            </select>
+                        </div>
+                        <div id="col_placa">
+                            <label class="ne-lbl">Placa del vehículo</label>
+                            <input type="text" name="placa_vehiculo" class="ne-inp" placeholder="Ej. ABC-123">
+                        </div>
                     </div>
+
                     <div>
-                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Comisión</label>
-                        <input type="text" inputmode="decimal" name="tt_comision" id="tt_comision" oninput="calcTodoTicket()" placeholder="9.031,27" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                        <label class="ne-lbl" id="beneficiario_label">Beneficiario</label>
+                        <select id="beneficiario" name="beneficiario" class="ne-inp">
+                            <option value="">-- Seleccione un beneficiario --</option>
+                            @foreach($proveedores as $prov)
+                                <option value="{{ $prov }}">{{ $prov }}</option>
+                            @endforeach
+                        </select>
+                        <input type="hidden" id="nomina_empleado_id" name="nomina_empleado_id" value="">
+                        <small id="beneficiario_ayuda" style="display:none; margin-top:4px; color:#047857;">
+                            Solo aparecen empleados activos marcados como Servicio Técnico en su ficha de Nómina.
+                        </small>
+                        <small id="beneficiario_ayuda_libre" style="display:block; margin-top:4px; color:#64748b;">
+                            Puedes elegir de la lista o escribir un nombre y pulsar Enter.
+                        </small>
                     </div>
+
                     <div>
-                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Total IVA 16%</label>
-                        <input type="text" inputmode="decimal" name="tt_iva" id="tt_iva" oninput="calcTodoTicket()" placeholder="1.445,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
-                    </div>
-                    <div>
-                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención ISLR</label>
-                        <input type="text" inputmode="decimal" name="tt_ret_islr" id="tt_ret_islr" oninput="calcTodoTicket()" placeholder="451,56" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
-                    </div>
-                    <div>
-                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención IVA</label>
-                        <input type="text" inputmode="decimal" name="tt_ret_iva" id="tt_ret_iva" oninput="calcTodoTicket()" placeholder="1.083,75" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
-                    </div>
-                    <div>
-                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención 1x1000 / 1x500 / 1x100</label>
-                        <input type="text" inputmode="decimal" name="tt_ret_1x1000" id="tt_ret_1x1000" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
-                    </div>
-                    <div>
-                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención Resp. Social</label>
-                        <input type="text" inputmode="decimal" name="tt_ret_resp_social" id="tt_ret_resp_social" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
-                    </div>
-                    <div>
-                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención ISAE</label>
-                        <input type="text" inputmode="decimal" name="tt_ret_isae" id="tt_ret_isae" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                        <label class="ne-lbl">Motivo (Breve descripción)</label>
+                        <input type="text" name="motivo" id="motivo_egreso" class="ne-inp" placeholder="Ej. Pago de internet mensual...">
                     </div>
                 </div>
-                <div style="margin-top: 12px; padding: 10px; background: #065f46; color: white; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: 700;">Total Real</span>
-                    <strong id="tt_total_real_lbl" style="font-size: 1.15rem;">Bs. 0,00</strong>
-                </div>
             </div>
+            </div>{{-- /.ne-main --}}
 
-            <div id="panel_gasto_fijo" style="display:none; background: linear-gradient(135deg,#eff6ff,#dbeafe); border: 1.5px solid #93c5fd; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px;">
-                <div style="margin-bottom: 10px;">
-                    <label style="display:block; font-size:0.8rem; font-weight:700; color:#1e40af; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:5px;">
-                        Agregar gasto fijo
+                <div class="ne-side" id="ne_side_panels">
+                    <div id="panel_todoticket" style="display:none; background: #ecfdf5; border: 1.5px solid #6ee7b7; border-radius: 10px; padding: 14px 16px;">
+                        <p style="margin: 0 0 10px; font-size: 0.8rem; color: #047857;">Copia los montos del <strong>Detalle Monto a Pagar</strong>. El <strong>Total Real</strong> es lo que se guarda y concilia con el banco.</p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div>
+                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Recarga Tarjeta Electrónica</label>
+                                <input type="text" inputmode="decimal" name="tt_recarga" id="tt_recarga" oninput="calcTodoTicket()" placeholder="903.127,29" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Comisión</label>
+                                <input type="text" inputmode="decimal" name="tt_comision" id="tt_comision" oninput="calcTodoTicket()" placeholder="9.031,27" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Total IVA 16%</label>
+                                <input type="text" inputmode="decimal" name="tt_iva" id="tt_iva" oninput="calcTodoTicket()" placeholder="1.445,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención ISLR</label>
+                                <input type="text" inputmode="decimal" name="tt_ret_islr" id="tt_ret_islr" oninput="calcTodoTicket()" placeholder="451,56" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención IVA</label>
+                                <input type="text" inputmode="decimal" name="tt_ret_iva" id="tt_ret_iva" oninput="calcTodoTicket()" placeholder="1.083,75" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención 1x1000 / 1x500 / 1x100</label>
+                                <input type="text" inputmode="decimal" name="tt_ret_1x1000" id="tt_ret_1x1000" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención Resp. Social</label>
+                                <input type="text" inputmode="decimal" name="tt_ret_resp_social" id="tt_ret_resp_social" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención ISAE</label>
+                                <input type="text" inputmode="decimal" name="tt_ret_isae" id="tt_ret_isae" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                            </div>
+                        </div>
+                        <div style="margin-top: 12px; padding: 10px; background: #065f46; color: white; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 700;">Total Real</span>
+                            <strong id="tt_total_real_lbl" style="font-size: 1.15rem;">Bs. 0,00</strong>
+                        </div>
+                    </div>
+
+                    <div id="panel_gasto_fijo" style="display:none; background: linear-gradient(135deg,#eff6ff,#dbeafe); border: 1.5px solid #93c5fd; border-radius: 10px; padding: 14px 16px;">
+                        <div style="margin-bottom: 10px;">
+                            <label style="display:block; font-size:0.8rem; font-weight:700; color:#1e40af; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:5px;">
+                                Agregar gasto fijo
+                            </label>
+                            <div class="gf-picker" id="gf_picker">
+                                <input type="search" id="gf_picker_q" class="gf-picker-search" placeholder="Buscar servicio, empresa o sede…" autocomplete="off" oninput="buildGastoFijoSelect()">
+                                <div id="sel_gasto_fijo" class="gf-picker-list" role="listbox" aria-label="Gastos fijos">
+                                    <div class="gf-picker-empty">Cargando gastos pendientes…</div>
+                                </div>
+                            </div>
+                            <p style="font-size:0.72rem; color:#3b82f6; margin:6px 0 0;">Haz clic en un gasto para agregarlo. Si la factura cubre varios, agrégalos todos.</p>
+                        </div>
+                        <div id="gf_items" style="display:flex; flex-direction:column; gap:8px;"></div>
+                        <div id="gf_items_total" style="display:none; margin-top:8px; text-align:right; font-size:0.85rem; color:#1e40af; font-weight:700;"></div>
+                        <div id="gf_items_inputs"></div>
+
+                        <div id="panel_cobranza_diff" style="display:none; margin-top:12px; padding:12px; background:#fff7ed; border:1.5px solid #fdba74; border-radius:8px;">
+                            <p style="margin:0 0 8px; font-size:0.82rem; color:#9a3412; font-weight:600;">
+                                Diferencia gasto − pago: <span id="cobranza_diff_lbl">$0,00</span>
+                            </p>
+                            <input type="hidden" name="cobranza_factura_sede" id="cobranza_factura_sede" value="">
+                            <input type="hidden" name="cobranza_factura_doc" id="cobranza_factura_doc" value="">
+                            <input type="hidden" name="cobranza_monto" id="cobranza_monto" value="">
+                            <label style="display:block; font-size:0.78rem; font-weight:600; color:#9a3412; margin-bottom:4px;">Buscar factura / deuda</label>
+                            <input type="search" id="cobranza_factura_q" placeholder="Cliente, código o factura…" autocomplete="off"
+                                style="width:100%; padding:7px 10px; border:1px solid #fdba74; border-radius:6px; font-size:0.85rem; margin-bottom:6px;">
+                            <div id="cobranza_factura_res" style="max-height:160px; overflow:auto; display:flex; flex-direction:column; gap:4px;"></div>
+                            <div id="cobranza_factura_sel" style="display:none; margin-top:8px; padding:8px 10px; background:#ffedd5; border-radius:6px; font-size:0.82rem; color:#9a3412;"></div>
+                        </div>
+                    </div>
+
+                    @include('finanzas.partials.asiento_egreso', ['sufijo' => ''])
+                </div>
+            </div>{{-- /.ne-body --}}
+
+            <div style="margin: 14px 0 0;">
+                <div class="ne-sec">Opciones</div>
+                <div id="row_opciones_egreso" class="ne-opts">
+                    <label style="color: #92400e;">
+                        <input type="checkbox" id="chk_asiento" onchange="faToggleAsiento('')" style="accent-color: #f59e0b;">
+                        Asiento contable
                     </label>
-                    <select id="sel_gasto_fijo" onchange="onGastoFijoSelected()" style="width:100%; padding:8px 10px; border:1.5px solid #93c5fd; border-radius:7px; font-size:0.88rem; background:white; color:#0f172a;">
-                        <option value="">-- Cargando gastos pendientes... --</option>
-                    </select>
-                    <p style="font-size:0.75rem; color:#3b82f6; margin:4px 0 0;">
-                        Si la factura cubre varios gastos (ej. varios condominios), agrégalos todos. Elige el mes que paga cada uno: si se paga con atraso, es el mes anterior.
-                    </p>
+                    <label id="row_cuenta_por_pagar" style="color: #9a3412;">
+                        <input type="checkbox" id="chk_cuenta_por_pagar" name="es_cuenta_por_pagar" value="1" style="accent-color: #ea580c;">
+                        Cuenta por pagar
+                    </label>
+                    <label style="color: #065f46;">
+                        <input type="checkbox" id="chk_todoticket" name="es_todoticket" value="1" onchange="toggleTodoTicket()" style="accent-color: #059669;">
+                        TodoTicket
+                    </label>
+                    <label style="color: #1e40af;">
+                        <input type="checkbox" id="chk_gasto_fijo" onchange="toggleGastoFijoPanel()" style="accent-color: #3b82f6;">
+                        Gasto fijo
+                    </label>
                 </div>
-                <div id="gf_items" style="display:flex; flex-direction:column; gap:8px;"></div>
-                <div id="gf_items_total" style="display:none; margin-top:8px; text-align:right; font-size:0.85rem; color:#1e40af; font-weight:700;"></div>
-                <div id="gf_items_inputs"></div>
-
             </div>
 
-            @include('finanzas.partials.asiento_egreso', ['sufijo' => ''])
-
-            <div style="margin-bottom: 15px;">
+            <div style="margin: 14px 0 12px;">
+                <div class="ne-sec">Comprobantes</div>
                 <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem;">
                     Comprobantes de Pago
                     <span id="comp-counter" style="font-size:0.78rem; color:#64748b; margin-left:6px;">0 / 6</span>
                 </label>
-                {{-- Multi-image preview grid --}}
                 <div id="comp-grid" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;"></div>
-                {{-- Paste/click area --}}
                 <div id="paste-area" style="border: 2px dashed #cbd5e1; border-radius: 8px; padding: 14px; text-align: center; cursor: pointer; background: #f8fafc; transition: all 0.2s;"
                     onmouseover="if(!pasteAreaDisabled())this.style.borderColor='#3b82f6';"
                     onmouseout="if(!pasteAreaDisabled())this.style.borderColor='#cbd5e1';">
@@ -1393,7 +1730,7 @@
                 <input type="file" name="comprobantes[]" id="comprobante-input" accept="image/*,application/pdf" multiple style="display: none;">
             </div>
 
-            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <div style="display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; border-top: 1px solid #e2e8f0; margin-top: 4px;">
                 <button type="button" onclick="closeNuevoEgresoModal(); sessionStorage.removeItem('pending_ocr_txs'); document.querySelector('#nuevoEgresoModal button[type=\'submit\']').innerText='Guardar Egreso'; document.querySelector('#nuevoEgresoModal button[type=\'submit\']').style.backgroundColor='#1a4273';" style="padding: 10px 20px; background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-weight: 500;">Cancelar</button>
                 <button type="submit" style="padding: 10px 20px; background-color: #1a4273; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Guardar Egreso</button>
             </div>
@@ -1546,12 +1883,36 @@ function calcTraslado() {
     }
 }
 
+function categoriaCuentaDeValor(valor) {
+    const parts = String(valor || '').split('|');
+    return (parts[2] || '').toUpperCase();
+}
+function esBancaInternacionalCat(cat) {
+    return String(cat || '').includes('BANCA INTERNACIONAL');
+}
+function cuentaBancaInternacionalActual() {
+    const raw = window.tsBancoTitular?.getValue?.() || document.getElementById('banco_titular')?.value || '';
+    return esBancaInternacionalCat(categoriaCuentaDeValor(raw));
+}
+/** Banca internacional: solo USD (sin tasa ni Bs) y el egreso viaja como egreso en divisas. */
+function aplicarBancaInternacional() {
+    const sel = document.getElementById('categoria_egreso');
+    if (!sel || @json($soloAvances ?? false)) return;
+    const intl = cuentaBancaInternacionalActual();
+    if (intl && !['ingresos', 'traslados', 'compra_divisas'].includes(sel.value)) {
+        sel.value = 'egreso_divisas';
+    }
+    toggleTraslados();
+}
+
 function toggleTraslados() {
     const val = document.getElementById('categoria_egreso').value;
     const isTraslado = val === 'traslados';
-    const isDivisas = val === 'egreso_divisas';
+    const intl = cuentaBancaInternacionalActual();
+    const isDivisas = val === 'egreso_divisas' || (intl && !isTraslado && val !== 'compra_divisas');
     const isCompraDivisas = val === 'compra_divisas';
     const isIngreso = val === 'ingresos';
+    const sinTasa = isTraslado || isDivisas || (intl && !isCompraDivisas);
     
     document.getElementById('row_receptor').style.display = isTraslado ? 'flex' : 'none';
     document.getElementById('banco_titular_receptor').required = isTraslado;
@@ -1560,10 +1921,10 @@ function toggleTraslados() {
     document.getElementById('lbl_monto_bs').innerText = isTraslado ? 'Monto BS' : 'Monto BS';
     
     document.getElementById('col_monto_usd').style.display = isTraslado ? 'none' : 'block';
-    document.getElementById('col_tasa_cambio').style.display = (isTraslado || isDivisas) ? 'none' : 'block';
-    document.getElementById('col_monto_bs').style.display = isDivisas ? 'none' : 'block';
+    document.getElementById('col_tasa_cambio').style.display = sinTasa ? 'none' : 'block';
+    document.getElementById('col_monto_bs').style.display = (isDivisas || (intl && isIngreso)) ? 'none' : 'block';
     
-    document.getElementById('row_diferencial').style.display = (isTraslado || isDivisas || isCompraDivisas) ? 'none' : 'flex';
+    document.getElementById('row_diferencial').style.display = (isTraslado || isDivisas || isCompraDivisas || intl) ? 'none' : 'flex';
     document.getElementById('row_tipo_gasto').style.display = (isTraslado || isCompraDivisas) ? 'none' : 'block';
     document.getElementById('row_traslado_extra').style.display = isTraslado ? 'flex' : 'none';
     
@@ -1578,7 +1939,14 @@ function toggleTraslados() {
     if (usdTraslado) usdTraslado.disabled = !isTraslado;
     
     const bsNormal = document.getElementById('monto_bs');
-    if (bsNormal) bsNormal.disabled = isDivisas;
+    const tasaNormal = document.getElementById('tasa_cambio');
+    if (bsNormal) {
+        bsNormal.disabled = isDivisas || (intl && isIngreso);
+        if (bsNormal.disabled) bsNormal.value = '';
+    }
+    if (tasaNormal && sinTasa) {
+        tasaNormal.value = '';
+    }
     
     // When switching to traslado mode, auto-calc USD if monto_bs already has value
     if (isTraslado) calcTraslado();
@@ -1645,6 +2013,15 @@ function syncTodoTicketUsd() {
     }
 }
 
+function syncNuevoEgresoSide() {
+    const box = document.querySelector('#nuevoEgresoModal .ne-box');
+    if (!box) return;
+    const open = !!document.getElementById('chk_todoticket')?.checked
+        || !!document.getElementById('chk_gasto_fijo')?.checked
+        || !!document.getElementById('chk_asiento')?.checked;
+    box.classList.toggle('ne-wide', open);
+}
+
 function toggleTodoTicket() {
     const on = document.getElementById('chk_todoticket').checked;
     document.getElementById('panel_todoticket').style.display = on ? 'block' : 'none';
@@ -1673,6 +2050,7 @@ function toggleTodoTicket() {
         document.getElementById('tipo_gasto').required = document.getElementById('categoria_egreso').value !== 'traslados';
         document.getElementById('tt_total_real_lbl').innerText = 'Bs. 0,00';
     }
+    syncNuevoEgresoSide();
 }
 
 // ── Gasto Fijo Linking Functions ──
@@ -1686,6 +2064,7 @@ function limpiarGastosFijosEgreso() {
     renderGastoFijoItems();
     const panel = document.getElementById('panel_gasto_fijo');
     if (panel) panel.style.display = 'none';
+    syncNuevoEgresoSide();
 }
 
 async function toggleGastoFijoPanel() {
@@ -1696,15 +2075,17 @@ async function toggleGastoFijoPanel() {
         panel.style.display = 'none';
         _gfItems = [];
         renderGastoFijoItems();
+        syncNuevoEgresoSide();
         return;
     }
 
     panel.style.display = 'block';
+    syncNuevoEgresoSide();
 
     // Lazy-load the list only once
     if (!_gfPendientes) {
         const sel = document.getElementById('sel_gasto_fijo');
-        sel.innerHTML = '<option value="">Cargando...</option>';
+        if (sel) sel.innerHTML = '<div class="gf-picker-empty">Cargando…</div>';
         try {
             const res = await fetch('{{ \Illuminate\Support\Facades\Route::has("finanzas.gastos_fijos.pendientes") ? route("finanzas.gastos_fijos.pendientes") : url("/finanzas/gastos-fijos/pendientes") }}', {
                 headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
@@ -1721,34 +2102,60 @@ async function toggleGastoFijoPanel() {
 
 function buildGastoFijoSelect() {
     const sel = document.getElementById('sel_gasto_fijo');
-    sel.innerHTML = '<option value="">-- Selecciona un gasto fijo para agregar --</option>';
-    if (!_gfPendientes || _gfPendientes.length === 0) {
-        sel.innerHTML = '<option value="">Sin gastos fijos activos</option>';
+    if (!sel) return;
+    const q = (document.getElementById('gf_picker_q')?.value || '').trim().toLowerCase();
+
+    if (!_gfPendientes) {
+        sel.innerHTML = '<div class="gf-picker-empty">Cargando…</div>';
         return;
     }
-    const grupos = { pend: null, resto: null };
-    _gfPendientes.forEach(gf => {
-        if (_gfItems.some(it => it.gf.id === gf.id)) return;
-        const clave = gf.pendiente ? 'pend' : 'resto';
-        if (!grupos[clave]) {
-            grupos[clave] = document.createElement('optgroup');
-            grupos[clave].label = gf.pendiente ? 'Pendientes' : 'Otros gastos fijos';
-            sel.appendChild(grupos[clave]);
-        }
-        const opt = document.createElement('option');
-        opt.value = gf.id;
-        const sedeStr = gf.sede ? ` · ${gf.sede.substring(0, 25)}` : '';
-        const empresaStr = gf.empresa ? ` · ${gf.empresa.substring(0, 30)}` : '';
-        const urgente = gf.urgente ? '⚡ ' : '';
-        opt.textContent = `${urgente}${gf.servicio}${empresaStr}${sedeStr} — $${parseFloat(gf.costo).toFixed(2)}`;
-        grupos[clave].appendChild(opt);
+
+    const disponibles = _gfPendientes.filter(gf => {
+        if (_gfItems.some(it => it.gf.id === gf.id)) return false;
+        if (!q) return true;
+        const haystack = [gf.servicio, gf.empresa, gf.sede, gf.tabla_label].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(q);
+    });
+
+    if (!_gfPendientes.length) {
+        sel.innerHTML = '<div class="gf-picker-empty">Sin gastos fijos activos</div>';
+        return;
+    }
+    if (!disponibles.length) {
+        sel.innerHTML = `<div class="gf-picker-empty">${q ? 'Sin coincidencias para “' + escGf(q) + '”' : 'Ya agregaste todos los disponibles'}</div>`;
+        return;
+    }
+
+    const grupos = [
+        { key: 'pend', label: 'Pendientes', items: disponibles.filter(g => g.pendiente) },
+        { key: 'resto', label: 'Otros', items: disponibles.filter(g => !g.pendiente) },
+    ];
+
+    sel.innerHTML = grupos.map(grupo => {
+        if (!grupo.items.length) return '';
+        const rows = grupo.items.map(gf => {
+            const sub = [gf.empresa, gf.sede].filter(Boolean).join(' · ');
+            const title = escGf(gf.servicio || 'Gasto fijo');
+            const subEsc = escGf(sub);
+            const amt = '$' + parseFloat(gf.costo || 0).toFixed(2);
+            return `<button type="button" class="gf-picker-item${gf.urgente ? ' is-urgente' : ''}" data-gf-id="${gf.id}" title="${title}${sub ? ' — ' + subEsc : ''}">
+                <span style="min-width:0;">
+                    <div class="gf-picker-title">${gf.urgente ? '⚡ ' : ''}${title}</div>
+                    ${sub ? `<div class="gf-picker-sub">${subEsc}</div>` : ''}
+                </span>
+                <span class="gf-picker-amt">${amt}</span>
+            </button>`;
+        }).join('');
+        return `<div class="gf-picker-group">${grupo.label}</div>${rows}`;
+    }).join('');
+
+    sel.querySelectorAll('[data-gf-id]').forEach(btn => {
+        btn.addEventListener('click', () => onGastoFijoSelected(Number(btn.dataset.gfId)));
     });
 }
 
-function onGastoFijoSelected() {
-    const sel = document.getElementById('sel_gasto_fijo');
-    const id = parseInt(sel.value);
-    sel.value = '';
+function onGastoFijoSelected(id) {
+    id = parseInt(id, 10);
     if (!id || !_gfPendientes) return;
 
     const gf = _gfPendientes.find(g => g.id === id);
@@ -1758,6 +2165,8 @@ function onGastoFijoSelected() {
     const hoy = new Date();
     const periodo = (gf.periodos && gf.periodos[0]) || { mes_idx: hoy.getMonth(), anio: hoy.getFullYear() };
     _gfItems.push({ gf, mes: periodo.mes_idx, anio: periodo.anio, monto: parseFloat(gf.costo || 0).toFixed(2) });
+    const q = document.getElementById('gf_picker_q');
+    if (q) q.value = '';
     buildGastoFijoSelect();
     renderGastoFijoItems();
 }
@@ -1796,17 +2205,21 @@ function renderGastoFijoItems() {
         const gf = item.gf;
         total += parseFloat(item.monto) || 0;
         const fila = document.createElement('div');
-        fila.style.cssText = 'background:white; border:1px solid #bfdbfe; border-radius:8px; padding:10px 12px; display:grid; grid-template-columns: 1fr 150px 110px 28px; gap:8px; align-items:center;';
+        fila.className = 'gf-item';
         const detalle = escGf([gf.empresa, gf.sede, gf.tabla_label].filter(Boolean).join(' · '));
         fila.innerHTML = `
-            <div style="min-width:0;">
-                <div style="font-weight:700; color:#0f172a; font-size:0.85rem;">${escGf(gf.servicio)}</div>
-                <div style="font-size:0.72rem; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${detalle}">${detalle}</div>
-                <div style="font-size:0.7rem; color:#64748b;">Estimado $${parseFloat(gf.costo).toFixed(2)} · ${escGf(gf.fecha)}${gf.meses_atraso > 0 ? ' · paga mes siguiente' : ''}</div>
+            <div class="gf-item-top">
+                <div class="gf-item-info">
+                    <div class="gf-item-title">${escGf(gf.servicio)}</div>
+                    ${detalle ? `<div class="gf-item-sub" title="${detalle}">${detalle}</div>` : ''}
+                    <div class="gf-item-meta">Estimado $${parseFloat(gf.costo).toFixed(2)}${gf.meses_atraso > 0 ? ' · paga mes siguiente' : ''}</div>
+                </div>
+                <button type="button" class="gf-item-del" data-gf-quitar="${idx}" title="Quitar">✖</button>
             </div>
-            <select data-gf-mes="${idx}" style="padding:6px; border:1px solid #93c5fd; border-radius:6px; font-size:0.8rem;">${opcionesMesGastoFijo(item)}</select>
-            <input type="number" data-gf-monto="${idx}" step="0.01" min="0" value="${escGf(item.monto)}" placeholder="USD" style="padding:6px; border:1px solid #93c5fd; border-radius:6px; font-size:0.85rem; font-weight:700; text-align:right;">
-            <button type="button" data-gf-quitar="${idx}" title="Quitar" style="border:none; background:#fee2e2; color:#b91c1c; border-radius:6px; cursor:pointer; height:28px;">✖</button>`;
+            <div class="gf-item-actions">
+                <select data-gf-mes="${idx}">${opcionesMesGastoFijo(item)}</select>
+                <input type="number" data-gf-monto="${idx}" step="0.01" min="0" value="${escGf(item.monto)}" placeholder="USD">
+            </div>`;
         box.appendChild(fila);
 
         [['id', gf.id], ['mes_idx', item.mes], ['anio', item.anio], ['monto', item.monto]].forEach(([campo, valor]) => {
@@ -1839,7 +2252,74 @@ function renderGastoFijoItems() {
         totalBox.style.display = _gfItems.length > 1 ? 'block' : 'none';
         totalBox.textContent = `Total de los ${_gfItems.length} gastos fijos: $${total.toFixed(2)}`;
     }
+    actualizarPanelCobranzaDiff();
 }
+
+function pagoUsdEgresoActual() {
+    return window.parseLocalNumber(document.getElementById('monto_usd')?.value) || 0;
+}
+function totalGfUsdActual() {
+    return _gfItems.reduce((s, it) => s + (parseFloat(it.monto) || 0), 0);
+}
+function actualizarPanelCobranzaDiff() {
+    const panel = document.getElementById('panel_cobranza_diff');
+    if (!panel) return;
+    const total = totalGfUsdActual();
+    const pago = pagoUsdEgresoActual();
+    const diff = Math.round((total - pago) * 100) / 100;
+    const show = _gfItems.length > 0 && diff > 0.009;
+    panel.style.display = show ? 'block' : 'none';
+    const lbl = document.getElementById('cobranza_diff_lbl');
+    if (lbl) lbl.textContent = '$' + diff.toFixed(2).replace('.', ',');
+    const monto = document.getElementById('cobranza_monto');
+    if (monto && show) monto.value = diff.toFixed(2);
+    if (!show) {
+        const sede = document.getElementById('cobranza_factura_sede');
+        const doc = document.getElementById('cobranza_factura_doc');
+        if (sede) sede.value = '';
+        if (doc) doc.value = '';
+        const sel = document.getElementById('cobranza_factura_sel');
+        if (sel) { sel.style.display = 'none'; sel.textContent = ''; }
+    }
+}
+(function initCobranzaDiffBusqueda() {
+    const q = document.getElementById('cobranza_factura_q');
+    const box = document.getElementById('cobranza_factura_res');
+    if (!q || !box) return;
+    let t = null;
+    const url = @json(route('finanzas.cobranza_facturas'));
+    q.addEventListener('input', () => {
+        clearTimeout(t);
+        t = setTimeout(async () => {
+            const texto = q.value.trim();
+            if (texto.length < 2) { box.innerHTML = ''; return; }
+            try {
+                const res = await fetch(url + '?q=' + encodeURIComponent(texto), {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                const data = await res.json();
+                const facturas = data.facturas || [];
+                box.innerHTML = facturas.length ? facturas.map(f => `
+                    <button type="button" data-sede="${escGf(f.sede)}" data-doc="${escGf(f.doc)}" data-cliente="${escGf(f.cliente)}" data-numero="${escGf(f.numero)}" data-saldo="${f.saldo}"
+                        style="text-align:left; border:1px solid #fed7aa; background:#fff; border-radius:6px; padding:7px 9px; cursor:pointer; font-size:0.8rem;">
+                        <strong>${escGf(f.numero)}</strong> · ${escGf(f.cliente)} · saldo $${Number(f.saldo).toFixed(2)}
+                    </button>`).join('') : '<span style="font-size:0.78rem;color:#9a3412;">Sin facturas con saldo.</span>';
+                box.querySelectorAll('button[data-doc]').forEach(btn => btn.addEventListener('click', () => {
+                    document.getElementById('cobranza_factura_sede').value = btn.dataset.sede || '';
+                    document.getElementById('cobranza_factura_doc').value = btn.dataset.doc || '';
+                    const sel = document.getElementById('cobranza_factura_sel');
+                    sel.style.display = 'block';
+                    sel.textContent = 'Aplicar a ' + (btn.dataset.numero || '') + ' · ' + (btn.dataset.cliente || '') + ' (saldo $' + Number(btn.dataset.saldo || 0).toFixed(2) + ')';
+                    box.innerHTML = '';
+                    q.value = '';
+                }));
+            } catch (e) {
+                box.innerHTML = '<span style="font-size:0.78rem;color:#b91c1c;">No se pudo buscar.</span>';
+            }
+        }, 300);
+    });
+    document.getElementById('monto_usd')?.addEventListener('input', actualizarPanelCobranzaDiff);
+})();
 
 const proveedoresBeneficiario = @json($proveedores->values()->map(fn ($nombre) => ['value' => $nombre, 'text' => $nombre]));
 const tecnicosBeneficiario = @json($empleadosServicioTecnico->map(fn ($empleado) => [
@@ -1947,8 +2427,15 @@ document.addEventListener('DOMContentLoaded', function() {
         placeholder: '-- Seleccione --',
         maxOptions: null
     };
-    if (document.getElementById('banco_titular')) window.tsBancoTitular = new TomSelect("#banco_titular", tsBankSettings);
+    if (document.getElementById('banco_titular')) {
+        window.tsBancoTitular = new TomSelect("#banco_titular", Object.assign({}, tsBankSettings, {
+            onChange() { if (typeof aplicarBancaInternacional === 'function') aplicarBancaInternacional(); }
+        }));
+    }
     if (document.getElementById('banco_titular_receptor')) window.tsBancoTitularReceptor = new TomSelect("#banco_titular_receptor", tsBankSettings);
+    document.getElementById('banco_titular')?.addEventListener('change', () => {
+        if (typeof aplicarBancaInternacional === 'function') aplicarBancaInternacional();
+    });
     if (document.getElementById('beneficiario_edit')) {
         window.tsBeneficiarioEdit = new TomSelect("#beneficiario_edit", {
             create: true,
@@ -2566,6 +3053,7 @@ function faToggleAsiento(s) {
     caja.querySelectorAll('input:not([type="hidden"])').forEach(i => { i.disabled = !on; });
     if (on && !document.getElementById('haberes_asiento' + s).children.length) faAgregarHaber(s);
     faTotalesAsiento(s);
+    if (s === '') syncNuevoEgresoSide();
 }
 
 // El debe es siempre el monto en $ del egreso: se sigue al USD, Bs o tasa de arriba.
@@ -2580,17 +3068,56 @@ document.addEventListener('DOMContentLoaded', () => ['', '_edit'].forEach(s => {
     form.addEventListener('change', seguir);
 }));
 
+@php
+    $faSedes = array_values(array_unique(array_merge(config('inventario.sedes_locales', []), config('inventario.sedes_finanzas_extra', []))));
+    $faTiposGasto = array_values(array_diff($tiposGasto ?? [], ['001 - COMPRA DE MERCANCIA']));
+@endphp
+window.FA_SEDES = @json($faSedes);
+window.FA_TIPOS_GASTO = @json($faTiposGasto);
+
+function faOptsSelect(items, selected, placeholder) {
+    const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    let html = `<option value="">${esc(placeholder)}</option>`;
+    (items || []).forEach(v => {
+        html += `<option value="${esc(v)}" ${String(v) === String(selected || '') ? 'selected' : ''}>${esc(v)}</option>`;
+    });
+    return html;
+}
+
+function faDefaultsEgreso(s) {
+    const form = faCaja(s)?.closest('form');
+    const sede = form?.querySelector('[name="sede"]')?.value || '';
+    const tipo = s === '_edit'
+        ? (window.tsEditTipoGasto?.getValue?.() || form?.querySelector('[name="tipo_gasto"]')?.value || '')
+        : (window.tsTipoGasto?.getValue?.() || form?.querySelector('[name="tipo_gasto"]')?.value || '');
+    return { sede, tipo_gasto: tipo };
+}
+
 function faAgregarHaber(s, linea = {}) {
     const lista = document.getElementById('haberes_asiento' + s);
     const i = Date.now() + Math.floor(Math.random() * 1000);
     const fila = document.createElement('div');
     fila.className = 'fa-haber';
-    fila.style.cssText = 'display:flex; gap:8px; margin-bottom:6px; background:white; padding:8px; border:1px solid #fde68a; border-radius:6px;';
+    fila.style.cssText = 'display:flex; flex-direction:column; gap:6px; margin-bottom:8px; background:white; padding:8px; border:1px solid #fde68a; border-radius:6px;';
     const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    const inp = 'min-width:0; padding:6px; border:1px solid #ccc; border-radius:4px; font:inherit; background:#fff;';
+    const defs = faDefaultsEgreso(s);
+    const sedeSel = linea.sede !== undefined && linea.sede !== null ? linea.sede : defs.sede;
+    const tipoSel = linea.tipo_gasto !== undefined && linea.tipo_gasto !== null ? linea.tipo_gasto : defs.tipo_gasto;
     fila.innerHTML = `
-        <input type="text" name="asiento_haber[${i}][detalle]" class="fa-haber-detalle" maxlength="255" placeholder="Detalle" value="${esc(linea.detalle)}" style="flex:6; min-width:0; padding:6px; border:1px solid #ccc; border-radius:4px;">
-        <input type="number" step="0.01" min="0" name="asiento_haber[${i}][monto]" class="fa-haber-monto" placeholder="Monto $" value="${linea.monto ?? ''}" style="flex:1.4; min-width:0; padding:6px; border:1px solid #ccc; border-radius:4px;">
-        <button type="button" title="Quitar" style="padding:6px 10px; background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer; flex-shrink:0;">&times;</button>`;
+        <div style="display:flex; gap:6px; align-items:center;">
+            <input type="text" name="asiento_haber[${i}][detalle]" class="fa-haber-detalle" maxlength="255" placeholder="Detalle" value="${esc(linea.detalle)}" style="flex:1; ${inp}">
+            <input type="number" step="0.01" min="0" name="asiento_haber[${i}][monto]" class="fa-haber-monto" placeholder="Monto $" value="${linea.monto ?? ''}" style="width:96px; ${inp}">
+            <button type="button" title="Quitar" style="padding:6px 10px; background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer; flex-shrink:0;">&times;</button>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <select name="asiento_haber[${i}][sede]" class="fa-haber-sede" style="${inp}" title="Sede de este haber">
+                ${faOptsSelect(window.FA_SEDES, sedeSel, 'Sede (opc.)')}
+            </select>
+            <select name="asiento_haber[${i}][tipo_gasto]" class="fa-haber-tipo" style="${inp}" title="Tipo de gasto de este haber">
+                ${faOptsSelect(window.FA_TIPOS_GASTO, tipoSel, 'Tipo de gasto (opc.)')}
+            </select>
+        </div>`;
     fila.querySelector('button').addEventListener('click', () => {
         if (lista.children.length > 1) { fila.remove(); faTotalesAsiento(s); }
     });
@@ -2716,11 +3243,15 @@ function closeDesgloseModal() {
 function tablaAsiento(asiento) {
     const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
     const td = 'padding: 7px 8px; border-bottom: 1px solid #fde68a;';
-    const fila = (l, alDebe) => `<tr>
-        <td style="${td}${alDebe ? '' : ' padding-left: 24px;'}">${l.cuenta ? `<strong>${esc(l.cuenta)}</strong>` : ''}${l.detalle ? `<div style="${l.cuenta ? 'font-size: 0.78rem; color: #64748b;' : ''}">${esc(l.detalle)}</div>` : ''}</td>
+    const meta = (l) => [l.sede, l.tipo_gasto].filter(Boolean).join(' · ');
+    const fila = (l, alDebe) => {
+        const extra = !alDebe ? meta(l) : '';
+        return `<tr>
+        <td style="${td}${alDebe ? '' : ' padding-left: 24px;'}">${l.cuenta ? `<strong>${esc(l.cuenta)}</strong>` : ''}${l.detalle ? `<div style="${l.cuenta ? 'font-size: 0.78rem; color: #64748b;' : ''}">${esc(l.detalle)}</div>` : ''}${extra ? `<div style="font-size: 0.72rem; color: #b45309; margin-top: 2px;">${esc(extra)}</div>` : ''}</td>
         <td style="${td} text-align: right;">${alDebe ? faFmt(faNum(l.monto)) : ''}</td>
         <td style="${td} text-align: right;">${alDebe ? '' : faFmt(faNum(l.monto))}</td>
     </tr>`;
+    };
     const haber = asiento.haber || [];
     const total = haber.reduce((t, h) => t + faNum(h.monto), 0);
     return `<table style="width: 100%; border-collapse: collapse; font-size: 0.88rem;">
@@ -2768,9 +3299,16 @@ function cerrarGaleria() {
 }
 
 // ===== EDITAR EGRESO =====
+function cuentaBancaInternacionalEdit() {
+    const raw = document.getElementById('banco_titular_edit')?.value || '';
+    return esBancaInternacionalCat(categoriaCuentaDeValor(raw));
+}
 function aplicarCategoriaEdit(categoria, cambioManual) {
     const isTraslado = (categoria === 'traslados');
     const isIngreso = (categoria === 'ingresos');
+    const intl = cuentaBancaInternacionalEdit();
+    const isDivisas = categoria === 'egreso_divisas' || (intl && !isTraslado && categoria !== 'compra_divisas');
+    const sinTasa = isTraslado || isDivisas || (intl && !isIngreso);
     document.getElementById('titulo_editar_egreso').innerText = isIngreso ? '✏️ Editar Ingreso' : '✏️ Editar Egreso';
     const rowCategoria = document.getElementById('row_categoria_edit');
     if (rowCategoria && !@json($soloAvances ?? false)) rowCategoria.style.display = isIngreso ? 'none' : 'block';
@@ -2784,9 +3322,11 @@ function aplicarCategoriaEdit(categoria, cambioManual) {
     document.getElementById('lbl_monto_bs_edit').innerText = isTraslado ? 'Monto' : 'Monto BS';
 
     document.getElementById('col_monto_usd_edit').style.display = isTraslado ? 'none' : 'block';
-    document.getElementById('col_tasa_cambio_edit').style.display = isTraslado ? 'none' : 'block';
+    document.getElementById('col_tasa_cambio_edit').style.display = sinTasa ? 'none' : 'block';
+    const colBsEdit = document.getElementById('col_monto_bs_edit');
+    if (colBsEdit) colBsEdit.style.display = (isDivisas || (intl && isIngreso)) ? 'none' : 'block';
     const rowDifEdit = document.getElementById('row_diferencial_edit');
-    if (rowDifEdit) rowDifEdit.style.display = isTraslado ? 'none' : 'block';
+    if (rowDifEdit) rowDifEdit.style.display = (isTraslado || isDivisas || intl) ? 'none' : 'block';
 
     document.getElementById('row_tipo_gasto_edit').style.display = (isTraslado || isIngreso) ? 'none' : 'block';
     // Para no dar error con TomSelect requerimos el elemento base
@@ -2794,6 +3334,10 @@ function aplicarCategoriaEdit(categoria, cambioManual) {
     if (dstTG) dstTG.required = !isTraslado && !isIngreso;
 
     const sel = document.getElementById('categoria_egreso_edit');
+    if (sel && intl && !['ingresos', 'traslados', 'compra_divisas'].includes(sel.value)) {
+        sel.value = 'egreso_divisas';
+        categoria = 'egreso_divisas';
+    }
     const aviso = document.getElementById('aviso_categoria_edit');
     if (!aviso || !sel) return;
     const original = sel.dataset.original || '';
@@ -3202,7 +3746,7 @@ function limpiarFiltros() {
             <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                 <div style="flex: 2;">
                     <label id="lbl_banco_titular_edit" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Banco y Titular</label>
-                    <select name="banco_titular" id="banco_titular_edit" required style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
+                    <select name="banco_titular" id="banco_titular_edit" required onchange="aplicarCategoriaEdit(document.getElementById('categoria_egreso_edit')?.value || 'egreso_realizado', false)" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                         <option value="">-- Seleccione --</option>
                         @foreach($cuentas as $cuenta)
                             <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
@@ -3248,7 +3792,7 @@ function limpiarFiltros() {
                     <label style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Tasa Cambio</label>
                     <input type="text" inputmode="decimal" name="tasa_cambio" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>
-                <div style="flex: 1;">
+                <div style="flex: 1;" id="col_monto_bs_edit">
                     <label id="lbl_monto_bs_edit" style="display: block; margin-bottom: 3px; font-weight: 500; font-size: 0.9rem;">Monto BS</label>
                     <input type="text" inputmode="decimal" name="monto_bs" id="monto_bs_edit" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
                 </div>

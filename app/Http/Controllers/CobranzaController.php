@@ -932,6 +932,13 @@ class CobranzaController extends Controller
                 }
                 foreach ($movs as $mov) {
                     $abonos += (float) $mov->monto_usd;
+                    $usdFmt = number_format((float) $mov->monto_usd, 2, ',', '.');
+                    $como = $mov->comoSePago();
+                    // En estado de cuenta siempre es un abono; no mostrar «Descuento en divisas» como descripción.
+                    $descripcion = 'Abono: $ '.$usdFmt;
+                    if ($como !== '' && ! in_array($como, ['Abono', 'Descuento en divisas', 'Descuento En Divisas'], true)) {
+                        $descripcion .= ' · '.$como;
+                    }
                     $lineas[] = [
                         'antiguedad' => '',
                         'fecha' => $mov->fecha->format('d/m/Y'),
@@ -939,7 +946,7 @@ class CobranzaController extends Controller
                         'tipo_doc' => 'PAG',
                         'numero_documento' => (string) ($mov->referencia ?? ''),
                         'factura_padre' => $doc['factura'],
-                        'descripcion' => $mov->comoSePago(),
+                        'descripcion' => $descripcion,
                         'cantidad' => null,
                         'precio' => null,
                         'total' => null,

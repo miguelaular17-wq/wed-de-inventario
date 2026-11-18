@@ -103,6 +103,48 @@ class CobranzaFlujoService
     }
 
     /**
+     * Compensación desde Finanzas: el egreso pagó menos que el gasto (p. ej. gasto fijo) porque
+     * parte se descontó de una deuda. Se registra el abono en Cobranza sin tocar el banco otra vez.
+     *
+     * @param  array{fecha: string, monto_usd: float, factura_sede: string, factura_doc: string,
+     *               concepto?: string, contraparte?: ?string, referencia?: ?string, observaciones?: ?string}  $info
+     */
+    public function registrarCompensacionDesdeFinanzas(array $info, ?User $user): CobranzaMovimiento
+    {
+        $usd = round((float) ($info['monto_usd'] ?? 0), 2);
+        if ($usd <= 0) {
+            throw ValidationException::withMessages(['cobranza_monto' => 'La diferencia a aplicar en Cobranza debe ser mayor a cero.']);
+        }
+
+        return DB::transaction(function () use ($info, $usd, $user) {
+            $datos = $this->prepararVinculo([
+                'tipo' => CobranzaMovimiento::TIPO_INGRESO,
+                'ambito' => 'cobranza',
+                'fecha' => $info['fecha'],
+                'banco' => CobranzaMovimiento::CUENTA_DESCUENTO_DIVISAS,
+                'titular' => 'COBRANZA',
+                'categoria_cuenta' => CobranzaMovimiento::GRUPO_SIN_BANCO,
+                'monto_usd' => $usd,
+                'tasa_cambio' => 0,
+                'monto_bs' => 0,
+                'referencia' => $info['referencia'] ?? null,
+                'concepto' => $info['concepto'] ?? 'Compensación desde egreso de Finanzas',
+                'contraparte' => $info['contraparte'] ?? null,
+                'observaciones' => $info['observaciones'] ?? null,
+                'forma_pago' => 'DESCUENTO_DIVISAS',
+                'vinculo_tipo' => CobranzaFactura::VINCULO,
+                'factura_sede' => $info['factura_sede'],
+                'factura_doc' => $info['factura_doc'],
+            ]);
+
+            $mov = $this->crear($datos, $user);
+            $this->aplicarVinculo($mov, $datos, $user);
+
+            return $mov->fresh();
+        });
+    }
+
+    /**
      * Pago registrado en la pantalla de Contratos o Patrimonial: entra al flujo de caja de Cobranza.
      *
      * @param  array{ambito: string, fecha: string, monto_usd: float, tasa_cambio?: mixed, forma_pago?: ?string, banco_destino?: ?string,
@@ -691,7 +733,12 @@ class CobranzaFlujoService
         $usd = round((float) ($datos['monto_usd'] ?? 0), 2);
         $bs = round((float) ($datos['monto_bs'] ?? 0), 2);
         $tasa = round((float) ($datos['tasa_cambio'] ?? 0), 4);
-        if ($usd <= 0 && $bs > 0 && $tasa > 0) {
+        $intl = FinanzasCatalogo::esBancaInternacional($datos['categoria_cuenta'] ?? null);
+        if ($intl && $usd > 0) {
+            // Banca internacional: solo divisas, sin tasa ni Bs.
+            $bs = 0.0;
+            $tasa = 0.0;
+        } elseif ($usd <= 0 && $bs > 0 && $tasa > 0) {
             $usd = round($bs / $tasa, 2);
         } elseif ($bs <= 0 && $usd > 0 && $tasa > 0) {
             $bs = round($usd * $tasa, 2);
@@ -712,7 +759,8 @@ class CobranzaFlujoService
     }
 
     /**
-     * Banco real: copia oculta en flujo_cajas (no sale en el flujo de caja de Finanzas, sí en la conciliación).
+     * Banco real → copia en flujo_cajas para conciliar.
+     * Egresos: visibles en el flujo de Finanzas. Ingresos: ocultos (solo conciliación).
      * Cruce, efectivo o cuenta por identificar: sin copia.
      */
     private function sincronizarEspejo(CobranzaMovimiento $mov): void
@@ -726,22 +774,29 @@ class CobranzaFlujoService
             return;
         }
 
+        $intl = FinanzasCatalogo::esBancaInternacional($mov->categoria_cuenta);
+        $categoriaEgreso = $mov->esIngreso()
+            ? 'ingresos'
+            : ($intl ? 'egreso_divisas' : 'egreso_realizado');
+
         $datos = [
             'fecha' => $mov->fecha->toDateString(),
             'tipo' => $mov->tipo,
-            'categoria_egreso' => $mov->esIngreso() ? 'ingresos' : 'egreso_realizado',
+            'categoria_egreso' => $categoriaEgreso,
             'banco' => $mov->banco,
             'titular' => $mov->titular,
             'categoria_cuenta' => $mov->categoria_cuenta,
             'titular_receptor' => $mov->contraparte,
             'referencia' => $mov->referencia,
             'monto_usd' => $mov->monto_usd,
-            'tasa_cambio' => $mov->tasa_cambio,
+            'tasa_cambio' => $intl ? 0 : $mov->tasa_cambio,
             'diferencial_cambiario' => 0,
-            'monto_bs' => $mov->monto_bs,
+            'monto_bs' => $intl ? 0 : $mov->monto_bs,
             'comision' => 0,
             'motivo' => mb_substr('Cobranza · '.$mov->nombreAmbito().' · '.$mov->concepto, 0, 255),
-            'oculto' => true,
+            // Egreso con banco real: se ve en Finanzas (internacional → egreso en divisas).
+            // Ingreso: sigue oculto para no mezclar cobros en el flujo diario de Finanzas.
+            'oculto' => $mov->esIngreso(),
             'origen' => FlujoCaja::ORIGEN_COBRANZA,
         ];
         if (Schema::hasColumn('flujo_cajas', 'tipo_gasto')) {
