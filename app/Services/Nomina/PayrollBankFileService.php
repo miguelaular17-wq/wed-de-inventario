@@ -83,7 +83,7 @@ class PayrollBankFileService
             ? $periodo->liquidacionesComision
             : NominaLiquidacionComision::query()
                 ->where('periodo_id', $periodo->id)
-                ->with(['empleado.empresa', 'empleado.cliente'])
+                ->with(['empleado.empresa', 'empleado.cliente', 'empleado.sedeCatalogo', 'empleado.cargoCatalogo'])
                 ->get();
 
         return $liquidaciones
@@ -112,7 +112,7 @@ class PayrollBankFileService
     /**
      * @param  Collection<int, \App\Models\Nomina\NominaEmpleado>  $empleados
      * @param  Collection<string, float>  $montosPorEmpleado
-     * @return Collection<int, object{id:int,nombre:string,cedula:string,usd:float}>
+     * @return Collection<int, object{id:int,nombre:string,cedula:string,usd:float,sede:string,cargo:string,empresa_id:int}>
      */
     private function personasDelGrupo(Collection $empleados, Collection $montosPorEmpleado): Collection
     {
@@ -123,8 +123,44 @@ class PayrollBankFileService
                 'nombre' => $empleado->nombre(),
                 'cedula' => $empleado->cedula(),
                 'usd' => round((float) ($montosPorEmpleado->get((string) (int) $empleado->id, 0)), 2),
+                'sede' => $empleado->nombreSede(),
+                'cargo' => $empleado->nombreCargo(),
+                'empresa_id' => (int) ($empleado->empresa_id ?: 0),
             ])
             ->sortBy(fn ($persona) => mb_strtolower($persona->nombre))
+            ->values();
+    }
+
+    /**
+     * Personas con comisión > 0 para armar el TXT (incluye sede/cargo para filtros).
+     *
+     * @return Collection<int, object{id:int,nombre:string,cedula:string,usd:float,sede:string,cargo:string,empresa_id:int,empresa:?string,descargable:bool}>
+     */
+    public function personasComisionesTxt(NominaPeriodo $periodo): Collection
+    {
+        return $this->resumenComisionesPorEmpresa($periodo)
+            ->flatMap(function ($fila) {
+                $empresa = $fila->empresa;
+                $empresaId = (int) ($empresa?->id ?: ($fila->personas?->first()?->empresa_id ?? 0));
+
+                return ($fila->personas ?? collect())->map(function ($persona) use ($empresa, $empresaId) {
+                    $cedulaOk = preg_replace('/\D+/', '', (string) $persona->cedula) !== '';
+
+                    return (object) [
+                        'id' => (int) $persona->id,
+                        'nombre' => (string) $persona->nombre,
+                        'cedula' => (string) $persona->cedula,
+                        'usd' => round((float) $persona->usd, 2),
+                        'sede' => (string) ($persona->sede ?? '—'),
+                        'cargo' => (string) ($persona->cargo ?? '—'),
+                        'empresa_id' => (int) ($persona->empresa_id ?? $empresaId),
+                        'empresa' => $empresa ? ($empresa->codigo.' — '.$empresa->nombre) : '',
+                        'descargable' => $cedulaOk && (float) $persona->usd > 0,
+                    ];
+                });
+            })
+            ->filter(fn ($p) => $p->usd > 0)
+            ->sortBy(fn ($p) => mb_strtolower($p->nombre))
             ->values();
     }
 
@@ -167,6 +203,76 @@ class PayrollBankFileService
         }
 
         return implode("\r\n", $lineas)."\r\n";
+    }
+
+    /**
+     * Un solo TXT con las personas seleccionadas (cualquier empresa).
+     *
+     * @param  list<int>  $empleadoIds
+     */
+    public function generarComisionesSeleccion(
+        NominaPeriodo $periodo,
+        float $tasaBcv,
+        array $empleadoIds,
+        Carbon|string|null $fechaPago = null
+    ): string {
+        if ($tasaBcv <= 0) {
+            throw ValidationException::withMessages([
+                'tasa_bcv' => 'No hay tasa BCV del día. Cárgala en Flujo de caja o reintenta más tarde.',
+            ]);
+        }
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', $empleadoIds))));
+        if ($ids === []) {
+            throw ValidationException::withMessages([
+                'empleados' => 'Selecciona al menos una persona para el TXT.',
+            ]);
+        }
+
+        $fecha = Carbon::parse($fechaPago ?? $periodo->fecha_pago_comision ?? now());
+        $liquidaciones = NominaLiquidacionComision::query()
+            ->where('periodo_id', $periodo->id)
+            ->whereIn('empleado_id', $ids)
+            ->visibles()
+            ->with(['empleado.cliente'])
+            ->get()
+            ->filter(fn ($liq) => $liq->empleado && $liq->empleado->generaComision() && $liq->empleado->isActivo());
+
+        $porEmpleado = $liquidaciones
+            ->groupBy(fn ($liq) => (int) $liq->empleado_id)
+            ->map(fn (Collection $liqs) => round((float) $liqs->sum('total_pagar'), 2));
+
+        $lineas = [];
+        foreach ($ids as $id) {
+            $usd = (float) ($porEmpleado->get($id, 0));
+            if ($usd <= 0) {
+                continue;
+            }
+            $empleado = $liquidaciones->firstWhere('empleado_id', $id)?->empleado;
+            if (! $empleado) {
+                continue;
+            }
+            $cedula = $empleado->cedula();
+            if (preg_replace('/\D+/', '', $cedula) === '') {
+                continue;
+            }
+            $lineas[] = self::formatearLinea($cedula, round($usd * $tasaBcv, 2), $fecha);
+        }
+
+        if ($lineas === []) {
+            throw ValidationException::withMessages([
+                'empleados' => 'Ninguna de las personas seleccionadas tiene monto descargable (cédula y comisión > 0).',
+            ]);
+        }
+
+        return implode("\r\n", $lineas)."\r\n";
+    }
+
+    public function nombreArchivoComisionesSeleccion(NominaPeriodo $periodo, Carbon|string|null $fechaPago = null): string
+    {
+        $fecha = Carbon::parse($fechaPago ?? $periodo->fecha_pago_comision ?? now())->format('Ymd');
+
+        return 'comision_todas_'.$periodo->id.'_'.$fecha.'.txt';
     }
 
     public function nombreArchivo(NominaPeriodo $periodo, NominaEmpresa $empresa, Carbon|string|null $fechaPago = null): string

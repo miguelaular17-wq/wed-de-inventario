@@ -68,16 +68,20 @@ class ComisionController extends Controller
         $liquidaciones = NominaLiquidacionComision::query()
             ->where('periodo_id', $periodo->id)
             ->visibles()
-            ->with(['empleado.cliente', 'empleado.empresa', 'empleado.sedeCatalogo', 'periodo'])
+            ->with(['empleado.cliente', 'empleado.empresa', 'empleado.sedeCatalogo', 'empleado.cargoCatalogo', 'periodo'])
             ->orderBy('id')
             ->get();
 
         $periodo->setRelation('liquidacionesComision', $liquidaciones);
 
         $tasaBcv = $this->bcv->tasaParaPeriodo($periodo);
+        $personasTxt = $this->bankFile->personasComisionesTxt($periodo);
 
         return view('nomina.comisiones.show', [
             'periodo' => $periodo,
+            'personasTxt' => $personasTxt,
+            'filtrosTxtSedes' => $personasTxt->pluck('sede')->unique()->sort()->values(),
+            'filtrosTxtCargos' => $personasTxt->pluck('cargo')->unique()->sort()->values(),
             'liquidaciones' => $liquidaciones,
             'bonosComision' => $this->bonosDePeriodo($periodo),
             'bancoPorEmpresa' => $this->bankFile->resumenComisionesPorEmpresa($periodo),
@@ -558,6 +562,30 @@ class ComisionController extends Controller
         $tasa = $this->bcv->tasaParaPeriodo($periodo);
         $contenido = $this->bankFile->generarComisiones($periodo, $empresa, $tasa);
         $nombre = $this->bankFile->nombreArchivoComisiones($periodo, $empresa);
+
+        return response()->streamDownload(function () use ($contenido) {
+            echo $contenido;
+        }, $nombre, [
+            'Content-Type' => 'text/plain; charset=UTF-8',
+        ]);
+    }
+
+    public function exportarBancoTodo(Request $request, NominaPeriodo $periodo): StreamedResponse|RedirectResponse
+    {
+        if ($periodo->estado === NominaPeriodo::ABIERTO) {
+            return redirect()
+                ->route('nomina.comisiones.show', $periodo)
+                ->withErrors(['periodo' => 'Calcula la nómina antes de generar el archivo del banco.']);
+        }
+
+        $datos = $request->validate([
+            'empleados' => ['required', 'array', 'min:1'],
+            'empleados.*' => ['integer'],
+        ]);
+
+        $tasa = $this->bcv->tasaParaPeriodo($periodo);
+        $contenido = $this->bankFile->generarComisionesSeleccion($periodo, $tasa, $datos['empleados']);
+        $nombre = $this->bankFile->nombreArchivoComisionesSeleccion($periodo);
 
         return response()->streamDownload(function () use ($contenido) {
             echo $contenido;

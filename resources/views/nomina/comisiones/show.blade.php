@@ -27,6 +27,16 @@
 .com-alta-lista { position: absolute; z-index: 5; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 4px; max-height: 220px; overflow: auto; box-shadow: 0 12px 30px rgba(15,23,42,.12); }
 .com-alta-lista button { display: block; width: 100%; text-align: left; background: #fff; border: 0; border-bottom: 1px solid #f1f5f9; padding: 8px 10px; cursor: pointer; }
 .com-alta-lista button:hover { background: #eff6ff; }
+.com-modal-card.com-modal-txt { width: min(1100px, 100%); }
+.txt-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 0 0 12px; }
+.txt-filtros label { display: flex; flex-direction: column; gap: 4px; font-size: .75rem; font-weight: 700; color: #64748b; min-width: 160px; }
+.txt-filtros select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 600; color: #0f172a; }
+.txt-acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 10px; }
+.txt-lista-wrap { max-height: min(52vh, 520px); overflow: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
+.txt-lista-wrap table { margin: 0; }
+.txt-lista-wrap tr[hidden] { display: none !important; }
+.txt-empresas { margin-top: 14px; }
+.txt-empresas summary { cursor: pointer; font-weight: 700; color: #334155; }
 </style>
 @endpush
 
@@ -486,53 +496,134 @@
 
 @if($periodo->estado !== 'ABIERTO')
 <div class="com-modal" id="modal-txt" hidden>
-    <div class="com-modal-card">
+    <div class="com-modal-card com-modal-txt">
         <div class="com-modal-head">
             <div>
                 <h3 style="margin:0;">TXT del banco</h3>
-                <p class="muted" style="margin:4px 0 0;">Los que tienen empresa se descargan. Los que no, hay que asignarla en la ficha. Tasa BCV: <strong>{{ number_format($tasaBcv, 2) }}</strong>.</p>
+                <p class="muted" style="margin:4px 0 0;">Solo se descargan los marcados (también en “por empresa”). Filtra por cargo o sede para marcar/desmarcar más fácil. Tasa BCV: <strong>{{ number_format($tasaBcv, 2) }}</strong>.</p>
             </div>
             <button class="btn secondary" type="button" data-cerrar-modal>Cerrar</button>
         </div>
-        <table class="data-table">
-            <thead><tr><th>Empresa</th><th>Empleados</th><th>Comisión USD</th><th>Comisión Bs</th><th></th></tr></thead>
-            <tbody>
-                @forelse($bancoPorEmpresa as $fila)
-                    @if($fila->empresa)
-                        <tr>
-                            <td>
-                                <strong>{{ $fila->empresa->codigo }}</strong>
-                                <div class="muted" style="font-size:.78rem;">{{ $fila->empresa->nombre }}</div>
-                            </td>
-                            <td>{{ $fila->empleados }}</td>
-                            <td>${{ number_format($fila->usd, 2) }}</td>
-                            <td>Bs {{ number_format($fila->usd * $tasaBcv, 2) }}</td>
-                            <td style="text-align:right;">
-                                <a class="btn primary" href="{{ route('nomina.comisiones.banco', [$periodo, $fila->empresa]) }}">Descargar TXT</a>
-                            </td>
-                        </tr>
-                    @else
-                        <tr>
-                            <td colspan="5"><strong>Sin empresa</strong> · {{ $fila->empleados }} persona(s) · ${{ number_format($fila->usd, 2) }}</td>
-                        </tr>
-                        @foreach(($fila->personas ?? collect()) as $persona)
-                            <tr>
-                                <td style="padding-left:24px;">
-                                    <a href="{{ route('nomina.empleados.show', ['empleado' => $persona->id, 'tab' => 'comisiones']) }}">{{ $persona->nombre }}</a>
-                                    <span class="muted">· {{ $persona->cedula !== '' ? $persona->cedula : 'Sin cédula' }}</span>
-                                </td>
-                                <td>1</td>
-                                <td>${{ number_format($persona->usd ?? 0, 2) }}</td>
-                                <td>Bs {{ number_format(($persona->usd ?? 0) * $tasaBcv, 2) }}</td>
-                                <td class="muted">No se descarga</td>
-                            </tr>
+
+        <form method="POST" action="{{ route('nomina.comisiones.banco_todo', $periodo) }}" id="form-txt-banco">
+            @csrf
+            <div class="txt-filtros">
+                <label>Sede
+                    <select id="txt-filtro-sede">
+                        <option value="">Todas</option>
+                        @foreach(($filtrosTxtSedes ?? collect()) as $sede)
+                            <option value="{{ $sede }}">{{ $sede }}</option>
                         @endforeach
-                    @endif
-                @empty
-                    <tr><td colspan="5" class="muted">No hay comisiones calculadas.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
+                    </select>
+                </label>
+                <label>Cargo
+                    <select id="txt-filtro-cargo">
+                        <option value="">Todos</option>
+                        @foreach(($filtrosTxtCargos ?? collect()) as $cargo)
+                            <option value="{{ $cargo }}">{{ $cargo }}</option>
+                        @endforeach
+                    </select>
+                </label>
+            </div>
+
+            <div class="txt-acciones">
+                <button class="btn primary" type="submit" id="txt-descargar-todo">Descargar TXT seleccionado</button>
+                <button class="btn secondary" type="button" id="txt-marcar-visibles">Marcar visibles</button>
+                <button class="btn secondary" type="button" id="txt-desmarcar-visibles">Desmarcar visibles</button>
+                <span class="muted" id="txt-contador">0 seleccionados</span>
+            </div>
+
+            <div class="txt-lista-wrap">
+                <table class="data-table" id="tabla-txt-personas">
+                    <thead>
+                        <tr>
+                            <th style="width:36px;"></th>
+                            <th>Persona</th>
+                            <th>Sede</th>
+                            <th>Cargo</th>
+                            <th>Empresa</th>
+                            <th>USD</th>
+                            <th>Bs</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse(($personasTxt ?? collect()) as $persona)
+                            @php
+                                $puede = (bool) ($persona->descargable ?? false);
+                            @endphp
+                            <tr data-txt-fila
+                                data-sede="{{ $persona->sede }}"
+                                data-cargo="{{ $persona->cargo }}"
+                                data-empresa-id="{{ (int) ($persona->empresa_id ?? 0) }}"
+                                @if(! $puede) class="muted" @endif>
+                                <td>
+                                    <input type="checkbox"
+                                           name="empleados[]"
+                                           value="{{ $persona->id }}"
+                                           data-txt-check
+                                           @checked($puede)
+                                           @disabled(! $puede)>
+                                </td>
+                                <td>
+                                    <a href="{{ route('nomina.empleados.show', ['empleado' => $persona->id, 'tab' => 'comisiones']) }}">{{ $persona->nombre }}</a>
+                                    <div class="muted" style="font-size:.78rem;">{{ $persona->cedula !== '' ? $persona->cedula : 'Sin cédula' }}</div>
+                                </td>
+                                <td>{{ $persona->sede }}</td>
+                                <td>{{ $persona->cargo }}</td>
+                                <td>{{ $persona->empresa !== '' ? $persona->empresa : 'Sin empresa' }}</td>
+                                <td>${{ number_format($persona->usd, 2) }}</td>
+                                <td>Bs {{ number_format($persona->usd * $tasaBcv, 2) }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="7" class="muted">No hay comisiones calculadas.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </form>
+
+        <details class="txt-empresas">
+            <summary>Descargas por empresa (solo marcados de esa empresa)</summary>
+            <table class="data-table" style="margin-top:10px;">
+                <thead><tr><th>Empresa</th><th>Empleados</th><th>Comisión USD</th><th>Comisión Bs</th><th></th></tr></thead>
+                <tbody>
+                    @forelse($bancoPorEmpresa as $fila)
+                        @if($fila->empresa)
+                            <tr>
+                                <td>
+                                    <strong>{{ $fila->empresa->codigo }}</strong>
+                                    <div class="muted" style="font-size:.78rem;">{{ $fila->empresa->nombre }}</div>
+                                </td>
+                                <td>{{ $fila->empleados }}</td>
+                                <td>${{ number_format($fila->usd, 2) }}</td>
+                                <td>Bs {{ number_format($fila->usd * $tasaBcv, 2) }}</td>
+                                <td style="text-align:right;">
+                                    <button class="btn primary" type="button" data-txt-empresa="{{ $fila->empresa->id }}">Descargar TXT</button>
+                                </td>
+                            </tr>
+                        @else
+                            <tr>
+                                <td colspan="5"><strong>Sin empresa</strong> · {{ $fila->empleados }} persona(s) · ${{ number_format($fila->usd, 2) }} · se incluyen en el TXT seleccionado si están marcados y tienen cédula</td>
+                            </tr>
+                            @foreach(($fila->personas ?? collect()) as $persona)
+                                <tr>
+                                    <td style="padding-left:24px;">
+                                        <a href="{{ route('nomina.empleados.show', ['empleado' => $persona->id, 'tab' => 'comisiones']) }}">{{ $persona->nombre }}</a>
+                                        <span class="muted">· {{ $persona->cedula !== '' ? $persona->cedula : 'Sin cédula' }}</span>
+                                    </td>
+                                    <td>1</td>
+                                    <td>${{ number_format($persona->usd ?? 0, 2) }}</td>
+                                    <td>Bs {{ number_format(($persona->usd ?? 0) * $tasaBcv, 2) }}</td>
+                                    <td class="muted">{{ preg_replace('/\D+/', '', (string) ($persona->cedula ?? '')) !== '' ? 'Marcar arriba para incluir' : 'Sin cédula' }}</td>
+                                </tr>
+                            @endforeach
+                        @endif
+                    @empty
+                        <tr><td colspan="5" class="muted">No hay comisiones calculadas.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </details>
     </div>
 </div>
 @endif
@@ -558,6 +649,105 @@ document.addEventListener('DOMContentLoaded', function () {
             if (event.target === modal) modal.hidden = true;
         });
     });
+
+    (function initTxtBanco() {
+        const form = document.getElementById('form-txt-banco');
+        if (!form) return;
+
+        const filtroSede = document.getElementById('txt-filtro-sede');
+        const filtroCargo = document.getElementById('txt-filtro-cargo');
+        const contador = document.getElementById('txt-contador');
+        const filas = Array.from(form.querySelectorAll('[data-txt-fila]'));
+        const accionTodo = form.getAttribute('action');
+
+        function actualizarContador() {
+            const n = form.querySelectorAll('[data-txt-check]:checked:not(:disabled)').length;
+            if (contador) contador.textContent = n + ' seleccionado' + (n === 1 ? '' : 's');
+        }
+
+        function aplicarFiltros() {
+            const sede = (filtroSede && filtroSede.value) || '';
+            const cargo = (filtroCargo && filtroCargo.value) || '';
+            filas.forEach(function (fila) {
+                const okSede = !sede || fila.getAttribute('data-sede') === sede;
+                const okCargo = !cargo || fila.getAttribute('data-cargo') === cargo;
+                fila.hidden = !(okSede && okCargo);
+            });
+        }
+
+        function checksVisibles(marcar) {
+            filas.forEach(function (fila) {
+                if (fila.hidden) return;
+                const check = fila.querySelector('[data-txt-check]');
+                if (check && !check.disabled) check.checked = marcar;
+            });
+            actualizarContador();
+        }
+
+        function idsSeleccionados(empresaId) {
+            const ids = [];
+            filas.forEach(function (fila) {
+                const check = fila.querySelector('[data-txt-check]');
+                if (!check || check.disabled || !check.checked) return;
+                if (empresaId != null && String(fila.getAttribute('data-empresa-id') || '0') !== String(empresaId)) return;
+                ids.push(check.value);
+            });
+            return ids;
+        }
+
+        function enviarSeleccion(ids) {
+            if (!ids.length) {
+                alert('No hay personas marcadas para esa descarga.');
+                return;
+            }
+            const tmp = document.createElement('form');
+            tmp.method = 'POST';
+            tmp.action = accionTodo;
+            tmp.style.display = 'none';
+            const csrf = form.querySelector('input[name="_token"]');
+            if (csrf) {
+                const token = document.createElement('input');
+                token.type = 'hidden';
+                token.name = '_token';
+                token.value = csrf.value;
+                tmp.appendChild(token);
+            }
+            ids.forEach(function (id) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'empleados[]';
+                input.value = id;
+                tmp.appendChild(input);
+            });
+            document.body.appendChild(tmp);
+            tmp.submit();
+            tmp.remove();
+        }
+
+        if (filtroSede) filtroSede.addEventListener('change', aplicarFiltros);
+        if (filtroCargo) filtroCargo.addEventListener('change', aplicarFiltros);
+        form.addEventListener('change', function (event) {
+            if (event.target && event.target.matches('[data-txt-check]')) actualizarContador();
+        });
+        const btnMarcar = document.getElementById('txt-marcar-visibles');
+        const btnDesmarcar = document.getElementById('txt-desmarcar-visibles');
+        if (btnMarcar) btnMarcar.addEventListener('click', function () { checksVisibles(true); });
+        if (btnDesmarcar) btnDesmarcar.addEventListener('click', function () { checksVisibles(false); });
+        form.addEventListener('submit', function (event) {
+            const n = form.querySelectorAll('[data-txt-check]:checked:not(:disabled)').length;
+            if (n < 1) {
+                event.preventDefault();
+                alert('Selecciona al menos una persona para el TXT.');
+            }
+        });
+        document.querySelectorAll('[data-txt-empresa]').forEach(function (boton) {
+            boton.addEventListener('click', function () {
+                enviarSeleccion(idsSeleccionados(boton.getAttribute('data-txt-empresa')));
+            });
+        });
+        actualizarContador();
+    })();
+
     document.querySelectorAll('[data-ajuste-tab]').forEach(function (boton) {
         boton.addEventListener('click', function () {
             activarAjuste(boton.getAttribute('data-ajuste-tab'));
