@@ -703,6 +703,7 @@ class FinanzasController extends Controller
                 'cobranza_factura_sede' => 'nullable|string|max:120',
                 'cobranza_factura_doc' => 'nullable|string|max:120',
                 'cobranza_monto' => 'nullable|numeric|min:0',
+                'cobranza_diferencia_justificacion' => 'nullable|string|max:500',
             ]);
 
             $empleadoServicioTecnico = null;
@@ -983,7 +984,7 @@ class FinanzasController extends Controller
 
     /**
      * Si el gasto fijo (o el total del gasto) es mayor que lo pagado en el banco, la diferencia
-     * se aplica como abono en Cobranza (sin segundo egreso bancario).
+     * se aplica como abono en Cobranza (sin segundo egreso bancario) o queda justificada en el motivo.
      *
      * @param  list<array{id?:int|string, monto?:float|string|null}>  $itemsGf
      */
@@ -999,6 +1000,7 @@ class FinanzasController extends Controller
         $diferencia = round($totalGasto - $pagoUsd, 2);
         $sede = trim((string) ($data['cobranza_factura_sede'] ?? ''));
         $doc = trim((string) ($data['cobranza_factura_doc'] ?? ''));
+        $justificacion = trim((string) preg_replace('/\s+/u', ' ', (string) ($data['cobranza_diferencia_justificacion'] ?? '')));
         $montoCobranza = round((float) ($data['cobranza_monto'] ?? 0), 2);
         if ($montoCobranza <= 0 && $diferencia > 0.009) {
             $montoCobranza = $diferencia;
@@ -1009,8 +1011,19 @@ class FinanzasController extends Controller
         }
         if ($sede === '' || $doc === '') {
             if ($diferencia > 0.009 && $itemsGf !== []) {
+                if (mb_strlen($justificacion) >= 5) {
+                    $notaFaltante = 'Faltante $'.number_format($diferencia, 2).' justificado: '.$justificacion;
+                    $motivo = trim((string) $flujo->motivo);
+                    $flujo->forceFill([
+                        'motivo' => mb_substr($motivo !== '' ? $motivo.' · '.$notaFaltante : $notaFaltante, 0, 255),
+                    ])->save();
+
+                    return;
+                }
+
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'cobranza_factura_doc' => 'El gasto ($'.number_format($totalGasto, 2).') es mayor que el pago ($'.number_format($pagoUsd, 2).'). Elige la factura de Cobranza donde se aplica la diferencia ($'.number_format($diferencia, 2).').',
+                    'cobranza_factura_doc' => 'El gasto ($'.number_format($totalGasto, 2).') es mayor que el pago ($'.number_format($pagoUsd, 2).'). Elige la factura de Cobranza o justifica el faltante ($'.number_format($diferencia, 2).').',
+                    'cobranza_diferencia_justificacion' => 'Indica por qué no se aplica a Cobranza (mín. 5 caracteres).',
                 ]);
             }
 

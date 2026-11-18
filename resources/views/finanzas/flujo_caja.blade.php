@@ -796,10 +796,16 @@
                                 @php
                                     $motivoEr = (string) ($mov->motivo ?: '-');
                                     $sobranteEr = str_contains($motivoEr, ' · Sobrante $') ? explode(' · Sobrante $', $motivoEr, 2) : null;
+                                    $faltanteEr = (! $sobranteEr && str_contains($motivoEr, ' · Faltante $'))
+                                        ? explode(' · Faltante $', $motivoEr, 2)
+                                        : null;
                                 @endphp
                                 @if($sobranteEr)
                                     <div>{{ $sobranteEr[0] !== '' ? $sobranteEr[0] : '-' }}</div>
                                     <div style="margin-top:3px; font-size:0.75rem; color:#9a3412; font-weight:600;">Sobrante ${{ $sobranteEr[1] }}</div>
+                                @elseif($faltanteEr)
+                                    <div>{{ $faltanteEr[0] !== '' ? $faltanteEr[0] : '-' }}</div>
+                                    <div style="margin-top:3px; font-size:0.75rem; color:#9a3412; font-weight:600;">Faltante ${{ $faltanteEr[1] }}</div>
                                 @else
                                     {{ $motivoEr }}
                                 @endif
@@ -1677,6 +1683,7 @@
                             <p style="margin:0 0 8px; font-size:0.82rem; color:#9a3412; font-weight:600;">
                                 Diferencia gasto − pago: <span id="cobranza_diff_lbl">$0,00</span>
                             </p>
+                            <p style="margin:0 0 10px; font-size:0.75rem; color:#c2410c;">Elige una factura de Cobranza <strong>o</strong> justifica el faltante si no corresponde a cobranza.</p>
                             <input type="hidden" name="cobranza_factura_sede" id="cobranza_factura_sede" value="">
                             <input type="hidden" name="cobranza_factura_doc" id="cobranza_factura_doc" value="">
                             <input type="hidden" name="cobranza_monto" id="cobranza_monto" value="">
@@ -1685,6 +1692,12 @@
                                 style="width:100%; padding:7px 10px; border:1px solid #fdba74; border-radius:6px; font-size:0.85rem; margin-bottom:6px;">
                             <div id="cobranza_factura_res" style="max-height:160px; overflow:auto; display:flex; flex-direction:column; gap:4px;"></div>
                             <div id="cobranza_factura_sel" style="display:none; margin-top:8px; padding:8px 10px; background:#ffedd5; border-radius:6px; font-size:0.82rem; color:#9a3412;"></div>
+                            <div style="margin-top:12px; padding-top:10px; border-top:1px dashed #fdba74;">
+                                <label for="cobranza_diferencia_justificacion" style="display:block; font-size:0.78rem; font-weight:600; color:#9a3412; margin-bottom:4px;">Justificar faltante (si no es Cobranza)</label>
+                                <textarea name="cobranza_diferencia_justificacion" id="cobranza_diferencia_justificacion" rows="2" maxlength="500"
+                                    placeholder="Ej.: ajuste de tarifa, descuento del proveedor, error en estimado…"
+                                    style="width:100%; padding:7px 10px; border:1px solid #fdba74; border-radius:6px; font-size:0.85rem; resize:vertical;"></textarea>
+                            </div>
                         </div>
                     </div>
 
@@ -2261,6 +2274,22 @@ function pagoUsdEgresoActual() {
 function totalGfUsdActual() {
     return _gfItems.reduce((s, it) => s + (parseFloat(it.monto) || 0), 0);
 }
+function limpiarSeleccionCobranzaDiff() {
+    const sede = document.getElementById('cobranza_factura_sede');
+    const doc = document.getElementById('cobranza_factura_doc');
+    if (sede) sede.value = '';
+    if (doc) doc.value = '';
+    const sel = document.getElementById('cobranza_factura_sel');
+    if (sel) { sel.style.display = 'none'; sel.textContent = ''; }
+    const box = document.getElementById('cobranza_factura_res');
+    if (box) box.innerHTML = '';
+    const q = document.getElementById('cobranza_factura_q');
+    if (q) q.value = '';
+}
+function limpiarJustificacionCobranzaDiff() {
+    const just = document.getElementById('cobranza_diferencia_justificacion');
+    if (just) just.value = '';
+}
 function actualizarPanelCobranzaDiff() {
     const panel = document.getElementById('panel_cobranza_diff');
     if (!panel) return;
@@ -2274,12 +2303,9 @@ function actualizarPanelCobranzaDiff() {
     const monto = document.getElementById('cobranza_monto');
     if (monto && show) monto.value = diff.toFixed(2);
     if (!show) {
-        const sede = document.getElementById('cobranza_factura_sede');
-        const doc = document.getElementById('cobranza_factura_doc');
-        if (sede) sede.value = '';
-        if (doc) doc.value = '';
-        const sel = document.getElementById('cobranza_factura_sel');
-        if (sel) { sel.style.display = 'none'; sel.textContent = ''; }
+        limpiarSeleccionCobranzaDiff();
+        limpiarJustificacionCobranzaDiff();
+        if (monto) monto.value = '';
     }
 }
 (function initCobranzaDiffBusqueda() {
@@ -2307,6 +2333,7 @@ function actualizarPanelCobranzaDiff() {
                 box.querySelectorAll('button[data-doc]').forEach(btn => btn.addEventListener('click', () => {
                     document.getElementById('cobranza_factura_sede').value = btn.dataset.sede || '';
                     document.getElementById('cobranza_factura_doc').value = btn.dataset.doc || '';
+                    limpiarJustificacionCobranzaDiff();
                     const sel = document.getElementById('cobranza_factura_sel');
                     sel.style.display = 'block';
                     sel.textContent = 'Aplicar a ' + (btn.dataset.numero || '') + ' · ' + (btn.dataset.cliente || '') + ' (saldo $' + Number(btn.dataset.saldo || 0).toFixed(2) + ')';
@@ -2317,6 +2344,9 @@ function actualizarPanelCobranzaDiff() {
                 box.innerHTML = '<span style="font-size:0.78rem;color:#b91c1c;">No se pudo buscar.</span>';
             }
         }, 300);
+    });
+    document.getElementById('cobranza_diferencia_justificacion')?.addEventListener('input', function () {
+        if (this.value.trim().length >= 3) limpiarSeleccionCobranzaDiff();
     });
     document.getElementById('monto_usd')?.addEventListener('input', actualizarPanelCobranzaDiff);
 })();
@@ -3024,6 +3054,18 @@ function validarDesglose(event) {
         if (total <= 0) {
             alert('Indica el monto total del gasto para marcar esta cuenta por pagar.');
             event.preventDefault();
+            return false;
+        }
+    }
+    const panelDiff = document.getElementById('panel_cobranza_diff');
+    if (panelDiff && panelDiff.style.display !== 'none') {
+        const sede = (document.getElementById('cobranza_factura_sede')?.value || '').trim();
+        const doc = (document.getElementById('cobranza_factura_doc')?.value || '').trim();
+        const just = (document.getElementById('cobranza_diferencia_justificacion')?.value || '').trim();
+        if ((!sede || !doc) && just.length < 5) {
+            alert('Hay un faltante (gasto mayor al pago). Elige una factura de Cobranza o escribe la justificación (mín. 5 caracteres).');
+            event.preventDefault();
+            document.getElementById('cobranza_diferencia_justificacion')?.focus();
             return false;
         }
     }
