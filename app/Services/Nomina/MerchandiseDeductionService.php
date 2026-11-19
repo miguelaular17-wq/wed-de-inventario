@@ -260,6 +260,24 @@ class MerchandiseDeductionService
             ]);
     }
 
+    /** @param  list<int>  $empleadoIds */
+    public function deshacerComisionEmpleados(int $periodoId, array $empleadoIds): int
+    {
+        if (! $this->disponible() || $empleadoIds === []) {
+            return 0;
+        }
+
+        return NominaDescuentoMercancia::query()
+            ->where('nomina_periodo_id', $periodoId)
+            ->whereIn('empleado_id', $empleadoIds)
+            ->where('destino', NominaDescuentoMercancia::DESTINO_COMISION)
+            ->where('estado', 'DESCONTADO')
+            ->update([
+                'estado' => 'PENDIENTE',
+                'nomina_periodo_id' => null,
+            ]);
+    }
+
     public function deshacerPeriodo(int $periodoId): int
     {
         if (! $this->disponible()) {

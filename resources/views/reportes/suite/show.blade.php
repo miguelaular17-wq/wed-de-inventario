@@ -29,6 +29,9 @@
 .rs-tabla td { font-size:.82rem; }
 .rs-tabla td.r, .rs-tabla th.r { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .rs-tabla tr.negativo td { color:#b91c1c; }
+.rs-tabla tr.rs-grupo td { background:#1a4480; color:#fff; font-weight:800; font-size:.8rem; letter-spacing:.02em; padding:8px 10px; }
+.rs-tabla tr.rs-resumen td { background:#eef4fc; font-weight:700; }
+.rs-tabla tr.rs-subtotal td { background:#f1f5f9; font-weight:800; border-top:1px solid #cbd5e1; }
 .rs-tabla tfoot td { font-weight:800; background:#f8fafc; }
 .rs-detalle { border:0; background:#eef4fc; color:#1a4480; font-weight:800; font-size:.7rem; padding:3px 8px; border-radius:6px; cursor:pointer; }
 #rs-modal { border:0; border-radius:12px; padding:18px 20px; width:min(640px, 94vw); }
@@ -112,12 +115,17 @@
                 </thead>
                 <tbody>
                     @forelse($resultado['filas'] as $fila)
-                        <tr class="{{ ! empty($fila['negativo']) ? 'negativo' : '' }}">
+                        @php $tipoFila = $fila['tipo'] ?? null; @endphp
+                        <tr class="{{ ! empty($fila['negativo']) ? 'negativo' : '' }}{{ $tipoFila === 'grupo' ? ' rs-grupo' : '' }}{{ $tipoFila === 'resumen' ? ' rs-resumen' : '' }}{{ $tipoFila === 'subtotal' ? ' rs-subtotal' : '' }}">
                             @foreach($fila['celdas'] as $i => $celda)
                                 <td class="{{ $resultado['columnas'][$i][1] ?? 'l' }}">{{ $celda }}</td>
                             @endforeach
                             @if(! empty($resultado['detalle']))
-                                <td><button type="button" class="rs-detalle" data-url="{{ route('reportes_suite.factura', [$fila['sede'], $fila['documento']]) }}" data-doc="{{ $fila['documento'] }}">DETALLE</button></td>
+                                <td>
+                                    @if(empty($tipoFila))
+                                        <button type="button" class="rs-detalle" data-url="{{ route('reportes_suite.factura', [$fila['sede'], $fila['documento']]) }}" data-doc="{{ $fila['documento'] }}">DETALLE</button>
+                                    @endif
+                                </td>
                             @endif
                         </tr>
                     @empty

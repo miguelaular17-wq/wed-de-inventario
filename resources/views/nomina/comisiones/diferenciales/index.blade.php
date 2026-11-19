@@ -7,11 +7,11 @@
     <div class="panel-header-flex">
         <div>
             <a href="{{ route('nomina.comisiones.show', $periodo) }}" class="muted" style="font-size:.82rem;">← Comisiones {{ $periodo->etiqueta }}</a>
-            <h1 style="margin:4px 0 0;">Diferenciales de comisión</h1>
-            <p class="muted" style="margin:4px 0 0;">Pagos complementarios de la quincena para quienes no cobraron o se les pagó con otro porcentaje.</p>
+            <h1 style="margin:4px 0 0;">Ajustes / diferenciales</h1>
+            <p class="muted" style="margin:4px 0 0;">Complementos: no pagado (total) o ya pagado (solo la diferencia tras un recálculo).</p>
         </div>
         <div>
-            <a class="btn primary" href="{{ route('nomina.comisiones.diferenciales.create', $periodo) }}">Nuevo diferencial</a>
+            <a class="btn primary" href="{{ route('nomina.comisiones.diferenciales.create', $periodo) }}">Nuevo ajuste</a>
         </div>
     </div>
 

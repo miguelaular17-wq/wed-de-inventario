@@ -133,6 +133,26 @@ class LoanPaymentService
         $this->revertirAbonosPorObservacion($periodoId, 'Descuento de comisión período #'.$periodoId, false);
     }
 
+    /** @param  list<int>  $empleadoIds */
+    public function revertirAbonosComisionDeEmpleados(int $periodoId, array $empleadoIds): void
+    {
+        if ($empleadoIds === []) {
+            return;
+        }
+
+        $marcador = 'Descuento de comisión período #'.$periodoId;
+        $abonos = NominaPrestamoAbono::query()
+            ->where('tipo', NominaPrestamoAbono::TIPO_NOMINA)
+            ->where('observacion', 'like', '%'.$marcador.'%')
+            ->whereHas('prestamo', fn ($q) => $q->whereIn('empleado_id', $empleadoIds))
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($abonos as $abono) {
+            $this->revertirAbono($abono, $periodoId);
+        }
+    }
+
     private function revertirAbonosPorObservacion(int $periodoId, string $marcador, bool $limpiarCuotasDelPeriodo): void
     {
         $abonos = NominaPrestamoAbono::query()

@@ -2,9 +2,13 @@
 
 @section('title', 'Ventas al mayor · Configuración')
 
+@push('head')
+@include('partials.ventas-mayor-responsive')
+@endpush
+
 @section('content')
-<div class="panel nomina-page">
-    <div class="panel-header-flex">
+<div class="panel nomina-page vm-mobile-root">
+    <div class="panel-header-flex vm-page-head">
         <div>
             <a href="{{ route('ventas_mayor.stock') }}" class="muted" style="font-size:.82rem;">← Ventas al mayor</a>
             <h1 style="margin:4px 0 0;">Configuración · Ventas al mayor</h1>

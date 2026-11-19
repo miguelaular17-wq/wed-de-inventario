@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Ventas diarias '.$reporte->sede)
+@section('title', 'Cobros diarios '.$reporte->sede)
 
 @push('head')
 <style>

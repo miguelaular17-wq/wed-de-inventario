@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Tesorería · Caja')
+@section('title', 'Tesorería · Caja principal')
 
 @php
     $fmt = function ($caja, $monto, $monedaDivisa = null) {
@@ -39,7 +39,7 @@
 <div class="tc-dash py-4">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; gap:12px; flex-wrap:wrap;">
         <div>
-            <h2 style="margin:0; font-size:1.5rem; color:var(--blue); font-weight:600;">Caja de Tesorería</h2>
+            <h2 style="margin:0; font-size:1.5rem; color:var(--blue); font-weight:600;">Caja principal</h2>
             <p class="muted" style="margin:4px 0 0;">Disponibilidad · ingresos y egresos · Caja Principal Bolívares y Divisas</p>
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
@@ -187,6 +187,7 @@
             <thead>
                 <tr>
                     <th style="width:100px;">Fecha</th>
+                    <th style="width:110px;">Sede</th>
                     <th>Caja</th>
                     <th>Concepto</th>
                     <th>Referencia</th>
@@ -198,11 +199,16 @@
                 @forelse($ingresos as $m)
                     @php
                         $esCuadre = $m->esDeCuadre();
+                        $esCobranza = $m->esDeCobranza();
                         $detalles = $esCuadre ? $m->detalles : collect();
                         $porSede = $detalles->groupBy(fn ($d) => $d->sede ?: 'SIN SEDE');
+                        $sedeFila = $esCuadre
+                            ? ($porSede->count() === 1 ? ($etiquetas[$porSede->keys()->first()] ?? $porSede->keys()->first()) : ($porSede->count().' sedes'))
+                            : ($m->sede ? ($etiquetas[$m->sede] ?? $m->sede) : '—');
                     @endphp
                     <tr>
                         <td>{{ $m->fecha?->format('d/m/Y') }}</td>
+                        <td>{{ $sedeFila }}</td>
                         <td>
                             <strong style="color:#0f766e;">CAJA PRINCIPAL</strong><br>
                             <span class="muted" style="font-size:.85rem;">{{ $m->caja?->esBolivares() ? 'BOLÍVARES' : 'DIVISAS' }}</span>
@@ -212,6 +218,9 @@
                             @if($esCuadre)
                                 <span style="display:inline-block; margin-left:6px; background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; border-radius:999px; padding:1px 8px; font-size:.68rem; font-weight:700;">CUADRE</span>
                                 <div class="muted" style="font-size:.72rem; margin-top:2px;">Ingreso del día · detalle por sede abajo</div>
+                            @elseif($esCobranza)
+                                <span style="display:inline-block; margin-left:6px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:999px; padding:1px 8px; font-size:.68rem; font-weight:700;">COBRANZA</span>
+                                <div class="muted" style="font-size:.72rem; margin-top:2px;">Efectivo recibido en Cobranza</div>
                             @else
                                 <div class="muted" style="font-size:.72rem;">{{ $m->usuario?->name }} · {{ $m->created_at?->format('d/m/Y H:i') }}</div>
                             @endif
@@ -221,6 +230,8 @@
                         <td style="text-align:center;">
                             @if($esCuadre)
                                 <span class="muted" style="font-size:.72rem;">Desde cuadre</span>
+                            @elseif($esCobranza)
+                                <span class="muted" style="font-size:.72rem;">Desde Cobranza</span>
                             @else
                                 <form method="POST" action="{{ route('tesoreria.caja.destroy', $m) }}" onsubmit="return confirm('¿Eliminar este ingreso? Se ajustará el saldo.');">
                                     @csrf
@@ -232,7 +243,7 @@
                     </tr>
                     @if($esCuadre && $porSede->isNotEmpty())
                         <tr>
-                            <td colspan="6" style="background:#f0fdf4; padding:0;">
+                            <td colspan="7" style="background:#f0fdf4; padding:0;">
                                 <details open style="padding:10px 14px;">
                                     <summary style="cursor:pointer; font-weight:700; color:#047857; font-size:.82rem;">
                                         Detalle por sede ({{ $porSede->count() }})
@@ -273,7 +284,7 @@
                     @endif
                 @empty
                     <tr>
-                        <td colspan="6" style="text-align:center; padding:30px; color:var(--muted);">
+                        <td colspan="7" style="text-align:center; padding:30px; color:var(--muted);">
                             No hay ingresos. El efectivo del cuadre entra solo al procesar/cerrar; también puedes usar «Nuevo Egreso» → Tipo: Ingreso.
                         </td>
                     </tr>
@@ -282,7 +293,7 @@
             @if($ingresos->isNotEmpty())
                 <tfoot>
                     <tr>
-                        <td colspan="4" style="text-align:right; color:#0f766e;">TOTAL INGRESOS</td>
+                        <td colspan="5" style="text-align:right; color:#0f766e;">TOTAL INGRESOS</td>
                         <td class="tc-ingreso" style="text-align:right;" colspan="2">
                             @foreach($totalesIngreso as $cajaId => $monto)
                                 @php $c = $cajas->firstWhere('id', $cajaId); @endphp

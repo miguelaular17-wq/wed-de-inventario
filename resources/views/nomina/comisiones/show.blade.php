@@ -66,9 +66,15 @@
             <p class="muted" style="margin:4px 0 0;">
                 Pago el {{ $periodo->fecha_pago_comision?->format('d/m/Y') ?: $periodo->fecha_fin?->copy()->addDays(3)->format('d/m/Y') }}.
                 @if(in_array($periodo->estado, ['PAGADO', 'CERRADO'], true))
-                    · <strong>{{ $periodo->estado }}</strong> (solo lectura)
+                    · <strong>{{ $periodo->estado }}</strong> (solo lectura · usa Ajuste/recálculo para diferencias)
                 @endif
             </p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            @if($periodo->estado !== 'ABIERTO')
+                <a class="btn primary" href="{{ route('nomina.comisiones.diferenciales.create', $periodo) }}">Ajuste / recálculo</a>
+                <a class="btn secondary" href="{{ route('nomina.comisiones.diferenciales.index', $periodo) }}">Ver diferenciales</a>
+            @endif
         </div>
     </div>
 

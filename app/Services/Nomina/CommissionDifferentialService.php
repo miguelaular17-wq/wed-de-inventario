@@ -14,12 +14,25 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Diferencial de comisiones: recalcula la comisión de personas seleccionadas con
- * porcentajes ajustados, sobre las mismas bases guardadas en la liquidación de la
- * quincena (no vuelve a leer ventas ni toca la liquidación original).
+ * Diferencial de comisiones tras un ajuste:
+ * - Ya pagado → se paga solo la diferencia (nuevo − lo cobrado).
+ * - No pagado → se paga el total recalculado (complemento / primera vez).
+ *
+ * Fuentes:
+ * - porcentajes: recalcula sobre las bases ya guardadas (no toca la liquidación).
+ * - ventas: vuelve a leer ventas/config, actualiza liquidación de los elegidos y arma el diferencial.
  */
 class CommissionDifferentialService
 {
+    public const FUENTE_PORCENTAJES = 'porcentajes';
+
+    public const FUENTE_VENTAS = 'ventas';
+
+    public function __construct(
+        private PayrollPeriodService $periods,
+        private CommissionCalculationService $commissions,
+    ) {
+    }
     /** @var array<string, array{0:string,1:float}> clave => [etiqueta, valor por defecto] */
     public const PORCENTAJES = [
         'comision_telefonia_pct' => ['Telefonía (%)', 0.20],
@@ -241,6 +254,69 @@ class CommissionDifferentialService
     }
 
     /**
+     * Vista previa sin persistir: estima el total con ventas/config actuales
+     * y aplica la regla pagado / no pagado sobre el total_pagar actual.
+     *
+     * @param  array<int, bool>  $seleccion  empleado_id => no_pagado
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function previsualizarDesdeVentas(NominaPeriodo $periodo, array $seleccion): Collection
+    {
+        return $this->liquidaciones($periodo)
+            ->filter(fn ($liq) => array_key_exists((int) $liq->empleado_id, $seleccion))
+            ->map(function (NominaLiquidacionComision $liq) use ($periodo, $seleccion) {
+                $noPagado = $seleccion[(int) $liq->empleado_id];
+                $calculo = $this->commissions->calcular($periodo, $liq->empleado);
+                $comision = round((float) ($calculo['total'] ?? 0), 2);
+                $abonos = (float) $liq->abonos;
+                $descuentos = round((float) $liq->descuentos + (float) $liq->prestamos, 2);
+                $bruto = round($comision + $abonos, 2);
+                if ($liq->empleado?->exentoRetencionComision()) {
+                    $retencionPct = 0.0;
+                    $retenible = 0.0;
+                } elseif ($liq->esServicioTecnico()) {
+                    $retencionPct = (float) ($liq->retencion_pct ?: NominaConfig::getDecimal('retencion_comision_pct', 10));
+                    $retenible = round(
+                        (float) ($calculo['comision_telefonia'] ?? 0)
+                        + (float) ($calculo['comision_otros'] ?? 0)
+                        + $abonos,
+                        2
+                    );
+                } else {
+                    $retencionPct = (float) ($liq->retencion_pct ?: NominaConfig::getDecimal('retencion_comision_pct', 10));
+                    $retenible = $bruto;
+                }
+                $retencion = round($retenible * $retencionPct / 100, 2);
+                $totalAjustado = round($bruto - $retencion - $descuentos, 2);
+                $totalOriginal = (float) $liq->total_pagar;
+                $pagado = $noPagado ? 0.0 : max(0.0, $totalOriginal);
+
+                return [
+                    'empleado_id' => (int) $liq->empleado_id,
+                    'modo' => (string) $liq->modo,
+                    'no_pagado' => $noPagado,
+                    'comision_original' => (float) $liq->comision_total,
+                    'comision_ajustada' => $comision,
+                    'abonos' => $abonos,
+                    'retencion_original' => (float) $liq->retencion,
+                    'retencion_ajustada' => $retencion,
+                    'descuentos' => $descuentos,
+                    'total_original' => $totalOriginal,
+                    'total_ajustado' => $totalAjustado,
+                    'pagado' => $pagado,
+                    'diferencia' => round(max(0.0, $totalAjustado) - $pagado, 2),
+                    'detalle' => [
+                        'fuente' => self::FUENTE_VENTAS,
+                        'liquidacion_id' => $liq->id,
+                        'base_total' => (float) ($calculo['base'] ?? 0),
+                    ],
+                    'empleado' => $liq->empleado,
+                ];
+            })
+            ->values();
+    }
+
+    /**
      * @param  array<string, float>  $config
      * @param  array<int, bool>  $seleccion  empleado_id => no_pagado
      */
@@ -251,8 +327,13 @@ class CommissionDifferentialService
         float $tasaBcv,
         array $config,
         array $seleccion,
-        ?int $userId
+        ?int $userId,
+        string $fuente = self::FUENTE_PORCENTAJES
     ): NominaComisionDiferencial {
+        if ($fuente === self::FUENTE_VENTAS) {
+            return $this->crearDesdeVentas($periodo, $motivo, $fechaPago, $tasaBcv, $seleccion, $userId);
+        }
+
         $lineas = $this->calcularSeleccion($periodo, $config, $seleccion);
         if ($lineas->isEmpty()) {
             throw ValidationException::withMessages([
@@ -260,6 +341,127 @@ class CommissionDifferentialService
             ]);
         }
 
+        return $this->persistir($periodo, $motivo, $fechaPago, $tasaBcv, $config, $lineas, $userId);
+    }
+
+    /**
+     * Recalcula liquidaciones desde ventas y genera el diferencial:
+     * ya pagado → diferencia; no pagado → total nuevo.
+     *
+     * @param  array<int, bool>  $seleccion  empleado_id => no_pagado
+     */
+    public function crearDesdeVentas(
+        NominaPeriodo $periodo,
+        string $motivo,
+        string $fechaPago,
+        float $tasaBcv,
+        array $seleccion,
+        ?int $userId
+    ): NominaComisionDiferencial {
+        if ($seleccion === []) {
+            throw ValidationException::withMessages([
+                'seleccion' => 'Selecciona al menos una persona con comisión en esta quincena.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($periodo, $motivo, $fechaPago, $tasaBcv, $seleccion, $userId) {
+            $antes = $this->liquidaciones($periodo)
+                ->filter(fn ($liq) => array_key_exists((int) $liq->empleado_id, $seleccion))
+                ->keyBy(fn ($liq) => (int) $liq->empleado_id);
+
+            if ($antes->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'seleccion' => 'Selecciona al menos una persona con comisión en esta quincena.',
+                ]);
+            }
+
+            $snapshots = $antes->map(fn (NominaLiquidacionComision $liq) => [
+                'comision_total' => (float) $liq->comision_total,
+                'abonos' => (float) $liq->abonos,
+                'retencion' => (float) $liq->retencion,
+                'descuentos' => round((float) $liq->descuentos + (float) $liq->prestamos, 2),
+                'total_pagar' => (float) $liq->total_pagar,
+                'modo' => (string) $liq->modo,
+                'empleado' => $liq->empleado,
+            ]);
+
+            $this->periods->recalcularComisionesEmpleados($periodo, $antes->keys()->all(), $userId);
+
+            $despues = NominaLiquidacionComision::query()
+                ->where('periodo_id', $periodo->id)
+                ->whereIn('empleado_id', $antes->keys()->all())
+                ->with(['empleado.cliente', 'empleado.empresa'])
+                ->get()
+                ->keyBy(fn ($liq) => (int) $liq->empleado_id);
+
+            $lineas = collect();
+            foreach ($seleccion as $empleadoId => $noPagado) {
+                $empleadoId = (int) $empleadoId;
+                $prev = $snapshots->get($empleadoId);
+                $nueva = $despues->get($empleadoId);
+                if (! $prev || ! $nueva) {
+                    continue;
+                }
+                $totalAjustado = (float) $nueva->total_pagar;
+                $pagado = $noPagado ? 0.0 : max(0.0, (float) $prev['total_pagar']);
+                $lineas->push([
+                    'empleado_id' => $empleadoId,
+                    'modo' => (string) $nueva->modo,
+                    'no_pagado' => (bool) $noPagado,
+                    'comision_original' => (float) $prev['comision_total'],
+                    'comision_ajustada' => (float) $nueva->comision_total,
+                    'abonos' => (float) $nueva->abonos,
+                    'retencion_original' => (float) $prev['retencion'],
+                    'retencion_ajustada' => (float) $nueva->retencion,
+                    'descuentos' => round((float) $nueva->descuentos + (float) $nueva->prestamos, 2),
+                    'total_original' => (float) $prev['total_pagar'],
+                    'total_ajustado' => $totalAjustado,
+                    'pagado' => $pagado,
+                    'diferencia' => round(max(0.0, $totalAjustado) - $pagado, 2),
+                    'detalle' => [
+                        'fuente' => self::FUENTE_VENTAS,
+                        'liquidacion_id' => $nueva->id,
+                    ],
+                    'empleado' => $nueva->empleado,
+                ]);
+            }
+
+            if ($lineas->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'seleccion' => 'No se pudo recalcular a las personas seleccionadas.',
+                ]);
+            }
+
+            $config = $this->configActual();
+            $config['_fuente'] = self::FUENTE_VENTAS;
+
+            return $this->persistir($periodo, $motivo, $fechaPago, $tasaBcv, $config, $lineas, $userId);
+        });
+    }
+
+    /**
+     * Solo recalcula liquidaciones de quienes no se les pagó (sin generar diferencial).
+     * Útil cuando la quincena aún no está PAGADO y el TXT principal los incluirá.
+     *
+     * @param  list<int>  $empleadoIds
+     */
+    public function soloRecalcularNoPagados(NominaPeriodo $periodo, array $empleadoIds, ?int $userId): NominaPeriodo
+    {
+        return $this->periods->recalcularComisionesEmpleados($periodo, $empleadoIds, $userId);
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $lineas
+     */
+    private function persistir(
+        NominaPeriodo $periodo,
+        string $motivo,
+        string $fechaPago,
+        float $tasaBcv,
+        array $config,
+        Collection $lineas,
+        ?int $userId
+    ): NominaComisionDiferencial {
         return DB::transaction(function () use ($periodo, $motivo, $fechaPago, $tasaBcv, $config, $lineas, $userId) {
             $diferencial = NominaComisionDiferencial::create([
                 'periodo_id' => $periodo->id,

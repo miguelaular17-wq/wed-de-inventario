@@ -192,6 +192,10 @@ class TesoreriaCajaController extends Controller
             return redirect()->route('tesoreria.caja.index')
                 ->withErrors(['movimiento' => 'Ese ingreso viene del cuadre de caja. Reabre el cuadre para quitarlo.']);
         }
+        if ($movimiento->esDeCobranza()) {
+            return redirect()->route('tesoreria.caja.index')
+                ->withErrors(['movimiento' => 'Ese ingreso viene de Cobranza (efectivo). Corrígelo o elimínalo desde Cobranza.']);
+        }
 
         DB::transaction(function () use ($movimiento) {
             /** @var TesoreriaCaja $caja */

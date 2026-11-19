@@ -1,12 +1,12 @@
 @extends('layouts.app')
 
-@section('title', 'Ventas diarias')
+@section('title', 'Cobros diarios')
 
 @section('content')
 <div class="panel nomina-page">
     <div class="panel-header-flex">
         <div>
-            <h1 style="margin:0;">Ventas diarias</h1>
+            <h1 style="margin:0;">Cobros diarios</h1>
             <p class="muted" style="margin:4px 0 0;">
                 Cierre diario por sede (desglose de cobros + cajas), como el reporte Excel.
             </p>

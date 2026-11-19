@@ -47,6 +47,41 @@ class CommissionSettlementService
         }
     }
 
+    /** @param  list<int>  $empleadoIds */
+    public function limpiarEmpleados(NominaPeriodo $periodo, array $empleadoIds): void
+    {
+        if ($empleadoIds === []) {
+            return;
+        }
+
+        if (Schema::hasTable('nomina_liquidaciones_comision')) {
+            NominaLiquidacionComision::query()
+                ->where('periodo_id', $periodo->id)
+                ->whereIn('empleado_id', $empleadoIds)
+                ->delete();
+        }
+
+        if (! Schema::hasTable('nomina_comision_descuentos')) {
+            return;
+        }
+
+        NominaComisionDescuento::query()
+            ->where('periodo_id', $periodo->id)
+            ->whereIn('empleado_id', $empleadoIds)
+            ->where('tipo', 'PRESTAMO')
+            ->delete();
+
+        NominaComisionDescuento::query()
+            ->where('periodo_id', $periodo->id)
+            ->whereIn('empleado_id', $empleadoIds)
+            ->where('tipo', '!=', 'PRESTAMO')
+            ->where('estado', 'APLICADO')
+            ->update([
+                'estado' => 'PENDIENTE',
+                'periodo_id' => null,
+            ]);
+    }
+
     /**
      * @param  array<string, mixed>  $calculo
      */

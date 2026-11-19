@@ -132,8 +132,10 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(2000.0, $resultado['ventas_samsung_excluidas']);
         $this->assertSame(1500.0, $resultado['ventas_honor_excluidas']);
         $this->assertSame(3500.0, $resultado['ventas_honor_samsung_excluidas']);
-        $this->assertStringContainsString('0,20%', NominaEmpleado::modosComision()[NominaEmpleado::COMISION_VENTAS_PROPIAS]);
-        $this->assertStringContainsString('0,10%', NominaEmpleado::modosComision()[NominaEmpleado::COMISION_VENTAS_PROPIAS_SIN_HS]);
+        $this->assertSame('Ventas propias', NominaEmpleado::modosComision()[NominaEmpleado::COMISION_VENTAS_PROPIAS]);
+        $this->assertSame('Propias sin HS', NominaEmpleado::modosComision()[NominaEmpleado::COMISION_VENTAS_PROPIAS_SIN_HS]);
+        $this->assertStringContainsString('0,20%', NominaEmpleado::modosComisionDetalle()[NominaEmpleado::COMISION_VENTAS_PROPIAS]);
+        $this->assertStringContainsString('0,10%', NominaEmpleado::modosComisionDetalle()[NominaEmpleado::COMISION_VENTAS_PROPIAS_SIN_HS]);
     }
 
     public function test_ignora_ventas_de_sede_excluida_de_comision(): void

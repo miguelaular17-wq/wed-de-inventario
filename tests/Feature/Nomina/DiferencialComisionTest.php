@@ -72,6 +72,7 @@ class DiferencialComisionTest extends TestCase
             'motivo' => 'Ajuste telefonía',
             'fecha_pago' => '2026-11-05',
             'tasa_bcv' => 40,
+            'fuente' => 'porcentajes',
             'config' => [
                 'comision_telefonia_pct' => 0.2,
                 'comision_otros_pct' => 1,
@@ -134,6 +135,58 @@ class DiferencialComisionTest extends TestCase
             .'V028100002  '.str_pad('14000', 21, '0', STR_PAD_LEFT)."05112026\r\n",
             $txt
         );
+    }
+
+    public function test_ajuste_desde_ventas_paga_diferencia_si_ya_cobro_y_total_si_no(): void
+    {
+        $user = User::create([
+            'name' => 'RRHH Ventas',
+            'email' => 'rrhh-ventas@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_RRHH,
+        ]);
+        $empresa = NominaEmpresa::create(['codigo' => 'E2', 'nombre' => 'Empresa Dos']);
+        $periodo = NominaPeriodo::create([
+            'fecha_inicio' => '2026-10-16',
+            'fecha_fin' => '2026-10-31',
+            'etiqueta' => '16/10/2026 al 31/10/2026',
+            'estado' => NominaPeriodo::PAGADO,
+            'tasa_bcv' => 40,
+        ]);
+
+        $pagado = $this->empleado('29100001', 'Pedro Pagado', NominaEmpleado::COMISION_VENTAS_PROPIAS, $empresa);
+        $pendiente = $this->empleado('29100002', 'Nina Pendiente', NominaEmpleado::COMISION_VENTAS_PROPIAS, $empresa);
+
+        NominaLiquidacionComision::create([
+            'periodo_id' => $periodo->id, 'empleado_id' => $pagado->id, 'modo' => NominaEmpleado::COMISION_VENTAS_PROPIAS,
+            'base_total' => 100, 'comision_total' => 10, 'abonos' => 0, 'retencion_pct' => 10, 'retencion' => 1,
+            'descuentos' => 0, 'prestamos' => 0, 'total_pagar' => 9,
+        ]);
+        NominaLiquidacionComision::create([
+            'periodo_id' => $periodo->id, 'empleado_id' => $pendiente->id, 'modo' => NominaEmpleado::COMISION_VENTAS_PROPIAS,
+            'base_total' => 50, 'comision_total' => 5, 'abonos' => 0, 'retencion_pct' => 10, 'retencion' => 0.5,
+            'descuentos' => 0, 'prestamos' => 0, 'total_pagar' => 4.5,
+        ]);
+
+        // Sin ventas: el recálculo deja comisión 0; ya pagado → diferencia 0; no pagado → 0 a pagar.
+        $this->actingAs($user)
+            ->post(route('nomina.comisiones.diferenciales.store', $periodo), [
+                'motivo' => 'Recálculo post pago',
+                'fecha_pago' => '2026-11-06',
+                'tasa_bcv' => 40,
+                'fuente' => 'ventas',
+                'empleados' => [$pagado->id, $pendiente->id],
+                'pagado' => [$pagado->id => 'si', $pendiente->id => 'no'],
+                'accion' => 'guardar',
+            ])
+            ->assertRedirect();
+
+        $diferencial = NominaComisionDiferencial::query()->latest('id')->firstOrFail();
+        $lineas = $diferencial->lineas->keyBy('empleado_id');
+        $this->assertFalse($lineas[$pagado->id]->no_pagado);
+        $this->assertSame('9.00', $lineas[$pagado->id]->pagado);
+        $this->assertTrue($lineas[$pendiente->id]->no_pagado);
+        $this->assertSame('0.00', $lineas[$pendiente->id]->pagado);
     }
 
     private function empleado(string $cedula, string $nombre, string $modo, NominaEmpresa $empresa): NominaEmpleado

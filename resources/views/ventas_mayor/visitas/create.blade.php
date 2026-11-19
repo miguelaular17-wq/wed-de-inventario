@@ -2,6 +2,10 @@
 
 @section('title', 'Hoja de ruta · Nueva visita')
 
+@push('head')
+@include('partials.ventas-mayor-responsive')
+@endpush
+
 @section('content')
 <style>
     .hr-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; background: #fff; }
@@ -22,13 +26,15 @@
     .hr-sug button:hover { background: #eff6ff; }
     #hr-previas img { width: 90px; height: 90px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0; }
 </style>
-<div class="panel" style="max-width:900px; margin:0 auto;">
-    <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">
+<div class="panel vm-mobile-root" style="max-width:900px; margin:0 auto;">
+    <div class="vm-page-head" style="margin-bottom:14px;">
         <div>
             <h1 style="margin:0;">Nueva visita</h1>
             <p class="muted" style="margin:4px 0 0;">Hoja de ruta para captar clientes. La firma y la evidencia son obligatorias.</p>
         </div>
-        <a href="{{ route('ventas_mayor.visitas.index') }}" class="btn secondary">← Hoja de ruta</a>
+        <div class="vm-page-actions">
+            <a href="{{ route('ventas_mayor.visitas.index') }}" class="btn secondary">← Hoja de ruta</a>
+        </div>
     </div>
 
     @if($errors->any())

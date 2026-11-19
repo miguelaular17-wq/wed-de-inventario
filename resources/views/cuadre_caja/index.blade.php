@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Cuadre de caja')
+@section('title', 'Arqueo de caja')
 
 @php
     $dinero = fn ($n) => $n === null ? '—' : (round((float) $n, 2) < 0 ? '-' : '').'$'.number_format(abs((float) $n), 2, ',', '.');
@@ -16,7 +16,7 @@
 
 @section('content')
 <div class="page-header">
-    <h1>Cuadre de caja</h1>
+    <h1>Arqueo de caja</h1>
     <p class="lead">
         Lo que cobró cada caja en el día según Suite, por forma de pago, contra lo que contó Tesorería.
         Cada día aparece a partir del día siguiente, sin esperar el cierre de Suite.

@@ -2,6 +2,10 @@
 
 @section('title', 'Factura '.$factura->numeroFormateado())
 
+@push('head')
+@include('partials.ventas-mayor-responsive')
+@endpush
+
 @section('content')
 @php
     $pagado = $factura->totalPagadoUsd();
@@ -21,7 +25,7 @@
     .vf-barra div { height: 100%; background: #16a34a; }
     .vf-items tfoot td { font-weight: 800; background: #f8fafc; border-top: 2px solid #cbd5e1; }
 </style>
-<div class="panel">
+<div class="panel vm-mobile-root">
     <div class="vf-cab">
         <div class="vf-marca">
             <img src="{{ asset('logo.png') }}" alt="">
@@ -43,9 +47,9 @@
                 <p class="muted" style="margin:4px 0 0;">{{ $factura->fecha->format('d/m/Y') }} · {{ $factura->esCredito() ? 'A crédito' : 'De contado' }} · Vendedora: <strong>{{ $factura->vendedor_nombre }}</strong> · Hecha por {{ $factura->usuario?->name ?? '—' }}</p>
             </div>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div class="vm-page-actions">
             <a href="{{ route('ventas_mayor.facturas') }}" class="btn secondary">← Facturas</a>
-            <a href="{{ route('ventas_mayor.pdf', $factura) }}" target="_blank" rel="noopener" class="btn primary">🧾 Factura en PDF</a>
+            <a href="{{ route('ventas_mayor.pdf', $factura) }}" target="_blank" rel="noopener" class="btn primary">PDF</a>
         </div>
     </div>
 
@@ -107,17 +111,17 @@
 
     <h3 style="margin:20px 0 6px;">Productos <span class="muted" style="font-size:.85rem; font-weight:500;">· salen del stock de JRZ</span></h3>
     <div class="table-wrap">
-        <table class="data-table vf-items" style="font-size:.86rem;">
+        <table class="data-table vf-items vm-m-cards" style="font-size:.86rem;">
             <thead><tr><th style="width:36px;">#</th><th>Código</th><th>Producto</th><th style="text-align:right;">Cantidad</th><th style="text-align:right;">Precio $</th><th style="text-align:right;">Total $</th></tr></thead>
             <tbody>
                 @foreach($factura->items as $n => $i)
                     <tr>
-                        <td class="muted">{{ $n + 1 }}</td>
-                        <td><code>{{ $i->codigo }}</code></td>
-                        <td>{{ $i->descripcion }}</td>
-                        <td style="text-align:right;">{{ $i->cantidadTexto() }}</td>
-                        <td style="text-align:right;">${{ number_format($i->precio_usd, 2) }}</td>
-                        <td style="text-align:right; font-weight:700;">${{ number_format($i->total_usd, 2) }}</td>
+                        <td data-label="#" class="muted">{{ $n + 1 }}</td>
+                        <td data-label="Código"><code>{{ $i->codigo }}</code></td>
+                        <td data-label="Producto">{{ $i->descripcion }}</td>
+                        <td data-label="Cantidad">{{ $i->cantidadTexto() }}</td>
+                        <td data-label="Precio $">${{ number_format($i->precio_usd, 2) }}</td>
+                        <td data-label="Total $" style="font-weight:700;">${{ number_format($i->total_usd, 2) }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -136,7 +140,7 @@
     @endif
 
     <h3 style="margin:18px 0 6px;">Pagos y abonos</h3>
-    <div style="display:flex; flex-wrap:wrap; gap:10px;">
+    <div class="vf-pago-cards" style="display:flex; flex-wrap:wrap; gap:10px;">
         @forelse($factura->pagos as $p)
             <div style="border:1px solid #e2e8f0; border-radius:8px; padding:8px; width:210px; font-size:.8rem;">
                 @if($p->url)
@@ -169,10 +173,10 @@
     </div>
 
     @if(! $factura->estaAnulada() && $saldo >= 0.01)
-        <form method="POST" action="{{ route('ventas_mayor.comprobantes.store', $factura) }}" enctype="multipart/form-data" style="margin-top:12px; padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+        <form method="POST" action="{{ route('ventas_mayor.comprobantes.store', $factura) }}" enctype="multipart/form-data" class="vf-pago-form" style="margin-top:12px; padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
             @csrf
             <div style="width:100%; font-weight:700; color:#1e3a8a;">{{ $saldo >= 0.01 ? 'Registrar pago o abono (debe $'.number_format($saldo, 2).')' : 'Agregar comprobante' }}</div>
-            <div><label style="font-size:.8rem; font-weight:600;">Monto $</label><input type="number" step="0.01" min="0" max="{{ $saldo }}" name="monto_usd" style="padding:6px; width:120px;" @if($saldo >= 0.01) placeholder="{{ number_format($saldo, 2, '.', '') }}" @endif></div>
+            <div><label style="font-size:.8rem; font-weight:600;">Monto $</label><input type="number" step="0.01" min="0" max="{{ $saldo }}" name="monto_usd" style="padding:6px; width:120px;" inputmode="decimal" @if($saldo >= 0.01) placeholder="{{ number_format($saldo, 2, '.', '') }}" @endif></div>
             <div><label style="font-size:.8rem; font-weight:600;">Fecha</label><input type="date" name="fecha" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}" style="padding:6px;"></div>
             <div><label style="font-size:.8rem; font-weight:600;">Forma de pago</label>
                 <select name="forma_pago" style="padding:6px;">
@@ -184,7 +188,7 @@
             <div style="flex:1; min-width:220px;"><label style="font-size:.8rem; font-weight:600;">Comprobante(s) <span class="muted" style="font-weight:400;">(opcional en efectivo)</span></label><input type="file" name="comprobantes[]" multiple accept="image/*,.pdf"></div>
             <button type="submit" class="btn primary">Guardar</button>
         </form>
-    @endunless
+    @endif
 
     @unless($factura->estaAnulada())
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:18px; padding-top:14px; border-top:1px dashed #cbd5e1;">

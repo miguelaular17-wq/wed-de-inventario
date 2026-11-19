@@ -151,9 +151,9 @@
     ];
     $tesoreriaLink = fn () => $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.dashboard', 'tesoreria.ingreso_banco.*', 'tesoreria.ingresos.*', 'tesoreria.lote_pos.*'));
     $tesoreriaDashLink = fn () => $link('Dashboard', route('tesoreria.dash'), request()->routeIs('tesoreria.dash', 'tesoreria.dash.pdf'));
-    $tesoreriaCajaLink = fn () => $link('Caja', route('tesoreria.caja.index'), request()->routeIs('tesoreria.caja.*'));
-    $ventasDiariasLink = fn () => $link('Ventas diarias', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*'));
-    $cuadreCajaLink = fn () => $link('Cuadre de caja', route('cuadre_caja.index'), request()->routeIs('cuadre_caja.*'));
+    $tesoreriaCajaLink = fn () => $link('Caja principal', route('tesoreria.caja.index'), request()->routeIs('tesoreria.caja.*'));
+    $ventasDiariasLink = fn () => $link('Cobros diarios', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*'));
+    $cuadreCajaLink = fn () => $link('Arqueo de caja', route('cuadre_caja.index'), request()->routeIs('cuadre_caja.*'));
     $reportesSuiteLink = fn () => $link('Reportes de Suite', route('reportes_suite', 'facturas'), request()->routeIs('reportes_suite*'));
     $tesoreriaItems = [...$conciliacionItems(), $tesoreriaLink(), $tesoreriaDashLink(), $tesoreriaCajaLink(), $ventasDiariasLink(), $cuadreCajaLink(), $reportesSuiteLink()];
     $cobranzaItems = [

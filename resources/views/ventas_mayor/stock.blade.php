@@ -2,14 +2,18 @@
 
 @section('title', 'Ventas al mayor · Stock')
 
+@push('head')
+@include('partials.ventas-mayor-responsive')
+@endpush
+
 @section('content')
 @php
     $jrz = \App\Services\Mayor\VentasMayorService::SEDE_FACTURA;
     $nombreSede = fn ($s) => config('inventario.display.'.$s, $s);
     $filtros = ['alguna' => 'Con existencia', 'jrz' => 'Con stock en JRZ', 'todos' => 'Todos'];
 @endphp
-<div class="cat-page">
-<div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+<div class="cat-page vm-mobile-root">
+<div class="page-header vm-page-head">
     <div>
         <h1 style="margin:0;">Ventas al mayor · Stock</h1>
         <p class="lead" style="margin:4px 0 0;">
@@ -17,12 +21,10 @@
             · ${{ number_format($resumen['valor_mayor'], 2) }} al mayor · Se ve el stock de todas las sedes, pero <strong>solo se factura del de JRZ</strong>
         </p>
     </div>
-    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-        <a href="{{ route('ventas_mayor.facturas') }}" class="btn secondary" style="padding:10px 14px; border-radius:8px; text-decoration:none;">Facturas</a>
-        <a href="{{ route('ventas_mayor.create') }}" class="btn secondary" style="padding:10px 14px; border-radius:8px; text-decoration:none; font-weight:600;">+ Nueva factura</a>
-        <a href="{{ route('ventas_mayor.catalogo') }}" class="btn btn-primary" style="background-color: var(--blue); color: white; padding: 10px 16px; border-radius: 8px; text-decoration: none; font-weight: 500; display: flex; align-items: center; gap: 8px;">
-            <i class="fas fa-images"></i> Ver Catálogo Gráfico / PDF
-        </a>
+    <div class="vm-page-actions">
+        <a href="{{ route('ventas_mayor.facturas') }}" class="btn secondary">Facturas</a>
+        <a href="{{ route('ventas_mayor.create') }}" class="btn secondary">+ Nueva factura</a>
+        <a href="{{ route('ventas_mayor.catalogo') }}" class="btn primary">Catálogo / PDF</a>
     </div>
 </div>
 
@@ -416,7 +418,10 @@
 .vm-ficha-sub { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; margin-bottom: 8px; }
 .vm-ficha-stock { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .vm-campos input:disabled, .vm-campos select:disabled { background: #f1f5f9; color: #334155; }
-@media (max-width: 600px) { .vm-ficha-datos, .vm-ficha-stock { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px) {
+    .vm-ficha-datos, .vm-ficha-stock, .vm-campos { grid-template-columns: 1fr; }
+    .vm-ficha-top { flex-direction: column; align-items: center; text-align: center; padding-right: 0; }
+}
 .vm-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .vm-campos label { display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem; font-weight: 600; color: #334155; }
 .vm-campos input, .vm-campos select { padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; font-family: inherit; }

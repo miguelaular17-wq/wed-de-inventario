@@ -16,6 +16,9 @@
     table.rep td { padding: 3px; border-bottom: 1px solid #e5e7eb; }
     table.rep td.r { text-align: right; white-space: nowrap; }
     table.rep tr.negativo td { color: #b91c1c; }
+    table.rep tr.grupo td { background: #1a4480; color: #fff; font-weight: bold; padding: 5px 3px; }
+    table.rep tr.resumen td { background: #e8eef7; font-weight: bold; }
+    table.rep tr.subtotal td { background: #f3f4f6; font-weight: bold; border-top: 1px solid #9ca3af; }
     table.rep tfoot td { font-weight: bold; background: #f3f4f6; border-top: 1.5px solid #6b7280; }
     .pie { position: fixed; bottom: -16px; left: 0; right: 0; font-size: 7px; color: #94a3b8; }
 </style>
@@ -51,7 +54,8 @@
             </thead>
             <tbody>
                 @forelse($resultado['filas'] as $fila)
-                    <tr class="{{ ! empty($fila['negativo']) ? 'negativo' : '' }}">
+                    @php $tipoFila = $fila['tipo'] ?? null; @endphp
+                    <tr class="{{ ! empty($fila['negativo']) ? 'negativo' : '' }}{{ $tipoFila ? ' '.$tipoFila : '' }}">
                         @foreach($fila['celdas'] as $i => $celda)
                             <td class="{{ $resultado['columnas'][$i][1] ?? 'l' }}">{{ $celda }}</td>
                         @endforeach

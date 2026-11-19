@@ -89,7 +89,15 @@
             <div><span class="muted">Servicio Técnico</span><div>{{ $empleado->es_servicio_tecnico ? 'Sí' : 'No' }}</div></div>
             @php $codigosVendedor = $empleado->codigosVendedor(); @endphp
             <div><span class="muted">Códigos de vendedor</span><div>{{ $codigosVendedor ? implode(' · ', $codigosVendedor) : '—' }}</div></div>
-            <div class="field-wide"><span class="muted">Modo de comisión</span><div>{{ \App\Models\Nomina\NominaEmpleado::modosComision()[$empleado->modo_comision] ?? $empleado->modo_comision }}</div></div>
+            <div class="field-wide">
+                <span class="muted">Modo de comisión</span>
+                <div>
+                    {{ \App\Models\Nomina\NominaEmpleado::etiquetaModoComision($empleado->modo_comision) }}
+                    @if($detalle = \App\Models\Nomina\NominaEmpleado::detalleModoComision($empleado->modo_comision))
+                        <div class="muted" style="font-size:.78rem;">{{ $detalle }}</div>
+                    @endif
+                </div>
+            </div>
         </div>
 
         @if($empleado->subordinados->isNotEmpty())
@@ -212,7 +220,10 @@
         <div class="nomina-card" style="margin-top:16px;">
             <h3>Liquidaciones</h3>
             <p class="muted">
-                Modo: <strong>{{ \App\Models\Nomina\NominaEmpleado::modosComision()[$empleado->modo_comision] ?? $empleado->modo_comision }}</strong>.
+                Modo: <strong>{{ \App\Models\Nomina\NominaEmpleado::etiquetaModoComision($empleado->modo_comision) }}</strong>.
+                @if($detalle = \App\Models\Nomina\NominaEmpleado::detalleModoComision($empleado->modo_comision))
+                    <span class="muted">{{ $detalle }}</span>
+                @endif
             </p>
             <table class="data-table">
                 <thead><tr><th>Período</th><th>Pago</th><th>Comisión</th><th>Bonos</th><th>Retención</th><th>Desc.</th><th>A pagar</th></tr></thead>

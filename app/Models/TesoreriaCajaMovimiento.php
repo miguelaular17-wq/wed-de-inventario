@@ -15,6 +15,9 @@ class TesoreriaCajaMovimiento extends Model
 
     public const ORIGEN_CUADRE_DIARIO = 'cuadre_diario';
 
+    /** Ingreso de efectivo registrado en Cobranza (EFECTIVO - COBRANZA). */
+    public const ORIGEN_COBRANZA = 'cobranza';
+
     public const DIVISA_USD = 'USD';
 
     public const DIVISA_EUR = 'EUR';
@@ -92,6 +95,11 @@ class TesoreriaCajaMovimiento extends Model
     public function esDeCuadre(): bool
     {
         return $this->origen === self::ORIGEN_CUADRE_DIARIO;
+    }
+
+    public function esDeCobranza(): bool
+    {
+        return $this->origen === self::ORIGEN_COBRANZA;
     }
 
     public function signo(): float

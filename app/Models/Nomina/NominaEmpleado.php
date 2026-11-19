@@ -234,25 +234,62 @@ class NominaEmpleado extends Model
         return $this->hasMany(NominaEmpleadoAjuste::class, 'empleado_id')->orderByDesc('fecha')->orderByDesc('id');
     }
 
+    /** Nombre corto para selects y listados. */
     public static function modosComision(): array
     {
         return [
-            self::COMISION_VENTAS_PROPIAS => 'Ventas propias: venta neta (telefonía 0,20% / resto 1%)',
-            self::COMISION_VENTAS_PROPIAS_SIN_HS => 'Ventas propias sin Honor/Samsung: venta neta (telefonía 0,10% / resto 1%; sin teléfonos Honor ni Samsung)',
-            self::COMISION_SUPERVISOR_SEDE => 'Supervisor de sede: venta neta de la tienda (0,05%)',
-            self::COMISION_ENCARGADO => 'Encargado de tienda: venta neta de la tienda (% propio en Configuración)',
-            self::COMISION_SUPERVISOR_EQUIPO => 'Supervisor de equipo/Marketing: ventas de subordinados (0,10%)',
-            self::COMISION_DIGITAL => 'Digital: venta neta de sus trabajadores (0,30%)',
-            self::COMISION_PCP => 'PCP: venta neta de la tienda (0,015%)',
-            self::COMISION_SAMBIL => 'Sambil: venta neta de la tienda (0,20%)',
-            self::COMISION_SAMBIL_SIN_HS => 'Sambil sin Honor/Samsung: venta neta de la tienda Sambil sin teléfonos Honor ni Samsung (0,20%)',
-            self::COMISION_TECNOHOUSE_SIN_HS => 'Tecno House sin Honor/Samsung: venta neta de Tecno House sin teléfonos Honor ni Samsung (0,20%)',
-            self::COMISION_COLABORADOR => 'Colaborador: venta neta Sambil+Doral+Zamora+Centro+Virtudes (0,25%)',
-            self::COMISION_SERVICIO_TECNICO => 'Servicio Técnico: ST − 058 × 50%; el resto como vendedor (0,20%/1%); sin retención',
-            self::COMISION_NUNES => 'Nunes: venta neta total de la sede Nunes (0,60%)',
-            self::COMISION_MOVISTAR => 'Movistar: venta neta propia sin facturas ST (telefonía 0,20% / resto 1%)',
+            self::COMISION_VENTAS_PROPIAS => 'Ventas propias',
+            self::COMISION_VENTAS_PROPIAS_SIN_HS => 'Propias sin HS',
+            self::COMISION_SUPERVISOR_SEDE => 'Supervisor sede',
+            self::COMISION_ENCARGADO => 'Encargado',
+            self::COMISION_SUPERVISOR_EQUIPO => 'Sup. equipo',
+            self::COMISION_DIGITAL => 'Digital',
+            self::COMISION_PCP => 'PCP',
+            self::COMISION_SAMBIL => 'Sambil',
+            self::COMISION_SAMBIL_SIN_HS => 'Sambil sin HS',
+            self::COMISION_TECNOHOUSE_SIN_HS => 'Tecno House sin HS',
+            self::COMISION_COLABORADOR => 'Colaborador',
+            self::COMISION_SERVICIO_TECNICO => 'Servicio Técnico',
+            self::COMISION_NUNES => 'Nunes',
+            self::COMISION_MOVISTAR => 'Movistar',
             self::COMISION_NINGUNA => 'Sin comisión',
         ];
+    }
+
+    /** Descripción completa del modo (porcentajes y reglas). */
+    public static function modosComisionDetalle(): array
+    {
+        return [
+            self::COMISION_VENTAS_PROPIAS => 'Venta neta (telefonía 0,20% / resto 1%)',
+            self::COMISION_VENTAS_PROPIAS_SIN_HS => 'Venta neta (telefonía 0,10% / resto 1%; sin Honor ni Samsung)',
+            self::COMISION_SUPERVISOR_SEDE => 'Venta neta de la tienda (0,05%)',
+            self::COMISION_ENCARGADO => 'Venta neta de la tienda (% propio en Configuración)',
+            self::COMISION_SUPERVISOR_EQUIPO => 'Ventas de subordinados (0,10%)',
+            self::COMISION_DIGITAL => 'Venta neta de sus trabajadores (0,30%)',
+            self::COMISION_PCP => 'Venta neta de la tienda (0,015%)',
+            self::COMISION_SAMBIL => 'Venta neta de la tienda (0,20%)',
+            self::COMISION_SAMBIL_SIN_HS => 'Venta neta Sambil sin Honor ni Samsung (0,20%)',
+            self::COMISION_TECNOHOUSE_SIN_HS => 'Venta neta Tecno House sin Honor ni Samsung (0,20%)',
+            self::COMISION_COLABORADOR => 'Venta neta Sambil+Doral+Zamora+Centro+Virtudes (0,25%)',
+            self::COMISION_SERVICIO_TECNICO => 'ST − 058 × 50%; resto como vendedor (0,20%/1%); sin retención',
+            self::COMISION_NUNES => 'Venta neta total de la sede Nunes (0,60%)',
+            self::COMISION_MOVISTAR => 'Venta neta propia sin facturas ST (telefonía 0,20% / resto 1%)',
+            self::COMISION_NINGUNA => 'No genera comisión',
+        ];
+    }
+
+    public static function etiquetaModoComision(?string $modo): string
+    {
+        $modos = self::modosComision();
+
+        return $modos[$modo] ?? (string) $modo;
+    }
+
+    public static function detalleModoComision(?string $modo): string
+    {
+        $detalles = self::modosComisionDetalle();
+
+        return $detalles[$modo] ?? '';
     }
 
     public static function modosComisionAgregadosSede(): array

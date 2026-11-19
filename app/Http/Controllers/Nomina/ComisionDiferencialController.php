@@ -48,12 +48,16 @@ class ComisionDiferencialController extends Controller
             return $redirect;
         }
 
+        $periodoPagado = in_array($periodo->estado, [NominaPeriodo::PAGADO, NominaPeriodo::CERRADO], true);
+
         return $this->formulario($periodo, [
             'motivo' => '',
             'fecha_pago' => now()->toDateString(),
             'tasa_bcv' => $this->bcv->getRateForToday(),
             'config' => $this->diferenciales->configActual(),
             'seleccion' => [],
+            'fuente' => CommissionDifferentialService::FUENTE_VENTAS,
+            'default_pagado' => $periodoPagado ? 'si' : 'no',
         ]);
     }
 
@@ -71,29 +75,57 @@ class ComisionDiferencialController extends Controller
             'motivo' => ['required', 'string', 'min:3', 'max:255'],
             'fecha_pago' => ['required', 'date'],
             'tasa_bcv' => ['required', 'numeric', 'gt:0'],
+            'fuente' => ['nullable', 'in:ventas,porcentajes'],
             'empleados' => ['nullable', 'array'],
             'empleados.*' => ['integer'],
             'pagado' => ['nullable', 'array'],
-            'accion' => ['nullable', 'in:previsualizar,guardar'],
+            'accion' => ['nullable', 'in:previsualizar,guardar,solo_recalcular'],
         ] + $reglasPct, [
             'motivo.required' => 'Escribe el motivo del diferencial.',
             'tasa_bcv.gt' => 'La tasa BCV debe ser mayor a cero.',
+            'fuente.in' => 'Elige cómo recalcular: desde ventas o solo porcentajes.',
         ]);
 
         $config = $this->diferenciales->normalizarConfig($data['config'] ?? []);
+        $fuente = $data['fuente'] ?: CommissionDifferentialService::FUENTE_VENTAS;
         $seleccion = [];
         foreach ($data['empleados'] ?? [] as $empleadoId) {
             $seleccion[(int) $empleadoId] = $request->input('pagado.'.$empleadoId) === 'no';
         }
+        $periodoPagado = in_array($periodo->estado, [NominaPeriodo::PAGADO, NominaPeriodo::CERRADO], true);
+        $valoresBase = [
+            'motivo' => $data['motivo'],
+            'fecha_pago' => $data['fecha_pago'],
+            'tasa_bcv' => (float) $data['tasa_bcv'],
+            'config' => $config,
+            'seleccion' => $seleccion,
+            'fuente' => $fuente,
+            'default_pagado' => $periodoPagado ? 'si' : 'no',
+        ];
 
         if (($data['accion'] ?? 'guardar') === 'previsualizar') {
-            return $this->formulario($periodo, [
-                'motivo' => $data['motivo'],
-                'fecha_pago' => $data['fecha_pago'],
-                'tasa_bcv' => (float) $data['tasa_bcv'],
-                'config' => $config,
-                'seleccion' => $seleccion,
-            ], $this->diferenciales->calcularSeleccion($periodo, $config, $seleccion));
+            $previa = $fuente === CommissionDifferentialService::FUENTE_VENTAS
+                ? $this->diferenciales->previsualizarDesdeVentas($periodo, $seleccion)
+                : $this->diferenciales->calcularSeleccion($periodo, $config, $seleccion);
+
+            return $this->formulario($periodo, $valoresBase, $previa);
+        }
+
+        if (($data['accion'] ?? '') === 'solo_recalcular') {
+            if ($fuente !== CommissionDifferentialService::FUENTE_VENTAS) {
+                return back()->withErrors(['fuente' => 'El recálculo sin diferencial solo aplica con “desde ventas”.'])->withInput();
+            }
+            $ids = array_keys(array_filter($seleccion, fn ($noPagado) => $noPagado));
+            if ($ids === []) {
+                return back()->withErrors([
+                    'empleados' => 'Para solo recalcular, marca personas en “No se le pagó”. Si ya se les pagó, guarda un diferencial con la diferencia.',
+                ])->withInput();
+            }
+            $this->diferenciales->soloRecalcularNoPagados($periodo, $ids, auth()->id());
+
+            return redirect()
+                ->route('nomina.comisiones.show', $periodo)
+                ->with('status', 'Comisiones recalculadas para '.count($ids).' persona(s) sin pago aún. Quedan listas para el TXT principal.');
         }
 
         $diferencial = $this->diferenciales->crear(
@@ -103,12 +135,17 @@ class ComisionDiferencialController extends Controller
             (float) $data['tasa_bcv'],
             $config,
             $seleccion,
-            auth()->id()
+            auth()->id(),
+            $fuente
         );
+
+        $msg = $fuente === CommissionDifferentialService::FUENTE_VENTAS
+            ? 'Liquidaciones actualizadas y diferencial guardado. Descarga el TXT solo de la diferencia / complemento.'
+            : 'Diferencial guardado. Descarga el TXT del banco por empresa.';
 
         return redirect()
             ->route('nomina.comisiones.diferenciales.show', [$periodo, $diferencial])
-            ->with('status', 'Diferencial guardado. Descarga el TXT del banco por empresa.');
+            ->with('status', $msg);
     }
 
     public function show(NominaPeriodo $periodo, NominaComisionDiferencial $diferencial): View
@@ -229,12 +266,15 @@ class ComisionDiferencialController extends Controller
     }
 
     /**
-     * @param  array{motivo:string,fecha_pago:string,tasa_bcv:float,config:array<string,float>,seleccion:array<int,bool>}  $valores
+     * @param  array{motivo:string,fecha_pago:string,tasa_bcv:float,config:array<string,float>,seleccion:array<int,bool>,fuente?:string,default_pagado?:string}  $valores
      * @param  \Illuminate\Support\Collection<int, array<string, mixed>>|null  $vistaPrevia
      */
     private function formulario(NominaPeriodo $periodo, array $valores, $vistaPrevia = null): View
     {
         $liquidaciones = $this->diferenciales->liquidaciones($periodo);
+        $valores['fuente'] = $valores['fuente'] ?? CommissionDifferentialService::FUENTE_VENTAS;
+        $valores['default_pagado'] = $valores['default_pagado']
+            ?? (in_array($periodo->estado, [NominaPeriodo::PAGADO, NominaPeriodo::CERRADO], true) ? 'si' : 'no');
 
         return view('nomina.comisiones.diferenciales.create', [
             'periodo' => $periodo,

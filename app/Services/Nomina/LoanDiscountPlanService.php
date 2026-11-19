@@ -291,6 +291,23 @@ class LoanDiscountPlanService
             ]);
     }
 
+    /** @param  list<int>  $empleadoIds */
+    public function deshacerComisionEmpleados(int $periodoId, array $empleadoIds): void
+    {
+        if (! $this->disponible() || $empleadoIds === []) {
+            return;
+        }
+
+        NominaPrestamoPlan::query()
+            ->where('nomina_periodo_id', $periodoId)
+            ->whereIn('empleado_id', $empleadoIds)
+            ->where('destino', NominaPrestamoPlan::DESTINO_COMISION)
+            ->update([
+                'estado' => NominaPrestamoPlan::PENDIENTE,
+                'nomina_periodo_id' => null,
+            ]);
+    }
+
     /**
      * @return list<array{cuota_id:int, monto:float, destino:string}>
      */

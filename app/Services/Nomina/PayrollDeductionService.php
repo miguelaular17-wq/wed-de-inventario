@@ -157,4 +157,10 @@ class PayrollDeductionService
     {
         $this->payments->revertirAbonosComisionDelPeriodo($periodoId);
     }
+
+    /** @param  list<int>  $empleadoIds */
+    public function revertirPrestamosComisionDeEmpleados(int $periodoId, array $empleadoIds): void
+    {
+        $this->payments->revertirAbonosComisionDeEmpleados($periodoId, $empleadoIds);
+    }
 }

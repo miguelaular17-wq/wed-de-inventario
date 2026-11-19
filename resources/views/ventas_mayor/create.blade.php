@@ -2,6 +2,10 @@
 
 @section('title', 'Ventas al mayor · Nueva factura')
 
+@push('head')
+@include('partials.ventas-mayor-responsive')
+@endpush
+
 @section('content')
 @php
     $formas = $formas ?? ['Transferencia', 'Pago móvil', 'Zelle', 'Efectivo $', 'Efectivo Bs', 'Binance', 'Punto de venta'];
@@ -38,24 +42,24 @@
     .vm-pills span { display: block; text-align: center; padding: 9px; border: 1.5px solid #cbd5e1; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: .85rem; color: #475569; }
     .vm-pills input:checked + span { border-color: #1e3a8a; background: #eff6ff; color: #1e3a8a; }
 </style>
-<div class="panel">
-    <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">
+<div class="panel vm-mobile-root">
+    <div class="vm-page-head" style="margin-bottom:14px;">
         <div>
             <h1 style="margin:0;">Nueva factura al mayor</h1>
             <p class="muted" style="margin:4px 0 0;">Las cantidades salen del stock de <strong>JRZ</strong>: no se puede facturar más de lo disponible.</p>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <div class="vm-page-actions">
             @if($descuentoDivisaPct > 0)
-                <span style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; border-radius:999px; padding:4px 10px; font-size:.78rem; font-weight:700;">
-                    Descuento divisas {{ number_format($descuentoDivisaPct, 2) }}% · Zelle / Efectivo $ / Binance
+                <span style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; border-radius:8px; padding:6px 10px; font-size:.78rem; font-weight:700;">
+                    Desc. divisas {{ number_format($descuentoDivisaPct, 2) }}%
                 </span>
             @else
-                <span style="background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; border-radius:999px; padding:4px 10px; font-size:.78rem; font-weight:700;">
-                    Sin descuento en divisas configurado
+                <span style="background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; border-radius:8px; padding:6px 10px; font-size:.78rem; font-weight:700;">
+                    Sin desc. divisas
                 </span>
             @endif
             @if(auth()->user()?->isGerente() || auth()->user()?->isAdmin())
-                <a href="{{ route('ventas_mayor.configuracion') }}" class="btn secondary">Config. descuento</a>
+                <a href="{{ route('ventas_mayor.configuracion') }}" class="btn secondary">Config.</a>
             @endif
             <a href="{{ route('ventas_mayor.stock') }}" class="btn secondary">Stock</a>
             <a href="{{ route('ventas_mayor.facturas') }}" class="btn secondary">Facturas</a>
@@ -112,7 +116,7 @@
                         <div class="vm-resultados" id="vm-productos"></div>
                     </div>
 
-                    <div class="table-wrap" style="margin-top:12px;">
+                    <div class="table-wrap vm-items-wrap" style="margin-top:12px;">
                         <table class="data-table vm-items" style="font-size:.84rem;">
                             <thead><tr><th>Producto</th><th class="vm-num">Disp. JRZ</th><th class="vm-num" style="width:100px;">Cantidad</th><th class="vm-num" style="width:120px;">Precio $</th><th class="vm-num" style="width:110px;">Total $</th><th style="width:40px;"></th></tr></thead>
                             <tbody id="vm-items"><tr id="vm-sin-items"><td colspan="6" class="muted" style="text-align:center; padding:22px;">Busca un producto arriba y haz clic en <strong>Agregar</strong>.</td></tr></tbody>
@@ -324,7 +328,7 @@
         tr.dataset.presentacion = pres; tr.dataset.unidadesPor = por;
         const etiqueta = pres !== 'unidad' ? `<span class="vm-chip" style="background:#ede9fe; color:#6d28d9;">${esc(p.presentacion_texto || pres)}</span> ` : '';
         tr.innerHTML = `
-            <td><strong>${esc(p.nombre)}</strong><div class="muted" style="font-size:.72rem;">${etiqueta}${esc(p.codigo)} <span class="vm-aviso" style="color:#dc2626; font-weight:700;"></span></div>
+            <td data-label="Producto"><strong>${esc(p.nombre)}</strong><div class="muted" style="font-size:.72rem;">${etiqueta}${esc(p.codigo)} <span class="vm-aviso" style="color:#dc2626; font-weight:700;"></span></div>
                 <input type="hidden" name="items[${i}][producto_id]" value="${p.id}">
                 <input type="hidden" name="items[${i}][codigo]" value="${esc(p.codigo)}">
                 <input type="hidden" name="items[${i}][nombre]" value="${esc(p.nombre)}">
@@ -333,13 +337,13 @@
                 <input type="hidden" name="items[${i}][presentacion]" value="${esc(pres)}">
                 <input type="hidden" name="items[${i}][presentacion_texto]" value="${esc(p.presentacion_texto || '')}">
                 <input type="hidden" name="items[${i}][unidades_por]" value="${por}"></td>
-            <td class="vm-num" style="font-weight:700; color:#15803d;">${cantidadTexto(disp, pres)}${por > 1 ? `<div class="muted" style="font-size:.7rem; font-weight:400;">${p.disponible_jrz} und.</div>` : ''}</td>
-            <td class="vm-num"><input type="number" class="vm-cant" name="items[${i}][cantidad]" min="1" max="${disp}" step="1" value="${cantidad}" required style="width:84px;"></td>
-            <td class="vm-num"><input type="hidden" class="vm-precio" name="items[${i}][precio_usd]" value="${p.precio_mayor || 0}">${p.precio_mayor > 0
+            <td data-label="Disp. JRZ" class="vm-num" style="font-weight:700; color:#15803d;">${cantidadTexto(disp, pres)}${por > 1 ? `<div class="muted" style="font-size:.7rem; font-weight:400;">${p.disponible_jrz} und.</div>` : ''}</td>
+            <td data-label="Cantidad" class="vm-num"><input type="number" class="vm-cant" name="items[${i}][cantidad]" min="1" max="${disp}" step="1" value="${cantidad}" required style="width:84px;" inputmode="numeric"></td>
+            <td data-label="Precio $" class="vm-num"><input type="hidden" class="vm-precio" name="items[${i}][precio_usd]" value="${p.precio_mayor || 0}">${p.precio_mayor > 0
                 ? `<strong>${usd(p.precio_mayor)}</strong>`
                 : `<span style="color:#dc2626; font-weight:700;" title="Hay que ponerle precio en su ficha">Sin precio</span>`}</td>
-            <td class="vm-num vm-tot" style="font-weight:700;">$0.00</td>
-            <td><button type="button" style="padding:4px 9px; background:#fee2e2; color:#b91c1c; border:0; border-radius:6px; cursor:pointer; font-weight:700;" title="Quitar">&times;</button></td>`;
+            <td data-label="Total $" class="vm-num vm-tot" style="font-weight:700;">$0.00</td>
+            <td data-label=""><button type="button" style="padding:8px 12px; background:#fee2e2; color:#b91c1c; border:0; border-radius:6px; cursor:pointer; font-weight:700; width:100%;" title="Quitar">Quitar</button></td>`;
         tr.querySelector('button').addEventListener('click', () => { tr.remove(); totales(); });
         tr.querySelectorAll('input').forEach(inp => inp.addEventListener('input', totales));
         $('vm-items').appendChild(tr);

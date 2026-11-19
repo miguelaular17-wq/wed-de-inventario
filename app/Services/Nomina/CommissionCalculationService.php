@@ -43,6 +43,19 @@ class CommissionCalculationService
         }
     }
 
+    /** @param  list<int>  $empleadoIds */
+    public function limpiarEmpleados(NominaPeriodo $periodo, array $empleadoIds): void
+    {
+        if ($empleadoIds === [] || ! $this->flag('nomina_comision_registros')) {
+            return;
+        }
+
+        NominaComisionRegistro::query()
+            ->where('periodo_id', $periodo->id)
+            ->whereIn('empleado_id', $empleadoIds)
+            ->delete();
+    }
+
     /**
      * @return array{
      *     total:float,modo:string,base:float,gastos:float,lineas:int,

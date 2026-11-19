@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Cuadre de caja · '.($cuadre->usuario_nombre ?: $cuadre->usuario))
+@section('title', 'Arqueo de caja · '.($cuadre->usuario_nombre ?: $cuadre->usuario))
 
 @php
     $dinero = fn ($n) => $n === null ? '—' : (round((float) $n, 2) < 0 ? '-' : '').'$'.number_format(abs((float) $n), 2, ',', '.');
@@ -181,7 +181,7 @@
 
 @section('content')
 <div class="page-header">
-    <a href="{{ $volverUrl }}" class="btn secondary" style="margin-bottom:10px;">← Cuadre de caja</a>
+    <a href="{{ $volverUrl }}" class="btn secondary" style="margin-bottom:10px;">← Arqueo de caja</a>
     <div class="cc-titulo">
         <h1>{{ $cuadre->usuario_nombre ?: $cuadre->usuario }}</h1>
         <span class="cc-badge {{ $badges[$estadoCaja][1] }}">{{ $badges[$estadoCaja][0] }}</span>

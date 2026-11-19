@@ -2,6 +2,10 @@
 
 @section('title', 'Catálogo al mayor')
 
+@push('head')
+@include('partials.ventas-mayor-responsive')
+@endpush
+
 @section('content')
 @php
     $presNombre = fn ($p) => $p->presentacion === 'caja' ? 'caja' : ($p->presentacion === 'paquete' ? 'paquete' : 'unidad');
@@ -28,15 +32,15 @@
     .cm-precio span { font-size: .75rem; color: #475569; }
     .cm-facturar { display: block; text-align: center; padding: 8px; border-radius: 8px; background: #2563eb; color: #fff; font-weight: 700; font-size: .82rem; text-decoration: none; }
 </style>
-<div class="cm-page">
-    <div class="cm-cab">
+<div class="cm-page vm-mobile-root">
+    <div class="cm-cab vm-page-head">
         <div>
             <h1 style="margin:0;">Catálogo al mayor</h1>
             <p class="muted" style="margin:4px 0 0;">{{ $productos->count() }} productos con stock en JRZ · precio y presentación al mayor</p>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div class="vm-page-actions">
             <a href="{{ route('ventas_mayor.stock') }}" class="btn secondary">← Stock</a>
-            <a href="{{ route('ventas_mayor.catalogo.pdf', array_filter(['q' => $q, 'categoria' => $categoria])) }}" target="_blank" rel="noopener" class="btn primary">📄 Catálogo en PDF</a>
+            <a href="{{ route('ventas_mayor.catalogo.pdf', array_filter(['q' => $q, 'categoria' => $categoria])) }}" target="_blank" rel="noopener" class="btn primary">PDF</a>
         </div>
     </div>
 

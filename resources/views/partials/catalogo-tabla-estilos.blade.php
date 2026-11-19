@@ -283,5 +283,15 @@ main:has(.cat-page) {
     .cat-table tr { padding: 16px; border-bottom: 1px solid var(--border); }
     .cat-table td { padding: 8px 0; }
     .cat-stock { flex-direction: column; align-items: stretch; }
-    .cat-prices { margin-top: 4px; }
+    .cat-prices { margin-top: 4px; grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+    main:has(.cat-page) { padding: 12px !important; }
+    .cat-page { padding: 0 !important; }
+    .cat-table tr { padding: 12px; }
+    .cat-table th, .cat-table td { padding-left: 0; padding-right: 0; }
+    .cat-product-fila { gap: 10px; }
+    .cat-foto { width: 56px; height: 56px; }
+    .cat-stock-sedes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+    .cat-sede { padding: 6px 8px; font-size: .74rem; }
 }

@@ -98,6 +98,9 @@
                                 @else
                                     <span class="btn secondary" style="opacity:.45;pointer-events:none;" title="Calcula la nómina primero">TXT</span>
                                 @endif
+                                @if($puedeTxt)
+                                    <a class="btn secondary" href="{{ route('nomina.comisiones.diferenciales.create', $periodo) }}" title="Recalcular personas: no pagado o solo diferencia">Ajuste</a>
+                                @endif
                                 <details class="com-reportes">
                                     <summary class="btn secondary">Reportes</summary>
                                     <div class="com-reportes-menu">
@@ -105,6 +108,7 @@
                                             <a href="{{ route('nomina.comisiones.relacion', ['periodo' => $periodo, 'formato' => 'zip']) }}">ZIP PDF por sede y área</a>
                                             <a href="{{ route('nomina.comisiones.reporte_sedes', $periodo) }}">Ventas netas por sede</a>
                                             <a href="{{ route('nomina.comisiones.relacion', ['periodo' => $periodo, 'formato' => 'xlsx']) }}">Excel</a>
+                                            <a href="{{ route('nomina.comisiones.diferenciales.index', $periodo) }}">Diferenciales / ajustes</a>
                                         @else
                                             <span class="muted">Calcula la nómina para descargar reportes.</span>
                                         @endif

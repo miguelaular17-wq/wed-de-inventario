@@ -2,23 +2,27 @@
 
 @section('title', 'Visita · '.$visita->negocio_nombre)
 
+@push('head')
+@include('partials.ventas-mayor-responsive')
+@endpush
+
 @section('content')
 @php $esImagen = fn ($u) => (bool) preg_match('/\.(jpe?g|png|gif|webp|heic)(\?|$)/i', (string) $u); @endphp
-<div class="panel" style="max-width:980px; margin:0 auto;">
-    <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
+<div class="panel vm-mobile-root" style="max-width:980px; margin:0 auto;">
+    <div class="vm-page-head">
         <div>
             <h1 style="margin:0;">{{ $visita->negocio_nombre }}</h1>
             <p class="muted" style="margin:4px 0 0;">Visita del {{ $visita->fecha->format('d/m/Y') }} · {{ $visita->usuario?->name }} · {{ $visita->etiquetaResultado() }}</p>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div class="vm-page-actions">
             <a href="{{ route('ventas_mayor.visitas.index') }}" class="btn secondary">← Hoja de ruta</a>
             @if($visita->cliente_id)
-                <a href="{{ route('ventas_mayor.create', ['cliente_id' => $visita->cliente_id]) }}" class="btn primary">+ Factura a este cliente</a>
+                <a href="{{ route('ventas_mayor.create', ['cliente_id' => $visita->cliente_id]) }}" class="btn primary">+ Facturar</a>
             @else
                 <form method="POST" action="{{ route('ventas_mayor.visitas.cliente', $visita) }}" onsubmit="@if(! $visita->negocio_documento) const d = prompt('RIF o cédula del negocio para registrarlo como cliente:'); if (!d) return false; this.documento.value = d; @endif return true;">
                     @csrf
                     <input type="hidden" name="documento">
-                    <button type="submit" class="btn primary">Registrar como cliente y facturar</button>
+                    <button type="submit" class="btn primary">Registrar cliente</button>
                 </form>
             @endif
         </div>
@@ -57,7 +61,7 @@
         <p style="margin-top:12px;"><strong>Observaciones:</strong> {{ $visita->observaciones }}</p>
     @endif
 
-    <div style="display:grid; grid-template-columns:minmax(260px,1fr) 2fr; gap:14px; margin-top:14px;">
+    <div class="hr-visita-grid" style="display:grid; grid-template-columns:minmax(260px,1fr) 2fr; gap:14px; margin-top:14px;">
         <div>
             <h3 style="margin:0 0 6px;">Firma</h3>
             <div style="border:1px solid #e2e8f0; border-radius:10px; padding:8px; background:#fff;">

@@ -123,7 +123,7 @@ class ReportesSuiteTest extends TestCase
         DB::table('cuadres_caja')->where('id', $cuadreId)->update(['conciliado_at' => now(), 'estado_tesoreria' => 'procesado',
             'observacion_tesoreria' => 'Faltan 5 en efectivo']);
         $this->get(route('reportes_suite', ['reporte' => 'cuadre'] + $filtros))
-            ->assertOk()->assertSee('JAIR AVILA')->assertSee('Faltan 5 en efectivo')->assertSee('380,86')->assertSee('Procesado')->assertSee('-5,00')->assertSee('1 cierres');
+            ->assertOk()->assertSee('JAIR AVILA')->assertSee('Faltan 5 en efectivo')->assertSee('380,86')->assertSee('Procesado')->assertSee('-5,00')->assertSee('1 cierre');
         $this->get(route('reportes_suite', ['reporte' => 'cuadre', 'mostrar_total' => '0'] + $filtros))
             ->assertOk()->assertDontSee('380,86');
 
