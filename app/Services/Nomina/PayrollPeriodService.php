@@ -621,6 +621,29 @@ class PayrollPeriodService
         );
     }
 
+    /** Marca PAGADO al descargar el TXT (nómina o comisiones), desde CALCULADO o APROBADO. */
+    public function marcarPagadoPorTxt(NominaPeriodo $periodo, ?int $usuarioId = null): NominaPeriodo
+    {
+        return DB::transaction(function () use ($periodo, $usuarioId) {
+            $periodo = NominaPeriodo::query()->lockForUpdate()->findOrFail($periodo->id);
+
+            if (in_array($periodo->estado, [NominaPeriodo::PAGADO, NominaPeriodo::CERRADO, NominaPeriodo::ABIERTO], true)) {
+                return $periodo;
+            }
+
+            $desde = $periodo->estado;
+            $periodo->forceFill([
+                'estado' => NominaPeriodo::PAGADO,
+                'pagado_at' => now(),
+                'pagado_por' => $usuarioId,
+            ])->save();
+
+            $this->auditarTransicion($periodo, $desde, NominaPeriodo::PAGADO);
+
+            return $periodo->fresh();
+        });
+    }
+
     public function cerrar(NominaPeriodo $periodo, ?int $usuarioId = null): NominaPeriodo
     {
         return $this->transicionar(

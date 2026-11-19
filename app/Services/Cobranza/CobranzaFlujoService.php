@@ -774,7 +774,22 @@ class CobranzaFlujoService
             return;
         }
 
-        $intl = FinanzasCatalogo::esBancaInternacional($mov->categoria_cuenta);
+        if ($this->catalogo === null) {
+            $this->catalogo = [];
+            foreach (FinanzasCatalogo::combinarCuentas(FinanzasController::cuentasBase()) as $c) {
+                $this->catalogo[FinanzasCatalogo::clave($c['banco'], $c['titular'])] = $c['categoria'];
+            }
+        }
+        $categoriaCuenta = trim((string) ($mov->categoria_cuenta ?? ''));
+        if ($categoriaCuenta === '') {
+            $categoriaCuenta = (string) ($this->catalogo[FinanzasCatalogo::clave($mov->banco, $mov->titular)] ?? '');
+        }
+        $intl = FinanzasCatalogo::esCuentaInternacional(
+            $categoriaCuenta,
+            $mov->banco,
+            $mov->titular,
+            FinanzasController::cuentasBase()
+        );
         $categoriaEgreso = $mov->esIngreso()
             ? 'ingresos'
             : ($intl ? 'egreso_divisas' : 'egreso_realizado');
@@ -785,7 +800,7 @@ class CobranzaFlujoService
             'categoria_egreso' => $categoriaEgreso,
             'banco' => $mov->banco,
             'titular' => $mov->titular,
-            'categoria_cuenta' => $mov->categoria_cuenta,
+            'categoria_cuenta' => $categoriaCuenta !== '' ? $categoriaCuenta : $mov->categoria_cuenta,
             'titular_receptor' => $mov->contraparte,
             'referencia' => $mov->referencia,
             'monto_usd' => $mov->monto_usd,

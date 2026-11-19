@@ -506,7 +506,9 @@ Route::middleware(['auth', 'permission:nomina,nomina.periodos'])->prefix('nomina
     Route::post('/periodos/{periodo}/aprobar', [PeriodoController::class, 'aprobar'])->name('periodos.aprobar');
     Route::post('/periodos/{periodo}/pagar', [PeriodoController::class, 'pagar'])->name('periodos.pagar');
     Route::post('/periodos/{periodo}/cerrar', [PeriodoController::class, 'cerrar'])->name('periodos.cerrar');
+    Route::get('/periodos/{periodo}/txt-modal', [PeriodoController::class, 'modalTxt'])->name('periodos.txt_modal');
     Route::get('/periodos/{periodo}/banco/{empresa}', [PeriodoController::class, 'exportarBanco'])->name('periodos.banco');
+    Route::post('/periodos/{periodo}/banco', [PeriodoController::class, 'exportarBancoTodo'])->name('periodos.banco_todo');
     Route::get('/periodos/{periodo}/relacion', [PeriodoController::class, 'relacion'])->name('periodos.relacion');
     Route::get('/periodos/{periodo}/reporte-sedes.pdf', [PeriodoController::class, 'reporteSedesPdf'])->name('periodos.reporte_sedes');
     Route::get('/periodos/{periodo}/reporte-gastos-personal.pdf', [PeriodoController::class, 'reporteGastosPersonalPdf'])->name('periodos.reporte_gastos_personal');
@@ -529,10 +531,16 @@ Route::middleware(['auth', 'permission:nomina,nomina.comisiones'])->prefix('nomi
     Route::post('/comisiones/{periodo}/ajustes', [ComisionController::class, 'registrarAjuste'])->name('comisiones.ajustes.store');
     Route::post('/comisiones/{periodo}/bonos/aplicar', [ComisionController::class, 'aplicarBonos'])->name('comisiones.bonos.aplicar');
     Route::post('/comisiones/{periodo}/bonos/{ajuste}', [ComisionController::class, 'quitarBono'])->name('comisiones.bonos.quitar');
+    Route::post('/comisiones/{periodo}/empleados/{empleado}/bono', [ComisionController::class, 'guardarBonoRapido'])->name('comisiones.bono_rapido');
+    Route::get('/comisiones/{periodo}/empleados/{empleado}/deducciones', [ComisionController::class, 'opcionesDeduccion'])->name('comisiones.deducciones.opciones');
+    Route::post('/comisiones/{periodo}/empleados/{empleado}/deducciones/anular', [ComisionController::class, 'anularDeduccion'])->name('comisiones.deducciones.anular');
+    Route::post('/comisiones/{periodo}/empleados/{empleado}/deducciones/aplicar', [ComisionController::class, 'aplicarDeduccion'])->name('comisiones.deducciones.aplicar');
+    Route::post('/comisiones/{periodo}/empleados/{empleado}/descuento', [ComisionController::class, 'guardarDescuentoRapido'])->name('comisiones.descuento_rapido');
     Route::post('/comisiones/{periodo}/empleados/{empleado}/exento-retencion', [ComisionController::class, 'toggleExentoRetencion'])->name('comisiones.exento_retencion');
     Route::post('/comisiones/{periodo}/empleados/{empleado}/egresos-st', [ComisionController::class, 'registrarEgresoSt'])->name('comisiones.egresos_st.store');
     Route::post('/comisiones/{periodo}/empleados/{empleado}/egresos-st/aplicar', [ComisionController::class, 'aplicarEgresosSt'])->name('comisiones.egresos_st.aplicar');
     Route::delete('/comisiones/{periodo}/egresos-st/{ajuste}', [ComisionController::class, 'quitarEgresoSt'])->name('comisiones.egresos_st.destroy');
+    Route::get('/comisiones/{periodo}/txt-modal', [ComisionController::class, 'modalTxt'])->name('comisiones.txt_modal');
     Route::get('/comisiones/{periodo}/banco/{empresa}', [ComisionController::class, 'exportarBanco'])->name('comisiones.banco');
     Route::post('/comisiones/{periodo}/banco', [ComisionController::class, 'exportarBancoTodo'])->name('comisiones.banco_todo');
     Route::get('/comisiones/{periodo}/diferenciales', [ComisionDiferencialController::class, 'index'])->name('comisiones.diferenciales.index');

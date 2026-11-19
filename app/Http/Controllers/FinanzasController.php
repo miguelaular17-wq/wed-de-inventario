@@ -437,9 +437,16 @@ class FinanzasController extends Controller
             ->get();
 
         $tasa_bcv = $resumen->tasa_bcv_usd > 0 ? $resumen->tasa_bcv_usd : 1;
+        $cuentasBase = self::cuentasBase();
+        $esIntl = fn ($m) => \App\Models\FinanzasCatalogo::esCuentaInternacional(
+            $m->categoria_cuenta,
+            $m->banco,
+            $m->titular,
+            $cuentasBase
+        );
 
-        // Egresos Realizados (ignorar los que son nulos o vacíos en categoria)
-        $egresos_realizados = $egresos->where('categoria_egreso', 'egreso_realizado');
+        // Egresos Realizados (sin banca internacional: esos van a egreso_divisas)
+        $egresos_realizados = $egresos->where('categoria_egreso', 'egreso_realizado')->reject($esIntl);
         $resumen->total_egresos_usd = $egresos_realizados->sum('monto_usd');
         $resumen->total_egresos_bs_usd = $egresos_realizados->sum('monto_bs') / $tasa_bcv;
 
@@ -479,10 +486,37 @@ class FinanzasController extends Controller
         Profiler::stop('FinanzasController::flujoCaja query');
         $ingresos = $movimientos->where('tipo', 'ingreso')->values();
         $movimientos = $movimientos->where('tipo', '!=', 'ingreso');
-        $egresos_realizados = $movimientos->where('categoria_egreso', 'egreso_realizado');
+
+        // Cobranza a veces deja egresos de banca internacional como egreso_realizado;
+        // se reclasifican a egreso_divisas (vista + dato).
+        $cuentasBase = self::cuentasBase();
+        $esIntl = fn ($m) => \App\Models\FinanzasCatalogo::esCuentaInternacional(
+            $m->categoria_cuenta,
+            $m->banco,
+            $m->titular,
+            $cuentasBase
+        );
+        $intlMalClasificados = $movimientos
+            ->filter(fn ($m) => ($m->categoria_egreso === 'egreso_realizado' || $m->categoria_egreso === null || $m->categoria_egreso === '')
+                && $esIntl($m));
+        if ($intlMalClasificados->isNotEmpty()) {
+            \App\Models\FlujoCaja::query()
+                ->whereIn('id', $intlMalClasificados->pluck('id')->all())
+                ->update(['categoria_egreso' => 'egreso_divisas']);
+            foreach ($intlMalClasificados as $m) {
+                $m->categoria_egreso = 'egreso_divisas';
+            }
+        }
+
+        $egresos_realizados = $movimientos
+            ->where('categoria_egreso', 'egreso_realizado')
+            ->reject($esIntl)
+            ->values();
         $otros_egresos = $movimientos->where('categoria_egreso', 'otros_egresos');
         $traslados = $movimientos->where('categoria_egreso', 'traslados');
-        $egresos_divisas = $movimientos->where('categoria_egreso', 'egreso_divisas');
+        $egresos_divisas = $movimientos
+            ->filter(fn ($m) => $m->categoria_egreso === 'egreso_divisas' || ($m->categoria_egreso === 'egreso_realizado' && $esIntl($m)))
+            ->values();
         $compras_divisas = \Illuminate\Support\Facades\Schema::hasTable('compra_divisas')
             ? \App\Models\CompraDivisa::whereBetween('fecha', [$fecha_desde, $fecha_hasta])->orderByDesc('fecha')->orderBy('id')->get()
             : collect();
@@ -5346,10 +5380,19 @@ class FinanzasController extends Controller
             );
         }
 
-        $egresos = $movimientos->where('categoria_egreso', 'egreso_realizado');
+        $cuentasBase = self::cuentasBase();
+        $esIntl = fn ($m) => \App\Models\FinanzasCatalogo::esCuentaInternacional(
+            $m->categoria_cuenta,
+            $m->banco,
+            $m->titular,
+            $cuentasBase
+        );
+        $egresos = $movimientos->where('categoria_egreso', 'egreso_realizado')->reject($esIntl)->values();
         $otros = $movimientos->where('categoria_egreso', 'otros_egresos');
         $traslados = $movimientos->where('categoria_egreso', 'traslados');
-        $divisas = $movimientos->where('categoria_egreso', 'egreso_divisas');
+        $divisas = $movimientos
+            ->filter(fn ($m) => $m->categoria_egreso === 'egreso_divisas' || ($m->categoria_egreso === 'egreso_realizado' && $esIntl($m)))
+            ->values();
         $compras = $this->comprasDivisasReporte($fecha_desde, $fecha_hasta, $q, $selected_cats);
         if ($ref !== '') {
             $compras = $compras->filter(

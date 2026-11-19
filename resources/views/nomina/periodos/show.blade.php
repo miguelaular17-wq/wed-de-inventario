@@ -27,6 +27,22 @@
 .com-alta-lista { position: absolute; z-index: 5; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 4px; max-height: 220px; overflow: auto; box-shadow: 0 12px 30px rgba(15,23,42,.12); }
 .com-alta-lista button { display: block; width: 100%; text-align: left; background: #fff; border: 0; border-bottom: 1px solid #f1f5f9; padding: 8px 10px; cursor: pointer; }
 .com-alta-lista button:hover { background: #eff6ff; }
+.com-modal-card.com-modal-txt { width: min(920px, 100%); }
+.txt-acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 14px; }
+.txt-empresas-main { margin: 0 0 12px; }
+.txt-empresas-main .data-table { margin: 0; }
+.txt-excluir { margin-top: 8px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 12px; background: #f8fafc; }
+.txt-excluir > summary { cursor: pointer; font-weight: 700; color: #334155; list-style: none; }
+.txt-excluir > summary::-webkit-details-marker { display: none; }
+.txt-excluir > summary::before { content: '▸ '; color: #64748b; }
+.txt-excluir[open] > summary::before { content: '▾ '; }
+.txt-excluir-body { margin-top: 12px; }
+.txt-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 0 0 12px; }
+.txt-filtros label { display: flex; flex-direction: column; gap: 4px; font-size: .75rem; font-weight: 700; color: #64748b; min-width: 160px; }
+.txt-filtros select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 600; color: #0f172a; }
+.txt-lista-wrap { max-height: min(42vh, 420px); overflow: auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+.txt-lista-wrap table { margin: 0; }
+.txt-lista-wrap tr[hidden] { display: none !important; }
 </style>
 @endpush
 
@@ -73,9 +89,9 @@
             @endif
             @if($periodo->estado !== 'ABIERTO' && $periodo->registros->isNotEmpty())
                 <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px;">
-                    <a class="btn primary" href="{{ route('nomina.periodos.relacion', $periodo) }}">Descargar relación PDF</a>
-                    <a class="btn" href="{{ route('nomina.periodos.relacion', ['periodo' => $periodo, 'formato' => 'xlsx']) }}">Descargar Excel</a>
-                    <a class="btn" href="{{ route('nomina.periodos.relacion', ['periodo' => $periodo, 'formato' => 'zip']) }}">ZIP PDF por sede y área</a>
+                    @if(! in_array($periodo->estado, ['PAGADO', 'CERRADO'], true))
+                        <button class="btn" type="button" data-abrir-modal="modal-ajustes">Ajustes</button>
+                    @endif
                     <a class="btn" href="{{ route('nomina.periodos.diferenciales_tasa.index', $periodo) }}">Diferencial por tasa</a>
                 </div>
             @endif
@@ -98,14 +114,6 @@
         <div class="nomina-kpi"><span>Horas extras</span><strong>${{ number_format($totalOtros, 2) }}</strong></div>
         <div class="nomina-kpi warn"><span>Deducciones sueldo</span><strong>${{ number_format($totalDeducciones, 2) }}</strong></div>
         <div class="nomina-kpi"><span>Nómina a pagar</span><strong>${{ number_format($totalPagar, 2) }}</strong></div>
-    </div>
-
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
-        <button class="btn" type="button" data-abrir-modal="modal-ajustes">Ajustes de la quincena</button>
-        <button class="btn" type="button" data-abrir-modal="modal-sedes">Totales por sede y área</button>
-        @if($periodo->estado !== 'ABIERTO')
-            <button class="btn" type="button" data-abrir-modal="modal-txt">TXT del banco</button>
-        @endif
     </div>
 
     <div class="nomina-card" style="margin-top:16px;">
@@ -379,54 +387,7 @@
 
 @if($periodo->estado !== 'ABIERTO')
 <div class="com-modal" id="modal-txt" hidden>
-    <div class="com-modal-card">
-        <div class="com-modal-head">
-            <div>
-                <h3 style="margin:0;">Archivo para el banco</h3>
-                <p class="muted" style="margin:4px 0 0;">Los que tienen empresa se descargan. Los que no, hay que asignarla en la ficha. Tasa BCV del cierre ({{ $periodo->fecha_fin?->format('d/m/Y') }}): <strong>{{ number_format($tasaBcv, 2) }}</strong>.</p>
-            </div>
-            <button class="btn secondary" type="button" data-cerrar-modal>Cerrar</button>
-        </div>
-        <table class="data-table">
-            <thead><tr><th>Empresa</th><th>Empleados</th><th>Nómina USD</th><th>Nómina Bs</th><th></th></tr></thead>
-            <tbody>
-                @forelse($bancoPorEmpresa as $fila)
-                    @if($fila->empresa)
-                        <tr>
-                            <td>
-                                <strong>{{ $fila->empresa->codigo }}</strong>
-                                <div class="muted" style="font-size:.78rem;">{{ $fila->empresa->nombre }}</div>
-                            </td>
-                            <td>{{ $fila->empleados }}</td>
-                            <td>${{ number_format($fila->usd, 2) }}</td>
-                            <td>Bs {{ number_format($fila->usd * $tasaBcv, 2) }}</td>
-                            <td style="text-align:right;">
-                                <a class="btn primary" href="{{ route('nomina.periodos.banco', [$periodo, $fila->empresa]) }}">Descargar TXT</a>
-                            </td>
-                        </tr>
-                    @else
-                        <tr>
-                            <td colspan="5"><strong>Sin empresa</strong> · {{ $fila->empleados }} persona(s) · ${{ number_format($fila->usd, 2) }}</td>
-                        </tr>
-                        @foreach(($fila->personas ?? collect()) as $persona)
-                            <tr>
-                                <td style="padding-left:24px;">
-                                    <a href="{{ route('nomina.empleados.show', ['empleado' => $persona->id, 'tab' => 'nomina']) }}">{{ $persona->nombre }}</a>
-                                    <span class="muted">· {{ $persona->cedula !== '' ? $persona->cedula : 'Sin cédula' }}</span>
-                                </td>
-                                <td>1</td>
-                                <td>${{ number_format($persona->usd ?? 0, 2) }}</td>
-                                <td>Bs {{ number_format(($persona->usd ?? 0) * $tasaBcv, 2) }}</td>
-                                <td class="muted">No se descarga</td>
-                            </tr>
-                        @endforeach
-                    @endif
-                @empty
-                    <tr><td colspan="5" class="muted">No hay recibos calculados.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
+    @include('nomina.periodos._modal_txt')
 </div>
 @endif
 @endsection
@@ -451,6 +412,108 @@ document.addEventListener('DOMContentLoaded', function () {
             if (event.target === modal) modal.hidden = true;
         });
     });
+
+    (function initTxtBanco() {
+        const form = document.getElementById('form-txt-banco');
+        if (!form) return;
+
+        const filtroSede = document.getElementById('txt-filtro-sede');
+        const filtroCargo = document.getElementById('txt-filtro-cargo');
+        const contador = document.getElementById('txt-contador');
+        const filas = Array.from(form.querySelectorAll('[data-txt-fila]'));
+        const accionTodo = form.getAttribute('action');
+
+        function actualizarContador() {
+            const n = form.querySelectorAll('[data-txt-check]:checked:not(:disabled)').length;
+            if (contador) contador.textContent = n + ' seleccionado' + (n === 1 ? '' : 's');
+        }
+
+        function aplicarFiltros() {
+            const sede = (filtroSede && filtroSede.value) || '';
+            const cargo = (filtroCargo && filtroCargo.value) || '';
+            filas.forEach(function (fila) {
+                const okSede = !sede || fila.getAttribute('data-sede') === sede;
+                const okCargo = !cargo || fila.getAttribute('data-cargo') === cargo;
+                fila.hidden = !(okSede && okCargo);
+            });
+        }
+
+        function checksVisibles(marcar) {
+            filas.forEach(function (fila) {
+                if (fila.hidden) return;
+                const check = fila.querySelector('[data-txt-check]');
+                if (check && !check.disabled) check.checked = marcar;
+            });
+            actualizarContador();
+        }
+
+        function idsSeleccionados(empresaId) {
+            const ids = [];
+            filas.forEach(function (fila) {
+                const check = fila.querySelector('[data-txt-check]');
+                if (!check || check.disabled || !check.checked) return;
+                if (empresaId != null && String(fila.getAttribute('data-empresa-id') || '0') !== String(empresaId)) return;
+                ids.push(check.value);
+            });
+            return ids;
+        }
+
+        function enviarSeleccion(ids) {
+            if (!ids.length) {
+                alert('No hay personas marcadas para esa descarga.');
+                return;
+            }
+            const tmp = document.createElement('form');
+            tmp.method = 'POST';
+            tmp.action = accionTodo;
+            tmp.style.display = 'none';
+            const csrf = form.querySelector('input[name="_token"]');
+            if (csrf) {
+                const token = document.createElement('input');
+                token.type = 'hidden';
+                token.name = '_token';
+                token.value = csrf.value;
+                tmp.appendChild(token);
+            }
+            ids.forEach(function (id) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'empleados[]';
+                input.value = id;
+                tmp.appendChild(input);
+            });
+            document.body.appendChild(tmp);
+            tmp.submit();
+            tmp.remove();
+            setTimeout(function () { window.location.reload(); }, 1200);
+        }
+
+        if (filtroSede) filtroSede.addEventListener('change', aplicarFiltros);
+        if (filtroCargo) filtroCargo.addEventListener('change', aplicarFiltros);
+        form.addEventListener('change', function (event) {
+            if (event.target && event.target.matches('[data-txt-check]')) actualizarContador();
+        });
+        const btnMarcar = document.getElementById('txt-marcar-visibles');
+        const btnDesmarcar = document.getElementById('txt-desmarcar-visibles');
+        if (btnMarcar) btnMarcar.addEventListener('click', function () { checksVisibles(true); });
+        if (btnDesmarcar) btnDesmarcar.addEventListener('click', function () { checksVisibles(false); });
+        form.addEventListener('submit', function (event) {
+            const n = form.querySelectorAll('[data-txt-check]:checked:not(:disabled)').length;
+            if (n < 1) {
+                event.preventDefault();
+                alert('Selecciona al menos una persona para el TXT.');
+                return;
+            }
+            setTimeout(function () { window.location.reload(); }, 1200);
+        });
+        document.querySelectorAll('[data-txt-empresa]').forEach(function (boton) {
+            boton.addEventListener('click', function () {
+                enviarSeleccion(idsSeleccionados(boton.getAttribute('data-txt-empresa')));
+            });
+        });
+        actualizarContador();
+    })();
+
     function activarAjuste(nombre) {
         document.querySelectorAll('[data-ajuste-tab]').forEach(function (otro) {
             otro.classList.toggle('is-on', otro.getAttribute('data-ajuste-tab') === nombre);

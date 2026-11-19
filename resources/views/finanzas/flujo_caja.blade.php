@@ -1459,214 +1459,214 @@
                         <div>
                             <label class="ne-lbl">Tipo de Egreso</label>
                             <select name="categoria_egreso" id="categoria_egreso" class="ne-inp" onchange="toggleTraslados()" required>
-                                @if($soloAvances ?? false)
-                                    <option value="otros_egresos" selected>OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
-                                @else
-                                <option value="egreso_realizado">EGRESOS REALIZADOS</option>
-                                <option value="egreso_divisas">EGRESOS EN DIVISAS</option>
-                                <option value="compra_divisas">COMPRA DE DIVISAS</option>
-                                <option value="otros_egresos">OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
-                                <option value="traslados">TRASLADOS</option>
-                                <option value="ingresos">INGRESOS</option>
-                                @endif
-                            </select>
-                        </div>
+                        @if($soloAvances ?? false)
+                            <option value="otros_egresos" selected>OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
+                        @else
+                        <option value="egreso_realizado">EGRESOS REALIZADOS</option>
+                        <option value="egreso_divisas">EGRESOS EN DIVISAS</option>
+                        <option value="compra_divisas">COMPRA DE DIVISAS</option>
+                        <option value="otros_egresos">OTROS EGRESOS (AVANCES Y CAMBIOS)</option>
+                        <option value="traslados">TRASLADOS</option>
+                        <option value="ingresos">INGRESOS</option>
+                        @endif
+                    </select>
+                </div>
                         <div>
                             <label class="ne-lbl">Fecha</label>
                             <input type="date" name="fecha" class="ne-inp" value="{{ $fecha_filtro }}" max="{{ date('Y-m-d') }}" required>
-                        </div>
-                    </div>
+                </div>
+            </div>
 
                     <div class="ne-row">
                         <div style="flex: 2.2;">
                             <label class="ne-lbl" id="lbl_banco_titular">Banco y Titular</label>
                             <select id="banco_titular" name="banco_titular" class="ne-inp" required>
-                                <option value="">-- Seleccione --</option>
-                                @php $cuentasAgrupadas = collect($cuentas)->groupBy('categoria'); @endphp
-                                @foreach($cuentasAgrupadas as $categoria => $listaCuentas)
-                                    <optgroup label="{{ $categoria }}">
-                                        @foreach($listaCuentas as $cuenta)
-                                            <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
-                                                {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
-                                            </option>
-                                        @endforeach
-                                    </optgroup>
+                        <option value="">-- Seleccione --</option>
+                        @php $cuentasAgrupadas = collect($cuentas)->groupBy('categoria'); @endphp
+                        @foreach($cuentasAgrupadas as $categoria => $listaCuentas)
+                            <optgroup label="{{ $categoria }}">
+                                @foreach($listaCuentas as $cuenta)
+                                    <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
+                                        {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
+                                    </option>
                                 @endforeach
-                            </select>
-                        </div>
+                            </optgroup>
+                        @endforeach
+                    </select>
+                </div>
                         <div id="col_referencia" style="flex: 0.9;">
                             <label class="ne-lbl">Ref.</label>
                             <input type="text" name="referencia" class="ne-inp" placeholder="# Referencia">
-                        </div>
-                    </div>
+                </div>
+            </div>
 
                     <div id="row_receptor" style="display: none;">
                         <label class="ne-lbl">Banco Receptor y Titular Receptor</label>
                         <select name="banco_titular_receptor" id="banco_titular_receptor" class="ne-inp">
-                            <option value="">-- Seleccione Receptor --</option>
-                            @foreach($cuentasAgrupadas as $categoria => $listaCuentas)
-                                <optgroup label="{{ $categoria }}">
-                                    @foreach($listaCuentas as $cuenta)
-                                        <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
-                                            {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
-                                        </option>
-                                    @endforeach
-                                </optgroup>
-                            @endforeach
-                        </select>
-                    </div>
-
+                        <option value="">-- Seleccione Receptor --</option>
+                        @foreach($cuentasAgrupadas as $categoria => $listaCuentas)
+                            <optgroup label="{{ $categoria }}">
+                                @foreach($listaCuentas as $cuenta)
+                                    <option value="{{ $cuenta['banco'] }}|{{ $cuenta['titular'] }}|{{ $cuenta['categoria'] }}">
+                                        {{ $cuenta['banco'] }} - {{ $cuenta['titular'] }}
+                                    </option>
+                                @endforeach
+                            </optgroup>
+                        @endforeach
+                    </select>
+            </div>
+            
                     <div class="ne-sec">Montos</div>
                     <div class="ne-row">
                         <div id="col_monto_usd">
                             <label class="ne-lbl">Monto USD</label>
                             <input type="text" inputmode="decimal" name="monto_usd" id="monto_usd" class="ne-inp">
-                        </div>
+                </div>
                         <div id="col_tasa_cambio">
                             <label class="ne-lbl">Tasa de Cambio</label>
                             <input type="text" inputmode="decimal" name="tasa_cambio" id="tasa_cambio" class="ne-inp">
-                        </div>
+                </div>
                         <div id="col_monto_bs">
                             <label class="ne-lbl" id="lbl_monto_bs">Monto BS</label>
                             <input type="text" inputmode="decimal" name="monto_bs" id="monto_bs" class="ne-inp">
-                        </div>
-                    </div>
+                </div>
+            </div>
 
                     <div id="row_monto_total_gasto">
                         <label class="ne-lbl">Monto total del gasto</label>
                         <input type="text" inputmode="decimal" name="monto_total_gasto" id="monto_total_gasto" class="ne-inp" placeholder="Total de la cuenta (si hoy solo abonas una parte)">
-                    </div>
+            </div>
 
                     <div id="row_diferencial" class="ne-row">
                         <div>
                             <label class="ne-lbl">Dif. Cambiario</label>
                             <input type="text" inputmode="decimal" name="diferencial_cambiario" class="ne-inp">
-                        </div>
+                </div>
                         <div>
                             <label class="ne-lbl">Comisión</label>
                             <input type="text" inputmode="decimal" name="comision" id="comision" class="ne-inp">
-                        </div>
-                    </div>
+                </div>
+            </div>
 
                     <div id="row_traslado_extra" class="ne-row" style="display: none;">
                         <div>
                             <label class="ne-lbl">Comisión (Bs)</label>
                             <input type="text" inputmode="decimal" name="comision" id="comision_traslado" class="ne-inp"
                                 oninput="calcTraslado()" placeholder="0,00" disabled>
-                        </div>
+                </div>
                         <div>
                             <label class="ne-lbl">Monto USD <small style="color:#64748b;">(calculado)</small></label>
                             <input type="text" inputmode="decimal" name="monto_usd" id="monto_usd_traslado" class="ne-inp"
                                 readonly placeholder="Se calcula con la tasa del día"
                                 style="background:#f8fafc; color:#475569; cursor:default;">
                         </div>
-                    </div>
                 </div>
+            </div>
 
                 <div class="ne-col">
                     <div class="ne-sec">Detalle</div>
                     <div id="row_tipo_gasto">
                         <label class="ne-lbl" id="lbl_tipo_gasto">Tipo de Gasto</label>
                         <select name="tipo_gasto" id="tipo_gasto" class="ne-inp" required>
-                            <option value="">-- Seleccione un tipo de gasto --</option>
-                            @foreach(array_diff($tiposGasto, ['001 - COMPRA DE MERCANCIA']) as $tipoGasto)
-                                <option value="{{ $tipoGasto }}">{{ $tipoGasto }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
+                    <option value="">-- Seleccione un tipo de gasto --</option>
+                    @foreach(array_diff($tiposGasto, ['001 - COMPRA DE MERCANCIA']) as $tipoGasto)
+                        <option value="{{ $tipoGasto }}">{{ $tipoGasto }}</option>
+                    @endforeach
+                </select>
+            </div>
+            
                     <div class="ne-row">
                         <div>
                             <label class="ne-lbl">Sede (Opcional)</label>
                             <select name="sede" class="ne-inp">
-                                <option value="">-- Seleccione una sede --</option>
-                                @php
-                                    $sedesFinanzas = array_values(array_unique(array_merge(config('inventario.sedes_locales', []), config('inventario.sedes_finanzas_extra', []))));
-                                @endphp
-                                @foreach($sedesFinanzas as $sedeLocal)
-                                    <option value="{{ $sedeLocal }}">{{ $sedeLocal }}</option>
-                                @endforeach
-                            </select>
-                        </div>
+                        <option value="">-- Seleccione una sede --</option>
+                        @php
+                            $sedesFinanzas = array_values(array_unique(array_merge(config('inventario.sedes_locales', []), config('inventario.sedes_finanzas_extra', []))));
+                        @endphp
+                        @foreach($sedesFinanzas as $sedeLocal)
+                            <option value="{{ $sedeLocal }}">{{ $sedeLocal }}</option>
+                        @endforeach
+                    </select>
+                </div>
                         <div id="col_placa">
                             <label class="ne-lbl">Placa del vehículo</label>
                             <input type="text" name="placa_vehiculo" class="ne-inp" placeholder="Ej. ABC-123">
-                        </div>
-                    </div>
+                </div>
+            </div>
 
                     <div>
                         <label class="ne-lbl" id="beneficiario_label">Beneficiario</label>
                         <select id="beneficiario" name="beneficiario" class="ne-inp">
-                            <option value="">-- Seleccione un beneficiario --</option>
-                            @foreach($proveedores as $prov)
-                                <option value="{{ $prov }}">{{ $prov }}</option>
-                            @endforeach
-                        </select>
-                        <input type="hidden" id="nomina_empleado_id" name="nomina_empleado_id" value="">
-                        <small id="beneficiario_ayuda" style="display:none; margin-top:4px; color:#047857;">
-                            Solo aparecen empleados activos marcados como Servicio Técnico en su ficha de Nómina.
-                        </small>
-                        <small id="beneficiario_ayuda_libre" style="display:block; margin-top:4px; color:#64748b;">
-                            Puedes elegir de la lista o escribir un nombre y pulsar Enter.
-                        </small>
-                    </div>
+                    <option value="">-- Seleccione un beneficiario --</option>
+                    @foreach($proveedores as $prov)
+                        <option value="{{ $prov }}">{{ $prov }}</option>
+                    @endforeach
+                </select>
+                <input type="hidden" id="nomina_empleado_id" name="nomina_empleado_id" value="">
+                <small id="beneficiario_ayuda" style="display:none; margin-top:4px; color:#047857;">
+                    Solo aparecen empleados activos marcados como Servicio Técnico en su ficha de Nómina.
+                </small>
+                <small id="beneficiario_ayuda_libre" style="display:block; margin-top:4px; color:#64748b;">
+                    Puedes elegir de la lista o escribir un nombre y pulsar Enter.
+                </small>
+            </div>
 
                     <div>
                         <label class="ne-lbl">Motivo (Breve descripción)</label>
                         <input type="text" name="motivo" id="motivo_egreso" class="ne-inp" placeholder="Ej. Pago de internet mensual...">
-                    </div>
-                </div>
+            </div>
+            </div>
             </div>
             </div>{{-- /.ne-main --}}
 
                 <div class="ne-side" id="ne_side_panels">
                     <div id="panel_todoticket" style="display:none; background: #ecfdf5; border: 1.5px solid #6ee7b7; border-radius: 10px; padding: 14px 16px;">
-                        <p style="margin: 0 0 10px; font-size: 0.8rem; color: #047857;">Copia los montos del <strong>Detalle Monto a Pagar</strong>. El <strong>Total Real</strong> es lo que se guarda y concilia con el banco.</p>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <div>
-                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Recarga Tarjeta Electrónica</label>
-                                <input type="text" inputmode="decimal" name="tt_recarga" id="tt_recarga" oninput="calcTodoTicket()" placeholder="903.127,29" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
-                            </div>
-                            <div>
-                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Comisión</label>
-                                <input type="text" inputmode="decimal" name="tt_comision" id="tt_comision" oninput="calcTodoTicket()" placeholder="9.031,27" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
-                            </div>
-                            <div>
-                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Total IVA 16%</label>
-                                <input type="text" inputmode="decimal" name="tt_iva" id="tt_iva" oninput="calcTodoTicket()" placeholder="1.445,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
-                            </div>
-                            <div>
-                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención ISLR</label>
-                                <input type="text" inputmode="decimal" name="tt_ret_islr" id="tt_ret_islr" oninput="calcTodoTicket()" placeholder="451,56" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
-                            </div>
-                            <div>
-                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención IVA</label>
-                                <input type="text" inputmode="decimal" name="tt_ret_iva" id="tt_ret_iva" oninput="calcTodoTicket()" placeholder="1.083,75" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
-                            </div>
-                            <div>
-                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención 1x1000 / 1x500 / 1x100</label>
-                                <input type="text" inputmode="decimal" name="tt_ret_1x1000" id="tt_ret_1x1000" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
-                            </div>
-                            <div>
-                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención Resp. Social</label>
-                                <input type="text" inputmode="decimal" name="tt_ret_resp_social" id="tt_ret_resp_social" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
-                            </div>
-                            <div>
-                                <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención ISAE</label>
-                                <input type="text" inputmode="decimal" name="tt_ret_isae" id="tt_ret_isae" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
-                            </div>
-                        </div>
-                        <div style="margin-top: 12px; padding: 10px; background: #065f46; color: white; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-weight: 700;">Total Real</span>
-                            <strong id="tt_total_real_lbl" style="font-size: 1.15rem;">Bs. 0,00</strong>
-                        </div>
+                <p style="margin: 0 0 10px; font-size: 0.8rem; color: #047857;">Copia los montos del <strong>Detalle Monto a Pagar</strong>. El <strong>Total Real</strong> es lo que se guarda y concilia con el banco.</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Recarga Tarjeta Electrónica</label>
+                        <input type="text" inputmode="decimal" name="tt_recarga" id="tt_recarga" oninput="calcTodoTicket()" placeholder="903.127,29" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
                     </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Comisión</label>
+                        <input type="text" inputmode="decimal" name="tt_comision" id="tt_comision" oninput="calcTodoTicket()" placeholder="9.031,27" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Total IVA 16%</label>
+                        <input type="text" inputmode="decimal" name="tt_iva" id="tt_iva" oninput="calcTodoTicket()" placeholder="1.445,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención ISLR</label>
+                        <input type="text" inputmode="decimal" name="tt_ret_islr" id="tt_ret_islr" oninput="calcTodoTicket()" placeholder="451,56" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención IVA</label>
+                        <input type="text" inputmode="decimal" name="tt_ret_iva" id="tt_ret_iva" oninput="calcTodoTicket()" placeholder="1.083,75" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención 1x1000 / 1x500 / 1x100</label>
+                        <input type="text" inputmode="decimal" name="tt_ret_1x1000" id="tt_ret_1x1000" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención Resp. Social</label>
+                        <input type="text" inputmode="decimal" name="tt_ret_resp_social" id="tt_ret_resp_social" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="display:block; font-size: 0.8rem; font-weight: 600; margin-bottom: 3px;">Retención ISAE</label>
+                        <input type="text" inputmode="decimal" name="tt_ret_isae" id="tt_ret_isae" oninput="calcTodoTicket()" placeholder="0,00" style="width:100%; padding:6px; border:1px solid #a7f3d0; border-radius:4px;">
+                    </div>
+                </div>
+                <div style="margin-top: 12px; padding: 10px; background: #065f46; color: white; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 700;">Total Real</span>
+                    <strong id="tt_total_real_lbl" style="font-size: 1.15rem;">Bs. 0,00</strong>
+                </div>
+            </div>
 
                     <div id="panel_gasto_fijo" style="display:none; background: linear-gradient(135deg,#eff6ff,#dbeafe); border: 1.5px solid #93c5fd; border-radius: 10px; padding: 14px 16px;">
-                        <div style="margin-bottom: 10px;">
-                            <label style="display:block; font-size:0.8rem; font-weight:700; color:#1e40af; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:5px;">
-                                Agregar gasto fijo
-                            </label>
+                <div style="margin-bottom: 10px;">
+                    <label style="display:block; font-size:0.8rem; font-weight:700; color:#1e40af; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:5px;">
+                        Agregar gasto fijo
+                    </label>
                             <div class="gf-picker" id="gf_picker">
                                 <input type="search" id="gf_picker_q" class="gf-picker-search" placeholder="Buscar servicio, empresa o sede…" autocomplete="off" oninput="buildGastoFijoSelect()">
                                 <div id="sel_gasto_fijo" class="gf-picker-list" role="listbox" aria-label="Gastos fijos">
@@ -1674,10 +1674,10 @@
                                 </div>
                             </div>
                             <p style="font-size:0.72rem; color:#3b82f6; margin:6px 0 0;">Haz clic en un gasto para agregarlo. Si la factura cubre varios, agrégalos todos.</p>
-                        </div>
-                        <div id="gf_items" style="display:flex; flex-direction:column; gap:8px;"></div>
-                        <div id="gf_items_total" style="display:none; margin-top:8px; text-align:right; font-size:0.85rem; color:#1e40af; font-weight:700;"></div>
-                        <div id="gf_items_inputs"></div>
+                </div>
+                <div id="gf_items" style="display:flex; flex-direction:column; gap:8px;"></div>
+                <div id="gf_items_total" style="display:none; margin-top:8px; text-align:right; font-size:0.85rem; color:#1e40af; font-weight:700;"></div>
+                <div id="gf_items_inputs"></div>
 
                         <div id="panel_cobranza_diff" style="display:none; margin-top:12px; padding:12px; background:#fff7ed; border:1.5px solid #fdba74; border-radius:8px;">
                             <p style="margin:0 0 8px; font-size:0.82rem; color:#9a3412; font-weight:600;">
@@ -1699,10 +1699,10 @@
                                     style="width:100%; padding:7px 10px; border:1px solid #fdba74; border-radius:6px; font-size:0.85rem; resize:vertical;"></textarea>
                             </div>
                         </div>
-                    </div>
+            </div>
 
                     @include('finanzas.partials.asiento_egreso', ['sufijo' => ''])
-                </div>
+                    </div>
             </div>{{-- /.ne-body --}}
 
             <div style="margin: 14px 0 0;">
@@ -2226,7 +2226,7 @@ function renderGastoFijoItems() {
                     <div class="gf-item-title">${escGf(gf.servicio)}</div>
                     ${detalle ? `<div class="gf-item-sub" title="${detalle}">${detalle}</div>` : ''}
                     <div class="gf-item-meta">Estimado $${parseFloat(gf.costo).toFixed(2)}${gf.meses_atraso > 0 ? ' · paga mes siguiente' : ''}</div>
-                </div>
+            </div>
                 <button type="button" class="gf-item-del" data-gf-quitar="${idx}" title="Quitar">✖</button>
             </div>
             <div class="gf-item-actions">
@@ -3155,10 +3155,10 @@ function faAgregarHaber(s, linea = {}) {
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
             <select name="asiento_haber[${i}][sede]" class="fa-haber-sede" style="${inp}" title="Sede de este haber">
                 ${faOptsSelect(window.FA_SEDES, sedeSel, 'Sede (opc.)')}
-            </select>
+                    </select>
             <select name="asiento_haber[${i}][tipo_gasto]" class="fa-haber-tipo" style="${inp}" title="Tipo de gasto de este haber">
                 ${faOptsSelect(window.FA_TIPOS_GASTO, tipoSel, 'Tipo de gasto (opc.)')}
-            </select>
+                    </select>
         </div>`;
     fila.querySelector('button').addEventListener('click', () => {
         if (lista.children.length > 1) { fila.remove(); faTotalesAsiento(s); }

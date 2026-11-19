@@ -38,6 +38,45 @@ class FinanzasCatalogo extends Model
         return $c !== '' && str_contains($c, 'BANCA INTERNACIONAL');
     }
 
+    /**
+     * Categoría del catálogo por banco+titular (incluye cuentasBase + finanzas_catalogos).
+     *
+     * @return array<string, string> clave banco|titular => categoría
+     */
+    public static function mapaCategoriasCuenta(array $cuentasBase = []): array
+    {
+        static $cache = [];
+        $key = md5(json_encode($cuentasBase) ?: '0');
+        if (isset($cache[$key])) {
+            return $cache[$key];
+        }
+
+        $map = [];
+        foreach (self::combinarCuentas($cuentasBase) as $c) {
+            $map[self::clave($c['banco'] ?? '', $c['titular'] ?? '')] = (string) ($c['categoria'] ?? '');
+        }
+
+        return $cache[$key] = $map;
+    }
+
+    /** Intl por categoria_cuenta o, si falta, por banco+titular del catálogo. */
+    public static function esCuentaInternacional(
+        ?string $categoriaCuenta,
+        ?string $banco = null,
+        ?string $titular = null,
+        array $cuentasBase = []
+    ): bool {
+        if (self::esBancaInternacional($categoriaCuenta)) {
+            return true;
+        }
+        if ($banco === null && $titular === null) {
+            return false;
+        }
+        $map = self::mapaCategoriasCuenta($cuentasBase);
+
+        return self::esBancaInternacional($map[self::clave($banco, $titular)] ?? null);
+    }
+
     /** Secciones de cuentas_bancarias que usan Disponibilidad (las dos nacionales) y el reporte consolidado. */
     public const SECCIONES_REPORTE = [
         'BANCA NACIONAL - ALTO Y MEDIANO MOVIMIENTO' => 'Banca nacional (sale en Disponibilidad y en el reporte)',

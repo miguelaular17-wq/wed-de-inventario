@@ -106,15 +106,45 @@ class PeriodoController extends Controller
             ->get();
 
         $tasaBcv = $this->bcv->tasaParaPeriodo($periodo);
+        $datosTxt = $this->datosModalTxt($periodo);
 
-        return view('nomina.periodos.show', [
+        return view('nomina.periodos.show', array_merge($datosTxt, [
             'periodo' => $periodo,
             'historial' => $historial,
-            'bancoPorEmpresa' => $this->bankFile->resumenPorEmpresa($periodo),
             'tasaBcv' => $tasaBcv,
             'totalesPorGrupo' => $this->sedeAreaTotals->deRegistros($periodo->registros, $tasaBcv),
             'movimientos' => $this->movimientosPeriodo($periodo),
-        ]);
+        ]));
+    }
+
+    public function modalTxt(NominaPeriodo $periodo): View|RedirectResponse
+    {
+        if ($periodo->estado === NominaPeriodo::ABIERTO) {
+            return redirect()
+                ->route('nomina.periodos.index')
+                ->withErrors(['periodo' => 'Calcula la nómina antes de generar el archivo del banco.']);
+        }
+
+        $periodo->load(['registros.empleado.cliente', 'registros.empleado.empresa', 'registros.empleado.sedeCatalogo', 'registros.empleado.cargoCatalogo']);
+
+        return view('nomina.periodos._modal_txt', array_merge(
+            $this->datosModalTxt($periodo),
+            ['periodo' => $periodo]
+        ));
+    }
+
+    /** @return array{personasTxt: \Illuminate\Support\Collection, filtrosTxtSedes: \Illuminate\Support\Collection, filtrosTxtCargos: \Illuminate\Support\Collection, bancoPorEmpresa: \Illuminate\Support\Collection, tasaBcv: float|int} */
+    private function datosModalTxt(NominaPeriodo $periodo): array
+    {
+        $personasTxt = $this->bankFile->personasNominaTxt($periodo);
+
+        return [
+            'personasTxt' => $personasTxt,
+            'filtrosTxtSedes' => $personasTxt->pluck('sede')->unique()->sort()->values(),
+            'filtrosTxtCargos' => $personasTxt->pluck('cargo')->unique()->sort()->values(),
+            'bancoPorEmpresa' => $this->bankFile->resumenPorEmpresa($periodo),
+            'tasaBcv' => $this->bcv->tasaParaPeriodo($periodo),
+        ];
     }
 
     public function calcularForm(NominaPeriodo $periodo): View|RedirectResponse
@@ -217,6 +247,31 @@ class PeriodoController extends Controller
         $tasa = $this->bcv->tasaParaPeriodo($periodo);
         $contenido = $this->bankFile->generar($periodo, $empresa, $tasa);
         $nombre = $this->bankFile->nombreArchivo($periodo, $empresa);
+        $this->periods->marcarPagadoPorTxt($periodo, auth()->id());
+
+        return response()->streamDownload(function () use ($contenido) {
+            echo $contenido;
+        }, $nombre, [
+            'Content-Type' => 'text/plain; charset=UTF-8',
+        ]);
+    }
+
+    public function exportarBancoTodo(Request $request, NominaPeriodo $periodo): StreamedResponse|RedirectResponse
+    {
+        if ($periodo->estado === NominaPeriodo::ABIERTO) {
+            return $this->volver($periodo, 'Calcula la nómina antes de generar el archivo del banco.');
+        }
+
+        $datos = $request->validate([
+            'empleados' => ['required', 'array', 'min:1'],
+            'empleados.*' => ['integer'],
+        ]);
+
+        $periodo->load(['registros.empleado.cliente', 'registros.empleado.empresa']);
+        $tasa = $this->bcv->tasaParaPeriodo($periodo);
+        $contenido = $this->bankFile->generarSeleccion($periodo, $tasa, $datos['empleados']);
+        $nombre = $this->bankFile->nombreArchivoSeleccion($periodo);
+        $this->periods->marcarPagadoPorTxt($periodo, auth()->id());
 
         return response()->streamDownload(function () use ($contenido) {
             echo $contenido;

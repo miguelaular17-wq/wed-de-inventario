@@ -75,16 +75,12 @@ class ComisionController extends Controller
         $periodo->setRelation('liquidacionesComision', $liquidaciones);
 
         $tasaBcv = $this->bcv->tasaParaPeriodo($periodo);
-        $personasTxt = $this->bankFile->personasComisionesTxt($periodo);
+        $datosTxt = $this->datosModalTxt($periodo);
 
-        return view('nomina.comisiones.show', [
+        return view('nomina.comisiones.show', array_merge($datosTxt, [
             'periodo' => $periodo,
-            'personasTxt' => $personasTxt,
-            'filtrosTxtSedes' => $personasTxt->pluck('sede')->unique()->sort()->values(),
-            'filtrosTxtCargos' => $personasTxt->pluck('cargo')->unique()->sort()->values(),
             'liquidaciones' => $liquidaciones,
             'bonosComision' => $this->bonosDePeriodo($periodo),
-            'bancoPorEmpresa' => $this->bankFile->resumenComisionesPorEmpresa($periodo),
             'tasaBcv' => $tasaBcv,
             'totalesPorGrupo' => $this->sedeAreaTotals->deLiquidaciones($liquidaciones, $tasaBcv),
             'ajustesPeriodo' => $this->ajustesPeriodo($periodo),
@@ -104,7 +100,35 @@ class ComisionController extends Controller
                     ->groupBy('empleado_id')
                     ->map(fn (Collection $filas) => $filas->pluck('flujo_caja_id')->map(fn ($id) => (int) $id)->all())
                 : collect(),
-        ]);
+        ]));
+    }
+
+    public function modalTxt(NominaPeriodo $periodo): View|RedirectResponse
+    {
+        if ($periodo->estado === NominaPeriodo::ABIERTO) {
+            return redirect()
+                ->route('nomina.comisiones.index')
+                ->withErrors(['periodo' => 'Calcula la nómina antes de generar el archivo del banco.']);
+        }
+
+        return view('nomina.comisiones._modal_txt', array_merge(
+            $this->datosModalTxt($periodo),
+            ['periodo' => $periodo]
+        ));
+    }
+
+    /** @return array{personasTxt: Collection, filtrosTxtSedes: Collection, filtrosTxtCargos: Collection, bancoPorEmpresa: Collection, tasaBcv: float|int} */
+    private function datosModalTxt(NominaPeriodo $periodo): array
+    {
+        $personasTxt = $this->bankFile->personasComisionesTxt($periodo);
+
+        return [
+            'personasTxt' => $personasTxt,
+            'filtrosTxtSedes' => $personasTxt->pluck('sede')->unique()->sort()->values(),
+            'filtrosTxtCargos' => $personasTxt->pluck('cargo')->unique()->sort()->values(),
+            'bancoPorEmpresa' => $this->bankFile->resumenComisionesPorEmpresa($periodo),
+            'tasaBcv' => $this->bcv->tasaParaPeriodo($periodo),
+        ];
     }
 
     public function relacion(Request $request, NominaPeriodo $periodo)
@@ -245,8 +269,8 @@ class ComisionController extends Controller
         $tab = $this->tabDeConcepto((string) $request->input('concepto', 'bono'));
         $volver = fn () => redirect()->route('nomina.comisiones.show', ['periodo' => $periodo, 'ajuste' => $tab]);
 
-        if ($periodo->estado === NominaPeriodo::CERRADO) {
-            return $volver()->withErrors(['estado' => 'La quincena está cerrada. Ya no se pueden cargar ajustes.']);
+        if ($msg = $this->mensajeSiNoEditable($periodo)) {
+            return $volver()->withErrors(['estado' => $msg]);
         }
 
         $validator = validator($request->all(), [
@@ -292,6 +316,12 @@ class ComisionController extends Controller
 
     public function quitarBono(NominaPeriodo $periodo, NominaEmpleadoAjuste $ajuste): RedirectResponse
     {
+        if ($msg = $this->mensajeSiNoEditable($periodo)) {
+            return redirect()
+                ->route('nomina.comisiones.show', $periodo)
+                ->withErrors(['estado' => $msg]);
+        }
+
         $this->ajustes->quitarBonoComision($ajuste, $periodo);
 
         if ($periodo->estado !== NominaPeriodo::ABIERTO) {
@@ -303,12 +333,516 @@ class ComisionController extends Controller
             ->with('status', 'Bono quitado de la quincena.');
     }
 
-    public function aplicarBonos(Request $request, NominaPeriodo $periodo): RedirectResponse
+    public function guardarBonoRapido(Request $request, NominaPeriodo $periodo, NominaEmpleado $empleado): RedirectResponse|JsonResponse
     {
-        if ($periodo->estado === NominaPeriodo::CERRADO) {
+        $quiereJson = $request->expectsJson() || $request->ajax();
+
+        if ($msg = $this->mensajeSiNoEditable($periodo)) {
+            if ($quiereJson) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
             return redirect()
                 ->route('nomina.comisiones.show', $periodo)
-                ->withErrors(['estado' => 'La quincena está cerrada. Ya no se pueden cambiar los bonos.']);
+                ->withErrors(['estado' => $msg]);
+        }
+
+        $data = $request->validate([
+            'monto' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        if (! $empleado->generaComision()) {
+            $msg = 'Esa persona no genera comisión.';
+            if ($quiereJson) {
+                return response()->json(['ok' => false, 'message' => $msg], 422);
+            }
+
+            return redirect()
+                ->route('nomina.comisiones.show', $periodo)
+                ->withErrors(['empleado_id' => $msg]);
+        }
+
+        $monto = round((float) $data['monto'], 2);
+        $actuales = $this->bonosDePeriodo($periodo)->where('empleado_id', (int) $empleado->id)->values();
+        $actual = round((float) $actuales->sum('monto'), 2);
+        $liqAntes = NominaLiquidacionComision::query()
+            ->where('periodo_id', $periodo->id)
+            ->where('empleado_id', $empleado->id)
+            ->first();
+
+        if (abs($actual - $monto) >= 0.009) {
+            foreach ($actuales as $bono) {
+                $this->ajustes->quitarBonoComision($bono, $periodo);
+            }
+
+            if ($monto >= 0.01) {
+                $this->registrarBonoComision(
+                    $empleado,
+                    $periodo->fecha_fin->toDateString(),
+                    $monto,
+                    'Bono quincena'
+                );
+            }
+        }
+
+        $liq = null;
+        if ($periodo->estado !== NominaPeriodo::ABIERTO) {
+            $liq = $this->refrescarLiquidacionTrasBono($periodo, $empleado);
+        }
+
+        $mensaje = $monto >= 0.01
+            ? 'Bono de $'.number_format($monto, 2).' guardado a '.$empleado->nombre().'.'
+            : 'Bono de '.$empleado->nombre().' dejado en $0.00.';
+
+        if ($quiereJson) {
+            $payload = [
+                'ok' => true,
+                'message' => $mensaje,
+                'empleado_id' => (int) $empleado->id,
+                'abonos' => $liq ? round((float) $liq->abonos, 2) : $monto,
+                'retencion' => $liq ? round((float) $liq->retencion, 2) : null,
+                'total_pagar' => $liq ? round((float) $liq->total_pagar, 2) : null,
+                'comision_total' => $liq ? round((float) $liq->comision_total, 2) : null,
+                'delta_abonos' => $liq && $liqAntes
+                    ? round((float) $liq->abonos - (float) $liqAntes->abonos, 2)
+                    : round($monto - (float) ($liqAntes?->abonos ?? $actual), 2),
+                'delta_retencion' => $liq && $liqAntes
+                    ? round((float) $liq->retencion - (float) $liqAntes->retencion, 2)
+                    : 0.0,
+                'delta_pagar' => $liq && $liqAntes
+                    ? round((float) $liq->total_pagar - (float) $liqAntes->total_pagar, 2)
+                    : 0.0,
+            ];
+
+            return response()->json($payload);
+        }
+
+        return redirect()
+            ->route('nomina.comisiones.show', $periodo)
+            ->with('status', $mensaje);
+    }
+
+    public function opcionesDeduccion(NominaPeriodo $periodo, NominaEmpleado $empleado): JsonResponse
+    {
+        $ajustes = $this->ajustesPeriodo($periodo);
+        $faltantes = $ajustes['faltantes']
+            ->where('empleado_id', (int) $empleado->id)
+            ->map(fn ($f) => [
+                'id' => (int) $f->id,
+                'monto' => round((float) $f->monto, 2),
+                'motivo' => (string) ($f->motivo ?: 'Faltante de caja'),
+                'estado' => (string) $f->estado,
+                'aplicado' => (int) ($f->periodo_id ?: 0) === (int) $periodo->id,
+            ])
+            ->values();
+        $prestamos = $ajustes['prestamos']
+            ->where('empleado_id', (int) $empleado->id)
+            ->map(fn ($p) => [
+                'id' => (int) $p->id,
+                'monto' => round((float) $p->monto, 2),
+                'motivo' => (string) ($p->etiqueta ?: ($p->prestamo->motivo ?? 'Préstamo')),
+                'estado' => (string) $p->estado,
+                'aplicado' => (int) ($p->nomina_periodo_id ?: 0) === (int) $periodo->id,
+            ])
+            ->values();
+
+        $liq = NominaLiquidacionComision::query()
+            ->where('periodo_id', $periodo->id)
+            ->where('empleado_id', $empleado->id)
+            ->first();
+
+        return response()->json([
+            'ok' => true,
+            'faltantes' => $faltantes,
+            'prestamos' => $prestamos,
+            'lineas' => $liq ? $liq->lineasDescuento() : [],
+            'monto' => $liq ? round((float) $liq->descuentos + (float) $liq->prestamos, 2) : 0,
+        ]);
+    }
+
+    public function anularDeduccion(Request $request, NominaPeriodo $periodo, NominaEmpleado $empleado): JsonResponse
+    {
+        if ($msg = $this->mensajeSiNoEditable($periodo)) {
+            return response()->json(['ok' => false, 'message' => $msg], 422);
+        }
+
+        $data = $request->validate([
+            'origen' => ['required', 'in:comision_descuento,ajuste,mercancia,plan'],
+            'id' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $id = (int) $data['id'];
+        match ($data['origen']) {
+            'comision_descuento' => tap(NominaComisionDescuento::query()->where('empleado_id', $empleado->id)->findOrFail($id), function ($item) {
+                $item->estado = 'CANCELADO';
+                $item->periodo_id = null;
+                $item->save();
+            }),
+            'ajuste' => tap(NominaEmpleadoAjuste::query()->where('empleado_id', $empleado->id)->findOrFail($id), function ($item) {
+                $item->estado = NominaEmpleadoAjuste::CANCELADO;
+                $item->nomina_periodo_id = null;
+                $item->save();
+            }),
+            'mercancia' => tap(\App\Models\Nomina\NominaDescuentoMercancia::query()->where('empleado_id', $empleado->id)->findOrFail($id), function ($item) {
+                $item->estado = 'CANCELADO';
+                $item->nomina_periodo_id = null;
+                $item->save();
+            }),
+            'plan' => tap(NominaPrestamoPlan::query()->where('empleado_id', $empleado->id)->findOrFail($id), function ($item) {
+                $item->estado = NominaPrestamoPlan::CANCELADO;
+                $item->nomina_periodo_id = null;
+                $item->save();
+            }),
+        };
+
+        return $this->responderDeduccionActualizada($periodo, $empleado, 'Concepto anulado de la quincena.');
+    }
+
+    public function aplicarDeduccion(Request $request, NominaPeriodo $periodo, NominaEmpleado $empleado): JsonResponse
+    {
+        if ($msg = $this->mensajeSiNoEditable($periodo)) {
+            return response()->json(['ok' => false, 'message' => $msg], 422);
+        }
+
+        $data = $request->validate([
+            'tipo' => ['required', 'in:descuento,faltante,prestamo'],
+            'id' => ['nullable', 'integer', 'min:1'],
+            'monto' => ['nullable', 'numeric', 'min:0.01'],
+            'motivo' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            if ($data['tipo'] === 'descuento') {
+                $monto = round((float) ($data['monto'] ?? 0), 2);
+                $motivo = trim((string) ($data['motivo'] ?? ''));
+                if ($monto < 0.01) {
+                    throw ValidationException::withMessages(['monto' => 'Indica el monto del descuento.']);
+                }
+                if ($motivo === '') {
+                    $motivo = 'Descuento quincena';
+                }
+                $this->registrarDescuentoComision(
+                    $empleado,
+                    $periodo->fecha_fin->toDateString(),
+                    $monto,
+                    $motivo,
+                    'deduccion'
+                );
+            } elseif ($data['tipo'] === 'faltante') {
+                $item = NominaComisionDescuento::query()
+                    ->where('empleado_id', $empleado->id)
+                    ->where('tipo', 'FALTANTE')
+                    ->where('estado', '!=', 'CANCELADO')
+                    ->findOrFail((int) ($data['id'] ?? 0));
+                if (Schema::hasColumn('nomina_comision_descuentos', 'decision')) {
+                    $item->decision = NominaComisionDescuento::DECISION_DESCONTAR;
+                }
+                if (Schema::hasColumn('nomina_comision_descuentos', 'destino')) {
+                    $item->destino = NominaComisionDescuento::DESTINO_COMISION;
+                }
+                $item->estado = 'PENDIENTE';
+                $item->periodo_id = null;
+                $item->save();
+            } else {
+                $plan = NominaPrestamoPlan::query()
+                    ->where('empleado_id', $empleado->id)
+                    ->where('destino', NominaPrestamoPlan::DESTINO_COMISION)
+                    ->where('estado', '!=', NominaPrestamoPlan::CANCELADO)
+                    ->findOrFail((int) ($data['id'] ?? 0));
+                $plan->estado = NominaPrestamoPlan::PENDIENTE;
+                $plan->quincena_inicio = $periodo->fecha_inicio->toDateString();
+                $plan->quincena_fin = $periodo->fecha_fin->toDateString();
+                $plan->etiqueta = $periodo->etiqueta;
+                $plan->nomina_periodo_id = null;
+                $plan->save();
+            }
+        } catch (ValidationException $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => collect($e->errors())->flatten()->first() ?: 'No se pudo aplicar.',
+            ], 422);
+        }
+
+        return $this->responderDeduccionActualizada($periodo, $empleado, 'Ajuste aplicado a la quincena.');
+    }
+
+    public function guardarDescuentoRapido(Request $request, NominaPeriodo $periodo, NominaEmpleado $empleado): JsonResponse
+    {
+        if ($msg = $this->mensajeSiNoEditable($periodo)) {
+            return response()->json(['ok' => false, 'message' => $msg], 422);
+        }
+
+        $data = $request->validate([
+            'monto' => ['required', 'numeric', 'min:0.01'],
+            'motivo' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $motivo = trim((string) ($data['motivo'] ?? ''));
+        if ($motivo === '') {
+            $motivo = 'Descuento quincena';
+        }
+
+        try {
+            $this->registrarDescuentoComision(
+                $empleado,
+                $periodo->fecha_fin->toDateString(),
+                round((float) $data['monto'], 2),
+                $motivo,
+                'deduccion'
+            );
+        } catch (ValidationException $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => collect($e->errors())->flatten()->first() ?: 'No se pudo guardar.',
+            ], 422);
+        }
+
+        return $this->responderDeduccionActualizada(
+            $periodo,
+            $empleado,
+            'Descuento de $'.number_format((float) $data['monto'], 2).' guardado a '.$empleado->nombre().'.'
+        );
+    }
+
+    private function responderDeduccionActualizada(NominaPeriodo $periodo, NominaEmpleado $empleado, string $mensaje): JsonResponse
+    {
+        $liqAntes = NominaLiquidacionComision::query()
+            ->where('periodo_id', $periodo->id)
+            ->where('empleado_id', $empleado->id)
+            ->first();
+
+        $liq = $periodo->estado === NominaPeriodo::ABIERTO
+            ? $liqAntes
+            : $this->refrescarLiquidacionTrasDeduccion($periodo, $empleado);
+
+        $monto = $liq ? round((float) $liq->descuentos + (float) $liq->prestamos, 2) : 0.0;
+        $lineas = $liq
+            ? app(\App\Services\Nomina\NominaDescuentoComentarios::class)->lineasComisionDesdePeriodo($periodo, $empleado)
+            : [];
+
+        return response()->json([
+            'ok' => true,
+            'message' => $mensaje,
+            'empleado_id' => (int) $empleado->id,
+            'monto' => $monto,
+            'lineas' => $lineas,
+            'retencion' => $liq ? round((float) $liq->retencion, 2) : null,
+            'total_pagar' => $liq ? round((float) $liq->total_pagar, 2) : null,
+            'delta_descuentos' => $liq && $liqAntes
+                ? round($monto - ((float) $liqAntes->descuentos + (float) $liqAntes->prestamos), 2)
+                : 0.0,
+            'delta_retencion' => $liq && $liqAntes
+                ? round((float) $liq->retencion - (float) $liqAntes->retencion, 2)
+                : 0.0,
+            'delta_pagar' => $liq && $liqAntes
+                ? round((float) $liq->total_pagar - (float) $liqAntes->total_pagar, 2)
+                : 0.0,
+        ]);
+    }
+
+    private function refrescarLiquidacionTrasDeduccion(NominaPeriodo $periodo, NominaEmpleado $empleado): ?NominaLiquidacionComision
+    {
+        $liq = NominaLiquidacionComision::query()
+            ->where('periodo_id', $periodo->id)
+            ->where('empleado_id', $empleado->id)
+            ->first();
+        if (! $liq) {
+            return null;
+        }
+
+        $descuentosCd = $this->aplicarDescuentosComisionEmpleado($periodo, $empleado);
+        $this->ajustes->aplicarComision($periodo, $empleado, NominaEmpleadoAjuste::TIPO_DEDUCCION);
+        $this->mercancia->aplicarComision($periodo, $empleado);
+        [, $prestamosNuevos] = $this->planes->aplicarLibresEmpleado($empleado, $periodo, auth()->id());
+
+        $descuentosAjTotal = $this->ajustes->totalAplicado(
+            $periodo,
+            $empleado,
+            NominaEmpleadoAjuste::DESTINO_COMISION,
+            NominaEmpleadoAjuste::TIPO_DEDUCCION
+        );
+        $descuentosMerTotal = 0.0;
+        if (Schema::hasTable('nomina_descuentos_mercancia')) {
+            $descuentosMerTotal = (float) \App\Models\Nomina\NominaDescuentoMercancia::query()
+                ->where('empleado_id', $empleado->id)
+                ->where('nomina_periodo_id', $periodo->id)
+                ->where('destino', \App\Models\Nomina\NominaDescuentoMercancia::DESTINO_COMISION)
+                ->where('estado', '!=', 'CANCELADO')
+                ->sum('monto');
+        }
+
+        $descuentos = round($descuentosCd + $descuentosAjTotal + $descuentosMerTotal, 2);
+
+        $prestamos = 0.0;
+        if (Schema::hasTable('nomina_prestamo_planes')) {
+            $prestamos = (float) NominaPrestamoPlan::query()
+                ->where('empleado_id', $empleado->id)
+                ->where('destino', NominaPrestamoPlan::DESTINO_COMISION)
+                ->where('nomina_periodo_id', $periodo->id)
+                ->where('estado', '!=', NominaPrestamoPlan::CANCELADO)
+                ->sum('monto');
+        }
+        $prestamos = round(max($prestamos, (float) $prestamosNuevos), 2);
+
+        $abonos = round((float) $liq->abonos, 2);
+        $comisionTotal = round((float) $liq->comision_total, 2);
+        $bruto = round($comisionTotal + $abonos, 2);
+        $modo = (string) ($liq->modo ?: $empleado->modo_comision);
+        $retencionPct = (float) ($liq->retencion_pct ?? \App\Models\Nomina\NominaConfig::getDecimal('retencion_comision_pct', 10));
+
+        if ($empleado->exentoRetencionComision()) {
+            $retencionPct = 0.0;
+            $retenible = 0.0;
+        } elseif ($modo === NominaEmpleado::COMISION_SERVICIO_TECNICO) {
+            $retenible = round((float) $liq->comision_telefonia + (float) $liq->comision_otros + $abonos, 2);
+        } else {
+            $retenible = $bruto;
+        }
+
+        $retencion = round($retenible * $retencionPct / 100, 2);
+        $totalPagar = round($bruto - $retencion - $descuentos - $prestamos, 2);
+
+        $lineas = app(\App\Services\Nomina\NominaDescuentoComentarios::class)
+            ->lineasComisionDesdePeriodo($periodo, $empleado);
+        $snapshot = is_array($liq->snapshot) ? $liq->snapshot : [];
+        $snapshot['descuentos_lineas'] = $lineas;
+
+        $liq->forceFill([
+            'descuentos' => $descuentos,
+            'prestamos' => $prestamos,
+            'retencion_pct' => $retencionPct,
+            'retencion' => $retencion,
+            'total_pagar' => $totalPagar,
+            'snapshot' => $snapshot,
+        ])->save();
+
+        // Silenciar unused en análisis estático: se usa al aplicar pendientes.
+        unset($descuentosAj, $descuentosMer);
+
+        return $liq->fresh();
+    }
+
+    private function aplicarDescuentosComisionEmpleado(NominaPeriodo $periodo, NominaEmpleado $empleado): float
+    {
+        if (! Schema::hasTable('nomina_comision_descuentos')) {
+            return 0.0;
+        }
+
+        $inicio = $periodo->fecha_inicio->toDateString();
+        $fin = $periodo->fecha_fin->toDateString();
+        $pago = $periodo->fecha_pago_comision?->toDateString()
+            ?? $periodo->fecha_fin?->copy()->addDays(3)->toDateString();
+        if ($pago && $pago > $fin) {
+            $fin = $pago;
+        }
+
+        $items = NominaComisionDescuento::query()
+            ->where('empleado_id', $empleado->id)
+            ->where('tipo', '!=', 'PRESTAMO')
+            ->where('estado', '!=', 'CANCELADO')
+            ->where(function ($q) use ($periodo, $inicio, $fin) {
+                $q->where('periodo_id', $periodo->id)
+                    ->orWhere(function ($q2) use ($inicio, $fin) {
+                        $q2->where('estado', 'PENDIENTE')
+                            ->whereDate('fecha', '>=', $inicio)
+                            ->whereDate('fecha', '<=', $fin);
+                    });
+            })
+            ->where(function ($q) {
+                $q->where('tipo', '!=', 'FALTANTE')
+                    ->orWhere(function ($f) {
+                        $f->where('tipo', 'FALTANTE');
+                        if (Schema::hasColumn('nomina_comision_descuentos', 'decision')) {
+                            $f->where('decision', NominaComisionDescuento::DECISION_DESCONTAR);
+                        }
+                        if (Schema::hasColumn('nomina_comision_descuentos', 'destino')) {
+                            $f->where(function ($d) {
+                                $d->where('destino', NominaComisionDescuento::DESTINO_COMISION)
+                                    ->orWhereNull('destino');
+                            });
+                        }
+                    });
+            })
+            ->get();
+
+        foreach ($items as $item) {
+            if ($item->estado !== 'APLICADO' || (int) $item->periodo_id !== (int) $periodo->id) {
+                $item->update([
+                    'estado' => 'APLICADO',
+                    'periodo_id' => $periodo->id,
+                ]);
+            }
+        }
+
+        return round((float) $items->sum('monto'), 2);
+    }
+
+    private function refrescarLiquidacionTrasBono(NominaPeriodo $periodo, NominaEmpleado $empleado): ?NominaLiquidacionComision
+    {
+        $liq = NominaLiquidacionComision::query()
+            ->where('periodo_id', $periodo->id)
+            ->where('empleado_id', $empleado->id)
+            ->first();
+        if (! $liq) {
+            return null;
+        }
+
+        $this->ajustes->aplicarComision($periodo, $empleado, NominaEmpleadoAjuste::TIPO_BONIFICACION);
+        $abonosAjuste = $this->ajustes->totalAplicado(
+            $periodo,
+            $empleado,
+            NominaEmpleadoAjuste::DESTINO_COMISION,
+            NominaEmpleadoAjuste::TIPO_BONIFICACION
+        );
+
+        $abonosExtra = 0.0;
+        if (Schema::hasTable('nomina_comision_abonos')) {
+            $abonosExtra = (float) \App\Models\Nomina\NominaComisionAbono::query()
+                ->where('empleado_id', $empleado->id)
+                ->where('periodo_id', $periodo->id)
+                ->where('estado', 'APLICADO')
+                ->sum('monto');
+        }
+
+        $abonos = round($abonosAjuste + $abonosExtra, 2);
+        $comisionTotal = round((float) $liq->comision_total, 2);
+        $bruto = round($comisionTotal + $abonos, 2);
+        $modo = (string) ($liq->modo ?: $empleado->modo_comision);
+        $retencionPct = (float) ($liq->retencion_pct ?? \App\Models\Nomina\NominaConfig::getDecimal('retencion_comision_pct', 10));
+
+        if ($empleado->exentoRetencionComision()) {
+            $retencionPct = 0.0;
+            $retenible = 0.0;
+        } elseif ($modo === NominaEmpleado::COMISION_SERVICIO_TECNICO) {
+            $retenible = round(
+                (float) $liq->comision_telefonia + (float) $liq->comision_otros + $abonos,
+                2
+            );
+        } else {
+            $retenible = $bruto;
+        }
+
+        $retencion = round($retenible * $retencionPct / 100, 2);
+        $descuentos = round((float) $liq->descuentos, 2);
+        $prestamos = round((float) $liq->prestamos, 2);
+        $totalPagar = round($bruto - $retencion - $descuentos - $prestamos, 2);
+
+        $liq->forceFill([
+            'abonos' => $abonos,
+            'retencion_pct' => $retencionPct,
+            'retencion' => $retencion,
+            'total_pagar' => $totalPagar,
+        ])->save();
+
+        return $liq->fresh();
+    }
+
+    public function aplicarBonos(Request $request, NominaPeriodo $periodo): RedirectResponse
+    {
+        if ($msg = $this->mensajeSiNoEditable($periodo)) {
+            return redirect()
+                ->route('nomina.comisiones.show', $periodo)
+                ->withErrors(['estado' => $msg]);
         }
 
         $marcadosBonos = array_map('intval', (array) $request->input('ajuste_ids', []));
@@ -370,8 +904,8 @@ class ComisionController extends Controller
     {
         $volver = fn () => redirect()->route('nomina.comisiones.show', $periodo);
 
-        if ($periodo->estado === NominaPeriodo::CERRADO) {
-            return $volver()->withErrors(['estado' => 'La quincena está cerrada. Ya no se pueden cambiar los egresos 058.']);
+        if ($msg = $this->mensajeSiNoEditable($periodo)) {
+            return $volver()->withErrors(['estado' => $msg]);
         }
         if (! $empleado->es_servicio_tecnico) {
             return $volver()->withErrors(['empleado' => $empleado->nombre().' no es de servicio técnico.']);
@@ -414,8 +948,8 @@ class ComisionController extends Controller
         if ((int) $ajuste->periodo_id !== (int) $periodo->id) {
             abort(404);
         }
-        if ($periodo->estado === NominaPeriodo::CERRADO) {
-            return $volver()->withErrors(['estado' => 'La quincena está cerrada. Ya no se pueden cambiar los egresos 058.']);
+        if ($msg = $this->mensajeSiNoEditable($periodo)) {
+            return $volver()->withErrors(['estado' => $msg]);
         }
 
         $ajuste->delete();
@@ -433,8 +967,8 @@ class ComisionController extends Controller
     {
         $volver = fn () => redirect()->route('nomina.comisiones.show', $periodo);
 
-        if ($periodo->estado === NominaPeriodo::CERRADO) {
-            return $volver()->withErrors(['estado' => 'La quincena está cerrada. Ya no se pueden cambiar los egresos 058.']);
+        if ($msg = $this->mensajeSiNoEditable($periodo)) {
+            return $volver()->withErrors(['estado' => $msg]);
         }
         if (! $empleado->es_servicio_tecnico) {
             return $volver()->withErrors(['empleado' => $empleado->nombre().' no es de servicio técnico.']);
@@ -521,6 +1055,12 @@ class ComisionController extends Controller
 
     public function recalcular(NominaPeriodo $periodo): RedirectResponse
     {
+        if ($msg = $this->mensajeSiNoEditable($periodo)) {
+            return redirect()
+                ->route('nomina.comisiones.show', $periodo)
+                ->withErrors(['estado' => $msg]);
+        }
+
         $this->periods->recalcularComisiones($periodo, auth()->id());
 
         return redirect()
@@ -530,6 +1070,12 @@ class ComisionController extends Controller
 
     public function toggleExentoRetencion(Request $request, NominaPeriodo $periodo, NominaEmpleado $empleado): RedirectResponse
     {
+        if ($msg = $this->mensajeSiNoEditable($periodo)) {
+            return redirect()
+                ->route('nomina.comisiones.show', $periodo)
+                ->withErrors(['estado' => $msg]);
+        }
+
         $exento = $request->boolean('exento_retencion_comision');
 
         $empleado->exento_retencion_comision = $exento;
@@ -539,7 +1085,7 @@ class ComisionController extends Controller
             ? $empleado->nombre().': marcado sin retención de comisión.'
             : $empleado->nombre().': se vuelve a aplicar retención de comisión.';
 
-        if ($periodo->estado !== NominaPeriodo::ABIERTO && $periodo->estado !== NominaPeriodo::CERRADO) {
+        if ($periodo->estado !== NominaPeriodo::ABIERTO) {
             $this->periods->recalcularComisiones($periodo, auth()->id());
             $msg .= ' Comisiones recalculadas.';
         } else {
@@ -549,6 +1095,18 @@ class ComisionController extends Controller
         return redirect()
             ->route('nomina.comisiones.show', $periodo)
             ->with('status', $msg);
+    }
+
+    private function mensajeSiNoEditable(NominaPeriodo $periodo): ?string
+    {
+        if ($periodo->estado === NominaPeriodo::PAGADO) {
+            return 'La quincena ya está pagada. Ya no se puede editar.';
+        }
+        if ($periodo->estado === NominaPeriodo::CERRADO) {
+            return 'La quincena está cerrada. Ya no se puede editar.';
+        }
+
+        return null;
     }
 
     public function exportarBanco(NominaPeriodo $periodo, NominaEmpresa $empresa): StreamedResponse|RedirectResponse
@@ -562,6 +1120,7 @@ class ComisionController extends Controller
         $tasa = $this->bcv->tasaParaPeriodo($periodo);
         $contenido = $this->bankFile->generarComisiones($periodo, $empresa, $tasa);
         $nombre = $this->bankFile->nombreArchivoComisiones($periodo, $empresa);
+        $this->periods->marcarPagadoPorTxt($periodo, auth()->id());
 
         return response()->streamDownload(function () use ($contenido) {
             echo $contenido;
@@ -586,6 +1145,7 @@ class ComisionController extends Controller
         $tasa = $this->bcv->tasaParaPeriodo($periodo);
         $contenido = $this->bankFile->generarComisionesSeleccion($periodo, $tasa, $datos['empleados']);
         $nombre = $this->bankFile->nombreArchivoComisionesSeleccion($periodo);
+        $this->periods->marcarPagadoPorTxt($periodo, auth()->id());
 
         return response()->streamDownload(function () use ($contenido) {
             echo $contenido;

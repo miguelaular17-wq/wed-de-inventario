@@ -27,16 +27,33 @@
 .com-alta-lista { position: absolute; z-index: 5; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 4px; max-height: 220px; overflow: auto; box-shadow: 0 12px 30px rgba(15,23,42,.12); }
 .com-alta-lista button { display: block; width: 100%; text-align: left; background: #fff; border: 0; border-bottom: 1px solid #f1f5f9; padding: 8px 10px; cursor: pointer; }
 .com-alta-lista button:hover { background: #eff6ff; }
-.com-modal-card.com-modal-txt { width: min(1100px, 100%); }
+.com-modal-card.com-modal-txt { width: min(920px, 100%); }
+.txt-acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 14px; }
+.txt-empresas-main { margin: 0 0 12px; }
+.txt-empresas-main .data-table { margin: 0; }
+.txt-excluir { margin-top: 8px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 12px; background: #f8fafc; }
+.txt-excluir > summary { cursor: pointer; font-weight: 700; color: #334155; list-style: none; }
+.txt-excluir > summary::-webkit-details-marker { display: none; }
+.txt-excluir > summary::before { content: '▸ '; color: #64748b; }
+.txt-excluir[open] > summary::before { content: '▾ '; }
+.txt-excluir-body { margin-top: 12px; }
 .txt-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 0 0 12px; }
 .txt-filtros label { display: flex; flex-direction: column; gap: 4px; font-size: .75rem; font-weight: 700; color: #64748b; min-width: 160px; }
 .txt-filtros select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 600; color: #0f172a; }
-.txt-acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 10px; }
-.txt-lista-wrap { max-height: min(52vh, 520px); overflow: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
+.txt-lista-wrap { max-height: min(42vh, 420px); overflow: auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
 .txt-lista-wrap table { margin: 0; }
 .txt-lista-wrap tr[hidden] { display: none !important; }
-.txt-empresas { margin-top: 14px; }
-.txt-empresas summary { cursor: pointer; font-weight: 700; color: #334155; }
+.com-bono-rapido { display: inline-flex; align-items: center; margin: 0; }
+.com-bono-valor {
+    border: 0; background: transparent; padding: 0; margin: 0;
+    color: #1d4ed8; font: inherit; font-weight: 700; cursor: pointer;
+    text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px;
+}
+.com-bono-valor:hover { color: #1e3a8a; }
+.com-bono-input {
+    width: 5.5rem; padding: 4px 6px; border: 1px solid #93c5fd; border-radius: 6px;
+    font-weight: 700; color: #0f172a; font-size: .85rem;
+}
 </style>
 @endpush
 
@@ -44,31 +61,14 @@
 <div class="panel nomina-page">
     <div class="panel-header-flex">
         <div>
-            <a href="{{ route('nomina.comisiones.index') }}" class="muted" style="font-size:.82rem;">← Comisiones</a>
+            <a href="{{ route('nomina.comisiones.index') }}" class="muted" style="font-size:.82rem;">← Volver</a>
             <h1 style="margin:4px 0 0;">Comisiones {{ $periodo->etiqueta }}</h1>
             <p class="muted" style="margin:4px 0 0;">
                 Pago el {{ $periodo->fecha_pago_comision?->format('d/m/Y') ?: $periodo->fecha_fin?->copy()->addDays(3)->format('d/m/Y') }}.
+                @if(in_array($periodo->estado, ['PAGADO', 'CERRADO'], true))
+                    · <strong>{{ $periodo->estado }}</strong> (solo lectura)
+                @endif
             </p>
-        </div>
-        <div>
-            <a class="btn secondary" href="{{ route('nomina.periodos.show', $periodo) }}">Ver nómina</a>
-            @if($periodo->estado !== 'ABIERTO' && $periodo->estado !== 'CERRADO' && $liquidaciones->isNotEmpty())
-                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px;">
-                    <form method="POST" action="{{ route('nomina.comisiones.recalcular', $periodo) }}" onsubmit="return confirm('¿Recalcular solo las comisiones de esta quincena? La nómina (sueldos y deducciones) no se modifica.')">
-                        @csrf
-                        <button class="btn" type="submit">Recalcular comisiones</button>
-                    </form>
-                    <a class="btn primary" href="{{ route('nomina.comisiones.relacion', $periodo) }}">Descargar relación PDF</a>
-                    <a class="btn" href="{{ route('nomina.comisiones.relacion', ['periodo' => $periodo, 'formato' => 'xlsx']) }}">Descargar Excel</a>
-                    <a class="btn" href="{{ route('nomina.comisiones.relacion', ['periodo' => $periodo, 'formato' => 'zip']) }}">ZIP PDF por sede y área</a>
-                </div>
-            @elseif($periodo->estado !== 'ABIERTO' && $liquidaciones->isNotEmpty())
-                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:8px;">
-                    <a class="btn primary" href="{{ route('nomina.comisiones.relacion', $periodo) }}">Descargar relación PDF</a>
-                    <a class="btn" href="{{ route('nomina.comisiones.relacion', ['periodo' => $periodo, 'formato' => 'xlsx']) }}">Descargar Excel</a>
-                    <a class="btn" href="{{ route('nomina.comisiones.relacion', ['periodo' => $periodo, 'formato' => 'zip']) }}">ZIP PDF por sede y área</a>
-                </div>
-            @endif
         </div>
     </div>
 
@@ -101,23 +101,25 @@
         <div class="nomina-kpi"><span>A pagar</span><strong>${{ number_format($totalPagar, 2) }}</strong></div>
     </div>
 
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
-        <button class="btn" type="button" data-abrir-modal="modal-ajustes">Ajustes de la quincena</button>
-        <button class="btn" type="button" data-abrir-modal="modal-sedes">Totales por sede y área</button>
-        @if($periodo->estado !== 'ABIERTO')
-            <button class="btn" type="button" data-abrir-modal="modal-txt">TXT del banco</button>
-            <a class="btn" href="{{ route('nomina.comisiones.diferenciales.index', $periodo) }}">Diferencial de comisiones</a>
-        @endif
-    </div>
+    @php
+        $filtrosEmpleadoSedes = $liquidaciones->map(fn ($liq) => $liq->empleado?->nombreSede())->filter()->unique()->sort()->values();
+        $filtrosEmpleadoCargos = $liquidaciones->map(fn ($liq) => $liq->empleado?->nombreCargo())->filter()->unique()->sort()->values();
+    @endphp
 
     <h3 style="margin:20px 0 0;">Supervisores y vendedores</h3>
-    @include('nomina.partials.empleado-tabla-buscador', ['target' => 'tabla-comisiones-ventas'])
+    @include('nomina.partials.empleado-tabla-buscador', [
+        'target' => 'tabla-comisiones-ventas',
+        'filtrosSede' => $filtrosEmpleadoSedes,
+        'filtrosCargo' => $filtrosEmpleadoCargos,
+    ])
 
     <div class="table-wrap" style="margin-top:8px;">
         <table class="data-table" id="tabla-comisiones-ventas">
             <thead>
                 <tr>
                     <th>Empleado</th>
+                    <th>Sede</th>
+                    <th>Cargo</th>
                     <th>Venta neta</th>
                     <th>Ventas telefonía</th>
                     <th>Ventas otros</th>
@@ -142,9 +144,14 @@
                         $pagarMostrado = $esSt
                             ? round($comisionMostrada + $abonosMostrados - $retencionMostrada, 2)
                             : (float) $liq->total_pagar;
-                        $puedeMarcarExento = $periodo->estado !== 'ABIERTO' && $periodo->estado !== 'CERRADO';
+                        $puedeEditarComision = ! in_array($periodo->estado, ['PAGADO', 'CERRADO'], true);
+                        $puedeMarcarExento = $puedeEditarComision && $periodo->estado !== 'ABIERTO';
+                        $puedeBonoRapido = $puedeEditarComision;
                     @endphp
-                    <tr data-grupo-clave="{{ $sedeArea->grupoDeEmpleado($liq->empleado)['clave'] }}" data-empleado-buscar="{{ $buscarAttrs($liq) }}">
+                    <tr data-grupo-clave="{{ $sedeArea->grupoDeEmpleado($liq->empleado)['clave'] }}"
+                        data-empleado-buscar="{{ $buscarAttrs($liq) }}"
+                        data-empleado-sede="{{ $liq->empleado->nombreSede() }}"
+                        data-empleado-cargo="{{ $liq->empleado->nombreCargo() }}">
                         <td>
                             <a href="{{ route('nomina.empleados.show', ['empleado' => $liq->empleado, 'tab' => 'comisiones']) }}">
                                 {{ $liq->empleado->nombre() }}
@@ -155,7 +162,7 @@
                             @if($esSt)
                                 <div class="muted" style="font-size:.72rem;">ST · Otros productos</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_SEDE)
-                                <div class="muted" style="font-size:.72rem;">Sede {{ $liq->empleado->nombreSede() }}</div>
+                                <div class="muted" style="font-size:.72rem;">Supervisor de sede</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_EQUIPO)
                                 <div class="muted" style="font-size:.72rem;">Ventas del equipo</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_DIGITAL)
@@ -178,6 +185,8 @@
                                 <div class="muted" style="font-size:.72rem;">Sin teléfonos Honor/Samsung</div>
                             @endif
                         </td>
+                        <td>{{ $liq->empleado->nombreSede() }}</td>
+                        <td>{{ $liq->empleado->nombreCargo() }}</td>
                         @if($esAgregado)
                             <td>
                                 <strong>${{ number_format($ventaMostrada, 2) }}</strong>
@@ -219,9 +228,16 @@
                             <td>${{ number_format($liq->base_telefonia, 2) }}</td>
                             <td>${{ number_format($liq->base_otros, 2) }}</td>
                         @endif
-                        <td>${{ number_format($comisionMostrada, 2) }}</td>
-                        <td>${{ number_format($abonosMostrados, 2) }}</td>
-                        <td>${{ number_format($retencionMostrada, 2) }}</td>
+                        <td data-col="comision">${{ number_format($comisionMostrada, 2) }}</td>
+                        <td data-col="bonos">
+                            @include('nomina.partials.bono-rapido', [
+                                'periodo' => $periodo,
+                                'empleado' => $liq->empleado,
+                                'monto' => $abonosMostrados,
+                                'puede' => $puedeBonoRapido,
+                            ])
+                        </td>
+                        <td data-col="retencion">${{ number_format($retencionMostrada, 2) }}</td>
                         <td style="text-align:center;">
                             <form method="POST" action="{{ route('nomina.comisiones.exento_retencion', [$periodo, $liq->empleado]) }}" style="margin:0;">
                                 @csrf
@@ -237,14 +253,17 @@
                                 >
                             </form>
                         </td>
-                        <td>
-                            @include('nomina.partials.descuento-comentarios', [
+                        <td data-col="descuentos">
+                            @include('nomina.partials.descuento-comision-celda', [
+                                'periodo' => $periodo,
+                                'empleado' => $liq->empleado,
                                 'monto' => $descuentosMostrados,
                                 'lineas' => $liq->lineasDescuento(),
                                 'titulo' => 'Desc. / préstamos',
+                                'puede' => $puedeBonoRapido,
                             ])
                         </td>
-                        <td>
+                        <td data-col="pagar">
                             <strong>${{ number_format($pagarMostrado, 2) }}</strong>
                             @if($esSt)
                                 <div class="muted" style="font-size:.72rem;">Parte ST abajo, sin retención</div>
@@ -252,20 +271,26 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="10" class="muted">Sin liquidaciones de supervisores o vendedores en esta quincena.</td></tr>
+                    <tr><td colspan="12" class="muted">Sin liquidaciones de supervisores o vendedores en esta quincena.</td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
 
     <h3 style="margin:24px 0 0;">Servicio técnico</h3>
-    @include('nomina.partials.empleado-tabla-buscador', ['target' => 'tabla-comisiones-st'])
+    @include('nomina.partials.empleado-tabla-buscador', [
+        'target' => 'tabla-comisiones-st',
+        'filtrosSede' => $filtrosEmpleadoSedes,
+        'filtrosCargo' => $filtrosEmpleadoCargos,
+    ])
 
     <div class="table-wrap" style="margin-top:8px;">
         <table class="data-table" id="tabla-comisiones-st">
             <thead>
                 <tr>
                     <th>Empleado</th>
+                    <th>Sede</th>
+                    <th>Cargo</th>
                     <th>Facturas ST</th>
                     <th>Egresos 058</th>
                     <th>Comisión</th>
@@ -282,13 +307,18 @@
                         $descuentosSt = (float) $liq->descuentos + (float) $liq->prestamos;
                         $pagarSt = round($comisionSt - $descuentosSt, 2);
                     @endphp
-                    <tr data-grupo-clave="{{ $sedeArea->grupoDeEmpleado($liq->empleado)['clave'] }}" data-empleado-buscar="{{ $buscarAttrs($liq) }}">
+                    <tr data-grupo-clave="{{ $sedeArea->grupoDeEmpleado($liq->empleado)['clave'] }}"
+                        data-empleado-buscar="{{ $buscarAttrs($liq) }}"
+                        data-empleado-sede="{{ $liq->empleado->nombreSede() }}"
+                        data-empleado-cargo="{{ $liq->empleado->nombreCargo() }}">
                         <td>
                             <a href="{{ route('nomina.empleados.show', ['empleado' => $liq->empleado, 'tab' => 'comisiones']) }}">
                                 {{ $liq->empleado->nombre() }}
                             </a>
                             <div class="muted" style="font-size:.72rem;">Servicio técnico</div>
                         </td>
+                        <td>{{ $liq->empleado->nombreSede() }}</td>
+                        <td>{{ $liq->empleado->nombreCargo() }}</td>
                         <td>
                             @if($liq->ventasSt() > 0)
                                 <strong>${{ number_format($liq->ventasSt(), 2) }}</strong>
@@ -303,7 +333,7 @@
                             $manualesSt = ($egresosStManuales ?? collect())->get($liq->empleado_id, collect());
                             $flujoSt = ($egresosStFlujo ?? collect())->get($liq->empleado_id, collect());
                             $excluidosSt = ($egresosStExcluidos ?? collect())->get($liq->empleado_id, []);
-                            $puedeEgresosSt = $periodo->estado !== \App\Models\Nomina\NominaPeriodo::CERRADO;
+                            $puedeEgresosSt = ! in_array($periodo->estado, ['PAGADO', 'CERRADO'], true);
                         @endphp
                         <td>
                             @if($liq->egresos058() > 0)
@@ -372,23 +402,33 @@
                                 </details>
                             @endif
                         </td>
-                        <td>${{ number_format($comisionSt, 2) }}</td>
-                        <td>$0.00</td>
-                        <td>
+                        <td data-col="comision">${{ number_format($comisionSt, 2) }}</td>
+                        <td data-col="bonos">
+                            @include('nomina.partials.bono-rapido', [
+                                'periodo' => $periodo,
+                                'empleado' => $liq->empleado,
+                                'monto' => (float) $liq->abonos,
+                                'puede' => ! in_array($periodo->estado, ['PAGADO', 'CERRADO'], true),
+                            ])
+                        </td>
+                        <td data-col="retencion">
                             $0.00
                             <div class="muted" style="font-size:.72rem;">Sin retención</div>
                         </td>
-                        <td>
-                            @include('nomina.partials.descuento-comentarios', [
+                        <td data-col="descuentos">
+                            @include('nomina.partials.descuento-comision-celda', [
+                                'periodo' => $periodo,
+                                'empleado' => $liq->empleado,
                                 'monto' => $descuentosSt,
                                 'lineas' => $liq->lineasDescuento(),
                                 'titulo' => 'Desc. / préstamos',
+                                'puede' => ! in_array($periodo->estado, ['PAGADO', 'CERRADO'], true),
                             ])
                         </td>
-                        <td><strong>${{ number_format($pagarSt, 2) }}</strong></td>
+                        <td data-col="pagar"><strong>${{ number_format($pagarSt, 2) }}</strong></td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="muted">Sin liquidaciones de servicio técnico en esta quincena.</td></tr>
+                    <tr><td colspan="10" class="muted">Sin liquidaciones de servicio técnico en esta quincena.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -404,7 +444,7 @@
         'otros' => collect(),
         'mercancia' => collect(),
     ];
-    $puedeAjustar = $periodo->estado !== 'CERRADO';
+    $puedeAjustar = ! in_array($periodo->estado, ['PAGADO', 'CERRADO'], true);
 @endphp
 
 <div class="com-modal" id="modal-ajustes" hidden>
@@ -496,135 +536,7 @@
 
 @if($periodo->estado !== 'ABIERTO')
 <div class="com-modal" id="modal-txt" hidden>
-    <div class="com-modal-card com-modal-txt">
-        <div class="com-modal-head">
-            <div>
-                <h3 style="margin:0;">TXT del banco</h3>
-                <p class="muted" style="margin:4px 0 0;">Solo se descargan los marcados (también en “por empresa”). Filtra por cargo o sede para marcar/desmarcar más fácil. Tasa BCV: <strong>{{ number_format($tasaBcv, 2) }}</strong>.</p>
-            </div>
-            <button class="btn secondary" type="button" data-cerrar-modal>Cerrar</button>
-        </div>
-
-        <form method="POST" action="{{ route('nomina.comisiones.banco_todo', $periodo) }}" id="form-txt-banco">
-            @csrf
-            <div class="txt-filtros">
-                <label>Sede
-                    <select id="txt-filtro-sede">
-                        <option value="">Todas</option>
-                        @foreach(($filtrosTxtSedes ?? collect()) as $sede)
-                            <option value="{{ $sede }}">{{ $sede }}</option>
-                        @endforeach
-                    </select>
-                </label>
-                <label>Cargo
-                    <select id="txt-filtro-cargo">
-                        <option value="">Todos</option>
-                        @foreach(($filtrosTxtCargos ?? collect()) as $cargo)
-                            <option value="{{ $cargo }}">{{ $cargo }}</option>
-                        @endforeach
-                    </select>
-                </label>
-            </div>
-
-            <div class="txt-acciones">
-                <button class="btn primary" type="submit" id="txt-descargar-todo">Descargar TXT seleccionado</button>
-                <button class="btn secondary" type="button" id="txt-marcar-visibles">Marcar visibles</button>
-                <button class="btn secondary" type="button" id="txt-desmarcar-visibles">Desmarcar visibles</button>
-                <span class="muted" id="txt-contador">0 seleccionados</span>
-            </div>
-
-            <div class="txt-lista-wrap">
-                <table class="data-table" id="tabla-txt-personas">
-                    <thead>
-                        <tr>
-                            <th style="width:36px;"></th>
-                            <th>Persona</th>
-                            <th>Sede</th>
-                            <th>Cargo</th>
-                            <th>Empresa</th>
-                            <th>USD</th>
-                            <th>Bs</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse(($personasTxt ?? collect()) as $persona)
-                            @php
-                                $puede = (bool) ($persona->descargable ?? false);
-                            @endphp
-                            <tr data-txt-fila
-                                data-sede="{{ $persona->sede }}"
-                                data-cargo="{{ $persona->cargo }}"
-                                data-empresa-id="{{ (int) ($persona->empresa_id ?? 0) }}"
-                                @if(! $puede) class="muted" @endif>
-                                <td>
-                                    <input type="checkbox"
-                                           name="empleados[]"
-                                           value="{{ $persona->id }}"
-                                           data-txt-check
-                                           @checked($puede)
-                                           @disabled(! $puede)>
-                                </td>
-                                <td>
-                                    <a href="{{ route('nomina.empleados.show', ['empleado' => $persona->id, 'tab' => 'comisiones']) }}">{{ $persona->nombre }}</a>
-                                    <div class="muted" style="font-size:.78rem;">{{ $persona->cedula !== '' ? $persona->cedula : 'Sin cédula' }}</div>
-                                </td>
-                                <td>{{ $persona->sede }}</td>
-                                <td>{{ $persona->cargo }}</td>
-                                <td>{{ $persona->empresa !== '' ? $persona->empresa : 'Sin empresa' }}</td>
-                                <td>${{ number_format($persona->usd, 2) }}</td>
-                                <td>Bs {{ number_format($persona->usd * $tasaBcv, 2) }}</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="7" class="muted">No hay comisiones calculadas.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </form>
-
-        <details class="txt-empresas">
-            <summary>Descargas por empresa (solo marcados de esa empresa)</summary>
-            <table class="data-table" style="margin-top:10px;">
-                <thead><tr><th>Empresa</th><th>Empleados</th><th>Comisión USD</th><th>Comisión Bs</th><th></th></tr></thead>
-                <tbody>
-                    @forelse($bancoPorEmpresa as $fila)
-                        @if($fila->empresa)
-                            <tr>
-                                <td>
-                                    <strong>{{ $fila->empresa->codigo }}</strong>
-                                    <div class="muted" style="font-size:.78rem;">{{ $fila->empresa->nombre }}</div>
-                                </td>
-                                <td>{{ $fila->empleados }}</td>
-                                <td>${{ number_format($fila->usd, 2) }}</td>
-                                <td>Bs {{ number_format($fila->usd * $tasaBcv, 2) }}</td>
-                                <td style="text-align:right;">
-                                    <button class="btn primary" type="button" data-txt-empresa="{{ $fila->empresa->id }}">Descargar TXT</button>
-                                </td>
-                            </tr>
-                        @else
-                            <tr>
-                                <td colspan="5"><strong>Sin empresa</strong> · {{ $fila->empleados }} persona(s) · ${{ number_format($fila->usd, 2) }} · se incluyen en el TXT seleccionado si están marcados y tienen cédula</td>
-                            </tr>
-                            @foreach(($fila->personas ?? collect()) as $persona)
-                                <tr>
-                                    <td style="padding-left:24px;">
-                                        <a href="{{ route('nomina.empleados.show', ['empleado' => $persona->id, 'tab' => 'comisiones']) }}">{{ $persona->nombre }}</a>
-                                        <span class="muted">· {{ $persona->cedula !== '' ? $persona->cedula : 'Sin cédula' }}</span>
-                                    </td>
-                                    <td>1</td>
-                                    <td>${{ number_format($persona->usd ?? 0, 2) }}</td>
-                                    <td>Bs {{ number_format(($persona->usd ?? 0) * $tasaBcv, 2) }}</td>
-                                    <td class="muted">{{ preg_replace('/\D+/', '', (string) ($persona->cedula ?? '')) !== '' ? 'Marcar arriba para incluir' : 'Sin cédula' }}</td>
-                                </tr>
-                            @endforeach
-                        @endif
-                    @empty
-                        <tr><td colspan="5" class="muted">No hay comisiones calculadas.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </details>
-    </div>
+    @include('nomina.comisiones._modal_txt')
 </div>
 @endif
 @endsection
@@ -763,11 +675,178 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    const tabInicial = new URLSearchParams(window.location.search).get('ajuste');
-    if (tabInicial && document.getElementById('modal-ajustes')) {
+    const params = new URLSearchParams(window.location.search);
+    const tabInicial = params.get('ajuste');
+    const abrir = params.get('abrir');
+    if ((tabInicial || abrir === 'ajustes') && document.getElementById('modal-ajustes')) {
         document.getElementById('modal-ajustes').hidden = false;
-        activarAjuste(tabInicial);
+        activarAjuste(tabInicial || 'bonos');
     }
+    if (abrir === 'txt' && document.getElementById('modal-txt')) {
+        document.getElementById('modal-txt').hidden = false;
+    }
+    if (abrir === 'sedes' && document.getElementById('modal-sedes')) {
+        document.getElementById('modal-sedes').hidden = false;
+    }
+
+    function fmtUsd(n) {
+        return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function actualizarKpi(selector, delta) {
+        if (!delta) return;
+        const el = document.querySelector(selector);
+        if (!el) return;
+        const actual = parseFloat(String(el.textContent || '').replace(/[^0-9.-]/g, '')) || 0;
+        el.textContent = fmtUsd(actual + delta);
+    }
+
+    document.querySelectorAll('form.com-bono-rapido').forEach(function (form) {
+        const boton = form.querySelector('.com-bono-valor');
+        const input = form.querySelector('.com-bono-input');
+        if (!boton || !input) return;
+        let actual = form.getAttribute('data-monto-actual') || '0';
+        let guardando = false;
+
+        function mostrarTexto(monto) {
+            actual = Number(monto || 0).toFixed(2);
+            form.setAttribute('data-monto-actual', actual);
+            boton.textContent = fmtUsd(actual);
+            input.value = actual;
+            input.hidden = true;
+            boton.hidden = false;
+        }
+
+        function abrirEdicion() {
+            if (guardando) return;
+            boton.hidden = true;
+            input.hidden = false;
+            input.value = actual;
+            input.focus();
+            input.select();
+        }
+
+        function cancelarEdicion() {
+            mostrarTexto(actual);
+        }
+
+        function aplicarFila(data) {
+            const fila = form.closest('tr');
+            if (!fila) return;
+            if (data.abonos != null) {
+                mostrarTexto(data.abonos);
+            }
+            if (data.retencion != null) {
+                const celda = fila.querySelector('[data-col="retencion"]');
+                if (celda) {
+                    const hint = celda.querySelector('.muted');
+                    celda.textContent = '';
+                    celda.appendChild(document.createTextNode(fmtUsd(data.retencion)));
+                    if (hint) celda.appendChild(hint);
+                }
+            }
+            if (data.total_pagar != null) {
+                const celda = fila.querySelector('[data-col="pagar"]');
+                if (celda) {
+                    const fuerte = celda.querySelector('strong');
+                    if (fuerte) fuerte.textContent = fmtUsd(data.total_pagar);
+                    else celda.textContent = fmtUsd(data.total_pagar);
+                }
+            }
+            actualizarKpi('.nomina-kpi span + strong', 0);
+            const kpis = document.querySelectorAll('.nomina-kpi');
+            kpis.forEach(function (kpi) {
+                const label = (kpi.querySelector('span')?.textContent || '').toLowerCase();
+                const strong = kpi.querySelector('strong');
+                if (!strong) return;
+                if (label.includes('bonos')) {
+                    const actualKpi = parseFloat(String(strong.textContent || '').replace(/[^0-9.-]/g, '')) || 0;
+                    strong.textContent = fmtUsd(actualKpi + (data.delta_abonos || 0));
+                }
+                if (label.includes('retención') || label.includes('retencion')) {
+                    const actualKpi = parseFloat(String(strong.textContent || '').replace(/[^0-9.-]/g, '')) || 0;
+                    strong.textContent = fmtUsd(actualKpi + (data.delta_retencion || 0));
+                }
+                if (label.includes('a pagar')) {
+                    const actualKpi = parseFloat(String(strong.textContent || '').replace(/[^0-9.-]/g, '')) || 0;
+                    strong.textContent = fmtUsd(actualKpi + (data.delta_pagar || 0));
+                }
+            });
+        }
+
+        function guardarSiCambio() {
+            if (guardando) return;
+            const previo = actual;
+            const nuevo = (parseFloat(String(input.value).replace(',', '.')) || 0).toFixed(2);
+            if (nuevo === Number(previo).toFixed(2)) {
+                cancelarEdicion();
+                return;
+            }
+
+            guardando = true;
+            mostrarTexto(nuevo);
+            boton.textContent = '…';
+            boton.disabled = true;
+
+            const cuerpo = new FormData(form);
+            cuerpo.set('monto', nuevo);
+
+            fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: cuerpo,
+                credentials: 'same-origin',
+            })
+                .then(function (res) {
+                    return res.json().then(function (data) {
+                        return { ok: res.ok, data: data };
+                    }).catch(function () {
+                        return { ok: false, data: { message: 'No se pudo guardar el bono.' } };
+                    });
+                })
+                .then(function (result) {
+                    if (!result.ok || !result.data || result.data.ok === false) {
+                        throw new Error((result.data && result.data.message) || 'No se pudo guardar el bono.');
+                    }
+                    aplicarFila(result.data);
+                })
+                .catch(function (err) {
+                    mostrarTexto(previo);
+                    alert(err.message || 'No se pudo guardar el bono.');
+                })
+                .finally(function () {
+                    guardando = false;
+                    boton.disabled = false;
+                    if (boton.textContent === '…') boton.textContent = fmtUsd(actual);
+                });
+        }
+
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            guardarSiCambio();
+        });
+        boton.addEventListener('click', abrirEdicion);
+        input.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                input.blur();
+                guardarSiCambio();
+            }
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                cancelarEdicion();
+            }
+        });
+        input.addEventListener('blur', function () {
+            setTimeout(function () {
+                if (guardando || document.activeElement === input || input.hidden) return;
+                guardarSiCambio();
+            }, 80);
+        });
+    });
 
     document.querySelectorAll('form.com-alta').forEach(function (form) {
         const campo = form.querySelector('input[name="empleado_nombre"]');

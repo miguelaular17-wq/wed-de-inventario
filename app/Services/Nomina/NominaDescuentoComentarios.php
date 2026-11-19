@@ -127,25 +127,58 @@ class NominaDescuentoComentarios
         $lineas = [];
 
         foreach ($this->descuentosComision($periodo)->get($empleado->id, []) as $row) {
-                $tipoRaw = strtoupper((string) $row->tipo);
-                $tipo = match ($tipoRaw) {
-                    'PRESTAMO' => 'Préstamo',
-                    'FALTANTE' => 'Faltante de caja',
-                    default => 'Descuento',
-                };
-                $grupo = $tipoRaw === 'PRESTAMO' ? 'prestamo' : 'descuento';
-                $lineas[] = $this->linea($tipo, $row->motivo ?? null, (float) $row->monto, $grupo);
+            $tipoRaw = strtoupper((string) $row->tipo);
+            $tipo = match ($tipoRaw) {
+                'PRESTAMO' => 'Préstamo',
+                'FALTANTE' => 'Faltante de caja',
+                default => 'Descuento',
+            };
+            $grupo = match ($tipoRaw) {
+                'PRESTAMO' => 'prestamo',
+                'FALTANTE' => 'faltante_caja',
+                default => 'descuento',
+            };
+            $lineas[] = $this->linea($tipo, $row->motivo ?? null, (float) $row->monto, $grupo, (int) $row->id, 'comision_descuento');
         }
 
         foreach ($this->ajustesComision($periodo)->get($empleado->id, []) as $row) {
-            $lineas[] = $this->linea('Deducción', $row->motivo ?? null, (float) $row->monto, 'descuento');
+            $lineas[] = $this->linea('Deducción', $row->motivo ?? null, (float) $row->monto, 'descuento', (int) $row->id, 'ajuste');
         }
 
         foreach ($this->mercanciaComision($periodo)->get($empleado->id, []) as $row) {
-            $lineas[] = $this->linea('Mercancía', $row->motivo ?? null, (float) $row->monto, 'descuento');
+            $lineas[] = $this->linea('Mercancía', $row->motivo ?? null, (float) $row->monto, 'descuento', (int) $row->id, 'mercancia');
+        }
+
+        foreach ($this->planesComision($periodo)->get($empleado->id, []) as $row) {
+            $lineas[] = $this->linea(
+                'Préstamo',
+                $row->etiqueta ?: ($row->prestamo->motivo ?? 'Préstamo'),
+                (float) $row->monto,
+                'prestamo',
+                (int) $row->id,
+                'plan'
+            );
         }
 
         return $this->normalizar($lineas);
+    }
+
+    private function planesComision(NominaPeriodo $periodo): \Illuminate\Support\Collection
+    {
+        return $this->bolsa('planes-comision|'.$periodo->id, function () use ($periodo) {
+            if (! Schema::hasTable('nomina_prestamo_planes')) {
+                return collect();
+            }
+
+            return \App\Models\Nomina\NominaPrestamoPlan::query()
+                ->with('prestamo')
+                ->where('destino', \App\Models\Nomina\NominaPrestamoPlan::DESTINO_COMISION)
+                ->where('estado', '!=', \App\Models\Nomina\NominaPrestamoPlan::CANCELADO)
+                ->where('nomina_periodo_id', $periodo->id)
+                ->orderBy('id')
+                ->get()
+                ->groupBy('empleado_id');
+        });
     }
 
     /**
@@ -379,7 +412,7 @@ class NominaDescuentoComentarios
 
     /**
      * @param  list<array<string, mixed>>  $lineas
-     * @return list<array{tipo: string, comentario: string, monto: float, grupo: string}>
+     * @return list<array{tipo: string, comentario: string, monto: float, grupo: string, id:?int, origen:?string}>
      */
     private function normalizar(array $lineas): array
     {
@@ -393,7 +426,9 @@ class NominaDescuentoComentarios
                 (string) ($linea['tipo'] ?? 'Descuento'),
                 $linea['comentario'] ?? null,
                 $monto,
-                (string) ($linea['grupo'] ?? 'descuento')
+                (string) ($linea['grupo'] ?? 'descuento'),
+                isset($linea['id']) ? (int) $linea['id'] : null,
+                isset($linea['origen']) ? (string) $linea['origen'] : null
             );
         }
 
@@ -401,9 +436,9 @@ class NominaDescuentoComentarios
     }
 
     /**
-     * @return array{tipo: string, comentario: string, monto: float, grupo: string}
+     * @return array{tipo: string, comentario: string, monto: float, grupo: string, id:?int, origen:?string}
      */
-    private function linea(string $tipo, ?string $comentario, float $monto, string $grupo): array
+    private function linea(string $tipo, ?string $comentario, float $monto, string $grupo, ?int $id = null, ?string $origen = null): array
     {
         $comentario = trim((string) $comentario);
 
@@ -412,6 +447,8 @@ class NominaDescuentoComentarios
             'comentario' => $comentario !== '' ? $comentario : 'Sin comentario',
             'monto' => round($monto, 2),
             'grupo' => $grupo,
+            'id' => $id,
+            'origen' => $origen,
         ];
     }
 }

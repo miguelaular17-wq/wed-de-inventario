@@ -75,6 +75,106 @@ class PayrollBankFileService
     }
 
     /**
+     * Personas con nómina > 0 para armar el TXT (incluye sede/cargo para filtros).
+     *
+     * @return Collection<int, object{id:int,nombre:string,cedula:string,usd:float,sede:string,cargo:string,empresa_id:int,empresa:string,descargable:bool}>
+     */
+    public function personasNominaTxt(NominaPeriodo $periodo): Collection
+    {
+        return $this->resumenPorEmpresa($periodo)
+            ->flatMap(function ($fila) {
+                $empresa = $fila->empresa;
+                $empresaId = (int) ($empresa?->id ?: ($fila->personas?->first()?->empresa_id ?? 0));
+
+                return ($fila->personas ?? collect())->map(function ($persona) use ($empresa, $empresaId) {
+                    $cedulaOk = preg_replace('/\D+/', '', (string) $persona->cedula) !== '';
+
+                    return (object) [
+                        'id' => (int) $persona->id,
+                        'nombre' => (string) $persona->nombre,
+                        'cedula' => (string) $persona->cedula,
+                        'usd' => round((float) $persona->usd, 2),
+                        'sede' => (string) ($persona->sede ?? '—'),
+                        'cargo' => (string) ($persona->cargo ?? '—'),
+                        'empresa_id' => (int) ($persona->empresa_id ?? $empresaId),
+                        'empresa' => $empresa ? ($empresa->codigo.' — '.$empresa->nombre) : '',
+                        'descargable' => $cedulaOk && (float) $persona->usd > 0,
+                    ];
+                });
+            })
+            ->filter(fn ($p) => $p->usd > 0)
+            ->sortBy(fn ($p) => mb_strtolower($p->nombre))
+            ->values();
+    }
+
+    /**
+     * Un solo TXT de nómina con las personas seleccionadas (cualquier empresa).
+     *
+     * @param  list<int>  $empleadoIds
+     */
+    public function generarSeleccion(
+        NominaPeriodo $periodo,
+        float $tasaBcv,
+        array $empleadoIds,
+        Carbon|string|null $fechaPago = null
+    ): string {
+        if ($tasaBcv <= 0) {
+            throw ValidationException::withMessages([
+                'tasa_bcv' => 'No hay tasa BCV del día. Cárgala en Flujo de caja o reintenta más tarde.',
+            ]);
+        }
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', $empleadoIds))));
+        if ($ids === []) {
+            throw ValidationException::withMessages([
+                'empleados' => 'Selecciona al menos una persona para el TXT.',
+            ]);
+        }
+
+        $fecha = Carbon::parse($fechaPago ?? now());
+        $registros = $periodo->relationLoaded('registros')
+            ? $periodo->registros
+            : $periodo->registros()->with(['empleado.cliente'])->get();
+
+        $porEmpleado = $registros
+            ->whereIn('empleado_id', $ids)
+            ->groupBy(fn ($r) => (int) $r->empleado_id)
+            ->map(fn (Collection $regs) => round((float) $regs->sum('total_pagar'), 2));
+
+        $lineas = [];
+        foreach ($ids as $id) {
+            $usd = (float) ($porEmpleado->get($id, 0));
+            if ($usd <= 0) {
+                continue;
+            }
+            $empleado = $registros->firstWhere('empleado_id', $id)?->empleado;
+            if (! $empleado) {
+                continue;
+            }
+            $cedula = $empleado->cedula();
+            if (preg_replace('/\D+/', '', $cedula) === '') {
+                continue;
+            }
+            $lineas[] = self::formatearLinea($cedula, round($usd * $tasaBcv, 2), $fecha);
+        }
+
+        if ($lineas === []) {
+            throw ValidationException::withMessages([
+                'empleados' => 'Ninguna de las personas seleccionadas tiene monto descargable (cédula y nómina > 0).',
+            ]);
+        }
+
+        return implode("\r\n", $lineas)."\r\n";
+    }
+
+    public function nombreArchivoSeleccion(NominaPeriodo $periodo, Carbon|string|null $fechaPago = null): string
+    {
+        $fecha = Carbon::parse($fechaPago ?? now())->format('Ymd');
+
+        return 'nomina_todas_'.$periodo->id.'_'.$fecha.'.txt';
+    }
+
+    /**
      * @return Collection<int, object{empresa:?NominaEmpresa,empleados:int,usd:float,personas:Collection<int, object{id:int,nombre:string,cedula:string,usd:float}>}>
      */
     public function resumenComisionesPorEmpresa(NominaPeriodo $periodo): Collection
