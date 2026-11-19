@@ -802,6 +802,58 @@ class CommissionCalculationServiceTest extends TestCase
         $this->assertSame(700.0, (float) \App\Models\Nomina\NominaLiquidacionComision::query()->where('empleado_id', $activo->id)->value('base_total'));
     }
 
+    public function test_al_liquidar_aplica_bono_automatico_por_productos_meta(): void
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('meta_quincena_productos')) {
+            (require database_path('migrations/2026_09_03_120000_create_meta_quincena_productos_table.php'))->up();
+        }
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('meta_quincena_productos', 'valor_unitario')) {
+            (require database_path('migrations/2026_11_19_160000_add_valor_unitario_to_meta_quincena_productos_table.php'))->up();
+        }
+
+        $empleado = $this->empleado(NominaEmpleado::COMISION_VENTAS_PROPIAS, 'VEND-META');
+        $periodo = $this->periodo();
+        $productoId = DB::table('productos')->insertGetId([
+            'codigo' => 'META-1',
+            'nombre' => 'Producto meta',
+            'categoria' => 'PERFUMERIA',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        \App\Models\MetaQuincenaProducto::create([
+            'producto_id' => $productoId,
+            'sede' => 'CENTRO',
+            'quincena_inicio' => '2026-08-01',
+            'quincena_fin' => '2026-08-15',
+            'cantidad_inicial' => 4,
+            'valor_unitario' => 2.5,
+            'responsable_empleado_id' => $empleado->id,
+        ]);
+        DB::table('ventas_detalle')->insert([
+            'sede' => 'CENTRO',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => 'M-100',
+            'fecha' => '2026-08-10',
+            'producto_id' => $productoId,
+            'cantidad' => 3,
+            'precio_venta' => 10,
+            'costo_unitario' => 0,
+            'ganancia' => 30,
+            'vendedor' => 'OTRO',
+            'anulado' => false,
+        ]);
+        $this->venta('VEND-META', 1000);
+
+        $calculo = app(CommissionCalculationService::class)->calcular($periodo, $empleado);
+        $liq = app(CommissionSettlementService::class)->liquidar($periodo, $empleado, $calculo);
+
+        // 3 u. × $2.50 = $7.50 bono meta automático
+        $this->assertSame(7.5, (float) $liq->abonos);
+        $this->assertSame(7.5, $liq->bonoProductosMeta());
+        $this->assertSame(0.0, $liq->bonoManual());
+        $this->assertSame(7.5, (float) ($liq->snapshot['bono_productos_meta'] ?? 0));
+    }
+
     public function test_txt_de_comisiones_es_por_empresa(): void
     {
         $empresa = \App\Models\Nomina\NominaEmpresa::create([

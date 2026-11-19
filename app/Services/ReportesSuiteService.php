@@ -154,24 +154,37 @@ class ReportesSuiteService
         }
         $docs = $q->orderBy('d.fecha')->orderBy('d.numero_documento')->get();
         $metodos = $this->metodosPorDocumento($docs);
+        $tieneAutorizado = $this->hayColumna('ventas_documentos', 'autorizado_descuento');
+        $nombres = $tieneAutorizado
+            ? $this->nombresPorCedula($docs->pluck('autorizado_descuento')->filter()->all())
+            : [];
 
-        $filas = $docs->map(function ($d) use ($metodos) {
+        $filas = $docs->map(function ($d) use ($metodos, $tieneAutorizado, $nombres) {
             $bruto = (float) $d->total_neto_usd + (float) $d->total_descuento_usd;
+            $autorizado = '—';
+            if ($tieneAutorizado && ! empty($d->autorizado_descuento)) {
+                $clave = trim((string) $d->autorizado_descuento);
+                $autorizado = $nombres[$clave]
+                    ?? $nombres[strtoupper($clave)]
+                    ?? $nombres[strtolower($clave)]
+                    ?? $clave;
+            }
 
             return ['celdas' => [
                 $this->fecha($d->fecha), $d->sede ?: '—', $d->numero_documento, $d->identificacion ?: ($d->codigo_cliente ?: '—'), $d->cliente ?: '—',
                 $this->num($d->factor_cambio), $d->motivo_descuento ?? '—', $d->observacion ?? '—',
                 $this->num($bruto), $this->num($d->total_descuento_usd), $this->num($d->total_neto_usd),
                 $metodos[$d->sede.'|'.$d->numero_documento] ?? '—',
+                $autorizado,
             ]];
         })->all();
 
         return [
-            'columnas' => [['Fecha', 'l'], ['Sede', 'l'], ['N° Doc', 'l'], ['Cliente', 'l'], ['Razón social', 'l'], ['Tasa', 'r'], ['Motivo', 'l'], ['Observación', 'l'], ['Total fact. $', 'r'], ['Total desc. $', 'r'], ['Total pagado $', 'r'], ['Método', 'l']],
+            'columnas' => [['Fecha', 'l'], ['Sede', 'l'], ['N° Doc', 'l'], ['Cliente', 'l'], ['Razón social', 'l'], ['Tasa', 'r'], ['Motivo', 'l'], ['Observación', 'l'], ['Total fact. $', 'r'], ['Total desc. $', 'r'], ['Total pagado $', 'r'], ['Método', 'l'], ['Autorizado', 'l']],
             'filas' => $filas,
             'totales' => ['Total', '', count($filas).' facturas', '', '', '', '', '',
                 $this->num($docs->sum(fn ($d) => (float) $d->total_neto_usd + (float) $d->total_descuento_usd)),
-                $this->num($docs->sum('total_descuento_usd')), $this->num($docs->sum('total_neto_usd')), ''],
+                $this->num($docs->sum('total_descuento_usd')), $this->num($docs->sum('total_neto_usd')), '', ''],
             'total_filas' => count($filas),
         ];
     }

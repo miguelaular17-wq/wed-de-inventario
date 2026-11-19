@@ -29,6 +29,7 @@ class TesoreriaCajaTest extends TestCase
         (require database_path('migrations/2026_11_17_160000_add_categoria_to_tesoreria_caja_movimientos.php'))->up();
         (require database_path('migrations/2026_11_18_123000_add_tipo_gasto_to_tesoreria_caja_movimientos.php'))->up();
         (require database_path('migrations/2026_11_18_124000_add_flujo_caja_id_to_tesoreria_caja_movimientos.php'))->up();
+        (require database_path('migrations/2026_11_19_150000_add_beneficiario_placa_to_tesoreria_caja_movimientos.php'))->up();
         $this->asegurarColumnasFlujoCaja();
         $this->mock(BcvRateService::class, fn ($m) => $m->shouldReceive('getRateForToday')->andReturn(40.0));
     }
@@ -40,6 +41,7 @@ class TesoreriaCajaTest extends TestCase
             'categoria_egreso' => 'string', 'referencia' => 'string', 'motivo' => 'string',
             'origen' => 'string', 'oculto' => 'bool', 'es_conciliado' => 'bool',
             'comision' => 'decimal', 'diferencial_cambiario' => 'decimal',
+            'tipo_gasto' => 'string', 'titular_receptor' => 'string', 'sede' => 'string', 'placa_vehiculo' => 'string',
         ];
         $faltan = array_filter($columnas, fn ($tipo, $col) => ! Schema::hasColumn('flujo_cajas', $col), ARRAY_FILTER_USE_BOTH);
         if ($faltan === []) {
@@ -115,6 +117,9 @@ class TesoreriaCajaTest extends TestCase
             'monto_bs' => 250,
             'concepto' => 'Pago proveedor',
             'referencia' => 'REF-1',
+            'beneficiario' => 'Proveedor Demo',
+            'sede' => 'DORAL',
+            'placa_vehiculo' => 'abc-123',
         ])->assertRedirect();
 
         $this->assertEquals(750.0, (float) $bs->fresh()->saldo);
@@ -124,6 +129,9 @@ class TesoreriaCajaTest extends TestCase
         $egreso = TesoreriaCajaMovimiento::query()->where('concepto', 'Pago proveedor')->firstOrFail();
         $this->assertSame('087 - PAGO PROVEEDORES', $egreso->tipo_gasto);
         $this->assertSame('egreso', $egreso->tipo);
+        $this->assertSame('Proveedor Demo', $egreso->beneficiario);
+        $this->assertSame('DORAL', $egreso->sede);
+        $this->assertSame('ABC-123', $egreso->placa_vehiculo);
         $this->assertNotNull($egreso->flujo_caja_id);
         $espejo = FlujoCaja::query()->findOrFail($egreso->flujo_caja_id);
         $this->assertSame(FlujoCaja::ORIGEN_TESORERIA_CAJA, $espejo->origen);
@@ -131,6 +139,9 @@ class TesoreriaCajaTest extends TestCase
         $this->assertSame('egreso_realizado', $espejo->categoria_egreso);
         $this->assertSame('CAJA PRINCIPAL', $espejo->banco);
         $this->assertSame('087 - PAGO PROVEEDORES', $espejo->tipo_gasto);
+        $this->assertSame('Proveedor Demo', $espejo->titular_receptor);
+        $this->assertSame('DORAL', $espejo->sede);
+        $this->assertSame('ABC-123', $espejo->placa_vehiculo);
         $this->assertSame('6.25', number_format((float) $espejo->monto_usd, 2, '.', ''));
 
         $this->actingAs($user)->get(route('tesoreria.caja.index'))
@@ -138,7 +149,10 @@ class TesoreriaCajaTest extends TestCase
             ->assertSee('USD / EUR')
             ->assertSee('$200,00')
             ->assertSee('€50,00')
-            ->assertSee('087 - PAGO PROVEEDORES');
+            ->assertSee('087 - PAGO PROVEEDORES')
+            ->assertSee('Proveedor Demo')
+            ->assertSee('Beneficiario')
+            ->assertSee('Placa del vehículo');
 
         $this->actingAs($user)->post(route('tesoreria.caja.store'), [
             'caja_id' => $bs->id,

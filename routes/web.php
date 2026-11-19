@@ -377,6 +377,7 @@ Route::middleware(['auth'])->prefix('metas')->name('metas.')->group(function () 
         ->middleware('permission:meta')
         ->name('destroy');
     Route::patch('/{meta}/responsable', [MetaQuincenaController::class, 'asignarResponsable'])->name('responsable');
+    Route::patch('/{meta}/valor', [MetaQuincenaController::class, 'actualizarValor'])->name('valor');
     Route::get('/sedes-activas', [MetaQuincenaController::class, 'sedesMeta'])
         ->middleware('permission:meta')
         ->name('sedes');

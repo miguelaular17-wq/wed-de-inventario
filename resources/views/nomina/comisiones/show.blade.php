@@ -65,14 +65,27 @@
             <h1 style="margin:4px 0 0;">Comisiones {{ $periodo->etiqueta }}</h1>
             <p class="muted" style="margin:4px 0 0;">
                 Pago el {{ $periodo->fecha_pago_comision?->format('d/m/Y') ?: $periodo->fecha_fin?->copy()->addDays(3)->format('d/m/Y') }}.
-                @if(in_array($periodo->estado, ['PAGADO', 'CERRADO'], true))
-                    · <strong>{{ $periodo->estado }}</strong> (solo lectura · usa Ajuste/recálculo para diferencias)
+                @if($periodo->estado === 'CERRADO')
+                    · <strong>{{ $periodo->estado }}</strong> (solo lectura)
+                @elseif($periodo->estado === 'PAGADO')
+                    · <strong>{{ $periodo->estado }}</strong> · puedes recalcular aquí o usar Ajuste para diferencias
+                @elseif($periodo->estado !== 'ABIERTO')
+                    · <strong>{{ $periodo->estado }}</strong>
                 @endif
             </p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            @if(! in_array($periodo->estado, ['ABIERTO', 'CERRADO'], true))
+                <form method="POST" action="{{ route('nomina.comisiones.recalcular', $periodo) }}"
+                      onsubmit="return confirm(@json($periodo->estado === 'PAGADO'
+                          ? '¿Recalcular todas las comisiones de esta quincena YA PAGADA? Se actualizan montos (incluye bonos de productos meta) sin reabrir el período.'
+                          : '¿Recalcular todas las comisiones de esta quincena con ventas y bonos de productos meta actuales?'))">
+                    @csrf
+                    <button type="submit" class="btn primary">Recalcular comisiones</button>
+                </form>
+            @endif
             @if($periodo->estado !== 'ABIERTO')
-                <a class="btn primary" href="{{ route('nomina.comisiones.diferenciales.create', $periodo) }}">Ajuste / recálculo</a>
+                <a class="btn {{ $periodo->estado === 'CERRADO' ? 'primary' : 'secondary' }}" href="{{ route('nomina.comisiones.diferenciales.create', $periodo) }}">Ajuste / recálculo</a>
                 <a class="btn secondary" href="{{ route('nomina.comisiones.diferenciales.index', $periodo) }}">Ver diferenciales</a>
             @endif
         </div>
@@ -239,7 +252,8 @@
                             @include('nomina.partials.bono-rapido', [
                                 'periodo' => $periodo,
                                 'empleado' => $liq->empleado,
-                                'monto' => $abonosMostrados,
+                                'monto' => $liq->bonoManual(),
+                                'bonoMeta' => $liq->bonoProductosMeta(),
                                 'puede' => $puedeBonoRapido,
                             ])
                         </td>
@@ -413,7 +427,8 @@
                             @include('nomina.partials.bono-rapido', [
                                 'periodo' => $periodo,
                                 'empleado' => $liq->empleado,
-                                'monto' => (float) $liq->abonos,
+                                'monto' => $liq->bonoManual(),
+                                'bonoMeta' => $liq->bonoProductosMeta(),
                                 'puede' => ! in_array($periodo->estado, ['PAGADO', 'CERRADO'], true),
                             ])
                         </td>
@@ -712,12 +727,38 @@ document.addEventListener('DOMContentLoaded', function () {
         const input = form.querySelector('.com-bono-input');
         if (!boton || !input) return;
         let actual = form.getAttribute('data-monto-actual') || '0';
+        let bonoMeta = 0;
+        const metaHintInicial = form.parentElement?.querySelector('.muted');
+        if (metaHintInicial && /Meta\s*\$/.test(metaHintInicial.textContent || '')) {
+            bonoMeta = parseFloat(String(metaHintInicial.textContent).replace(/[^0-9.-]/g, '')) || 0;
+        }
         let guardando = false;
 
-        function mostrarTexto(monto) {
-            actual = Number(monto || 0).toFixed(2);
+        function pintarMeta(meta) {
+            bonoMeta = Number(meta || 0);
+            let hint = form.parentElement?.querySelector('[data-bono-meta]');
+            if (bonoMeta > 0.009) {
+                if (!hint) {
+                    hint = document.createElement('div');
+                    hint.className = 'muted';
+                    hint.setAttribute('data-bono-meta', '1');
+                    hint.style.cssText = 'font-size:.72rem;color:#0f766e;margin-top:2px;';
+                    form.parentElement?.appendChild(hint);
+                }
+                hint.textContent = 'Meta ' + fmtUsd(bonoMeta);
+                hint.title = 'Valor de productos meta × unidades vendidas';
+            } else if (hint) {
+                hint.remove();
+            }
+        }
+
+        function mostrarTexto(montoManual, meta) {
+            actual = Number(montoManual || 0).toFixed(2);
+            if (meta != null) {
+                pintarMeta(meta);
+            }
             form.setAttribute('data-monto-actual', actual);
-            boton.textContent = fmtUsd(actual);
+            boton.textContent = fmtUsd(Number(actual) + Number(bonoMeta || 0));
             input.value = actual;
             input.hidden = true;
             boton.hidden = false;
@@ -739,8 +780,10 @@ document.addEventListener('DOMContentLoaded', function () {
         function aplicarFila(data) {
             const fila = form.closest('tr');
             if (!fila) return;
-            if (data.abonos != null) {
-                mostrarTexto(data.abonos);
+            if (data.bono_manual != null) {
+                mostrarTexto(data.bono_manual, data.bono_meta);
+            } else if (data.abonos != null) {
+                mostrarTexto(data.abonos, data.bono_meta);
             }
             if (data.retencion != null) {
                 const celda = fila.querySelector('[data-col="retencion"]');

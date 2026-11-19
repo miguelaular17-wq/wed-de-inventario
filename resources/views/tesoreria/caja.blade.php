@@ -125,6 +125,7 @@
                     <th style="width:100px;">Fecha</th>
                     <th>Caja</th>
                     <th>Tipo de gasto</th>
+                    <th>Beneficiario / Sede</th>
                     <th>Concepto</th>
                     <th>Referencia</th>
                     <th style="text-align:right;">Monto</th>
@@ -141,6 +142,15 @@
                         </td>
                         <td>{{ $m->tipo_gasto ?: '—' }}</td>
                         <td>
+                            {{ $m->beneficiario ?: '—' }}
+                            @if($m->sede)
+                                <div class="muted" style="font-size:.72rem;">{{ $etiquetas[$m->sede] ?? $m->sede }}</div>
+                            @endif
+                            @if($m->placa_vehiculo)
+                                <div class="muted" style="font-size:.72rem;">Placa {{ $m->placa_vehiculo }}</div>
+                            @endif
+                        </td>
+                        <td>
                             {{ $m->concepto }}
                             <div class="muted" style="font-size:.72rem;">{{ $m->usuario?->name }} · {{ $m->created_at?->format('d/m/Y H:i') }}</div>
                         </td>
@@ -156,7 +166,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" style="text-align:center; padding:30px; color:var(--muted);">
+                        <td colspan="8" style="text-align:center; padding:30px; color:var(--muted);">
                             No hay egresos. Regístralos con «Nuevo Egreso».
                         </td>
                     </tr>
@@ -165,7 +175,7 @@
             @if($egresos->isNotEmpty())
                 <tfoot>
                     <tr>
-                        <td colspan="5" style="text-align:right;">TOTAL EGRESOS</td>
+                        <td colspan="6" style="text-align:right;">TOTAL EGRESOS</td>
                         <td class="tc-egreso" style="text-align:right;" colspan="2">
                             @foreach($totalesEgreso as $cajaId => $monto)
                                 @php $c = $cajas->firstWhere('id', $cajaId); @endphp
@@ -384,6 +394,32 @@
                 </div>
             </div>
 
+            <div style="display:flex; gap:15px; margin-bottom:10px;">
+                <div style="flex:1;">
+                    <label class="tc-lbl">Sede (opcional)</label>
+                    <select name="sede" class="tc-inp">
+                        <option value="">-- Seleccione una sede --</option>
+                        @foreach(($sedes ?? []) as $sedeLocal)
+                            <option value="{{ $sedeLocal }}" @selected(old('sede') === $sedeLocal)>{{ $sedeLocal }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div id="tc-col-placa" style="flex:1;">
+                    <label class="tc-lbl">Placa del vehículo</label>
+                    <input type="text" name="placa_vehiculo" id="tc-placa" value="{{ old('placa_vehiculo') }}" maxlength="40" class="tc-inp" placeholder="Ej. ABC-123">
+                </div>
+            </div>
+
+            <div style="margin-bottom:10px;">
+                <label class="tc-lbl" id="tc-lbl-beneficiario">Beneficiario</label>
+                <input type="text" name="beneficiario" id="tc-beneficiario" list="tc-beneficiarios" value="{{ old('beneficiario') }}" maxlength="255" class="tc-inp" placeholder="Seleccione o escriba un beneficiario" autocomplete="off">
+                <datalist id="tc-beneficiarios">
+                    @foreach(($beneficiarios ?? []) as $b)
+                        <option value="{{ $b }}"></option>
+                    @endforeach
+                </datalist>
+            </div>
+
             <div style="margin-bottom:10px;">
                 <label class="tc-lbl" id="tc-lbl-motivo">Motivo (Breve descripción)</label>
                 <input type="text" name="concepto" id="tc-motivo" value="{{ old('concepto') }}" maxlength="300" required class="tc-inp" placeholder="Ej. Pago de internet mensual...">
@@ -427,7 +463,13 @@
         titulo.textContent = ingreso ? 'Nuevo Ingreso' : 'Nuevo Egreso';
         document.getElementById('tc-lbl-banco').textContent = ingreso ? 'Cuenta que recibe el dinero' : 'Banco y Titular';
         document.getElementById('tc-lbl-tipo-gasto').textContent = ingreso ? 'Tipo de ingreso (opcional)' : 'Tipo de gasto';
+        document.getElementById('tc-lbl-beneficiario').textContent = ingreso ? 'Quién paga (origen)' : 'Beneficiario';
+        document.getElementById('tc-beneficiario').placeholder = ingreso
+            ? 'Seleccione o escriba quién paga'
+            : 'Seleccione o escriba un beneficiario';
         document.getElementById('tc-motivo').placeholder = ingreso ? 'Ej. Cobro de alquiler local 3...' : 'Ej. Pago de internet mensual...';
+        document.getElementById('tc-col-placa').style.display = ingreso ? 'none' : 'block';
+        if (ingreso) document.getElementById('tc-placa').value = '';
         submit.textContent = ingreso ? 'Guardar Ingreso' : 'Guardar Egreso';
         submit.style.backgroundColor = ingreso ? '#0f766e' : '#1a4273';
         rowTipoGasto.style.display = 'block';

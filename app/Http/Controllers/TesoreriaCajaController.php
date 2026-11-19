@@ -40,10 +40,16 @@ class TesoreriaCajaController extends Controller
             ->when($q !== '', function ($query) use ($q) {
                 $like = $query->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
                 $conTipoGasto = Schema::hasColumn('tesoreria_caja_movimientos', 'tipo_gasto');
-                $query->where(function ($w) use ($q, $like, $conTipoGasto) {
+                $conBenef = Schema::hasColumn('tesoreria_caja_movimientos', 'beneficiario');
+                $conSede = Schema::hasColumn('tesoreria_caja_movimientos', 'sede');
+                $conPlaca = Schema::hasColumn('tesoreria_caja_movimientos', 'placa_vehiculo');
+                $query->where(function ($w) use ($q, $like, $conTipoGasto, $conBenef, $conSede, $conPlaca) {
                     $w->where('concepto', $like, '%'.$q.'%')
                         ->orWhere('referencia', $like, '%'.$q.'%')
-                        ->when($conTipoGasto, fn ($x) => $x->orWhere('tipo_gasto', $like, '%'.$q.'%'));
+                        ->when($conTipoGasto, fn ($x) => $x->orWhere('tipo_gasto', $like, '%'.$q.'%'))
+                        ->when($conBenef, fn ($x) => $x->orWhere('beneficiario', $like, '%'.$q.'%'))
+                        ->when($conSede, fn ($x) => $x->orWhere('sede', $like, '%'.$q.'%'))
+                        ->when($conPlaca, fn ($x) => $x->orWhere('placa_vehiculo', $like, '%'.$q.'%'));
                 });
             })
             ->orderByDesc('fecha')
@@ -61,6 +67,11 @@ class TesoreriaCajaController extends Controller
             'totalesEgreso' => $egresos->groupBy('caja_id')->map(fn ($g) => round($g->sum('monto'), 2)),
             'totalesIngreso' => $ingresos->groupBy('caja_id')->map(fn ($g) => round($g->sum('monto'), 2)),
             'tiposGasto' => FinanzasCatalogo::tiposGasto(),
+            'beneficiarios' => FinanzasCatalogo::beneficiarios([]),
+            'sedes' => array_values(array_unique(array_merge(
+                config('inventario.sedes_locales', []),
+                config('inventario.sedes_finanzas_extra', [])
+            ))),
             'tasa_bcv' => (float) $bcv->getRateForToday(),
             'etiquetas' => config('inventario.display', []),
             'filtros' => [
@@ -88,6 +99,9 @@ class TesoreriaCajaController extends Controller
             'moneda_divisa' => ['nullable', 'in:USD,EUR'],
             'concepto' => ['required', 'string', 'min:3', 'max:300'],
             'referencia' => ['nullable', 'string', 'max:120'],
+            'beneficiario' => ['nullable', 'string', 'max:255'],
+            'sede' => ['nullable', 'string', 'max:40'],
+            'placa_vehiculo' => ['nullable', 'string', 'max:40'],
         ]);
         $data['tipo'] = $data['tipo'] === TesoreriaCajaMovimiento::INGRESO
             ? TesoreriaCajaMovimiento::INGRESO
@@ -100,6 +114,9 @@ class TesoreriaCajaController extends Controller
             ]);
         }
         $data['tipo_gasto'] = $tipoGasto !== '' ? $tipoGasto : null;
+        $data['beneficiario'] = ($t = trim((string) ($data['beneficiario'] ?? ''))) !== '' ? $t : null;
+        $data['sede'] = ($t = trim((string) ($data['sede'] ?? ''))) !== '' ? strtoupper($t) : null;
+        $data['placa_vehiculo'] = ($t = trim((string) ($data['placa_vehiculo'] ?? ''))) !== '' ? mb_strtoupper($t, 'UTF-8') : null;
 
         /** @var TesoreriaCaja $cajaPreview */
         $cajaPreview = TesoreriaCaja::query()->findOrFail((int) $data['caja_id']);
@@ -170,6 +187,17 @@ class TesoreriaCajaController extends Controller
             }
             if (Schema::hasColumn('tesoreria_caja_movimientos', 'tipo_gasto')) {
                 $payload['tipo_gasto'] = $data['tipo_gasto'];
+            }
+            if (Schema::hasColumn('tesoreria_caja_movimientos', 'beneficiario')) {
+                $payload['beneficiario'] = $data['beneficiario'];
+            }
+            if (Schema::hasColumn('tesoreria_caja_movimientos', 'sede')) {
+                $payload['sede'] = $data['sede'];
+            }
+            if (Schema::hasColumn('tesoreria_caja_movimientos', 'placa_vehiculo')) {
+                $payload['placa_vehiculo'] = $data['tipo'] === TesoreriaCajaMovimiento::EGRESO
+                    ? $data['placa_vehiculo']
+                    : null;
             }
             $mov = TesoreriaCajaMovimiento::query()->create($payload);
             $caja->update(['saldo' => round((float) $caja->saldo + $delta, 2)]);
@@ -256,6 +284,15 @@ class TesoreriaCajaController extends Controller
         ];
         if (Schema::hasColumn('flujo_cajas', 'tipo_gasto')) {
             $datos['tipo_gasto'] = $mov->esIngreso() ? null : ($mov->tipo_gasto ?? null);
+        }
+        if (Schema::hasColumn('flujo_cajas', 'titular_receptor')) {
+            $datos['titular_receptor'] = $mov->beneficiario;
+        }
+        if (Schema::hasColumn('flujo_cajas', 'sede')) {
+            $datos['sede'] = $mov->sede;
+        }
+        if (Schema::hasColumn('flujo_cajas', 'placa_vehiculo')) {
+            $datos['placa_vehiculo'] = $mov->placa_vehiculo;
         }
 
         $espejo = $mov->flujo_caja_id ? FlujoCaja::query()->find($mov->flujo_caja_id) : null;

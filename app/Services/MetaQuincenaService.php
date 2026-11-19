@@ -459,6 +459,103 @@ class MetaQuincenaService
     }
 
     /**
+     * Valor USD por unidad vendida que se suma a la comisión del responsable.
+     */
+    public function puedeEditarValor(User $user): bool
+    {
+        return ! $this->soloSusMetas($user)
+            && ($user->isAdmin() || $user->isGerente() || $user->canAccess('meta'));
+    }
+
+    public function actualizarValor(MetaQuincenaProducto $meta, ?float $valor, User $user): MetaQuincenaProducto
+    {
+        if (! $this->puedeEditarValor($user)) {
+            throw ValidationException::withMessages([
+                'valor_unitario' => 'No puedes definir el valor de comisión de la meta.',
+            ]);
+        }
+
+        abort_unless($this->puedeOperarSede($user, (string) $meta->sede), 403);
+
+        if (! Schema::hasColumn('meta_quincena_productos', 'valor_unitario')) {
+            throw ValidationException::withMessages([
+                'valor_unitario' => 'El campo de valor aún no está disponible.',
+            ]);
+        }
+
+        $meta->valor_unitario = $valor !== null && $valor > 0 ? round($valor, 2) : null;
+        $meta->save();
+
+        return $meta->fresh(['responsable.cliente', 'responsable.cargoCatalogo']);
+    }
+
+    /**
+     * Bono de productos meta para la comisión del responsable en una quincena.
+     * Monto = valor_unitario × unidades vendidas (tope: cantidad de la meta).
+     *
+     * @return array{total: float, lineas: list<array{meta_id:int, producto_id:int, sede:string, valor_unitario:float, vendido:float, unidades_pago:float, monto:float}>}
+     */
+    public function bonoComisionResponsable(int $empleadoId, Carbon|string $inicio, Carbon|string $fin): array
+    {
+        $vacio = ['total' => 0.0, 'lineas' => []];
+        if ($empleadoId <= 0
+            || ! Schema::hasTable('meta_quincena_productos')
+            || ! Schema::hasColumn('meta_quincena_productos', 'valor_unitario')
+        ) {
+            return $vacio;
+        }
+
+        $inicio = Carbon::parse($inicio)->toDateString();
+        $fin = Carbon::parse($fin)->toDateString();
+
+        $metas = MetaQuincenaProducto::query()
+            ->where('responsable_empleado_id', $empleadoId)
+            ->whereDate('quincena_inicio', $inicio)
+            ->whereDate('quincena_fin', $fin)
+            ->whereNotNull('valor_unitario')
+            ->where('valor_unitario', '>', 0)
+            ->get();
+
+        if ($metas->isEmpty()) {
+            return $vacio;
+        }
+
+        $lineas = [];
+        $total = 0.0;
+        foreach ($metas as $meta) {
+            $valor = round((float) $meta->valor_unitario, 2);
+            $metaCantidad = max(0.0, (float) $meta->cantidad_inicial);
+            $vendido = max(0.0, $this->unidadesVendidas(
+                (int) $meta->producto_id,
+                (string) $meta->sede,
+                $meta->quincena_inicio,
+                $meta->quincena_fin
+            ));
+            // Paga por lo vendido, sin pasar de la cantidad meta.
+            $unidadesPago = $metaCantidad > 0 ? min($vendido, $metaCantidad) : $vendido;
+            $monto = round($valor * $unidadesPago, 2);
+            if ($monto <= 0) {
+                continue;
+            }
+            $lineas[] = [
+                'meta_id' => (int) $meta->id,
+                'producto_id' => (int) $meta->producto_id,
+                'sede' => mb_strtoupper(trim((string) $meta->sede), 'UTF-8'),
+                'valor_unitario' => $valor,
+                'vendido' => $vendido,
+                'unidades_pago' => $unidadesPago,
+                'monto' => $monto,
+            ];
+            $total += $monto;
+        }
+
+        return [
+            'total' => round($total, 2),
+            'lineas' => $lineas,
+        ];
+    }
+
+    /**
      * @return list<string>
      */
     public function sedesDelSupervisor(User $user): array
@@ -588,6 +685,14 @@ class MetaQuincenaService
         $stockActual = $this->esArea($meta->sede)
             ? max(0.0, round($cantidadInicial - $vendido, 2))
             : $this->stockActual((int) $meta->producto_id, $meta->sede);
+        $tieneValor = Schema::hasColumn('meta_quincena_productos', 'valor_unitario')
+            && $meta->valor_unitario !== null
+            && (float) $meta->valor_unitario > 0;
+        $valorUnitario = $tieneValor ? round((float) $meta->valor_unitario, 2) : null;
+        $unidadesPago = $cantidadInicial > 0 ? min($vendido, $cantidadInicial) : max(0.0, $vendido);
+        $comisionEstimada = $valorUnitario !== null
+            ? round($valorUnitario * $unidadesPago, 2)
+            : 0.0;
 
         return [
             'id' => $meta->id,
@@ -606,6 +711,8 @@ class MetaQuincenaService
             'avance_pct' => $cantidadInicial > 0
                 ? round(min(100, ($vendido / $cantidadInicial) * 100), 1)
                 : ($vendido > 0 ? 100.0 : 0.0),
+            'valor_unitario' => $valorUnitario,
+            'comision_estimada' => $comisionEstimada,
             'responsable_empleado_id' => $meta->responsable_empleado_id,
             'responsable_nombre' => $meta->responsable?->nombre() ?? null,
             'creado_por_user_id' => $meta->creado_por_user_id,

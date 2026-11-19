@@ -31,6 +31,9 @@ class MetaQuincenaTest extends TestCase
         if (! Schema::hasTable('meta_quincena_productos')) {
             (require database_path('migrations/2026_09_03_120000_create_meta_quincena_productos_table.php'))->up();
         }
+        if (! Schema::hasColumn('meta_quincena_productos', 'valor_unitario')) {
+            (require database_path('migrations/2026_11_19_160000_add_valor_unitario_to_meta_quincena_productos_table.php'))->up();
+        }
 
         $zamora = DB::table('nomina_sedes')->insertGetId(['nombre' => 'Zamora', 'codigo' => 'ZAMORA']);
         $this->ana = $this->empleado('ANA TELEFONIA', '11111111', $zamora);
@@ -153,6 +156,52 @@ class MetaQuincenaTest extends TestCase
 
         $this->actingAs($gerente)->getJson(route('metas.stock', $producto))
             ->assertJsonPath('responsables.ZAMORA', 'ANA TELEFONIA');
+    }
+
+    public function test_gerente_puede_definir_valor_unitario_de_la_meta(): void
+    {
+        $gerente = $this->usuario(User::ROLE_GERENTE, null);
+
+        $this->actingAs($gerente)
+            ->patchJson(route('metas.valor', $this->deAna), ['valor_unitario' => 2.5])
+            ->assertOk()
+            ->assertJsonPath('valor_unitario', 2.5);
+
+        $this->assertEquals(2.5, (float) $this->deAna->fresh()->valor_unitario);
+
+        $this->actingAs($this->usuario(User::ROLE_TELEFONIA, 'ZAMORA'))
+            ->patchJson(route('metas.valor', $this->deAna), ['valor_unitario' => 9])
+            ->assertForbidden();
+        $this->assertEquals(2.5, (float) $this->deAna->fresh()->valor_unitario);
+    }
+
+    public function test_el_bono_de_meta_usa_valor_por_unidades_vendidas_hasta_la_meta(): void
+    {
+        $this->deAna->update(['valor_unitario' => 2, 'cantidad_inicial' => 3]);
+        $q = app(MetaQuincenaService::class)->quincenaActual();
+
+        if (Schema::hasTable('ventas_detalle')) {
+            DB::table('ventas_detalle')->insert([
+                'producto_id' => $this->deAna->producto_id,
+                'sede' => 'ZAMORA',
+                'fecha' => $q['inicio']->toDateString(),
+                'cantidad' => 5,
+                'tipo_documento' => 'FAC',
+                'numero_documento' => 'F-META-1',
+                'anulado' => false,
+            ]);
+        }
+
+        $bono = app(MetaQuincenaService::class)->bonoComisionResponsable(
+            $this->ana->id,
+            $q['inicio'],
+            $q['fin']
+        );
+
+        // 5 vendidas, meta 3 → paga 3 × $2 = $6
+        $this->assertEquals(6.0, $bono['total']);
+        $this->assertCount(1, $bono['lineas']);
+        $this->assertEquals(3.0, $bono['lineas'][0]['unidades_pago']);
     }
 
     public function test_una_sede_escrita_distinto_en_nomina_igual_trae_sus_vendedores(): void

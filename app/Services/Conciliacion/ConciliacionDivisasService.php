@@ -177,7 +177,7 @@ class ConciliacionDivisasService
     }
 
     /**
-     * Estado de cuenta en PDF (Citizens, Amerant). No lleva mapeo: el formato de cada banco es fijo.
+     * Estado de cuenta en PDF (Citizens, Amerant, Wells Fargo). No lleva mapeo: el formato de cada banco es fijo.
      *
      * @return array{nuevas: int, duplicadas: int, movimientos: int, banco_pdf: string, cuenta: ?string, cuadra: bool, desde: ?string, hasta: ?string}
      */
@@ -185,7 +185,7 @@ class ConciliacionDivisasService
     {
         $r = $this->pdf->leer($path);
         if ($r === null) {
-            throw ValidationException::withMessages(['archivos' => "«{$archivo}» no es un PDF que reconozca: estado de cuenta de Citizens o Amerant, o el reporte de pagos de Cloud."]);
+            throw ValidationException::withMessages(['archivos' => "«{$archivo}» no es un PDF que reconozca: estado de cuenta de Citizens, Amerant o Wells Fargo, o el reporte de pagos de Cloud."]);
         }
         $clave = $this->claveBanco($banco);
         if ($clave !== null && $clave !== $this->claveBanco($r['banco'])) {

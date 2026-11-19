@@ -78,7 +78,7 @@ class IncentivoEvaluacionService
                 }
             }
         }
-        $productosMeta = $this->productosMetaPorEmpleado($filtroMeta, $clave === 'arreglos');
+        $productosMeta = $this->productosMetaPorEmpleado($filtroMeta, $clave === 'arreglos', $desde, $hasta);
         if ($clave === 'call_center') {
             // En call center el producto meta cuenta por lo que se lleva vendido, no solo los completos.
             foreach ($productosMeta as $id => $dato) {
@@ -617,7 +617,7 @@ class IncentivoEvaluacionService
     {
         $metas = $this->metasPorSede();
         $tiendas = $this->totalesTienda($desde, $hasta, [], []);
-        $productos = $this->productosMetaPorSede();
+        $productos = $this->productosMetaPorSede($desde, $hasta);
         $nombres = $this->nombresSede();
         $nivelacion = $this->nivelacionPorSede($desde, $hasta);
         $inventario = $this->rotacionInventarioPorSede($desde, $hasta);
@@ -1126,19 +1126,57 @@ class IncentivoEvaluacionService
     /**
      * @return array<int, array{cumplidas:int, total:int, estado:string}>
      */
-    public function productosMetaAsignados(): array
+    public function productosMetaAsignados(?Carbon $desde = null, ?Carbon $hasta = null): array
     {
-        return $this->productosMetaPorEmpleado(null, false);
+        return $this->productosMetaPorEmpleado(null, false, $desde, $hasta);
     }
 
     /**
-     * La meta de producto asignada a cada persona en la quincena.
+     * Quincena de producto meta del período del indicador (no la “actual” del sistema).
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function rangoMetasQuincena(?Carbon $desde, ?Carbon $hasta): array
+    {
+        $desde = ($desde ?? now())->copy()->startOfDay();
+        $hasta = ($hasta ?? $desde)->copy()->startOfDay();
+        $quincena = $this->metasQuincena->quincenaActual($desde);
+        $inicio = $quincena['inicio']->toDateString();
+        $fin = $quincena['fin']->toDateString();
+
+        if (! Schema::hasTable('meta_quincena_productos')) {
+            return [$inicio, $fin];
+        }
+
+        if (DB::table('meta_quincena_productos')->whereDate('quincena_inicio', $inicio)->exists()) {
+            return [$inicio, $fin];
+        }
+
+        // Si esa quincena no tiene metas cargadas, usa la que solape el rango elegido.
+        $solape = DB::table('meta_quincena_productos')
+            ->whereDate('quincena_inicio', '<=', $hasta->toDateString())
+            ->whereDate('quincena_fin', '>=', $desde->toDateString())
+            ->orderByDesc('quincena_inicio')
+            ->first(['quincena_inicio', 'quincena_fin']);
+
+        if ($solape) {
+            return [
+                Carbon::parse($solape->quincena_inicio)->toDateString(),
+                Carbon::parse($solape->quincena_fin)->toDateString(),
+            ];
+        }
+
+        return [$inicio, $fin];
+    }
+
+    /**
+     * La meta de producto asignada a cada persona en la quincena del período evaluado.
      * En Arreglo solo entra si además está en la selección activa.
      *
      * @param  array{categorias:list<string>, productos:list<string>}|null  $filtro
      * @return array<int, array{cumplidas:int, total:int, estado:string}>
      */
-    private function productosMetaPorEmpleado(?array $filtro, bool $soloSeleccion): array
+    private function productosMetaPorEmpleado(?array $filtro, bool $soloSeleccion, ?Carbon $desde = null, ?Carbon $hasta = null): array
     {
         if ($soloSeleccion && ($filtro === null || ($filtro['categorias'] === [] && $filtro['productos'] === []))) {
             return [];
@@ -1147,9 +1185,7 @@ class IncentivoEvaluacionService
             return [];
         }
 
-        $quincena = $this->metasQuincena->resolverQuincenaListado(null);
-        $inicio = $quincena['inicio']->toDateString();
-        $fin = $quincena['fin']->toDateString();
+        [$inicio, $fin] = $this->rangoMetasQuincena($desde, $hasta);
         $categorias = $filtro['categorias'] ?? [];
         $codigos = $filtro['productos'] ?? [];
 
@@ -1222,15 +1258,13 @@ class IncentivoEvaluacionService
      *
      * @return array<string, array{cumplidas:int, total:int, estado:string}>
      */
-    private function productosMetaPorSede(): array
+    private function productosMetaPorSede(?Carbon $desde = null, ?Carbon $hasta = null): array
     {
         if (! Schema::hasTable('meta_quincena_productos') || ! Schema::hasTable('productos') || ! Schema::hasTable('ventas_detalle')) {
             return [];
         }
 
-        $quincena = $this->metasQuincena->resolverQuincenaListado(null);
-        $inicio = $quincena['inicio']->toDateString();
-        $fin = $quincena['fin']->toDateString();
+        [$inicio, $fin] = $this->rangoMetasQuincena($desde, $hasta);
 
         $metas = DB::table('meta_quincena_productos as m')
             ->join('productos as p', 'p.id', '=', 'm.producto_id')

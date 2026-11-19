@@ -69,8 +69,11 @@ class CuadreCajaService
 
         $modo = $sede ? 'cajas' : 'sedes';
         $etiquetas = config('inventario.display', []);
-        $filas = [];
+        $metodosCuadre = config('cuadre_caja.metodos_cuadre', []);
+        $filas = $this->filasBaseDashboard($sede ?: 'DORAL');
         $clavesCol = [];
+
+        $cajasOcultas = ['CAJA COBRANZA', 'CAJA RRHH'];
 
         foreach ($cierres as $cierre) {
             if ($modo === 'sedes') {
@@ -79,6 +82,10 @@ class CuadreCajaService
             } else {
                 $col = trim((string) ($cierre->codigo_caja ?: $cierre->descripcion_caja ?: 'SIN CAJA'));
                 $etiquetaCol = trim((string) ($cierre->descripcion_caja ?: $cierre->codigo_caja ?: 'Sin caja'));
+                $nombreCaja = mb_strtoupper($etiquetaCol !== '' ? $etiquetaCol : $col, 'UTF-8');
+                if (in_array($nombreCaja, $cajasOcultas, true)) {
+                    continue;
+                }
             }
             if ($col === '') {
                 $col = 'SIN';
@@ -90,41 +97,44 @@ class CuadreCajaService
                 if (($linea['regla'] ?? null) === 'no_suma') {
                     continue;
                 }
-                $forma = mb_strtoupper(trim((string) ($linea['forma_pago'] ?: $linea['codigo_metodo'] ?: 'OTRO')), 'UTF-8');
-                $filas[$forma] ??= [
-                    'forma' => $forma,
-                    'por_columna' => [],
-                    'suite' => 0.0,
-                    'tesoreria' => 0.0,
-                ];
+                $metodo = (string) ($linea['codigo_metodo'] ?? '');
+                if ($metodosCuadre !== [] && ! in_array($metodo, $metodosCuadre, true)) {
+                    continue;
+                }
+                $forma = mb_strtoupper(trim((string) ($linea['forma_pago'] ?: $metodo ?: 'OTRO')), 'UTF-8');
+                if (str_contains($forma, 'CAJA PRINCIPAL')) {
+                    continue;
+                }
+
+                // Puntos de venta: una sola fila global (como en el arqueo).
+                $esPos = ! empty($linea['punto_venta']) || ! empty($linea['agrupada'])
+                    || (($linea['codigo_cuenta'] ?? '') === self::CUENTA_PUNTOS);
+                $clave = $esPos
+                    ? $this->clave($metodo, self::CUENTA_PUNTOS)
+                    : (string) ($linea['clave'] ?? $this->clave($metodo, $linea['codigo_cuenta'] ?? ''));
+
+                // Solo catálogo del cuadre de esa sede (o DORAL si es consolidado): no sumar cuentas sueltas de otros cierres.
+                if (! isset($filas[$clave])) {
+                    continue;
+                }
+
                 $suite = (float) ($linea['suite_usd'] ?? 0);
                 $tesoreria = $linea['tesoreria_usd'] !== null ? (float) $linea['tesoreria_usd'] : 0.0;
-                $filas[$forma]['por_columna'][$col] = round(($filas[$forma]['por_columna'][$col] ?? 0) + $suite, 2);
-                $filas[$forma]['suite'] = round($filas[$forma]['suite'] + $suite, 2);
-                $filas[$forma]['tesoreria'] = round($filas[$forma]['tesoreria'] + $tesoreria, 2);
+                // EFECTIVO DEVOLUCION: resta en Suite (no es cobro) y no se duplica en Tesorería del consolidado.
+                $esDevolucion = ($linea['regla'] ?? null) === 'devolucion'
+                    || $metodo === strtoupper((string) config('cuadre_caja.metodo_devolucion_efectivo', 'NDC1'));
+                if ($esDevolucion) {
+                    $suite = $suite > 0 ? -$suite : $suite;
+                    $tesoreria = 0.0;
+                }
+                $filas[$clave]['por_columna'][$col] = round(($filas[$clave]['por_columna'][$col] ?? 0) + $suite, 2);
+                $filas[$clave]['suite'] = round($filas[$clave]['suite'] + $suite, 2);
+                $filas[$clave]['tesoreria'] = round($filas[$clave]['tesoreria'] + $tesoreria, 2);
             }
         }
 
-        $ordenFormas = [];
-        foreach (config('cuadre_caja.formas_cuadre.DORAL', []) as $def) {
-            $ordenFormas[] = mb_strtoupper(trim((string) ($def[0] ?? '')), 'UTF-8');
-        }
-        $ordenFormas = array_values(array_unique(array_filter($ordenFormas)));
-        uksort($filas, function (string $a, string $b) use ($ordenFormas) {
-            $ia = array_search($a, $ordenFormas, true);
-            $ib = array_search($b, $ordenFormas, true);
-            if ($ia === false && $ib === false) {
-                return strnatcasecmp($a, $b);
-            }
-            if ($ia === false) {
-                return 1;
-            }
-            if ($ib === false) {
-                return -1;
-            }
-
-            return $ia <=> $ib;
-        });
+        $filas = $this->ordenarComoSuite(array_values($filas), $sede ?: 'DORAL');
+        $filas = array_column($filas, null, 'clave');
 
         if ($modo === 'sedes') {
             $preferidas = config('inventario.sedes_gerencial', []);
@@ -471,6 +481,64 @@ class CuadreCajaService
         $metodos = config('cuadre_caja.metodos_cuadre', []);
 
         return array_values(array_filter($this->formasDePago($sede), fn ($f) => in_array($f['codigo_metodo'], $metodos, true)));
+    }
+
+    /**
+     * Filas del dashboard = mismas del arqueo (formas_cuadre), con puntos de venta en una sola fila global.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function filasBaseDashboard(string $sede): array
+    {
+        $noSuman = config('cuadre_caja.metodos_no_suman', []);
+        $filas = [];
+        $posHecho = [];
+
+        foreach ($this->formasDelCuadre($sede) as $f) {
+            $metodo = (string) $f['codigo_metodo'];
+            if (in_array($metodo, $noSuman, true)) {
+                continue;
+            }
+            $forma = mb_strtoupper(trim((string) ($f['forma_pago'] ?: $metodo)), 'UTF-8');
+            if (! empty($f['punto_venta']) && empty($f['en_dolares'])) {
+                if (isset($posHecho[$metodo])) {
+                    continue;
+                }
+                $posHecho[$metodo] = true;
+                $clave = $this->clave($metodo, self::CUENTA_PUNTOS);
+                $filas[$clave] = [
+                    'clave' => $clave,
+                    'orden_clave' => (string) $f['clave'],
+                    'codigo_metodo' => $metodo,
+                    'codigo_cuenta' => self::CUENTA_PUNTOS,
+                    'forma_pago' => $forma,
+                    'forma' => $forma,
+                    'cuenta' => 'Todos los puntos de venta',
+                    'por_columna' => [],
+                    'suite' => 0.0,
+                    'tesoreria' => 0.0,
+                ];
+
+                continue;
+            }
+
+            $clave = (string) $f['clave'];
+            $cuenta = trim((string) ($f['cuenta'] ?? ''));
+            $filas[$clave] = [
+                'clave' => $clave,
+                'orden_clave' => $clave,
+                'codigo_metodo' => $metodo,
+                'codigo_cuenta' => (string) ($f['codigo_cuenta'] ?? ''),
+                'forma_pago' => $forma,
+                'forma' => $forma,
+                'cuenta' => $cuenta !== '' ? $cuenta : null,
+                'por_columna' => [],
+                'suite' => 0.0,
+                'tesoreria' => 0.0,
+            ];
+        }
+
+        return $filas;
     }
 
     /**

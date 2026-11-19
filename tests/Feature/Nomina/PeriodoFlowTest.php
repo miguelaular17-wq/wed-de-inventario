@@ -838,4 +838,25 @@ class PeriodoFlowTest extends TestCase
         $this->post(route('nomina.comisiones.recalcular', $periodo))
             ->assertSessionHasErrors('estado');
     }
+
+    public function test_recalcula_comisiones_desde_pantalla_aunque_este_pagada(): void
+    {
+        $this->actingAs($this->rrhh);
+        Carbon::setTestNow(Carbon::parse('2026-08-20'));
+
+        $this->post(route('nomina.periodos.store'), ['fecha' => '2026-08-20'])->assertRedirect();
+        $periodo = NominaPeriodo::query()->firstOrFail();
+        $this->post(route('nomina.periodos.calcular', $periodo))->assertRedirect();
+        $periodo->update(['estado' => NominaPeriodo::PAGADO, 'pagado_at' => now()]);
+
+        $this->get(route('nomina.comisiones.show', $periodo))
+            ->assertOk()
+            ->assertSee('Recalcular comisiones');
+
+        $this->post(route('nomina.comisiones.recalcular', $periodo))
+            ->assertRedirect(route('nomina.comisiones.show', $periodo))
+            ->assertSessionHas('status');
+
+        Carbon::setTestNow();
+    }
 }

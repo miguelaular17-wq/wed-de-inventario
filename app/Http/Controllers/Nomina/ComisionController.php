@@ -395,17 +395,22 @@ class ComisionController extends Controller
             : 'Bono de '.$empleado->nombre().' dejado en $0.00.';
 
         if ($quiereJson) {
+            $bonoMeta = $liq ? $liq->bonoProductosMeta() : (float) ($liqAntes?->bonoProductosMeta() ?? 0);
+            $bonoManual = $liq ? $liq->bonoManual() : $monto;
+            $abonosTotal = $liq ? round((float) $liq->abonos, 2) : round($bonoManual + $bonoMeta, 2);
             $payload = [
                 'ok' => true,
                 'message' => $mensaje,
                 'empleado_id' => (int) $empleado->id,
-                'abonos' => $liq ? round((float) $liq->abonos, 2) : $monto,
+                'abonos' => $abonosTotal,
+                'bono_manual' => round($bonoManual, 2),
+                'bono_meta' => round($bonoMeta, 2),
                 'retencion' => $liq ? round((float) $liq->retencion, 2) : null,
                 'total_pagar' => $liq ? round((float) $liq->total_pagar, 2) : null,
                 'comision_total' => $liq ? round((float) $liq->comision_total, 2) : null,
                 'delta_abonos' => $liq && $liqAntes
                     ? round((float) $liq->abonos - (float) $liqAntes->abonos, 2)
-                    : round($monto - (float) ($liqAntes?->abonos ?? $actual), 2),
+                    : round($monto - $actual, 2),
                 'delta_retencion' => $liq && $liqAntes
                     ? round((float) $liq->retencion - (float) $liqAntes->retencion, 2)
                     : 0.0,
@@ -1055,17 +1060,17 @@ class ComisionController extends Controller
 
     public function recalcular(NominaPeriodo $periodo): RedirectResponse
     {
-        if ($msg = $this->mensajeSiNoEditable($periodo)) {
+        try {
+            $this->periods->recalcularComisiones($periodo, auth()->id());
+        } catch (ValidationException $e) {
             return redirect()
                 ->route('nomina.comisiones.show', $periodo)
-                ->withErrors(['estado' => $msg]);
+                ->withErrors($e->errors());
         }
-
-        $this->periods->recalcularComisiones($periodo, auth()->id());
 
         return redirect()
             ->route('nomina.comisiones.show', $periodo)
-            ->with('status', 'Comisiones recalculadas con los datos actuales de ventas y la tasa BCV del día.');
+            ->with('status', 'Comisiones recalculadas con ventas, bonos de productos meta y la tasa BCV del día.');
     }
 
     public function toggleExentoRetencion(Request $request, NominaPeriodo $periodo, NominaEmpleado $empleado): RedirectResponse

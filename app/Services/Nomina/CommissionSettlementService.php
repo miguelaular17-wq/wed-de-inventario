@@ -9,6 +9,7 @@ use App\Models\Nomina\NominaConfig;
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaLiquidacionComision;
 use App\Models\Nomina\NominaPeriodo;
+use App\Services\MetaQuincenaService;
 use Illuminate\Support\Facades\Schema;
 
 class CommissionSettlementService
@@ -17,6 +18,7 @@ class CommissionSettlementService
         private AjusteService $ajustes,
         private MerchandiseDeductionService $mercancia,
         private NominaDescuentoComentarios $descuentoComentarios,
+        private MetaQuincenaService $metasQuincena,
     ) {
     }
 
@@ -91,13 +93,21 @@ class CommissionSettlementService
         array $calculo,
         float $prestamos = 0
     ): NominaLiquidacionComision {
+        $bonoMeta = $this->metasQuincena->bonoComisionResponsable(
+            (int) $empleado->id,
+            $periodo->fecha_inicio,
+            $periodo->fecha_fin
+        );
         $abonos = $this->aplicarAbonos($periodo, $empleado)
-            + $this->ajustes->aplicarComision($periodo, $empleado, NominaEmpleadoAjuste::TIPO_BONIFICACION);
+            + $this->ajustes->aplicarComision($periodo, $empleado, NominaEmpleadoAjuste::TIPO_BONIFICACION)
+            + (float) ($bonoMeta['total'] ?? 0);
         $descuentos = $this->aplicarDescuentos($periodo, $empleado)
             + $this->ajustes->aplicarComision($periodo, $empleado, NominaEmpleadoAjuste::TIPO_DEDUCCION)
             + $this->mercancia->aplicarComision($periodo, $empleado);
         $comisionTotal = round((float) ($calculo['total'] ?? 0), 2);
         $bruto = round($comisionTotal + $abonos, 2);
+        $calculo['bono_productos_meta'] = (float) ($bonoMeta['total'] ?? 0);
+        $calculo['bono_productos_meta_lineas'] = $bonoMeta['lineas'] ?? [];
         $modo = (string) ($calculo['modo'] ?? $empleado->modo_comision);
         $retencionPct = NominaConfig::getDecimal('retencion_comision_pct', 10);
         if ($empleado->exentoRetencionComision()) {

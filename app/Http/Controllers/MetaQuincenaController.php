@@ -25,6 +25,7 @@ class MetaQuincenaController extends Controller
         $soloSusMetas = $metas->soloSusMetas($user);
         $puedeMarcar = ! $soloSusMetas && $user->canAccess('meta')
             && ($metas->veTodasLasSedes($user) || $metas->areaDelUsuario($user) !== null);
+        $puedeEditarValor = $metas->puedeEditarValor($user);
         $equiposPorSede = [];
 
         foreach ($soloSusMetas ? [] : $filas->pluck('sede')->unique() as $sede) {
@@ -46,6 +47,7 @@ class MetaQuincenaController extends Controller
             'sedeFiltro' => $sedeFiltro,
             'soloSusMetas' => $soloSusMetas,
             'puedeMarcar' => $puedeMarcar,
+            'puedeEditarValor' => $puedeEditarValor,
             'equiposPorSede' => $equiposPorSede,
             'sedesDisponibles' => $metas->veTodasLasSedes($user)
                 ? array_merge($metas->sedesDisponibles(), $metas->areasDisponibles())
@@ -152,6 +154,53 @@ class MetaQuincenaController extends Controller
             'message' => 'Responsable actualizado.',
             'responsable_empleado_id' => $actualizado->responsable_empleado_id,
             'responsable_nombre' => $actualizado->responsable?->nombre(),
+        ]);
+    }
+
+    public function actualizarValor(Request $request, MetaQuincenaProducto $meta, MetaQuincenaService $metas): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($metas->puedeVerMetas($user), 403);
+        abort_unless($metas->puedeEditarValor($user), 403);
+        abort_unless($metas->puedeOperarSede($user, (string) $meta->sede), 403);
+
+        $data = $request->validate([
+            'valor_unitario' => ['nullable', 'numeric', 'min:0', 'max:100000'],
+        ]);
+
+        try {
+            $actualizado = $metas->actualizarValor(
+                $meta,
+                array_key_exists('valor_unitario', $data) && $data['valor_unitario'] !== null
+                    ? (float) $data['valor_unitario']
+                    : null,
+                $user
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => collect($e->errors())->flatten()->first() ?: 'No se pudo guardar el valor.',
+            ], 422);
+        }
+
+        $valor = $actualizado->valor_unitario !== null ? round((float) $actualizado->valor_unitario, 2) : null;
+        $vendido = $metas->unidadesVendidas(
+            (int) $actualizado->producto_id,
+            (string) $actualizado->sede,
+            $actualizado->quincena_inicio,
+            $actualizado->quincena_fin
+        );
+        $tope = max(0.0, (float) $actualizado->cantidad_inicial);
+        $unidadesPago = $tope > 0 ? min($vendido, $tope) : $vendido;
+        $comisionEstimada = $valor !== null && $valor > 0
+            ? round($valor * $unidadesPago, 2)
+            : 0.0;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Valor de comisión actualizado.',
+            'valor_unitario' => $valor,
+            'comision_estimada' => $comisionEstimada,
         ]);
     }
 

@@ -138,6 +138,20 @@ class NominaLiquidacionComision extends Model
         return round((float) $this->comision_telefonia + (float) $this->comision_otros, 2);
     }
 
+    /** Bono automático por productos meta (valor $/u. × unidades vendidas). */
+    public function bonoProductosMeta(): float
+    {
+        $snap = $this->snapshot ?? [];
+
+        return round((float) ($snap['bono_productos_meta'] ?? 0), 2);
+    }
+
+    /** Bonos manuales / abonos, sin el bono automático de productos meta. */
+    public function bonoManual(): float
+    {
+        return round(max(0, (float) $this->abonos - $this->bonoProductosMeta()), 2);
+    }
+
     public function comisionSt(): float
     {
         $snap = $this->snapshot ?? [];

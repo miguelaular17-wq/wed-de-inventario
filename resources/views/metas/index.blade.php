@@ -29,8 +29,10 @@
                     · Solo las metas de tu sede. Asigna el responsable de cada producto.
                 @elseif($puedeMarcar)
                     · Marca productos desde Marketing → Sobre Stock
+                    @if(!empty($puedeEditarValor)) · El valor $/u. se paga en la comisión del responsable por unidades vendidas (hasta la meta).@endif
                 @else
                     · Productos asignados a tu sede
+                    @if(!empty($puedeEditarValor)) · Puedes definir el valor $/u. de comisión del responsable.@endif
                 @endif
             </p>
         </div>
@@ -107,6 +109,7 @@
                     <th style="text-align:right;">Vendido</th>
                     <th>Última venta</th>
                     <th>Avance</th>
+                    <th style="text-align:right;" title="USD por unidad vendida que se suma a la comisión del responsable">Valor $/u.</th>
                     <th>Responsable</th>
                     @if($puedeMarcar)
                         <th></th>
@@ -149,6 +152,37 @@
                                     <div style="height:100%;width:{{ min(100, $fila['avance_pct']) }}%;background:{{ $fila['avance_pct'] >= 100 ? '#16a34a' : '#1a4480' }};"></div>
                                 </div>
                             </div>
+                        </td>
+                        <td style="text-align:right;white-space:nowrap;">
+                            @if(!empty($puedeEditarValor))
+                                <input
+                                    type="number"
+                                    class="meta-valor"
+                                    data-meta-id="{{ $fila['id'] }}"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    value="{{ $fila['valor_unitario'] !== null ? number_format((float) $fila['valor_unitario'], 2, '.', '') : '' }}"
+                                    style="width:88px;padding:5px 8px;border-radius:8px;border:1px solid var(--border);text-align:right;font-size:.82rem;"
+                                    title="USD por unidad vendida (hasta la meta)"
+                                >
+                                <div class="muted meta-comision-est" style="font-size:.72rem;margin-top:3px;">
+                                    @if(($fila['comision_estimada'] ?? 0) > 0)
+                                        ≈ ${{ number_format((float) $fila['comision_estimada'], 2) }}
+                                    @else
+                                        —
+                                    @endif
+                                </div>
+                            @else
+                                @if($fila['valor_unitario'] !== null && (float) $fila['valor_unitario'] > 0)
+                                    ${{ number_format((float) $fila['valor_unitario'], 2) }}
+                                    @if(($fila['comision_estimada'] ?? 0) > 0)
+                                        <div class="muted" style="font-size:.72rem;">≈ ${{ number_format((float) $fila['comision_estimada'], 2) }}</div>
+                                    @endif
+                                @else
+                                    <span class="muted">—</span>
+                                @endif
+                            @endif
                         </td>
                         <td>
                             @if($soloSusMetas)
@@ -193,7 +227,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ $puedeMarcar ? 9 : 8 }}" class="muted" style="text-align:center;padding:28px;">
+                        <td colspan="{{ $puedeMarcar ? 10 : 9 }}" class="muted" style="text-align:center;padding:28px;">
                             @if($sedeFiltro !== '')
                                 No hay productos meta de {{ $sedeFiltro }} en esta quincena.
                             @elseif($soloSusMetas)
@@ -213,6 +247,51 @@
 @push('scripts')
 <script>
 const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+document.querySelectorAll('.meta-valor').forEach(inp => {
+    const guardar = async () => {
+        const metaId = inp.dataset.metaId;
+        const raw = String(inp.value || '').trim();
+        const body = { valor_unitario: raw === '' ? null : Number(raw) };
+        try {
+            const res = await fetch(`{{ url('/metas') }}/${metaId}/valor`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                },
+                body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+                alert(data.message || 'No se pudo guardar el valor.');
+                return;
+            }
+            if (data.valor_unitario != null) {
+                inp.value = Number(data.valor_unitario).toFixed(2);
+            } else {
+                inp.value = '';
+            }
+            const est = inp.parentElement.querySelector('.meta-comision-est');
+            if (est) {
+                const monto = Number(data.comision_estimada || 0);
+                est.textContent = monto > 0
+                    ? `≈ $${monto.toFixed(2)}`
+                    : '—';
+            }
+        } catch (e) {
+            alert('Error de red al guardar el valor.');
+        }
+    };
+    inp.addEventListener('change', guardar);
+    inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            inp.blur();
+        }
+    });
+});
+
 document.querySelectorAll('.meta-responsable').forEach(sel => {
     sel.addEventListener('change', async () => {
         const metaId = sel.dataset.metaId;

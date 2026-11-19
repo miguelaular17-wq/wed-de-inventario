@@ -21,10 +21,56 @@
 .rs-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
 .rs-tab { padding:7px 12px; border-radius:999px; border:1px solid #c9daf3; background:#fff; color:#1a4480; font-weight:700; font-size:.8rem; text-decoration:none; }
 .rs-tab.activo { background:#1a4480; color:#fff; border-color:#1a4480; }
-.rs-filtros { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:10px; align-items:end; }
-.rs-filtros label { display:grid; gap:4px; font-size:.7rem; font-weight:700; text-transform:uppercase; color:#64748b; }
-.rs-filtros input, .rs-filtros select { padding:7px 9px; border:1px solid #cbd5e1; border-radius:7px; font-size:.86rem; font-weight:400; text-transform:none; color:#0f172a; background:#fff; }
-.rs-botones { display:flex; gap:8px; }
+.rs-filtros-card { padding:14px 16px; overflow:hidden; }
+.rs-filtros {
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0, 1fr));
+    gap:12px 14px;
+    align-items:end;
+}
+@media (max-width: 1100px) {
+    .rs-filtros { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 780px) {
+    .rs-filtros { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+    .rs-filtros { grid-template-columns:1fr; }
+}
+.rs-filtros label {
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    min-width:0;
+    font-size:.7rem;
+    font-weight:700;
+    text-transform:uppercase;
+    color:#64748b;
+}
+.rs-filtros input,
+.rs-filtros select {
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    box-sizing:border-box;
+    min-height:36px;
+    padding:7px 10px;
+    border:1px solid #cbd5e1;
+    border-radius:7px;
+    font-size:.86rem;
+    font-weight:400;
+    text-transform:none;
+    color:#0f172a;
+    background:#fff;
+}
+.rs-botones {
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+    grid-column:1 / -1;
+    padding-top:2px;
+}
 .rs-tabla th { white-space:nowrap; }
 .rs-tabla td { font-size:.82rem; }
 .rs-tabla td.r, .rs-tabla th.r { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
@@ -56,7 +102,7 @@
     @endforeach
 </div>
 
-<form method="GET" action="{{ route('reportes_suite', $reporte) }}" class="nomina-card" style="margin-bottom:14px;">
+<form method="GET" action="{{ route('reportes_suite', $reporte) }}" class="nomina-card rs-filtros-card" style="margin-bottom:14px;">
     <div class="rs-filtros">
         <label>Sede
             <select name="sede" @disabled(count($sedes) === 1)>

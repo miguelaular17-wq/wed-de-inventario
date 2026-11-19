@@ -123,9 +123,57 @@ TXT;
         $this->assertFalse($r['cuadra']);
     }
 
+    public const WELLS = <<<'TXT'
+Wells Fargo Bank, N.A.
+INVERSIONES DORAL PARAGUANA C.A LLC
+31 de octubre de 2026
+Resumen de la actividad del período de estado de cuenta
+Saldo inicial al 10/1 	$1,000.00
+Depósitos/Créditos 	460.00
+Retiros/Débitos 	-  130.00
+Saldo final al 10/31  (mes/dia) 	$1,330.00
+Número de cuenta:   3558846915  (cuenta principal)
+Historial de transacciones
+Fecha
+(mes/dia
+Descripción
+Depósitos/
+Créditos
+Retiros/
+Débitos
+Saldo
+diario final
+10/1   Zelle From Anibal Eduardo Pacheco Gutierrez on 10/01 Ref #
+Jpm99Cybrdsa Para Mary Novia
+110.00
+10/2   Zelle to Kiras G International LLC on 10/02 Ref #
+Wfct22Qdxm26 Factura 8233
+   100.00
+Historial de transacciones (continuación)
+Fecha
+10/5   Zelle From Luis Brett on 10/05 Ref # Bacx5Yww59We  	350.00
+10/30  Interest Payment  	0.00
+10/30  Wire Trans Svc Charge - Sequence: 261006164380
+   30.00     1,330.00
+Totales 	$460.00 $130.00
+El Saldo Diario Final no refleja ningún retiro pendiente
+TXT;
+
+    public function test_wells_fargo_lee_historial_y_cuadra_con_los_totales(): void
+    {
+        $r = (new EstadoCuentaPdfParser)->leerTexto(self::WELLS);
+
+        $this->assertSame('Wells Fargo', $r['banco']);
+        $this->assertSame('3558846915', $r['cuenta']);
+        $this->assertSame(['2026-10-01', '2026-10-31'], [$r['desde'], $r['hasta']]);
+        $this->assertTrue($r['cuadra']);
+        $this->assertSame([110.0, -100.0, 350.0, -30.0], array_column($r['movimientos'], 'monto'));
+        $this->assertSame('ANIBALEDUARDOPACHECOGUTIERREZ', ConciliacionDivisasService::nombreZelle($r['movimientos'][0]['descripcion']));
+    }
+
     public function test_texto_de_otro_banco_no_se_reconoce(): void
     {
-        $this->assertNull((new EstadoCuentaPdfParser)->leerTexto("Wells Fargo\nStatement period activity summary"));
+        $this->assertNull((new EstadoCuentaPdfParser)->leerTexto("Chase Bank\nStatement period activity summary\nAccount Activity"));
     }
 
     public function test_nombres_cortados_o_pegados_se_reconocen(): void

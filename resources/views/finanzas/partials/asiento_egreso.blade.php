@@ -2,7 +2,7 @@
 <div id="container_asiento{{ $sufijo }}" style="display: none; background: #fffbeb; padding: 14px 15px; border: 1px solid #fde68a; border-radius: 8px; margin-bottom: 15px;">
     <input type="hidden" name="asiento_activo" id="asiento_activo{{ $sufijo }}" value="0">
     <h4 style="margin: 0 0 8px; font-size: 0.95rem; color: #b45309;">Asiento contable</h4>
-    <p style="margin: 0 0 10px; font-size: 0.78rem; color: #92400e;">Reparte el monto en uno o varios haber. Cada línea puede ir a otra sede o tipo de gasto.</p>
+    <p style="margin: 0 0 10px; font-size: 0.78rem; color: #92400e;">Reparte el monto en uno o varios haber. En cada línea puedes indicar beneficiario, sede, tipo de gasto y placa (si aplica).</p>
 
     {{-- Debe oculto: se sigue llenando desde el egreso para validar el cuadre --}}
     <div style="display: none;" aria-hidden="true">

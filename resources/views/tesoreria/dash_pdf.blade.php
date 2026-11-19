@@ -28,7 +28,11 @@
 </head>
 <body>
 @php
-    $usd = fn ($n) => '$'.number_format((float) $n, 2, ',', '.');
+    $usd = function ($n) {
+        $n = (float) $n;
+
+        return ($n < -0.004 ? '-' : '').'$'.number_format(abs($n), 2, ',', '.');
+    };
     $clsDif = function ($d) {
         $d = (float) $d;
         if (abs($d) < 0.005) {
@@ -72,6 +76,7 @@
             @foreach($columnas as $col)
                 <th>{{ $col['etiqueta'] }}</th>
             @endforeach
+            <th>Total Suite</th>
             <th>Ingreso tesorería {{ $modo === 'sedes' ? 'global' : '' }}</th>
             <th>Diferencia</th>
         </tr>
@@ -79,17 +84,23 @@
     <tbody>
         @forelse($filas as $fila)
             <tr>
-                <td><strong>{{ $fila['forma'] }}</strong></td>
+                <td>
+                    <strong>{{ $fila['forma'] }}</strong>
+                    @if(!empty($fila['cuenta']))
+                        <div style="color:#64748b;font-size:7.5px;margin-top:1px;">{{ $fila['cuenta'] }}</div>
+                    @endif
+                </td>
                 @foreach($columnas as $col)
                     @php $v = $fila['por_columna'][$col['clave']] ?? 0; @endphp
                     <td class="num {{ abs($v) < 0.005 ? 'muted' : '' }}">{{ $usd($v) }}</td>
                 @endforeach
+                <td class="num">{{ $usd($fila['suite']) }}</td>
                 <td class="num">{{ $usd($fila['tesoreria']) }}</td>
                 <td class="num {{ $clsDif($fila['diferencia']) }}">{{ $usd($fila['diferencia']) }}</td>
             </tr>
         @empty
             <tr>
-                <td colspan="{{ 3 + count($columnas) }}" class="empty">
+                <td colspan="{{ 4 + count($columnas) }}" class="empty">
                     No hay cierres de cuadre en ese rango{{ $sede ? ' para esa sede' : '' }}.
                 </td>
             </tr>
@@ -102,6 +113,7 @@
                 @foreach($columnas as $col)
                     <td class="num">{{ $usd($totales['por_columna'][$col['clave']] ?? 0) }}</td>
                 @endforeach
+                <td class="num">{{ $usd($totales['suite']) }}</td>
                 <td class="num">{{ $usd($totales['tesoreria']) }}</td>
                 <td class="num {{ $clsDif($totales['diferencia']) }}">{{ $usd($totales['diferencia']) }}</td>
             </tr>

@@ -42,7 +42,7 @@ class TesoreriaCajaMovimiento extends Model
     protected $table = 'tesoreria_caja_movimientos';
 
     protected $fillable = [
-        'caja_id', 'tipo', 'categoria', 'tipo_gasto', 'origen', 'fecha', 'monto', 'moneda_divisa', 'concepto', 'referencia', 'sede', 'user_id', 'flujo_caja_id',
+        'caja_id', 'tipo', 'categoria', 'tipo_gasto', 'origen', 'fecha', 'monto', 'moneda_divisa', 'concepto', 'referencia', 'beneficiario', 'sede', 'placa_vehiculo', 'user_id', 'flujo_caja_id',
     ];
 
     protected $casts = [

@@ -192,7 +192,7 @@
                             $estadoMeta = $fila['meta_prod_estado'];
                             if ($clave === 'arreglos' && $cruce && ! $cruce['activo']) {
                                 $estadoMeta = 'Desactivado';
-                            } elseif ($clave === 'arreglos' && $cruce && $cruce['activo'] && $estadoMeta === null) {
+                            } elseif ($fila['meta_prod_total'] === null && $estadoMeta === null) {
                                 $estadoMeta = 'Sin meta';
                             }
                             $claseMeta = match ($estadoMeta) {
@@ -203,8 +203,10 @@
                                 default => '',
                             };
                         @endphp
-                        <td class="inc-num inc-group g-pmeta" @if(! empty($fila['meta_prod_proporcional'])) title="{{ $fila['meta_prod_cumplidas'] }} de {{ $fila['meta_prod_total'] }} productos completos. El avance es el promedio de lo vendido de cada producto." @endif>
-                            @if($estadoMeta === 'Desactivado' || $fila['meta_prod_total'] === null)
+                        <td class="inc-num inc-group g-pmeta" @if(! empty($fila['meta_prod_proporcional'])) title="{{ $fila['meta_prod_cumplidas'] }} de {{ $fila['meta_prod_total'] }} productos completos. El avance es el promedio de lo vendido de cada producto." @elseif($fila['meta_prod_total'] === null) title="No tiene producto meta asignado en esta quincena" @endif>
+                            @if($estadoMeta === 'Desactivado')
+                                —
+                            @elseif($fila['meta_prod_total'] === null)
                                 —
                             @elseif(! empty($fila['meta_prod_proporcional']))
                                 {{ $pct($fila['meta_prod_pct']) }}

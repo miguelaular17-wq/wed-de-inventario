@@ -65,8 +65,10 @@ class ReportesSuiteTest extends TestCase
 
     public function test_descuentos_muestra_motivo_observacion_y_el_metodo_de_pago(): void
     {
+        DB::table('cuadres_caja')->insert(['sede' => 'DORAL', 'fecha_cierre' => '2026-11-02', 'codigo_caja' => 'CJA01', 'usuario' => '28369458',
+            'usuario_nombre' => 'MANUEL JUNIOR RUIZ', 'factor_cambio' => 1, 'created_at' => now(), 'updated_at' => now()]);
         $this->factura('154538', ['cliente' => 'ESTEFANY MEDINA', 'identificacion' => 'V27961153', 'total_neto_usd' => 1650.47, 'total_descuento_usd' => 614.83,
-            'motivo_descuento' => 'AUTORIZADO COMPRAS', 'observacion' => 'REGALIA IPHONE 18 PRO MAX']);
+            'motivo_descuento' => 'AUTORIZADO COMPRAS', 'observacion' => 'REGALIA IPHONE 18 PRO MAX', 'autorizado_descuento' => '28369458']);
         $this->factura('154539', ['cliente' => 'SIN DESCUENTO', 'total_neto_usd' => 50]);
         $this->pago(1, '154538', 'TRFBS', 'TRANSFERENCIA BS', 1650.47);
 
@@ -79,6 +81,8 @@ class ReportesSuiteTest extends TestCase
             ->assertSee('2.265,30')
             ->assertSee('614,83')
             ->assertSee('TRANSFERENCIA BS')
+            ->assertSee('Autorizado')
+            ->assertSee('MANUEL JUNIOR RUIZ')
             ->assertDontSee('SIN DESCUENTO');
     }
 

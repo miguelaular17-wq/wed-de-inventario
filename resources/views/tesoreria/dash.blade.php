@@ -3,8 +3,13 @@
 @section('title', 'Tesorería · Dashboard')
 
 @php
-    $usd = fn ($n) => '$'.number_format((float) $n, 2, ',', '.');
+    $usd = function ($n) {
+        $n = (float) $n;
+
+        return ($n < -0.004 ? '-' : '').'$'.number_format(abs($n), 2, ',', '.');
+    };
     $esCero = fn ($n) => abs((float) $n) < 0.005;
+    $claseMonto = fn ($n) => (float) $n < -0.004 ? 'td-dif-neg' : '';
     $claseDif = function ($d) use ($esCero) {
         if ($esCero($d)) {
             return 'td-dif-ok';
@@ -162,7 +167,7 @@
 .td-legend .pos i { background: #15803d; }
 .td-legend .ok i { background: #94a3b8; }
 
-.td-wrap { overflow: auto; max-height: min(68vh, 820px); }
+.td-wrap { overflow-x: auto; overflow-y: visible; }
 .td-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .8rem; min-width: 760px; }
 .td-table th, .td-table td {
     padding: 9px 11px;
@@ -200,7 +205,8 @@
     z-index: 3;
     background: #fff;
     box-shadow: 1px 0 0 #e2e8f0;
-    min-width: 170px;
+    min-width: 200px;
+    max-width: 260px;
 }
 .td-table thead th.sticky {
     z-index: 6;
@@ -215,10 +221,17 @@
 .td-table tbody tr:hover td.sticky { background: #f8fafc; }
 .td-table tbody tr:hover td.td-teso { background: #f0fdfa; }
 .td-table tbody tr:hover td.td-dif-cell { background: #fffbeb; }
-.td-forma { font-weight: 700; color: #1e293b; font-size: .78rem; }
+.td-forma { font-weight: 700; color: #1e293b; font-size: .78rem; display: block; }
+.td-cuenta { margin-top: 2px; font-size: .68rem; font-weight: 500; color: #64748b; line-height: 1.25; }
 .td-num { text-align: right; font-variant-numeric: tabular-nums; color: #334155; }
 .td-muted { color: #cbd5e1 !important; font-weight: 500; }
 .td-sede { background: #fcfdff; }
+.td-suite-tot {
+    background: #eef2ff;
+    font-weight: 800;
+    color: #1e3a8a;
+    border-left: 1px solid #c7d2fe;
+}
 .td-teso {
     background: #f0fdfa;
     font-weight: 700;
@@ -233,6 +246,10 @@
 .td-dif-neg { color: #b91c1c; }
 .td-dif-pos { color: #15803d; }
 .td-dif-ok { color: #64748b; font-weight: 600; }
+.td-table thead th.td-suite-tot-h {
+    background: #e0e7ff;
+    color: #1e3a8a;
+}
 .td-table thead th.td-teso-h {
     background: #ecfdf5;
     color: #0f766e;
@@ -251,8 +268,10 @@
     box-shadow: 0 -1px 0 #cbd5e1;
 }
 .td-table tfoot td.sticky { background: #e2e8f0; z-index: 4; }
+.td-table tfoot td.td-suite-tot { background: #c7d2fe; color: #1e3a8a; }
 .td-table tfoot td.td-teso { background: #ccfbf1; color: #115e59; }
 .td-table tfoot td.td-dif-cell { background: #fef3c7; }
+.td-table tbody tr:hover td.td-suite-tot { background: #e0e7ff; }
 .td-empty { padding: 36px 16px !important; text-align: center; color: #94a3b8; }
 .td-note {
     margin: 12px 0 0;
@@ -346,6 +365,7 @@
                         @if(count($columnas))
                             <th colspan="{{ count($columnas) }}">{{ $modo === 'sedes' ? 'Suite por sede' : 'Suite por caja' }}</th>
                         @endif
+                        <th>Suite</th>
                         <th>Tesorería</th>
                         <th>Resultado</th>
                     </tr>
@@ -354,6 +374,7 @@
                         @foreach($columnas as $col)
                             <th class="td-num">{{ $col['etiqueta'] }}</th>
                         @endforeach
+                        <th class="td-num td-suite-tot-h">Total</th>
                         <th class="td-num td-teso-h">Ingreso {{ $modo === 'sedes' ? 'global' : '' }}</th>
                         <th class="td-num td-dif-h">Diferencia</th>
                     </tr>
@@ -361,17 +382,23 @@
                 <tbody>
                     @forelse($filas as $fila)
                         <tr>
-                            <td class="sticky"><span class="td-forma">{{ $fila['forma'] }}</span></td>
+                            <td class="sticky">
+                                <span class="td-forma">{{ $fila['forma'] }}</span>
+                                @if(!empty($fila['cuenta']))
+                                    <div class="td-cuenta">{{ $fila['cuenta'] }}</div>
+                                @endif
+                            </td>
                             @foreach($columnas as $col)
                                 @php $v = $fila['por_columna'][$col['clave']] ?? 0; @endphp
-                                <td class="td-num td-sede {{ $esCero($v) ? 'td-muted' : '' }}">{{ $esCero($v) ? '—' : $usd($v) }}</td>
+                                <td class="td-num td-sede {{ $esCero($v) ? 'td-muted' : '' }} {{ $claseMonto($v) }}">{{ $esCero($v) ? '—' : $usd($v) }}</td>
                             @endforeach
+                            <td class="td-num td-suite-tot {{ $esCero($fila['suite']) ? 'td-muted' : '' }} {{ $claseMonto($fila['suite']) }}">{{ $esCero($fila['suite']) ? '—' : $usd($fila['suite']) }}</td>
                             <td class="td-num td-teso {{ $esCero($fila['tesoreria']) ? 'td-muted' : '' }}">{{ $esCero($fila['tesoreria']) ? '—' : $usd($fila['tesoreria']) }}</td>
                             <td class="td-num td-dif-cell {{ $claseDif($fila['diferencia']) }}">{{ $usd($fila['diferencia']) }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ 3 + count($columnas) }}" class="td-empty">
+                            <td colspan="{{ 4 + count($columnas) }}" class="td-empty">
                                 No hay cierres de arqueo en ese rango{{ $sede ? ' para esa sede' : '' }}.
                             </td>
                         </tr>
@@ -384,11 +411,7 @@
                             @foreach($columnas as $col)
                                 <td class="td-num">{{ $usd($totales['por_columna'][$col['clave']] ?? 0) }}</td>
                             @endforeach
-                            <td class="td-num td-teso">{{ $usd($totales['tesoreria']) }}</td>
-                            <td class="td-num td-dif-cell {{ $claseDif($totales['diferencia']) }}">{{ $usd($totales['diferencia']) }}</td>
-                        </tr>
-                    </tfoot>
-                @endif
+                            <td class="td-num td-suite-tot">{{ $usd($totales['suite']) }}</td>
             </table>
         </div>
     </div>

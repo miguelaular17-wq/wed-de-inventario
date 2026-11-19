@@ -16,6 +16,7 @@ class MetaQuincenaProducto extends Model
         'quincena_inicio',
         'quincena_fin',
         'cantidad_inicial',
+        'valor_unitario',
         'responsable_empleado_id',
         'creado_por_user_id',
     ];
@@ -24,6 +25,7 @@ class MetaQuincenaProducto extends Model
         'quincena_inicio' => 'date',
         'quincena_fin' => 'date',
         'cantidad_inicial' => 'decimal:4',
+        'valor_unitario' => 'decimal:2',
     ];
 
     public function responsable(): BelongsTo

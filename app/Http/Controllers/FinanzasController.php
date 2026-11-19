@@ -1136,9 +1136,9 @@ class FinanzasController extends Controller
 
     /**
      * Asiento contable del egreso, en $: el debe es la cuenta (banco · titular), el motivo y el monto
-     * del egreso; se reparte en uno o varios haber (detalle, monto y opcionalmente sede / tipo de gasto).
+     * del egreso; se reparte en uno o varios haber (detalle, monto y opcionalmente beneficiario / sede / tipo de gasto / placa).
      *
-     * @return array{0: ?array{debe: array{cuenta: string, detalle: ?string, monto: float}, haber: list<array{detalle: string, monto: float, sede?: string, tipo_gasto?: string}>}, 1: ?string}
+     * @return array{0: ?array{debe: array{cuenta: string, detalle: ?string, monto: float}, haber: list<array{detalle: string, monto: float, beneficiario?: string, sede?: string, tipo_gasto?: string, placa?: string}>}, 1: ?string}
      */
     private function asientoDelEgreso(Request $request, float $montoUsd, ?string $banco, ?string $titular, ?string $motivo): array
     {
@@ -1172,13 +1172,21 @@ class FinanzasController extends Controller
             if ($linea['detalle'] === null || $linea['monto'] <= 0) {
                 return [null, 'Asiento contable: cada haber necesita su detalle y su monto en $.'];
             }
+            $beneficiario = $detalle($fila['beneficiario'] ?? '');
             $sede = $detalle($fila['sede'] ?? '');
             $tipoGasto = $detalle($fila['tipo_gasto'] ?? '');
+            $placa = $detalle($fila['placa'] ?? $fila['placa_vehiculo'] ?? '');
+            if ($beneficiario !== null) {
+                $linea['beneficiario'] = $beneficiario;
+            }
             if ($sede !== null) {
                 $linea['sede'] = $sede;
             }
             if ($tipoGasto !== null) {
                 $linea['tipo_gasto'] = $tipoGasto;
+            }
+            if ($placa !== null) {
+                $linea['placa'] = $placa;
             }
             $haber[] = $linea;
         }

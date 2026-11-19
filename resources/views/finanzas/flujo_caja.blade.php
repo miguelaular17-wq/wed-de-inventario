@@ -3132,7 +3132,11 @@ function faDefaultsEgreso(s) {
     const tipo = s === '_edit'
         ? (window.tsEditTipoGasto?.getValue?.() || form?.querySelector('[name="tipo_gasto"]')?.value || '')
         : (window.tsTipoGasto?.getValue?.() || form?.querySelector('[name="tipo_gasto"]')?.value || '');
-    return { sede, tipo_gasto: tipo };
+    const beneficiario = s === '_edit'
+        ? (window.tsBeneficiarioEdit?.getValue?.() || form?.querySelector('[name="beneficiario"]')?.value || '')
+        : (window.tsBeneficiario?.getValue?.() || form?.querySelector('[name="beneficiario"]')?.value || '');
+    const placa = form?.querySelector('[name="placa_vehiculo"]')?.value || '';
+    return { sede, tipo_gasto: tipo, beneficiario, placa };
 }
 
 function faAgregarHaber(s, linea = {}) {
@@ -3146,6 +3150,10 @@ function faAgregarHaber(s, linea = {}) {
     const defs = faDefaultsEgreso(s);
     const sedeSel = linea.sede !== undefined && linea.sede !== null ? linea.sede : defs.sede;
     const tipoSel = linea.tipo_gasto !== undefined && linea.tipo_gasto !== null ? linea.tipo_gasto : defs.tipo_gasto;
+    const benefVal = linea.beneficiario !== undefined && linea.beneficiario !== null ? linea.beneficiario : defs.beneficiario;
+    const placaVal = linea.placa !== undefined && linea.placa !== null
+        ? linea.placa
+        : (linea.placa_vehiculo !== undefined && linea.placa_vehiculo !== null ? linea.placa_vehiculo : defs.placa);
     fila.innerHTML = `
         <div style="display:flex; gap:6px; align-items:center;">
             <input type="text" name="asiento_haber[${i}][detalle]" class="fa-haber-detalle" maxlength="255" placeholder="Detalle" value="${esc(linea.detalle)}" style="flex:1; ${inp}">
@@ -3153,12 +3161,14 @@ function faAgregarHaber(s, linea = {}) {
             <button type="button" title="Quitar" style="padding:6px 10px; background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer; flex-shrink:0;">&times;</button>
         </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <input type="text" name="asiento_haber[${i}][beneficiario]" class="fa-haber-beneficiario" maxlength="255" placeholder="Beneficiario (opc.)" value="${esc(benefVal)}" style="${inp}" title="Beneficiario de este haber">
             <select name="asiento_haber[${i}][sede]" class="fa-haber-sede" style="${inp}" title="Sede de este haber">
                 ${faOptsSelect(window.FA_SEDES, sedeSel, 'Sede (opc.)')}
-                    </select>
+            </select>
             <select name="asiento_haber[${i}][tipo_gasto]" class="fa-haber-tipo" style="${inp}" title="Tipo de gasto de este haber">
                 ${faOptsSelect(window.FA_TIPOS_GASTO, tipoSel, 'Tipo de gasto (opc.)')}
-                    </select>
+            </select>
+            <input type="text" name="asiento_haber[${i}][placa]" class="fa-haber-placa" maxlength="40" placeholder="Placa (si aplica)" value="${esc(placaVal)}" style="${inp}" title="Placa del vehículo, si aplica">
         </div>`;
     fila.querySelector('button').addEventListener('click', () => {
         if (lista.children.length > 1) { fila.remove(); faTotalesAsiento(s); }
@@ -3285,7 +3295,14 @@ function closeDesgloseModal() {
 function tablaAsiento(asiento) {
     const esc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
     const td = 'padding: 7px 8px; border-bottom: 1px solid #fde68a;';
-    const meta = (l) => [l.sede, l.tipo_gasto].filter(Boolean).join(' · ');
+    const meta = (l) => {
+        const partes = [];
+        if (l.beneficiario) partes.push('Benef.: ' + l.beneficiario);
+        if (l.sede) partes.push('Sede: ' + l.sede);
+        if (l.tipo_gasto) partes.push(l.tipo_gasto);
+        if (l.placa || l.placa_vehiculo) partes.push('Placa: ' + (l.placa || l.placa_vehiculo));
+        return partes.join(' · ');
+    };
     const fila = (l, alDebe) => {
         const extra = !alDebe ? meta(l) : '';
         return `<tr>

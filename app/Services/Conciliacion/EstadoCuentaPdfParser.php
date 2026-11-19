@@ -5,8 +5,8 @@ namespace App\Services\Conciliacion;
 use Smalot\PdfParser\Parser;
 
 /**
- * Estados de cuenta en PDF de los bancos en EE.UU. (Citizens, Amerant). Se lee el texto del PDF y se
- * comparan las sumas con los totales que trae el propio estado para saber si se leyó completo.
+ * Estados de cuenta en PDF de los bancos en EE.UU. (Citizens, Amerant, Wells Fargo).
+ * Se lee el texto del PDF y se comparan las sumas con los totales del propio estado.
  */
 class EstadoCuentaPdfParser
 {
@@ -29,6 +29,7 @@ class EstadoCuentaPdfParser
         $r = match (true) {
             str_contains($texto, 'Deposits&Credit') && stripos($texto, 'citizens') !== false => $this->citizens($texto),
             str_contains($texto, 'Account Activity') && stripos($texto, 'amerant') !== false => $this->amerant($texto),
+            $this->esWellsFargo($texto) => $this->wellsFargo($texto),
             default => null,
         };
         if ($r === null) {
@@ -161,6 +162,161 @@ class EstadoCuentaPdfParser
                 'abonos' => preg_match('/Deposits and Credits\s*\(\d+\)\s*\$([\d,]+\.\d{2})/', $t, $m) ? $this->num($m[1]) : null,
                 'cargos' => preg_match('/Withdrawals and Debits\s*\(\d+\)\s*\$([\d,]+\.\d{2})/', $t, $m) ? $this->num($m[1]) : null,
             ],
+        ];
+    }
+
+    private function esWellsFargo(string $t): bool
+    {
+        return stripos($t, 'wells fargo') !== false
+            && (str_contains($t, 'Historial de transacciones') || stripos($t, 'Account transaction history') !== false);
+    }
+
+    /**
+     * Wells Fargo Business Checking (estado en español): Historial con Fecha MM/D, descripción y
+     * monto en Depósitos/Créditos o Retiros/Débitos (a veces + saldo diario final).
+     */
+    private function wellsFargo(string $t): array
+    {
+        $hasta = null;
+        if (preg_match('/(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s+de\s+(\d{4})/iu', $t, $m)) {
+            $mesesEs = [
+                'enero' => 1, 'febrero' => 2, 'marzo' => 3, 'abril' => 4, 'mayo' => 5, 'junio' => 6,
+                'julio' => 7, 'agosto' => 8, 'septiembre' => 9, 'octubre' => 10, 'noviembre' => 11, 'diciembre' => 12,
+            ];
+            $hasta = sprintf('%04d-%02d-%02d', (int) $m[3], $mesesEs[mb_strtolower($m[2])] ?? 12, (int) $m[1]);
+        } elseif (preg_match('#Saldo final al\s*(\d{1,2})/(\d{1,2})#iu', $t, $m)) {
+            $anio = preg_match('/\b(20\d{2})\b/', $t, $y) ? (int) $y[1] : (int) date('Y');
+            $hasta = sprintf('%04d-%02d-%02d', $anio, (int) $m[1], (int) $m[2]);
+        }
+
+        $desde = null;
+        if (preg_match('#Saldo inicial al\s*(\d{1,2})/(\d{1,2})#iu', $t, $m)) {
+            $desde = $this->fecha((int) $m[1], (int) $m[2], $hasta);
+        }
+
+        $mov = [];
+        $enHistorial = false;
+        $cur = null;
+        foreach (preg_split('/\R/', $t) as $raw) {
+            $l = trim($raw);
+            if ($l === '') {
+                continue;
+            }
+            if (preg_match('/^Historial de transacciones\b/u', $l) || stripos($l, 'Account transaction history') === 0) {
+                // "(continuación)" repite el encabezado en cada página: no cortes el movimiento abierto.
+                $enHistorial = true;
+
+                continue;
+            }
+            if (! $enHistorial) {
+                continue;
+            }
+            if (preg_match('/^(Totales\b|El Saldo Diario Final|Resumen de saldo|Important information|Information about|Account information)/iu', $l)) {
+                if ($cur) {
+                    $this->cerrarWells($mov, $cur);
+                    $cur = null;
+                }
+                $enHistorial = false;
+
+                continue;
+            }
+            if (preg_match('/^(Historial de transacciones|Fecha|Número|de cheque|Descripción|Depósitos\/|Créditos|Retiros\/|Débitos|Saldo|diario final|Página\b|Traducciones|•)/u', $l)
+                || preg_match('/^\d{1,2}\s+de\s+\p{L}+\s+de\s+\d{4}\b/u', $l)
+            ) {
+                continue;
+            }
+            if (preg_match('#^(\d{1,2})/(\d{1,2})\s+(.*)$#u', $l, $m)) {
+                if ($cur) {
+                    $this->cerrarWells($mov, $cur);
+                }
+                $cur = [
+                    'fecha' => $this->fecha((int) $m[1], (int) $m[2], $hasta),
+                    'lineas' => [trim($m[3])],
+                ];
+
+                continue;
+            }
+            if ($cur) {
+                $cur['lineas'][] = $l;
+            }
+        }
+        if ($cur) {
+            $this->cerrarWells($mov, $cur);
+        }
+
+        $abonos = preg_match('/Depósitos\/\s*Créditos\s+([\d,]+\.\d{2})/u', $t, $m)
+            ? $this->num($m[1])
+            : (preg_match('/Depósitos\/Créditos\s+([\d,]+\.\d{2})/u', $t, $m) ? $this->num($m[1]) : null);
+        if ($abonos === null && preg_match('/Totales\s*\$?\s*([\d,]+\.\d{2})\s*\$?\s*([\d,]+\.\d{2})/u', $t, $m)) {
+            $abonos = $this->num($m[1]);
+        }
+        $cargos = null;
+        if (preg_match('/Retiros\/\s*Débitos\s+-?\s*([\d,]+\.\d{2})/u', $t, $m)
+            || preg_match('/Retiros\/Débitos\s+-?\s*([\d,]+\.\d{2})/u', $t, $m)
+        ) {
+            $cargos = $this->num($m[1]);
+        } elseif (preg_match('/Totales\s*\$?\s*([\d,]+\.\d{2})\s*\$?\s*([\d,]+\.\d{2})/u', $t, $m)) {
+            $cargos = $this->num($m[2]);
+        }
+
+        return [
+            'banco' => 'Wells Fargo',
+            'cuenta' => preg_match('/Número de cuenta:\s*(\d+)/u', $t, $m) ? $m[1] : null,
+            'desde' => $desde,
+            'hasta' => $hasta,
+            'movimientos' => $this->limpiar($mov),
+            'totales' => ['abonos' => $abonos, 'cargos' => $cargos],
+        ];
+    }
+
+    /**
+     * @param  list<array{fecha: string, descripcion: string, monto: float|null}>  $mov
+     * @param  array{fecha: string, lineas: list<string>}  $cur
+     */
+    private function cerrarWells(array &$mov, array $cur): void
+    {
+        $lineas = $cur['lineas'];
+        $montoAbs = null;
+        for ($i = count($lineas) - 1; $i >= 0; $i--) {
+            if (! preg_match_all('/([\d,]+\.\d{2})/', $lineas[$i], $mm) || $mm[1] === []) {
+                continue;
+            }
+            $amts = $mm[1];
+            // 1 monto = movimiento; 2+ = movimiento (+ saldo diario). Si hay más de 2, los dos últimos.
+            if (count($amts) >= 2) {
+                $montoAbs = $this->num($amts[count($amts) - 2]);
+            } else {
+                $montoAbs = $this->num($amts[0]);
+            }
+            // Quita los importes de la línea de monto para no ensuciar la descripción.
+            $lineas[$i] = trim(preg_replace('/(?:\s*[\d,]+\.\d{2})+\s*$/', '', $lineas[$i]) ?? '');
+            if ($lineas[$i] === '') {
+                unset($lineas[$i]);
+            }
+            break;
+        }
+        if ($montoAbs === null || $montoAbs < 0.005) {
+            return;
+        }
+
+        $desc = trim(preg_replace('/\s+/', ' ', implode(' ', $lineas)) ?? '');
+        $d = mb_strtolower($desc);
+        $esCredito = (bool) preg_match('/\bzelle from\b|\bdeposit\b|\binterest payment\b|\bdirect deposit\b|\bcredit\b/i', $d);
+        $esDebito = (bool) preg_match('/\bzelle to\b|\bwt\b|\bwire\b|\bpurchase\b|\bwithdrawal\b|\bfee\b|\batm\b|\bonline transfer\b|\bbill pay\b|\bach debit\b|\brecurring\b|\bcheck\b/i', $d);
+        if ($esCredito && $esDebito) {
+            $esDebito = ! preg_match('/\bzelle from\b|\binterest payment\b/i', $d);
+            $esCredito = ! $esDebito;
+        }
+        if (! $esCredito && ! $esDebito) {
+            // Sin palabra clave: si la línea de monto venía muy indentada suele ser retiro; por defecto crédito.
+            $esCredito = true;
+        }
+        $signo = $esDebito ? -1 : 1;
+
+        $mov[] = [
+            'fecha' => $cur['fecha'],
+            'descripcion' => $desc,
+            'monto' => $signo * $montoAbs,
         ];
     }
 
