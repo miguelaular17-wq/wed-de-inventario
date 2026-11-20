@@ -137,6 +137,7 @@
     $finanzasItems = [
         $link('Flujo de Caja', route('finanzas.flujo_caja'), request()->routeIs('finanzas.flujo_caja*')),
         $link('Cuentas por Pagar', route('finanzas.cuentas_por_pagar'), request()->routeIs('finanzas.cuentas_por_pagar')),
+        $link('Pagos manuales nómina', route('finanzas.pagos_manual_nomina.index'), request()->routeIs('finanzas.pagos_manual_nomina*')),
         $link('My Delivery', route('finanzas.my_delivery'), request()->routeIs('finanzas.my_delivery')),
         $link('Gasto Directivos', route('finanzas.gasto_directivos'), request()->routeIs('finanzas.gasto_directivos*')),
         $link('Gastos Fijos', route('finanzas.gastos_fijos'), request()->routeIs('finanzas.gastos_fijos', 'finanzas.gastos_fijos.*')),
@@ -593,6 +594,11 @@
                                     <span>{{ $notification->created_at->diffForHumans() }}</span>
                                 </div>
                                 <p>{{ $notification->message }}</p>
+                                @if($notification->estaPagada())
+                                    <span class="muted" style="display:inline-block; margin-top:6px; font-size:0.72rem;">✓ Pagado</span>
+                                @elseif($notification->tieneAccion())
+                                    <a href="{{ route('notifications.act', $notification) }}" class="btn" style="display:inline-block; margin-top:6px; padding:4px 10px; font-size:0.72rem;">{{ $notification->action_label }}</a>
+                                @endif
                             </div>
                         @empty
                             <div class="nav-notify-empty">No hay notificaciones</div>

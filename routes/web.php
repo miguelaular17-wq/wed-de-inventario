@@ -508,6 +508,7 @@ Route::middleware(['auth', 'permission:nomina,nomina.periodos'])->prefix('nomina
     Route::post('/periodos/{periodo}/pagar', [PeriodoController::class, 'pagar'])->name('periodos.pagar');
     Route::post('/periodos/{periodo}/cerrar', [PeriodoController::class, 'cerrar'])->name('periodos.cerrar');
     Route::get('/periodos/{periodo}/txt-modal', [PeriodoController::class, 'modalTxt'])->name('periodos.txt_modal');
+    Route::post('/periodos/{periodo}/enviar-finanzas', [PeriodoController::class, 'enviarFinanzas'])->name('periodos.enviar_finanzas');
     Route::get('/periodos/{periodo}/banco/{empresa}', [PeriodoController::class, 'exportarBanco'])->name('periodos.banco');
     Route::post('/periodos/{periodo}/banco', [PeriodoController::class, 'exportarBancoTodo'])->name('periodos.banco_todo');
     Route::get('/periodos/{periodo}/relacion', [PeriodoController::class, 'relacion'])->name('periodos.relacion');
@@ -542,6 +543,7 @@ Route::middleware(['auth', 'permission:nomina,nomina.comisiones'])->prefix('nomi
     Route::post('/comisiones/{periodo}/empleados/{empleado}/egresos-st/aplicar', [ComisionController::class, 'aplicarEgresosSt'])->name('comisiones.egresos_st.aplicar');
     Route::delete('/comisiones/{periodo}/egresos-st/{ajuste}', [ComisionController::class, 'quitarEgresoSt'])->name('comisiones.egresos_st.destroy');
     Route::get('/comisiones/{periodo}/txt-modal', [ComisionController::class, 'modalTxt'])->name('comisiones.txt_modal');
+    Route::post('/comisiones/{periodo}/enviar-finanzas', [ComisionController::class, 'enviarFinanzas'])->name('comisiones.enviar_finanzas');
     Route::get('/comisiones/{periodo}/banco/{empresa}', [ComisionController::class, 'exportarBanco'])->name('comisiones.banco');
     Route::post('/comisiones/{periodo}/banco', [ComisionController::class, 'exportarBancoTodo'])->name('comisiones.banco_todo');
     Route::get('/comisiones/{periodo}/diferenciales', [ComisionDiferencialController::class, 'index'])->name('comisiones.diferenciales.index');
@@ -587,6 +589,7 @@ Route::middleware(['auth', 'permission:nomina'])->prefix('nomina')->name('nomina
     Route::get('/adelantos', [AbonoSueldoController::class, 'index'])->name('adelantos.index');
     Route::post('/adelantos', [AbonoSueldoController::class, 'storeEscritorio'])->name('adelantos.store');
     Route::get('/adelantos/txt', [AbonoSueldoController::class, 'exportarTxt'])->name('adelantos.txt');
+    Route::post('/adelantos/marcar-pagado', [AbonoSueldoController::class, 'marcarPagadoSinEmpresa'])->name('adelantos.marcar_pagado');
     Route::get('/adelantos/excel', [AbonoSueldoController::class, 'exportarExcel'])->name('adelantos.excel');
     Route::post('/empleados/{empleado}/abonos-sueldo', [AbonoSueldoController::class, 'store'])->name('abonos_sueldo.store');
     Route::post('/abonos-sueldo/{abono}/cancelar', [AbonoSueldoController::class, 'cancelar'])->name('abonos_sueldo.cancelar');
@@ -683,6 +686,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/notificaciones', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notificaciones/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+    Route::get('/notificaciones/{notification}/accion', [NotificationController::class, 'act'])->name('notifications.act');
     Route::post('/notificaciones/read-all', [NotificationController::class, 'readAll'])->name('notifications.read_all');
 });
 
@@ -713,6 +717,8 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
     Route::get('/gastos-fijos', [FinanzasController::class, 'gastosFijos'])->name('finanzas.gastos_fijos');
     Route::get('/gastos-fijos/pendientes', [FinanzasController::class, 'getGastosFijosParaVincular'])->name('finanzas.gastos_fijos.pendientes');
     Route::get('/flujo-caja/cobranza-facturas', [FinanzasController::class, 'buscarFacturasCobranza'])->name('finanzas.cobranza_facturas');
+    Route::get('/pagos-manual-nomina', [\App\Http\Controllers\Finanzas\PagoManualNominaController::class, 'index'])->name('finanzas.pagos_manual_nomina.index');
+    Route::get('/pagos-manual-nomina/{pago}/pagar', [\App\Http\Controllers\Finanzas\PagoManualNominaController::class, 'pagar'])->whereNumber('pago')->name('finanzas.pagos_manual_nomina.pagar');
     Route::get('/configuracion', [\App\Http\Controllers\FinanzasConfiguracionController::class, 'index'])->name('finanzas.configuracion');
     Route::get('/cuentas', [\App\Http\Controllers\FinanzasCuentasController::class, 'index'])->name('finanzas.cuentas');
 

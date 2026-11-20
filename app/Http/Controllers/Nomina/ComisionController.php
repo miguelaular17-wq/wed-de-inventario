@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Nomina\NominaEmpresa;
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaLiquidacionComision;
+use App\Models\Nomina\NominaPagoManual;
 use App\Models\Nomina\NominaPeriodo;
 use App\Services\BcvRateService;
 use App\Models\Nomina\NominaComisionDescuento;
@@ -18,6 +19,7 @@ use App\Services\Nomina\FaltanteCajaService;
 use App\Services\Nomina\LoanDiscountPlanService;
 use App\Services\Nomina\LoanService;
 use App\Services\Nomina\MerchandiseDeductionService;
+use App\Services\Nomina\PagoManualNominaService;
 use App\Services\Nomina\PayrollBankFileService;
 use App\Services\Nomina\PayrollPeriodService;
 use App\Services\Nomina\PayrollSedeAreaTotals;
@@ -45,6 +47,7 @@ class ComisionController extends Controller
         private LoanService $loans,
         private LoanDiscountPlanService $planes,
         private MerchandiseDeductionService $mercancia,
+        private PagoManualNominaService $pagosManuales,
     ) {
     }
 
@@ -117,7 +120,7 @@ class ComisionController extends Controller
         ));
     }
 
-    /** @return array{personasTxt: Collection, filtrosTxtSedes: Collection, filtrosTxtCargos: Collection, bancoPorEmpresa: Collection, tasaBcv: float|int} */
+    /** @return array{personasTxt: Collection, filtrosTxtSedes: Collection, filtrosTxtCargos: Collection, bancoPorEmpresa: Collection, tasaBcv: float|int, enviadosSinEmpresa: array<int>} */
     private function datosModalTxt(NominaPeriodo $periodo): array
     {
         $personasTxt = $this->bankFile->personasComisionesTxt($periodo);
@@ -128,7 +131,36 @@ class ComisionController extends Controller
             'filtrosTxtCargos' => $personasTxt->pluck('cargo')->unique()->sort()->values(),
             'bancoPorEmpresa' => $this->bankFile->resumenComisionesPorEmpresa($periodo),
             'tasaBcv' => $this->bcv->tasaParaPeriodo($periodo),
+            'enviadosSinEmpresa' => $this->pagosManuales->empleadoIdsEnviados($periodo->id, NominaPagoManual::TIPO_COMISION),
+            'enviarFinanzasRoute' => route('nomina.comisiones.enviar_finanzas', $periodo),
+            'pagoManualTipo' => NominaPagoManual::TIPO_COMISION,
         ];
+    }
+
+    public function enviarFinanzas(NominaPeriodo $periodo): RedirectResponse
+    {
+        if ($periodo->estado === NominaPeriodo::ABIERTO) {
+            return redirect()
+                ->route('nomina.comisiones.index')
+                ->withErrors(['periodo' => 'Calcula las comisiones antes de enviar a Finanzas.']);
+        }
+
+        try {
+            $resultado = $this->pagosManuales->enviarAFinanzas(
+                $periodo,
+                NominaPagoManual::TIPO_COMISION,
+                (float) $this->bcv->tasaParaPeriodo($periodo),
+                auth()->id()
+            );
+        } catch (ValidationException $e) {
+            return redirect()
+                ->route('nomina.comisiones.show', $periodo)
+                ->withErrors($e->errors());
+        }
+
+        return redirect()
+            ->route('nomina.comisiones.show', $periodo)
+            ->with('status', 'Enviado a Finanzas: '.$resultado['creados'].' persona(s) · $'.number_format($resultado['total_usd'], 2).'.');
     }
 
     public function relacion(Request $request, NominaPeriodo $periodo)

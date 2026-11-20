@@ -15,6 +15,8 @@ class NotificationController extends Controller
      */
     public function index(Request $request): View
     {
+        Notification::sincronizarAdelantosPagados($request->user()->id);
+
         $notifications = $request->user()->notifications()->paginate(15);
 
         return view('user.notifications', [
@@ -39,6 +41,26 @@ class NotificationController extends Controller
         }
 
         return back()->with('status', 'Notificación marcada como leída.');
+    }
+
+    /**
+     * Marca leída y lleva a la acción (ej. Pagar → factura/egreso prellenado).
+     */
+    public function act(Request $request, Notification $notification): RedirectResponse
+    {
+        if ($notification->receiver_id !== $request->user()->id) {
+            abort(403);
+        }
+
+        if (! $notification->tieneAccion()) {
+            return back()->withErrors(['notification' => 'Esta notificación no tiene acción.']);
+        }
+
+        if (! $notification->read_at) {
+            $notification->update(['read_at' => now()]);
+        }
+
+        return redirect()->to($notification->action_url);
     }
 
     /**

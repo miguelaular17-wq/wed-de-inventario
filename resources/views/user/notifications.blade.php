@@ -52,16 +52,22 @@
                         {{ $notification->message }}
                     </p>
                 </div>
-                @if(!$notification->read_at)
-                    <div style="flex-shrink: 0; display: flex; align-items: center;">
+                <div style="flex-shrink: 0; display: flex; align-items: center; gap: 8px;">
+                    @if($notification->estaPagada())
+                        <span class="btn secondary" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; cursor: default; opacity: .85;">✓ Pagado</span>
+                    @elseif($notification->tieneAccion())
+                        <a href="{{ route('notifications.act', $notification) }}" class="btn" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; background-color: var(--blue); text-decoration: none;">
+                            {{ $notification->action_label }}
+                        </a>
+                    @elseif(!$notification->read_at)
                         <form method="POST" action="{{ route('notifications.read', $notification) }}" style="margin: 0;">
                             @csrf
                             <button type="submit" class="btn" style="padding: 6px 12px; font-size: 0.75rem; border-radius: 6px; background-color: var(--blue);" title="Marcar como leída">
                                 ✓ Leída
                             </button>
                         </form>
-                    </div>
-                @endif
+                    @endif
+                </div>
             </div>
         @empty
             <div style="text-align: center; padding: 48px 16px; color: var(--muted);">

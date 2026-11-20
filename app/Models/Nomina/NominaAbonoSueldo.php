@@ -21,6 +21,7 @@ class NominaAbonoSueldo extends Model
         'nomina_periodo_id',
         'motivo',
         'created_by',
+        'txt_exportado_at',
     ];
 
     protected $casts = [
@@ -28,6 +29,7 @@ class NominaAbonoSueldo extends Model
         'quincena_inicio' => 'date',
         'quincena_fin' => 'date',
         'monto' => 'decimal:2',
+        'txt_exportado_at' => 'datetime',
     ];
 
     public function empleado(): BelongsTo
@@ -43,5 +45,10 @@ class NominaAbonoSueldo extends Model
     public function isPendiente(): bool
     {
         return $this->estado === 'PENDIENTE';
+    }
+
+    public function yaFueExportadoTxt(): bool
+    {
+        return $this->txt_exportado_at !== null;
     }
 }

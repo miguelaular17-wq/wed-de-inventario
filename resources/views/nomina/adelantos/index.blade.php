@@ -38,11 +38,12 @@
     <div style="margin-top:10px;">
         @include('nomina.partials.excel-quincena', ['excelRoute' => route('nomina.adelantos.excel'), 'fecha' => $fecha])
     </div>
-    <p class="muted" style="margin-top:8px;">Tasa BCV hoy: <strong>{{ number_format($tasaBcv, 2) }}</strong>. El banco pide un TXT por empresa (si hay varias, baja un ZIP).</p>
+    <p class="muted" style="margin-top:8px;">Tasa BCV hoy: <strong>{{ number_format($tasaBcv, 2) }}</strong>. El banco pide un TXT por empresa (si hay varias, baja un ZIP). Cada descarga solo incluye adelantos nuevos; los ya bajados no se repiten. Sin empresa = pago manual (Finanzas recibe aviso).</p>
 
     @if(($txtPorEmpresa ?? collect())->isNotEmpty())
         <div class="nomina-card" style="margin-top:16px;">
-            <h3 style="margin-top:0;">TXT del {{ \Carbon\Carbon::parse($fecha)->format('d/m/Y') }}</h3>
+            <h3 style="margin-top:0;">TXT pendiente del {{ \Carbon\Carbon::parse($fecha)->format('d/m/Y') }}</h3>
+            <p class="muted" style="margin-top:0;">Pendiente de descargar: <strong>${{ number_format($totalPendienteTxt ?? 0, 2) }}</strong></p>
             <table class="data-table">
                 <thead>
                     <tr>
@@ -56,7 +57,7 @@
                     @foreach($txtPorEmpresa as $fila)
                         <tr>
                             <td>
-                                <strong>{{ $fila->empresa?->nombre ?: 'Sin empresa' }}</strong>
+                                <strong>{{ $fila->empresa?->nombre }}</strong>
                                 @if($fila->empresa?->codigo)
                                     <div class="muted" style="font-size:.75rem;">{{ $fila->empresa->codigo }}</div>
                                 @endif
@@ -64,11 +65,47 @@
                             <td>{{ $fila->empleados }}</td>
                             <td>${{ number_format($fila->usd, 2) }}</td>
                             <td>
-                                @if($fila->empresa)
-                                    <a class="btn secondary" href="{{ route('nomina.adelantos.txt', ['fecha' => $fecha, 'empresa' => $fila->empresa->id]) }}">TXT</a>
-                                @else
-                                    <a class="btn secondary" href="{{ route('nomina.adelantos.txt', ['fecha' => $fecha, 'empresa' => 0]) }}">TXT</a>
-                                @endif
+                                <a class="btn secondary" href="{{ route('nomina.adelantos.txt', ['fecha' => $fecha, 'empresa' => $fila->empresa->id]) }}">TXT</a>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+
+    @if(($sinEmpresa ?? collect())->isNotEmpty())
+        <div class="nomina-card" style="margin-top:16px;">
+            <h3 style="margin-top:0;">Pago manual · sin empresa</h3>
+            <p class="muted" style="margin-top:0;">Finanzas paga estas personas a mano (no van en el TXT bancario).</p>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Persona</th>
+                        <th>Cédula</th>
+                        <th>Divisa (USD)</th>
+                        <th>Bs</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($sinEmpresa as $fila)
+                        <tr>
+                            <td>
+                                <strong>{{ $fila->empleado->nombre() }}</strong>
+                            </td>
+                            <td>{{ $fila->empleado->cedula() ?: '—' }}</td>
+                            <td>${{ number_format($fila->usd, 2) }}</td>
+                            <td>Bs {{ number_format($fila->bs, 2) }}</td>
+                            <td>
+                                <form method="POST" action="{{ route('nomina.adelantos.marcar_pagado') }}" onsubmit="return confirm('¿Marcar como pagado a {{ $fila->empleado->nombre() }}?')">
+                                    @csrf
+                                    <input type="hidden" name="fecha" value="{{ $fecha }}">
+                                    @foreach($fila->abono_ids as $abonoId)
+                                        <input type="hidden" name="abono_ids[]" value="{{ $abonoId }}">
+                                    @endforeach
+                                    <button class="btn secondary" type="submit">Pagado</button>
+                                </form>
                             </td>
                         </tr>
                     @endforeach
@@ -146,7 +183,12 @@
                         </td>
                         <td>{{ $abono->empleado?->cedula() ?: '—' }}</td>
                         <td>${{ number_format($abono->monto, 2) }}</td>
-                        <td>{{ $abono->estado }}</td>
+                        <td>
+                            {{ $abono->estado }}
+                            @if($abono->yaFueExportadoTxt())
+                                <div class="muted" style="font-size:.75rem;">Ya en TXT</div>
+                            @endif
+                        </td>
                         <td>{{ $abono->creador?->name ?: '—' }}</td>
                         <td>{{ $abono->motivo ?: '—' }}</td>
                         <td>

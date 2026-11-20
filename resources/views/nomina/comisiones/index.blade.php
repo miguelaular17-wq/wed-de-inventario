@@ -253,6 +253,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if (btnMarcar) btnMarcar.addEventListener('click', function () { checksVisibles(true); });
         if (btnDesmarcar) btnDesmarcar.addEventListener('click', function () { checksVisibles(false); });
         form.addEventListener('submit', function (event) {
+            const destino = (event.submitter && event.submitter.getAttribute('formaction')) || form.getAttribute('action') || '';
+            if (destino.indexOf('enviar-finanzas') !== -1) {
+                return;
+            }
             const n = form.querySelectorAll('[data-txt-check]:checked:not(:disabled)').length;
             if (n < 1) {
                 event.preventDefault();

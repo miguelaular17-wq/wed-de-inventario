@@ -37,15 +37,30 @@
                                 </td>
                             </tr>
                         @else
+                            @php $enviados = collect($enviadosSinEmpresa ?? []); @endphp
                             <tr>
                                 <td colspan="5">
-                                    <strong>Sin empresa</strong>
-                                    · {{ $fila->empleados }} persona(s)
-                                    · ${{ number_format($fila->usd, 2) }}
-                                    · van en el TXT combinado si tienen cédula (o exclúyelos abajo)
+                                    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
+                                        <div>
+                                            <strong>Sin empresa</strong>
+                                            · {{ $fila->empleados }} persona(s)
+                                            · ${{ number_format($fila->usd, 2) }}
+                                            · pago manual (no van en el TXT)
+                                        </div>
+                                        @if(!empty($enviarFinanzasRoute))
+                                            {{-- formaction: no anidar otro <form> dentro del TXT (el browser descarga el TXT) --}}
+                                            <button class="btn primary" type="submit"
+                                                    formaction="{{ $enviarFinanzasRoute }}"
+                                                    formmethod="post"
+                                                    onclick="return confirm('¿Enviar estas {{ $fila->empleados }} persona(s) a Finanzas para pago manual?')">
+                                                Enviar a Finanzas
+                                            </button>
+                                        @endif
+                                    </div>
                                 </td>
                             </tr>
                             @foreach(($fila->personas ?? collect()) as $persona)
+                                @php $yaEnviado = $enviados->contains((int) $persona->id); @endphp
                                 <tr>
                                     <td style="padding-left:24px;">
                                         <a href="{{ route('nomina.empleados.show', ['empleado' => $persona->id, 'tab' => 'comisiones']) }}">{{ $persona->nombre }}</a>
@@ -54,7 +69,7 @@
                                     <td>1</td>
                                     <td>${{ number_format($persona->usd ?? 0, 2) }}</td>
                                     <td>Bs {{ number_format(($persona->usd ?? 0) * $tasaBcv, 2) }}</td>
-                                    <td class="muted">{{ preg_replace('/\D+/', '', (string) ($persona->cedula ?? '')) !== '' ? 'Incluido en combinado' : 'Sin cédula' }}</td>
+                                    <td class="muted">{{ $yaEnviado ? 'Enviado a Finanzas' : 'Pendiente de enviar' }}</td>
                                 </tr>
                             @endforeach
                         @endif

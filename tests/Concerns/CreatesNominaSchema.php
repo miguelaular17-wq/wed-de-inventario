@@ -28,9 +28,22 @@ trait CreatesNominaSchema
                 $table->unsignedBigInteger('sender_id')->nullable();
                 $table->unsignedBigInteger('receiver_id');
                 $table->text('message');
+                $table->string('action_url', 1000)->nullable();
+                $table->string('action_label', 64)->nullable();
                 $table->timestamp('read_at')->nullable();
                 $table->timestamps();
             });
+        } else {
+            if (! Schema::hasColumn('notifications', 'action_url')) {
+                Schema::table('notifications', function (Blueprint $table) {
+                    $table->string('action_url', 1000)->nullable();
+                });
+            }
+            if (! Schema::hasColumn('notifications', 'action_label')) {
+                Schema::table('notifications', function (Blueprint $table) {
+                    $table->string('action_label', 64)->nullable();
+                });
+            }
         }
 
         if (! Schema::hasTable('users')) {
@@ -302,7 +315,12 @@ trait CreatesNominaSchema
                 $table->unsignedBigInteger('nomina_periodo_id')->nullable();
                 $table->text('motivo')->nullable();
                 $table->unsignedBigInteger('created_by')->nullable();
+                $table->timestamp('txt_exportado_at')->nullable();
                 $table->timestamps();
+            });
+        } elseif (! Schema::hasColumn('nomina_abonos_sueldo', 'txt_exportado_at')) {
+            Schema::table('nomina_abonos_sueldo', function (Blueprint $table) {
+                $table->timestamp('txt_exportado_at')->nullable();
             });
         }
 

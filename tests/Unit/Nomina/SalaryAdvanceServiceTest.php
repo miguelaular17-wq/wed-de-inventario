@@ -6,6 +6,7 @@ use App\Models\Cliente;
 use App\Models\Nomina\NominaAbonoSueldo;
 use App\Models\Nomina\NominaEmpleado;
 use App\Models\Nomina\NominaEmpresa;
+use App\Models\Notification;
 use App\Models\User;
 use App\Services\Nomina\PayrollDeductionService;
 use App\Services\Nomina\PayrollBankFileService;
@@ -140,6 +141,9 @@ class SalaryAdvanceServiceTest extends TestCase
 
     public function test_txt_del_dia_agrupa_por_empleado_y_omite_cancelados(): void
     {
+        $empresa = NominaEmpresa::create(['codigo' => 'J99', 'nombre' => 'Demo', 'estado' => 'ACTIVO']);
+        $this->empleado->update(['empresa_id' => $empresa->id]);
+
         $service = app(SalaryAdvanceService::class);
         $service->create($this->empleado, ['fecha' => '2026-08-29', 'monto' => 20], auth()->id());
         $service->create($this->empleado, ['fecha' => '2026-08-29', 'monto' => 10], auth()->id());
@@ -150,7 +154,7 @@ class SalaryAdvanceServiceTest extends TestCase
         $linea = PayrollBankFileService::formatearLinea('999002', 3000.00, '2026-08-29');
 
         $this->assertSame($linea."\r\n", $txt);
-        $this->assertSame('adelantos_SIN_EMPRESA_20260829.txt', $service->nombreArchivoEmpresa('2026-08-29', 'SIN_EMPRESA'));
+        $this->assertSame('adelantos_J99_20260829.txt', $service->nombreArchivoEmpresa('2026-08-29', 'J99'));
     }
 
     public function test_txt_del_dia_separa_un_archivo_por_empresa(): void
@@ -177,5 +181,70 @@ class SalaryAdvanceServiceTest extends TestCase
         $this->assertSame('adelantos_J401722296_20260829.txt', $archivos->firstWhere('nombre', 'Doral')->archivo);
         $this->assertStringContainsString(PayrollBankFileService::formatearLinea('999002', 400.00, '2026-08-29'), $archivos->firstWhere('nombre', 'Doral')->contenido);
         $this->assertStringContainsString(PayrollBankFileService::formatearLinea('888111', 800.00, '2026-08-29'), $archivos->firstWhere('nombre', 'Nunes')->contenido);
+    }
+
+    public function test_txt_no_repite_adelantos_ya_descargados(): void
+    {
+        $empresa = NominaEmpresa::create(['codigo' => 'J99', 'nombre' => 'Demo', 'estado' => 'ACTIVO']);
+        $this->empleado->update(['empresa_id' => $empresa->id]);
+
+        $service = app(SalaryAdvanceService::class);
+        $primero = $service->create($this->empleado, ['fecha' => '2026-08-29', 'monto' => 20], auth()->id());
+        $segundo = $service->create($this->empleado, ['fecha' => '2026-08-29', 'monto' => 10], auth()->id());
+
+        $archivos = $service->archivosTxtDelDia('2026-08-29', 100);
+        $this->assertCount(1, $archivos);
+        $service->marcarTxtExportados($archivos->first()->abono_ids);
+
+        $this->assertNotNull($primero->fresh()->txt_exportado_at);
+        $this->assertNotNull($segundo->fresh()->txt_exportado_at);
+
+        $nuevo = $service->create($this->empleado, ['fecha' => '2026-08-29', 'monto' => 5], auth()->id());
+        $siguiente = $service->archivosTxtDelDia('2026-08-29', 100);
+
+        $this->assertCount(1, $siguiente);
+        $this->assertSame([$nuevo->id], $siguiente->first()->abono_ids);
+        $this->assertStringContainsString(
+            PayrollBankFileService::formatearLinea('999002', 500.00, '2026-08-29'),
+            $siguiente->first()->contenido
+        );
+        $this->assertStringNotContainsString(
+            PayrollBankFileService::formatearLinea('999002', 3000.00, '2026-08-29'),
+            $siguiente->first()->contenido
+        );
+    }
+
+    public function test_sin_empresa_no_entra_en_txt_y_notifica_finanzas(): void
+    {
+        $finanzas = User::create([
+            'name' => 'Finanzas User',
+            'email' => 'finanzas-adelanto@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_FINANZAS,
+        ]);
+
+        $service = app(SalaryAdvanceService::class);
+        $abono = $service->create($this->empleado, [
+            'fecha' => '2026-08-29',
+            'monto' => 50,
+            'tasa_bcv' => 40,
+        ], auth()->id());
+
+        $filas = $service->sinEmpresaPendientesDelDia('2026-08-29', 40);
+        $this->assertCount(1, $filas);
+        $this->assertSame(50.0, $filas->first()->usd);
+        $this->assertSame(2000.0, $filas->first()->bs);
+        $this->assertSame([$abono->id], $filas->first()->abono_ids);
+
+        $aviso = Notification::query()->where('receiver_id', $finanzas->id)->first();
+        $this->assertNotNull($aviso);
+        $this->assertStringContainsString('pago manual', $aviso->message);
+        $this->assertStringContainsString('50', $aviso->message);
+        $this->assertSame('Pagar', $aviso->action_label);
+        $this->assertStringContainsString('pagar_adelanto=1', $aviso->action_url);
+        $this->assertStringContainsString('abono_ids='.$abono->id, $aviso->action_url);
+
+        $this->expectException(ValidationException::class);
+        $service->archivosTxtDelDia('2026-08-29', 40);
     }
 }

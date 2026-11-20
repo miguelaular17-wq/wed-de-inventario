@@ -5,8 +5,11 @@ namespace App\Services\Nomina;
 use App\Models\Nomina\NominaAbonoSueldo;
 use App\Models\Nomina\NominaAuditLog;
 use App\Models\Nomina\NominaEmpleado;
+use App\Models\Notification;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class SalaryAdvanceService
@@ -44,7 +47,7 @@ class SalaryAdvanceService
         $fecha = Carbon::parse($data['fecha'] ?? now())->startOfDay();
         $quincena = $this->quincenaDe($fecha);
 
-        return DB::transaction(function () use ($empleado, $data, $monto, $fecha, $quincena, $usuarioId) {
+        $abono = DB::transaction(function () use ($empleado, $data, $monto, $fecha, $quincena, $usuarioId) {
             $abono = NominaAbonoSueldo::create([
                 'empleado_id' => $empleado->id,
                 'fecha' => $fecha->toDateString(),
@@ -65,6 +68,68 @@ class SalaryAdvanceService
 
             return $abono;
         });
+
+        if (! $empleado->empresa_id) {
+            $tasa = isset($data['tasa_bcv']) ? (float) $data['tasa_bcv'] : 0.0;
+            $this->notificarFinanzasSinEmpresa($abono, $empleado, $tasa, $usuarioId);
+        }
+
+        return $abono;
+    }
+
+    /**
+     * Avisa a usuarios Finanzas para pago manual (empleado sin empresa / sin TXT bancario).
+     */
+    public function notificarFinanzasSinEmpresa(
+        NominaAbonoSueldo $abono,
+        NominaEmpleado $empleado,
+        float $tasaBcv = 0,
+        ?int $senderId = null
+    ): int {
+        $usd = round((float) $abono->monto, 2);
+        $bs = $tasaBcv > 0 ? round($usd * $tasaBcv, 2) : null;
+        $nombre = $empleado->nombre();
+        $cedula = $empleado->cedula() ?: 's/cédula';
+        $fecha = $abono->fecha?->format('d/m/Y') ?: '';
+        $mensaje = sprintf(
+            'Adelanto sin empresa (pago manual): %s (%s) · $%s%s · fecha %s.',
+            $nombre,
+            $cedula,
+            number_format($usd, 2, '.', ''),
+            $bs !== null ? ' / Bs '.number_format($bs, 2, '.', '') : '',
+            $fecha
+        );
+
+        $actionUrl = route('finanzas.flujo_caja', array_filter([
+            'pagar_adelanto' => 1,
+            'beneficiario' => $nombre,
+            'monto_usd' => number_format($usd, 2, '.', ''),
+            'monto_bs' => $bs !== null ? number_format($bs, 2, '.', '') : null,
+            'tasa_cambio' => $tasaBcv > 0 ? number_format($tasaBcv, 2, '.', '') : null,
+            'motivo' => 'Adelanto de sueldo (pago manual) — '.$nombre,
+            'nomina_empleado_id' => $empleado->id,
+            'abono_ids' => (string) $abono->id,
+            'fecha' => $abono->fecha?->toDateString(),
+        ], fn ($v) => $v !== null && $v !== ''));
+
+        $receivers = User::query()
+            ->where('role', User::ROLE_FINANZAS)
+            ->when($senderId, fn ($q) => $q->where('id', '!=', $senderId))
+            ->get(['id']);
+
+        $count = 0;
+        foreach ($receivers as $receiver) {
+            Notification::create([
+                'sender_id' => $senderId,
+                'receiver_id' => $receiver->id,
+                'message' => Str::limit($mensaje, 2000, ''),
+                'action_url' => $actionUrl,
+                'action_label' => 'Pagar',
+            ]);
+            $count++;
+        }
+
+        return $count;
     }
 
     public function cancelar(NominaAbonoSueldo $abono, ?string $motivo = null): NominaAbonoSueldo
@@ -194,9 +259,46 @@ class SalaryAdvanceService
     }
 
     /**
-     * Un TXT bancario por empresa (misma regla que nómina).
+     * Adelantos del día que aún no entraron en un TXT bancario ni se marcaron pagados.
      *
-     * @return \Illuminate\Support\Collection<int, object{empresa:?NominaEmpresa,clave:string,nombre:string,contenido:string,archivo:string,empleados:int,usd:float}>
+     * @return \Illuminate\Support\Collection<int, NominaAbonoSueldo>
+     */
+    public function pendientesTxtDelDia(Carbon|string $fecha)
+    {
+        return $this->delDia($fecha)->filter(fn (NominaAbonoSueldo $abono) => ! $abono->yaFueExportadoTxt())->values();
+    }
+
+    /**
+     * Personas sin empresa: pago manual (no TXT). Una fila por persona con USD y Bs.
+     *
+     * @return \Illuminate\Support\Collection<int, object{empleado:NominaEmpleado,usd:float,bs:float,abono_ids:array<int>}>
+     */
+    public function sinEmpresaPendientesDelDia(Carbon|string $fecha, float $tasaBcv)
+    {
+        return $this->pendientesTxtDelDia($fecha)
+            ->filter(fn (NominaAbonoSueldo $abono) => ! $abono->empleado?->empresa_id)
+            ->groupBy('empleado_id')
+            ->map(function ($grupo) use ($tasaBcv) {
+                $empleado = $grupo->first()->empleado;
+                $usd = round((float) $grupo->sum('monto'), 2);
+
+                return (object) [
+                    'empleado' => $empleado,
+                    'usd' => $usd,
+                    'bs' => $tasaBcv > 0 ? round($usd * $tasaBcv, 2) : 0.0,
+                    'abono_ids' => $grupo->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                ];
+            })
+            ->filter(fn ($fila) => $fila->empleado && $fila->usd > 0)
+            ->sortBy(fn ($fila) => $fila->empleado->nombre())
+            ->values();
+    }
+
+    /**
+     * Un TXT bancario por empresa (misma regla que nómina).
+     * Solo adelantos con empresa, aún no descargados. Sin empresa = pago manual.
+     *
+     * @return \Illuminate\Support\Collection<int, object{empresa:?NominaEmpresa,clave:string,nombre:string,contenido:string,archivo:string,empleados:int,usd:float,abono_ids:array<int>}>
      */
     public function archivosTxtDelDia(Carbon|string $fecha, float $tasaBcv)
     {
@@ -207,7 +309,9 @@ class SalaryAdvanceService
         }
 
         $dia = Carbon::parse($fecha)->startOfDay();
-        $porEmpleado = $this->delDia($dia)
+        $pendientes = $this->pendientesTxtDelDia($dia)
+            ->filter(fn (NominaAbonoSueldo $abono) => (bool) $abono->empleado?->empresa_id);
+        $porEmpleado = $pendientes
             ->groupBy('empleado_id')
             ->map(function ($grupo) {
                 $empleado = $grupo->first()->empleado;
@@ -215,20 +319,20 @@ class SalaryAdvanceService
                 return [
                     'empleado' => $empleado,
                     'usd' => round((float) $grupo->sum('monto'), 2),
+                    'abono_ids' => $grupo->pluck('id')->map(fn ($id) => (int) $id)->all(),
                 ];
             })
             ->filter(fn ($fila) => $fila['empleado'] && $fila['usd'] > 0);
 
         $porEmpresa = $porEmpleado->groupBy(function ($fila) {
-            $empresa = $fila['empleado']->empresa;
-
-            return $empresa?->id ? 'emp-'.$empresa->id : 'sin-empresa';
+            return 'emp-'.$fila['empleado']->empresa->id;
         });
 
         $archivos = collect();
         foreach ($porEmpresa as $clave => $filas) {
             $lineas = [];
             $usd = 0.0;
+            $abonoIds = [];
             $empresa = $filas->first()['empleado']->empresa;
             foreach ($filas as $fila) {
                 $cedula = $fila['empleado']->cedula();
@@ -238,30 +342,55 @@ class SalaryAdvanceService
                 $usd = round($usd + $fila['usd'], 2);
                 $bs = round($fila['usd'] * $tasaBcv, 2);
                 $lineas[] = PayrollBankFileService::formatearLinea($cedula, $bs, $dia);
+                $abonoIds = array_merge($abonoIds, $fila['abono_ids']);
             }
             if ($lineas === []) {
                 continue;
             }
 
-            $codigo = $empresa?->codigo ?: 'SIN_EMPRESA';
             $archivos->push((object) [
                 'empresa' => $empresa,
                 'clave' => $clave,
-                'nombre' => $empresa?->nombre ?: 'Sin empresa',
+                'nombre' => $empresa->nombre,
                 'contenido' => implode("\r\n", $lineas)."\r\n",
-                'archivo' => $this->nombreArchivoEmpresa($dia, $codigo),
+                'archivo' => $this->nombreArchivoEmpresa($dia, $empresa->codigo ?: 'EMPRESA'),
                 'empleados' => $filas->count(),
                 'usd' => $usd,
+                'abono_ids' => array_values(array_unique($abonoIds)),
             ]);
         }
 
         if ($archivos->isEmpty()) {
             throw ValidationException::withMessages([
-                'fecha' => 'Ese día no hay adelantos para generar el TXT.',
+                'fecha' => 'No hay adelantos con empresa para generar el TXT (sin empresa se pagan a mano).',
             ]);
         }
 
         return $archivos->sortBy('archivo')->values();
+    }
+
+    /**
+     * Marca adelantos incluidos en un TXT para que no vuelvan a salir.
+     *
+     * @param  array<int>  $abonoIds
+     */
+    public function marcarTxtExportados(array $abonoIds): int
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $abonoIds))));
+        if ($ids === []) {
+            return 0;
+        }
+
+        $updated = NominaAbonoSueldo::query()
+            ->whereIn('id', $ids)
+            ->whereNull('txt_exportado_at')
+            ->update(['txt_exportado_at' => now()]);
+
+        Notification::marcarPagadasPorUrl(
+            array_map(fn (int $id) => 'abono_ids='.$id, $ids)
+        );
+
+        return $updated;
     }
 
     public function generarTxtDelDia(Carbon|string $fecha, float $tasaBcv, ?int $empresaId = null): string

@@ -98,7 +98,8 @@ class PayrollBankFileService
                         'cargo' => (string) ($persona->cargo ?? '—'),
                         'empresa_id' => (int) ($persona->empresa_id ?? $empresaId),
                         'empresa' => $empresa ? ($empresa->codigo.' — '.$empresa->nombre) : '',
-                        'descargable' => $cedulaOk && (float) $persona->usd > 0,
+                        // Sin empresa → pago manual (Finanzas), no TXT bancario.
+                        'descargable' => $cedulaOk && (float) $persona->usd > 0 && $empresaId > 0,
                     ];
                 });
             })
@@ -148,7 +149,7 @@ class PayrollBankFileService
                 continue;
             }
             $empleado = $registros->firstWhere('empleado_id', $id)?->empleado;
-            if (! $empleado) {
+            if (! $empleado || ! $empleado->empresa_id) {
                 continue;
             }
             $cedula = $empleado->cedula();
@@ -160,7 +161,7 @@ class PayrollBankFileService
 
         if ($lineas === []) {
             throw ValidationException::withMessages([
-                'empleados' => 'Ninguna de las personas seleccionadas tiene monto descargable (cédula y nómina > 0).',
+                'empleados' => 'Ninguna de las personas seleccionadas tiene monto descargable (empresa, cédula y nómina > 0).',
             ]);
         }
 
@@ -255,7 +256,8 @@ class PayrollBankFileService
                         'cargo' => (string) ($persona->cargo ?? '—'),
                         'empresa_id' => (int) ($persona->empresa_id ?? $empresaId),
                         'empresa' => $empresa ? ($empresa->codigo.' — '.$empresa->nombre) : '',
-                        'descargable' => $cedulaOk && (float) $persona->usd > 0,
+                        // Sin empresa → pago manual (Finanzas), no TXT bancario.
+                        'descargable' => $cedulaOk && (float) $persona->usd > 0 && $empresaId > 0,
                     ];
                 });
             })
@@ -349,7 +351,7 @@ class PayrollBankFileService
                 continue;
             }
             $empleado = $liquidaciones->firstWhere('empleado_id', $id)?->empleado;
-            if (! $empleado) {
+            if (! $empleado || ! $empleado->empresa_id) {
                 continue;
             }
             $cedula = $empleado->cedula();
@@ -361,7 +363,7 @@ class PayrollBankFileService
 
         if ($lineas === []) {
             throw ValidationException::withMessages([
-                'empleados' => 'Ninguna de las personas seleccionadas tiene monto descargable (cédula y comisión > 0).',
+                'empleados' => 'Ninguna de las personas seleccionadas tiene monto descargable (empresa, cédula y comisión > 0).',
             ]);
         }
 

@@ -734,6 +734,8 @@ class FinanzasController extends Controller
                 'monto_total_gasto' => 'nullable|numeric|min:0',
                 'es_cuenta_por_pagar' => 'nullable|boolean',
                 'cuenta_por_pagar_id' => 'nullable|integer',
+                'adelanto_abono_ids' => 'nullable|string|max:500',
+                'pago_manual_id' => 'nullable|integer',
                 'cobranza_factura_sede' => 'nullable|string|max:120',
                 'cobranza_factura_doc' => 'nullable|string|max:120',
                 'cobranza_monto' => 'nullable|numeric|min:0',
@@ -1000,6 +1002,50 @@ class FinanzasController extends Controller
             });
 
             $this->syncTotalesSalidas($data['fecha']);
+
+            $abonoIdsRaw = trim((string) ($data['adelanto_abono_ids'] ?? ''));
+            $abonoIds = $abonoIdsRaw !== ''
+                ? array_values(array_filter(array_map('intval', preg_split('/[,\s]+/', $abonoIdsRaw))))
+                : [];
+
+            // Si vino del aviso "Pagar" pero faltó el hidden, resuelve por empleado + motivo.
+            if ($abonoIds === []
+                && (int) ($data['nomina_empleado_id'] ?? 0) > 0
+                && str_contains((string) ($data['motivo'] ?? ''), 'Adelanto de sueldo (pago manual)')
+            ) {
+                $abonoIds = \App\Models\Nomina\NominaAbonoSueldo::query()
+                    ->where('empleado_id', (int) $data['nomina_empleado_id'])
+                    ->where('estado', 'PENDIENTE')
+                    ->whereNull('txt_exportado_at')
+                    ->orderByDesc('id')
+                    ->limit(5)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+            }
+
+            if ($abonoIds !== []) {
+                app(\App\Services\Nomina\SalaryAdvanceService::class)->marcarTxtExportados($abonoIds);
+            }
+
+            $pagoManualId = (int) ($data['pago_manual_id'] ?? 0);
+            if ($pagoManualId > 0) {
+                $pagoManual = \App\Models\Nomina\NominaPagoManual::query()->find($pagoManualId);
+                if ($pagoManual) {
+                    app(\App\Services\Nomina\PagoManualNominaService::class)
+                        ->marcarPagado($pagoManual, $request->user()?->id);
+                }
+
+                return redirect()
+                    ->route('finanzas.pagos_manual_nomina.index', ['estado' => 'PENDIENTE'])
+                    ->with('success', 'Pago registrado. Sigue con el siguiente de la lista.');
+            }
+
+            if ($abonoIds !== []) {
+                return redirect()
+                    ->route('notifications.index')
+                    ->with('success', 'Egreso registrado. El adelanto quedó marcado como pagado.');
+            }
 
             if ((int) ($data['cuenta_por_pagar_id'] ?? 0) > 0) {
                 return redirect()

@@ -43,10 +43,14 @@ class AbonoSueldoController extends Controller
                 ->get();
         }
 
+        $tasaBcv = $this->bcv->getRateForToday();
         $delDia = $this->advances->delDia($fecha);
+        $pendientesTxt = $this->advances->pendientesTxtDelDia($fecha)
+            ->filter(fn ($abono) => (bool) $abono->empleado?->empresa_id);
+        $sinEmpresa = $this->advances->sinEmpresaPendientesDelDia($fecha, $tasaBcv);
         $quincena = $this->advances->quincenaDe($fecha);
-        $txtPorEmpresa = $delDia
-            ->groupBy(fn ($abono) => (string) ($abono->empleado?->empresa_id ?: '0'))
+        $txtPorEmpresa = $pendientesTxt
+            ->groupBy(fn ($abono) => (string) $abono->empleado->empresa_id)
             ->map(function ($grupo) {
                 $empleado = $grupo->first()->empleado;
 
@@ -65,10 +69,12 @@ class AbonoSueldoController extends Controller
             'resultados' => $resultados,
             'delDia' => $delDia,
             'txtPorEmpresa' => $txtPorEmpresa,
+            'sinEmpresa' => $sinEmpresa,
             'totalDia' => round((float) $delDia->sum('monto'), 2),
+            'totalPendienteTxt' => round((float) $pendientesTxt->sum('monto'), 2),
             'quincena' => $quincena,
             'kpis' => $this->advances->kpis($fecha),
-            'tasaBcv' => $this->bcv->getRateForToday(),
+            'tasaBcv' => $tasaBcv,
         ]);
     }
 
@@ -83,14 +89,34 @@ class AbonoSueldoController extends Controller
         ]);
 
         $empleado = NominaEmpleado::query()->findOrFail($data['empleado_id']);
+        $data['tasa_bcv'] = $this->bcv->getRateForToday();
         $this->advances->create($empleado, $data, auth()->id());
+
+        $extra = ! $empleado->empresa_id
+            ? ' Finanzas recibió aviso para pagarlo a mano (sin empresa).'
+            : '';
 
         return redirect()
             ->route('nomina.adelantos.index', [
                 'fecha' => $data['fecha'],
                 'q' => $data['q'] ?? '',
             ])
-            ->with('status', 'Adelanto registrado a '.$empleado->nombre().'. Se descontará del sueldo en esa quincena.');
+            ->with('status', 'Adelanto registrado a '.$empleado->nombre().'. Se descontará del sueldo en esa quincena.'.$extra);
+    }
+
+    public function marcarPagadoSinEmpresa(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'fecha' => ['required', 'date'],
+            'abono_ids' => ['required', 'array', 'min:1'],
+            'abono_ids.*' => ['integer'],
+        ]);
+
+        $this->advances->marcarTxtExportados($data['abono_ids']);
+
+        return redirect()
+            ->route('nomina.adelantos.index', ['fecha' => $data['fecha']])
+            ->with('status', 'Marcado como pagado. Ya no aparece en el listado de pago manual.');
     }
 
     public function exportarTxt(Request $request): StreamedResponse|RedirectResponse
@@ -112,8 +138,10 @@ class AbonoSueldoController extends Controller
             if (! $archivo) {
                 return redirect()
                     ->route('nomina.adelantos.index', ['fecha' => $fecha->toDateString()])
-                    ->withErrors(['empresa' => 'Esa empresa no tiene adelantos en esta fecha.']);
+                    ->withErrors(['empresa' => 'Esa empresa no tiene adelantos nuevos para el TXT.']);
             }
+
+            $this->advances->marcarTxtExportados($archivo->abono_ids ?? []);
 
             return response()->streamDownload(function () use ($archivo) {
                 echo $archivo->contenido;
@@ -121,6 +149,10 @@ class AbonoSueldoController extends Controller
                 'Content-Type' => 'text/plain; charset=UTF-8',
             ]);
         }
+
+        $this->advances->marcarTxtExportados(
+            $archivos->flatMap(fn ($a) => $a->abono_ids ?? [])->all()
+        );
 
         if ($archivos->count() === 1) {
             $archivo = $archivos->first();
@@ -166,11 +198,16 @@ class AbonoSueldoController extends Controller
             'motivo' => ['nullable', 'string'],
         ]);
 
+        $data['tasa_bcv'] = $this->bcv->getRateForToday();
         $this->advances->create($empleado, $data, auth()->id());
+
+        $extra = ! $empleado->empresa_id
+            ? ' Finanzas recibió aviso para pagarlo a mano (sin empresa).'
+            : '';
 
         return redirect()
             ->route('nomina.empleados.show', ['empleado' => $empleado, 'tab' => 'abonos'])
-            ->with('status', 'Adelanto registrado. Se descontará del sueldo en esa quincena.');
+            ->with('status', 'Adelanto registrado. Se descontará del sueldo en esa quincena.'.$extra);
     }
 
     public function cancelar(Request $request, NominaAbonoSueldo $abono): RedirectResponse

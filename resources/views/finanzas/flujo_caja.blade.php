@@ -1448,6 +1448,8 @@
         <form id="formNuevoEgreso" method="POST" action="{{ route('finanzas.store_egreso') }}" enctype="multipart/form-data" onsubmit="return validarDesglose(event)">
             @csrf
             <input type="hidden" name="cuenta_por_pagar_id" id="cuenta_por_pagar_id" value="">
+            <input type="hidden" name="adelanto_abono_ids" id="adelanto_abono_ids" value="">
+            <input type="hidden" name="pago_manual_id" id="pago_manual_id" value="">
             <div id="banner_pago_cuenta" style="display:none; margin-bottom: 12px; padding: 10px 12px; background: #fff7ed; border: 1px solid #fdba74; border-radius: 8px; color: #9a3412; font-size: 0.85rem;"></div>
 
             <div class="ne-body">
@@ -2521,6 +2523,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const rowTotal = document.getElementById('row_monto_total_gasto');
         const totalInput = document.getElementById('monto_total_gasto');
         if (idInput) idInput.value = '';
+        const adelantoIds = document.getElementById('adelanto_abono_ids');
+        if (adelantoIds) adelantoIds.value = '';
+        const pagoManualId = document.getElementById('pago_manual_id');
+        if (pagoManualId) pagoManualId.value = '';
         if (banner) { banner.style.display = 'none'; banner.textContent = ''; }
         if (titulo) titulo.textContent = 'Nuevo Egreso';
         if (chk) chk.checked = false;
@@ -2638,6 +2644,105 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.openPagoCuentaPorPagar(id);
             }
         }, 200);
+    })();
+
+    window.openPagoAdelantoSinEmpresa = function(params) {
+        window.resetNuevoEgresoCuenta();
+        const cat = document.getElementById('categoria_egreso');
+        if (cat) {
+            cat.value = 'egreso_realizado';
+            if (typeof toggleTraslados === 'function') toggleTraslados();
+        }
+        document.getElementById('nuevoEgresoModalTitulo').textContent = 'Pagar adelanto (sin empresa)';
+        const banner = document.getElementById('banner_pago_cuenta');
+        if (banner) {
+            banner.style.display = 'block';
+            banner.textContent = 'Pago manual de adelanto: ' + (params.beneficiario || '') +
+                '. Completa banco/referencia y guarda la factura.';
+        }
+        const idsInput = document.getElementById('adelanto_abono_ids');
+        if (idsInput) idsInput.value = params.abono_ids || '';
+        const empInput = document.getElementById('nomina_empleado_id');
+        if (empInput && params.nomina_empleado_id) empInput.value = params.nomina_empleado_id;
+        const motivo = document.querySelector('#formNuevoEgreso input[name="motivo"]');
+        if (motivo && params.motivo) motivo.value = params.motivo;
+        const fecha = document.querySelector('#formNuevoEgreso input[name="fecha"]');
+        if (fecha && params.fecha) fecha.value = params.fecha;
+        const montoUsd = document.getElementById('monto_usd');
+        if (montoUsd && params.monto_usd) montoUsd.value = params.monto_usd;
+        const montoBs = document.getElementById('monto_bs');
+        if (montoBs && params.monto_bs) montoBs.value = params.monto_bs;
+        const tasa = document.getElementById('tasa_cambio');
+        if (tasa && params.tasa_cambio) tasa.value = params.tasa_cambio;
+        if (window.tsBeneficiario && params.beneficiario) {
+            try {
+                window.tsBeneficiario.addOption({ value: params.beneficiario, text: params.beneficiario });
+                window.tsBeneficiario.setValue(params.beneficiario);
+            } catch (e) {}
+        }
+        const submitBtn = document.querySelector('#nuevoEgresoModal button[type="submit"]');
+        if (submitBtn) submitBtn.innerText = 'Registrar pago';
+        document.getElementById('nuevoEgresoModal').style.display = 'flex';
+    };
+
+    (function autoAbrirPagoAdelanto() {
+        const qs = new URLSearchParams(window.location.search);
+        if (qs.get('pagar_adelanto') !== '1') return;
+        setTimeout(function () {
+            if (typeof window.openPagoAdelantoSinEmpresa === 'function') {
+                window.openPagoAdelantoSinEmpresa({
+                    beneficiario: qs.get('beneficiario') || '',
+                    monto_usd: qs.get('monto_usd') || '',
+                    monto_bs: qs.get('monto_bs') || '',
+                    tasa_cambio: qs.get('tasa_cambio') || '',
+                    motivo: qs.get('motivo') || '',
+                    nomina_empleado_id: qs.get('nomina_empleado_id') || '',
+                    abono_ids: qs.get('abono_ids') || '',
+                    fecha: qs.get('fecha') || '',
+                });
+            }
+        }, 250);
+    })();
+
+    window.openPagoManualNomina = function(params) {
+        window.openPagoAdelantoSinEmpresa({
+            beneficiario: params.beneficiario || '',
+            monto_usd: params.monto_usd || '',
+            monto_bs: params.monto_bs || '',
+            tasa_cambio: params.tasa_cambio || '',
+            motivo: params.motivo || '',
+            nomina_empleado_id: params.nomina_empleado_id || '',
+            abono_ids: '',
+            fecha: params.fecha || '',
+        });
+        document.getElementById('nuevoEgresoModalTitulo').textContent = 'Pagar nómina/comisión (sin empresa)';
+        const banner = document.getElementById('banner_pago_cuenta');
+        if (banner) {
+            banner.style.display = 'block';
+            banner.textContent = 'Pago manual de ' + (params.beneficiario || 'persona sin empresa') +
+                '. Completa banco/referencia y guarda la factura.';
+        }
+        const pagoId = document.getElementById('pago_manual_id');
+        if (pagoId) pagoId.value = params.pago_manual_id || '';
+    };
+
+    (function autoAbrirPagoManualNomina() {
+        const qs = new URLSearchParams(window.location.search);
+        if (qs.get('pagar_manual_nomina') !== '1') return;
+        setTimeout(function () {
+            if (typeof window.openPagoManualNomina === 'function') {
+                window.openPagoManualNomina({
+                    beneficiario: qs.get('beneficiario') || '',
+                    monto_usd: qs.get('monto_usd') || '',
+                    monto_bs: qs.get('monto_bs') || '',
+                    tasa_cambio: qs.get('tasa_cambio') || '',
+                    motivo: qs.get('motivo') || '',
+                    nomina_empleado_id: qs.get('nomina_empleado_id') || '',
+                    pago_manual_id: qs.get('pago_manual_id') || '',
+                    fecha: qs.get('fecha') || '',
+                });
+            }
+        }, 250);
     })();
 
     // ===== MULTI-COMPROBANTE (máx 6) =====
