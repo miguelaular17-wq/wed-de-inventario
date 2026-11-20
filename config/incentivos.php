@@ -40,6 +40,15 @@ return [
                 ['nombre' => 'Efectividad en tienda', 'peso' => '70%', 'mide' => 'Promedio de la parte de cada trabajador en la venta, los productos y los clientes de la selección, sobre el total de la tienda.'],
                 ['nombre' => 'Producto meta', 'peso' => '30%', 'mide' => '100% si cumplió el producto que se le asignó dentro de la selección.'],
             ],
+            // Códigos (o alternos) con los que se evalúa Arreglo. Se resuelven al SKU principal al activar.
+            'productos' => [
+                'BIRRET02', 'BIRRET03', 'BIRRET01', 'SUBLIBOL01', 'SUBLIDTF01', 'SUBLIDTF2',
+                '10201', 'ENVOL001', 'SUBLITX01', 'FRANELASUBLI', 'FRANELADTF', 'SUBLIFR01',
+                'FRANELASVINIL01', 'SUBLIFR03', 'FRANELASUBLI02', 'SUBLIGR01', 'LASER02', 'LASER01',
+                'SUBLILNY01', 'SUBLILV01', 'SUBLILV02', '002ROSA', 'ROS100', 'VINIL02',
+                'TAZASUBLI', 'SUBLITAZ01', 'SUBLISW02', 'SUBLISW01', 'TAZASUBLI02',
+                'VINIL06', 'VINIL05',
+            ],
         ],
         'supervisor' => [
             'cargos' => [

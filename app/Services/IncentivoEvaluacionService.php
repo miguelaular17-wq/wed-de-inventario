@@ -48,6 +48,14 @@ class IncentivoEvaluacionService
         $sinMedicion = false;
         if ($clave === 'arreglos') {
             $seleccion = $this->cruce->activos($clave);
+            // Primera vez: carga el catálogo fijo de productos de Arreglo.
+            if ($seleccion['categorias'] === [] && $seleccion['productos'] === []
+                && ! \App\Models\IncentivoCruceItem::query()->where('modulo', $clave)->exists()
+            ) {
+                $this->cruce->activarProductosCatalogo($clave);
+                $seleccion = $this->cruce->activos($clave);
+            }
+            $seleccion['productos'] = $this->cruce->codigosParaFiltro($seleccion['productos']);
             $cruceActivo = $seleccion['categorias'] !== [] || $seleccion['productos'] !== [];
             $filtroMeta = $seleccion;
             $sinMedicion = ! $cruceActivo;
@@ -180,10 +188,14 @@ class IncentivoEvaluacionService
                     $filtro->whereIn(DB::raw("UPPER(TRIM(COALESCE(p.categoria, '')))"), $categorias);
                 }
                 if ($productos !== []) {
-                    $metodo = $categorias === [] ? 'whereIn' : 'orWhereIn';
+                    $productos = $this->cruce->codigosParaFiltro($productos);
+                    $metodo = $categorias === [] ? 'where' : 'orWhere';
                     $codigoVenta = "UPPER(TRIM(SPLIT_PART(COALESCE(vd.codigo_producto, ''), '/', 1)))";
-                    $filtro->{$metodo}(DB::raw($codigoVenta), $productos);
-                    $filtro->orWhereIn(DB::raw("UPPER(TRIM(COALESCE(p.codigo, '')))"), $productos);
+                    $filtro->{$metodo}(function ($q) use ($productos, $codigoVenta) {
+                        $q->whereIn(DB::raw($codigoVenta), $productos)
+                            ->orWhereIn(DB::raw("UPPER(TRIM(SPLIT_PART(COALESCE(p.codigo, ''), '/', 1)))"), $productos)
+                            ->orWhereIn(DB::raw("UPPER(TRIM(COALESCE(p.codigo, '')))"), $productos);
+                    });
                 }
             });
         }
@@ -447,10 +459,14 @@ class IncentivoEvaluacionService
                     $filtro->whereIn(DB::raw("UPPER(TRIM(COALESCE(p.categoria, '')))"), $categorias);
                 }
                 if ($productos !== []) {
-                    $metodo = $categorias === [] ? 'whereIn' : 'orWhereIn';
+                    $productos = $this->cruce->codigosParaFiltro($productos);
+                    $metodo = $categorias === [] ? 'where' : 'orWhere';
                     $codigoVenta = "UPPER(TRIM(SPLIT_PART(COALESCE(vd.codigo_producto, ''), '/', 1)))";
-                    $filtro->{$metodo}(DB::raw($codigoVenta), $productos);
-                    $filtro->orWhereIn(DB::raw("UPPER(TRIM(COALESCE(p.codigo, '')))"), $productos);
+                    $filtro->{$metodo}(function ($q) use ($productos, $codigoVenta) {
+                        $q->whereIn(DB::raw($codigoVenta), $productos)
+                            ->orWhereIn(DB::raw("UPPER(TRIM(SPLIT_PART(COALESCE(p.codigo, ''), '/', 1)))"), $productos)
+                            ->orWhereIn(DB::raw("UPPER(TRIM(COALESCE(p.codigo, '')))"), $productos);
+                    });
                 }
             });
         }
@@ -500,10 +516,14 @@ class IncentivoEvaluacionService
                     $filtro->whereIn(DB::raw("UPPER(TRIM(COALESCE(p.categoria, '')))"), $categorias);
                 }
                 if ($productos !== []) {
-                    $metodo = $categorias === [] ? 'whereIn' : 'orWhereIn';
+                    $productos = $this->cruce->codigosParaFiltro($productos);
+                    $metodo = $categorias === [] ? 'where' : 'orWhere';
                     $codigoVenta = "UPPER(TRIM(SPLIT_PART(COALESCE(vd.codigo_producto, ''), '/', 1)))";
-                    $filtro->{$metodo}(DB::raw($codigoVenta), $productos);
-                    $filtro->orWhereIn(DB::raw("UPPER(TRIM(COALESCE(p.codigo, '')))"), $productos);
+                    $filtro->{$metodo}(function ($q) use ($productos, $codigoVenta) {
+                        $q->whereIn(DB::raw($codigoVenta), $productos)
+                            ->orWhereIn(DB::raw("UPPER(TRIM(SPLIT_PART(COALESCE(p.codigo, ''), '/', 1)))"), $productos)
+                            ->orWhereIn(DB::raw("UPPER(TRIM(COALESCE(p.codigo, '')))"), $productos);
+                    });
                 }
             });
         if (Schema::hasColumn('ventas_detalle', 'anulado')) {
@@ -560,6 +580,7 @@ class IncentivoEvaluacionService
                     'clave' => '',
                     'nombre' => 'Sin categoría',
                     'unidades' => null,
+                    'tienda' => null,
                     'pct' => null,
                     'estado' => 'Desactivado',
                 ];
@@ -574,6 +595,7 @@ class IncentivoEvaluacionService
                         'clave' => $grupo['clave'],
                         'nombre' => $grupo['nombre'],
                         'unidades' => $unidades,
+                        'tienda' => $totalTienda,
                         'pct' => $this->porcentaje($unidades, $totalTienda),
                         'estado' => 'Activo',
                     ];
@@ -584,6 +606,7 @@ class IncentivoEvaluacionService
                     'clave' => '',
                     'nombre' => 'Sin categoría',
                     'unidades' => null,
+                    'tienda' => null,
                     'pct' => null,
                     'estado' => 'Desactivado',
                 ];
@@ -1011,7 +1034,7 @@ class IncentivoEvaluacionService
     /**
      * @param  array{monto:?float, unidades:?float, clientes:?int}  $suma
      * @param  array{monto:float, unidades:float, clientes:int, cruce:float, cruces?:array<string, float>}|null  $tienda
-     * @param  list<array{clave:string, nombre:string, unidades:?float, pct:?float, estado:string}>  $cruceColumnas
+     * @param  list<array{clave:string, nombre:string, unidades:?float, tienda:?float, pct:?float, estado:string}>  $cruceColumnas
      * @return array<string, mixed>
      */
     private function armarFila(
@@ -1223,7 +1246,15 @@ class IncentivoEvaluacionService
         foreach ($metas as $meta) {
             $categoria = mb_strtoupper(trim((string) $meta->categoria));
             $codigo = mb_strtoupper(trim((string) $meta->codigo));
-            if ($filtro !== null && ! in_array($categoria, $categorias, true) && ! in_array($codigo, $codigos, true)) {
+            $partesCodigo = array_values(array_filter(array_map(
+                fn ($p) => mb_strtoupper(trim($p)),
+                preg_split('#(?:^|\s)/(?:\s|$)#', $codigo) ?: []
+            )));
+            $enSeleccion = $filtro === null
+                || in_array($categoria, $categorias, true)
+                || in_array($codigo, $codigos, true)
+                || array_intersect($partesCodigo, $codigos) !== [];
+            if (! $enSeleccion) {
                 continue;
             }
             $empleadoId = (int) $meta->responsable_empleado_id;

@@ -213,6 +213,7 @@
                     Pertenece a Servicio Técnico
                 </label>
             </div>
+            <p class="muted" style="margin:8px 0 0;font-size:.82rem;">Si es supervisora de una sede, al guardar queda automáticamente como supervisora del resto del personal de esa sede.</p>
         </section>
 
         <section class="emp-form-sec">

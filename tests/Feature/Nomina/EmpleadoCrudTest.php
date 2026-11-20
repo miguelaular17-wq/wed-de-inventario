@@ -133,6 +133,65 @@ class EmpleadoCrudTest extends TestCase
         $this->assertEquals($josmarly->id, $juan->supervisor_id);
     }
 
+    public function test_al_marcar_supervisora_de_sede_queda_como_jefa_del_resto(): void
+    {
+        $sede = NominaSede::create(['nombre' => 'Centro', 'codigo' => 'CENTRO', 'tipo' => 'SEDE', 'estado' => 'ACTIVO']);
+        $otra = NominaSede::create(['nombre' => 'Virtudes', 'codigo' => 'VIRTUDES', 'tipo' => 'SEDE', 'estado' => 'ACTIVO']);
+        $cargoSup = NominaCargo::create(['nombre' => 'Supervisor de sede', 'estado' => 'ACTIVO']);
+        $cargoVen = NominaCargo::create(['nombre' => 'Asesor de venta', 'estado' => 'ACTIVO']);
+        $this->actingAs($this->rrhh);
+
+        $this->post(route('nomina.empleados.store'), [
+            'cedula' => '27844739',
+            'nombre' => 'Ivania Sanchez',
+            'salario_base' => 500,
+            'tipo_salario' => 'QUINCENAL',
+            'estado' => 'ACTIVO',
+            'sede_id' => $sede->id,
+            'cargo_id' => $cargoVen->id,
+        ])->assertRedirect();
+
+        $this->post(route('nomina.empleados.store'), [
+            'cedula' => '28501943',
+            'nombre' => 'Juan Perez',
+            'salario_base' => 200,
+            'tipo_salario' => 'QUINCENAL',
+            'estado' => 'ACTIVO',
+            'sede_id' => $sede->id,
+            'cargo_id' => $cargoVen->id,
+        ])->assertRedirect();
+
+        $this->post(route('nomina.empleados.store'), [
+            'cedula' => '26598293',
+            'nombre' => 'Maria Virtudes',
+            'salario_base' => 200,
+            'tipo_salario' => 'QUINCENAL',
+            'estado' => 'ACTIVO',
+            'sede_id' => $otra->id,
+            'cargo_id' => $cargoVen->id,
+        ])->assertRedirect();
+
+        $ivania = NominaEmpleado::query()->whereHas('cliente', fn ($q) => $q->where('cedula', '27844739'))->firstOrFail();
+        $juan = NominaEmpleado::query()->whereHas('cliente', fn ($q) => $q->where('cedula', '28501943'))->firstOrFail();
+        $maria = NominaEmpleado::query()->whereHas('cliente', fn ($q) => $q->where('cedula', '26598293'))->firstOrFail();
+
+        $this->put(route('nomina.empleados.update', $ivania), [
+            'cedula' => '27844739',
+            'nombre' => 'Ivania Sanchez',
+            'salario_base' => 500,
+            'tipo_salario' => 'QUINCENAL',
+            'estado' => 'ACTIVO',
+            'sede_id' => $sede->id,
+            'cargo_id' => $cargoSup->id,
+            'es_supervisor' => 1,
+        ])->assertRedirect();
+
+        $this->assertTrue($juan->fresh()->jefes->contains('id', $ivania->id));
+        $this->assertEquals($ivania->id, $juan->fresh()->supervisor_id);
+        $this->assertFalse($maria->fresh()->jefes->contains('id', $ivania->id));
+        $this->assertNull($maria->fresh()->supervisor_id);
+    }
+
     public function test_index_carga_personas_desde_clientes(): void
     {
         \App\Models\Cliente::create(['cedula' => '28766068', 'nombre' => 'MIGUEL AULAR']);

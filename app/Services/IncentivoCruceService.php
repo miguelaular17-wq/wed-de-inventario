@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\IncentivoCruceItem;
+use App\Support\Sku;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -108,13 +109,11 @@ class IncentivoCruceService
             }
             $nombre = $catalogo[$clave]['nombre'];
         } else {
-            $producto = DB::table('productos')
-                ->whereRaw('UPPER(TRIM(codigo)) = ?', [$clave])
-                ->first(['codigo', 'nombre']);
+            $producto = $this->buscarProductoPorCodigo($clave);
             if (! $producto) {
                 throw ValidationException::withMessages(['clave' => 'Ese producto no existe.']);
             }
-            $clave = mb_strtoupper(trim((string) $producto->codigo));
+            $clave = mb_strtoupper(Sku::principal((string) $producto->codigo));
             $nombre = trim((string) $producto->nombre) ?: $clave;
         }
 
@@ -122,6 +121,79 @@ class IncentivoCruceService
             ['modulo' => $modulo, 'tipo' => $tipo, 'clave' => $clave],
             ['nombre' => $nombre, 'activo' => (bool) $data['activo']],
         );
+    }
+
+    /**
+     * Activa el catálogo de productos de evaluación del módulo (p. ej. Arreglo).
+     *
+     * @return array{activados:int, faltantes:list<string>}
+     */
+    public function activarProductosCatalogo(string $modulo): array
+    {
+        $codigos = config("incentivos.modulos.{$modulo}.productos", []);
+        if (! is_array($codigos) || $codigos === []) {
+            return ['activados' => 0, 'faltantes' => []];
+        }
+
+        $activados = 0;
+        $faltantes = [];
+        $vistos = [];
+        foreach ($codigos as $codigo) {
+            $codigo = mb_strtoupper(trim((string) $codigo));
+            if ($codigo === '') {
+                continue;
+            }
+            $producto = $this->buscarProductoPorCodigo($codigo);
+            if (! $producto) {
+                $faltantes[] = $codigo;
+
+                continue;
+            }
+            $clave = mb_strtoupper(Sku::principal((string) $producto->codigo));
+            if (isset($vistos[$clave])) {
+                continue;
+            }
+            $vistos[$clave] = true;
+            $this->guardar($modulo, [
+                'tipo' => 'producto',
+                'clave' => $clave,
+                'nombre' => trim((string) $producto->nombre) ?: $clave,
+                'activo' => true,
+            ]);
+            $activados++;
+        }
+
+        return ['activados' => $activados, 'faltantes' => $faltantes];
+    }
+
+    /**
+     * Expande claves guardadas a todos los segmentos de código (principal + alternos) para filtrar ventas.
+     *
+     * @param  list<string>  $claves
+     * @return list<string>
+     */
+    public function codigosParaFiltro(array $claves): array
+    {
+        $out = [];
+        foreach ($claves as $clave) {
+            $clave = mb_strtoupper(trim((string) $clave));
+            if ($clave === '') {
+                continue;
+            }
+            $out[$clave] = $clave;
+            $producto = $this->buscarProductoPorCodigo($clave);
+            if (! $producto) {
+                continue;
+            }
+            foreach (preg_split('#(?:^|\s)/(?:\s|$)#', (string) $producto->codigo) as $parte) {
+                $parte = mb_strtoupper(trim($parte));
+                if ($parte !== '') {
+                    $out[$parte] = $parte;
+                }
+            }
+        }
+
+        return array_values($out);
     }
 
     /**
@@ -152,7 +224,7 @@ class IncentivoCruceService
 
         $out = [];
         foreach ($rows as $row) {
-            $clave = mb_strtoupper(trim((string) $row->codigo));
+            $clave = mb_strtoupper(Sku::principal((string) $row->codigo));
             $out[] = [
                 'clave' => $clave,
                 'nombre' => trim((string) $row->nombre) ?: $clave,
@@ -162,6 +234,34 @@ class IncentivoCruceService
         }
 
         return $out;
+    }
+
+    private function buscarProductoPorCodigo(string $clave): ?object
+    {
+        if (! Schema::hasTable('productos') || $clave === '') {
+            return null;
+        }
+
+        $exacto = DB::table('productos')
+            ->whereRaw('UPPER(TRIM(codigo)) = ?', [$clave])
+            ->first(['codigo', 'nombre', 'categoria']);
+        if ($exacto) {
+            return $exacto;
+        }
+
+        // Código alterno exacto dentro de "PRINCIPAL / ALTERNO1 / ALTERNO2" (no substring).
+        $candidatos = DB::table('productos')
+            ->whereRaw("UPPER(REPLACE(codigo, ' ', '')) LIKE ?", ['%'.str_replace(' ', '', $clave).'%'])
+            ->get(['codigo', 'nombre', 'categoria']);
+        foreach ($candidatos as $row) {
+            foreach (preg_split('#(?:^|\s)/(?:\s|$)#', (string) $row->codigo) as $parte) {
+                if (mb_strtoupper(trim($parte)) === $clave) {
+                    return $row;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**

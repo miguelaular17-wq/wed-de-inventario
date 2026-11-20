@@ -62,6 +62,9 @@ class EmployeeService
             );
             $this->syncCodigosVendedor($empleado, $codigos);
             $this->syncDenormalized($empleado);
+            $this->organization->asignarComoJefeDeSede(
+                $empleado->fresh(['sedeCatalogo', 'cargoCatalogo'])
+            );
 
             NominaAuditLog::registrar('CREAR', 'empleado', $empleado->id, null, $empleado->toArray());
 
@@ -84,6 +87,9 @@ class EmployeeService
             );
             $this->syncCodigosVendedor($empleado, $codigos);
             $this->syncDenormalized($empleado);
+            $this->organization->asignarComoJefeDeSede(
+                $empleado->fresh(['sedeCatalogo', 'cargoCatalogo'])
+            );
 
             NominaAuditLog::registrar('ACTUALIZAR', 'empleado', $empleado->id, $anterior, $empleado->fresh()->toArray());
 

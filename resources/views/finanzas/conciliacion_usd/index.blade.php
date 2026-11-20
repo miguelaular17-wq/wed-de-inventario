@@ -72,8 +72,9 @@
             <label class="field">Archivos <input type="file" name="archivos[]" accept=".xlsx,.xls,.csv,.txt,.pdf" multiple required></label>
             <button type="submit" class="btn primary">Subir y conciliar</button>
             <div class="muted" style="flex-basis:100%; font-size:.75rem;">
-                Sube juntos el documento del banco (historial de Binance, o el estado de cuenta en PDF de Citizens / Amerant / Wells Fargo) y el reporte de pagos de Cloud (Excel o PDF).
-                Del reporte de Zelle solo se toman los cobros que llegaron al banco de la cuenta elegida.
+                Wells Fargo: sube juntos el estado de cuenta PDF y el reporte Cloud <code>cloud_pagos_zelle_mes_….xls</code>.
+                Solo entran los cobros con aviso <code>alerts@notify.wellsfargo.com</code>; el resto (Citizens, Amerant, etc.) se ignora.
+                También sirve Binance (Excel) o Citizens / Amerant (PDF) con su mismo reporte de caja.
             </div>
         </form>
     </div>

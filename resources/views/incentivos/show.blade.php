@@ -9,7 +9,7 @@
     $gruposCruce = $evaluacion['grupos_cruce'] ?? [];
     $nCruce = $clave === 'telefonia' ? max(1, count($gruposCruce)) : 0;
     $porSede = $clave === 'supervisor';
-    $columnas = $porSede ? 18 : (15 + ($nCruce * 3));
+    $columnas = $porSede ? 18 : (15 + ($nCruce * 4));
     $conSelector = in_array($clave, ['telefonia', 'arreglos'], true);
     $efectividad = in_array($clave, ['telefonia', 'ventas', 'arreglos', 'call_center'], true);
     $porEquipo = $clave === 'call_center';
@@ -70,7 +70,7 @@
                         <th class="inc-group g-piso" colspan="9">{{ $porEquipo ? 'Efectividad en el equipo' : 'Efectividad en tienda' }}</th>
                         <th class="inc-group g-pmeta" colspan="2" rowspan="2">Productos meta</th>
                         @if($clave === 'telefonia')
-                            <th class="inc-group g-cruce" colspan="{{ $nCruce * 3 }}">Efectividad de venta cruzada</th>
+                            <th class="inc-group g-cruce" colspan="{{ $nCruce * 4 }}">Efectividad de venta cruzada</th>
                         @endif
                         <th class="inc-group g-nota" colspan="2" rowspan="2">Resultado</th>
                     </tr>
@@ -80,7 +80,7 @@
                         <th class="inc-group g-cli" colspan="3">Clientes</th>
                         @if($clave === 'telefonia')
                             @foreach($gruposCruce as $grupo)
-                                <th class="inc-group g-cruce" colspan="3" title="{{ $grupo['nombre'] }}">{{ $grupo['nombre'] }}</th>
+                                <th class="inc-group g-cruce" colspan="4" title="{{ $grupo['nombre'] }}">{{ $grupo['nombre'] }}</th>
                             @endforeach
                         @endif
                     </tr>
@@ -99,6 +99,7 @@
                         @if($clave === 'telefonia')
                             @foreach($gruposCruce as $grupo)
                                 <th class="inc-group g-cruce">Cruce</th>
+                                <th class="g-cruce">Tienda</th>
                                 <th class="g-cruce">Estado</th>
                                 <th class="g-cruce">%</th>
                             @endforeach
@@ -221,6 +222,7 @@
                         @if($clave === 'telefonia')
                             @foreach($fila['cruces'] as $columna)
                                 <td class="inc-num inc-group g-cruce">{{ $numero($columna['unidades']) }}</td>
+                                <td class="inc-num g-cruce" title="Total de la sede en esta categoría">{{ $numero($columna['tienda'] ?? null) }}</td>
                                 <td class="g-cruce">
                                     <button type="button" class="inc-estado js-abrir-cruce {{ $columna['estado'] === 'Activo' ? 'es-on' : 'es-off' }}">{{ $columna['estado'] }}</button>
                                 </td>
@@ -239,7 +241,7 @@
         </table>
     </div>
     @if($clave === 'telefonia')
-        <p class="muted" style="margin:10px 0 0;">Hay tres categorías. Cada una tiene Cruce, Estado y %, nueve columnas en total. Activa las que faltan en el botón. El porcentaje es la parte de ese trabajador en esa categoría dentro de su tienda, y el promedio de las activas vale el 50% de la nota.</p>
+        <p class="muted" style="margin:10px 0 0;">Hay tres categorías. Cada una tiene Cruce, Tienda, Estado y %. Cruce es lo del trabajador y Tienda el total de la sede en esa categoría. El porcentaje es Cruce ÷ Tienda, y el promedio de las activas vale el 50% de la nota.</p>
     @elseif($porEquipo)
         <p class="muted" style="margin:10px 0 0;">El porcentaje es la venta de cada trabajador dividida entre lo que vendió todo el call center en el período. Esa efectividad vale 70% de la nota y el producto meta vale 30%. El producto meta cuenta por lo que se lleva vendido de cada producto (3 de 6 = 50%), promediado entre sus productos.</p>
     @elseif($efectividad)
@@ -356,7 +358,7 @@
 <div id="modal-cruce" class="modal-overlay" hidden>
     <div class="panel modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-cruce-titulo">
         <h2 id="modal-cruce-titulo" style="margin:0;">{{ $clave === 'arreglos' ? 'Arreglo' : 'Venta cruzada' }}</h2>
-        <p class="muted" style="margin:6px 0 0;">{{ $clave === 'arreglos' ? 'Elige categorías o productos. Activo hace que venta, productos y clientes cuenten solo eso. Desactivado los deja en blanco.' : 'Activa las categorías que quieras medir. Cada una abre Cruce, Estado y %.' }}</p>
+        <p class="muted" style="margin:6px 0 0;">{{ $clave === 'arreglos' ? 'Catálogo de Arreglo (birretes, franelas, sublimado, láser, vinil…). Activo = venta/productos/clientes solo de esa selección. Desactivado deja la fila en blanco.' : 'Activa las categorías que quieras medir. Cada una abre Cruce, Estado y %.' }}</p>
         <div class="inc-tabs">
             <button type="button" class="inc-tab activo" data-tab="categoria">Categorías</button>
             <button type="button" class="inc-tab" data-tab="producto">Productos</button>

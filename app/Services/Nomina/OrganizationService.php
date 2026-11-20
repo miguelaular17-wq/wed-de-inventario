@@ -153,6 +153,56 @@ class OrganizationService
         $empleado->save();
     }
 
+    /**
+     * Si la persona es supervisora de una sede (no área), queda como jefa
+     * del resto del personal activo de esa sede que no es liderazgo.
+     *
+     * @return int Cantidad de fichas actualizadas
+     */
+    public function asignarComoJefeDeSede(NominaEmpleado $supervisor): int
+    {
+        if (! $supervisor->es_supervisor || ! $supervisor->sede_id || $this->esGerente($supervisor)) {
+            return 0;
+        }
+
+        $sede = $supervisor->sedeCatalogo ?? NominaSede::query()->find($supervisor->sede_id);
+        if (! $sede || $sede->isArea()) {
+            return 0;
+        }
+
+        $equipo = NominaEmpleado::query()
+            ->with(['jefes', 'sedeCatalogo', 'cargoCatalogo'])
+            ->where('sede_id', $supervisor->sede_id)
+            ->where('id', '!=', $supervisor->id)
+            ->where('estado', 'ACTIVO')
+            ->where('es_supervisor', false)
+            ->orderBy('id')
+            ->get()
+            ->reject(fn (NominaEmpleado $e) => $this->esGerente($e));
+
+        $asignados = 0;
+        foreach ($equipo as $empleado) {
+            $actuales = $empleado->jefes->pluck('id')->map(fn ($id) => (int) $id)->all();
+            if ($actuales === [] && $empleado->supervisor_id) {
+                $actuales = [(int) $empleado->supervisor_id];
+            }
+
+            if (in_array((int) $supervisor->id, $actuales, true)) {
+                continue;
+            }
+
+            $nuevos = array_values(array_unique(array_merge([(int) $supervisor->id], $actuales)));
+            if (count($nuevos) > 2) {
+                $nuevos = array_slice($nuevos, 0, 2);
+            }
+
+            $this->syncJefes($empleado, $nuevos);
+            $asignados++;
+        }
+
+        return $asignados;
+    }
+
     public function assertSupervisorValido(int $supervisorId, ?int $empleadoId = null): void
     {
         if ($empleadoId && (int) $supervisorId === (int) $empleadoId) {
