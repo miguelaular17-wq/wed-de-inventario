@@ -171,8 +171,38 @@ class NominaEmpleado extends Model
 
     public function nombreSupervisor(): string
     {
-        return $this->jefes->map(fn (self $jefe) => $jefe->nombre())->filter()->unique()->implode(' / ')
-            ?: ($this->supervisor?->nombre() ?? '—');
+        $nombres = $this->jefesListados()->map(fn (self $jefe) => $jefe->nombreCorto())->filter()->unique();
+
+        return $nombres->isNotEmpty() ? $nombres->implode(', ') : '—';
+    }
+
+    /**
+     * Nombre corto para chips (primer nombre + último apellido).
+     */
+    public function nombreCorto(): string
+    {
+        $partes = array_values(array_filter(preg_split('/\s+/', trim($this->nombre())) ?: []));
+        if ($partes === []) {
+            return '—';
+        }
+        if (count($partes) === 1) {
+            return $partes[0];
+        }
+
+        return $partes[0].' '.$partes[count($partes) - 1];
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, self>
+     */
+    public function jefesListados()
+    {
+        $jefes = $this->relationLoaded('jefes') ? $this->jefes : $this->jefes()->with('cliente')->get();
+        if ($jefes->isNotEmpty()) {
+            return $jefes->unique('id')->values();
+        }
+
+        return collect($this->supervisor ? [$this->supervisor] : []);
     }
 
     public function isActivo(): bool

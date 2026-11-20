@@ -33,6 +33,16 @@
 }
 .emp-form-sec .nomina-sup-list { max-height: 180px; }
 .emp-codigos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.emp-jefes-preview {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;
+}
+.emp-jefe-chip {
+    display: inline-flex; flex-direction: column; gap: 2px;
+    padding: 8px 12px; border-radius: 10px; background: #f1f5f9; border: 1px solid #e2e8f0;
+    min-width: 160px;
+}
+.emp-jefe-chip strong { font-size: .88rem; color: #0f172a; }
+.emp-jefe-chip span { font-size: .75rem; color: #64748b; }
 @media (max-width: 720px) {
     .emp-codigos { grid-template-columns: 1fr; }
 }
@@ -44,7 +54,7 @@
     <div class="panel-header-flex">
         <div>
             <h1 style="margin:0;">{{ $empleado ? 'Editar empleado' : 'Nuevo empleado' }}</h1>
-            <p class="muted" style="margin:4px 0 0;">Completa persona, puesto, salario y comisión. Los supervisores son opcionales.</p>
+            <p class="muted" style="margin:4px 0 0;">Completa persona, puesto, salario y comisión. El equipo de un supervisor sale de su sede o área.</p>
         </div>
         <a href="{{ route('nomina.empleados.index') }}" class="btn secondary">Volver</a>
     </div>
@@ -58,7 +68,6 @@
         $fotoActual = $empleado?->foto_url;
         $partesNombre = preg_split('/\s+/', trim((string) $empleado?->nombre())) ?: [];
         $inicialesForm = mb_strtoupper(mb_substr($partesNombre[0] ?? '', 0, 1).mb_substr($partesNombre[1] ?? '', 0, 1)) ?: '+';
-        $jefesSel = collect(old('supervisor_ids', $empleado?->jefes?->pluck('id')->all() ?: array_filter([$empleado?->supervisor_id])));
         $codigosVendedorOld = old('codigos_vendedor');
         if (! is_array($codigosVendedorOld)) {
             $codigosVendedorOld = $empleado?->codigosVendedor() ?? [];
@@ -142,12 +151,12 @@
 
         <section class="emp-form-sec">
             <h3>2. Puesto y jefatura</h3>
-            <p class="emp-sec-lead">Sede → cargo → supervisor(es). Hasta 2 jefes si la sede está compartida.</p>
+            <p class="emp-sec-lead">Elige sede y cargo; si no es supervisor, verás quién queda como su jefe.</p>
 
             <div class="nomina-form-grid">
                 <div class="field">
                     <label>Sede / área</label>
-                    <select name="sede_id">
+                    <select name="sede_id" id="emp-sede">
                         @include('nomina.partials.sede-options', ['unidades' => $sedes, 'selected' => old('sede_id', $empleado?->sede_id), 'placeholder' => '— Seleccionar —'])
                     </select>
                 </div>
@@ -164,56 +173,35 @@
                 </div>
                 <div class="field">
                     <label>Cargo</label>
-                    <select name="cargo_id">
-                        <option value="">— Seleccionar —</option>
+                    <select name="cargo_id" id="emp-cargo">
+                        <option value="" data-personal-cargo="0">— Seleccionar —</option>
                         @foreach($cargos as $cargo)
-                            <option value="{{ $cargo->id }}" @selected(old('cargo_id', $empleado?->cargo_id) == $cargo->id)>{{ $cargo->nombre }}</option>
+                            @php
+                                $cargoConEquipo = str_starts_with(mb_strtoupper($cargo->nombre, 'UTF-8'), 'SUPERVISOR')
+                                    || str_starts_with(mb_strtoupper($cargo->nombre, 'UTF-8'), 'SUPERVISORA');
+                            @endphp
+                            <option
+                                value="{{ $cargo->id }}"
+                                data-personal-cargo="{{ $cargoConEquipo ? '1' : '0' }}"
+                                @selected(old('cargo_id', $empleado?->cargo_id) == $cargo->id)
+                            >{{ $cargo->nombre }}</option>
                         @endforeach
                     </select>
                 </div>
-                <div class="field field-wide">
-                    <label>Supervisores</label>
-                    <div class="nomina-sup-picker" data-max="2">
-                        <div class="nomina-sup-chips" data-empty="Sin supervisor (reporta a gerente o no aplica)">
-                            @foreach($supervisores as $sup)
-                                @if($jefesSel->contains($sup->id))
-                                    <button type="button" class="nomina-sup-chip" data-id="{{ $sup->id }}">
-                                        {{ $sup->nombre() }}
-                                        <span aria-hidden="true">×</span>
-                                    </button>
-                                @endif
-                            @endforeach
-                        </div>
-                        <input type="search" class="nomina-sup-search" placeholder="Buscar por nombre o sede…" autocomplete="off">
-                        <div class="nomina-sup-list">
-                            @forelse($supervisores as $sup)
-                                <label class="nomina-sup-option">
-                                    <input type="checkbox" name="supervisor_ids[]" value="{{ $sup->id }}" @checked($jefesSel->contains($sup->id))>
-                                    <span class="nomina-sup-option-text">
-                                        <strong>{{ $sup->nombre() }}</strong>
-                                        <em>{{ $sup->nombreSede() }}{{ $sup->cargoCatalogo?->nombre ? ' · '.$sup->cargoCatalogo->nombre : '' }}</em>
-                                    </span>
-                                </label>
-                            @empty
-                                <p class="muted" style="margin:8px 0;">No hay supervisores activos.</p>
-                            @endforelse
-                        </div>
-                        <p class="nomina-sup-hint muted">Vacío = reporta a la gerente o no tiene supervisor.</p>
-                    </div>
+                <div class="field field-wide" id="aviso-organigrama">
+                    <label id="aviso-org-label">Supervisor(es)</label>
+                    <div id="aviso-org-jefes" class="emp-jefes-preview" hidden></div>
+                    <p class="muted" id="aviso-org-texto" style="margin:6px 0 0;font-size:.88rem;line-height:1.4;"></p>
+                    <input type="hidden" name="es_supervisor" id="flag-es-supervisor" value="{{ old('es_supervisor', $empleado?->es_supervisor) ? '1' : '0' }}">
                 </div>
             </div>
 
             <div class="emp-flags">
                 <label>
-                    <input type="checkbox" name="es_supervisor" value="1" @checked(old('es_supervisor', $empleado?->es_supervisor))>
-                    Puede tener personal a cargo
-                </label>
-                <label>
                     <input type="checkbox" name="es_servicio_tecnico" value="1" @checked(old('es_servicio_tecnico', $empleado?->es_servicio_tecnico))>
                     Pertenece a Servicio Técnico
                 </label>
             </div>
-            <p class="muted" style="margin:8px 0 0;font-size:.82rem;">Si es supervisora de una sede, al guardar queda automáticamente como supervisora del resto del personal de esa sede.</p>
         </section>
 
         <section class="emp-form-sec">
@@ -338,62 +326,68 @@ document.getElementById('nomina-cliente')?.addEventListener('change', function (
 })();
 
 (function () {
-    const picker = document.querySelector('.nomina-sup-picker');
-    if (!picker) return;
-    const max = Number(picker.dataset.max || 2);
-    const chips = picker.querySelector('.nomina-sup-chips');
-    const search = picker.querySelector('.nomina-sup-search');
-    const options = [...picker.querySelectorAll('.nomina-sup-option')];
+    const cargo = document.getElementById('emp-cargo');
+    const sede = document.getElementById('emp-sede');
+    const flag = document.getElementById('flag-es-supervisor');
+    const texto = document.getElementById('aviso-org-texto');
+    const label = document.getElementById('aviso-org-label');
+    const preview = document.getElementById('aviso-org-jefes');
+    if (!cargo || !sede || !flag || !texto || !label || !preview) return;
 
-    function selectedBoxes() {
-        return options.map((opt) => opt.querySelector('input')).filter((el) => el.checked);
-    }
+    const jefesPorSede = @json($jefesPorSede ?? []);
+    const msgSup = 'Cargo de supervisor: queda con personal a cargo de su sede/área y reporta a la gerente.';
 
-    function renderChips() {
-        chips.innerHTML = '';
-        selectedBoxes().forEach((input) => {
-            const option = input.closest('.nomina-sup-option');
-            const name = option.querySelector('strong')?.textContent?.trim() || input.value;
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'nomina-sup-chip';
-            btn.dataset.id = input.value;
-            btn.innerHTML = name + ' <span aria-hidden="true">×</span>';
-            chips.appendChild(btn);
-        });
-        chips.classList.toggle('is-empty', selectedBoxes().length === 0);
-        const atMax = selectedBoxes().length >= max;
-        options.forEach((opt) => {
-            const input = opt.querySelector('input');
-            input.disabled = atMax && !input.checked;
-            opt.classList.toggle('is-disabled', input.disabled);
-            opt.classList.toggle('is-checked', input.checked);
-        });
-    }
-
-    picker.addEventListener('change', (e) => {
-        if (e.target.matches('input[type="checkbox"]') && selectedBoxes().length > max) {
-            e.target.checked = false;
+    function renderJefes(lista) {
+        preview.innerHTML = '';
+        if (!lista || !lista.length) {
+            preview.hidden = true;
+            return;
         }
-        renderChips();
-    });
-
-    chips.addEventListener('click', (e) => {
-        const btn = e.target.closest('.nomina-sup-chip');
-        if (!btn) return;
-        const input = picker.querySelector('input[value="' + btn.dataset.id + '"]');
-        if (input) input.checked = false;
-        renderChips();
-    });
-
-    search?.addEventListener('input', () => {
-        const q = search.value.trim().toLowerCase();
-        options.forEach((opt) => {
-            opt.hidden = q !== '' && !opt.textContent.toLowerCase().includes(q);
+        lista.forEach(function (jefe) {
+            const chip = document.createElement('div');
+            chip.className = 'emp-jefe-chip';
+            chip.innerHTML = '<strong></strong><span></span>';
+            chip.querySelector('strong').textContent = jefe.nombre || '—';
+            chip.querySelector('span').textContent = jefe.cargo || 'Supervisor';
+            preview.appendChild(chip);
         });
-    });
+        preview.hidden = false;
+    }
 
-    renderChips();
+    function sync() {
+        const opt = cargo.options[cargo.selectedIndex];
+        const esSup = opt?.dataset?.personalCargo === '1';
+        const sedeId = String(sede.value || '');
+        flag.value = esSup ? '1' : '0';
+
+        if (esSup) {
+            label.textContent = 'Organigrama';
+            renderJefes([]);
+            texto.textContent = msgSup;
+            return;
+        }
+
+        label.textContent = listaTitulo(jefesPorSede[sedeId] || []);
+        const lista = jefesPorSede[sedeId] || [];
+        renderJefes(lista);
+        if (!sedeId) {
+            texto.textContent = 'Elige una sede o área para ver quién será su supervisor.';
+        } else if (!lista.length) {
+            texto.textContent = 'Esta sede/área aún no tiene supervisor activo.';
+        } else {
+            texto.textContent = '';
+        }
+    }
+
+    function listaTitulo(lista) {
+        if (lista.length > 1) return 'Sus supervisores';
+        if (lista.length === 1 && /gerente/i.test(lista[0].cargo || '')) return 'Su gerente';
+        return 'Su supervisor';
+    }
+
+    cargo.addEventListener('change', sync);
+    sede.addEventListener('change', sync);
+    sync();
 })();
 </script>
 @endpush

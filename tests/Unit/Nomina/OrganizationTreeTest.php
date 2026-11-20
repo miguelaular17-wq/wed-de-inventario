@@ -76,18 +76,50 @@ class OrganizationTreeTest extends TestCase
 
         $this->org->syncJefes($carlos, [$auri->id]);
         $this->org->syncJefes($keisy, [$auri->id]);
-        $this->org->syncJefes($asesor, [$carlos->id]);
+        // Sin marcar jefes a mano: el asesor de la sede queda a cargo por unidad.
+        $this->org->asignarEquipoPorUnidad($carlos);
 
         $idsReporte = $this->org->idsPersonalACargo($userCarlos, true);
         $idsSoloCargo = $this->org->idsPersonalACargo($userCarlos, false);
 
         $this->assertContains((int) $carlos->id, $idsReporte);
         $this->assertContains((int) $keisy->id, $idsReporte);
-        $this->assertContains((int) $asesor->id, $idsReporte);
+        $this->assertContains((int) $asesor->id, $idsSoloCargo);
 
         $this->assertNotContains((int) $carlos->id, $idsSoloCargo);
         $this->assertNotContains((int) $keisy->id, $idsSoloCargo);
-        $this->assertContains((int) $asesor->id, $idsSoloCargo);
+        $this->assertTrue($asesor->fresh()->jefes->pluck('id')->contains($carlos->id));
+    }
+
+    public function test_supervisor_de_area_toma_todo_el_personal_del_area(): void
+    {
+        $flota = NominaSede::create(['nombre' => 'Flota', 'codigo' => 'FLOTA', 'tipo' => 'AREA', 'estado' => 'ACTIVO']);
+        $cargoSup = NominaCargo::create(['nombre' => 'Supervisor de área', 'estado' => 'ACTIVO']);
+        $cargoTec = NominaCargo::create(['nombre' => 'Técnico', 'estado' => 'ACTIVO']);
+
+        $sup = $this->empleado('3001', 'SUP FLOTA', $flota, $cargoSup, true);
+        $tec1 = $this->empleado('3002', 'TEC UNO', $flota, $cargoTec, false);
+        $tec2 = $this->empleado('3003', 'TEC DOS', $flota, $cargoTec, false);
+
+        $user = \App\Models\User::create([
+            'name' => 'Sup Flota',
+            'email' => 'sup-flota@test.local',
+            'password' => 'password123',
+            'role' => \App\Models\User::ROLE_SUPERVISOR,
+            'sede' => 'FLOTA',
+        ]);
+        $sup->user_id = $user->id;
+        $sup->save();
+
+        $this->org->asignarEquipoPorUnidad($sup);
+
+        $nodo = $this->org->tree($flota->id)->first();
+        $this->assertEqualsCanonicalizing(['TEC UNO', 'TEC DOS'], $nodo['equipo']->map->nombre()->all());
+        $this->assertEqualsCanonicalizing(['TEC UNO', 'TEC DOS'], $nodo['grupos']->first()['empleados']->map->nombre()->all());
+
+        $ids = $this->org->idsPersonalACargo($user, false);
+        $this->assertEqualsCanonicalizing([(int) $tec1->id, (int) $tec2->id], $ids);
+        $this->assertEqualsCanonicalizing([$sup->id], $tec1->fresh()->jefes->pluck('id')->all());
     }
 
     private function empleado(string $cedula, string $nombre, NominaSede $sede, NominaCargo $cargo, bool $esSupervisor): NominaEmpleado

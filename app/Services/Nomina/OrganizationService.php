@@ -45,42 +45,28 @@ class OrganizationService
             }
 
             $idsLiderazgo = $gerentes->pluck('id')->merge($localesSup->pluck('id'));
+            $equipo = $deSede->reject(fn (NominaEmpleado $e) => $idsLiderazgo->contains($e->id))->values();
 
-            if ($sede->isArea()) {
-                $gruposSup = $localesSup;
-                if ($supervisorId && $localesSup->contains('id', $supervisorId)) {
-                    $gruposSup = $localesSup->where('id', $supervisorId)->values();
-                }
-
-                $asignados = $idsLiderazgo->all();
-                $grupos = $gruposSup->map(function (NominaEmpleado $supervisor) use ($deSede, $idsLiderazgo, &$asignados) {
-                    $equipo = $deSede
-                        ->filter(fn (NominaEmpleado $e) => ! $idsLiderazgo->contains($e->id) && $this->reportaA($e, $supervisor->id))
-                        ->values();
-                    $asignados = array_merge($asignados, $equipo->pluck('id')->all());
-
-                    return [
-                        'supervisor' => $supervisor,
-                        'empleados' => $equipo,
-                    ];
-                });
-
-                return [
-                    'sede' => $sede,
-                    'gerentes' => $gerentes,
-                    'supervisores' => $localesSup,
-                    'equipo' => collect(),
-                    'grupos' => $grupos,
-                    'sin_supervisor' => $deSede->reject(fn (NominaEmpleado $e) => in_array($e->id, $asignados, true))->values(),
-                ];
+            // En sede y área el personal de la unidad queda a cargo de sus supervisores
+            // (equipo compartido). Los grupos del área muestran el mismo piso bajo cada uno.
+            $gruposSup = $localesSup;
+            if ($supervisorId && $localesSup->contains('id', $supervisorId)) {
+                $gruposSup = $localesSup->where('id', $supervisorId)->values();
             }
+
+            $grupos = $sede->isArea()
+                ? $gruposSup->map(fn (NominaEmpleado $supervisor) => [
+                    'supervisor' => $supervisor,
+                    'empleados' => $equipo,
+                ])
+                : collect();
 
             return [
                 'sede' => $sede,
                 'gerentes' => $gerentes,
                 'supervisores' => $localesSup,
-                'equipo' => $deSede->reject(fn (NominaEmpleado $e) => $idsLiderazgo->contains($e->id))->values(),
-                'grupos' => collect(),
+                'equipo' => $equipo,
+                'grupos' => $grupos,
                 'sin_supervisor' => collect(),
             ];
         })->filter()->values();
@@ -92,6 +78,51 @@ class OrganizationService
         $sede = mb_strtoupper((string) ($empleado->sedeCatalogo?->codigo ?? $empleado->sede), 'UTF-8');
 
         return str_contains($cargo, 'GERENTE') || $sede === 'GERENCIA';
+    }
+
+    /**
+     * Cargos de supervisor (sede, área, flota, inventario, call center, etc.).
+     */
+    public function esCargoConPersonalACargo(?string $nombreCargo): bool
+    {
+        $cargo = mb_strtoupper(trim((string) $nombreCargo), 'UTF-8');
+        if ($cargo === '') {
+            return false;
+        }
+
+        return str_starts_with($cargo, 'SUPERVISOR') || str_starts_with($cargo, 'SUPERVISORA');
+    }
+
+    public function esAdministracion(NominaEmpleado $empleado): bool
+    {
+        $codigo = mb_strtoupper((string) ($empleado->sedeCatalogo?->codigo ?? $empleado->sede), 'UTF-8');
+
+        return $codigo === 'ADMINISTRACION' || $codigo === 'ADMINISTRACIÓN';
+    }
+
+    /**
+     * Gerentes activos por cargo (no basta con sede Gerencia).
+     *
+     * @return list<int>
+     */
+    public function idsGerentesActivos(?int $exceptoEmpleadoId = null): array
+    {
+        return NominaEmpleado::query()
+            ->with(['cargoCatalogo', 'sedeCatalogo'])
+            ->where('estado', 'ACTIVO')
+            ->when($exceptoEmpleadoId, fn ($q) => $q->where('id', '!=', $exceptoEmpleadoId))
+            ->orderBy('id')
+            ->get()
+            ->filter(function (NominaEmpleado $e) {
+                $cargo = mb_strtoupper($e->nombreCargo(), 'UTF-8');
+
+                return str_contains($cargo, 'GERENTE');
+            })
+            ->take(2)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
     }
 
     public function reportaA(NominaEmpleado $empleado, int $supervisorId): bool
@@ -116,6 +147,33 @@ class OrganizationService
             ->when($exceptoEmpleadoId, fn ($q) => $q->where('id', '!=', $exceptoEmpleadoId))
             ->orderBy('id')
             ->get();
+    }
+
+    /**
+     * Supervisores activos de una sede/área (máx. 2 para el pivot).
+     *
+     * @return list<int>
+     */
+    public function idsSupervisoresDeUnidad(?int $sedeId, ?int $exceptoEmpleadoId = null): array
+    {
+        if (! $sedeId) {
+            return [];
+        }
+
+        return NominaEmpleado::query()
+            ->with(['sedeCatalogo', 'cargoCatalogo'])
+            ->where('sede_id', $sedeId)
+            ->where('es_supervisor', true)
+            ->where('estado', 'ACTIVO')
+            ->when($exceptoEmpleadoId, fn ($q) => $q->where('id', '!=', $exceptoEmpleadoId))
+            ->orderBy('id')
+            ->get()
+            ->reject(fn (NominaEmpleado $e) => $this->esGerente($e))
+            ->take(2)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
     }
 
     /**
@@ -154,19 +212,63 @@ class OrganizationService
     }
 
     /**
-     * Si la persona es supervisora de una sede (no área), queda como jefa
-     * del resto del personal activo de esa sede que no es liderazgo.
+     * Empleado de piso: jefes = supervisores de su sede/área.
+     * Administración: mando directo de la gerente.
+     */
+    public function sincronizarJefesPorUnidad(NominaEmpleado $empleado): void
+    {
+        if ($empleado->es_supervisor || $this->esGerente($empleado) || ! $empleado->sede_id) {
+            return;
+        }
+
+        if ($this->esAdministracion($empleado)) {
+            $this->syncJefes($empleado, $this->idsGerentesActivos((int) $empleado->id));
+
+            return;
+        }
+
+        $this->syncJefes(
+            $empleado,
+            $this->idsSupervisoresDeUnidad((int) $empleado->sede_id, (int) $empleado->id)
+        );
+    }
+
+    /**
+     * Supervisores reportan a la gerente.
+     */
+    public function sincronizarJefeGerente(NominaEmpleado $supervisor): void
+    {
+        if (! $supervisor->es_supervisor || $this->esGerente($supervisor)) {
+            return;
+        }
+
+        $this->syncJefes($supervisor, $this->idsGerentesActivos((int) $supervisor->id));
+    }
+
+    /**
+     * Si la persona es supervisora de sede o área, el personal activo de esa
+     * unidad (que no es liderazgo) queda a su cargo.
+     * En Administración el mando es de la gerente: no se reasigna el piso.
      *
      * @return int Cantidad de fichas actualizadas
      */
-    public function asignarComoJefeDeSede(NominaEmpleado $supervisor): int
+    public function asignarEquipoPorUnidad(NominaEmpleado $supervisor): int
     {
         if (! $supervisor->es_supervisor || ! $supervisor->sede_id || $this->esGerente($supervisor)) {
             return 0;
         }
 
         $sede = $supervisor->sedeCatalogo ?? NominaSede::query()->find($supervisor->sede_id);
-        if (! $sede || $sede->isArea()) {
+        if (! $sede) {
+            return 0;
+        }
+
+        if ($this->esAdministracion($supervisor)) {
+            return 0;
+        }
+
+        $jefesUnidad = $this->idsSupervisoresDeUnidad((int) $supervisor->sede_id);
+        if ($jefesUnidad === []) {
             return 0;
         }
 
@@ -187,20 +289,24 @@ class OrganizationService
                 $actuales = [(int) $empleado->supervisor_id];
             }
 
-            if (in_array((int) $supervisor->id, $actuales, true)) {
+            sort($actuales);
+            $esperados = $jefesUnidad;
+            sort($esperados);
+            if ($actuales === $esperados) {
                 continue;
             }
 
-            $nuevos = array_values(array_unique(array_merge([(int) $supervisor->id], $actuales)));
-            if (count($nuevos) > 2) {
-                $nuevos = array_slice($nuevos, 0, 2);
-            }
-
-            $this->syncJefes($empleado, $nuevos);
+            $this->syncJefes($empleado, $jefesUnidad);
             $asignados++;
         }
 
         return $asignados;
+    }
+
+    /** @deprecated Use asignarEquipoPorUnidad */
+    public function asignarComoJefeDeSede(NominaEmpleado $supervisor): int
+    {
+        return $this->asignarEquipoPorUnidad($supervisor);
     }
 
     public function assertSupervisorValido(int $supervisorId, ?int $empleadoId = null): void
@@ -270,9 +376,26 @@ class OrganizationService
             return [];
         }
 
-        $ids = NominaEmpleado::query()
-            ->where('supervisor_id', $yo->id)
-            ->pluck('id');
+        $ids = collect();
+
+        // Regla principal: supervisor de sede/área → todo el personal de su unidad.
+        if ($yo->es_supervisor && $yo->sede_id && ! $this->esGerente($yo)) {
+            $ids = $ids->merge(
+                NominaEmpleado::query()
+                    ->where('sede_id', $yo->sede_id)
+                    ->where('id', '!=', $yo->id)
+                    ->where('estado', 'ACTIVO')
+                    ->where('es_supervisor', false)
+                    ->pluck('id')
+            );
+        }
+
+        // Enlaces explícitos (legado / casos especiales).
+        $ids = $ids->merge(
+            NominaEmpleado::query()
+                ->where('supervisor_id', $yo->id)
+                ->pluck('id')
+        );
 
         if (Schema::hasTable('nomina_empleado_supervisores')) {
             $ids = $ids->merge($yo->equipo()->pluck('nomina_empleados.id'));
@@ -289,14 +412,7 @@ class OrganizationService
                     ->merge($nodo['grupos']->flatMap(fn (array $grupo) => $grupo['empleados']->pluck('id')))
                     ->merge($nodo['sin_supervisor']->pluck('id'));
             } elseif ($esSupervisor) {
-                if ($nodo['sede']->isArea()) {
-                    $grupo = $nodo['grupos']->first(fn (array $item) => (int) $item['supervisor']->id === (int) $yo->id);
-                    if ($grupo) {
-                        $ids = $ids->merge($grupo['empleados']->pluck('id'));
-                    }
-                } else {
-                    $ids = $ids->merge($nodo['equipo']->pluck('id'));
-                }
+                $ids = $ids->merge($nodo['equipo']->pluck('id'));
 
                 // En el reporte del equipo, si la sede/área tiene varios supervisores, deben verse todos.
                 if ($incluirse) {

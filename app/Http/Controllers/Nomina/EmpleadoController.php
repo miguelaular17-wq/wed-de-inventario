@@ -66,19 +66,19 @@ class EmpleadoController extends Controller
         }
 
         if ($request->filled('sede_id')) {
-            $query->where('sede_id', $request->query('sede_id'));
+            $query->where('nomina_empleados.sede_id', $request->query('sede_id'));
         }
         if ($request->filled('empresa_id')) {
-            $query->where('empresa_id', $request->query('empresa_id'));
+            $query->where('nomina_empleados.empresa_id', $request->query('empresa_id'));
         }
         if ($request->filled('cargo_id')) {
-            $query->where('cargo_id', $request->query('cargo_id'));
+            $query->where('nomina_empleados.cargo_id', $request->query('cargo_id'));
         }
         if ($request->filled('supervisor_id')) {
-            $query->where('supervisor_id', $request->query('supervisor_id'));
+            $query->where('nomina_empleados.supervisor_id', $request->query('supervisor_id'));
         }
         if ($request->filled('estado')) {
-            $query->where('estado', $request->query('estado'));
+            $query->where('nomina_empleados.estado', $request->query('estado'));
         }
 
         $empleados = $query->paginate(24)->withQueryString();
@@ -110,19 +110,19 @@ class EmpleadoController extends Controller
             $query->buscar($search);
         }
         if ($request->filled('sede_id')) {
-            $query->where('sede_id', $request->query('sede_id'));
+            $query->where('nomina_empleados.sede_id', $request->query('sede_id'));
         }
         if ($request->filled('empresa_id')) {
-            $query->where('empresa_id', $request->query('empresa_id'));
+            $query->where('nomina_empleados.empresa_id', $request->query('empresa_id'));
         }
         if ($request->filled('cargo_id')) {
-            $query->where('cargo_id', $request->query('cargo_id'));
+            $query->where('nomina_empleados.cargo_id', $request->query('cargo_id'));
         }
         if ($request->filled('supervisor_id')) {
-            $query->where('supervisor_id', $request->query('supervisor_id'));
+            $query->where('nomina_empleados.supervisor_id', $request->query('supervisor_id'));
         }
         if ($request->filled('estado')) {
-            $query->where('estado', $request->query('estado'));
+            $query->where('nomina_empleados.estado', $request->query('estado'));
         }
 
         $rows = [[
@@ -130,6 +130,7 @@ class EmpleadoController extends Controller
             'Cédula',
             'Sede o área',
             'Cargo',
+            'Estado',
             'Salario mensual',
         ]];
 
@@ -139,6 +140,7 @@ class EmpleadoController extends Controller
                 $empleado->cedula(),
                 $empleado->nombreSede(),
                 $empleado->nombreCargo(),
+                $empleado->estado === 'ACTIVO' ? 'Activo' : ($empleado->estado === 'INACTIVO' ? 'Inactivo' : (string) $empleado->estado),
                 round((float) $empleado->salario_base, 2),
             ];
         }
@@ -192,7 +194,10 @@ class EmpleadoController extends Controller
             'empresa',
             'cargoCatalogo',
             'supervisor.cliente',
+            'supervisor.cargoCatalogo',
             'jefes.cliente',
+            'jefes.cargoCatalogo',
+            'jefes.sedeCatalogo',
             'vendedores',
             'subordinados.cliente',
             'prestamos.cuotas',
@@ -404,12 +409,35 @@ class EmpleadoController extends Controller
 
     private function formData(?NominaEmpleado $empleado = null): array
     {
+        $sedes = NominaSede::query()->where('estado', 'ACTIVO')->ordenCatalogo()->get();
+        $supervisores = $this->organization->supervisoresDisponibles($empleado?->id);
+        $gerentes = NominaEmpleado::query()
+            ->with(['cliente', 'cargoCatalogo', 'sedeCatalogo'])
+            ->whereIn('id', $this->organization->idsGerentesActivos($empleado?->id) ?: [0])
+            ->get();
+
+        $jefesPorSede = [];
+        foreach ($sedes as $sede) {
+            $codigo = mb_strtoupper((string) $sede->codigo, 'UTF-8');
+            $esAdmin = $codigo === 'ADMINISTRACION' || $codigo === 'ADMINISTRACIÓN';
+            $lista = $esAdmin
+                ? $gerentes
+                : $supervisores->where('sede_id', $sede->id)->take(2)->values();
+
+            $jefesPorSede[(string) $sede->id] = $lista->map(fn (NominaEmpleado $e) => [
+                'id' => $e->id,
+                'nombre' => $e->nombre(),
+                'cargo' => $e->nombreCargo(),
+            ])->values()->all();
+        }
+
         return [
             'empleado' => $empleado,
-            'sedes' => NominaSede::query()->where('estado', 'ACTIVO')->ordenCatalogo()->get(),
+            'sedes' => $sedes,
             'empresas' => NominaEmpresa::query()->where('estado', 'ACTIVO')->orderBy('nombre')->get(),
             'cargos' => NominaCargo::query()->where('estado', 'ACTIVO')->orderBy('nombre')->get(),
-            'supervisores' => $this->organization->supervisoresDisponibles($empleado?->id),
+            'supervisores' => $supervisores,
+            'jefesPorSede' => $jefesPorSede,
             'usuarios' => User::query()->orderBy('name')->get(['id', 'name', 'email', 'role']),
             'clientes' => Cliente::query()->orderBy('nombre')->get(['id', 'cedula', 'nombre']),
         ];

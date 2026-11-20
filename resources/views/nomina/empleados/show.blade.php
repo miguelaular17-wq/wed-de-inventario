@@ -2,7 +2,7 @@
 
 @section('title', $empleado->nombre())
 
-    @php
+@php
     $tabs = [
         'personal' => 'Información personal',
         'laboral' => 'Información laboral',
@@ -18,7 +18,28 @@
         'ajustes' => 'Deducciones y bonos',
         'deudas' => 'Deudas',
     ];
+    $jefesFicha = $empleado->jefesListados();
+    $etiquetaJefe = $jefesFicha->count() > 1
+        ? 'Supervisores'
+        : ($jefesFicha->contains(fn ($j) => str_contains(mb_strtoupper($j->nombreCargo(), 'UTF-8'), 'GERENTE')) ? 'Gerente' : 'Supervisor');
 @endphp
+
+@push('head')
+<style>
+.emp-ficha-linea { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:6px 0 0; font-size:.9rem; color:#64748b; }
+.emp-ficha-linea strong { color:#334155; font-weight:600; }
+.emp-ficha-jefes { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; }
+.emp-ficha-jefes > .muted { font-size:.75rem; text-transform:uppercase; letter-spacing:.02em; margin-right:2px; }
+.emp-jefe-pill {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:4px 10px; border-radius:999px; background:#f1f5f9; border:1px solid #e2e8f0;
+    color:#0f172a; text-decoration:none; font-size:.82rem; font-weight:600; max-width:100%;
+}
+.emp-jefe-pill:hover { background:#e2e8f0; }
+.emp-jefe-pill em { font-style:normal; font-weight:500; color:#64748b; font-size:.72rem; }
+.emp-jefes-lista { display:flex; flex-direction:column; gap:6px; margin-top:4px; }
+</style>
+@endpush
 
 @section('content')
 <div class="panel nomina-page">
@@ -36,12 +57,27 @@
                     {{ $inicialesFicha }}
                 @endif
             </a>
-            <div>
+            <div style="min-width:0;">
                 <a href="{{ route('nomina.empleados.index') }}" class="muted" style="font-size:.82rem;">← Volver</a>
                 <h1 style="margin:4px 0 0;">{{ $empleado->nombre() }}</h1>
-                <p class="muted" style="margin:4px 0 0;">
-                    Cargo: {{ $empleado->nombreCargo() }}  · Supervisor: {{ $empleado->nombreSupervisor() }}
-                </p>
+                <div class="emp-ficha-linea">
+                    <span>{{ $empleado->nombreSede() }}</span>
+                    <span aria-hidden="true">·</span>
+                    <strong>{{ $empleado->nombreCargo() }}</strong>
+                </div>
+                <div class="emp-ficha-jefes">
+                    <span class="muted">{{ $etiquetaJefe }}</span>
+                    @forelse($jefesFicha as $jefe)
+                        <a class="emp-jefe-pill" href="{{ route('nomina.empleados.show', $jefe) }}" title="{{ $jefe->nombre() }}">
+                            {{ $jefe->nombreCorto() }}
+                            @if($jefe->nombreCargo())
+                                <em>{{ $jefe->nombreCargo() }}</em>
+                            @endif
+                        </a>
+                    @empty
+                        <span class="muted" style="text-transform:none;letter-spacing:0;">Sin jefe asignado</span>
+                    @endforelse
+                </div>
             </div>
         </div>
         <div class="nomina-ficha-meta">
@@ -83,9 +119,19 @@
             <div><span class="muted">Sede</span><div>{{ $empleado->nombreSede() }}</div></div>
             <div><span class="muted">Empresa</span><div>{{ $empleado->nombreEmpresa() }}</div></div>
             <div><span class="muted">Cargo</span><div>{{ $empleado->nombreCargo() }}</div></div>
-            <div><span class="muted">Supervisor</span><div>{{ $empleado->nombreSupervisor() }}</div></div>
+            <div>
+                <span class="muted">{{ $etiquetaJefe }}</span>
+                <div class="emp-jefes-lista">
+                    @forelse($jefesFicha as $jefe)
+                        <a href="{{ route('nomina.empleados.show', $jefe) }}">{{ $jefe->nombre() }}</a>
+                        <span class="muted" style="font-size:.78rem;">{{ $jefe->nombreCargo() }} · {{ $jefe->nombreSede() }}</span>
+                    @empty
+                        —
+                    @endforelse
+                </div>
+            </div>
             <div><span class="muted">Ingreso</span><div>{{ optional($empleado->fecha_ingreso)->format('d/m/Y') ?: '—' }}</div></div>
-            <div><span class="muted">Es supervisor</span><div>{{ $empleado->es_supervisor ? 'Sí' : 'No' }}</div></div>
+            <div><span class="muted">Personal a cargo</span><div>{{ $empleado->es_supervisor ? 'Sí (por sede/área)' : 'No' }}</div></div>
             <div><span class="muted">Servicio Técnico</span><div>{{ $empleado->es_servicio_tecnico ? 'Sí' : 'No' }}</div></div>
             @php $codigosVendedor = $empleado->codigosVendedor(); @endphp
             <div><span class="muted">Códigos de vendedor</span><div>{{ $codigosVendedor ? implode(' · ', $codigosVendedor) : '—' }}</div></div>

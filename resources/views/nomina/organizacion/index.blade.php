@@ -44,11 +44,8 @@
 
     @forelse($arbol as $nodo)
         @php
-            $esArea = $nodo['sede']->isArea();
-            $nSup = $esArea ? $nodo['grupos']->count() : $nodo['supervisores']->count();
-            $nPiso = $nodo['equipo']->count()
-                + $nodo['grupos']->sum(fn ($g) => $g['empleados']->count())
-                + $nodo['sin_supervisor']->count();
+            $nSup = $nodo['supervisores']->count();
+            $nPiso = $nodo['equipo']->count();
             $porCargo = $nodo['equipo']
                 ->groupBy(fn ($e) => $e->nombreCargo() ?: 'Sin cargo')
                 ->sortByDesc(fn ($grupo) => $grupo->count());
@@ -77,71 +74,37 @@
                     </div>
                 @endif
 
-                @if($esArea)
-                    @if($nodo['grupos']->isNotEmpty())
-                        <div class="org-branch">
-                            <div class="org-cols">
-                                @foreach($nodo['grupos'] as $grupo)
-                                    <div class="org-col">
-                                        @include('nomina.organizacion._persona', ['empleado' => $grupo['supervisor'], 'tono' => 'sup'])
-                                        <div class="org-col-team">
-                                            @forelse($grupo['empleados'] as $emp)
-                                                @include('nomina.organizacion._persona', ['empleado' => $emp, 'tono' => 'piso', 'compacto' => true])
-                                            @empty
-                                                <p class="muted org-empty">Sin personal asignado</p>
-                                            @endforelse
-                                        </div>
-                                    </div>
-                                @endforeach
-                            </div>
-                        </div>
-                    @elseif($nodo['gerentes']->isEmpty())
-                        <p class="muted org-empty">No hay supervisores en esta área.</p>
-                    @endif
-                @else
-                    @if($nodo['supervisores']->isNotEmpty())
-                        <div class="org-branch">
-                            <div class="org-row">
-                                @foreach($nodo['supervisores'] as $sup)
-                                    @include('nomina.organizacion._persona', ['empleado' => $sup, 'tono' => 'sup'])
-                                @endforeach
-                            </div>
-                        </div>
-                    @else
-                        <p class="muted org-empty">No hay supervisores en esta sede.</p>
-                    @endif
-
-                    @if($porCargo->isNotEmpty())
-                        <div class="org-piso">
-                            <h3>Personal de piso</h3>
-                            @foreach($porCargo as $cargo => $personas)
-                                <div class="org-cargo">
-                                    <div class="org-cargo-head">
-                                        <strong>{{ $cargo }}</strong>
-                                        <span>{{ $personas->count() }}</span>
-                                    </div>
-                                    <div class="org-chips">
-                                        @foreach($personas as $emp)
-                                            @include('nomina.organizacion._persona', ['empleado' => $emp, 'tono' => 'piso', 'compacto' => true])
-                                        @endforeach
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    @elseif($nodo['supervisores']->isNotEmpty())
-                        <p class="muted org-empty">Sin personal de piso</p>
-                    @endif
-                @endif
-
-                @if($nodo['sin_supervisor']->isNotEmpty())
-                    <div class="org-piso">
-                        <h3>Sin supervisor</h3>
-                        <div class="org-chips">
-                            @foreach($nodo['sin_supervisor'] as $emp)
-                                @include('nomina.organizacion._persona', ['empleado' => $emp, 'tono' => 'piso', 'compacto' => true])
+                @if($nodo['supervisores']->isNotEmpty())
+                    <div class="org-branch">
+                        <div class="org-row">
+                            @foreach($nodo['supervisores'] as $sup)
+                                @include('nomina.organizacion._persona', ['empleado' => $sup, 'tono' => 'sup'])
                             @endforeach
                         </div>
                     </div>
+                @else
+                    <p class="muted org-empty">No hay supervisores en esta {{ strtolower($nodo['sede']->etiquetaTipo()) }}.</p>
+                @endif
+
+                @if($porCargo->isNotEmpty())
+                    <div class="org-piso">
+                        <h3>Personal a cargo</h3>
+                        @foreach($porCargo as $cargo => $personas)
+                            <div class="org-cargo">
+                                <div class="org-cargo-head">
+                                    <strong>{{ $cargo }}</strong>
+                                    <span>{{ $personas->count() }}</span>
+                                </div>
+                                <div class="org-chips">
+                                    @foreach($personas as $emp)
+                                        @include('nomina.organizacion._persona', ['empleado' => $emp, 'tono' => 'piso', 'compacto' => true])
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @elseif($nodo['supervisores']->isNotEmpty())
+                    <p class="muted org-empty">Sin personal de piso</p>
                 @endif
             </div>
         </section>

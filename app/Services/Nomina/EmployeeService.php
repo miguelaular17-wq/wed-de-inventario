@@ -56,15 +56,9 @@ class EmployeeService
         return DB::transaction(function () use ($data) {
             $codigos = $this->normalizarCodigosVendedor($data, null);
             $empleado = NominaEmpleado::create($this->payload($data, null, $codigos[0] ?? null));
-            $this->organization->syncJefes(
-                $empleado,
-                $this->idsJefes($data, $empleado)
-            );
             $this->syncCodigosVendedor($empleado, $codigos);
             $this->syncDenormalized($empleado);
-            $this->organization->asignarComoJefeDeSede(
-                $empleado->fresh(['sedeCatalogo', 'cargoCatalogo'])
-            );
+            $this->aplicarOrganigrama($empleado, $data);
 
             NominaAuditLog::registrar('CREAR', 'empleado', $empleado->id, null, $empleado->toArray());
 
@@ -81,15 +75,9 @@ class EmployeeService
             $codigos = $this->normalizarCodigosVendedor($data, $empleado);
             $empleado->fill($this->payload($data, $empleado, $codigos[0] ?? null));
             $empleado->save();
-            $this->organization->syncJefes(
-                $empleado,
-                $this->idsJefes($data, $empleado)
-            );
             $this->syncCodigosVendedor($empleado, $codigos);
             $this->syncDenormalized($empleado);
-            $this->organization->asignarComoJefeDeSede(
-                $empleado->fresh(['sedeCatalogo', 'cargoCatalogo'])
-            );
+            $this->aplicarOrganigrama($empleado, $data);
 
             NominaAuditLog::registrar('ACTUALIZAR', 'empleado', $empleado->id, $anterior, $empleado->fresh()->toArray());
 
@@ -97,6 +85,38 @@ class EmployeeService
                 'cliente', 'sedeCatalogo', 'cargoCatalogo', 'supervisor.cliente', 'jefes.cliente', 'vendedores',
             ]);
         });
+    }
+
+    /**
+     * Cargo supervisor → personal a cargo automático.
+     * Supervisores → reportan a la gerente.
+     * Piso → supervisores de su sede/área (Administración → gerente).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function aplicarOrganigrama(NominaEmpleado $empleado, array $data): void
+    {
+        $fresh = $empleado->fresh(['sedeCatalogo', 'cargoCatalogo', 'jefes']);
+        if (! $fresh) {
+            return;
+        }
+
+        if ($this->organization->esGerente($fresh)) {
+            $this->organization->syncJefes($fresh, []);
+
+            return;
+        }
+
+        if ($fresh->es_supervisor) {
+            $this->organization->sincronizarJefeGerente($fresh);
+            $this->organization->asignarEquipoPorUnidad(
+                $fresh->fresh(['sedeCatalogo', 'cargoCatalogo'])
+            );
+
+            return;
+        }
+
+        $this->organization->sincronizarJefesPorUnidad($fresh);
     }
 
     /**
@@ -183,14 +203,10 @@ class EmployeeService
     private function payload(array $data, ?NominaEmpleado $empleado = null, ?string $codigoVendedor = null): array
     {
         $cliente = $this->resolveCliente($data, $empleado);
-        $supervisorIds = $data['supervisor_ids'] ?? [];
-        if ($supervisorIds === [] && ! empty($data['supervisor_id'])) {
-            $supervisorIds = [$data['supervisor_id']];
-        }
-        $supervisorIds = $this->organization->normalizarJefes(
-            is_array($supervisorIds) ? $supervisorIds : [$supervisorIds],
-            $empleado?->id
-        );
+        $cargoId = ($data['cargo_id'] ?? null) ?: null;
+        $cargo = $cargoId ? NominaCargo::query()->find($cargoId) : null;
+        // Personal a cargo sale del cargo (Supervisor…); no se marca a mano.
+        $esSupervisor = $this->organization->esCargoConPersonalACargo($cargo?->nombre);
 
         return [
             'cliente_id' => $cliente->id,
@@ -202,9 +218,9 @@ class EmployeeService
             'tipo_salario' => $data['tipo_salario'] ?? 'QUINCENAL',
             'estado' => $data['estado'] ?? 'ACTIVO',
             'sede_id' => ($data['sede_id'] ?? null) ?: null,
-            'cargo_id' => ($data['cargo_id'] ?? null) ?: null,
-            'supervisor_id' => $supervisorIds[0] ?? null,
-            'es_supervisor' => (bool) ($data['es_supervisor'] ?? false),
+            'cargo_id' => $cargoId,
+            'supervisor_id' => null,
+            'es_supervisor' => $esSupervisor,
             'es_servicio_tecnico' => (bool) ($data['es_servicio_tecnico'] ?? false),
             'exento_retencion_comision' => (bool) ($data['exento_retencion_comision'] ?? false),
             'modo_comision' => $data['modo_comision'] ?? $empleado?->modo_comision ?? NominaEmpleado::COMISION_NINGUNA,

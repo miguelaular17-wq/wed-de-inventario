@@ -9,9 +9,11 @@
             <h1 style="margin:0;">Empleados</h1>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <a href="{{ route('nomina.empleados.reporte', array_filter($filters ?? [], fn ($value) => $value !== null && $value !== '')) }}" class="btn secondary">
-                Descargar reporte
-            </a>
+            <a
+                id="empleados-descargar-reporte"
+                href="{{ route('nomina.empleados.reporte', array_filter($filters ?? [], fn ($value) => $value !== null && $value !== '')) }}"
+                class="btn secondary"
+            >Descargar reporte</a>
             <a href="{{ route('nomina.empleados.create') }}" class="btn primary">Nuevo empleado</a>
         </div>
     </div>
@@ -20,7 +22,7 @@
         <div class="success">Se incorporaron {{ $importados }} personas desde la tabla clientes. Completa sede, cargo y salario en cada ficha.</div>
     @endif
 
-    <form method="GET" class="filter-bar" style="margin-top:16px;">
+    <form id="empleados-filtros" method="GET" action="{{ route('nomina.empleados.index') }}" class="filter-bar" style="margin-top:16px;">
         <div class="field field-wide">
             <label>Buscar</label>
             <input type="text" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Nombre o cédula">
@@ -135,4 +137,29 @@
 .emp-datos dt { margin: 0; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
 .emp-datos dd { margin: 2px 0 0; font-weight: 700; color: #0f172a; }
 </style>
+<script>
+(function () {
+    const link = document.getElementById('empleados-descargar-reporte');
+    const form = document.getElementById('empleados-filtros');
+    if (!link || !form) return;
+
+    const base = link.href.split('?')[0];
+
+    function syncHref() {
+        const params = new URLSearchParams();
+        for (const [key, value] of new FormData(form).entries()) {
+            if (String(value).trim() !== '') {
+                params.append(key, value);
+            }
+        }
+        const query = params.toString();
+        link.href = query ? base + '?' + query : base;
+    }
+
+    form.addEventListener('change', syncHref);
+    form.addEventListener('input', syncHref);
+    link.addEventListener('click', syncHref);
+    syncHref();
+})();
+</script>
 @endsection
