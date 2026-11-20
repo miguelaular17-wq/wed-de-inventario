@@ -181,7 +181,7 @@
                             @if($esSt)
                                 <div class="muted" style="font-size:.72rem;">ST · Otros productos</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_SEDE)
-                                <div class="muted" style="font-size:.72rem;">Supervisor de sede</div>
+                                <div class="muted" style="font-size:.72rem;">Supervisor de tienda</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_SUPERVISOR_EQUIPO)
                                 <div class="muted" style="font-size:.72rem;">Ventas del equipo</div>
                             @elseif($liq->modo === \App\Models\Nomina\NominaEmpleado::COMISION_DIGITAL)

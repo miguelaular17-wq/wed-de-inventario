@@ -16,6 +16,7 @@ class User extends Authenticatable
     public const ROLE_SUPERVISOR = 'supervisor';
     public const ROLE_TELEFONIA = 'telefonia';
     public const ROLE_COMPRADOR = 'comprador';
+    /** @deprecated Rol eliminado del catálogo; se mantiene por compatibilidad. */
     public const ROLE_SEDE = 'sede';
     public const ROLE_VENDEDOR = 'vendedor';
     public const ROLE_MARKETING = 'marketing';
@@ -29,6 +30,80 @@ class User extends Authenticatable
     public const ROLE_TECNICO = 'tecnico';
     public const ROLE_AVANCES = 'avances';
     public const ROLE_MAYOR = 'mayor';
+
+    /**
+     * Etiquetas de rol en UI (código => nombre).
+     * El rol "sede" se eliminó del catálogo.
+     *
+     * @var array<string, string>
+     */
+    public const ROLE_LABELS = [
+        self::ROLE_ADMIN => 'Admin',
+        self::ROLE_GERENTE => 'Gerente',
+        self::ROLE_SUPERVISOR => 'Supervisor de tienda',
+        self::ROLE_TELEFONIA => 'Asesor de venta telefonía',
+        self::ROLE_VENDEDOR => 'Call center',
+        self::ROLE_COMPRADOR => 'Comprador',
+        self::ROLE_MARKETING => 'Marketing',
+        self::ROLE_FINANZAS => 'Finanzas',
+        self::ROLE_COBRANZA => 'Cobranza',
+        self::ROLE_CONTABILIDAD => 'Contabilidad',
+        self::ROLE_AUDITOR => 'Auditor',
+        self::ROLE_TESORERIA => 'Tesorería',
+        self::ROLE_RRHH => 'RRHH',
+        self::ROLE_TECNICO => 'Técnico',
+        self::ROLE_AVANCES => 'Avances',
+        self::ROLE_MAYOR => 'Mayor',
+    ];
+
+    /**
+     * Cargo de nómina que corresponde a cada rol de usuario.
+     * vendedor/Call center: en JRZ la excepción operativa son receptores de mercancía.
+     *
+     * @var array<string, int>
+     */
+    public const ROLE_CARGO_IDS = [
+        self::ROLE_ADMIN => 44, // DESARROLLADOR DE SISTEMA
+        self::ROLE_GERENTE => 19, // Gerente
+        self::ROLE_SUPERVISOR => 1, // Supervisor de tienda
+        self::ROLE_TELEFONIA => 28, // Asesor de venta telefonía
+        self::ROLE_VENDEDOR => 7, // Call center
+        self::ROLE_COMPRADOR => 40, // ANALISTA DE COMPRAS
+        self::ROLE_MARKETING => 8, // Marketing
+        self::ROLE_FINANZAS => 37, // Finanzas
+        self::ROLE_COBRANZA => 38, // Analista de Cuentas por Cobrar
+        self::ROLE_CONTABILIDAD => 14, // Contador
+        self::ROLE_TESORERIA => 15, // Analista de Tesoreria
+        self::ROLE_RRHH => 25, // Coordinadora de RRHH
+        self::ROLE_TECNICO => 29, // Servicio técnico
+    ];
+
+    public static function etiquetaRol(?string $role): string
+    {
+        $role = (string) $role;
+        if ($role === self::ROLE_SEDE) {
+            return 'Sede (eliminado)';
+        }
+
+        return self::ROLE_LABELS[$role] ?? ucfirst($role);
+    }
+
+    /**
+     * Roles seleccionables al crear/editar usuarios (sin "sede").
+     *
+     * @return array<string, string>
+     */
+    public static function rolesSeleccionables(): array
+    {
+        return self::ROLE_LABELS;
+    }
+
+    public static function cargoIdParaRol(?string $role): ?int
+    {
+        $role = (string) $role;
+
+        return self::ROLE_CARGO_IDS[$role] ?? null;
+    }
 
     public const COBRANZA_CLIENTES_TODOS = 'todos';
     public const COBRANZA_CLIENTES_REGULARES = 'regulares';

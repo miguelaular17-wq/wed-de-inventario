@@ -38,7 +38,7 @@ class CommissionDifferentialService
         'comision_telefonia_pct' => ['Telefonía (%)', 0.20],
         'comision_telefonia_sin_hs_pct' => ['Telefonía sin Honor/Samsung (%)', 0.10],
         'comision_otros_pct' => ['Resto de categorías (%)', 1],
-        'comision_supervisor_pct' => ['Supervisor de sede (%)', 0.05],
+        'comision_supervisor_pct' => ['Supervisor de tienda (%)', 0.05],
         'comision_encargado_pct' => ['Encargado de tienda (%)', 0.0],
         'comision_marketing_pct' => ['Supervisor de equipo / Marketing (%)', 0.10],
         'comision_digital_pct' => ['Digital (%)', 0.30],

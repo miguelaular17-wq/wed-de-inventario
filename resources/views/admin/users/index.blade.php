@@ -88,23 +88,12 @@
                                 @csrf
                                 <div class="field" style="margin:0;">
                                     <select name="role" style="padding:6px 12px; font-size:0.85rem; border-radius:6px; min-width: 100px; border: 1px solid var(--border);">
-                                        <option value="admin" @selected($user->role === 'admin')>Admin</option>
-                                        <option value="supervisor" @selected($user->role === 'supervisor')>Supervisor</option>
-                                        <option value="telefonia" @selected($user->role === 'telefonia')>Telefonía</option>
-                                        <option value="tecnico" @selected($user->role === 'tecnico')>Técnico</option>
-                                        <option value="comprador" @selected($user->role === 'comprador')>Comprador</option>
-                                        <option value="sede" @selected($user->role === 'sede')>Sede</option>
-                                        <option value="vendedor" @selected($user->role === 'vendedor')>Vendedor</option>
-                                        <option value="marketing" @selected($user->role === 'marketing')>Marketing</option>
-                                        <option value="finanzas" @selected($user->role === 'finanzas')>Finanzas</option>
-                                        <option value="cobranza" @selected($user->role === 'cobranza')>Cobranza</option>
-                                        <option value="contabilidad" @selected($user->role === 'contabilidad')>Contabilidad</option>
-                                        <option value="auditor" @selected($user->role === 'auditor')>Auditor</option>
-                                        <option value="tesoreria" @selected($user->role === 'tesoreria')>Tesorería</option>
-                                        <option value="gerente" @selected($user->role === 'gerente')>Gerente</option>
-                                        <option value="rrhh" @selected($user->role === 'rrhh')>RRHH</option>
-                                        <option value="avances" @selected($user->role === 'avances')>Avances</option>
-                                        <option value="mayor" @selected($user->role === 'mayor')>Ventas al mayor</option>
+                                        @foreach(\App\Models\User::rolesSeleccionables() as $roleValue => $roleLabel)
+                                            <option value="{{ $roleValue }}" @selected($user->role === $roleValue)>{{ $roleLabel }}</option>
+                                        @endforeach
+                                        @if($user->role === \App\Models\User::ROLE_SEDE)
+                                            <option value="sede" selected>{{ \App\Models\User::etiquetaRol('sede') }}</option>
+                                        @endif
                                     </select>
                                 </div>
                                 <div class="field" style="margin:0;">

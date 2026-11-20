@@ -52,6 +52,7 @@ return [
         ],
         'supervisor' => [
             'cargos' => [
+                'supervisor de tienda',
                 'supervisor de sede',
                 'supervisor de area',
                 'supervisora area call center',

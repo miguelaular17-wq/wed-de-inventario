@@ -154,8 +154,16 @@ class CatalogoController extends Controller
             ini_set('max_execution_time', 300); // Dar 5 minutos por si son muchos
             ini_set('memory_limit', '512M'); // Dar más memoria para dompdf (evita error 500)
 
-            $query = clone $this->buildQuery($request);
-            
+            // Público: con token de cliente o desde /catalogo sin sesión.
+            $modoCliente = false;
+            if ($request->filled('cliente_token')) {
+                abort_unless(hash_equals($this->clienteToken(), (string) $request->input('cliente_token')), 404);
+                $modoCliente = true;
+                $request->merge(['solo_existencia' => '1']);
+            }
+
+            $query = clone $this->buildQuery($request, $modoCliente);
+
             $scope = $request->input('pdf_scope', 'page');
             if ($scope === 'page') {
                 $perPage = $request->input('per_page', 24);

@@ -38,7 +38,7 @@
             <p class="muted">Porcentajes de los modos que pagan sobre venta neta de tienda, equipo o sedes.</p>
             <div class="nomina-form-grid">
                 <div class="field">
-                    <label>Supervisor de sede (%)</label>
+                    <label>Supervisor de tienda (%)</label>
                     <input type="number" step="0.0001" min="0" max="100" name="comision_supervisor_pct" value="{{ number_format($comisionSupervisorPct, 4, '.', '') }}" required>
                 </div>
                 <div class="field">

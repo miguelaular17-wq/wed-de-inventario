@@ -270,7 +270,7 @@ class NominaEmpleado extends Model
         return [
             self::COMISION_VENTAS_PROPIAS => 'Ventas propias',
             self::COMISION_VENTAS_PROPIAS_SIN_HS => 'Propias sin HS',
-            self::COMISION_SUPERVISOR_SEDE => 'Supervisor sede',
+            self::COMISION_SUPERVISOR_SEDE => 'Supervisor tienda',
             self::COMISION_ENCARGADO => 'Encargado',
             self::COMISION_SUPERVISOR_EQUIPO => 'Sup. equipo',
             self::COMISION_DIGITAL => 'Digital',

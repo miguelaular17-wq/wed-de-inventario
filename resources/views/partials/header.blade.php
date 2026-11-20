@@ -437,26 +437,7 @@
 
     $nav = app(\App\Services\AccesosService::class)->filtrarMenu($u, $nav);
 
-    $roleLabels = [
-        'admin' => 'Admin',
-        'gerente' => 'Gerente',
-        'supervisor' => 'Supervisor',
-        'telefonia' => 'Telefonía',
-        'comprador' => 'Comprador',
-        'sede' => 'Sede',
-        'vendedor' => 'Vendedor',
-        'marketing' => 'Marketing',
-        'finanzas' => 'Finanzas',
-        'cobranza' => 'Cobranza',
-        'contabilidad' => 'Contabilidad',
-        'auditor' => 'Auditor',
-        'tesoreria' => 'Tesorería',
-        'rrhh' => 'RRHH',
-        'tecnico' => 'Técnico',
-        'avances' => 'Avances',
-        'mayor' => 'Ventas al mayor',
-    ];
-    $roleLabel = $roleLabels[$u->role] ?? ucfirst($u->role);
+    $roleLabel = \App\Models\User::etiquetaRol($u->role);
     $nameParts = preg_split('/\s+/', trim($u->name)) ?: [];
     $initials = strtoupper(mb_substr($nameParts[0] ?? 'U', 0, 1) . mb_substr($nameParts[1] ?? '', 0, 1));
 

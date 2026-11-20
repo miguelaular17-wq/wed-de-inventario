@@ -668,9 +668,7 @@
                     @endif
                     <button type="submit" class="btn-custom btn-primary-custom" id="btn-buscar">Buscar</button>
                     <a href="{{ $formAction }}" class="btn-custom btn-light-custom">Limpiar</a>
-                    @unless($modoCliente)
                     <button type="button" class="btn-custom btn-danger-custom" onclick="document.getElementById('pdf-panel').style.display = 'block';">PDF</button>
-                    @endunless
                 </div>
             </div>
 
@@ -698,13 +696,12 @@
                     </div>
                 @endforeach
             </div>
-            
-            @unless($modoCliente)
-            <!-- Panel PDF (Oculto por defecto en lugar de modal Bootstrap) -->
+
+            <!-- Panel PDF: disponible también sin usuario (catálogo público / enlace cliente) -->
             <div class="pdf-actions" id="pdf-panel">
                 <h4 style="margin-top: 0; color: #be123c;">Descargar Catálogo (PDF)</h4>
                 <p style="font-size: 0.9rem; color: #881337; margin-bottom: 15px;">Selecciona cómo deseas descargar el catálogo (se aplicarán los filtros actuales):</p>
-                
+
                 <div style="display: flex; gap: 15px; flex-wrap: wrap;">
                     <button type="button" onclick="descargarPDF('page')" class="btn-custom btn-danger-custom">
                         Descargar Página Actual ({{ count($productos) }} prod.)
@@ -758,7 +755,6 @@
                     </button>
                 </div>
             </div>
-            @endunless
         </form>
     </details>
 
@@ -1111,8 +1107,7 @@ document.addEventListener('keydown', function (e) {
         refrescar();
     })();
     
-    // --- NUEVA LÓGICA DE PDF ASÍNCRONA ---
-    @unless($modoCliente)
+    // --- PDF público (con o sin sesión) ---
     async function descargarPDF(scope) {
         let btnPanel = document.getElementById('pdf-panel');
         let loaderPanel = document.getElementById('pdf-loader');
@@ -1131,6 +1126,10 @@ document.addEventListener('keydown', function (e) {
                 url.searchParams.append(pair[0], pair[1]);
             }
         }
+
+        @if(!empty($modoCliente) && !empty($clienteToken))
+        url.searchParams.append('cliente_token', @json($clienteToken));
+        @endif
         
         let currentUrlParams = new URLSearchParams(window.location.search);
         if (currentUrlParams.has('page') && scope === 'page') {
@@ -1181,7 +1180,6 @@ document.addEventListener('keydown', function (e) {
             alert('Ocurrió un error de conexión al generar el catálogo.');
         }
     }
-    @endunless
 
     // --- FOTOS DEL PRODUCTO: cambiar la principal o agregar otras (archivo del equipo/teléfono o enlace) ---
     // Ventana propia (no prompt()): sigue abierta al cambiar de pestaña y el nombre

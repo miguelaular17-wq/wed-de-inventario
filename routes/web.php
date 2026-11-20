@@ -665,15 +665,15 @@ Route::middleware(['auth', 'permission:nomina,nomina.dias_libres'])->prefix('nom
 });
 
 // Notifications routes for all authenticated users
-// Catálogo público interno
+// Catálogo público (sin usuario): ver y descargar PDF
 Route::get('/catalogo', [\App\Http\Controllers\CatalogoController::class, 'index'])->name('catalogo.index');
 Route::get('/catalogo/cliente/{token}', [\App\Http\Controllers\CatalogoController::class, 'cliente'])
     ->where('token', '[A-Za-z0-9_-]{16,80}')
     ->name('catalogo.cliente');
+Route::get('/catalogo/pdf', [\App\Http\Controllers\CatalogoController::class, 'exportPdf'])->name('catalogo.pdf');
 
 Route::middleware('auth')->group(function () {
-    // Catálogo Gráfico (solo acciones protegidas)
-    Route::get('/catalogo/pdf', [\App\Http\Controllers\CatalogoController::class, 'exportPdf'])->name('catalogo.pdf');
+    // Catálogo: acciones que sí requieren sesión
     Route::get('/catalogo/precios.xlsx', [\App\Http\Controllers\CatalogoController::class, 'exportarPrecios'])
         ->middleware('permission:catalogo.exportar_precios')
         ->name('catalogo.precios.export');

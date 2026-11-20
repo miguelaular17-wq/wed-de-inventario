@@ -4,9 +4,7 @@
 
 @section('content')
 @php
-    $roles = ['gerente' => 'Gerente', 'supervisor' => 'Supervisor', 'telefonia' => 'Telefonía', 'comprador' => 'Comprador', 'sede' => 'Sede',
-        'vendedor' => 'Vendedor', 'marketing' => 'Marketing', 'finanzas' => 'Finanzas', 'cobranza' => 'Cobranza', 'contabilidad' => 'Contabilidad',
-        'auditor' => 'Auditor', 'tesoreria' => 'Tesorería', 'rrhh' => 'RRHH', 'tecnico' => 'Técnico', 'avances' => 'Avances', 'mayor' => 'Ventas al mayor'];
+    $roles = \App\Models\User::rolesSeleccionables();
     $totalMarcadas = count($marcadas);
 @endphp
 <div class="panel">
