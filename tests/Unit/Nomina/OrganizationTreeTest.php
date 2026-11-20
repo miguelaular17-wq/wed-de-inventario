@@ -122,6 +122,37 @@ class OrganizationTreeTest extends TestCase
         $this->assertEqualsCanonicalizing([$sup->id], $tec1->fresh()->jefes->pluck('id')->all());
     }
 
+    public function test_supervisor_no_ve_personal_de_otra_sede_por_vinculo_viejo(): void
+    {
+        $centro = NominaSede::create(['nombre' => 'Centro', 'codigo' => 'CENTRO', 'tipo' => 'SEDE', 'estado' => 'ACTIVO']);
+        $virtudes = NominaSede::create(['nombre' => 'Virtudes', 'codigo' => 'VIRTUDES', 'tipo' => 'SEDE', 'estado' => 'ACTIVO']);
+        $cargoSup = NominaCargo::create(['nombre' => 'Supervisor de sede', 'estado' => 'ACTIVO']);
+        $cargoVen = NominaCargo::create(['nombre' => 'Asesor de venta', 'estado' => 'ACTIVO']);
+
+        $ivania = $this->empleado('27844739', 'IVANIA SANCHEZ', $centro, $cargoSup, true);
+        $deCentro = $this->empleado('111', 'ASESOR CENTRO', $centro, $cargoVen, false);
+        $deVirtudes = $this->empleado('222', 'ASESOR VIRTUDES', $virtudes, $cargoVen, false);
+
+        $user = \App\Models\User::create([
+            'name' => 'Ivania',
+            'email' => 'ivania-org@test.local',
+            'password' => 'password123',
+            'role' => \App\Models\User::ROLE_SUPERVISOR,
+            'sede' => 'CENTRO',
+        ]);
+        $ivania->user_id = $user->id;
+        $ivania->save();
+
+        // Vínculo viejo incorrecto: Virtudes apuntando a supervisora de Centro.
+        $this->org->syncJefes($deVirtudes, [$ivania->id]);
+        $this->org->asignarEquipoPorUnidad($ivania);
+
+        $ids = $this->org->idsPersonalACargo($user, true);
+        $this->assertContains((int) $deCentro->id, $ids);
+        $this->assertContains((int) $ivania->id, $ids);
+        $this->assertNotContains((int) $deVirtudes->id, $ids);
+    }
+
     private function empleado(string $cedula, string $nombre, NominaSede $sede, NominaCargo $cargo, bool $esSupervisor): NominaEmpleado
     {
         $cliente = Cliente::create(['cedula' => $cedula, 'nombre' => $nombre]);

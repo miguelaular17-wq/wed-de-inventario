@@ -367,6 +367,9 @@ class OrganizationService
      * IDs del personal a cargo del usuario.
      * Con $incluirse=true también incluye la propia ficha (reporte de nómina del equipo).
      *
+     * Un supervisor de sede/área solo ve su unidad: no arrastra gente de otra sede
+     * aunque queden vínculos viejos en supervisor_id / pivot.
+     *
      * @return list<int>
      */
     public function idsPersonalACargo(User $user, bool $incluirse = false): array
@@ -376,21 +379,31 @@ class OrganizationService
             return [];
         }
 
-        $ids = collect();
-
-        // Regla principal: supervisor de sede/área → todo el personal de su unidad.
+        // Supervisor de sede/área: únicamente personal de su misma unidad.
         if ($yo->es_supervisor && $yo->sede_id && ! $this->esGerente($yo)) {
-            $ids = $ids->merge(
-                NominaEmpleado::query()
-                    ->where('sede_id', $yo->sede_id)
+            $query = NominaEmpleado::query()
+                ->where('sede_id', $yo->sede_id)
+                ->where('estado', 'ACTIVO');
+
+            if ($incluirse) {
+                $ids = $query->pluck('id');
+            } else {
+                $ids = $query
                     ->where('id', '!=', $yo->id)
-                    ->where('estado', 'ACTIVO')
                     ->where('es_supervisor', false)
-                    ->pluck('id')
-            );
+                    ->pluck('id');
+            }
+
+            return $ids
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
         }
 
-        // Enlaces explícitos (legado / casos especiales).
+        $ids = collect();
+
+        // Enlaces explícitos (legado / casos especiales / sin sede).
         $ids = $ids->merge(
             NominaEmpleado::query()
                 ->where('supervisor_id', $yo->id)
@@ -414,7 +427,6 @@ class OrganizationService
             } elseif ($esSupervisor) {
                 $ids = $ids->merge($nodo['equipo']->pluck('id'));
 
-                // En el reporte del equipo, si la sede/área tiene varios supervisores, deben verse todos.
                 if ($incluirse) {
                     $ids = $ids->merge($nodo['supervisores']->pluck('id'));
                 }
