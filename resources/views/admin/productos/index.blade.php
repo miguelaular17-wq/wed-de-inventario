@@ -104,7 +104,7 @@
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
         <div>
             <h1>Catálogo de Productos</h1>
-            <p class="lead">Ocultar un producto lo quita de <strong>todos</strong> los catálogos y vistas (cualquier sede). La sede solo sirve para consultar stock e histórico.</p>
+            <p class="lead">Ficha y edición manual (no la pisa el sincronizador). Ocultar lo quita de todos los catálogos. La sede solo consulta stock e histórico.</p>
         </div>
         <a href="{{ route('admin.productos.export_json') }}"
            id="btn-export-json"
@@ -293,7 +293,7 @@ document.getElementById('export-modal').addEventListener('click', function(e) {
                     <th style="text-align: center;">Demanda (15d)</th>
                     <th style="text-align: center;">Demanda (60d)</th>
                     <th style="text-align: center;">Stock en {{ config('inventario.display.'.$sedeSeleccionada, $sedeSeleccionada) }}</th>
-                    <th style="text-align: center; width: 100px;">Acciones</th>
+                    <th style="text-align: center; width: 210px;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -305,7 +305,14 @@ document.getElementById('export-modal').addEventListener('click', function(e) {
                                 <span style="display:inline-block; margin-left:4px; padding:2px 4px; background:#64748b; color:white; font-size:0.65rem; border-radius:4px; font-weight:bold;">OCULTO</span>
                             @endif
                         </td>
-                        <td style="font-weight: 500;">{{ $row['producto'] ?? '—' }}</td>
+                        <td style="font-weight: 500;">
+                            <a href="{{ route('admin.productos.show', ['id' => $row['id'], 'sede' => $sedeSeleccionada]) }}" style="color:inherit;text-decoration:none;">
+                                {{ $row['producto'] ?? '—' }}
+                            </a>
+                            @if(!empty($row['editado']))
+                                <span style="display:inline-block; margin-left:4px; padding:2px 4px; background:#0f766e; color:white; font-size:0.65rem; border-radius:4px; font-weight:bold;">EDITADO</span>
+                            @endif
+                        </td>
                         <td style="color: var(--muted); font-size: .9rem;">{{ $row['categoria'] ?? '—' }}</td>
                         <td style="color: var(--muted); font-size: .9rem;">{{ $row['proveedor'] ?? '—' }}</td>
                         <td style="text-align: center; font-weight: 500;">{{ isset($row['venta_promedio']) ? round(floatval($row['venta_promedio']) * 15) : '0' }}</td>
@@ -321,18 +328,22 @@ document.getElementById('export-modal').addEventListener('click', function(e) {
                             @endif
                         </td>
                         <td style="text-align: center; vertical-align: middle;">
-                            <form method="POST" action="{{ route('admin.productos.toggle_oculto', $row['id']) }}" style="display:inline; margin:0;">
-                                @csrf
-                                @if(!empty($row['oculto']))
-                                    <button type="submit" class="btn" style="padding:4px 10px; font-size:0.8rem; border-radius:6px; background-color: #10b981; color: white; border: 0; cursor: pointer; transition: background-color 0.15s;" title="Restaurar Producto">
-                                        Restaurar
-                                    </button>
-                                @else
-                                    <button type="submit" class="btn" style="padding:4px 10px; font-size:0.8rem; border-radius:6px; background-color: #64748b; color: white; border: 0; cursor: pointer; transition: background-color 0.15s;" title="Ocultar Producto" onsubmit="return confirm('¿Estás seguro de que deseas ocultar este producto?')">
-                                        Ocultar
-                                    </button>
-                                @endif
-                            </form>
+                            <div style="display:inline-flex;gap:6px;flex-wrap:wrap;justify-content:center;">
+                                <a class="btn secondary" href="{{ route('admin.productos.show', ['id' => $row['id'], 'sede' => $sedeSeleccionada]) }}" style="padding:4px 10px; font-size:0.8rem; border-radius:6px;">Ficha</a>
+                                <a class="btn" href="{{ route('admin.productos.show', ['id' => $row['id'], 'sede' => $sedeSeleccionada, 'editar' => 1]) }}" style="padding:4px 10px; font-size:0.8rem; border-radius:6px; background-color:#0f766e; color:white;">Editar</a>
+                                <form method="POST" action="{{ route('admin.productos.toggle_oculto', $row['id']) }}" style="display:inline; margin:0;">
+                                    @csrf
+                                    @if(!empty($row['oculto']))
+                                        <button type="submit" class="btn" style="padding:4px 10px; font-size:0.8rem; border-radius:6px; background-color: #10b981; color: white; border: 0; cursor: pointer;" title="Restaurar Producto">
+                                            Restaurar
+                                        </button>
+                                    @else
+                                        <button type="submit" class="btn" style="padding:4px 10px; font-size:0.8rem; border-radius:6px; background-color: #64748b; color: white; border: 0; cursor: pointer;" title="Ocultar Producto" onclick="return confirm('¿Ocultar este producto de todos los catálogos?')">
+                                            Ocultar
+                                        </button>
+                                    @endif
+                                </form>
+                            </div>
                         </td>
                     </tr>
                 @empty

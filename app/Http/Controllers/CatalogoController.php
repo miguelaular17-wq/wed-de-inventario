@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\V2\Producto;
 use App\Models\V2\StockActual;
 use App\Services\ExportarPreciosDescuentoService;
+use App\Services\ProductoEdicionService;
 use Illuminate\Support\Facades\Cache;
 use Barryvdh\DomPDF\Facade\Pdf;
 
@@ -113,6 +114,9 @@ class CatalogoController extends Controller
         }
 
         $productos = $query->paginate($perPage)->withQueryString();
+        $productos->setCollection(
+            app(ProductoEdicionService::class)->aplicarAColeccion($productos->getCollection(), 'descripcion')
+        );
 
         // Desglose por sede de las unidades (al pasar el mouse); solo para los productos de esta página.
         // Catálogo interno (también el acceso rápido sin sesión de las tiendas); el enlace para clientes no lo muestra.
@@ -163,13 +167,17 @@ class CatalogoController extends Controller
             }
 
             $query = clone $this->buildQuery($request, $modoCliente);
+            $ediciones = app(ProductoEdicionService::class);
 
             $scope = $request->input('pdf_scope', 'page');
             if ($scope === 'page') {
                 $perPage = $request->input('per_page', 24);
                 $productos = $query->paginate($perPage);
+                $productos->setCollection(
+                    $ediciones->aplicarAColeccion($productos->getCollection(), 'descripcion')
+                );
             } else {
-                $productos = $query->get();
+                $productos = $ediciones->aplicarAColeccion($query->get(), 'descripcion');
             }
 
             $pdf = Pdf::setOptions(['isRemoteEnabled' => true])

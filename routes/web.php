@@ -275,6 +275,9 @@ Route::middleware(['auth', 'permission:sincronizadores'])->prefix('admin')->name
 Route::middleware(['auth', 'permission:productos.ocultar'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/productos', [\App\Http\Controllers\Admin\ProductController::class, 'index'])->name('productos.index');
     Route::post('/productos/export-json', [\App\Http\Controllers\Admin\ProductController::class, 'exportJson'])->name('productos.export_json');
+    Route::get('/productos/{id}', [\App\Http\Controllers\Admin\ProductController::class, 'show'])->whereNumber('id')->name('productos.show');
+    Route::post('/productos/{id}', [\App\Http\Controllers\Admin\ProductController::class, 'update'])->whereNumber('id')->name('productos.update');
+    Route::post('/productos/{id}/restaurar-sync', [\App\Http\Controllers\Admin\ProductController::class, 'restaurarSync'])->whereNumber('id')->name('productos.restaurar_sync');
     Route::post('/productos/{id}/toggle-oculto', [\App\Http\Controllers\Admin\ProductController::class, 'toggleOculto'])->whereNumber('id')->name('productos.toggle_oculto');
 });
 

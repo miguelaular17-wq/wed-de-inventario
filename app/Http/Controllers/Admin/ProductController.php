@@ -5,12 +5,20 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\V2\Producto;
+use App\Services\ProductoEdicionService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
 
 class ProductController extends Controller
 {
+    public function __construct(
+        private ProductoEdicionService $ediciones,
+    ) {
+    }
+
     public function index(Request $request)
     {
         $sedes = config('inventario.sedes_stock');
@@ -67,10 +75,10 @@ class ProductController extends Controller
 
             $items = $query->forPage($page, $perPage)->get();
             
-            // Convert to Collection
-            $items = collect($items)->map(function ($item) {
-                return (array) $item;
-            });
+            // Convert to Collection + aplicar ediciones manuales (prioridad sobre sync)
+            $items = $this->ediciones->aplicarAColeccion(
+                collect($items)->map(fn ($item) => (array) $item)
+            );
         } else {
             // SQLite fallback
             $query = Product::query()->with(['sedeMetrics' => function($q) use ($sede) {
@@ -144,6 +152,86 @@ class ProductController extends Controller
         ]);
     }
 
+    public function show(Request $request, int $id): View|RedirectResponse
+    {
+        if (config('database.default') !== 'pgsql') {
+            return redirect()->route('admin.productos.index')->with('error', 'Producto no disponible.');
+        }
+
+        $producto = Producto::query()->find($id);
+        if (! $producto) {
+            return redirect()->route('admin.productos.index')->with('error', 'Producto no encontrado.');
+        }
+
+        $sede = strtoupper((string) $request->query('sede', config('inventario.sedes_stock')[0] ?? ''));
+        $efectivo = $this->ediciones->efectivo($producto);
+        $stocks = DB::connection('pgsql')->table('inventario_v2.stock_actual')
+            ->where('producto_id', $producto->id)
+            ->orderBy('sede')
+            ->get(['sede', 'existencia']);
+
+        return view('admin.productos.show', [
+            'producto' => $producto,
+            'efectivo' => $efectivo,
+            'sede' => $sede,
+            'sedes' => config('inventario.sedes_stock'),
+            'stocks' => $stocks,
+            'editando' => $request->boolean('editar'),
+        ]);
+    }
+
+    public function update(Request $request, int $id): RedirectResponse
+    {
+        if (config('database.default') !== 'pgsql') {
+            return redirect()->route('admin.productos.index')->with('error', 'Producto no disponible.');
+        }
+
+        $producto = Producto::query()->find($id);
+        if (! $producto) {
+            return redirect()->route('admin.productos.index')->with('error', 'Producto no encontrado.');
+        }
+
+        $data = $request->validate([
+            'nombre' => ['nullable', 'string', 'max:2000'],
+            'categoria' => ['nullable', 'string', 'max:256'],
+            'subcategoria' => ['nullable', 'string', 'max:256'],
+            'proveedor' => ['nullable', 'string', 'max:256'],
+            'precio_unidad' => ['nullable', 'numeric', 'min:0'],
+            'precio_mayor' => ['nullable', 'numeric', 'min:0'],
+            'url_imagen' => ['nullable', 'string', 'max:500'],
+            'descripcion_ampliada' => ['nullable', 'string', 'max:5000'],
+            'sede' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        $this->ediciones->guardar($producto, $data, auth()->id());
+
+        Cache::forget('catalogo_categorias');
+        Cache::forget('catalogo_subcategorias');
+        Cache::forget('catalogo_cat_subcat_map');
+
+        return redirect()
+            ->route('admin.productos.show', ['id' => $producto->id, 'sede' => $data['sede'] ?? null])
+            ->with('success', 'Edición guardada. El catálogo usa estos datos; el sincronizador no los pisa.');
+    }
+
+    public function restaurarSync(Request $request, int $id): RedirectResponse
+    {
+        if (config('database.default') !== 'pgsql') {
+            return redirect()->route('admin.productos.index')->with('error', 'Producto no disponible.');
+        }
+
+        $producto = Producto::query()->find($id);
+        if (! $producto) {
+            return redirect()->route('admin.productos.index')->with('error', 'Producto no encontrado.');
+        }
+
+        $this->ediciones->restaurar($producto);
+
+        return redirect()
+            ->route('admin.productos.show', ['id' => $producto->id, 'sede' => $request->input('sede')])
+            ->with('success', 'Se restauró la información del sincronizador (se borró la edición manual).');
+    }
+
     /**
      * Oculta o restaura un producto en todas las sedes, catálogos y vistas.
      */
@@ -209,23 +297,22 @@ class ProductController extends Controller
                 $query->whereRaw('COALESCE(sg.existencia_global, 0) > 0');
             }
 
-            $productos = $query->orderBy('p.nombre')
-                ->select([
-                    'p.id',
-                    'p.codigo',
-                    'p.nombre',
-                    'p.categoria',
-                    'p.subcategoria',
-                    'p.proveedor',
-                    'p.precio_unidad',
-                    'p.precio_mayor',
-                    'p.url_imagen',
-                    DB::connection('pgsql')->raw('COALESCE(sg.existencia_global, 0) as existencia_global'),
-                ])
-                ->get()
-                ->map(function ($p) {
-                    return $p;
-                });
+            $productos = $this->ediciones->aplicarAColeccion(
+                $query->orderBy('p.nombre')
+                    ->select([
+                        'p.id',
+                        'p.codigo',
+                        'p.nombre',
+                        'p.categoria',
+                        'p.subcategoria',
+                        'p.proveedor',
+                        'p.precio_unidad',
+                        'p.precio_mayor',
+                        'p.url_imagen',
+                        DB::connection('pgsql')->raw('COALESCE(sg.existencia_global, 0) as existencia_global'),
+                    ])
+                    ->get()
+            );
         } else {
             // SQLite fallback
             $query = Product::with('sedeMetrics');
