@@ -16,6 +16,20 @@ class MayorCliente extends Model
         return $this->hasMany(MayorFactura::class, 'cliente_id');
     }
 
+    public function archivos(): HasMany
+    {
+        return $this->hasMany(MayorClienteArchivo::class, 'cliente_id')->orderBy('slot');
+    }
+
+    public function tieneFotos(): bool
+    {
+        if (array_key_exists('archivos_count', $this->attributes)) {
+            return (int) $this->attributes['archivos_count'] > 0;
+        }
+
+        return $this->archivos()->exists();
+    }
+
     /** "J-40123456-7", "v 12.345.678" → "J401234567", "V12345678". */
     public static function normalizarDocumento(?string $documento): string
     {

@@ -40,6 +40,7 @@ class ProductoEdicionService
             'proveedor' => (string) ($base['proveedor'] ?? ''),
             'precio_unidad' => isset($base['precio_unidad']) ? (float) $base['precio_unidad'] : null,
             'precio_mayor' => isset($base['precio_mayor']) ? (float) $base['precio_mayor'] : null,
+            'lote_inicial' => isset($base['lote_inicial']) ? (int) $base['lote_inicial'] : null,
             'url_imagen' => (string) ($base['url_imagen'] ?? ''),
             'descripcion_ampliada' => '',
             'activo' => (bool) ($base['activo'] ?? true),
@@ -51,6 +52,7 @@ class ProductoEdicionService
                 'proveedor' => (string) ($base['proveedor'] ?? ''),
                 'precio_unidad' => isset($base['precio_unidad']) ? (float) $base['precio_unidad'] : null,
                 'precio_mayor' => isset($base['precio_mayor']) ? (float) $base['precio_mayor'] : null,
+                'lote_inicial' => null,
                 'url_imagen' => (string) ($base['url_imagen'] ?? ''),
             ],
             'editado' => false,
@@ -64,9 +66,11 @@ class ProductoEdicionService
                 if ($valor === null || $valor === '') {
                     continue;
                 }
-                $efectivo[$campo] = $campo === 'precio_unidad' || $campo === 'precio_mayor'
-                    ? (float) $valor
-                    : (string) $valor;
+                $efectivo[$campo] = match (true) {
+                    in_array($campo, ['precio_unidad', 'precio_mayor'], true) => (float) $valor,
+                    $campo === 'lote_inicial' => (int) $valor,
+                    default => (string) $valor,
+                };
                 $efectivo['campos_editados'][] = $campo;
             }
             $efectivo['editado'] = $efectivo['campos_editados'] !== [];
@@ -123,6 +127,7 @@ class ProductoEdicionService
                 $item['proveedor'] = $efectivo['proveedor'];
                 $item['precio_unidad'] = $efectivo['precio_unidad'];
                 $item['precio_mayor'] = $efectivo['precio_mayor'];
+                $item['lote_inicial'] = $efectivo['lote_inicial'];
                 $item['url_imagen'] = $efectivo['url_imagen'];
                 $item['editado'] = $efectivo['editado'];
                 $item['campos_editados'] = $efectivo['campos_editados'];
@@ -144,6 +149,7 @@ class ProductoEdicionService
             if ($efectivo['precio_mayor'] !== null) {
                 $item->precio_mayor = $efectivo['precio_mayor'];
             }
+            $item->lote_inicial = $efectivo['lote_inicial'];
             if ($efectivo['url_imagen'] !== '') {
                 $item->url_imagen = $efectivo['url_imagen'];
             }
@@ -179,6 +185,12 @@ class ProductoEdicionService
                 $num = round((float) $valor, 2);
                 $sync = round((float) ($producto->$campo ?? 0), 2);
                 $edicion->$campo = abs($num - $sync) < 0.001 ? null : $num;
+                continue;
+            }
+
+            if ($campo === 'lote_inicial') {
+                $num = (int) $valor;
+                $edicion->$campo = $num > 0 ? $num : null;
                 continue;
             }
 

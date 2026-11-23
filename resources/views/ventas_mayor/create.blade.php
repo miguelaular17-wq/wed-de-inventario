@@ -79,8 +79,8 @@
                     <h3><span class="vm-paso">1</span> Cliente</h3>
                     <input type="hidden" name="cliente_id" id="vm-cliente-id" value="{{ old('cliente_id', $clienteInicial?->id) }}">
                     <input type="hidden" name="cliente_etiqueta" id="vm-cliente-etiqueta" value="{{ old('cliente_etiqueta', $clienteInicial ? $clienteInicial->nombre.' · '.$clienteInicial->documento : '') }}">
-                    <div id="vm-cliente-elegido" style="display:none; padding:10px 12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; justify-content:space-between; align-items:center; gap:10px;">
-                        <div>✅ <strong id="vm-cliente-texto"></strong></div>
+                    <div id="vm-cliente-elegido" style="display:none; padding:10px 12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <div>✅ <strong id="vm-cliente-texto"></strong> <span id="vm-cliente-fotos-badge" class="vm-chip" style="margin-left:6px;"></span> <a id="vm-cliente-fotos-link" href="#" style="display:none; font-size:.78rem; font-weight:700; margin-left:6px;">Ver en Clientes</a></div>
                         <button type="button" class="btn secondary" style="padding:3px 10px; font-size:.78rem;" onclick="vmQuitarCliente()">Cambiar</button>
                     </div>
                     <div id="vm-cliente-buscar" class="vm-row" style="align-items:flex-end;">
@@ -102,6 +102,11 @@
                             <div><label>Teléfono</label><input type="text" name="cliente_telefono" maxlength="60" value="{{ old('cliente_telefono') }}"></div>
                             <div><label>Correo</label><input type="email" name="cliente_email" maxlength="120" value="{{ old('cliente_email') }}"></div>
                             <div style="flex:2;"><label>Dirección</label><input type="text" name="cliente_direccion" maxlength="300" value="{{ old('cliente_direccion') }}"></div>
+                        </div>
+                        <div style="margin-top:10px;">
+                            <label>Fotos / archivos del cliente (hasta 4)</label>
+                            <input type="file" name="cliente_archivos[]" id="vm-c-archivos" accept="image/*,application/pdf" multiple style="width:100%; margin-top:4px;">
+                            <div class="muted" style="font-size:.72rem; margin-top:4px;">JPG, PNG, WEBP o PDF. Se guardan al emitir la factura.</div>
                         </div>
                         <button type="button" class="btn secondary" style="margin-top:8px; padding:3px 10px; font-size:.78rem;" onclick="vmNuevoCliente(false)">Cancelar, buscar uno existente</button>
                     </div>
@@ -208,31 +213,73 @@
     const cerrarAlClicFuera = (input, box) => document.addEventListener('click', e => { if (!box.contains(e.target) && e.target !== input) box.style.display = 'none'; });
 
     // ── Cliente ──
+    // Cliente ya registrado: solo badge + enlace a Clientes (los archivos se gestionan allá).
+    const urlClienteShow = id => @json(url('/ventas-mayor/clientes')).replace(/\/$/, '') + '/' + id;
+
+    function badgeFotos(n, clienteId = null) {
+        const badge = $('vm-cliente-fotos-badge');
+        const link = $('vm-cliente-fotos-link');
+        if (!badge) return;
+        if (n > 0) {
+            badge.style.background = '#dcfce7'; badge.style.color = '#166534';
+            badge.textContent = '📷 ' + n + '/4';
+        } else {
+            badge.style.background = '#fee2e2'; badge.style.color = '#991b1b';
+            badge.textContent = 'Sin fotos';
+        }
+        if (link) {
+            if (clienteId) {
+                link.href = urlClienteShow(clienteId);
+                link.style.display = 'inline';
+                link.textContent = n > 0 ? 'Ver archivos' : 'Subir en Clientes';
+            } else {
+                link.style.display = 'none';
+            }
+        }
+    }
     window.vmQuitarCliente = function () {
         $('vm-cliente-id').value = ''; $('vm-cliente-etiqueta').value = '';
         $('vm-cliente-elegido').style.display = 'none'; $('vm-cliente-buscar').style.display = '';
+        badgeFotos(0);
+        const link = $('vm-cliente-fotos-link');
+        if (link) link.style.display = 'none';
     };
-    function elegirCliente(id, etiqueta) {
+    function elegirCliente(id, etiqueta, archivosCount = null) {
         $('vm-cliente-id').value = id; $('vm-cliente-etiqueta').value = etiqueta;
         $('vm-cliente-texto').textContent = etiqueta;
         $('vm-cliente-elegido').style.display = 'flex'; $('vm-cliente-buscar').style.display = 'none';
         $('vm-clientes').style.display = 'none'; $('vm-cliente-q').value = '';
         vmNuevoCliente(false);
+        badgeFotos(Number(archivosCount) || 0, id);
     }
     window.vmNuevoCliente = function (on) {
         $('vm-cliente-nuevo').style.display = on ? '' : 'none';
         $('vm-c-doc').required = on; $('vm-c-nombre').required = on;
-        if (on) { vmQuitarCliente(); $('vm-clientes').style.display = 'none'; $('vm-c-doc').focus(); }
+        if (on) {
+            vmQuitarCliente();
+            $('vm-clientes').style.display = 'none';
+            $('vm-c-doc').focus();
+        }
     };
+    $('vm-c-archivos')?.addEventListener('change', function () {
+        if (this.files && this.files.length > 4) {
+            alert('Solo se permiten 4 archivos. Se tomarán los primeros 4.');
+        }
+    });
     $('vm-cliente-q').addEventListener('input', debounce(async e => {
         const q = e.target.value.trim(), box = $('vm-clientes');
         if (q.length < 2) { box.style.display = 'none'; return; }
         const r = await fetch(@json(route('ventas_mayor.clientes.buscar')) + '?q=' + encodeURIComponent(q), {headers: {Accept: 'application/json'}});
         const {clientes} = await r.json();
         box.innerHTML = clientes.length
-            ? clientes.map(c => `<button type="button" class="vm-op" data-id="${c.id}" data-et="${esc(c.nombre + ' · ' + c.documento)}"><span><strong>${esc(c.nombre)}</strong> · ${esc(c.documento)}<br><small class="muted">${esc([c.telefono, c.email].filter(Boolean).join(' · '))}</small></span><span class="vm-agregar">Elegir</span></button>`).join('')
+            ? clientes.map(c => {
+                const fotos = c.tiene_fotos
+                    ? `<span class="vm-chip" style="background:#dcfce7;color:#166534;">📷 ${c.archivos_count}/4</span>`
+                    : `<span class="vm-chip" style="background:#fee2e2;color:#991b1b;">Sin fotos</span>`;
+                return `<button type="button" class="vm-op" data-id="${c.id}" data-et="${esc(c.nombre + ' · ' + c.documento)}" data-fotos="${c.archivos_count || 0}"><span><strong>${esc(c.nombre)}</strong> · ${esc(c.documento)}<br><small class="muted">${esc([c.telefono, c.email].filter(Boolean).join(' · '))}</small></span><span style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">${fotos}<span class="vm-agregar">Elegir</span></span></button>`;
+            }).join('')
             : `<div style="padding:12px;">No está registrado. <a href="#" id="vm-registrar">Regístralo aquí</a>.</div>`;
-        box.querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', () => elegirCliente(b.dataset.id, b.dataset.et)));
+        box.querySelectorAll('[data-id]').forEach(b => b.addEventListener('click', () => elegirCliente(b.dataset.id, b.dataset.et, b.dataset.fotos)));
         box.querySelector('#vm-registrar')?.addEventListener('click', ev => { ev.preventDefault(); vmNuevoCliente(true); $('vm-c-nombre').value = /\d/.test(q) ? '' : q; if (/\d/.test(q)) $('vm-c-doc').value = q; });
         box.style.display = 'block';
     }));
@@ -398,7 +445,7 @@
         disponible_pres: parseInt(it.disponible_pres ?? it.disponible_jrz, 10) || 0, presentacion: it.presentacion || 'unidad',
         presentacion_texto: it.presentacion_texto || '', unidades_por: parseInt(it.unidades_por, 10) || 1,
     }, it.cantidad, it.precio_usd));
-    if (!document.querySelector('#vm-items tr[data-item]')) (@json($iniciales ?? [])).forEach(p => agregar(p));
+    if (!document.querySelector('#vm-items tr[data-item]')) (@json($iniciales ?? [])).forEach(p => agregar(p, p.cantidad_inicial || 1));
     pintarCondicion();
 
     $('vm-form').addEventListener('submit', function (e) {

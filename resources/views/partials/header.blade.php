@@ -420,6 +420,7 @@
             $link('Stock (JRZ y sedes)', route('ventas_mayor.stock'), request()->routeIs('ventas_mayor.stock')),
             $link('Nueva factura', route('ventas_mayor.create'), request()->routeIs('ventas_mayor.create')),
             $link('Facturas', route('ventas_mayor.facturas'), request()->routeIs('ventas_mayor.facturas', 'ventas_mayor.show')),
+            $link('Clientes', route('ventas_mayor.clientes.index'), request()->routeIs('ventas_mayor.clientes.*')),
             $link('Hoja de ruta', route('ventas_mayor.visitas.index'), request()->routeIs('ventas_mayor.visitas.*')),
         ];
         if ($u->isGerente() || $u->isAdmin()) {

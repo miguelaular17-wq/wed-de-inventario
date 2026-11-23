@@ -66,11 +66,26 @@ class VentasMayorController extends Controller
 
     public function create(Request $request): View
     {
-        // Desde el stock: «Facturar» abre la factura con ese producto ya cargado.
+        // Desde el catálogo/stock: «Facturar» abre la factura con esos productos (y cantidades) ya cargados.
         $ids = array_values(array_filter(array_map('intval', explode(',', (string) $request->query('productos', '')))));
+        $ids = array_slice($ids, 0, 50);
+        $cantsRaw = array_map('intval', explode(',', (string) $request->query('cants', '')));
+        $cantPorId = [];
+        foreach ($ids as $i => $id) {
+            $cantPorId[$id] = max(1, (int) ($cantsRaw[$i] ?? 1));
+        }
         $iniciales = $ids === [] ? collect() : $this->servicio->conStock(
-            \Illuminate\Support\Facades\DB::table('productos')->whereIn('id', array_slice($ids, 0, 50))->get(['id', 'codigo', 'nombre', 'categoria', 'precio_unidad', 'precio_mayor'])
-        )->filter(fn ($p) => $p->disponible_presentaciones > 0)->map(fn ($p) => $this->paraFactura($p))->values();
+            \Illuminate\Support\Facades\DB::table('productos')->whereIn('id', $ids)->get(['id', 'codigo', 'nombre', 'categoria', 'precio_unidad', 'precio_mayor'])
+        )->filter(fn ($p) => $p->disponible_presentaciones > 0)
+            ->sortBy(fn ($p) => array_search((int) $p->id, $ids, true))
+            ->map(function ($p) use ($cantPorId) {
+                $fila = $this->paraFactura($p);
+                $cant = (int) ($cantPorId[(int) $p->id] ?? 1);
+                $disp = (int) ($p->disponible_presentaciones ?? 0);
+                $fila['cantidad_inicial'] = $disp > 0 ? min($cant, $disp) : max(1, $cant);
+
+                return $fila;
+            })->values();
 
         return view('ventas_mayor.create', [
             'vendedoras' => $this->servicio->vendedoras(),
@@ -132,19 +147,30 @@ class VentasMayorController extends Controller
         ];
     }
 
-    /** Catálogo para clientes al mayor: lo que hay en JRZ con la presentación y el precio que puso la regente. */
+    /** Catálogo al mayor: mismos filtros que el catálogo normal. */
     public function catalogo(Request $request): View
     {
-        $q = trim((string) $request->query('q', ''));
-        $categoria = trim((string) $request->query('categoria', ''));
-        $limite = 240;
+        $filtros = $this->filtrosCatalogo($request);
+        $opciones = $this->servicio->opcionesFiltroCatalogo();
+        $descuentoPct = $this->servicio->descuentoDivisaPct();
 
         return view('ventas_mayor.catalogo', [
-            'productos' => $this->servicio->catalogoClientes($q, $categoria, $limite),
-            'categorias' => $this->servicio->categoriasJrz(),
-            'q' => $q,
-            'categoria' => $categoria,
-            'limite' => $limite,
+            'productos' => $this->servicio->catalogoClientes($filtros),
+            'categorias' => $opciones['categorias'],
+            'subcategorias' => $opciones['subcategorias'],
+            'subcategoriasElegidas' => $filtros['subcategorias'],
+            'catSubcatMap' => $opciones['catSubcatMap'],
+            'sedes' => $opciones['sedes'],
+            'sedesExcluidas' => $filtros['excluir_sedes'],
+            'filtros' => $filtros,
+            'limite' => $filtros['limite'],
+            'rangos' => [
+                'stock' => ['titulo' => 'Stock JRZ (unidades)', 'pasos' => \App\Http\Controllers\CatalogoController::PASOS_STOCK, 'prefijo' => ''],
+                'precio' => ['titulo' => 'Precio unidad', 'pasos' => \App\Http\Controllers\CatalogoController::PASOS_PRECIO, 'prefijo' => '$'],
+            ],
+            'descuentoDivisaPct' => $descuentoPct,
+            'descuentoEtiqueta' => rtrim(rtrim(number_format($descuentoPct, 2, '.', ''), '0'), '.').'%',
+            'descuentoFactor' => max(0, 1 - ($descuentoPct / 100)),
         ]);
     }
 
@@ -152,22 +178,76 @@ class VentasMayorController extends Controller
     {
         ini_set('memory_limit', '768M');
         set_time_limit(300);
-        $q = trim((string) $request->query('q', ''));
-        $categoria = trim((string) $request->query('categoria', ''));
-        $productos = $this->servicio->catalogoClientes($q, $categoria, 300);
+        $filtros = $this->filtrosCatalogo($request, 300);
+        $productos = $this->servicio->catalogoClientes($filtros);
         $fotos = \App\Support\FotoProducto::embebidas($productos->mapWithKeys(fn ($p) => [(int) $p->id => (string) $p->codigo])->all());
         $logo = is_file(public_path('logo.png'))
             ? 'data:image/png;base64,'.base64_encode((string) file_get_contents(public_path('logo.png')))
             : null;
+        $descuentoPct = $this->servicio->descuentoDivisaPct();
 
         return Pdf::loadView('ventas_mayor.catalogo_pdf', [
             'productos' => $productos,
             'fotos' => $fotos,
             'logo' => $logo,
-            'categoria' => $categoria,
-            'q' => $q,
+            'categoria' => $filtros['categoria'],
+            'q' => $filtros['q'],
+            'descuentoDivisaPct' => $descuentoPct,
+            'descuentoEtiqueta' => rtrim(rtrim(number_format($descuentoPct, 2, '.', ''), '0'), '.').'%',
+            'descuentoFactor' => max(0, 1 - ($descuentoPct / 100)),
         ])->setPaper('letter')
             ->stream('catalogo_al_mayor_'.now()->format('Ymd').'.pdf');
+    }
+
+    /**
+     * @return array{
+     *   q: string,
+     *   categoria: string,
+     *   subcategorias: list<string>,
+     *   sede: string,
+     *   excluir_sedes: list<string>,
+     *   solo_existencia: bool,
+     *   stock_min: ?float,
+     *   stock_max: ?float,
+     *   precio_min: ?float,
+     *   precio_max: ?float,
+     *   limite: int
+     * }
+     */
+    private function filtrosCatalogo(Request $request, ?int $limiteForzado = null): array
+    {
+        $sub = $request->input('subcategoria');
+        $subLista = is_array($sub) ? $sub : [$sub];
+        $excluir = $request->input('excluir_sede', []);
+        $excluirLista = is_array($excluir) ? $excluir : [$excluir];
+        $perPage = (int) $request->input('per_page', 24);
+        if (! in_array($perPage, [24, 48, 72, 96], true)) {
+            $perPage = 24;
+        }
+        $leer = function (string $campo) use ($request): ?float {
+            $valor = $request->input($campo);
+
+            return is_numeric($valor) && (float) $valor >= 0 ? (float) $valor : null;
+        };
+
+        return [
+            'q' => trim((string) $request->query('q', $request->query('search', ''))),
+            'categoria' => trim((string) $request->query('categoria', '')),
+            'subcategorias' => array_values(array_unique(array_filter(
+                array_map(fn ($s) => trim((string) $s), $subLista),
+                fn ($s) => $s !== '' && strtolower($s) !== 'todas'
+            ))),
+            'sede' => trim((string) $request->query('sede', 'todas')),
+            'excluir_sedes' => array_values(array_unique(array_filter(
+                array_map(fn ($s) => strtoupper(trim((string) $s)), $excluirLista)
+            ))),
+            'solo_existencia' => $request->boolean('solo_existencia'),
+            'stock_min' => $leer('stock_min'),
+            'stock_max' => $leer('stock_max'),
+            'precio_min' => $leer('precio_min'),
+            'precio_max' => $leer('precio_max'),
+            'limite' => $limiteForzado ?? $perPage,
+        ];
     }
 
     /** Cómo se vende el producto al mayor: presentación, unidades por caja/paquete, precio y costo. */
@@ -185,10 +265,192 @@ class VentasMayorController extends Controller
         return back()->with('success', 'Se guardó cómo se vende al mayor.');
     }
 
+    public function clientes(Request $request): View
+    {
+        $q = trim((string) $request->query('q', ''));
+        $filtroFotos = (string) $request->query('fotos', '');
+        $like = \Illuminate\Support\Facades\DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+
+        $query = \App\Models\Mayor\MayorCliente::query()->withCount('archivos')->withCount('facturas');
+        if ($q !== '') {
+            $doc = \App\Models\Mayor\MayorCliente::normalizarDocumento($q);
+            $query->where(function ($w) use ($q, $doc, $like) {
+                $w->where('nombre', $like, '%'.$q.'%');
+                if ($doc !== '') {
+                    $w->orWhere('documento', $like, '%'.$doc.'%');
+                }
+                $w->orWhere('telefono', $like, '%'.$q.'%')
+                    ->orWhere('email', $like, '%'.$q.'%');
+            });
+        }
+        if ($filtroFotos === 'con') {
+            $query->has('archivos');
+        } elseif ($filtroFotos === 'sin') {
+            $query->doesntHave('archivos');
+        }
+
+        $clientes = $query->orderBy('nombre')->paginate(40)->withQueryString();
+
+        return view('ventas_mayor.clientes.index', [
+            'clientes' => $clientes,
+            'q' => $q,
+            'fotos' => $filtroFotos,
+            'total' => \App\Models\Mayor\MayorCliente::query()->count(),
+            'conFotos' => \App\Models\Mayor\MayorCliente::query()->has('archivos')->count(),
+        ]);
+    }
+
+    public function clienteShow(int $cliente): View
+    {
+        $c = \App\Models\Mayor\MayorCliente::query()
+            ->with(['archivos'])
+            ->withCount('facturas')
+            ->findOrFail($cliente);
+
+        $facturas = \App\Models\Mayor\MayorFactura::query()
+            ->where('cliente_id', $c->id)
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get();
+
+        return view('ventas_mayor.clientes.show', [
+            'cliente' => $c,
+            'facturas' => $facturas,
+            'maxArchivos' => \App\Models\Mayor\MayorClienteArchivo::MAX_POR_CLIENTE,
+        ]);
+    }
+
+    public function guardarCliente(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'documento' => ['required', 'string', 'max:40'],
+            'nombre' => ['required', 'string', 'max:200'],
+            'telefono' => ['nullable', 'string', 'max:60'],
+            'email' => ['nullable', 'email', 'max:120'],
+            'direccion' => ['nullable', 'string', 'max:300'],
+            'archivos' => ['nullable', 'array', 'max:4'],
+            'archivos.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:8192'],
+        ]);
+
+        $cliente = $this->servicio->resolverCliente([
+            'documento' => $data['documento'],
+            'nombre' => $data['nombre'],
+            'telefono' => $data['telefono'] ?? null,
+            'email' => $data['email'] ?? null,
+            'direccion' => $data['direccion'] ?? null,
+        ], $request->user()?->id);
+
+        // Si ya existía, actualizar datos visibles.
+        $cliente->fill([
+            'nombre' => mb_substr($data['nombre'], 0, 200),
+            'telefono' => $data['telefono'] ?? $cliente->telefono,
+            'email' => $data['email'] ?? $cliente->email,
+            'direccion' => $data['direccion'] ?? $cliente->direccion,
+        ])->save();
+
+        $archivos = array_values(array_filter($request->file('archivos', []) ?: []));
+        if ($archivos !== []) {
+            $this->servicio->guardarArchivosCliente($cliente, $archivos, $request->user()?->id);
+        }
+
+        return redirect()->route('ventas_mayor.clientes.show', $cliente)
+            ->with('success', 'Cliente guardado.');
+    }
+
+    public function actualizarCliente(Request $request, int $cliente): RedirectResponse
+    {
+        $c = \App\Models\Mayor\MayorCliente::query()->findOrFail($cliente);
+        $data = $request->validate([
+            'nombre' => ['required', 'string', 'max:200'],
+            'telefono' => ['nullable', 'string', 'max:60'],
+            'email' => ['nullable', 'email', 'max:120'],
+            'direccion' => ['nullable', 'string', 'max:300'],
+            'archivos' => ['nullable', 'array', 'max:4'],
+            'archivos.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:8192'],
+        ]);
+
+        $c->fill([
+            'nombre' => mb_substr($data['nombre'], 0, 200),
+            'telefono' => $data['telefono'] ?? null,
+            'email' => $data['email'] ?? null,
+            'direccion' => $data['direccion'] ?? null,
+        ])->save();
+
+        $archivos = array_values(array_filter($request->file('archivos', []) ?: []));
+        if ($archivos !== []) {
+            $this->servicio->guardarArchivosCliente($c, $archivos, $request->user()?->id);
+        }
+
+        return redirect()->route('ventas_mayor.clientes.show', $c)
+            ->with('success', 'Cliente actualizado.');
+    }
+
     public function buscarClientes(Request $request): JsonResponse
     {
         return response()->json(['clientes' => $this->servicio->buscarClientes((string) $request->query('q', ''))
-            ->map(fn ($c) => $c->only(['id', 'documento', 'nombre', 'telefono', 'email', 'direccion']))->values()]);
+            ->map(fn ($c) => [
+                'id' => (int) $c->id,
+                'documento' => $c->documento,
+                'nombre' => $c->nombre,
+                'telefono' => $c->telefono,
+                'email' => $c->email,
+                'direccion' => $c->direccion,
+                'archivos_count' => (int) ($c->archivos_count ?? 0),
+                'tiene_fotos' => (int) ($c->archivos_count ?? 0) > 0,
+            ])->values()]);
+    }
+
+    public function archivosCliente(int $cliente): JsonResponse
+    {
+        $c = \App\Models\Mayor\MayorCliente::query()->findOrFail($cliente);
+
+        return response()->json([
+            'cliente_id' => (int) $c->id,
+            'archivos' => $this->servicio->archivosClienteParaApi($c),
+            'max' => \App\Models\Mayor\MayorClienteArchivo::MAX_POR_CLIENTE,
+        ]);
+    }
+
+    public function subirArchivosCliente(Request $request, int $cliente): JsonResponse|RedirectResponse
+    {
+        $c = \App\Models\Mayor\MayorCliente::query()->findOrFail($cliente);
+        $data = $request->validate([
+            'slot' => ['nullable', 'integer', 'min:1', 'max:4'],
+            'archivo' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:8192'],
+        ]);
+        $slot = isset($data['slot']) ? (int) $data['slot'] : null;
+        if ($slot) {
+            $this->servicio->guardarArchivoClienteEnSlot($c, $slot, $request->file('archivo'), $request->user()?->id);
+        } else {
+            $this->servicio->guardarArchivosCliente($c, [$request->file('archivo')], $request->user()?->id);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'archivos' => $this->servicio->archivosClienteParaApi($c->fresh()),
+                'archivos_count' => $c->archivos()->count(),
+            ]);
+        }
+
+        return redirect()->route('ventas_mayor.clientes.show', $c)->with('success', 'Archivo subido al bucket Clientes VM.');
+    }
+
+    public function borrarArchivoCliente(Request $request, int $cliente, int $archivo): JsonResponse|RedirectResponse
+    {
+        $c = \App\Models\Mayor\MayorCliente::query()->findOrFail($cliente);
+        $this->servicio->borrarArchivoCliente($c, $archivo);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'archivos' => $this->servicio->archivosClienteParaApi($c->fresh()),
+                'archivos_count' => $c->archivos()->count(),
+            ]);
+        }
+
+        return redirect()->route('ventas_mayor.clientes.show', $c)->with('success', 'Archivo eliminado.');
     }
 
     public function store(Request $request): RedirectResponse
@@ -204,6 +466,8 @@ class VentasMayorController extends Controller
             'cliente_telefono' => ['nullable', 'string', 'max:60'],
             'cliente_email' => ['nullable', 'email', 'max:120'],
             'cliente_direccion' => ['nullable', 'string', 'max:300'],
+            'cliente_archivos' => ['nullable', 'array', 'max:4'],
+            'cliente_archivos.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:8192'],
             'items' => ['required', 'array', 'min:1', 'max:200'],
             'items.*.producto_id' => ['required', 'integer'],
             'items.*.cantidad' => ['required', 'integer', 'min:1'],
@@ -227,6 +491,11 @@ class VentasMayorController extends Controller
             'email' => $data['cliente_email'] ?? null,
             'direccion' => $data['cliente_direccion'] ?? null,
         ], $user->id);
+
+        $archivosCliente = array_values(array_filter($request->file('cliente_archivos', []) ?: []));
+        if ($archivosCliente !== []) {
+            $this->servicio->guardarArchivosCliente($cliente, $archivosCliente, $user->id);
+        }
 
         $factura = $this->servicio->emitir($cliente, [
             'fecha' => $data['fecha'],
@@ -266,7 +535,7 @@ class VentasMayorController extends Controller
 
     public function show(MayorFactura $factura): View
     {
-        $factura->load(['cliente', 'items', 'pagos.usuario', 'usuario', 'vendedor.cliente']);
+        $factura->load(['cliente.archivos', 'items', 'pagos.usuario', 'usuario', 'vendedor.cliente']);
 
         return view('ventas_mayor.show', ['factura' => $factura]);
     }
@@ -291,7 +560,7 @@ class VentasMayorController extends Controller
     {
         abort_unless((int) $pago->factura_id === (int) $factura->id, 404);
         abort_unless(($pago->monto_usd ?? 0) > 0, 404, 'Este registro no tiene monto de pago.');
-        $factura->load(['cliente', 'pagos', 'usuario']);
+        $factura->load(['cliente', 'items', 'pagos', 'usuario', 'vendedor']);
         $pago->loadMissing('usuario');
         $logo = is_file(public_path('logo.png'))
             ? 'data:image/png;base64,'.base64_encode((string) file_get_contents(public_path('logo.png')))
@@ -302,11 +571,14 @@ class VentasMayorController extends Controller
             ->filter(fn ($p) => (int) $p->id <= (int) $pago->id)
             ->sum(fn ($p) => (float) ($p->monto_usd ?? 0));
         $saldoRestante = max(0, round((float) $factura->total_usd - $pagadoHasta, 2));
+        $pagadoAntes = max(0, round($pagadoHasta - (float) ($pago->monto_usd ?? 0), 2));
 
         return Pdf::loadView('ventas_mayor.pago_pdf', [
             'factura' => $factura,
             'pago' => $pago,
             'saldoRestante' => $saldoRestante,
+            'pagadoHasta' => $pagadoHasta,
+            'pagadoAntes' => $pagadoAntes,
             'logo' => $logo,
             'empresa' => config('recibos.empresas.'.VentasMayorService::SEDE_FACTURA, []),
         ])->setPaper('letter')

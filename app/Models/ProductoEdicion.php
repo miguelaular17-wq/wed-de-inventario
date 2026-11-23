@@ -14,6 +14,7 @@ class ProductoEdicion extends Model
         'proveedor',
         'precio_unidad',
         'precio_mayor',
+        'lote_inicial',
         'url_imagen',
         'descripcion_ampliada',
     ];
@@ -29,6 +30,7 @@ class ProductoEdicion extends Model
         'proveedor',
         'precio_unidad',
         'precio_mayor',
+        'lote_inicial',
         'url_imagen',
         'descripcion_ampliada',
         'editado_by',
@@ -37,6 +39,7 @@ class ProductoEdicion extends Model
     protected $casts = [
         'precio_unidad' => 'decimal:2',
         'precio_mayor' => 'decimal:2',
+        'lote_inicial' => 'integer',
     ];
 
     public function editor(): BelongsTo

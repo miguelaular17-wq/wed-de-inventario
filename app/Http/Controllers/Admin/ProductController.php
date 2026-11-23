@@ -198,6 +198,7 @@ class ProductController extends Controller
             'proveedor' => ['nullable', 'string', 'max:256'],
             'precio_unidad' => ['nullable', 'numeric', 'min:0'],
             'precio_mayor' => ['nullable', 'numeric', 'min:0'],
+            'lote_inicial' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'url_imagen' => ['nullable', 'string', 'max:500'],
             'descripcion_ampliada' => ['nullable', 'string', 'max:5000'],
             'sede' => ['nullable', 'string', 'max:32'],

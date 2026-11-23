@@ -77,6 +77,19 @@
             <div style="font-weight:800; font-size:1.05rem; margin-top:2px;">{{ $factura->cliente?->nombre }}</div>
             <div style="font-size:.85rem;">RIF / C.I. {{ $factura->cliente?->documento }}</div>
             <div class="muted" style="font-size:.8rem;">{{ collect([$factura->cliente?->telefono, $factura->cliente?->email, $factura->cliente?->direccion])->filter()->implode(' · ') }}</div>
+            @php $archivosCliente = $factura->cliente?->archivos ?? collect(); @endphp
+            <div style="margin-top:6px; font-size:.8rem;">
+                @if($archivosCliente->isNotEmpty())
+                    <span style="display:inline-block; background:#dcfce7; color:#166534; font-weight:700; padding:2px 8px; border-radius:999px;">📷 {{ $archivosCliente->count() }}/4 archivos</span>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+                        @foreach($archivosCliente as $a)
+                            <a href="{{ $a->url }}" target="_blank" rel="noopener" style="font-size:.75rem; color:#1d4ed8; font-weight:600;">{{ $a->esImagen() ? 'Foto' : 'PDF' }} {{ $a->slot }}</a>
+                        @endforeach
+                    </div>
+                @else
+                    <span style="display:inline-block; background:#fee2e2; color:#991b1b; font-weight:700; padding:2px 8px; border-radius:999px;">Sin fotos</span>
+                @endif
+            </div>
         </div>
         <div class="vf-card" style="border-left:4px solid #1e3a8a;">
             <div class="t">Total de la factura</div>

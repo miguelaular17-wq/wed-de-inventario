@@ -1,6 +1,9 @@
 @php
     $presNombre = fn ($p) => $p->presentacion === 'caja' ? 'caja' : ($p->presentacion === 'paquete' ? 'paquete' : 'unidad');
     $filas = $productos->chunk(3);
+    $descPct = (float) ($descuentoDivisaPct ?? 0);
+    $descFactor = (float) ($descuentoFactor ?? max(0, 1 - ($descPct / 100)));
+    $descEtiqueta = $descuentoEtiqueta ?? (rtrim(rtrim(number_format($descPct, 2, '.', ''), '0'), '.').'%');
 @endphp
 <!DOCTYPE html>
 <html lang="es">
@@ -22,8 +25,14 @@
     .pres { display: inline-block; background: #6d28d9; color: #fff; font-weight: bold; font-size: 8px; padding: 2px 6px; border-radius: 8px; margin-top: 4px; }
     .meta { font-size: 7.5px; color: #64748b; text-transform: uppercase; margin-top: 5px; }
     .nombre { font-weight: bold; font-size: 9.5px; margin-top: 2px; height: 30px; overflow: hidden; }
-    .precio { margin-top: 5px; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 4px; text-align: center; }
-    .precio .v { font-size: 15px; font-weight: bold; color: #6d28d9; }
+    .precio { margin-top: 5px; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 4px; }
+    .precio table { width: 100%; border-collapse: collapse; }
+    .precio td { width: 33%; text-align: center; vertical-align: top; padding: 2px; }
+    .precio .l { font-size: 6.5px; color: #64748b; text-transform: uppercase; font-weight: bold; }
+    .precio .v { font-size: 11px; font-weight: bold; color: #6d28d9; }
+    .precio .deal { color: #16a34a; }
+    .precio .lote { color: #0f172a; }
+    .precio .h { font-size: 6px; color: #94a3b8; }
     .disp { font-size: 8px; color: #166534; font-weight: bold; margin-top: 3px; text-align: center; }
     .pie { position: fixed; bottom: -20px; left: 0; right: 0; font-size: 7.5px; color: #94a3b8; text-align: center; }
 </style>
@@ -34,7 +43,7 @@
         <td style="width:62px;">@if($logo)<img src="{{ $logo }}" style="width:54px; height:54px;" alt="">@endif</td>
         <td>
             <div class="titulo">Catálogo al mayor</div>
-            <div class="muted">Palacio de los Detalles · Precios al mayor · {{ now()->format('d/m/Y') }}@if($categoria !== '') · {{ $categoria }}@endif</div>
+            <div class="muted">Palacio de los Detalles · Unidad · Desc. divisas (−{{ $descEtiqueta }}) · Lote inicial · {{ now()->format('d/m/Y') }}@if($categoria !== '') · {{ $categoria }}@endif</div>
         </td>
         <td style="text-align:right;" class="muted">{{ $productos->count() }} productos</td>
     </tr>
@@ -53,9 +62,31 @@
                     <div class="meta">{{ $p->categoria }} · {{ \App\Support\Sku::principal($p->codigo) }}</div>
                     <div class="nombre">{{ $p->nombre }}</div>
                     @if($p->presentacion !== 'unidad')<span class="pres">{{ $p->presentacion_texto }}</span>@endif
+                    @php
+                        $precioUnidad = (float) $p->precio_presentacion;
+                        $precioDivisa = round($precioUnidad * $descFactor, 2);
+                        $lote = (int) ($p->lote_inicial ?? 0);
+                    @endphp
                     <div class="precio">
-                        <div class="v">${{ number_format($p->precio_presentacion, 2) }}</div>
-                        <div>por {{ $presNombre($p) }}@if($p->unidades_por > 1) · ${{ number_format($p->precio_presentacion / $p->unidades_por, 2) }} c/u @endif</div>
+                        <table>
+                            <tr>
+                                <td>
+                                    <div class="l">Unidad</div>
+                                    <div class="v">${{ number_format($precioUnidad, 2) }}</div>
+                                    <div class="h">por {{ $presNombre($p) }}</div>
+                                </td>
+                                <td>
+                                    <div class="l">−{{ $descEtiqueta }}</div>
+                                    <div class="v deal">${{ number_format($precioDivisa, 2) }}</div>
+                                    <div class="h">desc. divisas</div>
+                                </td>
+                                <td>
+                                    <div class="l">Lote inicial</div>
+                                    <div class="v lote">{{ $lote > 0 ? $lote : '—' }}</div>
+                                    <div class="h">{{ $lote > 0 ? 'mín. compra' : 'sin mínimo' }}</div>
+                                </td>
+                            </tr>
+                        </table>
                     </div>
                     <div class="disp">Disponible: {{ \App\Models\Mayor\MayorCatalogo::cantidadTexto($p->disponible_presentaciones, $p->presentacion) }}</div>
                 </td>

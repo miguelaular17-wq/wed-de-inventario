@@ -5,10 +5,12 @@ namespace App\Services\Mayor;
 use App\Models\FinanzasResumen;
 use App\Models\Mayor\MayorCatalogo;
 use App\Models\Mayor\MayorCliente;
+use App\Models\Mayor\MayorClienteArchivo;
 use App\Models\Mayor\MayorConfig;
 use App\Models\Mayor\MayorFactura;
 use App\Models\Mayor\MayorFacturaPago;
 use App\Models\Nomina\NominaEmpleado;
+use App\Models\ProductoEdicion;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -111,14 +113,162 @@ class VentasMayorService
     }
 
     /**
-     * Catálogo para clientes al mayor: lo que hay en JRZ con su presentación y precio al mayor (sin costo).
+     * Catálogo al mayor con los mismos filtros del catálogo normal (buscar, categoría, subcategoría,
+     * sede, excluir sedes, con stock, rangos de stock/precio, mostrar).
      *
+     * @param  array{
+     *   q?: string,
+     *   categoria?: string,
+     *   subcategorias?: list<string>,
+     *   sede?: string,
+     *   excluir_sedes?: list<string>,
+     *   solo_existencia?: bool,
+     *   stock_min?: float|null,
+     *   stock_max?: float|null,
+     *   precio_min?: float|null,
+     *   precio_max?: float|null,
+     *   limite?: int
+     * }  $filtros
      * @return Collection<int, object>
      */
-    public function catalogoClientes(string $q = '', ?string $categoria = null, int $limite = 200): Collection
+    public function catalogoClientes(array|string $filtros = [], ?string $categoria = null, int $limite = 200): Collection
     {
-        return $this->productos($q, $limite, 'jrz', $categoria)
-            ->filter(fn ($p) => $p->disponible_presentaciones > 0 && $p->precio_presentacion > 0)
+        // Compatibilidad: llamadas viejas catalogoClientes($q, $categoria, $limite).
+        if (is_string($filtros)) {
+            $filtros = [
+                'q' => $filtros,
+                'categoria' => $categoria,
+                'limite' => $limite,
+                'sede' => self::SEDE_FACTURA,
+                'solo_existencia' => true,
+            ];
+        }
+
+        $q = trim((string) ($filtros['q'] ?? ''));
+        $categoria = trim((string) ($filtros['categoria'] ?? ''));
+        if ($categoria === '' || strtolower($categoria) === 'todas') {
+            $categoria = '';
+        }
+        $subcats = array_values(array_unique(array_filter(array_map(
+            fn ($s) => trim((string) $s),
+            $filtros['subcategorias'] ?? []
+        ), fn ($s) => $s !== '' && strtolower($s) !== 'todas')));
+        $sedeRaw = trim((string) ($filtros['sede'] ?? 'todas'));
+        $sede = strtolower($sedeRaw) === 'todas' || $sedeRaw === ''
+            ? 'todas'
+            : strtoupper($sedeRaw);
+        if ($sede !== 'todas' && $this->sedeOcultaEnCatalogo($sede)) {
+            $sede = 'todas';
+        }
+        $excluidas = array_values(array_unique(array_filter(array_map(
+            fn ($s) => strtoupper(trim((string) $s)),
+            $filtros['excluir_sedes'] ?? []
+        ))));
+        $soloExistencia = (bool) ($filtros['solo_existencia'] ?? false);
+        $stockMin = $this->numeroFiltro($filtros['stock_min'] ?? null);
+        $stockMax = $this->numeroFiltro($filtros['stock_max'] ?? null);
+        $precioMin = $this->numeroFiltro($filtros['precio_min'] ?? null);
+        $precioMax = $this->numeroFiltro($filtros['precio_max'] ?? null);
+        if ($stockMin !== null && $stockMin <= 0) {
+            $stockMin = null;
+        }
+        if ($stockMin !== null && $stockMax !== null && $stockMax < $stockMin) {
+            [$stockMin, $stockMax] = [$stockMax, $stockMin];
+        }
+        if ($precioMin !== null && $precioMin <= 0) {
+            $precioMin = null;
+        }
+        if ($precioMin !== null && $precioMax !== null && $precioMax < $precioMin) {
+            [$precioMin, $precioMax] = [$precioMax, $precioMin];
+        }
+        $limite = max(1, min(500, (int) ($filtros['limite'] ?? 24)));
+
+        $like = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+        $query = DB::table('productos')->where('activo', true)
+            ->where(fn ($w) => $w->where('oculto', false)->orWhereNull('oculto'))
+            ->when($categoria !== '', fn ($w) => $w->where('categoria', $categoria))
+            ->when($subcats !== [], fn ($w) => $w->whereIn('subcategoria', $subcats));
+
+        if ($q !== '') {
+            foreach (preg_split('/\s+/', $q) ?: [] as $palabra) {
+                $query->where(fn ($w) => $w->where('nombre', $like, '%'.$palabra.'%')->orWhere('codigo', $like, '%'.$palabra.'%'));
+            }
+        }
+
+        if ($precioMin !== null) {
+            $query->where('precio_mayor', '>=', $precioMin);
+        }
+        if ($precioMax !== null) {
+            $query->where('precio_mayor', '<=', $precioMax);
+        }
+
+        // La tarjeta muestra el stock de JRZ (de donde se factura). Con sede Global
+        // los filtros de stock/existencia usan JRZ para que coincidan con lo que se ve.
+        $sedeStock = $sede === 'todas' ? self::SEDE_FACTURA : $sede;
+
+        $aplicarSedeStock = function ($q) use ($sedeStock): void {
+            $q->whereRaw('UPPER(TRIM(sede)) = ?', [$sedeStock]);
+        };
+
+        if ($soloExistencia) {
+            $query->whereExists(function ($e) use ($aplicarSedeStock) {
+                $e->selectRaw('1')->from('stock_actual')
+                    ->whereColumn('stock_actual.producto_id', 'productos.id')
+                    ->where('existencia', '>', 0);
+                $aplicarSedeStock($e);
+            });
+        }
+
+        if ($stockMin !== null || $stockMax !== null) {
+            $sumaSql = '(SELECT COALESCE(SUM(s.existencia), 0) FROM stock_actual s'
+                .' WHERE s.producto_id = productos.id AND UPPER(TRIM(s.sede)) = ?)';
+            if ($stockMin !== null) {
+                $query->whereRaw("{$sumaSql} >= ?", [$sedeStock, $stockMin]);
+            }
+            if ($stockMax !== null) {
+                $query->whereRaw("{$sumaSql} <= ?", [$sedeStock, $stockMax]);
+            }
+        }
+
+        // Pedir de más: luego se resta el apartado de JRZ y puede bajar del mínimo.
+        $limiteSql = ($stockMin !== null || $stockMax !== null || $soloExistencia)
+            ? min(500, max($limite * 3, $limite + 40))
+            : $limite;
+
+        $productos = $query
+            ->orderByRaw('(SELECT COALESCE(SUM(s.existencia), 0) FROM stock_actual s WHERE s.producto_id = productos.id AND UPPER(TRIM(s.sede)) = ?) DESC', [self::SEDE_FACTURA])
+            ->orderBy('nombre')
+            ->limit($limiteSql)
+            ->get($this->columnasFicha());
+
+        return $this->conStock($productos)
+            ->filter(function ($p) use ($precioMin, $precioMax, $stockMin, $stockMax, $soloExistencia, $sedeStock) {
+                if ($p->precio_presentacion <= 0) {
+                    return false;
+                }
+                if ($precioMin !== null && $p->precio_presentacion < $precioMin) {
+                    return false;
+                }
+                if ($precioMax !== null && $p->precio_presentacion > $precioMax) {
+                    return false;
+                }
+                // Mismo número que el badge de la tarjeta (JRZ disponible, ya sin apartado).
+                $und = $sedeStock === self::SEDE_FACTURA
+                    ? (int) $p->disponible_jrz
+                    : (int) ($p->stocks[$sedeStock] ?? 0);
+                if ($soloExistencia && $und <= 0) {
+                    return false;
+                }
+                if ($stockMin !== null && $und < $stockMin) {
+                    return false;
+                }
+                if ($stockMax !== null && $und > $stockMax) {
+                    return false;
+                }
+
+                return true;
+            })
+            ->take($limite)
             ->values();
     }
 
@@ -129,6 +279,74 @@ class VentasMayorService
             ->where('p.activo', true)->whereRaw('UPPER(TRIM(s.sede)) = ?', [self::SEDE_FACTURA])->where('s.existencia', '>', 0)
             ->whereNotNull('p.categoria')->where('p.categoria', '!=', '')
             ->distinct()->orderBy('p.categoria')->pluck('p.categoria')->all();
+    }
+
+    /**
+     * Opciones de filtro del catálogo al mayor (mismas que el catálogo normal).
+     *
+     * @return array{categorias: list<string>, subcategorias: list<string>, catSubcatMap: array<string, list<string>>, sedes: list<string>}
+     */
+    public function opcionesFiltroCatalogo(): array
+    {
+        $ocultas = array_map('strtoupper', config('inventario.catalogo_sedes_ocultas', ['NUNES', 'MOVISTAR']));
+
+        $categorias = Cache::remember('mayor_catalogo_categorias', 3600, function () {
+            return DB::table('productos')->where('activo', true)
+                ->where(fn ($w) => $w->where('oculto', false)->orWhereNull('oculto'))
+                ->whereNotNull('categoria')->where('categoria', '!=', '')
+                ->distinct()->orderBy('categoria')->pluck('categoria')->all();
+        });
+
+        $subcategorias = Cache::remember('mayor_catalogo_subcategorias', 3600, function () {
+            return DB::table('productos')->where('activo', true)
+                ->where(fn ($w) => $w->where('oculto', false)->orWhereNull('oculto'))
+                ->whereNotNull('subcategoria')->where('subcategoria', '!=', '')
+                ->distinct()->orderBy('subcategoria')->pluck('subcategoria')->all();
+        });
+
+        $catSubcatMap = Cache::remember('mayor_catalogo_cat_subcat_map', 3600, function () {
+            $filas = DB::table('productos')->where('activo', true)
+                ->where(fn ($w) => $w->where('oculto', false)->orWhereNull('oculto'))
+                ->whereNotNull('categoria')->where('categoria', '!=', '')
+                ->whereNotNull('subcategoria')->where('subcategoria', '!=', '')
+                ->select('categoria', 'subcategoria')->distinct()->get();
+            $map = [];
+            foreach ($filas as $row) {
+                $map[$row->categoria][] = $row->subcategoria;
+            }
+            foreach ($map as &$subs) {
+                $subs = array_values(array_unique($subs));
+                sort($subs);
+            }
+
+            return $map;
+        });
+
+        $sedes = Cache::remember('mayor_catalogo_sedes', 3600, function () use ($ocultas) {
+            return DB::table('stock_actual')->select('sede')->distinct()->pluck('sede')
+                ->map(fn ($s) => (string) $s)
+                ->reject(fn ($s) => in_array(strtoupper(trim($s)), $ocultas, true))
+                ->sort()->values()->all();
+        });
+
+        return [
+            'categorias' => $categorias,
+            'subcategorias' => $subcategorias,
+            'catSubcatMap' => $catSubcatMap,
+            'sedes' => $sedes,
+        ];
+    }
+
+    private function sedeOcultaEnCatalogo(string $sede): bool
+    {
+        $ocultas = array_map('strtoupper', config('inventario.catalogo_sedes_ocultas', ['NUNES', 'MOVISTAR']));
+
+        return in_array(strtoupper(trim($sede)), $ocultas, true);
+    }
+
+    private function numeroFiltro(mixed $valor): ?float
+    {
+        return is_numeric($valor) && (float) $valor >= 0 ? (float) $valor : null;
     }
 
     /** Columnas de la ficha del producto que existan en esta base. */
@@ -171,8 +389,11 @@ class VentasMayorService
         $stock = $this->stockPorSede($ids);
         $apartado = $this->apartadoJrz($ids);
         $catalogo = $this->catalogo($ids);
+        $lotes = Schema::hasTable('producto_ediciones') && Schema::hasColumn('producto_ediciones', 'lote_inicial')
+            ? ProductoEdicion::query()->whereIn('producto_id', $ids)->whereNotNull('lote_inicial')->pluck('lote_inicial', 'producto_id')
+            : collect();
 
-        return $productos->map(function ($p) use ($stock, $apartado, $catalogo) {
+        return $productos->map(function ($p) use ($stock, $apartado, $catalogo, $lotes) {
             $id = (int) $p->id;
             $p->stocks = [];
             foreach ($this->sedes() as $sede) {
@@ -195,6 +416,8 @@ class VentasMayorService
             $p->costo_editado = $c['costo_editado'];
             $p->ganancia_pct = $p->costo_presentacion > 0 ? round(($p->precio_presentacion - $p->costo_presentacion) / $p->costo_presentacion * 100, 1) : null;
             $p->disponible_presentaciones = intdiv($p->disponible_jrz, max(1, $c['unidades']));
+            $lote = $lotes->get($id);
+            $p->lote_inicial = $lote !== null && (int) $lote > 0 ? (int) $lote : null;
 
             return $p;
         })->values();
@@ -346,6 +569,7 @@ class VentasMayorService
         $doc = MayorCliente::normalizarDocumento($q);
 
         return MayorCliente::query()
+            ->withCount('archivos')
             ->where(function ($w) use ($q, $doc, $like) {
                 $w->where('nombre', $like, '%'.$q.'%');
                 if ($doc !== '') {
@@ -353,6 +577,93 @@ class VentasMayorService
                 }
             })
             ->orderBy('nombre')->limit($limite)->get();
+    }
+
+    /**
+     * Guarda hasta 4 archivos del cliente (fotos / documentos) en los slots libres.
+     *
+     * @param  list<UploadedFile|null>  $archivos
+     * @return list<MayorClienteArchivo>
+     */
+    public function guardarArchivosCliente(MayorCliente $cliente, array $archivos, ?int $userId = null): array
+    {
+        $guardados = [];
+        $ocupados = $cliente->archivos()->pluck('slot')->map(fn ($s) => (int) $s)->all();
+        foreach ($archivos as $archivo) {
+            if (! $archivo instanceof UploadedFile) {
+                continue;
+            }
+            $libre = collect(range(1, MayorClienteArchivo::MAX_POR_CLIENTE))
+                ->first(fn ($s) => ! in_array((int) $s, $ocupados, true));
+            if ($libre === null) {
+                throw ValidationException::withMessages(['archivos' => 'Este cliente ya tiene '.MayorClienteArchivo::MAX_POR_CLIENTE.' archivos. Borra uno para subir otro.']);
+            }
+            $guardados[] = $this->guardarArchivoClienteEnSlot($cliente, (int) $libre, $archivo, $userId);
+            $ocupados[] = (int) $libre;
+        }
+
+        return $guardados;
+    }
+
+    public function guardarArchivoClienteEnSlot(MayorCliente $cliente, int $slot, UploadedFile $archivo, ?int $userId = null): MayorClienteArchivo
+    {
+        if ($slot < 1 || $slot > MayorClienteArchivo::MAX_POR_CLIENTE) {
+            throw ValidationException::withMessages(['slot' => 'Solo se permiten '.MayorClienteArchivo::MAX_POR_CLIENTE.' archivos por cliente.']);
+        }
+
+        $storage = app(\App\Services\ClientesVmStorage::class);
+        $prefijo = 'c'.$cliente->id.'_'.MayorCliente::normalizarDocumento($cliente->documento).'_s'.$slot;
+        $url = $storage->subir($archivo, $prefijo);
+
+        $existente = MayorClienteArchivo::query()
+            ->where('cliente_id', $cliente->id)
+            ->where('slot', $slot)
+            ->first();
+
+        if ($existente) {
+            if ($existente->url && $existente->url !== $url) {
+                $storage->borrarPorUrl($existente->url);
+            }
+            $existente->fill([
+                'url' => $url,
+                'nombre_archivo' => mb_substr($archivo->getClientOriginalName(), 0, 200),
+                'mime' => mb_substr((string) $archivo->getClientMimeType(), 0, 120),
+                'user_id' => $userId,
+            ])->save();
+
+            return $existente;
+        }
+
+        return MayorClienteArchivo::query()->create([
+            'cliente_id' => $cliente->id,
+            'slot' => $slot,
+            'url' => $url,
+            'nombre_archivo' => mb_substr($archivo->getClientOriginalName(), 0, 200),
+            'mime' => mb_substr((string) $archivo->getClientMimeType(), 0, 120),
+            'user_id' => $userId,
+        ]);
+    }
+
+    public function borrarArchivoCliente(MayorCliente $cliente, int $archivoId): void
+    {
+        $archivo = MayorClienteArchivo::query()
+            ->where('cliente_id', $cliente->id)
+            ->where('id', $archivoId)
+            ->firstOrFail();
+        app(\App\Services\ClientesVmStorage::class)->borrarPorUrl($archivo->url);
+        $archivo->delete();
+    }
+
+    /** @return list<array{id:int,slot:int,url:string,nombre:string,es_imagen:bool}> */
+    public function archivosClienteParaApi(MayorCliente $cliente): array
+    {
+        return $cliente->archivos()->get()->map(fn (MayorClienteArchivo $a) => [
+            'id' => (int) $a->id,
+            'slot' => (int) $a->slot,
+            'url' => (string) $a->url,
+            'nombre' => (string) $a->nombre_archivo,
+            'es_imagen' => $a->esImagen(),
+        ])->values()->all();
     }
 
     /**

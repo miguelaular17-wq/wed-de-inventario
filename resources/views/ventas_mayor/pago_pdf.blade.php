@@ -4,22 +4,31 @@
 <meta charset="utf-8">
 <title>Factura de pago {{ $pago->id }} · {{ $factura->numeroFormateado() }}</title>
 <style>
-    @page { margin: 18px 20px; }
-    body { font-family: DejaVu Sans, sans-serif; font-size: 11px; color: #1e293b; }
-    .cab { width: 100%; border-bottom: 2px solid #1e3a8a; padding-bottom: 8px; margin-bottom: 12px; }
-    .cab td { border: none; vertical-align: middle; padding: 0; }
-    .cab img { height: 48px; }
-    h1 { margin: 0; font-size: 16px; color: #1e3a8a; text-transform: uppercase; }
-    .sub { color: #64748b; margin-top: 3px; font-size: 10px; }
-    .box { border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; }
-    .box h2 { margin: 0 0 8px; font-size: 12px; color: #1e3a8a; text-transform: uppercase; }
-    table.datos { width: 100%; border-collapse: collapse; }
-    table.datos td { padding: 3px 0; vertical-align: top; }
-    table.datos td.l { width: 140px; color: #64748b; }
-    .num { text-align: right; white-space: nowrap; font-weight: bold; }
-    .grande { font-size: 18px; color: #166534; }
-    .saldo { font-size: 14px; color: #b45309; }
-    .pie { margin-top: 14px; font-size: 9px; color: #94a3b8; border-top: 1px dashed #cbd5e1; padding-top: 6px; }
+    @page { margin: 18px 22px 28px; }
+    body { font-family: DejaVu Sans, sans-serif; font-size: 10.5px; color: #0f172a; }
+    .muted { color: #64748b; }
+    .cab { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+    .cab td { vertical-align: middle; padding: 0; }
+    .cab img { height: 52px; }
+    .empresa { font-size: 15px; font-weight: bold; color: #1e3a8a; }
+    .doc { border: 2px solid #1e3a8a; border-radius: 8px; padding: 7px 10px; text-align: right; }
+    .doc .t { font-size: 9px; font-weight: bold; letter-spacing: 1px; color: #1e3a8a; text-transform: uppercase; }
+    .doc .n { font-size: 16px; font-weight: bold; }
+    .franja { height: 4px; background: #1e3a8a; margin: 8px 0 10px; }
+    .caja { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; }
+    .caja .t { font-size: 8.5px; font-weight: bold; color: #64748b; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 3px; }
+    table.items { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    table.items th { background: #1e3a8a; color: #fff; padding: 5px 6px; font-size: 8.5px; text-align: left; text-transform: uppercase; }
+    table.items td { padding: 5px 6px; border-bottom: 1px solid #e2e8f0; font-size: 9.5px; }
+    table.items tr:nth-child(even) td { background: #f8fafc; }
+    .num { text-align: right; white-space: nowrap; }
+    .resumen { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .resumen td { padding: 4px 8px; border-bottom: 1px solid #f1f5f9; }
+    .resumen td.l { color: #64748b; width: 55%; }
+    .resumen .abonado td { font-size: 13px; font-weight: bold; color: #166534; background: #f0fdf4; }
+    .resumen .saldo td { font-size: 12px; font-weight: bold; color: #b45309; background: #fffbeb; }
+    .resumen .total td { font-weight: bold; background: #eff6ff; color: #1e3a8a; }
+    .pie { margin-top: 12px; font-size: 8.5px; color: #94a3b8; border-top: 1px dashed #cbd5e1; padding-top: 6px; text-align: center; }
 </style>
 </head>
 <body>
@@ -27,55 +36,116 @@
     $usd = fn ($n) => '$'.number_format((float) $n, 2, ',', '.');
     $abonado = (float) ($pago->monto_usd ?? 0);
     $saldo = (float) $saldoRestante;
+    $pagadoAntes = (float) ($pagadoAntes ?? max(0, $pagadoHasta - $abonado));
+    $items = $factura->items ?? collect();
 @endphp
+
 <table class="cab">
     <tr>
         <td style="width:70px;">@if($logo)<img src="{{ $logo }}" alt="Logo">@endif</td>
-        <td>
-            <h1>Factura de pago</h1>
-            <div class="sub">Abono a factura {{ $factura->numeroFormateado() }} · {{ $pago->fecha?->format('d/m/Y') }}</div>
+        <td style="padding-left:8px;">
+            <div class="empresa">{{ $empresa['razon_social'] ?? 'Palacio de los Detalles' }}</div>
+            @if(! empty($empresa['rif']))<div><strong>RIF:</strong> {{ $empresa['rif'] }}</div>@endif
+            <div class="muted">Ventas al mayor · Comprobante de pago / abono</div>
         </td>
-        <td style="width:160px; text-align:right; color:#64748b;">
-            N.º pago <strong style="color:#1e293b;">{{ $pago->id }}</strong><br>
-            {{ now()->format('d/m/Y H:i') }}
+        <td style="width:210px;">
+            <div class="doc">
+                <div class="t">Factura de pago</div>
+                <div class="n">N.º {{ $pago->id }}</div>
+                <div>Abono a <strong>{{ $factura->numeroFormateado() }}</strong></div>
+                <div>{{ $pago->fecha?->format('d/m/Y') }} · {{ now()->format('H:i') }}</div>
+            </div>
+        </td>
+    </tr>
+</table>
+<div class="franja"></div>
+
+<table style="width:100%; border-collapse:separate; border-spacing:0; margin-bottom:8px;">
+    <tr>
+        <td style="width:55%; padding-right:8px; vertical-align:top;">
+            <div class="caja">
+                <div class="t">Cliente</div>
+                <div style="font-size:12px; font-weight:bold;">{{ $factura->cliente?->nombre }}</div>
+                <div>RIF / C.I.: {{ $factura->cliente?->documento }}</div>
+                @if($factura->cliente?->telefono)<div>Tel.: {{ $factura->cliente->telefono }}</div>@endif
+                @if($factura->cliente?->direccion)<div class="muted">{{ $factura->cliente->direccion }}</div>@endif
+            </div>
+        </td>
+        <td style="width:45%; vertical-align:top;">
+            <div class="caja">
+                <div class="t">Datos del pago</div>
+                <div><strong>Método:</strong> {{ $pago->forma_pago ?: '—' }}</div>
+                @if($pago->referencia)<div><strong>Referencia:</strong> {{ $pago->referencia }}</div>@endif
+                <div><strong>Registró:</strong> {{ $pago->usuario?->name ?? '—' }}</div>
+                <div><strong>Vendedora:</strong> {{ $factura->vendedor_nombre ?: '—' }}</div>
+            </div>
         </td>
     </tr>
 </table>
 
-<div class="box">
-    <h2>Cliente</h2>
-    <table class="datos">
-        <tr><td class="l">Nombre</td><td><strong>{{ $factura->cliente?->nombre }}</strong></td></tr>
-        <tr><td class="l">RIF / C.I.</td><td>{{ $factura->cliente?->documento }}</td></tr>
-        @if($factura->cliente?->telefono)
-            <tr><td class="l">Teléfono</td><td>{{ $factura->cliente->telefono }}</td></tr>
-        @endif
-    </table>
+<div style="font-size:10px; font-weight:bold; color:#1e3a8a; text-transform:uppercase; margin-top:4px;">
+    Productos de la factura {{ $factura->numeroFormateado() }}
 </div>
+<table class="items">
+    <thead>
+        <tr>
+            <th style="width:4%;">#</th>
+            <th style="width:16%;">Código</th>
+            <th>Producto</th>
+            <th class="num" style="width:14%;">Cantidad</th>
+            <th class="num" style="width:12%;">Precio $</th>
+            <th class="num" style="width:13%;">Total $</th>
+        </tr>
+    </thead>
+    <tbody>
+        @forelse($items as $n => $i)
+            <tr>
+                <td class="muted">{{ $n + 1 }}</td>
+                <td>{{ $i->codigo }}</td>
+                <td>{{ $i->descripcion }}</td>
+                <td class="num">{{ $i->cantidadTexto() }}</td>
+                <td class="num">{{ number_format((float) $i->precio_usd, 2, ',', '.') }}</td>
+                <td class="num"><strong>{{ number_format((float) $i->total_usd, 2, ',', '.') }}</strong></td>
+            </tr>
+        @empty
+            <tr><td colspan="6" class="muted" style="text-align:center; padding:12px;">Sin productos cargados en la factura.</td></tr>
+        @endforelse
+    </tbody>
+</table>
 
-<div class="box">
-    <h2>Detalle del abono</h2>
-    <table class="datos">
-        <tr><td class="l">Factura afectada</td><td class="num">{{ $factura->numeroFormateado() }}</td></tr>
-        <tr><td class="l">Total factura</td><td class="num">{{ $usd($factura->total_usd) }}</td></tr>
-        <tr><td class="l">Método de pago</td><td class="num">{{ $pago->forma_pago ?: '—' }}</td></tr>
-        @if($pago->referencia)
-            <tr><td class="l">Referencia</td><td class="num">{{ $pago->referencia }}</td></tr>
-        @endif
-        <tr><td class="l">Monto abonado</td><td class="num grande">{{ $usd($abonado) }}</td></tr>
-        <tr><td class="l">Saldo por cobrar</td><td class="num saldo">{{ $usd($saldo) }}</td></tr>
-        @if($factura->tasa_bcv > 0)
-            <tr><td class="l">Equiv. Bs (tasa {{ number_format($factura->tasa_bcv, 4, ',', '.') }})</td><td class="num">Bs {{ number_format($abonado * $factura->tasa_bcv, 2, ',', '.') }}</td></tr>
-        @endif
-        <tr><td class="l">Registró</td><td>{{ $pago->usuario?->name ?? '—' }}</td></tr>
-    </table>
-</div>
+<table class="resumen">
+    <tr class="total">
+        <td class="l">Total factura {{ $factura->numeroFormateado() }}</td>
+        <td class="num">{{ $usd($factura->total_usd) }}</td>
+    </tr>
+    @if($pagadoAntes > 0.009)
+        <tr>
+            <td class="l">Abonos anteriores</td>
+            <td class="num">− {{ $usd($pagadoAntes) }}</td>
+        </tr>
+    @endif
+    <tr class="abonado">
+        <td class="l">Monto abonado en este pago</td>
+        <td class="num">{{ $usd($abonado) }}</td>
+    </tr>
+    <tr class="saldo">
+        <td class="l">Saldo por cobrar</td>
+        <td class="num">{{ $usd($saldo) }}</td>
+    </tr>
+    @if($factura->tasa_bcv > 0)
+        <tr>
+            <td class="l">Equiv. Bs (tasa {{ number_format($factura->tasa_bcv, 4, ',', '.') }})</td>
+            <td class="num">Bs {{ number_format($abonado * $factura->tasa_bcv, 2, ',', '.') }}</td>
+        </tr>
+    @endif
+</table>
 
 <p class="pie">
     Documento de pago / abono de Ventas al mayor.
     @if($empresa)
         {{ $empresa['razon_social'] ?? '' }} {{ isset($empresa['rif']) ? '· '.$empresa['rif'] : '' }}
     @endif
+    · Incluye el detalle de productos de la factura asociada.
 </p>
 </body>
 </html>

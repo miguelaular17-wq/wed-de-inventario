@@ -70,9 +70,10 @@ window.__TOUR__ = {
 <script src="/js/onboarding-tour.js"></script>
 @endauth
 @endif
-@auth
+{{-- Asistente desactivado --}}
+{{-- @auth
     @include('partials.asistente')
-@endauth
+@endauth --}}
 @stack('scripts')
 
 <script>

@@ -411,7 +411,14 @@ Route::middleware(['auth', 'permission:ventas_mayor'])->prefix('ventas-mayor')->
     Route::get('/catalogo', [\App\Http\Controllers\VentasMayorController::class, 'catalogo'])->name('catalogo');
     Route::get('/catalogo/pdf', [\App\Http\Controllers\VentasMayorController::class, 'catalogoPdf'])->name('catalogo.pdf');
     Route::post('/catalogo/{producto}', [\App\Http\Controllers\VentasMayorController::class, 'guardarCatalogo'])->whereNumber('producto')->middleware('permission:ventas_mayor.catalogo')->name('catalogo.guardar');
+    Route::get('/clientes', [\App\Http\Controllers\VentasMayorController::class, 'clientes'])->name('clientes.index');
+    Route::post('/clientes', [\App\Http\Controllers\VentasMayorController::class, 'guardarCliente'])->name('clientes.store');
     Route::get('/clientes/buscar', [\App\Http\Controllers\VentasMayorController::class, 'buscarClientes'])->name('clientes.buscar');
+    Route::get('/clientes/{cliente}', [\App\Http\Controllers\VentasMayorController::class, 'clienteShow'])->whereNumber('cliente')->name('clientes.show');
+    Route::post('/clientes/{cliente}', [\App\Http\Controllers\VentasMayorController::class, 'actualizarCliente'])->whereNumber('cliente')->name('clientes.update');
+    Route::get('/clientes/{cliente}/archivos', [\App\Http\Controllers\VentasMayorController::class, 'archivosCliente'])->whereNumber('cliente')->name('clientes.archivos');
+    Route::post('/clientes/{cliente}/archivos', [\App\Http\Controllers\VentasMayorController::class, 'subirArchivosCliente'])->whereNumber('cliente')->name('clientes.archivos.store');
+    Route::delete('/clientes/{cliente}/archivos/{archivo}', [\App\Http\Controllers\VentasMayorController::class, 'borrarArchivoCliente'])->whereNumber('cliente')->whereNumber('archivo')->name('clientes.archivos.destroy');
     Route::get('/facturas/{factura}', [\App\Http\Controllers\VentasMayorController::class, 'show'])->whereNumber('factura')->name('show');
     Route::get('/facturas/{factura}/pdf', [\App\Http\Controllers\VentasMayorController::class, 'pdf'])->whereNumber('factura')->name('pdf');
     Route::get('/facturas/{factura}/pagos/{pago}/pdf', [\App\Http\Controllers\VentasMayorController::class, 'pagoPdf'])->whereNumber('factura')->whereNumber('pago')->name('pagos.pdf');

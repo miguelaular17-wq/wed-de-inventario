@@ -15,6 +15,7 @@
         </div>
         <div class="vm-page-actions">
             <a href="{{ route('ventas_mayor.stock') }}" class="btn secondary">Stock</a>
+            <a href="{{ route('ventas_mayor.clientes.index') }}" class="btn secondary">Clientes</a>
             <a href="{{ route('ventas_mayor.create') }}" class="btn primary">+ Nueva factura</a>
         </div>
     </div>

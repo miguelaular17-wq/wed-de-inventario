@@ -1370,10 +1370,14 @@ document.addEventListener('keydown', function (e) {
             return i === -1 ? tope - 1 : i;
         };
 
-        deslizMin.value = indice(campoMin.value) ?? 0;
-        deslizMax.value = indice(campoMax.value) ?? tope;
+        // Si ya hay un valor escrito (p. ej. 6), no lo redondear a los escalones del slider (5→10).
         if (campoMin.value !== '') numMin.value = campoMin.value;
         if (campoMax.value !== '') numMax.value = campoMax.value;
+        if (campoMin.value !== '' || campoMax.value !== '') {
+            origen = 'numero';
+        }
+        deslizMin.value = indice(campoMin.value) ?? 0;
+        deslizMax.value = indice(campoMax.value) ?? tope;
 
         function pintar() {
             let desde = null, hasta = null;
@@ -1381,6 +1385,7 @@ document.addEventListener('keydown', function (e) {
                 desde = leerNum(numMin);
                 hasta = leerNum(numMax);
                 if (desde !== null && hasta !== null && desde > hasta) [desde, hasta] = [hasta, desde];
+                // Solo mueve la barra como aproximación visual; el número exacto se conserva.
                 deslizMin.value = desde === null ? 0 : (indice(desde) ?? 0);
                 deslizMax.value = hasta === null ? tope : (indice(hasta) ?? tope);
             } else {
@@ -1406,6 +1411,7 @@ document.addEventListener('keydown', function (e) {
             deslizMin.style.zIndex = parseInt(deslizMin.value, 10) >= tope - 1 ? 3 : 1;
         }
         function aplicarYBuscar() {
+            origen = origen === 'slider' ? 'slider' : 'numero';
             pintar();
             document.getElementById('form-filtros').requestSubmit();
         }
@@ -1419,6 +1425,7 @@ document.addEventListener('keydown', function (e) {
             inp.addEventListener('keydown', e => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    e.stopPropagation();
                     origen = 'numero';
                     aplicarYBuscar();
                 }
