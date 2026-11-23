@@ -24,7 +24,7 @@ use Illuminate\Validation\ValidationException;
 
 class CobranzaFlujoService
 {
-    /** Pagos que viven en su módulo: el monto se corrige allá, no desde el flujo. */
+    /** Pagos ligados a Contratos/Patrimonial: el monto/fecha se editan allá; borrar desde el flujo sí los deshace. */
     public const VINCULOS_MODULO = [
         CobranzaMovimiento::VINCULO_CUOTA => 'Contratos',
         CobranzaMovimiento::VINCULO_CONTRATO => 'Contratos',
@@ -273,11 +273,6 @@ class CobranzaFlujoService
                         'movimiento' => 'Ya está conciliado con el banco: primero hay que quitar la conciliación.',
                     ]);
                 }
-                if ($modulo = self::VINCULOS_MODULO[$m->vinculo_tipo] ?? null) {
-                    throw ValidationException::withMessages([
-                        'movimiento' => "Es un pago registrado en {$modulo}: se corrige desde allá.",
-                    ]);
-                }
             }
             $facturas = [];
             foreach ($movimientos as $m) {
@@ -290,6 +285,8 @@ class CobranzaFlujoService
                 if ($m->vinculo_tipo === CobranzaMovimiento::VINCULO_PAT_REPARTO) {
                     PatTransaccion::query()->where('cobranza_movimiento_id', $m->id)->delete();
                 }
+                // Pagos de Contratos/Patrimonial: al borrar desde el flujo también se deshace el abono allá.
+                $this->revertirVinculoModulo($m);
                 $this->asientos->borrarDeMovimiento($m);
                 $this->borrarEspejo($m);
                 $this->borrarCajaTesoreria($m);
@@ -608,6 +605,40 @@ class CobranzaFlujoService
             ),
             default => null,
         };
+    }
+
+    /** Deshace en Contratos/Patrimonial el efecto del pago al borrar el movimiento del flujo. */
+    private function revertirVinculoModulo(CobranzaMovimiento $mov): void
+    {
+        $usd = round((float) $mov->monto_usd, 2);
+        $fecha = $mov->fecha?->toDateString();
+
+        if ($mov->vinculo_tipo === CobranzaMovimiento::VINCULO_ALQUILER) {
+            if ($pago = AlquilerPago::query()->find($mov->vinculo_id)) {
+                $this->pagos->revertirAlquiler($pago, $usd);
+            }
+
+            return;
+        }
+        if ($mov->vinculo_tipo === CobranzaMovimiento::VINCULO_RESERVA) {
+            if ($reserva = Reserva::query()->find($mov->vinculo_id)) {
+                $this->pagos->revertirReserva($reserva, $usd, $fecha);
+            }
+
+            return;
+        }
+        if ($mov->vinculo_tipo === CobranzaMovimiento::VINCULO_CUOTA) {
+            if ($cuota = ContratoCuota::query()->find($mov->vinculo_id)) {
+                $this->pagos->revertirCuota($cuota, $usd);
+            }
+
+            return;
+        }
+        if ($mov->vinculo_tipo === CobranzaMovimiento::VINCULO_CONTRATO) {
+            if ($contrato = Contrato::query()->find($mov->vinculo_id)) {
+                $this->pagos->revertirAbonoCapital($contrato, $usd, $fecha);
+            }
+        }
     }
 
     /** Cambió el total de un gasto repartido: cada propiedad conserva su proporción; la última absorbe el redondeo. */

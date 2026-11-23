@@ -451,7 +451,7 @@ class FlujoCajaCobranzaController extends Controller
     private function filtros(Request $request): array
     {
         return [
-            'desde' => $this->fecha($request->query('desde'), now()->startOfMonth()->toDateString()),
+            'desde' => $this->fecha($request->query('desde'), now()->toDateString()),
             'hasta' => $this->fecha($request->query('hasta'), now()->toDateString()),
             'tipo' => in_array($request->query('tipo'), ['ingreso', 'egreso'], true) ? $request->query('tipo') : '',
             'ambito' => array_key_exists((string) $request->query('ambito'), CobranzaMovimiento::AMBITOS) ? (string) $request->query('ambito') : '',

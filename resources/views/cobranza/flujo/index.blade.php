@@ -37,11 +37,12 @@
     .widget-block-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #64748b; margin-bottom: 6px; font-weight: 600; }
     .widget-block-value { font-size: 20px; font-weight: 700; color: #0f172a; }
     .widget-block-sub { font-size: 12px; color: #64748b; margin-top: 2px; }
-    @media (min-width: 1200px) {
-        .custom-row { display: flex; gap: 24px; }
-        .custom-left { flex: 1; min-width: 0; }
-        .custom-right { width: 320px; flex-shrink: 0; }
-    }
+    .cf-resumen-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+    @media (max-width: 1100px) { .cf-resumen-strip { grid-template-columns: 1fr; } }
+    .cf-resumen-strip .widget-card { margin-bottom: 0; }
+    .cf-resumen-strip .widget-block { padding: 10px 12px; }
+    .cf-resumen-strip .widget-block-value { font-size: 1.15rem; }
+    .custom-left { width: 100%; min-width: 0; }
     .cf-btn { padding: 10px 18px; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; color: #fff; }
     .cf-btn-ingreso { background: #0f766e; box-shadow: 0 2px 4px rgba(15,118,110,.25); }
     .cf-btn-egreso { background: #1a4273; box-shadow: 0 2px 4px rgba(26,66,115,.25); }
@@ -76,6 +77,24 @@
     .cf-opcion:hover { background: #f8fafc; }
     .cf-opcion.activo { background: #eff6ff; box-shadow: inset 3px 0 0 #1d4ed8; }
     .cf-opcion small { color: #64748b; display: block; }
+    /* Sin barra horizontal; sí vertical si hay muchas filas */
+    .cf-tabla-completa.table-wrap,
+    .cf-tabla-completa {
+        max-height: 65vh !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        border: none;
+    }
+    .cf-tabla-completa .data-table { width: 100%; table-layout: fixed; font-size: 12px; }
+    .cf-tabla-completa .data-table thead th { position: sticky; top: 0; z-index: 2; box-shadow: 0 1px 0 #e2e8f0; }
+    .cf-tabla-completa .data-table th,
+    .cf-tabla-completa .data-table td { padding: 6px 8px; word-wrap: break-word; overflow-wrap: anywhere; vertical-align: top; }
+    .cf-tabla-completa .col-fecha { width: 78px; white-space: nowrap; }
+    .cf-tabla-completa .col-cuenta { width: 16%; }
+    .cf-tabla-completa .col-pago { width: 26%; }
+    .cf-tabla-completa .col-concepto { width: 24%; }
+    .cf-tabla-completa .col-monto { width: 12%; text-align: right; white-space: nowrap; }
+    .cf-tabla-completa .col-acc { width: 96px; text-align: center; white-space: nowrap; }
     .cf-debe { font-weight: 700; color: #b91c1c; white-space: nowrap; }
     .cf-resumen { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: .88rem; display: none; }
     .cf-vacio { padding: 12px; color: #64748b; font-size: .85rem; text-align: center; }
@@ -98,6 +117,7 @@
                 <input type="date" name="desde" value="{{ $filtros['desde'] }}" style="padding:6px 10px;border:1px solid #ccc;border-radius:6px;" onchange="this.form.submit()">
                 <label style="font-weight:600;color:#4b5563;font-size:.9rem;">Hasta:</label>
                 <input type="date" name="hasta" value="{{ $filtros['hasta'] }}" style="padding:6px 10px;border:1px solid #ccc;border-radius:6px;" onchange="this.form.submit()">
+                <a href="{{ route('cobranza.flujo.index') }}" class="cf-btn cf-btn-gris" style="text-decoration:none;padding:6px 12px;font-size:.85rem;" title="Ver solo el día de hoy">Hoy</a>
             </form>
             <button type="button" class="cf-btn cf-btn-ingreso" onclick="cfAbrir('ingreso')">
                 <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 19V5m-7 7l7-7 7 7"/></svg>
@@ -166,8 +186,44 @@
         <a href="{{ route('cobranza.flujo.excel', $filtrosReporte) }}" class="cf-btn cf-btn-gris" style="text-decoration:none;">📊 Excel</a>
     </form>
 
-    <div class="custom-row">
-        <div class="custom-left">
+    {{-- Resumen arriba a lo ancho para que ingresos/egresos usen toda la pantalla --}}
+    <div class="cf-resumen-strip">
+        <div class="widget-card">
+            <div class="widget-header">Resumen del período</div>
+            <div class="widget-block">
+                <div class="widget-block-label">Ingresos</div>
+                <div class="widget-block-value" style="color:#0f766e;">{{ $fmtUsd($totales['ingresos_usd']) }}</div>
+                <div class="widget-block-sub">{{ $fmtBs($totales['ingresos_bs']) }}</div>
+            </div>
+            <div class="widget-block">
+                <div class="widget-block-label">Egresos</div>
+                <div class="widget-block-value" style="color:#b91c1c;">{{ $fmtUsd($totales['egresos_usd']) }}</div>
+                <div class="widget-block-sub">{{ $fmtBs($totales['egresos_bs']) }}</div>
+            </div>
+            <div class="widget-block" style="border-bottom:none;">
+                <div class="widget-block-label">Neto</div>
+                <div class="widget-block-value" style="color:{{ $netoUsd < 0 ? '#b91c1c' : '#0f172a' }};">{{ $fmtUsd($netoUsd) }}</div>
+            </div>
+        </div>
+        <div class="widget-card">
+            <div class="widget-header">Por apartado (neto $)</div>
+            @foreach($ambitos as $clave => $nombre)
+                @php $pa = $totales['por_ambito'][$clave]; @endphp
+                <div class="widget-row">
+                    <span class="widget-label">{{ $nombre }}</span>
+                    <span class="widget-value" title="+{{ $fmtUsd($pa['ingresos_usd']) }} / −{{ $fmtUsd($pa['egresos_usd']) }}">{{ $fmtUsd($pa['ingresos_usd'] - $pa['egresos_usd']) }}</span>
+                </div>
+            @endforeach
+        </div>
+        <div class="widget-card">
+            <div class="widget-header">Otros datos</div>
+            <div class="widget-row"><span class="widget-label">Cruces del período</span><span class="widget-value">{{ $totales['cruces'] }}</span></div>
+            <div class="widget-row"><span class="widget-label">Movimientos</span><span class="widget-value">{{ $movimientos->count() }}</span></div>
+            <div class="widget-row"><span class="widget-label">Tasa BCV hoy</span><span class="widget-value" style="color:#b45309;">Bs. {{ number_format((float) $tasaHoy, 2) }}</span></div>
+        </div>
+    </div>
+
+    <div class="custom-left">
             @foreach([['ingreso', 'INGRESOS', $ingresos, '#0f766e', '#99f6e4', '#f0fdfa'], ['egreso', 'EGRESOS', $egresos, '#b91c1c', '#fecaca', '#fef2f2']] as [$tipoTabla, $tituloTabla, $lista, $color, $borde, $fondo])
                 <h3 class="cf-section-title" style="color:{{ $color }};">
                     @if($tipoTabla === 'ingreso')
@@ -177,20 +233,17 @@
                     @endif
                     {{ $tituloTabla }}
                 </h3>
-                <div class="panel" style="padding:0;overflow:hidden;margin-bottom:28px;border:1.5px solid {{ $borde }};">
-                    <div class="table-wrap">
-                        <table class="data-table" style="width:100%;">
+                <div class="panel" style="padding:0;overflow:visible;margin-bottom:28px;border:1.5px solid {{ $borde }};">
+                    <div class="table-wrap cf-tabla-completa">
+                        <table class="data-table">
                             <thead>
                                 <tr style="background:{{ $fondo }};">
-                                    <th style="width:90px;">Fecha</th>
-                                    <th>Cuenta</th>
-                                    <th>Qué se paga</th>
-                                    <th>Concepto</th>
-                                    <th>Ref.</th>
-                                    <th style="text-align:right;">Monto Bs</th>
-                                    <th style="text-align:right;">Monto USD</th>
-                                    <th style="text-align:center;">Banco</th>
-                                    <th style="text-align:center;width:90px;">Acciones</th>
+                                    <th class="col-fecha">Fecha</th>
+                                    <th class="col-cuenta">Cuenta</th>
+                                    <th class="col-pago">Qué se paga</th>
+                                    <th class="col-concepto">Concepto</th>
+                                    <th class="col-monto">Monto</th>
+                                    <th class="col-acc">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -209,54 +262,48 @@
                                             'pago' => $pago ? $pago['titulo'].' · '.$pago['detalle'] : null,
                                             'tipo' => $m->tipo, 'url' => route('cobranza.flujo.update', $m),
                                         ];
+                                        $estadoBanco = \App\Models\CobranzaMovimiento::esBancoCruce($m->banco)
+                                            ? 'Cruce'
+                                            : (! $m->flujo_caja_id ? 'Sin banco' : ($m->estaConciliado() ? '✓ banco' : 'En tránsito'));
                                     @endphp
                                     <tr>
-                                        <td>{{ $m->fecha->format('d/m/Y') }}</td>
-                                        <td>
+                                        <td class="col-fecha">{{ $m->fecha->format('d/m/Y') }}</td>
+                                        <td class="col-cuenta">
                                             <strong style="color:{{ $color }};">{{ $m->banco }}</strong><br>
-                                            <span class="muted" style="font-size:.82rem;">{{ $m->titular }}</span>
+                                            <span class="muted" style="font-size:.78rem;">{{ $m->titular }}</span>
+                                            <div class="muted" style="font-size:.72rem;margin-top:2px;">{{ $estadoBanco }}</div>
                                         </td>
-                                        <td style="min-width:220px;">
+                                        <td class="col-pago">
                                             <span class="cf-badge" style="background:{{ $bgA }};color:{{ $fgA }};">{{ $m->nombreAmbito() }}</span>
                                             @if($m->esCruce())<span class="cf-badge" style="background:#eef2ff;color:#4338ca;">Cruce</span>@endif
                                             @if($pago)
                                                 <div style="font-weight:600;margin-top:3px;">{{ $pago['titulo'] }}</div>
-                                                <div class="muted" style="font-size:.8rem;">{{ $pago['detalle'] }}</div>
+                                                <div class="muted" style="font-size:.78rem;">{{ $pago['detalle'] }}</div>
                                             @elseif($otra)
-                                                <div class="muted" style="font-size:.8rem;margin-top:3px;">{{ $m->esIngreso() ? 'Se fue en' : 'Vino de' }}: {{ $otra->concepto }}</div>
+                                                <div class="muted" style="font-size:.78rem;margin-top:3px;">{{ $m->esIngreso() ? 'Se fue en' : 'Vino de' }}: {{ $otra->concepto }}</div>
                                             @else
-                                                <div class="muted" style="font-size:.8rem;margin-top:3px;">Sin asignar a una factura, cuota o propiedad</div>
+                                                <div class="muted" style="font-size:.78rem;margin-top:3px;">Sin asignar</div>
                                             @endif
                                         </td>
-                                        <td>
+                                        <td class="col-concepto">
                                             {{ $m->concepto }}
-                                            @if($m->contraparte)<div class="muted" style="font-size:.8rem;">{{ $m->esIngreso() ? 'Paga' : 'Para' }}: {{ $m->contraparte }}</div>@endif
-                                            @if(! $m->esIngreso() && $m->tipo_gasto)<div style="font-size:.75rem;color:#b45309;">{{ $m->tipo_gasto }}</div>@endif
+                                            @if($m->referencia)<div class="muted" style="font-size:.78rem;">Ref: {{ $m->referencia }}</div>@endif
+                                            @if($m->contraparte)<div class="muted" style="font-size:.78rem;">{{ $m->esIngreso() ? 'Paga' : 'Para' }}: {{ $m->contraparte }}</div>@endif
+                                            @if(! $m->esIngreso() && $m->tipo_gasto)<div style="font-size:.72rem;color:#b45309;">{{ $m->tipo_gasto }}</div>@endif
                                             @foreach($m->comprobantes ?? [] as $i => $url)
-                                                <a href="{{ $url }}" target="_blank" rel="noopener" style="font-size:.75rem;margin-right:6px;" title="Comprobante {{ $i + 1 }}">📎 Comprobante{{ count($m->comprobantes) > 1 ? ' '.($i + 1) : '' }}</a>
+                                                <a href="{{ $url }}" target="_blank" rel="noopener" style="font-size:.72rem;margin-right:6px;" title="Comprobante {{ $i + 1 }}">📎 Comprobante{{ count($m->comprobantes) > 1 ? ' '.($i + 1) : '' }}</a>
                                             @endforeach
-                                            @if($otra && $pago)<div class="muted" style="font-size:.8rem;">Se fue en: {{ $otra->concepto }}</div>@endif
+                                            @if($otra && $pago)<div class="muted" style="font-size:.78rem;">Se fue en: {{ $otra->concepto }}</div>@endif
                                             @if(! empty($asientoDeMovimiento[$m->id]))
-                                                <div style="font-size:.75rem;color:#b45309;">📒 Asiento contra {{ $asientoDeMovimiento[$m->id] }}</div>
+                                                <div style="font-size:.72rem;color:#b45309;">📒 Asiento contra {{ $asientoDeMovimiento[$m->id] }}</div>
                                             @endif
                                         </td>
-                                        <td>{{ $m->referencia ?: '-' }}</td>
-                                        <td style="text-align:right;font-weight:500;color:{{ $color }};">{{ $fmtBs($m->monto_bs) }}</td>
-                                        <td style="text-align:right;">{{ $fmtUsd($m->monto_usd) }}
-                                            @if((float) $m->tasa_cambio > 0)<div class="muted" style="font-size:.72rem;">tasa {{ number_format((float) $m->tasa_cambio, 2) }}</div>@endif
+                                        <td class="col-monto" style="color:{{ $color }};">
+                                            <strong>{{ $fmtUsd($m->monto_usd) }}</strong>
+                                            @if((float) $m->monto_bs > 0)<div style="font-size:.78rem;">{{ $fmtBs($m->monto_bs) }}</div>@endif
+                                            @if((float) $m->tasa_cambio > 0)<div class="muted" style="font-size:.7rem;">tasa {{ number_format((float) $m->tasa_cambio, 2) }}</div>@endif
                                         </td>
-                                        <td style="text-align:center;font-size:.75rem;">
-                                            @if(\App\Models\CobranzaMovimiento::esBancoCruce($m->banco))
-                                                <span class="muted">Cruce</span>
-                                            @elseif(! $m->flujo_caja_id)
-                                                <span class="muted">Sin banco</span>
-                                            @elseif($m->estaConciliado())
-                                                <span style="color:#15803d;font-weight:700;">✓ en el banco</span>
-                                            @else
-                                                <span style="color:#b45309;font-weight:600;">En tránsito</span>
-                                            @endif
-                                        </td>
-                                        <td style="text-align:center;white-space:nowrap;">
+                                        <td class="col-acc">
                                             @if($m->esIngreso())
                                                 <a href="{{ route('cobranza.flujo.recibo', $m) }}" target="_blank" rel="noopener" class="cf-acc" title="Recibo de pago" style="text-decoration:none;">🧾</a>
                                             @endif
@@ -271,15 +318,17 @@
                                         </td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="9" style="text-align:center;padding:26px;color:var(--muted);">No hay {{ strtolower($tituloTabla) }} en este período.</td></tr>
+                                    <tr><td colspan="6" style="text-align:center;padding:26px;color:var(--muted);">No hay {{ strtolower($tituloTabla) }} en este período.</td></tr>
                                 @endforelse
                             </tbody>
                             <tfoot>
                                 <tr style="background:{{ $fondo }};border-top:2px solid {{ $borde }};font-weight:bold;">
-                                    <td colspan="5" style="text-align:right;color:{{ $color }};">TOTAL {{ $tituloTabla }}</td>
-                                    <td style="text-align:right;color:{{ $color }};">{{ $fmtBs($lista->sum('monto_bs')) }}</td>
-                                    <td style="text-align:right;color:{{ $color }};">{{ $fmtUsd($lista->sum('monto_usd')) }}</td>
-                                    <td colspan="2"></td>
+                                    <td colspan="4" style="text-align:right;color:{{ $color }};">TOTAL {{ $tituloTabla }}</td>
+                                    <td class="col-monto" style="color:{{ $color }};">
+                                        {{ $fmtUsd($lista->sum('monto_usd')) }}
+                                        <div style="font-size:.78rem;font-weight:600;">{{ $fmtBs($lista->sum('monto_bs')) }}</div>
+                                    </td>
+                                    <td></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -379,44 +428,6 @@
                     </table>
                 </div>
             </div>
-        </div>
-
-        {{-- RESUMEN --}}
-        <div class="custom-right">
-            <div class="widget-card">
-                <div class="widget-header">Resumen del período</div>
-                <div class="widget-block">
-                    <div class="widget-block-label">Ingresos</div>
-                    <div class="widget-block-value" style="color:#0f766e;">{{ $fmtUsd($totales['ingresos_usd']) }}</div>
-                    <div class="widget-block-sub">{{ $fmtBs($totales['ingresos_bs']) }}</div>
-                </div>
-                <div class="widget-block">
-                    <div class="widget-block-label">Egresos</div>
-                    <div class="widget-block-value" style="color:#b91c1c;">{{ $fmtUsd($totales['egresos_usd']) }}</div>
-                    <div class="widget-block-sub">{{ $fmtBs($totales['egresos_bs']) }}</div>
-                </div>
-                <div class="widget-block" style="border-bottom:none;">
-                    <div class="widget-block-label">Neto</div>
-                    <div class="widget-block-value" style="color:{{ $netoUsd < 0 ? '#b91c1c' : '#0f172a' }};">{{ $fmtUsd($netoUsd) }}</div>
-                </div>
-            </div>
-            <div class="widget-card">
-                <div class="widget-header">Por apartado (neto $)</div>
-                @foreach($ambitos as $clave => $nombre)
-                    @php $pa = $totales['por_ambito'][$clave]; @endphp
-                    <div class="widget-row">
-                        <span class="widget-label">{{ $nombre }}</span>
-                        <span class="widget-value" title="+{{ $fmtUsd($pa['ingresos_usd']) }} / −{{ $fmtUsd($pa['egresos_usd']) }}">{{ $fmtUsd($pa['ingresos_usd'] - $pa['egresos_usd']) }}</span>
-                    </div>
-                @endforeach
-            </div>
-            <div class="widget-card">
-                <div class="widget-header">Otros datos</div>
-                <div class="widget-row"><span class="widget-label">Cruces del período</span><span class="widget-value">{{ $totales['cruces'] }}</span></div>
-                <div class="widget-row"><span class="widget-label">Movimientos</span><span class="widget-value">{{ $movimientos->count() }}</span></div>
-                <div class="widget-row"><span class="widget-label">Tasa BCV hoy</span><span class="widget-value" style="color:#b45309;">Bs. {{ number_format((float) $tasaHoy, 2) }}</span></div>
-            </div>
-        </div>
     </div>
 </div>
 

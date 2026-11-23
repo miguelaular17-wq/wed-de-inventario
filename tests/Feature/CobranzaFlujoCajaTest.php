@@ -420,6 +420,16 @@ class CobranzaFlujoCajaTest extends TestCase
         $this->assertSame(300.0, (float) $pago->fresh()->monto_pagado);
         $this->get(route('cobranza.flujo.index', ['desde' => '2026-11-01', 'hasta' => '2026-11-30']))
             ->assertSee('Local 3 · Alquiler')->assertSee('Período 2026-11 · inquilino Inquilino Uno');
+
+        // Borrar desde el flujo deshace el abono en Patrimonial.
+        $movAlquiler = CobranzaMovimiento::query()
+            ->where('vinculo_tipo', CobranzaMovimiento::VINCULO_ALQUILER)
+            ->where('vinculo_id', $pago->id)
+            ->firstOrFail();
+        $this->delete(route('cobranza.flujo.destroy', $movAlquiler))->assertSessionHasNoErrors();
+        $this->assertNull($movAlquiler->fresh());
+        $this->assertSame('vencido', $pago->fresh()->estado); // vencimiento 2026-11-05 ya pasó
+        $this->assertSame(0.0, (float) $pago->fresh()->monto_pagado);
     }
 
     public function test_asiento_contable_debe_cuadrar_y_suma_a_los_saldos_por_cuenta(): void
