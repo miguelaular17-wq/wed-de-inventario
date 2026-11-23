@@ -691,20 +691,260 @@ class CobranzaController extends Controller
         return response()->json($data, ($data['ok'] ?? true) === false ? 422 : 200);
     }
 
-    /** Estado de cuenta del cliente en PDF (mismos datos que la pantalla, con las facturas que intermedia). */
+    /** Estado de cuenta del cliente en PDF. ?detalle=1 → con artículos y cada pago. */
     public function estadoCuentaClientePdf(string $codigo_cliente)
     {
         $data = $this->datosEstadoCuentaCliente(trim($codigo_cliente));
         abort_if(($data['ok'] ?? true) === false, 422, $data['message'] ?? 'No se pudo armar el estado de cuenta.');
 
+        $detallado = request()->boolean('detalle');
         $logo = is_file(public_path('logo.png'))
             ? 'data:image/png;base64,'.base64_encode((string) file_get_contents(public_path('logo.png')))
             : null;
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('cobranza.pdf_estado_cuenta', $data + ['logo' => $logo])
-            ->setPaper('letter', 'landscape');
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('cobranza.pdf_estado_cuenta', $data + [
+            'logo' => $logo,
+            'detallado' => $detallado,
+        ])->setPaper('letter', 'landscape');
         $nombre = preg_replace('/[^A-Za-z0-9]+/', '_', \Illuminate\Support\Str::ascii((string) ($data['cliente'] ?: $data['codigo_cliente'])));
+        $sufijo = $detallado ? '_detallado' : '_resumido';
 
-        return $pdf->download('Estado_de_cuenta_'.trim($nombre, '_').'_'.date('Y_m_d').'.pdf');
+        return $pdf->download('Estado_de_cuenta'. $sufijo .'_'.trim($nombre, '_').'_'.date('Y_m_d').'.pdf');
+    }
+
+    /** Estado de cuenta del cliente en Excel (facturas unificadas + abonos). */
+    public function estadoCuentaClienteExcel(string $codigo_cliente)
+    {
+        $data = $this->datosEstadoCuentaCliente(trim($codigo_cliente));
+        abort_if(($data['ok'] ?? true) === false, 422, $data['message'] ?? 'No se pudo armar el estado de cuenta.');
+
+        $nombre = preg_replace('/[^A-Za-z0-9]+/', '_', \Illuminate\Support\Str::ascii((string) ($data['cliente'] ?: $data['codigo_cliente'])));
+        $archivo = 'Estado_de_cuenta_'.trim($nombre, '_').'_'.date('Y_m_d').'.xlsx';
+
+        return response(\App\Support\SimpleXlsxWriter::toString($this->excelEstadoCuenta($data)), 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="'.$archivo.'"',
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, list<list<string|int|float|null>>>
+     */
+    private function excelEstadoCuenta(array $data): array
+    {
+        $totales = $data['totales'] ?? [];
+        $resumen = [
+            ['Estado de cuenta'],
+            ['Cliente', $data['cliente'] ?? ''],
+            ['Código', $data['codigo_cliente'] ?? ''],
+            ['Corte sync', $data['fecha_sync'] ?? ''],
+            ['Saldo a pagar USD', $totales['saldo'] ?? 0],
+            ['Cargos USD', $totales['cargos'] ?? 0],
+            ['Abonos USD', $totales['abonos'] ?? 0],
+            ['Tasa BCV', $totales['tasa_bcv'] ?? ''],
+            ['Saldo Bs', $totales['saldo_bs'] ?? ''],
+            [],
+        ];
+
+        $cabecera = ['Antigüedad', 'Fecha', 'Sede', 'Doc', 'Nº', 'Descripción', 'Cargo (+)', 'Desc.', 'Tot. fac.', 'Abono (−)', 'Saldo acum.', 'Tipo'];
+        $filas = [$cabecera];
+        $detalle = [['Factura', 'Fecha', 'Sede', 'Artículo', 'Cant.', 'Precio', 'Total']];
+        $detallePagos = [['Factura', 'Fecha', 'Sede', 'Nº pago', 'Descripción', 'Abono (−)']];
+
+        $bloques = ! empty($data['grupos']) ? $data['grupos'] : [[
+            'propio' => true,
+            'titulo' => $data['cliente'] ?? '',
+            'lineas' => $data['lineas'] ?? [],
+        ]];
+
+        foreach ($bloques as $g) {
+            $saldoRun = 0.0;
+            $agrupados = $this->agruparLineasEstadoCuenta($g['lineas'] ?? []);
+            foreach ($agrupados as $bloque) {
+                if (($bloque['tipo'] ?? '') === 'abono') {
+                    $l = $bloque['mov'];
+                    $saldoRun = round($saldoRun - (float) ($l['pagado'] ?? 0), 2);
+                    $filas[] = [
+                        $l['antiguedad'] ?? '',
+                        $l['fecha'] ?? '',
+                        $l['sede'] ?? '',
+                        'PAG',
+                        $l['numero_documento'] ?? '',
+                        $l['descripcion'] ?? '',
+                        '',
+                        '',
+                        '',
+                        $l['pagado'] ?? '',
+                        $saldoRun,
+                        'Abono',
+                    ];
+                    continue;
+                }
+
+                $items = $bloque['items'] ?? [];
+                $abonos = $bloque['abonos'] ?? [];
+                $cab = $bloque['cabecera'] ?? ($items[0] ?? ($abonos[0] ?? []));
+                $cargo = round(array_sum(array_map(fn ($it) => (float) ($it['total'] ?? 0), $items)), 2);
+                $totFac = isset($cab['total_factura']) ? (float) $cab['total_factura'] : (float) $cargo;
+                $descMonto = ($cargo > $totFac + 0.05) ? round($cargo - $totFac, 2) : 0.0;
+                $descPct = ($descMonto > 0 && $cargo > 0) ? (int) round(($descMonto / $cargo) * 100) : 0;
+                $descTxt = $descPct >= 1 ? round($descMonto, 2).' ('.$descPct.'%)' : '';
+                $n = count($items);
+                $nPagos = count($abonos);
+                $totalPagos = round(array_sum(array_map(fn ($a) => (float) ($a['pagado'] ?? 0), $abonos)), 2);
+                $pagadoFac = isset($cab['pagado']) ? (float) $cab['pagado'] : 0.0;
+                $abonoEnFac = ($nPagos === 0 && $pagadoFac > 0.01) ? $pagadoFac : 0.0;
+                $num = $cab['numero_documento'] ?? $cab['factura_padre'] ?? ($bloque['clave'] ?? '');
+                $desc = $n <= 1
+                    ? ($cab['descripcion'] ?? 'Factura')
+                    : $n.' artículos · '.($items[0]['descripcion'] ?? 'Factura');
+
+                $saldoRun = round($saldoRun + $totFac, 2);
+                $saldoTrasFac = $saldoRun;
+                if ($abonoEnFac > 0) {
+                    $saldoRun = round($saldoRun - $abonoEnFac, 2);
+                }
+                $saldoMostrarFac = $abonoEnFac > 0 ? $saldoRun : $saldoTrasFac;
+
+                $filas[] = [
+                    $cab['antiguedad'] ?? '',
+                    $cab['fecha'] ?? '',
+                    $cab['sede'] ?? '',
+                    'FAC',
+                    $num,
+                    $desc,
+                    $cargo ?: $totFac,
+                    $descTxt,
+                    $totFac,
+                    $abonoEnFac > 0 ? $abonoEnFac : '',
+                    $saldoMostrarFac,
+                    'Factura',
+                ];
+
+                foreach ($items as $it) {
+                    $detalle[] = [
+                        $num,
+                        $it['fecha'] ?? '',
+                        $it['sede'] ?? '',
+                        $it['descripcion'] ?? '',
+                        $it['cantidad'] ?? '',
+                        $it['precio'] ?? '',
+                        $it['total'] ?? '',
+                    ];
+                }
+
+                if ($nPagos > 0) {
+                    $saldoRun = round($saldoRun - $totalPagos, 2);
+                    $filas[] = [
+                        $abonos[0]['antiguedad'] ?? '',
+                        $abonos[0]['fecha'] ?? '',
+                        $abonos[0]['sede'] ?? '',
+                        'PAG',
+                        $nPagos === 1 ? ($abonos[0]['numero_documento'] ?? '') : '',
+                        $nPagos > 1 ? ($nPagos.' pagos aplicados') : ($abonos[0]['descripcion'] ?? 'Pago / Abono'),
+                        '',
+                        '',
+                        '',
+                        $totalPagos,
+                        $saldoRun,
+                        'Abono',
+                    ];
+                    foreach ($abonos as $l) {
+                        $detallePagos[] = [
+                            $num,
+                            $l['fecha'] ?? '',
+                            $l['sede'] ?? '',
+                            $l['numero_documento'] ?? '',
+                            $l['descripcion'] ?? '',
+                            $l['pagado'] ?? '',
+                        ];
+                    }
+                }
+            }
+        }
+
+        $filas[] = [];
+        $filas[] = ['Totales', '', '', '', '', '', $totales['cargos'] ?? 0, '', '', $totales['abonos'] ?? 0, $totales['saldo'] ?? 0, ''];
+
+        return [
+            'Resumen' => $resumen,
+            'Estado de cuenta' => $filas,
+            'Detalle artículos' => $detalle,
+            'Detalle pagos' => $detallePagos,
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $lineas
+     * @return list<array<string, mixed>>
+     */
+    private function agruparLineasEstadoCuenta(array $lineas): array
+    {
+        $facs = [];
+        $orden = [];
+        $huerfanos = [];
+        $vistoAbono = [];
+
+        foreach ($lineas as $l) {
+            if (($l['tipo'] ?? '') === 'abono') {
+                $claveAbono = implode('|', [
+                    $l['numero_documento'] ?? '',
+                    $l['factura_padre'] ?? '',
+                    $l['fecha'] ?? '',
+                    $l['pagado'] ?? '',
+                    $l['descripcion'] ?? '',
+                ]);
+                if (isset($vistoAbono[$claveAbono])) {
+                    continue;
+                }
+                $vistoAbono[$claveAbono] = true;
+                $facKey = (string) ($l['factura_padre'] ?? '');
+                if ($facKey !== '') {
+                    if (! isset($facs[$facKey])) {
+                        $orden[] = $facKey;
+                        $facs[$facKey] = [
+                            'tipo' => 'factura',
+                            'clave' => $facKey,
+                            'items' => [],
+                            'cabecera' => null,
+                            'abonos' => [],
+                        ];
+                    }
+                    $facs[$facKey]['abonos'][] = $l;
+                } else {
+                    $huerfanos[] = ['tipo' => 'abono', 'mov' => $l, 'abonos' => []];
+                }
+                continue;
+            }
+
+            $clave = (string) ($l['factura_padre'] ?? $l['numero_documento'] ?? '');
+            if (! isset($facs[$clave])) {
+                $orden[] = $clave;
+                $facs[$clave] = [
+                    'tipo' => 'factura',
+                    'clave' => $clave,
+                    'items' => [],
+                    'cabecera' => null,
+                    'abonos' => [],
+                ];
+            }
+            $facs[$clave]['items'][] = $l;
+            if (($l['total_factura'] ?? null) !== null) {
+                $facs[$clave]['cabecera'] = $l;
+            }
+        }
+
+        $out = [];
+        foreach ($orden as $clave) {
+            $fac = $facs[$clave];
+            usort($fac['abonos'], function ($a, $b) {
+                return strcmp((string) ($a['fecha'] ?? ''), (string) ($b['fecha'] ?? ''))
+                    ?: strcmp((string) ($a['numero_documento'] ?? ''), (string) ($b['numero_documento'] ?? ''));
+            });
+            $out[] = $fac;
+        }
+
+        return array_merge($out, $huerfanos);
     }
 
     private function datosEstadoCuentaCliente(string $codigo): array
@@ -864,6 +1104,11 @@ class CobranzaController extends Controller
                 $dias = (int) round(\Carbon\Carbon::parse($row->fecha_emision)->diffInDays(now()));
             }
 
+            $descripcion = $detalle !== '' ? $detalle : ($esAbono ? 'Pago / Abono' : 'Artículo');
+            if ($esAbono && $factura !== '' && $factura !== (string) ($row->numero_documento ?? '')) {
+                $descripcion = trim($descripcion.' → FAC '.$factura);
+            }
+
             $lineas[] = [
                 'antiguedad' => $this->formatoAntiguedad($dias),
                 'fecha' => $row->fecha_emision ? \Carbon\Carbon::parse($row->fecha_emision)->format('d/m/Y') : '',
@@ -871,14 +1116,16 @@ class CobranzaController extends Controller
                 'tipo_doc' => $esAbono ? 'PAG' : strtoupper((string) ($row->tipo_cxc ?: 'FAC')),
                 'numero_documento' => (string) ($row->numero_documento ?? ''),
                 'factura_padre' => $factura,
-                'descripcion' => $detalle !== '' ? $detalle : ($esAbono ? 'Pago / Abono' : 'Artículo'),
+                'descripcion' => $descripcion,
                 'cantidad' => $cantidad,
                 'precio' => $precio,
                 'total' => $esAbono ? null : $cargo,
                 'pagado' => $esAbono ? $pagado : $pagadoFactura,
                 'total_factura' => $totalFactura,
                 'saldo_factura' => $saldoFactura,
-                'saldo_acumulado' => $esCabecera || $esAbono ? $saldoAcumulado : null,
+                // Solo en cabecera FAC: el abono Profit ya viene descontado en el saldo de la factura.
+                'saldo_acumulado' => $esCabecera ? $saldoAcumulado : null,
+                'efecto' => $esAbono ? 'resta' : 'suma',
                 'tipo' => $esAbono ? 'abono' : 'cargo',
                 'a_nombre_de' => $ajena ? trim((string) $row->nombre_cliente) : null,
                 'intermediario' => $ajena ? null : ($quienLleva[$factura] ?? $quienLleva[(string) $row->numero_documento] ?? null),
@@ -954,6 +1201,7 @@ class CobranzaController extends Controller
                         'total_factura' => null,
                         'saldo_factura' => null,
                         'saldo_acumulado' => $saldoAcumulado,
+                        'efecto' => 'resta',
                         'tipo' => 'abono',
                         'a_nombre_de' => $doc['ajena'] ? $doc['nombre'] : null,
                         'intermediario' => null,

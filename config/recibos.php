@@ -1,9 +1,9 @@
 <?php
 
 /*
- * Encabezado del recibo de pago de Cobranza: datos fiscales de la empresa de cada sede.
- * La sede sale de la factura de Profit que se abona; Contratos y Patrimonial usan «por_defecto».
- * Una sede sin datos muestra solo su nombre.
+ * Encabezado del recibo de pago del flujo de Cobranza.
+ * - Cobranza → Doral (membrete fijo).
+ * - Contratos y Patrimonial → Je Nu (membrete fijo).
  */
 return [
     'empresas' => [
@@ -17,7 +17,23 @@ return [
             ],
             'leyenda' => 'CONTRIBUYENTE FORMAL ESPECIAL',
         ],
+        'JENU' => [
+            'rif' => 'J-50255135-2',
+            'razon_social' => 'Grupo Inmobiliario y de Transporte Je Nu & Asociados, C.A.',
+            'direccion' => [
+                'Calle Girardot, con Av. Santa Irene, Punto Fijo - Edo. Falcon',
+                'Zona Postal 4102',
+            ],
+            'telefono' => '0412-6937658',
+            'leyenda' => null,
+        ],
     ],
 
-    'por_defecto' => null,
+    /** Solo Cobranza usa Doral. */
+    'cobranza' => 'DORAL',
+
+    /** Contratos y Patrimonial usan Je Nu. */
+    'otros' => 'JENU',
+
+    'por_defecto' => 'JENU',
 ];

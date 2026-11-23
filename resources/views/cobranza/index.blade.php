@@ -588,7 +588,9 @@
         <div style="background-color: #d97706; color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
             <h3 id="modalEstadoCuentaTitle" style="margin: 0; font-size: 1.1rem; font-weight: 600;">Estado de Cuenta</h3>
             <div style="display:flex; gap:8px; align-items:center;">
-                <button type="button" onclick="descargarEstadoCuentaPdf()" style="background: white; border: 0; color: #b45309; padding: 6px 10px; border-radius: 6px; font-weight: 700; cursor: pointer;">⬇ Descargar PDF</button>
+                <button type="button" onclick="descargarEstadoCuentaPdf(false)" style="background: white; border: 0; color: #b45309; padding: 6px 10px; border-radius: 6px; font-weight: 700; cursor: pointer;" title="Facturas y abonos totales">⬇ PDF resumido</button>
+                <button type="button" onclick="descargarEstadoCuentaPdf(true)" style="background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; padding: 6px 10px; border-radius: 6px; font-weight: 700; cursor: pointer;" title="Con artículos y cada pago">⬇ PDF detallado</button>
+                <button type="button" onclick="descargarEstadoCuentaExcel()" style="background: #166534; border: 0; color: white; padding: 6px 10px; border-radius: 6px; font-weight: 700; cursor: pointer;">⬇ Excel</button>
                 <button type="button" onclick="imprimirEstadoCuenta()" style="background: rgba(255,255,255,.18); border: 0; color: white; padding: 6px 10px; border-radius: 6px; font-weight: 600; cursor: pointer;">Imprimir</button>
                 <button type="button" onclick="cerrarModalEstadoCuenta()" style="background: transparent; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
             </div>
@@ -879,9 +881,15 @@
 
     let estadoCuentaCodigo = null;
 
-    function descargarEstadoCuentaPdf() {
+    function descargarEstadoCuentaPdf(detallado) {
         if (!estadoCuentaCodigo) return;
-        window.location.href = `/cobranza/cliente/${encodeURIComponent(estadoCuentaCodigo)}/estado-cuenta/pdf`;
+        const q = detallado ? '?detalle=1' : '';
+        window.location.href = `/cobranza/cliente/${encodeURIComponent(estadoCuentaCodigo)}/estado-cuenta/pdf${q}`;
+    }
+
+    function descargarEstadoCuentaExcel() {
+        if (!estadoCuentaCodigo) return;
+        window.location.href = `/cobranza/cliente/${encodeURIComponent(estadoCuentaCodigo)}/estado-cuenta/excel`;
     }
 
     async function abrirModalEstadoCuenta(codigoCliente, cliente) {
@@ -897,8 +905,90 @@
         }
 
         const money = (n) => n == null || n === '' ? '' : '$ ' + Number(n).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const moneyMas = (n) => n == null || n === '' || !(Number(n) > 0) ? '' : '<span style="color:#b45309;font-weight:700;">+ ' + money(n) + '</span>';
+        const moneyMenos = (n) => n == null || n === '' || !(Number(n) > 0) ? '' : '<span style="color:#15803d;font-weight:700;">− ' + money(n) + '</span>';
         const qty = (n) => n == null || n === '' ? '' : Number(n).toLocaleString('es-VE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        const round2 = (n) => Math.round(Number(n) * 100) / 100;
         const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const agruparFacturas = (lineasGrupo) => {
+            const facs = new Map();
+            const ordenFac = [];
+            const huerfanos = [];
+            const vistoAbono = new Set();
+
+            lineasGrupo.forEach((mov) => {
+                if (mov.tipo === 'abono') {
+                    const claveAbono = [mov.numero_documento, mov.factura_padre, mov.fecha, mov.pagado, mov.descripcion].join('|');
+                    if (vistoAbono.has(claveAbono)) return;
+                    vistoAbono.add(claveAbono);
+                    const facKey = String(mov.factura_padre || '');
+                    if (facKey && facs.has(facKey)) {
+                        facs.get(facKey).abonos.push(mov);
+                    } else if (facKey) {
+                        // Factura aún no vista: crear bloque mínimo para colgar el pago
+                        ordenFac.push(facKey);
+                        facs.set(facKey, { tipo: 'factura', clave: facKey, items: [], cabecera: null, abonos: [mov] });
+                    } else {
+                        huerfanos.push(mov);
+                    }
+                    return;
+                }
+                const clave = String(mov.factura_padre || mov.numero_documento || '');
+                if (!facs.has(clave)) {
+                    ordenFac.push(clave);
+                    facs.set(clave, { tipo: 'factura', clave, items: [], cabecera: null, abonos: [] });
+                }
+                const fac = facs.get(clave);
+                const claveItem = [mov.descripcion, mov.cantidad, mov.precio, mov.total].join('|');
+                if (!fac._itemsVistos) fac._itemsVistos = new Set();
+                if (!fac._itemsVistos.has(claveItem)) {
+                    fac._itemsVistos.add(claveItem);
+                    fac.items.push(mov);
+                }
+                if (mov.total_factura != null) fac.cabecera = mov;
+            });
+
+            // Reordenar pagos de cada factura por fecha
+            const bloques = ordenFac.map((k) => {
+                const f = facs.get(k);
+                f.abonos.sort((a, b) => String(a.fecha || '').localeCompare(String(b.fecha || '')) || String(a.numero_documento || '').localeCompare(String(b.numero_documento || '')));
+                return f;
+            });
+            huerfanos.forEach((mov) => bloques.push({ tipo: 'abono', mov, abonos: [] }));
+            return bloques;
+        };
+
+        const filaAbonoHtml = (mov, saldoTras, opts = {}) => {
+            const id = opts.id || '';
+            const n = opts.n || 1;
+            const expandable = n > 1 && id;
+            const clickable = expandable ? `class="edo-pag-toggle" data-pag="${id}" style="cursor:pointer;"` : '';
+            const resumen = n > 1
+                ? `${n} pagos aplicados`
+                : esc(mov.descripcion || 'Pago / Abono');
+            return `
+            <tr ${clickable} style="background-color:#f0fdf4;" title="${expandable ? 'Clic para ver desglose de pagos' : ''}">
+                <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; white-space:nowrap; color:#64748b;">${esc(mov.antiguedad || '')}</td>
+                <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; white-space:nowrap;">${esc(mov.fecha || '')}</td>
+                <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0;">${esc(mov.sede || '')}</td>
+                <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0;">
+                    <span style="display:inline-block; padding:1px 6px; border-radius:4px; font-weight:800; font-size:.72rem; color:#15803d; background:#dcfce7;">PAG −</span>
+                </td>
+                <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0;">${esc(n > 1 ? '' : (mov.numero_documento || ''))}</td>
+                <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0;">
+                    <span style="display:inline-flex; align-items:center; gap:6px;">
+                        ${expandable ? `<span class="edo-chevron" data-chevron="${id}" style="font-size:.7rem; color:#64748b; width:10px;">▶</span>` : ''}
+                        <span>${resumen}</span>
+                    </span>
+                    ${expandable ? `<div style="font-size:.68rem; color:#94a3b8; margin-top:2px;">Clic para ver desglose</div>` : ''}
+                </td>
+                <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; text-align:right;"></td>
+                <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; text-align:right;"></td>
+                <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; text-align:right;"></td>
+                <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; text-align:right; white-space:nowrap;">${moneyMenos(mov.pagado)}</td>
+                <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; text-align:right; white-space:nowrap;"><span style="font-weight:800; color:#b91c1c;">${money(saldoTras)}</span></td>
+            </tr>`;
+        };
 
         try {
             const res = await fetch(`/cobranza/cliente/${encodeURIComponent(codigoCliente)}/estado-cuenta`, {
@@ -946,61 +1036,178 @@
                             <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Doc</th>
                             <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Nº</th>
                             <th style="padding: 8px; border-bottom: 2px solid #e2e8f0;">Descripción</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;">Cant.</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;">Precio</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;">Total</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;">Pagado</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;">Tot. fac.</th>
-                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;">Saldo</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right; color:#b45309;" title="Suma de artículos">Cargo (+)</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right; color:#7c3aed;" title="Diferencia entre cargo y total factura">Desc.</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;" title="Total de la factura">Tot. fac.</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right; color:#15803d;" title="Pagos aplicados">Abono (−)</th>
+                            <th style="padding: 8px; border-bottom: 2px solid #e2e8f0; text-align:right;" title="Deuda acumulada tras esta factura">Saldo acum.</th>
                         </tr>
                     </thead>
                     <tbody>
             `;
 
+            let facUid = 0;
             const grupos = (data.grupos && data.grupos.length) ? data.grupos : [{ propio: true, titulo: data.cliente || cliente, lineas, totales }];
             const varios = grupos.length > 1;
             grupos.forEach((g) => {
+            let saldoRun = 0;
             if (varios) {
                 html += `
                     <tr style="background:${g.propio ? '#fff7ed' : '#f5f3ff'};">
-                        <td colspan="12" style="padding: 8px; font-weight: 800; color:${g.propio ? '#9a3412' : '#6d28d9'}; border-bottom: 2px solid ${g.propio ? '#fdba74' : '#c4b5fd'};">
+                        <td colspan="11" style="padding: 8px; font-weight: 800; color:${g.propio ? '#9a3412' : '#6d28d9'}; border-bottom: 2px solid ${g.propio ? '#fdba74' : '#c4b5fd'};">
                             ${g.propio ? 'Facturas propias' : '🤝 Como intermediario · a nombre de'} — ${esc(g.titulo)}
                         </td>
                     </tr>`;
             }
-            g.lineas.forEach((mov) => {
-                const esAbono = mov.tipo === 'abono';
-                const esCabecera = mov.total_factura != null;
-                const relacion = !varios && esCabecera && mov.a_nombre_de
-                    ? `<div style="margin-top:2px; font-size:.7rem; font-weight:700; color:#7c3aed;">🤝 A nombre de ${esc(mov.a_nombre_de)}</div>`
-                    : (esCabecera && mov.intermediario ? `<div style="margin-top:2px; font-size:.7rem; font-weight:700; color:#7c3aed;">🤝 Intermediario: ${esc(mov.intermediario)}</div>` : '');
+            agruparFacturas(g.lineas || []).forEach((bloque) => {
+                if (bloque.tipo === 'abono') {
+                    const mov = bloque.mov;
+                    const pagado = Number(mov.pagado) || 0;
+                    saldoRun = round2(saldoRun - pagado);
+                    html += filaAbonoHtml(mov, saldoRun);
+                    return;
+                }
+
+                const items = bloque.items || [];
+                const abonos = bloque.abonos || [];
+                const cab = bloque.cabecera || items[0] || abonos[0] || {};
+                const cargo = items.reduce((s, it) => s + (Number(it.total) || 0), 0);
+                const totFac = cab.total_factura != null ? Number(cab.total_factura) : (cargo || 0);
+                const pagadoFac = cab.pagado != null ? Number(cab.pagado) : 0;
+                const descMonto = (totFac != null && cargo > totFac + 0.05) ? round2(cargo - totFac) : 0;
+                const descPct = descMonto > 0 && cargo > 0 ? Math.round((descMonto / cargo) * 100) : 0;
+                const nItems = items.length;
+                const nPagos = abonos.length;
+                const totalPagosDetalle = abonos.reduce((s, a) => s + (Number(a.pagado) || 0), 0);
+                // Si hay pagos detallados, la factura solo llega a Tot.fac; el abono se ve en PAG.
+                // Si Profit dice que se pagó pero no hay filas PAG, el abono va en la misma FAC.
+                const abonoEnFac = nPagos === 0 && pagadoFac > 0.01 ? pagadoFac : 0;
+                const id = 'fac-' + (++facUid);
+                const numFac = cab.numero_documento || cab.factura_padre || bloque.clave || '';
+                const relacion = !varios && cab.a_nombre_de
+                    ? `<div style="margin-top:2px; font-size:.7rem; font-weight:700; color:#7c3aed;">🤝 A nombre de ${esc(cab.a_nombre_de)}</div>`
+                    : (cab.intermediario ? `<div style="margin-top:2px; font-size:.7rem; font-weight:700; color:#7c3aed;">🤝 Intermediario: ${esc(cab.intermediario)}</div>` : '');
+                const resumen = nItems <= 1
+                    ? esc(cab.descripcion || (nItems === 0 ? 'Factura' : 'Factura'))
+                    : `${nItems} artículos · ${esc(items[0]?.descripcion || 'Factura')}…`;
+                const descTxt = descPct >= 1
+                    ? `<span style="color:#7c3aed;font-weight:800;">− ${money(descMonto)}<div style="font-size:.65rem;font-weight:700;">${descPct}%</div></span>`
+                    : '';
+
+                // 1) Factura suma al saldo (= Tot.fac si no hay abono aún)
+                saldoRun = round2(saldoRun + (Number(totFac) || 0));
+                const saldoTrasFac = saldoRun;
+                if (abonoEnFac > 0) {
+                    saldoRun = round2(saldoRun - abonoEnFac);
+                }
+                const saldoMostrarFac = abonoEnFac > 0 ? saldoRun : saldoTrasFac;
+
+                const badges = [];
+                const abonoTotalVista = nPagos > 0 ? totalPagosDetalle : abonoEnFac;
+                const saldoFinalFac = nPagos > 0
+                    ? round2(saldoTrasFac - totalPagosDetalle)
+                    : saldoMostrarFac;
+                if (abonoTotalVista > 0.01 && saldoFinalFac > 0.01) {
+                    badges.push(`<span style="display:inline-block;margin-top:3px;padding:1px 6px;border-radius:4px;font-size:.68rem;font-weight:800;color:#b45309;background:#ffedd5;">Pago parcial</span>`);
+                } else if (abonoTotalVista > 0.01 && saldoFinalFac <= 0.01 && (totFac || 0) > 0.01) {
+                    badges.push(`<span style="display:inline-block;margin-top:3px;padding:1px 6px;border-radius:4px;font-size:.68rem;font-weight:800;color:#15803d;background:#dcfce7;">Pagada</span>`);
+                }
+
+                const tieneDetalle = nItems > 1;
+                const clickable = tieneDetalle ? `class="edo-fac-toggle" data-fac="${id}" style="cursor:pointer;"` : '';
                 html += `
-                    <tr style="${esAbono ? 'background-color: #f0fdf4;' : ''}">
-                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; white-space:nowrap; color:#64748b;">${esc(mov.antiguedad || '')}</td>
-                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; white-space:nowrap;">${esc(mov.fecha || '')}</td>
-                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${esc(mov.sede || '')}</td>
-                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; font-weight:700;">${esc(mov.tipo_doc || '')}</td>
-                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${esc(mov.numero_documento || '')}</td>
-                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0;">${esc(mov.descripcion || '')}${relacion}</td>
-                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right;">${qty(mov.cantidad)}</td>
-                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right;">${money(mov.precio)}</td>
-                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right; color:#b45309;">${money(mov.total)}</td>
-                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right; color:#16a34a;">${money(mov.pagado)}</td>
-                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right;">${money(mov.total_factura)}</td>
-                        <td style="padding: 7px 8px; border-bottom: 1px solid #e2e8f0; text-align:right; font-weight:700;">${money(mov.saldo_acumulado ?? mov.saldo_factura)}</td>
-                    </tr>
-                `;
+                    <tr ${clickable} title="${tieneDetalle ? 'Clic para ver o ocultar artículos' : ''}">
+                        <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; white-space:nowrap; color:#64748b;">${esc(cab.antiguedad || '')}</td>
+                        <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; white-space:nowrap;">${esc(cab.fecha || '')}</td>
+                        <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0;">${esc(cab.sede || '')}</td>
+                        <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0;">
+                            <span style="display:inline-block; padding:1px 6px; border-radius:4px; font-weight:800; font-size:.72rem; color:#b45309; background:#ffedd5;">FAC +</span>
+                        </td>
+                        <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; font-weight:700;">${esc(numFac)}</td>
+                        <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0;">
+                            <span style="display:inline-flex; align-items:center; gap:6px;">
+                                ${tieneDetalle ? `<span class="edo-chevron" data-chevron="${id}" style="font-size:.7rem; color:#64748b; width:10px;">▶</span>` : ''}
+                                <span>${resumen}${relacion}</span>
+                            </span>
+                            ${tieneDetalle ? `<div style="font-size:.68rem; color:#94a3b8; margin-top:2px;">Clic para ver artículos</div>` : ''}
+                            ${badges.join('')}
+                        </td>
+                        <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; text-align:right; white-space:nowrap;">${moneyMas(cargo || totFac)}</td>
+                        <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; text-align:right; white-space:nowrap;">${descTxt}</td>
+                        <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; text-align:right; white-space:nowrap; font-weight:600;">${money(totFac)}</td>
+                        <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; text-align:right; white-space:nowrap;">${abonoEnFac > 0 ? moneyMenos(abonoEnFac) : ''}</td>
+                        <td style="padding:7px 8px; border-bottom:1px solid #e2e8f0; text-align:right; white-space:nowrap;"><span style="font-weight:800; color:#b91c1c;">${money(saldoMostrarFac)}</span></td>
+                    </tr>`;
+
+                items.forEach((mov) => {
+                    html += `
+                        <tr class="edo-fac-detalle" data-parent="${id}" style="display:none; background:#f8fafc;">
+                            <td style="padding:5px 8px 5px 18px; border-bottom:1px solid #f1f5f9; color:#94a3b8;"></td>
+                            <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9; color:#94a3b8; font-size:.72rem;">${esc(mov.fecha || '')}</td>
+                            <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9;"></td>
+                            <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9;"></td>
+                            <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9; color:#94a3b8; font-size:.72rem;">${esc(mov.numero_documento || '')}</td>
+                            <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9; color:#475569;">
+                                ${esc(mov.descripcion || '')}
+                                ${mov.cantidad != null || mov.precio != null ? `<span style="color:#94a3b8; font-size:.7rem;"> · ${qty(mov.cantidad)} × ${money(mov.precio)}</span>` : ''}
+                            </td>
+                            <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9; text-align:right; white-space:nowrap;">${moneyMas(mov.total)}</td>
+                            <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9;"></td>
+                            <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9;"></td>
+                            <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9;"></td>
+                            <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9;"></td>
+                        </tr>`;
+                });
+
+                // 2) Abonos debajo: restan y muestran cómo queda el saldo
+                if (nPagos > 0) {
+                    const pagId = 'pag-' + id;
+                    const totalPag = totalPagosDetalle;
+                    saldoRun = round2(saldoRun - totalPag);
+                    const resumenPag = {
+                        antiguedad: abonos[0].antiguedad || '',
+                        fecha: abonos[0].fecha || '',
+                        sede: abonos[0].sede || '',
+                        numero_documento: nPagos === 1 ? (abonos[0].numero_documento || '') : '',
+                        descripcion: nPagos === 1 ? (abonos[0].descripcion || 'Pago / Abono') : (nPagos + ' pagos aplicados'),
+                        pagado: totalPag,
+                    };
+                    html += filaAbonoHtml(resumenPag, saldoRun, { id: pagId, n: nPagos });
+                    if (nPagos > 1) {
+                        let saldoPaso = round2(saldoTrasFac);
+                        abonos.forEach((mov) => {
+                            saldoPaso = round2(saldoPaso - (Number(mov.pagado) || 0));
+                            html += `
+                                <tr class="edo-pag-detalle" data-parent="${pagId}" style="display:none; background:#ecfdf5;">
+                                    <td style="padding:5px 8px 5px 18px; border-bottom:1px solid #dcfce7;"></td>
+                                    <td style="padding:5px 8px; border-bottom:1px solid #dcfce7; color:#64748b; font-size:.72rem;">${esc(mov.fecha || '')}</td>
+                                    <td style="padding:5px 8px; border-bottom:1px solid #dcfce7;">${esc(mov.sede || '')}</td>
+                                    <td style="padding:5px 8px; border-bottom:1px solid #dcfce7;">
+                                        <span style="display:inline-block; padding:1px 6px; border-radius:4px; font-weight:800; font-size:.68rem; color:#15803d; background:#dcfce7;">PAG −</span>
+                                    </td>
+                                    <td style="padding:5px 8px; border-bottom:1px solid #dcfce7; color:#64748b; font-size:.72rem;">${esc(mov.numero_documento || '')}</td>
+                                    <td style="padding:5px 8px; border-bottom:1px solid #dcfce7; color:#166534;">${esc(mov.descripcion || 'Pago / Abono')}</td>
+                                    <td style="padding:5px 8px; border-bottom:1px solid #dcfce7;"></td>
+                                    <td style="padding:5px 8px; border-bottom:1px solid #dcfce7;"></td>
+                                    <td style="padding:5px 8px; border-bottom:1px solid #dcfce7;"></td>
+                                    <td style="padding:5px 8px; border-bottom:1px solid #dcfce7; text-align:right; white-space:nowrap;">${moneyMenos(mov.pagado)}</td>
+                                    <td style="padding:5px 8px; border-bottom:1px solid #dcfce7; text-align:right; white-space:nowrap; color:#b91c1c;">${money(saldoPaso)}</td>
+                                </tr>`;
+                        });
+                    }
+                }
             });
             if (varios) {
                 html += `
                     <tr style="background:${g.propio ? '#fff7ed' : '#f5f3ff'};">
-                        <td colspan="8" style="padding: 8px; font-weight: 700;">Subtotal ${esc(g.titulo)}</td>
-                        <td style="padding: 8px; text-align: right; font-weight: 700; color: #b45309;">${money(g.totales.cargos)}</td>
-                        <td style="padding: 8px; text-align: right; font-weight: 700; color: #16a34a;">${money(g.totales.abonos)}</td>
+                        <td colspan="6" style="padding: 8px; font-weight: 700;">Subtotal ${esc(g.titulo)}</td>
+                        <td style="padding: 8px; text-align: right; font-weight: 700; white-space:nowrap;">${moneyMas(g.totales.cargos)}</td>
                         <td></td>
-                        <td style="padding: 8px; text-align: right; font-weight: 800;">${money(g.totales.saldo)}</td>
+                        <td></td>
+                        <td style="padding: 8px; text-align: right; font-weight: 700; white-space:nowrap;">${moneyMenos(g.totales.abonos)}</td>
+                        <td style="padding: 8px; text-align: right; font-weight: 800; color:#b91c1c;">${money(g.totales.saldo)}</td>
                     </tr>
-                    <tr><td colspan="12" style="padding: 6px; border: 0;"></td></tr>`;
+                    <tr><td colspan="11" style="padding: 6px; border: 0;"></td></tr>`;
             }
             });
 
@@ -1008,27 +1215,45 @@
                     </tbody>
                     <tfoot>
                         <tr style="background: #f8fafc;">
-                            <td colspan="8" style="padding: 8px; font-weight: 600; border-top: 1px solid #cbd5e1;">${varios ? 'Total general' : 'Totales Profit'}</td>
-                            <td style="padding: 8px; text-align: right; font-weight: 600; color: #b45309; border-top: 1px solid #cbd5e1;">${money(totales.cargos)}</td>
-                            <td style="padding: 8px; text-align: right; font-weight: 600; color: #16a34a; border-top: 1px solid #cbd5e1;">${money(totales.abonos)}</td>
+                            <td colspan="6" style="padding: 8px; font-weight: 600; border-top: 1px solid #cbd5e1;">${varios ? 'Total general' : 'Totales Profit'}</td>
+                            <td style="padding: 8px; text-align: right; border-top: 1px solid #cbd5e1; white-space:nowrap;">${moneyMas(totales.cargos)}</td>
                             <td style="padding: 8px; border-top: 1px solid #cbd5e1;"></td>
-                            <td style="padding: 8px; text-align: right; font-weight: 700; color: #dc2626; border-top: 1px solid #cbd5e1;">${money(totales.saldo)}</td>
+                            <td style="padding: 8px; border-top: 1px solid #cbd5e1;"></td>
+                            <td style="padding: 8px; text-align: right; border-top: 1px solid #cbd5e1; white-space:nowrap;">${moneyMenos(totales.abonos)}</td>
+                            <td style="padding: 8px; text-align: right; font-weight: 800; color: #dc2626; border-top: 1px solid #cbd5e1;">${money(totales.saldo)}</td>
                         </tr>
                     </tfoot>
                 </table>
                 </div>
                 <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:12px;">
-                    <div style="font-size:.8rem; color:#475569;">Por sede: ${sedeTxt}</div>
+                    <div style="font-size:.8rem; color:#475569;">
+                        Factura → Tot. fac. (= saldo si no hay pago) · si hay pago: <span style="color:#15803d;font-weight:700;">Abono</span> y saldo que queda ·
+                        Por sede: ${sedeTxt}
+                    </div>
                     <div style="text-align:right;">
                         ${totales.tasa_bcv > 1 ? `<div style="font-size:.8rem; color:#64748b;">BCV ${Number(totales.tasa_bcv).toLocaleString('es-VE', { maximumFractionDigits: 4 })} · Bs ${Number(totales.saldo_bs).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
                         ${Number(totales.saldo_intermediado || 0) > 0 ? `<div style="font-size:.82rem; color:#475569;">Propio ${money(totales.saldo_propio)} · Como intermediario ${money(totales.saldo_intermediado)}</div>` : ''}
                         <div style="font-size:1.05rem; font-weight:800;">Saldo a pagar ${money(totales.saldo)}</div>
                     </div>
                 </div>
-                <p style="margin:10px 0 0; font-size:.75rem; color:#94a3b8;">Relación con lo sincronizado desde Profit (artículos, abonos y saldo). El Excel de crédito agrupado por persona o el -30% a mano no está en la web.</p>
             `;
 
             list.innerHTML = html;
+            const bindToggle = (selector, attr, detalleClass, openBg) => {
+                list.querySelectorAll(selector).forEach((fila) => {
+                    fila.addEventListener('click', () => {
+                        const id = fila.getAttribute(attr);
+                        const abiertos = list.querySelectorAll(`.${detalleClass}[data-parent="${id}"]`);
+                        const chevron = list.querySelector(`.edo-chevron[data-chevron="${id}"]`);
+                        const abierto = abiertos.length && abiertos[0].style.display !== 'none';
+                        abiertos.forEach((tr) => { tr.style.display = abierto ? 'none' : 'table-row'; });
+                        if (chevron) chevron.textContent = abierto ? '▶' : '▼';
+                        fila.style.background = abierto ? (openBg === '#f0fdf4' ? '#f0fdf4' : '') : openBg;
+                    });
+                });
+            };
+            bindToggle('.edo-fac-toggle', 'data-fac', 'edo-fac-detalle', '#fff7ed');
+            bindToggle('.edo-pag-toggle', 'data-pag', 'edo-pag-detalle', '#dcfce7');
         } catch (e) {
             console.error(e);
             list.innerHTML = '<div style="color:red; padding:10px;">Error al cargar el estado de cuenta.</div>';

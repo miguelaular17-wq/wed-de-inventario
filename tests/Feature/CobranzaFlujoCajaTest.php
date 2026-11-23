@@ -278,6 +278,7 @@ class CobranzaFlujoCajaTest extends TestCase
 
         $datos = app(\App\Services\Cobranza\CobranzaReciboService::class)->datos($mov->load('usuario'));
         $this->assertSame('J-40172229-6', $datos['empresa']['rif']);
+        $this->assertStringContainsString('DORAL', $datos['empresa']['razon_social']);
         $this->assertSame('Cliente Deudor', $datos['cliente']);
         $this->assertSame('155564', $datos['afecta']);
         $this->assertSame('EFECTIVO', $datos['metodo']);

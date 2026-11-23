@@ -836,6 +836,7 @@ Route::middleware(['auth', 'permission:cobranza'])->prefix('cobranza')->group(fu
     Route::delete('/flujo-caja/asientos/{asiento}', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'destroyAsiento'])->whereNumber('asiento')->name('cobranza.flujo.asientos.destroy');
     Route::get('/cliente/{codigo_cliente}/estado-cuenta', [CobranzaController::class, 'estadoCuentaCliente'])->name('cobranza.estado_cuenta.cliente');
     Route::get('/cliente/{codigo_cliente}/estado-cuenta/pdf', [CobranzaController::class, 'estadoCuentaClientePdf'])->name('cobranza.estado_cuenta.cliente.pdf');
+    Route::get('/cliente/{codigo_cliente}/estado-cuenta/excel', [CobranzaController::class, 'estadoCuentaClienteExcel'])->name('cobranza.estado_cuenta.cliente.excel');
     Route::get('/{codigo_cliente}/llamadas', [CobranzaController::class, 'obtenerLlamadas'])->name('cobranza.llamadas.get');
     Route::post('/{codigo_cliente}/llamadas', [CobranzaController::class, 'guardarLlamada'])->name('cobranza.llamadas.store');
     Route::delete('/llamadas/{id}', [CobranzaController::class, 'eliminarLlamada'])->name('cobranza.llamadas.destroy');

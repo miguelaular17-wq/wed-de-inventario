@@ -3269,10 +3269,10 @@ function faAgregarHaber(s, linea = {}) {
             <input type="text" name="asiento_haber[${i}][beneficiario]" class="fa-haber-beneficiario" maxlength="255" placeholder="Beneficiario (opc.)" value="${esc(benefVal)}" style="${inp}" title="Beneficiario de este haber">
             <select name="asiento_haber[${i}][sede]" class="fa-haber-sede" style="${inp}" title="Sede de este haber">
                 ${faOptsSelect(window.FA_SEDES, sedeSel, 'Sede (opc.)')}
-            </select>
+                    </select>
             <select name="asiento_haber[${i}][tipo_gasto]" class="fa-haber-tipo" style="${inp}" title="Tipo de gasto de este haber">
                 ${faOptsSelect(window.FA_TIPOS_GASTO, tipoSel, 'Tipo de gasto (opc.)')}
-            </select>
+                    </select>
             <input type="text" name="asiento_haber[${i}][placa]" class="fa-haber-placa" maxlength="40" placeholder="Placa (si aplica)" value="${esc(placaVal)}" style="${inp}" title="Placa del vehículo, si aplica">
         </div>`;
     fila.querySelector('button').addEventListener('click', () => {

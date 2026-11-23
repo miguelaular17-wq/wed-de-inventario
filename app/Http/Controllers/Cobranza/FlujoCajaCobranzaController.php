@@ -116,16 +116,22 @@ class FlujoCajaCobranzaController extends Controller
         return array_map(fn ($archivo) => $storage->subir($archivo, $prefijo), $request->file('comprobantes'));
     }
 
-    /** Recibo de pago (formato ticket) de un ingreso. */
+    /** Recibo de pago: ticket (Cobranza/Doral) o formato Je Nu (Contratos/Patrimonial). */
     public function recibo(CobranzaMovimiento $movimiento): \Illuminate\Http\Response
     {
         abort_unless($movimiento->esIngreso(), 404);
         $movimiento->loadMissing('usuario');
         $datos = app(\App\Services\Cobranza\CobranzaReciboService::class)->datos($movimiento);
+        $esJenu = ($datos['plantilla'] ?? '') === 'jenu';
+        $vista = $esJenu ? 'cobranza.flujo.recibo_jenu' : 'cobranza.flujo.recibo';
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($vista, ['r' => $datos]);
+        if ($esJenu) {
+            $pdf->setPaper('letter', 'portrait');
+        } else {
+            $pdf->setPaper([0, 0, 226.77, 600]);
+        }
 
-        return \Barryvdh\DomPDF\Facade\Pdf::loadView('cobranza.flujo.recibo', ['r' => $datos])
-            ->setPaper([0, 0, 226.77, 600])
-            ->stream('recibo_'.$datos['numero'].'.pdf');
+        return $pdf->stream('recibo_'.$datos['numero'].'.pdf');
     }
 
     public function update(Request $request, CobranzaMovimiento $movimiento): RedirectResponse
