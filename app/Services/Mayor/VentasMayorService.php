@@ -153,12 +153,13 @@ class VentasMayorService
             fn ($s) => trim((string) $s),
             $filtros['subcategorias'] ?? []
         ), fn ($s) => $s !== '' && strtolower($s) !== 'todas')));
-        $sedeRaw = trim((string) ($filtros['sede'] ?? 'todas'));
-        $sede = strtolower($sedeRaw) === 'todas' || $sedeRaw === ''
+        $sedeRaw = trim((string) ($filtros['sede'] ?? self::SEDE_FACTURA));
+        // Por defecto JRZ (sede de facturación); el usuario puede elegir otra o Global.
+        $sede = strtolower($sedeRaw) === 'todas'
             ? 'todas'
-            : strtoupper($sedeRaw);
+            : strtoupper($sedeRaw === '' ? self::SEDE_FACTURA : $sedeRaw);
         if ($sede !== 'todas' && $this->sedeOcultaEnCatalogo($sede)) {
-            $sede = 'todas';
+            $sede = self::SEDE_FACTURA;
         }
         $excluidas = array_values(array_unique(array_filter(array_map(
             fn ($s) => strtoupper(trim((string) $s)),
@@ -202,12 +203,14 @@ class VentasMayorService
             $query->where('precio_mayor', '<=', $precioMax);
         }
 
-        // La tarjeta muestra el stock de JRZ (de donde se factura). Con sede Global
-        // los filtros de stock/existencia usan JRZ para que coincidan con lo que se ve.
-        $sedeStock = $sede === 'todas' ? self::SEDE_FACTURA : $sede;
-
-        $aplicarSedeStock = function ($q) use ($sedeStock): void {
-            $q->whereRaw('UPPER(TRIM(sede)) = ?', [$sedeStock]);
+        // Igual que el catálogo normal: sede concreta, o Global (todas menos las excluidas).
+        $aplicarSedeStock = function ($q) use ($sede, $excluidas): void {
+            if ($sede !== 'todas') {
+                $q->whereRaw('UPPER(TRIM(sede)) = ?', [$sede]);
+            } elseif ($excluidas !== []) {
+                $ph = implode(',', array_fill(0, count($excluidas), '?'));
+                $q->whereRaw('UPPER(TRIM(sede)) NOT IN ('.$ph.')', $excluidas);
+            }
         };
 
         if ($soloExistencia) {
@@ -219,30 +222,34 @@ class VentasMayorService
             });
         }
 
-        if ($stockMin !== null || $stockMax !== null) {
-            $sumaSql = '(SELECT COALESCE(SUM(s.existencia), 0) FROM stock_actual s'
-                .' WHERE s.producto_id = productos.id AND UPPER(TRIM(s.sede)) = ?)';
-            if ($stockMin !== null) {
-                $query->whereRaw("{$sumaSql} >= ?", [$sedeStock, $stockMin]);
-            }
-            if ($stockMax !== null) {
-                $query->whereRaw("{$sumaSql} <= ?", [$sedeStock, $stockMax]);
-            }
+        [$sumaSql, $sumaBindings] = $this->sumaExistenciaSql($sede, $excluidas);
+        if ($stockMin !== null) {
+            $query->whereRaw("{$sumaSql} >= ?", [...$sumaBindings, $stockMin]);
+        }
+        if ($stockMax !== null) {
+            $query->whereRaw("{$sumaSql} <= ?", [...$sumaBindings, $stockMax]);
         }
 
-        // Pedir de más: luego se resta el apartado de JRZ y puede bajar del mínimo.
+        // Pedir de más: el apartado de JRZ puede bajar el disponible al filtrar.
         $limiteSql = ($stockMin !== null || $stockMax !== null || $soloExistencia)
             ? min(500, max($limite * 3, $limite + 40))
             : $limite;
 
         $productos = $query
-            ->orderByRaw('(SELECT COALESCE(SUM(s.existencia), 0) FROM stock_actual s WHERE s.producto_id = productos.id AND UPPER(TRIM(s.sede)) = ?) DESC', [self::SEDE_FACTURA])
+            ->orderByRaw("{$sumaSql} DESC", $sumaBindings)
             ->orderBy('nombre')
             ->limit($limiteSql)
             ->get($this->columnasFicha());
 
         return $this->conStock($productos)
-            ->filter(function ($p) use ($precioMin, $precioMax, $stockMin, $stockMax, $soloExistencia, $sedeStock) {
+            ->map(function ($p) use ($sede, $excluidas) {
+                $und = $this->unidadesSegunFiltroSede($p, $sede, $excluidas);
+                $p->stock_filtro = $und;
+                $p->disponible_filtro = intdiv($und, max(1, (int) $p->unidades_por));
+
+                return $p;
+            })
+            ->filter(function ($p) use ($precioMin, $precioMax, $stockMin, $stockMax, $soloExistencia) {
                 if ($p->precio_presentacion <= 0) {
                     return false;
                 }
@@ -252,10 +259,7 @@ class VentasMayorService
                 if ($precioMax !== null && $p->precio_presentacion > $precioMax) {
                     return false;
                 }
-                // Mismo número que el badge de la tarjeta (JRZ disponible, ya sin apartado).
-                $und = $sedeStock === self::SEDE_FACTURA
-                    ? (int) $p->disponible_jrz
-                    : (int) ($p->stocks[$sedeStock] ?? 0);
+                $und = (int) $p->stock_filtro;
                 if ($soloExistencia && $und <= 0) {
                     return false;
                 }
@@ -270,6 +274,54 @@ class VentasMayorService
             })
             ->take($limite)
             ->values();
+    }
+
+    /**
+     * SQL + bindings de la suma de existencia según sede / exclusiones (catálogo normal).
+     *
+     * @param  list<string>  $excluidas
+     * @return array{0: string, 1: list<string>}
+     */
+    private function sumaExistenciaSql(string $sede, array $excluidas): array
+    {
+        $base = '(SELECT COALESCE(SUM(s.existencia), 0) FROM stock_actual s WHERE s.producto_id = productos.id';
+        if ($sede !== 'todas') {
+            return [$base.' AND UPPER(TRIM(s.sede)) = ?)', [$sede]];
+        }
+        if ($excluidas !== []) {
+            $ph = implode(',', array_fill(0, count($excluidas), '?'));
+
+            return [$base.' AND UPPER(TRIM(s.sede)) NOT IN ('.$ph.'))', $excluidas];
+        }
+
+        return [$base.')', []];
+    }
+
+    /**
+     * Unidades que ve el filtro/tarjeta: sede elegida, o suma Global menos excluidas.
+     * En JRZ se usa el disponible (ya sin apartado de facturas).
+     *
+     * @param  list<string>  $excluidas
+     */
+    private function unidadesSegunFiltroSede(object $p, string $sede, array $excluidas): int
+    {
+        if ($sede !== 'todas') {
+            if ($sede === self::SEDE_FACTURA) {
+                return (int) $p->disponible_jrz;
+            }
+
+            return (int) ($p->stocks[$sede] ?? 0);
+        }
+
+        $sum = 0;
+        foreach ($p->stocks as $s => $n) {
+            if ($excluidas !== [] && in_array((string) $s, $excluidas, true)) {
+                continue;
+            }
+            $sum += (int) $n;
+        }
+
+        return $sum;
     }
 
     /** @return list<string> Categorías con stock en JRZ. */
@@ -399,7 +451,13 @@ class VentasMayorService
             foreach ($this->sedes() as $sede) {
                 $p->stocks[$sede] = (int) ($stock[$id][$sede] ?? 0);
             }
-            $p->stocks[self::SEDE_FACTURA] = max(0, $p->stocks[self::SEDE_FACTURA] - (int) ($apartado[$id] ?? 0));
+            // Incluir sedes que existan en stock_actual aunque no estén en config (filtro del catálogo).
+            foreach ($stock[$id] ?? [] as $sede => $n) {
+                if (! array_key_exists($sede, $p->stocks)) {
+                    $p->stocks[$sede] = (int) $n;
+                }
+            }
+            $p->stocks[self::SEDE_FACTURA] = max(0, ($p->stocks[self::SEDE_FACTURA] ?? 0) - (int) ($apartado[$id] ?? 0));
             $p->stock_total = array_sum($p->stocks);
             $p->disponible_jrz = $p->stocks[self::SEDE_FACTURA];
             $p->precio_mayor = round((float) ($p->precio_mayor ?? 0), 2);

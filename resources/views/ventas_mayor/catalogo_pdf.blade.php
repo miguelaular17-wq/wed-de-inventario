@@ -88,7 +88,7 @@
                             </tr>
                         </table>
                     </div>
-                    <div class="disp">Disponible: {{ \App\Models\Mayor\MayorCatalogo::cantidadTexto($p->disponible_presentaciones, $p->presentacion) }}</div>
+                    <div class="disp">Disponible: {{ \App\Models\Mayor\MayorCatalogo::cantidadTexto((int) ($p->disponible_filtro ?? $p->disponible_presentaciones), $p->presentacion) }}</div>
                 </td>
             @endforeach
             @for($i = $fila->count(); $i < 3; $i++)<td style="width:33.33%;"></td>@endfor

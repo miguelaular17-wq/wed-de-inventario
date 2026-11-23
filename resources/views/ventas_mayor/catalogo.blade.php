@@ -9,14 +9,17 @@
 @section('content')
 @php
     $presNombre = fn ($p) => $p->presentacion === 'caja' ? 'caja' : ($p->presentacion === 'paquete' ? 'paquete' : 'unidad');
-    $disponibleTexto = fn ($p) => \App\Models\Mayor\MayorCatalogo::cantidadTexto($p->disponible_presentaciones, $p->presentacion);
+    $disponibleTexto = fn ($p) => \App\Models\Mayor\MayorCatalogo::cantidadTexto(
+        (int) ($p->disponible_filtro ?? $p->disponible_presentaciones),
+        $p->presentacion
+    );
     $descPct = (float) ($descuentoDivisaPct ?? 0);
     $descFactor = (float) ($descuentoFactor ?? max(0, 1 - ($descPct / 100)));
     $descEtiqueta = $descuentoEtiqueta ?? (rtrim(rtrim(number_format($descPct, 2, '.', ''), '0'), '.').'%');
     $filtros = $filtros ?? [];
     $q = (string) ($filtros['q'] ?? '');
     $categoria = (string) ($filtros['categoria'] ?? '');
-    $sede = (string) ($filtros['sede'] ?? 'todas');
+    $sede = (string) ($filtros['sede'] ?? \App\Services\Mayor\VentasMayorService::SEDE_FACTURA);
     $soloExistencia = (bool) ($filtros['solo_existencia'] ?? false);
     $perPage = (int) ($filtros['limite'] ?? 24);
     $subcategoriasElegidas = $subcategoriasElegidas ?? [];
@@ -205,7 +208,7 @@
             <div class="cm-filter-item">
                 <label>Sede</label>
                 <select name="sede" id="sedeSelect" class="cm-filter-input">
-                    <option value="todas" @selected($sede === 'todas' || $sede === '')>Global (Todas)</option>
+                    <option value="todas" @selected($sede === 'todas')>Global (Todas)</option>
                     @foreach($sedes as $s)
                         <option value="{{ $s }}" @selected(strtoupper($sede) === strtoupper($s))>{{ $s }}</option>
                     @endforeach
@@ -327,7 +330,7 @@
             @endforeach
         </div>
         @if($productos->count() >= $limite)
-            <p class="muted" style="font-size:.8rem; margin-top:10px;">Se muestran {{ $limite }} productos (los de más stock en JRZ). Aumenta «Mostrar» o afina los filtros.</p>
+            <p class="muted" style="font-size:.8rem; margin-top:10px;">Se muestran {{ $limite }} productos (los de más stock según el filtro de sede). Aumenta «Mostrar» o afina los filtros.</p>
         @endif
     @endif
 </div>

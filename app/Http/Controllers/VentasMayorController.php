@@ -237,7 +237,7 @@ class VentasMayorController extends Controller
                 array_map(fn ($s) => trim((string) $s), $subLista),
                 fn ($s) => $s !== '' && strtolower($s) !== 'todas'
             ))),
-            'sede' => trim((string) $request->query('sede', 'todas')),
+            'sede' => trim((string) $request->query('sede', \App\Services\Mayor\VentasMayorService::SEDE_FACTURA)),
             'excluir_sedes' => array_values(array_unique(array_filter(
                 array_map(fn ($s) => strtoupper(trim((string) $s)), $excluirLista)
             ))),
