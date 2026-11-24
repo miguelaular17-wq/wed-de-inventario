@@ -15,7 +15,7 @@ return [
      * Orden de las formas de pago en el cuadre, igual que la pantalla de cierre de Suite: códigos de metodo_pago
      * y, dentro de cada uno, las cuentas en el orden de metodo_pago_cuentas_banco. Lo que no esté aquí va al final.
      */
-    'orden_metodos' => ['01', '02', 'TDD', 'TDC', 'TRFBS', 'TRF', '10', '11', '12', 'CASHEA', 'GIFTCARD', '03', 'NDC', 'NDC1', 'IGTF'],
+    'orden_metodos' => ['01', '02', 'TDD', 'TDC', 'TRFBS', 'TRF', '10', '11', '12', 'CASHEA', '1212', '05', 'GIFTCARD', '03', 'NDC', 'NDC1', 'IGTF'],
     'orden_cuentas' => ['4459', 'VZLA01', '4025', 'BAN01', 'BAN02', 'BAN03', 'BAN05', 'BNC01', 'BNC02', 'TESOROPM', 'BINANCE', 'CITYB01', 'MPAN'],
 
     /*
@@ -42,13 +42,15 @@ return [
             '10|' => ['IPHONE', null, true],
             '11|' => ['PREVENTA', null, true],
             'CASHEA|' => ['CASHEA', null, true],
+            '1212|' => ['FLEXPAY', null, true],
+            '05|' => ['FLEXPLAY', null, true],
             'GIFTCARD|' => ['GIFT CARD', null, true],
             'NDC|' => ['NOTA DE CRÉDITO', null, false],
             'NDC1|' => ['EFECTIVO DEVOLUCION', null, false],
             'IGTF|' => ['RECARGO FACTURA', null, false],
         ],
     ],
-    'metodos_cuadre' => ['01', '02', 'TDD', 'TRFBS', 'TRF', '10', '11', 'CASHEA', 'GIFTCARD', 'NDC', 'NDC1', 'IGTF'],
+    'metodos_cuadre' => ['01', '02', 'TDD', 'TRFBS', 'TRF', '10', '11', 'CASHEA', '1212', '05', 'GIFTCARD', 'NDC', 'NDC1', 'IGTF'],
 
     /*
      * Como en la configuración de las formas de pago de Suite:

@@ -176,6 +176,13 @@ class MetaQuincenaTest extends TestCase
             ->patchJson(route('metas.valor', $this->deAna), ['valor_unitario' => 9])
             ->assertForbidden();
         $this->assertEquals(2.5, (float) $this->deAna->fresh()->valor_unitario);
+
+        // Quien solo tiene acceso a metas (sin ser gerente) tampoco puede poner el monto.
+        $conMeta = $this->usuario(User::ROLE_SUPERVISOR, 'ZAMORA');
+        $this->actingAs($conMeta)
+            ->patchJson(route('metas.valor', $this->deAna), ['valor_unitario' => 9])
+            ->assertForbidden();
+        $this->assertEquals(2.5, (float) $this->deAna->fresh()->valor_unitario);
     }
 
     public function test_el_bono_de_meta_usa_valor_por_unidades_vendidas_hasta_la_meta(): void

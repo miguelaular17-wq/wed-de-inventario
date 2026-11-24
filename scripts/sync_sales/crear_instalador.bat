@@ -87,7 +87,7 @@ if exist "%BASE_DIR%README.md" (
 )
 
 echo Creando config.json plantilla (nube via bootstrap, sin password)...
-python -c "import json,os; from utils.constants import APP_VERSION, DEFAULT_UPDATE_URL, DEFAULT_SYNC_TOKEN; cfg={'sede':'JRZ','interval_seconds':1800,'update_url':DEFAULT_UPDATE_URL,'sync_token':DEFAULT_SYNC_TOKEN,'app_version':APP_VERSION,'sync_stock':True,'sync_precios':True,'sync_cobranzas':True,'sync_compras':True,'sync_ventas_detalle':True,'sync_ajustes':True,'inicio_dia_ventas_detalle':True,'inicio_dia_ajustes':True,'interval_detalle':10800,'billing_db':{'driver':'{SQL Server}','server':r'localhost\\SQLEXPRESS','database':'suitedb_centro','trusted_connection':True,'query':\"SELECT h.fecha_emision, i.articulo, i.cantidad FROM [dbo].[documentos_venta] h WITH (NOLOCK) INNER JOIN [dbo].[documentos_venta_items] i WITH (NOLOCK) ON h.tipo_documento = i.tipo_documento AND h.numero_documento = i.numero_documento WHERE h.tipo_documento = 'FAC' AND h.fecha_emision > ? ORDER BY h.fecha_emision ASC\"},'web_db':{'host':'','port':5432,'database':'postgres','user':'','password':''}}; open(os.path.join(r'%DIST_DIR%','config.json'),'w',encoding='utf-8').write(json.dumps(cfg,indent=2))"
+python "%BASE_DIR%make_config_plantilla.py" "%DIST_DIR%\config.json"
 if %errorlevel% neq 0 (
     echo [ERROR] No se pudo crear config.json
     pause
@@ -119,18 +119,19 @@ echo [6/6] Creando archivo ZIP para distribucion...
 set "ZIP_PATH=%BASE_DIR%WinSyncService_Instalador.zip"
 if exist "%ZIP_PATH%" del /q "%ZIP_PATH%"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$src = '%DIST_DIR%'; $zip = '%ZIP_PATH%'; ^
-   $items = Get-ChildItem -LiteralPath $src -Force | Where-Object { $_.Name -ne 'state.json' -and $_.Extension -ne '.log' -and $_.Name -notlike '*.log.*' }; ^
-   if (-not $items) { throw 'dist_instalador vacio' }; ^
-   Compress-Archive -Path ($items.FullName) -DestinationPath $zip -Force"
-
+powershell -NoProfile -ExecutionPolicy Bypass -File "%BASE_DIR%pack_instalador.ps1" -Src "%DIST_DIR%" -Zip "%ZIP_PATH%"
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] No se pudo crear el ZIP.
+    echo Cierra el sincronizador si esta abierto desde la carpeta dist_instalador y vuelve a correr este archivo.
+    pause
+    exit /b 1
+)
 if exist "%ZIP_PATH%" (
     echo OK: ZIP creado exitosamente.
 ) else (
     echo.
     echo [ERROR] No se pudo crear el ZIP.
-    echo Cierra el sincronizador si esta abierto desde la carpeta dist_instalador y vuelve a correr este archivo.
     pause
     exit /b 1
 )

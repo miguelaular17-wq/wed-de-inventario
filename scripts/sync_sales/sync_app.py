@@ -1830,79 +1830,16 @@ class SyncApp:
         threading.Thread(target=self._perform_update_prices, daemon=True).start()
 
     def _perform_update_prices(self):
-        billing_conn = None
-        web_conn = None
         try:
-            self.log("Iniciando actualizacion de precios...")
             if not self.save_ui_values_to_config():
                 return
-            
-            billing_conn = self.get_sql_connection()
-            if not billing_conn:
-                self.log("Error: No se pudo conectar a SQL Server.")
-                return
-            
-            web = self.config.get("web_db", {})
-            web_conn = psycopg2.connect(
-                host=web.get("host"), port=web.get("port"), database=web.get("database"),
-                user=web.get("user"), password=web.get("password"), sslmode="require",
-                connect_timeout=15
-            )
-            
-            web_cursor = web_conn.cursor()
-            billing_cursor = billing_conn.cursor()
-
-            self.log("Consultando productos en Supabase...")
-            web_cursor.execute("SELECT id, nombre, COALESCE(precio_unidad, 0), COALESCE(precio_mayor, 0) FROM inventario_v2.productos WHERE nombre IS NOT NULL")
-            web_prods = web_cursor.fetchall()
-
-            self.log("Consultando precios en SQL Server...")
-            billing_cursor.execute("SELECT descripcion, ISNULL(precio1_moneda2_uni1, 0), ISNULL(precio2_moneda2_uni1, ISNULL(precio1_moneda2_uni1, 0)) FROM articulos WITH (NOLOCK) WHERE descripcion IS NOT NULL")
-            sql_prods = billing_cursor.fetchall()
-
-            self.log("Procesando comparaciones...")
-            sql_dict = {}
-            for desc, p1, p2 in sql_prods:
-                sql_dict[str(desc).strip().lower()] = (float(p1), float(p2))
-
-            updates = []
-            for wid, wname, wp1, wp2 in web_prods:
-                clean_name = str(wname).strip().lower()
-                if clean_name in sql_dict:
-                    sp1, sp2 = sql_dict[clean_name]
-                    new_p1 = max(float(wp1), sp1)
-                    new_p2 = max(float(wp2), sp2)
-
-                    if new_p1 > float(wp1) or new_p2 > float(wp2):
-                        updates.append((new_p1, new_p2, wid))
-
-            if not updates:
-                self.log("Todos los precios estan actualizados en la web.")
-                return
-
-            self.log(f"Se actualizaran los precios de {len(updates)} productos. Subiendo a Supabase...")
-            psycopg2.extras.execute_batch(
-                web_cursor,
-                "UPDATE inventario_v2.productos SET precio_unidad = %s, precio_mayor = %s, updated_at = NOW() WHERE id = %s",
-                updates
-            )
-            web_conn.commit()
-            self.log(f"Actualizacion completada! {len(updates)} precios actualizados.")
-
+            from services.price_service import PriceService
+            PriceService.execute(ui_callback=lambda: self.log("Actualizacion de precios finalizada."))
         except Exception as e:
             import traceback
             self.log(f"Error en actualizacion de precios: {traceback.format_exc()}")
-            if web_conn:
-                try: web_conn.rollback()
-                except Exception: pass
         finally:
             self.root.after(0, lambda: self.btn_update_prices.config(state=tk.NORMAL))
-            if billing_conn:
-                try: billing_conn.close()
-                except Exception: pass
-            if web_conn:
-                try: web_conn.close()
-                except Exception: pass
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -29,10 +29,10 @@
                     · Solo las metas de tu sede. Asigna el responsable de cada producto.
                 @elseif($puedeMarcar)
                     · Marca productos desde Marketing → Sobre Stock
-                    @if(!empty($puedeEditarValor)) · El valor $/u. se paga en la comisión del responsable por unidades vendidas (hasta la meta).@endif
+                    @if(!empty($puedeEditarValor)) · Solo la gerente define el valor $/u. de comisión (por unidades vendidas, hasta la meta).@endif
                 @else
                     · Productos asignados a tu sede
-                    @if(!empty($puedeEditarValor)) · Puedes definir el valor $/u. de comisión del responsable.@endif
+                    @if(!empty($puedeEditarValor)) · Solo la gerente puede definir el valor $/u. de comisión del responsable.@endif
                 @endif
             </p>
         </div>

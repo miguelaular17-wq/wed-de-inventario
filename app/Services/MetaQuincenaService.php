@@ -609,8 +609,8 @@ class MetaQuincenaService
      */
     public function puedeEditarValor(User $user): bool
     {
-        return ! $this->soloSusMetas($user)
-            && ($user->isAdmin() || $user->isGerente() || $user->canAccess('meta'));
+        // Solo la gerente (y admin) define el monto $/u. de la meta.
+        return $user->isGerente() || $user->isAdmin();
     }
 
     public function actualizarValor(MetaQuincenaProducto $meta, ?float $valor, User $user): MetaQuincenaProducto
