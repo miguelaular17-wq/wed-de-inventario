@@ -48,6 +48,8 @@ class StOrden extends Model
         'TECNOTROPOLIS' => 'Tecnotropolis',
         'HONOR' => 'Honor',
         'ZTE' => 'ZTE',
+        'MERUQ' => 'Meruq',
+        'OLAX' => 'Olax',
     ];
 
     public const GARANTIA_PENDIENTE_ENVIO = 'pendiente_envio';

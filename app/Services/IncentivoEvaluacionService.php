@@ -1212,11 +1212,19 @@ class IncentivoEvaluacionService
         $categorias = $filtro['categorias'] ?? [];
         $codigos = $filtro['productos'] ?? [];
 
+        // Arrastra lo pendiente de la quincena anterior antes de evaluar.
+        $this->metasQuincena->asegurarArrastres($inicio);
+
+        $cols = ['m.producto_id', 'm.sede', 'm.cantidad_inicial', 'm.responsable_empleado_id', 'p.codigo', 'p.categoria'];
+        if (Schema::hasColumn('meta_quincena_productos', 'cantidad_arrastre')) {
+            $cols[] = 'm.cantidad_arrastre';
+        }
+
         $metas = DB::table('meta_quincena_productos as m')
             ->join('productos as p', 'p.id', '=', 'm.producto_id')
             ->whereDate('m.quincena_inicio', $inicio)
             ->whereNotNull('m.responsable_empleado_id')
-            ->get(['m.producto_id', 'm.sede', 'm.cantidad_inicial', 'm.responsable_empleado_id', 'p.codigo', 'p.categoria']);
+            ->get($cols);
 
         if ($metas->isEmpty()) {
             return [];
@@ -1259,7 +1267,7 @@ class IncentivoEvaluacionService
             }
             $empleadoId = (int) $meta->responsable_empleado_id;
             $sede = mb_strtoupper(trim((string) $meta->sede));
-            $inicial = (float) $meta->cantidad_inicial;
+            $inicial = round((float) $meta->cantidad_inicial + (float) ($meta->cantidad_arrastre ?? 0), 2);
             $unidades = $this->metasQuincena->esArea($sede)
                 ? $this->metasQuincena->unidadesVendidas((int) $meta->producto_id, $sede, $inicio, $fin)
                 : ($vendido[(int) $meta->producto_id.'|'.$sede] ?? 0.0);
@@ -1296,11 +1304,17 @@ class IncentivoEvaluacionService
         }
 
         [$inicio, $fin] = $this->rangoMetasQuincena($desde, $hasta);
+        $this->metasQuincena->asegurarArrastres($inicio);
+
+        $cols = ['m.producto_id', 'm.sede', 'm.cantidad_inicial'];
+        if (Schema::hasColumn('meta_quincena_productos', 'cantidad_arrastre')) {
+            $cols[] = 'm.cantidad_arrastre';
+        }
 
         $metas = DB::table('meta_quincena_productos as m')
             ->join('productos as p', 'p.id', '=', 'm.producto_id')
             ->whereDate('m.quincena_inicio', $inicio)
-            ->get(['m.producto_id', 'm.sede', 'm.cantidad_inicial']);
+            ->get($cols);
 
         if ($metas->isEmpty()) {
             return [];
@@ -1332,7 +1346,7 @@ class IncentivoEvaluacionService
             if ($sede === '') {
                 continue;
             }
-            $inicial = (float) $meta->cantidad_inicial;
+            $inicial = round((float) $meta->cantidad_inicial + (float) ($meta->cantidad_arrastre ?? 0), 2);
             $unidades = $vendido[(int) $meta->producto_id.'|'.$sede] ?? 0.0;
             $cumplida = $inicial > 0 ? $unidades >= $inicial : $unidades > 0;
             $porSede[$sede]['cumplidas'] = ($porSede[$sede]['cumplidas'] ?? 0) + ($cumplida ? 1 : 0);

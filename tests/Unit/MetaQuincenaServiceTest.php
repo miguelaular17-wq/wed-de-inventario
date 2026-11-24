@@ -30,9 +30,18 @@ class MetaQuincenaServiceTest extends TestCase
                 $table->date('quincena_inicio');
                 $table->date('quincena_fin');
                 $table->decimal('cantidad_inicial', 18, 4)->default(0);
+                $table->decimal('cantidad_arrastre', 18, 4)->default(0);
+                $table->unsignedBigInteger('arrastra_de_meta_id')->nullable()->unique();
+                $table->decimal('valor_unitario', 12, 2)->nullable();
                 $table->unsignedBigInteger('responsable_empleado_id')->nullable();
                 $table->unsignedBigInteger('creado_por_user_id')->nullable();
                 $table->timestamps();
+            });
+        }
+        if (Schema::hasTable('meta_quincena_productos') && ! Schema::hasColumn('meta_quincena_productos', 'cantidad_arrastre')) {
+            Schema::table('meta_quincena_productos', function ($table) {
+                $table->decimal('cantidad_arrastre', 18, 4)->default(0);
+                $table->unsignedBigInteger('arrastra_de_meta_id')->nullable()->unique();
             });
         }
 
@@ -351,5 +360,166 @@ class MetaQuincenaServiceTest extends TestCase
             ->all();
 
         $this->assertSame(['DORAL'], $sedes);
+    }
+
+    public function test_arrastra_faltante_a_la_siguiente_quincena_aunque_asignen_otra_meta(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-20', 'America/Caracas'));
+
+        $productoViejo = DB::table('productos')->insertGetId([
+            'codigo' => 'META-ARR-1',
+            'nombre' => 'Producto arrastre',
+            'categoria' => 'HOGAR',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $productoNuevo = DB::table('productos')->insertGetId([
+            'codigo' => 'META-ARR-2',
+            'nombre' => 'Producto nuevo',
+            'categoria' => 'HOGAR',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('clientes')->insert(['id' => 9301, 'nombre' => 'Vendedor Arrastre', 'cedula' => 'V-9301', 'created_at' => now(), 'updated_at' => now()]);
+        $empleadoId = DB::table('nomina_empleados')->insertGetId([
+            'cliente_id' => 9301,
+            'sede' => 'DORAL',
+            'estado' => 'ACTIVO',
+            'salario_base' => 100,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Quincena 01–15: meta 10, vendió 6 → faltan 4.
+        $prev = MetaQuincenaProducto::create([
+            'producto_id' => $productoViejo,
+            'sede' => 'DORAL',
+            'quincena_inicio' => '2026-09-01',
+            'quincena_fin' => '2026-09-15',
+            'cantidad_inicial' => 10,
+            'responsable_empleado_id' => $empleadoId,
+        ]);
+        DB::table('ventas_detalle')->insert([
+            'producto_id' => $productoViejo,
+            'sede' => 'DORAL',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => 'ARR-1',
+            'fecha' => '2026-09-10',
+            'cantidad' => 6,
+            'anulado' => false,
+        ]);
+
+        // Quincena 16–30: le asignan otra meta distinta.
+        MetaQuincenaProducto::create([
+            'producto_id' => $productoNuevo,
+            'sede' => 'DORAL',
+            'quincena_inicio' => '2026-09-16',
+            'quincena_fin' => '2026-09-30',
+            'cantidad_inicial' => 5,
+            'responsable_empleado_id' => $empleadoId,
+        ]);
+
+        $admin = User::create([
+            'name' => 'Admin Arrastre',
+            'email' => 'admin-arrastre@test.local',
+            'password' => 'password123',
+            'role' => User::ROLE_ADMIN,
+        ]);
+
+        $filas = app(MetaQuincenaService::class)->listarParaUsuario($admin);
+        $arrastrada = $filas->firstWhere('producto_id', $productoViejo);
+        $nueva = $filas->firstWhere('producto_id', $productoNuevo);
+
+        $this->assertNotNull($arrastrada);
+        $this->assertSame(4.0, (float) $arrastrada['cantidad_arrastre']);
+        $this->assertSame(4.0, (float) $arrastrada['cantidad_inicial']); // efectiva
+        $this->assertSame($empleadoId, (int) $arrastrada['responsable_empleado_id']);
+        $this->assertNotNull($nueva);
+        $this->assertSame(5.0, (float) $nueva['cantidad_inicial']);
+        $this->assertTrue(
+            MetaQuincenaProducto::query()->where('arrastra_de_meta_id', $prev->id)->exists()
+        );
+
+        // Idempotente: listar de nuevo no duplica el arrastre.
+        $otraVez = app(MetaQuincenaService::class)->listarParaUsuario($admin)
+            ->where('producto_id', $productoViejo);
+        $this->assertCount(1, $otraVez);
+        $this->assertSame(4.0, (float) $otraVez->first()['cantidad_arrastre']);
+    }
+
+    public function test_comision_paga_parcial_en_su_quincena_y_el_resto_arrastrado_en_la_siguiente(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-20', 'America/Caracas'));
+
+        $productoId = DB::table('productos')->insertGetId([
+            'codigo' => 'META-COM-ARR',
+            'nombre' => 'Producto comision arrastre',
+            'categoria' => 'HOGAR',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('clientes')->insert([
+            'id' => 9302,
+            'nombre' => 'Vendedor Comision Arrastre',
+            'cedula' => 'V-9302',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $empleadoId = DB::table('nomina_empleados')->insertGetId([
+            'cliente_id' => 9302,
+            'sede' => 'DORAL',
+            'estado' => 'ACTIVO',
+            'salario_base' => 100,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Q1: meta 10 × $3; vendió 6 → comisión $18; faltan 4.
+        MetaQuincenaProducto::create([
+            'producto_id' => $productoId,
+            'sede' => 'DORAL',
+            'quincena_inicio' => '2026-09-01',
+            'quincena_fin' => '2026-09-15',
+            'cantidad_inicial' => 10,
+            'valor_unitario' => 3,
+            'responsable_empleado_id' => $empleadoId,
+        ]);
+        DB::table('ventas_detalle')->insert([
+            'producto_id' => $productoId,
+            'sede' => 'DORAL',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => 'COM-ARR-1',
+            'fecha' => '2026-09-10',
+            'cantidad' => 6,
+            'anulado' => false,
+        ]);
+
+        $servicio = app(MetaQuincenaService::class);
+        $bonoQ1 = $servicio->bonoComisionResponsable($empleadoId, '2026-09-01', '2026-09-15');
+        $this->assertSame(18.0, $bonoQ1['total']);
+        $this->assertSame(6.0, $bonoQ1['lineas'][0]['unidades_pago']);
+
+        // Q2: vende las 4 restantes del arrastre → paga 4 × $3 = $12.
+        DB::table('ventas_detalle')->insert([
+            'producto_id' => $productoId,
+            'sede' => 'DORAL',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => 'COM-ARR-2',
+            'fecha' => '2026-09-22',
+            'cantidad' => 4,
+            'anulado' => false,
+        ]);
+
+        $bonoQ2 = $servicio->bonoComisionResponsable($empleadoId, '2026-09-16', '2026-09-30');
+        $this->assertSame(12.0, $bonoQ2['total']);
+        $this->assertSame(4.0, $bonoQ2['lineas'][0]['unidades_pago']);
+        $this->assertTrue(
+            MetaQuincenaProducto::query()
+                ->where('producto_id', $productoId)
+                ->whereDate('quincena_inicio', '2026-09-16')
+                ->where('cantidad_arrastre', 4)
+                ->exists()
+        );
     }
 }

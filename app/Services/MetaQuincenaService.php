@@ -207,11 +207,8 @@ class MetaQuincenaService
             ->where('producto_id', $productoId)
             ->whereRaw('UPPER(TRIM(sede)) = ?', [$sede])
             ->whereDate('quincena_inicio', $q['inicio']->toDateString())
+            ->orderByDesc('id')
             ->first();
-
-        if ($existente) {
-            return $existente;
-        }
 
         $stock = $esArea ? round((float) $cantidad, 2) : $this->stockActual($productoId, $sede);
         if ($stock <= 0) {
@@ -220,12 +217,23 @@ class MetaQuincenaService
             ]);
         }
 
+        // Si ya había un arrastre del mismo producto, suma la meta nueva sin borrar lo pendiente.
+        if ($existente) {
+            if ((float) $existente->cantidad_inicial <= 0 && $stock > 0) {
+                $existente->cantidad_inicial = $stock;
+                $existente->save();
+            }
+
+            return $existente->fresh(['responsable.cliente', 'responsable.cargoCatalogo']) ?? $existente;
+        }
+
         return MetaQuincenaProducto::create([
             'producto_id' => $productoId,
             'sede' => $sede,
             'quincena_inicio' => $q['inicio']->toDateString(),
             'quincena_fin' => $q['fin']->toDateString(),
             'cantidad_inicial' => $stock,
+            'cantidad_arrastre' => 0,
             'creado_por_user_id' => $user?->id,
         ]);
     }
@@ -294,18 +302,30 @@ class MetaQuincenaService
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    public function listarParaUsuario(User $user, ?Carbon $fecha = null): Collection
+    public function listarParaUsuario(User $user, ?Carbon $fecha = null, ?string $buscar = null): Collection
     {
         if (! Schema::hasTable('meta_quincena_productos')) {
             return collect();
         }
 
+        $termino = trim((string) $buscar);
+        $buscaGlobal = mb_strlen($termino, 'UTF-8') >= 2;
+
         $q = $this->quincenaActual($fecha);
+        // Lo no cumplido de la quincena anterior se arrastra (aunque le asignen otra meta).
+        $this->asegurarArrastres($q['inicio']);
+
         $query = MetaQuincenaProducto::query()
-            ->with(['responsable.cliente', 'responsable.cargoCatalogo'])
-            ->whereDate('quincena_inicio', $q['inicio']->toDateString())
-            ->orderBy('sede')
-            ->orderBy('id');
+            ->with(['responsable.cliente', 'responsable.cargoCatalogo']);
+
+        if ($buscaGlobal) {
+            $this->aplicarBusquedaProductoOResponsable($query, $termino);
+            $query->orderByDesc('quincena_inicio')->orderBy('sede')->orderBy('id');
+        } else {
+            $query->whereDate('quincena_inicio', $q['inicio']->toDateString())
+                ->orderBy('sede')
+                ->orderBy('id');
+        }
 
         if ($this->soloSusMetas($user)) {
             $yo = $this->org->empleadoDelUsuario($user);
@@ -322,6 +342,132 @@ class MetaQuincenaService
         }
 
         return $query->get()->map(fn (MetaQuincenaProducto $meta) => $this->enriquecer($meta));
+    }
+
+    /**
+     * Busca por nombre/código de producto o por nombre/cédula del responsable (cualquier quincena).
+     */
+    private function aplicarBusquedaProductoOResponsable($query, string $termino): void
+    {
+        $like = '%'.mb_strtolower($termino, 'UTF-8').'%';
+
+        $query->where(function ($q) use ($like) {
+            $q->whereExists(function ($sub) use ($like) {
+                $sub->select(DB::raw(1))
+                    ->from('productos')
+                    ->whereColumn('productos.id', 'meta_quincena_productos.producto_id')
+                    ->where(function ($p) use ($like) {
+                        $p->whereRaw('LOWER(productos.nombre) LIKE ?', [$like])
+                            ->orWhereRaw('LOWER(productos.codigo) LIKE ?', [$like]);
+                    });
+            })->orWhereHas('responsable.cliente', function ($cliente) use ($like) {
+                $cliente->whereRaw('LOWER(nombre) LIKE ?', [$like])
+                    ->orWhereRaw('LOWER(cedula) LIKE ?', [$like]);
+            });
+        });
+    }
+
+    /**
+     * Quincena inmediatamente anterior a la indicada.
+     *
+     * @return array{inicio:Carbon,fin:Carbon,etiqueta:string}
+     */
+    public function quincenaAnterior(Carbon|string $inicioActual): array
+    {
+        $dia = Carbon::parse($inicioActual)->subDay()->startOfDay();
+
+        return $this->quincenas->quincenaDe($dia);
+    }
+
+    /**
+     * Crea/actualiza en la quincena actual lo que cada responsable dejó pendiente.
+     * Idempotente: cada meta origen solo se arrastra una vez (arrastra_de_meta_id).
+     */
+    public function asegurarArrastres(Carbon|string $inicioQuincena): void
+    {
+        if (! Schema::hasTable('meta_quincena_productos')
+            || ! Schema::hasColumn('meta_quincena_productos', 'cantidad_arrastre')
+        ) {
+            return;
+        }
+
+        $qActual = $this->quincenas->quincenaDe($inicioQuincena);
+        $inicioActual = $qActual['inicio']->toDateString();
+        $finActual = $qActual['fin']->toDateString();
+
+        $anterior = $this->quincenaAnterior($inicioActual);
+        $previas = MetaQuincenaProducto::query()
+            ->whereDate('quincena_inicio', $anterior['inicio']->toDateString())
+            ->whereNotNull('responsable_empleado_id')
+            ->get();
+
+        if ($previas->isEmpty()) {
+            return;
+        }
+
+        $yaArrastradas = MetaQuincenaProducto::query()
+            ->whereNotNull('arrastra_de_meta_id')
+            ->whereIn('arrastra_de_meta_id', $previas->pluck('id')->all())
+            ->pluck('arrastra_de_meta_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $ya = array_fill_keys($yaArrastradas, true);
+
+        foreach ($previas as $prev) {
+            if (isset($ya[(int) $prev->id])) {
+                continue;
+            }
+
+            $objetivo = $prev->cantidadEfectiva();
+            if ($objetivo <= 0) {
+                continue;
+            }
+            $vendido = $this->unidadesVendidas(
+                (int) $prev->producto_id,
+                (string) $prev->sede,
+                $prev->quincena_inicio,
+                $prev->quincena_fin
+            );
+            $faltante = round(max(0.0, $objetivo - $vendido), 2);
+            if ($faltante < 0.005) {
+                continue;
+            }
+
+            $responsableId = (int) $prev->responsable_empleado_id;
+            $sede = mb_strtoupper(trim((string) $prev->sede), 'UTF-8');
+
+            // Misma persona + mismo producto/sede en la quincena nueva: suma el faltante.
+            $destino = MetaQuincenaProducto::query()
+                ->where('producto_id', (int) $prev->producto_id)
+                ->whereRaw('UPPER(TRIM(sede)) = ?', [$sede])
+                ->whereDate('quincena_inicio', $inicioActual)
+                ->where('responsable_empleado_id', $responsableId)
+                ->first();
+
+            if ($destino) {
+                $destino->cantidad_arrastre = round((float) ($destino->cantidad_arrastre ?? 0) + $faltante, 2);
+                $destino->arrastra_de_meta_id = (int) $prev->id;
+                if ($destino->valor_unitario === null && $prev->valor_unitario !== null) {
+                    $destino->valor_unitario = $prev->valor_unitario;
+                }
+                $destino->save();
+                continue;
+            }
+
+            // Aunque le hayan puesto otra meta distinta, el faltante sigue con el responsable.
+            MetaQuincenaProducto::create([
+                'producto_id' => (int) $prev->producto_id,
+                'sede' => $sede,
+                'quincena_inicio' => $inicioActual,
+                'quincena_fin' => $finActual,
+                'cantidad_inicial' => 0,
+                'cantidad_arrastre' => $faltante,
+                'arrastra_de_meta_id' => (int) $prev->id,
+                'valor_unitario' => $prev->valor_unitario,
+                'responsable_empleado_id' => $responsableId,
+                'creado_por_user_id' => $prev->creado_por_user_id,
+            ]);
+        }
     }
 
     /**
@@ -508,6 +654,9 @@ class MetaQuincenaService
         $inicio = Carbon::parse($inicio)->toDateString();
         $fin = Carbon::parse($fin)->toDateString();
 
+        // Antes de liquidar: arrastra faltantes de la quincena anterior (parcial o cero).
+        $this->asegurarArrastres($inicio);
+
         $metas = MetaQuincenaProducto::query()
             ->where('responsable_empleado_id', $empleadoId)
             ->whereDate('quincena_inicio', $inicio)
@@ -524,14 +673,14 @@ class MetaQuincenaService
         $total = 0.0;
         foreach ($metas as $meta) {
             $valor = round((float) $meta->valor_unitario, 2);
-            $metaCantidad = max(0.0, (float) $meta->cantidad_inicial);
+            $metaCantidad = max(0.0, $meta->cantidadEfectiva());
             $vendido = max(0.0, $this->unidadesVendidas(
                 (int) $meta->producto_id,
                 (string) $meta->sede,
                 $meta->quincena_inicio,
                 $meta->quincena_fin
             ));
-            // Paga por lo vendido, sin pasar de la cantidad meta.
+            // Paga por lo vendido, sin pasar de la cantidad meta (incluye arrastre).
             $unidadesPago = $metaCantidad > 0 ? min($vendido, $metaCantidad) : $vendido;
             $monto = round($valor * $unidadesPago, 2);
             if ($monto <= 0) {
@@ -680,16 +829,20 @@ class MetaQuincenaService
             $meta->quincena_fin
         );
         $vendido = $venta['unidades'];
-        $cantidadInicial = (float) $meta->cantidad_inicial;
+        $cantidadNueva = (float) $meta->cantidad_inicial;
+        $cantidadArrastre = Schema::hasColumn('meta_quincena_productos', 'cantidad_arrastre')
+            ? round((float) ($meta->cantidad_arrastre ?? 0), 2)
+            : 0.0;
+        $cantidadEfectiva = round($cantidadNueva + $cantidadArrastre, 2);
         // Un área no tiene stock: su "cantidad actual" es lo que le falta por vender.
         $stockActual = $this->esArea($meta->sede)
-            ? max(0.0, round($cantidadInicial - $vendido, 2))
+            ? max(0.0, round($cantidadEfectiva - $vendido, 2))
             : $this->stockActual((int) $meta->producto_id, $meta->sede);
         $tieneValor = Schema::hasColumn('meta_quincena_productos', 'valor_unitario')
             && $meta->valor_unitario !== null
             && (float) $meta->valor_unitario > 0;
         $valorUnitario = $tieneValor ? round((float) $meta->valor_unitario, 2) : null;
-        $unidadesPago = $cantidadInicial > 0 ? min($vendido, $cantidadInicial) : max(0.0, $vendido);
+        $unidadesPago = $cantidadEfectiva > 0 ? min($vendido, $cantidadEfectiva) : max(0.0, $vendido);
         $comisionEstimada = $valorUnitario !== null
             ? round($valorUnitario * $unidadesPago, 2)
             : 0.0;
@@ -704,18 +857,24 @@ class MetaQuincenaService
             'es_area' => $this->esArea($meta->sede),
             'quincena_inicio' => $meta->quincena_inicio?->toDateString(),
             'quincena_fin' => $meta->quincena_fin?->toDateString(),
-            'cantidad_inicial' => $cantidadInicial,
+            'cantidad_inicial' => $cantidadEfectiva,
+            'cantidad_nueva' => $cantidadNueva,
+            'cantidad_arrastre' => $cantidadArrastre,
             'cantidad_actual' => $stockActual,
             'vendido' => $vendido,
             'ultima_venta' => $venta['ultima_venta'],
-            'avance_pct' => $cantidadInicial > 0
-                ? round(min(100, ($vendido / $cantidadInicial) * 100), 1)
+            'avance_pct' => $cantidadEfectiva > 0
+                ? round(min(100, ($vendido / $cantidadEfectiva) * 100), 1)
                 : ($vendido > 0 ? 100.0 : 0.0),
             'valor_unitario' => $valorUnitario,
             'comision_estimada' => $comisionEstimada,
             'responsable_empleado_id' => $meta->responsable_empleado_id,
             'responsable_nombre' => $meta->responsable?->nombre() ?? null,
             'creado_por_user_id' => $meta->creado_por_user_id,
+            'asignada_el' => $meta->created_at?->toDateTimeString(),
+            'quincena_etiqueta' => $meta->quincena_inicio && $meta->quincena_fin
+                ? $meta->quincena_inicio->format('d/m/Y').' al '.$meta->quincena_fin->format('d/m/Y')
+                : null,
         ];
     }
 

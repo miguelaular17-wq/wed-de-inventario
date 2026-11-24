@@ -19,7 +19,8 @@ class MetaQuincenaController extends Controller
 
         $quincenas = $metas->quincenasParaSelector(null, $user);
         $quincena = $metas->resolverQuincenaListado($request->query('inicio'), null, $user);
-        $todas = $metas->listarParaUsuario($user, $quincena['inicio']);
+        $busqueda = trim((string) $request->query('q', ''));
+        $todas = $metas->listarParaUsuario($user, $quincena['inicio'], $busqueda);
         $sedeFiltro = mb_strtoupper(trim((string) $request->query('sede', '')), 'UTF-8');
         $filas = $sedeFiltro !== '' ? $todas->where('sede', $sedeFiltro)->values() : $todas;
         $soloSusMetas = $metas->soloSusMetas($user);
@@ -27,6 +28,7 @@ class MetaQuincenaController extends Controller
             && ($metas->veTodasLasSedes($user) || $metas->areaDelUsuario($user) !== null);
         $puedeEditarValor = $metas->puedeEditarValor($user);
         $equiposPorSede = [];
+        $buscaGlobal = mb_strlen($busqueda, 'UTF-8') >= 2;
 
         foreach ($soloSusMetas ? [] : $filas->pluck('sede')->unique() as $sede) {
             $equiposPorSede[$sede] = $metas->responsablesDisponibles($user, $sede)
@@ -45,6 +47,8 @@ class MetaQuincenaController extends Controller
             'filas' => $filas,
             'todas' => $todas,
             'sedeFiltro' => $sedeFiltro,
+            'busqueda' => $busqueda,
+            'buscaGlobal' => $buscaGlobal,
             'soloSusMetas' => $soloSusMetas,
             'puedeMarcar' => $puedeMarcar,
             'puedeEditarValor' => $puedeEditarValor,

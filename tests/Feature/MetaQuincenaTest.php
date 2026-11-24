@@ -34,6 +34,9 @@ class MetaQuincenaTest extends TestCase
         if (! Schema::hasColumn('meta_quincena_productos', 'valor_unitario')) {
             (require database_path('migrations/2026_11_19_160000_add_valor_unitario_to_meta_quincena_productos_table.php'))->up();
         }
+        if (! Schema::hasColumn('meta_quincena_productos', 'cantidad_arrastre')) {
+            (require database_path('migrations/2026_11_24_140000_add_arrastre_to_meta_quincena_productos.php'))->up();
+        }
 
         $zamora = DB::table('nomina_sedes')->insertGetId(['nombre' => 'Zamora', 'codigo' => 'ZAMORA']);
         $this->ana = $this->empleado('ANA TELEFONIA', '11111111', $zamora);
@@ -231,6 +234,47 @@ class MetaQuincenaTest extends TestCase
             ->get(route('metas.index', ['sede' => 'TECNOHOUSE']))
             ->assertOk()
             ->assertSee('<option value="'.$kleiver->id.'"', false);
+    }
+
+    public function test_buscar_producto_o_responsable_mira_todas_las_quincenas_y_muestra_fecha_asignacion(): void
+    {
+        $servicio = app(MetaQuincenaService::class);
+        $actual = $servicio->quincenaActual();
+        $anterior = $servicio->quincenaAnterior($actual['inicio']);
+
+        $productoViejo = DB::table('productos')->insertGetId([
+            'codigo' => 'BUSQ-OLD',
+            'nombre' => 'LICUADORA HISTORICA',
+        ]);
+        $metaVieja = MetaQuincenaProducto::create([
+            'producto_id' => $productoViejo,
+            'sede' => 'ZAMORA',
+            'quincena_inicio' => $anterior['inicio']->toDateString(),
+            'quincena_fin' => $anterior['fin']->toDateString(),
+            'cantidad_inicial' => 2,
+            'responsable_empleado_id' => $this->ana->id,
+        ]);
+        $metaVieja->forceFill([
+            'created_at' => '2026-10-02 09:15:00',
+            'updated_at' => '2026-10-02 09:15:00',
+        ])->saveQuietly();
+
+        $user = $this->usuario(User::ROLE_GERENTE, null);
+
+        $this->actingAs($user)->get(route('metas.index', ['q' => 'LICUADORA']))
+            ->assertOk()
+            ->assertSee('LICUADORA HISTORICA')
+            ->assertSee('todas las quincenas')
+            ->assertSee('02/10/2026')
+            ->assertSee($anterior['inicio']->format('d/m/Y'))
+            ->assertDontSee('VENTILADOR CENTRO');
+
+        $this->actingAs($user)->get(route('metas.index', ['q' => 'ANA TELEFONIA']))
+            ->assertOk()
+            ->assertSee('LICUADORA HISTORICA')
+            ->assertSee('PERFUME DE ANA')
+            ->assertSee('Asignada')
+            ->assertDontSee('RELOJ DE LUIS');
     }
 
     private function empleado(string $nombre, string $cedula, int $sedeId): NominaEmpleado

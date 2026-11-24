@@ -36,17 +36,34 @@
                 @endif
             </p>
         </div>
+        @php
+            $queryBase = array_filter([
+                'inicio' => $inicioQ,
+                'q' => ($busqueda ?? '') !== '' ? $busqueda : null,
+            ]);
+        @endphp
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
-            <form method="get" action="{{ route('metas.index') }}" style="display:flex;gap:8px;align-items:center;margin:0;">
+            <form method="get" action="{{ route('metas.index') }}" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0;">
                 @if($sedeFiltro !== '')
                     <input type="hidden" name="sede" value="{{ $sedeFiltro }}">
                 @endif
+                <label for="meta-buscar" class="muted" style="font-size:.8rem;font-weight:600;">Buscar</label>
+                <input
+                    id="meta-buscar"
+                    type="search"
+                    name="q"
+                    value="{{ $busqueda ?? '' }}"
+                    placeholder="Producto o responsable…"
+                    minlength="2"
+                    style="min-width:200px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:.85rem;"
+                >
                 <label for="meta-quincena" class="muted" style="font-size:.8rem;font-weight:600;">Quincena</label>
                 <select
                     id="meta-quincena"
                     name="inicio"
-                    onchange="this.form.submit()"
-                    style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:.85rem;"
+                    @if(empty($buscaGlobal)) onchange="this.form.submit()" @endif
+                    style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:#fff;font-size:.85rem;{{ !empty($buscaGlobal) ? 'opacity:.55;' : '' }}"
+                    @if(!empty($buscaGlobal)) title="La búsqueda mira todas las quincenas" @endif
                 >
                     @foreach($quincenas as $opc)
                         <option
@@ -59,11 +76,21 @@
                         </option>
                     @endforeach
                 </select>
+                <button type="submit" class="btn secondary" style="padding:7px 12px;font-size:.82rem;">Buscar</button>
+                @if(($busqueda ?? '') !== '')
+                    <a href="{{ route('metas.index', array_filter(['inicio' => $inicioQ, 'sede' => $sedeFiltro ?: null])) }}" class="muted" style="font-size:.8rem;">Limpiar</a>
+                @endif
             </form>
         </div>
     </div>
 
-    @if(!empty($quincena['auto_anterior']))
+    @if(!empty($buscaGlobal))
+        <div style="margin-top:14px;padding:12px 14px;border-radius:10px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e3a5f;font-size:.9rem;">
+            Búsqueda de <strong>{{ $busqueda }}</strong> en todas las quincenas
+            ({{ $filas->count() }} resultado{{ $filas->count() === 1 ? '' : 's' }}).
+            La fecha <em>Asignada</em> indica cuándo se marcó la meta.
+        </div>
+    @elseif(!empty($quincena['auto_anterior']))
         <div style="margin-top:14px;padding:12px 14px;border-radius:10px;border:1px solid #fde68a;background:#fffbeb;color:#92400e;font-size:.9rem;">
             La quincena actual no tiene metas marcadas. Se muestran las de
             <strong>{{ $quincena['etiqueta'] }}</strong>
@@ -78,7 +105,7 @@
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center;">
             <span class="muted" style="font-size:.78rem;font-weight:600;margin-right:4px;">Sede</span>
             @php $activo = $sedeFiltro === ''; @endphp
-            <a href="{{ route('metas.index', ['inicio' => $inicioQ]) }}" style="{{ $chip($activo, true) }}">
+            <a href="{{ route('metas.index', $queryBase) }}" style="{{ $chip($activo, true) }}">
                 Todas
                 <span style="{{ $burbuja($activo, true) }}">{{ $todas->count() }}</span>
             </a>
@@ -88,7 +115,7 @@
                     $activo = $sedeFiltro === $sede;
                 @endphp
                 <span style="{{ $chip($activo, $n > 0) }}">
-                    <a href="{{ route('metas.index', ['inicio' => $inicioQ, 'sede' => $sede]) }}" title="Ver solo {{ $sede }}" style="display:inline-flex;align-items:center;gap:6px;color:inherit;text-decoration:none;">
+                    <a href="{{ route('metas.index', $queryBase + ['sede' => $sede]) }}" title="Ver solo {{ $sede }}" style="display:inline-flex;align-items:center;gap:6px;color:inherit;text-decoration:none;">
                         {{ $sede }}
                         <span style="{{ $burbuja($activo, $n > 0) }}">{{ $n }}</span>
                     </a>
@@ -104,6 +131,10 @@
                 <tr>
                     <th>Producto</th>
                     <th>Sede</th>
+                    @if(!empty($buscaGlobal))
+                        <th>Quincena</th>
+                    @endif
+                    <th>Asignada</th>
                     <th style="text-align:right;">Cantidad</th>
                     <th style="text-align:right;">Cant. actual</th>
                     <th style="text-align:right;">Vendido</th>
@@ -132,7 +163,25 @@
                                 <div class="muted" style="font-size:.72rem;">Área · ventas de su equipo</div>
                             @endif
                         </td>
-                        <td style="text-align:right;">{{ $fmt($fila['cantidad_inicial']) }} u.</td>
+                        @if(!empty($buscaGlobal))
+                            <td style="white-space:nowrap;font-size:.82rem;">
+                                {{ $fila['quincena_etiqueta'] ?? '—' }}
+                            </td>
+                        @endif
+                        <td style="white-space:nowrap;{{ empty($fila['asignada_el']) ? 'color:var(--muted);' : '' }}" title="Fecha en que se marcó / asignó la meta">
+                            {{ !empty($fila['asignada_el']) ? \Carbon\Carbon::parse($fila['asignada_el'])->format('d/m/Y') : '—' }}
+                        </td>
+                        <td style="text-align:right;">
+                            {{ $fmt($fila['cantidad_inicial']) }} u.
+                            @if(($fila['cantidad_arrastre'] ?? 0) > 0)
+                                <div class="muted" style="font-size:.72rem;color:#b45309;">
+                                    Incluye {{ $fmt($fila['cantidad_arrastre']) }} u. arrastradas
+                                    @if(($fila['cantidad_nueva'] ?? 0) > 0)
+                                        (+ {{ $fmt($fila['cantidad_nueva']) }} u. nuevas)
+                                    @endif
+                                </div>
+                            @endif
+                        </td>
                         <td style="text-align:right;font-weight:600;">
                             {{ $fmt($fila['cantidad_actual']) }} u.
                             @if(!empty($fila['es_area']))
@@ -226,9 +275,14 @@
                         @endif
                     </tr>
                 @empty
+                    @php
+                        $cols = 10 + (!empty($buscaGlobal) ? 1 : 0) + ($puedeMarcar ? 1 : 0);
+                    @endphp
                     <tr>
-                        <td colspan="{{ $puedeMarcar ? 10 : 9 }}" class="muted" style="text-align:center;padding:28px;">
-                            @if($sedeFiltro !== '')
+                        <td colspan="{{ $cols }}" class="muted" style="text-align:center;padding:28px;">
+                            @if(!empty($buscaGlobal))
+                                No hay metas de producto o responsable que coincidan con «{{ $busqueda }}».
+                            @elseif($sedeFiltro !== '')
                                 No hay productos meta de {{ $sedeFiltro }} en esta quincena.
                             @elseif($soloSusMetas)
                                 Aún no tienes productos meta asignados en esta quincena.

@@ -4,8 +4,10 @@ return [
     /*
     | Token compartido entre la web y el sincronizador de escritorio.
     | El cliente lo envía en X-Sync-Token o ?token=
+    | Default = el mismo de utils/constants.py (DEFAULT_SYNC_TOKEN) para que
+    | Render no devuelva 403 si falta la variable de entorno.
     */
-    'token' => env('SYNC_DESKTOP_TOKEN', ''),
+    'token' => env('SYNC_DESKTOP_TOKEN', 'szcu58ewlmnjk6i03y4tpr79aghbd12q'),
 
     /*
     | URL pública base que usan las sedes (sin barra final).
