@@ -412,6 +412,11 @@
                                 <td class="td-num">{{ $usd($totales['por_columna'][$col['clave']] ?? 0) }}</td>
                             @endforeach
                             <td class="td-num td-suite-tot">{{ $usd($totales['suite']) }}</td>
+                            <td class="td-num td-teso">{{ $usd($totales['tesoreria']) }}</td>
+                            <td class="td-num td-dif-cell {{ $claseDif($totales['diferencia']) }}">{{ $usd($totales['diferencia']) }}</td>
+                        </tr>
+                    </tfoot>
+                @endif
             </table>
         </div>
     </div>
