@@ -213,8 +213,17 @@ class PagosModulosService
      *
      * @param  array<string, mixed>  $data  fecha_pago, forma_pago, tasa_cambio, banco_origen, banco_destino, referencia, comentario, observaciones
      */
-    public function abonarAlquiler(AlquilerPago $pago, float $montoAbonado, array $data, float $comisionAbono, ?int $usuarioId): void
-    {
+    /**
+     * @param  bool|null  $comisionLiquidada  true=ya pagada, false=pendiente de egreso, null=automático histórico
+     */
+    public function abonarAlquiler(
+        AlquilerPago $pago,
+        float $montoAbonado,
+        array $data,
+        float $comisionAbono,
+        ?int $usuarioId,
+        ?bool $comisionLiquidada = null
+    ): void {
         if ($montoAbonado > 0) {
             $pago->monto_pagado += $montoAbonado;
         }
@@ -251,7 +260,13 @@ class PagosModulosService
                 $ingreso['alquiler_pago_id'] = $pago->id;
             }
             PatTransaccion::create($ingreso);
-            $this->comisionAlquiler->syncPago($alquiler, $pago->fresh(), $data['fecha_pago'], $comisionAbono);
+            $this->comisionAlquiler->syncPago(
+                $alquiler,
+                $pago->fresh(),
+                $data['fecha_pago'],
+                $comisionAbono,
+                $comisionLiquidada
+            );
         }
     }
 
@@ -280,7 +295,8 @@ class PagosModulosService
         }
         $reserva = Reserva::create($campos);
         $reserva->comision = $comision;
-        $this->comisionReserva->sync($reserva, $reserva->fecha_entrada?->toDateString());
+        $liquidada = array_key_exists('comision_liquidada', $data) ? (bool) $data['comision_liquidada'] : false;
+        $this->comisionReserva->sync($reserva, $reserva->fecha_entrada?->toDateString(), $liquidada);
         $this->sincronizarEstadoPropiedad((int) $reserva->propiedad_id);
 
         return $reserva->fresh();
@@ -300,10 +316,15 @@ class PagosModulosService
     /**
      * @param  array<string, mixed>  $data  monto_pagado, forma_pago, fecha_pago, tasa_cambio, banco_destino, banco_origen, referencia, comentario
      */
-    public function pagarReserva(Reserva $reserva, array $data, ?int $usuarioId): void
+    /**
+     * @param  bool|null  $comisionLiquidada
+     */
+    public function pagarReserva(Reserva $reserva, array $data, ?int $usuarioId, ?bool $comisionLiquidada = null): void
     {
         $data['user_id'] = $usuarioId;
-        $reserva->pagos()->create($data);
+        $payloadPago = $data;
+        unset($payloadPago['comision_liquidada']);
+        $reserva->pagos()->create($payloadPago);
 
         $pagoTx = [
             'propiedad_id' => $reserva->propiedad_id,
@@ -321,7 +342,7 @@ class PagosModulosService
             $pagoTx['reserva_id'] = $reserva->id;
         }
         PatTransaccion::create($pagoTx);
-        $this->comisionReserva->sync($reserva->fresh(), $data['fecha_pago']);
+        $this->comisionReserva->sync($reserva->fresh(), $data['fecha_pago'], $comisionLiquidada);
     }
 
     /** Revierte un abono de alquiler (p. ej. al borrar el movimiento del flujo de caja). */

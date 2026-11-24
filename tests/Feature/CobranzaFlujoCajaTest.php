@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\CobranzaMovimiento;
 use App\Models\ConciliacionLinea;
 use App\Models\FlujoCaja;
+use App\Models\TesoreriaCaja;
+use App\Models\TesoreriaCajaMovimiento;
 use App\Models\User;
 use App\Services\BcvRateService;
 use Illuminate\Database\Schema\Blueprint;
@@ -155,6 +157,51 @@ class CobranzaFlujoCajaTest extends TestCase
         $this->assertSame('EFECTIVO DIVISA', $mov->banco);
         $this->assertSame(0.0, (float) $mov->tasa_cambio);
         $this->assertSame(0.0, (float) $mov->monto_bs);
+    }
+
+    public function test_efectivo_ingreso_y_egreso_se_reflejan_en_tesoreria(): void
+    {
+        $this->crearTablasTesoreriaCaja();
+        $user = $this->makeUser();
+
+        $this->actingAs($user)->post(route('cobranza.flujo.store'), [
+            'tipo' => 'ingreso', 'fecha' => '2026-11-10',
+            'ambito' => 'cobranza', 'cuenta' => 'EFECTIVO DIVISA|COBRANZA|SIN BANCO',
+            'monto_usd' => 200, 'concepto' => 'Cobro efectivo',
+        ])->assertSessionHasNoErrors();
+
+        $ingreso = CobranzaMovimiento::query()->firstOrFail();
+        $cajaUsd = TesoreriaCaja::query()->where('codigo', TesoreriaCaja::CODIGO_USD)->firstOrFail();
+        $this->assertSame(200.0, (float) $cajaUsd->saldo);
+        $cajaMov = TesoreriaCajaMovimiento::query()
+            ->where('origen', TesoreriaCajaMovimiento::ORIGEN_COBRANZA)
+            ->where('referencia', 'COBRANZA:'.$ingreso->id)
+            ->firstOrFail();
+        $this->assertSame(TesoreriaCajaMovimiento::INGRESO, $cajaMov->tipo);
+        $this->assertSame(200.0, (float) $cajaMov->monto);
+
+        $this->actingAs($user)->post(route('cobranza.flujo.store'), [
+            'tipo' => 'egreso', 'tipo_gasto' => 'GENERAL', 'fecha' => '2026-11-10',
+            'ambito' => 'general', 'cuenta' => 'EFECTIVO DIVISA|COBRANZA|SIN BANCO',
+            'monto_usd' => 105, 'concepto' => 'Pago de comisiones pendientes', 'contraparte' => 'AQUILES PRIMERA',
+        ])->assertSessionHasNoErrors();
+
+        $egreso = CobranzaMovimiento::query()->where('tipo', 'egreso')->firstOrFail();
+        $cajaUsd->refresh();
+        $this->assertSame(95.0, (float) $cajaUsd->saldo);
+        $cajaEgreso = TesoreriaCajaMovimiento::query()
+            ->where('origen', TesoreriaCajaMovimiento::ORIGEN_COBRANZA)
+            ->where('referencia', 'COBRANZA:'.$egreso->id)
+            ->firstOrFail();
+        $this->assertSame(TesoreriaCajaMovimiento::EGRESO, $cajaEgreso->tipo);
+        $this->assertSame(105.0, (float) $cajaEgreso->monto);
+
+        $this->delete(route('cobranza.flujo.destroy', $egreso))->assertSessionHasNoErrors();
+        $cajaUsd->refresh();
+        $this->assertSame(200.0, (float) $cajaUsd->saldo);
+        $this->assertNull(
+            TesoreriaCajaMovimiento::query()->where('referencia', 'COBRANZA:'.$egreso->id)->first()
+        );
     }
 
     public function test_efectivo_bs_mantiene_tasa_y_efectivo_divisa_no(): void
@@ -660,6 +707,16 @@ class CobranzaFlujoCajaTest extends TestCase
         return User::create([
             'name' => 'Cobranza', 'email' => 'cob-'.uniqid().'@test.local', 'password' => 'password123', 'role' => 'cobranza',
         ]);
+    }
+
+    private function crearTablasTesoreriaCaja(): void
+    {
+        (require database_path('migrations/2026_11_16_130000_create_tesoreria_caja_tables.php'))->up();
+        (require database_path('migrations/2026_11_16_140000_tesoreria_caja_cuadre_efectivo.php'))->up();
+        (require database_path('migrations/2026_11_16_150000_add_moneda_divisa_to_tesoreria_caja_movimientos.php'))->up();
+        (require database_path('migrations/2026_11_17_160000_add_categoria_to_tesoreria_caja_movimientos.php'))->up();
+        (require database_path('migrations/2026_11_18_123000_add_tipo_gasto_to_tesoreria_caja_movimientos.php'))->up();
+        (require database_path('migrations/2026_11_19_150000_add_beneficiario_placa_to_tesoreria_caja_movimientos.php'))->up();
     }
 
     private function crearTablas(): void

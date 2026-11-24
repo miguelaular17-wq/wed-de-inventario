@@ -85,6 +85,10 @@ class CobranzaFlujoService
             }
 
             if (! $esCruce) {
+                if (! $ingreso->esIngreso()) {
+                    $this->liquidarComisionesPendientes($ingreso, $datos['comisiones_pendientes'] ?? []);
+                }
+
                 return [$ingreso];
             }
 
@@ -102,6 +106,91 @@ class CobranzaFlujoService
 
             return [$ingreso, $egreso];
         });
+    }
+
+    /**
+     * Comisiones de alquiler/reserva aún sin salida de caja.
+     *
+     * @return list<array{id:int,descripcion:string,monto:float,propiedad:string,fecha:?string}>
+     */
+    public function comisionesPendientes(): array
+    {
+        if (! Schema::hasTable('pat_transacciones')
+            || ! Schema::hasColumn('pat_transacciones', 'comision_liquidada')
+        ) {
+            return [];
+        }
+
+        return PatTransaccion::query()
+            ->with('propiedad:id,nombre')
+            ->where('tipo', 'comision')
+            ->where('comision_liquidada', false)
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get()
+            ->map(fn (PatTransaccion $t) => [
+                'id' => (int) $t->id,
+                'descripcion' => (string) $t->descripcion,
+                'monto' => round((float) $t->monto, 2),
+                'propiedad' => (string) ($t->propiedad?->nombre ?? 'Propiedad'),
+                'fecha' => $t->fecha?->toDateString(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  list<int|string>  $ids
+     */
+    public function liquidarComisionesPendientes(CobranzaMovimiento $egreso, array $ids): void
+    {
+        if ($egreso->tipo !== CobranzaMovimiento::TIPO_EGRESO) {
+            return;
+        }
+        if (! Schema::hasColumn('pat_transacciones', 'comision_liquidada')) {
+            return;
+        }
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if ($ids === []) {
+            return;
+        }
+
+        $pendientes = PatTransaccion::query()
+            ->where('tipo', 'comision')
+            ->where('comision_liquidada', false)
+            ->whereIn('id', $ids)
+            ->lockForUpdate()
+            ->get();
+        if ($pendientes->isEmpty()) {
+            return;
+        }
+
+        $suma = round((float) $pendientes->sum('monto'), 2);
+        $pagado = round((float) $egreso->monto_usd, 2);
+        if (abs($suma - $pagado) > 0.05) {
+            throw ValidationException::withMessages([
+                'comisiones_pendientes' => 'El egreso ($'.number_format($pagado, 2).') debe coincidir con las comisiones marcadas ($'.number_format($suma, 2).').',
+            ]);
+        }
+
+        foreach ($pendientes as $tx) {
+            $tx->forceFill([
+                'comision_liquidada' => true,
+                'cobranza_egreso_id' => $egreso->id,
+            ])->save();
+        }
+    }
+
+    private function comisionLiquidadaDeDatos(array $datos): ?bool
+    {
+        $estado = strtolower(trim((string) ($datos['comision_estado'] ?? '')));
+
+        return match ($estado) {
+            'pagada' => true,
+            'pendiente' => false,
+            default => null,
+        };
     }
 
     /**
@@ -437,6 +526,7 @@ class CobranzaFlujoService
                 'fecha_salida' => $salida,
                 'precio_noche' => $precioNoche,
                 'comision' => (float) ($datos['reserva_comision'] ?? 0),
+                'comision_liquidada' => $this->comisionLiquidadaDeDatos($datos),
                 'observaciones' => 'Registrada desde el flujo de caja de Cobranza',
             ];
             $datos['vinculo_tipo'] = CobranzaMovimiento::VINCULO_RESERVA;
@@ -598,10 +688,18 @@ class CobranzaFlujoService
                 $user->id
             ),
             CobranzaMovimiento::VINCULO_ALQUILER => $this->pagos->abonarAlquiler(
-                AlquilerPago::query()->findOrFail($mov->vinculo_id), $usd, $comun, 0, $user->id
+                AlquilerPago::query()->findOrFail($mov->vinculo_id),
+                $usd,
+                $comun,
+                (float) ($datos['comision_monto'] ?? 0),
+                $user->id,
+                $this->comisionLiquidadaDeDatos($datos)
             ),
             CobranzaMovimiento::VINCULO_RESERVA => $this->pagos->pagarReserva(
-                Reserva::query()->findOrFail($mov->vinculo_id), $comun + ['monto_pagado' => $usd], $user->id
+                Reserva::query()->findOrFail($mov->vinculo_id),
+                $comun + ['monto_pagado' => $usd],
+                $user->id,
+                $this->comisionLiquidadaDeDatos($datos)
             ),
             default => null,
         };
@@ -799,7 +897,35 @@ class CobranzaFlujoService
     }
 
     /**
-     * Ingreso en EFECTIVO de Cobranza → entra a Caja de Tesorería (Bs o $) con origen Cobranza.
+     * Reaplica en Tesorería todos los movimientos de Cobranza en efectivo (ingresos y egresos).
+     * Idempotente: actualiza saldos si el movimiento de caja ya existía.
+     */
+    public function resincronizarEfectivoTesoreria(): int
+    {
+        if (! Schema::hasTable('tesoreria_caja_movimientos') || ! Schema::hasTable('tesoreria_cajas')) {
+            return 0;
+        }
+
+        $n = 0;
+        CobranzaMovimiento::query()
+            ->whereIn('banco', [
+                CobranzaMovimiento::CUENTA_EFECTIVO_DIVISA,
+                CobranzaMovimiento::CUENTA_EFECTIVO_BS,
+                CobranzaMovimiento::CUENTA_EFECTIVO_LEGACY,
+            ])
+            ->orderBy('id')
+            ->each(function (CobranzaMovimiento $mov) use (&$n) {
+                DB::transaction(function () use ($mov) {
+                    $this->sincronizarCajaTesoreria($mov);
+                });
+                $n++;
+            });
+
+        return $n;
+    }
+
+    /**
+     * Ingreso o egreso en EFECTIVO (DIVISA / BS) de Cobranza → se refleja en Caja de Tesorería.
      */
     private function sincronizarCajaTesoreria(CobranzaMovimiento $mov): void
     {
@@ -807,9 +933,7 @@ class CobranzaFlujoService
             return;
         }
 
-        $esEfectivoIngreso = $mov->esIngreso() && CobranzaMovimiento::esEfectivo($mov->banco);
-
-        if (! $esEfectivoIngreso) {
+        if (! CobranzaMovimiento::esEfectivo($mov->banco)) {
             $this->borrarCajaTesoreria($mov);
 
             return;
@@ -836,11 +960,34 @@ class CobranzaFlujoService
             return;
         }
 
+        $esIngreso = $mov->esIngreso();
+        $tipoCaja = $esIngreso ? TesoreriaCajaMovimiento::INGRESO : TesoreriaCajaMovimiento::EGRESO;
+        $categoria = TesoreriaCajaMovimiento::categoriaDesdeTipo($tipoCaja);
+        $signo = $esIngreso ? 1 : -1; // ingreso suma saldo; egreso resta
+
         $this->asegurarCajasTesoreria();
         $caja = TesoreriaCaja::query()->where('codigo', $codigoCaja)->lockForUpdate()->firstOrFail();
         $ref = $this->refCajaTesoreria($mov);
         $sede = $this->sedeDeMovimiento($mov);
         $concepto = mb_substr('Cobranza · '.$mov->nombreAmbito().' · '.$mov->concepto, 0, 255);
+        $payload = [
+            'caja_id' => $caja->id,
+            'tipo' => $tipoCaja,
+            'categoria' => $categoria,
+            'fecha' => $mov->fecha->toDateString(),
+            'monto' => $monto,
+            'moneda_divisa' => $monedaDivisa,
+            'concepto' => $concepto,
+            'sede' => $sede,
+            'user_id' => $mov->user_id,
+        ];
+        if (Schema::hasColumn('tesoreria_caja_movimientos', 'tipo_gasto') && ! $esIngreso) {
+            $payload['tipo_gasto'] = $mov->tipo_gasto ?: null;
+        }
+        if (Schema::hasColumn('tesoreria_caja_movimientos', 'beneficiario') && ! $esIngreso) {
+            $payload['beneficiario'] = $mov->contraparte ?: null;
+        }
+
         $existente = TesoreriaCajaMovimiento::query()
             ->where('origen', TesoreriaCajaMovimiento::ORIGEN_COBRANZA)
             ->where('referencia', $ref)
@@ -848,60 +995,19 @@ class CobranzaFlujoService
             ->first();
 
         if ($existente) {
-            if ((int) $existente->caja_id !== (int) $caja->id) {
-                $cajaAnterior = TesoreriaCaja::query()->lockForUpdate()->find($existente->caja_id);
-                if ($cajaAnterior) {
-                    $cajaAnterior->update([
-                        'saldo' => round((float) $cajaAnterior->saldo - (float) $existente->monto, 2),
-                    ]);
-                }
-                $existente->update([
-                    'caja_id' => $caja->id,
-                    'tipo' => TesoreriaCajaMovimiento::INGRESO,
-                    'categoria' => TesoreriaCajaMovimiento::CATEGORIA_INGRESOS,
-                    'fecha' => $mov->fecha->toDateString(),
-                    'monto' => $monto,
-                    'moneda_divisa' => $monedaDivisa,
-                    'concepto' => $concepto,
-                    'sede' => $sede,
-                    'user_id' => $mov->user_id,
-                ]);
-                $caja->update(['saldo' => round((float) $caja->saldo + $monto, 2)]);
-
-                return;
-            }
-
-            $antes = round((float) $existente->monto, 2);
-            $delta = round($monto - $antes, 2);
-            $existente->update([
-                'fecha' => $mov->fecha->toDateString(),
-                'monto' => $monto,
-                'moneda_divisa' => $monedaDivisa,
-                'concepto' => $concepto,
-                'sede' => $sede,
-                'user_id' => $mov->user_id,
-            ]);
-            if (abs($delta) >= 0.01) {
-                $caja->update(['saldo' => round((float) $caja->saldo + $delta, 2)]);
-            }
+            $this->revertirSaldoCajaPorMovimiento($existente);
+            $existente->update($payload);
+            $caja = TesoreriaCaja::query()->where('codigo', $codigoCaja)->lockForUpdate()->firstOrFail();
+            $caja->update(['saldo' => round((float) $caja->saldo + ($signo * $monto), 2)]);
 
             return;
         }
 
-        TesoreriaCajaMovimiento::query()->create([
-            'caja_id' => $caja->id,
-            'tipo' => TesoreriaCajaMovimiento::INGRESO,
-            'categoria' => TesoreriaCajaMovimiento::CATEGORIA_INGRESOS,
+        TesoreriaCajaMovimiento::query()->create($payload + [
             'origen' => TesoreriaCajaMovimiento::ORIGEN_COBRANZA,
-            'fecha' => $mov->fecha->toDateString(),
-            'monto' => $monto,
-            'moneda_divisa' => $monedaDivisa,
-            'concepto' => $concepto,
             'referencia' => $ref,
-            'sede' => $sede,
-            'user_id' => $mov->user_id,
         ]);
-        $caja->update(['saldo' => round((float) $caja->saldo + $monto, 2)]);
+        $caja->update(['saldo' => round((float) $caja->saldo + ($signo * $monto), 2)]);
     }
 
     private function sedeDeMovimiento(CobranzaMovimiento $mov): ?string
@@ -932,13 +1038,21 @@ class CobranzaFlujoService
             return;
         }
 
-        $caja = TesoreriaCaja::query()->lockForUpdate()->find($existente->caja_id);
-        if ($caja) {
-            $caja->update([
-                'saldo' => round((float) $caja->saldo - (float) $existente->monto, 2),
-            ]);
-        }
+        $this->revertirSaldoCajaPorMovimiento($existente);
         $existente->delete();
+    }
+
+    /** Deshace el efecto en saldo: ingreso restaba al borrar; egreso sumaba. */
+    private function revertirSaldoCajaPorMovimiento(TesoreriaCajaMovimiento $mov): void
+    {
+        $caja = TesoreriaCaja::query()->lockForUpdate()->find($mov->caja_id);
+        if (! $caja) {
+            return;
+        }
+        $signo = $mov->esIngreso() ? -1 : 1;
+        $caja->update([
+            'saldo' => round((float) $caja->saldo + ($signo * (float) $mov->monto), 2),
+        ]);
     }
 
     private function refCajaTesoreria(CobranzaMovimiento $mov): string

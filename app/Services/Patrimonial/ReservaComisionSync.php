@@ -9,7 +9,10 @@ use Illuminate\Support\Facades\Schema;
 
 class ReservaComisionSync
 {
-    public function sync(Reserva $reserva, ?string $fecha = null): void
+    /**
+     * @param  bool|null  $liquidada  true = ya salió de caja; false = pendiente de egreso; null = no cambia si ya existe
+     */
+    public function sync(Reserva $reserva, ?string $fecha = null, ?bool $liquidada = null): void
     {
         $monto = round((float) ($reserva->comision ?? 0), 2);
         $fecha = $fecha ?: $this->fechaPreferida($reserva);
@@ -37,6 +40,11 @@ class ReservaComisionSync
         ];
         if (Schema::hasColumn('pat_transacciones', 'reserva_id')) {
             $payload['reserva_id'] = $reserva->id;
+        }
+        if (Schema::hasColumn('pat_transacciones', 'comision_liquidada') && $liquidada !== null) {
+            $payload['comision_liquidada'] = $liquidada;
+        } elseif (Schema::hasColumn('pat_transacciones', 'comision_liquidada') && ! $existente) {
+            $payload['comision_liquidada'] = false;
         }
 
         if ($existente) {

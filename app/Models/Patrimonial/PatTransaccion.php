@@ -10,13 +10,20 @@ class PatTransaccion extends Model
     protected $fillable = [
         'propiedad_id', 'reserva_id', 'alquiler_id', 'alquiler_pago_id',
         'tipo', 'categoria', 'descripcion',
-        'monto', 'moneda', 'mes', 'anio', 'fecha', 'observaciones', 'cobranza_movimiento_id',
+        'monto', 'moneda', 'mes', 'anio', 'fecha', 'observaciones',
+        'cobranza_movimiento_id', 'comision_liquidada', 'cobranza_egreso_id',
     ];
 
     protected $casts = [
         'fecha' => 'date',
         'monto' => 'decimal:2',
+        'comision_liquidada' => 'boolean',
     ];
+
+    public function estaPendienteDePago(): bool
+    {
+        return $this->tipo === 'comision' && ! (bool) ($this->comision_liquidada ?? true);
+    }
 
     public function propiedad()
     {

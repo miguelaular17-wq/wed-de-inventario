@@ -824,6 +824,8 @@ Route::middleware(['auth', 'permission:cobranza'])->prefix('cobranza')->group(fu
     Route::post('/marcar-pagado-manualmente', [CobranzaController::class, 'marcarPagadoManualmente'])->name('cobranza.marcar_pagado');
     Route::post('/guardar-nota', [CobranzaController::class, 'guardarNota'])->name('cobranza.guardar_nota');
     Route::post('/guardar-intermediario', [CobranzaController::class, 'guardarIntermediario'])->name('cobranza.guardar_intermediario');
+    Route::get('/facturas-cerradas', [\App\Http\Controllers\Cobranza\FacturasCerradasController::class, 'index'])->name('cobranza.facturas_cerradas');
+    Route::delete('/facturas-cerradas/{id}', [\App\Http\Controllers\Cobranza\FacturasCerradasController::class, 'reabrir'])->whereNumber('id')->name('cobranza.facturas_cerradas.reabrir');
     Route::get('/flujo-caja', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'index'])->name('cobranza.flujo.index');
     Route::post('/flujo-caja', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'store'])->name('cobranza.flujo.store');
     Route::put('/flujo-caja/{movimiento}', [\App\Http\Controllers\Cobranza\FlujoCajaCobranzaController::class, 'update'])->whereNumber('movimiento')->name('cobranza.flujo.update');

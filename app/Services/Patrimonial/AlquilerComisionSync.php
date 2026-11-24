@@ -10,8 +10,16 @@ use Illuminate\Support\Facades\Schema;
 
 class AlquilerComisionSync
 {
-    public function syncPago(Alquiler $alquiler, AlquilerPago $pago, ?string $fecha = null, float $comisionEsteAbono = 0): void
-    {
+    /**
+     * @param  bool|null  $liquidada  true = ya salió de caja; false = queda pendiente de egreso; null = comportamiento histórico
+     */
+    public function syncPago(
+        Alquiler $alquiler,
+        AlquilerPago $pago,
+        ?string $fecha = null,
+        float $comisionEsteAbono = 0,
+        ?bool $liquidada = null
+    ): void {
         $contrato = round((float) ($alquiler->comision ?? 0), 2);
         if ($contrato <= 0) {
             return;
@@ -26,15 +34,16 @@ class AlquilerComisionSync
         $cuotaPagada = $pago->estado === 'pagado' || (float) $pago->monto_pagado >= (float) $pago->monto;
         $pedido = round(max(0, $comisionEsteAbono), 2);
 
-        $aRegistrar = $cuotaPagada
-            ? $restante
-            : min($pedido, $restante);
+        // Si eligieron estado de comisión (pagada/pendiente), se registra ya aunque el abono sea parcial.
+        $aRegistrar = $liquidada !== null
+            ? ($pedido > 0 ? min($pedido, $restante) : $restante)
+            : ($cuotaPagada ? $restante : min($pedido, $restante));
 
         if ($aRegistrar <= 0) {
             return;
         }
 
-        $this->crearTransaccion($alquiler, $pago, $aRegistrar, $fecha);
+        $this->crearTransaccion($alquiler, $pago, $aRegistrar, $fecha, $liquidada);
         $pago->comision_pagada = round($ya + $aRegistrar, 2);
         if (Schema::hasColumn('pat_alquiler_pagos', 'comision_pagada')) {
             $pago->save();
@@ -59,8 +68,13 @@ class AlquilerComisionSync
             ->delete();
     }
 
-    private function crearTransaccion(Alquiler $alquiler, AlquilerPago $pago, float $monto, ?string $fecha): void
-    {
+    private function crearTransaccion(
+        Alquiler $alquiler,
+        AlquilerPago $pago,
+        float $monto,
+        ?string $fecha,
+        ?bool $liquidada = null
+    ): void {
         $fechaC = Carbon::parse($fecha ?: ($pago->fecha_pago?->toDateString() ?: now()->toDateString()));
 
         $payload = [
@@ -80,6 +94,9 @@ class AlquilerComisionSync
         }
         if (Schema::hasColumn('pat_transacciones', 'alquiler_pago_id')) {
             $payload['alquiler_pago_id'] = $pago->id;
+        }
+        if (Schema::hasColumn('pat_transacciones', 'comision_liquidada')) {
+            $payload['comision_liquidada'] = $liquidada ?? false;
         }
 
         PatTransaccion::create($payload);

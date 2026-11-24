@@ -15,7 +15,7 @@ class TesoreriaCajaMovimiento extends Model
 
     public const ORIGEN_CUADRE_DIARIO = 'cuadre_diario';
 
-    /** Ingreso de efectivo registrado en Cobranza (EFECTIVO DIVISA / EFECTIVO BS). */
+    /** Ingreso o egreso de efectivo registrado en Cobranza (EFECTIVO DIVISA / EFECTIVO BS). */
     public const ORIGEN_COBRANZA = 'cobranza';
 
     public const DIVISA_USD = 'USD';

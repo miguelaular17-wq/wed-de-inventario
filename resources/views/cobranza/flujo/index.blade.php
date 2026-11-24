@@ -528,7 +528,8 @@
                 </div>
             </div>
             <div class="cf-que" data-ambito="general">
-                <div class="cf-vacio" style="text-align:left;">Movimiento general: no se aplica a una factura, cuota ni propiedad.</div>
+                <div class="cf-vacio" data-solo="ingreso" style="text-align:left;">Movimiento general: no se aplica a una factura, cuota ni propiedad.</div>
+                <div class="cf-vacio" data-solo="egreso" style="text-align:left;">Egreso general: aquí sales las <strong>comisiones pendientes</strong> de alquiler/reserva, o cualquier otro pago suelto.</div>
             </div>
             <div class="cf-resumen" id="cf-resumen"></div>
 
@@ -542,6 +543,32 @@
                         @endforeach
                     </select>
                 </div>
+            </div>
+
+            <div id="cf-comision-box" style="display:none;margin-top:10px;padding:12px 14px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb;">
+                <div style="font-weight:700;color:#92400e;margin-bottom:6px;">Comisión de la propiedad</div>
+                <div class="muted" id="cf-comision-info" style="font-size:.85rem;margin-bottom:8px;"></div>
+                <input type="hidden" name="comision_monto" id="cf-comision-monto" value="">
+                <div class="cf-row" style="margin:0;gap:16px;align-items:center;">
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;">
+                        <input type="radio" name="comision_estado" id="cf-comision-pendiente" value="pendiente" checked>
+                        Pendiente de pagar
+                    </label>
+                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;">
+                        <input type="radio" name="comision_estado" id="cf-comision-pagada" value="pagada">
+                        Ya pagada
+                    </label>
+                </div>
+                <div class="muted" style="font-size:.78rem;margin-top:6px;">Si queda pendiente, luego la sales en un egreso (puedes juntar varias y pagar el total).</div>
+            </div>
+
+            <div id="cf-comisiones-egreso" style="display:none;margin-top:10px;padding:12px 14px;border:1px solid #bbf7d0;border-radius:10px;background:#f0fdf4;">
+                <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+                    <div style="font-weight:700;color:#166534;">Comisiones pendientes de salida</div>
+                    <button type="button" class="btn secondary" style="padding:4px 10px;font-size:.78rem;" onclick="cfComisionesTodas(true)">Marcar todas</button>
+                </div>
+                <div id="cf-comisiones-lista" class="cf-lista" style="max-height:220px;overflow:auto;"></div>
+                <div class="muted" id="cf-comisiones-total" style="margin-top:8px;font-size:.85rem;">Selecciona las que vas a pagar; el monto USD se completa solo.</div>
             </div>
 
             <div class="cf-paso">3 · Dinero</div>
@@ -775,6 +802,7 @@
     const contratos = @json($contratos);
     const propiedades = @json($propiedades);
     const categorias = @json($categoriasPropiedad);
+    const comisionesPendientes = @json($comisionesPendientes ?? []);
     const facturaInicial = @json($factura);
     const urlFacturas = @json(route('cobranza.flujo.facturas'));
     const bancoCruce = @json($bancoCruce);
@@ -964,6 +992,7 @@
         $('cf-prop-categoria').disabled = true;
         mostrarReservaNueva(false);
         desactivarDestinoCuota();
+        cfOcultarComision();
         resumen('');
     }
 
@@ -999,6 +1028,10 @@
         }
         $('cf-res-info').textContent = info;
         resumen(`<strong>nueva reserva temporal</strong> en <strong>${esc(propiedadReserva.nombre)}</strong>${cliente ? ' de <strong>' + esc(cliente) + '</strong>' : ''}${fechas ? ' del ' + esc(fechas) : ''}`);
+        const comRes = parseFloat(($('cf-res-comision') || {}).value) || 0;
+        if (($('cf-vinculo').value || '').startsWith('pat_reserva_nueva:')) {
+            cfMostrarComision(comRes, `Nueva reserva · ${propiedadReserva.nombre}`);
+        }
     }
     camposReserva.forEach(id => $(id).addEventListener('input', () => {
         if (id === 'cf-res-cliente' && propiedadReserva) {
@@ -1138,8 +1171,90 @@
     $('cf-buscar-contrato').addEventListener('input', pintarContratos);
 
     // Patrimonial: propiedad → alquiler / reserva / otro ingreso o gasto
+    function cfMostrarComision(monto, etiqueta) {
+        const box = $('cf-comision-box');
+        const m = Math.round((Number(monto) || 0) * 100) / 100;
+        if (!box) return;
+        if (m < 0.01) {
+            cfOcultarComision();
+            return;
+        }
+        box.style.display = '';
+        $('cf-comision-monto').disabled = false;
+        $('cf-comision-pendiente').disabled = false;
+        $('cf-comision-pagada').disabled = false;
+        $('cf-comision-monto').value = m.toFixed(2);
+        $('cf-comision-info').innerHTML = `Se refleja en Patrimonial: <strong>${fmt(m)}</strong> · ${esc(etiqueta || '')}`;
+        $('cf-comision-pendiente').checked = true;
+    }
+    function cfOcultarComision() {
+        const box = $('cf-comision-box');
+        if (!box) return;
+        box.style.display = 'none';
+        $('cf-comision-monto').value = '';
+        $('cf-comision-monto').disabled = true;
+        $('cf-comision-pendiente').disabled = true;
+        $('cf-comision-pagada').disabled = true;
+        $('cf-comision-pendiente').checked = true;
+    }
+    function cfPintarComisionesEgreso() {
+        const caja = $('cf-comisiones-lista');
+        const wrap = $('cf-comisiones-egreso');
+        if (!caja || !wrap) return;
+        // Solo en Egreso → apartado General se ven las comisiones por pagar.
+        const ver = estado.tipo === 'egreso' && estado.ambito === 'general' && comisionesPendientes.length > 0;
+        if (!ver) {
+            wrap.style.display = 'none';
+            caja.innerHTML = '';
+            document.querySelectorAll('#cf-comisiones-lista input[type=checkbox]').forEach(cb => { cb.checked = false; });
+            return;
+        }
+        wrap.style.display = '';
+        caja.innerHTML = comisionesPendientes.map(c => `
+            <label class="cf-opcion" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+                <input type="checkbox" name="comisiones_pendientes[]" value="${c.id}" data-monto="${c.monto}" style="margin-top:3px;" onchange="cfComisionesSumar()">
+                <span style="flex:1;">
+                    <strong>${esc(c.descripcion)}</strong>
+                    <small>${esc(c.propiedad)}${c.fecha ? ' · '+esc(c.fecha) : ''}</small>
+                </span>
+                <span class="cf-debe">${fmt(c.monto)}</span>
+            </label>`).join('');
+        cfComisionesSumar();
+    }
+    window.cfComisionesTodas = function (on) {
+        document.querySelectorAll('#cf-comisiones-lista input[type=checkbox]').forEach(cb => { cb.checked = !!on; });
+        cfComisionesSumar();
+    };
+    window.cfComisionesSumar = function () {
+        let total = 0;
+        document.querySelectorAll('#cf-comisiones-lista input[type=checkbox]:checked').forEach(cb => {
+            total += parseFloat(cb.dataset.monto) || 0;
+        });
+        total = Math.round(total * 100) / 100;
+        const info = $('cf-comisiones-total');
+        if (info) {
+            info.innerHTML = total > 0
+                ? `Total seleccionado: <strong>${fmt(total)}</strong> — se completa el monto USD del egreso.`
+                : 'Selecciona las que vas a pagar; el monto USD se completa solo.';
+        }
+        if (total > 0 && estado.tipo === 'egreso') {
+            const usd = $('cf-usd');
+            if (usd) {
+                usd.value = total.toFixed(2);
+                usd.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            if (!$('cf-concepto').value) {
+                $('cf-concepto').value = 'Pago de comisiones pendientes';
+            }
+            if (!$('cf-tipo-gasto').value && typeof setTipoGasto === 'function') {
+                // dejar que el usuario elija tipo de gasto
+            }
+        }
+    };
+
     function pintarPropiedad() {
         limpiarSeleccion();
+        cfOcultarComision();
         const p = propiedades.find(x => String(x.id) === $('cf-propiedad').value);
         $('cf-prop-opciones').style.display = p ? '' : 'none';
         if (!p) return;
@@ -1154,22 +1269,24 @@
         };
         if (estado.tipo === 'ingreso') {
             p.alquileres.forEach(a => agregar(
-                `<div><strong>Alquiler ${esc(a.periodo)}</strong> · ${esc(a.inquilino || '')}<small>vence ${esc(a.vence || '—')} · ${esc(a.estado)}</small></div><div class="cf-debe">debe ${fmt(a.debe)}</div>`,
+                `<div><strong>Alquiler ${esc(a.periodo)}</strong> · ${esc(a.inquilino || '')}<small>vence ${esc(a.vence || '—')} · ${esc(a.estado)}${a.comision > 0 ? ' · comisión '+fmt(a.comision) : ''}</small></div><div class="cf-debe">debe ${fmt(a.debe)}</div>`,
                 () => {
                     $('cf-vinculo').value = a.valor;
                     $('cf-extra-pago').style.display = '';
                     desactivarDestinoCuota();
                     resumen(`pago del <strong>alquiler ${esc(a.periodo)}</strong> de <strong>${esc(p.nombre)}</strong> (${esc(a.inquilino || '')}) · debe ${fmt(a.debe)}`);
                     autollenar(`Alquiler ${a.periodo} · ${p.nombre}`, a.inquilino, a.debe);
+                    cfMostrarComision(a.comision || 0, `Alquiler ${a.periodo} · ${p.nombre}`);
                 }));
             p.reservas.forEach(r => agregar(
-                `<div><strong>Reserva</strong> · ${esc(r.cliente)}<small>${esc(r.fechas)}</small></div><div class="cf-debe">debe ${fmt(r.debe)}</div>`,
+                `<div><strong>Reserva</strong> · ${esc(r.cliente)}<small>${esc(r.fechas)}${r.comision > 0 ? ' · comisión '+fmt(r.comision) : ''}</small></div><div class="cf-debe">debe ${fmt(r.debe)}</div>`,
                 () => {
                     $('cf-vinculo').value = r.valor;
                     $('cf-extra-pago').style.display = '';
                     desactivarDestinoCuota();
                     resumen(`pago de la <strong>reserva</strong> de <strong>${esc(r.cliente)}</strong> en <strong>${esc(p.nombre)}</strong> (${esc(r.fechas)}) · debe ${fmt(r.debe)}`);
                     autollenar(`Reserva ${p.nombre} · ${r.cliente}`, r.cliente, r.debe);
+                    cfMostrarComision(r.comision || 0, `Reserva · ${r.cliente}`);
                 }));
         }
         const grupo = estado.tipo === 'ingreso' ? 'ingreso' : 'gasto';
@@ -1181,6 +1298,8 @@
                 $('cf-extra-pago').style.display = '';
                 desactivarDestinoCuota();
                 pintarReservaNueva();
+                const comRes = parseFloat(($('cf-res-comision') || {}).value) || 0;
+                cfMostrarComision(comRes, `Nueva reserva · ${p.nombre}`);
             });
         }
         agregar(`<div><strong>${grupo === 'ingreso' ? 'Otro ingreso' : 'Gasto'} de la propiedad</strong><small>${grupo === 'ingreso' ? 'Depósito u otro ingreso' : 'Mantenimiento, servicios, condominio…'}: va al balance de Patrimonial</small></div>`, () => {
@@ -1314,6 +1433,7 @@
         if (!ingreso) $('cf-cruce').checked = false;
         $('cf-tipo-gasto').required = !ingreso;
         enableTipoGasto(tsTipoGasto, !ingreso);
+        cfPintarComisionesEgreso();
         if (ingreso) setTipoGasto(tsTipoGasto, '');
         sincronizarCruce();
     }
@@ -1356,6 +1476,7 @@
     document.querySelectorAll('.cf-modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('abierto'); }));
 
     pintarContratos();
+    cfOcultarComision();
     sincronizar();
     // Viene de «Abonar» en Cobranza, o el formulario volvió con errores.
     if (facturaInicial) {

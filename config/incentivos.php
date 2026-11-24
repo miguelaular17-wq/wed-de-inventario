@@ -33,7 +33,7 @@ return [
             ],
         ],
         'arreglos' => [
-            'cargos' => ['arreglos', 'servicio tecnico'],
+            'cargos' => ['asesor de arreglos'],
             'titulo' => 'Arreglo',
             'resumen' => 'Solo cuentan las categorías o productos activos. El 100% es lo que vendió la tienda de esa selección. La nota es 70% piso y 30% producto meta.',
             'indicadores' => [

@@ -170,19 +170,26 @@ class CobranzaVinculos
                 'id' => $p->id,
                 'nombre' => $p->nombre,
                 'codigo' => $p->codigo,
-                'alquileres' => ($alquileres->get($p->id) ?? collect())->map(fn (AlquilerPago $a) => [
-                    'valor' => CobranzaMovimiento::VINCULO_ALQUILER.':'.$a->id,
-                    'periodo' => $a->periodo,
-                    'inquilino' => $a->alquiler?->inquilino_nombre,
-                    'vence' => optional($a->fecha_vencimiento)->format('d/m/Y'),
-                    'debe' => round((float) $a->getSaldo(), 2),
-                    'estado' => $a->estado,
-                ])->values()->all(),
+                'alquileres' => ($alquileres->get($p->id) ?? collect())->map(function (AlquilerPago $a) {
+                    $comisionContrato = round((float) ($a->alquiler?->getComision() ?? 0), 2);
+                    $ya = round((float) ($a->comision_pagada ?? 0), 2);
+
+                    return [
+                        'valor' => CobranzaMovimiento::VINCULO_ALQUILER.':'.$a->id,
+                        'periodo' => $a->periodo,
+                        'inquilino' => $a->alquiler?->inquilino_nombre,
+                        'vence' => optional($a->fecha_vencimiento)->format('d/m/Y'),
+                        'debe' => round((float) $a->getSaldo(), 2),
+                        'estado' => $a->estado,
+                        'comision' => round(max(0, $comisionContrato - $ya), 2),
+                    ];
+                })->values()->all(),
                 'reservas' => ($reservas->get($p->id) ?? collect())->map(fn (Reserva $r) => [
                     'valor' => CobranzaMovimiento::VINCULO_RESERVA.':'.$r->id,
                     'cliente' => $r->cliente_nombre,
                     'fechas' => optional($r->fecha_entrada)->format('d/m').' al '.optional($r->fecha_salida)->format('d/m/Y'),
                     'debe' => round($r->getTotal() - (float) ($r->pagos_sum_monto_pagado ?? 0), 2),
+                    'comision' => round((float) ($r->getComision() ?? 0), 2),
                 ])->values()->all(),
             ])->values()->all();
     }
