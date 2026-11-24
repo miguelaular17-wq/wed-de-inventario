@@ -224,8 +224,14 @@ class CobranzaReciboService
         if (CobranzaMovimiento::esBancoCruce($mov->banco)) {
             return 'CRUCE';
         }
-        if (strtoupper((string) $mov->banco) === 'EFECTIVO') {
-            return (float) $mov->monto_bs > 0 ? 'EFECTIVO BS' : 'EFECTIVO $';
+        if (CobranzaMovimiento::esEfectivoDivisa($mov->banco)) {
+            return 'EFECTIVO DIVISA';
+        }
+        if (CobranzaMovimiento::esEfectivoBs($mov->banco)) {
+            return 'EFECTIVO BS';
+        }
+        if (CobranzaMovimiento::esEfectivo($mov->banco)) {
+            return (float) $mov->monto_bs > 0 ? 'EFECTIVO BS' : 'EFECTIVO DIVISA';
         }
         if (mb_strtoupper((string) $mov->banco, 'UTF-8') === CobranzaMovimiento::CUENTA_DESCUENTO_DIVISAS) {
             return 'DESCUENTO EN DIVISAS';

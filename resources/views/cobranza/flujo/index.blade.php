@@ -812,32 +812,39 @@
         const cat = String(valor || '').split('|')[2] || '';
         return cat.toUpperCase().includes('BANCA INTERNACIONAL');
     }
-    function cfAplicarCamposDivisas(intl, colTasa, colBs, tasa, bs) {
-        if (colTasa) colTasa.style.display = intl ? 'none' : '';
-        if (colBs) colBs.style.display = intl ? 'none' : '';
-        if (intl) {
+    function esEfectivoDivisaValor(valor) {
+        const banco = String(valor || '').split('|')[0] || '';
+        return banco.toUpperCase().trim() === 'EFECTIVO DIVISA';
+    }
+    function esSinTasaValor(valor) {
+        return esBancaInternacionalValor(valor) || esEfectivoDivisaValor(valor);
+    }
+    function cfAplicarCamposDivisas(sinTasa, colTasa, colBs, tasa, bs) {
+        if (colTasa) colTasa.style.display = sinTasa ? 'none' : '';
+        if (colBs) colBs.style.display = sinTasa ? 'none' : '';
+        if (sinTasa) {
             if (tasa) tasa.value = '';
             if (bs) bs.value = '';
         }
     }
     window.cfCuentaCambio = function () {
-        const intl = esBancaInternacionalValor($('cf-cuenta').value);
-        cfAplicarCamposDivisas(intl, $('cf-col-tasa'), $('cf-col-bs'), $('cf-tasa'), $('cf-bs'));
+        const sinTasa = esSinTasaValor($('cf-cuenta').value);
+        cfAplicarCamposDivisas(sinTasa, $('cf-col-tasa'), $('cf-col-bs'), $('cf-tasa'), $('cf-bs'));
         const ambasTasa = $('cf-ambas-tasa-bs');
-        if (ambasTasa) ambasTasa.style.display = intl ? 'none' : '';
-        if (intl) {
+        if (ambasTasa) ambasTasa.style.display = sinTasa ? 'none' : '';
+        if (sinTasa) {
             $('cf-tasa-ambas').value = '';
             $('cf-bs-ambas').value = '';
         }
     };
     window.cfCuentaCambioEdit = function () {
-        const intl = esBancaInternacionalValor($('cfe-cuenta').value);
-        cfAplicarCamposDivisas(intl, $('cfe-col-tasa'), $('cfe-col-bs'), $('cfe-tasa'), $('cfe-bs'));
+        const sinTasa = esSinTasaValor($('cfe-cuenta').value);
+        cfAplicarCamposDivisas(sinTasa, $('cfe-col-tasa'), $('cfe-col-bs'), $('cfe-tasa'), $('cfe-bs'));
     };
     function enlazarMontos(usd, tasa, bs) {
         let ultimo = null;
         const calcular = () => {
-            if (esBancaInternacionalValor(($('cf-cuenta') || {}).value) || esBancaInternacionalValor(($('cfe-cuenta') || {}).value)) {
+            if (esSinTasaValor(($('cf-cuenta') || {}).value) || esSinTasaValor(($('cfe-cuenta') || {}).value)) {
                 return;
             }
             const t = parseFloat(tasa.value) || 0;

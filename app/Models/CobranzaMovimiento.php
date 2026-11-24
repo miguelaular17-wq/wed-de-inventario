@@ -35,11 +35,45 @@ class CobranzaMovimiento extends Model
 
     public const CUENTA_DESCUENTO_DIVISAS = 'DESCUENTO EN DIVISAS';
 
-    public const CUENTAS_SIN_BANCO = ['EFECTIVO', 'REGALÍA', self::CUENTA_DESCUENTO_DIVISAS, self::CUENTA_POR_IDENTIFICAR];
+    public const CUENTA_EFECTIVO_DIVISA = 'EFECTIVO DIVISA';
+
+    public const CUENTA_EFECTIVO_BS = 'EFECTIVO BS';
+
+    /** @deprecated legacy: movimientos viejos con banco=EFECTIVO */
+    public const CUENTA_EFECTIVO_LEGACY = 'EFECTIVO';
+
+    public const CUENTAS_SIN_BANCO = [
+        self::CUENTA_EFECTIVO_DIVISA,
+        self::CUENTA_EFECTIVO_BS,
+        'REGALÍA',
+        self::CUENTA_DESCUENTO_DIVISAS,
+        self::CUENTA_POR_IDENTIFICAR,
+    ];
 
     public const FORMAS_PAGO = ['ZELLE', 'EFECTIVO', 'TRANSFERENCIA_DIVISAS', 'TRANSFERENCIA_BCV', 'PAGO_MOVIL', 'DEPOSITO', 'BINANCE', 'CRUCE', 'DESCUENTO_DIVISAS'];
 
     public const GRUPO_SIN_BANCO = 'SIN BANCO';
+
+    public static function esEfectivo(?string $banco): bool
+    {
+        $b = mb_strtoupper(trim((string) $banco), 'UTF-8');
+
+        return in_array($b, [
+            self::CUENTA_EFECTIVO_DIVISA,
+            self::CUENTA_EFECTIVO_BS,
+            self::CUENTA_EFECTIVO_LEGACY,
+        ], true);
+    }
+
+    public static function esEfectivoDivisa(?string $banco): bool
+    {
+        return mb_strtoupper(trim((string) $banco), 'UTF-8') === self::CUENTA_EFECTIVO_DIVISA;
+    }
+
+    public static function esEfectivoBs(?string $banco): bool
+    {
+        return mb_strtoupper(trim((string) $banco), 'UTF-8') === self::CUENTA_EFECTIVO_BS;
+    }
 
     public const VINCULO_CUOTA = 'contrato_cuota';
 
@@ -149,13 +183,16 @@ class CobranzaMovimiento extends Model
         }
 
         $forma = $formas[strtoupper((string) $this->forma_pago)] ?? match (true) {
-            $bancoUpper === 'EFECTIVO' => 'Efectivo',
+            self::esEfectivoDivisa($banco) => 'Efectivo divisa',
+            self::esEfectivoBs($banco) => 'Efectivo Bs',
+            self::esEfectivo($banco) => 'Efectivo',
             in_array($bancoUpper, self::CUENTAS_SIN_BANCO, true) => mb_convert_case($banco, MB_CASE_TITLE, 'UTF-8'),
             default => (float) $this->monto_bs > 0 ? 'Transferencia Bs' : 'Transferencia $',
         };
-        $cuenta = in_array($bancoUpper, self::CUENTAS_SIN_BANCO, true) ? '' : trim($banco.' '.trim((string) $this->titular));
+        $esSinBanco = in_array($bancoUpper, self::CUENTAS_SIN_BANCO, true) || self::esEfectivo($banco);
+        $cuenta = $esSinBanco ? '' : trim($banco.' '.trim((string) $this->titular));
 
-        return $cuenta !== '' && $forma !== 'Efectivo' ? $forma.' · '.$cuenta : $forma;
+        return $cuenta !== '' && ! str_starts_with($forma, 'Efectivo') ? $forma.' · '.$cuenta : $forma;
     }
 
     /** A qué factura, cuota, alquiler, reserva o propiedad pertenece, en una línea. */

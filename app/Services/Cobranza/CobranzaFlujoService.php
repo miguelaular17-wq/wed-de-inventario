@@ -671,7 +671,7 @@ class CobranzaFlujoService
         if (CobranzaMovimiento::esBancoCruce($mov->banco)) {
             return 'CRUCE';
         }
-        if (strtoupper((string) $mov->banco) === 'EFECTIVO') {
+        if (CobranzaMovimiento::esEfectivo($mov->banco)) {
             return 'EFECTIVO';
         }
         if (mb_strtoupper((string) $mov->banco, 'UTF-8') === CobranzaMovimiento::CUENTA_DESCUENTO_DIVISAS) {
@@ -693,7 +693,8 @@ class CobranzaFlujoService
             return [CobranzaMovimiento::BANCO_CRUCE_POR_DEFECTO, 'COBRANZA', FinanzasCatalogo::CATEGORIA_CRUCE];
         }
         if ($formaPago === 'EFECTIVO') {
-            return ['EFECTIVO', 'COBRANZA', CobranzaMovimiento::GRUPO_SIN_BANCO];
+            // Módulos no distinguen aún: por defecto divisa (cobros en $); Bs se elige en el flujo.
+            return [CobranzaMovimiento::CUENTA_EFECTIVO_DIVISA, 'COBRANZA', CobranzaMovimiento::GRUPO_SIN_BANCO];
         }
         if ($formaPago === 'DESCUENTO_DIVISAS') {
             return [CobranzaMovimiento::CUENTA_DESCUENTO_DIVISAS, 'COBRANZA', CobranzaMovimiento::GRUPO_SIN_BANCO];
@@ -770,10 +771,13 @@ class CobranzaFlujoService
         $bs = round((float) ($datos['monto_bs'] ?? 0), 2);
         $tasa = round((float) ($datos['tasa_cambio'] ?? 0), 4);
         $intl = FinanzasCatalogo::esBancaInternacional($datos['categoria_cuenta'] ?? null);
-        if ($intl && $usd > 0) {
-            // Banca internacional: solo divisas, sin tasa ni Bs.
+        $efectivoDivisa = CobranzaMovimiento::esEfectivoDivisa($datos['banco'] ?? null);
+        if (($intl || $efectivoDivisa) && $usd > 0) {
+            // Divisas / efectivo divisa: solo $, sin tasa ni Bs.
             $bs = 0.0;
             $tasa = 0.0;
+        } elseif (CobranzaMovimiento::esEfectivoBs($datos['banco'] ?? null) && $bs > 0 && $usd <= 0 && $tasa > 0) {
+            $usd = round($bs / $tasa, 2);
         } elseif ($usd <= 0 && $bs > 0 && $tasa > 0) {
             $usd = round($bs / $tasa, 2);
         } elseif ($bs <= 0 && $usd > 0 && $tasa > 0) {
@@ -803,8 +807,7 @@ class CobranzaFlujoService
             return;
         }
 
-        $esEfectivoIngreso = $mov->esIngreso()
-            && mb_strtoupper(trim((string) $mov->banco), 'UTF-8') === 'EFECTIVO';
+        $esEfectivoIngreso = $mov->esIngreso() && CobranzaMovimiento::esEfectivo($mov->banco);
 
         if (! $esEfectivoIngreso) {
             $this->borrarCajaTesoreria($mov);
@@ -814,7 +817,12 @@ class CobranzaFlujoService
 
         $montoBs = round((float) $mov->monto_bs, 2);
         $montoUsd = round((float) $mov->monto_usd, 2);
-        if ($montoBs >= 0.01) {
+        if (CobranzaMovimiento::esEfectivoBs($mov->banco) || (! CobranzaMovimiento::esEfectivoDivisa($mov->banco) && $montoBs >= 0.01)) {
+            if ($montoBs < 0.01) {
+                $this->borrarCajaTesoreria($mov);
+
+                return;
+            }
             $codigoCaja = TesoreriaCaja::CODIGO_BS;
             $monto = $montoBs;
             $monedaDivisa = null;

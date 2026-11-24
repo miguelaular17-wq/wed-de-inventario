@@ -8,8 +8,8 @@ echo   GENERADOR DE INSTALADOR .EXE
 echo   Sincronizador de Inventario y Ventas - JRZ-TECH
 echo ============================================================
 echo.
-echo Este script empaqueta el programa en un .exe independiente
-echo que NO requiere Python instalado en el equipo destino.
+echo Empaqueta en modo ONEDIR (carpeta con .exe + DLLs).
+echo Evita el error "Failed to load Python DLL" de Temp\_MEI*.
 echo.
 
 
@@ -32,7 +32,7 @@ for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo OK: %%v
 REM 2. Instalar dependencias
 echo.
 echo [2/6] Instalando dependencias necesarias...
-python -m pip install psycopg2-binary pyodbc pandas openpyxl pyinstaller --quiet --disable-pip-version-check
+python -m pip install psycopg2-binary pyodbc pandas openpyxl pyinstaller pystray pillow --quiet --disable-pip-version-check
 if %errorlevel% neq 0 (
     echo [ERROR] No se pudieron instalar las dependencias.
     pause
@@ -49,16 +49,15 @@ if exist "%BASE_DIR%%EXE_NAME%.spec" del /q "%BASE_DIR%%EXE_NAME%.spec"
 if exist "%DIST_DIR%" rd /s /q "%DIST_DIR%"
 echo OK: Directorios limpiados.
 
-REM 4. Compilar con PyInstaller
+REM 4. Compilar con PyInstaller (onedir: DLLs junto al .exe, sin Temp\_MEI)
 echo.
-echo [4/6] Compilando ejecutable con PyInstaller...
+echo [4/6] Compilando ejecutable con PyInstaller --onedir...
 echo (Esto puede tardar 1-3 minutos, por favor espera...)
 echo.
 
-REM Moverse al directorio base para evitar problemas de rutas largas
 cd /d "%BASE_DIR%"
 
-python -m PyInstaller --onefile --windowed --name "WinSyncService" --add-data "sql;sql" --hidden-import psycopg2 --hidden-import pyodbc --hidden-import pandas --hidden-import openpyxl --hidden-import tkinter --hidden-import tkinter.ttk --hidden-import tkinter.scrolledtext --hidden-import tkinter.messagebox --hidden-import pystray --hidden-import PIL "main.py"
+python -m PyInstaller --noconfirm --onedir --windowed --name "%EXE_NAME%" --add-data "sql;sql" --hidden-import psycopg2 --hidden-import pyodbc --hidden-import pandas --hidden-import openpyxl --hidden-import tkinter --hidden-import tkinter.ttk --hidden-import tkinter.scrolledtext --hidden-import tkinter.messagebox --hidden-import pystray --hidden-import PIL "main.py"
 
 if %errorlevel% neq 0 (
     echo.
@@ -67,15 +66,20 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 echo.
-echo OK: Ejecutable creado.
+echo OK: Carpeta del ejecutable creada.
 
 REM 5. Armar carpeta de distribucion
 echo.
 echo [5/6] Armando paquete de distribucion...
 mkdir "%DIST_DIR%"
 
-copy "%BASE_DIR%dist\%EXE_NAME%.exe" "%DIST_DIR%\" >nul
-echo OK: SincronizadorJRZ.exe copiado.
+xcopy /E /I /Y "%BASE_DIR%dist\%EXE_NAME%\*" "%DIST_DIR%\" >nul
+if not exist "%DIST_DIR%\%EXE_NAME%.exe" (
+    echo [ERROR] No se encontro %EXE_NAME%.exe en dist\%EXE_NAME%\
+    pause
+    exit /b 1
+)
+echo OK: WinSyncService.exe y DLLs copiados.
 
 if exist "%BASE_DIR%README.md" (
     copy "%BASE_DIR%README.md" "%DIST_DIR%\" >nul
@@ -103,19 +107,23 @@ echo echo Creando acceso directo en el Escritorio...
 echo set "EXE_PATH=%%~dp0WinSyncService.exe"
 echo powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $desktop = [Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut($desktop + '\Sincronizador JRZ.lnk'); $s.TargetPath = '%%EXE_PATH%%'; $s.WorkingDirectory = '%%~dp0'; $s.Description = 'Sincronizador JRZ-TECH'; $s.Save()"
 echo echo OK: Acceso directo creado en el Escritorio.
+echo echo Deja TODA la carpeta junta ^(exe + _internal / DLLs^). No muevas solo el .exe.
 echo echo La nube se integra sola al abrir. Solo configura sede y SQL Server en la app.
 echo 
 ) > "%DIST_DIR%\instalar.bat"
 echo OK: instalar.bat creado.
 
-REM 6. Crear ZIP del paquete
+REM 6. Crear ZIP del paquete (carpeta completa onedir)
 echo.
 echo [6/6] Creando archivo ZIP para distribucion...
 set "ZIP_PATH=%BASE_DIR%WinSyncService_Instalador.zip"
 if exist "%ZIP_PATH%" del /q "%ZIP_PATH%"
 
-REM Solo lo que va en el paquete: el .exe que corre desde aqui escribe sync.log y state.json y los deja bloqueados.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$archivos = Get-ChildItem -Path '%DIST_DIR%' -File | Where-Object { $_.Extension -ne '.log' -and $_.Name -notlike '*.log.*' -and $_.Name -ne 'state.json' }; Compress-Archive -Path $archivos.FullName -DestinationPath '%ZIP_PATH%' -Force"
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$src = '%DIST_DIR%'; $zip = '%ZIP_PATH%'; ^
+   $items = Get-ChildItem -LiteralPath $src -Force | Where-Object { $_.Name -ne 'state.json' -and $_.Extension -ne '.log' -and $_.Name -notlike '*.log.*' }; ^
+   if (-not $items) { throw 'dist_instalador vacio' }; ^
+   Compress-Archive -Path ($items.FullName) -DestinationPath $zip -Force"
 
 if exist "%ZIP_PATH%" (
     echo OK: ZIP creado exitosamente.
@@ -139,8 +147,12 @@ echo ============================================================
 echo Archivo listo para distribuir:
 echo WinSyncService_Instalador.zip
 echo.
+echo IMPORTANTE en el servidor:
+echo  1. Descomprimir la carpeta completa ^(no solo el .exe^)
+echo  2. Instalar VC++ Redistributable x64 si falta:
+echo     https://aka.ms/vs/17/release/vc_redist.x64.exe
+echo.
 explorer "%BASE_DIR%"
 
 
 pause
-

@@ -145,13 +145,46 @@ class CobranzaFlujoCajaTest extends TestCase
         $user = $this->makeUser();
         $this->actingAs($user)->post(route('cobranza.flujo.store'), [
             'tipo' => 'egreso', 'tipo_gasto' => '087 - PAGO PROVEEDORES', 'fecha' => '2026-11-10',
-            'ambito' => 'cobranza', 'cuenta' => 'EFECTIVO|COBRANZA|SIN BANCO',
+            'ambito' => 'cobranza', 'cuenta' => 'EFECTIVO DIVISA|COBRANZA|SIN BANCO',
             'monto_usd' => 50, 'tasa_cambio' => 40, 'concepto' => 'Pago en efectivo',
         ])->assertSessionHasNoErrors();
 
         $mov = CobranzaMovimiento::query()->firstOrFail();
         $this->assertNull($mov->flujo_caja_id);
         $this->assertSame(0, FlujoCaja::query()->count());
+        $this->assertSame('EFECTIVO DIVISA', $mov->banco);
+        $this->assertSame(0.0, (float) $mov->tasa_cambio);
+        $this->assertSame(0.0, (float) $mov->monto_bs);
+    }
+
+    public function test_efectivo_bs_mantiene_tasa_y_efectivo_divisa_no(): void
+    {
+        $user = $this->makeUser();
+
+        $this->actingAs($user)->post(route('cobranza.flujo.store'), [
+            'tipo' => 'ingreso', 'fecha' => '2026-11-10',
+            'ambito' => 'cobranza', 'cuenta' => 'EFECTIVO BS|COBRANZA|SIN BANCO',
+            'monto_bs' => 4000, 'tasa_cambio' => 40, 'concepto' => 'Cobro en Bs',
+        ])->assertSessionHasNoErrors();
+
+        $bs = CobranzaMovimiento::query()->firstOrFail();
+        $this->assertSame('EFECTIVO BS', $bs->banco);
+        $this->assertSame(40.0, (float) $bs->tasa_cambio);
+        $this->assertSame(100.0, (float) $bs->monto_usd);
+
+        CobranzaMovimiento::query()->delete();
+
+        $this->actingAs($user)->post(route('cobranza.flujo.store'), [
+            'tipo' => 'ingreso', 'fecha' => '2026-11-10',
+            'ambito' => 'cobranza', 'cuenta' => 'EFECTIVO DIVISA|COBRANZA|SIN BANCO',
+            'monto_usd' => 80, 'tasa_cambio' => 40, 'monto_bs' => 3200, 'concepto' => 'Cobro en $',
+        ])->assertSessionHasNoErrors();
+
+        $div = CobranzaMovimiento::query()->firstOrFail();
+        $this->assertSame('EFECTIVO DIVISA', $div->banco);
+        $this->assertSame(0.0, (float) $div->tasa_cambio);
+        $this->assertSame(0.0, (float) $div->monto_bs);
+        $this->assertSame(80.0, (float) $div->monto_usd);
     }
 
     public function test_egreso_banca_internacional_va_sin_tasa_como_egreso_divisas(): void
