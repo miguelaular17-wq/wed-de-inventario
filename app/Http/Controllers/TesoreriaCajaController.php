@@ -55,6 +55,15 @@ class TesoreriaCajaController extends Controller
             ->orderByDesc('fecha')
             ->orderByDesc('id');
 
+        // Cobranza pendiente de validar solo sale en el bloque de pendientes (no en el historial ni en totales).
+        if (Schema::hasColumn('tesoreria_caja_movimientos', 'validado_at')) {
+            $base->where(function ($w) {
+                $w->whereNull('origen')
+                    ->orWhere('origen', '!=', TesoreriaCajaMovimiento::ORIGEN_COBRANZA)
+                    ->orWhereNotNull('validado_at');
+            });
+        }
+
         $egresos = (clone $base)->where('tipo', TesoreriaCajaMovimiento::EGRESO)->get();
         $ingresos = (clone $base)->where('tipo', TesoreriaCajaMovimiento::INGRESO)
             ->with(['detalles' => fn ($q) => $q->orderBy('sede')->orderBy('codigo_caja')])
@@ -76,12 +85,8 @@ class TesoreriaCajaController extends Controller
             'egresos' => $egresos,
             'ingresos' => $ingresos,
             'pendientesCobranza' => $pendientesCobranza,
-            'totalesEgreso' => $egresos
-                ->reject(fn (TesoreriaCajaMovimiento $m) => $m->pendienteValidacionCobranza())
-                ->groupBy('caja_id')->map(fn ($g) => round($g->sum('monto'), 2)),
-            'totalesIngreso' => $ingresos
-                ->reject(fn (TesoreriaCajaMovimiento $m) => $m->pendienteValidacionCobranza())
-                ->groupBy('caja_id')->map(fn ($g) => round($g->sum('monto'), 2)),
+            'totalesEgreso' => $egresos->groupBy('caja_id')->map(fn ($g) => round($g->sum('monto'), 2)),
+            'totalesIngreso' => $ingresos->groupBy('caja_id')->map(fn ($g) => round($g->sum('monto'), 2)),
             'tiposGasto' => FinanzasCatalogo::tiposGasto(),
             'beneficiarios' => FinanzasCatalogo::beneficiarios([]),
             'sedes' => array_values(array_unique(array_merge(
