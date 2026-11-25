@@ -507,7 +507,12 @@ class CuadreCajaService
         return $lineas;
     }
 
-    /** Total en Bs de las devoluciones registradas por la cajera de la caja ese día (ventas_documentos DEV). */
+    /**
+     * Total en Bs de las devoluciones de esa cajera ese día, atribuidas a esta caja.
+     * Suite no guarda codigo_caja en el DEV: se usa la estación del documento mapeada
+     * a caja vía los pagos del mismo día (así CAJA 01 y CAJA ADMON de la misma cajera
+     * no comparten el mismo monto de EFECTIVO DEVOLUCION).
+     */
     private function devolucionesBs(CuadreCaja $cuadre): ?float
     {
         if (! Schema::hasTable('ventas_documentos') || ! Schema::hasColumn('ventas_documentos', 'usuario') || ! $cuadre->usuario || ! $cuadre->fecha_cierre) {
@@ -515,14 +520,75 @@ class CuadreCajaService
         }
         $cedula = $this->cedula((string) $cuadre->usuario);
         $usuarios = array_values(array_unique(array_filter([(string) $cuadre->usuario, $cedula, 'V'.$cedula, 'E'.$cedula])));
+        $fecha = $cuadre->fecha_cierre->toDateString();
 
-        return (float) DB::table('ventas_documentos')
+        $q = DB::table('ventas_documentos')
             ->where('sede', $cuadre->sede)
-            ->whereDate('fecha', $cuadre->fecha_cierre->toDateString())
+            ->whereDate('fecha', $fecha)
             ->where('tipo_documento', 'DEV')
             ->where(fn ($q) => $q->whereNull('estado')->orWhereRaw("LOWER(estado) = 'registrado'"))
-            ->whereIn('usuario', $usuarios)
-            ->sum('total_neto_bs');
+            ->whereIn('usuario', $usuarios);
+
+        $estaciones = $this->estacionesDeLaCaja($cuadre, $fecha);
+        if ($estaciones !== null) {
+            if ($estaciones === []) {
+                return 0.0;
+            }
+            $q->whereIn('estacion', $estaciones);
+        }
+
+        return (float) $q->sum('total_neto_bs');
+    }
+
+    /**
+     * Estaciones (PCs) que ese día cobraron con el codigo_caja del cuadre.
+     * null = no se puede filtrar (sin columna/tabla o sin pagos mapeados → comportamiento anterior).
+     *
+     * @return list<string>|null
+     */
+    private function estacionesDeLaCaja(CuadreCaja $cuadre, string $fecha): ?array
+    {
+        if (! Schema::hasColumn('ventas_documentos', 'estacion')
+            || ! Schema::hasTable('ventas_pagos')
+            || ! Schema::hasColumn('ventas_pagos', 'codigo_caja')
+            || ! $cuadre->codigo_caja) {
+            return null;
+        }
+
+        $hayMapeo = DB::table('ventas_pagos as p')
+            ->join('ventas_documentos as d', function ($j) {
+                $j->on('p.sede', '=', 'd.sede')
+                    ->on('p.numero_documento', '=', 'd.numero_documento');
+            })
+            ->where('p.sede', $cuadre->sede)
+            ->whereDate('p.fecha', $fecha)
+            ->whereDate('d.fecha', $fecha)
+            ->whereNotNull('d.estacion')
+            ->where('d.estacion', '!=', '')
+            ->whereNotNull('p.codigo_caja')
+            ->where('p.codigo_caja', '!=', '')
+            ->exists();
+
+        if (! $hayMapeo) {
+            return null;
+        }
+
+        return DB::table('ventas_pagos as p')
+            ->join('ventas_documentos as d', function ($j) {
+                $j->on('p.sede', '=', 'd.sede')
+                    ->on('p.numero_documento', '=', 'd.numero_documento');
+            })
+            ->where('p.sede', $cuadre->sede)
+            ->whereDate('p.fecha', $fecha)
+            ->whereDate('d.fecha', $fecha)
+            ->where('p.codigo_caja', $cuadre->codigo_caja)
+            ->whereNotNull('d.estacion')
+            ->where('d.estacion', '!=', '')
+            ->distinct()
+            ->pluck('d.estacion')
+            ->map(fn ($e) => (string) $e)
+            ->values()
+            ->all();
     }
 
     /**

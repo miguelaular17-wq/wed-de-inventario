@@ -476,6 +476,62 @@ class CuadreCajaTest extends TestCase
             ->assertSee('No suma al cuadre')->assertSee('Devuelto en efectivo')->assertSee('-$2,75', false);
     }
 
+    public function test_efectivo_devolucion_solo_en_la_caja_de_la_estacion_no_en_admon_de_la_misma_cajera(): void
+    {
+        if (! Schema::hasColumn('ventas_documentos', 'usuario')) {
+            Schema::table('ventas_documentos', fn (Blueprint $t) => $t->string('usuario')->nullable());
+        }
+        if (! Schema::hasColumn('ventas_documentos', 'estacion')) {
+            Schema::table('ventas_documentos', fn (Blueprint $t) => $t->string('estacion')->nullable());
+        }
+        (require database_path('migrations/2026_11_07_120000_reportes_suite_ventas_pagos.php'))->up();
+
+        $tasa = 919.82;
+        $caja01 = CuadreCaja::create([
+            'sede' => 'DORAL', 'fecha_cierre' => '2026-11-21', 'codigo_caja' => 'CJA01', 'descripcion_caja' => 'CAJA 01',
+            'usuario' => '28369458', 'usuario_nombre' => 'ALEJANDRA PAOLA SALAS DIAZ', 'factor_cambio' => $tasa,
+        ]);
+        $admon = CuadreCaja::create([
+            'sede' => 'DORAL', 'fecha_cierre' => '2026-11-21', 'codigo_caja' => 'CJAADMON', 'descripcion_caja' => 'CAJA ADMON',
+            'usuario' => '28369458', 'usuario_nombre' => 'ALEJANDRA PAOLA SALAS DIAZ', 'factor_cambio' => $tasa,
+        ]);
+        CuadreCajaPago::create([
+            'cuadre_caja_id' => $caja01->id, 'codigo_metodo' => 'NDC', 'forma_pago' => 'NOTA DE CRÉDITO',
+            'en_dolares' => false, 'ingresos' => 109072.26, 'ingresos_usd' => 118.58,
+        ]);
+        CuadreCajaPago::create([
+            'cuadre_caja_id' => $admon->id, 'codigo_metodo' => 'TRF', 'forma_pago' => 'TRANSF. $',
+            'en_dolares' => true, 'ingresos' => 5, 'ingresos_usd' => 5,
+        ]);
+
+        // Venta en CAJA 01 que amarra la estación DESKTOP-O0DM8BV → CJA01.
+        \Illuminate\Support\Facades\DB::table('ventas_documentos')->insert([
+            'sede' => 'DORAL', 'tipo_documento' => 'FAC', 'numero_documento' => '156800', 'fecha' => '2026-11-21',
+            'estado' => 'registrado', 'total_neto_bs' => 100, 'total_neto_usd' => 0.11, 'usuario' => '28369458',
+            'estacion' => 'DESKTOP-O0DM8BV', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        \Illuminate\Support\Facades\DB::table('ventas_pagos')->insert([
+            'sede' => 'DORAL', 'id_movimiento' => 900001, 'numero_documento' => '156800', 'fecha' => '2026-11-21',
+            'codigo_caja' => 'CJA01', 'codigo_metodo' => 'TRFBS', 'forma_pago' => 'TRANSFERENCIA BS',
+            'monto_bs' => 100, 'monto_usd' => 0.11, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        \Illuminate\Support\Facades\DB::table('ventas_documentos')->insert([
+            'sede' => 'DORAL', 'tipo_documento' => 'DEV', 'numero_documento' => '1725', 'fecha' => '2026-11-21',
+            'estado' => 'registrado', 'total_neto_bs' => 109079.15, 'total_neto_usd' => 119.34, 'usuario' => '28369458',
+            'estacion' => 'DESKTOP-O0DM8BV', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $svc = app(CuadreCajaService::class);
+        $lineas01 = collect($svc->lineas($caja01->load(['pagos', 'conteos', 'lotes'])))->keyBy('clave');
+        $lineasAdmon = collect($svc->lineas($admon->load(['pagos', 'conteos', 'lotes'])))->keyBy('clave');
+
+        // CAJA 01: DEV − NDC ≈ 6,89 Bs (efectivo devuelto real).
+        $this->assertSame('devolucion', $lineas01['NDC1|']['regla']);
+        $this->assertEqualsWithDelta(6.89, $lineas01['NDC1|']['suite'], 0.01);
+        // CAJA ADMON: no debe heredar el DEV de la otra caja (~$118).
+        $this->assertEqualsWithDelta(0.0, $lineasAdmon['NDC1|']['suite'], 0.01);
+    }
+
     public function test_lo_contado_antes_punto_por_punto_se_junta_en_una_linea_y_al_reprocesar_no_se_duplica(): void
     {
         $tesoreria = $this->usuario('tesoreria');
