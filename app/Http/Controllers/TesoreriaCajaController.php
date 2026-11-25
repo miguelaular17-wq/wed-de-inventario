@@ -23,8 +23,9 @@ class TesoreriaCajaController extends Controller
         $this->asegurarCajas();
 
         $cajaId = $request->filled('caja_id') ? (int) $request->query('caja_id') : null;
-        $desde = $this->fecha($request->query('desde')) ?? now()->startOfMonth()->toDateString();
-        $hasta = $this->fecha($request->query('hasta')) ?? now()->toDateString();
+        $hoy = now()->toDateString();
+        $desde = $this->fecha($request->query('desde')) ?? $hoy;
+        $hasta = $this->fecha($request->query('hasta')) ?? $hoy;
         if ($hasta < $desde) {
             [$desde, $hasta] = [$hasta, $desde];
         }

@@ -189,8 +189,9 @@ class CuadreCajaController extends Controller
      */
     private function filtros(Request $request): array
     {
-        $desde = $this->fecha($request->query('desde'), now()->startOfMonth());
-        $hasta = $this->fecha($request->query('hasta'), now());
+        $hoy = now()->startOfDay();
+        $desde = $this->fecha($request->query('desde'), $hoy);
+        $hasta = $this->fecha($request->query('hasta'), $hoy);
         if ($hasta->lt($desde)) {
             [$desde, $hasta] = [$hasta, $desde];
         }

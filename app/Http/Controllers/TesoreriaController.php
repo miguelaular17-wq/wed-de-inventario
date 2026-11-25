@@ -40,8 +40,9 @@ class TesoreriaController extends Controller
 
     private function payloadDash(Request $request, CuadreCajaService $cuadres): array
     {
-        $desde = $this->fechaDash($request->query('desde'), now()->startOfMonth());
-        $hasta = $this->fechaDash($request->query('hasta'), now());
+        $hoy = now()->startOfDay();
+        $desde = $this->fechaDash($request->query('desde'), $hoy);
+        $hasta = $this->fechaDash($request->query('hasta'), $hoy);
         if ($hasta->lt($desde)) {
             [$desde, $hasta] = [$hasta, $desde];
         }
