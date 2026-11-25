@@ -131,6 +131,37 @@ class CuadreCajaTest extends TestCase
         $this->assertSame(815.0, (float) $this->cierre->fresh()->conteos()->value('monto'));
     }
 
+    public function test_pdf_solo_cerradas_y_separadas_por_sede(): void
+    {
+        $tesoreria = $this->usuario('tesoreria');
+        $this->actingAs($tesoreria)->post(route('cuadre_caja.conciliar', $this->cierre), [
+            'accion' => 'procesar', 'montos' => ['02|' => '810'], 'observacion' => 'Faltan 5',
+        ]);
+
+        // Procesada: no entra al PDF (solo cerradas).
+        $resVacio = $this->actingAs($tesoreria)->get(route('cuadre_caja.pdf', [
+            'desde' => '2026-10-30', 'hasta' => '2026-10-30', 'sede' => 'DORAL',
+        ]));
+        $resVacio->assertOk();
+        $this->assertStringStartsWith('%PDF', $resVacio->getContent());
+        $this->assertStringContainsString('Arqueo_caja_cerradas_2026-10-30_2026-10-30_DORAL.pdf', (string) $resVacio->headers->get('Content-Disposition'));
+
+        $this->actingAs($tesoreria)->post(route('cuadre_caja.conciliar', $this->cierre), [
+            'accion' => 'cerrar', 'motivo' => 'faltante', 'aplicar_faltante_cajera' => '0',
+            'observacion' => 'Cerrada para PDF',
+        ])->assertSessionHasNoErrors();
+
+        $res = $this->actingAs($tesoreria)->get(route('cuadre_caja.pdf', [
+            'desde' => '2026-10-30', 'hasta' => '2026-10-30',
+        ]));
+        $res->assertOk();
+        $this->assertStringStartsWith('%PDF', $res->getContent());
+
+        $this->actingAs($tesoreria)->get(route('cuadre_caja.index', [
+            'desde' => '2026-10-30', 'hasta' => '2026-10-30',
+        ]))->assertOk()->assertSee('/cuadre-caja/pdf', false)->assertSee('PDF cerradas');
+    }
+
     public function test_cerrar_pide_motivo_y_observacion_y_no_se_reabre(): void
     {
         $tesoreria = $this->usuario('tesoreria');
@@ -178,12 +209,51 @@ class CuadreCajaTest extends TestCase
         ]);
 
         $this->actingAs($tesoreria)->post(route('cuadre_caja.conciliar', $this->cierre), [
-            'accion' => 'cerrar', 'motivo' => 'faltante', 'observacion' => 'Se descuenta por nómina',
+            'accion' => 'cerrar', 'motivo' => 'faltante', 'aplicar_faltante_cajera' => '0',
+            'observacion' => 'Se anota sin cargar a la cajera',
         ])->assertSessionHasNoErrors();
 
         $cerrada = $this->cierre->fresh();
         $this->assertTrue($cerrada->cerrado());
         $this->assertSame(810.0, (float) $cerrada->conteos()->value('monto'));
+    }
+
+    public function test_cerrar_con_faltante_puede_cargarlo_a_la_cajera(): void
+    {
+        $tesoreria = $this->usuario('tesoreria');
+        $cargo = \App\Models\Nomina\NominaCargo::create(['nombre' => 'Cajera', 'estado' => 'ACTIVO']);
+        $cliente = Cliente::create(['cedula' => '28738920', 'nombre' => 'ARIAMNA REYES']);
+        $empleado = \App\Models\Nomina\NominaEmpleado::create([
+            'cliente_id' => $cliente->id,
+            'cargo_id' => $cargo->id,
+            'salario_base' => 400,
+            'tipo_salario' => 'QUINCENAL',
+            'estado' => 'ACTIVO',
+            'fecha_ingreso' => '2025-01-01',
+        ]);
+
+        $payload = [
+            'accion' => 'cerrar',
+            'montos' => ['02|' => '810', 'TDD|PUNTOS' => ''],
+            'lotes' => ['TDD|PUNTOS' => $this->lotesCompletos()],
+            'motivo' => 'faltante',
+            'observacion' => 'Faltan 5 en efectivo',
+        ];
+        $this->actingAs($tesoreria)->post(route('cuadre_caja.conciliar', $this->cierre), $payload)
+            ->assertSessionHasErrors('aplicar_faltante_cajera');
+
+        $this->actingAs($tesoreria)->post(route('cuadre_caja.conciliar', $this->cierre), $payload + [
+            'aplicar_faltante_cajera' => '1',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertTrue($this->cierre->fresh()->cerrado());
+        $row = \App\Models\Nomina\NominaComisionDescuento::query()
+            ->where('empleado_id', $empleado->id)
+            ->where('tipo', 'FALTANTE')
+            ->first();
+        $this->assertNotNull($row);
+        $this->assertSame(5.0, (float) $row->monto);
+        $this->assertStringContainsString('Cuadre #'.$this->cierre->id, (string) $row->motivo);
     }
 
     public function test_una_forma_de_pago_sin_contar_cuenta_como_cero_al_conciliar(): void

@@ -172,13 +172,24 @@ class CobranzaFlujoCajaTest extends TestCase
 
         $ingreso = CobranzaMovimiento::query()->firstOrFail();
         $cajaUsd = TesoreriaCaja::query()->where('codigo', TesoreriaCaja::CODIGO_USD)->firstOrFail();
-        $this->assertSame(200.0, (float) $cajaUsd->saldo);
+        // Pendiente: aún no afecta saldo hasta que Tesorería valide.
+        $this->assertSame(0.0, (float) $cajaUsd->saldo);
         $cajaMov = TesoreriaCajaMovimiento::query()
             ->where('origen', TesoreriaCajaMovimiento::ORIGEN_COBRANZA)
             ->where('referencia', 'COBRANZA:'.$ingreso->id)
             ->firstOrFail();
         $this->assertSame(TesoreriaCajaMovimiento::INGRESO, $cajaMov->tipo);
         $this->assertSame(200.0, (float) $cajaMov->monto);
+        $this->assertNull($cajaMov->validado_at);
+
+        $tesoreria = User::create([
+            'name' => 'Tesorería', 'email' => 'tes-'.uniqid().'@test.local', 'password' => 'password123', 'role' => User::ROLE_TESORERIA,
+        ]);
+        $this->actingAs($tesoreria)->post(route('tesoreria.caja.validar_cobranza', $cajaMov))
+            ->assertRedirect();
+        $cajaUsd->refresh();
+        $this->assertSame(200.0, (float) $cajaUsd->saldo);
+        $this->assertNotNull($cajaMov->fresh()->validado_at);
 
         $this->actingAs($user)->post(route('cobranza.flujo.store'), [
             'tipo' => 'egreso', 'tipo_gasto' => 'GENERAL', 'fecha' => '2026-11-10',
@@ -188,15 +199,21 @@ class CobranzaFlujoCajaTest extends TestCase
 
         $egreso = CobranzaMovimiento::query()->where('tipo', 'egreso')->firstOrFail();
         $cajaUsd->refresh();
-        $this->assertSame(95.0, (float) $cajaUsd->saldo);
+        $this->assertSame(200.0, (float) $cajaUsd->saldo); // egreso aún pendiente
         $cajaEgreso = TesoreriaCajaMovimiento::query()
             ->where('origen', TesoreriaCajaMovimiento::ORIGEN_COBRANZA)
             ->where('referencia', 'COBRANZA:'.$egreso->id)
             ->firstOrFail();
         $this->assertSame(TesoreriaCajaMovimiento::EGRESO, $cajaEgreso->tipo);
         $this->assertSame(105.0, (float) $cajaEgreso->monto);
+        $this->assertNull($cajaEgreso->validado_at);
 
-        $this->delete(route('cobranza.flujo.destroy', $egreso))->assertSessionHasNoErrors();
+        $this->actingAs($tesoreria)->post(route('tesoreria.caja.validar_cobranza', $cajaEgreso))
+            ->assertRedirect();
+        $cajaUsd->refresh();
+        $this->assertSame(95.0, (float) $cajaUsd->saldo);
+
+        $this->actingAs($user)->delete(route('cobranza.flujo.destroy', $egreso))->assertSessionHasNoErrors();
         $cajaUsd->refresh();
         $this->assertSame(200.0, (float) $cajaUsd->saldo);
         $this->assertNull(
@@ -426,12 +443,16 @@ class CobranzaFlujoCajaTest extends TestCase
         $this->get(route('cobranza.flujo.index', ['desde' => '2026-11-01', 'hasta' => '2026-11-30']))
             ->assertSee('Contrato C-010 · Juan Pérez')->assertSee('Cuota #1 · vence 01/11/2026');
 
-        // El monto se corrige en Contratos, no en el flujo.
-        $this->delete(route('cobranza.flujo.destroy', $mov))->assertSessionHasErrors('movimiento');
+        // Desde el flujo también se puede corregir el monto: actualiza la cuota en Contratos.
         $this->put(route('cobranza.flujo.update', $mov), [
             'fecha' => '2026-11-10', 'ambito' => 'contratos', 'cuenta' => self::CUENTA_BANCO,
             'monto_usd' => 120, 'tasa_cambio' => 40, 'concepto' => 'Cuota 1 C-010',
-        ])->assertSessionHasErrors('movimiento');
+        ])->assertSessionHasNoErrors();
+        $this->assertSame('120.00', $mov->fresh()->monto_usd);
+        $cuota->refresh();
+        $this->assertSame(80.0, (float) $cuota->monto_pagado); // 120 − abono capital proporcional (40)
+        $this->assertSame(40.0, (float) $cuota->abono_capital);
+        $this->assertSame(960.0, (float) $contrato->fresh()->total_a_pagar);
 
         // Desde Contratos: el pago aparece en el flujo (cruce → cuenta de cruce, sin conciliación).
         $cuota2 = \App\Models\ContratoCuota::create([
@@ -717,6 +738,7 @@ class CobranzaFlujoCajaTest extends TestCase
         (require database_path('migrations/2026_11_17_160000_add_categoria_to_tesoreria_caja_movimientos.php'))->up();
         (require database_path('migrations/2026_11_18_123000_add_tipo_gasto_to_tesoreria_caja_movimientos.php'))->up();
         (require database_path('migrations/2026_11_19_150000_add_beneficiario_placa_to_tesoreria_caja_movimientos.php'))->up();
+        (require database_path('migrations/2026_11_25_100000_add_validado_at_to_tesoreria_caja_movimientos.php'))->up();
     }
 
     private function crearTablas(): void

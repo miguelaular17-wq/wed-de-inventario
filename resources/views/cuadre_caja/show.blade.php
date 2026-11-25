@@ -175,6 +175,10 @@
 .cc-aviso { border-radius:8px; padding:9px 12px; font-size:.8rem; margin-bottom:12px; }
 .cc-aviso--peligro { background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
 .cc-aviso--info { background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; }
+.cc-aviso--faltante { background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; }
+.cc-radio-fila { display:flex; gap:16px; flex-wrap:wrap; margin-top:6px; }
+.cc-radio-fila label { display:flex; align-items:center; gap:6px; font-weight:600; font-size:.88rem; color:#0f172a; margin:0; cursor:pointer; }
+.cc-radio-fila input { width:16px; height:16px; margin:0; }
 .cc-modal-pie { display:flex; justify-content:flex-end; gap:8px; padding:12px 22px 18px; border-top:1px solid #f1f5f9; }
 </style>
 @endpush
@@ -375,6 +379,27 @@
                         </select>
                     </div>
 
+                    <div class="cc-paso" id="cc-paso-faltante" style="display:none;">
+                        <label><span class="num">2</span> ¿Aplicar el faltante a la cajera?</label>
+                        <div class="cc-aviso cc-aviso--faltante" style="margin-bottom:8px;">
+                            Se cargará en <strong>Faltante de caja</strong> (nómina) el monto de la diferencia negativa de esta caja
+                            (@if($cuadre->usuario_nombre)<strong>{{ $cuadre->usuario_nombre }}</strong> · @endif{{ $cuadre->usuario }}).
+                        </div>
+                        <div class="cc-radio-fila">
+                            <label>
+                                <input type="radio" name="aplicar_faltante_cajera" value="1"
+                                       @checked((string) old('aplicar_faltante_cajera') === '1')>
+                                Sí, aplicarlo a la cajera
+                            </label>
+                            <label>
+                                <input type="radio" name="aplicar_faltante_cajera" value="0"
+                                       @checked((string) old('aplicar_faltante_cajera') === '0')>
+                                No, solo cerrar
+                            </label>
+                        </div>
+                        <div class="ayuda">Si eliges sí, queda pendiente de decidir en Nómina si se descuenta de sueldo o comisión.</div>
+                    </div>
+
                     <div class="cc-paso">
                         <label for="cc-obs"><span class="num" id="cc-num-obs">1</span> Observación</label>
                         <textarea id="cc-obs" name="observacion" maxlength="2000" required
@@ -571,10 +596,19 @@
     const obs = document.getElementById('cc-obs');
     const confirmar = document.getElementById('cc-confirmar');
 
+    const pasoFaltante = document.getElementById('cc-paso-faltante');
+    const radiosFaltante = () => [...document.querySelectorAll('input[name="aplicar_faltante_cajera"]')];
+
     function pasoObservacion() {
         const esCerrar = document.getElementById('cc-accion').value === 'cerrar';
+        const esFaltante = esCerrar && motivo.value === 'faltante';
         obs.disabled = esCerrar && motivo.value === '';
         obs.placeholder = obs.disabled ? 'Primero elige el motivo del cierre' : 'Ej.: faltante de $5 en efectivo, la cajera lo repone mañana';
+        if (pasoFaltante) {
+            pasoFaltante.style.display = esFaltante ? '' : 'none';
+            radiosFaltante().forEach(r => { r.required = esFaltante; if (!esFaltante) r.checked = false; });
+        }
+        document.getElementById('cc-num-obs').textContent = esCerrar ? (esFaltante ? '3' : '2') : '1';
     }
 
     function abrir(accion) {
@@ -584,7 +618,6 @@
         document.getElementById('cc-paso-motivo').style.display = esCerrar ? '' : 'none';
         motivo.required = esCerrar;
         motivo.disabled = !esCerrar;
-        document.getElementById('cc-num-obs').textContent = esCerrar ? '2' : '1';
         document.getElementById('cc-aviso-cerrar').style.display = esCerrar ? '' : 'none';
         document.getElementById('cc-aviso-procesar').style.display = esCerrar ? 'none' : '';
         confirmar.textContent = esCerrar ? modal.dataset.botonCerrar : modal.dataset.botonProcesar;
@@ -610,6 +643,11 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.classList.contains('open')) cerrarModal(); });
     motivo.addEventListener('change', function () {
         pasoObservacion();
+        if (motivo.value === 'faltante') {
+            const primero = radiosFaltante()[0];
+            if (primero) primero.focus();
+            return;
+        }
         if (!obs.disabled) obs.focus();
     });
 

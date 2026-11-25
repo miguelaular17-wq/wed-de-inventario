@@ -447,10 +447,12 @@ Route::middleware(['auth', 'permission:tesoreria'])->prefix('tesoreria')->name('
     Route::get('/dash.pdf', [\App\Http\Controllers\TesoreriaController::class, 'dashPdf'])->name('dash.pdf');
     Route::get('/caja', [\App\Http\Controllers\TesoreriaCajaController::class, 'index'])->name('caja.index');
     Route::post('/caja', [\App\Http\Controllers\TesoreriaCajaController::class, 'store'])->name('caja.store');
+    Route::post('/caja/movimientos/{movimiento}/validar-cobranza', [\App\Http\Controllers\TesoreriaCajaController::class, 'validarCobranza'])->whereNumber('movimiento')->name('caja.validar_cobranza');
     Route::delete('/caja/movimientos/{movimiento}', [\App\Http\Controllers\TesoreriaCajaController::class, 'destroy'])->whereNumber('movimiento')->name('caja.destroy');
     Route::post('/ingreso-banco', [\App\Http\Controllers\TesoreriaController::class, 'storeIngresoBanco'])->name('ingreso_banco.store');
     Route::get('/ingresos/sin-conciliar.xlsx', [\App\Http\Controllers\TesoreriaController::class, 'exportarSinConciliar'])->name('ingresos.sin_conciliar');
     Route::post('/ingresos/reconciliar', [\App\Http\Controllers\TesoreriaController::class, 'reconciliarPendientes'])->name('ingresos.reconciliar');
+    Route::get('/lotes-pv', [\App\Http\Controllers\TesoreriaController::class, 'lotesPv'])->name('lote_pos.index');
     Route::post('/lote-punto-venta', [\App\Http\Controllers\TesoreriaController::class, 'storeLotePuntoVenta'])->name('lote_pos.store');
     Route::put('/lote-punto-venta/{id}', [\App\Http\Controllers\TesoreriaController::class, 'updateLotePuntoVenta'])->name('lote_pos.update');
     Route::delete('/lote-punto-venta/{id}', [\App\Http\Controllers\TesoreriaController::class, 'destroyLotePuntoVenta'])->name('lote_pos.destroy');
@@ -458,6 +460,7 @@ Route::middleware(['auth', 'permission:tesoreria'])->prefix('tesoreria')->name('
 
 Route::middleware(['auth', 'permission:cuadre_caja'])->prefix('cuadre-caja')->name('cuadre_caja.')->group(function () {
     Route::get('/', [\App\Http\Controllers\CuadreCajaController::class, 'index'])->name('index');
+    Route::get('/pdf', [\App\Http\Controllers\CuadreCajaController::class, 'pdf'])->name('pdf');
     Route::get('/{cuadre}', [\App\Http\Controllers\CuadreCajaController::class, 'show'])->whereNumber('cuadre')->name('show');
     Route::post('/{cuadre}', [\App\Http\Controllers\CuadreCajaController::class, 'conciliar'])
         ->whereNumber('cuadre')

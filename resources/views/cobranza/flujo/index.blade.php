@@ -1513,12 +1513,12 @@
         pago.innerHTML = m.pago ? 'Paga: <strong>' + esc(m.pago) + '</strong>' : '';
         const avisos = [];
         if (m.conciliado) avisos.push('Ya está conciliado con el banco: solo cambia concepto, apartado, contraparte y observaciones.');
-        if (m.modulo) avisos.push(`Pago registrado en ${m.modulo}: el monto, la fecha y el apartado se corrigen allá.`);
+        if (m.modulo) avisos.push(`Pago de ${m.modulo}: si cambias el monto o la fecha, también se actualiza allá.`);
         $('cfe-aviso').style.display = avisos.length ? '' : 'none';
         $('cfe-aviso').textContent = avisos.join(' ');
         const bloqueados = new Set();
         if (m.conciliado) ['cfe-fecha', 'cfe-cuenta', 'cfe-usd', 'cfe-tasa', 'cfe-bs', 'cfe-referencia'].forEach(id => bloqueados.add(id));
-        if (m.modulo) ['cfe-fecha', 'cfe-usd', 'cfe-tasa', 'cfe-bs', 'cfe-ambito'].forEach(id => bloqueados.add(id));
+        if (m.modulo) bloqueados.add('cfe-ambito');
         ['cfe-fecha', 'cfe-ambito', 'cfe-cuenta', 'cfe-usd', 'cfe-tasa', 'cfe-bs', 'cfe-referencia'].forEach(id => {
             const el = $(id), b = bloqueados.has(id);
             el.readOnly = b;

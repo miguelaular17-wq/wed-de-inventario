@@ -100,6 +100,24 @@ class TesoreriaController extends Controller
         return view('tesoreria.dashboard', compact('ingresosBancos', 'lotesPuntos', 'desde', 'hasta', 'ref', 'estado', 'conteoBancos'));
     }
 
+    /** Listado de lotes de punto de venta (manuales y del arqueo de caja). */
+    public function lotesPv(Request $request): View
+    {
+        $desde = $this->fechaFiltro($request->query('desde'));
+        $hasta = $this->fechaFiltro($request->query('hasta'));
+        $ref = mb_substr(trim((string) $request->query('ref', '')), 0, 60);
+
+        $lotesPuntos = TesoreriaIngreso::where('tipo', 'punto_venta')
+            ->when($desde, fn ($q) => $q->whereDate('fecha', '>=', $desde))
+            ->when($hasta, fn ($q) => $q->whereDate('fecha', '<=', $hasta))
+            ->when($ref !== '', fn ($q) => $this->filtrarReferencia($q, $ref))
+            ->latest('fecha')
+            ->latest('id')
+            ->get();
+
+        return view('tesoreria.lotes_pv', compact('lotesPuntos', 'desde', 'hasta', 'ref'));
+    }
+
     /** Excel de los ingresos de banco sin conciliar (con los filtros de fecha y referencia del panel). */
     public function exportarSinConciliar(Request $request)
     {
@@ -325,7 +343,7 @@ class TesoreriaController extends Controller
             'user_id' => auth()->id()
         ]);
 
-        return back()->with('success', 'Lote de punto de venta registrado exitosamente.');
+        return redirect()->route('tesoreria.lote_pos.index')->with('success', 'Lote de punto de venta registrado exitosamente.');
     }
 
     public function updateLotePuntoVenta(Request $request, $id)
@@ -352,15 +370,15 @@ class TesoreriaController extends Controller
             'descripcion' => $request->descripcion
         ]);
 
-        return back()->with('success', 'Lote de punto de venta actualizado exitosamente.');
+        return redirect()->route('tesoreria.lote_pos.index')->with('success', 'Lote de punto de venta actualizado exitosamente.');
     }
 
     public function destroyLotePuntoVenta($id)
     {
         $lote = TesoreriaIngreso::where('tipo', 'punto_venta')->findOrFail($id);
         $lote->delete();
-        
-        return back()->with('success', 'Lote de punto de venta eliminado exitosamente.');
+
+        return redirect()->route('tesoreria.lote_pos.index')->with('success', 'Lote de punto de venta eliminado exitosamente.');
     }
 
     /**

@@ -64,8 +64,12 @@
                 @endforeach
             </select>
         </div>
-        <div class="field" style="display:flex;align-items:flex-end;">
+        <div class="field" style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;">
             <button class="btn" type="submit">Aplicar</button>
+            <a class="btn secondary" href="{{ route('cuadre_caja.pdf', request()->only(['desde','hasta','sede','cajera'])) }}"
+               style="text-decoration:none;" title="PDF de cajas cerradas, separadas por sede">
+                ⬇ PDF cerradas
+            </a>
         </div>
     </div>
 </form>

@@ -59,6 +59,61 @@
         <div class="alert error" style="margin-bottom:14px;">⚠️ {{ $errors->first() }}</div>
     @endif
 
+    @php $pendientesCobranza = $pendientesCobranza ?? collect(); @endphp
+    @if($pendientesCobranza->isNotEmpty())
+        <div class="tc-modern" style="margin-bottom:20px; border-color:#93c5fd;">
+            <table>
+                <thead>
+                    <tr>
+                        <th colspan="6" class="tc-header-main" style="background:linear-gradient(135deg,#1e40af 0%,#1d4ed8 100%) !important;">
+                            Pendientes de Cobranza · confirmar recepción / entrega ({{ $pendientesCobranza->count() }})
+                        </th>
+                    </tr>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Caja</th>
+                        <th>Concepto</th>
+                        <th style="text-align:right;">Monto</th>
+                        <th style="text-align:center;">Validar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($pendientesCobranza as $p)
+                        <tr style="background:#eff6ff;">
+                            <td>{{ $p->fecha?->format('d/m/Y') }}</td>
+                            <td>
+                                @if($p->esIngreso())
+                                    <span class="tc-ingreso">Recibir</span>
+                                @else
+                                    <span class="tc-egreso">Entregar</span>
+                                @endif
+                            </td>
+                            <td>{{ $p->caja?->esBolivares() ? 'BOLÍVARES' : 'DIVISAS' }}</td>
+                            <td>{{ $p->concepto }}</td>
+                            <td style="text-align:right;" class="{{ $p->esIngreso() ? 'tc-ingreso' : 'tc-egreso' }}">
+                                {{ $p->esIngreso() ? '+' : '−' }}{{ $p->formatoMonto() }}
+                            </td>
+                            <td style="text-align:center;">
+                                <form method="POST" action="{{ route('tesoreria.caja.validar_cobranza', $p) }}" style="margin:0;">
+                                    @csrf
+                                    <input type="hidden" name="volver_desde" value="{{ $filtros['desde'] ?? '' }}">
+                                    <input type="hidden" name="volver_hasta" value="{{ $filtros['hasta'] ?? '' }}">
+                                    <button type="submit" style="background:#1d4ed8; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-size:.78rem; font-weight:700; cursor:pointer;">
+                                        {{ $p->esIngreso() ? 'Confirmar recibido' : 'Confirmar entregado' }}
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+            <p class="muted" style="margin:0; padding:10px 14px; font-size:.78rem;">
+                Estos movimientos aún no afectan el saldo. Tesorería debe confirmar que el efectivo se recibió o se entregó.
+            </p>
+        </div>
+    @endif
+
     {{-- DISPONIBILIDAD --}}
     <div class="tc-modern" style="margin-bottom:28px;">
         <table>
@@ -152,16 +207,33 @@
                         </td>
                         <td>
                             {{ $m->concepto }}
+                            @if($m->esDeCobranza())
+                                <span style="display:inline-block; margin-left:6px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:999px; padding:1px 8px; font-size:.68rem; font-weight:700;">COBRANZA</span>
+                                @if($m->pendienteValidacionCobranza())
+                                    <span style="display:inline-block; margin-left:4px; background:#fef3c7; color:#b45309; border:1px solid #fcd34d; border-radius:999px; padding:1px 8px; font-size:.68rem; font-weight:700;">PENDIENTE</span>
+                                @endif
+                            @endif
                             <div class="muted" style="font-size:.72rem;">{{ $m->usuario?->name }} · {{ $m->created_at?->format('d/m/Y H:i') }}</div>
                         </td>
                         <td>{{ $m->referencia ?: '—' }}</td>
                         <td class="tc-egreso" style="text-align:right;">−{{ $m->formatoMonto() }}</td>
                         <td style="text-align:center;">
-                            <form method="POST" action="{{ route('tesoreria.caja.destroy', $m) }}" onsubmit="return confirm('¿Eliminar este egreso? Se ajustará el saldo.');">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" style="background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:6px; padding:4px 8px; font-size:.75rem; cursor:pointer;">Eliminar</button>
-                            </form>
+                            @if($m->esDeCobranza())
+                                @if($m->pendienteValidacionCobranza())
+                                    <form method="POST" action="{{ route('tesoreria.caja.validar_cobranza', $m) }}" style="margin:0;">
+                                        @csrf
+                                        <button type="submit" style="background:#1d4ed8; color:#fff; border:none; border-radius:6px; padding:4px 8px; font-size:.72rem; font-weight:700; cursor:pointer;">Confirmar entregado</button>
+                                    </form>
+                                @else
+                                    <span class="muted" style="font-size:.72rem;">Desde Cobranza</span>
+                                @endif
+                            @else
+                                <form method="POST" action="{{ route('tesoreria.caja.destroy', $m) }}" onsubmit="return confirm('¿Eliminar este egreso? Se ajustará el saldo.');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" style="background:#fee2e2; color:#991b1b; border:1px solid #fecaca; border-radius:6px; padding:4px 8px; font-size:.75rem; cursor:pointer;">Eliminar</button>
+                                </form>
+                            @endif
                         </td>
                     </tr>
                 @empty
@@ -230,7 +302,12 @@
                                 <div class="muted" style="font-size:.72rem; margin-top:2px;">Ingreso del día · detalle por sede abajo</div>
                             @elseif($esCobranza)
                                 <span style="display:inline-block; margin-left:6px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:999px; padding:1px 8px; font-size:.68rem; font-weight:700;">COBRANZA</span>
-                                <div class="muted" style="font-size:.72rem; margin-top:2px;">Efectivo recibido en Cobranza</div>
+                                @if($m->pendienteValidacionCobranza())
+                                    <span style="display:inline-block; margin-left:4px; background:#fef3c7; color:#b45309; border:1px solid #fcd34d; border-radius:999px; padding:1px 8px; font-size:.68rem; font-weight:700;">PENDIENTE</span>
+                                    <div class="muted" style="font-size:.72rem; margin-top:2px;">Espera confirmación de Tesorería · no afecta saldo</div>
+                                @else
+                                    <div class="muted" style="font-size:.72rem; margin-top:2px;">Efectivo de Cobranza confirmado</div>
+                                @endif
                             @else
                                 <div class="muted" style="font-size:.72rem;">{{ $m->usuario?->name }} · {{ $m->created_at?->format('d/m/Y H:i') }}</div>
                             @endif
@@ -241,7 +318,14 @@
                             @if($esCuadre)
                                 <span class="muted" style="font-size:.72rem;">Desde cuadre</span>
                             @elseif($esCobranza)
-                                <span class="muted" style="font-size:.72rem;">Desde Cobranza</span>
+                                @if($m->pendienteValidacionCobranza())
+                                    <form method="POST" action="{{ route('tesoreria.caja.validar_cobranza', $m) }}" style="margin:0;">
+                                        @csrf
+                                        <button type="submit" style="background:#1d4ed8; color:#fff; border:none; border-radius:6px; padding:4px 8px; font-size:.72rem; font-weight:700; cursor:pointer;">Confirmar recibido</button>
+                                    </form>
+                                @else
+                                    <span class="muted" style="font-size:.72rem;">Desde Cobranza</span>
+                                @endif
                             @else
                                 <form method="POST" action="{{ route('tesoreria.caja.destroy', $m) }}" onsubmit="return confirm('¿Eliminar este ingreso? Se ajustará el saldo.');">
                                     @csrf
@@ -262,7 +346,6 @@
                                         <thead>
                                             <tr>
                                                 <th style="text-align:left; padding:4px 6px; color:#64748b;">Sede</th>
-                                                <th style="text-align:left; padding:4px 6px; color:#64748b;">Caja</th>
                                                 <th style="text-align:right; padding:4px 6px; color:#64748b;">Monto</th>
                                             </tr>
                                         </thead>
@@ -271,18 +354,8 @@
                                                 @php $sumaSede = round($items->sum('monto'), 2); @endphp
                                                 <tr style="background:#fff;">
                                                     <td style="padding:5px 6px; font-weight:700;">{{ $etiquetas[$sedeNombre] ?? $sedeNombre }}</td>
-                                                    <td style="padding:5px 6px;">
-                                                        @foreach($items as $item)
-                                                            <div>{{ $item->codigo_caja ?: '—' }}</div>
-                                                        @endforeach
-                                                    </td>
                                                     <td style="padding:5px 6px; text-align:right; font-weight:700; color:#15803d;">
-                                                        @foreach($items as $item)
-                                                            <div>+{{ $fmt($m->caja, $item->monto) }}</div>
-                                                        @endforeach
-                                                        @if($items->count() > 1)
-                                                            <div class="muted" style="font-size:.72rem; margin-top:2px;">Σ sede {{ $fmt($m->caja, $sumaSede) }}</div>
-                                                        @endif
+                                                        +{{ $fmt($m->caja, $sumaSede) }}
                                                     </td>
                                                 </tr>
                                             @endforeach

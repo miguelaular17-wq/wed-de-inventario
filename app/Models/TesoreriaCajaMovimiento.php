@@ -42,12 +42,13 @@ class TesoreriaCajaMovimiento extends Model
     protected $table = 'tesoreria_caja_movimientos';
 
     protected $fillable = [
-        'caja_id', 'tipo', 'categoria', 'tipo_gasto', 'origen', 'fecha', 'monto', 'moneda_divisa', 'concepto', 'referencia', 'beneficiario', 'sede', 'placa_vehiculo', 'user_id', 'flujo_caja_id',
+        'caja_id', 'tipo', 'categoria', 'tipo_gasto', 'origen', 'fecha', 'monto', 'moneda_divisa', 'concepto', 'referencia', 'beneficiario', 'sede', 'placa_vehiculo', 'user_id', 'flujo_caja_id', 'validado_at', 'validado_por',
     ];
 
     protected $casts = [
         'fecha' => 'date',
         'monto' => 'float',
+        'validado_at' => 'datetime',
     ];
 
     public function caja(): BelongsTo
@@ -100,6 +101,17 @@ class TesoreriaCajaMovimiento extends Model
     public function esDeCobranza(): bool
     {
         return $this->origen === self::ORIGEN_COBRANZA;
+    }
+
+    /** Cobranza en efectivo: no mueve saldo hasta que Tesorería lo confirme. */
+    public function pendienteValidacionCobranza(): bool
+    {
+        return $this->esDeCobranza() && $this->validado_at === null;
+    }
+
+    public function estaValidado(): bool
+    {
+        return $this->validado_at !== null;
     }
 
     public function signo(): float

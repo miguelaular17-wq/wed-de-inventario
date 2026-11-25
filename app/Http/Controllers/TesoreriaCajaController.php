@@ -60,12 +60,28 @@ class TesoreriaCajaController extends Controller
             ->with(['detalles' => fn ($q) => $q->orderBy('sede')->orderBy('codigo_caja')])
             ->get();
 
+        $pendientesCobranza = collect();
+        if (Schema::hasColumn('tesoreria_caja_movimientos', 'validado_at')) {
+            $pendientesCobranza = TesoreriaCajaMovimiento::query()
+                ->with(['caja', 'usuario:id,name'])
+                ->where('origen', TesoreriaCajaMovimiento::ORIGEN_COBRANZA)
+                ->whereNull('validado_at')
+                ->orderByDesc('fecha')
+                ->orderByDesc('id')
+                ->get();
+        }
+
         return view('tesoreria.caja', [
             'cajas' => $cajas,
             'egresos' => $egresos,
             'ingresos' => $ingresos,
-            'totalesEgreso' => $egresos->groupBy('caja_id')->map(fn ($g) => round($g->sum('monto'), 2)),
-            'totalesIngreso' => $ingresos->groupBy('caja_id')->map(fn ($g) => round($g->sum('monto'), 2)),
+            'pendientesCobranza' => $pendientesCobranza,
+            'totalesEgreso' => $egresos
+                ->reject(fn (TesoreriaCajaMovimiento $m) => $m->pendienteValidacionCobranza())
+                ->groupBy('caja_id')->map(fn ($g) => round($g->sum('monto'), 2)),
+            'totalesIngreso' => $ingresos
+                ->reject(fn (TesoreriaCajaMovimiento $m) => $m->pendienteValidacionCobranza())
+                ->groupBy('caja_id')->map(fn ($g) => round($g->sum('monto'), 2)),
             'tiposGasto' => FinanzasCatalogo::tiposGasto(),
             'beneficiarios' => FinanzasCatalogo::beneficiarios([]),
             'sedes' => array_values(array_unique(array_merge(
@@ -212,6 +228,58 @@ class TesoreriaCajaController extends Controller
         ]))->with('success', $etiqueta.' registrado.');
     }
 
+    /**
+     * Tesorería confirma que recibió (ingreso) o entregó (egreso) el efectivo de Cobranza.
+     * Solo entonces se afecta el saldo de la caja.
+     */
+    public function validarCobranza(Request $request, TesoreriaCajaMovimiento $movimiento): RedirectResponse
+    {
+        abort_unless(Schema::hasTable('tesoreria_caja_movimientos'), 503);
+        abort_unless(Schema::hasColumn('tesoreria_caja_movimientos', 'validado_at'), 503);
+
+        if (! $movimiento->esDeCobranza()) {
+            return redirect()->route('tesoreria.caja.index')
+                ->withErrors(['movimiento' => 'Solo se validan movimientos de Cobranza.']);
+        }
+        if ($movimiento->estaValidado()) {
+            return redirect()->route('tesoreria.caja.index')
+                ->with('success', 'Ese movimiento ya estaba validado.');
+        }
+
+        DB::transaction(function () use ($movimiento, $request) {
+            /** @var TesoreriaCajaMovimiento $mov */
+            $mov = TesoreriaCajaMovimiento::query()->lockForUpdate()->findOrFail($movimiento->id);
+            if ($mov->validado_at !== null) {
+                return;
+            }
+            /** @var TesoreriaCaja $caja */
+            $caja = TesoreriaCaja::query()->lockForUpdate()->findOrFail($mov->caja_id);
+            $delta = $mov->esIngreso() ? (float) $mov->monto : -(float) $mov->monto;
+            $nuevo = round((float) $caja->saldo + $delta, 2);
+            if ($nuevo < -0.009) {
+                throw ValidationException::withMessages([
+                    'movimiento' => 'Al validar, la caja quedaría en negativo (saldo actual '.$caja->formatoSaldo().').',
+                ]);
+            }
+            $caja->update(['saldo' => $nuevo]);
+            $mov->update([
+                'validado_at' => now(),
+                'validado_por' => $request->user()?->id,
+            ]);
+        });
+
+        $msg = $movimiento->esIngreso()
+            ? 'Ingreso de Cobranza confirmado: se sumó a la caja.'
+            : 'Egreso de Cobranza confirmado: se descontó de la caja.';
+
+        return redirect()->route('tesoreria.caja.index', array_filter([
+            'desde' => $request->input('volver_desde'),
+            'hasta' => $request->input('volver_hasta'),
+            'caja_id' => $request->input('volver_caja_id'),
+            'q' => $request->input('volver_q'),
+        ]))->with('success', $msg);
+    }
+
     public function destroy(TesoreriaCajaMovimiento $movimiento): RedirectResponse
     {
         abort_unless(Schema::hasTable('tesoreria_caja_movimientos'), 503);
@@ -222,7 +290,7 @@ class TesoreriaCajaController extends Controller
         }
         if ($movimiento->esDeCobranza()) {
             return redirect()->route('tesoreria.caja.index')
-                ->withErrors(['movimiento' => 'Ese ingreso viene de Cobranza (efectivo). Corrígelo o elimínalo desde Cobranza.']);
+                ->withErrors(['movimiento' => 'Ese movimiento viene de Cobranza (efectivo). Corrígelo o elimínalo desde Cobranza.']);
         }
 
         DB::transaction(function () use ($movimiento) {

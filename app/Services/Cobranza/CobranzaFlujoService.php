@@ -24,7 +24,7 @@ use Illuminate\Validation\ValidationException;
 
 class CobranzaFlujoService
 {
-    /** Pagos ligados a Contratos/Patrimonial: el monto/fecha se editan allá; borrar desde el flujo sí los deshace. */
+    /** Pagos ligados a Contratos/Patrimonial: editar/borrar desde el flujo también actualiza allá. */
     public const VINCULOS_MODULO = [
         CobranzaMovimiento::VINCULO_CUOTA => 'Contratos',
         CobranzaMovimiento::VINCULO_CONTRATO => 'Contratos',
@@ -279,7 +279,7 @@ class CobranzaFlujoService
         $datos = $this->normalizar($datos + ['tipo' => $mov->tipo]);
         $datos['tipo'] = $mov->tipo;
 
-        return DB::transaction(function () use ($mov, $datos) {
+        return DB::transaction(function () use ($mov, $datos, $user) {
             $mov = CobranzaMovimiento::query()->lockForUpdate()->findOrFail($mov->id);
             $cambiaMonto = $mov->fecha->toDateString() !== $datos['fecha']
                 || abs((float) $mov->monto_bs - $datos['monto_bs']) >= 0.005
@@ -296,10 +296,9 @@ class CobranzaFlujoService
                 throw ValidationException::withMessages(['cuenta' => 'Un cruce de Cobranza debe quedar en Banco Cruce Cobranza.']);
             }
             $modulo = self::VINCULOS_MODULO[$mov->vinculo_tipo] ?? null;
-            if ($modulo && ($cambiaMonto || $datos['ambito'] !== $mov->ambito)) {
-                throw ValidationException::withMessages([
-                    'movimiento' => "Es un pago registrado en {$modulo}: el monto y la fecha se corrigen allá. Aquí puedes cambiar la cuenta, la referencia y el concepto.",
-                ]);
+            if ($modulo) {
+                // El apartado queda fijado por el vínculo (Contratos / Patrimonial).
+                $datos['ambito'] = $mov->ambito;
             }
             $factura = $mov->vinculo_tipo === CobranzaFactura::VINCULO ? CobranzaFactura::query()->find($mov->vinculo_id) : null;
             if ($factura) {
@@ -310,10 +309,29 @@ class CobranzaFlujoService
                 $datos['ambito'] = 'cobranza';
             }
 
+            $abonoViejo = null;
+            $usdViejo = round((float) $mov->monto_usd, 2);
+            if ($modulo && $cambiaMonto) {
+                $abonoViejo = $this->abonoCapitalDeMovimiento($mov);
+                $this->revertirVinculoModulo($mov);
+            }
+
             $mov->update($this->camposMovimiento($datos));
+            $mov = $mov->fresh();
             $this->sincronizarEspejo($mov);
-            $this->sincronizarCajaTesoreria($mov->fresh());
+            $this->sincronizarCajaTesoreria($mov);
             $this->asientos->sincronizarConMovimiento($mov);
+
+            if ($modulo && $cambiaMonto) {
+                $usdNuevo = round((float) $mov->monto_usd, 2);
+                $abonoNuevo = $usdViejo > 0.009
+                    ? round(min($usdNuevo, $abonoViejo * ($usdNuevo / $usdViejo)), 2)
+                    : 0.0;
+                $this->aplicarVinculo($mov, [
+                    'abono_capital' => $abonoNuevo,
+                    'forma_pago' => $mov->forma_pago,
+                ], $user);
+            }
 
             // El cruce es el mismo dinero: fecha, montos y cuenta van iguales en las dos mitades.
             if ($otra = $mov->contraparteCruce()) {
@@ -347,6 +365,34 @@ class CobranzaFlujoService
 
             return $mov->fresh();
         });
+    }
+
+    /**
+     * Estima el abono a capital del pago actual para reaplicarlo al editar el monto
+     * (proporcional al nuevo total).
+     */
+    private function abonoCapitalDeMovimiento(CobranzaMovimiento $mov): float
+    {
+        $usd = round((float) $mov->monto_usd, 2);
+        if ($usd <= 0) {
+            return 0.0;
+        }
+        if ($mov->vinculo_tipo === CobranzaMovimiento::VINCULO_CONTRATO) {
+            return $usd;
+        }
+        if ($mov->vinculo_tipo !== CobranzaMovimiento::VINCULO_CUOTA) {
+            return 0.0;
+        }
+        $cuota = ContratoCuota::query()->with('contrato')->find($mov->vinculo_id);
+        if (! $cuota) {
+            return 0.0;
+        }
+        if ((float) $cuota->contrato->interes_porcentaje == 0) {
+            return $usd;
+        }
+
+        // En cuotas con interés: abono_capital acumulado acotado al monto de este movimiento.
+        return min($usd, round((float) $cuota->abono_capital, 2));
     }
 
     public function eliminar(CobranzaMovimiento $mov): int
@@ -963,7 +1009,6 @@ class CobranzaFlujoService
         $esIngreso = $mov->esIngreso();
         $tipoCaja = $esIngreso ? TesoreriaCajaMovimiento::INGRESO : TesoreriaCajaMovimiento::EGRESO;
         $categoria = TesoreriaCajaMovimiento::categoriaDesdeTipo($tipoCaja);
-        $signo = $esIngreso ? 1 : -1; // ingreso suma saldo; egreso resta
 
         $this->asegurarCajasTesoreria();
         $caja = TesoreriaCaja::query()->where('codigo', $codigoCaja)->lockForUpdate()->firstOrFail();
@@ -987,6 +1032,11 @@ class CobranzaFlujoService
         if (Schema::hasColumn('tesoreria_caja_movimientos', 'beneficiario') && ! $esIngreso) {
             $payload['beneficiario'] = $mov->contraparte ?: null;
         }
+        // Cobranza no mueve saldo hasta que Tesorería valide recepción/entrega.
+        if (Schema::hasColumn('tesoreria_caja_movimientos', 'validado_at')) {
+            $payload['validado_at'] = null;
+            $payload['validado_por'] = null;
+        }
 
         $existente = TesoreriaCajaMovimiento::query()
             ->where('origen', TesoreriaCajaMovimiento::ORIGEN_COBRANZA)
@@ -995,10 +1045,9 @@ class CobranzaFlujoService
             ->first();
 
         if ($existente) {
+            // Si ya estaba validado, se deshace el saldo y vuelve a pendiente.
             $this->revertirSaldoCajaPorMovimiento($existente);
             $existente->update($payload);
-            $caja = TesoreriaCaja::query()->where('codigo', $codigoCaja)->lockForUpdate()->firstOrFail();
-            $caja->update(['saldo' => round((float) $caja->saldo + ($signo * $monto), 2)]);
 
             return;
         }
@@ -1007,7 +1056,6 @@ class CobranzaFlujoService
             'origen' => TesoreriaCajaMovimiento::ORIGEN_COBRANZA,
             'referencia' => $ref,
         ]);
-        $caja->update(['saldo' => round((float) $caja->saldo + ($signo * $monto), 2)]);
     }
 
     private function sedeDeMovimiento(CobranzaMovimiento $mov): ?string
@@ -1042,9 +1090,15 @@ class CobranzaFlujoService
         $existente->delete();
     }
 
-    /** Deshace el efecto en saldo: ingreso restaba al borrar; egreso sumaba. */
+    /**
+     * Deshace el efecto en saldo solo si Tesorería ya lo había validado
+     * (ingreso restaba al borrar; egreso sumaba).
+     */
     private function revertirSaldoCajaPorMovimiento(TesoreriaCajaMovimiento $mov): void
     {
+        if (Schema::hasColumn('tesoreria_caja_movimientos', 'validado_at') && $mov->validado_at === null) {
+            return;
+        }
         $caja = TesoreriaCaja::query()->lockForUpdate()->find($mov->caja_id);
         if (! $caja) {
             return;

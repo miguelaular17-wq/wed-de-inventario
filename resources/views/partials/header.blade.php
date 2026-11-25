@@ -150,13 +150,14 @@
         $link('Lotes punto de venta', route('finanzas.conciliaciones.lotes'), request()->routeIs('finanzas.conciliaciones.lotes')),
         $link('Calendario conciliaciones', route('finanzas.calendario_conciliaciones'), request()->routeIs('finanzas.calendario_conciliaciones')),
     ];
-    $tesoreriaLink = fn () => $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.dashboard', 'tesoreria.ingreso_banco.*', 'tesoreria.ingresos.*', 'tesoreria.lote_pos.*'));
+    $tesoreriaLink = fn () => $link('Tesorería', route('tesoreria.dashboard'), request()->routeIs('tesoreria.dashboard', 'tesoreria.ingreso_banco.*', 'tesoreria.ingresos.*'));
     $tesoreriaDashLink = fn () => $link('Dashboard', route('tesoreria.dash'), request()->routeIs('tesoreria.dash', 'tesoreria.dash.pdf'));
     $tesoreriaCajaLink = fn () => $link('Caja principal', route('tesoreria.caja.index'), request()->routeIs('tesoreria.caja.*'));
+    $tesoreriaLotesPvLink = fn () => $link('Lotes de PV', route('tesoreria.lote_pos.index'), request()->routeIs('tesoreria.lote_pos.*'));
     $ventasDiariasLink = fn () => $link('Cobros diarios', route('ventas_diarias.index'), request()->routeIs('ventas_diarias.*'));
     $cuadreCajaLink = fn () => $link('Arqueo de caja', route('cuadre_caja.index'), request()->routeIs('cuadre_caja.*'));
     $reportesSuiteLink = fn () => $link('Reportes de Suite', route('reportes_suite', 'facturas'), request()->routeIs('reportes_suite*'));
-    $tesoreriaItems = [...$conciliacionItems(), $tesoreriaLink(), $tesoreriaDashLink(), $tesoreriaCajaLink(), $ventasDiariasLink(), $cuadreCajaLink(), $reportesSuiteLink()];
+    $tesoreriaItems = [...$conciliacionItems(), $tesoreriaLink(), $tesoreriaDashLink(), $tesoreriaCajaLink(), $tesoreriaLotesPvLink(), $ventasDiariasLink(), $cuadreCajaLink(), $reportesSuiteLink()];
     $cobranzaItems = [
         $link('Cobranza', route('cobranza.index'), request()->routeIs('cobranza.*') && ! request()->routeIs('cobranza.flujo.*', 'cobranza.archivero.*', 'cobranza.facturas_cerradas*')),
         $link('Flujo de caja', route('cobranza.flujo.index'), request()->routeIs('cobranza.flujo.*')),
@@ -312,6 +313,7 @@
             $tesoreriaUsuario[] = $tesoreriaLink();
             $tesoreriaUsuario[] = $tesoreriaDashLink();
             $tesoreriaUsuario[] = $tesoreriaCajaLink();
+            $tesoreriaUsuario[] = $tesoreriaLotesPvLink();
         }
         if ($u->canAccess('ventas.diarias') || $u->canAccess('tesoreria')) {
             $tesoreriaUsuario[] = $ventasDiariasLink();

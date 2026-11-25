@@ -7,12 +7,16 @@ use App\Models\CuadreCaja;
 use App\Models\CuadreCajaConteo;
 use App\Models\CuadreCajaLote;
 use App\Models\CuadreCajaPago;
+use App\Models\Nomina\NominaComisionDescuento;
+use App\Models\Nomina\NominaEmpleado;
 use App\Models\TesoreriaIngreso;
 use App\Models\User;
+use App\Services\Nomina\FaltanteCajaService;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Cuadre de caja: lo que cobró cada caja en el día según Suite contra lo que
@@ -640,12 +644,20 @@ class CuadreCajaService
 
     /**
      * Cierre definitivo con motivo. Desde pendiente guarda también los montos y lotes; desde procesada los deja como están.
+     * Si el motivo es faltante y $aplicarFaltanteCajera, carga el monto negativo a Faltante de caja de la cajera.
      *
      * @param  array<string, string|float|int|null>|null  $montos
      * @param  array<string, list<array{lote?: mixed, monto?: mixed}>>  $lotes
      */
-    public function cerrar(CuadreCaja $cuadre, ?array $montos, array $lotes, string $motivo, string $observacion, User $user): void
-    {
+    public function cerrar(
+        CuadreCaja $cuadre,
+        ?array $montos,
+        array $lotes,
+        string $motivo,
+        string $observacion,
+        User $user,
+        bool $aplicarFaltanteCajera = false,
+    ): void {
         if ($cuadre->cerrado()) {
             throw new \DomainException('Esta caja ya está cerrada.');
         }
@@ -653,13 +665,88 @@ class CuadreCajaService
             throw new \DomainException('Elige un motivo de cierre de la lista.');
         }
 
-        DB::transaction(function () use ($cuadre, $montos, $lotes, $motivo, $observacion, $user) {
+        DB::transaction(function () use ($cuadre, $montos, $lotes, $motivo, $observacion, $user, $aplicarFaltanteCajera) {
             if ($cuadre->pendiente() && $montos !== null) {
                 $this->guardarConteos($cuadre, $montos, $lotes, $user);
             }
             $this->marcar($cuadre, CuadreCaja::CERRADO, $motivo, $observacion, $user);
-            app(TesoreriaCajaEfectivoService::class)->sincronizarDesdeCuadre($cuadre->fresh(['conteos']), $user);
+            $fresco = $cuadre->fresh(['pagos', 'conteos', 'lotes.ingreso']);
+            app(TesoreriaCajaEfectivoService::class)->sincronizarDesdeCuadre($fresco, $user);
+            if ($motivo === 'faltante' && $aplicarFaltanteCajera) {
+                $this->aplicarFaltanteACajera($fresco, $observacion, $user);
+            }
         });
+    }
+
+    /** Carga en Nómina el faltante (diferencia negativa) de este cuadre a la cajera. */
+    private function aplicarFaltanteACajera(CuadreCaja $cuadre, string $observacion, User $user): void
+    {
+        $faltantes = app(FaltanteCajaService::class);
+        if (! $faltantes->disponible()) {
+            throw ValidationException::withMessages([
+                'aplicar_faltante_cajera' => 'No está disponible el módulo de faltante de caja en nómina.',
+            ]);
+        }
+
+        $resumen = $this->resumen($cuadre);
+        $dif = (float) ($resumen['diferencia_usd'] ?? 0);
+        if ($dif >= -0.004) {
+            throw ValidationException::withMessages([
+                'aplicar_faltante_cajera' => 'No hay faltante: la diferencia no es negativa ('.$this->fmtUsd($dif).').',
+            ]);
+        }
+        $monto = round(abs($dif), 2);
+
+        $empleado = $this->empleadoDeCuadre($cuadre);
+        if (! $empleado) {
+            throw ValidationException::withMessages([
+                'aplicar_faltante_cajera' => 'No se encontró la cajera en nómina (cédula '.$cuadre->usuario.').',
+            ]);
+        }
+        if (! $faltantes->puedeRegistrarFaltante($empleado)) {
+            throw ValidationException::withMessages([
+                'aplicar_faltante_cajera' => 'Esa persona no es cajera, supervisora ni call center en nómina.',
+            ]);
+        }
+
+        $marca = 'Cuadre #'.$cuadre->id;
+        $ya = NominaComisionDescuento::query()
+            ->where('empleado_id', $empleado->id)
+            ->where('tipo', 'FALTANTE')
+            ->where('motivo', 'like', '%'.$marca.'%')
+            ->where('estado', '<>', 'CANCELADO')
+            ->exists();
+        if ($ya) {
+            return;
+        }
+
+        $caja = $cuadre->descripcion_caja ?: $cuadre->codigo_caja;
+        $fecha = $cuadre->fecha_cierre?->format('d/m/Y') ?: '';
+        $detalle = trim($observacion) !== '' ? ' · '.$observacion : '';
+        $faltantes->create($empleado, [
+            'fecha' => $cuadre->fecha_cierre?->toDateString() ?: now()->toDateString(),
+            'monto' => $monto,
+            'motivo' => $marca.' · '.$caja.' · '.$fecha.$detalle,
+            'accion' => 'sumar',
+        ], $user->id);
+    }
+
+    private function empleadoDeCuadre(CuadreCaja $cuadre): ?NominaEmpleado
+    {
+        $cedula = (string) preg_replace('/\D/', '', (string) $cuadre->usuario);
+        if ($cedula === '') {
+            return null;
+        }
+
+        return NominaEmpleado::query()
+            ->activos()
+            ->whereHas('cliente', fn ($q) => $q->where('cedula', $cedula))
+            ->first();
+    }
+
+    private function fmtUsd(float $n): string
+    {
+        return ($n < 0 ? '-' : '').'$'.number_format(abs($n), 2, ',', '.');
     }
 
     /** Vuelve a dejar pendiente una caja procesada. Una cerrada no se reabre. */
