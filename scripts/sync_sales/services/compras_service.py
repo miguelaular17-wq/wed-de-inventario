@@ -47,6 +47,51 @@ ALTER TABLE inventario_v2.cuentas_por_pagar
 CREATE UNIQUE INDEX IF NOT EXISTS cuentas_por_pagar_origen_referencia_unique
     ON inventario_v2.cuentas_por_pagar (origen, referencia)
     WHERE referencia IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS inventario_v2.cuentas_por_pagar_suite_items (
+    id bigserial PRIMARY KEY,
+    cuenta_por_pagar_suite_id bigint NOT NULL,
+    sede varchar(32) NOT NULL,
+    tipo_documento varchar(16) NOT NULL DEFAULT 'FAC',
+    numero_documento varchar(64) NOT NULL,
+    item_numero integer NOT NULL DEFAULT 0,
+    articulo varchar(64) NULL,
+    descripcion varchar(255) NULL,
+    cantidad numeric(18,4) NOT NULL DEFAULT 0,
+    costo_usd numeric(18,4) NOT NULL DEFAULT 0,
+    costo_bs numeric(18,4) NOT NULL DEFAULT 0,
+    total_usd numeric(18,2) NOT NULL DEFAULT 0,
+    total_bs numeric(18,2) NOT NULL DEFAULT 0,
+    created_at timestamp NULL,
+    updated_at timestamp NULL,
+    UNIQUE (sede, tipo_documento, numero_documento, item_numero)
+);
+CREATE INDEX IF NOT EXISTS cxp_suite_items_suite_id_idx
+    ON inventario_v2.cuentas_por_pagar_suite_items (cuenta_por_pagar_suite_id);
+
+CREATE TABLE IF NOT EXISTS inventario_v2.cuentas_por_pagar_suite_pagos (
+    id bigserial PRIMARY KEY,
+    cuenta_por_pagar_suite_id bigint NOT NULL,
+    sede varchar(32) NOT NULL,
+    tipo_documento varchar(16) NOT NULL DEFAULT 'FAC',
+    numero_documento varchar(64) NOT NULL,
+    numero_pago varchar(64) NOT NULL,
+    fecha date NULL,
+    monto_usd numeric(18,2) NOT NULL DEFAULT 0,
+    monto_bs numeric(18,2) NOT NULL DEFAULT 0,
+    metodo_pago varchar(64) NULL,
+    codigo_metodo varchar(32) NULL,
+    referencia varchar(120) NULL,
+    codigo_cuenta varchar(64) NULL,
+    tasa_cambio numeric(18,6) NULL,
+    descripcion varchar(255) NULL,
+    estado varchar(64) NULL,
+    created_at timestamp NULL,
+    updated_at timestamp NULL,
+    UNIQUE (sede, tipo_documento, numero_documento, numero_pago)
+);
+CREATE INDEX IF NOT EXISTS cxp_suite_pagos_suite_id_idx
+    ON inventario_v2.cuentas_por_pagar_suite_pagos (cuenta_por_pagar_suite_id);
 """
 
 
@@ -380,10 +425,16 @@ class ComprasService:
         vinculadas = ComprasService._asegurar_cuentas_finanzas(wc, sede, ahora)
         web_conn.commit()
 
+        # Ítems y pagos Suite de las FAC activas (cabecera + las que siguen abiertas en web).
+        n_items, n_pagos = ComprasService._sync_detalle_fac(
+            billing_cursor, wc, sede, ahora
+        )
+        web_conn.commit()
+
         # Quitar espejo Suite solo si ya no debe en Suite y tampoco queda saldo abierto en la web.
         wc.execute(
             """
-            DELETE FROM inventario_v2.cuentas_por_pagar_suite s
+            SELECT id FROM inventario_v2.cuentas_por_pagar_suite s
             WHERE s.sede = %s
               AND (s.synced_at IS NULL OR s.synced_at < %s)
               AND (
@@ -399,13 +450,275 @@ class ComprasService:
             """,
             (sede, ahora),
         )
-        borradas = wc.rowcount if wc.rowcount is not None else 0
+        ids_borrar = [r[0] for r in wc.fetchall()]
+        if ids_borrar:
+            wc.execute(
+                "DELETE FROM inventario_v2.cuentas_por_pagar_suite_items WHERE cuenta_por_pagar_suite_id = ANY(%s)",
+                (ids_borrar,),
+            )
+            wc.execute(
+                "DELETE FROM inventario_v2.cuentas_por_pagar_suite_pagos WHERE cuenta_por_pagar_suite_id = ANY(%s)",
+                (ids_borrar,),
+            )
+            wc.execute(
+                "DELETE FROM inventario_v2.cuentas_por_pagar_suite WHERE id = ANY(%s)",
+                (ids_borrar,),
+            )
+        borradas = len(ids_borrar)
         web_conn.commit()
         logger.info(
             f"[Compras/CxP] ✓ {len(batch)} FAC con saldo; "
             f"{vinculadas} listas para pagar en web; "
+            f"{n_items} ítems; {n_pagos} pagos Suite; "
             f"{borradas} cerradas/eliminadas."
         )
+
+    @staticmethod
+    def _sync_detalle_fac(billing_cursor, wc, sede, ahora):
+        """Sube ítems (documentos_compra_items) y pagos (pagos_cuentas_pagar) de las FAC activas."""
+        logger = AppLogger.get_logger()
+        wc.execute(
+            """
+            SELECT id, numero_documento
+            FROM inventario_v2.cuentas_por_pagar_suite
+            WHERE sede = %s
+            """,
+            (sede,),
+        )
+        filas = wc.fetchall()
+        if not filas:
+            return 0, 0
+
+        id_por_numero = {str(n).strip(): sid for sid, n in filas if n}
+        numeros = list(id_por_numero.keys())
+        if not numeros:
+            return 0, 0
+
+        n_items = 0
+        n_pagos = 0
+        for i in range(0, len(numeros), 400):
+            chunk = numeros[i : i + 400]
+            n_items += ComprasService._sync_items_fac(
+                billing_cursor, wc, sede, ahora, id_por_numero, chunk
+            )
+            n_pagos += ComprasService._sync_pagos_fac(
+                billing_cursor, wc, sede, ahora, id_por_numero, chunk
+            )
+        logger.info(f"[Compras/CxP] Detalle: {n_items} ítems, {n_pagos} pagos Suite.")
+        return n_items, n_pagos
+
+    @staticmethod
+    def _sync_items_fac(billing_cursor, wc, sede, ahora, id_por_numero, numeros):
+        if not numeros:
+            return 0
+        placeholders = ",".join("?" for _ in numeros)
+        cols = ComprasService._columnas(billing_cursor, "documentos_compra_items")
+        desc_expr = (
+            "NULLIF(LTRIM(RTRIM(i.descripcion_articulo)), '')"
+            if "descripcion_articulo" in cols
+            else "CAST(NULL AS varchar(255))"
+        )
+        item_expr = "ISNULL(i.item_numero, 0)" if "item_numero" in cols else "0"
+        if "total_neto_moneda2" in cols:
+            total_usd = "CAST(ISNULL(i.total_neto_moneda2, ISNULL(i.total_moneda2, 0)) AS decimal(18,2))"
+        elif "total_moneda2" in cols:
+            total_usd = "CAST(ISNULL(i.total_moneda2, 0) AS decimal(18,2))"
+        else:
+            total_usd = "CAST(0 AS decimal(18,2))"
+        if "total_neto" in cols:
+            total_bs = "CAST(ISNULL(i.total_neto, ISNULL(i.total, 0)) AS decimal(18,2))"
+        elif "total" in cols:
+            total_bs = "CAST(ISNULL(i.total, 0) AS decimal(18,2))"
+        else:
+            total_bs = "CAST(0 AS decimal(18,2))"
+        costo_usd = (
+            "CAST(ISNULL(i.costo_unitario_moneda2, 0) AS decimal(18,4))"
+            if "costo_unitario_moneda2" in cols
+            else "CAST(0 AS decimal(18,4))"
+        )
+        costo_bs = (
+            "CAST(ISNULL(i.costo_unitario, 0) AS decimal(18,4))"
+            if "costo_unitario" in cols
+            else "CAST(0 AS decimal(18,4))"
+        )
+
+        billing_cursor.execute(
+            f"""
+            SELECT
+                LTRIM(RTRIM(CAST(i.numero_documento AS VARCHAR(64)))) AS numero_documento,
+                {item_expr} AS item_numero,
+                NULLIF(LTRIM(RTRIM(i.articulo)), '') AS articulo,
+                {desc_expr} AS descripcion,
+                CAST(ISNULL(i.cantidad, 0) AS decimal(18,4)) AS cantidad,
+                {costo_usd} AS costo_usd,
+                {costo_bs} AS costo_bs,
+                {total_usd} AS total_usd,
+                {total_bs} AS total_bs
+            FROM documentos_compra_items i WITH (NOLOCK)
+            WHERE i.tipo_documento = 'FAC'
+              AND LTRIM(RTRIM(CAST(i.numero_documento AS VARCHAR(64)))) IN ({placeholders})
+            ORDER BY i.numero_documento, {item_expr}
+            """,
+            numeros,
+        )
+        rows = billing_cursor.fetchall()
+        batch = []
+        for row in rows:
+            numero = str(row[0]).strip() if row[0] else ""
+            sid = id_por_numero.get(numero)
+            if not sid:
+                continue
+            desc = str(row[3]).strip() if row[3] else None
+            if desc and len(desc) > 255:
+                desc = desc[:255]
+            art = str(row[2]).strip() if row[2] else None
+            batch.append(
+                (
+                    sid,
+                    sede,
+                    "FAC",
+                    numero,
+                    int(row[1] or 0),
+                    art,
+                    desc,
+                    float(row[4] or 0),
+                    float(row[5] or 0),
+                    float(row[6] or 0),
+                    float(row[7] or 0),
+                    float(row[8] or 0),
+                    ahora,
+                    ahora,
+                )
+            )
+
+        suite_ids = list({id_por_numero[n] for n in numeros if n in id_por_numero})
+        if suite_ids:
+            wc.execute(
+                "DELETE FROM inventario_v2.cuentas_por_pagar_suite_items WHERE cuenta_por_pagar_suite_id = ANY(%s)",
+                (suite_ids,),
+            )
+        if batch:
+            psycopg2.extras.execute_batch(
+                wc,
+                """
+                INSERT INTO inventario_v2.cuentas_por_pagar_suite_items (
+                    cuenta_por_pagar_suite_id, sede, tipo_documento, numero_documento,
+                    item_numero, articulo, descripcion, cantidad,
+                    costo_usd, costo_bs, total_usd, total_bs, created_at, updated_at
+                ) VALUES (
+                    %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s
+                )
+                """,
+                batch,
+                page_size=1000,
+            )
+        return len(batch)
+
+    @staticmethod
+    def _sync_pagos_fac(billing_cursor, wc, sede, ahora, id_por_numero, numeros):
+        if not numeros:
+            return 0
+        # ¿Existe el esquema Profit de CxP?
+        billing_cursor.execute(
+            """
+            SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME IN ('cuentas_pagar', 'pagos_cuentas_pagar')
+            """
+        )
+        tablas = {str(r[0]).lower() for r in billing_cursor.fetchall()}
+        if "cuentas_pagar" not in tablas or "pagos_cuentas_pagar" not in tablas:
+            return 0
+
+        placeholders = ",".join("?" for _ in numeros)
+        billing_cursor.execute(
+            f"""
+            SELECT
+                LTRIM(RTRIM(CAST(fac.numero_documento AS VARCHAR(64)))) AS numero_fac,
+                LTRIM(RTRIM(CAST(pago.numero_documento AS VARCHAR(64)))) AS numero_pago,
+                CAST(pago.fecha_emision AS date) AS fecha,
+                CAST(ISNULL(p.monto_moneda2, 0) AS decimal(18,2)) AS monto_usd,
+                CAST(ISNULL(p.monto, 0) AS decimal(18,2)) AS monto_bs,
+                NULLIF(LTRIM(RTRIM(pago.metodo_pago)), '') AS metodo_pago,
+                NULLIF(LTRIM(RTRIM(pago.codigo_metodo_pago)), '') AS codigo_metodo,
+                NULLIF(LTRIM(RTRIM(pago.numero_pago)), '') AS referencia,
+                NULLIF(LTRIM(RTRIM(pago.codigo_cuenta_bancaria)), '') AS codigo_cuenta,
+                CAST(pago.tasa_cambio AS decimal(18,6)) AS tasa_cambio,
+                NULLIF(LTRIM(RTRIM(pago.descripcion)), '') AS descripcion,
+                NULLIF(LTRIM(RTRIM(pago.estado)), '') AS estado
+            FROM pagos_cuentas_pagar p WITH (NOLOCK)
+            INNER JOIN cuentas_pagar fac WITH (NOLOCK) ON fac.id = p.id_factura
+            INNER JOIN cuentas_pagar pago WITH (NOLOCK) ON pago.id = p.id_pago
+            WHERE fac.tipo_documento = 'FAC'
+              AND LTRIM(RTRIM(CAST(fac.numero_documento AS VARCHAR(64)))) IN ({placeholders})
+            """,
+            numeros,
+        )
+        rows = billing_cursor.fetchall()
+        batch = []
+        for row in rows:
+            numero = str(row[0]).strip() if row[0] else ""
+            sid = id_por_numero.get(numero)
+            if not sid:
+                continue
+            numero_pago = str(row[1]).strip() if row[1] else ""
+            if not numero_pago:
+                continue
+            fecha = row[2]
+            if hasattr(fecha, "date"):
+                fecha = fecha.date()
+            desc = str(row[10]).strip() if row[10] else None
+            if desc and len(desc) > 255:
+                desc = desc[:255]
+            batch.append(
+                (
+                    sid,
+                    sede,
+                    "FAC",
+                    numero,
+                    numero_pago[:64],
+                    fecha,
+                    float(row[3] or 0),
+                    float(row[4] or 0),
+                    (str(row[5]).strip()[:64] if row[5] else None),
+                    (str(row[6]).strip()[:32] if row[6] else None),
+                    (str(row[7]).strip()[:120] if row[7] else None),
+                    (str(row[8]).strip()[:64] if row[8] else None),
+                    float(row[9]) if row[9] is not None else None,
+                    desc,
+                    (str(row[11]).strip()[:64] if row[11] else None),
+                    ahora,
+                    ahora,
+                )
+            )
+
+        suite_ids = list({id_por_numero[n] for n in numeros if n in id_por_numero})
+        if suite_ids:
+            wc.execute(
+                "DELETE FROM inventario_v2.cuentas_por_pagar_suite_pagos WHERE cuenta_por_pagar_suite_id = ANY(%s)",
+                (suite_ids,),
+            )
+        if batch:
+            psycopg2.extras.execute_batch(
+                wc,
+                """
+                INSERT INTO inventario_v2.cuentas_por_pagar_suite_pagos (
+                    cuenta_por_pagar_suite_id, sede, tipo_documento, numero_documento,
+                    numero_pago, fecha, monto_usd, monto_bs,
+                    metodo_pago, codigo_metodo, referencia, codigo_cuenta,
+                    tasa_cambio, descripcion, estado, created_at, updated_at
+                ) VALUES (
+                    %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s
+                )
+                """,
+                batch,
+                page_size=500,
+            )
+        return len(batch)
 
     @staticmethod
     def _asegurar_cuentas_finanzas(wc, sede, ahora):

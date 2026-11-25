@@ -240,27 +240,147 @@ class CuadreCajaService
 
     /**
      * Suite no siempre manda el nombre de la cajera, solo su cédula (a veces con "V"):
-     * se toma el de su ficha de empleado. No se guarda; el sincronizador puede traerlo después.
+     * se toma de clientes / nómina (user) / otros cuadres. No se guarda; el sincronizador puede traerlo después.
      *
      * @param  iterable<CuadreCaja>  $cierres
      */
     public function completarNombres(iterable $cierres): void
     {
-        $sinNombre = collect($cierres)->filter(fn (CuadreCaja $c) => ! $c->usuario_nombre && $c->usuario);
+        $sinNombre = collect($cierres)->filter(function (CuadreCaja $c) {
+            return $c->usuario && $this->nombreCajeraIncompleto($c->usuario_nombre, $c->usuario);
+        });
         if ($sinNombre->isEmpty()) {
             return;
         }
 
-        $nombres = Cliente::query()
-            ->whereIn('cedula', $sinNombre->map(fn (CuadreCaja $c) => $this->cedula($c->usuario))->unique()->values())
-            ->pluck('nombre', 'cedula');
+        $cedulas = $sinNombre
+            ->map(fn (CuadreCaja $c) => $this->cedula((string) $c->usuario))
+            ->filter(fn ($c) => $c !== '')
+            ->unique()
+            ->values();
+
+        $nombres = $this->nombresCajeraPorCedula($cedulas);
 
         foreach ($sinNombre as $cierre) {
-            $nombre = $nombres[$this->cedula($cierre->usuario)] ?? null;
-            if ($nombre) {
+            $nombre = $nombres[$this->cedula((string) $cierre->usuario)] ?? null;
+            if ($nombre && ! $this->nombreCajeraIncompleto($nombre, (string) $cierre->usuario)) {
                 $cierre->usuario_nombre = $nombre;
             }
         }
+    }
+
+    /**
+     * True si no hay nombre útil (vacío o es la misma cédula).
+     */
+    private function nombreCajeraIncompleto(?string $nombre, string $usuario): bool
+    {
+        $nombre = trim((string) $nombre);
+        if ($nombre === '') {
+            return true;
+        }
+
+        $cedNombre = $this->cedula($nombre);
+        $cedUsuario = $this->cedula($usuario);
+
+        return $cedNombre !== '' && $cedUsuario !== '' && $cedNombre === $cedUsuario;
+    }
+
+    /**
+     * Busca el nombre por cédula en clientes, usuarios de nómina y cuadres previos.
+     *
+     * @param  Collection<int, string>  $cedulas
+     * @return array<string, string>
+     */
+    private function nombresCajeraPorCedula(Collection $cedulas): array
+    {
+        if ($cedulas->isEmpty()) {
+            return [];
+        }
+
+        $nombres = [];
+        $variantes = fn (Collection $ceds) => $ceds
+            ->flatMap(fn ($c) => [$c, 'V'.$c, 'E'.$c, 'v'.$c, 'e'.$c])
+            ->unique()
+            ->values()
+            ->all();
+
+        if (Schema::hasTable('clientes')) {
+            $clientes = Cliente::query()
+                ->whereIn('cedula', $variantes($cedulas))
+                ->get(['cedula', 'nombre']);
+            foreach ($clientes as $cliente) {
+                $ced = $this->cedula((string) $cliente->cedula);
+                $nombre = trim((string) $cliente->nombre);
+                if ($ced !== '' && $nombre !== '' && ! $this->nombreCajeraIncompleto($nombre, $ced)) {
+                    $nombres[$ced] = $nombre;
+                }
+            }
+        }
+
+        $faltan = $cedulas->reject(fn ($c) => isset($nombres[$c]))->values();
+        if ($faltan->isNotEmpty() && Schema::hasTable('nomina_empleados')) {
+            $empleados = NominaEmpleado::query()
+                ->with(['cliente:id,cedula,nombre', 'user:id,name'])
+                ->whereHas('cliente', fn ($q) => $q->whereIn('cedula', $variantes($faltan)))
+                ->get();
+            foreach ($empleados as $empleado) {
+                $ced = $this->cedula((string) ($empleado->cliente?->cedula ?? ''));
+                if ($ced === '' || isset($nombres[$ced])) {
+                    continue;
+                }
+                $nombre = trim((string) ($empleado->cliente?->nombre ?: $empleado->user?->name));
+                if ($nombre !== '' && ! $this->nombreCajeraIncompleto($nombre, $ced)) {
+                    $nombres[$ced] = $nombre;
+                }
+            }
+        }
+
+        $faltan = $cedulas->reject(fn ($c) => isset($nombres[$c]))->values();
+        if ($faltan->isNotEmpty() && Schema::hasTable('cuadres_caja')) {
+            $previos = CuadreCaja::query()
+                ->whereNotNull('usuario_nombre')
+                ->where('usuario_nombre', '!=', '')
+                ->whereIn('usuario', $variantes($faltan))
+                ->orderByDesc('id')
+                ->get(['usuario', 'usuario_nombre']);
+            foreach ($previos as $previo) {
+                $ced = $this->cedula((string) $previo->usuario);
+                $nombre = trim((string) $previo->usuario_nombre);
+                if ($ced === '' || isset($nombres[$ced])) {
+                    continue;
+                }
+                if ($nombre !== '' && ! $this->nombreCajeraIncompleto($nombre, (string) $previo->usuario)) {
+                    $nombres[$ced] = $nombre;
+                }
+            }
+        }
+
+        // Users de la web: a veces el email (o el name) trae la cédula.
+        $faltan = $cedulas->reject(fn ($c) => isset($nombres[$c]))->values();
+        if ($faltan->isNotEmpty() && Schema::hasTable('users')) {
+            $users = User::query()
+                ->where(function ($q) use ($faltan) {
+                    foreach ($faltan as $ced) {
+                        $q->orWhere('email', 'like', '%'.$ced.'%')
+                            ->orWhere('name', 'like', '%'.$ced.'%');
+                    }
+                })
+                ->get(['name', 'email']);
+            foreach ($users as $user) {
+                foreach ($faltan as $ced) {
+                    if (isset($nombres[$ced])) {
+                        continue;
+                    }
+                    $hay = str_contains((string) $user->email, $ced) || str_contains((string) $user->name, $ced);
+                    $nombre = trim((string) $user->name);
+                    if ($hay && $nombre !== '' && ! $this->nombreCajeraIncompleto($nombre, $ced)) {
+                        $nombres[$ced] = $nombre;
+                    }
+                }
+            }
+        }
+
+        return $nombres;
     }
 
     /**

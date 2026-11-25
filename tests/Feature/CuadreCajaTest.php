@@ -305,6 +305,22 @@ class CuadreCajaTest extends TestCase
         $this->assertNull($sinNombre->fresh()->usuario_nombre);
     }
 
+    public function test_si_usuario_nombre_es_la_cedula_busca_el_nombre_real(): void
+    {
+        Cliente::create(['cedula' => '28501917', 'nombre' => 'ANAIS HERMOSO']);
+        CuadreCaja::create([
+            'sede' => 'DORAL', 'fecha_cierre' => '2026-11-22', 'codigo_caja' => 'CJA02',
+            'usuario' => '28501917', 'usuario_nombre' => '28501917', 'factor_cambio' => 919.82,
+        ]);
+        $tesoreria = $this->usuario('tesoreria');
+
+        $this->actingAs($tesoreria)
+            ->get(route('cuadre_caja.index', ['desde' => '2026-11-22', 'hasta' => '2026-11-22']))
+            ->assertOk()
+            ->assertSee('ANAIS HERMOSO')
+            ->assertSee('28501917');
+    }
+
     public function test_ver_no_deja_conciliar_y_sin_permiso_no_entra(): void
     {
         $sinPermiso = $this->usuario(User::ROLE_SUPERVISOR);

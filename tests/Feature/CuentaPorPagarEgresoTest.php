@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\CuentaPorPagar;
 use App\Models\CuentaPorPagarSuite;
+use App\Models\CuentaPorPagarSuiteItem;
+use App\Models\CuentaPorPagarSuitePago;
 use App\Models\FlujoCaja;
 use App\Models\GastoFijo;
 use App\Models\GastoFijoPago;
@@ -238,8 +240,60 @@ class CuentaPorPagarEgresoTest extends TestCase
             ->assertSee('SULIMAR')
             ->assertSee('4766')
             ->assertSee('Pagar')
+            ->assertSee('Historial')
             ->assertDontSee('NO DEBE SALIR')
             ->assertDontSee('YA PAGADA');
+    }
+
+    public function test_historial_suite_incluye_items_y_pagos_en_payload(): void
+    {
+        $user = $this->finanzasUser();
+        $fac = CuentaPorPagarSuite::query()->create([
+            'sede' => 'JRZ',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => '4766',
+            'fecha' => '2026-11-24',
+            'proveedor' => 'BEBESITOS',
+            'total_usd' => 850,
+            'saldo_usd' => 500,
+            'synced_at' => now(),
+        ]);
+        CuentaPorPagarSuiteItem::query()->create([
+            'cuenta_por_pagar_suite_id' => $fac->id,
+            'sede' => 'JRZ',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => '4766',
+            'item_numero' => 1,
+            'articulo' => 'EML-1073',
+            'descripcion' => 'ANDADERA CON TECHO',
+            'cantidad' => 8,
+            'costo_usd' => 46,
+            'total_usd' => 368,
+        ]);
+        CuentaPorPagarSuitePago::query()->create([
+            'cuenta_por_pagar_suite_id' => $fac->id,
+            'sede' => 'JRZ',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => '4766',
+            'numero_pago' => 'P2321',
+            'fecha' => '2026-11-19',
+            'monto_usd' => 350,
+            'monto_bs' => 100000,
+            'metodo_pago' => 'TRANSFERENCIA',
+            'referencia' => 'OW00007686293607',
+        ]);
+
+        $html = $this->actingAs($user)
+            ->get(route('finanzas.cuentas_por_pagar'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('ANDADERA CON TECHO', $html);
+        $this->assertStringContainsString('EML-1073', $html);
+        $this->assertStringContainsString('P2321', $html);
+        $this->assertStringContainsString('OW00007686293607', $html);
+        $this->assertStringContainsString('Ítems de la factura (Suite)', $html);
+        $this->assertStringContainsString('Pagos en Suite', $html);
     }
 
     public function test_pagar_suite_abre_flujo_con_cuenta_vinculada(): void

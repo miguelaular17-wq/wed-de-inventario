@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Schema;
 
 class CuentaPorPagarSuite extends Model
@@ -44,9 +45,27 @@ class CuentaPorPagarSuite extends Model
         return $this->belongsTo(CuentaPorPagar::class, 'cuenta_por_pagar_id');
     }
 
+    public function items(): HasMany
+    {
+        return $this->hasMany(CuentaPorPagarSuiteItem::class, 'cuenta_por_pagar_suite_id')
+            ->orderBy('item_numero');
+    }
+
+    public function pagosSuite(): HasMany
+    {
+        return $this->hasMany(CuentaPorPagarSuitePago::class, 'cuenta_por_pagar_suite_id')
+            ->orderBy('fecha')
+            ->orderBy('id');
+    }
+
     public function montoPagadoUsd(): float
     {
         return round(max(0, (float) $this->total_usd - (float) $this->saldo_usd), 2);
+    }
+
+    public function montoPagadoSuiteUsd(): float
+    {
+        return round((float) $this->pagosSuite->sum('monto_usd'), 2);
     }
 
     public function estaAbierta(): bool

@@ -124,7 +124,7 @@
                         <th class="col-number" style="text-align: right;">Pagado web $</th>
                         <th class="col-number" style="text-align: right;">Saldo por pagar $</th>
                         <th>Situación</th>
-                        <th style="text-align: center; width: 100px;">Acciones</th>
+                        <th style="text-align: center; width: 160px;">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -134,8 +134,9 @@
                             $pagadoWeb = $fac->cuentaPorPagar ? (float) $fac->cuentaPorPagar->monto_pagado : 0.0;
                             $saldoPagar = $fac->saldoPorPagarUsd();
                             $abierta = $fac->estaAbierta();
+                            $cuentaId = (int) ($fac->cuenta_por_pagar_id ?: 0);
                         @endphp
-                        <tr>
+                        <tr @if($cuentaId) style="cursor: pointer;" onclick="openHistorialCuentaPorPagar({{ $cuentaId }})" @endif>
                             <td>{{ optional($fac->fecha)->format('Y-m-d') ?? '-' }}</td>
                             <td style="font-variant-numeric: tabular-nums;">{{ $fac->numero_documento }}</td>
                             <td>
@@ -159,11 +160,10 @@
                                     <span style="margin-left:4px;background:#e0e7ff;color:#3730a3;font-size:0.7rem;padding:2px 6px;border-radius:999px;">Crédito</span>
                                 @endif
                             </td>
-                            <td style="text-align: center; white-space: nowrap;">
+                            <td style="text-align: center; white-space: nowrap;" onclick="event.stopPropagation();">
+                                <button type="button" onclick="openHistorialSuite({{ (int) $fac->id }})" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 3px 8px; font-size: 0.8rem; cursor: pointer; margin-right: 4px;">Historial</button>
                                 @if($abierta && !empty($puedeEditar))
                                     <a href="{{ route('finanzas.cuentas_por_pagar.suite.pagar', $fac->id) }}" style="background: #1a4273; color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 0.8rem; cursor: pointer; text-decoration:none; display:inline-block;">Pagar</a>
-                                @else
-                                    <span style="color:#94a3b8; font-size:0.8rem;">—</span>
                                 @endif
                             </td>
                         </tr>
@@ -185,6 +185,46 @@
         <button type="button" class="modal-close" onclick="closeHistorialCuentaPorPagar()" aria-label="Cerrar" style="position: absolute; right: 15px; top: 15px; background: none; border: none; font-size: 20px; cursor: pointer;">&times;</button>
         <h3 id="historialCuentaTitulo" style="margin: 0 0 8px; font-size: 1.1rem; color: #9a3412;">Historial</h3>
         <p id="historialCuentaResumen" style="margin: 0 0 12px; color: #64748b; font-size: 0.9rem;"></p>
+
+        <div id="historialItemsWrap" style="display:none; margin-bottom: 16px;">
+            <h4 style="margin:0 0 8px; font-size:0.95rem; color:#1e40af;">Ítems de la factura (Suite)</h4>
+            <div class="table-wrap">
+                <table class="data-table" style="width: 100%;">
+                    <thead>
+                        <tr style="background:#eff6ff;">
+                            <th style="width: 50px;">#</th>
+                            <th style="width: 110px;">Código</th>
+                            <th>Descripción</th>
+                            <th class="col-number" style="text-align: right;">Cant.</th>
+                            <th class="col-number" style="text-align: right;">Costo $</th>
+                            <th class="col-number" style="text-align: right;">Total $</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historialItemsBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="historialPagosSuiteWrap" style="display:none; margin-bottom: 16px;">
+            <h4 style="margin:0 0 8px; font-size:0.95rem; color:#1e40af;">Pagos en Suite</h4>
+            <div class="table-wrap">
+                <table class="data-table" style="width: 100%;">
+                    <thead>
+                        <tr style="background:#eff6ff;">
+                            <th style="width: 100px;">Fecha</th>
+                            <th style="width: 90px;">Pago</th>
+                            <th>Método</th>
+                            <th>Referencia</th>
+                            <th class="col-number" style="text-align: right;">USD</th>
+                            <th class="col-number" style="text-align: right;">BS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historialPagosSuiteBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <h4 id="historialPagosWebTitulo" style="margin:0 0 8px; font-size:0.95rem; color:#9a3412;">Pagos en la web (Flujo de Caja)</h4>
         <div class="table-wrap">
             <table class="data-table" style="width: 100%;">
                 <thead>
@@ -292,8 +332,8 @@
 </style>
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
 @php
-    $cuentasPorPagarJs = ($cuentas_por_pagar ?? collect())->map(function ($cuenta) {
-        return [
+    $mapCuentaJs = function ($cuenta, array $extra = []) {
+        return array_merge([
             'id' => $cuenta->id,
             'fecha' => optional($cuenta->fecha)->format('Y-m-d'),
             'beneficiario' => $cuenta->beneficiario,
@@ -305,6 +345,7 @@
             'monto_pagado' => (float) $cuenta->monto_pagado,
             'saldo' => (float) $cuenta->saldo,
             'abierta' => $cuenta->estaAbierta(),
+            'pagar_url' => null,
             'pagos' => $cuenta->pagos->map(function ($mov) {
                 return [
                     'fecha' => $mov->fecha,
@@ -321,11 +362,89 @@
                     'comision' => (float) $mov->comision,
                 ];
             })->values(),
+        ], $extra);
+    };
+
+    $cuentasPorPagarJs = ($cuentas_por_pagar ?? collect())->map(fn ($cuenta) => $mapCuentaJs($cuenta))->values();
+
+    foreach (($cuentas_suite ?? collect()) as $fac) {
+        if (! $fac->cuentaPorPagar) {
+            continue;
+        }
+        $ya = $cuentasPorPagarJs->first(fn ($c) => (int) $c['id'] === (int) $fac->cuentaPorPagar->id);
+        if ($ya) {
+            continue;
+        }
+        $cuentasPorPagarJs->push($mapCuentaJs($fac->cuentaPorPagar, [
+            'beneficiario' => $fac->proveedor ?: $fac->cuentaPorPagar->beneficiario,
+            'motivo' => 'FAC '.$fac->numero_documento.' Suite JRZ',
+            'monto_total' => (float) $fac->total_usd,
+            'pagar_url' => !empty($puedeEditar) && $fac->estaAbierta()
+                ? route('finanzas.cuentas_por_pagar.suite.pagar', $fac->id)
+                : null,
+        ]));
+    }
+
+    $cuentasSuiteJs = ($cuentas_suite ?? collect())->map(function ($fac) use ($puedeEditar) {
+        $cuenta = $fac->cuentaPorPagar;
+        $pagadoSuite = round((float) $fac->pagosSuite->sum('monto_usd'), 2);
+        return [
+            'id' => (int) $fac->id,
+            'cuenta_id' => $cuenta ? (int) $cuenta->id : null,
+            'numero' => $fac->numero_documento,
+            'proveedor' => $fac->proveedor,
+            'total_usd' => (float) $fac->total_usd,
+            'pagado_web' => $cuenta ? (float) $cuenta->monto_pagado : 0.0,
+            'pagado_suite' => $pagadoSuite,
+            'saldo' => $fac->saldoPorPagarUsd(),
+            'abierta' => $fac->estaAbierta(),
+            'pagar_url' => !empty($puedeEditar) && $fac->estaAbierta()
+                ? route('finanzas.cuentas_por_pagar.suite.pagar', $fac->id)
+                : null,
+            'items' => $fac->items->map(function ($item) {
+                return [
+                    'item_numero' => (int) $item->item_numero,
+                    'articulo' => $item->articulo,
+                    'descripcion' => $item->descripcion,
+                    'cantidad' => (float) $item->cantidad,
+                    'costo_usd' => (float) $item->costo_usd,
+                    'total_usd' => (float) $item->total_usd,
+                ];
+            })->values(),
+            'pagos_suite' => $fac->pagosSuite->map(function ($pago) {
+                return [
+                    'fecha' => optional($pago->fecha)->format('Y-m-d'),
+                    'numero_pago' => $pago->numero_pago,
+                    'metodo_pago' => $pago->metodo_pago ?: $pago->codigo_metodo,
+                    'referencia' => $pago->referencia,
+                    'monto_usd' => (float) $pago->monto_usd,
+                    'monto_bs' => (float) $pago->monto_bs,
+                ];
+            })->values(),
+            'pagos_web' => $cuenta
+                ? $cuenta->pagos->map(function ($mov) {
+                    return [
+                        'fecha' => $mov->fecha,
+                        'banco' => $mov->banco,
+                        'titular' => $mov->titular,
+                        'banco_receptor' => $mov->banco_receptor,
+                        'titular_receptor' => $mov->titular_receptor,
+                        'tipo_gasto' => $mov->tipo_gasto,
+                        'motivo' => $mov->motivo,
+                        'monto_usd' => (float) $mov->monto_usd,
+                        'tasa_cambio' => (float) $mov->tasa_cambio,
+                        'diferencial_cambiario' => (float) $mov->diferencial_cambiario,
+                        'monto_bs' => (float) $mov->monto_bs,
+                        'comision' => (float) $mov->comision,
+                    ];
+                })->values()
+                : collect(),
         ];
     })->values();
 @endphp
 <script>
 window.CUENTAS_POR_PAGAR = @json($cuentasPorPagarJs);
+window.CUENTAS_SUITE = @json($cuentasSuiteJs);
 const pagarCuentaUrl = @json(route('finanzas.flujo_caja'));
 
 function fmtNum(n) {
@@ -333,13 +452,61 @@ function fmtNum(n) {
     return v ? v.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
 }
 
-window.openHistorialCuentaPorPagar = function(id) {
-    const cuenta = (window.CUENTAS_POR_PAGAR || []).find(c => Number(c.id) === Number(id));
-    if (!cuenta) return;
-    const sim = String(cuenta.moneda).toUpperCase() === 'BS' ? 'Bs. ' : '$';
+function setHistorialDetalleSuite(items, pagosSuite) {
+    const itemsWrap = document.getElementById('historialItemsWrap');
+    const itemsBody = document.getElementById('historialItemsBody');
+    const pagosWrap = document.getElementById('historialPagosSuiteWrap');
+    const pagosBody = document.getElementById('historialPagosSuiteBody');
+    const listItems = items || [];
+    const listPagos = pagosSuite || [];
+
+    if (itemsWrap && itemsBody) {
+        if (listItems.length) {
+            itemsWrap.style.display = 'block';
+            itemsBody.innerHTML = listItems.map(it => `<tr>
+                <td>${it.item_numero || '-'}</td>
+                <td style="font-variant-numeric:tabular-nums;">${it.articulo || '-'}</td>
+                <td>${it.descripcion || '-'}</td>
+                <td class="col-number" style="text-align:right;">${fmtNum(it.cantidad)}</td>
+                <td class="col-number" style="text-align:right;">$${fmtNum(it.costo_usd)}</td>
+                <td class="col-number" style="text-align:right;">$${fmtNum(it.total_usd)}</td>
+            </tr>`).join('');
+        } else {
+            itemsWrap.style.display = 'none';
+            itemsBody.innerHTML = '';
+        }
+    }
+
+    if (pagosWrap && pagosBody) {
+        if (listPagos.length) {
+            pagosWrap.style.display = 'block';
+            pagosBody.innerHTML = listPagos.map(p => `<tr>
+                <td>${p.fecha || '-'}</td>
+                <td style="font-variant-numeric:tabular-nums;">${p.numero_pago || '-'}</td>
+                <td>${p.metodo_pago || '-'}</td>
+                <td>${p.referencia || '-'}</td>
+                <td class="col-number" style="text-align:right;">$${fmtNum(p.monto_usd)}</td>
+                <td class="col-number" style="text-align:right;">Bs. ${fmtNum(p.monto_bs)}</td>
+            </tr>`).join('');
+        } else {
+            pagosWrap.style.display = 'none';
+            pagosBody.innerHTML = '';
+        }
+    }
+}
+
+function renderHistorialCuenta(cuenta) {
+    const sim = String(cuenta.moneda || 'USD').toUpperCase() === 'BS' ? 'Bs. ' : '$';
     document.getElementById('historialCuentaTitulo').textContent = 'Historial — ' + (cuenta.beneficiario || cuenta.motivo || ('Cuenta #' + cuenta.id));
-    document.getElementById('historialCuentaResumen').textContent =
-        'Total ' + sim + fmtNum(cuenta.monto_total) + ' · Pagado ' + sim + fmtNum(cuenta.monto_pagado) + ' · Saldo ' + sim + fmtNum(cuenta.saldo);
+    let resumen = 'Total ' + sim + fmtNum(cuenta.monto_total) + ' · Pagado web ' + sim + fmtNum(cuenta.monto_pagado) + ' · Saldo ' + sim + fmtNum(cuenta.saldo);
+    if (cuenta.pagado_suite != null) {
+        resumen = 'Total $' + fmtNum(cuenta.monto_total)
+            + ' · Pagado Suite $' + fmtNum(cuenta.pagado_suite)
+            + ' · Pagado web $' + fmtNum(cuenta.monto_pagado)
+            + ' · Saldo $' + fmtNum(cuenta.saldo);
+    }
+    document.getElementById('historialCuentaResumen').textContent = resumen;
+    setHistorialDetalleSuite(cuenta.items || [], cuenta.pagos_suite || []);
     const body = document.getElementById('historialCuentaBody');
     body.innerHTML = (cuenta.pagos || []).map(mov => {
         const destino = mov.banco_receptor || mov.titular_receptor
@@ -362,17 +529,49 @@ window.openHistorialCuentaPorPagar = function(id) {
             <td class="col-number" style="text-align:right;">${mov.monto_bs ? 'Bs.' + fmtNum(mov.monto_bs) : '-'}</td>
             <td class="col-number" style="text-align:right;">${mov.comision ? fmtNum(mov.comision) : '-'}</td>
         </tr>`;
-    }).join('') || `<tr><td colspan="9" style="text-align:center;padding:20px;color:#64748b;">Sin pagos registrados.</td></tr>`;
+    }).join('') || `<tr><td colspan="9" style="text-align:center;padding:20px;color:#64748b;">Sin pagos registrados en la web.</td></tr>`;
     const pagarBtn = document.getElementById('historialCuentaPagarBtn');
     if (pagarBtn) {
         if (cuenta.abierta) {
             pagarBtn.style.display = 'inline-block';
-            pagarBtn.href = pagarCuentaUrl + '?pagar_cuenta=' + encodeURIComponent(cuenta.id);
+            pagarBtn.href = cuenta.pagar_url || (pagarCuentaUrl + '?pagar_cuenta=' + encodeURIComponent(cuenta.id));
         } else {
             pagarBtn.style.display = 'none';
         }
     }
     document.getElementById('historialCuentaModal').style.display = 'flex';
+}
+
+window.openHistorialCuentaPorPagar = function(id) {
+    const cuenta = (window.CUENTAS_POR_PAGAR || []).find(c => Number(c.id) === Number(id));
+    if (!cuenta) return;
+    // Si es una cuenta Suite, preferir el detalle completo (ítems + pagos Suite).
+    const fac = (window.CUENTAS_SUITE || []).find(c => Number(c.cuenta_id) === Number(id));
+    if (fac) {
+        openHistorialSuite(fac.id);
+        return;
+    }
+    renderHistorialCuenta(cuenta);
+};
+
+window.openHistorialSuite = function(suiteId) {
+    const fac = (window.CUENTAS_SUITE || []).find(c => Number(c.id) === Number(suiteId));
+    if (!fac) return;
+    renderHistorialCuenta({
+        id: fac.cuenta_id || ('suite-' + fac.id),
+        beneficiario: fac.proveedor || ('FAC ' + fac.numero),
+        motivo: 'FAC ' + fac.numero + ' Suite JRZ',
+        moneda: 'USD',
+        monto_total: fac.total_usd,
+        monto_pagado: fac.pagado_web,
+        pagado_suite: fac.pagado_suite,
+        saldo: fac.saldo,
+        abierta: fac.abierta,
+        pagar_url: fac.pagar_url,
+        items: fac.items || [],
+        pagos_suite: fac.pagos_suite || [],
+        pagos: fac.pagos_web || [],
+    });
 };
 
 window.closeHistorialCuentaPorPagar = function() {

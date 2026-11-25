@@ -36,7 +36,13 @@ class CuentaPorPagarController extends Controller
         $suite_synced_at = null;
         if (Schema::hasTable('cuentas_por_pagar_suite')) {
             $cuentas_suite = CuentaPorPagarSuite::query()
-                ->with('cuentaPorPagar')
+                ->with([
+                    'items',
+                    'pagosSuite',
+                    'cuentaPorPagar.pagos' => function ($query) {
+                        $query->orderBy('fecha')->orderBy('id');
+                    },
+                ])
                 ->where('sede', 'JRZ')
                 ->where(function ($q) {
                     $q->where('saldo_usd', '>', 0.01)
