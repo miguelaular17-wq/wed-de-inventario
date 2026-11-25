@@ -653,8 +653,47 @@ trait CreatesNominaSchema
                 $table->decimal('monto_pagado', 14, 2)->default(0);
                 $table->decimal('saldo', 14, 2)->default(0);
                 $table->string('estado', 16)->default('abierta');
+                $table->string('origen', 32)->default('manual');
+                $table->string('referencia', 64)->nullable();
                 $table->unsignedBigInteger('created_by')->nullable();
                 $table->timestamps();
+            });
+        } else {
+            Schema::table('cuentas_por_pagar', function (Blueprint $table) {
+                if (! Schema::hasColumn('cuentas_por_pagar', 'origen')) {
+                    $table->string('origen', 32)->default('manual');
+                }
+                if (! Schema::hasColumn('cuentas_por_pagar', 'referencia')) {
+                    $table->string('referencia', 64)->nullable();
+                }
+            });
+        }
+
+        if (! Schema::hasTable('cuentas_por_pagar_suite')) {
+            Schema::create('cuentas_por_pagar_suite', function (Blueprint $table) {
+                $table->id();
+                $table->string('sede', 32);
+                $table->string('tipo_documento', 16)->default('FAC');
+                $table->string('numero_documento', 64);
+                $table->date('fecha')->nullable();
+                $table->string('codigo_proveedor', 64)->nullable();
+                $table->string('proveedor', 255)->nullable();
+                $table->decimal('total_usd', 18, 2)->default(0);
+                $table->decimal('total_bs', 18, 2)->default(0);
+                $table->decimal('saldo_usd', 18, 2)->default(0);
+                $table->decimal('saldo_bs', 18, 2)->default(0);
+                $table->string('estado_suite', 64)->nullable();
+                $table->boolean('credito')->default(false);
+                $table->unsignedBigInteger('cuenta_por_pagar_id')->nullable()->index();
+                $table->timestamp('synced_at')->nullable();
+                $table->timestamps();
+                $table->unique(['sede', 'tipo_documento', 'numero_documento'], 'cxp_suite_sede_doc_unique');
+            });
+        } else {
+            Schema::table('cuentas_por_pagar_suite', function (Blueprint $table) {
+                if (! Schema::hasColumn('cuentas_por_pagar_suite', 'cuenta_por_pagar_id')) {
+                    $table->unsignedBigInteger('cuenta_por_pagar_id')->nullable()->index();
+                }
             });
         }
 

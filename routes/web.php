@@ -744,6 +744,9 @@ Route::middleware(['auth', 'permission:finanzas.ver'])->prefix('finanzas')->grou
         Route::post('/cuentas/{cuenta}', [\App\Http\Controllers\FinanzasCuentasController::class, 'guardar'])->whereNumber('cuenta')->name('finanzas.cuentas.guardar');
         Route::post('/cuentas/{cuenta}/quitar', [\App\Http\Controllers\FinanzasCuentasController::class, 'ocultar'])->whereNumber('cuenta')->name('finanzas.cuentas.quitar');
         Route::post('/cuentas-por-pagar', [\App\Http\Controllers\CuentaPorPagarController::class, 'store'])->name('finanzas.cuentas_por_pagar.store');
+        Route::get('/cuentas-por-pagar/suite/{id}/pagar', [\App\Http\Controllers\CuentaPorPagarController::class, 'pagarSuite'])
+            ->whereNumber('id')
+            ->name('finanzas.cuentas_por_pagar.suite.pagar');
         Route::post('/flujo-caja/reset', [FinanzasController::class, 'resetDaily'])->name('finanzas.reset_daily');
         Route::post('/flujo-caja/egresos-bulk', [FinanzasController::class, 'storeEgresosBulk'])->name('finanzas.store_egresos_bulk');
         Route::post('/flujo-caja/ocr-saldos', [FinanzasController::class, 'ocrSaldos'])->name('finanzas.ocr_saldos');

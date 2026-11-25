@@ -33,8 +33,12 @@
     @endif
 </div>
 
-<div class="dashboard-container">
+<div class="dashboard-container" style="display:flex; flex-direction:column; gap:18px;">
     <div class="panel" style="padding: 0; overflow: hidden; border: 1.5px solid #fed7aa;">
+        <div style="padding:12px 16px; border-bottom:1px solid #fed7aa; background:#fff7ed;">
+            <h2 style="margin:0; font-size:1rem; color:#9a3412;">Cuentas abiertas en Finanzas</h2>
+            <p style="margin:4px 0 0; color:#9a3412; font-size:0.85rem; opacity:0.85;">Gastos pendientes registrados aquí o desde Flujo de Caja.</p>
+        </div>
         <div class="table-wrap">
             <table class="data-table" style="width: 100%;">
                 <thead>
@@ -81,6 +85,92 @@
                         <tr>
                             <td colspan="9" style="text-align: center; color: #64748b; padding: 16px;">
                                 No hay cuentas por pagar. Puedes abrir una aquí (sin egreso) o marcarla al registrar un egreso en Flujo de Caja.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="panel" style="padding: 0; overflow: hidden; border: 1.5px solid #bfdbfe;">
+        <div style="padding:12px 16px; border-bottom:1px solid #bfdbfe; background:#eff6ff; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+            <div>
+                <h2 style="margin:0; font-size:1rem; color:#1e40af;">Facturas de compra Suite — JRZ</h2>
+                <p style="margin:4px 0 0; color:#1e40af; font-size:0.85rem; opacity:0.9;">
+                    Deuda sincronizada desde Profit (solo JRZ). El pago se registra aquí en Flujo de Caja.
+                </p>
+            </div>
+            <div style="color:#64748b; font-size:0.8rem; text-align:right;">
+                @if(!empty($suite_synced_at))
+                    Última sync: {{ \Illuminate\Support\Carbon::parse($suite_synced_at)->timezone(config('app.timezone'))->format('Y-m-d H:i') }}
+                @else
+                    Aún sin sincronizar desde el WinSync de JRZ
+                @endif
+                <div style="margin-top:2px; font-weight:600; color:#1e40af;">
+                    {{ ($cuentas_suite ?? collect())->count() }} con saldo
+                    · ${{ number_format(($cuentas_suite ?? collect())->sum(fn ($f) => $f->saldoPorPagarUsd()), 2) }}
+                </div>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table" style="width: 100%;">
+                <thead>
+                    <tr style="background: #eff6ff;">
+                        <th style="width: 100px;">Fecha</th>
+                        <th style="width: 90px;">FAC</th>
+                        <th>Proveedor</th>
+                        <th class="col-number" style="text-align: right;">Total factura $</th>
+                        <th class="col-number" style="text-align: right;">Pagado web $</th>
+                        <th class="col-number" style="text-align: right;">Saldo por pagar $</th>
+                        <th>Situación</th>
+                        <th style="text-align: center; width: 100px;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse(($cuentas_suite ?? collect()) as $fac)
+                        @php
+                            $situacion = $fac->situacion();
+                            $pagadoWeb = $fac->cuentaPorPagar ? (float) $fac->cuentaPorPagar->monto_pagado : 0.0;
+                            $saldoPagar = $fac->saldoPorPagarUsd();
+                            $abierta = $fac->estaAbierta();
+                        @endphp
+                        <tr>
+                            <td>{{ optional($fac->fecha)->format('Y-m-d') ?? '-' }}</td>
+                            <td style="font-variant-numeric: tabular-nums;">{{ $fac->numero_documento }}</td>
+                            <td>
+                                <div>{{ $fac->proveedor ?: '-' }}</div>
+                                @if($fac->codigo_proveedor)
+                                    <div style="color:#94a3b8; font-size:0.78rem;">{{ $fac->codigo_proveedor }}</div>
+                                @endif
+                            </td>
+                            <td class="col-number" style="text-align: right;">${{ number_format((float) $fac->total_usd, 2) }}</td>
+                            <td class="col-number" style="text-align: right;">${{ number_format($pagadoWeb, 2) }}</td>
+                            <td class="col-number" style="text-align: right; font-weight: 600; color: {{ $abierta ? '#c2410c' : '#166534' }};">${{ number_format($saldoPagar, 2) }}</td>
+                            <td>
+                                @if($situacion === 'parcial')
+                                    <span style="background:#fef9c3;color:#854d0e;font-size:0.75rem;padding:2px 8px;border-radius:999px;">Parcial</span>
+                                @elseif($situacion === 'debe')
+                                    <span style="background:#ffedd5;color:#9a3412;font-size:0.75rem;padding:2px 8px;border-radius:999px;">Debe</span>
+                                @else
+                                    <span style="background:#dcfce7;color:#166534;font-size:0.75rem;padding:2px 8px;border-radius:999px;">Pagada</span>
+                                @endif
+                                @if($fac->credito)
+                                    <span style="margin-left:4px;background:#e0e7ff;color:#3730a3;font-size:0.7rem;padding:2px 6px;border-radius:999px;">Crédito</span>
+                                @endif
+                            </td>
+                            <td style="text-align: center; white-space: nowrap;">
+                                @if($abierta && !empty($puedeEditar))
+                                    <a href="{{ route('finanzas.cuentas_por_pagar.suite.pagar', $fac->id) }}" style="background: #1a4273; color: white; border: none; border-radius: 4px; padding: 3px 8px; font-size: 0.8rem; cursor: pointer; text-decoration:none; display:inline-block;">Pagar</a>
+                                @else
+                                    <span style="color:#94a3b8; font-size:0.8rem;">—</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="8" style="text-align: center; color: #64748b; padding: 16px;">
+                                No hay facturas de compra con saldo en JRZ. Cuando el sincronizador de JRZ corra el módulo Compras, aparecerán aquí.
                             </td>
                         </tr>
                     @endforelse

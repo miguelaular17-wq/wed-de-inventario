@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CuentaPorPagar;
+use App\Models\CuentaPorPagarSuite;
 use App\Models\FlujoCaja;
 use App\Models\GastoFijo;
 use App\Models\GastoFijoPago;
@@ -170,6 +171,106 @@ class CuentaPorPagarEgresoTest extends TestCase
 
         $lista = $this->actingAs($user)->getJson(route('finanzas.gastos_fijos.pendientes'))->assertOk()->json();
         $this->assertNotContains($gasto->id, array_column($lista, 'id'));
+    }
+
+    public function test_index_muestra_facturas_suite_solo_jrz_con_saldo(): void
+    {
+        $user = $this->finanzasUser();
+
+        CuentaPorPagarSuite::query()->create([
+            'sede' => 'JRZ',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => '4766',
+            'fecha' => '2026-11-24',
+            'codigo_proveedor' => 'J01010101',
+            'proveedor' => 'BEBESITOS',
+            'total_usd' => 16404.60,
+            'total_bs' => 15089279.17,
+            'saldo_usd' => 16404.60,
+            'saldo_bs' => 15089279.17,
+            'estado_suite' => 'registrado',
+            'credito' => false,
+            'synced_at' => now(),
+        ]);
+        CuentaPorPagarSuite::query()->create([
+            'sede' => 'JRZ',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => '4761',
+            'fecha' => '2026-11-24',
+            'codigo_proveedor' => 'J411227099',
+            'proveedor' => 'SULIMAR',
+            'total_usd' => 5183.14,
+            'total_bs' => 4000000,
+            'saldo_usd' => 80.24,
+            'saldo_bs' => 73478.22,
+            'estado_suite' => 'registrado',
+            'credito' => false,
+            'synced_at' => now(),
+        ]);
+        // Otra sede no debe aparecer aunque tenga saldo.
+        CuentaPorPagarSuite::query()->create([
+            'sede' => 'DORAL',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => '999',
+            'fecha' => '2026-11-24',
+            'proveedor' => 'NO DEBE SALIR',
+            'total_usd' => 100,
+            'saldo_usd' => 100,
+            'synced_at' => now(),
+        ]);
+        // JRZ sin saldo no debe aparecer.
+        CuentaPorPagarSuite::query()->create([
+            'sede' => 'JRZ',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => '1',
+            'fecha' => '2026-01-01',
+            'proveedor' => 'YA PAGADA',
+            'total_usd' => 50,
+            'saldo_usd' => 0,
+            'synced_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('finanzas.cuentas_por_pagar'))
+            ->assertOk()
+            ->assertSee('Facturas de compra Suite — JRZ')
+            ->assertSee('BEBESITOS')
+            ->assertSee('SULIMAR')
+            ->assertSee('4766')
+            ->assertSee('Pagar')
+            ->assertDontSee('NO DEBE SALIR')
+            ->assertDontSee('YA PAGADA');
+    }
+
+    public function test_pagar_suite_abre_flujo_con_cuenta_vinculada(): void
+    {
+        $user = $this->finanzasUser();
+        $fac = CuentaPorPagarSuite::query()->create([
+            'sede' => 'JRZ',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => '5001',
+            'fecha' => '2026-11-24',
+            'proveedor' => 'EWIRELESS',
+            'total_usd' => 800,
+            'saldo_usd' => 800,
+            'synced_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('finanzas.cuentas_por_pagar.suite.pagar', $fac->id))
+            ->assertRedirect();
+
+        $fac->refresh();
+        $this->assertNotNull($fac->cuenta_por_pagar_id);
+        $cuenta = CuentaPorPagar::query()->findOrFail($fac->cuenta_por_pagar_id);
+        $this->assertSame('suite_jrz', $cuenta->origen);
+        $this->assertSame('5001', $cuenta->referencia);
+        $this->assertEquals(800.0, (float) $cuenta->saldo);
+        $this->assertTrue($cuenta->estaAbierta());
+
+        $this->actingAs($user)
+            ->get(route('finanzas.cuentas_por_pagar.suite.pagar', $fac->id))
+            ->assertRedirect(route('finanzas.flujo_caja', ['pagar_cuenta' => $cuenta->id]));
     }
 
     private function ensureGastosFijosTables(): void
