@@ -437,6 +437,32 @@ class CuadreCajaTest extends TestCase
         ])->assertSessionHas('error');
     }
 
+    public function test_descuento_divisas_no_sale_en_el_arqueo_ni_suma(): void
+    {
+        $caja = CuadreCaja::create([
+            'sede' => 'DORAL', 'fecha_cierre' => '2026-11-26', 'codigo_caja' => 'CJA01', 'descripcion_caja' => 'CAJA 01',
+            'usuario' => '123', 'usuario_nombre' => 'CAJERA', 'factor_cambio' => 40,
+        ]);
+        CuadreCajaPago::create([
+            'cuadre_caja_id' => $caja->id, 'codigo_metodo' => '02', 'forma_pago' => 'EFECTIVO $',
+            'en_dolares' => true, 'ingresos' => 100, 'ingresos_usd' => 100,
+        ]);
+        CuadreCajaPago::create([
+            'cuadre_caja_id' => $caja->id, 'codigo_metodo' => '12', 'forma_pago' => 'DESCUENTO DIVISAS 30%',
+            'en_dolares' => true, 'ingresos' => 416.67, 'ingresos_usd' => 416.67,
+        ]);
+
+        $svc = app(CuadreCajaService::class);
+        $lineas = collect($svc->lineas($caja->load(['pagos', 'conteos', 'lotes'])));
+        $this->assertFalse($lineas->contains(fn ($l) => str_contains(mb_strtoupper((string) $l['forma_pago']), 'DESCUENTO DIVISAS')));
+        $this->assertSame(100.0, $svc->resumen($caja->fresh()->load(['pagos', 'conteos', 'lotes']))['ingresos_usd']);
+
+        $this->actingAs($this->usuario('tesoreria'))
+            ->get(route('cuadre_caja.show', $caja))
+            ->assertOk()
+            ->assertDontSee('DESCUENTO DIVISAS');
+    }
+
     public function test_nota_de_credito_no_suma_y_el_efectivo_devuelto_compensa_la_diferencia(): void
     {
         if (! Schema::hasColumn('ventas_documentos', 'usuario')) {
@@ -627,6 +653,78 @@ class CuadreCajaTest extends TestCase
             ->assertOk()
             ->assertSee('TRANSF. $')
             ->assertSee('BINANCE');
+    }
+
+    public function test_consolidado_incluye_cuentas_de_nunes_aunque_el_catalogo_fijo_sea_solo_doral(): void
+    {
+        $nunes = CuadreCaja::create([
+            'sede' => 'NUNES', 'id_cierre' => 88001, 'fecha_cierre' => '2026-11-21', 'codigo_caja' => 'CJA01',
+            'descripcion_caja' => 'CAJA NUNES', 'usuario' => '100', 'usuario_nombre' => 'CAJERA NUNES',
+            'estado' => 2, 'factor_cambio' => 800, 'estado_tesoreria' => 'procesado',
+        ]);
+        // Cuenta propia de Nunes: no está en formas_cuadre.DORAL (solo hay cuentas Doral/JRZ).
+        CuadreCajaPago::create([
+            'cuadre_caja_id' => $nunes->id, 'codigo_metodo' => 'TDD', 'forma_pago' => 'TARJ. DÉBITO',
+            'codigo_cuenta' => 'NUNES01', 'cuenta' => 'BANESCO P.V. NUNES', 'en_dolares' => false,
+            'ingresos' => 120000, 'ingresos_usd' => 150,
+        ]);
+        CuadreCajaPago::create([
+            'cuadre_caja_id' => $nunes->id, 'codigo_metodo' => 'CASHEA', 'forma_pago' => 'CASHEA',
+            'codigo_cuenta' => '', 'cuenta' => null, 'en_dolares' => true,
+            'ingresos' => 114.33, 'ingresos_usd' => 114.33,
+        ]);
+        CuadreCajaPago::create([
+            'cuadre_caja_id' => $nunes->id, 'codigo_metodo' => 'TRF', 'forma_pago' => 'TRANSF. $',
+            'codigo_cuenta' => 'ZELLE', 'cuenta' => 'ZELLE', 'en_dolares' => true,
+            'ingresos' => 50.05, 'ingresos_usd' => 50.05,
+        ]);
+        CuadreCajaPago::create([
+            'cuadre_caja_id' => $nunes->id, 'codigo_metodo' => 'TRF', 'forma_pago' => 'TRANSF. $',
+            'codigo_cuenta' => 'CHASE', 'cuenta' => 'CHASE BANK', 'en_dolares' => true,
+            'ingresos' => 96.43, 'ingresos_usd' => 96.43,
+        ]);
+
+        $svc = app(CuadreCajaService::class);
+
+        // Filtrado por Nunes: mismas filas base que Doral + cuentas propias (no solo 4–5 formas).
+        $formasNunes = collect($svc->formasDelCuadre('NUNES'));
+        $this->assertTrue($formasNunes->contains(fn ($f) => $f['clave'] === 'CASHEA|'));
+        $this->assertTrue($formasNunes->contains(fn ($f) => $f['clave'] === '02|'));
+        $this->assertTrue($formasNunes->contains(fn ($f) => $f['clave'] === 'TRF|BINANCE'));
+        $this->assertTrue($formasNunes->contains(fn ($f) => $f['clave'] === 'TRF|CHASE'));
+        $this->assertGreaterThan(10, $formasNunes->count());
+
+        $mSede = $svc->matrizDashboard(
+            \Carbon\Carbon::parse('2026-11-21'),
+            \Carbon\Carbon::parse('2026-11-21'),
+            'NUNES'
+        );
+        $clavesSede = collect($mSede['filas'])->pluck('clave');
+        $this->assertTrue($clavesSede->contains('CASHEA|'));
+        $this->assertTrue($clavesSede->contains('02|'));
+        $this->assertTrue($clavesSede->contains('TRF|CHASE'));
+        $this->assertTrue($clavesSede->contains('TRF|ZELLE'));
+
+        $m = $svc->matrizDashboard(
+            \Carbon\Carbon::parse('2026-11-21'),
+            \Carbon\Carbon::parse('2026-11-21'),
+            null
+        );
+
+        $this->assertContains('NUNES', array_column($m['columnas'], 'clave'));
+        $nunesPorClave = [];
+        foreach ($m['filas'] as $f) {
+            $v = (float) ($f['por_columna']['NUNES'] ?? 0);
+            if (abs($v) >= 0.01) {
+                $nunesPorClave[$f['clave']] = $v;
+            }
+        }
+        // CASHEA, ZELLE, CHASE; el TDD P.V. Nunes se agrupa en TDD|PUNTOS.
+        $this->assertEqualsWithDelta(114.33, (float) ($nunesPorClave['CASHEA|'] ?? 0), 0.01);
+        $this->assertEqualsWithDelta(50.05, (float) ($nunesPorClave['TRF|ZELLE'] ?? 0), 0.01);
+        $this->assertEqualsWithDelta(96.43, (float) ($nunesPorClave['TRF|CHASE'] ?? 0), 0.01);
+        $this->assertEqualsWithDelta(150.0, (float) ($nunesPorClave['TDD|PUNTOS'] ?? 0), 0.01);
+        $this->assertEqualsWithDelta(410.81, array_sum($nunesPorClave), 0.01);
     }
 
     private function lotesCompletos(): array

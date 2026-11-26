@@ -296,6 +296,23 @@ sup.etq-dec { font-size: .5em; vertical-align: top; position: relative; top: .12
 .etq-th .lema em { font-style: normal; color: #22d3ee; }
 .etq-th .nombre { display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 800; text-transform: uppercase; line-height: 1.15; padding: 0 4%; }
 
+/* Vista previa: Movistar · Cashea */
+.etq-mv { position: relative; container-type: size; border-radius: 14px; overflow: hidden; font-family: inherit; color: #4a4a4a;
+    background:
+        linear-gradient(118deg, transparent 8%, rgba(0, 169, 224, .45) 14%, transparent 20%, transparent 48%, rgba(120, 210, 245, .35) 56%, transparent 64%, transparent 78%, rgba(0, 120, 190, .5) 88%, transparent 96%),
+        linear-gradient(155deg, #005596 0%, #0077b6 42%, #00a9e0 100%); }
+.etq-mv > div, .etq-mv > img { position: absolute; box-sizing: border-box; }
+.etq-mv .card { background: #fff; border-radius: 18px; }
+.etq-mv .disp { font-weight: 800; color: #4a4a4a; letter-spacing: .04em; white-space: nowrap; }
+.etq-mv .prod { background: #e8e8e8; border-radius: 8px; display: flex; align-items: center; justify-content: center; text-align: center;
+    font-weight: 800; text-transform: uppercase; line-height: 1.15; padding: 0 4%; overflow: hidden; }
+.etq-mv .precio { background: #fff; border: 3px solid #00a9e0; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-weight: 900; color: #374151; white-space: nowrap; }
+.etq-mv .precio small { position: absolute; left: 6%; top: 10%; font-weight: 800; color: #6b7280; }
+.etq-mv .oferta { background: linear-gradient(135deg, #0090c5, #00a9e0); border-radius: 999px; color: #fff; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; letter-spacing: .06em; box-shadow: 0 2px 6px rgba(0, 90, 140, .35); }
+.etq-mv .pie { left: 0; width: 100%; text-align: center; color: #fff; font-weight: 600; white-space: nowrap; }
+
 /* Temporada en la vista previa (mismos colores que el PDF) */
 .etq-preview-wrap { position: relative; }
 .etq-gorro { position: absolute; pointer-events: none; }
@@ -819,6 +836,25 @@ sup.etq-dec { font-size: .5em; vertical-align: top; position: relative; top: .12
             </div>`;
     }
 
+    function previewMovistar(p) {
+        const base = MEDIDAS_DEFECTO.movistar;
+        const nomPt = p.nombre.length <= 22 ? 11 : (p.nombre.length <= 40 ? 9 : 7.5);
+        return `
+            <div class="etq-mv" style="${tamanoPreview('movistar')}">
+                <div style="left:22%; top:5%; width:56%; height:12%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:${thFs(base, 11)}; letter-spacing:.02em;">
+                    <span style="display:inline-flex; align-items:center; gap:0.4em;"><span style="color:#7dd3fc; font-size:1.15em;">〰</span>movistar</span>
+                </div>
+                ${thCaja(base, 5, 14, 80, 40, 'card', '', '')}
+                ${thCaja(base, 9, 16.5, 38, 5, 'disp', `font-size:${thFs(base, 7)};`, 'DISPONIBLE CON')}
+                ${thCaja(base, 52, 16.2, 28, 5.5, '', `display:flex;align-items:center;gap:4px;font-size:${thFs(base, 9)};font-weight:800;`,
+                    `<span style="background:#ffd600;color:#111;border-radius:6px;padding:0 6px;font-size:${thFs(base, 12)};">C</span><span>cashea</span>`)}
+                ${thCaja(base, 8.5, 23.5, 73, 9.5, 'prod', `font-size:${thFs(base, nomPt)};`, esc(p.nombre))}
+                ${thCaja(base, 16, 35.5, 58, 12.5, 'precio', `font-size:${thFs(base, 22)};`, `<small style="font-size:${thFs(base, 6.5)};">REF</small>${sup(fmt(pu(p)))}`)}
+                ${thCaja(base, 62, 33.2, 18, 5.2, 'oferta', `font-size:${thFs(base, 7)};`, 'OFERTA')}
+                ${thCaja(base, 0, 55.2, base.ancho, 3.2, 'pie', `font-size:${thFs(base, 4.2)};`, 'Movistar - Todos los derechos reservados.')}
+            </div>`;
+    }
+
     function previewThClasica(p) {
         const base = MEDIDAS_DEFECTO.th_clasica;
         const cant = cantDe(p);
@@ -894,6 +930,7 @@ sup.etq-dec { font-size: .5em; vertical-align: top; position: relative; top: .12
         if (tipo === 'pc') { cont.innerHTML = previewPc(p); return; }
         if (tipo === 'th_pc' || tipo === 'th_cel') { cont.innerHTML = previewTh(p, tipo); return; }
         if (tipo === 'th_clasica') { cont.innerHTML = previewThClasica(p); return; }
+        if (tipo === 'movistar') { cont.innerHTML = previewMovistar(p); return; }
         const cant = cantDe(p);
         const unidad = pu(p);
         const mayor = pm(p);

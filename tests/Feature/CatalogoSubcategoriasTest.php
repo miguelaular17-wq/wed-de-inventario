@@ -27,8 +27,10 @@ class CatalogoSubcategoriasTest extends TestCase
         $query = (new \ReflectionMethod(CatalogoController::class, 'buildQuery'))
             ->invoke(app(CatalogoController::class), Request::create('/catalogo', 'GET', ['subcategoria' => ['CONSOLAS', 'JBL']]));
 
-        $this->assertStringContainsString('"subcategoria" in (?, ?)', $query->toSql());
+        $sql = mb_strtolower($query->toSql());
+        $this->assertMatchesRegularExpression('/upper\(trim\(subcategoria\)\) in \(\?,\s*\?\)/', $sql);
         $this->assertContains('JBL', $query->getBindings());
+        $this->assertContains('CONSOLAS', $query->getBindings());
     }
 
     public function test_barras_de_stock_y_precio(): void

@@ -229,6 +229,12 @@
     .th-blanco .num { color: #0b1f4d; }
     .th-txt { white-space: nowrap; color: #0b1f4d; font-weight: normal; }
 
+    .etq.mv { background-color: #005596; }
+    .mv-card { background: #fff; border-radius: {{ $m(5) }}mm; }
+    .mv-prod { background: #e8e8e8; border-radius: {{ $m(2.2) }}mm; }
+    .mv-precio { background: #fff; border: {{ $m(1.1) }}mm solid #00a9e0; border-radius: {{ $m(2.4) }}mm; }
+    .mv-oferta { background: #00a9e0; border-radius: {{ $m(3) }}mm; color: #fff; }
+
     @if($tema === 'halloween')
         .etq { background-color: #7e22ce; }
         .caja .h { background: #1c1917; }
@@ -267,8 +273,65 @@
     <div class="hoja {{ $loop->last ? '' : 'salto' }}">
         @foreach($fichas as $i => $e)
             @php [$x, $y] = $pos($i); @endphp
-            <div class="etq {{ $esTh ? 'th' : '' }}" style="left: {{ $x }}mm; top: {{ $y }}mm;">
-            @if($tipo === 'th_pc' || $tipo === 'th_cel')
+            <div class="etq {{ $esTh ? 'th' : ($tipo === 'movistar' ? 'mv' : '') }}" style="left: {{ $x }}mm; top: {{ $y }}mm;">
+            @if($tipo === 'movistar')
+                @php
+                    $logoMv = $logoMovistar ?? null;
+                    $logoCs = $logoCashea ?? null;
+                    $mvPadX = $mx(5);
+                    $mvCardL = $mvPadX;
+                    $mvCardT = $my(14);
+                    $mvCardW = $W - 2 * $mvPadX;
+                    $mvCardH = $my(40);
+                    $mvLogoH = $my(7.2);
+                    if ($logoMv) {
+                        $mvLogoW = min($W * 0.55, $mvLogoH * $logoMv['ratio']);
+                        $mvLogoH = $mvLogoW / $logoMv['ratio'];
+                    }
+                    $dispFs = $fs([7, 6.5, 6, 5.5]);
+                    $disp = $fit('mvdisp', 'DISPONIBLE CON', $mvCardW * 0.42, $dispFs);
+                    $csH = $my(5.2);
+                    if ($logoCs) {
+                        $csW = min($mvCardW * 0.38, $csH * $logoCs['ratio']);
+                        $csH = $csW / $logoCs['ratio'];
+                    } else {
+                        $csW = $mx(22);
+                    }
+                    $prodT = $mvCardT + $my(9.5);
+                    $prodH = $my(9.5);
+                    $prodPad = $mx(2.2);
+                    $nom = $ajustar('mv' . $e['id'], $e['nombre'], $mvCardW - 2 * $prodPad - $mx(1), $prodH - $my(3.2), $fs([11, 10, 9, 8.5, 8, 7.5, 7, 6.5, 6]), 2);
+                    $cajaW = $mvCardW * 0.72;
+                    $cajaH = $my(12.5);
+                    $cajaL = $mvCardL + ($mvCardW - $cajaW) / 2;
+                    $cajaT = $prodT + $prodH + $my(2.2);
+                    $numFs = $fitSup([$e['unidad_fmt']], $cajaW - $mx(14), $fs([26, 24, 22, 20, 18, 16, 14, 12]));
+                    $ofertaW = $mx(18);
+                    $ofertaH = $my(5.2);
+                    $pieFs = $fit('mvpie', 'Movistar - Todos los derechos reservados.', $W - $mx(8), $fs([4.5, 4.2, 3.8, 3.5]));
+                @endphp
+                @if($logoMv)
+                    <img class="abs" src="{{ $logoMv['src'] }}" alt="" style="left: {{ ($W - $mvLogoW) / 2 }}mm; top: {{ $my(3.2) }}mm; width: {{ $mvLogoW }}mm; height: {{ $mvLogoH }}mm;">
+                @endif
+                <div class="abs mv-card" style="left: {{ $mvCardL }}mm; top: {{ $mvCardT }}mm; width: {{ $mvCardW }}mm; height: {{ $mvCardH }}mm;"></div>
+                <div class="abs b nw" style="left: {{ $mvCardL + $mx(4) }}mm; top: {{ $mvCardT + $my(2.8) }}mm; font-size: {{ $disp['fs'] }}pt; color: #4a4a4a; letter-spacing: 0.4pt;">DISPONIBLE CON</div>
+                @if($logoCs)
+                    <img class="abs" src="{{ $logoCs['src'] }}" alt="" style="left: {{ $mvCardL + $mvCardW - $csW - $mx(4) }}mm; top: {{ $mvCardT + $my(2.2) }}mm; width: {{ $csW }}mm; height: {{ $csH }}mm;">
+                @else
+                    <div class="abs b nw" style="left: {{ $mvCardL + $mvCardW - $csW - $mx(4) }}mm; top: {{ $mvCardT + $my(3) }}mm; font-size: {{ round(8 * $k, 1) }}pt; color: #111;">cashea</div>
+                @endif
+                <div class="abs mv-prod" style="left: {{ $mvCardL + $mx(3.5) }}mm; top: {{ $prodT }}mm; width: {{ $mvCardW - $mx(7) }}mm; height: {{ $prodH }}mm;">
+                    {!! $lineas($nom, $prodPad, max($my(1.2), ($prodH - $altoLineas($nom)) / 2), 'color:#4a4a4a;') !!}
+                </div>
+                <div class="abs mv-precio" style="left: {{ $cajaL }}mm; top: {{ $cajaT }}mm; width: {{ $cajaW - 2 * $m(1.1) }}mm; height: {{ $cajaH - 2 * $m(1.1) }}mm;">
+                    <div class="abs b" style="left: {{ $mx(2.2) }}mm; top: {{ $my(1.4) }}mm; font-size: {{ round(6.5 * $k, 1) }}pt; color: #6b7280;">REF</div>
+                    {!! $precioSup($e['unidad_fmt'], $numFs, ($cajaH - 2 * $m(1.1) - $ptMm($numFs)) / 2 + $my(0.4), $cajaW - 2 * $m(1.1), '#374151') !!}
+                </div>
+                <div class="abs mv-oferta" style="left: {{ $cajaL + $cajaW - $ofertaW * 0.55 }}mm; top: {{ $cajaT - $ofertaH * 0.45 }}mm; width: {{ $ofertaW }}mm; height: {{ $ofertaH }}mm;">
+                    <div class="abs b centro nw" style="left: 0; width: 100%; top: {{ ($ofertaH - $ptMm(7 * $k)) / 2 + $my(0.15) }}mm; font-size: {{ round(7 * $k, 1) }}pt; letter-spacing: 0.4pt;">OFERTA</div>
+                </div>
+                <div class="abs b centro nw" style="left: 0; width: 100%; top: {{ $H - $my(4.2) }}mm; font-size: {{ $pieFs['fs'] }}pt; color: #fff;">{{ $pieFs['lineas'][0] ?? 'Movistar - Todos los derechos reservados.' }}</div>
+            @elseif($tipo === 'th_pc' || $tipo === 'th_cel')
                 @php
                     $specs = $e['specs'] ?? [];
                     $esCel = $tipo === 'th_cel';

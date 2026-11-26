@@ -22,7 +22,8 @@ return [
      * Formas de pago que muestra el cuadre, en el orden de la pantalla de cierre de Suite de cada sede.
      * clave «metodo|cuenta» => [forma de pago, cuenta, en dólares]. Una forma que no esté aquí solo sale
      * si la caja tiene algo declarado o contado en ella.
-     * Las sedes sin lista muestran las formas de «metodos_cuadre» que ya se usaron en sus cajas.
+     * Las sedes sin lista heredan el catálogo de DORAL (mismo orden/filas) y además muestran
+     * las cuentas propias que ya salieron en sus cierres (p. ej. Nunes: BANESCO NUNES, CHASE).
      */
     'formas_cuadre' => [
         'DORAL' => [
@@ -61,6 +62,12 @@ return [
      */
     'metodos_no_suman' => ['NDC'],
     'metodo_devolucion_efectivo' => 'NDC1',
+
+    /*
+     * Formas que Suite manda en el cierre pero no son dinero a cuadrar (p. ej. descuento promocional).
+     * Se comparan contra el nombre (contiene) o el código de método (igual). No salen en el arqueo ni en el dashboard.
+     */
+    'formas_ocultas' => ['DESCUENTO DIVISAS'],
 
     /*
      * Cuentas que también son punto de venta aunque su nombre no diga «P.V.» (solo para tarjetas;

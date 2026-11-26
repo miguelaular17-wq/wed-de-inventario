@@ -64,25 +64,33 @@ class CatalogoController extends Controller
 
     private function renderCatalogo(Request $request, bool $modoCliente, ?string $token = null)
     {
-        $categorias = Cache::remember('catalogo_categorias', 3600, function () {
+        $categorias = Cache::remember('catalogo_categorias_v2', 3600, function () {
             return Producto::visibles()
                 ->whereNotNull('categoria')
                 ->where('categoria', '!=', '')
                 ->distinct()
                 ->pluck('categoria')
-                ->sort();
+                ->map(fn ($c) => mb_strtoupper(trim((string) $c), 'UTF-8'))
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values();
         });
 
-        $subcategorias = Cache::remember('catalogo_subcategorias', 3600, function () {
+        $subcategorias = Cache::remember('catalogo_subcategorias_v2', 3600, function () {
             return Producto::visibles()
                 ->whereNotNull('subcategoria')
                 ->where('subcategoria', '!=', '')
                 ->distinct()
                 ->pluck('subcategoria')
-                ->sort();
+                ->map(fn ($s) => mb_strtoupper(trim((string) $s), 'UTF-8'))
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values();
         });
 
-        $catSubcatMap = Cache::remember('catalogo_cat_subcat_map', 3600, function () {
+        $catSubcatMap = Cache::remember('catalogo_cat_subcat_map_v2', 3600, function () {
             $data = Producto::visibles()
                 ->whereNotNull('categoria')
                 ->where('categoria', '!=', '')
@@ -94,11 +102,20 @@ class CatalogoController extends Controller
 
             $map = [];
             foreach ($data as $row) {
-                $map[$row->categoria][] = $row->subcategoria;
+                $cat = mb_strtoupper(trim((string) $row->categoria), 'UTF-8');
+                $sub = mb_strtoupper(trim((string) $row->subcategoria), 'UTF-8');
+                if ($cat === '' || $sub === '') {
+                    continue;
+                }
+                $map[$cat][] = $sub;
             }
             foreach ($map as $cat => &$subs) {
+                $subs = array_values(array_unique($subs));
                 sort($subs);
             }
+            unset($subs);
+            ksort($map);
+
             return $map;
         });
 
@@ -423,8 +440,8 @@ class CatalogoController extends Controller
         $lista = is_array($valor) ? $valor : [$valor];
 
         return array_values(array_unique(array_filter(
-            array_map(fn ($s) => trim((string) $s), $lista),
-            fn ($s) => $s !== '' && strtolower($s) !== 'todas'
+            array_map(fn ($s) => mb_strtoupper(trim((string) $s), 'UTF-8'), $lista),
+            fn ($s) => $s !== '' && $s !== 'TODAS'
         )));
     }
 
@@ -434,12 +451,15 @@ class CatalogoController extends Controller
             ->select('id', 'codigo', 'nombre as descripcion', 'categoria', 'subcategoria', 'precio_unidad', 'precio_mayor');
 
         if ($request->filled('categoria') && $request->categoria !== 'todas') {
-            $query->where('categoria', $request->categoria);
+            $cat = mb_strtoupper(trim((string) $request->categoria), 'UTF-8');
+            $query->whereRaw('UPPER(TRIM(categoria)) = ?', [$cat]);
         }
 
         $subcategorias = $this->subcategoriasElegidas($request);
         if ($subcategorias !== []) {
-            $query->whereIn('subcategoria', $subcategorias);
+            $subs = array_map(fn ($s) => mb_strtoupper(trim((string) $s), 'UTF-8'), $subcategorias);
+            $placeholders = implode(',', array_fill(0, count($subs), '?'));
+            $query->whereRaw('UPPER(TRIM(subcategoria)) IN ('.$placeholders.')', $subs);
         }
 
         if (! $modoCliente && $request->filled('search')) {

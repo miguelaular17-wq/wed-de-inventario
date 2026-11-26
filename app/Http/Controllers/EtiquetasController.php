@@ -68,6 +68,10 @@ class EtiquetasController extends Controller
         $tipo = $data['tipo'] ?? 'clasica';
         $tema = $data['tema'] ?? 'ninguno';
         $esTecnoHouse = str_starts_with($tipo, 'th_');
+        $esMovistar = $tipo === 'movistar';
+        if ($esMovistar) {
+            $tema = 'ninguno';
+        }
         if (! in_array($tipo, EtiquetasPrecioService::TIPOS_CON_SPECS, true)) {
             foreach ($data['items'] as &$item) {
                 unset($item['specs']);
@@ -108,16 +112,20 @@ class EtiquetasController extends Controller
             'tipo' => $tipo,
             'tamano' => $tamano,
             'logo' => $this->imagenDataUri(public_path('logo.png')),
-            'fondo' => $esTecnoHouse
-                ? $this->fondoTecnoHouse($tamano['ancho'], $tamano['alto'], $tema)
-                : $this->fondoDegradado($tamano['ancho'], $tamano['alto'], $tema),
+            'fondo' => $esMovistar
+                ? $this->fondoMovistar($tamano['ancho'], $tamano['alto'])
+                : ($esTecnoHouse
+                    ? $this->fondoTecnoHouse($tamano['ancho'], $tamano['alto'], $tema)
+                    : $this->fondoDegradado($tamano['ancho'], $tamano['alto'], $tema)),
             'tema' => $tema,
-            'gorro' => ($g = $this->temporada->gorro($tema)) ? $this->imagenConRatio($g) : null,
+            'gorro' => $esMovistar ? null : (($g = $this->temporada->gorro($tema)) ? $this->imagenConRatio($g) : null),
             'fecha' => now()->format('d/m/Y'),
             'web' => EtiquetasPrecioService::WEB,
-            'logosMarca' => $tipo !== 'clasica' && $tipo !== 'th_clasica' ? $this->logosMarca($fichas) : [],
+            'logosMarca' => $tipo !== 'clasica' && $tipo !== 'th_clasica' && ! $esMovistar ? $this->logosMarca($fichas) : [],
             'logoTh' => $esTecnoHouse ? $this->imagenConRatio(public_path('img/tecno_house.png')) : null,
             'iconosTh' => $esTecnoHouse ? $this->iconosTecnoHouse() : [],
+            'logoMovistar' => $esMovistar ? $this->logoMovistar() : null,
+            'logoCashea' => $esMovistar ? $this->logoCashea() : null,
         ])->setPaper('letter', 'portrait');
 
         return $pdf->stream('etiquetas_' . now()->format('Ymd_His') . '.pdf');
@@ -238,6 +246,156 @@ class EtiquetasController extends Controller
         imagedestroy($img);
 
         return $this->imagenDataUri($path);
+    }
+
+    /**
+     * Fondo Movistar: azul con planos diagonales (como el arte de referencia). Dompdf no dibuja degradados.
+     */
+    private function fondoMovistar(float $anchoMm, float $altoMm): ?string
+    {
+        $w = (int) ceil($anchoMm / 25.4 * 150);
+        $h = (int) ceil($altoMm / 25.4 * 150);
+        $path = storage_path("app/etiquetas/fondo_movistar_v1_{$w}x{$h}.png");
+        if (is_file($path)) {
+            return $this->imagenDataUri($path);
+        }
+        if (! function_exists('imagecreatetruecolor')) {
+            return null;
+        }
+
+        $img = imagecreatetruecolor($w, $h);
+        // Base: azul Movistar oscuro → cian.
+        for ($y = 0; $y < $h; $y++) {
+            for ($x = 0; $x < $w; $x++) {
+                $t = ($x * 0.55 + $y * 0.45) / max(1, $w + $h);
+                $r = (int) round(0 + (0 - 0) * $t + 8);
+                $g = (int) round(85 + (169 - 85) * $t);
+                $b = (int) round(150 + (224 - 150) * $t);
+                imagesetpixel($img, $x, $y, imagecolorallocate($img, $r, $g, $b));
+            }
+        }
+
+        // Planos diagonales translúcidos (forma de “M” abstracta / ribbons).
+        $capas = [
+            [[0.00, 0.00], [0.42, 0.00], [0.18, 1.00], [0.00, 1.00], [0, 90, 160, 55]],
+            [[0.28, 0.00], [0.72, 0.00], [0.48, 1.00], [0.08, 1.00], [0, 140, 200, 70]],
+            [[0.55, 0.00], [1.00, 0.00], [1.00, 0.55], [0.70, 1.00], [20, 170, 220, 80]],
+            [[0.00, 0.35], [0.35, 0.00], [0.55, 0.00], [0.15, 0.70], [0, 120, 190, 90]],
+            [[0.62, 0.00], [1.00, 0.00], [1.00, 0.40], [0.78, 0.55], [80, 200, 235, 100]],
+            [[0.10, 0.55], [0.40, 0.20], [0.52, 0.35], [0.22, 0.85], [0, 155, 210, 75]],
+        ];
+        foreach ($capas as $poly) {
+            $alpha = array_pop($poly);
+            $a = (int) $alpha[3];
+            $col = imagecolorallocatealpha($img, (int) $alpha[0], (int) $alpha[1], (int) $alpha[2], $a);
+            $pts = [];
+            foreach ($poly as [$px, $py]) {
+                $pts[] = (int) round($px * $w);
+                $pts[] = (int) round($py * $h);
+            }
+            imagefilledpolygon($img, $pts, $col);
+        }
+
+        // Destellos diagonales finos.
+        $cian = imagecolorallocatealpha($img, 120, 220, 255, 85);
+        for ($i = -2; $i < 8; $i++) {
+            $x0 = (int) ($w * (0.05 + $i * 0.14));
+            imageline($img, $x0, 0, $x0 + (int) ($w * 0.22), $h, $cian);
+            imageline($img, $x0 + 1, 0, $x0 + 1 + (int) ($w * 0.22), $h, $cian);
+        }
+
+        if (! is_dir(dirname($path))) {
+            @mkdir(dirname($path), 0775, true);
+        }
+        imagepng($img, $path);
+        imagedestroy($img);
+
+        return $this->imagenDataUri($path);
+    }
+
+    /**
+     * @return array{src: string, ratio: float}|null
+     */
+    private function logoMovistar(): ?array
+    {
+        $path = storage_path('app/etiquetas/logo_movistar_v1.png');
+        if (! is_file($path) && function_exists('imagecreatetruecolor')) {
+            $w = 520;
+            $h = 140;
+            $img = imagecreatetruecolor($w, $h);
+            imagesavealpha($img, true);
+            imagealphablending($img, false);
+            $trans = imagecolorallocatealpha($img, 0, 0, 0, 127);
+            imagefilledrectangle($img, 0, 0, $w, $h, $trans);
+            imagealphablending($img, true);
+
+            // Cinta “M” Movistar (aprox. del isotipo).
+            $azul = imagecolorallocate($img, 0, 169, 224);
+            $claro = imagecolorallocate($img, 90, 210, 245);
+            $m = [
+                8, 118, 28, 22, 52, 22, 78, 78, 104, 22, 128, 22, 148, 118,
+                128, 118, 116, 48, 90, 100, 66, 100, 40, 48, 28, 118,
+            ];
+            imagefilledpolygon($img, $m, $azul);
+            $brillo = [40, 48, 52, 22, 66, 22, 78, 48, 66, 78, 52, 78];
+            imagefilledpolygon($img, $brillo, $claro);
+
+            $font = base_path('vendor/dompdf/dompdf/lib/fonts/DejaVuSans-Bold.ttf');
+            if (is_file($font) && function_exists('imagettftext')) {
+                $blanco = imagecolorallocate($img, 255, 255, 255);
+                imagettftext($img, 52, 0, 170, 95, $blanco, $font, 'movistar');
+            }
+
+            if (! is_dir(dirname($path))) {
+                @mkdir(dirname($path), 0775, true);
+            }
+            imagepng($img, $path);
+            imagedestroy($img);
+        }
+
+        return $this->imagenConRatio($path);
+    }
+
+    /**
+     * @return array{src: string, ratio: float}|null
+     */
+    private function logoCashea(): ?array
+    {
+        $path = storage_path('app/etiquetas/logo_cashea_v1.png');
+        if (! is_file($path) && function_exists('imagecreatetruecolor')) {
+            $w = 360;
+            $h = 90;
+            $img = imagecreatetruecolor($w, $h);
+            imagesavealpha($img, true);
+            imagealphablending($img, false);
+            $trans = imagecolorallocatealpha($img, 0, 0, 0, 127);
+            imagefilledrectangle($img, 0, 0, $w, $h, $trans);
+            imagealphablending($img, true);
+
+            $amarillo = imagecolorallocate($img, 255, 214, 0);
+            $negro = imagecolorallocate($img, 20, 20, 20);
+            imagefilledrectangle($img, 4, 8, 76, 80, $amarillo);
+            // Esquinas redondeadas simples.
+            $r = 14;
+            imagefilledellipse($img, 4 + $r, 8 + $r, $r * 2, $r * 2, $amarillo);
+            imagefilledellipse($img, 76 - $r, 8 + $r, $r * 2, $r * 2, $amarillo);
+            imagefilledellipse($img, 4 + $r, 80 - $r, $r * 2, $r * 2, $amarillo);
+            imagefilledellipse($img, 76 - $r, 80 - $r, $r * 2, $r * 2, $amarillo);
+
+            $font = base_path('vendor/dompdf/dompdf/lib/fonts/DejaVuSans-Bold.ttf');
+            if (is_file($font) && function_exists('imagettftext')) {
+                imagettftext($img, 42, 0, 22, 62, $negro, $font, 'C');
+                imagettftext($img, 36, 0, 92, 60, $negro, $font, 'cashea');
+            }
+
+            if (! is_dir(dirname($path))) {
+                @mkdir(dirname($path), 0775, true);
+            }
+            imagepng($img, $path);
+            imagedestroy($img);
+        }
+
+        return $this->imagenConRatio($path);
     }
 
     private function imagenDataUri(string $path): ?string

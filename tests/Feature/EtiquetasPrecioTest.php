@@ -320,6 +320,20 @@ class EtiquetasPrecioTest extends TestCase
         ])->assertSessionHasErrors('recargo_regular');
     }
 
+    public function test_genera_pdf_movistar_cashea(): void
+    {
+        $tamano = (new EtiquetasPrecioService())->tamano('movistar');
+        $this->assertSame([90.0, 60.0], [(float) $tamano['ancho'], (float) $tamano['alto']]);
+
+        $this->post(route('etiquetas.pdf'), [
+            'items' => [['id' => 1, 'copias' => 1], ['id' => 3, 'copias' => 1]],
+            'tipo' => 'movistar',
+        ])->assertOk()->assertHeader('content-type', 'application/pdf');
+
+        $this->assertFileExists(storage_path('app/etiquetas/logo_movistar_v1.png'));
+        $this->assertFileExists(storage_path('app/etiquetas/logo_cashea_v1.png'));
+    }
+
     public function test_precios_y_piezas_ajustados_en_la_lista_reemplazan_los_del_sistema(): void
     {
         $svc = new EtiquetasPrecioService();

@@ -74,7 +74,21 @@ class CuadreCajaService
         $modo = $sede ? 'cajas' : 'sedes';
         $etiquetas = config('inventario.display', []);
         $metodosCuadre = config('cuadre_caja.metodos_cuadre', []);
-        $filas = $this->filasBaseDashboard($sede ?: 'DORAL');
+        // Consolidado: unir el catálogo de cada sede presente (antes solo se usaba DORAL y se
+        // perdían cuentas de Nunes, Tecnohouse, etc.). Con sede filtrada: catálogo de esa sede.
+        $filas = [];
+        if ($sede) {
+            $filas = $this->filasBaseDashboard($sede);
+        } else {
+            foreach ($cierres->pluck('sede')->map(fn ($s) => strtoupper(trim((string) $s)))->unique()->filter() as $sedeCierre) {
+                foreach ($this->filasBaseDashboard($sedeCierre) as $claveBase => $filaBase) {
+                    $filas[$claveBase] ??= $filaBase;
+                }
+            }
+            if ($filas === []) {
+                $filas = $this->filasBaseDashboard('DORAL');
+            }
+        }
         $clavesCol = [];
 
         $cajasOcultas = ['CAJA COBRANZA', 'CAJA RRHH'];
@@ -106,7 +120,7 @@ class CuadreCajaService
                     continue;
                 }
                 $forma = mb_strtoupper(trim((string) ($linea['forma_pago'] ?: $metodo ?: 'OTRO')), 'UTF-8');
-                if (str_contains($forma, 'CAJA PRINCIPAL')) {
+                if (str_contains($forma, 'CAJA PRINCIPAL') || $this->esFormaOculta($forma, $metodo)) {
                     continue;
                 }
 
@@ -117,9 +131,20 @@ class CuadreCajaService
                     ? $this->clave($metodo, self::CUENTA_PUNTOS)
                     : (string) ($linea['clave'] ?? $this->clave($metodo, $linea['codigo_cuenta'] ?? ''));
 
-                // Solo catálogo del cuadre de esa sede (o DORAL si es consolidado): no sumar cuentas sueltas de otros cierres.
+                // Si la forma/cuenta no estaba en el catálogo base, créala (no silenciar montos de otras sedes).
                 if (! isset($filas[$clave])) {
-                    continue;
+                    $filas[$clave] = [
+                        'clave' => $clave,
+                        'orden_clave' => $clave,
+                        'codigo_metodo' => $metodo,
+                        'codigo_cuenta' => $esPos ? self::CUENTA_PUNTOS : (string) ($linea['codigo_cuenta'] ?? ''),
+                        'forma_pago' => $forma,
+                        'forma' => $forma,
+                        'cuenta' => $esPos ? 'Todos los puntos de venta' : (trim((string) ($linea['cuenta'] ?? '')) ?: null),
+                        'por_columna' => [],
+                        'suite' => 0.0,
+                        'tesoreria' => 0.0,
+                    ];
                 }
 
                 $suite = (float) ($linea['suite_usd'] ?? 0);
@@ -395,6 +420,9 @@ class CuadreCajaService
 
         foreach ($cuadre->pagos as $pago) {
             /** @var CuadreCajaPago $pago */
+            if ($this->esFormaOculta($pago->forma_pago, $pago->codigo_metodo)) {
+                continue;
+            }
             $clave = $this->clave($pago->codigo_metodo, $pago->codigo_cuenta);
             $lineas[$clave] ??= $this->lineaVacia($clave, $pago->codigo_metodo, $pago->codigo_cuenta, $pago->forma_pago, $pago->cuenta, $pago->en_dolares);
             $lineas[$clave]['suite'] += $pago->ingresos;
@@ -403,6 +431,9 @@ class CuadreCajaService
 
         foreach ($cuadre->conteos as $conteo) {
             /** @var CuadreCajaConteo $conteo */
+            if ($this->esFormaOculta($conteo->forma_pago, $conteo->codigo_metodo)) {
+                continue;
+            }
             $clave = $this->clave($conteo->codigo_metodo, $conteo->codigo_cuenta);
             $lineas[$clave] ??= $this->lineaVacia($clave, $conteo->codigo_metodo, $conteo->codigo_cuenta, $conteo->forma_pago, $conteo->cuenta, $conteo->en_dolares);
             $lineas[$clave]['tesoreria'] = $conteo->monto;
@@ -643,34 +674,48 @@ class CuadreCajaService
 
     /**
      * Formas de pago fijas del cuadre de una sede (las de la pantalla de cierre de Suite).
+     * Si la sede no tiene lista propia, hereda la de DORAL (mismo aspecto) y añade las cuentas
+     * reales de sus cierres (p. ej. BANESCO NUNES, CHASE) para que no «falten» filas.
      *
      * @return list<array{clave:string, codigo_metodo:string, codigo_cuenta:string, forma_pago:?string, cuenta:?string, en_dolares:bool, punto_venta:bool, lotes:array}>
      */
     public function formasDelCuadre(string $sede): array
     {
-        $lista = config('cuadre_caja.formas_cuadre.'.strtoupper($sede));
-        if (is_array($lista) && $lista !== []) {
-            $formas = [];
-            foreach ($lista as $clave => [$forma, $cuenta, $enDolares]) {
-                [$metodo, $codigoCuenta] = array_pad(explode('|', $clave, 2), 2, '');
-                $formas[] = [
-                    'clave' => $clave,
-                    'codigo_metodo' => $metodo,
-                    'codigo_cuenta' => $codigoCuenta,
-                    'forma_pago' => $forma,
-                    'cuenta' => $cuenta,
-                    'en_dolares' => (bool) $enDolares,
-                    'punto_venta' => $this->esPuntoDeVenta($metodo, $forma, $cuenta),
-                    'lotes' => [],
-                ];
-            }
+        $sede = strtoupper(trim($sede));
+        $propia = config('cuadre_caja.formas_cuadre.'.$sede);
+        $tienePropia = is_array($propia) && $propia !== [];
+        $lista = $tienePropia ? $propia : config('cuadre_caja.formas_cuadre.DORAL', []);
+        $formas = [];
+        foreach ($lista as $clave => [$forma, $cuenta, $enDolares]) {
+            [$metodo, $codigoCuenta] = array_pad(explode('|', (string) $clave, 2), 2, '');
+            $formas[] = [
+                'clave' => (string) $clave,
+                'codigo_metodo' => $metodo,
+                'codigo_cuenta' => $codigoCuenta,
+                'forma_pago' => $forma,
+                'cuenta' => $cuenta,
+                'en_dolares' => (bool) $enDolares,
+                'punto_venta' => $this->esPuntoDeVenta($metodo, $forma, $cuenta),
+                'lotes' => [],
+            ];
+        }
 
+        if ($tienePropia || $formas === []) {
             return $formas;
         }
 
+        // Sede sin catálogo: completa con lo que ya salió en sus cierres (cuentas propias).
         $metodos = config('cuadre_caja.metodos_cuadre', []);
+        $conocidas = array_fill_keys(array_column($formas, 'clave'), true);
+        foreach ($this->formasDePago($sede) as $f) {
+            if (! in_array($f['codigo_metodo'], $metodos, true) || isset($conocidas[$f['clave']])) {
+                continue;
+            }
+            $formas[] = $f;
+            $conocidas[$f['clave']] = true;
+        }
 
-        return array_values(array_filter($this->formasDePago($sede), fn ($f) => in_array($f['codigo_metodo'], $metodos, true)));
+        return $formas;
     }
 
     /**
@@ -1180,6 +1225,24 @@ class CuadreCajaService
     public function clave(?string $metodo, ?string $cuenta): string
     {
         return strtoupper(trim((string) $metodo)).'|'.strtoupper(trim((string) $cuenta));
+    }
+
+    /** Descuentos u otras formas de Suite que no son dinero a cuadrar. */
+    private function esFormaOculta(?string $forma, ?string $metodo = null): bool
+    {
+        $forma = mb_strtoupper(trim((string) $forma), 'UTF-8');
+        $metodo = strtoupper(trim((string) $metodo));
+        foreach (config('cuadre_caja.formas_ocultas', []) as $patron) {
+            $patron = mb_strtoupper(trim((string) $patron), 'UTF-8');
+            if ($patron === '') {
+                continue;
+            }
+            if ($metodo === $patron || ($forma !== '' && str_contains($forma, $patron))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function cedula(string $usuario): string

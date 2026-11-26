@@ -828,7 +828,7 @@
                 </div>
                     <div class="product-info">
                         <div class="product-meta">
-                            <div class="product-category">{{ $prod->categoria ?? 'Sin Categoría' }}</div>
+                            <div class="product-category">{{ mb_strtoupper((string) ($prod->categoria ?? 'Sin Categoría'), 'UTF-8') }}</div>
                             <div class="product-code">{{ \App\Support\Sku::principal($prod->codigo) }}</div>
                         </div>
                         <h3 class="product-title" title="{{ $prod->descripcion }}">{{ ltrim((string) $prod->descripcion, "/ \t") }}</h3>

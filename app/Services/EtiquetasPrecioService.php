@@ -20,6 +20,7 @@ class EtiquetasPrecioService
         'th_clasica' => ['ancho' => 70, 'alto' => 50],
         'th_pc' => ['ancho' => 90, 'alto' => 83],
         'th_cel' => ['ancho' => 90, 'alto' => 83],
+        'movistar' => ['ancho' => 90, 'alto' => 60],
     ];
 
     /** Tipos que llevan ficha técnica editable. */
@@ -65,6 +66,7 @@ class EtiquetasPrecioService
         'th_clasica' => 'Tecno House · Clásica',
         'th_pc' => 'Tecno House · PC / Laptop',
         'th_cel' => 'Tecno House · Celular',
+        'movistar' => 'Movistar · Cashea',
     ];
 
     public const WEB = 'www.elpalaciodelosdetalles.com';
