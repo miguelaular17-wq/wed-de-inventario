@@ -204,7 +204,7 @@ class VentasMayorController extends Controller
             'descuentoEtiqueta' => rtrim(rtrim(number_format($descuentoPct, 2, '.', ''), '0'), '.').'%',
             'descuentoFactor' => max(0, 1 - ($descuentoPct / 100)),
         ])->setPaper('letter')
-            ->stream('catalogo_al_mayor_'.now()->format('Ymd').'.pdf');
+            ->download('catalogo_al_mayor_'.now()->format('Ymd').'.pdf');
     }
 
     /**

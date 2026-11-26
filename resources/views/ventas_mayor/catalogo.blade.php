@@ -196,7 +196,7 @@
         </div>
         <div class="vm-page-actions">
             <a href="{{ route('ventas_mayor.stock') }}" class="btn secondary">← Stock</a>
-            <a href="{{ route('ventas_mayor.catalogo.pdf', collect($pdfQuery)->except('ver_ocultos')->all()) }}" target="_blank" rel="noopener" class="btn primary" id="cm-pdf-link">PDF</a>
+            <a href="{{ route('ventas_mayor.catalogo.pdf', collect($pdfQuery)->except('ver_ocultos')->all()) }}" class="btn primary" id="cm-pdf-link" download>PDF</a>
         </div>
     </div>
 
@@ -275,7 +275,7 @@
                 @endif
                 <button type="submit" class="btn primary" id="btn-buscar-mayor">Buscar</button>
                 <a href="{{ route('ventas_mayor.catalogo') }}" class="btn secondary">Limpiar</a>
-                <a href="{{ route('ventas_mayor.catalogo.pdf', collect($pdfQuery)->except('ver_ocultos')->all()) }}" target="_blank" rel="noopener" class="btn secondary">PDF</a>
+                <a href="{{ route('ventas_mayor.catalogo.pdf', collect($pdfQuery)->except('ver_ocultos')->all()) }}" class="btn secondary" download>PDF</a>
             </div>
         </div>
 
