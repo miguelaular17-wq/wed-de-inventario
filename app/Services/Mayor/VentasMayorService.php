@@ -127,7 +127,8 @@ class VentasMayorService
      *   stock_max?: float|null,
      *   precio_min?: float|null,
      *   precio_max?: float|null,
-     *   limite?: int
+     *   limite?: int,
+     *   ver_ocultos?: bool
      * }  $filtros
      * @return Collection<int, object>
      */
@@ -166,6 +167,7 @@ class VentasMayorService
             $filtros['excluir_sedes'] ?? []
         ))));
         $soloExistencia = (bool) ($filtros['solo_existencia'] ?? false);
+        $verOcultos = (bool) ($filtros['ver_ocultos'] ?? false);
         $stockMin = $this->numeroFiltro($filtros['stock_min'] ?? null);
         $stockMax = $this->numeroFiltro($filtros['stock_max'] ?? null);
         $precioMin = $this->numeroFiltro($filtros['precio_min'] ?? null);
@@ -189,6 +191,19 @@ class VentasMayorService
             ->where(fn ($w) => $w->where('oculto', false)->orWhereNull('oculto'))
             ->when($categoria !== '', fn ($w) => $w->where('categoria', $categoria))
             ->when($subcats !== [], fn ($w) => $w->whereIn('subcategoria', $subcats));
+
+        // Ocultos del catálogo al mayor (mayor_catalogo.oculto): por defecto no salen; con ver_ocultos solo esos.
+        if (Schema::hasTable('mayor_catalogo') && Schema::hasColumn('mayor_catalogo', 'oculto')) {
+            if ($verOcultos) {
+                $query->whereExists(fn ($e) => $e->selectRaw('1')->from('mayor_catalogo')
+                    ->whereColumn('mayor_catalogo.producto_id', 'productos.id')
+                    ->where('mayor_catalogo.oculto', true));
+            } else {
+                $query->whereNotExists(fn ($e) => $e->selectRaw('1')->from('mayor_catalogo')
+                    ->whereColumn('mayor_catalogo.producto_id', 'productos.id')
+                    ->where('mayor_catalogo.oculto', true));
+            }
+        }
 
         if ($q !== '') {
             foreach (preg_split('/\s+/', $q) ?: [] as $palabra) {
@@ -462,7 +477,7 @@ class VentasMayorService
             $p->disponible_jrz = $p->stocks[self::SEDE_FACTURA];
             $p->precio_mayor = round((float) ($p->precio_mayor ?? 0), 2);
             $p->precio_unidad = round((float) ($p->precio_unidad ?? 0), 2);
-            $c = $catalogo[$id] ?? ['presentacion' => 'unidad', 'unidades' => 1, 'precio' => $p->precio_mayor, 'costo_unidad' => 0.0, 'costo_suite' => 0.0, 'precio_editado' => false, 'costo_editado' => false];
+            $c = $catalogo[$id] ?? ['presentacion' => 'unidad', 'unidades' => 1, 'precio' => $p->precio_mayor, 'costo_unidad' => 0.0, 'costo_suite' => 0.0, 'precio_editado' => false, 'costo_editado' => false, 'oculto' => false];
             $p->costo_suite = $c['costo_suite'];
             $p->presentacion = $c['presentacion'];
             $p->unidades_por = $c['unidades'];
@@ -472,6 +487,7 @@ class VentasMayorService
             $p->costo_unidad = $c['costo_unidad'];
             $p->costo_presentacion = round($c['costo_unidad'] * $c['unidades'], 2);
             $p->costo_editado = $c['costo_editado'];
+            $p->oculto_catalogo = (bool) ($c['oculto'] ?? false);
             $p->ganancia_pct = $p->costo_presentacion > 0 ? round(($p->precio_presentacion - $p->costo_presentacion) / $p->costo_presentacion * 100, 1) : null;
             $p->disponible_presentaciones = intdiv($p->disponible_jrz, max(1, $c['unidades']));
             $lote = $lotes->get($id);
@@ -540,7 +556,7 @@ class VentasMayorService
      *
      * @param  list<int>  $productoIds
      * @return array<int, array{presentacion: string, unidades: int, precio: float, costo_unidad: float, costo_suite: float,
-     *               precio_editado: bool, costo_editado: bool}>
+     *               precio_editado: bool, costo_editado: bool, oculto: bool}>
      */
     public function catalogo(array $productoIds): array
     {
@@ -567,6 +583,7 @@ class VentasMayorService
                 'costo_suite' => round((float) ($p->costo_actual ?? 0), 4),
                 'precio_editado' => $c?->precio_usd !== null,
                 'costo_editado' => $c?->costo_usd !== null,
+                'oculto' => (bool) ($c?->oculto ?? false),
             ];
         }
 
@@ -576,7 +593,7 @@ class VentasMayorService
     /**
      * Guarda cómo se vende un producto al mayor. Precio o costo vacíos vuelven a los de Suite.
      *
-     * @param  array{presentacion: string, unidades?: ?int, precio_usd?: ?float, costo_usd?: ?float}  $datos
+     * @param  array{presentacion: string, unidades?: ?int, precio_usd?: ?float, costo_usd?: ?float, oculto?: bool}  $datos
      */
     public function guardarCatalogo(int $productoId, array $datos, ?int $userId): MayorCatalogo
     {
@@ -586,13 +603,39 @@ class VentasMayorService
             throw ValidationException::withMessages(['unidades' => 'Indica cuántas unidades trae cada '.mb_strtolower(MayorCatalogo::PRESENTACIONES[$presentacion]).'.']);
         }
 
-        return MayorCatalogo::query()->updateOrCreate(['producto_id' => $productoId], [
+        $attrs = [
             'presentacion' => $presentacion,
             'unidades' => $unidades,
             'precio_usd' => isset($datos['precio_usd']) && $datos['precio_usd'] !== '' ? round((float) $datos['precio_usd'], 2) : null,
             'costo_usd' => isset($datos['costo_usd']) && $datos['costo_usd'] !== '' ? round((float) $datos['costo_usd'], 4) : null,
             'user_id' => $userId,
-        ]);
+        ];
+        if (array_key_exists('oculto', $datos) && Schema::hasColumn('mayor_catalogo', 'oculto')) {
+            $attrs['oculto'] = (bool) $datos['oculto'];
+        }
+
+        return MayorCatalogo::query()->updateOrCreate(['producto_id' => $productoId], $attrs);
+    }
+
+    /**
+     * Oculta o restaura un producto en el catálogo al mayor (no afecta el catálogo normal ni el stock).
+     */
+    public function toggleOcultoCatalogo(int $productoId, ?int $userId): MayorCatalogo
+    {
+        if (! Schema::hasTable('mayor_catalogo') || ! Schema::hasColumn('mayor_catalogo', 'oculto')) {
+            throw ValidationException::withMessages(['oculto' => 'Aún no está disponible ocultar del catálogo al mayor.']);
+        }
+
+        $fila = MayorCatalogo::query()->firstOrNew(['producto_id' => $productoId]);
+        if (! $fila->exists) {
+            $fila->presentacion = 'unidad';
+            $fila->unidades = 1;
+        }
+        $fila->oculto = ! (bool) $fila->oculto;
+        $fila->user_id = $userId;
+        $fila->save();
+
+        return $fila;
     }
 
     /** Tasa BCV del día (o la última registrada en Finanzas). */

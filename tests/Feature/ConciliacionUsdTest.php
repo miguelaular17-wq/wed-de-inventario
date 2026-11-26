@@ -40,6 +40,7 @@ class ConciliacionUsdTest extends TestCase
         (require database_path('migrations/2026_10_23_200000_create_conciliacion_divisas_tables.php'))->up();
         (require database_path('migrations/2026_10_24_130000_add_pagos_to_conciliacion_divisas.php'))->up();
         (require database_path('migrations/2026_11_12_140000_add_justificacion_to_conciliacion_divisas_lineas.php'))->up();
+        (require database_path('migrations/2026_11_26_141000_add_justificacion_to_conciliacion_divisas_pagos.php'))->up();
         $this->user = User::create([
             'name' => 'Contabilidad', 'email' => 'contab-usd@test.local', 'password' => 'password123', 'role' => User::ROLE_CONTABILIDAD,
         ]);
@@ -97,6 +98,16 @@ class ConciliacionUsdTest extends TestCase
         $linea->refresh();
         $this->assertSame('conciliado', $linea->estado);
         $this->assertSame($egreso, (int) $linea->flujo_caja_id);
+
+        // Al abrir el resumen también salen de Comisiones (aunque no se haya corrido el match).
+        $otra = ConciliacionDivisaLinea::query()->create([
+            'banco' => 'Binance', 'titular' => 'Grupo JENU', 'fecha' => '2026-08-12', 'descripcion' => 'Spot · Withdraw · Withdraw fee is included',
+            'monto' => -9821.5, 'tipo' => 'cargo', 'estado' => 'comision', 'huella' => 'fee-incluido-2',
+        ]);
+        $resumen = $servicio->resumen('Binance', 'Grupo JENU', '2026-08-01', '2026-08-31');
+        $this->assertSame('pendiente', $otra->fresh()->estado);
+        $this->assertFalse($resumen['comisiones']->contains(fn ($l) => (int) $l->id === (int) $otra->id));
+        $this->assertTrue($resumen['pendientes']->contains(fn ($l) => (int) $l->id === (int) $otra->id));
     }
 
     public function test_justifica_un_ingreso_o_egreso_sin_pareja_con_su_nota(): void
@@ -131,6 +142,40 @@ class ConciliacionUsdTest extends TestCase
         $deposito->refresh();
         $this->assertSame('pendiente', $deposito->estado);
         $this->assertNull($deposito->nota);
+    }
+
+    public function test_justifica_pago_de_caja_sin_abono_en_el_banco(): void
+    {
+        $pago = \App\Models\ConciliacionDivisaPago::query()->create([
+            'banco' => 'Binance', 'titular' => 'Grupo JENU', 'nro' => '821',
+            'fecha' => '2026-08-22', 'fecha_hora' => '2026-08-22 12:41:00',
+            'monto' => 12000, 'localidad' => 'CC Doral Sta Irene', 'terminal' => 'Caja Avance',
+            'usuario' => 'Dayana Lopez', 'pagador' => 'MARCOSREYES',
+            'huella' => 'pago-justificar-821',
+        ]);
+        $accion = fn (array $datos) => $this->actingAs($this->user)->post(route('finanzas.conciliacion_usd.accion'), $datos);
+
+        $accion(['pago_id' => $pago->id, 'accion' => 'justificar_pago', 'nota' => ''])->assertSessionHasErrors('nota');
+        $this->assertNull($pago->fresh()->justificado_at);
+
+        $accion([
+            'pago_id' => $pago->id,
+            'accion' => 'justificar_pago',
+            'nota' => 'Parece el #1397 sin el punto decimal (×100); no hubo abono real de $12.000',
+        ])->assertSessionHas('success');
+        $pago->refresh();
+        $this->assertNotNull($pago->justificado_at);
+        $this->assertSame($this->user->id, (int) $pago->justificado_por);
+
+        $this->actingAs($this->user)
+            ->get(route('finanzas.conciliacion_usd.index', ['cuenta' => 'Binance|Grupo JENU', 'fecha_desde' => '2026-08-01', 'fecha_hasta' => '2026-08-31']))
+            ->assertOk()
+            ->assertSee('Pagos de caja justificados (1)')
+            ->assertSee('Parece el #1397 sin el punto decimal')
+            ->assertDontSee('Pagos de caja sin abono en el banco (1)');
+
+        $accion(['pago_id' => $pago->id, 'accion' => 'restaurar_pago'])->assertSessionHas('success');
+        $this->assertNull($pago->fresh()->justificado_at);
     }
 
     public function test_importa_extracto_generico_y_concilia_en_usd(): void

@@ -183,10 +183,10 @@
                 $abonosLibres = $datos['pendientes']->reject(fn ($l) => $l->esCargo());
             @endphp
             <h3 style="margin:16px 0 6px;">Pagos de caja sin abono en el banco ({{ $datos['pagos_sin_abono']->count() }})</h3>
-            <p class="muted" style="margin:0 0 6px; font-size:.78rem;">🧾 Están en la app de cobros (Cloud) pero no aparecen en el extracto del banco.</p>
+            <p class="muted" style="margin:0 0 6px; font-size:.78rem;">🧾 Están en la app de cobros (Cloud) pero no aparecen en el extracto del banco. Si no va a aparecer (duplicado, ×100, error de lectura…), puedes justificarlo.</p>
             <div class="table-wrap">
                 <table class="data-table" style="font-size:.82rem;">
-                    <thead><tr><th>Nro</th><th>Fecha y hora</th><th>Localidad · caja</th><th>Cajero</th><th>Pagador</th><th style="text-align:right;">Monto</th><th>Ligar con abono del banco</th></tr></thead>
+                    <thead><tr><th>Nro</th><th>Fecha y hora</th><th>Localidad · caja</th><th>Cajero</th><th>Pagador</th><th style="text-align:right;">Monto</th><th>Ligar con abono del banco</th><th></th></tr></thead>
                     <tbody>
                         @foreach($datos['pagos_sin_abono'] as $p)
                             @php
@@ -194,6 +194,7 @@
                                     ->filter(fn ($l) => abs(abs((float) $l->monto) - (float) $p->monto) <= max(1, (float) $p->monto * 0.05) && abs($l->fecha->diffInDays($p->fecha, false)) <= 3)
                                     ->sortBy(fn ($l) => [abs(abs((float) $l->monto) - (float) $p->monto) > 0.009 ? 1 : 0, abs($l->fecha->diffInDays($p->fecha, false))])
                                     ->take(12);
+                                $hintPago = 'Pago #'.$p->nro.' de '.$usd($p->monto).($p->posible_x100_de ? ' (parece ×100 del #'.$p->posible_x100_de.')' : '');
                             @endphp
                             <tr>
                                 <td>
@@ -226,6 +227,48 @@
                                     @else
                                         <span class="muted" style="font-size:.78rem;">Sin abonos parecidos (±3 días)</span>
                                     @endif
+                                </td>
+                                <td style="white-space:nowrap;">
+                                    <form method="POST" action="{{ route('finanzas.conciliacion_usd.accion') }}" style="display:inline;" onsubmit="return pedirJustificacion(this, @js($hintPago))">
+                                        @csrf
+                                        <input type="hidden" name="pago_id" value="{{ $p->id }}">
+                                        <input type="hidden" name="accion" value="justificar_pago">
+                                        <input type="hidden" name="nota" value="">
+                                        <button type="submit" class="btn" style="padding:3px 8px; font-size:.75rem; background:#0ea5e9; color:white; border:none;">Justificar</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+
+        @if(($datos['pagos_justificados'] ?? collect())->isNotEmpty())
+            <h3 style="margin:20px 0 6px;">Pagos de caja justificados ({{ $datos['pagos_justificados']->count() }}) · {{ $usd($datos['pagos_justificados']->sum('monto')) }}</h3>
+            <p class="muted" style="margin:0 0 6px; font-size:.78rem;">Cobros de Cloud sin abono en el banco que se dieron por buenos con una nota.</p>
+            <div class="table-wrap">
+                <table class="data-table" style="font-size:.82rem;">
+                    <thead><tr><th>Nro</th><th>Fecha y hora</th><th>Localidad · caja</th><th>Pagador</th><th style="text-align:right;">Monto</th><th>Justificación</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach($datos['pagos_justificados'] as $p)
+                            <tr>
+                                <td>{{ $p->nro }}</td>
+                                <td style="white-space:nowrap;">{{ $p->fecha_hora ? $p->fecha_hora->format('d/m/Y h:i A') : $p->fecha->format('d/m/Y') }}</td>
+                                <td>{{ $p->localidad }}{{ $p->terminal ? ' · ' . $p->terminal : '' }}</td>
+                                <td>{{ $p->pagador }}</td>
+                                <td style="text-align:right; font-weight:700;">{{ $usd($p->monto) }}</td>
+                                <td style="max-width:320px;">
+                                    {{ $p->nota }}
+                                    <div class="muted" style="font-size:.72rem;">{{ $p->justificadoPor?->name ?? '—' }}{{ $p->justificado_at ? ' · ' . $p->justificado_at->format('d/m/Y h:i A') : '' }}</div>
+                                </td>
+                                <td>
+                                    <form method="POST" action="{{ route('finanzas.conciliacion_usd.accion') }}" style="display:inline;">
+                                        @csrf
+                                        <input type="hidden" name="pago_id" value="{{ $p->id }}">
+                                        <input type="hidden" name="accion" value="restaurar_pago">
+                                        <button type="submit" class="btn secondary" style="padding:3px 8px; font-size:.75rem;">Quitar justificación</button>
+                                    </form>
                                 </td>
                             </tr>
                         @endforeach
@@ -272,7 +315,7 @@
                                     <input type="hidden" name="nota" value="">
                                     <button type="submit" class="btn" style="padding:3px 8px; font-size:.75rem; background:#0ea5e9; color:white; border:none;">Justificar</button>
                                 </form>
-                                {!! $accion($l->id, 'comision', 'Comisión') !!} {!! $accion($l->id, 'ignorar', 'Ignorar') !!}
+                                {!! $accion($l->id, 'comision', 'Comisión') !!} {!! $accion($l->id, 'ignorar', 'Reverso') !!}
                             </td>
                         </tr>
                     @empty
@@ -354,7 +397,7 @@
             </div>
         @endif
 
-        @foreach([['Comisiones', $datos['comisiones'], 'Quitar de comisiones'], ['Ignorados', $datos['ignorados'], 'Restaurar']] as [$titulo, $lista, $boton])
+        @foreach([['Comisiones', $datos['comisiones'], 'Quitar de comisiones'], ['Reversos', $datos['ignorados'], 'Restaurar']] as [$titulo, $lista, $boton])
             @if($lista->isNotEmpty())
                 <h3 style="margin:20px 0 6px;">{{ $titulo }} ({{ $lista->count() }}) · {{ $usd($tot($lista)) }}</h3>
                 <div class="table-wrap">

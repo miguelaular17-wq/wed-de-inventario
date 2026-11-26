@@ -411,6 +411,7 @@ Route::middleware(['auth', 'permission:ventas_mayor'])->prefix('ventas-mayor')->
     Route::get('/catalogo', [\App\Http\Controllers\VentasMayorController::class, 'catalogo'])->name('catalogo');
     Route::get('/catalogo/pdf', [\App\Http\Controllers\VentasMayorController::class, 'catalogoPdf'])->name('catalogo.pdf');
     Route::post('/catalogo/{producto}', [\App\Http\Controllers\VentasMayorController::class, 'guardarCatalogo'])->whereNumber('producto')->middleware('permission:ventas_mayor.catalogo')->name('catalogo.guardar');
+    Route::post('/catalogo/{producto}/ocultar', [\App\Http\Controllers\VentasMayorController::class, 'toggleOcultoCatalogo'])->whereNumber('producto')->name('catalogo.ocultar');
     Route::get('/clientes', [\App\Http\Controllers\VentasMayorController::class, 'clientes'])->name('clientes.index');
     Route::post('/clientes', [\App\Http\Controllers\VentasMayorController::class, 'guardarCliente'])->name('clientes.store');
     Route::get('/clientes/buscar', [\App\Http\Controllers\VentasMayorController::class, 'buscarClientes'])->name('clientes.buscar');
@@ -774,6 +775,7 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::get('/calendario-conciliaciones/pdf', [FinanzasController::class, 'calendarioConciliacionesPdf'])->name('finanzas.calendario_conciliaciones.pdf');
     Route::get('/calendario-conciliaciones/movimientos', [FinanzasController::class, 'calendarioConciliacionesMovimientos'])->name('finanzas.calendario_conciliaciones.movimientos');
     Route::get('/conciliaciones', [FinanzasController::class, 'conciliaciones'])->name('finanzas.conciliaciones');
+    Route::get('/conciliaciones/guia-documentos.pdf', [FinanzasController::class, 'guiaDocumentosConciliacionPdf'])->name('finanzas.conciliaciones.guia_documentos');
     Route::get('/conciliaciones/lotes', [FinanzasController::class, 'lotesPuntoVenta'])->name('finanzas.conciliaciones.lotes');
     Route::post('/conciliaciones/lotes/manual', [FinanzasController::class, 'conciliarLoteManual'])->name('finanzas.conciliaciones.lotes.manual');
     Route::post('/conciliaciones/lotes/registrar-lote', [FinanzasController::class, 'registrarLoteDesdeLiq'])->name('finanzas.conciliaciones.lotes.registrar_lote');
@@ -788,6 +790,8 @@ Route::middleware(['auth', 'permission:conciliaciones'])->prefix('finanzas')->gr
     Route::post('/conciliacion-divisas/accion', [\App\Http\Controllers\ConciliacionUsdController::class, 'accion'])->name('finanzas.conciliacion_usd.accion');
     Route::post('/conciliaciones/divisas/preview', [\App\Http\Controllers\ConciliacionDivisasController::class, 'preview'])->name('finanzas.conciliaciones.divisas.preview');
     Route::post('/conciliaciones/divisas/aplicar', [\App\Http\Controllers\ConciliacionDivisasController::class, 'aplicar'])->name('finanzas.conciliaciones.divisas.aplicar');
+    Route::post('/conciliaciones/pagos-moviles/preview', [\App\Http\Controllers\PagosMovilesCloudController::class, 'preview'])->name('finanzas.conciliaciones.pagos_moviles.preview');
+    Route::post('/conciliaciones/pagos-moviles/aplicar', [\App\Http\Controllers\PagosMovilesCloudController::class, 'aplicar'])->name('finanzas.conciliaciones.pagos_moviles.aplicar');
     Route::post('/conciliaciones/pagos-manuales/preview', [\App\Http\Controllers\PagosManualesController::class, 'preview'])->name('finanzas.conciliaciones.pagos_manuales.preview');
     Route::post('/conciliaciones/pagos-manuales/aplicar', [\App\Http\Controllers\PagosManualesController::class, 'aplicar'])->name('finanzas.conciliaciones.pagos_manuales.aplicar');
     Route::post('/conciliaciones/cashea/preview', [\App\Http\Controllers\CasheaConciliacionController::class, 'preview'])->name('finanzas.conciliaciones.cashea.preview');

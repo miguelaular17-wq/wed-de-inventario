@@ -329,11 +329,11 @@ class ConciliacionUsdController extends Controller
     public function accion(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'linea_id' => ['required', 'integer'],
-            'accion' => ['required', Rule::in(['vincular', 'vincular_pago', 'desvincular', 'comision', 'ignorar', 'restaurar', 'justificar'])],
+            'accion' => ['required', Rule::in(['vincular', 'vincular_pago', 'desvincular', 'comision', 'ignorar', 'restaurar', 'justificar', 'justificar_pago', 'restaurar_pago'])],
+            'linea_id' => ['nullable', 'integer', 'required_unless:accion,justificar_pago,restaurar_pago'],
             'flujo_caja_id' => ['nullable', 'required_if:accion,vincular', 'integer'],
-            'pago_id' => ['nullable', 'required_if:accion,vincular_pago', 'integer'],
-            'nota' => ['nullable', 'required_if:accion,justificar', 'string', 'max:1000'],
+            'pago_id' => ['nullable', 'integer', 'required_if:accion,vincular_pago,justificar_pago,restaurar_pago'],
+            'nota' => ['nullable', 'required_if:accion,justificar,justificar_pago', 'string', 'max:1000'],
         ]);
 
         match ($data['accion']) {
@@ -347,9 +347,20 @@ class ConciliacionUsdController extends Controller
             'restaurar' => $this->servicio->marcar((int) $data['linea_id'], 'pendiente'),
             'justificar' => $this->servicio->justificar((int) $data['linea_id'], (string) $data['nota'], $request->user()?->id)
                 ?: throw \Illuminate\Validation\ValidationException::withMessages(['nota' => 'Ese movimiento ya no está pendiente.']),
+            'justificar_pago' => $this->servicio->justificarPago((int) $data['pago_id'], (string) $data['nota'], $request->user()?->id)
+                ?: throw \Illuminate\Validation\ValidationException::withMessages(['nota' => 'Ese pago ya está cruzado o justificado.']),
+            'restaurar_pago' => $this->servicio->restaurarPago((int) $data['pago_id'])
+                ?: throw \Illuminate\Validation\ValidationException::withMessages(['pago_id' => 'Ese pago no está justificado.']),
         };
 
-        return back()->with('success', $data['accion'] === 'justificar' ? 'Movimiento justificado.' : 'Listo.');
+        $ok = match ($data['accion']) {
+            'justificar' => 'Movimiento justificado.',
+            'justificar_pago' => 'Pago de caja justificado.',
+            'restaurar_pago' => 'Se quitó la justificación del pago.',
+            default => 'Listo.',
+        };
+
+        return back()->with('success', $ok);
     }
 
     /** @return array{0: string, 1: string, 2: string, 3: string} */

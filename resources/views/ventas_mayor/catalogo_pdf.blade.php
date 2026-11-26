@@ -43,7 +43,7 @@
         <td style="width:62px;">@if($logo)<img src="{{ $logo }}" style="width:54px; height:54px;" alt="">@endif</td>
         <td>
             <div class="titulo">Catálogo al mayor</div>
-            <div class="muted">Palacio de los Detalles · Unidad · Desc. divisas (−{{ $descEtiqueta }}) · Lote inicial · {{ now()->format('d/m/Y') }}@if($categoria !== '') · {{ $categoria }}@endif</div>
+            <div class="muted">Palacio de los Detalles · Unidad · Desc. divisas (−{{ $descEtiqueta }}) · Unidad de manejo · {{ now()->format('d/m/Y') }}@if($categoria !== '') · {{ $categoria }}@endif</div>
         </td>
         <td style="text-align:right;" class="muted">{{ $productos->count() }} productos</td>
     </tr>
@@ -81,7 +81,7 @@
                                     <div class="h">desc. divisas</div>
                                 </td>
                                 <td>
-                                    <div class="l">Lote inicial</div>
+                                    <div class="l">Unidad de manejo</div>
                                     <div class="v lote">{{ $lote > 0 ? $lote : '—' }}</div>
                                     <div class="h">{{ $lote > 0 ? 'mín. compra' : 'sin mínimo' }}</div>
                                 </td>

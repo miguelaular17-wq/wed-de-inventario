@@ -11,12 +11,13 @@ class MayorCatalogo extends Model
 
     protected $table = 'mayor_catalogo';
 
-    protected $fillable = ['producto_id', 'presentacion', 'unidades', 'precio_usd', 'costo_usd', 'user_id'];
+    protected $fillable = ['producto_id', 'presentacion', 'unidades', 'precio_usd', 'costo_usd', 'oculto', 'user_id'];
 
     protected $casts = [
         'unidades' => 'integer',
         'precio_usd' => 'float',
         'costo_usd' => 'float',
+        'oculto' => 'boolean',
     ];
 
     /** «Caja x12», «Paquete x6» o «Unidad». */

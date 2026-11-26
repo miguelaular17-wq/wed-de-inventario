@@ -21,6 +21,9 @@
     $categoria = (string) ($filtros['categoria'] ?? '');
     $sede = (string) ($filtros['sede'] ?? \App\Services\Mayor\VentasMayorService::SEDE_FACTURA);
     $soloExistencia = (bool) ($filtros['solo_existencia'] ?? false);
+    $verOcultos = (bool) ($filtros['ver_ocultos'] ?? false);
+    $puedeEditarCatalogo = (bool) ($puedeEditarCatalogo ?? false);
+    $puedeOcultarCatalogo = (bool) ($puedeOcultarCatalogo ?? $puedeEditarCatalogo);
     $perPage = (int) ($filtros['limite'] ?? 24);
     $subcategoriasElegidas = $subcategoriasElegidas ?? [];
     $sedesExcluidas = $sedesExcluidas ?? [];
@@ -113,6 +116,20 @@
     .cm-facturar { display: block; width: 100%; text-align: center; padding: 8px; border-radius: 8px; background: #2563eb; color: #fff; font-weight: 700; font-size: .82rem; border: 0; cursor: pointer; }
     .cm-facturar:hover { background: #1d4ed8; }
     .cm-facturar.is-added { background: #0f766e; }
+    .cm-card-acciones { display: grid; grid-template-columns: 1fr; gap: 6px; }
+    .cm-card-acciones.has-ocultar { grid-template-columns: auto 1fr; }
+    .cm-ocultar {
+        padding: 8px 10px; border-radius: 8px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569;
+        font-weight: 700; font-size: .72rem; cursor: pointer; white-space: nowrap; font-family: inherit;
+    }
+    .cm-ocultar:hover { background: #e2e8f0; }
+    .cm-ocultar.is-restore { background: #ecfdf5; border-color: #86efac; color: #15803d; }
+    .cm-ocultar.is-restore:hover { background: #d1fae5; }
+    .cm-card.is-oculto { opacity: .72; border-style: dashed; border-color: #94a3b8; }
+    .cm-badge-oculto {
+        position: absolute; left: 8px; top: 8px; background: #334155; color: #fff;
+        font-weight: 800; font-size: .68rem; padding: 3px 8px; border-radius: 999px; text-transform: uppercase;
+    }
     .cm-pedido-bar {
         position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
         background: #0f172a; color: #fff; padding: 12px 18px;
@@ -170,11 +187,16 @@
     <div class="cm-cab vm-page-head">
         <div>
             <h1 style="margin:0;">Catálogo al mayor</h1>
-            <p class="muted" style="margin:4px 0 0;">{{ $productos->count() }} productos · toca <strong>+ Facturar</strong> para ir sumando al pedido (sale de JRZ)</p>
+            <p class="muted" style="margin:4px 0 0;">
+                {{ $productos->count() }} productos
+                @if($verOcultos) · viendo solo ocultos
+                @else · toca <strong>+ Facturar</strong> para ir sumando al pedido (sale de JRZ)
+                @endif
+            </p>
         </div>
         <div class="vm-page-actions">
             <a href="{{ route('ventas_mayor.stock') }}" class="btn secondary">← Stock</a>
-            <a href="{{ route('ventas_mayor.catalogo.pdf', $pdfQuery) }}" target="_blank" rel="noopener" class="btn primary" id="cm-pdf-link">PDF</a>
+            <a href="{{ route('ventas_mayor.catalogo.pdf', collect($pdfQuery)->except('ver_ocultos')->all()) }}" target="_blank" rel="noopener" class="btn primary" id="cm-pdf-link">PDF</a>
         </div>
     </div>
 
@@ -245,9 +267,15 @@
                     <input type="checkbox" name="solo_existencia" value="1" @checked($soloExistencia)>
                     Con stock
                 </label>
+                @if($puedeOcultarCatalogo)
+                    <label class="cm-check" title="Productos que no salen en el catálogo ni en el PDF">
+                        <input type="checkbox" name="ver_ocultos" value="1" @checked($verOcultos)>
+                        Solo ocultos
+                    </label>
+                @endif
                 <button type="submit" class="btn primary" id="btn-buscar-mayor">Buscar</button>
                 <a href="{{ route('ventas_mayor.catalogo') }}" class="btn secondary">Limpiar</a>
-                <a href="{{ route('ventas_mayor.catalogo.pdf', $pdfQuery) }}" target="_blank" rel="noopener" class="btn secondary">PDF</a>
+                <a href="{{ route('ventas_mayor.catalogo.pdf', collect($pdfQuery)->except('ver_ocultos')->all()) }}" target="_blank" rel="noopener" class="btn secondary">PDF</a>
             </div>
         </div>
 
@@ -278,7 +306,13 @@
     </form>
 
     @if($productos->isEmpty())
-        <p class="muted" style="text-align:center; padding:40px;">No hay productos con precio al mayor con ese criterio. Prueba cambiar los filtros.</p>
+        <p class="muted" style="text-align:center; padding:40px;">
+            @if($verOcultos)
+                No hay productos ocultos del catálogo al mayor.
+            @else
+                No hay productos con precio al mayor con ese criterio. Prueba cambiar los filtros.
+            @endif
+        </p>
     @else
         <div class="cm-grid">
             @foreach($productos as $p)
@@ -287,10 +321,12 @@
                     $precioDivisa = round($precioUnidad * $descFactor, 2);
                     $lote = (int) ($p->lote_inicial ?? 0);
                     $cantDefault = $lote > 0 ? $lote : 1;
+                    $estaOculto = (bool) ($p->oculto_catalogo ?? false);
                 @endphp
-                <div class="cm-card" data-producto-id="{{ $p->id }}">
+                <div class="cm-card {{ $estaOculto ? 'is-oculto' : '' }}" data-producto-id="{{ $p->id }}">
                     <div class="cm-foto">
                         @include('partials.foto-producto', ['codigo' => $p->codigo, 'alt' => $p->nombre, 'clase' => ''])
+                        @if($estaOculto)<span class="cm-badge-oculto">Oculto</span>@endif
                         <span class="cm-badge">{{ $disponibleTexto($p) }}</span>
                         @if($p->presentacion !== 'unidad')<span class="cm-pres">{{ $p->presentacion_texto }}</span>@endif
                         <span class="cm-en-lista" data-badge-cant></span>
@@ -309,23 +345,38 @@
                             <span class="cm-price-hint">desc. divisas</span>
                         </div>
                         <div>
-                            <span class="cm-price-label">Lote inicial</span>
+                            <span class="cm-price-label">Unidad de manejo</span>
                             <span class="cm-price-value is-lote">{{ $lote > 0 ? $lote : '—' }}</span>
                             <span class="cm-price-hint">{{ $lote > 0 ? 'mín. compra' : 'sin mínimo' }}</span>
                         </div>
                     </div>
-                    <button
-                        type="button"
-                        class="cm-facturar"
-                        data-add-pedido
-                        data-id="{{ $p->id }}"
-                        data-nombre="{{ $p->nombre }}"
-                        data-codigo="{{ \App\Support\Sku::principal($p->codigo) }}"
-                        data-precio="{{ number_format($precioUnidad, 2, '.', '') }}"
-                        data-lote="{{ $cantDefault }}"
-                        data-disp="{{ (int) $p->disponible_presentaciones }}"
-                        data-pres="{{ $presNombre($p) }}"
-                    >+ Facturar</button>
+                    <div class="cm-card-acciones {{ $puedeOcultarCatalogo ? 'has-ocultar' : '' }}">
+                        @if($puedeOcultarCatalogo)
+                            <form method="POST" action="{{ route('ventas_mayor.catalogo.ocultar', $p->id) }}" style="margin:0;">
+                                @csrf
+                                <button
+                                    type="submit"
+                                    class="cm-ocultar {{ $estaOculto ? 'is-restore' : '' }}"
+                                    title="{{ $estaOculto ? 'Volver a mostrar en el catálogo al mayor' : 'No mostrar en el catálogo al mayor ni en el PDF' }}"
+                                    onclick="return confirm('{{ $estaOculto ? '¿Restaurar este producto en el catálogo al mayor?' : '¿Ocultar este producto del catálogo al mayor? Seguirá disponible en stock y facturación.' }}')"
+                                >{{ $estaOculto ? 'Restaurar' : 'Ocultar' }}</button>
+                            </form>
+                        @endif
+                        @unless($estaOculto)
+                            <button
+                                type="button"
+                                class="cm-facturar"
+                                data-add-pedido
+                                data-id="{{ $p->id }}"
+                                data-nombre="{{ $p->nombre }}"
+                                data-codigo="{{ \App\Support\Sku::principal($p->codigo) }}"
+                                data-precio="{{ number_format($precioUnidad, 2, '.', '') }}"
+                                data-lote="{{ $cantDefault }}"
+                                data-disp="{{ (int) $p->disponible_presentaciones }}"
+                                data-pres="{{ $presNombre($p) }}"
+                            >+ Facturar</button>
+                        @endunless
+                    </div>
                 </div>
             @endforeach
         </div>

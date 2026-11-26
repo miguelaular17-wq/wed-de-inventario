@@ -104,6 +104,9 @@
                                     <span>Se vende por</span>
                                     <strong class="vm-pres {{ $p->presentacion !== 'unidad' ? 'vm-pres-caja' : '' }}">{{ $p->presentacion_texto }}</strong>
                                     @if($p->unidades_por > 1)<em>{{ number_format($p->disponible_presentaciones) }} en JRZ</em>@endif
+                                    @if(!empty($p->oculto_catalogo))
+                                        <em style="color:#b45309; font-weight:700;">Oculto del catálogo</em>
+                                    @endif
                                 </div>
                                 <div>
                                     <span>Precio mayor{{ $p->precio_editado ? ' ✎' : '' }}</span>
@@ -141,6 +144,7 @@
                                             ? ['cantidad' => (float) ($p->ultima_cantidad_compra ?? 0), 'costo' => (float) $p->ultimo_costo_compra] : null;
                                         $ficha['costo'] = $p->costo_editado ? $p->costo_unidad : null;
                                         $ficha['costo_suite'] = $p->costo_suite;
+                                        $ficha['oculto'] = (bool) ($p->oculto_catalogo ?? false);
                                     }
                                 @endphp
                                 <div class="vm-acciones">
@@ -212,6 +216,11 @@
                 <label>Costo por unidad $
                     <input type="number" name="costo_usd" id="vm-costo" min="0" step="0.0001">
                     <small class="muted" id="vm-costo-ayuda"></small>
+                </label>
+                <label style="grid-column:1 / -1; flex-direction:row; align-items:center; gap:8px; font-weight:600;">
+                    <input type="hidden" name="oculto" value="0">
+                    <input type="checkbox" name="oculto" id="vm-oculto" value="1" style="width:auto; margin:0;">
+                    <span>Ocultar del catálogo al mayor <small class="muted" style="font-weight:400;">(no sale en el listado ni en el PDF; sí en stock/factura)</small></span>
                 </label>
             @endif
         </div>
@@ -356,8 +365,10 @@
         $('vm-precio').value = p.precio ?? '';
         $('vm-precio-unidad').value = '';
         if (puedeEditar && $('vm-costo')) $('vm-costo').value = p.costo ?? '';
+        if (puedeEditar && $('vm-oculto')) $('vm-oculto').checked = !!p.oculto;
         ['vm-presentacion', 'vm-unidades', 'vm-precio', 'vm-precio-unidad'].forEach(id => { $(id).disabled = !puedeEditar; });
         if ($('vm-costo')) $('vm-costo').disabled = !puedeEditar;
+        if ($('vm-oculto')) $('vm-oculto').disabled = !puedeEditar;
         $('vm-precio-ayuda').style.display = puedeEditar ? '' : 'none';
         if ($('vm-costo-ayuda')) $('vm-costo-ayuda').style.display = puedeEditar ? '' : 'none';
         sincronizarPrecios(p.precio ? 'caja' : null);

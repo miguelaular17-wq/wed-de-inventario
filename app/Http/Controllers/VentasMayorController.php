@@ -150,7 +150,11 @@ class VentasMayorController extends Controller
     /** Catálogo al mayor: mismos filtros que el catálogo normal. */
     public function catalogo(Request $request): View
     {
-        $filtros = $this->filtrosCatalogo($request);
+        $user = $request->user();
+        $puedeEditar = (bool) $user?->canAccess('ventas_mayor.catalogo');
+        // Ocultar/restaurar: regente (permiso de catálogo), gerente/admin, o el cargo Ventas al mayor.
+        $puedeOcultar = $puedeEditar || (bool) $user?->isMayor();
+        $filtros = $this->filtrosCatalogo($request, null, $puedeOcultar);
         $opciones = $this->servicio->opcionesFiltroCatalogo();
         $descuentoPct = $this->servicio->descuentoDivisaPct();
 
@@ -164,6 +168,8 @@ class VentasMayorController extends Controller
             'sedesExcluidas' => $filtros['excluir_sedes'],
             'filtros' => $filtros,
             'limite' => $filtros['limite'],
+            'puedeEditarCatalogo' => $puedeEditar,
+            'puedeOcultarCatalogo' => $puedeOcultar,
             'rangos' => [
                 'stock' => ['titulo' => 'Stock JRZ (unidades)', 'pasos' => \App\Http\Controllers\CatalogoController::PASOS_STOCK, 'prefijo' => ''],
                 'precio' => ['titulo' => 'Precio unidad', 'pasos' => \App\Http\Controllers\CatalogoController::PASOS_PRECIO, 'prefijo' => '$'],
@@ -178,7 +184,9 @@ class VentasMayorController extends Controller
     {
         ini_set('memory_limit', '768M');
         set_time_limit(300);
-        $filtros = $this->filtrosCatalogo($request, 300);
+        // El PDF nunca incluye productos ocultos del catálogo al mayor.
+        $filtros = $this->filtrosCatalogo($request, 300, false);
+        $filtros['ver_ocultos'] = false;
         $productos = $this->servicio->catalogoClientes($filtros);
         $fotos = \App\Support\FotoProducto::embebidas($productos->mapWithKeys(fn ($p) => [(int) $p->id => (string) $p->codigo])->all());
         $logo = is_file(public_path('logo.png'))
@@ -211,10 +219,11 @@ class VentasMayorController extends Controller
      *   stock_max: ?float,
      *   precio_min: ?float,
      *   precio_max: ?float,
-     *   limite: int
+     *   limite: int,
+     *   ver_ocultos: bool
      * }
      */
-    private function filtrosCatalogo(Request $request, ?int $limiteForzado = null): array
+    private function filtrosCatalogo(Request $request, ?int $limiteForzado = null, bool $permitirVerOcultos = false): array
     {
         $sub = $request->input('subcategoria');
         $subLista = is_array($sub) ? $sub : [$sub];
@@ -247,6 +256,7 @@ class VentasMayorController extends Controller
             'precio_min' => $leer('precio_min'),
             'precio_max' => $leer('precio_max'),
             'limite' => $limiteForzado ?? $perPage,
+            'ver_ocultos' => $permitirVerOcultos && $request->boolean('ver_ocultos'),
         ];
     }
 
@@ -259,10 +269,32 @@ class VentasMayorController extends Controller
             'unidades' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'precio_usd' => ['nullable', 'numeric', 'min:0.01', 'max:10000000'],
             'costo_usd' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
+            'oculto' => ['sometimes', 'boolean'],
         ]);
+        if ($request->has('oculto')) {
+            $data['oculto'] = $request->boolean('oculto');
+        }
         $this->servicio->guardarCatalogo($producto, $data, $request->user()?->id);
 
         return back()->with('success', 'Se guardó cómo se vende al mayor.');
+    }
+
+    /** Oculta o restaura un producto solo del catálogo al mayor (listado y PDF). */
+    public function toggleOcultoCatalogo(Request $request, int $producto): RedirectResponse
+    {
+        $user = $request->user();
+        abort_unless(
+            $user && ($user->canAccess('ventas_mayor.catalogo') || $user->isMayor()),
+            403,
+            'Solo el gerente, la regente o Ventas al mayor pueden ocultar productos del catálogo.'
+        );
+        abort_unless(\Illuminate\Support\Facades\DB::table('productos')->where('id', $producto)->exists(), 404);
+        $fila = $this->servicio->toggleOcultoCatalogo($producto, $user?->id);
+        $label = $fila->oculto
+            ? 'ocultado del catálogo al mayor'
+            : 'restaurado en el catálogo al mayor';
+
+        return back()->with('success', "Producto {$label}.");
     }
 
     public function clientes(Request $request): View

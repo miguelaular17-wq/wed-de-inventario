@@ -352,13 +352,7 @@ class ConciliacionDivisasService
      */
     public function conciliar(string $banco, string $titular, string $desde, string $hasta): array
     {
-        // Retiros de Binance «Withdraw fee is included» que se apartaron como comisión: vuelven a cruzarse.
-        foreach ($this->lineas($banco, $titular, $desde, $hasta)->where('estado', 'comision') as $linea) {
-            if (preg_match(self::FEE_INCLUIDO, (string) $linea->descripcion) === 1 && ! $this->esComision($linea->descripcion)) {
-                ConciliacionDivisaLinea::query()->whereKey($linea->id)->where('estado', 'comision')
-                    ->update(['estado' => 'pendiente', 'updated_at' => now()]);
-            }
-        }
+        $this->liberarRetirosConFeeIncluido($banco, $titular, $desde, $hasta);
         $internos = $this->ignorarInternos($banco, $titular, $desde, $hasta);
         $lineas = $this->lineas($banco, $titular, $desde, $hasta)->where('estado', 'pendiente')->values();
         $egresos = $this->egresosDisponibles($banco, $titular, $desde, $hasta);
@@ -430,7 +424,7 @@ class ConciliacionDivisasService
 
     /**
      * Movimientos entre billeteras de la misma cuenta (Binance Funding ↔ Spot, conversiones USDC/USDT):
-     * no son cobros ni pagos, salen en pares y se apartan como ignorados.
+     * no son cobros ni pagos, salen en pares y se apartan como reversos (estado ignorado).
      */
     public function ignorarInternos(string $banco, string $titular, string $desde, string $hasta): int
     {
@@ -547,7 +541,12 @@ class ConciliacionDivisasService
         if (! Schema::hasTable('conciliacion_divisas_pagos')) {
             return ['cruzados' => 0, 'sin_abono' => 0];
         }
-        $pagos = $this->pagos($banco, $titular, $desde, $hasta)->whereNull('linea_id')->values();
+        // Los cobros ya justificados no se vuelven a cruzar solos.
+        $pagos = $this->pagos($banco, $titular, $desde, $hasta)->whereNull('linea_id');
+        if (Schema::hasColumn('conciliacion_divisas_pagos', 'justificado_at')) {
+            $pagos = $pagos->whereNull('justificado_at');
+        }
+        $pagos = $pagos->values();
         $ocupadas = ConciliacionDivisaPago::query()->whereNotNull('linea_id')->pluck('linea_id')->flip();
         $lineas = $this->lineas($banco, $titular, date('Y-m-d', strtotime($desde . ' -2 days')), date('Y-m-d', strtotime($hasta . ' +4 days')))
             ->where('estado', 'pendiente')
@@ -647,7 +646,11 @@ class ConciliacionDivisasService
                 if ($ok !== 1) {
                     return false;
                 }
-                if (ConciliacionDivisaPago::query()->whereKey($pagoId)->whereNull('linea_id')->update(['linea_id' => $lineaId, 'updated_at' => now()]) !== 1) {
+                $pagoUpdate = ['linea_id' => $lineaId, 'updated_at' => now()];
+                if (Schema::hasColumn('conciliacion_divisas_pagos', 'justificado_at')) {
+                    $pagoUpdate += ['nota' => null, 'justificado_por' => null, 'justificado_at' => null];
+                }
+                if (ConciliacionDivisaPago::query()->whereKey($pagoId)->whereNull('linea_id')->update($pagoUpdate) !== 1) {
                     // Otro proceso cruzó el pago: se deshace también el movimiento.
                     throw new VinculoOcupadoException;
                 }
@@ -897,6 +900,42 @@ class ConciliacionDivisasService
             ]) === 1;
     }
 
+    /** Cobro de caja sin abono en el banco que se da por bueno con su explicación. */
+    public function justificarPago(int $pagoId, string $nota, ?int $userId): bool
+    {
+        if (! Schema::hasColumn('conciliacion_divisas_pagos', 'justificado_at')) {
+            throw ValidationException::withMessages(['nota' => 'Aún no está disponible justificar pagos de caja.']);
+        }
+        $nota = trim($nota);
+        if (mb_strlen($nota) < 5) {
+            throw ValidationException::withMessages(['nota' => 'Escribe por qué se justifica (mínimo 5 letras).']);
+        }
+
+        return ConciliacionDivisaPago::query()->whereKey($pagoId)->whereNull('linea_id')->whereNull('justificado_at')
+            ->update([
+                'nota' => mb_substr($nota, 0, 1000),
+                'justificado_por' => $userId,
+                'justificado_at' => now(),
+                'updated_at' => now(),
+            ]) === 1;
+    }
+
+    /** Quita la justificación de un cobro de caja (vuelve a «sin abono»). */
+    public function restaurarPago(int $pagoId): bool
+    {
+        if (! Schema::hasColumn('conciliacion_divisas_pagos', 'justificado_at')) {
+            return false;
+        }
+
+        return ConciliacionDivisaPago::query()->whereKey($pagoId)->whereNull('linea_id')->whereNotNull('justificado_at')
+            ->update([
+                'nota' => null,
+                'justificado_por' => null,
+                'justificado_at' => null,
+                'updated_at' => now(),
+            ]) === 1;
+    }
+
     /**
      * Datos de la pantalla para una cuenta y período.
      *
@@ -904,6 +943,9 @@ class ConciliacionDivisasService
      */
     public function resumen(string $banco, string $titular, string $desde, string $hasta): array
     {
+        // Al abrir la pantalla: retiros «Withdraw fee is included» no son comisión (vuelven a pendientes).
+        $this->liberarRetirosConFeeIncluido($banco, $titular, $desde, $hasta);
+
         $conPagos = Schema::hasTable('conciliacion_divisas_pagos');
         $lineas = $this->lineas($banco, $titular, $desde, $hasta)->load(array_merge(
             ['flujoCaja'],
@@ -915,7 +957,14 @@ class ConciliacionDivisasService
             ->reject(fn ($f) => isset($vinculados[$f->id]))
             ->values();
         $pagos = $conPagos ? $this->pagos($banco, $titular, $desde, $hasta) : collect();
-        $sinAbono = $pagos->whereNull('linea_id')->values();
+        if ($conPagos && Schema::hasColumn('conciliacion_divisas_pagos', 'justificado_por')) {
+            $pagos->load('justificadoPor');
+        }
+        $sinAbonoTodos = $pagos->whereNull('linea_id')->values();
+        $pagosJustificados = Schema::hasColumn('conciliacion_divisas_pagos', 'justificado_at')
+            ? $sinAbonoTodos->filter(fn ($p) => $p->justificado_at !== null)->values()
+            : collect();
+        $sinAbono = $sinAbonoTodos->filter(fn ($p) => $p->justificado_at === null)->values();
         $repetidos = collect();
         $cruzadosPorNombre = $pagos->whereNotNull('linea_id')->groupBy(fn ($o) => self::nombreNormalizado($o->pagador));
         foreach ($sinAbono as $p) {
@@ -955,9 +1004,10 @@ class ConciliacionDivisasService
                 'banco' => $this->documentosCargados('conciliacion_divisas_lineas', $banco, $titular, $desde, $hasta),
                 'cobros' => $conPagos ? $this->documentosCargados('conciliacion_divisas_pagos', $banco, $titular, $desde, $hasta) : [],
             ],
-            'pagos_total' => $pagos->count() - $repetidos->count(),
+            'pagos_total' => $pagos->count() - $repetidos->count() - $pagosJustificados->count(),
             'pagos_cruzados' => $pagos->whereNotNull('linea_id')->count(),
             'pagos_sin_abono' => $sinAbono->reject(fn ($p) => isset($repetidosIds[$p->id]))->values(),
+            'pagos_justificados' => $pagosJustificados,
             'pagos_repetidos' => $repetidos,
             'total_lineas' => $lineas->count(),
         ];
@@ -1028,8 +1078,12 @@ class ConciliacionDivisasService
 
     public function esComision(?string $descripcion): bool
     {
-        // «Withdraw fee is included»: es el retiro (con su comisión adentro), no una comisión aparte.
-        $d = trim((string) preg_replace(self::FEE_INCLUIDO, ' ', mb_strtolower((string) $descripcion, 'UTF-8')));
+        $texto = (string) $descripcion;
+        // «Withdraw fee is included»: es el retiro (la comisión va adentro), no una línea de comisión.
+        if (preg_match(self::FEE_INCLUIDO, $texto) === 1) {
+            return false;
+        }
+        $d = mb_strtolower($texto, 'UTF-8');
         foreach (self::COMISION as $kw) {
             if (preg_match('/\b' . preg_quote($kw, '/') . '\b/u', $d)) {
                 return true;
@@ -1037,6 +1091,22 @@ class ConciliacionDivisasService
         }
 
         return false;
+    }
+
+    /**
+     * Retiros Binance con «fee included» que quedaron mal como comisión → pendientes (para cruzar con egreso).
+     */
+    public function liberarRetirosConFeeIncluido(string $banco, string $titular, string $desde, string $hasta): int
+    {
+        $n = 0;
+        foreach ($this->lineas($banco, $titular, $desde, $hasta)->where('estado', 'comision') as $linea) {
+            if (preg_match(self::FEE_INCLUIDO, (string) $linea->descripcion) === 1) {
+                $n += ConciliacionDivisaLinea::query()->whereKey($linea->id)->where('estado', 'comision')
+                    ->update(['estado' => 'pendiente', 'updated_at' => now()]);
+            }
+        }
+
+        return $n;
     }
 
     /** @param  list<string>  $fila */

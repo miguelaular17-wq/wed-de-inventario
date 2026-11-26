@@ -16,10 +16,21 @@ class ConciliacionDivisaPago extends Model
         'fecha' => 'date',
         'fecha_hora' => 'datetime',
         'monto' => 'float',
+        'justificado_at' => 'datetime',
     ];
 
     public function linea(): BelongsTo
     {
         return $this->belongsTo(ConciliacionDivisaLinea::class, 'linea_id');
+    }
+
+    public function justificadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'justificado_por');
+    }
+
+    public function estaJustificado(): bool
+    {
+        return $this->justificado_at !== null;
     }
 }

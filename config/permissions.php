@@ -59,8 +59,8 @@ return [
         'servicio.transferir' => 'Transferir celulares / órdenes entre sedes',
         'nfc' => 'Tarjetas NFC (asignar y fichas de cliente)',
         'sincronizadores' => 'Control de sincronizadores (ver estado y enviar sincronizaciones)',
-        'ventas_mayor' => 'Ventas al mayor (stock de todas las sedes, facturar del stock de JRZ)',
-        'ventas_mayor.catalogo' => 'Ventas al mayor: editar el catálogo (presentación, precio y costo) — regente',
+        'ventas_mayor' => 'Ventas al mayor (stock de todas las sedes, facturar del stock de JRZ; el cargo Mayor también puede ocultar productos del catálogo)',
+        'ventas_mayor.catalogo' => 'Ventas al mayor: editar el catálogo (presentación, precio y costo) — regente / gerente',
     ],
 
     /*

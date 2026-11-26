@@ -10,14 +10,24 @@
         padding: 0;
     }
     .conc-page { padding: 4px 0 8px; font-family: 'Inter', sans-serif; background: transparent; min-height: 0; }
-    .conc-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 14px; }
+    .conc-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 14px; position: relative; z-index: 60; }
     .conc-title { margin: 0; font-size: 1.6rem; color: #0f172a; font-weight: 800; letter-spacing: -0.5px; }
     .conc-title span { color: #2563eb; }
 
     /* Toolbar */
-    .conc-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    .btn-upload { background: linear-gradient(135deg,#2563eb,#1d4ed8); color: white; padding: 10px 18px; border: none; border-radius: 9px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(37,99,235,.3); transition: transform .15s; }
+    .conc-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; position: relative; z-index: 61; }
+    .btn-upload { background: linear-gradient(135deg,#2563eb,#1d4ed8); color: white; padding: 10px 18px; border: none; border-radius: 9px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(37,99,235,.3); transition: transform .15s; text-decoration: none; }
     .btn-upload:hover { transform: translateY(-1px); }
+    .conc-docs-menu { position: relative; display: inline-block; z-index: 62; }
+    .conc-docs-menu[open] { z-index: 1200; }
+    .conc-docs-menu summary { list-style: none; }
+    .conc-docs-menu summary::-webkit-details-marker { display: none; }
+    .conc-docs-menu summary { background: linear-gradient(135deg,#5b21b6,#7c3aed); color: white; padding: 10px 18px; border: none; border-radius: 9px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(124,58,237,.3); }
+    .conc-docs-panel { position: fixed; z-index: 1200; min-width: 300px; background: white; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 16px 40px rgba(15,23,42,.22); padding: 6px; display: none; flex-direction: column; gap: 2px; }
+    .conc-docs-menu[open] > .conc-docs-panel { display: flex; }
+    .conc-docs-panel button { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 10px 12px; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600; color: #1e293b; font-size: 0.9rem; }
+    .conc-docs-panel button:hover { background: #f8fafc; }
+    .conc-docs-panel .doc-hint { display: block; font-size: 0.75rem; color: #64748b; font-weight: 500; margin-top: 2px; }
     .btn-clear { background: white; color: #ef4444; border: 1.5px solid #fca5a5; padding: 10px 18px; border-radius: 9px; font-weight: 600; cursor: pointer; font-size: 0.95rem; }
     .btn-clear:hover { background: #fef2f2; }
     .select-banco { padding: 10px 14px; border: 1.5px solid #cbd5e1; border-radius: 9px; font-size: 0.95rem; color: #334155; background: white; min-width: 160px; }
@@ -139,21 +149,57 @@
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 Añadir Movimientos
             </button>
-            <a href="{{ route('finanzas.conciliaciones.lotes') }}" class="btn-upload" style="background:linear-gradient(135deg,#0f766e,#0d9488);text-decoration:none;">
-                Lotes punto de venta
+            <details class="conc-docs-menu" id="docsAdicionalesMenu">
+                <summary>
+                    Documentos adicionales
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="conc-docs-panel">
+                    <button type="button" onclick="abrirDocAdicional('pagosMovilesModal')">
+                        Pago móvil (Banesco / Venezuela)
+                        <span class="doc-hint">Pagomovil banesco / venezuela · .xls / .xlsx</span>
+                    </button>
+                    <button type="button" onclick="abrirDocAdicional('pagosManualesModal')">
+                        Pagos manuales
+                        <span class="doc-hint">Pagos Manuales.xls · .xls / .xlsx / .csv</span>
+                    </button>
+                    <button type="button" onclick="abrirDocAdicional('casheaModal')">
+                        Cashea
+                        <span class="doc-hint">CASCHEA.xlsx · .xls / .xlsx / .csv</span>
+                    </button>
+                </div>
+            </details>
+            <a href="{{ route('finanzas.conciliaciones.guia_documentos') }}" class="btn-upload" style="background:linear-gradient(135deg,#334155,#475569);box-shadow:0 4px 12px rgba(51,65,85,.25);" target="_blank" rel="noopener">
+                Guía PDF
             </a>
-            <button type="button" class="btn-upload" style="background:linear-gradient(135deg,#7c3aed,#6366f1);" onclick="document.getElementById('divisasModal').style.display='flex'">
-                Transferencias en divisas / Pago móvil C2P
-            </button>
-            <button type="button" class="btn-upload" style="background:linear-gradient(135deg,#b45309,#d97706);" onclick="document.getElementById('pagosManualesModal').style.display='flex'">
-                Pagos manuales (Cloud)
-            </button>
-            <button type="button" class="btn-upload" style="background:linear-gradient(135deg,#be185d,#db2777);" onclick="document.getElementById('casheaModal').style.display='flex'">
-                Pagos Cashea
-            </button>
-            <button type="button" class="btn-upload" style="background:linear-gradient(135deg,#1d4ed8,#2563eb);" onclick="document.getElementById('mercantilLotesModal').style.display='flex'">
-                Lotes Mercantil (Excel)
-            </button>
+            <script>
+                function abrirDocAdicional(id) {
+                    const menu = document.getElementById('docsAdicionalesMenu');
+                    if (menu) menu.open = false;
+                    const modal = document.getElementById(id);
+                    if (modal) modal.style.display = 'flex';
+                }
+                (function () {
+                    const menu = document.getElementById('docsAdicionalesMenu');
+                    if (!menu) return;
+                    const panel = menu.querySelector('.conc-docs-panel');
+                    const summary = menu.querySelector('summary');
+                    function colocarPanel() {
+                        if (!menu.open || !panel || !summary) return;
+                        const r = summary.getBoundingClientRect();
+                        panel.style.top = (r.bottom + 6) + 'px';
+                        panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - panel.offsetWidth - 8)) + 'px';
+                    }
+                    menu.addEventListener('toggle', function () {
+                        if (menu.open) requestAnimationFrame(colocarPanel);
+                    });
+                    window.addEventListener('resize', colocarPanel);
+                    window.addEventListener('scroll', colocarPanel, true);
+                    document.addEventListener('click', function (e) {
+                        if (menu.open && !menu.contains(e.target) && !panel.contains(e.target)) menu.open = false;
+                    });
+                })();
+            </script>
 
             <form action="{{ route('finanzas.conciliaciones') }}" method="GET" style="display:flex;align-items:center;gap:8px;margin:0;flex-wrap:wrap;">
                 <input type="date" name="fecha_desde" class="select-banco" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}" title="Fecha Desde" required style="min-width: 130px;">
@@ -933,27 +979,27 @@
     </div>
 </div>
 
-{{-- TRANSFERENCIAS EN DIVISAS (documento adicional) --}}
-<div id="divisasModal" class="modal-overlay">
+{{-- PAGO MÓVIL CLOUD BANESCO / VENEZUELA (documento adicional) --}}
+<div id="pagosMovilesModal" class="modal-overlay">
     <div class="modal-box">
-        <form action="{{ route('finanzas.conciliaciones.divisas.preview') }}" method="POST" enctype="multipart/form-data"
+        <form action="{{ route('finanzas.conciliaciones.pagos_moviles.preview') }}" method="POST" enctype="multipart/form-data"
               onsubmit="const b = this.querySelector('.btn-submit'); b.disabled = true; b.innerText = 'Leyendo documento…';">
             @csrf
             <div class="modal-head">
-                <h5 class="modal-title">Transferencias en divisas / Pago móvil C2P</h5>
-                <button type="button" class="modal-close" onclick="document.getElementById('divisasModal').style.display='none'">&times;</button>
+                <h5 class="modal-title">Pago móvil Cloud (Banesco / Venezuela)</h5>
+                <button type="button" class="modal-close" onclick="document.getElementById('pagosMovilesModal').style.display='none'">&times;</button>
             </div>
             <div class="modal-body">
                 <p class="file-hint" style="margin-top:0;">
-                    Sube el PDF de transferencias del proveedor de cambio (Wells Fargo, Citizens, Mercantil Panamá, efectivo…)
-                    o el Excel de pagos móviles C2P (Dashboard Cloud Mai: Pago, Fecha, C2P, Ref, Importe…).
-                    Cada envío se busca en los débitos pendientes del banco por referencia y por <strong>USD × tasa interna</strong>;
-                    cada pago móvil, por su <strong>Importe</strong> en el débito PAGO MOVIL (±3 días).
+                    Sube el reporte de Cloud Mai de pago móvil
+                    (<em>REPORTE ESPECIFICO / MENSUAL DE BANESCO</em> o <em>… DE BDV</em>:
+                    columnas <strong>NRO, Fecha, Referencia Pago, Monto</strong>.
+                    Cada cobro se busca en los abonos de pago móvil de la cuenta elegida (mismo monto y referencia, hasta 4 días después).
                     Primero verás el resultado; no se guarda nada hasta que confirmes.
                 </p>
 
                 <label class="form-label">1. Banco del extracto:</label>
-                <select name="banco" id="divisasBanco" required class="form-control" onchange="divisasTitulares(this.value)">
+                <select name="banco" id="pagosMovilesBanco" required class="form-control" onchange="pagosMovilesTitulares(this.value)">
                     <option value="">-- Seleccione el Banco --</option>
                     @foreach($bancos as $b)
                         <option value="{{ $b }}" @selected(($filtrosConciliacion['banco_filtro'] ?? '') === $b)>{{ $b }}</option>
@@ -961,27 +1007,20 @@
                 </select>
 
                 <label class="form-label">2. Titular de la cuenta:</label>
-                <select name="titular" id="divisasTitular" required class="form-control"></select>
+                <select name="titular" id="pagosMovilesTitular" required class="form-control"></select>
 
-                <label class="form-label">3. Débitos del banco entre (opcional):</label>
-                <div style="display:flex; gap:8px;">
-                    <input type="date" name="fecha_desde" class="form-control" value="{{ $filtrosConciliacion['fecha_desde'] ?? '' }}">
-                    <input type="date" name="fecha_hasta" class="form-control" value="{{ $filtrosConciliacion['fecha_hasta'] ?? '' }}">
-                </div>
-                <p class="file-hint">Si lo dejas vacío, se usan las fechas del documento (±3 días).</p>
-
-                <label class="form-label">4. PDF de transferencias o Excel de pagos móviles C2P:</label>
+                <label class="form-label">3. Excel de pago móvil Cloud:</label>
                 <div class="file-wrap">
                     <label class="file-label">
                         Elegir archivo
-                        <input type="file" name="archivo" accept=".pdf,application/pdf,.xlsx,.xls" required style="display:none;"
-                               onchange="document.getElementById('divisasFileName').value = this.files[0] ? this.files[0].name : '';">
+                        <input type="file" name="archivo" accept=".xlsx,.xls,.csv" required style="display:none;"
+                               onchange="document.getElementById('pagosMovilesFileName').value = this.files[0] ? this.files[0].name : '';">
                     </label>
-                    <input type="text" id="divisasFileName" placeholder="Ningún archivo seleccionado" readonly class="file-name">
+                    <input type="text" id="pagosMovilesFileName" placeholder="Ningún archivo seleccionado" readonly class="file-name">
                 </div>
             </div>
             <div class="modal-foot">
-                <button type="button" class="btn-cancel" onclick="document.getElementById('divisasModal').style.display='none'">Cancelar</button>
+                <button type="button" class="btn-cancel" onclick="document.getElementById('pagosMovilesModal').style.display='none'">Cancelar</button>
                 <button type="submit" class="btn-submit">Ver match</button>
             </div>
         </form>
@@ -991,14 +1030,14 @@
 (function () {
     const titulares = @json($titularesPorBanco ?? []);
     const actual = @json($filtrosConciliacion['titular_filtro'] ?? '');
-    window.divisasTitulares = function (banco) {
-        const sel = document.getElementById('divisasTitular');
+    window.pagosMovilesTitulares = function (banco) {
+        const sel = document.getElementById('pagosMovilesTitular');
         const lista = titulares[banco] || [];
         sel.innerHTML = lista.length
             ? lista.map(t => `<option value="${String(t).replace(/"/g, '&quot;')}" ${t === actual ? 'selected' : ''}>${t}</option>`).join('')
             : '<option value="">-- Primero seleccione un Banco --</option>';
     };
-    divisasTitulares(document.getElementById('divisasBanco').value);
+    pagosMovilesTitulares(document.getElementById('pagosMovilesBanco').value);
 })();
 </script>
 

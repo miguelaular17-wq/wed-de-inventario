@@ -47,6 +47,7 @@ class VentasMayorTest extends TestCase
         (require database_path('migrations/2026_11_12_150000_create_ventas_mayor_tables.php'))->up();
         (require database_path('migrations/2026_11_12_200000_create_mayor_catalogo_y_presentaciones.php'))->up();
         (require database_path('migrations/2026_11_16_120000_mayor_descuento_divisa.php'))->up();
+        (require database_path('migrations/2026_11_26_120000_add_oculto_to_mayor_catalogo.php'))->up();
         if (! Schema::hasColumn('productos', 'costo_actual')) {
             Schema::table('productos', fn (Blueprint $t) => $t->decimal('costo_actual', 12, 2)->default(0));
         }
@@ -195,9 +196,12 @@ class VentasMayorTest extends TestCase
             ->assertDontSee('$40.00')->assertDontSee('+37.5% ganancia')->assertDontSee('"costo_suite"', false);
 
         // El catálogo al mayor (para clientes) muestra lo que puso la regente, sin el costo.
+        // Audífono (solo stock en DORAL) puede verse si no marcan «Con stock»; el costo no sale.
         $this->actingAs($this->user)->get(route('ventas_mayor.catalogo'))->assertOk()
             ->assertSee('Parlante Bluetooth')->assertSee('Caja x5')->assertSee('$55.00')->assertSee('por caja')->assertSee('2 cajas')
-            ->assertDontSee('$40.00')->assertDontSee('Audífono');
+            ->assertDontSee('$40.00');
+        $this->actingAs($this->user)->get(route('ventas_mayor.catalogo', ['solo_existencia' => 1]))->assertOk()
+            ->assertSee('Parlante Bluetooth')->assertDontSee('Audífono');
         Http::fake(['*' => Http::response('', 404)]);
         $pdf = $this->actingAs($this->user)->get(route('ventas_mayor.catalogo.pdf'));
         $pdf->assertOk();
@@ -217,6 +221,50 @@ class VentasMayorTest extends TestCase
         $guardar(['presentacion' => 'unidad', 'precio_usd' => '', 'costo_usd' => ''])->assertSessionHasNoErrors();
         $c = app(\App\Services\Mayor\VentasMayorService::class)->catalogo([$this->parlante])[$this->parlante];
         $this->assertSame(['unidad', 1, 12.5, 9.0, false], [$c['presentacion'], $c['unidades'], $c['precio'], $c['costo_unidad'], $c['precio_editado']]);
+    }
+
+    public function test_ocultar_producto_del_catalogo_al_mayor(): void
+    {
+        $regente = User::create(['name' => 'Regente', 'email' => 'regente-ocultar-'.uniqid().'@test.local', 'password' => 'password123', 'role' => User::ROLE_SEDE]);
+        $regente->extraPermissions()->create(['permission' => 'ventas_mayor']);
+        $regente->extraPermissions()->create(['permission' => 'ventas_mayor.catalogo']);
+        $otro = User::create(['name' => 'Sede', 'email' => 'sede-ocultar-'.uniqid().'@test.local', 'password' => 'password123', 'role' => User::ROLE_SEDE]);
+        $otro->extraPermissions()->create(['permission' => 'ventas_mayor']);
+
+        // El cargo Ventas al mayor puede ocultar (no solo la regente/gerente).
+        $this->actingAs($this->user)->get(route('ventas_mayor.catalogo'))->assertOk()
+            ->assertSee('Parlante Bluetooth')
+            ->assertSee('>Ocultar</button>', false)
+            ->assertSee('Solo ocultos');
+
+        // Otro usuario con acceso a ventas al mayor, pero sin cargo mayor ni permiso de catálogo, no puede.
+        $this->actingAs($otro)->post(route('ventas_mayor.catalogo.ocultar', $this->parlante))->assertForbidden();
+        $this->assertSame(0, \App\Models\Mayor\MayorCatalogo::query()->where('oculto', true)->count());
+
+        $this->actingAs($this->user)->post(route('ventas_mayor.catalogo.ocultar', $this->parlante))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+        $this->assertTrue((bool) \App\Models\Mayor\MayorCatalogo::query()->where('producto_id', $this->parlante)->value('oculto'));
+
+        $this->actingAs($this->user)->get(route('ventas_mayor.catalogo'))->assertOk()
+            ->assertDontSee('Parlante Bluetooth');
+        $this->actingAs($regente)->get(route('ventas_mayor.catalogo', ['ver_ocultos' => 1]))->assertOk()
+            ->assertSee('Parlante Bluetooth')
+            ->assertSee('>Restaurar</button>', false);
+
+        // El PDF no incluye ocultos aunque pidan ver_ocultos.
+        Http::fake(['*' => Http::response('', 404)]);
+        $this->actingAs($this->user)->get(route('ventas_mayor.catalogo.pdf', ['ver_ocultos' => 1]))->assertOk();
+
+        // Sigue disponible en stock / facturación.
+        $this->actingAs($this->user)->get(route('ventas_mayor.stock', ['q' => 'parlante']))->assertOk()
+            ->assertSee('Parlante Bluetooth')
+            ->assertSee('Oculto del catálogo');
+        $this->factura([['producto_id' => $this->parlante, 'cantidad' => 1, 'precio_usd' => 12.5]])->assertSessionHasNoErrors();
+
+        $this->actingAs($regente)->post(route('ventas_mayor.catalogo.ocultar', $this->parlante))->assertRedirect();
+        $this->assertFalse((bool) \App\Models\Mayor\MayorCatalogo::query()->where('producto_id', $this->parlante)->value('oculto'));
+        $this->actingAs($this->user)->get(route('ventas_mayor.catalogo'))->assertOk()->assertSee('Parlante Bluetooth');
     }
 
     public function test_factura_solo_del_stock_de_jrz_y_lo_aparta_hasta_cargarla_en_profit(): void

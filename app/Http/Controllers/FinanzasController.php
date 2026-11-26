@@ -2420,6 +2420,16 @@ class FinanzasController extends Controller
             ->download('Calendario_conciliaciones_'.$cal['mes'].'.pdf');
     }
 
+    /** PDF con tipo de reporte, extensión, estructura e impacto de cada carga en Conciliación. */
+    public function guiaDocumentosConciliacionPdf(Request $request)
+    {
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('finanzas.pdf.guia_documentos_conciliacion', [
+            'generadoPor' => $request->user()?->name,
+        ])
+            ->setPaper('a4', 'portrait')
+            ->download('Guia_documentos_conciliacion_egresos.pdf');
+    }
+
     /**
      * @return array{0: \Illuminate\Support\Collection, 1: \Illuminate\Support\Collection, 2: array<string, list<string>>}
      */

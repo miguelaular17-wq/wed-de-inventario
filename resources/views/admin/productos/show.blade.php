@@ -85,7 +85,7 @@
                     <div class="muted" style="font-size:.75rem;margin-top:4px;">Sync: {{ number_format((float) ($sync['precio_mayor'] ?? 0), 2) }}</div>
                 </div>
                 <div class="field">
-                    <label>Lote inicial (mín. compra al mayor)</label>
+                    <label>Unidad de manejo (mín. compra al mayor)</label>
                     <input type="number" step="1" min="1" name="lote_inicial" value="{{ old('lote_inicial', $efectivo['lote_inicial']) }}" placeholder="Ej. 12">
                     <div class="muted" style="font-size:.75rem;margin-top:4px;">Cantidad mínima al comprar en catálogo / factura al mayor. Vacío = sin mínimo.</div>
                 </div>
@@ -135,7 +135,7 @@
                         <td>${{ number_format((float) ($efectivo['precio_mayor'] ?? 0), 2) }} {!! $badge('precio_mayor') !!}</td>
                     </tr>
                     <tr>
-                        <th>Lote inicial</th>
+                        <th>Unidad de manejo</th>
                         <td>{{ $efectivo['lote_inicial'] ? ((int) $efectivo['lote_inicial']).' und. (mín. compra)' : '—' }} {!! $badge('lote_inicial') !!}</td>
                     </tr>
                     <tr>
