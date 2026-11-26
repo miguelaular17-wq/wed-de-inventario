@@ -126,6 +126,7 @@ class EtiquetasController extends Controller
             'iconosTh' => $esTecnoHouse ? $this->iconosTecnoHouse() : [],
             'logoMovistar' => $esMovistar ? $this->logoMovistar() : null,
             'logoCashea' => $esMovistar ? $this->logoCashea() : null,
+            'headerLocura' => $tipo === 'locura' ? $this->headerLocura() : null,
         ])->setPaper('letter', 'portrait');
 
         return $pdf->stream('etiquetas_' . now()->format('Ymd_His') . '.pdf');
@@ -313,6 +314,17 @@ class EtiquetasController extends Controller
         return $this->imagenDataUri($path);
     }
 
+    /** Header gráfico «PRECIOS DE LOCURA» + logo PD (fondo negro ya limpio). */
+    private function headerLocura(): ?array
+    {
+        $path = storage_path('app/etiquetas/locura/header_limpia.png');
+        if (! is_file($path)) {
+            $path = public_path('img/etiquetas/locura_header.png');
+        }
+
+        return $this->imagenConRatio($path);
+    }
+
     /**
      * @return array{src: string, ratio: float}|null
      */
@@ -409,7 +421,8 @@ class EtiquetasController extends Controller
 
     /**
      * Dompdf no dibuja linear-gradient ni escala fondos (background-size): se genera una vez
-     * un PNG rosa → morado → azul al tamaño exacto de la etiqueta (96 dpi; 150 con adornos de temporada).
+     * el PNG de diseño (palmeras / rosa→morado→cian) al tamaño exacto de la etiqueta.
+     * Temporada (Halloween/Navidad): se mantiene el degradado temático + adornos.
      */
     private function fondoDegradado(float $anchoMm, float $altoMm, string $tema = 'ninguno'): ?string
     {
@@ -417,7 +430,7 @@ class EtiquetasController extends Controller
         $w = (int) ceil($anchoMm / 25.4 * $dpi);
         $h = (int) ceil($altoMm / 25.4 * $dpi);
         $sufijo = $tema === 'ninguno' ? '' : "_{$tema}";
-        $path = storage_path("app/etiquetas/fondo_v1_{$w}x{$h}{$sufijo}.png");
+        $path = storage_path("app/etiquetas/fondo_v2_{$w}x{$h}{$sufijo}.png");
         if (is_file($path)) {
             return $this->imagenDataUri($path);
         }
@@ -426,21 +439,27 @@ class EtiquetasController extends Controller
         }
 
         $img = imagecreatetruecolor($w, $h);
-        $paradas = $this->temporada->paradas($tema);
-        $diag = $w + $h;
-        for ($x = 0; $x < $w; $x++) {
-            for ($y = 0; $y < $h; $y++) {
-                $t = ($x + ($h - $y)) / $diag;
-                [$t0, $c0] = $t <= 0.5 ? $paradas[0] : $paradas[1];
-                [$t1, $c1] = $t <= 0.5 ? $paradas[1] : $paradas[2];
-                $k = ($t - $t0) / ($t1 - $t0);
-                $color = imagecolorallocate(
-                    $img,
-                    (int) round($c0[0] + ($c1[0] - $c0[0]) * $k),
-                    (int) round($c0[1] + ($c1[1] - $c0[1]) * $k),
-                    (int) round($c0[2] + ($c1[2] - $c0[2]) * $k),
-                );
-                imagesetpixel($img, $x, $y, $color);
+        $base = storage_path('app/etiquetas/fondo_base_v1.png');
+        if ($tema === 'ninguno' && is_file($base) && ($src = @imagecreatefrompng($base))) {
+            imagecopyresampled($img, $src, 0, 0, 0, 0, $w, $h, imagesx($src), imagesy($src));
+            imagedestroy($src);
+        } else {
+            $paradas = $this->temporada->paradas($tema);
+            $diag = $w + $h;
+            for ($x = 0; $x < $w; $x++) {
+                for ($y = 0; $y < $h; $y++) {
+                    $t = ($x + ($h - $y)) / $diag;
+                    [$t0, $c0] = $t <= 0.5 ? $paradas[0] : $paradas[1];
+                    [$t1, $c1] = $t <= 0.5 ? $paradas[1] : $paradas[2];
+                    $k = ($t - $t0) / ($t1 - $t0);
+                    $color = imagecolorallocate(
+                        $img,
+                        (int) round($c0[0] + ($c1[0] - $c0[0]) * $k),
+                        (int) round($c0[1] + ($c1[1] - $c0[1]) * $k),
+                        (int) round($c0[2] + ($c1[2] - $c0[2]) * $k),
+                    );
+                    imagesetpixel($img, $x, $y, $color);
+                }
             }
         }
         $this->temporada->decorar($img, $w, $h, $tema);

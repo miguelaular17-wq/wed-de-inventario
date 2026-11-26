@@ -15,7 +15,7 @@ class EtiquetasPrecioService
     /** Medida por defecto de cada tipo (mm). Cada equipo puede ajustarla en "Configuración de medidas". */
     public const TAMANOS = [
         'clasica' => ['ancho' => 70, 'alto' => 50],
-        'locura' => ['ancho' => 70, 'alto' => 50],
+        'locura' => ['ancho' => 100, 'alto' => 70],
         'pc' => ['ancho' => 90, 'alto' => 83],
         'th_clasica' => ['ancho' => 70, 'alto' => 50],
         'th_pc' => ['ancho' => 90, 'alto' => 83],

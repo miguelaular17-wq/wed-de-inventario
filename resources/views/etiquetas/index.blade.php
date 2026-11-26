@@ -199,35 +199,24 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 .etq-specs label { display: flex; flex-direction: column; gap: 2px; font-size: .68rem; font-weight: 700; color: #7c3aed; text-transform: uppercase; }
 .etq-specs input { padding: 5px 7px; border-radius: 6px; border: 1px solid #ddd6fe; font-size: .8rem; font-weight: 500; color: #0f172a; text-transform: none; }
 
-/* Vista previa: Precios de locura */
-.etq-lz { width: 280px; height: 200px; border-radius: 14px; padding: 9px; box-sizing: border-box; display: flex; gap: 7px;
-    background: linear-gradient(135deg, #ec4899 0%, #9333ea 50%, #3b82f6 100%); font-family: inherit; }
-.etq-lz-izq { width: 108px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; color: #fff; }
-.etq-lz-izq img { width: 48px; height: 48px; }
-.etq-lz-de { font-weight: 800; font-size: 12px; letter-spacing: .03em; white-space: nowrap; }
-.etq-lz-loc { width: 100%; text-align: center; background: #3b0764; color: #facc15; font-weight: 900; font-size: 21px; border-radius: 7px; border-bottom: 3px solid #facc15; line-height: 1.3; }
-.etq-lz-cinta { width: 92%; text-align: center; background: #facc15; color: #9d174d; font-weight: 800; font-size: 7px; border-radius: 4px; padding: 2px 4px; line-height: 1.3; }
-.etq-lz.con-marca .etq-lz-izq { gap: 3px; }
-.etq-lz.con-marca .etq-lz-izq > img { width: 34px; height: 34px; }
-.etq-lz.con-marca .etq-lz-de { font-size: 11px; }
-.etq-lz.con-marca .etq-lz-loc { font-size: 18px; }
-.etq-lz-marca { width: 94%; height: 30px; background: #fff; border-radius: 7px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
-.etq-lz-marca img { max-height: 24px; max-width: 88%; object-fit: contain; }
-.etq-lz-marca b { color: #1e1b4b; font-size: 14px; font-weight: 900; letter-spacing: .08em; }
-.etq-lz-cod { margin-top: auto; font-size: 7.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.etq-lz-der { flex: 1; background: #fff; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; color: #0f172a; min-width: 0; }
+/* Vista previa: Precios de locura (header gráfico + blanco) */
+.etq-lz { width: 320px; height: 224px; border-radius: 14px; padding: 8px 10px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px;
+    background: #c026d3 url('{{ asset('img/etiquetas/fondo_base.png') }}') center / cover no-repeat; font-family: inherit; overflow: hidden; }
+.etq-lz-header { width: calc(100% - 4px); max-width: 100%; height: auto; max-height: 54%; object-fit: contain; object-position: center top; flex: none; display: block; align-self: center; margin: 0 auto; }
+.etq-lz-der { flex: 1; background: #fff; border-radius: 10px; padding: 6px 10px 5px; display: flex; flex-direction: column; color: #0f172a; min-height: 0; }
 .etq-lz-pill { align-self: flex-start; background: #7c3aed; color: #fff; font-weight: 800; font-size: 9px; letter-spacing: .1em; padding: 2px 12px; border-radius: 999px; }
 .etq-lz-precio { display: flex; align-items: flex-start; justify-content: center; gap: 4px; margin-top: 2px; }
 .etq-lz-precio small { font-size: 9px; font-weight: 800; color: #64748b; margin-top: 6px; }
-.etq-lz-precio strong { font-size: 30px; font-weight: 900; line-height: 1.1; }
-.etq-lz-mayor { text-align: center; font-size: 9px; font-weight: 800; color: #7c3aed; }
-.etq-lz-nombre { border-top: 1px dashed #c4b5fd; margin-top: 4px; padding-top: 5px; font-weight: 800; font-size: 11px; text-transform: uppercase; line-height: 1.2;
-    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.etq-lz-web { margin-top: auto; text-align: center; font-size: 7px; font-weight: 700; color: #7c3aed; }
+.etq-lz-precio strong { font-size: 34px; font-weight: 900; line-height: 1.05; }
+.etq-lz-mayor { text-align: center; font-size: 9px; font-weight: 800; color: #7c3aed; margin-top: 2px; }
+.etq-lz-nombre { border-bottom: 1px dashed #c4b5fd; margin-top: 2px; padding-bottom: 5px; font-weight: 800; font-size: 12px; text-transform: uppercase; line-height: 1.2;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.etq-lz-cod { margin-top: auto; text-align: center; font-size: 7px; font-weight: 700; color: #94a3b8; }
+.etq-lz-web { text-align: center; font-size: 7px; font-weight: 700; color: #7c3aed; }
 
 /* Vista previa: PC */
 .etq-pc { width: 270px; height: 315px; border-radius: 14px; padding: 9px; box-sizing: border-box; display: flex; flex-direction: column; gap: 7px;
-    background: linear-gradient(135deg, #ec4899 0%, #9333ea 50%, #3b82f6 100%); font-family: inherit; }
+    background: #c026d3 url('{{ asset('img/etiquetas/fondo_base.png') }}') center / cover no-repeat; font-family: inherit; }
 .etq-pc-izq { display: flex; flex-direction: column; gap: 0; color: #fff; }
 .etq-pc-caja { position: relative; background: #4c1d95; border-radius: 10px; padding: 8px 14px 14px; }
 .etq-pc-caja img { position: absolute; right: 10px; top: 7px; width: 50px; height: 50px; }
@@ -250,7 +239,7 @@ main:has(.etq-page) { max-width: none; width: 100%; padding: 20px 28px 40px; }
 /* Vista previa (misma ficha que el PDF) */
 .etq-preview-wrap { display: flex; justify-content: center; padding: 16px; background: #f1f5f9; border-radius: 12px; }
 .etq-card { width: 280px; height: 200px; border-radius: 14px; padding: 10px 12px; box-sizing: border-box; color: #fff;
-    background: linear-gradient(135deg, #ec4899 0%, #9333ea 50%, #3b82f6 100%); display: flex; flex-direction: column; gap: 7px; font-family: inherit; }
+    background: #c026d3 url('{{ asset('img/etiquetas/fondo_base.png') }}') center / cover no-repeat; display: flex; flex-direction: column; gap: 7px; font-family: inherit; }
 .etq-card-top { display: flex; gap: 10px; align-items: stretch; height: 64px; }
 .etq-card-logo { width: 64px; height: 64px; border-radius: 50%; background: #fff; padding: 2px; box-sizing: border-box; flex-shrink: 0; }
 .etq-card-name { flex: 1; background: #fff; color: #0f172a; border-radius: 10px; padding: 6px 10px; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
@@ -731,28 +720,17 @@ sup.etq-dec { font-size: .5em; vertical-align: top; position: relative; top: .12
         ).join('');
     }
 
+    const HEADER_LOCURA = @json(asset('img/etiquetas/locura_header.png'));
     function previewLocura(p) {
-        const cant = cantDe(p);
-        const marca = ((p.specs || {}).marca || '').trim();
-        const lk = logoKey(p);
-        const caja = lk
-            ? `<div class="etq-lz-marca"><img src="${LOGOS[lk]}" alt="${esc(marca)}"></div>`
-            : (marca ? `<div class="etq-lz-marca"><b>${esc(marca.toUpperCase())}</b></div>` : '');
         return `
-            <div class="etq-lz ${caja ? 'con-marca' : ''}" style="${tamanoPreview('locura')}">
-                <div class="etq-lz-izq">
-                    <img src="${LOGO}" alt="" data-logo>
-                    <div class="etq-lz-de">PRECIOS DE</div>
-                    <div class="etq-lz-loc">LOCURA</div>
-                    <div class="etq-lz-cinta">PRECIOS BAJOS TODO EL AÑO</div>
-                    ${caja}
-                    <div class="etq-lz-cod">Cód. ${esc(skuPrincipal(p.codigo))}</div>
-                </div>
+            <div class="etq-lz" style="${tamanoPreview('locura')}">
+                <img class="etq-lz-header" src="${HEADER_LOCURA}" alt="Precios de locura">
                 <div class="etq-lz-der">
+                    <div class="etq-lz-nombre">${esc(p.nombre)}</div>
                     <span class="etq-lz-pill">PRECIO</span>
                     <div class="etq-lz-precio"><small>REF</small><strong>${sup(fmt(pu(p)))}</strong></div>
                     ${tieneMayor(p) ? `<div class="etq-lz-mayor">${textoMayor(p)}: REF ${fmt(pm(p))}${esPaquete(p) ? '' : ' C/U'}</div>` : ''}
-                    <div class="etq-lz-nombre">${esc(p.nombre)}</div>
+                    <div class="etq-lz-cod">Cód. ${esc(skuPrincipal(p.codigo))}</div>
                     <div class="etq-lz-web">${esc(WEB)} · ${FECHA}</div>
                 </div>
             </div>`;

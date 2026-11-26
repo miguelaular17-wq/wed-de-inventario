@@ -63,11 +63,25 @@
     $headH2 = $m(11.6);
     $cabFs = $fs([13, 12, 11, 10, 9]);
 
-    // Precios de locura
-    $lzW = $m(27);
-    $lzPanelL = $pad + $lzW + $m(1.8);
-    $lzPanelW = $W - $lzPanelL - $pad;
-    $lzPanelH = $H - 2 * $pad;
+    // Precios de locura: recurso de arriba más grande (contain) + blanco debajo.
+    $headerLocura = $headerLocura ?? null;
+    $lzHeadRatio = max(0.5, (float) ($headerLocura['ratio'] ?? 2.69));
+    $lzHeadPadX = $m(1.2);
+    $lzHeadPadT = $m(1.0);
+    $lzHeadMaxW = max($m(20), $inW - 2 * $lzHeadPadX);
+    $lzHeadMaxH = $H * 0.54; // ~mitad superior: el gráfico se ve más grande
+    $lzHeadW = $lzHeadMaxW;
+    $lzHeadH = $lzHeadW / $lzHeadRatio;
+    if ($lzHeadH > $lzHeadMaxH) {
+        $lzHeadH = $lzHeadMaxH;
+        $lzHeadW = $lzHeadH * $lzHeadRatio;
+    }
+    $lzHeadL = $pad + ($inW - $lzHeadW) / 2;
+    $lzHeadT = $lzHeadPadT;
+    $lzPanelT = $lzHeadT + $lzHeadH + $m(0.6);
+    $lzPanelL = $pad;
+    $lzPanelW = $inW;
+    $lzPanelH = max($m(14), $H - $lzPanelT - $pad);
 
     // PC / Laptop
     $pcCajaH = $m(20);
@@ -206,13 +220,9 @@
     .ahorro { left: 0; width: 100%; text-align: center; font-size: {{ round(5.3 * $k, 1) }}pt; font-weight: bold; color: #be185d; }
     .pie { top: {{ $H - $pad - $footH + $m(0.4) }}mm; color: #fff; font-weight: bold; white-space: nowrap; }
 
-    .lz-de { left: {{ $pad }}mm; width: {{ $lzW }}mm; color: #fff; letter-spacing: 0.3pt; }
-    .lz-locura { left: {{ $pad }}mm; width: {{ $lzW }}mm; background: #3b0764; border-radius: {{ $m(1.8) }}mm; border-bottom: {{ $m(0.8) }}mm solid #facc15; }
-    .lz-cinta { left: {{ $pad + $m(1) }}mm; width: {{ $lzW - $m(2) }}mm; background: #facc15; border-radius: {{ $m(1) }}mm; }
-    .lz-cinta div { left: 0; width: 100%; color: #9d174d; }
-    .lz-panel { left: {{ $lzPanelL }}mm; top: {{ $pad }}mm; width: {{ $lzPanelW }}mm; height: {{ $lzPanelH }}mm; }
-    .lz-pill { left: {{ $m(2.2) }}mm; top: {{ $m(2.2) }}mm; width: {{ $m(15) }}mm; height: {{ $m(4) }}mm; background: #7c3aed; border-radius: {{ $m(2) }}mm; }
-    .lz-pill div { left: 0; width: 100%; top: {{ $m(0.9) }}mm; font-size: {{ round(6.3 * $k, 1) }}pt; color: #fff; letter-spacing: 0.7pt; }
+    .lz-panel { left: {{ $lzPanelL }}mm; top: {{ $lzPanelT }}mm; width: {{ $lzPanelW }}mm; height: {{ $lzPanelH }}mm; }
+    .lz-pill { left: {{ $m(2.2) }}mm; top: {{ $m(1.4) }}mm; width: {{ $m(20) }}mm; height: {{ $m(4.4) }}mm; background: #7c3aed; border-radius: {{ $m(2) }}mm; }
+    .lz-pill div { left: 0; width: 100%; top: {{ $m(1.05) }}mm; font-size: {{ round(6.2 * $k, 1) }}pt; color: #fff; letter-spacing: 0.3pt; }
 
     .pc-caja { left: {{ $pad }}mm; top: {{ $pad }}mm; width: {{ $inW }}mm; height: {{ $pcCajaH }}mm; background: #4c1d95; border-radius: {{ $radio }}mm; }
     .pc-pill { top: {{ $pcPillTop }}mm; height: {{ $pcPillH }}mm; background: #db2777; border-radius: {{ $m(3.5) }}mm; border: {{ $m(0.7) }}mm solid #fff; }
@@ -243,9 +253,6 @@
         .caja.mayor .h span { color: #581c87; }
         .caja.mayor .marco { border-color: #f97316; }
         .ahorro { color: #c2410c; }
-        .lz-locura { background: #1c1917; border-bottom-color: #f97316; }
-        .lz-cinta { background: #fb923c; }
-        .lz-cinta div { color: #1c1917; }
         .lz-pill { background: #ea580c; }
         .pc-caja { background: #1c1917; }
         .pc-pill, .pc-ico { background: #ea580c; }
@@ -258,8 +265,6 @@
         .caja.mayor .h { background: #dc2626; color: #fff; }
         .caja.mayor .h span { color: #fde047; }
         .ahorro { color: #b91c1c; }
-        .lz-locura { background: #14532d; }
-        .lz-cinta div { color: #b91c1c; }
         .lz-pill { background: #b91c1c; }
         .pc-caja { background: #14532d; }
         .pc-pill, .pc-ico { background: #b91c1c; }
@@ -486,59 +491,38 @@
                 {!! $thLema($my(47.3), $W - $m(10), $fs([7.5, 7, 6.5, 6, 5.5, 5])) !!}
             @elseif($tipo === 'locura')
                 @php
-                    $lzLogoM = $logosMarca[$e['logo_marca'] ?? ''] ?? null;
-                    $lzMarca = trim((string) ($e['specs']['marca'] ?? ''));
-                    $conMarca = $lzLogoM !== null || $lzMarca !== '';
-                    $L = $conMarca
-                        ? ['logo' => 9.5, 'de' => 10.2, 'deFs' => [9, 8.5, 8], 'loc' => 14.4, 'locH' => 8.6, 'locFs' => [16, 15, 14, 13], 'cinta' => 24, 'cintaH' => 6, 'cintaFs' => 4.6]
-                        : ['logo' => 13, 'de' => 14.2, 'deFs' => [10, 9.5, 9, 8.5, 8], 'loc' => 19.4, 'locH' => 10, 'locFs' => [18, 17, 16, 15, 14], 'cinta' => 31, 'cintaH' => 6.6, 'cintaFs' => 5];
-                    $de = $fit('lzde' . ($conMarca ? 1 : 0), 'PRECIOS DE', $lzW - $m(1), $fs($L['deFs']));
-                    $loc = $fit('lzloc' . ($conMarca ? 1 : 0), 'LOCURA', $lzW - $m(2), $fs($L['locFs']));
-                    $cod = $fit('lzcod' . $e['id'], 'Cód. ' . $e['codigo'], $lzW, $fs([5, 4.6, 4.2, 3.8]));
-                    if ($lzLogoM) {
-                        $mH = $m(6.2);
-                        $mW = min($lzW - $m(6), $mH * $lzLogoM['ratio']);
-                        $mH = $mW / $lzLogoM['ratio'];
-                    }
-                    $precio = ['fs' => $fitSup([$e['unidad_fmt']], $lzPanelW - $m(5), $fs([26, 24, 22, 20, 18, 16, 14]))];
-                    $mayor = $e['con_mayor'] ? $fit('lzmay', $e['texto_mayor'] . ': REF ' . $e['mayor_fmt'] . ($e['es_paquete'] ? '' : ' C/U'), $lzPanelW - $m(3), $fs([6.5, 6, 5.5, 5, 4.5])) : null;
-                    $nomTop = $m(25);
-                    $nomH = $lzPanelH - $nomTop - $m(4.6);
-                    $nom = $ajustar('lz' . $e['id'], $e['nombre'], $lzPanelW - $m(5), $nomH, $fs([9, 8.5, 8, 7.5, 7, 6.5, 6, 5.5]));
-                    $webFit = $fit('lzweb', $web, $lzPanelW - $m(3), $fs([5, 4.6, 4.2, 4]));
+                    // Blanco: nombre arriba, precio debajo (un poco más grande).
+                    $pNomT = $m(1.4);
+                    $pNomH = max($m(8), $lzPanelH * 0.28);
+                    $dashT = $pNomT + $pNomH;
+                    $pillTop = $dashT + $m(1.0);
+                    $pillH = $m(4.4);
+                    $refTop = $pillTop + $pillH + $m(0.2);
+                    $precioTop = $pillTop + $m(1.6);
+                    $pWebT = $lzPanelH - $m(2.6);
+                    $precioFs = $fitSup([$e['unidad_fmt']], $lzPanelW - $m(8), $fs([28, 26, 24, 22, 20, 18, 16]));
+                    $mayor = $e['con_mayor']
+                        ? $fit('lzmay', $e['texto_mayor'] . ': REF ' . $e['mayor_fmt'] . ($e['es_paquete'] ? '' : ' C/U'), $lzPanelW - $m(4), $fs([6, 5.5, 5, 4.5, 4]))
+                        : null;
+                    $nom = $ajustar('lz' . $e['id'], $e['nombre'], $lzPanelW - $m(5), $pNomH - $m(0.6), $fs([11, 10, 9, 8.5, 8, 7.5, 7, 6.5]), 2);
+                    $webFit = $fit('lzweb', $web . ' · ' . $fecha, $lzPanelW - $m(3), $fs([5, 4.6, 4.2, 4]));
+                    $codFit = $fit('lzcod' . $e['id'], 'Cód. ' . $e['codigo'], $lzPanelW - $m(4), $fs([5, 4.6, 4.2, 3.8]));
+                    $mayorTop = $precioTop + $ptMm($precioFs) + $m(0.4);
                 @endphp
-                @if($logo)<img class="abs" src="{{ $logo }}" alt="" style="left: {{ $pad + ($lzW - $m($L['logo'])) / 2 }}mm; top: {{ $pad }}mm; width: {{ $m($L['logo']) }}mm; height: {{ $m($L['logo']) }}mm;">{!! $ponGorro($pad + ($lzW - $m($L['logo'])) / 2, $pad, $m($L['logo'])) !!}@endif
-                <div class="abs lz-de b centro nw" style="top: {{ $pad + $m($L['de']) }}mm; font-size: {{ $de['fs'] }}pt;">PRECIOS DE</div>
-                <div class="abs lz-locura" style="top: {{ $pad + $m($L['loc']) }}mm; height: {{ $m($L['locH']) }}mm;">
-                    <div class="abs b centro nw" style="left: 0; width: 100%; top: {{ ($m($L['locH']) - $ptMm($loc['fs'])) / 2 - $m(0.4) }}mm; font-size: {{ $loc['fs'] }}pt; color: #facc15;">LOCURA</div>
-                </div>
-                <div class="abs lz-cinta" style="top: {{ $pad + $m($L['cinta']) }}mm; height: {{ $m($L['cintaH']) }}mm;">
-                    <div class="abs b centro nw" style="top: {{ $m(0.6) }}mm; font-size: {{ round($L['cintaFs'] * $k, 1) }}pt;">PRECIOS BAJOS</div>
-                    <div class="abs b centro nw" style="top: {{ $m($L['cintaH']) / 2 }}mm; font-size: {{ round($L['cintaFs'] * $k, 1) }}pt;">TODO EL AÑO</div>
-                </div>
-                @if($conMarca)
-                    <div class="abs blanco" style="left: {{ $pad + $m(1) }}mm; top: {{ $pad + $m(31) }}mm; width: {{ $lzW - $m(2) }}mm; height: {{ $m(8.8) }}mm;">
-                        @if($lzLogoM)
-                            <img class="abs" src="{{ $lzLogoM['src'] }}" alt="" style="left: {{ ($lzW - $m(2) - $mW) / 2 }}mm; top: {{ ($m(8.8) - $mH) / 2 }}mm; width: {{ $mW }}mm; height: {{ $mH }}mm;">
-                        @else
-                            @php $mf = $fit('lzmt', mb_strtoupper($lzMarca), $lzW - $m(4), $fs([11, 10, 9, 8, 7, 6])); @endphp
-                            <div class="abs b centro nw" style="left: 0; width: 100%; top: {{ ($m(8.8) - $ptMm($mf['fs'])) / 2 - $m(0.3) }}mm; font-size: {{ $mf['fs'] }}pt; color: #1e1b4b; letter-spacing: 0.6pt;">{{ $mf['lineas'][0] ?? '' }}</div>
-                        @endif
-                    </div>
+                @if($headerLocura)
+                    <img class="abs" src="{{ $headerLocura['src'] }}" alt="" style="left: {{ $lzHeadL }}mm; top: {{ $lzHeadT }}mm; width: {{ $lzHeadW }}mm; height: {{ $lzHeadH }}mm;">
                 @endif
-                <div class="abs b centro nw" style="left: {{ $pad }}mm; width: {{ $lzW }}mm; top: {{ $H - $pad - $m(2.4) }}mm; font-size: {{ $cod['fs'] }}pt; color: #fff;">{{ $cod['lineas'][0] ?? '' }}</div>
-
                 <div class="abs lz-panel blanco">
-                    <div class="abs lz-pill"><div class="abs b centro nw">PRECIO</div></div>
-                    <div class="abs b der nw" style="left: 0; width: {{ $lzPanelW - $m(2.4) }}mm; top: {{ $m(3.2) }}mm; font-size: {{ round(4.8 * $k, 1) }}pt; color: #94a3b8;">{{ $fecha }}</div>
-                    <div class="abs b" style="left: {{ $m(2.6) }}mm; top: {{ $m(7.6) }}mm; font-size: {{ round(5.5 * $k, 1) }}pt; color: #64748b;">REF</div>
-                    {!! $precioSup($e['unidad_fmt'], $precio['fs'], $m(8.6) + ($m(10.6) - $ptMm($precio['fs'])) / 2, $lzPanelW) !!}
+                    {!! $lineas($nom, $m(2.5), $pNomT) !!}
+                    <div class="abs" style="left: {{ $m(2.4) }}mm; width: {{ $lzPanelW - $m(4.8) }}mm; top: {{ $dashT }}mm; border-top: 0.3mm dashed #c4b5fd;"></div>
+                    <div class="abs lz-pill" style="top: {{ $pillTop }}mm;"><div class="abs b centro nw">PRECIO</div></div>
+                    <div class="abs b" style="left: {{ $m(2.4) }}mm; top: {{ $refTop }}mm; font-size: {{ round(5.2 * $k, 1) }}pt; color: #64748b;">REF</div>
+                    {!! $precioSup($e['unidad_fmt'], $precioFs, $precioTop, $lzPanelW) !!}
                     @if($mayor)
-                        <div class="abs b centro nw" style="left: 0; width: 100%; top: {{ $m(19.8) }}mm; font-size: {{ $mayor['fs'] }}pt; color: #7c3aed;">{{ $mayor['lineas'][0] ?? '' }}</div>
+                        <div class="abs b centro nw" style="left: 0; width: 100%; top: {{ $mayorTop }}mm; font-size: {{ $mayor['fs'] }}pt; color: #7c3aed;">{{ $mayor['lineas'][0] ?? '' }}</div>
                     @endif
-                    <div class="abs" style="left: {{ $m(2.4) }}mm; width: {{ $lzPanelW - $m(4.8) }}mm; top: {{ $m(23.4) }}mm; border-top: 0.3mm dashed #c4b5fd;"></div>
-                    {!! $lineas($nom, $m(2.5), $nomTop + max(0, ($nomH - $altoLineas($nom)) / 2)) !!}
-                    <div class="abs b centro nw" style="left: 0; width: 100%; top: {{ $lzPanelH - $m(3.2) }}mm; font-size: {{ $webFit['fs'] }}pt; color: #7c3aed;">{{ $web }}</div>
+                    <div class="abs b centro nw" style="left: 0; width: 100%; top: {{ $pWebT - $m(2.2) }}mm; font-size: {{ $codFit['fs'] }}pt; color: #94a3b8;">{{ $codFit['lineas'][0] ?? '' }}</div>
+                    <div class="abs b centro nw" style="left: 0; width: 100%; top: {{ $pWebT }}mm; font-size: {{ $webFit['fs'] }}pt; color: #7c3aed;">{{ $webFit['lineas'][0] ?? ($web . ' · ' . $fecha) }}</div>
                 </div>
             @elseif($tipo === 'pc')
                 @php

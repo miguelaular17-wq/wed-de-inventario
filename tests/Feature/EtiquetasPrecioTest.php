@@ -228,6 +228,18 @@ class EtiquetasPrecioTest extends TestCase
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
 
+        // Medida grande tipo 12×8 cm (120×80 mm): no debe romper el layout.
+        $this->actingAs($user)
+            ->post(route('etiquetas.pdf'), [
+                'items' => [['id' => 1, 'copias' => 1]],
+                'tipo' => 'locura',
+                'ancho_mm' => 120,
+                'alto_mm' => 80,
+                'cantidad_mayor' => 3,
+            ])
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
         $this->actingAs($user)
             ->post(route('etiquetas.pdf'), [
                 'items' => [['id' => 2, 'copias' => 1, 'specs' => ['marca' => 'DELL', 'modelo' => 'DELL 15', 'procesador' => 'INTEL I5', 'pantalla' => '', 'ram' => '8GB', 'almacenamiento' => '512GB SSD', 'sistema' => 'Windows 11']]],
@@ -413,6 +425,8 @@ class EtiquetasPrecioTest extends TestCase
         $this->post(route('etiquetas.pdf'), ['items' => [['id' => 1, 'copias' => 1]], 'tipo' => 'clasica'])
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
+        $this->assertFileExists(storage_path('app/etiquetas/fondo_base_v1.png'));
+        $this->assertNotEmpty(glob(storage_path('app/etiquetas/fondo_v2_*.png')));
 
         $this->actingAs($this->makeUser(User::ROLE_SUPERVISOR))
             ->get(route('etiquetas.index'))
