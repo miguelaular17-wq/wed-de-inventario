@@ -702,8 +702,10 @@ class CuadreCajaTest extends TestCase
         $clavesSede = collect($mSede['filas'])->pluck('clave');
         $this->assertTrue($clavesSede->contains('CASHEA|'));
         $this->assertTrue($clavesSede->contains('02|'));
-        $this->assertTrue($clavesSede->contains('TRF|CHASE'));
-        $this->assertTrue($clavesSede->contains('TRF|ZELLE'));
+        // Transferencias $ de varias cuentas → una sola fila (como puntos de venta).
+        $this->assertTrue($clavesSede->contains('TRF|'.CuadreCajaService::CUENTA_TRANSF_USD));
+        $this->assertFalse($clavesSede->contains('TRF|CHASE'));
+        $this->assertFalse($clavesSede->contains('TRF|ZELLE'));
 
         $m = $svc->matrizDashboard(
             \Carbon\Carbon::parse('2026-11-21'),
@@ -719,12 +721,22 @@ class CuadreCajaTest extends TestCase
                 $nunesPorClave[$f['clave']] = $v;
             }
         }
-        // CASHEA, ZELLE, CHASE; el TDD P.V. Nunes se agrupa en TDD|PUNTOS.
+        // CASHEA; ZELLE+CHASE agrupados; el TDD P.V. Nunes se agrupa en TDD|PUNTOS.
+        $claveTrf = 'TRF|'.CuadreCajaService::CUENTA_TRANSF_USD;
         $this->assertEqualsWithDelta(114.33, (float) ($nunesPorClave['CASHEA|'] ?? 0), 0.01);
-        $this->assertEqualsWithDelta(50.05, (float) ($nunesPorClave['TRF|ZELLE'] ?? 0), 0.01);
-        $this->assertEqualsWithDelta(96.43, (float) ($nunesPorClave['TRF|CHASE'] ?? 0), 0.01);
+        $this->assertEqualsWithDelta(146.48, (float) ($nunesPorClave[$claveTrf] ?? 0), 0.01);
         $this->assertEqualsWithDelta(150.0, (float) ($nunesPorClave['TDD|PUNTOS'] ?? 0), 0.01);
         $this->assertEqualsWithDelta(410.81, array_sum($nunesPorClave), 0.01);
+
+        $filaTrf = collect($m['filas'])->firstWhere('clave', $claveTrf);
+        $this->assertSame('Todas las transferencias $', $filaTrf['cuenta'] ?? null);
+
+        $porClave = collect($m['filas'])->keyBy('clave');
+        $this->assertSame('PUNTO DE VENTA', $porClave['TDD|PUNTOS']['forma'] ?? null);
+        $this->assertSame('FLEXPAY', $porClave['1212|']['forma'] ?? null);
+        $this->assertSame('KRECE', $porClave['05|']['forma'] ?? null);
+        $this->assertSame('DEVOLUCION', $porClave['NDC1|']['forma'] ?? null);
+        $this->assertFalse($porClave->has('IGTF|'));
     }
 
     private function lotesCompletos(): array

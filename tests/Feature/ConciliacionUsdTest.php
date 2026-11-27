@@ -494,4 +494,30 @@ class ConciliacionUsdTest extends TestCase
         $this->assertSame([-120.0, -10.0, 300.0], $lineas->pluck('monto')->all());
         $this->assertSame(['conciliado', 'comision', 'pendiente'], $lineas->pluck('estado')->all());
     }
+
+    public function test_pagos_manuales_solo_importa_el_receptor_de_la_cuenta_elegida(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $tmp = tempnam(sys_get_temp_dir(), 'pm') . '.csv';
+        file_put_contents($tmp, "REPORTE ESPECIFICO DE PAGOS MANUALES\n"
+            . "NRO,Banco Receptor,Banco,Terminal,Cajero,Ref,Monto Bs.,Monto USD / USDT,Fecha Operación,Fecha\n"
+            . "1,MERCANTIL PANAMA,,Caja 1,ANA,204064111,0,150.00,,10/08/2026 12:00:00\n"
+            . "2,ZELLE,,Caja 2,ANA,204064222,0,80.00,,11/08/2026 12:00:00\n"
+            . "3,BINANCE,,Caja 3,ANA,50763,0,111.00,,12/08/2026 12:00:00\n"
+            . "4,BANCO NACIONAL,0102,Caja 1,ANA,084918,6418,0,,13/08/2026 12:00:00\n");
+
+        $this->actingAs($this->user)->post(route('finanzas.conciliacion_usd.subir'), [
+            'cuenta' => 'Mercantil Panamá|José Je',
+            'archivos' => [new UploadedFile($tmp, 'pagos_manuales.csv', 'text/csv', null, true)],
+        ])->assertRedirect()
+            ->assertSessionHas('success', fn ($m) => str_contains($m, 'Reporte de pagos manuales: 1 cobros nuevos')
+                && str_contains($m, '1 de Zelle') && str_contains($m, '1 de Binance'));
+
+        $pagos = \App\Models\ConciliacionDivisaPago::query()->orderBy('nro')->get();
+        $this->assertCount(1, $pagos);
+        $this->assertSame('1', (string) $pagos[0]->nro);
+        $this->assertSame('204064111', $pagos[0]->referencia);
+        $this->assertSame(150.0, (float) $pagos[0]->monto);
+        $this->assertSame('Mercantil Panamá', $pagos[0]->banco);
+    }
 }

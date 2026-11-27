@@ -215,6 +215,9 @@
         <strong>Qué hace:</strong> cruza por referencia + monto.
         Si el receptor es «Banco Nacional» → cuentas en bolívares;
         si es Binance / Zelle / Mercantil Panamá → cuentas en divisas.
+        En <strong>Conciliación divisas (USD)</strong> también puedes subir este mismo reporte
+        junto al PDF/Excel de la cuenta: solo entran los cobros cuyo Banco Receptor coincide
+        con la cuenta elegida (Mercantil Panamá, Binance o Zelle→Wells/Citizens/Amerant).
     </div>
 
     {{-- 4. Cashea --}}
@@ -262,7 +265,7 @@
                 <td><span class="btn-ejemplo btn-lila">Documentos adicionales</span> → Pago móvil</td>
             </tr>
             <tr>
-                <td><code>Pagos Manuales.xls</code></td>
+                <td><code>Pagos Manuales.xls</code> (también en Conciliación USD / Mercantil–Zelle–Binance)</td>
                 <td><span class="btn-ejemplo btn-lila">Documentos adicionales</span> → Pagos manuales</td>
             </tr>
             <tr>

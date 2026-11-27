@@ -70,6 +70,17 @@ return [
     'formas_ocultas' => ['DESCUENTO DIVISAS'],
 
     /*
+     * Solo el dashboard de Tesorería: se ocultan y se renombran al mostrar (el arqueo sigue con los nombres de Suite).
+     */
+    'formas_ocultas_dashboard' => ['RECARGO FACTURA', 'IGTF'],
+    'etiquetas_dashboard' => [
+        'TARJ. DÉBITO' => 'PUNTO DE VENTA',
+        'FLEXPAY' => 'FLEXPAY',
+        'FLEXPLAY' => 'KRECE',
+        'EFECTIVO DEVOLUCION' => 'DEVOLUCION',
+    ],
+
+    /*
      * Cuentas que también son punto de venta aunque su nombre no diga «P.V.» (solo para tarjetas;
      * una transferencia a esa cuenta no es un lote del punto).
      */

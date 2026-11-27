@@ -74,6 +74,9 @@
             <div class="muted" style="flex-basis:100%; font-size:.75rem;">
                 Wells Fargo: sube juntos el estado de cuenta PDF y el reporte Cloud <code>cloud_pagos_zelle_mes_….xls</code>.
                 Solo entran los cobros con aviso <code>alerts@notify.wellsfargo.com</code>; el resto (Citizens, Amerant, etc.) se ignora.
+                Mercantil Panamá: el PDF del estado de cuenta USD (mercantilbanco.com.pa) se importa sin mapeo.
+                También el reporte de pagos manuales de Cloud (Banco Receptor: Mercantil Panamá, Zelle, Binance):
+                solo entran los de la cuenta elegida; el resto se aparta.
                 También sirve Binance (Excel) o Citizens / Amerant (PDF) con su mismo reporte de caja.
             </div>
         </form>
@@ -138,9 +141,9 @@
             </div>
             @if($datos['pagos_total'] > 0)
                 <div class="panel" style="padding:12px; border-left:4px solid #0ea5e9;">
-                    <div class="muted" style="font-size:.75rem; text-transform:uppercase; font-weight:700;">Pagos de caja: {{ $datos['pagos_cruzados'] }} de {{ $datos['pagos_total'] }} cruzados</div>
+                    <div class="muted" style="font-size:.75rem; text-transform:uppercase; font-weight:700;">Tránsito / pagos: {{ $datos['pagos_cruzados'] }} de {{ $datos['pagos_total'] }} cruzados</div>
                     <div style="font-size:1.25rem; font-weight:800; color:{{ $datos['pagos_sin_abono']->isEmpty() ? '#16a34a' : '#dc2626' }};">
-                        {{ $datos['pagos_sin_abono']->count() }} sin abono · {{ $usd($datos['pagos_sin_abono']->sum('monto')) }}
+                        {{ $datos['pagos_sin_abono']->count() }} en tránsito · {{ $usd($datos['pagos_sin_abono']->sum('monto')) }}
                     </div>
                     @if($datos['pagos_repetidos']->isNotEmpty())
                         <div class="muted" style="font-size:.72rem;">+ {{ $datos['pagos_repetidos']->count() }} avisos repetidos que no cuentan</div>
@@ -178,39 +181,71 @@
             </details>
         @endif
 
-        @if($datos['pagos_sin_abono']->isNotEmpty())
-            @php
-                $abonosLibres = $datos['pendientes']->reject(fn ($l) => $l->esCargo());
-            @endphp
-            <h3 style="margin:16px 0 6px;">Pagos de caja sin abono en el banco ({{ $datos['pagos_sin_abono']->count() }})</h3>
-            <p class="muted" style="margin:0 0 6px; font-size:.78rem;">🧾 Están en la app de cobros (Cloud) pero no aparecen en el extracto del banco. Si no va a aparecer (duplicado, ×100, error de lectura…), puedes justificarlo.</p>
-            <div class="table-wrap">
-                <table class="data-table" style="font-size:.82rem;">
-                    <thead><tr><th>Nro</th><th>Fecha y hora</th><th>Localidad · caja</th><th>Cajero</th><th>Pagador</th><th style="text-align:right;">Monto</th><th>Ligar con abono del banco</th><th></th></tr></thead>
-                    <tbody>
-                        @foreach($datos['pagos_sin_abono'] as $p)
+        @php
+            $abonosLibres = $datos['pendientes']->reject(fn ($l) => $l->esCargo());
+            $filasTransito = collect();
+            foreach ($datos['pagos_sin_abono'] as $p) {
+                $filasTransito->push([
+                    'tipo' => 'pago',
+                    'fecha_ord' => ($p->fecha_hora ?? $p->fecha)?->format('Y-m-d H:i:s') ?? '0000-00-00',
+                    'item' => $p,
+                ]);
+            }
+            foreach ($datos['egresos_sin_pareja'] as $f) {
+                $filasTransito->push([
+                    'tipo' => 'egreso',
+                    'fecha_ord' => \Carbon\Carbon::parse($f->fecha)->format('Y-m-d').' 00:00:00',
+                    'item' => $f,
+                ]);
+            }
+            $filasTransito = $filasTransito->sortBy('fecha_ord')->values();
+        @endphp
+        <h3 style="margin:16px 0 6px;">Tránsito ({{ $filasTransito->count() }})</h3>
+        <p class="muted" style="margin:0 0 6px; font-size:.78rem;">Lo que aún no está en el extracto: pagos de Cloud / manuales (Mercantil Panamá, Zelle, Binance…) y egresos del flujo de caja. Si un cobro no va a aparecer, puedes justificarlo.</p>
+        <div class="table-wrap">
+            <table class="data-table" style="font-size:.82rem;">
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Fecha</th>
+                        <th>Ref. / Nro</th>
+                        <th>Detalle</th>
+                        <th style="text-align:right;">Monto</th>
+                        <th>Ligar con abono del banco</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($filasTransito as $fila)
+                        @if($fila['tipo'] === 'pago')
                             @php
+                                $p = $fila['item'];
                                 $cands = $abonosLibres
                                     ->filter(fn ($l) => abs(abs((float) $l->monto) - (float) $p->monto) <= max(1, (float) $p->monto * 0.05) && abs($l->fecha->diffInDays($p->fecha, false)) <= 3)
                                     ->sortBy(fn ($l) => [abs(abs((float) $l->monto) - (float) $p->monto) > 0.009 ? 1 : 0, abs($l->fecha->diffInDays($p->fecha, false))])
                                     ->take(12);
                                 $hintPago = 'Pago #'.$p->nro.' de '.$usd($p->monto).($p->posible_x100_de ? ' (parece ×100 del #'.$p->posible_x100_de.')' : '');
+                                $detalle = trim(implode(' · ', array_filter([
+                                    $p->localidad ? $p->localidad.($p->terminal ? ' · '.$p->terminal : '') : ($p->terminal ?: null),
+                                    $p->usuario,
+                                    $p->pagador,
+                                ])));
                             @endphp
                             <tr>
+                                <td><span style="font-size:.72rem; font-weight:700; color:#0369a1; text-transform:uppercase;">Pago</span></td>
+                                <td style="white-space:nowrap;">{{ $p->fecha_hora ? $p->fecha_hora->format('d/m/Y h:i A') : $p->fecha->format('d/m/Y') }}</td>
                                 <td>
-                                    {{ $p->nro }}
+                                    #{{ $p->nro }}
+                                    @if($p->referencia)<div><code>{{ $p->referencia }}</code></div>@endif
                                     @if($p->duplicado_de)
-                                        <div style="font-size:.72rem; font-weight:700; color:#b45309;" title="Mismo monto y pagador con minutos de diferencia: el banco recibió un solo pago">⚠ Posible duplicado de #{{ $p->duplicado_de }}</div>
+                                        <div style="font-size:.72rem; font-weight:700; color:#b45309;">⚠ Posible duplicado de #{{ $p->duplicado_de }}</div>
                                     @endif
                                     @if($p->posible_x100_de ?? null)
-                                        <div style="font-size:.72rem; font-weight:700; color:#b91c1c;" title="Mismo pagador; el monto es exactamente 100 veces el de otro cobro ya cruzado con el banco">⚠ Parece el #{{ $p->posible_x100_de }} sin el punto decimal (×100)</div>
+                                        <div style="font-size:.72rem; font-weight:700; color:#b91c1c;">⚠ Parece el #{{ $p->posible_x100_de }} sin el punto decimal (×100)</div>
                                     @endif
                                 </td>
-                                <td style="white-space:nowrap;">{{ $p->fecha_hora ? $p->fecha_hora->format('d/m/Y h:i A') : $p->fecha->format('d/m/Y') }}</td>
-                                <td>{{ $p->localidad }}{{ $p->terminal ? ' · ' . $p->terminal : '' }}</td>
-                                <td>{{ $p->usuario }}</td>
-                                <td>{{ $p->pagador }}</td>
-                                <td style="text-align:right; font-weight:700;">{{ $usd($p->monto) }}</td>
+                                <td style="max-width:340px;">{{ $detalle !== '' ? $detalle : '—' }}</td>
+                                <td style="text-align:right; font-weight:700; color:#16a34a;">{{ $usd($p->monto) }}</td>
                                 <td>
                                     @if($cands->isNotEmpty())
                                         <form method="POST" action="{{ route('finanzas.conciliacion_usd.accion') }}" style="display:flex; gap:6px;">
@@ -238,11 +273,24 @@
                                     </form>
                                 </td>
                             </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        @endif
+                        @else
+                            @php $f = $fila['item']; @endphp
+                            <tr>
+                                <td><span style="font-size:.72rem; font-weight:700; color:#b45309; text-transform:uppercase;">Egreso</span></td>
+                                <td style="white-space:nowrap;">{{ $fmt($f->fecha) }}</td>
+                                <td><code>{{ $f->referencia }}</code></td>
+                                <td style="max-width:340px;">{{ \Illuminate\Support\Str::limit((string) $f->motivo, 110) }}</td>
+                                <td style="text-align:right; font-weight:700; color:#dc2626;">−${{ number_format(abs((float) $f->monto_usd), 2) }}</td>
+                                <td><span class="muted" style="font-size:.78rem;">—</span></td>
+                                <td></td>
+                            </tr>
+                        @endif
+                    @empty
+                        <tr><td colspan="7" class="muted" style="text-align:center;">Sin ítems en tránsito</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
 
         @if(($datos['pagos_justificados'] ?? collect())->isNotEmpty())
             <h3 style="margin:20px 0 6px;">Pagos de caja justificados ({{ $datos['pagos_justificados']->count() }}) · {{ $usd($datos['pagos_justificados']->sum('monto')) }}</h3>
@@ -277,8 +325,8 @@
             </div>
         @endif
 
-        <h3 style="margin:16px 0 6px;">Movimientos en el banco sin pareja ({{ $datos['pendientes']->count() }})</h3>
-        <p class="muted" style="margin:0 0 6px; font-size:.78rem;">🏦 Están en el extracto del banco pero no tienen su cobro en la app ni su egreso en el flujo de caja.</p>
+        <h3 style="margin:20px 0 6px;">Movimientos del banco ({{ $datos['pendientes']->count() }})</h3>
+        <p class="muted" style="margin:0 0 6px; font-size:.78rem;">Líneas del extracto bancario sin pareja: aún no tienen cobro en la app ni egreso en el flujo de caja.</p>
         <div class="table-wrap">
             <table class="data-table" style="font-size:.82rem;">
                 <thead><tr><th>Fecha</th><th>Referencia</th><th>Descripción</th><th style="text-align:right;">Monto</th><th>Ligar con egreso</th><th></th></tr></thead>
@@ -319,26 +367,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="muted" style="text-align:center;">Todo conciliado 🎉</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-        <h3 style="margin:20px 0 6px;">Egresos registrados sin movimiento en el banco ({{ $datos['egresos_sin_pareja']->count() }})</h3>
-        <div class="table-wrap">
-            <table class="data-table" style="font-size:.82rem;">
-                <thead><tr><th>Fecha</th><th>Referencia</th><th>Motivo</th><th style="text-align:right;">USD</th></tr></thead>
-                <tbody>
-                    @forelse($datos['egresos_sin_pareja'] as $f)
-                        <tr>
-                            <td>{{ $fmt($f->fecha) }}</td>
-                            <td><code>{{ $f->referencia }}</code></td>
-                            <td>{{ \Illuminate\Support\Str::limit((string) $f->motivo, 90) }}</td>
-                            <td style="text-align:right; font-weight:700;">${{ number_format(abs((float) $f->monto_usd), 2) }}</td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="4" class="muted" style="text-align:center;">Ninguno</td></tr>
+                        <tr><td colspan="6" class="muted" style="text-align:center;">Todo conciliado</td></tr>
                     @endforelse
                 </tbody>
             </table>

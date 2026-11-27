@@ -5,7 +5,7 @@ namespace App\Services\Conciliacion;
 use Smalot\PdfParser\Parser;
 
 /**
- * Estados de cuenta en PDF de los bancos en EE.UU. (Citizens, Amerant, Wells Fargo).
+ * Estados de cuenta en PDF (Citizens, Amerant, Wells Fargo, Mercantil Panamá).
  * Se lee el texto del PDF y se comparan las sumas con los totales del propio estado.
  */
 class EstadoCuentaPdfParser
@@ -30,6 +30,7 @@ class EstadoCuentaPdfParser
             str_contains($texto, 'Deposits&Credit') && stripos($texto, 'citizens') !== false => $this->citizens($texto),
             str_contains($texto, 'Account Activity') && stripos($texto, 'amerant') !== false => $this->amerant($texto),
             $this->esWellsFargo($texto) => $this->wellsFargo($texto),
+            $this->esMercantilPanama($texto) => $this->mercantilPanama($texto),
             default => null,
         };
         if ($r === null) {
@@ -169,6 +170,123 @@ class EstadoCuentaPdfParser
     {
         return stripos($t, 'wells fargo') !== false
             && (str_contains($t, 'Historial de transacciones') || stripos($t, 'Account transaction history') !== false);
+    }
+
+    private function esMercantilPanama(string $t): bool
+    {
+        return (stripos($t, 'mercantilbanco.com.pa') !== false || stripos($t, 'torre mercantil') !== false)
+            && (str_contains($t, 'Detalle de Transacciones') || str_contains($t, 'Total Débitos') || str_contains($t, 'Total Debitos'));
+    }
+
+    /**
+     * Estado de cuenta Mercantil Banco (Panamá), moneda USD.
+     * Filas: DD/MMM/YYYY + descripción + (ref) + monto + saldo. El signo sale del cambio de saldo.
+     * En débitos a veces el PDF pega monto y referencia (p. ej. 60.00598534).
+     */
+    private function mercantilPanama(string $t): array
+    {
+        $hasta = null;
+        if (preg_match('#Fecha:\s*(\d{2})/([A-Za-z]{3})/(\d{4})#', $t, $m)) {
+            $hasta = sprintf('%04d-%02d-%02d', (int) $m[3], self::MESES[strtolower($m[2])] ?? 12, (int) $m[1]);
+        }
+
+        $saldoIni = null;
+        $totDeb = null;
+        $totCre = null;
+        $saldoFin = null;
+        if (preg_match('/([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})\s*Nombre\s*:/u', $t, $m)) {
+            $saldoIni = $this->num($m[1]);
+            $a = $this->num($m[2]);
+            $b = $this->num($m[3]);
+            $saldoFin = $this->num($m[4]);
+            // Labels: Débitos luego Créditos, pero a veces el extracto los deja en orden inverso.
+            if (abs(($saldoIni + $a - $b) - $saldoFin) <= abs(($saldoIni + $b - $a) - $saldoFin)) {
+                $totCre = $a;
+                $totDeb = $b;
+            } else {
+                $totCre = $b;
+                $totDeb = $a;
+            }
+        }
+        // El ITBMS suele ir suelto después de «Saldo Final :» (antes de Moneda:USD).
+        $itbms = 0.0;
+        if (preg_match('/Saldo Final\s*:\s*([\d,]+\.\d{2})/u', $t, $m)) {
+            $itbms = $this->num($m[1]);
+        } elseif (preg_match('/Saldo Final\s*:\s*\R+\s*([\d,]+\.\d{2})/u', $t, $m)) {
+            $itbms = $this->num($m[1]);
+        }
+
+        $mov = [];
+        $prevBal = $saldoIni;
+        $vistos = [];
+        foreach (preg_split('/\R/', $t) as $raw) {
+            $l = trim($raw);
+            if (! preg_match('#^(\d{2})/([A-Za-z]{3})/(\d{4})(.+)$#u', $l, $m)) {
+                continue;
+            }
+            $mes = self::MESES[strtolower($m[2])] ?? 0;
+            if ($mes < 1) {
+                continue;
+            }
+            $rest = trim($m[4]);
+            if (! preg_match_all('/([\d,]+\.\d{2})/', $rest, $mm) || $mm[1] === []) {
+                continue;
+            }
+            $amts = $mm[1];
+            $balance = $this->num((string) end($amts));
+            $sinBal = (string) preg_replace('/\s*'.preg_quote((string) end($amts), '/').'\s*$/', '', $rest);
+            $montoAbs = null;
+            $desc = $sinBal;
+            if (preg_match('/([\d,]+\.\d{2})\s*$/', $sinBal, $a)) {
+                $montoAbs = $this->num($a[1]);
+                $desc = trim((string) preg_replace('/([\d,]+\.\d{2})\s*$/', '', $sinBal));
+                $desc = trim((string) preg_replace('/[\t ]+\d{3,}$/', '', $desc));
+            } elseif (preg_match('/([\d,]+\.\d{2})(\d{4,})\s*$/', $sinBal, $a)) {
+                // Débito con referencia pegada: 60.00598534 / 25,000.00976999
+                $montoAbs = $this->num($a[1]);
+                $desc = trim((string) preg_replace('/([\d,]+\.\d{2})\d{4,}\s*$/', '', $sinBal));
+            }
+            if ($montoAbs === null || $montoAbs < 0.005) {
+                continue;
+            }
+
+            $fecha = sprintf('%04d-%02d-%02d', (int) $m[3], $mes, (int) $m[1]);
+            $signo = 1;
+            if ($prevBal !== null) {
+                $delta = round($balance - $prevBal, 2);
+                $signo = $delta >= 0 ? 1 : -1;
+                if (abs(abs($delta) - $montoAbs) > 0.02 && abs($delta) >= 0.01) {
+                    $montoAbs = abs($delta);
+                }
+            }
+            $desc = trim((string) preg_replace('/\s+/', ' ', $desc));
+            $clave = $fecha.'|'.$desc.'|'.round($signo * $montoAbs, 2).'|'.$balance;
+            if (isset($vistos[$clave])) {
+                continue; // el PDF repite encabezado/movimientos en cada página
+            }
+            $vistos[$clave] = true;
+            $mov[] = [
+                'fecha' => $fecha,
+                'descripcion' => $desc,
+                'monto' => round($signo * $montoAbs, 2),
+            ];
+            $prevBal = $balance;
+        }
+
+        $fechas = array_column($mov, 'fecha');
+        $cargosTot = $totDeb !== null ? round($totDeb + max(0, (float) $itbms), 2) : null;
+
+        return [
+            'banco' => 'Mercantil Panamá',
+            'cuenta' => preg_match('/\b(\d{9})\b/', $t, $m) ? $m[1] : null,
+            'desde' => $fechas ? min($fechas) : null,
+            'hasta' => $hasta,
+            'movimientos' => $this->limpiar($mov),
+            'totales' => [
+                'abonos' => $totCre,
+                'cargos' => $cargosTot,
+            ],
+        ];
     }
 
     /**

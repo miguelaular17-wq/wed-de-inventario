@@ -27,6 +27,11 @@ class CuadreCajaService
     /** Código de cuenta de la línea que junta todos los puntos de venta de una forma de pago. */
     public const CUENTA_PUNTOS = 'PUNTOS';
 
+    /** Dashboard: una fila por todas las transferencias BS / en divisas (como PUNTOS en tarjetas). */
+    public const CUENTA_TRANSF_BS = 'TODAS_TRFBS';
+
+    public const CUENTA_TRANSF_USD = 'TODAS_TRF';
+
     public const ESTADOS = [
         CuadreCaja::PENDIENTE => 'Pendiente',
         CuadreCaja::PROCESADO => 'Procesado',
@@ -120,16 +125,30 @@ class CuadreCajaService
                     continue;
                 }
                 $forma = mb_strtoupper(trim((string) ($linea['forma_pago'] ?: $metodo ?: 'OTRO')), 'UTF-8');
-                if (str_contains($forma, 'CAJA PRINCIPAL') || $this->esFormaOculta($forma, $metodo)) {
+                if (str_contains($forma, 'CAJA PRINCIPAL') || $this->esFormaOculta($forma, $metodo) || $this->esFormaOcultaDashboard($forma, $metodo)) {
                     continue;
                 }
+                $formaVisible = $this->etiquetaDashboard($forma);
 
-                // Puntos de venta: una sola fila global (como en el arqueo).
+                // Puntos de venta y transferencias BS/$: una sola fila global (como en el arqueo POS).
                 $esPos = ! empty($linea['punto_venta']) || ! empty($linea['agrupada'])
                     || (($linea['codigo_cuenta'] ?? '') === self::CUENTA_PUNTOS);
-                $clave = $esPos
-                    ? $this->clave($metodo, self::CUENTA_PUNTOS)
-                    : (string) ($linea['clave'] ?? $this->clave($metodo, $linea['codigo_cuenta'] ?? ''));
+                $transfDash = $this->cuentaTransferenciaDashboard($metodo);
+                if ($esPos) {
+                    $clave = $this->clave($metodo, self::CUENTA_PUNTOS);
+                    $cuentaDash = 'Todos los puntos de venta';
+                    $codigoCuentaDash = self::CUENTA_PUNTOS;
+                } elseif ($transfDash !== null) {
+                    $clave = $this->clave($metodo, $transfDash);
+                    $cuentaDash = $transfDash === self::CUENTA_TRANSF_BS
+                        ? 'Todas las transferencias BS'
+                        : 'Todas las transferencias $';
+                    $codigoCuentaDash = $transfDash;
+                } else {
+                    $clave = (string) ($linea['clave'] ?? $this->clave($metodo, $linea['codigo_cuenta'] ?? ''));
+                    $cuentaDash = trim((string) ($linea['cuenta'] ?? '')) ?: null;
+                    $codigoCuentaDash = (string) ($linea['codigo_cuenta'] ?? '');
+                }
 
                 // Si la forma/cuenta no estaba en el catálogo base, créala (no silenciar montos de otras sedes).
                 if (! isset($filas[$clave])) {
@@ -137,10 +156,10 @@ class CuadreCajaService
                         'clave' => $clave,
                         'orden_clave' => $clave,
                         'codigo_metodo' => $metodo,
-                        'codigo_cuenta' => $esPos ? self::CUENTA_PUNTOS : (string) ($linea['codigo_cuenta'] ?? ''),
-                        'forma_pago' => $forma,
-                        'forma' => $forma,
-                        'cuenta' => $esPos ? 'Todos los puntos de venta' : (trim((string) ($linea['cuenta'] ?? '')) ?: null),
+                        'codigo_cuenta' => $codigoCuentaDash,
+                        'forma_pago' => $formaVisible,
+                        'forma' => $formaVisible,
+                        'cuenta' => $cuentaDash,
                         'por_columna' => [],
                         'suite' => 0.0,
                         'tesoreria' => 0.0,
@@ -719,7 +738,8 @@ class CuadreCajaService
     }
 
     /**
-     * Filas del dashboard = mismas del arqueo (formas_cuadre), con puntos de venta en una sola fila global.
+     * Filas del dashboard = mismas del arqueo (formas_cuadre), con puntos de venta y
+     * transferencias BS/$ en una sola fila global cada una.
      *
      * @return array<string, array<string, mixed>>
      */
@@ -728,6 +748,7 @@ class CuadreCajaService
         $noSuman = config('cuadre_caja.metodos_no_suman', []);
         $filas = [];
         $posHecho = [];
+        $transfHecho = [];
 
         foreach ($this->formasDelCuadre($sede) as $f) {
             $metodo = (string) $f['codigo_metodo'];
@@ -735,6 +756,10 @@ class CuadreCajaService
                 continue;
             }
             $forma = mb_strtoupper(trim((string) ($f['forma_pago'] ?: $metodo)), 'UTF-8');
+            if ($this->esFormaOculta($forma, $metodo) || $this->esFormaOcultaDashboard($forma, $metodo)) {
+                continue;
+            }
+            $formaVisible = $this->etiquetaDashboard($forma);
             if (! empty($f['punto_venta']) && empty($f['en_dolares'])) {
                 if (isset($posHecho[$metodo])) {
                     continue;
@@ -746,9 +771,34 @@ class CuadreCajaService
                     'orden_clave' => (string) $f['clave'],
                     'codigo_metodo' => $metodo,
                     'codigo_cuenta' => self::CUENTA_PUNTOS,
-                    'forma_pago' => $forma,
-                    'forma' => $forma,
+                    'forma_pago' => $formaVisible,
+                    'forma' => $formaVisible,
                     'cuenta' => 'Todos los puntos de venta',
+                    'por_columna' => [],
+                    'suite' => 0.0,
+                    'tesoreria' => 0.0,
+                ];
+
+                continue;
+            }
+
+            $transfDash = $this->cuentaTransferenciaDashboard($metodo);
+            if ($transfDash !== null) {
+                if (isset($transfHecho[$metodo])) {
+                    continue;
+                }
+                $transfHecho[$metodo] = true;
+                $clave = $this->clave($metodo, $transfDash);
+                $filas[$clave] = [
+                    'clave' => $clave,
+                    'orden_clave' => (string) $f['clave'],
+                    'codigo_metodo' => $metodo,
+                    'codigo_cuenta' => $transfDash,
+                    'forma_pago' => $formaVisible,
+                    'forma' => $formaVisible,
+                    'cuenta' => $transfDash === self::CUENTA_TRANSF_BS
+                        ? 'Todas las transferencias BS'
+                        : 'Todas las transferencias $',
                     'por_columna' => [],
                     'suite' => 0.0,
                     'tesoreria' => 0.0,
@@ -764,8 +814,8 @@ class CuadreCajaService
                 'orden_clave' => $clave,
                 'codigo_metodo' => $metodo,
                 'codigo_cuenta' => (string) ($f['codigo_cuenta'] ?? ''),
-                'forma_pago' => $forma,
-                'forma' => $forma,
+                'forma_pago' => $formaVisible,
+                'forma' => $formaVisible,
                 'cuenta' => $cuenta !== '' ? $cuenta : null,
                 'por_columna' => [],
                 'suite' => 0.0,
@@ -774,6 +824,20 @@ class CuadreCajaService
         }
 
         return $filas;
+    }
+
+    /** Código de cuenta agrupada en el dashboard para transferencias BS o en divisas. */
+    private function cuentaTransferenciaDashboard(string $metodo): ?string
+    {
+        $m = strtoupper(trim($metodo));
+        if ($m === 'TRFBS') {
+            return self::CUENTA_TRANSF_BS;
+        }
+        if ($m === 'TRF') {
+            return self::CUENTA_TRANSF_USD;
+        }
+
+        return null;
     }
 
     /**
@@ -1230,9 +1294,20 @@ class CuadreCajaService
     /** Descuentos u otras formas de Suite que no son dinero a cuadrar. */
     private function esFormaOculta(?string $forma, ?string $metodo = null): bool
     {
+        return $this->coincideFormaOculta(config('cuadre_caja.formas_ocultas', []), $forma, $metodo);
+    }
+
+    private function esFormaOcultaDashboard(?string $forma, ?string $metodo = null): bool
+    {
+        return $this->coincideFormaOculta(config('cuadre_caja.formas_ocultas_dashboard', []), $forma, $metodo);
+    }
+
+    /** @param  list<string>  $patrones */
+    private function coincideFormaOculta(array $patrones, ?string $forma, ?string $metodo = null): bool
+    {
         $forma = mb_strtoupper(trim((string) $forma), 'UTF-8');
         $metodo = strtoupper(trim((string) $metodo));
-        foreach (config('cuadre_caja.formas_ocultas', []) as $patron) {
+        foreach ($patrones as $patron) {
             $patron = mb_strtoupper(trim((string) $patron), 'UTF-8');
             if ($patron === '') {
                 continue;
@@ -1243,6 +1318,19 @@ class CuadreCajaService
         }
 
         return false;
+    }
+
+    /** Nombre visible en el consolidado del dashboard (el arqueo conserva el de Suite). */
+    private function etiquetaDashboard(string $forma): string
+    {
+        $mapa = config('cuadre_caja.etiquetas_dashboard', []);
+        foreach ($mapa as $origen => $destino) {
+            if (mb_strtoupper(trim((string) $origen), 'UTF-8') === $forma) {
+                return (string) $destino;
+            }
+        }
+
+        return $forma;
     }
 
     private function cedula(string $usuario): string

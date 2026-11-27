@@ -177,7 +177,7 @@ class ConciliacionDivisasService
     }
 
     /**
-     * Estado de cuenta en PDF (Citizens, Amerant, Wells Fargo). No lleva mapeo: el formato de cada banco es fijo.
+     * Estado de cuenta en PDF (Citizens, Amerant, Wells Fargo, Mercantil Panamá). No lleva mapeo: formato fijo.
      *
      * @return array{nuevas: int, duplicadas: int, movimientos: int, banco_pdf: string, cuenta: ?string, cuadra: bool, desde: ?string, hasta: ?string}
      */
@@ -185,7 +185,7 @@ class ConciliacionDivisasService
     {
         $r = $this->pdf->leer($path);
         if ($r === null) {
-            throw ValidationException::withMessages(['archivos' => "«{$archivo}» no es un PDF que reconozca: estado de cuenta de Citizens, Amerant o Wells Fargo, o el reporte de pagos de Cloud."]);
+            throw ValidationException::withMessages(['archivos' => "«{$archivo}» no es un PDF que reconozca: estado de cuenta de Citizens, Amerant, Wells Fargo o Mercantil Panamá, o el reporte de pagos de Cloud."]);
         }
         $clave = $this->claveBanco($banco);
         if ($clave !== null && $clave !== $this->claveBanco($r['banco'])) {
@@ -664,10 +664,10 @@ class ConciliacionDivisasService
 
     /**
      * Reconoce los documentos conocidos por su cabecera, para no pedir el mapeo de columnas:
-     * historial de transacciones de Binance (extracto) y reporte de pagos de caja de Cloud.
+     * historial de Binance, reporte de pagos de caja Cloud y reporte de pagos manuales Cloud.
      *
      * @param  list<list<string>>  $muestra
-     * @return array{tipo: 'extracto'|'pagos', nombre: string, mapeo?: array<string, mixed>}|null
+     * @return array{tipo: 'extracto'|'pagos'|'pagos_manuales', nombre: string, mapeo?: array<string, mixed>}|null
      */
     public function detectarFormato(array $muestra): ?array
     {
@@ -706,6 +706,14 @@ class ConciliacionDivisasService
                 ];
             }
 
+            // Pagos manuales Cloud: Banco Receptor + Ref + Monto Bs. (Mercantil Panamá, Zelle, Binance…).
+            if ($col(['banco receptor']) !== null
+                && $col(['ref', 'referencia']) !== null
+                && ($col(['monto bs.', 'monto bs', 'monto usd / usdt', 'monto usd']) !== null)
+            ) {
+                return ['tipo' => 'pagos_manuales', 'nombre' => 'reporte de pagos manuales'];
+            }
+
             $pagos = $this->columnasPagos($fila);
             if ($pagos !== null && (isset($pagos['pagador']) || isset($pagos['terminal']) || in_array('fecha confirmado', $celdas, true))) {
                 return ['tipo' => 'pagos', 'nombre' => 'reporte de pagos de caja'];
@@ -713,6 +721,118 @@ class ConciliacionDivisasService
         }
 
         return null;
+    }
+
+    /**
+     * Importa cobros en divisas del reporte de pagos manuales de Cloud para la cuenta elegida
+     * (Mercantil Panamá, Binance, Zelle→Wells/Citizens/Amerant…). El resto se cuenta en otras_cuentas.
+     *
+     * @return array{leidas: int, nuevas: int, duplicadas: int, rechazadas: list<string>, desde: ?string, hasta: ?string, otras_cuentas: array<string, int>}
+     */
+    public function importarPagosManuales(string $path, string $ext, string $banco, string $titular, string $archivo, ?int $userId): array
+    {
+        $verificador = app(PagosManualesVerificador::class);
+        $pagos = $verificador->leer($path, $ext);
+        $claveCuenta = $this->claveBanco($banco);
+        $filas = [];
+        $rechazadas = [];
+        $ocurrencias = [];
+        $leidas = 0;
+        $otrasCuentas = [];
+
+        foreach ($pagos as $p) {
+            if (($p['moneda'] ?? '') !== 'usd' || (float) ($p['monto'] ?? 0) <= 0) {
+                continue;
+            }
+            $receptor = (string) ($p['receptor'] ?? '');
+            $claveRec = $this->claveReceptorDivisa($receptor);
+            if ($claveCuenta !== null && ! $this->receptorCoincideConCuenta($receptor, $banco)) {
+                $claveOtras = $claveRec ?? ($receptor !== '' ? mb_strtolower($receptor) : 'otro');
+                $otrasCuentas[$claveOtras] = ($otrasCuentas[$claveOtras] ?? 0) + 1;
+
+                continue;
+            }
+
+            $leidas++;
+            $fecha = (string) ($p['fecha'] ?? '');
+            if ($fecha === '' || ! preg_match('/^\d{4}-\d{2}-\d{2}/', $fecha)) {
+                $rechazadas[] = 'Pago manual #'.($p['nro'] ?? '?').': fecha no reconocida';
+
+                continue;
+            }
+            $monto = round((float) $p['monto'], 2);
+            $nro = (string) ($p['nro'] ?? '');
+            $ref = mb_substr((string) ($p['ref'] ?? ''), 0, 160) ?: null;
+            $base = implode('|', ['MANUAL', mb_strtoupper($banco), mb_strtoupper($titular), $nro, $fecha, $ref, number_format($monto, 2, '.', '')]);
+            $ocurrencias[$base] = ($ocurrencias[$base] ?? 0) + 1;
+            $filas[] = [
+                'banco' => $banco,
+                'titular' => $titular,
+                'nro' => $nro !== '' ? $nro : null,
+                'fecha' => substr($fecha, 0, 10),
+                'fecha_hora' => null,
+                'monto' => $monto,
+                'localidad' => null,
+                'terminal' => mb_substr((string) ($p['caja'] ?? ''), 0, 160) ?: null,
+                'usuario' => mb_substr((string) ($p['cajero'] ?? ''), 0, 160) ?: null,
+                'pagador' => null,
+                'referencia' => $ref,
+                'huella' => hash('sha256', $base.'|'.$ocurrencias[$base]),
+                'archivo' => mb_substr($archivo, 0, 255),
+                'user_id' => $userId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        }
+
+        $nuevas = 0;
+        foreach (array_chunk($filas, 300) as $chunk) {
+            $nuevas += DB::table('conciliacion_divisas_pagos')->insertOrIgnore($chunk);
+        }
+        $fechas = array_column($filas, 'fecha');
+
+        return [
+            'leidas' => $leidas,
+            'nuevas' => $nuevas,
+            'duplicadas' => count($filas) - $nuevas,
+            'rechazadas' => $rechazadas,
+            'desde' => $fechas ? min($fechas) : null,
+            'hasta' => $fechas ? max($fechas) : null,
+            'otras_cuentas' => $otrasCuentas,
+        ];
+    }
+
+    /** Clave de banco receptor del reporte de pagos manuales (usd). */
+    private function claveReceptorDivisa(string $receptor): ?string
+    {
+        $r = mb_strtolower(trim($receptor));
+        if ($r === '' || str_contains($r, 'nacional')) {
+            return null;
+        }
+        if (str_contains($r, 'zelle')) {
+            return 'zelle';
+        }
+
+        return $this->claveBanco($receptor);
+    }
+
+    /** ¿El Banco Receptor del pago manual corresponde a la cuenta elegida en conciliación divisas? */
+    private function receptorCoincideConCuenta(string $receptor, string $banco): bool
+    {
+        $clave = $this->claveBanco($banco);
+        $rec = $this->claveReceptorDivisa($receptor);
+        if ($clave === null) {
+            return true;
+        }
+        if ($rec === $clave) {
+            return true;
+        }
+        // Zelle llega a cuentas US (Wells, Citizens, Amerant, Citi).
+        if ($rec === 'zelle' && in_array($clave, ['wells', 'citizens', 'amerant', 'citi', 'regions', 'truist'], true)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

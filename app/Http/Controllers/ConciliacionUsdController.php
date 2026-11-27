@@ -37,8 +37,9 @@ class ConciliacionUsdController extends Controller
     }
 
     /**
-     * Paso 1: se suben los documentos de la cuenta (uno o varios). Los formatos conocidos —historial de Binance
-     * y reporte de pagos de caja de Cloud— se importan y se cruzan solos; uno desconocido pasa a elegir columnas.
+     * Paso 1: se suben los documentos de la cuenta (uno o varios). Los formatos conocidos —historial de Binance,
+     * reporte de pagos de caja y reporte de pagos manuales de Cloud— se importan y se cruzan solos;
+     * uno desconocido pasa a elegir columnas.
      */
     public function subir(Request $request): View|RedirectResponse
     {
@@ -61,6 +62,7 @@ class ConciliacionUsdController extends Controller
         $extractos = [];
         $pdfs = [];
         $pagos = [];
+        $pagosManuales = [];
         $desconocidos = [];
         foreach ($files as $file) {
             $ext = strtolower($file->getClientOriginalExtension() ?: 'csv');
@@ -81,12 +83,12 @@ class ConciliacionUsdController extends Controller
             try {
                 $doc['muestra'] = $this->servicio->muestra(Storage::disk('local')->path($path), $ext);
             } catch (\Throwable $e) {
-                $this->borrar([$doc, ...$extractos, ...$pdfs, ...$pagos, ...$desconocidos]);
+                $this->borrar([$doc, ...$extractos, ...$pdfs, ...$pagos, ...$pagosManuales, ...$desconocidos]);
 
                 return back()->with('error', 'No se pudo leer «' . $doc['nombre'] . '»: ' . $e->getMessage());
             }
             if ($doc['muestra'] === []) {
-                $this->borrar([$doc, ...$extractos, ...$pdfs, ...$pagos, ...$desconocidos]);
+                $this->borrar([$doc, ...$extractos, ...$pdfs, ...$pagos, ...$pagosManuales, ...$desconocidos]);
 
                 return back()->with('error', '«' . $doc['nombre'] . '» está vacío.');
             }
@@ -94,12 +96,13 @@ class ConciliacionUsdController extends Controller
             match ($formato['tipo'] ?? null) {
                 'extracto' => $extractos[] = $doc + ['mapeo' => $formato['mapeo'], 'formato' => $formato['nombre']],
                 'pagos' => $pagos[] = $doc,
+                'pagos_manuales' => $pagosManuales[] = $doc,
                 default => $desconocidos[] = $doc,
             };
         }
 
-        if (count($desconocidos) > 1 || ($desconocidos !== [] && ($extractos !== [] || $pdfs !== [] || $pagos !== []))) {
-            $this->borrar([...$extractos, ...$pdfs, ...$pagos, ...$desconocidos]);
+        if (count($desconocidos) > 1 || ($desconocidos !== [] && ($extractos !== [] || $pdfs !== [] || $pagos !== [] || $pagosManuales !== []))) {
+            $this->borrar([...$extractos, ...$pdfs, ...$pagos, ...$pagosManuales, ...$desconocidos]);
 
             return back()->with('error', 'No reconozco el formato de «' . $desconocidos[0]['nombre'] . '». Súbelo solo para elegir qué columna es cada dato.');
         }
@@ -158,12 +161,21 @@ class ConciliacionUsdController extends Controller
                 $rechazadas = [...$rechazadas, ...$r['rechazadas']];
                 $rangos[] = [$r['desde'], $r['hasta'], 'pagos'];
             }
+            foreach ($pagosManuales as $doc) {
+                $r = $this->servicio->importarPagosManuales(
+                    Storage::disk('local')->path($doc['path']), $doc['ext'], $banco, $titular, $doc['nombre'], $request->user()?->id,
+                );
+                $partes[] = sprintf('Reporte de pagos manuales: %d cobros nuevos, %d ya estaban cargados', $r['nuevas'], $r['duplicadas'])
+                    . $this->textoOtrasCuentas($r['otras_cuentas']);
+                $rechazadas = [...$rechazadas, ...$r['rechazadas']];
+                $rangos[] = [$r['desde'], $r['hasta'], 'pagos'];
+            }
         } catch (\Illuminate\Validation\ValidationException $e) {
             throw $e;
         } catch (\Throwable $e) {
             return back()->with('error', 'No se pudo importar: ' . $e->getMessage());
         } finally {
-            $this->borrar([...$extractos, ...$pdfs, ...$pagos]);
+            $this->borrar([...$extractos, ...$pdfs, ...$pagos, ...$pagosManuales]);
         }
 
         // Período a conciliar: el del estado de cuenta en PDF (un mes); si no, el del reporte de pagos; si no, el del extracto.
@@ -193,7 +205,7 @@ class ConciliacionUsdController extends Controller
         }
         $nombres = [
             'citizens' => 'Citizens', 'amerant' => 'Amerant', 'wells' => 'Wells Fargo', 'regions' => 'Regions', 'truist' => 'Truist', 'citi' => 'Citi',
-            'panam' => 'Mercantil Panamá', 'binance' => 'Binance', 'efectivodivisa' => 'efectivo en divisas',
+            'panam' => 'Mercantil Panamá', 'binance' => 'Binance', 'zelle' => 'Zelle', 'efectivodivisa' => 'efectivo en divisas',
         ];
 
         return ' (se apartaron ' . implode(', ', array_map(fn ($k, $n) => "{$n} de " . ($nombres[$k] ?? $k), array_keys($otras), $otras)) . ': son de otras cuentas)';

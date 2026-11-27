@@ -176,6 +176,66 @@ TXT;
         $this->assertNull((new EstadoCuentaPdfParser)->leerTexto("Chase Bank\nStatement period activity summary\nAccount Activity"));
     }
 
+    public const MERCANTIL_PANAMA = <<<'TXT'
+420233875
+Fecha: 31/OCT/2026
+JOSE LEONARDO JEREZ ANEZ
+64,438.50
+10,088.68
+46,169.95
+28,357.16
+Nombre :
+Cuenta :
+Saldo Inicial :
+Total Débitos :
+Total Créditos :
+Total ITBMS :
+Saldo Final :
+0.07
+Moneda:USD
+Detalle de Transacciones
+01/OCT/2026ACHX-Arelis Vargas ZINLI	119385366	50.00 64,488.50
+02/OCT/2026INTERNA GERALDINE ANDREINA M *5731	886204	9.15 64,497.65
+05/OCT/2026CAHO A MFTECH, S.A. POR ZIN ANGEL ANTONIO	60.00598534	64,437.65
+07/OCT/2026CAHO A MFTECH, S.A. POR ZIN	300.00613893	64,137.65
+22/OCT/2026ACH--JERRY ALFARO BANESCO	25,000.00976999	39,137.65
+23/OCT/2026INTERNA VENEPAC 2020, C.A. *8521	19,859.95985293	19,277.70
+30/OCT/2026ITBMS P/COMISIONES/CUENTAS	0.07	19,277.63
+30/OCT/2026INTERESES	6.26 19,283.89
+Casa Matriz: Torre Mercantil. Calle 50, con calle 58 de Obarrio.
+www.mercantilbanco.com.pa
+TXT;
+
+    public function test_mercantil_panama_lee_creditos_debitos_y_monto_pegado_a_referencia(): void
+    {
+        $r = (new EstadoCuentaPdfParser)->leerTexto(self::MERCANTIL_PANAMA);
+
+        $this->assertSame('Mercantil Panamá', $r['banco']);
+        $this->assertSame('420233875', $r['cuenta']);
+        $this->assertSame('2026-10-31', $r['hasta']);
+        $this->assertSame(50.0, $r['movimientos'][0]['monto']);
+        $this->assertSame(-60.0, $r['movimientos'][2]['monto']);
+        $this->assertSame(-25000.0, $r['movimientos'][4]['monto']);
+        $this->assertSame(-19859.95, $r['movimientos'][5]['monto']);
+        $this->assertStringContainsString('ACHX-Arelis Vargas ZINLI', $r['movimientos'][0]['descripcion']);
+        $this->assertStringContainsString('ACH--JERRY ALFARO BANESCO', $r['movimientos'][4]['descripcion']);
+    }
+
+    public function test_mercantil_panama_pdf_real_cuadra_con_totales(): void
+    {
+        $path = dirname(__DIR__, 2).'/storage/app/_mercantil_panama.pdf';
+        if (! is_file($path)) {
+            $this->markTestSkipped('Falta storage/app/_mercantil_panama.pdf');
+        }
+        $r = (new EstadoCuentaPdfParser)->leer($path);
+        $this->assertNotNull($r);
+        $this->assertSame('Mercantil Panamá', $r['banco']);
+        $this->assertSame('420233875', $r['cuenta']);
+        $this->assertTrue($r['cuadra']);
+        $this->assertGreaterThan(40, count($r['movimientos']));
+        $this->assertEqualsWithDelta(10088.68, $r['totales']['abonos'], 0.01);
+    }
+
     public function test_nombres_cortados_o_pegados_se_reconocen(): void
     {
         $this->assertSame(2, ConciliacionDivisasService::similitudNombre('RICHARDJOSECHIRINOSARCAYA', 'RICHARDJOSECHIRI'));
