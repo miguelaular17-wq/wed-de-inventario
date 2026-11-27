@@ -102,6 +102,51 @@
 }
 .td-kpi-dif.is-neg .val { color: #b91c1c; }
 .td-kpi-dif.is-pos .val { color: #15803d; }
+.td-dif-btn {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.td-dif-btn:hover { opacity: .85; }
+#td-dif-modal {
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    padding: 16px 18px;
+    max-width: min(920px, 96vw);
+    width: 920px;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, .18);
+}
+#td-dif-modal::backdrop { background: rgba(15, 23, 42, .35); }
+#td-dif-modal h3 { margin: 0 0 4px; font-size: 1.05rem; color: #0f172a; }
+#td-dif-modal .td-dif-sub { margin: 0 0 12px; font-size: .8rem; color: #64748b; }
+#td-dif-modal table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+#td-dif-modal th, #td-dif-modal td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+#td-dif-modal th { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+#td-dif-modal .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+#td-dif-modal .pos { color: #15803d; }
+#td-dif-modal .neg { color: #b91c1c; }
+#td-dif-modal .ok { color: #64748b; }
+#td-dif-modal .abrir {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: #1a4480;
+    color: #fff;
+    font-weight: 800;
+    font-size: .7rem;
+    text-decoration: none;
+    white-space: nowrap;
+}
+#td-dif-modal .abrir:hover { background: #163a6d; color: #fff; }
 
 .td-filter {
     display: flex;
@@ -292,12 +337,12 @@
 
     <div class="td-kpis">
         <div class="td-kpi td-kpi-suite">
-            <p class="lbl">Suite {{ $modo === 'sedes' ? '(todas las sedes)' : '' }}</p>
+            <p class="lbl">Ingresos caja {{ $modo === 'sedes' ? '(todas las sedes)' : '' }}</p>
             <p class="val">{{ $usd($suiteTotal) }}</p>
             <p class="hint">Declarado en facturadora</p>
         </div>
         <div class="td-kpi td-kpi-teso">
-            <p class="lbl">Ingreso Tesorería</p>
+            <p class="lbl">Ingresos tesorería</p>
             <p class="val">{{ $usd($tesoTotal) }}</p>
             <p class="hint">Contado en arqueo de caja</p>
         </div>
@@ -348,10 +393,10 @@
                     <tr class="td-group">
                         <th class="sticky">Forma de pago</th>
                         @if(count($columnas))
-                            <th colspan="{{ count($columnas) }}">{{ $modo === 'sedes' ? 'Suite por sede' : 'Suite por caja' }}</th>
+                            <th colspan="{{ count($columnas) }}">{{ $modo === 'sedes' ? 'Ingresos caja por sede' : 'Ingresos caja por caja' }}</th>
                         @endif
-                        <th>Suite</th>
-                        <th>Tesorería</th>
+                        <th>Ingresos caja</th>
+                        <th>Ingresos tesorería</th>
                         <th>Resultado</th>
                     </tr>
                     <tr class="td-cols">
@@ -360,7 +405,7 @@
                             <th class="td-num">{{ $col['etiqueta'] }}</th>
                         @endforeach
                         <th class="td-num td-suite-tot-h">Total</th>
-                        <th class="td-num td-teso-h">Ingreso {{ $modo === 'sedes' ? 'global' : '' }}</th>
+                        <th class="td-num td-teso-h">{{ $modo === 'sedes' ? 'Global' : 'Total' }}</th>
                         <th class="td-num td-dif-h">Diferencia</th>
                     </tr>
                 </thead>
@@ -383,7 +428,19 @@
                             @endforeach
                             <td class="td-num td-suite-tot {{ $esCero($fila['suite']) ? 'td-muted' : '' }} {{ $claseMonto($fila['suite']) }}">{{ $esCero($fila['suite']) ? '—' : $usd($fila['suite']) }}</td>
                             <td class="td-num td-teso {{ ($soloSuite || $esCero($fila['tesoreria'])) ? 'td-muted' : '' }}">{{ $soloSuite ? '—' : ($esCero($fila['tesoreria']) ? '—' : $usd($fila['tesoreria'])) }}</td>
-                            <td class="td-num td-dif-cell {{ $soloSuite ? 'td-muted' : $claseDif($fila['diferencia']) }}">{{ $soloSuite ? '—' : $usd($fila['diferencia']) }}</td>
+                            <td class="td-num td-dif-cell {{ $soloSuite ? 'td-muted' : $claseDif($fila['diferencia']) }}">
+                                @if($soloSuite)
+                                    —
+                                @elseif($esCero($fila['diferencia']))
+                                    {{ $usd($fila['diferencia']) }}
+                                @else
+                                    <button type="button" class="td-dif-btn"
+                                        data-clave="{{ $fila['clave'] }}"
+                                        data-forma="{{ $fila['forma'] }}"
+                                        data-cuenta="{{ $fila['cuenta'] ?? '' }}"
+                                        title="Ver de qué cajas sale esta diferencia">{{ $usd($fila['diferencia']) }}</button>
+                                @endif
+                            </td>
                         </tr>
                     @empty
                         <tr>
@@ -411,10 +468,86 @@
     </div>
 
     <p class="td-note">
-        Montos en USD. Las columnas de sede/caja son lo declarado en Suite.
-        Ingreso tesorería = lo contado en el arqueo.
-        Diferencia = Tesorería − Suite (negativo = faltante, positivo = sobrante).
-        «Factura a crédito» suma al total Suite, pero no a Tesorería ni a la diferencia.
+        Montos en USD. Las columnas de sede/caja son ingresos caja (facturadora).
+        Ingresos tesorería = lo contado en el arqueo.
+        Diferencia = Ingresos tesorería − Ingresos caja (negativo = faltante, positivo = sobrante).
+        Haz clic en una diferencia distinta de cero para ver de qué cierres sale.
+        «Factura a crédito» suma al total de ingresos caja, pero no a tesorería ni a la diferencia.
     </p>
 </div>
+
+<dialog id="td-dif-modal">
+    <h3 id="td-dif-titulo">Diferencia</h3>
+    <p class="td-dif-sub" id="td-dif-sub"></p>
+    <div id="td-dif-cuerpo">Cargando…</div>
+    <form method="dialog" style="text-align:right;margin-top:14px;"><button class="btn secondary">Cerrar</button></form>
+</dialog>
+<script>
+(function () {
+    const modal = document.getElementById('td-dif-modal');
+    const cuerpo = document.getElementById('td-dif-cuerpo');
+    const titulo = document.getElementById('td-dif-titulo');
+    const sub = document.getElementById('td-dif-sub');
+    const baseUrl = @json(route('tesoreria.dash.diferencia'));
+    const filtros = @json(['desde' => $desde, 'hasta' => $hasta, 'sede' => $sede]);
+    const usd = (n) => {
+        const v = Number(n) || 0;
+        return (v < -0.004 ? '-' : '') + '$' + Math.abs(v).toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    };
+    const cls = (n) => Math.abs(Number(n)) < 0.005 ? 'ok' : (Number(n) < 0 ? 'neg' : 'pos');
+    const esc = (t) => String(t ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+    document.querySelectorAll('.td-dif-btn').forEach(btn => btn.addEventListener('click', async () => {
+        const forma = btn.dataset.forma || 'Forma de pago';
+        const cuenta = btn.dataset.cuenta || '';
+        titulo.textContent = forma;
+        sub.textContent = (cuenta ? cuenta + ' · ' : '') + 'Cierres que componen esta diferencia';
+        cuerpo.textContent = 'Cargando…';
+        modal.showModal();
+        const q = new URLSearchParams({...filtros, clave: btn.dataset.clave || ''});
+        if (!filtros.sede) q.delete('sede');
+        try {
+            const r = await fetch(baseUrl + '?' + q.toString(), {headers: {'Accept': 'application/json'}});
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const data = await r.json();
+            if (!data.filas || !data.filas.length) {
+                cuerpo.innerHTML = '<p class="td-dif-sub">No hay cierres con movimiento en esta forma.</p>';
+                return;
+            }
+            const rows = data.filas.map(f => {
+                const marcar = Math.abs(Number(f.diferencia)) >= 0.005;
+                return `<tr>
+                    <td>${esc(f.fecha)}</td>
+                    <td>${esc(f.sede)}</td>
+                    <td>${esc(f.caja)}</td>
+                    <td>${esc(f.cajero)}</td>
+                    <td class="num">${usd(f.suite)}</td>
+                    <td class="num">${usd(f.tesoreria)}</td>
+                    <td class="num ${cls(f.diferencia)}">${usd(f.diferencia)}</td>
+                    <td>${marcar ? `<a class="abrir" href="${esc(f.url)}">Abrir</a>` : ''}</td>
+                </tr>`;
+            }).join('');
+            const t = data.totales || {};
+            cuerpo.innerHTML = `<div style="overflow:auto;max-height:60vh;">
+                <table>
+                    <thead><tr>
+                        <th>Fecha</th><th>Sede</th><th>Caja</th><th>Cajero</th>
+                        <th class="num">Ingresos caja</th><th class="num">Tesorería</th><th class="num">Diferencia</th><th></th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                    <tfoot><tr>
+                        <td colspan="4"><strong>Total</strong></td>
+                        <td class="num">${usd(t.suite)}</td>
+                        <td class="num">${usd(t.tesoreria)}</td>
+                        <td class="num ${cls(t.diferencia)}">${usd(t.diferencia)}</td>
+                        <td></td>
+                    </tr></tfoot>
+                </table>
+            </div>`;
+        } catch (e) {
+            cuerpo.textContent = 'No se pudo cargar el desglose.';
+        }
+    }));
+})();
+</script>
 @endsection

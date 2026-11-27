@@ -18,6 +18,41 @@ class TesoreriaController extends Controller
         return view('tesoreria.dash', $this->payloadDash($request, $cuadres));
     }
 
+    /** JSON: cierres que componen la diferencia de una forma de pago del dash. */
+    public function dashDiferencia(Request $request, CuadreCajaService $cuadres)
+    {
+        $hoy = now()->startOfDay();
+        $desde = $this->fechaDash($request->query('desde'), $hoy);
+        $hasta = $this->fechaDash($request->query('hasta'), $hoy);
+        if ($hasta->lt($desde)) {
+            [$desde, $hasta] = [$hasta, $desde];
+        }
+        $sede = strtoupper(trim((string) $request->query('sede', '')));
+        $clave = trim((string) $request->query('clave', ''));
+        $detalle = $cuadres->detalleDiferenciaDashboard($desde, $hasta, $clave, $sede !== '' ? $sede : null);
+        $volver = $request->fullUrl();
+        $baseVolver = route('tesoreria.dash', array_filter([
+            'desde' => $desde->toDateString(),
+            'hasta' => $hasta->toDateString(),
+            'sede' => $sede !== '' ? $sede : null,
+        ]));
+
+        foreach ($detalle['filas'] as &$fila) {
+            $fila['url'] = route('cuadre_caja.show', [
+                'cuadre' => $fila['cuadre_id'],
+                'volver' => $baseVolver,
+            ]);
+        }
+        unset($fila);
+
+        return response()->json($detalle + [
+            'desde' => $desde->toDateString(),
+            'hasta' => $hasta->toDateString(),
+            'sede' => $sede,
+            'volver' => $volver,
+        ]);
+    }
+
     /** PDF de la matriz del dashboard (mismos filtros de fechas / sede). */
     public function dashPdf(Request $request, CuadreCajaService $cuadres)
     {

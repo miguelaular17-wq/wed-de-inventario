@@ -80,6 +80,10 @@
 .rs-tabla tr.rs-subtotal td { background:#f1f5f9; font-weight:800; border-top:1px solid #cbd5e1; }
 .rs-tabla tfoot td { font-weight:800; background:#f8fafc; }
 .rs-detalle { border:0; background:#eef4fc; color:#1a4480; font-weight:800; font-size:.7rem; padding:3px 8px; border-radius:6px; cursor:pointer; }
+.rs-abrir { display:inline-block; padding:3px 8px; border-radius:6px; background:#1a4480; color:#fff; font-weight:800; font-size:.7rem; text-decoration:none; white-space:nowrap; }
+.rs-abrir:hover { background:#163a6d; color:#fff; }
+.rs-caja-link { color:inherit; font-weight:800; text-decoration:underline; text-underline-offset:2px; }
+.rs-caja-link:hover { color:#1a4480; }
 #rs-modal { border:0; border-radius:12px; padding:18px 20px; width:min(640px, 94vw); }
 #rs-modal::backdrop { background:rgba(15, 23, 42, .45); }
 #rs-modal table { width:100%; border-collapse:collapse; font-size:.84rem; }
@@ -152,30 +156,46 @@
         <div class="table-wrap" style="max-height:70vh;overflow:auto;">
             <table class="data-table rs-tabla">
                 <thead>
+                    @php
+                        $esCuadre = $reporte === 'cuadre';
+                        $colExtra = (! empty($resultado['detalle'])) || $esCuadre;
+                    @endphp
                     <tr>
                         @foreach($resultado['columnas'] as [$columna, $alineacion])
                             <th class="{{ $alineacion }}">{{ $columna }}</th>
                         @endforeach
-                        @if(! empty($resultado['detalle']))<th>Detalle</th>@endif
+                        @if($colExtra)<th></th>@endif
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($resultado['filas'] as $fila)
-                        @php $tipoFila = $fila['tipo'] ?? null; @endphp
+                        @php
+                            $tipoFila = $fila['tipo'] ?? null;
+                            $cuadreId = (int) ($fila['cuadre_id'] ?? 0);
+                            $urlCuadre = $cuadreId > 0 ? route('cuadre_caja.show', ['cuadre' => $cuadreId, 'volver' => request()->fullUrl()]) : null;
+                        @endphp
                         <tr class="{{ ! empty($fila['negativo']) ? 'negativo' : '' }}{{ $tipoFila === 'grupo' ? ' rs-grupo' : '' }}{{ $tipoFila === 'resumen' ? ' rs-resumen' : '' }}{{ $tipoFila === 'subtotal' ? ' rs-subtotal' : '' }}">
                             @foreach($fila['celdas'] as $i => $celda)
-                                <td class="{{ $resultado['columnas'][$i][1] ?? 'l' }}">{{ $celda }}</td>
+                                <td class="{{ $resultado['columnas'][$i][1] ?? 'l' }}">
+                                    @if($urlCuadre && $i === 1 && empty($tipoFila))
+                                        <a class="rs-caja-link" href="{{ $urlCuadre }}" title="Abrir arqueo de esta caja">{{ $celda }}</a>
+                                    @else
+                                        {{ $celda }}
+                                    @endif
+                                </td>
                             @endforeach
-                            @if(! empty($resultado['detalle']))
+                            @if($colExtra)
                                 <td>
-                                    @if(empty($tipoFila))
+                                    @if(! empty($resultado['detalle']) && empty($tipoFila))
                                         <button type="button" class="rs-detalle" data-url="{{ route('reportes_suite.factura', [$fila['sede'], $fila['documento']]) }}" data-doc="{{ $fila['documento'] }}">DETALLE</button>
+                                    @elseif($urlCuadre)
+                                        <a class="rs-abrir" href="{{ $urlCuadre }}">Abrir</a>
                                     @endif
                                 </td>
                             @endif
                         </tr>
                     @empty
-                        <tr><td colspan="{{ count($resultado['columnas']) + 1 }}" class="muted" style="text-align:center;padding:24px;">No hay datos con estos filtros.</td></tr>
+                        <tr><td colspan="{{ count($resultado['columnas']) + ($colExtra ? 1 : 0) }}" class="muted" style="text-align:center;padding:24px;">No hay datos con estos filtros.</td></tr>
                     @endforelse
                 </tbody>
                 @if($resultado['filas'] && $resultado['totales'])
@@ -184,7 +204,7 @@
                             @foreach($resultado['totales'] as $i => $total)
                                 <td class="{{ $resultado['columnas'][$i][1] ?? 'l' }}">{{ $total }}</td>
                             @endforeach
-                            @if(! empty($resultado['detalle']))<td></td>@endif
+                            @if($colExtra)<td></td>@endif
                         </tr>
                     </tfoot>
                 @endif

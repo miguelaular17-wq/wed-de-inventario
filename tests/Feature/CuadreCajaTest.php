@@ -784,6 +784,46 @@ class CuadreCajaTest extends TestCase
         );
     }
 
+    public function test_detalle_diferencia_del_dash_muestra_de_que_caja_sale_el_excedente(): void
+    {
+        $tesoreria = $this->usuario('tesoreria');
+        $this->actingAs($tesoreria)
+            ->post(route('cuadre_caja.conciliar', $this->cierre), [
+                'accion' => 'procesar',
+                'montos' => ['02|' => '820', 'TDD|PUNTOS' => ''],
+                'observacion' => 'Sobra efectivo',
+            ])
+            ->assertRedirect();
+
+        $detalle = app(CuadreCajaService::class)->detalleDiferenciaDashboard(
+            \Carbon\Carbon::parse('2026-10-30'),
+            \Carbon\Carbon::parse('2026-10-30'),
+            '02|',
+            'DORAL'
+        );
+        $fila = collect($detalle['filas'])->firstWhere('cuadre_id', $this->cierre->id);
+        $this->assertNotNull($fila);
+        $this->assertEqualsWithDelta(815.0, (float) $fila['suite'], 0.01);
+        $this->assertEqualsWithDelta(820.0, (float) $fila['tesoreria'], 0.01);
+        $this->assertEqualsWithDelta(5.0, (float) $fila['diferencia'], 0.01);
+        $this->assertEqualsWithDelta(5.0, (float) $detalle['totales']['diferencia'], 0.01);
+
+        $this->getJson(route('tesoreria.dash.diferencia', [
+            'desde' => '2026-10-30', 'hasta' => '2026-10-30', 'sede' => 'DORAL', 'clave' => '02|',
+        ]))
+            ->assertOk()
+            ->assertJsonPath('forma', 'EFECTIVO $')
+            ->assertJsonFragment(['cuadre_id' => $this->cierre->id, 'diferencia' => 5])
+            ->assertJsonPath('totales.diferencia', 5);
+
+        $this->get(route('tesoreria.dash', [
+            'desde' => '2026-10-30', 'hasta' => '2026-10-30', 'sede' => 'DORAL',
+        ]))
+            ->assertOk()
+            ->assertSee('td-dif-btn', false)
+            ->assertSee('data-clave="02|"', false);
+    }
+
     private function lotesCompletos(): array
     {
         return [['lote' => '101', 'monto' => '500000'], ['lote' => '102', 'monto' => '231536.94']];

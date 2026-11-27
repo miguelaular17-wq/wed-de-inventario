@@ -312,6 +312,7 @@ class ReportesSuiteService
                         $estados[$c->estadoTesoreria()] ?? $c->estadoTesoreria(),
                     ], fn ($v) => $v !== null)),
                     'negativo' => $diferencia !== null && $diferencia < -0.004,
+                    'cuadre_id' => (int) $c->id,
                 ];
             }
 

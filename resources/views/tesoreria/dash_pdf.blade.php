@@ -61,9 +61,9 @@
         <div class="sub">
             Filas = formas de pago.
             @if($modo === 'sedes')
-                Columnas = sedes (Suite $) · Ingreso tesorería global · Diferencia (Tesorería − Suite).
+                Columnas = sedes (ingresos caja $) · Ingresos tesorería global · Diferencia.
             @else
-                Columnas = cajas (Suite $) · Ingreso tesorería · Diferencia.
+                Columnas = cajas (ingresos caja $) · Ingresos tesorería · Diferencia.
             @endif
         </div>
     </div>
@@ -76,8 +76,8 @@
             @foreach($columnas as $col)
                 <th>{{ $col['etiqueta'] }}</th>
             @endforeach
-            <th>Total Suite</th>
-            <th>Ingreso tesorería {{ $modo === 'sedes' ? 'global' : '' }}</th>
+            <th>Ingresos caja</th>
+            <th>Ingresos tesorería {{ $modo === 'sedes' ? 'global' : '' }}</th>
             <th>Diferencia</th>
         </tr>
     </thead>
@@ -122,9 +122,9 @@
 </table>
 
 <p class="note">
-    Montos en USD. Columnas de sede/caja = declarado en Suite.
-    Ingreso tesorería = contado en el cuadre.
-    Diferencia = Tesorería − Suite (negativo = faltante, positivo = sobrante).
+    Montos en USD. Columnas de sede/caja = ingresos caja (facturadora).
+    Ingresos tesorería = contado en el cuadre.
+    Diferencia = Ingresos tesorería − Ingresos caja (negativo = faltante, positivo = sobrante).
 </p>
 </body>
 </html>

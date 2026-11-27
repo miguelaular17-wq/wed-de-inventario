@@ -117,37 +117,20 @@ class CuadreCajaService
             $clavesCol[$col] = $etiquetaCol;
 
             foreach ($this->lineas($cierre) as $linea) {
-                if (($linea['regla'] ?? null) === 'no_suma') {
+                $meta = $this->metaLineaDashboard($linea, $metodosCuadre);
+                if ($meta === null) {
                     continue;
                 }
+                $clave = $meta['clave'];
                 $metodo = (string) ($linea['codigo_metodo'] ?? '');
-                if ($metodosCuadre !== [] && ! in_array($metodo, $metodosCuadre, true)) {
-                    continue;
-                }
-                $forma = mb_strtoupper(trim((string) ($linea['forma_pago'] ?: $metodo ?: 'OTRO')), 'UTF-8');
-                if (str_contains($forma, 'CAJA PRINCIPAL') || $this->esFormaOculta($forma, $metodo) || $this->esFormaOcultaDashboard($forma, $metodo)) {
-                    continue;
-                }
-                $formaVisible = $this->etiquetaDashboard($forma);
-
-                // Puntos de venta y transferencias BS/$: una sola fila global (como en el arqueo POS).
-                $esPos = ! empty($linea['punto_venta']) || ! empty($linea['agrupada'])
-                    || (($linea['codigo_cuenta'] ?? '') === self::CUENTA_PUNTOS);
-                $transfDash = $this->cuentaTransferenciaDashboard($metodo);
-                if ($esPos) {
-                    $clave = $this->clave($metodo, self::CUENTA_PUNTOS);
-                    $cuentaDash = 'Todos los puntos de venta';
+                $codigoCuentaDash = (string) ($linea['codigo_cuenta'] ?? '');
+                if (! empty($linea['punto_venta']) || ! empty($linea['agrupada']) || $codigoCuentaDash === self::CUENTA_PUNTOS) {
                     $codigoCuentaDash = self::CUENTA_PUNTOS;
-                } elseif ($transfDash !== null) {
-                    $clave = $this->clave($metodo, $transfDash);
-                    $cuentaDash = $transfDash === self::CUENTA_TRANSF_BS
-                        ? 'Todas las transferencias BS'
-                        : 'Todas las transferencias $';
-                    $codigoCuentaDash = $transfDash;
                 } else {
-                    $clave = (string) ($linea['clave'] ?? $this->clave($metodo, $linea['codigo_cuenta'] ?? ''));
-                    $cuentaDash = trim((string) ($linea['cuenta'] ?? '')) ?: null;
-                    $codigoCuentaDash = (string) ($linea['codigo_cuenta'] ?? '');
+                    $transfDash = $this->cuentaTransferenciaDashboard($metodo);
+                    if ($transfDash !== null) {
+                        $codigoCuentaDash = $transfDash;
+                    }
                 }
 
                 // Si la forma/cuenta no estaba en el catálogo base, créala (no silenciar montos de otras sedes).
@@ -157,24 +140,17 @@ class CuadreCajaService
                         'orden_clave' => $clave,
                         'codigo_metodo' => $metodo,
                         'codigo_cuenta' => $codigoCuentaDash,
-                        'forma_pago' => $formaVisible,
-                        'forma' => $formaVisible,
-                        'cuenta' => $cuentaDash,
+                        'forma_pago' => $meta['forma'],
+                        'forma' => $meta['forma'],
+                        'cuenta' => $meta['cuenta'],
                         'por_columna' => [],
                         'suite' => 0.0,
                         'tesoreria' => 0.0,
                     ];
                 }
 
-                $suite = (float) ($linea['suite_usd'] ?? 0);
-                $tesoreria = $linea['tesoreria_usd'] !== null ? (float) $linea['tesoreria_usd'] : 0.0;
-                // EFECTIVO DEVOLUCION: resta en Suite (no es cobro) y no se duplica en Tesorería del consolidado.
-                $esDevolucion = ($linea['regla'] ?? null) === 'devolucion'
-                    || $metodo === strtoupper((string) config('cuadre_caja.metodo_devolucion_efectivo', 'NDC1'));
-                if ($esDevolucion) {
-                    $suite = $suite > 0 ? -$suite : $suite;
-                    $tesoreria = 0.0;
-                }
+                $suite = $meta['suite'];
+                $tesoreria = $meta['tesoreria'];
                 $filas[$clave]['por_columna'][$col] = round(($filas[$clave]['por_columna'][$col] ?? 0) + $suite, 2);
                 $filas[$clave]['suite'] = round($filas[$clave]['suite'] + $suite, 2);
                 $filas[$clave]['tesoreria'] = round($filas[$clave]['tesoreria'] + $tesoreria, 2);
@@ -245,6 +221,158 @@ class CuadreCajaService
                 // Créditos suman al total Suite pero no mueven la diferencia Tesorería − Suite.
                 'diferencia' => round($totTesoreria - $totSuiteParaDif, 2),
             ],
+        ];
+    }
+
+    /**
+     * Desglose de una diferencia del dashboard: qué cierres de caja aportan a esa forma de pago.
+     *
+     * @return array{
+     *   clave: string,
+     *   forma: string,
+     *   cuenta: string|null,
+     *   filas: list<array<string,mixed>>,
+     *   totales: array{suite: float, tesoreria: float, diferencia: float}
+     * }
+     */
+    public function detalleDiferenciaDashboard(Carbon $desde, Carbon $hasta, string $clave, ?string $sede = null): array
+    {
+        $vacio = [
+            'clave' => $clave,
+            'forma' => $clave,
+            'cuenta' => null,
+            'filas' => [],
+            'totales' => ['suite' => 0.0, 'tesoreria' => 0.0, 'diferencia' => 0.0],
+        ];
+        if ($clave === '' || $clave === 'FACCRED|' || ! Schema::hasTable('cuadres_caja')) {
+            return $vacio;
+        }
+
+        $sede = $sede ? strtoupper(trim($sede)) : null;
+        $query = CuadreCaja::query()
+            ->with(['pagos', 'conteos', 'lotes'])
+            ->whereBetween('fecha_cierre', [$desde->toDateString(), $hasta->toDateString().' 23:59:59']);
+        if ($sede) {
+            $query->where('sede', $sede);
+        }
+        $cierres = $query->orderBy('fecha_cierre')->orderBy('sede')->orderBy('codigo_caja')->orderBy('id')->get();
+        if ($cierres->isEmpty()) {
+            return $vacio;
+        }
+
+        $metodosCuadre = config('cuadre_caja.metodos_cuadre', []);
+        $cajasOcultas = ['CAJA COBRANZA', 'CAJA RRHH'];
+        $etiquetas = config('inventario.display', []);
+        $forma = $clave;
+        $cuenta = null;
+        $porCierre = [];
+
+        foreach ($cierres as $cierre) {
+            $nombreCaja = mb_strtoupper(trim((string) ($cierre->descripcion_caja ?: $cierre->codigo_caja ?: '')), 'UTF-8');
+            if ($sede && in_array($nombreCaja, $cajasOcultas, true)) {
+                continue;
+            }
+
+            $suite = 0.0;
+            $tesoreria = 0.0;
+            foreach ($this->lineas($cierre) as $linea) {
+                $meta = $this->metaLineaDashboard($linea, $metodosCuadre);
+                if ($meta === null || $meta['clave'] !== $clave) {
+                    continue;
+                }
+                $forma = $meta['forma'];
+                $cuenta = $meta['cuenta'];
+                $suite += $meta['suite'];
+                $tesoreria += $meta['tesoreria'];
+            }
+            $suite = round($suite, 2);
+            $tesoreria = round($tesoreria, 2);
+            $dif = round($tesoreria - $suite, 2);
+            if (abs($suite) < 0.005 && abs($tesoreria) < 0.005) {
+                continue;
+            }
+            $porCierre[] = [
+                'cuadre_id' => (int) $cierre->id,
+                'fecha' => $cierre->fecha_cierre?->format('d/m/Y') ?? '',
+                'sede' => $etiquetas[strtoupper(trim((string) $cierre->sede))] ?? strtoupper(trim((string) $cierre->sede)),
+                'caja' => trim((string) ($cierre->codigo_caja ?: $cierre->descripcion_caja ?: '—')),
+                'cajero' => trim((string) ($cierre->usuario_nombre ?: $cierre->usuario ?: '—')),
+                'suite' => $suite,
+                'tesoreria' => $tesoreria,
+                'diferencia' => $dif,
+            ];
+        }
+
+        usort($porCierre, fn (array $a, array $b) => abs($b['diferencia']) <=> abs($a['diferencia']) ?: strcmp($a['fecha'], $b['fecha']));
+
+        $totSuite = round(array_sum(array_column($porCierre, 'suite')), 2);
+        $totTesoreria = round(array_sum(array_column($porCierre, 'tesoreria')), 2);
+
+        return [
+            'clave' => $clave,
+            'forma' => $forma,
+            'cuenta' => $cuenta,
+            'filas' => $porCierre,
+            'totales' => [
+                'suite' => $totSuite,
+                'tesoreria' => $totTesoreria,
+                'diferencia' => round($totTesoreria - $totSuite, 2),
+            ],
+        ];
+    }
+
+    /**
+     * Misma clave / montos que usa matrizDashboard para una línea de arqueo.
+     *
+     * @param  array<string, mixed>  $linea
+     * @param  list<string>  $metodosCuadre
+     * @return array{clave:string,forma:string,cuenta:?string,suite:float,tesoreria:float}|null
+     */
+    private function metaLineaDashboard(array $linea, array $metodosCuadre): ?array
+    {
+        if (($linea['regla'] ?? null) === 'no_suma') {
+            return null;
+        }
+        $metodo = (string) ($linea['codigo_metodo'] ?? '');
+        if ($metodosCuadre !== [] && ! in_array($metodo, $metodosCuadre, true)) {
+            return null;
+        }
+        $forma = mb_strtoupper(trim((string) ($linea['forma_pago'] ?: $metodo ?: 'OTRO')), 'UTF-8');
+        if (str_contains($forma, 'CAJA PRINCIPAL') || $this->esFormaOculta($forma, $metodo) || $this->esFormaOcultaDashboard($forma, $metodo)) {
+            return null;
+        }
+        $formaVisible = $this->etiquetaDashboard($forma);
+        $esPos = ! empty($linea['punto_venta']) || ! empty($linea['agrupada'])
+            || (($linea['codigo_cuenta'] ?? '') === self::CUENTA_PUNTOS);
+        $transfDash = $this->cuentaTransferenciaDashboard($metodo);
+        if ($esPos) {
+            $clave = $this->clave($metodo, self::CUENTA_PUNTOS);
+            $cuentaDash = 'Todos los puntos de venta';
+        } elseif ($transfDash !== null) {
+            $clave = $this->clave($metodo, $transfDash);
+            $cuentaDash = $transfDash === self::CUENTA_TRANSF_BS
+                ? 'Todas las transferencias BS'
+                : 'Todas las transferencias $';
+        } else {
+            $clave = (string) ($linea['clave'] ?? $this->clave($metodo, $linea['codigo_cuenta'] ?? ''));
+            $cuentaDash = trim((string) ($linea['cuenta'] ?? '')) ?: null;
+        }
+
+        $suite = (float) ($linea['suite_usd'] ?? 0);
+        $tesoreria = $linea['tesoreria_usd'] !== null ? (float) $linea['tesoreria_usd'] : 0.0;
+        $esDevolucion = ($linea['regla'] ?? null) === 'devolucion'
+            || $metodo === strtoupper((string) config('cuadre_caja.metodo_devolucion_efectivo', 'NDC1'));
+        if ($esDevolucion) {
+            $suite = $suite > 0 ? -$suite : $suite;
+            $tesoreria = 0.0;
+        }
+
+        return [
+            'clave' => $clave,
+            'forma' => $formaVisible,
+            'cuenta' => $cuentaDash,
+            'suite' => $suite,
+            'tesoreria' => $tesoreria,
         ];
     }
 

@@ -445,6 +445,7 @@ Route::prefix('etiquetas')->name('etiquetas.')->group(function () {
 Route::middleware(['auth', 'permission:tesoreria'])->prefix('tesoreria')->name('tesoreria.')->group(function () {
     Route::get('/', [\App\Http\Controllers\TesoreriaController::class, 'dashboard'])->name('dashboard');
     Route::get('/dash', [\App\Http\Controllers\TesoreriaController::class, 'dash'])->name('dash');
+    Route::get('/dash/diferencia', [\App\Http\Controllers\TesoreriaController::class, 'dashDiferencia'])->name('dash.diferencia');
     Route::get('/dash.pdf', [\App\Http\Controllers\TesoreriaController::class, 'dashPdf'])->name('dash.pdf');
     Route::get('/caja', [\App\Http\Controllers\TesoreriaCajaController::class, 'index'])->name('caja.index');
     Route::post('/caja', [\App\Http\Controllers\TesoreriaCajaController::class, 'store'])->name('caja.store');
