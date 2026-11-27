@@ -53,12 +53,26 @@ class SyncService:
                 )
 
                 # ── Módulo 1: Stock / Inventario ─────────────────────────
-                if config.get("sync_stock", True):
-                    logger.info("[Apertura] ▶ Módulo: Stock / Inventario")
+                # Solo Doral actualiza stock + categoria/subcategoria al inicio del día.
+                from utils.helpers import es_sede_maestra_catalogo
+                from utils.constants import SEDE_MAESTRA_CATALOGO
+                sede_actual = (config.get("sede") or "").strip().upper()
+                sync_stock = bool(config.get("sync_stock", True))
+                sync_cats = bool(
+                    config.get("sync_categorias", False) or es_sede_maestra_catalogo(sede_actual)
+                )
+                if sync_stock or sync_cats:
+                    alm = config.get("almacen") or "?"
+                    logger.info(
+                        f"[Apertura] ▶ Módulo: Stock / Inventario (sede {sede_actual or '?'} · almacén {alm}"
+                        + (" · stock" if sync_stock else "")
+                        + (" · categorías" if sync_cats else "")
+                        + ")"
+                    )
                     success = SnapshotService.execute()
                     self.last_detalle["stock"] = time.time()
                 else:
-                    logger.info("[Apertura] ⏭ Módulo Stock/Inventario desactivado. Saltando.")
+                    logger.info("[Apertura] ⏭ Módulo Stock/Inventario y categorías desactivados. Saltando.")
 
                 # ── Módulo 2: Precios ─────────────────────────────────────
                 if config.get("sync_precios", True):

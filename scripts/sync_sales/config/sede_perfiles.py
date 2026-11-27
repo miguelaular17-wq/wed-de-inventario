@@ -1,6 +1,6 @@
 """Conexión Profit de cada sede. La nube no va aquí: es la misma para todas."""
 
-from utils.constants import SQL_SYNC_PASSWORD, SQL_SYNC_USER
+from utils.constants import SQL_SYNC_PASSWORD, SQL_SYNC_USER, codigo_almacen
 
 _QUERY = (
     "SELECT h.fecha_emision, i.articulo, i.cantidad "
@@ -26,17 +26,25 @@ _SEDES = {
 
 
 def cargar_perfil(sede: str):
+    from utils.helpers import es_sede_maestra_catalogo
+
     nombre = (sede or "").strip().upper()
     fila = _SEDES.get(nombre)
     if not fila:
         return None
     servidor, base, intervalo, precios, compras = fila
+    # Doral: catálogo (categoria/subcategoria). Nunes también sube su stock (almacén 02 Virtudes).
+    es_doral = es_sede_maestra_catalogo(nombre)
     return {
         "sede": nombre,
         "interval_seconds": intervalo,
         "interval_detalle": 3600,
         "sync_cobranzas": True,
-        "sync_stock": True,
+        "sync_stock": es_doral or nombre == "NUNES",
+        "sync_stock_periodico": False,
+        # Categoría/subcategoría: Doral ON por defecto; el resto lo activa en la UI si quiere.
+        "sync_categorias": es_doral,
+        "almacen": codigo_almacen(nombre),
         "sync_precios": precios,
         "sync_compras": compras,
         # JRZ (compras=True): también periódico para refrescar CxP Suite.

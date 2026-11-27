@@ -825,6 +825,10 @@ class SyncApp:
             
             billing_conn = self.get_sql_connection()
 
+            from utils.constants import codigo_almacen
+            almacen = str(self.config.get("almacen") or codigo_almacen(sede) or "01").strip() or "01"
+            self.log(f"[Snapshot] Almacén Profit: {almacen}")
+
             snapshot_query = f"""
                 SELECT
                     a.codigo                                         AS codigo,
@@ -851,7 +855,7 @@ class SyncApp:
                     c_sub.descripcion                                AS subcategoria
                 FROM [dbo].[articulos] a WITH (NOLOCK)
                 LEFT JOIN [dbo].[existencias] ex WITH (NOLOCK) 
-                    ON a.id = ex.id_articulo AND ex.almacen = '01'
+                    ON a.id = ex.id_articulo AND ex.almacen = '{almacen}'
                 LEFT JOIN [dbo].[categorias] c_sub WITH (NOLOCK) ON a.categoria = c_sub.codigo
                 LEFT JOIN [dbo].[categorias] c_padre WITH (NOLOCK) ON c_sub.id_padre = c_padre.id
                 LEFT JOIN (
@@ -999,9 +1003,17 @@ class SyncApp:
                         skipped += 1
                         continue
 
-                # Guardar info para la actualización masiva de precios y categorías
-                if pid not in pid_updates_map or precio_unidad > pid_updates_map[pid][0]:
-                    pid_updates_map[pid] = (precio_unidad, precio_mayor, categoria_str, subcategoria_str)
+                # Guardar info para la actualización masiva de precios y categorías.
+                # No dejar que un código sin subcategoría borre una que sí la trae.
+                from utils.helpers import merge_snapshot_attrs
+                merged = merge_snapshot_attrs(
+                    pid_updates_map.get(pid),
+                    precio_unidad,
+                    precio_mayor,
+                    categoria_str,
+                    subcategoria_str,
+                )
+                pid_updates_map[pid] = merged[:4]
 
                 pid_stock_map[pid] = pid_stock_map.get(pid, 0) + existencia
                 
@@ -1054,7 +1066,11 @@ class SyncApp:
             for pid_r, (pu, pm, cat, subcat) in pid_updates_map.items():
                 updates_tuples.append((pu, pm, cat, subcat, pid_r, pu, pm, cat, subcat))
                 
-            if updates_tuples:
+            from utils.helpers import es_sede_maestra_catalogo
+            actualiza_catalogo = bool(
+                self.config.get("sync_categorias", False) or es_sede_maestra_catalogo(sede)
+            )
+            if updates_tuples and actualiza_catalogo:
                 batch_update_query = """
                     UPDATE inventario_v2.productos
                     SET precio_unidad = CASE WHEN precio_unidad IS NULL OR precio_unidad <= 0 THEN %s ELSE precio_unidad END,
@@ -1070,17 +1086,21 @@ class SyncApp:
                     );
                 """
                 batch_execute_and_commit(batch_update_query, updates_tuples)
-                
-            self.log(f"[Snapshot] Atributos (precios, categorias) evaluados y actualizados para {len(updates_tuples)} productos en la web.")
+                self.log(f"[Snapshot] Atributos (precios, categorias) actualizados para {len(updates_tuples)} productos.")
+            elif updates_tuples:
+                self.log("[Snapshot] Categorías omitidas: activa «Actualizar categorías / subcategorías» en Stock.")
 
             # 1. Batch Upsert stock
-            upsert_stock_query = """
-                INSERT INTO inventario_v2.stock_actual (producto_id, sede, existencia, updated_at)
-                VALUES (%s, %s, %s, NOW())
-                ON CONFLICT (producto_id, sede) DO UPDATE
-                    SET existencia = EXCLUDED.existencia, updated_at = NOW();
-            """
-            batch_execute_and_commit(upsert_stock_query, stock_tuples)
+            if bool(self.config.get("sync_stock", True)):
+                upsert_stock_query = """
+                    INSERT INTO inventario_v2.stock_actual (producto_id, sede, existencia, updated_at)
+                    VALUES (%s, %s, %s, NOW())
+                    ON CONFLICT (producto_id, sede) DO UPDATE
+                        SET existencia = EXCLUDED.existencia, updated_at = NOW();
+                """
+                batch_execute_and_commit(upsert_stock_query, stock_tuples)
+            else:
+                self.log("[Snapshot] Stock omitido: sync_stock desactivado.")
 
             # 2. Batch Upsert ventas
             upsert_ventas_query = """

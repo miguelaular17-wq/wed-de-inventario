@@ -24,9 +24,11 @@ SELECT
     ISNULL(a.costo_actual_moneda2, 0)                AS costo_actual
 FROM [dbo].[articulos] a WITH (NOLOCK)
 LEFT JOIN [dbo].[existencias] ex WITH (NOLOCK) 
-    ON a.id = ex.id_articulo AND ex.almacen = '01'
-LEFT JOIN [dbo].[categorias] c_sub WITH (NOLOCK) ON a.categoria = c_sub.codigo
-LEFT JOIN [dbo].[categorias] c_padre WITH (NOLOCK) ON c_sub.id_padre = c_padre.id
+    ON a.id = ex.id_articulo AND ex.almacen = '{almacen}'
+LEFT JOIN [dbo].[categorias] c_sub WITH (NOLOCK)
+    ON LTRIM(RTRIM(a.categoria)) = LTRIM(RTRIM(c_sub.codigo))
+LEFT JOIN [dbo].[categorias] c_padre WITH (NOLOCK)
+    ON c_padre.id = c_sub.id_padre
 LEFT JOIN (
     SELECT ISNULL(a2.codigo, vi.articulo) AS articulo, SUM(vi.cantidad) AS total_qty
     FROM [dbo].[documentos_venta] v WITH (NOLOCK)

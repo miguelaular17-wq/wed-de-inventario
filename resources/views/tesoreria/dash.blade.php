@@ -287,21 +287,6 @@
     <div class="td-head">
         <div>
             <h1>Dashboard Tesorería</h1>
-            <p class="lead">
-                Comparativo Suite vs lo contado en Tesorería.
-                @if($modo === 'sedes')
-                    Columnas = sedes · una sola vista con todas las sedes.
-                @else
-                    Columnas = cajas de {{ $etiquetas[$sede] ?? $sede }}.
-                @endif
-                Diferencia = Tesorería − Suite.
-            </p>
-        </div>
-        <div class="td-actions">
-            <a href="{{ route('tesoreria.dash.pdf', ['desde' => $desde, 'hasta' => $hasta, 'sede' => $sede]) }}" class="btn primary">Descargar PDF</a>
-            <a href="{{ route('tesoreria.dashboard') }}" class="btn secondary">Panel ingresos</a>
-            <a href="{{ route('tesoreria.caja.index') }}" class="btn secondary">Caja principal</a>
-            <a href="{{ route('cuadre_caja.index', ['desde' => $desde, 'hasta' => $hasta, 'sede' => $sede]) }}" class="btn secondary">Arqueo de caja</a>
         </div>
     </div>
 
@@ -381,11 +366,15 @@
                 </thead>
                 <tbody>
                     @forelse($filas as $fila)
+                        @php $soloSuite = !empty($fila['excluir_de_diferencia']); @endphp
                         <tr>
                             <td class="sticky">
                                 <span class="td-forma">{{ $fila['forma'] }}</span>
                                 @if(!empty($fila['cuenta']))
                                     <div class="td-cuenta">{{ $fila['cuenta'] }}</div>
+                                @endif
+                                @if($soloSuite)
+                                    <div class="td-cuenta">No entra en arqueo / diferencia</div>
                                 @endif
                             </td>
                             @foreach($columnas as $col)
@@ -393,8 +382,8 @@
                                 <td class="td-num td-sede {{ $esCero($v) ? 'td-muted' : '' }} {{ $claseMonto($v) }}">{{ $esCero($v) ? '—' : $usd($v) }}</td>
                             @endforeach
                             <td class="td-num td-suite-tot {{ $esCero($fila['suite']) ? 'td-muted' : '' }} {{ $claseMonto($fila['suite']) }}">{{ $esCero($fila['suite']) ? '—' : $usd($fila['suite']) }}</td>
-                            <td class="td-num td-teso {{ $esCero($fila['tesoreria']) ? 'td-muted' : '' }}">{{ $esCero($fila['tesoreria']) ? '—' : $usd($fila['tesoreria']) }}</td>
-                            <td class="td-num td-dif-cell {{ $claseDif($fila['diferencia']) }}">{{ $usd($fila['diferencia']) }}</td>
+                            <td class="td-num td-teso {{ ($soloSuite || $esCero($fila['tesoreria'])) ? 'td-muted' : '' }}">{{ $soloSuite ? '—' : ($esCero($fila['tesoreria']) ? '—' : $usd($fila['tesoreria'])) }}</td>
+                            <td class="td-num td-dif-cell {{ $soloSuite ? 'td-muted' : $claseDif($fila['diferencia']) }}">{{ $soloSuite ? '—' : $usd($fila['diferencia']) }}</td>
                         </tr>
                     @empty
                         <tr>
@@ -425,6 +414,7 @@
         Montos en USD. Las columnas de sede/caja son lo declarado en Suite.
         Ingreso tesorería = lo contado en el arqueo.
         Diferencia = Tesorería − Suite (negativo = faltante, positivo = sobrante).
+        «Factura a crédito» suma al total Suite, pero no a Tesorería ni a la diferencia.
     </p>
 </div>
 @endsection

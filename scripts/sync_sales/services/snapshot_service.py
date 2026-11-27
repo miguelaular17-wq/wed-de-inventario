@@ -5,7 +5,8 @@ from database.postgres import PostgresConnection
 from config.config_manager import ConfigManager
 from config.state_manager import StateManager
 from utils.logger import AppLogger
-from utils.helpers import get_sql_query
+from utils.helpers import get_sql_query, merge_snapshot_attrs, es_sede_maestra_catalogo
+from utils.constants import SEDE_MAESTRA_CATALOGO, codigo_almacen
 from utils.dates import sanitize_business_date
 import psycopg2.extras
 
@@ -20,6 +21,24 @@ class SnapshotService:
         
         try:
             sede = config.get("sede", "JRZ")
+            sync_stock = bool(config.get("sync_stock", True))
+            # Doral (maestro) o cualquier sede con la opción activada en la UI/config.
+            actualiza_catalogo = bool(
+                config.get("sync_categorias", False) or es_sede_maestra_catalogo(sede)
+            )
+            if not sync_stock and not actualiza_catalogo:
+                logger.info(
+                    f"[Snapshot] Omitido en sede {sede}: sync_stock y sync_categorias desactivados."
+                )
+                return True
+
+            almacen = str(config.get("almacen") or codigo_almacen(sede) or "01").strip() or "01"
+            logger.info(
+                f"[Snapshot] Sede {sede} · almacén Profit {almacen}"
+                + (" · actualiza categoría/subcategoría" if actualiza_catalogo else "")
+                + (" · actualiza stock" if sync_stock else "")
+            )
+
             logger.info("[Snapshot] 1. Conectando a Supabase para ver qué productos ya existen...")
             
             web_conn = PostgresConnection.get_connection()
@@ -64,7 +83,9 @@ class SnapshotService:
                 try: web_conn.rollback()
                 except Exception: pass
 
-            snapshot_query = get_sql_query("snapshot.sql")
+            snapshot_query = get_sql_query("snapshot.sql").replace(
+                "{almacen}", almacen.replace("'", "''")
+            )
             
             cursor = billing_conn.cursor()
             cursor.execute(snapshot_query)
@@ -162,8 +183,14 @@ class SnapshotService:
                         skipped += 1
                         continue
 
-                if pid not in pid_updates_map or precio_unidad > pid_updates_map[pid][0]:
-                    pid_updates_map[pid] = (precio_unidad, precio_mayor, categoria_str, subcategoria_str, costo_actual)
+                pid_updates_map[pid] = merge_snapshot_attrs(
+                    pid_updates_map.get(pid),
+                    precio_unidad,
+                    precio_mayor,
+                    categoria_str,
+                    subcategoria_str,
+                    costo_actual,
+                )
 
                 pid_stock_map[pid] = pid_stock_map.get(pid, 0) + existencia
                 
@@ -228,7 +255,7 @@ class SnapshotService:
             for pid_r, (pu, pm, cat, subcat, costo) in pid_updates_map.items():
                 updates_tuples.append((pu, pm, cat, subcat, costo, costo, pid_r, pu, pm, cat, subcat, costo))
                 
-            if updates_tuples:
+            if updates_tuples and actualiza_catalogo:
                 batch_update_query = """
                     UPDATE inventario_v2.productos
                     SET precio_unidad = CASE WHEN precio_unidad IS NULL OR precio_unidad <= 0 THEN %s ELSE precio_unidad END,
@@ -246,16 +273,24 @@ class SnapshotService:
                     );
                 """
                 batch_execute_and_commit(batch_update_query, updates_tuples)
-                
-            logger.info(f"[Snapshot] Atributos evaluados y actualizados para {len(updates_tuples)} productos en la web.")
+                logger.info(f"[Snapshot] Atributos evaluados y actualizados para {len(updates_tuples)} productos en la web.")
+            elif updates_tuples:
+                logger.info(
+                    f"[Snapshot] Categorías omitidas en {sede}: activa "
+                    f"«Actualizar categorías / subcategorías» en la UI "
+                    f"(por defecto solo {SEDE_MAESTRA_CATALOGO})."
+                )
 
-            upsert_stock_query = """
-                INSERT INTO inventario_v2.stock_actual (producto_id, sede, existencia, updated_at)
-                VALUES (%s, %s, %s, NOW())
-                ON CONFLICT (producto_id, sede) DO UPDATE
-                    SET existencia = EXCLUDED.existencia, updated_at = NOW();
-            """
-            batch_execute_and_commit(upsert_stock_query, stock_tuples)
+            if sync_stock:
+                upsert_stock_query = """
+                    INSERT INTO inventario_v2.stock_actual (producto_id, sede, existencia, updated_at)
+                    VALUES (%s, %s, %s, NOW())
+                    ON CONFLICT (producto_id, sede) DO UPDATE
+                        SET existencia = EXCLUDED.existencia, updated_at = NOW();
+                """
+                batch_execute_and_commit(upsert_stock_query, stock_tuples)
+            else:
+                logger.info(f"[Snapshot] Stock omitido en {sede}: sync_stock desactivado.")
 
             upsert_ventas_query = """
                 INSERT INTO inventario_v2.ventas_historicas

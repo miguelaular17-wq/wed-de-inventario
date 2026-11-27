@@ -210,17 +210,27 @@ class CuadreCajaService
             $columnas[] = ['clave' => $clave, 'etiqueta' => $etiqueta];
         }
 
+        $credito = $this->filaFacturasCreditoDashboard($desde, $hasta, $modo, $sede, $cierres, array_keys($clavesCol));
+        if ($credito !== null) {
+            $filas['FACCRED|'] = $credito;
+        }
+
         $lista = [];
         $totCol = array_fill_keys(array_keys($clavesCol), 0.0);
         $totSuite = 0.0;
+        $totSuiteParaDif = 0.0;
         $totTesoreria = 0.0;
         foreach ($filas as $fila) {
-            $dif = round($fila['tesoreria'] - $fila['suite'], 2);
+            $excluirDif = ! empty($fila['excluir_de_diferencia']);
+            $dif = $excluirDif ? 0.0 : round($fila['tesoreria'] - $fila['suite'], 2);
             $lista[] = $fila + ['diferencia' => $dif];
             foreach ($fila['por_columna'] as $col => $monto) {
                 $totCol[$col] = round(($totCol[$col] ?? 0) + $monto, 2);
             }
             $totSuite = round($totSuite + $fila['suite'], 2);
+            if (! $excluirDif) {
+                $totSuiteParaDif = round($totSuiteParaDif + $fila['suite'], 2);
+            }
             $totTesoreria = round($totTesoreria + $fila['tesoreria'], 2);
         }
 
@@ -232,8 +242,113 @@ class CuadreCajaService
                 'por_columna' => $totCol,
                 'suite' => $totSuite,
                 'tesoreria' => $totTesoreria,
-                'diferencia' => round($totTesoreria - $totSuite, 2),
+                // Créditos suman al total Suite pero no mueven la diferencia Tesorería − Suite.
+                'diferencia' => round($totTesoreria - $totSuiteParaDif, 2),
             ],
+        ];
+    }
+
+    /**
+     * Fila solo del dashboard: facturas a crédito de Suite (ventas_documentos).
+     * Suma a Suite / columnas de sede o caja; Tesorería y Diferencia quedan en 0.
+     *
+     * @param  Collection<int, CuadreCaja>  $cierres
+     * @param  list<string>  $clavesCol
+     * @return array<string, mixed>|null
+     */
+    private function filaFacturasCreditoDashboard(
+        Carbon $desde,
+        Carbon $hasta,
+        string $modo,
+        ?string $sede,
+        Collection $cierres,
+        array $clavesCol
+    ): ?array {
+        if (! Schema::hasTable('ventas_documentos') || ! Schema::hasColumn('ventas_documentos', 'credito')) {
+            return null;
+        }
+
+        $docs = DB::table('ventas_documentos')
+            ->when($sede, fn ($q) => $q->whereRaw('UPPER(TRIM(sede)) = ?', [strtoupper($sede)]))
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where(fn ($q) => $q->whereNull('estado')->orWhereRaw("LOWER(estado) = 'registrado'"))
+            ->where(fn ($q) => $q
+                ->where(fn ($fac) => $fac->where('tipo_documento', 'FAC')->where('credito', true))
+                ->orWhere(fn ($dev) => $dev->where('tipo_documento', 'DEV')->where('total_credito_usd', '<>', 0)))
+            ->get(['sede', 'usuario', 'tipo_documento', 'fecha', 'total_credito_usd']);
+
+        if ($docs->isEmpty()) {
+            return [
+                'clave' => 'FACCRED|',
+                'orden_clave' => 'ZZZ|FACCRED',
+                'codigo_metodo' => 'FACCRED',
+                'codigo_cuenta' => '',
+                'forma_pago' => 'FACTURA A CREDITO',
+                'forma' => 'FACTURA A CREDITO',
+                'cuenta' => null,
+                'por_columna' => [],
+                'suite' => 0.0,
+                'tesoreria' => 0.0,
+                'excluir_de_diferencia' => true,
+            ];
+        }
+
+        // usuario (cédula) → códigos de caja del día (para modo cajas).
+        $cajasPorUsuario = [];
+        foreach ($cierres as $cierre) {
+            $u = preg_replace('/\D/', '', (string) $cierre->usuario) ?: trim((string) $cierre->usuario);
+            if ($u === '') {
+                continue;
+            }
+            $caja = trim((string) ($cierre->codigo_caja ?: ''));
+            if ($caja === '') {
+                continue;
+            }
+            $cajasPorUsuario[$u][] = $caja;
+        }
+
+        $porColumna = [];
+        $suite = 0.0;
+        foreach ($docs as $d) {
+            $signo = strtoupper((string) $d->tipo_documento) === 'DEV' ? -1.0 : 1.0;
+            $monto = round($signo * abs((float) $d->total_credito_usd), 2);
+            if (abs($monto) < 0.005) {
+                continue;
+            }
+            $suite = round($suite + $monto, 2);
+
+            if ($modo === 'sedes') {
+                $col = strtoupper(trim((string) $d->sede));
+            } else {
+                $u = preg_replace('/\D/', '', (string) $d->usuario) ?: trim((string) $d->usuario);
+                $cajas = array_values(array_unique($cajasPorUsuario[$u] ?? []));
+                if (count($cajas) === 1) {
+                    $col = $cajas[0];
+                } elseif (count($cajas) > 1) {
+                    $noAdmon = array_values(array_filter($cajas, fn ($c) => ! str_contains(strtoupper($c), 'ADMON')));
+                    $col = $noAdmon[0] ?? $cajas[0];
+                } else {
+                    $col = null;
+                }
+            }
+
+            if ($col !== null && $col !== '' && in_array($col, $clavesCol, true)) {
+                $porColumna[$col] = round(($porColumna[$col] ?? 0) + $monto, 2);
+            }
+        }
+
+        return [
+            'clave' => 'FACCRED|',
+            'orden_clave' => 'ZZZ|FACCRED',
+            'codigo_metodo' => 'FACCRED',
+            'codigo_cuenta' => '',
+            'forma_pago' => 'FACTURA A CREDITO',
+            'forma' => 'FACTURA A CREDITO',
+            'cuenta' => null,
+            'por_columna' => $porColumna,
+            'suite' => $suite,
+            'tesoreria' => 0.0,
+            'excluir_de_diferencia' => true,
         ];
     }
 

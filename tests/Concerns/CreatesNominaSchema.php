@@ -129,8 +129,27 @@ trait CreatesNominaSchema
                 $table->string('estado', 24)->default('registrado');
                 $table->decimal('total_neto_bs', 18, 5)->default(0);
                 $table->decimal('total_neto_usd', 18, 5)->default(0);
+                $table->decimal('total_credito_usd', 18, 5)->default(0);
+                $table->boolean('credito')->default(false);
+                $table->string('usuario', 64)->nullable();
+                $table->string('estacion', 64)->nullable();
                 $table->string('vendedor', 128)->nullable();
                 $table->timestamps();
+            });
+        } else {
+            Schema::table('ventas_documentos', function (Blueprint $table) {
+                if (! Schema::hasColumn('ventas_documentos', 'total_credito_usd')) {
+                    $table->decimal('total_credito_usd', 18, 5)->default(0);
+                }
+                if (! Schema::hasColumn('ventas_documentos', 'credito')) {
+                    $table->boolean('credito')->default(false);
+                }
+                if (! Schema::hasColumn('ventas_documentos', 'usuario')) {
+                    $table->string('usuario', 64)->nullable();
+                }
+                if (! Schema::hasColumn('ventas_documentos', 'estacion')) {
+                    $table->string('estacion', 64)->nullable();
+                }
             });
         }
 

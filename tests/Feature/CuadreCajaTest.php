@@ -737,6 +737,51 @@ class CuadreCajaTest extends TestCase
         $this->assertSame('KRECE', $porClave['05|']['forma'] ?? null);
         $this->assertSame('DEVOLUCION', $porClave['NDC1|']['forma'] ?? null);
         $this->assertFalse($porClave->has('IGTF|'));
+        $this->assertSame('FACTURA A CREDITO', $porClave['FACCRED|']['forma'] ?? null);
+        $this->assertTrue(! empty($porClave['FACCRED|']['excluir_de_diferencia']));
+        $this->assertSame(0.0, (float) ($porClave['FACCRED|']['tesoreria'] ?? -1));
+        $this->assertSame(0.0, (float) ($porClave['FACCRED|']['diferencia'] ?? -1));
+    }
+
+    public function test_factura_a_credito_suma_al_suite_del_dash_sin_mover_tesoreria_ni_diferencia(): void
+    {
+        \Illuminate\Support\Facades\DB::table('ventas_documentos')->insert([
+            'sede' => 'DORAL',
+            'tipo_documento' => 'FAC',
+            'numero_documento' => 'FAC-CRED-1',
+            'fecha' => '2026-10-30',
+            'estado' => 'registrado',
+            'total_neto_usd' => 50,
+            'total_credito_usd' => 12.38,
+            'credito' => true,
+            'usuario' => '28738920',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $m = app(CuadreCajaService::class)->matrizDashboard(
+            \Carbon\Carbon::parse('2026-10-30'),
+            \Carbon\Carbon::parse('2026-10-30'),
+            'DORAL'
+        );
+
+        $fila = collect($m['filas'])->firstWhere('clave', 'FACCRED|');
+        $this->assertNotNull($fila);
+        $this->assertSame('FACTURA A CREDITO', $fila['forma']);
+        $this->assertTrue(! empty($fila['excluir_de_diferencia']));
+        $this->assertEqualsWithDelta(12.38, (float) $fila['suite'], 0.01);
+        $this->assertSame(0.0, (float) $fila['tesoreria']);
+        $this->assertSame(0.0, (float) $fila['diferencia']);
+
+        $suiteSinCredito = collect($m['filas'])
+            ->reject(fn ($f) => ($f['clave'] ?? '') === 'FACCRED|')
+            ->sum(fn ($f) => (float) $f['suite']);
+        $this->assertEqualsWithDelta($suiteSinCredito + 12.38, (float) $m['totales']['suite'], 0.01);
+        $this->assertEqualsWithDelta(
+            (float) $m['totales']['tesoreria'] - $suiteSinCredito,
+            (float) $m['totales']['diferencia'],
+            0.01
+        );
     }
 
     private function lotesCompletos(): array
