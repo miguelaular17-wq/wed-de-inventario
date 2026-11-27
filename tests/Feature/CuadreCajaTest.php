@@ -493,10 +493,22 @@ class CuadreCajaTest extends TestCase
         $this->actingAs($this->usuario('tesoreria'))->post(route('cuadre_caja.conciliar', $caja), [
             'accion' => 'procesar', 'montos' => ['02|' => '430', 'CASHEA|' => '1084.04'], 'observacion' => 'Faltante por tasa en devolución',
         ])->assertSessionHasNoErrors();
-        $resumen = app(CuadreCajaService::class)->resumen($caja->fresh()->load(['pagos', 'conteos', 'lotes']));
+        $svc = app(CuadreCajaService::class);
+        $caja = $caja->fresh()->load(['pagos', 'conteos', 'lotes']);
+        $resumen = $svc->resumen($caja);
         $this->assertSame(1619.04, $resumen['ingresos_usd']);
         $this->assertSame(1616.29, $resumen['tesoreria_usd']);
         $this->assertSame(-2.75, $resumen['diferencia_usd']);
+
+        // Dashboard / consolidado Suite: la devolución resta en ventas y no infla el contado.
+        $dash = $svc->montosComoDashboard($caja);
+        $this->assertEqualsWithDelta(1516.79, $dash['ingresos_usd'], 0.01);
+        $this->assertEqualsWithDelta(1514.04, $dash['tesoreria_usd'], 0.01);
+        $this->assertEqualsWithDelta(-2.75, $dash['diferencia_usd'], 0.01);
+        $matriz = $svc->matrizDashboard(\Carbon\Carbon::parse('2026-11-10'), \Carbon\Carbon::parse('2026-11-10'), 'DORAL');
+        $this->assertEqualsWithDelta($dash['ingresos_usd'], (float) $matriz['totales']['suite'] - (float) (collect($matriz['filas'])->firstWhere('clave', 'FACCRED|')['suite'] ?? 0), 0.01);
+        $this->assertEqualsWithDelta($dash['tesoreria_usd'], (float) $matriz['totales']['tesoreria'], 0.01);
+        $this->assertEqualsWithDelta($dash['diferencia_usd'], (float) $matriz['totales']['diferencia'], 0.01);
 
         $this->get(route('cuadre_caja.show', $caja))->assertOk()
             ->assertSee('No suma al cuadre')->assertSee('Devuelto en efectivo')->assertSee('-$2,75', false);

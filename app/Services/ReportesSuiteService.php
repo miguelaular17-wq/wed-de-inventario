@@ -291,14 +291,14 @@ class ReportesSuiteService
             $detalle = [];
 
             foreach ($items as $c) {
-                $resumen = $servicio->resumen($c);
+                // Misma base que Tesorería → Detalle por caja (devolución, métodos, etc.).
+                $montos = $servicio->montosComoDashboard($c);
                 $clave = $c->sede.'|'.$c->fecha_cierre?->toDateString().'|'.$c->codigo_caja.'|'.$c->usuario;
                 $facturas = $c->facturas_suite ?? ($facturasPorCaja[$clave] ?? null);
-                // Ingresos del arqueo (formas de pago), no el total_venta_usd de Suite: así cierra con la diferencia.
-                $venta = (float) $resumen['ingresos_usd'];
+                $venta = (float) $montos['ingresos_usd'];
                 $credito = (float) ($creditoPorCuadre[(int) $c->id] ?? 0);
-                $contado = $resumen['tesoreria_usd'];
-                $diferencia = $resumen['diferencia_usd'];
+                $contado = $montos['tesoreria_usd'];
+                $diferencia = $montos['diferencia_usd'];
                 $nFact = (int) ($facturas ?? 0);
                 $sedeFacturas += $nFact;
                 $sedeVenta += $venta;
@@ -425,7 +425,7 @@ class ReportesSuiteService
             'total_filas' => $totalCierres,
             'agrupado' => true,
             'nota' => $conTotal
-                ? 'Total ventas = cobrado en formas de pago del arqueo. Diferencia = Total contado − Total ventas. Ventas a crédito no entran al arqueo ni a la diferencia.'
+                ? 'Mismos totales que Tesorería (Detalle por caja): Diferencia = Total contado − Total ventas. La devolución resta en ventas y no suma a contado. Ventas a crédito no entran al arqueo ni a la diferencia.'
                 : null,
         ];
     }

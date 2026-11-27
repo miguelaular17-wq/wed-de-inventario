@@ -120,9 +120,9 @@ class ReportesSuiteTest extends TestCase
             ->assertOk()->assertDontSee('JAIR AVILA')->assertDontSee('380,86');
 
         $cuadreId = DB::table('cuadres_caja')->where('codigo_caja', 'CJA09')->value('id');
-        DB::table('cuadre_caja_pagos')->insert(['cuadre_caja_id' => $cuadreId, 'codigo_metodo' => 'EFE$', 'forma_pago' => 'EFECTIVO $',
+        DB::table('cuadre_caja_pagos')->insert(['cuadre_caja_id' => $cuadreId, 'codigo_metodo' => '02', 'forma_pago' => 'EFECTIVO $',
             'codigo_cuenta' => '', 'en_dolares' => true, 'ingresos' => 100, 'ingresos_usd' => 100]);
-        DB::table('cuadre_caja_conteos')->insert(['cuadre_caja_id' => $cuadreId, 'codigo_metodo' => 'EFE$', 'codigo_cuenta' => '',
+        DB::table('cuadre_caja_conteos')->insert(['cuadre_caja_id' => $cuadreId, 'codigo_metodo' => '02', 'codigo_cuenta' => '',
             'forma_pago' => 'EFECTIVO $', 'en_dolares' => true, 'monto' => 95, 'created_at' => now(), 'updated_at' => now()]);
         DB::table('cuadres_caja')->where('id', $cuadreId)->update(['conciliado_at' => now(), 'estado_tesoreria' => 'procesado',
             'observacion_tesoreria' => 'Faltan 5 en efectivo']);

@@ -1126,6 +1126,38 @@ class CuadreCajaService
     }
 
     /**
+     * Totales de un cierre con la misma regla del dashboard Tesorería (devolución resta en
+     * ingresos caja y no suma a tesorería; mismos filtros de formas/métodos).
+     *
+     * @return array{ingresos_usd: float, tesoreria_usd: float|null, diferencia_usd: float|null}
+     */
+    public function montosComoDashboard(CuadreCaja $cuadre): array
+    {
+        $metodosCuadre = config('cuadre_caja.metodos_cuadre', []);
+        $suite = 0.0;
+        $tesoreria = 0.0;
+        foreach ($this->lineas($cuadre) as $linea) {
+            $meta = $this->metaLineaDashboard($linea, $metodosCuadre);
+            if ($meta === null) {
+                continue;
+            }
+            $suite += $meta['suite'];
+            $tesoreria += $meta['tesoreria'];
+        }
+        $suite = round($suite, 2);
+        $tesoreria = round($tesoreria, 2);
+        if (! $cuadre->conciliado()) {
+            return ['ingresos_usd' => $suite, 'tesoreria_usd' => null, 'diferencia_usd' => null];
+        }
+
+        return [
+            'ingresos_usd' => $suite,
+            'tesoreria_usd' => $tesoreria,
+            'diferencia_usd' => round($tesoreria - $suite, 2),
+        ];
+    }
+
+    /**
      * Formas de pago con cuenta que ya aparecieron en los cierres de la sede, para que Tesorería
      * pueda anotar una que la cajera no declaró.
      *
