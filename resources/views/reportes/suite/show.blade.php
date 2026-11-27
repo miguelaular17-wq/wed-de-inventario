@@ -149,9 +149,12 @@
     </div>
 </form>
 
-@if(! empty($resultado['aviso']))
+@if(! empty($resultado['aviso']) && empty($resultado['filas']))
     <div class="panel" style="padding:16px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;">{{ $resultado['aviso'] }}</div>
-@else
+@elseif(! empty($resultado['filas']) || ! empty($resultado['columnas']))
+    @if(! empty($resultado['nota']))
+        <p class="muted" style="margin:0 0 10px;font-size:.8rem;">{{ $resultado['nota'] }}</p>
+    @endif
     <div class="panel" style="padding:0;">
         <div class="table-wrap" style="max-height:70vh;overflow:auto;">
             <table class="data-table rs-tabla">

@@ -131,15 +131,19 @@ class ReportesSuiteTest extends TestCase
             'total_neto_usd' => 40.5, 'usuario' => '28046742',
         ]);
         $this->get(route('reportes_suite', ['reporte' => 'cuadre'] + $filtros))
-            ->assertOk()->assertSee('JAIR AVILA')->assertSee('Faltan 5 en efectivo')->assertSee('380,86')->assertSee('Procesado')->assertSee('-5,00')->assertSee('1 cierre')
+            ->assertOk()->assertSee('JAIR AVILA')->assertSee('Faltan 5 en efectivo')->assertSee('Procesado')->assertSee('-5,00')->assertSee('1 cierre')
             ->assertSee('Total ventas $')
             ->assertSee('Ventas a crédito $')
             ->assertSee('Total contado $')
+            // Total ventas = ingresos del arqueo (100), no total_venta_usd de Suite (380,86).
+            ->assertSee('100,00')
+            ->assertSee('95,00')
             ->assertSee('40,50')
+            ->assertDontSee('380,86')
             ->assertSee('Abrir')
             ->assertSee(route('cuadre_caja.show', ['cuadre' => $cuadreId]), false);
         $this->get(route('reportes_suite', ['reporte' => 'cuadre', 'mostrar_total' => '0'] + $filtros))
-            ->assertOk()->assertDontSee('380,86')->assertDontSee('40,50');
+            ->assertOk()->assertDontSee('100,00')->assertDontSee('40,50');
 
         $this->getJson(route('reportes_suite.factura', ['DORAL', '154526']))->assertOk()->assertJsonPath('renglones', []);
         $pdf = $this->get(route('reportes_suite', ['reporte' => 'facturas', 'formato' => 'pdf'] + $filtros));

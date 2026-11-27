@@ -258,12 +258,12 @@ class ReportesSuiteService
         $conTotal = ($f['mostrar_total'] ?? '1') === '1';
         $facturasPorCaja = $this->facturasPorCaja($f);
         $creditoPorCuadre = $this->creditoUsdPorCuadre($cuadres, $f);
-        $creditoPorSedeDocs = $this->creditoUsdPorSede($f);
         $estados = CuadreCajaService::ESTADOS;
         $etiquetas = config('inventario.display', []);
 
         $columnas = [['Fecha', 'l'], ['Caja', 'l'], ['Usuario', 'l'], ['Cajero', 'l'], ['Observación', 'l'], ['N° facturas', 'r']];
         if ($conTotal) {
+            // Misma base del arqueo: Diferencia = Total contado − Total ventas. El crédito no entra al arqueo.
             $columnas[] = ['Total ventas $', 'r'];
             $columnas[] = ['Ventas a crédito $', 'r'];
             $columnas[] = ['Total contado $', 'r'];
@@ -285,7 +285,7 @@ class ReportesSuiteService
         foreach ($porSede as $sedeCodigo => $items) {
             $sedeFacturas = 0;
             $sedeVenta = 0.0;
-            $sedeCreditoDetalle = 0.0;
+            $sedeCredito = 0.0;
             $sedeContado = 0.0;
             $sedeCuadre = 0.0;
             $detalle = [];
@@ -294,14 +294,15 @@ class ReportesSuiteService
                 $resumen = $servicio->resumen($c);
                 $clave = $c->sede.'|'.$c->fecha_cierre?->toDateString().'|'.$c->codigo_caja.'|'.$c->usuario;
                 $facturas = $c->facturas_suite ?? ($facturasPorCaja[$clave] ?? null);
-                $venta = $c->total_venta_usd !== null ? (float) $c->total_venta_usd : (float) $resumen['ingresos_usd'];
+                // Ingresos del arqueo (formas de pago), no el total_venta_usd de Suite: así cierra con la diferencia.
+                $venta = (float) $resumen['ingresos_usd'];
                 $credito = (float) ($creditoPorCuadre[(int) $c->id] ?? 0);
                 $contado = $resumen['tesoreria_usd'];
                 $diferencia = $resumen['diferencia_usd'];
                 $nFact = (int) ($facturas ?? 0);
                 $sedeFacturas += $nFact;
                 $sedeVenta += $venta;
-                $sedeCreditoDetalle += $credito;
+                $sedeCredito += $credito;
                 $sedeContado += (float) ($contado ?? 0);
                 $sedeCuadre += (float) ($diferencia ?? 0);
 
@@ -324,10 +325,6 @@ class ReportesSuiteService
                 ];
             }
 
-            $sedeKey = strtoupper(trim((string) $sedeCodigo));
-            $sedeCredito = array_key_exists($sedeKey, $creditoPorSedeDocs)
-                ? (float) $creditoPorSedeDocs[$sedeKey]
-                : $sedeCreditoDetalle;
             $nombreSede = $etiquetas[$sedeCodigo] ?? $sedeCodigo;
             $resumenSedes[] = [
                 'sede' => $nombreSede,
@@ -427,49 +424,14 @@ class ReportesSuiteService
             'totales' => $totales,
             'total_filas' => $totalCierres,
             'agrupado' => true,
+            'nota' => $conTotal
+                ? 'Total ventas = cobrado en formas de pago del arqueo. Diferencia = Total contado − Total ventas. Ventas a crédito no entran al arqueo ni a la diferencia.'
+                : null,
         ];
     }
 
     /**
-     * Crédito Suite por sede (docs del rango), para el resumen del consolidado.
-     *
-     * @return array<string, float> sede => USD
-     */
-    private function creditoUsdPorSede(array $f): array
-    {
-        if (! Schema::hasTable('ventas_documentos') || ! $this->hayColumna('ventas_documentos', 'credito')) {
-            return [];
-        }
-
-        $docs = DB::table('ventas_documentos')
-            ->when(! empty($f['sede']), fn ($q) => $q->where('sede', $f['sede']))
-            ->whereBetween('fecha', [$f['desde'], $f['hasta']])
-            ->where(fn ($q) => $q->whereNull('estado')->orWhereRaw("LOWER(estado) = 'registrado'"))
-            ->where(fn ($q) => $q
-                ->where(fn ($fac) => $fac->where('tipo_documento', 'FAC')->where('credito', true))
-                ->orWhere(fn ($dev) => $dev->where('tipo_documento', 'DEV')->where('total_credito_usd', '<>', 0)))
-            ->when(! empty($f['usuario']), function ($q) use ($f) {
-                $u = preg_replace('/\D/', '', (string) $f['usuario']) ?: (string) $f['usuario'];
-                $q->whereRaw("REPLACE(REPLACE(REPLACE(COALESCE(usuario,''), 'V', ''), 'E', ''), ' ', '') = ?", [$u]);
-            })
-            ->get(['sede', 'tipo_documento', 'total_credito_usd']);
-
-        $porSede = [];
-        foreach ($docs as $d) {
-            $sede = strtoupper(trim((string) $d->sede));
-            $signo = strtoupper((string) $d->tipo_documento) === 'DEV' ? -1.0 : 1.0;
-            $monto = round($signo * abs((float) $d->total_credito_usd), 2);
-            if ($sede === '' || abs($monto) < 0.005) {
-                continue;
-            }
-            $porSede[$sede] = round(($porSede[$sede] ?? 0) + $monto, 2);
-        }
-
-        return $porSede;
-    }
-
-    /**
-     * Crédito Suite atribuido a cada cierre (sede + día + cajero).
+     * Crédito Suite atribuido a cada cierre (sede + día + cajero). No entra a la diferencia del arqueo.
      *
      * @param  \Illuminate\Support\Collection<int, \App\Models\CuadreCaja>  $cuadres
      * @return array<int, float> cuadre_id => USD
