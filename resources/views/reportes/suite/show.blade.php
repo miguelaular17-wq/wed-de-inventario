@@ -11,7 +11,7 @@
         'tipo_documento' => 'Tipo de documento',
         'motivo' => 'Motivo',
         'solo_devoluciones' => 'Solo devoluciones',
-        'mostrar_total' => 'Mostrar total venta',
+        'mostrar_total' => 'Mostrar totales',
     ];
     $consulta = array_filter($filtros, fn ($v) => $v !== '' && $v !== null);
 @endphp

@@ -126,12 +126,20 @@ class ReportesSuiteTest extends TestCase
             'forma_pago' => 'EFECTIVO $', 'en_dolares' => true, 'monto' => 95, 'created_at' => now(), 'updated_at' => now()]);
         DB::table('cuadres_caja')->where('id', $cuadreId)->update(['conciliado_at' => now(), 'estado_tesoreria' => 'procesado',
             'observacion_tesoreria' => 'Faltan 5 en efectivo']);
+        $this->factura('cred-1', [
+            'cliente' => 'CREDITO TEST', 'credito' => true, 'total_credito_usd' => 40.5,
+            'total_neto_usd' => 40.5, 'usuario' => '28046742',
+        ]);
         $this->get(route('reportes_suite', ['reporte' => 'cuadre'] + $filtros))
             ->assertOk()->assertSee('JAIR AVILA')->assertSee('Faltan 5 en efectivo')->assertSee('380,86')->assertSee('Procesado')->assertSee('-5,00')->assertSee('1 cierre')
+            ->assertSee('Total ventas $')
+            ->assertSee('Ventas a crédito $')
+            ->assertSee('Total contado $')
+            ->assertSee('40,50')
             ->assertSee('Abrir')
             ->assertSee(route('cuadre_caja.show', ['cuadre' => $cuadreId]), false);
         $this->get(route('reportes_suite', ['reporte' => 'cuadre', 'mostrar_total' => '0'] + $filtros))
-            ->assertOk()->assertDontSee('380,86');
+            ->assertOk()->assertDontSee('380,86')->assertDontSee('40,50');
 
         $this->getJson(route('reportes_suite.factura', ['DORAL', '154526']))->assertOk()->assertJsonPath('renglones', []);
         $pdf = $this->get(route('reportes_suite', ['reporte' => 'facturas', 'formato' => 'pdf'] + $filtros));
